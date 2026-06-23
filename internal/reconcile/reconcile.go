@@ -23,3 +23,34 @@ func Diff(clearedMinor int64, statementMinor int64) Result {
 	diff := statementMinor - clearedMinor
 	return Result{DifferenceMinor: diff, Reconciled: diff == 0}
 }
+
+// DeltaPreview describes the adjustment that will be posted when the user saves
+// an "Update balance" (force-to-target) entry. It is purely informational —
+// nothing is written; the caller uses it to render a human-readable preview
+// ("current $710.00 → entered $1,115.00 = +$405.00 adjustment") before the
+// user confirms.
+type DeltaPreview struct {
+	// CurrentMinor is the account's present balance in minor units (as computed
+	// by the caller from the ledger).
+	CurrentMinor int64
+	// TargetMinor is the balance the user has typed in.
+	TargetMinor int64
+	// AdjustmentMinor is (TargetMinor − CurrentMinor). Positive means money is
+	// added; negative means it is removed. Zero means no adjustment is needed.
+	AdjustmentMinor int64
+	// NeedsAdjustment is false when the target already equals the current balance
+	// (no transaction will be posted).
+	NeedsAdjustment bool
+}
+
+// PreviewDelta computes what adjustment (if any) a "set balance to target"
+// operation would post.  Both arguments are in the same currency's minor units.
+func PreviewDelta(currentMinor int64, targetMinor int64) DeltaPreview {
+	adj := targetMinor - currentMinor
+	return DeltaPreview{
+		CurrentMinor:    currentMinor,
+		TargetMinor:     targetMinor,
+		AdjustmentMinor: adj,
+		NeedsAdjustment: adj != 0,
+	}
+}

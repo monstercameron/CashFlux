@@ -2,13 +2,84 @@ package reconcile
 
 import "testing"
 
-func TestDiff(t *testing.T) {
+func TestPreviewDelta(t *testing.T) {
 	tests := []struct {
 		name            string
-		clearedMinor    int64
-		statementMinor  int64
-		wantDiff        int64
-		wantReconciled  bool
+		currentMinor    int64
+		targetMinor     int64
+		wantAdj         int64
+		wantNeedsAdjust bool
+	}{
+		{
+			name:            "no change — no adjustment needed",
+			currentMinor:    71000,
+			targetMinor:     71000,
+			wantAdj:         0,
+			wantNeedsAdjust: false,
+		},
+		{
+			name:            "bank higher than ledger — positive adjustment",
+			currentMinor:    71000,
+			targetMinor:     111500,
+			wantAdj:         40500,
+			wantNeedsAdjust: true,
+		},
+		{
+			name:            "bank lower than ledger — negative adjustment (credit)",
+			currentMinor:    111500,
+			targetMinor:     71000,
+			wantAdj:         -40500,
+			wantNeedsAdjust: true,
+		},
+		{
+			name:            "zero current — full target becomes adjustment",
+			currentMinor:    0,
+			targetMinor:     50000,
+			wantAdj:         50000,
+			wantNeedsAdjust: true,
+		},
+		{
+			name:            "both zero — no adjustment",
+			currentMinor:    0,
+			targetMinor:     0,
+			wantAdj:         0,
+			wantNeedsAdjust: false,
+		},
+		{
+			name:            "L57 example: $710 → $1,115 = +$405",
+			currentMinor:    71000,
+			targetMinor:     111500,
+			wantAdj:         40500,
+			wantNeedsAdjust: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PreviewDelta(tc.currentMinor, tc.targetMinor)
+			if got.CurrentMinor != tc.currentMinor {
+				t.Errorf("CurrentMinor = %d; want %d", got.CurrentMinor, tc.currentMinor)
+			}
+			if got.TargetMinor != tc.targetMinor {
+				t.Errorf("TargetMinor = %d; want %d", got.TargetMinor, tc.targetMinor)
+			}
+			if got.AdjustmentMinor != tc.wantAdj {
+				t.Errorf("AdjustmentMinor = %d; want %d", got.AdjustmentMinor, tc.wantAdj)
+			}
+			if got.NeedsAdjustment != tc.wantNeedsAdjust {
+				t.Errorf("NeedsAdjustment = %v; want %v", got.NeedsAdjustment, tc.wantNeedsAdjust)
+			}
+		})
+	}
+}
+
+func TestDiff(t *testing.T) {
+	tests := []struct {
+		name           string
+		clearedMinor   int64
+		statementMinor int64
+		wantDiff       int64
+		wantReconciled bool
 	}{
 		{
 			name:           "exact match — reconciled",

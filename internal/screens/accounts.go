@@ -144,7 +144,7 @@ func Accounts() ui.Node {
 		bump()
 	}
 
-	setBalance := func(ac domain.Account, currentBal money.Money, newStr string) {
+	setBalance := func(ac domain.Account, currentBal money.Money, newStr, catID string) {
 		dec := currency.Decimals(ac.Currency)
 		target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
 		if err != nil {
@@ -152,11 +152,13 @@ func Accounts() ui.Node {
 			return
 		}
 		// Post an adjustment transaction for the difference, so the computed
-		// balance equals the figure entered (e.g. matching a statement).
+		// balance equals the figure entered (e.g. matching a statement). The
+		// optional catID lets the user attach a category to the adjustment so it
+		// doesn't land as an uncategorized spike in reports (L57/L30).
 		if amount, ok := ledger.AdjustmentToTarget(currentBal, target); ok {
 			adj := domain.Transaction{
 				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: uistate.T("accounts.balanceAdjustment"),
-				Amount: amount, Cleared: true,
+				Amount: amount, Cleared: true, CategoryID: catID,
 			}
 			if err := app.PutTransaction(adj); err != nil {
 				errMsg.Set(err.Error())
@@ -185,6 +187,41 @@ func Accounts() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
+	doTransfer := func(fromID, toID string, amountStr, dateStr, desc string) {
+		dec := currency.Decimals("")
+		for _, ac := range accounts {
+			if ac.ID == fromID {
+				dec = currency.Decimals(ac.Currency)
+				break
+			}
+		}
+		amtMinor, err := money.ParseMinor(strings.TrimSpace(amountStr), dec)
+		if err != nil || amtMinor <= 0 {
+			notifyErr(uistate.T("accounts.transferInvalidAmount"))
+			return
+		}
+		var when time.Time
+		if d, e := time.Parse("2006-01-02", strings.TrimSpace(dateStr)); e == nil {
+			when = d
+		}
+		d := strings.TrimSpace(desc)
+		if d == "" {
+			d = uistate.T("accounts.transferDefaultDesc")
+		}
+		if _, _, err := app.CreateTransferPair(appstate.TransferParams{
+			FromAccountID: fromID,
+			ToAccountID:   toID,
+			AmountMinor:   amtMinor,
+			Date:          when,
+			Desc:          d,
+		}); err != nil {
+			notifyErr(err.Error())
+			return
+		}
+		bump()
+		noticeAtom.Set(noticeAtom.Get().With(uistate.T("accounts.transferDone"), false))
+	}
+
 	windows := app.FreshnessWindows()
 	now := time.Now()
 	staleCount := 0
@@ -193,12 +230,16 @@ func Accounts() ui.Node {
 			staleCount++
 		}
 	}
+	categories := app.Categories()
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
 		return ui.CreateElement(AccountRow, accountRowProps{
-			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), Members: app.Members(),
-			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount, OnSave: saveAccount, OnView: viewTransactions, OnSetBalance: setBalance,
+			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now),
+			Members: app.Members(), Accounts: accounts, Categories: categories,
+			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount,
+			OnSave: saveAccount, OnView: viewTransactions, OnSetBalance: setBalance,
+			OnTransfer: doTransfer,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -306,17 +347,22 @@ func accountMeta(a domain.Account, bal money.Money) string {
 }
 
 type accountRowProps struct {
-	Account      domain.Account
-	Balance      money.Money
-	Cleared      money.Money
-	Stale        bool
-	Members      []domain.Member
-	OnDelete     func(string)
-	OnArchive    func(domain.Account)
-	OnRefresh    func(domain.Account)
-	OnSave       func(domain.Account)
-	OnView       func(string)
-	OnSetBalance func(domain.Account, money.Money, string)
+	Account    domain.Account
+	Balance    money.Money
+	Cleared    money.Money
+	Stale      bool
+	Members    []domain.Member
+	Accounts   []domain.Account // all non-archived accounts (for Transfer to-picker)
+	Categories []domain.Category
+	OnDelete   func(string)
+	OnArchive  func(domain.Account)
+	OnRefresh  func(domain.Account)
+	OnSave     func(domain.Account)
+	OnView     func(string)
+	// OnSetBalance: newBalStr is the typed target; catID is the optional category
+	// to attach to the adjustment transaction (empty = uncategorized).
+	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID string)
+	OnTransfer   func(fromID, toID string, amountStr string, dateStr string, desc string)
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -362,19 +408,48 @@ func AccountRow(props accountRowProps) ui.Node {
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
 	settingBal := ui.UseState(false)
 	setBalAmtS := ui.UseState("")
+	setBalCatS := ui.UseState("") // optional category for the adjustment transaction
 	setBal := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		setBalAmtS.Set("")
+		setBalCatS.Set("")
 		settingBal.Set(true)
 	}))
 	onSetBalAmt := ui.UseEvent(func(v string) { setBalAmtS.Set(v) })
+	onSetBalCat := ui.UseEvent(func(e ui.Event) { setBalCatS.Set(e.GetValue()) })
 	doSetBal := ui.UseEvent(Prevent(func() {
 		if v := strings.TrimSpace(setBalAmtS.Get()); v != "" {
-			props.OnSetBalance(a, props.Balance, v)
+			props.OnSetBalance(a, props.Balance, v, setBalCatS.Get())
 		}
 		settingBal.Set(false)
 	}))
 	cancelSetBal := ui.UseEvent(Prevent(func() { settingBal.Set(false) }))
+
+	// Transfer form state (L43): pre-populated with this account as the source.
+	transferring := ui.UseState(false)
+	xferToS := ui.UseState("")
+	xferAmtS := ui.UseState("")
+	xferDateS := ui.UseState(time.Now().Format("2006-01-02"))
+	xferDescS := ui.UseState("")
+	startTransfer := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		xferToS.Set("")
+		xferAmtS.Set("")
+		xferDateS.Set(time.Now().Format("2006-01-02"))
+		xferDescS.Set("")
+		transferring.Set(true)
+	}))
+	cancelTransfer := ui.UseEvent(Prevent(func() { transferring.Set(false) }))
+	onXferTo := ui.UseEvent(func(e ui.Event) { xferToS.Set(e.GetValue()) })
+	onXferAmt := ui.UseEvent(func(v string) { xferAmtS.Set(v) })
+	onXferDate := ui.UseEvent(func(v string) { xferDateS.Set(v) })
+	onXferDesc := ui.UseEvent(func(v string) { xferDescS.Set(v) })
+	doTransfer := ui.UseEvent(Prevent(func() {
+		if props.OnTransfer != nil {
+			props.OnTransfer(a.ID, xferToS.Get(), xferAmtS.Get(), xferDateS.Get(), xferDescS.Get())
+		}
+		transferring.Set(false)
+	}))
 
 	// reconcile-to-statement mode (L30): user enters a statement balance; we show
 	// per-account uncleared transactions they can mark cleared, recomputing the
@@ -475,17 +550,65 @@ func AccountRow(props accountRowProps) ui.Node {
 			focusByID("acct-setbal-" + a.ID)
 		case reconciling.Get():
 			focusByID("acct-reconcile-stmt-" + a.ID)
+		case transferring.Get():
+			focusByID("acct-xfer-amt-" + a.ID)
 		case editing.Get():
 			focusByID("acct-edit-" + a.ID)
 		}
 		return nil
-	}, fmt.Sprintf("%t-%t-%t", editing.Get(), settingBal.Get(), reconciling.Get()))
+	}, fmt.Sprintf("%t-%t-%t-%t", editing.Get(), settingBal.Get(), reconciling.Get(), transferring.Get()))
 
 	if settingBal.Get() {
+		// Delta preview: compute the live adjustment so the user sees what will be
+		// posted before they confirm (L57/L30). Rendered only when the field has
+		// a parseable value.
+		dec := currency.Decimals(a.Currency)
+		var deltaNode ui.Node = Fragment()
+		if rawAmt := strings.TrimSpace(setBalAmtS.Get()); rawAmt != "" {
+			if targetMinor, parseErr := money.ParseMinor(rawAmt, dec); parseErr == nil {
+				dp := reconcile.PreviewDelta(props.Balance.Amount, targetMinor)
+				sign := ""
+				if dp.AdjustmentMinor > 0 {
+					sign = "+"
+				}
+				adjLabel := sign + money.FormatMinor(dp.AdjustmentMinor, dec)
+				if dp.NeedsAdjustment {
+					deltaNode = P(css.Class("t-caption"),
+						Attr("data-testid", "setbal-delta-preview"),
+						uistate.T("accounts.setBalanceDeltaPreview",
+							fmtMoney(money.New(props.Balance.Amount, a.Currency)),
+							fmtMoney(money.New(targetMinor, a.Currency)),
+							adjLabel),
+					)
+				} else {
+					deltaNode = P(css.Class("t-caption"),
+						Attr("data-testid", "setbal-delta-preview"),
+						uistate.T("accounts.setBalanceNoAdjNeeded"))
+				}
+			}
+		}
+
+		// Category picker for the adjustment transaction (L57/L30).
+		catOpts := []ui.Node{Option(Value(""), SelectedIf(setBalCatS.Get() == ""), uistate.T("accounts.setBalanceNoCategory"))}
+		for _, c := range props.Categories {
+			catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(setBalCatS.Get() == c.ID), c.Name))
+		}
+
 		return Div(css.Class("row-edit"),
-			Form(css.Class("form-grid"), OnSubmit(doSetBal),
+			Form(css.Class("form-grid"),
+				Attr("id", "acct-setbal-form-"+a.ID),
+				Attr("aria-label", uistate.T("accounts.setBalanceFormLabel", a.Name)),
+				OnSubmit(doSetBal),
 				labeledField(uistate.T("accounts.setBalanceAmount"),
-					Input(css.Class("field"), Attr("id", "acct-setbal-"+a.ID), Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")), Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt))),
+					Input(css.Class("field"), Attr("id", "acct-setbal-"+a.ID),
+						Type("number"), Placeholder(uistate.T("accounts.setBalanceAmount")),
+						Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt))),
+				deltaNode,
+				labeledField(uistate.T("accounts.setBalanceCategoryLabel"),
+					Select(css.Class("field"),
+						Attr("aria-label", uistate.T("accounts.setBalanceCategoryLabel")),
+						Attr("data-testid", "setbal-cat-select"),
+						OnChange(onSetBalCat), catOpts)),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),
@@ -574,6 +697,47 @@ func AccountRow(props accountRowProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(cancelReconcile), uistate.T("action.cancel")),
 		)
 	}
+	if transferring.Get() {
+		// Build a "To account" option list: every non-archived account except this one.
+		toOpts := []ui.Node{Option(Value(""), SelectedIf(xferToS.Get() == ""), uistate.T("accounts.transferToPlaceholder"))}
+		for _, ac := range props.Accounts {
+			if ac.ID == a.ID || ac.Archived {
+				continue
+			}
+			label := ac.Name + " (" + ac.Currency + ")"
+			toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(xferToS.Get() == ac.ID), label))
+		}
+		return Div(css.Class("row-edit"),
+			H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}),
+				uistate.T("accounts.transferTitle", a.Name)),
+			Form(css.Class("form-grid"),
+				Attr("id", "acct-transfer-form-"+a.ID),
+				Attr("aria-label", uistate.T("accounts.transferFormLabel", a.Name)),
+				OnSubmit(doTransfer),
+				labeledField(uistate.T("accounts.transferAmount"),
+					Input(css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID),
+						Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
+						Value(xferAmtS.Get()), Step("0.01"), Attr("min", "0.01"),
+						OnInput(onXferAmt))),
+				labeledField(uistate.T("accounts.transferToLabel"),
+					Select(css.Class("field"),
+						Attr("aria-label", uistate.T("accounts.transferToLabel")),
+						Attr("data-testid", "acct-xfer-to-select"),
+						OnChange(onXferTo), toOpts)),
+				labeledField(uistate.T("accounts.transferDateLabel"),
+					Input(css.Class("field"), Type("date"),
+						Attr("aria-label", uistate.T("accounts.transferDateLabel")),
+						Value(xferDateS.Get()), OnInput(onXferDate))),
+				labeledField(uistate.T("accounts.transferDescLabel"),
+					Input(css.Class("field"), Type("text"),
+						Placeholder(uistate.T("accounts.transferDefaultDesc")),
+						Value(xferDescS.Get()), OnInput(onXferDesc))),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelTransfer), uistate.T("action.cancel")),
+			),
+		)
+	}
+
 	if editing.Get() {
 		isLiab := a.Class == domain.ClassLiability
 		return Div(css.Class("row-edit"),
@@ -637,6 +801,9 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
+				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
+					uistate.T("accounts.transferAction"))),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
 			),
