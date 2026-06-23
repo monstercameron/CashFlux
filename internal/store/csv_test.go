@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -230,4 +231,58 @@ func TestTransactionsFromCSVResilient(t *testing.T) {
 			t.Error("expected structural error for malformed CSV")
 		}
 	})
+}
+
+// TestCSVResilientScale verifies that TransactionsFromCSVResilient handles a
+// 600-row corpus at scale (L23): all valid rows are imported, scattered malformed
+// rows are skipped with reasons, and the function never aborts early. This guards
+// against any regression that silently returns a partial result or panics on bulk
+// data.
+func TestCSVResilientScale(t *testing.T) {
+	const totalRows = 600
+	// Malformed rows at a spread of positions (1-based data row number).
+	malformedAt := map[int]bool{1: true, 50: true, 200: true, 350: true, 599: true}
+	wantSkipped := len(malformedAt)
+	wantImported := totalRows - wantSkipped
+
+	var sb strings.Builder
+	sb.WriteString("date,payee,amount,currency\n")
+	for i := 1; i <= totalRows; i++ {
+		day := fmt.Sprintf("2024-%02d-%02d", (i%12)+1, (i%28)+1)
+		if malformedAt[i] {
+			// Missing amount — guaranteed skip by the resilient parser.
+			fmt.Fprintf(&sb, "%s,Malformed row %d,,USD\n", day, i)
+		} else {
+			fmt.Fprintf(&sb, "%s,Payee %d,-%.2f,USD\n", day, i, float64(i)*1.23)
+		}
+	}
+
+	txns, skipped, err := TransactionsFromCSVResilient([]byte(sb.String()), "")
+	if err != nil {
+		t.Fatalf("unexpected structural error on 600-row corpus: %v", err)
+	}
+	if len(txns) != wantImported {
+		t.Errorf("imported %d rows, want %d", len(txns), wantImported)
+	}
+	if len(skipped) != wantSkipped {
+		t.Errorf("skipped %d rows, want %d: %+v", len(skipped), wantSkipped, skipped)
+	}
+	for _, s := range skipped {
+		if s.Reason == "" {
+			t.Errorf("skipped row at line %d has empty reason", s.Line)
+		}
+		if s.Line < 2 || s.Line > totalRows+1 {
+			t.Errorf("skipped line number %d out of expected range [2, %d]", s.Line, totalRows+1)
+		}
+	}
+	// Every imported transaction must have a non-empty ID (generated when absent)
+	// and a valid non-zero amount.
+	for _, tx := range txns {
+		if tx.ID == "" {
+			t.Error("imported transaction missing ID")
+		}
+		if tx.Amount.Amount == 0 {
+			t.Errorf("imported transaction %s has zero amount", tx.ID)
+		}
+	}
 }

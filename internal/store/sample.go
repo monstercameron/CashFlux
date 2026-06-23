@@ -205,6 +205,19 @@ func SampleDataset() Dataset {
 	// A shared dinner with the roommate (settles via the SharedExpense ledger).
 	add(domain.Transaction{ID: "tx-dinner-shared-2026-05", AccountID: card, Date: date(2026, time.May, 24), Payee: "Nobu", Desc: "Dinner with Jordan", CategoryID: catDining, Amount: usd(-9000), MemberID: me, Cleared: true})
 
+	// --- Jordan Lee's attributed transactions (L16/L2) ---
+	// A handful of transactions charged to the shared card and attributed to the
+	// roommate — enough that per-member Reports and the Split/Settle-up screens
+	// demonstrate multi-member behaviour out of the box.
+	add(domain.Transaction{ID: "tx-jordan-rent-2026-04", AccountID: checking, Date: date(2026, time.April, 1), Payee: "Maple Court Apartments", Desc: "Jordan's half of rent", CategoryID: catHousing, Amount: usd(-72500), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-grocery-2026-04", AccountID: checking, Date: date(2026, time.April, 8), Payee: "Greenfield Market", Desc: "Jordan's groceries", CategoryID: catGroceries, Amount: usd(-18000), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-dining-2026-04", AccountID: card, Date: date(2026, time.April, 14), Payee: "Trattoria Nove", Desc: "Jordan's dinner out", CategoryID: catDining, Amount: usd(-7500), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-rent-2026-05", AccountID: checking, Date: date(2026, time.May, 1), Payee: "Maple Court Apartments", Desc: "Jordan's half of rent", CategoryID: catHousing, Amount: usd(-72500), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-grocery-2026-05", AccountID: checking, Date: date(2026, time.May, 9), Payee: "Greenfield Market", Desc: "Jordan's groceries", CategoryID: catGroceries, Amount: usd(-19500), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-subs-2026-05", AccountID: checking, Date: date(2026, time.May, 5), Payee: "Streaming & apps", Desc: "Jordan's share of subscriptions", CategoryID: catSubs, Amount: usd(-1500), MemberID: room, Cleared: true})
+	add(domain.Transaction{ID: "tx-jordan-rent-2026-06", AccountID: checking, Date: date(2026, time.June, 1), Payee: "Maple Court Apartments", Desc: "Jordan's half of rent", CategoryID: catHousing, Amount: usd(-72500), MemberID: room, Cleared: false})
+	add(domain.Transaction{ID: "tx-jordan-pharmacy-2026-06", AccountID: card, Date: date(2026, time.June, 10), Payee: "Wellness Pharmacy", Desc: "Jordan's pharmacy run", CategoryID: catHealth, Amount: usd(-4200), MemberID: room, Cleared: false})
+
 	tinyPNG := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d}
 
 	return Dataset{
