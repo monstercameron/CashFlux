@@ -163,15 +163,20 @@ func GoalRow(props goalRowProps) ui.Node {
 	overfund, _ := goalsvc.Overfund(g)
 	pace := goalsvc.ClassifyPace(g, time.Now())
 
-	sub := uistate.T("goals.progressFmt", pct, fmtMoney(rem))
+	// Sub-line: split into primary (actionable: remaining + deadline + monthly needed)
+	// and secondary (confirmatory: % complete). The secondary is rendered in a dimmer
+	// tone so Aaliyah can scan the right-side actionable figures without equal-weight
+	// noise competing with them (G5/C50 "text-busy" fix).
+	var subPrimary, subSecondary string
 	if complete {
-		sub = uistate.T("goals.complete")
-	}
-	if !g.TargetDate.IsZero() {
-		sub += uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
-		if !complete {
+		subPrimary = uistate.T("goals.complete")
+	} else {
+		subPrimary = fmtMoney(rem) + " to go"
+		subSecondary = fmt.Sprintf("%d%%", pct)
+		if !g.TargetDate.IsZero() {
+			subPrimary += uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
 			if per, ok, _ := goalsvc.MonthlyNeeded(g, time.Now()); ok {
-				sub += uistate.T("goals.saveSuffix", fmtMoney(per))
+				subPrimary += uistate.T("goals.saveSuffix", fmtMoney(per))
 			}
 		}
 	}
@@ -256,10 +261,13 @@ func GoalRow(props goalRowProps) ui.Node {
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			archiveBtn,
-			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+			Button(css.Class("btn-del", "btn-del-hover"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")), Div(ClassStr("bar-fill "+paceBarClass(pace)), Attr("style", barFillStyle(pct)))),
-		Span(css.Class("budget-sub"), sub),
+		Div(css.Class("budget-sub goal-sub"),
+			Span(subPrimary),
+			If(subSecondary != "", Span(css.Class("goal-sub-dim"), " · "+subSecondary)),
+		),
 		overfundNote,
 		whatNext,
 		linkedLine,

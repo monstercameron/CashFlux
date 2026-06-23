@@ -399,9 +399,13 @@ func Transactions() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	var shownNet int64
+	var unclearedCount int
 	for _, t := range shown {
 		if c, err := rates.Convert(t.Amount, base); err == nil {
 			shownNet += c.Amount
+		}
+		if !t.Cleared {
+			unclearedCount++
 		}
 	}
 
@@ -673,6 +677,7 @@ func Transactions() ui.Node {
 				// rides alongside the count/net summary.
 				If(len(shown) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.4rem"}),
 					Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
+					If(unclearedCount > 0, Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summaryUncleared", unclearedCount)))),
 					Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
 				)),
 				// Screen-reader live region announcing the match count as filters change
