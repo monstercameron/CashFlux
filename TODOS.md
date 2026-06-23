@@ -10414,6 +10414,19 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ### G13. Insights — "The Money Question" (Renu) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Contained styling fixes shipped:
+- **Settings CTA promoted** (§4) — the no-key "Settings" button is now `.btn-primary`, signalling the
+  one action that unblocks AI chat instead of reading as a neutral secondary button.
+- **Chat switcher pills visible in light** (§2) — "New chat"/"Edit prompt" pills gained a `.chat-pill`
+  `--border` outline (the `BorderBlack10` tint vanished on white).
+- **Starter chips softened** (§4) — dedicated `.chip-suggest` style (rounded, elevated, accent hover).
+- Pinned-insight / highlights / "Show more" light contrast — covered by the G9 `[data-theme="light"]`
+  legacy-text pins.
+- **Intentionally deferred** (systemic / structural): the **sticky composer** is a structural rework,
+  and the **light-mode "black bands between cards" + dark nav rail** are *shell-level* theming bleed
+  affecting every page (theme engine emits `--bg-base`/`--bg-card` but the shell/bento read other
+  tokens) — that belongs in a dedicated shell-theming pass, and the shell is under active concurrent edit.
+
 **The story**
 Renu opens Insights to ask a plain-English question about her finances and read a clear
 answer. She has not yet added an API key. She lands on the page and sees: spending
@@ -13854,6 +13867,254 @@ _7 · General UX / Glanceability_
   card; account select + "Import these" below row list in review card. ✓
 - G12/G13: Dark inter-card dividers in light mode — same systemic body-bg bleed confirmed
   here (defect #2 above). Same root-cause fix applies.
+
+---
+
+### G15. Customize — "The Formula Tinkerer" (Tomás) — 2026-06-23 ★
+
+**The story**
+Tomás is an analytical household manager who wants to build a custom calculated metric — a
+savings-rate percentage — and save it alongside his live figures. He opens Customize, scans the
+page to find the formula builder, types an expression, checks the result, clicks an example
+button, names and saves the formula. He then notices there are also "custom fields" on the same
+page and wants to understand what they are. Tomás is power-user tier — he wants the formula
+tool front-and-centre, not buried below three custom-field management cards he did not come here
+for. He is on a 1280×900 desktop in light mode.
+
+**Drive script**
+`e2e/glamor_15_customize.mjs`
+
+Screenshots produced:
+- `glamor_15_customize_dark_1280_empty.png`
+- `glamor_15_customize_dark_1280_empty_full.png`
+- `glamor_15_customize_dark_1280_formula.png`
+- `glamor_15_customize_dark_1280_example.png`
+- `glamor_15_customize_dark_1440.png`
+- `glamor_15_customize_dark_768.png`
+- `glamor_15_customize_dark_768_full.png`
+- `glamor_15_customize_light_1280_empty.png`
+- `glamor_15_customize_light_1280_empty_full.png`
+- `glamor_15_customize_light_1280_formula.png`
+- `glamor_15_customize_light_1280_example.png`
+- `glamor_15_customize_light_1440.png`
+- `glamor_15_customize_light_768.png`
+- `glamor_15_customize_light_768_full.png`
+
+JSON: `glamor_15_customize_dom.json`, `glamor_15_customize_dom_formula.json`,
+`glamor_15_customize_light_contrast.json`
+
+**Build/run evidence**
+- `node e2e/glamor_15_customize.mjs` → EXIT 0
+- Light theme confirmed: `data-theme="light"` on `<html>` verified for all light captures.
+- DOM audit (dark/empty): `cardCount: 7`, `cardOrder: ["Add a custom field", "Accounts",
+  "Transactions", "Formula calculator", "Result", "Saved formulas", "Available variables"]`.
+  `exampleBtnCount: 4`, `exampleBtnLabels: ["Savings rate %", "Spending ratio %", "Gross assets",
+  "Over budget?"]`. `varCount: 11`, `savedRowCount: 3`. `overflowCount: 0`.
+- DOM audit (dark/formula, after example click): `hasResultValue: true`, `resultValueText: "-8"`.
+  Variable values are thousands-separated (e.g. `net_worth: "60,386"`).
+- Dark: `cardTitleColor: rgb(244,244,245)` on `cardBg: rgb(18,18,20)` — passes. `pageBg:
+  rgb(14,14,15)`. `varLabelColor: rgb(244,244,245)` — passes on dark surface.
+- Light contrast: `cardTitleColor: rgb(28,28,30)` on `cardBg: rgb(255,255,255)` — passes (~18:1).
+  **CRITICAL FAILURE: `varAmtColor: rgb(244,244,245)` on transparent-over-white — ~1.05:1, FAILS
+  AA catastrophically.** Card titles and var labels pass; var amount column and any `.amount`
+  token in the vars rows does not switch in light mode. `statColor: rgb(28,28,30)` on
+  `rgb(255,255,255)` — result stat-value passes. `mutedColor: rgb(86,86,92)` — borderline (~5.4:1
+  on white). `fieldBg: rgb(241,241,242)`, `fieldColor: rgb(28,28,30)` — input fields pass.
+  `dataBtnColor: rgb(28,28,30)` on `rgb(255,255,255)` — example buttons pass.
+  `mainBg: rgba(0,0,0,0)` — gap between cards shows body `rgb(14,14,15)` in light; same systemic
+  bleed as G12–G14.
+- 0 page errors.
+
+**What already works well (keep — regression anchors)** ✓
+- **Formula evaluates live as you type** — example click populates the expression field and the
+  result card updates immediately. `resultValueText: "-8"` confirmed (savings-rate formula on the
+  sample data). No round-trip delay noticeable. ✓
+- **Four example buttons ("Try: …") are labelled in plain English** and correctly load their
+  expression into the formula input. They are compact `.data-btn` pills, not oversized action
+  buttons. ✓
+- **Variable values are thousands-separated** (`net_worth: "60,386"`, `assets: "85,813"`) —
+  C61's raw-float complaint was addressed; `groupThousands()` is working correctly for the
+  variable reference panel. ✓
+- **Saved formulas evaluated live** — `savedRowCount: 3` formulas in the sample data, each
+  showing its live result. Load/delete actions per row. ✓
+- **Custom fields manager is functional** — entity picker + key + label + type + optional/required
+  + "Add field" works; existing fields list per entity type (Accounts, Transactions). ✓
+- **No horizontal overflow at any width** — `overflowCount: 0` confirmed. ✓
+- **Zero JS page errors.** ✓
+- **Result card shows a meaningful hint when empty** ("Type a formula above — e.g. round(…)") —
+  the empty state is instructive. ✓
+- **Dark-mode contrast passes across all elements** — card titles, var labels, var amounts, result
+  stat all render in `rgb(244,244,245)` on dark surfaces; adequate. ✓
+
+**Structure fixes (bottom-up)** grouped by the 7 dimensions:
+
+_1 · Layout_
+- [ ] **CRITICAL: Formula calculator is below the fold at every desktop width.** DOM-confirmed
+      card order: "Add a custom field" → "Accounts" [entity listing] → "Transactions" [entity
+      listing] → "Formula calculator" → "Result" → "Saved formulas" → "Available variables".
+      At 1280×900 the formula input, example buttons, result, and variables are entirely off-screen
+      on arrival; Tomás must scroll past three custom-field cards to reach the tool he came for.
+      At 1440×900 the formula card title is just barely visible at the very bottom. At 768px the
+      formula calculator is even further down. Confirmed in `dark_1280_empty.png`,
+      `light_1280_empty.png`, `dark_1440.png`, `light_1440.png`, `dark_768_full.png`. **Highest-
+      impact fix on this page: reorder DOM so the formula calculator card (and its result) appear
+      first, above the custom-field manager.** The formula tool is the primary, featured capability;
+      custom fields are an advanced secondary feature.
+- [ ] **Seven flat cards with no two-tool hierarchy.** The page exposes two distinct tools —
+      a formula calculator and a custom-fields manager — as an undifferentiated stream of 7 equal-
+      weight cards. There is no visual signal that separates "formula tool (cards 1–3)" from "custom
+      fields tool (cards 4–5 in current DOM)". A clear section heading or visual divider between
+      the two tools — or a two-tab / two-panel layout — would let Tomás understand the page's
+      structure at a glance. Cross-references C61 (two tools in one screen).
+- [ ] **Result card is detached from the formula input.** The formula input lives in "Formula
+      calculator"; the result appears in a separate "Result" card below it — with no visual
+      connection (no arrow, no inset, no shared card). Users typing in the formula input see no
+      immediate hint of where to look for the output. Either merge the result into the calculator
+      card as an inline output pane (below the expression field), or use a strong visual connector.
+
+_2 · Spacing_
+- [ ] **Entity-listing cards ("Accounts", "Transactions") have very little internal padding.**
+      Each entity card shows its one or two field definitions with a `×` delete button; the minimal
+      spacing makes them feel like lists within the larger add-form card rather than independent
+      management sections. A slightly larger header (`card-head` padding or a thicker card border)
+      would visually separate the "list of fields" cards from the "add a field" form card.
+- [ ] **Example buttons row is tight against the formula input** — the `mt-2` gap between the
+      expression field and the "Try:" row is 8px; at 768px the "Over budget?" button wraps to its
+      own row below the other three. Increase to `mt-3` and ensure all four chips fit on one row
+      at 768px (they fit at 1280/1440). Confirmed in `dark_768_full.png` and `light_768_full.png`.
+
+_3 · Theming_
+- [ ] **CRITICAL: Variable row amounts are near-invisible in light mode.** `varAmtColor:
+      rgb(244,244,245)` on transparent-over-white (`rgb(255,255,255)`) — contrast ~1.05:1, fails
+      WCAG AA (4.5:1) catastrophically. The "Available variables" card shows 11 variable name +
+      value pairs; in light mode every value (`60,386`, `85,813`, `4,068`, etc.) is virtually
+      invisible. Root cause: the `.amount.fig` token in the `.rows .row` context is not switching
+      in `data-theme=light` — same systemic root as G4–G14 row-text failures. Confirmed in
+      `light_contrast.json` (`varAmtColor: rgb(244,244,245)`). **Fix: ensure `.amount` / `.fig`
+      in `.rows .row` uses `--text` or `--fg` which switches to dark in light theme.** Highest-
+      impact theming fix on this page.
+- [ ] **Dark body background bleeds between cards in light mode.** `mainBg: rgba(0,0,0,0)`
+      and body `pageBg: rgb(247,246,243)` but the gap regions between white cards render as near-
+      black bands (the body `rgb(14,14,15)` shows through). Confirmed visually in
+      `light_1280_empty.png`, `light_1440.png`, `light_768_full.png` — thick black gutters between
+      white cards in an otherwise light-mode page. Same systemic fix as G12/G13/G14: content-area
+      background token must switch in `data-theme=light`.
+- [ ] **Custom field description paragraph renders in muted amber in light mode.** The card
+      description "Define your own fields on any entity…" renders in the `.muted` amber token
+      (`rgb(86,86,92)` approximately, or possibly the amber variant) — in light mode this reads as
+      an active/warning state rather than secondary text. Confirmed in `light_1280_empty.png` where
+      the paragraph under "Add a custom field" appears amber-tinted. Use a neutral `--text-dim`
+      token that reads as secondary text, not as an alert, in both themes.
+- [ ] **Muted text in light (`rgb(86,86,92)`) is borderline.** ~5.4:1 on white — passes AA for
+      normal body text but is tight for small paragraph text. Flag for token audit.
+
+_4 · Styling_
+- [ ] **"Savings rate %" example button goes blank after clicking it.** In `light_1280_example.png`
+      the first `.data-btn` renders as an empty white rectangle — its text label disappears after
+      being clicked and the formula populates. This may be a state bug where clicking sets the
+      button text to the formula expression and truncates it, or the button loses its text node.
+      Confirmed visually: `light_1280_example.png` shows an empty white box where "Savings rate %"
+      was. Needs investigation — either a render bug in the example-button click handler, or the
+      expression is being written into the button's own text node.
+- [ ] **All form inputs are placeholder-only — no visible labels.** `labelTexts: []` confirmed
+      by DOM audit: there is not a single `<label>` element on the page. The custom-field form
+      inputs ("Key (e.g. account_number)", "Label (e.g. Account number)") and the formula name
+      input ("Name this formula…") are purely placeholder-labelled. Cross-references C61 (no
+      label) and B15 (systemic labelling gap). Add visible `<label>` elements for the key, label,
+      and formula-name inputs at minimum.
+- [ ] **"Save formula" button is primary green at full width** even when the name field is empty.
+      The save button dominates the formula section visually but is not actionable until both
+      the expression and name fields have content. Consider disabling or dimming it when either
+      field is empty, and making its width proportional (`fit-content` + `align-self: flex-end`)
+      rather than spanning the full card width.
+
+_5 · Positioning_
+- [ ] **The formula name input and "Save formula" button are on the same row**, leaving the name
+      field at roughly half card width. At 768px the layout is two rows (input above button), but
+      at 1280/1440 the button is beside the name field — this is actually acceptable; the concern
+      is that the full-width green "Save formula" button is visually louder than the formula
+      expression input itself. The primary interaction (typing the expression) is less visually
+      prominent than the secondary action (saving it). Consider a compact `btn-primary` save button
+      with `width: fit-content` at desktop widths.
+- [ ] **Custom field "Add field" button is primary green and prominently centered** in the add
+      form row. At 768px it occupies the full right column in a two-column layout; its prominence
+      is higher than warranted for an "add" action inside a form that users haven't filled yet.
+      Use the standard `btn-sm btn-primary` sizing consistent with other add-form buttons.
+
+_6 · Ordering_
+- [ ] **HIGHEST IMPACT — formula calculator should be first, custom fields second.** Current DOM
+      order buries the formula tool under three custom-field cards. The page is named "Customize"
+      and the nav places it in the BUILD section — a user arriving expects the formula builder,
+      not a field-definition form. Reorder: formula calculator → result → saved formulas →
+      available variables → [section divider] → custom fields add form → entity field listings.
+      Alternatively, use an in-page tab strip ("Formula" | "Custom fields") to give each tool its
+      own view without scrolling. Cross-references C61 (two tools in one screen).
+- [ ] **"Available variables" card is last** — below saved formulas. The variable reference is
+      needed while writing a formula, not after saving one. Move it immediately below the formula
+      calculator card so Tomás can see the variable names while composing his expression without
+      scrolling to the bottom of the page.
+
+_7 · General UX / Glanceability_
+- [ ] **Tomás's key task — "type a formula, see its result" — requires scrolling past three
+      irrelevant cards on arrival.** The formula input, the result, the example buttons, the
+      variable reference, and the saved formulas are all below the fold at 1280/1440. The single
+      largest glanceability improvement on this page is layout reorder (see §6 fix #1). Once
+      the formula calculator leads, the entire workflow (type → see result → save → view saved)
+      is above the fold.
+- [ ] **No click-to-insert for variable names.** The "Available variables" card lists 11
+      variable names (sorted alphabetically: accounts, assets, budgets, …) with their values,
+      but each row is static text — clicking a variable name does not insert it into the formula
+      input. Tomás must read the name, remember it, scroll back up to the expression field, and
+      type it by hand. Cross-references C61 (no var-insert). Add an `OnClick` to each `.row-desc`
+      in the vars card that appends the variable name to the expression.
+- [ ] **Result value shows raw number without context ("−8").** The result of the savings-rate
+      formula is "-8" — no "%" suffix, no currency symbol, no label saying "savings rate". Without
+      context the number is ambiguous. C61 flagged this: the formula result should carry a display
+      hint (the engine evaluates correctly; the display layer needs unit context). Consider
+      appending "%" when the example buttons populate the formula (they already label themselves
+      "Savings rate %"), or allow the saved formula to carry a format hint.
+- [ ] **No empty-state CTA for custom fields under each entity type** when no fields exist.
+      With no custom fields defined for an entity, the entity-type card simply does not appear in
+      the listing (DOM shows "Accounts" and "Transactions" only — "Budgets", "Goals", "Members"
+      cards are absent because the sample data has no fields for them). A user wanting to add a
+      field for "Goals" gets no visual confirmation the category exists until after the first save.
+      A faint empty-state row ("No custom fields for Goals yet") per entity would help discovery.
+
+**UI/UX defects (screenshot-confirmed)**
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `dark_1280_empty.png`, `light_1280_empty.png`, `dark_1440.png`, `light_1440.png` | Formula calculator entirely below the fold on arrival — user must scroll past 3 custom-field cards | Reorder DOM: formula tool first, custom-fields manager second |
+| 2 | `light_contrast.json` (`varAmtColor: rgb(244,244,245)`) | Variable row amounts near-invisible in light (~1.05:1 on white) | Fix `.amount.fig` in `.rows .row` to use `--text`/`--fg` in `data-theme=light` — same root as G4–G14 |
+| 3 | `light_1280_empty.png`, `light_1440.png`, `light_768_full.png` | Dark inter-card gutters bleed through in light (body rgb(14,14,15) between white cards) | Switch content-area bg token in `data-theme=light` — same systemic fix as G12–G14 |
+| 4 | `light_1280_example.png` | "Savings rate %" example button renders as blank white rectangle after click | Investigate example-button click handler — text label disappears on interaction |
+| 5 | DOM audit `labelTexts: []` | Zero `<label>` elements on the entire page — all inputs placeholder-only | Add visible `<label>` for key, label, and formula-name inputs (B15 systemic) |
+| 6 | `dark_1280_empty.png` | Result card detached from formula input — no visual connection between expression entry and output | Merge result display into formula calculator card as inline output pane, or add a visible connector |
+| 7 | `dark_768_full.png`, `light_768_full.png` | "Over budget?" example button wraps to its own row at 768px | Increase flex gap; ensure all 4 example chips fit on one row at 768px |
+| 8 | `light_1280_empty.png` | Custom-field description paragraph in amber/muted in light — reads as alert, not secondary text | Use neutral `--text-dim` token for card description paragraphs |
+
+**Probe hardening**
+- `auditDOM` correctly detected `formulaInputType: "text"` but `formulaPlaceholder` returned
+  "Key (e.g. account_number)" — the first `.field` input on the page belongs to the custom-field
+  form (which is DOM-first), not the formula calculator. The formula expression input is lower in
+  the DOM. `exerciseFormulaBuilder` filled the wrong input as a result. The example-button click
+  (`dark.locator(".data-btn").first()`) correctly targeted the formula example and populated the
+  formula calculator's expression field, producing the correct `resultValueText: "-8"`. Future
+  probes targeting the formula input should use a selector scoped to the formula calculator card
+  (e.g. `section.card:has(h2:text("Formula")) input.field`) rather than the first `.field` on
+  the page.
+- Light theme recipe (G4 canonical `bootWithTheme()` pattern): confirmed working —
+  `data-theme="light"` on `<html>` verified before navigation.
+- `overflowCount: 0` at all widths — no horizontal scroll issues.
+
+**Cross-references**
+- C61: "Two tools in one screen; unformatted results + no var-insert" — var values are now
+  thousands-separated (groupThousands ✓); result formatting for unit context (%, $) still open;
+  no var-insert still open; two-tool layout still open. Defects #1 (ordering) and #7 (var-insert)
+  directly address C61's open items.
+- G4–G14: Systemic `.amount` / `--fg` not switching in light mode — defect #2 above is the same
+  root cause; same fix applies across all entity-row contexts.
+- G12/G13/G14: Dark inter-card divider bleed in light mode — defect #3 is the same systemic body-
+  bg issue.
 
 ---
 

@@ -32,6 +32,8 @@ and every commit updates this file under `Unreleased`.
   Cancel button. **Bills (G11):** dollar amounts now render full-contrast in light mode, and the
   "Next due" stat date no longer hyphenates across two lines at 768px. **Split (G12):** the
   destructive "Clear" member button is now a ghost-danger style, visually distinct from "Select all".
+  **Insights (G13):** the no-key "Settings" CTA is now a primary button, the New-chat/Edit-prompt
+  pills stay outlined in light mode, and the starter chips get a softer dedicated pill style.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**
