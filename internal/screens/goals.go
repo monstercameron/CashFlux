@@ -226,9 +226,9 @@ func Goals() ui.Node {
 				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
 			},
 		)
-		achievedSection = Section(css.Class("card"),
-			Attr("aria-label", uistate.T("goals.achieved")),
-			H2(css.Class("card-title"),
+		achievedSection = uiw.Card(uiw.CardProps{
+			Attrs: []any{Attr("aria-label", uistate.T("goals.achieved"))},
+			Header: H2(css.Class("card-title"),
 				Button(
 					css.Class("btn"),
 					Type("button"),
@@ -239,10 +239,10 @@ func Goals() ui.Node {
 					Span(css.Class("budget-sub"), uistate.T("goals.achievedCount", len(achievedGoals))),
 				),
 			),
-			If(achievedOpen.Get(),
+			Body: If(achievedOpen.Get(),
 				Div(Attr("id", "goals-achieved-list"), achievedRows),
 			),
-		)
+		})
 	}
 
 	return Div(

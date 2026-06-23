@@ -61,11 +61,11 @@ func NotificationCenter() ui.Node {
 		))
 	}
 
-	return Section(css.Class("card"),
-		Div(css.Class("budget-head"),
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Header: Div(css.Class("budget-head"),
 			H2(css.Class("card-title"), uistate.T("nav.notifications")),
 			Button(css.Class("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
 		),
-		Div(css.Class("rows"), rows),
-	)
+		Rows: rows,
+	})
 }

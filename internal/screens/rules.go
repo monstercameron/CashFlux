@@ -198,8 +198,8 @@ func Rules() ui.Node {
 	// push "Your rules" — Bianca's primary concern — entirely below the fold. Order
 	// is now Your rules → Rule order → Suggestions (discovery aid, secondary).
 	return Div(
-		Section(css.Class("card"),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
+		uiw.Card(uiw.CardProps{
+			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("rules.listTitle")),
 
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
@@ -210,10 +210,12 @@ func Rules() ui.Node {
 						Span(uistate.T("rules.addRule"))),
 				),
 			),
-			If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
-			If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
-			list,
-		),
+			Body: Fragment(
+				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
+				If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
+				list,
+			),
+		}),
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
 		If(len(rs) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: "Rule order",
