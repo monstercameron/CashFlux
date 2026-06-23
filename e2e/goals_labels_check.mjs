@@ -23,13 +23,22 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/goals", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#goal-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+
+  // Open the add modal first so labeled-field elements are visible.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForSelector('#goal-add', { timeout: 10000 });
   await page.waitForSelector(".labeled-field", { timeout: 5000 });
 
   const count = await page.locator(".labeled-field").count();
   if (count < 5) fail(`expected the goal add form to have several labeled fields, got ${count}`);
   const texts = (await page.locator(".labeled-field span").allInnerTexts()).map((t) => t.trim());
   if (!texts.includes("Name")) fail(`add form should have a visible "Name" label (saw: ${texts.join(", ")})`);
+
+  // Close the modal before interacting with the goal list behind it.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 
   // Inline editor is labeled too.
   const edit = page.getByRole("button", { name: "Edit" }).first();

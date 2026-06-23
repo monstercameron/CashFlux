@@ -20,9 +20,26 @@ const fail = (m) => {
 
 const advCount = async (page) => {
   const texts = await page.locator(".labeled-field span").allInnerTexts();
-  return ["Return %", "Liquidity (1–5)", "Stability (1–5)", "Locked until (no new money before this date)"].filter((w) =>
-    texts.some((t) => t.trim() === w)
-  ).length;
+  // Field labels: "Return %", "Easy to access (1–5)" (or "Liquidity (1–5)"),
+  // "Low risk (1–5)" (or "Stability (1–5)"), and "Locked until ..."
+  const candidates = [
+    "Return %",
+    "Easy to access (1–5)", "Liquidity (1–5)",
+    "Low risk (1–5)", "Stability (1–5)",
+    "Locked until (no new money before this date)",
+  ];
+  const normalized = texts.map((t) => t.trim());
+  const found = new Set();
+  for (const c of candidates) {
+    if (normalized.some((t) => t === c)) {
+      // map to canonical bucket
+      if (c.startsWith("Easy to access") || c.startsWith("Liquidity")) found.add("liquidity");
+      else if (c.startsWith("Low risk") || c.startsWith("Stability")) found.add("stability");
+      else if (c === "Return %") found.add("return");
+      else if (c.startsWith("Locked")) found.add("locked");
+    }
+  }
+  return found.size;
 };
 
 try {
@@ -31,7 +48,13 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".cf-adv-toggle", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+
+  // Open the add modal so the disclosure toggle is accessible.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForTimeout(400);
+  await page.waitForSelector(".cf-adv-toggle", { timeout: 10000 });
 
   const toggle = page.locator(".cf-adv-toggle").first();
   if ((await toggle.getAttribute("aria-expanded")) !== "false") fail("toggle should start collapsed (aria-expanded=false)");

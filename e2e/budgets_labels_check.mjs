@@ -23,12 +23,22 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/budgets", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".labeled-field", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+
+  // Open the add modal so the labeled-field elements are visible.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /budget/i }).first().click();
+  await page.waitForSelector('#budget-add', { timeout: 10000 });
+  await page.waitForSelector(".labeled-field", { timeout: 5000 });
 
   const texts = await page.locator(".labeled-field span").allInnerTexts();
   for (const want of ["Name", "Category", "Owner", "Period", "Limit"]) {
     if (!texts.some((t) => t.trim() === want)) fail(`add form missing visible label "${want}" (saw: ${texts.join(", ")})`);
   }
+
+  // Close the modal before interacting with the budget list behind it.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 
   // Inline editor is labeled too.
   const edit = page.getByRole("button", { name: "Edit" }).first();

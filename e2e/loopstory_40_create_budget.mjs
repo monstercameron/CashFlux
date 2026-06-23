@@ -50,11 +50,16 @@ try {
   await page.screenshot({ path: SS("loop40-01-budgets-before.png") });
   pass("Step 1b — screenshot loop40-01-budgets-before.png");
 
-  // ── Step 2: Confirm Groceries category exists in the add-budget form ──────────
-  // The Category select has aria-label="Category" (index 1 in the DOM; index 0
-  // is the "Jump to…" period picker). Use the aria-label to target correctly.
-  const catOpts = await page.evaluate(() => {
-    const sel = document.querySelector('select[aria-label="Category"]');
+  // ── Step 2: Open the add modal and confirm Groceries category exists ─────────
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /budget/i }).first().click();
+  await page.waitForTimeout(400);
+  const dialog = page.locator('[role="dialog"]');
+
+  const catOpts = await dialog.evaluate((dlg) => {
+    const sel = dlg.querySelector('select[aria-label="Category"]');
     return sel ? Array.from(sel.options).map((o) => ({ value: o.value, text: o.text })) : [];
   });
   const groceryCat = catOpts.find((o) => /grocer/i.test(o.text));
@@ -66,23 +71,28 @@ try {
 
   // ── Step 3: Fill and submit the add-budget form ───────────────────────────────
   // Name
-  await page.fill('#budget-add', "Monthly Groceries");
+  await dialog.locator('#budget-add').fill("Monthly Groceries");
 
   // Category → Groceries
-  await page.selectOption('select[aria-label="Category"]', { value: "cat-groceries" });
+  await dialog.locator('select[aria-label="Category"]').selectOption({ value: "cat-groceries" });
 
   // Period → Monthly (already default but be explicit)
-  await page.selectOption('select[aria-label="Period"]', { value: "monthly" });
+  await dialog.locator('select[aria-label="Period"]').selectOption({ value: "monthly" });
 
   // Limit
-  await page.fill('input[type="number"][aria-required="true"]', "600");
+  await dialog.locator('input[type="number"][aria-required="true"]').fill("600");
 
   await page.screenshot({ path: SS("loop40-02-add-form-filled.png") });
   pass("Step 3a — screenshot loop40-02-add-form-filled.png (form filled)");
 
   // Submit
-  await page.locator('form button[type="submit"]').click();
+  await dialog.locator('button[type="submit"]').click();
   await page.waitForTimeout(1200);
+  // Soft-nav cycle to force budgets list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/budgets'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
   await page.screenshot({ path: SS("loop40-03-after-add-budget.png") });
   pass("Step 3b — screenshot loop40-03-after-add-budget.png (after submit)");
 

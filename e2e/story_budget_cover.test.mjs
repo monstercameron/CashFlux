@@ -35,13 +35,25 @@ const budgetByName = (page, name) =>
     return found;
   }, name);
 
-// addBudget fills the Budgets add form for the given category label + limit.
+// addBudget opens the FlipPanel modal and fills the Budgets add form.
 async function addBudget(page, name, categoryLabel, limit) {
-  await page.locator("#budget-add").fill(name);
-  await page.locator("form.form-grid select").first().selectOption({ label: categoryLabel });
-  await page.locator('input[type="number"][aria-required="true"]').fill(limit);
-  await page.locator('form.form-grid button[type="submit"]').first().click();
-  await page.waitForTimeout(500);
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /budget/i }).first().click();
+  await page.waitForSelector('#budget-add', { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#budget-add").fill(name);
+  await dialog.locator("select").first().selectOption({ label: categoryLabel });
+  await dialog.locator('input[type="number"][aria-required="true"]').fill(limit);
+  await dialog.locator('button[type="submit"]').first().click();
+  // Wait for the dialog to close before proceeding.
+  await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  // Soft-nav cycle to force budgets list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { window.history.pushState({}, '', '/budgets'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(600);
 }
 
 try {
@@ -50,13 +62,15 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/budgets", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#budget-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // The over budget: $1 limit on Groceries (which has sample spend) -> over.
   // The source budget: a roomy limit on Shopping.
   await addBudget(page, OVER, "Groceries", "1");
   await addBudget(page, SRC, "Shopping", "500");
 
+  // Flush dataset to localStorage.
+  await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
   await page.waitForTimeout(2500); // let the dataset autosave flush
   const srcBefore = await budgetByName(page, SRC);
   const overBefore = await budgetByName(page, OVER);
@@ -98,7 +112,7 @@ try {
 
   // Survives reload (pagehide flushes the dataset to localStorage).
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#budget-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   await page.waitForTimeout(800);
   const srcReload = await budgetByName(page, SRC);
   if (!srcReload || srcReload.limit.Amount !== srcBefore.limit.Amount - 5000)

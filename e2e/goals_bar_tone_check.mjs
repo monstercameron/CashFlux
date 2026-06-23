@@ -26,15 +26,23 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/goals", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#goal-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // Add a goal already at 100% (saved == target).
-  await page.locator("#goal-add").fill(NAME);
-  const nums = page.locator("form .field[type='number']");
-  await nums.nth(0).fill("50"); // target
-  await nums.nth(1).fill("50"); // saved so far
-  await page.locator("form button[type='submit']").first().click();
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForSelector('#goal-add', { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#goal-add").fill(NAME);
+  await dialog.locator('input[type="number"]').nth(0).fill("50"); // target
+  await dialog.locator('input[type="number"]').nth(1).fill("50"); // saved so far
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
+  // Soft-nav cycle to force goals list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/goals'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
 
   const doneRow = page.locator(".budget", { hasText: NAME });
   if ((await doneRow.count()) === 0) fail(`the completed goal "${NAME}" did not appear`);

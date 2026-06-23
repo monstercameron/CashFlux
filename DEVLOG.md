@@ -10989,3 +10989,15 @@ already-done: #31 goal-complete tone, #34 currency Select, #35 same-kind reassig
 key→Settings link, #37 documents select label, #38 todo labels, #39 todo overdue cue, #41 subs price
 tone, #42 artifacts error notice, #44 member avatar, #46 category per-row usage, #48/#33 input
 constraints, #53/#54/#55 labeledField forms, #56/#57 budget/goal drill-downs.
+
+## 2026-06-22 — C73/C79 add-modal foundation (Goal/Account/Budget)
+Converted the +Add menu from navigation to in-place FlipPanel modals for the three "money" entities.
+New uistate.AddTarget atom (captured-setter like SetQuickAdd) + app.AddHost at the shell root renders
+the right add form in a CloseOnly FlipPanel — the form owns its submit + errText, calling OnDone (close)
+only on success, so the documented FlipPanel auto-close-on-save wrinkle is sidestepped. Extracted each
+inline add form into a reusable component (GoalAddForm/AccountAddForm/BudgetAddForm) and removed the
+inline add Section from goals/accounts/budgets so each page leads with content. EmptyStateCTA gained an
+AddTarget that opens the modal. Fixed the agent's over-eager removal of the `id` import from accounts.go
+(still used by the reconcile adjustment). Updated 16 e2e gates that added via the old inline forms to
+open the modal first (same field ids). add_modal_check + a11y + all 16 regressions green. Task/Category/
+Member/Rule + transaction-inline removal are the follow-up (agent 2).

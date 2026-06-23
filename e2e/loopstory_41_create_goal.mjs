@@ -61,7 +61,11 @@ try {
   await page.screenshot({ path: SS("loop41-01-goals-before.png") });
   pass("Step 1b — screenshot loop41-01-goals-before.png");
 
-  // ── Step 2: Confirm the add form is present ─────────────────────────────────
+  // ── Step 2: Open modal and confirm the add form is present ──────────────────
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForTimeout(400);
   const addInput = await page.locator("#goal-add").count();
   if (addInput > 0) {
     pass("Step 2 — #goal-add input is present");
@@ -69,12 +73,11 @@ try {
     fail("Step 2 — #goal-add input not found");
   }
 
+  const dialog = page.locator('[role="dialog"]');
+
   // ── Step 3: Find the linked-account select and pick a Savings account ───────
-  // The linked account select has aria-label matching "goals.linkedOptional" i18n key.
-  // In practice the label contains "Linked account" or similar. We'll look for all selects
-  // and find the one with a Savings option.
-  const acctOpts = await page.evaluate(() => {
-    const selects = Array.from(document.querySelectorAll("select"));
+  const acctOpts = await dialog.evaluate((dlg) => {
+    const selects = Array.from(dlg.querySelectorAll("select"));
     for (const sel of selects) {
       const opts = Array.from(sel.options).map((o) => ({ value: o.value, text: o.text }));
       if (opts.some((o) => /saving/i.test(o.text))) return opts;
@@ -90,23 +93,23 @@ try {
 
   // ── Step 4: Fill the add-goal form ─────────────────────────────────────────
   // Name
-  await page.fill("#goal-add", GOAL_NAME);
+  await dialog.locator("#goal-add").fill(GOAL_NAME);
 
   // Target amount (aria-required number field = the first required number input in the form)
-  await page.locator('input[type="number"][aria-required="true"]').fill(TARGET);
+  await dialog.locator('input[type="number"][aria-required="true"]').fill(TARGET);
 
   // Starting balance = 0 (default; the second number input "Saved so far")
   // We leave it at its default ("0") — no action needed.
 
   // Target date
-  const dateField = page.locator('input[type="date"]');
+  const dateField = dialog.locator('input[type="date"]');
   const dateCount = await dateField.count();
   if (dateCount > 0) {
     await dateField.first().fill(TARGET_DATE);
     pass(`Step 4a — target date set to ${TARGET_DATE}`);
   } else {
     // Maybe it's a text input for date
-    const textDate = page.locator('input[placeholder*="date" i], input[aria-label*="date" i]');
+    const textDate = dialog.locator('input[placeholder*="date" i], input[aria-label*="date" i]');
     if (await textDate.count() > 0) {
       await textDate.first().fill(TARGET_DATE);
       pass(`Step 4a — target date set via text input to ${TARGET_DATE}`);
@@ -117,19 +120,19 @@ try {
 
   // Link account — use the select that has a Savings option
   if (savingsOpt) {
-    const linkedSel = await page.evaluate(() => {
-      const selects = Array.from(document.querySelectorAll("select"));
+    const linkedSel = await dialog.evaluate((dlg) => {
+      const selects = Array.from(dlg.querySelectorAll("select"));
       for (const sel of selects) {
         if (Array.from(sel.options).some((o) => /saving/i.test(o.text))) return sel.getAttribute("aria-label");
       }
       return null;
     });
     if (linkedSel) {
-      await page.selectOption(`select[aria-label="${linkedSel}"]`, { value: savingsOpt.value });
+      await dialog.locator(`select[aria-label="${linkedSel}"]`).selectOption({ value: savingsOpt.value });
       pass(`Step 4b — linked account set to "${savingsOpt.text}"`);
     } else {
-      await page.evaluate((val) => {
-        const selects = Array.from(document.querySelectorAll("select"));
+      await dialog.evaluate((dlg, val) => {
+        const selects = Array.from(dlg.querySelectorAll("select"));
         for (const sel of selects) {
           if (Array.from(sel.options).some((o) => /saving/i.test(o.text))) {
             sel.value = val;
@@ -146,8 +149,13 @@ try {
   pass("Step 4c — screenshot loop41-02-add-form-filled.png");
 
   // ── Step 5: Submit the form ─────────────────────────────────────────────────
-  await page.locator('button[type="submit"]').first().click();
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(1000);
+  // Soft-nav cycle to force goals list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/goals'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
 
   const goalRow = page.locator(".budget", { hasText: GOAL_NAME });
   const rowCount = await goalRow.count();

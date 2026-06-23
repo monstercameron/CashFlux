@@ -22,10 +22,14 @@ type emptyCTAProps struct {
 	// FocusID is the id of the add form's first field; clicking the button moves
 	// the cursor there (see focusByID). Empty FocusID renders just the message.
 	FocusID string
+	// AddTarget, when set and FocusID is empty, makes the CTA open the matching
+	// entity's add modal via uistate.SetAddTarget (e.g. "goal", "account",
+	// "budget"). Takes precedence over Href when both are set.
+	AddTarget string
 	// Href, when set, makes the CTA navigate to this logical route instead of
-	// focusing a field — for derived screens (Bills, Subscriptions, Reports) whose
-	// data is created elsewhere (add transactions / set due dates). Takes effect
-	// only when FocusID is empty.
+	// focusing a field or opening a modal — for derived screens (Bills,
+	// Subscriptions, Reports) whose data is created elsewhere. Takes effect only
+	// when FocusID and AddTarget are both empty.
 	Href string
 	// Icon is the muted glyph shown above a first-run empty state (CTA variant).
 	// Unset falls back to a neutral box glyph (C46). Ignored for the bare-message
@@ -34,33 +38,42 @@ type emptyCTAProps struct {
 }
 
 // EmptyStateCTA renders a friendly empty-state block: a short message plus a
-// button that jumps the cursor to the add form so the user can create their
-// first entry without hunting for it (§6.5). It is its own component so its
-// click handler hook stays stable as the list toggles between empty and
-// non-empty (mounting/unmounting a whole component is safe; reordering hooks
-// inside a stable one is not).
+// button that opens the entity's add modal (AddTarget), jumps the cursor to an
+// inline add form (FocusID), or navigates to a route (Href). It is its own
+// component so its click handler hooks stay stable as the list toggles between
+// empty and non-empty (mounting/unmounting a whole component is safe; reordering
+// hooks inside a stable one is not).
 func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	nav := router.UseNavigate()
 	onClick := ui.UseEvent(Prevent(func() { focusByID(props.FocusID) }))
 	onNav := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(props.Href)) }))
+	onAddTarget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget(props.AddTarget) }))
+
 	if props.FocusID == "" {
-		// A route-based CTA guides the user to where the data is created; a bare
-		// message stays a plain transient line ("no match" / "all done").
+		glyph := props.Icon
+		if !glyph.Valid() {
+			glyph = icon.Box
+		}
+		// AddTarget: open the entity's add modal.
+		if props.AddTarget != "" {
+			return Div(css.Class("empty-cta"),
+				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
+				P(css.Class("empty"), props.Message),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onAddTarget), props.CTALabel),
+			)
+		}
+		// Href: navigate to where the data is created.
 		if props.Href != "" {
-			glyph := props.Icon
-			if !glyph.Valid() {
-				glyph = icon.Box
-			}
 			return Div(css.Class("empty-cta"),
 				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
 				P(css.Class("empty"), props.Message),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onNav), props.CTALabel),
 			)
 		}
+		// No action: plain transient line ("no match" / "all done").
 		return P(css.Class("empty"), props.Message)
 	}
-	// A muted glyph above the first-run message makes an otherwise-blank panel feel
-	// intentional and inviting (C46).
+	// FocusID: jump cursor to the inline add form's first field.
 	glyph := props.Icon
 	if !glyph.Valid() {
 		glyph = icon.Box

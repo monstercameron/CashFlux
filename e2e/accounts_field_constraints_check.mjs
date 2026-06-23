@@ -26,25 +26,37 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+
+  // Open the add modal so form fields are visible.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForTimeout(400);
+
   // Asset scoring fields (Liquidity/Stability/…) now sit behind an "Advanced"
   // disclosure (C49) — expand it before asserting their constraints.
-  await page.waitForSelector(".cf-adv-toggle", { timeout: 60000 });
+  await page.waitForSelector(".cf-adv-toggle", { timeout: 10000 });
   await page.locator(".cf-adv-toggle").first().click();
-  await page.waitForSelector('input[placeholder^="Liquidity"]', { timeout: 60000 });
+  await page.waitForSelector('input[placeholder^="Liquidity"], input[placeholder^="Easy to access"]', { timeout: 10000 });
 
-  // Asset (default) form: Liquidity / Stability are 1–5 with the hint.
-  for (const name of ["Liquidity", "Stability"]) {
-    const a = await attrs(page.locator(`input[placeholder^="${name}"]`).first());
-    if (a.min !== "1" || a.max !== "5" || a.step !== "1") fail(`${name}: min/max/step = ${a.min}/${a.max}/${a.step}, want 1/5/1`);
-    if (!/\(1–5\)/.test(a.ph || "")) fail(`${name}: placeholder "${a.ph}" should carry the (1–5) hint`);
-  }
+  // Asset (default) form: liquidity/stability fields are 1–5 with the hint.
+  // Labels may be "Liquidity" or "Easy to access" / "Stability" or "Low risk".
+  const liquidityLocator = page.locator('input[placeholder^="Liquidity"], input[placeholder^="Easy to access"]').first();
+  const stabilityLocator = page.locator('input[placeholder^="Stability"], input[placeholder^="Low risk"]').first();
+
+  const aLiq = await attrs(liquidityLocator);
+  if (aLiq.min !== "1" || aLiq.max !== "5" || aLiq.step !== "1") fail(`Liquidity/Easy-to-access: min/max/step = ${aLiq.min}/${aLiq.max}/${aLiq.step}, want 1/5/1`);
+  if (!/\(1.5\)/.test(aLiq.ph || "")) fail(`Liquidity/Easy-to-access: placeholder "${aLiq.ph}" should carry the (1–5) hint`);
+
+  const aStab = await attrs(stabilityLocator);
+  if (aStab.min !== "1" || aStab.max !== "5" || aStab.step !== "1") fail(`Stability/Low-risk: min/max/step = ${aStab.min}/${aStab.max}/${aStab.step}, want 1/5/1`);
+  if (!/\(1.5\)/.test(aStab.ph || "")) fail(`Stability/Low-risk: placeholder "${aStab.ph}" should carry the (1–5) hint`);
 
   // Switch the account type to a liability so the Due day field renders, then
   // assert it's constrained to a valid day-of-month range.
-  const typeSel = page.locator("select").first();
+  const typeSel = page.locator('select[aria-label="Account type"]');
   await typeSel.selectOption({ label: "Credit card" }).catch(async () => {
-    // Fall back to the first liability-ish option by value if the label differs.
-    await typeSel.selectOption({ index: 1 });
+    await typeSel.selectOption({ index: 4 });
   });
   await page.waitForSelector('input[placeholder^="Due day"]', { timeout: 5000 });
   const d = await attrs(page.locator('input[placeholder^="Due day"]').first());

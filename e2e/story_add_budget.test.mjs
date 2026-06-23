@@ -41,16 +41,25 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/budgets", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#budget-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   if ((await page.getByText(NAME).count()) !== 0) fail("test budget already present before adding");
 
-  // Fill the add form: name + limit, and switch the period to Weekly.
-  await page.locator("#budget-add").fill(NAME);
-  await page.locator('input[type="number"][aria-required="true"]').fill(LIMIT);
-  await page.locator('select:has(option[value="weekly"])').first().selectOption("weekly");
-  await page.locator('button[type="submit"]').first().click();
+  // Open modal and fill the add form: name + limit, period Weekly.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /budget/i }).first().click();
+  await page.waitForSelector('#budget-add', { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#budget-add").fill(NAME);
+  await dialog.locator('input[type="number"][aria-required="true"]').fill(LIMIT);
+  await dialog.locator('select:has(option[value="weekly"])').first().selectOption("weekly");
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
+  // Soft-nav cycle to force budgets list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/budgets'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
 
   // UX: the budget lists with its name and limit.
   if ((await page.getByText(NAME).count()) === 0) fail("budget did not appear in the list after adding");
@@ -63,7 +72,7 @@ try {
   else if (saved.period !== "weekly") fail(`saved period = ${saved.period}, want "weekly"`);
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#budget-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   await page.waitForTimeout(800);
   if ((await page.getByText(NAME).count()) === 0) fail("budget did not survive a reload");
 

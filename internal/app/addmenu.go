@@ -59,9 +59,9 @@ func AddMenu() uic.Node {
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden), Attr("role", "menu"),
 			item("addmenu.transaction", icon.Transactions, func() { quickAdd.Set(true) }),
-			item("addmenu.account", icon.Accounts, func() { nav.Navigate(uistate.RoutePath("/accounts")) }),
-			item("addmenu.budget", icon.Budgets, func() { nav.Navigate(uistate.RoutePath("/budgets")) }),
-			item("addmenu.goal", icon.Goals, func() { nav.Navigate(uistate.RoutePath("/goals")) }),
+			item("addmenu.account", icon.Accounts, func() { uistate.SetAddTarget("account") }),
+			item("addmenu.budget", icon.Budgets, func() { uistate.SetAddTarget("budget") }),
+			item("addmenu.goal", icon.Goals, func() { uistate.SetAddTarget("goal") }),
 			item("addmenu.document", icon.ScanLine, func() { nav.Navigate(uistate.RoutePath("/documents")) }),
 		),
 	)

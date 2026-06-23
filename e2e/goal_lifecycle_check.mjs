@@ -38,22 +38,35 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/goals", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#goal-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
 
   // ── Add the over-funded goal (target $1.00, saved $2.00) ──────────────────
-  await page.locator("#goal-add").fill(OVER_NAME);
-  const nums = page.locator("form .field[type='number']");
-  await nums.nth(0).fill("1");   // target
-  await nums.nth(1).fill("2");   // saved so far (over-funded by $1)
-  await page.locator("form button[type='submit']").first().click();
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForSelector('#goal-add', { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#goal-add").fill(OVER_NAME);
+  const nums = dialog.locator('.field[type="number"]');
+  await dialog.locator('input[type="number"]').nth(0).fill("1");   // target
+  await dialog.locator('input[type="number"]').nth(1).fill("2");   // saved so far (over-funded by $1)
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
 
   // ── Add a normal in-progress goal ($100 target, $0 saved) ────────────────
-  await page.locator("#goal-add").fill(ACTIVE_NAME);
-  await nums.nth(0).fill("100");
-  await nums.nth(1).fill("0");
-  await page.locator("form button[type='submit']").first().click();
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForSelector('#goal-add', { timeout: 10000 });
+  const dialog2 = page.locator('[role="dialog"]');
+  await dialog2.locator("#goal-add").fill(ACTIVE_NAME);
+  await dialog2.locator('input[type="number"]').nth(0).fill("100");
+  await dialog2.locator('input[type="number"]').nth(1).fill("0");
+  await dialog2.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
+  // Soft-nav cycle to force goals list re-render after modal adds.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/goals'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
 
   // ── Assert: over-funding note is visible on the over-funded row ──────────
   // We use the data-testid the screen attaches: data-testid="goal-overfund-<id>"

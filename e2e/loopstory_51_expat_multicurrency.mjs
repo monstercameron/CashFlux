@@ -115,36 +115,45 @@ const getDataset = (page) => page.evaluate(() => {
   return JSON.parse(localStorage.getItem("cashflux:dataset") || "{}");
 });
 
-// Fill and submit the account-add form.
+// Fill and submit the account-add form via the FlipPanel modal.
 const addAccount = async (page, name, opening, currency) => {
-  const nameIn = await page.$('input[placeholder*="Name" i], input[aria-label*="Name" i], input[placeholder*="Account" i]');
-  if (!nameIn) { fail(`addAccount(${name}) — name input not found`); return false; }
-  await nameIn.fill(name);
+  // Open the + Add modal and pick Account
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForTimeout(400);
+  const dlg = page.locator('[role="dialog"]');
 
-  const openingIn = await page.$('input[placeholder*="Opening" i], input[placeholder*="Balance" i], input[aria-label*="Opening" i]');
-  if (openingIn) await openingIn.fill(opening);
+  const nameInLoc = dlg.locator('input[placeholder*="Name" i], input[aria-label*="Name" i], input[placeholder*="Account" i]').first();
+  if ((await nameInLoc.count()) === 0) { fail(`addAccount(${name}) — name input not found`); return false; }
+  await nameInLoc.fill(name);
+
+  const openingInLoc = dlg.locator('input[placeholder*="Opening" i], input[placeholder*="Balance" i], input[aria-label*="Opening" i]').first();
+  if ((await openingInLoc.count()) > 0) await openingInLoc.fill(opening);
 
   // Currency select if present
   if (currency) {
-    const currSel = await page.$('select[aria-label*="Currency" i], select[name*="currency" i]');
-    if (currSel) {
-      await currSel.selectOption({ value: currency });
+    const currSelLoc = dlg.locator('select[aria-label*="Currency" i], select[name*="currency" i]').first();
+    if ((await currSelLoc.count()) > 0) {
+      await currSelLoc.selectOption({ value: currency });
     } else {
-      // Try text-based option
-      const currSelGeneric = await page.$('select');
-      if (currSelGeneric) {
-        const opts = await currSelGeneric.evaluate(el =>
+      // Try finding a select with currency options
+      const allSels = dlg.locator('select');
+      const selCount = await allSels.count();
+      for (let i = 0; i < selCount; i++) {
+        const opts = await allSels.nth(i).evaluate(el =>
           [...el.options].map(o => ({ value: o.value, text: o.text }))
         );
         const eurOpt = opts.find(o => o.value === currency || o.text.includes(currency));
-        if (eurOpt) await currSelGeneric.selectOption({ value: eurOpt.value });
+        if (eurOpt) { await allSels.nth(i).selectOption({ value: eurOpt.value }); break; }
       }
     }
   }
 
-  const addBtn = await page.$('button:has-text("Add"), button[type="submit"]:not([disabled])');
-  if (!addBtn) { fail(`addAccount(${name}) — Add button not found`); return false; }
-  await addBtn.click();
+  const addBtnLoc = dlg.locator('button[type="submit"]').first();
+  if ((await addBtnLoc.count()) === 0) { fail(`addAccount(${name}) — Add button not found`); return false; }
+  await addBtnLoc.click();
   await page.waitForTimeout(800);
   return true;
 };

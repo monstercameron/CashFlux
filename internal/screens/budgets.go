@@ -12,10 +12,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -68,70 +66,11 @@ func Budgets() ui.Node {
 		base = "USD"
 	}
 
-	name := ui.UseState("")
-	limit := ui.UseState("")
-	defaultCat := ""
-	if len(expenseCats) > 0 {
-		defaultCat = expenseCats[0].ID
-	}
-	catID := ui.UseState(defaultCat)
-	owner := ui.UseState(domain.GroupOwnerID)
-	period := ui.UseState(string(domain.PeriodMonthly))
-	rollover := ui.UseState(false)
-	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	// The viewed period comes from the shared top-bar resolution control (C7) —
 	// the Budgets card no longer has its own competing month stepper.
 	periodWin := uistate.UsePeriod()
 	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
-
-	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
-	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
-	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
-	onPeriod := ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
-	onRollover := ui.UseEvent(func() { rollover.Set(!rollover.Get()) })
-
-	budgetDefs := app.CustomFieldDefsFor("budget")
-	onCustom := func(key, value string) {
-		m := customVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[key] = value
-		customVals.Set(nm)
-	}
-	add := ui.UseEvent(Prevent(func() {
-		amt, err := money.ParseMinor(strings.TrimSpace(limit.Get()), currency.Decimals(base))
-		if err != nil || amt <= 0 {
-			errMsg.Set(uistate.T("budgets.limitRequired"))
-			return
-		}
-		scope := domain.ScopeIndividual
-		if owner.Get() == domain.GroupOwnerID {
-			scope = domain.ScopeShared
-		}
-		b := domain.Budget{
-			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
-			CategoryID: catID.Get(), Period: domain.Period(period.Get()), Limit: money.New(amt, base),
-			Rollover: rollover.Get(), Custom: customValuesToMap(budgetDefs, customVals.Get()),
-		}
-		if err := app.PutBudget(b); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		name.Set("")
-		limit.Set("")
-		rollover.Set(false)
-		if len(expenseCats) > 0 {
-			catID.Set(expenseCats[0].ID) // reset category to the default after add (L40)
-		}
-		customVals.Set(map[string]string{})
-		errMsg.Set("")
-		bump()
-		uistate.PostNotice(uistate.T("budgets.addedToast"), false) // L40 success confirmation
-	}))
 
 	deleteBudget := func(budgetID string) {
 		if err := app.DeleteBudget(budgetID); err != nil {
@@ -187,49 +126,6 @@ func Budgets() ui.Node {
 		}
 		bump()
 		return nil
-	}
-
-	var formCard ui.Node
-	if len(expenseCats) == 0 {
-		formCard = Section(css.Class("card"), P(css.Class("empty"), uistate.T("budgets.needCategory")))
-	} else {
-		catOptions := make([]ui.Node, 0, len(expenseCats))
-		for _, c := range expenseCats {
-			catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
-		}
-		ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
-		// Suggest a limit from the selected category's recent monthly spend, with a
-		// one-tap "use this" that fills the limit field (D6/budget hygiene).
-		suggestRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		suggestion, _ := budgeting.SuggestLimit(catID.Get(), app.Transactions(), time.Now(), 6, suggestRates)
-		formCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("budgets.add")),
-			Form(css.Class("form-grid"), OnSubmit(add),
-				labeledField(uistate.T("common.name"),
-					Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
-				labeledField(uistate.T("budgets.categoryLabel"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions)),
-				labeledField(uistate.T("common.owner"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
-				labeledField(uistate.T("budgets.period"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get()))),
-				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
-				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
-					Span(uistate.T("budgets.rollover")),
-				),
-				MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-				}),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-			),
-			If(suggestion > 0, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
-				Button(css.Class("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
-			)),
-			errText("budget-err", errMsg.Get()),
-		)
 	}
 
 	budgets := app.Budgets()
@@ -320,7 +216,7 @@ func Budgets() ui.Node {
 
 	var listBody ui.Node
 	if len(statuses) == 0 {
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), FocusID: "budget-add"})
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), AddTarget: "budget", Icon: icon.Budgets})
 	} else {
 		// Source budgets a "Cover…" action can pull from: every budget, labelled with
 		// its remaining room (the row drops itself when building its picker).
@@ -346,7 +242,6 @@ func Budgets() ui.Node {
 	}
 
 	return Div(
-		formCard,
 		If(len(statuses) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("budgets.spent"), fmtMoney(money.New(totalSpent, base)), "neg"),
 			stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(totalLimit, base)), ""),

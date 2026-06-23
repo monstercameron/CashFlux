@@ -83,6 +83,7 @@ func Shell(props ShellProps) uic.Node {
 		),
 		uic.CreateElement(SettingsHost),
 		uic.CreateElement(QuickAddHost),
+		uic.CreateElement(AddHost),
 		uic.CreateElement(DialogHost),
 		uic.CreateElement(Toast),
 	)

@@ -24,7 +24,13 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".labeled-field", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+
+  // Open the add modal so labeled-field elements are visible.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForTimeout(400);
+  await page.waitForSelector(".labeled-field", { timeout: 10000 });
 
   const count = await page.locator(".labeled-field").count();
   if (count < 5) fail(`expected the add form to have several labeled fields, got ${count}`);
@@ -34,6 +40,10 @@ try {
   for (const want of ["Name", "Account type", "Owner", "Currency", "Opening balance"]) {
     if (!texts.some((t) => t.trim() === want)) fail(`missing visible label "${want}" (saw: ${texts.join(", ")})`);
   }
+
+  // Close the modal before interacting with the account list behind it.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 
   // The inline-edit form is labeled too: open the first account's editor and
   // assert it renders labeled fields with the common labels visible.

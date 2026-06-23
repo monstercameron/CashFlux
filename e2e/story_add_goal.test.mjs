@@ -28,16 +28,24 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/goals", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#goal-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   if ((await page.getByText(NAME).count()) !== 0) fail("test goal already present before adding");
 
-  // Create the goal: name, target (aria-required), and an initial saved amount
-  // (the second, non-required number field).
-  await page.locator("#goal-add").fill(NAME);
-  await page.locator('input[type="number"][aria-required="true"]').fill(TARGET);
-  await page.locator('input[type="number"]').nth(1).fill(START);
-  await page.locator('button[type="submit"]').first().click();
+  // Open modal and create the goal.
+  await page.locator(".add-btn").click();
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForSelector('#goal-add', { timeout: 10000 });
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.locator("#goal-add").fill(NAME);
+  await dialog.locator('input[type="number"][aria-required="true"]').fill(TARGET);
+  await dialog.locator('input[type="number"]').nth(1).fill(START);
+  await dialog.locator('button[type="submit"]').first().click();
   await page.waitForTimeout(700);
+  // Soft-nav cycle to force goals list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/goals'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(800);
 
   const row = page.locator(".budget", { hasText: NAME });
   if ((await row.count()) === 0) fail("goal did not appear after adding");
@@ -59,7 +67,7 @@ try {
   const persisted = await page.evaluate(() => localStorage.getItem("cashflux:dataset") || "");
   if (!persisted.includes(NAME)) fail("goal was not autosaved to the dataset store");
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#goal-add", { timeout: 60000 });
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
   await page.waitForTimeout(800);
   const afterReload = (await page.locator(".budget", { hasText: NAME }).first().textContent().catch(() => "")) || "";
   if ((await page.getByText(NAME).count()) === 0) fail("goal did not survive a reload");

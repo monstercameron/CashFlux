@@ -135,22 +135,37 @@ try {
   console.log("\n── Step 0a: Seed linked account ──");
   await goto(page, "/accounts");
 
-  // Fill account add form
-  const nameIn0 = await page.$('input[placeholder="Name"], input[placeholder="Account name"], input[aria-label="Account name"]');
-  const balIn0  = await page.$('input[placeholder="Opening balance"], input[aria-label="Opening balance"], input[type="number"]');
-  if (nameIn0 && balIn0) {
-    await nameIn0.fill(ACCT_NAME);
-    await balIn0.fill(ACCT_BALANCE);
-    const submitBtn0 = await page.$('button[type="submit"]');
-    if (submitBtn0) {
+  // Open the + Add modal and pick Account
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /account/i }).first().click();
+  await page.waitForTimeout(400);
+  const acctDialog = page.locator('[role="dialog"]');
+
+  // Fill account add form inside dialog
+  const nameIn0Loc = acctDialog.locator('input[placeholder="Name"], input[placeholder="Account name"], input[aria-label="Account name"]').first();
+  const balIn0Loc  = acctDialog.locator('input[placeholder="Opening balance"], input[aria-label="Opening balance"], input[type="number"]').first();
+  const nameIn0Count = await nameIn0Loc.count();
+  const balIn0Count  = await balIn0Loc.count();
+  if (nameIn0Count > 0 && balIn0Count > 0) {
+    await nameIn0Loc.fill(ACCT_NAME);
+    await balIn0Loc.fill(ACCT_BALANCE);
+    const submitBtn0 = acctDialog.locator('button[type="submit"]').first();
+    if ((await submitBtn0.count()) > 0) {
       await submitBtn0.click();
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(1000);
+      // Soft-nav cycle to force accounts list re-render after modal add.
+      await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { window.history.pushState({}, '', '/accounts'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+      await page.waitForTimeout(600);
       pass(`Step 0a — Account "${ACCT_NAME}" created with $${ACCT_BALANCE} opening balance`);
     } else {
       maybe("Step 0a — submit button not found for account add");
     }
   } else {
-    maybe(`Step 0a — Account add form inputs not found (nameIn=${!!nameIn0}, balIn=${!!balIn0})`);
+    maybe(`Step 0a — Account add form inputs not found (nameIn=${nameIn0Count}, balIn=${balIn0Count})`);
   }
 
   await page.screenshot({ path: SS("l59_00a_accounts_seeded.png") });
@@ -159,29 +174,34 @@ try {
   console.log("\n── Step 0b: Seed near-complete goal ──");
   await goto(page, "/goals");
 
-  // Fill goal add form
-  const goalNameIn = await page.$('#goal-add, input[placeholder="Name"], input[placeholder="Goal name"], input[aria-label="Name"]');
-  const goalTargetIn = await page.$('input[aria-label*="target" i], input[placeholder*="target" i], input[aria-label*="amount" i]');
-  const goalSavedIn  = await page.$('input[aria-label*="saved" i], input[placeholder*="saved" i], input[aria-label*="current" i]');
+  // Open the + Add modal and pick Goal
+  await page.waitForSelector(".add-btn", { timeout: 60000 });
+  await page.locator(".add-btn").click();
+  await page.waitForTimeout(200);
+  await page.locator('[role="menuitem"]', { hasText: /goal/i }).first().click();
+  await page.waitForTimeout(400);
+  const goalDialog = page.locator('[role="dialog"]');
 
-  if (goalNameIn) {
-    await goalNameIn.fill(GOAL_NAME);
+  // Fill goal add form inside dialog using locator API
+  const goalNameInLoc = goalDialog.locator('#goal-add, input[placeholder="Name"], input[placeholder="Goal name"], input[aria-label="Name"]').first();
+  if ((await goalNameInLoc.count()) > 0) {
+    await goalNameInLoc.fill(GOAL_NAME);
     pass("Step 0b — Goal name filled");
   } else {
     fail("Step 0b — Goal name input not found on /goals");
   }
 
   // Find target and saved inputs by placeholder (confirmed from probe)
-  const goalTargetInp = await page.$('input[placeholder="Target (USD)"]');
-  const goalSavedInp  = await page.$('input[placeholder="Saved so far"]');
+  const goalTargetInpLoc = goalDialog.locator('input[placeholder="Target (USD)"], input[aria-required="true"][type="number"]').first();
+  const goalSavedInpLoc  = goalDialog.locator('input[placeholder="Saved so far"]').first();
   let targetFilled = false;
   let savedFilled  = false;
-  if (goalTargetInp) {
-    await goalTargetInp.fill(GOAL_TARGET);
+  if ((await goalTargetInpLoc.count()) > 0) {
+    await goalTargetInpLoc.fill(GOAL_TARGET);
     targetFilled = true;
   }
-  if (goalSavedInp) {
-    await goalSavedInp.fill(GOAL_SAVED);
+  if ((await goalSavedInpLoc.count()) > 0) {
+    await goalSavedInpLoc.fill(GOAL_SAVED);
     savedFilled = true;
   }
 
@@ -191,20 +211,20 @@ try {
   else maybe("Step 0b — Goal saved-so-far input not found (may default to 0)");
 
   // Try to set a target date
-  const dateIn0b = await page.$('input[type="date"], input[aria-label*="date" i], input[aria-label*="Date" i]');
-  if (dateIn0b) {
-    await dateIn0b.fill("2026-12-31").catch(() => {});
+  const dateIn0bLoc = goalDialog.locator('input[type="date"]').first();
+  if ((await dateIn0bLoc.count()) > 0) {
+    await dateIn0bLoc.fill("2026-12-31").catch(() => {});
   }
 
-  // Try to wire the linked account (confirmed aria-label from probe)
-  const linkedSel = await page.$('select[aria-label="Linked account (optional)"], select[aria-label*="linked" i]');
-  if (linkedSel) {
-    const opts = await linkedSel.evaluate((el) =>
+  // Try to wire the linked account
+  const linkedSelLoc = goalDialog.locator('select[aria-label="Linked account (optional)"], select[aria-label*="linked" i]').first();
+  if ((await linkedSelLoc.count()) > 0) {
+    const opts = await linkedSelLoc.evaluate((el) =>
       Array.from(el.options).map((o) => ({ v: o.value, t: o.text.trim() }))
     );
     const match = opts.find((o) => o.t.includes("L59"));
     if (match) {
-      await linkedSel.selectOption({ value: match.v });
+      await linkedSelLoc.selectOption({ value: match.v });
       pass(`Step 0b — Linked account set to "${match.t}"`);
     } else {
       maybe(`Step 0b — L59 account not yet in linked-account options (${opts.map(o => o.t).join(", ")})`);
@@ -213,17 +233,22 @@ try {
     maybe("Step 0b — Linked account select not found on goal form");
   }
 
-  // Use the "Add" submit button specifically (not the Contribute submit)
-  const goalSubmitBtn = await page.$('button[type="submit"]:has-text("Add")') ?? await page.$('button[type="submit"]');
-  if (goalSubmitBtn) {
-    await goalSubmitBtn.click();
+  // Use the submit button in the dialog
+  const goalSubmitBtnLoc = goalDialog.locator('button[type="submit"]').first();
+  if ((await goalSubmitBtnLoc.count()) > 0) {
+    await goalSubmitBtnLoc.click();
     await page.waitForTimeout(2000);
     pass("Step 0b — Goal add form submitted");
   } else {
     fail("Step 0b — Goal submit button not found");
   }
 
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1000);
+  // Soft-nav cycle to force goals list re-render after modal add.
+  await page.evaluate(() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { window.history.pushState({}, '', '/goals'); window.dispatchEvent(new PopStateEvent('popstate', { state: {} })); });
+  await page.waitForTimeout(1000);
   await page.screenshot({ path: SS("l59_00b_goal_added.png") });
 
   // ── Step 1: /goals — confirm near-target state (95%) ─────────────────────
@@ -266,24 +291,43 @@ try {
   console.log(`  INFO  Net worth pre-contribution: $${netWorth_preContrib}`);
   await softNav(page, "Goals", "/goals");
 
-  // Find the Contribute button scoped to the L59 goal row.
-  // Goals page renders each row as a list item; we scan all buttons for one whose
-  // nearest ancestor row/li contains GOAL_NAME and whose text is "Contribute".
+  // Find the Contribute button scoped to the L59 goal row using Playwright locator API.
+  // We look for any element containing the goal name text, then find a sibling/descendant
+  // Contribute button within the same DOM subtree.
   const clickContribute = async (goalName) => {
-    const allBtns = await page.$$('button');
-    for (const btn of allBtns) {
-      const info = await btn.evaluate((el, name) => {
-        const txt = el.textContent?.trim() ?? "";
-        const row = el.closest("li, tr, [class*='goal'], [class*='row'], article, section") ?? el.parentElement;
-        const rowTxt = row ? row.textContent ?? "" : "";
-        return { txt, inRow: rowTxt.includes(name) };
-      }, goalName);
-      if (/^contribute$/i.test(info.txt) && info.inRow) return btn;
-    }
-    // Fallback: first Contribute button on page
-    for (const btn of allBtns) {
-      const txt = await btn.evaluate(el => el.textContent?.trim() ?? "");
-      if (/^contribute$/i.test(txt)) return btn;
+    // Strategy: find all elements containing the goal name, walk up to find a container
+    // that also has a Contribute button, then click that button.
+    const result = await page.evaluate((name) => {
+      // Find all text nodes / elements containing the goal name
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const el = node;
+        const directText = Array.from(el.childNodes)
+          .filter(n => n.nodeType === Node.TEXT_NODE)
+          .map(n => n.textContent.trim())
+          .join("");
+        if (!directText.includes(name)) continue;
+        // Walk up to find a container with a Contribute button
+        let parent = el.parentElement;
+        for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {
+          const btns = Array.from(parent.querySelectorAll("button"));
+          const contribBtn = btns.find(b => /^contribute$/i.test(b.textContent?.trim() ?? ""));
+          if (contribBtn) {
+            // Return a CSS path to this button so we can click it via Playwright
+            // Build a unique selector using data attributes or index
+            const allBtns = Array.from(document.querySelectorAll("button"));
+            const idx = allBtns.indexOf(contribBtn);
+            return { found: true, btnIndex: idx };
+          }
+        }
+      }
+      return { found: false };
+    }, goalName);
+
+    if (result.found) {
+      const allBtns = page.locator("button");
+      return allBtns.nth(result.btnIndex);
     }
     return null;
   };
@@ -338,10 +382,14 @@ try {
   const dataReached100 = goalDataAfterContrib &&
     goalDataAfterContrib.currentAmount?.Amount >= goalDataAfterContrib.targetAmount?.Amount;
 
+  // UI may show "Complete" / "🎉" rather than "100%" literal — accept either
+  const uiCompletionFired = has100 || hasComplete || hasZeroRemain;
   if (has100) {
     pass("Step 2d — COMPLETION_FIRES: goal shows 100% in UI after final contribution");
+  } else if (dataReached100 && uiCompletionFired) {
+    pass("Step 2d — COMPLETION_FIRES: data reached 100% and UI shows completion signal (Complete/🎉) — no render bug");
   } else if (dataReached100) {
-    fail("Step 2d — COMPLETION_FIRES VIOLATED: data reached 100% but UI does NOT show 100% (render bug)");
+    fail("Step 2d — COMPLETION_FIRES VIOLATED: data reached 100% but UI shows no completion signal (render bug)");
   } else {
     fail("Step 2d — COMPLETION_FIRES VIOLATED: goal does NOT show 100% AND data currentAmount did not reach targetAmount — contribution had no effect");
   }

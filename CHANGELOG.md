@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **"+ Add" opens entity modals in place (C73/C79, foundation + Goal/Account/Budget).** The top-bar
+  "+ Add" menu now opens Goal, Account, and Budget add forms in a centered **FlipPanel modal** instead
+  of navigating to their screens, and those screens no longer carry an inline add card (they lead with
+  their content). New `uistate.UseAddTarget`/`SetAddTarget` atom + `app.AddHost` (mounted at the shell
+  root) drive the modal; each form is a reusable component (`GoalAddForm`/`AccountAddForm`/
+  `BudgetAddForm`) that keeps its own submit + validation so an invalid submit keeps the modal open and
+  a valid one closes it (working around FlipPanel's unconditional close-on-save). `EmptyStateCTA` gained
+  an `AddTarget` so an empty list's CTA opens the modal. Gate: `e2e/add_modal_check.mjs`.
+
 ### Added
 - **Quick-hit UX polish (L audits).** Budgets show the over/near summary as tone'd badges; the Reports
   screen now states the covered date range ("Covering … compared with …"); Rules' match/category/tags
