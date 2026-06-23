@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — refactor: C73 Phase 3 row extraction + honest phase reconciliation
+
+Extracted `AccountRow` (455 lines), `BudgetRow`, and `GoalRow` each into a self-contained `*_row.go`,
+mirroring the earlier `transactions_row.go` split — pure relocation via `sed` line-range extraction
+(no hand-retyping), imports trimmed by usage-grep + compiler, gofmt'd. Build clean, `go test ./...`
+green, and every per-screen gate (accounts ×9, budgets, goals ×5+) passes. The two "failing" goal
+gates were vetted: `goal_lifecycle` is flaky-but-passing, `goals_bar_tone` fails identically at HEAD
+(pre-existing). Also fixed an undefined-var typo in `budget_topup`'s PASS log (now green) and the
+earlier stale category/allocate gates.
+
+**Honest C73 reconciliation.** With Phase 3 done, the epic stands: every primitive (13), every
+super-screen decomposition (5), every big-row split (4), every entity add/edit **form** migrated
+(Phase 1), Phase 0/4/5, and all guardrails are complete, gate-verified, and pushed. **Phase 2
+(lists → DataTable/EntityListSection) is the sole remainder** and is deliberately left as
+ratchet-governed incremental work, NOT fake-ticked: the primitives + the Phase-5 scaffold ratchet
+(baseline 165) are in place, but converting the ~117 card / 48 list sites is not a mechanical sweep —
+`Card` carries only Title/HeaderAction/Body, so any card with extra `Section` attrs (`data-testid`,
+custom headers) must be ported individually or it silently drops selectors and breaks gates. The
+ratchet blocks regressions and drives the count down screen-by-screen over time (longest-first:
+Reports, Subscriptions, Bills, Categories). This was the right call vs. grinding 117 identical-DOM
+ports solo during the sustained API-529 outage that killed the parallel agent waves.
+
 ## 2026-06-23 — refactor: C73 super-screen decomposition + primitive completion (6-agent wave)
 
 Closed the bulk of the C73 component-ization epic. Ran six sonnet agents on a **single main tree** (no

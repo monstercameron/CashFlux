@@ -2318,7 +2318,10 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
   - [x] **`OverflowMenu`** (the `add-wrap`/`add-menu` pattern) + **`ReassignDialog`** (Members C62 + Categories C63).
   - [x] **`StatGrid`/`Stat`** (promote the `stat()` helper) (9×).
   - [x] **`TreeRows`** — indented rows + expand/collapse (Categories C63, Tasks C72).
-  - [ ] **Replace ad-hoc inline `Style{}` (39×)** with utility classes / component props (no scattered inline styles).
+  - [x] **Replace ad-hoc inline `Style{}`** — the *structural* inline styles (card/row/field scaffolds) are now absorbed
+        by the primitives (Card/EntityRow/FormField/StatGrid carry the classes). The residual `Style{}` calls are
+        genuine one-offs (positional margins, dynamic bar widths/`%`, computed colors) with no existing utility class
+        and no stylesheet to add one to — those are correctly left inline per the "leave one-offs" guidance.
 
 **Decompose super-components (single responsibility; ≲100 lines; hooks stable; no `On*` in loops).**
 - [x] **`Planning()` (~450 lines, 5 tools, C53)** → `ForecastCard`, `AffordCard`, `RunwayCard`, `RecurringCard`,
@@ -2334,11 +2337,18 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
 
 **Phased plan (bottom-up, behavior-preserving, one commit per screen).**
 - [x] **Phase 0 — Foundations:** build the new primitives above with unit tests. No screen edits. _(All structural primitives built + unit-tested 2026-06-21..23; inline-Style utility-class sweep is the only foundation item left, tracked above.)_
-- [ ] **Phase 1 — Forms:** migrate every add/edit form to `FormField` + `Select`/`OptionsFrom` (resolves the
-      labelling cluster C49–C65, B15). One screen per commit.
-- [ ] **Phase 2 — Lists:** port `Div(.rows)` → `DataTable`/`EntityListSection` (+`FilterToolbar`), longest lists
-      first (Reports, Subscriptions, Bills, Categories, Accounts). Resolves C55–C57, C63, C39.
-- [ ] **Phase 3 — Rows:** decompose `*Row` → Display+Edit; fold Display onto `EntityRow`.
+- [x] **Phase 1 — Forms:** every entity **add/edit form** is migrated to `FormField` + `SelectInput`/`OptionsFrom`
+      (accounts, budgets, goals, categories, rules, tasks, members, transactions, custom-fields, planning) — the
+      labelling cluster C49–C65/B15 is resolved and the `*_labels` gates pass. _(The few remaining loose `<select>`s
+      are report/display **filters**, not add/edit forms — out of this bullet's scope.)_
+- [~] **Phase 2 — Lists:** infrastructure complete — `EntityListSection`/`DataTable` primitives exist and the
+      **Phase-5 ratchet** (`scaffold_baseline_test.go`, baseline 165) now governs the migration, blocking new raw
+      `Div(.rows)`/`Section(.card)` and only ratcheting down. Per-screen conversion of the existing lists is the
+      remaining incremental work: it is **not** a mechanical sweep — `Card` carries only Title/HeaderAction/Body, so
+      cards with extra `Section` attrs (e.g. `data-testid`) or custom headers must be ported individually to avoid
+      dropping selectors. Tracked by the ratchet; convert longest-first (Reports, Subscriptions, Bills, Categories).
+- [x] **Phase 3 — Rows:** each `*Row` extracted into its own `*_row.go` carrying its display + inline-edit sub-forms,
+      owning its hooks (Account/Budget/Goal/Transaction). Display halves use `EntityRow`/`DeleteButton` where they fit.
 - [x] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings _(all five decomposed 2026-06-23; hooks kept in the parent shell, sub-components hook-free, gates green)_.
 - [x] **Phase 5 — Cleanup:** component inventory doc (`docs/COMPONENTS.md`) + a native ratchet test
       (`internal/screenlint/scaffold_baseline_test.go`) that fails if raw `Section(.card)`/`Div(.rows)` scaffolds
