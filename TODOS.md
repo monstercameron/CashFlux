@@ -14990,6 +14990,15 @@ _7 · General UX / Glanceability_
 
 ### G19. Workflows — "The Automator" (Raj) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** This page is already in strong shape — builder above the fold, staged-
+action remove (C65) + filled-but-unstaged save (C37) fixed, dry-run preview + Mermaid working, card
+titles already `H2` (the audit's "all H3" was stale), light-mode title/row contrast passing.
+- **"Run now" primary button fails contrast in light** — `.btn-primary` used dark-green text on the
+  mid-green accent (~2.1:1). Added `[data-theme="light"] .btn-primary { color: #fff }`, clearing the
+  large/bold-text AA bar — a **series-wide** win since it's the same primary button on every screen.
+- **Intentionally deferred**: the shell-level inter-card "black band" background bleed (systemic,
+  affects every page) and an in-place workflow Edit (a feature gap, C65, not a glamor item).
+
 **The story**
 Raj is a power-user household manager who wants to build a multi-condition, multi-action
 automation: he opens Workflows, fills in a name, picks a trigger, types a condition

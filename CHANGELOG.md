@@ -43,7 +43,9 @@ and every commit updates this file under `Unreleased`.
   **Categories (G17):** added an in-card "+ Add category" button to both the Expense and Income kind
   cards (add was previously only reachable from the command palette). **Rules (G18):** "Your rules"
   now leads the page (precedence chain next, the 15-row suggestions card last) instead of being
-  pushed below the fold, plus an in-card "+ Add rule" button.
+  pushed below the fold, plus an in-card "+ Add rule" button. **Workflows (G19):** primary buttons
+  ("Run now" etc.) now use white text in light mode — the previous dark-green-on-green failed AA
+  (~2.1:1); this fix applies app-wide.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

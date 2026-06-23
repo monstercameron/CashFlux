@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 4 — G15 Customize … G19 Workflows
+
+Cam kept adding glamor tickets (G15–G19) as I worked. Pattern across this wave: the deepest light-mode
+issues are all variations of one root cause I'd already cracked in G9/G14 — legacy components reading
+theme-engine runtime vars (`--text`, `.amount`) that don't switch with `[data-theme=light]`. So G15's
+and G16's "invisible amounts in light" CRITICALs were either already fixed by the G14 `.amount` pin
+(G15 vars) or a one-line class addition (G16 net-worth rows now carry `.amount`).
+
+The rest were contained structure/affordance fixes: G15 reordered the formula calculator above the
+custom-fields manager; G17 + G18 added the missing in-card "+ Add" buttons (Categories per-kind cards,
+Rules "Your rules" header) and G18 reordered so the user's rules lead instead of the 15-row suggestions
+card; G19 fixed the one real non-systemic item — the primary button's dark-green-on-green text failed
+AA in light, so primary buttons now use white text in light mode (app-wide win).
+
+Two systemic things I kept deferring with notes rather than risk: (1) the shell-level inter-card
+"black band" background bleed in light mode — the shell/bento read tokens the theme engine doesn't
+switch; that's a dedicated shell pass, and Cam's actively in the shell. (2) The general accent-button
+contrast for arbitrary custom accents — the theme engine should compute contrast-aware button text;
+I only nudged the default-accent light case. Series now spans G1–G19, all reviewed.
+
 ## 2026-06-23 - feat: GLAMOR series wave 3 — G12 Split, G13 Insights, G14 Documents
 
 Cam added five more glamor tickets (G12–G14 plus the earlier G7–G11). Worked through G12–G14.
