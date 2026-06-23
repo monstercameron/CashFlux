@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/importmap"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/pdftext"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -59,6 +62,12 @@ const visionExtractionSchema = `{
     }
   }
 }`
+
+// textExtractionSystemPrompt is the system prompt for "Extract with AI" on pasted
+// statement text (C74). It mirrors visionSystemPrompt but operates on raw text.
+const textExtractionSystemPrompt = "You extract bank/credit-card transactions from pasted statement text. " +
+	"Return ONLY a JSON object: {\"transactions\":[{\"date\":\"YYYY-MM-DD\",\"description\":\"...\",\"amount\":\"...\",\"category\":\"\"}]}. " +
+	"Amount: negative for money out/expenses (e.g. \"-45.00\"), positive for money in. No prose, no markdown."
 
 // Documents imports transactions two ways: paste CSV (no AI), or read a receipt/
 // statement image with the OpenAI vision model (bring-your-own-key). Extracted
@@ -204,6 +213,13 @@ func Documents() ui.Node {
 		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
 		stRows, err := statement.ParseAny(strings.NewReader(data), dec)
 		if err != nil {
+			// Tier 3: scanned/image-only or encrypted PDF — don't show the wizard,
+			// show a helpful message directing the user to Extract with AI or image import.
+			if errors.Is(err, pdftext.ErrNoText) || errors.Is(err, pdftext.ErrEncrypted) ||
+				strings.Contains(err.Error(), "no text found") || strings.Contains(err.Error(), "PDF is encrypted") {
+				msg.Set(uistate.T("documents.scannedPdf"))
+				return
+			}
 			// If the error is about missing columns, offer the wizard instead of a
 			// bare error message (C74 wizard path). Also try to populate the wizard
 			// header from a raw Parse so the user can see column names.
@@ -409,6 +425,150 @@ func Documents() ui.Node {
 		}
 	})
 
+	// extractWithAI (C74) sends the pasted statement text to the LLM for extraction,
+	// using the same pipeline (extract.ParseRows → draft.Set) as the image import path.
+	// Gated on OpenAI key / backend, like readAI.
+	extractWithAI := ui.UseEvent(func() {
+		if settings.OpenAIKey == "" && !useBackendAI {
+			needsKey.Set(true)
+			return
+		}
+		data := strings.TrimSpace(stmtText.Get())
+		if data == "" {
+			aiErr.Set(uistate.T("documents.stmtEmpty"))
+			return
+		}
+		aiLoading.Set(true)
+		aiErr.Set("")
+		needsKey.Set(false)
+		model := settings.OpenAIModel
+		if model == "" {
+			model = "gpt-4o-mini"
+		}
+		msgs := []ai.Message{
+			{Role: ai.RoleSystem, Content: textExtractionSystemPrompt},
+			{Role: ai.RoleUser, Content: data},
+		}
+		onResult := func(content string, _ ai.Usage) {
+			aiLoading.Set(false)
+			rows, err := extract.ParseRows(content)
+			if err != nil {
+				aiErr.Set(err.Error())
+				return
+			}
+			if len(rows) == 0 {
+				aiErr.Set(uistate.T("documents.noneFound"))
+				return
+			}
+			draft.Set(rows)
+			msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+		}
+		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
+		if useBackendAI {
+			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, msgs, 0.1, onResult, onError)
+		} else {
+			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, msgs, 0.1, onResult, onError)
+		}
+	})
+
+	// categorizeDraft (C74) runs two passes over the draft rows:
+	// Pass 1 — deterministic rules (free, no network).
+	// Pass 2 — AI for still-uncategorized rows (BYO-key or backend, opt-in).
+	categorizeDraft := ui.UseEvent(func() {
+		rows := draft.Get()
+		if len(rows) == 0 {
+			return
+		}
+		// Pass 1: deterministic rules (free, local)
+		appRules := app.Rules()
+		changed := false
+		updated := make([]extract.Row, len(rows))
+		copy(updated, rows)
+		for i, r := range updated {
+			if r.Category == "" {
+				if cat := rules.Category(appRules, r.Description, r.Description); cat != "" {
+					updated[i].Category = cat
+					changed = true
+				}
+			}
+		}
+		if changed {
+			draft.Set(updated)
+		}
+		// Pass 2: AI for still-uncategorized rows (BYO-key, opt-in)
+		if settings.OpenAIKey == "" && !useBackendAI {
+			if changed {
+				msg.Set(uistate.T("documents.categorizing"))
+			}
+			return
+		}
+		// Gather uncategorized descriptions
+		type pending struct {
+			idx  int
+			desc string
+		}
+		var pendings []pending
+		for i, r := range updated {
+			if r.Category == "" {
+				pendings = append(pendings, pending{i, r.Description})
+			}
+		}
+		if len(pendings) == 0 {
+			msg.Set(uistate.T("documents.categorizing"))
+			return
+		}
+		// Build category list
+		cats := app.Categories()
+		catNames := make([]string, 0, len(cats))
+		for _, c := range cats {
+			catNames = append(catNames, c.Name)
+		}
+		// Build prompt
+		var sb strings.Builder
+		sb.WriteString("Given these household spending categories: ")
+		sb.WriteString(strings.Join(catNames, ", "))
+		sb.WriteString("\n\nFor each transaction description below, reply with ONLY the best-fit category name from the list above (or empty string if none fits). One line per transaction, same order.\n\n")
+		for j, p := range pendings {
+			sb.WriteString(strconv.Itoa(j+1) + ". " + p.desc + "\n")
+		}
+		model := settings.OpenAIModel
+		if model == "" {
+			model = "gpt-4o-mini"
+		}
+		msgs := []ai.Message{
+			{Role: ai.RoleSystem, Content: "You are a household finance assistant. Categorize transaction descriptions."},
+			{Role: ai.RoleUser, Content: sb.String()},
+		}
+		aiLoading.Set(true)
+		onResult := func(content string, _ ai.Usage) {
+			aiLoading.Set(false)
+			lines := strings.Split(strings.TrimSpace(content), "\n")
+			cur := draft.Get()
+			next := make([]extract.Row, len(cur))
+			copy(next, cur)
+			for j, p := range pendings {
+				if j < len(lines) {
+					cat := strings.TrimSpace(lines[j])
+					// Strip leading "1. " numbering if the model echoes it back
+					if idx := strings.Index(cat, ". "); idx >= 0 && idx < 3 {
+						cat = cat[idx+2:]
+					}
+					if cat != "" {
+						next[p.idx].Category = cat
+					}
+				}
+			}
+			draft.Set(next)
+			msg.Set(uistate.T("documents.categorizing"))
+		}
+		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
+		if useBackendAI {
+			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, msgs, 0.1, onResult, onError)
+		} else {
+			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, msgs, 0.1, onResult, onError)
+		}
+	})
+
 	importDraft := ui.UseEvent(Prevent(func() {
 		rows := draft.Get()
 		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
@@ -540,6 +700,8 @@ func Documents() ui.Node {
 					),
 					Div(Style(map[string]string{"margin-top": "0.6rem"}),
 						Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+						Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
+							OnClick(extractWithAI), uistate.T("documents.extractAI")),
 					),
 				),
 				// C74 — per-bank import cadence reminder: creates a monthly to-do so the
@@ -605,6 +767,15 @@ func Documents() ui.Node {
 					_ = app.DeleteImportProfile(id)
 					rev.Set(rev.Get() + 1)
 				},
+			),
+		),
+		// C74 — Suggest categories button: shown when draft is non-empty.
+		// Pass 1 (deterministic rules) runs free; Pass 2 (AI) only fires with a key.
+		If(len(rows) > 0,
+			Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "suggest-categories-btn"),
+					OnClick(categorizeDraft), uistate.T("documents.suggestCategories")),
+				If(aiLoading.Get(), Span(css.Class("muted"), uistate.T("documents.categorizing"))),
 			),
 		),
 		// Review results sit below the import inputs that produce them (G14 §1): a

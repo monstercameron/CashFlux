@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- C74 Tier 3: friendly message for scanned/encrypted PDFs directing user to "Extract with AI" or image import
+- C74: "Extract with AI" button on statement card — sends pasted text to LLM, parses result into draft rows (same pipeline as image import)
+- C74: "Suggest categories" button on draft review — applies deterministic rules first (free/local), then optional AI for uncategorized rows
+- C74 e2e: `e2e/c74_ai_extract_check.mjs` asserts Extract-with-AI + Suggest-categories buttons render and are operable
+
 ### Changed
 - **C73 Phase 2 COMPLETE — every screen card ported to primitives (2026-06-23).** Drove the raw-scaffold count
   **165 → 38**, eliminating **all** bespoke `Section(css.Class("card"))` markup from `internal/screens` (now zero):

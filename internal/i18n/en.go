@@ -1667,6 +1667,12 @@ var english = Catalog{
 	"documents.cadenceBtn":             "Remind me monthly",
 	"documents.cadenceCreated":         "Reminder added to your to-do list — due %s.",
 
+	// C74 final sub-bullets: scanned PDF message, Extract with AI, Suggest categories
+	"documents.scannedPdf":        "This PDF is scanned or encrypted — there's no text to extract directly. Use \"Extract with AI\" below to read it, or take a photo and use the image import above.",
+	"documents.extractAI":         "Extract with AI",
+	"documents.categorizing":      "Working…",
+	"documents.suggestCategories": "Suggest categories",
+
 	// C65 — workflow condition variable reference (Workflows screen)
 	"workflows.conditionHint":     "Available variables — click to insert:",
 	"workflows.conditionExamples": "Examples: txn_abs > 200  ·  txn_amount < 0  ·  contains(txn_payee, \"uber\")  ·  txn_category == \"Dining\"",
