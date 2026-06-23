@@ -222,11 +222,13 @@ func Activity() ui.Node {
 	})
 
 	if len(entries) == 0 {
-		return Section(css.Class("card"),
-			H2(css.Class("card-title"), navTitle),
-			Div(css.Class("row row-filter"), filterControl),
-			P(css.Class("empty"), emptyMsg),
-		)
+		return uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: navTitle,
+			Body: Fragment(
+				Div(css.Class("row row-filter"), filterControl),
+				P(css.Class("empty"), emptyMsg),
+			),
+		})
 	}
 
 	rows := make([]ui.Node, 0, len(entries))
@@ -238,12 +240,14 @@ func Activity() ui.Node {
 		}))
 	}
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), navTitle),
-		P(css.Class("row-meta", tw.TextFaint), subTitle),
-		Div(css.Class("row row-filter"), filterControl),
-		Div(css.Class("rows"), rows),
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: navTitle,
+		Body: Fragment(
+			P(css.Class("row-meta", tw.TextFaint), subTitle),
+			Div(css.Class("row row-filter"), filterControl),
+			Div(css.Class("rows"), rows),
+		),
+	})
 }
 
 // ─── feed synthesis ───────────────────────────────────────────────────────────

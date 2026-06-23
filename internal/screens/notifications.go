@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -41,10 +42,10 @@ func NotificationCenter() ui.Node {
 	})
 
 	if len(feed) == 0 {
-		return Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("nav.notifications")),
-			P(css.Class("empty"), uistate.T("notifications.empty")),
-		)
+		return uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("nav.notifications"),
+			Body:  P(css.Class("empty"), uistate.T("notifications.empty")),
+		})
 	}
 
 	pr := uistate.UsePrefs().Get()
