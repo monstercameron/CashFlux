@@ -23389,6 +23389,17 @@ Deferred: full inline-Edit for existing workflows (C65) — scope too large for 
 
 ### GX17. Loading & skeleton states — "The Waiting Moment" — 2026-06-23 ★
 
+✅ RESOLVED (2026-06-23). Contained fixes shipped (code live on origin in commit 71d952a; this block
+added after the subagent's TODOS edit failed to land):
+- **GX17-F1 (HIGH, CSS + 1-line class)** — Insights "thinking" bubble was invisible in light mode;
+  added an `.insights-thinking` class with a `[data-theme="light"]` rule (visible surface + dark text).
+- **GX17-F4 (i18n)** — verified `allocate.explainAI`/`explainAINarrative`/`thinking` keys already present.
+- **GX17-F6 (CSS-ONLY)** — `[data-theme="light"] .boot-ring-arc { stroke: #56565c }` so the boot spinner
+  arc shows on the light splash regardless of accent.
+- **Deferred (build-gated GO-STRUCTURAL on the C73 refactor):** F2 (LoadingCard component replacing the
+  bare `notReady` text on the 5 high-traffic screens), F3 (skeleton placeholders), F5 (`aria-busy` on
+  AI loading buttons).
+
 **The story:** Every async moment in CashFlux — the initial boot, the wasm hydration window, an AI call in Insights or Documents, an allocation explanation — is a moment where the app either earns the user's trust or loses it. This pass audits every loading affordance end-to-end: boot splash, the `common.notReady` hydration guard, the Insights thinking bubble, the Documents/Allocate AI-loading states, and the absence of skeleton placeholders. GX2 covered empty states and flagged loading as not deeply reviewed; this completes it. Cross-ref: GX9 (splash dismiss), GX2 (boot splash card bg GX2-F6), W1-W19 (shimmer roadmap item).
 
 **Drive script:** `node e2e/gx_17_loading.mjs`
