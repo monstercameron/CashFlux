@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -31,7 +32,7 @@ const billsHorizonDays = 90
 func Bills() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -162,29 +163,31 @@ func Bills() ui.Node {
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),
 		Div(css.Class("bills-layout"),
-			Section(css.Class("card"),
-				H2(css.Class("card-title"), uistate.T("nav.bills")),
-				body,
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					If(len(allUpcoming) > 0,
-						Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggleShowAll), toggleLabel),
-					),
-					If(len(upcoming) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
-						csvAmount := func(m money.Money) string {
-							c, err := rates.Convert(m, base)
-							if err != nil {
-								c = money.New(m.Amount, base)
+			uiw.EntityListSection(uiw.EntityListSectionProps{
+				Title: uistate.T("nav.bills"),
+				Body: Fragment(
+					body,
+					Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+						If(len(allUpcoming) > 0,
+							Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggleShowAll), toggleLabel),
+						),
+						If(len(upcoming) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
+							csvAmount := func(m money.Money) string {
+								c, err := rates.Convert(m, base)
+								if err != nil {
+									c = money.New(m.Amount, base)
+								}
+								return money.FormatMinor(c.Amount, currency.Decimals(base))
 							}
-							return money.FormatMinor(c.Amount, currency.Decimals(base))
-						}
-						downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
-					}), uistate.T("bills.downloadCsv"))),
+							downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
+						}), uistate.T("bills.downloadCsv"))),
+					),
 				),
-			),
-			If(len(allUpcoming) > 0, Section(css.Class("card"),
-				H2(css.Class("card-title"), uistate.T("bills.calendar", monthLabel(now))),
-				billsCalendar(bills.MonthCalendar(allUpcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
-			)),
+			}),
+			If(len(allUpcoming) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+				Title: uistate.T("bills.calendar", monthLabel(now)),
+				Body:  billsCalendar(bills.MonthCalendar(allUpcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
+			})),
 		),
 	)
 }
