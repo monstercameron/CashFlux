@@ -12,9 +12,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -133,6 +135,34 @@ func Allocate() ui.Node {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
+	// amountStr is declared early so the income pre-fill handler (below) can reference
+	// it; its OnInput handler (onAmount) is wired after the other form-state hooks.
+	amountStr := ui.UseState("")
+
+	// incomeNudgeDismissed tracks whether the user dismissed the income pre-fill banner
+	// for this session. The hook is at a stable top-level position (not in a loop).
+	incomeNudgeDismissed := ui.UseState(false)
+	dismissIncomeNudge := ui.UseEvent(Prevent(func() { incomeNudgeDismissed.Set(true) }))
+
+	// Compute this month's income once (pure read — no hooks).
+	settings0 := app.Settings()
+	base0 := settings0.BaseCurrency
+	if base0 == "" {
+		base0 = "USD"
+	}
+	rates0 := currency.Rates{Base: base0, Rates: settings0.FXRates}
+	mStart0, mEnd0 := dateutil.MonthRange(time.Now())
+	monthIncome, _, _ := ledger.PeriodTotals(app.Transactions(), mStart0, mEnd0, rates0)
+
+	// prefillIncomeAmount copies the period income into the amount input field.
+	// The event hook is at a stable render position — not in a loop.
+	prefillIncomeAmount := ui.UseEvent(Prevent(func() {
+		dec0 := currency.Decimals(base0)
+		formatted := money.FormatMinor(monthIncome.Amount, dec0)
+		amountStr.Set(formatted)
+		incomeNudgeDismissed.Set(true)
+	}))
+
 	// allocationMode toggles between score-weighted and fill-to-target (envelope) allocation.
 	allocationMode := ui.UseState("weighted")
 	onMode := ui.UseEvent(func(e ui.Event) { allocationMode.Set(e.GetValue()) })
@@ -179,7 +209,6 @@ func Allocate() ui.Node {
 	onWDebt := ui.UseEvent(func(v string) { wDebt.Set(v) })
 	onWGoal := ui.UseEvent(func(v string) { wGoal.Set(v) })
 	onProfName := ui.UseEvent(func(v string) { profName.Set(v) })
-	amountStr := ui.UseState("")
 	reserveStr := ui.UseState("")
 	maxPerStr := ui.UseState("")
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
@@ -507,7 +536,34 @@ func Allocate() ui.Node {
 		savedOpts = append(savedOpts, Option(Value(key), SelectedIf(profile.Get() == key), p.Name))
 	}
 
+	// incomeNudge is the income pre-fill banner: shown whenever there is positive
+	// income this month AND the user hasn't dismissed or used it yet. A dedicated
+	// Section (not inline in the form card) so it can be targeted by tests and kept
+	// as a clear visual affordance separate from the manual inputs.
+	showIncomeNudge := monthIncome.Amount > 0 && !incomeNudgeDismissed.Get()
+	incomeNudge := Fragment()
+	if showIncomeNudge {
+		incomeNudge = Section(css.Class("card"),
+			Attr("data-testid", "income-nudge"),
+			Attr("aria-label", uistate.T("allocate.incomeNudgeLabel")),
+			P(css.Class("muted"), uistate.T("allocate.incomeNudgeDesc",
+				fmtMoney(monthIncome))),
+			Div(css.Class(tw.Flex, tw.Gap2),
+				Button(css.Class("btn btn-primary"), Type("button"),
+					Attr("data-testid", "income-nudge-apply"),
+					OnClick(prefillIncomeAmount),
+					uistate.T("allocate.incomeNudgeApply", fmtMoney(monthIncome)),
+				),
+				Button(css.Class("btn"), Type("button"),
+					OnClick(dismissIncomeNudge),
+					uistate.T("allocate.incomeNudgeDismiss"),
+				),
+			),
+		)
+	}
+
 	return Div(
+		incomeNudge,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("allocate.profileTitle")),
 			P(css.Class("muted"), uistate.T("allocate.profileDesc")),

@@ -411,10 +411,10 @@ func TestDistributeFillToTarget(t *testing.T) {
 
 	t.Run("sum invariant holds across varied inputs", func(t *testing.T) {
 		cases := []struct {
-			label   string
-			ranked  []Ranked
-			total   int64
-			opts    SplitOptions
+			label  string
+			ranked []Ranked
+			total  int64
+			opts   SplitOptions
 		}{
 			{"zero total", []Ranked{mkGoal("g1", 1, 500)}, 0, SplitOptions{}},
 			{"negative total", []Ranked{mkGoal("g1", 1, 500)}, -100, SplitOptions{}},

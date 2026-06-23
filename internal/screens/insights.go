@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -201,6 +202,9 @@ func Insights() ui.Node {
 		ctx := "Live context — " + aiCtx.Line()
 		if names := categoryNames(app.Categories()); names != "" {
 			ctx += " The user's categories: " + names + "."
+		}
+		if cfSummary := customFieldsSummary(app.CustomFieldDefs()); cfSummary != "" {
+			ctx += " The user's custom fields: " + cfSummary + "."
 		}
 		ctx += " For any specific number (a category total, an account balance, affordability), CALL A TOOL — never guess or say you lack the data."
 		msgs := []ai.Message{
@@ -884,6 +888,27 @@ func Insights() ui.Node {
 			),
 		})),
 	)
+}
+
+// customFieldsSummary builds a compact plain-English list of custom field definitions
+// for use in the Insights context message, so the AI can answer questions that
+// reference custom fields (e.g. "show spending by Property"). Each field is described
+// as "<label> (<type>, on <entity>)"; multiple fields are comma-separated.
+// Returns an empty string when no custom fields are defined.
+func customFieldsSummary(defs []customfields.Def) string {
+	if len(defs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(defs))
+	for _, d := range defs {
+		desc := d.Label + " (" + string(d.Type)
+		if d.Type == customfields.TypeSelect && len(d.Options) > 0 {
+			desc += ": " + strings.Join(d.Options, "/")
+		}
+		desc += ", on " + d.EntityType + ")"
+		parts = append(parts, desc)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // conversationTitle derives a chat's title from its first user message (truncated),
