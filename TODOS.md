@@ -2341,12 +2341,14 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
       (accounts, budgets, goals, categories, rules, tasks, members, transactions, custom-fields, planning) — the
       labelling cluster C49–C65/B15 is resolved and the `*_labels` gates pass. _(The few remaining loose `<select>`s
       are report/display **filters**, not add/edit forms — out of this bullet's scope.)_
-- [~] **Phase 2 — Lists:** infrastructure complete — `EntityListSection`/`DataTable` primitives exist and the
-      **Phase-5 ratchet** (`scaffold_baseline_test.go`, baseline 165) now governs the migration, blocking new raw
-      `Div(.rows)`/`Section(.card)` and only ratcheting down. Per-screen conversion of the existing lists is the
-      remaining incremental work: it is **not** a mechanical sweep — `Card` carries only Title/HeaderAction/Body, so
-      cards with extra `Section` attrs (e.g. `data-testid`) or custom headers must be ported individually to avoid
-      dropping selectors. Tracked by the ratchet; convert longest-first (Reports, Subscriptions, Bills, Categories).
+- [~] **Phase 2 — Lists:** in progress — primitives extended (`Card`/`EntityListSection` gained `TestID`/`Attrs`/`Rows`
+      so a hand-rolled `Section(.card)` with a test id or list body ports without dropping selectors). **All five named
+      priority screens are fully ported** — Reports, Subscriptions, Bills, Categories, Accounts — plus the not-ready/
+      empty `Section(.card)` guards across ~19 screens. Scaffold count driven **165 → 118**, each step gate-verified
+      and locked by the Phase-5 ratchet (now at 118; it can only ratchet down). Remaining: the non-priority long-tail
+      screens (planning, split, workflows, widgets, customize_formula, rules, insights, documents, …) and a residual
+      of irreducibly-bespoke cards (custom multi-button `.card-head` headers, `card-alert` banners) that can't port
+      without DOM change — those stay hand-rolled by design. The ratchet drives the tail down screen-by-screen.
 - [x] **Phase 3 — Rows:** each `*Row` extracted into its own `*_row.go` carrying its display + inline-edit sub-forms,
       owning its hooks (Account/Budget/Goal/Transaction). Display halves use `EntityRow`/`DeleteButton` where they fit.
 - [x] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings _(all five decomposed 2026-06-23; hooks kept in the parent shell, sub-components hook-free, gates green)_.
@@ -17990,6 +17992,837 @@ The following script adjustments are needed before re-running:
 - GX2-F7 — Planning CTA button says "Add" — too terse (one-line wording change; deferred to next GX pass).
 - GX2-F8 — Reports/Documents/Customize/Allocate bare `.empty` (structural; deferred to screen-level UX passes).
 
+## The story
+
+A first-time user launches CashFlux on a fresh install. Every screen she visits is empty. She
+needs to be oriented — told what the screen is for, invited to take the first action, never
+dropped in front of a silent void. The same story plays for an existing user who navigates to a
+past month with no data. The quality of these first-run moments determines whether she forms a
+habit or closes the tab.
+
+---
+
+## Drive script
+
+`node e2e/gx_02_empty_loading.mjs`
+
+```
+Exit 0 — 2026-06-23
+57 screenshots produced
+```
+
+Screenshots in `e2e/screenshots/` with prefix `gx02_`.
+Measurements JSON: `e2e/screenshots/gx02_measurements.json`
+
+---
+
+## What already works well (keep) ✓
+
+- **Boot splash is present and branded.** `#boot` card renders with `.boot-ring` + `.boot-word` +
+  subtext "Getting your money in order…". Wasm-interception trick confirms it shows before WASM
+  loads. Dark background `rgb(14,14,15)` is intentional and legible. ✓
+- **`EmptyStateCTA` component exists and is coherent.** `internal/screens/emptystate.go` defines a
+  single reusable component with icon + message + primary button. All three slots (AddTarget /
+  Href / FocusID) are wired. The green CTA button (`rgb(46,139,87)` bg, `rgb(5,46,19)` text) is
+  consistent across every screen that uses it. ✓
+- **Correct button text on most screens.** Budgets ("Create your first budget"), Goals ("Add your
+  first goal"), To-do ("Add your first task"), Members ("Add your first member"), Rules ("Add your
+  first rule"), Bills ("Set up a liability account"), Subscriptions ("Add transactions"),
+  Categories ("Add an expense category"), Split ("Go to Members →") — all clear and action-
+  oriented. ✓
+- **EmptyStateCTA flex layout is correct.** `display: flex; align-items: center; gap: 13.6px` —
+  icon, message, and button stack cleanly in a vertical column at every breakpoint. ✓
+- **Dark-mode empty text contrast is adequate.** `color: rgb(108,108,113)` on
+  `background-color: rgba(0,0,0,0)` (inheriting from dark card ~`rgb(28,28,30)`) gives
+  approximately 4.5:1 contrast ratio. Passes WCAG AA for normal text at 14.5px. ✓
+- **`common.notReady` guard renders on every screen.** All screens that gate on app-state readiness
+  fall through to `P(css.Class("empty"), uistate.T("common.notReady"))` before the main render
+  — no blank-page flash in the wiped-data test. ✓
+
+---
+
+## Structure fixes (bottom-up, grouped)
+
+### GX2-F1. CRITICAL — Transactions and Accounts have no EmptyStateCTA — bare text only [GO-STRUCTURAL] ★★
+
+**Evidence:** `gx02_transactions_empty_dark_1280.png`, `gx02_accounts_empty_dark_1280.png`
+
+**Measured (dark/1280):**
+```
+transactions: { emptyText: color rgb(108,108,113) ... }, emptyCTA: { _missing }
+accounts:     { emptyText: color rgb(108,108,113) ... }, emptyCTA: { _missing }
+```
+
+Transactions (`internal/screens/transactions.go:425`) renders:
+```go
+listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst")})
+```
+The `EmptyStateCTA` is called without `AddTarget`, `Href`, or `FocusID` — so `emptystate.go:74`
+falls through to the bare-message branch: `return P(css.Class("empty"), props.Message)`. The
+button and icon are silently dropped. The probe finds no `.empty-cta` because none is rendered.
+
+Accounts (`internal/screens/accounts.go`) shows the "welcome" banner on first run, which is a
+different code path — but after dismissal, the account list itself has the same bare-`P` pattern
+for `noAssets` (line 1071 in en.go). Neither screen's primary empty state has a CTA button.
+
+These are the two most-used screens in the app. A new user landing on either with no data sees
+only a single muted line of text — no pointer to what to do next.
+
+**Fix:** Add `AddTarget: "transaction"` / `AddTarget: "account"` to the respective `emptyCTAProps`
+calls, and add the `Icon` field to render the glyph slot:
+```go
+// transactions.go
+listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+    Message:   uistate.T("transactions.empty"),
+    CTALabel:  uistate.T("transactions.addFirst"),
+    AddTarget: "transaction",
+    Icon:      icon.Transactions,
+})
+
+// accounts.go — for the noAssets branch
+ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+    Message:   uistate.T("accounts.noAssets"),
+    CTALabel:  uistate.T("accounts.addFirst"),
+    AddTarget: "account",
+    Icon:      icon.Accounts,
+})
+```
+
+---
+
+### GX2-F2. CRITICAL — Insights has no empty state whatsoever — `.empty` is missing from DOM [GO-STRUCTURAL] ★★
+
+**Evidence:** `gx02_insights_empty_dark_1280.png`, `gx02_insights_empty_dark_768.png`
+
+**Measured (both widths, both themes):**
+```
+insights: { emptyText: { _missing }, emptyCTA: { _missing } }
+```
+
+The Insights screen (`internal/screens/insights.go`) shows the chat/Q&A interface regardless of
+whether there is any account or transaction data. When the wiped dataset is active, the screen
+renders its input form but gives no orientation message — no "Add an account first to get
+grounded answers", no "What do you want to know about your money?" prompt. The affordance
+`"insights.affordNoData"` exists in en.go ("No balance data yet — add an account to get a
+grounded answer.") but is only shown in-context inside the affordability widget, not as a
+screen-level empty state.
+
+A first-time user on an empty database landing on Insights sees a chat box with no context about
+what it does or why it needs data first. The empty state is structurally absent.
+
+**Fix:** Add a conditional empty state before the main Insights content body that fires when
+accounts/transactions are zero:
+```go
+// insights.go — add before the chat body render
+if len(accounts) == 0 {
+    return Section(css.Class("card"), ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+        Message:   uistate.T("insights.emptyNoData"),
+        CTALabel:  uistate.T("accounts.addFirst"),
+        AddTarget: "account",
+        Icon:      icon.Insights,
+    }))
+}
+```
+Add `"insights.emptyNoData": "Add accounts and transactions to get AI-powered answers about your finances."` to `en.go`.
+
+---
+
+### GX2-F3. HIGH — Artifacts and Workflows have no EmptyStateCTA — bare text, no guidance [GO-STRUCTURAL] ★
+
+**Evidence:** `gx02_artifacts_empty_dark_1280.png`, `gx02_workflows_empty_dark_1280.png`
+
+**Measured:**
+```
+artifacts:  { emptyCTA: { _missing } }
+workflows:  { emptyCTA: { _missing } }
+```
+
+Source confirms bare `P.empty` only:
+- `artifacts.go:111`: `listBody := P(css.Class("empty"), uistate.T("artifacts.empty"))`
+- `workflows.go:43`: `listBody := P(css.Class("empty"), uistate.T("workflows.empty"))`
+
+The Artifacts text ("No artifacts yet. Upload an image or import a dataset.") is more helpful
+than most but still renders as a muted single line with no action affordance. The Workflows text
+("No workflows yet. Create one above.") points vaguely "above" — which may be confusing on
+small screens.
+
+**Fix:** Both screens have an upload/create button above the list. The bare message is acceptable
+IF the create button is clearly visible. At 768px the "above" pointer is still usually in-frame.
+Raise to GO-STRUCTURAL to add icon-only CTA blocks matching other screens, or accept as
+LOW/deferred given the in-page create affordance.
+
+---
+
+### GX2-F4. HIGH — Dashboard empty state uses different color and smaller font than all other screens [CSS-ONLY] ★
+
+**Evidence:** `gx02_dashboard_empty_dark_1280.png`, `gx02_dashboard_empty_light_1280.png`
+
+**Measured:**
+```
+dashboard empty: color rgb(171,171,179)  font-size 13px   ← lighter, smaller
+all other screens: color rgb(108,108,113) font-size 14.5px ← darker, standard
+```
+
+Dashboard uses the `.empty` class on `P` elements inside bento widget bodies (`.wbody`). The
+`13px` font-size and `rgb(171,171,179)` color come from a CSS rule scoped to the widget context
+that overrides the shared `.empty` rule. This is inconsistent — the same concept (empty state
+message) has two different visual weights depending on where it appears.
+
+The `rgb(171,171,179)` color on a dark card (`~rgb(22,22,24)`) gives approximately 7:1 contrast
+— actually more legible than the standard `rgb(108,108,113)`. But the visual inconsistency
+across the app is the issue: the user's mental model of what an "empty" message looks like gets
+split.
+
+**Fix:** Standardize to a single `.empty` computed value. Either:
+(a) remove the widget-context override and let bento widgets use the same 14.5px / `rgb(108,108,113)` as list screens, or
+(b) promote the lighter/brighter `rgb(171,171,179)` color to the global `.empty` rule — it has better contrast.
+
+Option (b) is a one-liner CSS-ONLY fix:
+```css
+/* web/index.html — unify empty state text color */
+.empty {
+  color: var(--text-faint, rgb(171,171,179));  /* was rgb(108,108,113) on list screens */
+  font-size: 14px;
+}
+/* Remove the bento-widget-specific override if one exists */
+.wbody .empty { font-size: inherit; }
+```
+
+---
+
+### GX2-F5. HIGH — Light-mode empty text has insufficient contrast [CSS-ONLY] ★
+
+**Evidence:** `gx02_transactions_empty_light_1280.png`, `gx02_accounts_empty_light_1280.png`
+
+**Measured (light theme):**
+```
+.empty color: rgb(108,108,113)
+.empty background (inherited from card): rgba(0,0,0,0) → resolves to light card ~rgb(240,238,232)
+```
+
+Approximate contrast ratio: `rgb(108,108,113)` on `rgb(240,238,232)` ≈ **3.2:1** — fails
+WCAG AA (requires 4.5:1 for normal text at 14.5px). The dark-mode version passes; the
+light-mode version does not.
+
+This is the same class of issue as GX1-F1/F2 — light-mode tokens inherited from dark-mode
+computed values. The `var(--text-faint)` CSS variable resolves to the dark-mode faint value
+(~108 out of 255 lightness) which is too light for a warm-white card surface.
+
+**Fix:**
+```css
+[data-theme="light"] .empty {
+  color: var(--text-dim, #56565c) !important;  /* ~rgb(86,86,92) — contrast ~5.8:1 on warm white */
+}
+```
+This also fixes the Dashboard widget empty state if the `.wbody .empty` override is removed.
+
+---
+
+### GX2-F6. MEDIUM — Boot splash card background is transparent [CSS-ONLY]
+
+**Evidence:** `gx02_boot_splash_1280_dark.png`
+
+**Measured:**
+```
+splash.cardBg: rgba(0,0,0,0)   ← transparent
+splash.background (body): rgb(14,14,15)
+```
+
+The `.boot-card` has no background of its own — it sits on the body dark background. In dark
+mode this is invisible (card blends with body). If the boot background ever changes or the card
+gets a drop-shadow, the transparent card will look unfinished. More importantly, in light mode
+(if the boot splash is ever toggled), the transparent card on a warm-white body would make the
+ring and word invisible.
+
+**Fix:**
+```css
+.boot-card {
+  background: var(--bg-card, rgba(28,28,30,0.8));
+  border-radius: 16px;
+  padding: 32px;
+}
+```
+Low-risk CSS-ONLY; the visual change in dark mode is subtle (slightly elevated card vs body).
+
+---
+
+### GX2-F7. MEDIUM — Planning empty CTA button says "Add" — too terse [GO-STRUCTURAL]
+
+**Evidence:** `gx02_planning_empty_dark_1280.png`
+
+**Measured:**
+```
+planning emptyCTA.btnText: "Add"
+```
+
+All other screens with CTA buttons use descriptive labels: "Add your first goal", "Create your
+first budget", "Add your first task". Planning says "Add" — uninformative for a first-time user
+who doesn't know what they're adding. The CTA label comes from `uistate.T("recurring.add")` or
+`uistate.T("plans.add")` which resolve to the same short form.
+
+**Fix:** Update `en.go`:
+```go
+"recurring.add": "Add a recurring cash flow",
+"plans.add":     "Add your first plan",
+```
+
+---
+
+### GX2-F8. MEDIUM — Reports, Documents, Customize, Allocate: bare `.empty` only [GO-STRUCTURAL]
+
+**Evidence:** `gx02_reports_empty_dark_1280.png`, `gx02_documents_empty_dark_1280.png`,
+`gx02_customize_empty_dark_1280.png`, `gx02_allocate_empty_dark_1280.png`
+
+**Measured:** all four have `emptyCTA: { _missing }`.
+
+Reports and Allocate show bare messages without any orientation CTA. Documents shows "No imports
+yet. Import a CSV or an image above." — the inline instruction is partially sufficient since the
+upload controls are in the same view. Customize ("No formulas yet" context) similarly. These are
+power-user screens where the inline form is always visible, so the urgency is lower than
+Transactions/Accounts. Nonetheless the inconsistency with other screens is noticeable.
+
+Priority: MEDIUM — acceptable deferred fix after GX2-F1/F2.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| Screen | Route | Empty State Type | Quality | Notes |
+|--------|-------|-----------------|---------|-------|
+| Dashboard | `/` | `P.empty` in bento widgets | MEDIUM | Smaller font (13px), lighter color (171,171,179) vs standard — inconsistent |
+| Transactions | `/transactions` | `P.empty` only | POOR | No CTA icon or button; primary user entry point; `AddTarget` silently dropped (see GX2-F1) |
+| Accounts | `/accounts` | Welcome banner only | POOR | Welcome banner disappears after first visit; underlying bare-P empty state has no CTA (GX2-F1) |
+| Budgets | `/budgets` | Full `EmptyStateCTA` | GOOD | Icon + message + "Create your first budget" button ✓ |
+| Goals | `/goals` | Full `EmptyStateCTA` | GOOD | Icon + message + "Add your first goal" button ✓ |
+| To-do | `/todo` | Full `EmptyStateCTA` | GOOD | Icon + message + "Add your first task" button ✓ |
+| Planning | `/planning` | Full `EmptyStateCTA` | FAIR | CTA button says "Add" — too terse (GX2-F7) |
+| Allocate | `/allocate` | `P.empty` only | FAIR | Inline guidance sufficient for power-user screen; no icon CTA |
+| Reports | `/reports` | `P.empty` only | FAIR | Message explains; inline nav to Transactions nearby |
+| Insights | `/insights` | NONE | CRITICAL | No `.empty` element in DOM at all; first-time user gets chat box with no context (GX2-F2) |
+| Documents | `/documents` | `P.empty` only | FAIR | "Import above" pointer sufficient; upload controls always visible |
+| Artifacts | `/artifacts` | `P.empty` only | FAIR | Message present; no CTA button (GX2-F3) |
+| Workflows | `/workflows` | `P.empty` only | FAIR | "Create one above" pointer; GX2-F3 |
+| Bills | `/bills` | Full `EmptyStateCTA` | GOOD | "Set up a liability account" CTA correctly redirects to Accounts ✓ |
+| Subscriptions | `/subscriptions` | Full `EmptyStateCTA` | GOOD | "Add transactions" CTA ✓ |
+| Split | `/split` | Full `EmptyStateCTA` | GOOD | "Go to Members →" CTA ✓ |
+| Members | `/members` | Full `EmptyStateCTA` | GOOD | "Add your first member" ✓ |
+| Categories | `/categories` | Full `EmptyStateCTA` | GOOD | "Add an expense category" per section ✓ |
+| Rules | `/rules` | Full `EmptyStateCTA` | GOOD | "Add your first rule" ✓ |
+| Customize | `/customize` | `P.empty` only | FAIR | Power-user screen; inline form available |
+| Boot splash | — | `.boot-ring` + `.boot-word` | GOOD | Branded, catches pre-WASM correctly; cardBg transparent (GX2-F6) |
+| Transactions filtered | `/transactions` + "zzzzz" search | `P.empty` only | FAIR | No icon, single muted line; acceptable for transient filter-empty |
+
+---
+
+## Light-mode status
+
+Light-mode captures taken for: Dashboard, Transactions, Accounts, Budgets, Goals, Artifacts,
+Workflows (7 screens × 2 widths = 14 screenshots).
+
+**Critical finding:** Light-mode empty text color `rgb(108,108,113)` on light card surface
+(~`rgb(240,238,232)`) fails WCAG AA contrast (~3.2:1). Requires CSS-ONLY fix (GX2-F5).
+
+The light-mode card surface itself appears correct — the warm-white background is applying (the
+shell GX1-F1 issue affects the topbar/rail, not card content). Empty state text inside cards is
+the light-mode-specific gap.
+
+---
+
+## Probe hardening
+
+1. **Insights empty probe:** The current script measures `.empty` on the Insights screen, but
+   because Insights has no `.empty` element at all, it returns `_missing` — which is the correct
+   finding. No probe change needed; the measurement accurately documents the structural absence.
+
+2. **Transactions filtered-empty:** The search input probe (`input[type="search"]` etc.) succeeds
+   at 1280 but may silently skip typing if the input is not visible at 768 due to the topbar
+   wrapping (GX1-F5). Add a `waitForSelector` before `fill` to confirm the input is in the DOM:
+   ```js
+   await page.waitForSelector(searchSel, { state: 'visible', timeout: 2000 }).catch(() => {});
+   ```
+
+3. **Wiped dataset and `cashflux:seeded`:** The `wipe=true` path sets `cashflux:seeded: "1"` to
+   suppress re-seeding. Verify this key name matches the Go store's first-run check — if the app
+   re-seeds regardless, the empty-state screenshots will show populated data. The current
+   screenshots appear correctly empty (all measurements return `.empty` elements, not populated
+   lists), confirming the wipe path is working.
+
+4. **Boot splash timing:** The wasm-interception trick (`route("**/*.wasm", never-resolve)`)
+   reliably captures the splash. The selector `#boot` is found within 10s. No change needed.
+
+---
+
+## Cross-references
+
+- GX1-F1 / GX1-F2 — light-mode shell background (prerequisite for GX2-F5 light card contrast)
+- C46 — box glyph fallback in `EmptyStateCTA` (referenced in emptystate.go:56)
+- C66 — `EmptyStateCTA` component introduced
+- G1 (Dashboard) — bento widget empty states; GX2-F4 font/color inconsistency
+- G2 (Transactions) — primary screen missing CTA; GX2-F1
+- G3 (Accounts) — GX2-F1 welcome banner + noAssets empty state
+- G13 (Insights) — structural empty state absence; GX2-F2
+- L1/L2 — light-mode theme token resolution (root cause of GX2-F5)
+
+
+### GX3. Component primitives (buttons · inputs · selects · tables · badges · tooltips) — "A Thousand Small Cuts" — 2026-06-23 ★
+
+## The story
+
+A returning user — let's call her Dana — opens CashFlux three times a day: morning to check her transactions, midday to update a goal, evening to review her budget. She interacts with the same buttons, inputs, and badges on every visit. Each small inconsistency chips away at her confidence in the product: a button that looks pressed when it isn't, a select that looks nothing like its neighbouring input, a tooltip that fires only on desktop. None of these are fatal bugs. Together they are a thousand small cuts that make the app feel like it was assembled from parts rather than designed as a whole.
+
+---
+
+## Drive script
+
+`node e2e/gx_03_primitives.mjs`
+
+```
+Exit 0 — 2026-06-23
+22 screenshots produced
+```
+
+Screenshots in `e2e/screenshots/` with prefix `gx03_`.
+Measurements JSON: `e2e/screenshots/gx03_measurements.json`
+
+---
+
+## What already works well (keep) ✓
+
+- **Input scale is consistent across text/number/textarea.** `.field` class measures exactly `height: 44px`, `min-height: 44px`, `padding: 8px 9.6px`, `border-radius: 6px`, `border: 1px solid rgb(42,42,44)` in dark mode — identical across text, number inputs, and the search field. A single scale token drives all of them correctly. ✓
+- **Progress bar height/radius is consistent.** `.bar` = `8px` height, `999px` radius, `1px solid var(--border)` across budgets AND goals. Bar fill at `6px` height inside — consistent geometry. ✓
+- **Priority badges are internally consistent.** `.prio-high` / `.prio-med` / `.prio-low` all share `border-radius: 999px`, `padding: 3.2px 8.8px`, `font-size: 12px`, `font-weight: 700` — only the color token differs per severity. Internal consistency is solid. ✓
+- **Budget health pill is well-defined.** `.pill` = `display:flex`, `border-radius: 999px`, `padding: 1.92px 8px`, `border: 1px solid`, `font-size: 11.84px`, `font-weight: 700` — compact status chip that reads clearly. ✓
+- **Delete button hit area meets WCAG 2.5.8.** `.btn-del` measures `32px × 32px` minimum — above the 24×24 floor. ✓
+- **Focus rings are present.** `a:focus-visible, button:focus-visible, input:focus-visible` all get `outline: 2px solid var(--accent); outline-offset: 2px` — consistent and on-brand. ✓
+- **Table zebra striping is implemented.** `tr:nth-child(even)` = `rgba(255,255,255,0.03)` dark / `rgba(0,0,0,0.025)` light — values are appropriate, mechanism is present. ✓
+
+---
+
+## Structure fixes (bottom-up, grouped by primitive)
+
+### GX3-F1. CRITICAL — Selects inherit browser default styles — 18px height, white background, no border-radius [CSS-ONLY] ★★
+
+**Evidence:** `gx03_transactions_dark_1280.png`, `gx03_modal_dark_1280.png`
+
+**Measured (dark mode, all widths):**
+```
+select: {
+  height: "18px",          ← browser default
+  minHeight: "auto",
+  paddingTop: "0px",
+  borderRadius: "0px",     ← browser default (no radius)
+  borderColor: "rgb(171, 171, 179)",  ← browser default border
+  backgroundColor: "rgb(255, 255, 255)",  ← WHITE in dark mode
+  color: "rgb(171, 171, 179)",
+  fontSize: "13px"         ← 1.5px smaller than inputs
+}
+
+input (.field):
+  height: 44px
+  borderRadius: 6px
+  backgroundColor: rgb(32,32,34)
+  fontSize: 14.5px
+```
+
+The gap is total: a `<select>` sitting beside an `<input>` in the Add Transaction form measures `18px` tall vs `44px` — a factor of 2.4× difference. The white `rgb(255,255,255)` background on `<select>` inside a near-black dark modal is a hard glitch: a white box floating inside a dark panel. No `.field` class is applied to selects.
+
+The CSS defines `.field { ... }` for inputs but there is no `select.field` rule, so `<select>` elements receive zero custom styling and fall back to the browser UA stylesheet (which varies per OS/browser — Chromium gives the white background).
+
+**Fix:**
+```css
+/* web/index.html — apply .field tokens to <select> */
+select.field, select[class*="field"] {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888890' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  padding-right: 2rem;
+}
+/* If selects don't carry .field explicitly, target them globally: */
+select {
+  padding: 0.5rem 2rem 0.5rem 0.6rem;
+  min-height: 44px;
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888890' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+}
+[data-theme="light"] select {
+  background-color: var(--bg-card, #ffffff);
+  border-color: var(--border, #e4e2dd);
+  color: var(--text, #1c1c1e);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236a6a72' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+}
+```
+
+Cross-ref: C47 (transaction form), C50 (inline-edit forms) — both use `<select>` elements inside forms.
+
+---
+
+### GX3-F2. CRITICAL — Transactions table has NO light-mode theme override — renders dark-on-dark in light mode [CSS-ONLY] ★★
+
+**Evidence:** `gx03_transactions_light_1280.png`, `gx03_transactions_light_768.png`
+
+**Measured (light mode, 1280):**
+```
+th: {
+  backgroundColor: "rgb(14, 14, 15)",   ← near-black (dark mode bg value)
+  color: "rgb(171, 171, 179)",           ← dark dim text
+  borderBottom: "1px solid rgb(42, 42, 44)"  ← dark border
+}
+tr1: {
+  backgroundColor: "rgba(0, 0, 0, 0)",  ← transparent (inherits near-black)
+  color: "rgb(244, 244, 245)",           ← near-white text on near-black bg
+}
+```
+
+In light mode the table header background is still `rgb(14,14,15)` — the dark body color. The sticky `position: sticky` thead inherits `background: var(--bg)` from the CSS rule `.txn-table thead th { background: var(--bg); }`. When `data-theme="light"` is set, `--bg` resolves to `#f7f6f3` per the light palette override — but a runtime override from the WASM layer is injecting a dark `--bg` value that outranks the CSS variable, the same class of issue as GX1-F1 (topbar). The result: a dark header band inside a warm-white page, with near-white text on near-black — both unreadable and visually jarring.
+
+The table body rows have `rgba(0,0,0,0)` background, which means they are transparent and inherit the dark body, not the warm-white card. Near-white text `rgb(244,244,245)` on a transparent-over-dark surface = readable in dark, invisible-or-borderline in light.
+
+**Fix:**
+```css
+/* web/index.html — pin table surfaces to light tokens */
+[data-theme="light"] .txn-table thead th {
+  background: var(--bg-card, #ffffff) !important;
+  color: var(--text-dim, #56565c) !important;
+  border-bottom-color: var(--border, #e4e2dd) !important;
+}
+[data-theme="light"] .txn-table tbody tr.row {
+  color: var(--text, #1c1c1e) !important;
+}
+[data-theme="light"] .txn-table tbody td {
+  border-bottom-color: var(--border, #e4e2dd) !important;
+}
+[data-theme="light"] .txn-table .td-cat,
+[data-theme="light"] .txn-table .td-acct,
+[data-theme="light"] .txn-table .td-tags,
+[data-theme="light"] .txn-table .td-date,
+[data-theme="light"] .txn-table .td-tags-inline {
+  color: var(--text-dim, #56565c) !important;
+}
+[data-theme="light"] .txn-table tbody tr.row:nth-child(even) {
+  background: rgba(0,0,0,0.025) !important;
+}
+```
+
+Cross-ref: C47 (table introduced), G2 (table styling), GX1-F1 (same `!important` pattern for runtime-overridden `--bg`).
+
+---
+
+### GX3-F3. HIGH — Button heights are three different values — no single scale [CSS-ONLY] ★
+
+**Evidence:** `gx03_transactions_dark_1280.png`, `gx03_modal_dark_1280.png`, `gx03_budgets_dark_1280.png`
+
+**Measured:**
+```
+.btn (page buttons — "Filters", "+ Add budget"):  height 35.8px   padding 6.4px top/bottom
+.set-btn (modal footer — "Cancel"):                height 40.5px   padding 8.8px top/bottom
+.set-btn.save (modal footer — "Save"):             height 40.5px   padding 8.8px top/bottom
+.btn-del (icon delete):                            height 32px     padding 4px top/bottom
+```
+
+Three separate height systems: 35.8px page buttons, 40.5px modal footer buttons, 32px delete buttons. A user who clicks "Save" in a modal and then hits "+ Add budget" on the next screen is interacting with buttons 4.7px apart in height — nearly 13% taller in modals. The visual rhythm fractures across contexts.
+
+The root cause is two parallel button systems: `.btn` (used on pages) and `.set-btn` (used in modal footers). Neither is a component that inherits from a shared token; each has its own hardcoded padding.
+
+**Fix:** Align `.set-btn` height to match `.btn` by reducing padding, OR unify padding to a shared CSS custom property:
+```css
+/* Unify button height via a shared scale token */
+:root {
+  --btn-py: 0.5rem;   /* 8px — aligns all buttons to 44px min-height target */
+  --btn-px: 0.8rem;
+}
+.btn { padding: var(--btn-py) var(--btn-px); min-height: 44px; }
+.set-btn { padding: var(--btn-py) var(--btn-px); min-height: 44px; }
+```
+This brings `.btn` from `35.8px` (currently under the 44px touch target floor) up to the `44px` floor that inputs already meet — closing the height gap AND fixing a WCAG 2.5.8 shortfall in page-level buttons.
+
+---
+
+### GX3-F4. HIGH — `.btn-primary` absent from all page-level contexts — no primary button scale outside modals [GO-STRUCTURAL / CSS-ONLY] ★
+
+**Evidence:** `gx03_transactions_dark_1280.png`, `gx03_budgets_dark_1280.png`, `gx03_accounts_dark_1280.png`
+
+**Measured:**
+```
+btnPrimary: { "_missing": true }   ← all screens, both themes
+primaryBtnCount: 0                  ← no .btn.btn-primary in DOM on any page
+```
+
+The `.btn-primary` class is defined in CSS (`background: var(--accent); color: #052e13; border-color: var(--accent); font-weight: 600`) and used in `internal/ui/inlineeditform.go` for inline-edit "Save" buttons. But page-level primary actions ("+ Add budget", "+ Add goal", "+ Add transaction") all use the same neutral `.btn` class — no visual hierarchy distinguishes the primary CTA from secondary actions. The only accented buttons in the app are inside the modal footer system (`.set-btn.save`), which uses a different base class.
+
+The result: scanning the Budgets or Goals page, nothing is visually elevated as the primary action. The `+ Add budget` button in the card header reads identically to the sort/filter buttons in the Transactions toolbar. The hierarchy is flat.
+
+**Fix:**
+- [CSS-ONLY]: Add `.btn-primary` styling to the `+ Add X` buttons that appear in `.card-head` positions. These are currently emitted as `Button(css.Class("btn"), …)` — the Go caller just needs to add `btn-primary` to the class string.
+- [GO-STRUCTURAL]: Audit `internal/screens/budgets.go`, `goals.go`, `transactions.go` header-action buttons and change to `css.Class("btn btn-primary")` for the top-level add action.
+
+Cross-ref: GX2-F1 (add-first CTA buttons on transactions/accounts), C47 (transaction add button).
+
+---
+
+### GX3-F5. HIGH — Modal Save button in dark mode is low-contrast muted green — does not read as primary [CSS-ONLY] ★
+
+**Evidence:** `gx03_modal_dark_1280.png`, `gx03_modal_dark_768.png`
+
+**Measured:**
+```
+.set-btn.save (dark):
+  backgroundColor: "rgb(31, 44, 36)"    ← very dark forest green
+  color: "rgb(127, 208, 163)"           ← mint green text
+  border: "1px solid rgb(53, 107, 80)"
+  height: 40.5px
+```
+
+The dark-mode Save button has a near-black forest-green background (`rgb(31,44,36)` — only ~12/255 above pure black in lightness) with mint-green text. The approximate contrast ratio is ~3.5:1 — below the 4.5:1 AA requirement for normal text. More importantly, it reads as a *muted* action, not a *primary* action. The Cancel button next to it (`rgba(0,0,0,0)` bg / `rgb(166,166,172)` text) actually has more visual mass because the Save button's near-black surface disappears into the dark modal panel.
+
+The light-mode fix from GM2-2 (`[data-theme="light"] .set-btn.save { background: var(--accent,#2e8b57); color: #ffffff; }`) correctly uses the full accent green. The dark mode needs the same treatment — a filled accent, not a tinted surface.
+
+**Fix:**
+```css
+/* Dark-mode Save: use solid accent fill (matches light-mode pattern) */
+.set-btn.save {
+  background: var(--accent, #2e8b57);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 600;
+}
+.set-btn.save:hover { filter: brightness(0.9); }
+```
+The current `rgb(31,44,36)` value (`--accent-dim`) was the intended "soft" primary, but it fails both contrast and hierarchy. The solid accent on a dark modal panel is clearly primary. Note: light-mode already uses this pattern correctly (GM2-2).
+
+Cross-ref: GM2-2 (light-mode modal buttons), GM4-8 (modal header/footer separators).
+
+---
+
+### GX3-F6. HIGH — Goal progress bars have transparent fill — invisible on dark background [GO-STRUCTURAL] ★
+
+**Evidence:** `gx03_goals_dark_1280.png`, `gx03_goals_dark_768.png`
+
+**Measured:**
+```
+goals_progress_dark_1280:
+  fillDefault: {
+    height: "6px",
+    backgroundColor: "rgba(0, 0, 0, 0)",   ← TRANSPARENT fill
+    border: "0px solid rgb(244, 244, 245)"
+  }
+  barCount: 10
+```
+
+The goals progress bar fills render as `rgba(0,0,0,0)` — completely transparent. On a dark `rgb(32,32,34)` bar track, a transparent fill is invisible: the bar always appears empty regardless of the goal's actual progress. The Budget page fills render correctly (`rgb(216,113,111)` for "over", `rgb(245,158,11)` for "near"), so the `.bar-fill` CSS itself is correct. The issue is that goals emit `.bar-fill` without any state modifier class (`.done`, `.final`, `.overdue`, `.soon`, `.ontrack`) that would assign a background color, OR they emit `.bar-fill` with inline `width` style but without the default `background: var(--accent)` resolving.
+
+Inspecting the CSS: `.bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }` — the default fill is accent green. If goal fills are rendering transparent, either: (a) the `.bar-fill` class is not being applied (the fill `<div>` has a different class), or (b) a state modifier class is overriding `background` with `transparent`, or (c) the fill width is `0` (all goals at 0% progress — but then the `.pace-final` badge "Final stretch" would be inconsistent).
+
+Since `.pace-final` badge ("Final stretch") is present, the goals are not at 0%. The fill is likely miscalculated or the class is wrong.
+
+**Investigation path:** In `internal/screens/goals.go`, check the `bar-fill` element emission — confirm the width inline style and that no state modifier sets `background: transparent`.
+
+Cross-ref: G5 (goal pace states introduced), C66 (goals screen).
+
+---
+
+### GX3-F7. MEDIUM — Tooltips are native `title=` only — no real tooltip component [GO-STRUCTURAL]
+
+**Evidence:** `gx03_transactions_dark_1280.png`, `gx03_accounts_dark_1280.png`
+
+**Measured:**
+```
+transactions_tooltips_dark_1280:
+  nativeTitleCount: 369
+  realTooltipElements: 0          ← zero real tooltip components
+  buttonsWithTitle: 329           ← 329 buttons carry title= attribute
+  tooltipImplementation: "native-title-only"
+```
+
+Every tooltip in the app is implemented via the native HTML `title=` attribute. This means:
+1. **Mobile/touch users see no tooltip** — `title=` does not fire on touch devices.
+2. **Keyboard users see no tooltip** — focus does not trigger `title=` in most browsers.
+3. **No styling control** — the OS-native tooltip uses system font, color, and delay, which is inconsistent with the app design.
+4. **Inconsistent aria pairing** — 329 buttons have `title=` but many lack `aria-label=`. The `title=` attribute provides an accessible name fallback for icon-only buttons, but the pairing is inconsistent (e.g. `cls: "hh"` has `title=` but `ariaLabel: null`).
+
+The `internal/ui/primitives.go` `IconButton` and `DeleteButton` components correctly set both `title=` AND `aria-label=`. But many buttons in the shell and older screens set only `title=`.
+
+**Fix (phased):**
+- **Immediate [GO-STRUCTURAL]**: Audit shell buttons (`hh`, `rail-section`, `menu-btn`, `gear-inline`, `gear-abs`) that have `title=` but no `aria-label=`. Add `aria-label=` matching `title=` so screen readers work, regardless of tooltip implementation.
+- **Later [GO-STRUCTURAL]**: Introduce a `Tooltip` wrapper component in `internal/ui/` that renders a CSS-styled tooltip panel (absolutely positioned, `role="tooltip"`, `id=` + `aria-describedby=` pair). Replace `title=` with the component on high-priority icon buttons (delete, archive, sort).
+
+Cross-ref: C20 (rail collapse button), C67 (rail nav v2), primitives.go `IconButton` (sets both correctly).
+
+---
+
+### GX3-F8. MEDIUM — `.pace-badge` has `border: 0px` — inconsistent with all other badge/pill types [CSS-ONLY]
+
+**Evidence:** `gx03_goals_dark_1280.png`
+
+**Measured:**
+```
+pace-badge (.pace-final):
+  borderRadius: "999px"
+  border: "0px solid rgb(46, 139, 87)"   ← NO border
+
+pace-ontrack:
+  border: "0px solid rgb(171, 171, 179)"  ← NO border
+
+pill (.pill):
+  border: "1px solid rgb(42, 42, 44)"    ← has border
+
+prio-high (.prio-high):
+  border: "1px solid rgb(127, 29, 29)"   ← has border
+
+prio-low (.prio-low):
+  border: "1px solid rgb(22, 101, 52)"   ← has border
+```
+
+The `.pace-badge` CSS rule (`padding: 0.1rem 0.45rem; border-radius: 999px`) has no `border` property, so the element inherits the CSS reset `border-width: 0`. All other badge/chip primitives explicitly set a `1px solid` border to separate them from the card background. The borderless pace badge looks slightly inconsistent — especially `pace-ontrack` which has a low-contrast fill (`var(--bg-elev)`) that relies on a border for legibility.
+
+**Fix:**
+```css
+/* web/index.html — add hairline border to pace badges for consistency */
+.pace-badge {
+  border: 1px solid currentColor;
+  opacity: 0.85;  /* soften the border slightly so it's not harsh */
+}
+/* Override for the accent/danger/amber states which are already strong */
+.pace-final { border-color: var(--accent); opacity: 1; }
+.pace-overdue { border-color: var(--danger); opacity: 1; }
+.pace-soon { border-color: #d98c00; opacity: 1; }
+.pace-ontrack { border-color: var(--border); opacity: 1; }
+```
+
+---
+
+### GX3-F9. MEDIUM — Filter chips never appear — no visual evidence of active filter state [GO-STRUCTURAL / Probe issue]
+
+**Evidence:** `gx03_transactions_dark_1280.png`, measured `chipCount: 0` across all conditions.
+
+**Measured:**
+```
+filter_chips_dark_1280:
+  toolbarPresent: true
+  chip: { "_missing": true }
+  filterBadge: { "_missing": true }
+  chipCount: 0
+```
+
+No filter chips were observed on the Transactions page in any screenshot. The `.filter-chip` and `.filter-badge` elements are only present when filters are actively applied, and the probe did not apply any filters before screenshotting. This may be a probe gap — the script navigates to `/transactions` but does not interact with the Filters popover to apply a filter.
+
+However, this also documents that the **filter chip visual design cannot be evaluated** from these screenshots. The CSS definitions for `.filter-chip` (border-radius: 999px, bg: var(--bg-elev), border: 1px solid) and `.filter-badge` (min-width: 1.25rem, bg: var(--accent)) look correct in the stylesheet, but no light-mode override for `.filter-chip` or `.filter-badge` is present in the CSS, which is a concern — if `.filter-chip` uses `var(--bg-elev)` and `var(--border)` in light mode, they should resolve correctly, but the active filter badge (`background: var(--accent)`) needs verification.
+
+**Action:** Add filter activation to the probe script (open Filters popover, select a category, apply, screenshot). The light-mode absence of a `.filter-chip` override should be investigated — if the chip text is near-white (`var(--text)`) in light mode but the bg is warm-white from `--bg-elev`, the text may be invisible.
+
+Cross-ref: C47 (filter toolbar), C50 (filter chips).
+
+---
+
+### GX3-F10. LOW — `.btn` (page buttons) are below the 44px touch target minimum — height 35.8px [CSS-ONLY]
+
+**Evidence:** all page-button measurements.
+
+**Measured:**
+```
+.btn: height 35.8px   (min-height not set explicitly; padding 6.4px top+bottom)
+.field (inputs): height 44px, min-height 44px
+.set-btn: height 40.5px
+```
+
+Page-level `.btn` elements measure `35.8px` tall — below the WCAG 2.5.8 (AA) `24px` floor for target size, but also below the iOS HIG / Material Design recommended `44px` comfortable touch target. Inputs at `44px` and modal buttons at `40.5px` are both larger, leaving a visible height inconsistency in any form where a `.btn` (e.g. "Export CSV") sits beside a `.field` input.
+
+The fix is to add `min-height: 44px` to `.btn` (part of GX3-F3 unified height fix above). Listed separately here because the touch target argument is independent of the height-alignment argument.
+
+```css
+.btn { min-height: 44px; }   /* already has padding; height grows to fit */
+```
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| ID | Screenshot(s) | Primitive | Description | Severity |
+|---|---|---|---|---|
+| GX3-D1 | `gx03_transactions_dark_1280.png`, `gx03_modal_dark_1280.png` | Select | White `rgb(255,255,255)` box in dark modal; `18px` height vs `44px` inputs | CRITICAL |
+| GX3-D2 | `gx03_transactions_light_1280.png`, `gx03_transactions_light_768.png` | Table | Dark header `rgb(14,14,15)` / dark row text `rgb(244,244,245)` in light mode | CRITICAL |
+| GX3-D3 | `gx03_modal_dark_1280.png`, `gx03_modal_dark_768.png` | Modal Save | Near-black `rgb(31,44,36)` background — reads as disabled/muted, not primary | HIGH |
+| GX3-D4 | `gx03_goals_dark_1280.png`, `gx03_goals_dark_768.png` | Progress bar | Goal fills are `rgba(0,0,0,0)` — bars always appear empty regardless of progress | HIGH |
+| GX3-D5 | All page screens | Buttons | No `.btn-primary` on any page-level action — flat hierarchy, no primary CTA | HIGH |
+| GX3-D6 | `gx03_transactions_dark_1280.png` | Buttons | `.btn` height `35.8px` vs inputs `44px`, modal buttons `40.5px` — three scales | MEDIUM |
+| GX3-D7 | `gx03_goals_dark_1280.png` | Pace badge | `border: 0px` on `.pace-badge` — inconsistent with every other badge/pill | MEDIUM |
+| GX3-D8 | All screens | Tooltips | 329 buttons use `title=` only; 0 real tooltip components; no touch/kbd support | MEDIUM |
+| GX3-D9 | `gx03_transactions_dark_1280.png` | Filter chips | No chips visible — active-filter state unverifiable; no light-mode chip override | LOW |
+
+---
+
+## Primitive consistency audit (summary table)
+
+| Primitive | Height | Border-radius | Border | Font-size | Light-mode correct? |
+|---|---|---|---|---|---|
+| `.field` (text input) | 44px ✓ | 6px ✓ | 1px solid ✓ | 14.5px ✓ | Needs verification |
+| `.field` (number input) | 44px ✓ | 6px ✓ | 1px solid ✓ | 14.5px ✓ | Needs verification |
+| `select` (unstyled) | **18px ✗** | **0px ✗** | browser default ✗ | **13px ✗** | **White bg in dark ✗** |
+| `.btn` (page) | **35.8px ✗** | 6px ✓ | 1px solid ✓ | 14.5px ✓ | No primary variant ✗ |
+| `.set-btn.save` (modal) | 40.5px | 4px | 1px solid | 14.4px | ✓ (light fixed) |
+| `.set-btn.cancel` (modal) | 40.5px | 4px | 1px solid | 14.4px | ✓ |
+| `.btn-del` (delete) | 32px | 0px | none | 16px | ✓ |
+| `.txn-table thead th` | 34.8px | — | 1px solid bottom | 13.76px | **Dark bg in light ✗** |
+| `.txn-table tbody tr` | 49.8px | — | 1px solid bottom | 13.76px | **Near-white text in light ✗** |
+| `.pill` | auto | 999px ✓ | 1px solid ✓ | 11.84px ✓ | **No light override** |
+| `.pace-badge` | auto | 999px ✓ | **0px ✗** | 11.2px ✓ | ✓ |
+| `.badge`/`.prio-*` | auto | 999px ✓ | 1px solid ✓ | 12px ✓ | **Dark bg in light ✗** |
+| `.bar` track | 8px ✓ | 999px ✓ | 1px solid ✓ | — | ✓ |
+| `.bar-fill` (budgets) | 6px ✓ | 999px ✓ | none ✓ | — | ✓ |
+| `.bar-fill` (goals) | 6px | 999px | none | — | **Transparent fill ✗** |
+
+---
+
+## Probe hardening
+
+1. **Apply a filter before screenshotting chips.** Add a filter activation step after navigating to `/transactions`:
+   ```js
+   // Click Filters button
+   await page.click('.filters-trigger button, button:has-text("Filters")', { timeout: 3000 }).catch(() => {});
+   await page.waitForTimeout(500);
+   // Click first available category option or date range
+   const filterField = await page.$('.filter-fields select, .filter-fields input');
+   if (filterField) { await filterField.selectOption({ index: 1 }).catch(() => {}); }
+   // Apply filter
+   await page.click('button:has-text("Apply"), button:has-text("Filter")', { timeout: 2000 }).catch(() => {});
+   await page.waitForTimeout(600);
+   // Screenshot chips
+   ```
+
+2. **Measure select elements inside the modal specifically.** The current `select` measurement captures the first `<select>` in the DOM — at page load on `/transactions` this may be a hidden filter select, not a styled form select. Narrow to `'.set-body select, .flip-face select'` after the modal opens.
+
+3. **Goal bar fill selector.** The `fillDefault` query targets `.bar-fill:not(.near):not(.over):not(.done):not(.overdue):not(.soon)` — but if goal fills have no state class and are simply `.bar-fill`, the selector might be correct but the `backgroundColor` being transparent indicates the element has `width: 0` (not rendered) or a style override. Add a width measurement:
+   ```js
+   const fill = document.querySelector('.goals-section .bar-fill');
+   if (fill) { cs.width = getComputedStyle(fill).width; }
+   ```
+
+4. **Light-mode pill/badge probe.** Add specific measurement of `.pill` and `.badge-prio` in light mode to detect any white-on-white or near-invisible text scenarios (no light-mode override exists for these classes in the CSS).
+
+---
+
+## Cross-references
+
+- C47 — Transactions table + filter toolbar introduced
+- C50 — Inline-edit forms (select elements in row editors)
+- G2 — Transaction table G-ticket (sort, zebra, density)
+- G4 — Budget progress bars
+- G5 — Goal pace badges, progress states
+- GM2 — Modal footer buttons (light-mode Save/Cancel fixes)
+- GM4 — Modal polish (header/footer separators)
+- GX1-F1 — Same runtime `!important` override pattern for table light-mode (GX3-F2)
+- GX2-F5 — Light-mode contrast fixes (same `!important` pattern)
+- L1/L2 — Light-mode theme token resolution (root cause of GX3-F2, GX3-D1)
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 
@@ -21087,22 +21920,22 @@ _Cross-links: **C44** (D3 vendored; this finishes the CDN-removal/offline goal),
 naturally with typed classes), **C69** (theming via tokens)._
 
 
-### GX3. Component primitives (buttons � inputs � selects � tables � badges � tooltips) � "A Thousand Small Cuts" � 2026-06-23 ?
+### GX3. Component primitives (buttons � inputs � selects � tables � badges � tooltips) � "A Thousand Small Cuts" � 2026-06-23 ?
 
 ? RESOLVED (2026-06-23).
 
 **Shipped (CSS-ONLY fixes):**
-- **GX3-F1 / GX3-D1 (CRITICAL):** `select:not(.set-input):not(.seg-btn)` rule gives all bare selects the `.field` treatment � `min-height: 44px`, `var(--bg-elev)` background, `var(--border)` border, `border-radius: 6px`, `font: inherit`. Eliminates the white-box-in-dark-panel glitch.
+- **GX3-F1 / GX3-D1 (CRITICAL):** `select:not(.set-input):not(.seg-btn)` rule gives all bare selects the `.field` treatment � `min-height: 44px`, `var(--bg-elev)` background, `var(--border)` border, `border-radius: 6px`, `font: inherit`. Eliminates the white-box-in-dark-panel glitch.
 - **GX3-F2 / GX3-D2 (CRITICAL):** Light-mode DataTable pinned with `!important` overrides: `thead th` ? `#f7f6f3` bg / `#3c3c43` text; `tbody td + tr.row` ? `#1c1c1e` text; hover ? `#efede8`. Dark-on-dark in light mode resolved.
 - **GX3-F3 / GX3-F10 / GX3-D6 (HIGH):** Unified button-scale tokens `--btn-py: 0.5rem` / `--btn-px: 0.8rem` added to `:root`. `.btn` now has `min-height: 44px` + `display: inline-flex; align-items: center`. `.set-btn` aligned to same token (`min-height: 44px`). All button contexts now hit the 44px touch-target floor (was 35.8px on page buttons).
-- **GX3-F5 / GX3-D3 (HIGH):** `.set-btn.save` in dark mode changed from muted `rgb(31,44,36)` tint to solid `var(--accent, #2e8b57)` fill with `color: #ffffff` � now reads as primary action, matching light-mode pattern from GM2-2.
-- **GX3-F8 / GX3-D7 (MEDIUM):** `.pace-badge` given `border: 1px solid var(--border)` � consistent with `.pill`, `.prio-*`, and every other badge/chip primitive. `.pace-final/overdue/soon/ontrack` keep their specific border colors.
+- **GX3-F5 / GX3-D3 (HIGH):** `.set-btn.save` in dark mode changed from muted `rgb(31,44,36)` tint to solid `var(--accent, #2e8b57)` fill with `color: #ffffff` � now reads as primary action, matching light-mode pattern from GM2-2.
+- **GX3-F8 / GX3-D7 (MEDIUM):** `.pace-badge` given `border: 1px solid var(--border)` � consistent with `.pill`, `.prio-*`, and every other badge/chip primitive. `.pace-final/overdue/soon/ontrack` keep their specific border colors.
 
-**Deferred (GO-STRUCTURAL � require Go source changes):**
-- **GX3-F4 / GX3-D5:** No `.btn-primary` on page-level add actions � requires auditing `internal/screens/budgets.go`, `goals.go`, `transactions.go` to add `btn-primary` class to card-head add buttons.
-- **GX3-F6 / GX3-D4:** Goal progress bar fills are `rgba(0,0,0,0)` � requires investigation in `internal/screens/goals.go` to confirm `.bar-fill` class and inline width style are emitted correctly.
-- **GX3-F7 / GX3-D8:** Native `title=`-only tooltips (329 buttons, 0 real tooltip components) � requires a `Tooltip` wrapper component in `internal/ui/` + audit of shell buttons missing `aria-label=`.
-- **GX3-F9 / GX3-D9:** Filter chips not observable (probe did not apply filters) � requires probe script update + light-mode filter-chip override CSS once chip rendering is verified.
+**Deferred (GO-STRUCTURAL � require Go source changes):**
+- **GX3-F4 / GX3-D5:** No `.btn-primary` on page-level add actions � requires auditing `internal/screens/budgets.go`, `goals.go`, `transactions.go` to add `btn-primary` class to card-head add buttons.
+- **GX3-F6 / GX3-D4:** Goal progress bar fills are `rgba(0,0,0,0)` � requires investigation in `internal/screens/goals.go` to confirm `.bar-fill` class and inline width style are emitted correctly.
+- **GX3-F7 / GX3-D8:** Native `title=`-only tooltips (329 buttons, 0 real tooltip components) � requires a `Tooltip` wrapper component in `internal/ui/` + audit of shell buttons missing `aria-label=`.
+- **GX3-F9 / GX3-D9:** Filter chips not observable (probe did not apply filters) � requires probe script update + light-mode filter-chip override CSS once chip rendering is verified.
 
 
 ### GX4. Global accessibility — "Everyone Can Use It" — 2026-06-23 ★

@@ -29,7 +29,7 @@ const (
 	// contributors may only ever LOWER it as screens are ported to primitives.
 	// If this constant needs to go UP, you are adding bespoke markup the epic is
 	// trying to delete: use a primitive instead. Lower it whenever you migrate.
-	scaffoldBaseline = 118
+	scaffoldBaseline = 114
 )
 
 // countScaffolds returns the combined occurrences of the two raw scaffolds in a

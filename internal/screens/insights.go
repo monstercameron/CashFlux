@@ -722,15 +722,15 @@ func Insights() ui.Node {
 	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
 	pinnedCard := Fragment()
 	if len(pins) > 0 {
-		pinnedCard = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("insights.pinnedTitle")),
-			Div(css.Class("rows"), MapKeyed(pins,
+		pinnedCard = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("insights.pinnedTitle"),
+			Rows: MapKeyed(pins,
 				func(p domain.SavedInsight) any { return p.ID },
 				func(p domain.SavedInsight) ui.Node {
 					return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
 				},
-			)),
-		)
+			),
+		})
 	}
 
 	convo := turns.Get()
@@ -870,24 +870,26 @@ func Insights() ui.Node {
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
 		// thread below has room to grow.
 		pinnedCard,
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("insights.chatTitle")),
-			switcher,
-			backendToggle,
-			If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
-			If(!empty, thread),
-			// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
-			// own component so the Approve/Decline handlers re-attach cleanly each time
-			// it mounts (the no-On*-in-conditional rule).
-			If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
-				Preview:   approvalPreview,
-				OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
-				OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
-			})),
-			chips,
-			composer,
-			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
-		),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("insights.chatTitle"),
+			Body: Fragment(
+				switcher,
+				backendToggle,
+				If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
+				If(!empty, thread),
+				// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
+				// own component so the Approve/Decline handlers re-attach cleanly each time
+				// it mounts (the no-On*-in-conditional rule).
+				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
+					Preview:   approvalPreview,
+					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
+					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+				})),
+				chips,
+				composer,
+				If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+			),
+		}),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
 		If(promptOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
@@ -1303,11 +1305,13 @@ func spendingHighlights(txns []domain.Transaction, categories []domain.Category,
 		))
 	}
 
-	return Section(css.Class("card"),
-		H2(css.Class("card-title"), uistate.T("insights.highlightsTitle")),
-		P(css.Class("muted"), uistate.T("insights.highlightsHint")),
-		Div(css.Class("insight-list"), rows),
-	)
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("insights.highlightsTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("insights.highlightsHint")),
+			Div(css.Class("insight-list"), rows),
+		),
+	})
 }
 
 // detectSpendingAnomalies builds the last four monthly per-category spend series
