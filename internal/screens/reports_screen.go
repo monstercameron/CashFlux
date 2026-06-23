@@ -98,7 +98,7 @@ func accentForRunway(months int) string {
 func Reports() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	// Subscribe to the shared data-revision atom so Reports re-renders whenever a
 	// recategorize (or any other mutation) bumps the revision mid-session
@@ -646,10 +646,10 @@ func Reports() ui.Node {
 			)),
 		),
 		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
-		If(len(moneyFlows) > 1, Section(css.Class("card"),
-			H2(css.Class("card-title"), "Money flow"),
-			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
-		)),
+		If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: "Money flow",
+			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
+		})),
 		If(len(payeeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.topPayees")),
 			If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
@@ -681,10 +681,10 @@ func Reports() ui.Node {
 			),
 		)),
 		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
-		If(len(bigIncomeNodes) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.biggestDeposits")),
-			Div(css.Class("rows"), bigIncomeNodes),
-		)),
+		If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.biggestDeposits"),
+			Rows:  bigIncomeNodes,
+		})),
 		If(len(incomeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.incomeBySource")),
 			If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
@@ -717,29 +717,33 @@ func Reports() ui.Node {
 			),
 		)),
 		H3(css.Class("section-divider"), uistate.T("reports.sectionTrends")),
-		If(len(netSeries) >= 2, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("dashboard.cashFlow")),
-			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-			uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
-		)),
-		If(len(accounts) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("dashboard.netWorth")),
-			Div(css.Class("stat-grid"),
+		If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("dashboard.cashFlow"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
+			),
+		})),
+		If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("dashboard.netWorth"),
+			Body: Div(css.Class("stat-grid"),
 				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
 				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
 				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 				If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 			),
-		)),
-		If(len(nw) >= 2, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("dashboard.netWorthTrend")),
-			uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
-		)),
-		If(len(srSeries) >= 2, Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("reports.savingsTrend")),
-			P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-			uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
-		)),
+		})),
+		If(len(nw) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("dashboard.netWorthTrend"),
+			Body:  uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
+		})),
+		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("reports.savingsTrend"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
+			),
+		})),
 		// G9.1 Item 6 — Advanced collapse: wraps custom field spend and deductible totals.
 		// Both are behind a disclosure toggle ("Advanced ▾/▲"), collapsed by default.
 		If(len(cfDefs) > 0,
