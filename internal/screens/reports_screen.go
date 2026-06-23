@@ -4,9 +4,11 @@ package screens
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -26,6 +28,52 @@ import (
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
+
+// reportsBarSpec builds a horizontal Bar chart spec from label+amount pairs.
+// amounts are in minor currency units; pass decimals (e.g. 2) to convert to major units.
+func reportsBarSpec(pairs []struct {
+	Label  string
+	Amount int64
+}, decimals int) chartspec.Spec {
+	divisor := math.Pow(10, float64(decimals))
+	var points []chartspec.Point
+	for i, p := range pairs {
+		points = append(points, chartspec.Point{
+			X:     float64(i),
+			Y:     float64(p.Amount) / divisor,
+			Label: p.Label,
+		})
+	}
+	return chartspec.Spec{
+		Kind: chartspec.Bar,
+		Series: []chartspec.Series{
+			{Name: "Amount", Color: "#4f8ef7", Points: points},
+		},
+		Legend: false,
+	}
+}
+
+// reportsDonutSpec builds a Donut chart spec from label+amount pairs. Donut
+// charts are single-series with one point per slice (per chartspec invariant).
+func reportsDonutSpec(pairs []struct {
+	Label  string
+	Amount int64
+}, decimals int) chartspec.Spec {
+	divisor := math.Pow(10, float64(decimals))
+	var points []chartspec.Point
+	for i, p := range pairs {
+		points = append(points, chartspec.Point{
+			X:     float64(i),
+			Y:     float64(p.Amount) / divisor,
+			Label: p.Label,
+		})
+	}
+	return chartspec.Spec{
+		Kind:   chartspec.Donut,
+		Series: []chartspec.Series{{Name: "Spending", Points: points}},
+		Legend: true,
+	}
+}
 
 // trendBuckets is how many consecutive periods the cash-flow trend spans.
 const trendBuckets = 6
@@ -260,6 +308,68 @@ func Reports() ui.Node {
 		}))
 	}
 
+	// V2: top-8 spending categories as a ranked bar chart above the text list.
+	// V3: top-5 categories + "Other" as a donut in the same card.
+	decimals := currency.Decimals(base)
+	var catBarNodes []ui.Node
+	var catDonutNodes []ui.Node
+	if len(rows) > 0 {
+		type labelAmt struct {
+			Label  string
+			Amount int64
+		}
+		// Bar: top 8 by absolute amount (spending rows are negative — negate for display).
+		var barPairs []struct {
+			Label  string
+			Amount int64
+		}
+		for i, r := range rows {
+			if i >= 8 {
+				break
+			}
+			if r.Amount == 0 {
+				continue
+			}
+			barPairs = append(barPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: nameOf(r.CategoryID), Amount: absI64(r.Amount)})
+		}
+		if len(barPairs) > 0 {
+			spec := reportsBarSpec(barPairs, decimals)
+			catBarNodes = append(catBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top spending categories ranked by amount"}))
+		}
+		// Donut: top 5 + "Other" bucket.
+		var donutPairs []struct {
+			Label  string
+			Amount int64
+		}
+		var otherAmt int64
+		for i, r := range rows {
+			if r.Amount == 0 {
+				continue
+			}
+			if i < 5 {
+				donutPairs = append(donutPairs, struct {
+					Label  string
+					Amount int64
+				}{Label: nameOf(r.CategoryID), Amount: absI64(r.Amount)})
+			} else {
+				otherAmt += absI64(r.Amount)
+			}
+		}
+		if otherAmt > 0 {
+			donutPairs = append(donutPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: "Other", Amount: otherAmt})
+		}
+		if len(donutPairs) > 0 {
+			spec := reportsDonutSpec(donutPairs, decimals)
+			catDonutNodes = append(catDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Spending share by category"}))
+		}
+	}
+
 	var catBody ui.Node
 	if len(rowNodes) == 0 {
 		catBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
@@ -359,6 +469,72 @@ func Reports() ui.Node {
 		))
 	}
 
+	// V4: income-by-source donut chart.
+	var incomeDonutNodes []ui.Node
+	{
+		var donutPairs []struct {
+			Label  string
+			Amount int64
+		}
+		for _, r := range incomeRows {
+			if r.Amount == 0 {
+				continue
+			}
+			donutPairs = append(donutPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: nameOf(r.CategoryID), Amount: absI64(r.Amount)})
+		}
+		if len(donutPairs) > 0 {
+			spec := reportsDonutSpec(donutPairs, decimals)
+			incomeDonutNodes = append(incomeDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Income share by source"}))
+		}
+	}
+
+	// V7: ranked bar charts for top payees and biggest expenses.
+	var payeeBarNodes []ui.Node
+	{
+		var barPairs []struct {
+			Label  string
+			Amount int64
+		}
+		for _, p := range payees {
+			name := p.Name
+			if name == "" {
+				name = uistate.T("reports.noPayee")
+			}
+			barPairs = append(barPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: name, Amount: absI64(p.Amount)})
+		}
+		if len(barPairs) > 0 {
+			spec := reportsBarSpec(barPairs, decimals)
+			payeeBarNodes = append(payeeBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top payees ranked by amount"}))
+		}
+	}
+	var expenseBarNodes []ui.Node
+	{
+		var barPairs []struct {
+			Label  string
+			Amount int64
+		}
+		for _, e := range largest {
+			desc := e.Desc
+			if desc == "" {
+				desc = nameOf(e.CategoryID)
+			}
+			barPairs = append(barPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: desc, Amount: absI64(e.Amount)})
+		}
+		if len(barPairs) > 0 {
+			spec := reportsBarSpec(barPairs, decimals)
+			expenseBarNodes = append(expenseBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Biggest individual expenses ranked by amount"}))
+		}
+	}
+
 	// Spending-by-weekday insight: which day money tends to leave.
 	weekdayPeakLine := ""
 	if wd, err := reports.SpendingByWeekday(txns, cs, ce, rates); err == nil {
@@ -445,6 +621,8 @@ func Reports() ui.Node {
 			),
 			P(css.Class("muted"), narrative),
 			If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
+			If(len(catBarNodes) > 0, Div(catBarNodes)),
+			If(len(catDonutNodes) > 0, Div(catDonutNodes)),
 			catBody,
 			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
@@ -474,6 +652,7 @@ func Reports() ui.Node {
 		)),
 		If(len(payeeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.topPayees")),
+			If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
 			Div(css.Class("rows"), payeeNodes),
 			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
 				Button(css.Class("btn"), Type("button"),
@@ -488,6 +667,7 @@ func Reports() ui.Node {
 		)),
 		If(len(largestNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.biggestExpenses")),
+			If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
 			Div(css.Class("rows"), largestNodes),
 			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
 				Button(css.Class("btn"), Type("button"),
@@ -507,6 +687,7 @@ func Reports() ui.Node {
 		)),
 		If(len(incomeNodes) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("reports.incomeBySource")),
+			If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
 			Div(css.Class("rows"), incomeNodes),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {

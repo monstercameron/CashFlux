@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: G9.1a Reports charts — ranked bars + donuts from existing aggregates
+
+Wired the existing D3 chart engine (`uiw.Chart` / `chartspec.Spec`) into the Reports screen for four
+chart placements that were already producing the right aggregate data but rendering only as text lists:
+
+- **V2**: top-8 spending categories as a ranked Bar chart above the category text list.
+- **V3**: top-5 spending categories + "Other" bucket as a Donut in the same card.
+- **V4**: income-by-source Donut in the "Income by source" card.
+- **V7**: ranked Bar charts for top payees and biggest individual expenses, above the respective text rows.
+
+Two helpers added to `reports_screen.go`: `reportsBarSpec` and `reportsDonutSpec`. Both take
+`[]struct{Label string; Amount int64}` pairs in minor units plus a decimal count, and return a
+`chartspec.Spec`. The donut helper uses a single series with one point per slice — matching the
+chartspec invariant (`ErrDonutSingle`) that the D3 shim enforces. The bar helper emits a single series
+with `X=index, Y=major-unit amount, Label=category/payee name`.
+
+Deferred (need new primitives or e2e harness): treemap, calendar heatmap, V6 stacked-area, V10
+bullet, V11 grouped-bar.
+
 ## 2026-06-23 — refactor: C73 Phase 3 row extraction + honest phase reconciliation
 
 Extracted `AccountRow` (455 lines), `BudgetRow`, and `GoalRow` each into a self-contained `*_row.go`,

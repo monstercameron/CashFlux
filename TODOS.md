@@ -12539,6 +12539,8 @@ if (tabNum) expect(tabNum).toContain('tabular');
 
 #### G9.1a — Chart variety & workflow-diagram catalog (addendum to G9.1) ★★
 
+✅ RESOLVED (2026-06-23). Charts wired: V2 (ranked bar, top-8 spending categories), V3 (donut, top-5 categories + Other), V4 (income-by-source donut), V7 (ranked bars for top payees and biggest expenses). Helpers: reportsBarSpec / reportsDonutSpec in reports_screen.go. DEFERRED (need new primitives or screenshot verification): treemap, calendar heatmap, V6 stacked-area, V10 bullet, V11 grouped-bar, e2e harness.
+
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.
 The app already ships a far richer toolkit that Reports under-uses — so most of this is *wiring existing primitives*,

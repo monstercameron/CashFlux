@@ -81,7 +81,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Changed
 - **App shell (GX1):** light-mode topbar/rail-active-chip/+Add button now switch correctly.
-- **GLAMOR series, G9.1 Reports redesign (2026-06-23).** **Reports redesign (G9.1):** hero zone (Net at 2.5rem/800, Income+Spend flanking at 1.75rem/700, period caption promoted, secondary row for savings rate/runway/no-spend days), card-title weight (font-weight: 600 app-wide), heads-up alert strip (.card-alert with danger left-border + tint), tabular amounts (font-variant-numeric + strong color on .budget-amount), Sankey moved up (category → Sankey → top payees → biggest expenses), advanced collapse (custom field spend + deductible totals behind "Advanced ▾/▲" disclosure, collapsed by default).
+- **GLAMOR series, G9.1 Reports redesign (2026-06-23).** **Reports redesign (G9.1):** hero zone (Net at 2.5rem/800, Income+Spend flanking at 1.75rem/700, period caption promoted, secondary row for savings rate/runway/no-spend days), card-title weight (font-weight: 600 app-wide), heads-up alert strip (.card-alert with danger left-border + tint), tabular amounts (font-variant-numeric + strong color on .budget-amount), Sankey moved up (category → Sankey → top payees → biggest expenses), advanced collapse (custom field spend + deductible totals behind "Advanced ▾/▲" disclosure, collapsed by default). **Reports charts (G9.1a):** ranked category/payee/expense bars + spending & income donuts from existing aggregates.
 - **GLAMOR series, second wave (G7+).** **Planning (G7):** the forecast card now leads with a
   display-weight headline stat (projected 12-month net worth + avg monthly net), and the forecast
   chart's X-axis shows real calendar months ("Jul 2026") instead of opaque indices. Series-wide:
