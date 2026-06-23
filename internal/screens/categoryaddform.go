@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -90,7 +91,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 	}
 	parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentID.Get() == ""), uistate.T("categories.noParentTop"))}
 	for _, f := range categorytree.Flatten(kindCats) {
-		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
+		parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentID.Get() == f.Category.ID), uiw.IndentLabel(f.Depth)+f.Category.Name))
 	}
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "category-add-form"), OnSubmit(add),

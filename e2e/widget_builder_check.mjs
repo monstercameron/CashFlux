@@ -54,10 +54,17 @@ try {
   }));
   if (srcPos.position !== "absolute") fail("nodes are not absolutely positioned on a canvas: " + srcPos.position);
 
+  // selectByOption picks, among the config selects, the one that actually has the
+  // wanted option, then selects it. Robust to extra "type" selectors on the panel.
+  const selectByOption = async (val) => {
+    const sel = page.locator(".wb-config select", { has: page.locator(`option[value="${val}"]`) }).first();
+    await sel.selectOption(val);
+  };
+
   // 1) Source: select the "transactions" figure (a clean integer count). Read it.
   await page.locator(".wb-node").filter({ hasText: "Data source" }).first().click();
   await page.waitForSelector(".wb-config select", { timeout: 5000 });
-  await page.locator(".wb-config select").first().selectOption("transactions");
+  await selectByOption("transactions");
   await page.waitForTimeout(400);
   const n0 = figNum(await figText());
   if (!Number.isFinite(n0)) fail("source figure did not render a number: " + (await figText()));
@@ -82,10 +89,38 @@ try {
   // 3) Visualize: switch to currency format → the figure gains a currency symbol.
   await page.locator(".wb-node").filter({ hasText: "Visualize" }).first().click();
   await page.waitForSelector(".wb-config select", { timeout: 5000 });
-  await page.locator(".wb-config select").first().selectOption("currency");
+  await selectByOption("currency");
   await page.waitForTimeout(400);
   const cur = await figText();
   if (!/[$€£¥]/.test(cur)) fail("currency format did not render a money symbol, got: " + cur);
+
+  // 3b) Many widget types: switch the visualization to a Progress bar → the stage
+  // renders a progress bar element.
+  await selectByOption("progress");
+  await page.waitForTimeout(400);
+  if ((await page.locator(".wb-tile .wb-bar").count()) === 0) fail("Progress viz did not render a progress bar (.wb-bar)");
+
+  // 3c) Switch to a Badge widget → a badge (pill) renders, no big .fig figure.
+  await selectByOption("badge");
+  await page.waitForTimeout(400);
+  if ((await page.locator(".wb-tile .fig").count()) !== 0) fail("Badge viz should not render a big KPI figure");
+
+  // 3d) Many primitive types: switch the source to a literal Number and confirm the
+  // value flows through. (Back to KPI so the figure shows.)
+  await page.locator(".wb-node").filter({ hasText: "Visualize" }).first().click();
+  await page.waitForTimeout(200);
+  await selectByOption("kpi");
+  await page.waitForTimeout(200);
+  await page.locator(".wb-node").filter({ hasText: "Data source" }).first().click();
+  await page.waitForTimeout(200);
+  await selectByOption("number"); // source type = Number
+  await page.waitForTimeout(300);
+  const numInput = page.locator('.wb-config input[type="number"]').first();
+  await numInput.fill("4321");
+  await page.waitForTimeout(400);
+  // Source feeds the transform "a / 2" set earlier → 4321/2 = 2160.5.
+  const litFig = figNum(await figText());
+  if (Math.abs(litFig - 2160.5) > 0.5) fail(`literal number source did not flow through transform: got ${litFig}, want ~2160.5`);
 
   // 4) Size: the W stepper grows the preview tile's rendered width.
   const tileW = () => page.evaluate(() => Math.round(document.querySelector(".wb-tile").getBoundingClientRect().width));

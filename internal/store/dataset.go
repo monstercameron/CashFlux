@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
@@ -80,8 +81,14 @@ type Dataset struct {
 	Earmarks                  []domain.Earmark                  `json:"earmarks,omitempty"`
 	SubscriptionIgnores       []domain.SubscriptionIgnore       `json:"subscriptionIgnores,omitempty"`
 	SubscriptionCancellations []domain.SubscriptionCancellation `json:"subscriptionCancellations,omitempty"`
+	AuditEntries              []auditlog.Entry                  `json:"auditEntries,omitempty"`
 	Settings                  Settings                          `json:"settings"`
 }
+
+// AuditLogCap is the maximum number of audit entries persisted to the dataset.
+// Older entries are dropped when the cap is exceeded so the JSON blob does not
+// grow unbounded across many sessions.
+const AuditLogCap = 200
 
 // Export serializes the dataset to indented JSON, stamping the current schema
 // version.

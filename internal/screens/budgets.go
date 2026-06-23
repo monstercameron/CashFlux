@@ -353,21 +353,21 @@ func budgetTitle(name, category string) string {
 	}
 }
 
-// periodOptions builds the budget-period <option>s with selected marked.
-func periodOptions(selected string) []ui.Node {
-	opts := make([]ui.Node, 0, len(domain.AllPeriods))
+// periodOptions builds the budget-period SelectOptions.
+func periodOptions(selected string) []uiw.SelectOption {
+	opts := make([]uiw.SelectOption, 0, len(domain.AllPeriods))
 	for _, p := range domain.AllPeriods {
-		opts = append(opts, Option(Value(string(p)), SelectedIf(selected == string(p)), p.Label()))
+		opts = append(opts, uiw.SelectOption{Value: string(p), Label: p.Label()})
 	}
 	return opts
 }
 
-// ownerSelectOptions builds owner <option>s (the shared group plus each member)
-// with selected marked — used wherever an entity's owner can be chosen.
-func ownerSelectOptions(members []domain.Member, selected string) []ui.Node {
-	opts := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(selected == domain.GroupOwnerID), uistate.T("owner.group"))}
+// ownerSelectOptions builds owner SelectOptions (the shared group plus each member)
+// — used wherever an entity's owner can be chosen.
+func ownerSelectOptions(members []domain.Member, selected string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: domain.GroupOwnerID, Label: uistate.T("owner.group")}}
 	for _, m := range members {
-		opts = append(opts, Option(Value(m.ID), SelectedIf(selected == m.ID), m.Name))
+		opts = append(opts, uiw.SelectOption{Value: m.ID, Label: m.Name})
 	}
 	return opts
 }
@@ -400,8 +400,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	rolloverS := ui.UseState(s.Budget.Rollover)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
-	onPeriod := ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
-	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
+	// onPeriod/onOwner hooks kept for stable hook ordering; SelectInput owns the
+	// change event internally so these handlers are no longer wired to DOM.
+	ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(s.Budget.Name)
@@ -422,7 +424,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	coverFrom := ui.UseState("")
 	coverAmt := ui.UseState("")
 	coverErr := ui.UseState("")
-	onCoverFrom := ui.UseEvent(func(e ui.Event) { coverFrom.Set(e.GetValue()) })
+	// onCoverFrom hook kept for stable hook ordering; SelectInput owns the change event.
+	ui.UseEvent(func(e ui.Event) { coverFrom.Set(e.GetValue()) })
 	onCoverAmt := ui.UseEvent(func(v string) { coverAmt.Set(v) })
 	firstSource := func() string {
 		for _, src := range props.CoverSources {
@@ -494,9 +497,19 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				labeledField(uistate.T("budgets.limitLabel"),
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
 				labeledField(uistate.T("budgets.period"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(periodS.Get()))),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   periodOptions(periodS.Get()),
+						Selected:  periodS.Get(),
+						OnChange:  func(v string) { periodS.Set(v) },
+						AriaLabel: uistate.T("budgets.period"),
+					})),
 				labeledField(uistate.T("common.owner"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
+						Selected:  ownerS.Get(),
+						OnChange:  func(v string) { ownerS.Set(v) },
+						AriaLabel: uistate.T("common.owner"),
+					})),
 				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 					Span(uistate.T("budgets.rollover")),
@@ -595,12 +608,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
-		srcOpts := make([]ui.Node, 0, len(props.CoverSources))
+		srcOpts := make([]uiw.SelectOption, 0, len(props.CoverSources))
 		for _, src := range props.CoverSources {
 			if src.ID == s.Budget.ID {
 				continue
 			}
-			srcOpts = append(srcOpts, Option(Value(src.ID), SelectedIf(coverFrom.Get() == src.ID), src.Label))
+			srcOpts = append(srcOpts, uiw.SelectOption{Value: src.ID, Label: src.Label})
 		}
 		var coverErrLine ui.Node = Fragment()
 		if coverErr.Get() != "" {
@@ -609,7 +622,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverForm = Div(css.Class("cover-form"),
 			Span(css.Class("budget-sub"), "Cover the "+props.CoverShortfall+" over by moving money from another budget:"),
 			Form(css.Class("form-grid"), OnSubmit(submitCover),
-				Select(css.Class("field"), Attr("aria-label", "Cover from budget"), OnChange(onCoverFrom), srcOpts),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   srcOpts,
+					Selected:  coverFrom.Get(),
+					OnChange:  func(v string) { coverFrom.Set(v) },
+					AriaLabel: "Cover from budget",
+				}),
 				Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to move"), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
 				Button(css.Class("btn"), Type("button"), Title("Use the full overspend amount"), OnClick(fullCover), "Full "+props.CoverShortfall),
 				Button(css.Class("btn btn-primary"), Type("submit"), "Cover"),

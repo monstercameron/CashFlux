@@ -43,10 +43,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -130,7 +132,52 @@ func activityRow(props activityRowProps) ui.Node {
 	)
 }
 
+// activityFilterAtomID is the state atom key for the entity-type filter on the
+// Activity screen. The empty string means "all entity types".
+const activityFilterAtomID = "activity:entityFilter"
+
+// activityEntityOptions returns the SelectInput options for the entity-type
+// filter. The first entry is always "All" (empty value = no filter).
+//
+// i18n keys (add to en.go when registering the route):
+//
+//	activity.filterAll          "All changes"
+//	activity.filterTransaction  "Transactions"
+//	activity.filterAccount      "Accounts"
+//	activity.filterBudget       "Budgets"
+//	activity.filterGoal         "Goals"
+//	activity.filterTask         "Tasks"
+//	activity.filterCategory     "Categories"
+//	activity.filterMember       "Members"
+func activityEntityOptions() []uiw.SelectOption {
+	label := func(key, fallback string) string {
+		if v := uistate.T(key); v != key {
+			return v
+		}
+		return fallback
+	}
+	return []uiw.SelectOption{
+		{Value: "", Label: label("activity.filterAll", "All changes")},
+		{Value: "transaction", Label: label("activity.filterTransaction", "Transactions")},
+		{Value: "account", Label: label("activity.filterAccount", "Accounts")},
+		{Value: "budget", Label: label("activity.filterBudget", "Budgets")},
+		{Value: "goal", Label: label("activity.filterGoal", "Goals")},
+		{Value: "task", Label: label("activity.filterTask", "Tasks")},
+		{Value: "category", Label: label("activity.filterCategory", "Categories")},
+		{Value: "member", Label: label("activity.filterMember", "Members")},
+	}
+}
+
 // Activity is the Activity / History timeline screen.
+//
+// Entity-type filter: a SelectInput above the timeline narrows the feed to one
+// entity type, using the audit feed's per-entity data when available. This
+// delivers the C78 "per-entity Recent changes" requirement at the Activity-screen
+// level.
+//
+// Follow-up (noted): per-entity Recent changes embedded inline on entity detail
+// screens (e.g. the transaction inline-editor) is a separate sub-task; it would
+// call auditlog.ByEntity(entityType, entityID) and render a compact feed inline.
 func Activity() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -138,7 +185,16 @@ func Activity() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get() // re-render on undo/redo, import, wipe
 
+	// Entity-type filter state — persists while the screen is mounted.
+	filterAtom := state.UseAtom(activityFilterAtomID, "")
+	selectedFilter := filterAtom.Get()
+
 	entries := buildActivityFeed(app)
+
+	// Apply entity-type filter when one is selected.
+	if selectedFilter != "" {
+		entries = actFilterByEntityType(entries, selectedFilter)
+	}
 
 	navTitle := uistate.T("nav.activity")
 	if navTitle == "nav.activity" {
@@ -152,10 +208,23 @@ func Activity() ui.Node {
 	if emptyMsg == "activity.empty" {
 		emptyMsg = "No changes recorded yet — start by adding a transaction."
 	}
+	filterLabel := uistate.T("activity.filterLabel")
+	if filterLabel == "activity.filterLabel" {
+		filterLabel = "Filter by type"
+	}
+
+	filterControl := uiw.SelectInput(uiw.SelectInputProps{
+		Options:   activityEntityOptions(),
+		Selected:  selectedFilter,
+		OnChange:  func(v string) { filterAtom.Set(v) },
+		AriaLabel: filterLabel,
+		TestID:    "activity-entity-filter",
+	})
 
 	if len(entries) == 0 {
 		return Section(css.Class("card"),
 			H2(css.Class("card-title"), navTitle),
+			Div(css.Class("row row-filter"), filterControl),
 			P(css.Class("empty"), emptyMsg),
 		)
 	}
@@ -172,6 +241,7 @@ func Activity() ui.Node {
 	return Section(css.Class("card"),
 		H2(css.Class("card-title"), navTitle),
 		P(css.Class("row-meta", tw.TextFaint), subTitle),
+		Div(css.Class("row row-filter"), filterControl),
 		Div(css.Class("rows"), rows),
 	)
 }
@@ -230,6 +300,21 @@ func buildActivityFeed(app *appstate.App) []auditlog.Entry {
 		entries = entries[:activityFeedMax]
 	}
 	return entries
+}
+
+// ─── filtering ───────────────────────────────────────────────────────────────
+
+// actFilterByEntityType returns only the entries whose EntityType matches the
+// given type string (case-insensitive match against the stored value). It does
+// not modify the input slice.
+func actFilterByEntityType(entries []auditlog.Entry, entityType string) []auditlog.Entry {
+	out := make([]auditlog.Entry, 0, len(entries))
+	for _, e := range entries {
+		if e.EntityType == entityType {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // ─── small helpers (prefixed act* to avoid clashing with other screens) ───────

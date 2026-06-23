@@ -146,6 +146,68 @@ func TestLogicCompareBranchKPI(t *testing.T) {
 	}
 }
 
+func TestVizText(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "t", Kind: KindLiteralText, Props: map[string]string{"value": "Hello"}},
+			{ID: "v", Kind: KindVizText, Props: map[string]string{"title": "Greeting"}},
+		},
+		Edges: []Edge{{From: PortRef{"t", OutPort}, To: PortRef{"v", "value"}}},
+		Root:  "v",
+	}
+	res := Eval(g, Context{})
+	if len(res.Issues) != 0 || res.Render == nil {
+		t.Fatalf("issues=%+v render=%v", res.Issues, res.Render)
+	}
+	if res.Render.Kind != "text" || res.Render.Text != "Hello" {
+		t.Errorf("render = %+v", *res.Render)
+	}
+}
+
+func TestVizProgress(t *testing.T) {
+	// 750 of 1000 → 75% fill, not full (no "up" tone).
+	g := Graph{
+		Nodes: []Node{
+			{ID: "v", Kind: KindLiteralNumber, Props: map[string]string{"value": "750"}},
+			{ID: "m", Kind: KindLiteralNumber, Props: map[string]string{"value": "1000"}},
+			{ID: "p", Kind: KindVizProgress, Props: map[string]string{"title": "Goal"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"v", OutPort}, To: PortRef{"p", "value"}},
+			{From: PortRef{"m", OutPort}, To: PortRef{"p", "max"}},
+		},
+		Root: "p",
+	}
+	res := Eval(g, Context{})
+	if res.Render == nil {
+		t.Fatalf("no render: %+v", res.Issues)
+	}
+	if res.Render.Kind != "progress" || res.Render.Pct != 0.75 {
+		t.Errorf("render = %+v", *res.Render)
+	}
+	if res.Render.Sub != "of 1000" {
+		t.Errorf("sub = %q", res.Render.Sub)
+	}
+	if res.Render.Tone != "" {
+		t.Errorf("expected no tone below max, got %q", res.Render.Tone)
+	}
+}
+
+func TestVizProgressZeroMaxNoPanic(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "v", Kind: KindLiteralNumber, Props: map[string]string{"value": "5"}},
+			{ID: "p", Kind: KindVizProgress},
+		},
+		Edges: []Edge{{From: PortRef{"v", OutPort}, To: PortRef{"p", "value"}}},
+		Root:  "p",
+	}
+	res := Eval(g, Context{})
+	if res.Render == nil || res.Render.Pct != 0 {
+		t.Errorf("zero/missing max should give 0%% fill, got %+v", res.Render)
+	}
+}
+
 func TestTopoOrderCycle(t *testing.T) {
 	g := Graph{
 		Nodes: []Node{

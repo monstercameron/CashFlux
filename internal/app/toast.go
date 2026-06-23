@@ -3,13 +3,16 @@
 package app
 
 import (
+	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/state"
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -20,10 +23,63 @@ const (
 	toastErrTimeoutMS = 7500
 )
 
+// toastUndoProps are the props for the toastUndoButton sub-component.
+type toastUndoProps struct {
+	// Atom is the notice atom so the Undo action can clear the toast after undo.
+	Atom state.Atom[uistate.Notice]
+}
+
+// toastUndoButton is a dedicated component so that its UseEvent hook is
+// registered at a stable (non-loop) call-site — required by the GoWebComponents
+// framework (CLAUDE.md §"CRITICAL gotchas"). It renders the "Undo" button
+// inside a Toast whose notice represents an undoable change.
+func toastUndoButton(props toastUndoProps) uic.Node {
+	doUndo := uic.UseEvent(func() {
+		auditview.UndoFunc()
+		props.Atom.Set(props.Atom.Get().Cleared())
+	})
+
+	label := uistate.T("toast.undoBtn")
+	if label == "toast.undoBtn" {
+		label = "Undo"
+	}
+	return Button(
+		css.Class("toast-undo"),
+		Attr("type", "button"),
+		Attr("aria-label", label),
+		OnClick(doUndo),
+		label,
+	)
+}
+
+// toastNoticeIsUndoable reports whether the notice text looks like it
+// represents a delete or change that the user may want to undo. This is a
+// heuristic used when the Notice model has no explicit Undoable field.
+//
+// Follow-up: add a Notice.Undoable bool field to uistate.Notice so callers
+// (e.g. delete handlers) can set it directly, removing the need for this
+// text-matching heuristic entirely.
+func toastNoticeIsUndoable(text string) bool {
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "deleted") ||
+		strings.Contains(lower, "removed") ||
+		strings.Contains(lower, "changed") ||
+		strings.Contains(lower, "updated") ||
+		strings.Contains(lower, "moved") ||
+		strings.Contains(lower, "archived")
+}
+
 // Toast renders the app-wide notice surface: a single dismissible message
 // pinned to the bottom of the viewport, driven by the shared uistate.Notice
 // atom. Ordinary notices auto-dismiss after toastTimeoutMS; errors linger for
 // toastErrTimeoutMS (and can always be dismissed by hand).
+//
+// Inline Undo: when the undo stack is non-empty (auditview.CanUndoFunc()) and
+// the notice text matches a delete/change pattern, an inline "Undo" button
+// appears. Clicking it calls auditview.UndoFunc() and dismisses the toast.
+//
+// Cleaner follow-up: add Notice.Undoable bool to uistate.Notice and set it
+// from delete/change handlers, replacing the text-pattern heuristic below.
 func Toast() uic.Node {
 	atom := uistate.UseNotice()
 	n := atom.Get()
@@ -81,8 +137,14 @@ func Toast() uic.Node {
 	if n.Err {
 		cls += " toast-err"
 	}
+
+	// Show the inline Undo button when the undo stack has something to undo and
+	// the notice text indicates a destructive or mutating operation.
+	showUndo := auditview.CanUndoFunc() && toastNoticeIsUndoable(n.Text)
+
 	return Div(ClassStr(cls), Attr("role", role), Attr("aria-live", live),
 		Span(css.Class("toast-msg"), n.Text),
+		If(showUndo, uic.CreateElement(toastUndoButton, toastUndoProps{Atom: atom})),
 		Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"), Attr("aria-label", "Dismiss"),
 			OnClick(func() { atom.Set(n.Cleared()) }), "×"),
 	)

@@ -4,7 +4,6 @@ package screens
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -305,15 +304,6 @@ func visibleFlats(flats []categorytree.Flat, visible map[string]bool) []category
 	return out
 }
 
-// indentLabel returns a depth-proportional prefix for nested category names in
-// <option> lists, where CSS padding can't reach. It uses non-breaking spaces
-// (which, unlike normal leading spaces, browsers don't collapse in an option)
-// rather than em-dashes, for a cleaner hierarchy (C63). Row labels indent with
-// real CSS padding instead — see CategoryRow.
-func indentLabel(depth int) string {
-	return strings.Repeat("   ", depth)
-}
-
 // CategoryRow is a per-category row. It can be edited inline (name + kind). All
 // hooks are declared unconditionally so the edit toggle never reorders them.
 func CategoryRow(props categoryRowProps) ui.Node {
@@ -379,7 +369,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		}
 		parentOpts := []ui.Node{Option(Value(""), SelectedIf(parentS.Get() == ""), uistate.T("categories.noParent"))}
 		for _, f := range categorytree.Flatten(sameKind) {
-			parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentS.Get() == f.Category.ID), indentLabel(f.Depth)+f.Category.Name))
+			parentOpts = append(parentOpts, Option(Value(f.Category.ID), SelectedIf(parentS.Get() == f.Category.ID), uiw.IndentLabel(f.Depth)+f.Category.Name))
 		}
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
@@ -404,7 +394,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 	// than literal "— " prefixes, for a cleaner hierarchy (C63). Depth 0 is flush.
 	descStyle := map[string]string{}
 	if props.Depth > 0 {
-		descStyle["padding-left"] = strconv.Itoa(props.Depth*16) + "px"
+		descStyle["padding-left"] = uiw.IndentPx(props.Depth)
 		descStyle["border-left"] = "2px solid var(--border, #2a2a2a)"
 		descStyle["margin-left"] = "2px"
 	}

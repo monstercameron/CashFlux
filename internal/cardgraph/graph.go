@@ -56,12 +56,20 @@ type Value struct {
 }
 
 // VizBlock is a renderable result the wasm layer turns into a dashboard tile body.
-// v1 supports a KPI block; list/table/chart/stack blocks extend this in later phases.
+// Kind selects the renderer; the other fields are interpreted per Kind:
+//   - "kpi":      Text (big figure), Tone
+//   - "text":     Text (a paragraph/label)
+//   - "progress": Text (formatted value), Sub (e.g. "of 1,000"), Pct (0..1 fill), Tone
+//   - "badge":    Text (label), Tone (color)
+//
+// List/table/chart blocks extend this in later phases.
 type VizBlock struct {
-	Kind  string // "kpi" (more in later phases)
-	Title string
-	Text  string // the formatted value to display
-	Tone  string // "" | "up" | "down" — display tone for the figure
+	Kind  string  // "kpi" | "text" | "progress" | "badge"
+	Title string  //
+	Text  string  // the formatted value/label to display
+	Sub   string  // secondary line (e.g. progress denominator)
+	Tone  string  // "" | "up" | "down" — display tone
+	Pct   float64 // 0..1 fill fraction, for "progress"
 }
 
 // Num builds a number value. Text, Bln, and Viz are the sibling constructors.

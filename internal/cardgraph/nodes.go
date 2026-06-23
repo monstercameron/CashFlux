@@ -67,6 +67,9 @@ const (
 	KindCompare       = "logic.compare"
 	KindBranchNumber  = "logic.branch.number"
 	KindVizKPI        = "viz.kpi"
+	KindVizText       = "viz.text"
+	KindVizProgress   = "viz.progress"
+	KindVizBadge      = "viz.badge"
 )
 
 func init() {
@@ -243,6 +246,95 @@ func init() {
 				tone = ""
 			}
 			return Viz(VizBlock{Kind: "kpi", Title: props["title"], Text: text, Tone: tone}), nil
+		},
+	})
+
+	// viz.text — renders its input as a text/label block (number coerced to text).
+	// props["title"] labels it. Good for showing a name, category, or status string.
+	register(Spec{
+		Kind: KindVizText, Out: TypeViz,
+		Inputs: []Port{{Name: "value", Type: TypeText}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["value"]
+			if !ok {
+				return Value{}, fmt.Errorf("viz.text: connect a value")
+			}
+			text := in.Str
+			if n, ok := in.AsNumber(); ok && in.Type != TypeText {
+				text = formatNumber(n, "")
+			}
+			return Viz(VizBlock{Kind: "text", Title: props["title"], Text: text}), nil
+		},
+	})
+
+	// viz.progress — a progress bar: "value" of "max". props["title"] labels it,
+	// props["format"] formats the value. Pct is value/max clamped to 0..1; the bar is
+	// toned up when full. A missing/zero max degrades to an empty bar (no divide-by-0).
+	register(Spec{
+		Kind: KindVizProgress, Out: TypeViz,
+		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "max", Type: TypeNumber}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			vv, ok := inputs["value"]
+			if !ok {
+				return Value{}, fmt.Errorf("viz.progress: connect a value")
+			}
+			val, _ := vv.AsNumber()
+			max := 0.0
+			if mv, ok := inputs["max"]; ok {
+				max, _ = mv.AsNumber()
+			}
+			pct := 0.0
+			if max > 0 {
+				pct = val / max
+				if pct < 0 {
+					pct = 0
+				}
+				if pct > 1 {
+					pct = 1
+				}
+			}
+			tone := ""
+			if max > 0 && val >= max {
+				tone = "up"
+			}
+			return Viz(VizBlock{
+				Kind: "progress", Title: props["title"],
+				Text: formatNumber(val, props["format"]),
+				Sub:  "of " + formatNumber(max, props["format"]),
+				Tone: tone, Pct: pct,
+			}), nil
+		},
+	})
+
+	// viz.badge — a small toned label. props["title"] labels it; the input becomes the
+	// badge text; props["tone"] sets the color, or "auto" derives up/down from a number.
+	register(Spec{
+		Kind: KindVizBadge, Out: TypeViz,
+		Inputs: []Port{{Name: "value", Type: TypeText}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["value"]
+			if !ok {
+				return Value{}, fmt.Errorf("viz.badge: connect a value")
+			}
+			text := in.Str
+			tone := props["tone"]
+			if n, ok := in.AsNumber(); ok && in.Type != TypeText {
+				text = formatNumber(n, "")
+				if tone == "auto" {
+					switch {
+					case n > 0:
+						tone = "up"
+					case n < 0:
+						tone = "down"
+					default:
+						tone = ""
+					}
+				}
+			}
+			if tone == "auto" {
+				tone = ""
+			}
+			return Viz(VizBlock{Kind: "badge", Title: props["title"], Text: text, Tone: tone}), nil
 		},
 	})
 }

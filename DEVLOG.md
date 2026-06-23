@@ -11365,3 +11365,14 @@ into documents.parseStatement, registered the /activity route, added RecordAudit
 the build. Residual tails remain and are NOT claimed done: C73 per-screen migration to the new primitives;
 C74 XLSX/scanned-PDF/DOCX; C78 SQLite audit persistence + Phase-2 commit seam + inline toast-undo. All
 built gates + regressions green; go test ./... green.
+
+## 2026-06-23 — C73/C74/C78 epic build-out
+6-agent wave on the three open C epics. C73: Lane A migrated accounts/budgets/goals to uiw.SelectInput
+(converting orphaned UseEvent handlers to anonymous calls to keep hook order stable); Lane B did the
+TreeRows indent consolidation but conservatively SKIPPED the categories/members/rules/todo SelectInput
+swap (a follow-up). C74: pure xlsx/docx/pdftext parsers + ParseAny routing + a Map-columns wizard +
+session profiles + cadence reminder wired into Documents. C78: SQLite audit_log table + persistence +
+Phase-2 commit seam (RecordAuditPoint persists, applyingUndo replay guard) + LoadAuditIntoFeed at boot +
+inline Toast undo + Activity per-entity filter. Integration: wired ParseAny into documents, merged i18n
+keys, fixed agent e2e gates (modal-open, multi-currency injection, no-auto-date wizard trigger, audit-feed
+assertion). Reverted (yet again) the half-written widget-builder edit. Combined wasm + go test ./... green.

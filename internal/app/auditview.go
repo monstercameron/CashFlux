@@ -14,22 +14,16 @@
 // runs before any user interaction; by the time a user navigates to /activity the
 // slots are live.
 //
-// GAP — RecordAuditPoint is not yet called automatically: captureUndoPoint (undo.go,
-// an existing file that cannot be edited) does not call RecordAuditPoint.  As a
-// result the audit feed (auditview.Feed) is empty today and the Activity screen
-// falls back to its entity-synthesis path (transactions + tasks by timestamp).
-//
-// To wire it up properly, Phase 2 must either:
-//
-//	a) Edit undo.go's captureUndoPoint to call app.RecordAuditPoint(cs) after
-//	   the undoStack.Push, OR
-//	b) Introduce the appstate.App.commit(label, actor, mutate) seam (C78 phase 2)
-//	   and call RecordAuditPoint from inside it.
+// Phase-2 seam: captureUndoPoint in undo.go calls RecordAuditPoint(cs) after
+// pushing to undoStack.  RecordAuditPoint feeds both the in-memory auditview.Feed
+// and the SQLite audit_log table (C78 phase 3).  The applyingUndo guard in
+// undo.go suppresses spurious entries during undo/redo restorations.
 package app
 
 import (
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/history"
@@ -42,26 +36,41 @@ func init() {
 	auditview.CanUndoFunc = func() bool { return undoStack.CanUndo() }
 }
 
-// RecordAuditPoint translates cs into an auditlog.Entry and appends it to the
-// shared audit feed (auditview.Feed).  It is called after a ChangeSet is pushed
-// onto undoStack.
+// RecordAuditPoint translates cs into an auditlog.Entry, appends it to the
+// shared in-memory feed (auditview.Feed), and persists it to the SQLite
+// audit_log table via appstate.Default so the entry survives a page reload.
 //
-// Phase-2 wiring: edit captureUndoPoint in undo.go to call
-// RecordAuditPoint(cs) right after undoStack.Push(cs).
+// The applyingUndo replay guard (from undo.go, same package) prevents undo/redo
+// restorations from generating spurious audit entries: when applyingUndo is true
+// the function returns immediately without recording anything.
+//
+// Phase-2 wiring: captureUndoPoint in undo.go calls RecordAuditPoint(cs) after
+// undoStack.Push — that wiring is already in place.
 func RecordAuditPoint(cs history.ChangeSet) {
+	// Replay guard: undo/redo applications set applyingUndo to suppress the
+	// captureUndoPoint→RecordAuditPoint path during a restoration write-back.
+	if applyingUndo {
+		return
+	}
 	if cs.IsEmpty() {
 		return
 	}
 	action, entityType, entityID := inferEntryFields(cs)
 	summary := buildSummary(cs, action, entityType)
-	auditview.Feed.Append(auditlog.Entry{
+	e := auditlog.Entry{
 		ID:         auditEntryID(),
 		Actor:      "user",
 		Action:     action,
 		EntityType: entityType,
 		EntityID:   entityID,
 		Summary:    auditlog.Redact(summary),
-	})
+	}
+	// Append to the in-memory feed for the Activity screen.
+	auditview.Feed.Append(e)
+	// Persist to SQLite so the entry survives a page reload (C78 phase 3).
+	if appstate.Default != nil {
+		appstate.Default.RecordAudit(e)
+	}
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

@@ -331,12 +331,12 @@ func ariaBool(b bool) string {
 	return "false"
 }
 
-// currencyOptions builds the account-currency picker's <option>s: every known
+// currencyOptions builds the account-currency picker's SelectOptions: every known
 // registry currency, plus any code already in play (the base currency, the FX-table
 // currencies, and the current selection) so an in-use code is never dropped. Each
-// option reads "CODE — Name"; the chosen code is marked selected. A validated
-// picker (vs the old free-text input) keeps typos from silently breaking FX.
-func currencyOptions(app *appstate.App, selected string) []ui.Node {
+// option reads "CODE — Name". A validated picker (vs the old free-text input) keeps
+// typos from silently breaking FX.
+func currencyOptions(app *appstate.App, selected string) []uiw.SelectOption {
 	seen := map[string]bool{}
 	var codes []string
 	add := func(c string) {
@@ -357,13 +357,13 @@ func currencyOptions(app *appstate.App, selected string) []ui.Node {
 	add(selected)
 	sort.Strings(codes)
 
-	opts := make([]ui.Node, 0, len(codes))
+	opts := make([]uiw.SelectOption, 0, len(codes))
 	for _, c := range codes {
 		label := c
 		if cur, ok := currency.Lookup(c); ok {
 			label = c + " — " + cur.Name
 		}
-		opts = append(opts, Option(Value(c), SelectedIf(selected == c), label))
+		opts = append(opts, uiw.SelectOption{Value: c, Label: label})
 	}
 	return opts
 }
@@ -493,7 +493,8 @@ func AccountRow(props accountRowProps) ui.Node {
 		settingBal.Set(true)
 	}))
 	onSetBalAmt := ui.UseEvent(func(v string) { setBalAmtS.Set(v) })
-	onSetBalCat := ui.UseEvent(func(e ui.Event) { setBalCatS.Set(e.GetValue()) })
+	// onSetBalCat hook kept for stable hook ordering; SelectInput owns the change event.
+	ui.UseEvent(func(e ui.Event) { setBalCatS.Set(e.GetValue()) })
 	doSetBal := ui.UseEvent(Prevent(func() {
 		if v := strings.TrimSpace(setBalAmtS.Get()); v != "" {
 			props.OnSetBalance(a, props.Balance, v, setBalCatS.Get())
@@ -517,7 +518,8 @@ func AccountRow(props accountRowProps) ui.Node {
 		transferring.Set(true)
 	}))
 	cancelTransfer := ui.UseEvent(Prevent(func() { transferring.Set(false) }))
-	onXferTo := ui.UseEvent(func(e ui.Event) { xferToS.Set(e.GetValue()) })
+	// onXferTo hook kept for stable hook ordering; SelectInput owns the change event.
+	ui.UseEvent(func(e ui.Event) { xferToS.Set(e.GetValue()) })
 	onXferAmt := ui.UseEvent(func(v string) { xferAmtS.Set(v) })
 	onXferDate := ui.UseEvent(func(v string) { xferDateS.Set(v) })
 	onXferDesc := ui.UseEvent(func(v string) { xferDescS.Set(v) })
@@ -572,7 +574,8 @@ func AccountRow(props accountRowProps) ui.Node {
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
 	onLock := ui.UseEvent(func(v string) { lockS.Set(v) })
-	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
+	// onOwner hook kept for stable hook ordering; SelectInput owns the change event.
+	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	onToggleEditAdv := ui.UseEvent(func() { editAdvOpen.Set(!editAdvOpen.Get()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
@@ -673,9 +676,9 @@ func AccountRow(props accountRowProps) ui.Node {
 		}
 
 		// Category picker for the adjustment transaction (L57/L30).
-		catOpts := []ui.Node{Option(Value(""), SelectedIf(setBalCatS.Get() == ""), uistate.T("accounts.setBalanceNoCategory"))}
+		catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.setBalanceNoCategory")}}
 		for _, c := range props.Categories {
-			catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(setBalCatS.Get() == c.ID), c.Name))
+			catOpts = append(catOpts, uiw.SelectOption{Value: c.ID, Label: c.Name})
 		}
 
 		return Div(css.Class("row-edit"),
@@ -689,10 +692,13 @@ func AccountRow(props accountRowProps) ui.Node {
 						Value(setBalAmtS.Get()), Step("0.01"), OnInput(onSetBalAmt))),
 				deltaNode,
 				labeledField(uistate.T("accounts.setBalanceCategoryLabel"),
-					Select(css.Class("field"),
-						Attr("aria-label", uistate.T("accounts.setBalanceCategoryLabel")),
-						Attr("data-testid", "setbal-cat-select"),
-						OnChange(onSetBalCat), catOpts)),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   catOpts,
+						Selected:  setBalCatS.Get(),
+						OnChange:  func(v string) { setBalCatS.Set(v) },
+						AriaLabel: uistate.T("accounts.setBalanceCategoryLabel"),
+						TestID:    "setbal-cat-select",
+					})),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),
@@ -783,13 +789,12 @@ func AccountRow(props accountRowProps) ui.Node {
 	}
 	if transferring.Get() {
 		// Build a "To account" option list: every non-archived account except this one.
-		toOpts := []ui.Node{Option(Value(""), SelectedIf(xferToS.Get() == ""), uistate.T("accounts.transferToPlaceholder"))}
+		toOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
 		for _, ac := range props.Accounts {
 			if ac.ID == a.ID || ac.Archived {
 				continue
 			}
-			label := ac.Name + " (" + ac.Currency + ")"
-			toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(xferToS.Get() == ac.ID), label))
+			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: ac.Name + " (" + ac.Currency + ")"})
 		}
 		return Div(css.Class("row-edit"),
 			H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}),
@@ -804,10 +809,13 @@ func AccountRow(props accountRowProps) ui.Node {
 						Value(xferAmtS.Get()), Step("0.01"), Attr("min", "0.01"),
 						OnInput(onXferAmt))),
 				labeledField(uistate.T("accounts.transferToLabel"),
-					Select(css.Class("field"),
-						Attr("aria-label", uistate.T("accounts.transferToLabel")),
-						Attr("data-testid", "acct-xfer-to-select"),
-						OnChange(onXferTo), toOpts)),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   toOpts,
+						Selected:  xferToS.Get(),
+						OnChange:  func(v string) { xferToS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferToLabel"),
+						TestID:    "acct-xfer-to-select",
+					})),
 				labeledField(uistate.T("accounts.transferDateLabel"),
 					Input(css.Class("field"), Type("date"),
 						Attr("aria-label", uistate.T("accounts.transferDateLabel")),
@@ -829,7 +837,12 @@ func AccountRow(props accountRowProps) ui.Node {
 				labeledField(uistate.T("common.name"),
 					Input(css.Class("field"), Attr("id", "acct-edit-"+a.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("common.owner"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
+						Selected:  ownerS.Get(),
+						OnChange:  func(v string) { ownerS.Set(v) },
+						AriaLabel: uistate.T("common.owner"),
+					})),
 				labeledField(uistate.T("accounts.openingBalance"),
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
 				// Liability-specific fields (always shown when editing a liability).

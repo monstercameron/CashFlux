@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/importmap"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	"github.com/monstercameron/CashFlux/internal/statement"
@@ -91,8 +92,33 @@ func Documents() ui.Node {
 	receiptTotal := ui.UseState("")    // the receipt's single total (defaults to the line sum)
 	receiptMerchant := ui.UseState("") // optional store name
 
+	// C74 — import-map wizard state: populated when statement auto-map fails or
+	// the user explicitly opens the wizard. wizardHeader holds the parsed column
+	// names; wizardRawRows holds the raw CSV records (post-header) for Apply.
+	wizardVisible := ui.UseState(false)
+	wizardHeader := ui.UseState([]string{})
+	wizardRawRows := ui.UseState([][][]string{})
+	// Each wizard field tracks which column index maps to it ("-1" = not present).
+	wizardDate := ui.UseState("-1")
+	wizardDescCol := ui.UseState("-1")
+	wizardAmount := ui.UseState("-1")
+	wizardDebit := ui.UseState("-1")
+	wizardCredit := ui.UseState("-1")
+
+	// C74 — profile save/load
+	profileName := ui.UseState("")
+	showProfiles := ui.UseState(false)
+
 	onCsv := ui.UseEvent(func(v string) { csvText.Set(v) })
 	onStmt := ui.UseEvent(func(v string) { stmtText.Set(v) })
+
+	// C74 wizard — one UseEvent per wizard field (fixed set, not a loop).
+	onWizardDate := ui.UseEvent(func(e ui.Event) { wizardDate.Set(e.GetValue()) })
+	onWizardDesc := ui.UseEvent(func(e ui.Event) { wizardDescCol.Set(e.GetValue()) })
+	onWizardAmount := ui.UseEvent(func(e ui.Event) { wizardAmount.Set(e.GetValue()) })
+	onWizardDebit := ui.UseEvent(func(e ui.Event) { wizardDebit.Set(e.GetValue()) })
+	onWizardCredit := ui.UseEvent(func(e ui.Event) { wizardCredit.Set(e.GetValue()) })
+	onProfileName := ui.UseEvent(func(v string) { profileName.Set(v) })
 
 	// recordDocument saves a best-effort audit record of an import (logged by
 	// appstate on failure). Declared before the import handlers that call it.
@@ -163,6 +189,9 @@ func Documents() ui.Node {
 	// → dedupe → import pipeline the image/CSV paths use, so the user can edit, drop,
 	// and commit rows (duplicates are skipped on import). Per-row parse failures are
 	// reported, not fatal.
+	//
+	// When the auto-mapping cannot locate a date or amount column (C74 wizard path),
+	// the wizard panel is shown so the user can assign columns manually.
 	parseStatement := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(stmtText.Get())
 		if data == "" {
@@ -176,6 +205,29 @@ func Documents() ui.Node {
 		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
 		stRows, err := statement.ParseAny(strings.NewReader(data), dec)
 		if err != nil {
+			// If the error is about missing columns, offer the wizard instead of a
+			// bare error message (C74 wizard path). Also try to populate the wizard
+			// header from a raw Parse so the user can see column names.
+			if strings.Contains(err.Error(), "could not find a date") ||
+				strings.Contains(err.Error(), "could not find") {
+				// Try a raw Parse to extract header/column info for the wizard.
+				raw, rerr := statement.Parse(data, dec)
+				// Even if rerr is non-nil, raw.Delimiter is set from the first line,
+				// which is enough to populate the wizard column list.
+				header, rawRecs := extractRawHeaderAndRows(data, raw.Delimiter)
+				_ = rerr
+				wizardHeader.Set(header)
+				wizardRawRows.Set(rawRecs)
+				// Pre-fill wizard fields from whatever was auto-detected (-1 = absent).
+				wizardDate.Set(strconv.Itoa(raw.Columns.Date))
+				wizardDescCol.Set(strconv.Itoa(raw.Columns.Description))
+				wizardAmount.Set(strconv.Itoa(raw.Columns.Amount))
+				wizardDebit.Set(strconv.Itoa(raw.Columns.Debit))
+				wizardCredit.Set(strconv.Itoa(raw.Columns.Credit))
+				wizardVisible.Set(true)
+				msg.Set(uistate.T("documents.stmtError", "Columns couldn't be detected automatically — use the mapping wizard below."))
+				return
+			}
 			msg.Set(uistate.T("documents.stmtError", strings.TrimPrefix(err.Error(), "statement: ")))
 			return
 		}
@@ -191,10 +243,119 @@ func Documents() ui.Node {
 			msg.Set(uistate.T("documents.stmtNoneFound"))
 			return
 		}
+		// Successful parse — hide wizard, populate draft.
+		wizardVisible.Set(false)
 		draft.Set(rows)
 		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
 		rev.Set(rev.Get() + 1)
 	}))
+
+	// applyWizard (C74) applies the user's manual column assignments via
+	// importmap.Apply to produce draft rows from the raw statement records.
+	applyWizard := ui.UseEvent(Prevent(func() {
+		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+		atoi := func(s string) int {
+			v, _ := strconv.Atoi(s)
+			return v
+		}
+		p := importmap.Profile{
+			Name:        "manual",
+			DateCol:     atoi(wizardDate.Get()),
+			DescCol:     atoi(wizardDescCol.Get()),
+			AmountCol:   atoi(wizardAmount.Get()),
+			DebitCol:    atoi(wizardDebit.Get()),
+			CreditCol:   atoi(wizardCredit.Get()),
+			BalanceCol:  -1,
+			CurrencyCol: -1,
+			SkipRows:    0,
+			Decimals:    dec,
+		}
+		rawRecs := wizardRawRows.Get()
+		// Flatten [][][]string to [][]string (each outer entry is one record set).
+		flat := make([][]string, 0)
+		for _, group := range rawRecs {
+			flat = append(flat, group...)
+		}
+		stRows := importmap.Apply(p, flat)
+		if len(stRows) == 0 {
+			msg.Set("No rows matched — check your column assignments.")
+			return
+		}
+		rows := make([]extract.Row, 0, len(stRows))
+		for _, r := range stRows {
+			rows = append(rows, extract.Row{
+				Date:        r.Date.Format("2006-01-02"),
+				Description: r.Description,
+				Amount:      money.FormatMinor(r.Amount, dec),
+			})
+		}
+		wizardVisible.Set(false)
+		draft.Set(rows)
+		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+		rev.Set(rev.Get() + 1)
+	}))
+
+	// saveProfile (C74) saves the current wizard mapping as a named profile.
+	saveProfile := ui.UseEvent(Prevent(func() {
+		name := strings.TrimSpace(profileName.Get())
+		if name == "" {
+			return
+		}
+		atoi := func(s string) int { v, _ := strconv.Atoi(s); return v }
+		p := importmap.Profile{
+			Name:        name,
+			DateCol:     atoi(wizardDate.Get()),
+			DescCol:     atoi(wizardDescCol.Get()),
+			AmountCol:   atoi(wizardAmount.Get()),
+			DebitCol:    atoi(wizardDebit.Get()),
+			CreditCol:   atoi(wizardCredit.Get()),
+			BalanceCol:  -1,
+			CurrencyCol: -1,
+			Decimals:    currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get())),
+		}
+		saved, err := app.SaveImportProfile(importmap.SavedProfile{Profile: p})
+		if err != nil {
+			msg.Set("Couldn't save: " + err.Error())
+			return
+		}
+		profileName.Set("")
+		msg.Set(uistate.T("documents.profileSaved", saved.Profile.Name))
+		rev.Set(rev.Get() + 1)
+	}))
+
+	// createCadenceReminder (C74) creates a monthly to-do nudging the user to
+	// import this account's statement next cycle, reusing app.PutTask like the
+	// freshness nudge.
+	createCadenceReminder := ui.UseEvent(func() {
+		acctName := ""
+		for _, a := range accounts {
+			if a.ID == importAcct.Get() {
+				acctName = a.Name
+				break
+			}
+		}
+		label := "Import bank statement"
+		if acctName != "" {
+			label = "Import " + acctName + " statement"
+		}
+		// Due one month from today.
+		due := time.Now().AddDate(0, 1, 0)
+		t := domain.Task{
+			ID:         id.New(),
+			Title:      label,
+			Due:        due,
+			Status:     domain.StatusOpen,
+			Priority:   domain.PriorityMedium,
+			Source:     domain.SourceNudge,
+			Recurrence: domain.CadenceMonthly,
+		}
+		if err := app.PutTask(t); err != nil {
+			msg.Set("Couldn't create reminder: " + err.Error())
+			return
+		}
+		msg.Set(uistate.T("documents.cadenceCreated", due.Format("Jan 2, 2006")))
+		rev.Set(rev.Get() + 1)
+	})
 
 	chooseImage := ui.UseEvent(func() {
 		pickImageDataURL(func(u string) {
@@ -517,6 +678,69 @@ func Documents() ui.Node {
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
 				),
 			),
+			// C74 — per-bank import cadence reminder: creates a monthly to-do so the
+			// user is nudged to import next cycle. Off by default; single click.
+			Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+				P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
+					OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
+			),
+		),
+		// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
+		// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
+		// a variable-length loop, so UseEvent hooks stay at stable render positions.
+		If(wizardVisible.Get(),
+			wizardCard(
+				wizardHeader.Get(),
+				wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
+				wizardDebit.Get(), wizardCredit.Get(),
+				onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
+				applyWizard,
+				profileName.Get(), onProfileName, saveProfile,
+			),
+		),
+		// C74 — Saved profile picker: shown/hidden via the "Saved mappings" toggle.
+		// Each profile row is its own component (owns its Apply/Delete handlers).
+		If(wizardVisible.Get() || showProfiles.Get(),
+			savedProfilesCard(app, accounts, importAcct.Get(),
+				showProfiles.Get(),
+				func() { showProfiles.Set(!showProfiles.Get()) },
+				func(sp importmap.SavedProfile) {
+					// Apply a saved profile to the current raw rows.
+					rawRecs := wizardRawRows.Get()
+					flat := make([][]string, 0)
+					for _, g := range rawRecs {
+						flat = append(flat, g...)
+					}
+					if len(flat) == 0 {
+						msg.Set("Paste a statement above, then click Parse before applying a profile.")
+						return
+					}
+					dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+					sp.Profile.Decimals = dec
+					stRows := importmap.Apply(sp.Profile, flat)
+					if len(stRows) == 0 {
+						msg.Set("No rows matched with that profile — check column assignments.")
+						return
+					}
+					rows2 := make([]extract.Row, 0, len(stRows))
+					for _, r := range stRows {
+						rows2 = append(rows2, extract.Row{
+							Date:        r.Date.Format("2006-01-02"),
+							Description: r.Description,
+							Amount:      money.FormatMinor(r.Amount, dec),
+						})
+					}
+					wizardVisible.Set(false)
+					draft.Set(rows2)
+					msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
+					rev.Set(rev.Get() + 1)
+				},
+				func(id string) {
+					_ = app.DeleteImportProfile(id)
+					rev.Set(rev.Get() + 1)
+				},
+			),
 		),
 		// Review results sit below the import inputs that produce them (G14 §1): a
 		// parsed statement / scanned receipt's draft rows no longer pop in *above* the
@@ -799,4 +1023,201 @@ func pickImageDataURL(onData func(string)) {
 	})
 	input.Set("onchange", onChange)
 	input.Call("click")
+}
+
+// ---------------------------------------------------------------------------
+// C74 — import-map wizard helpers
+// ---------------------------------------------------------------------------
+
+// extractRawHeaderAndRows splits raw delimited text into a header slice and a
+// [][][]string of records (each record is a []string of fields). The outer
+// slice wraps each record in its own single-element slice so it can be stored
+// in a ui.UseState([][][]string) and later flattened to [][]string for Apply.
+func extractRawHeaderAndRows(text string, delim rune) (header []string, rows [][][]string) {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	sep := string(delim)
+	header = splitLine(lines[0], sep)
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		rows = append(rows, [][]string{splitLine(line, sep)})
+	}
+	return header, rows
+}
+
+// splitLine splits a single CSV/TSV/pipe line by sep without full csv.Reader
+// overhead. Used only to populate the wizard header for display purposes.
+func splitLine(line, sep string) []string {
+	line = strings.TrimRight(line, "\r")
+	parts := strings.Split(line, sep)
+	out := make([]string, len(parts))
+	for i, p := range parts {
+		out[i] = strings.Trim(strings.TrimSpace(p), `"`)
+	}
+	return out
+}
+
+// wizardColumnOptions builds a <select> option list for picking a column from
+// the parsed header. The first option is "— not present —" (value "-1"); each
+// subsequent option is the column name with its 0-based index as the value.
+func wizardColumnOptions(header []string, selected string) []ui.Node {
+	opts := []ui.Node{Option(Value("-1"), SelectedIf(selected == "-1" || selected == ""), uistate.T("documents.wizardNone"))}
+	for i, h := range header {
+		v := strconv.Itoa(i)
+		label := h
+		if label == "" {
+			label = "Column " + v
+		}
+		opts = append(opts, Option(Value(v), SelectedIf(selected == v), label+" (col "+v+")"))
+	}
+	return opts
+}
+
+// wizardCard renders the column-mapping wizard panel (C74). It shows one
+// <select> per required or optional field — always a fixed set of five, never
+// inside a variable-length loop — so the UseEvent hooks that drive them stay
+// at stable render positions (the hooks live in Documents(), not here).
+//
+// The "Extract with AI" alternative is noted for discoverability; the vision
+// path already exists in the image card above.
+func wizardCard(
+	header []string,
+	selDate, selDesc, selAmount, selDebit, selCredit string,
+	onDate, onDesc, onAmount, onDebit, onCredit ui.Handler,
+	onApply ui.Handler,
+	profileNameVal string,
+	onProfileName ui.Handler,
+	onSaveProfile ui.Handler,
+) ui.Node {
+	colOpts := func(sel string) []ui.Node { return wizardColumnOptions(header, sel) }
+
+	return Section(css.Class("card"), Attr("data-testid", "import-wizard"),
+		H2(css.Class("card-title"), uistate.T("documents.wizardTitle")),
+		P(css.Class("muted"), uistate.T("documents.wizardDesc")),
+		P(css.Class("muted"), uistate.T("documents.wizardOrAI")),
+		Form(OnSubmit(onApply),
+			Div(css.Class("form-grid"),
+				Div(
+					Label(For("wiz-date"), uistate.T("documents.wizardDate")),
+					Select(css.Class("field"), Attr("id", "wiz-date"),
+						Attr("aria-label", uistate.T("documents.wizardDate")),
+						OnChange(onDate), colOpts(selDate)),
+				),
+				Div(
+					Label(For("wiz-desc"), uistate.T("documents.wizardDesc2")),
+					Select(css.Class("field"), Attr("id", "wiz-desc"),
+						Attr("aria-label", uistate.T("documents.wizardDesc2")),
+						OnChange(onDesc), colOpts(selDesc)),
+				),
+				Div(
+					Label(For("wiz-amount"), uistate.T("documents.wizardAmount")),
+					Select(css.Class("field"), Attr("id", "wiz-amount"),
+						Attr("aria-label", uistate.T("documents.wizardAmount")),
+						OnChange(onAmount), colOpts(selAmount)),
+				),
+				Div(
+					Label(For("wiz-debit"), uistate.T("documents.wizardDebit")),
+					Select(css.Class("field"), Attr("id", "wiz-debit"),
+						Attr("aria-label", uistate.T("documents.wizardDebit")),
+						OnChange(onDebit), colOpts(selDebit)),
+				),
+				Div(
+					Label(For("wiz-credit"), uistate.T("documents.wizardCredit")),
+					Select(css.Class("field"), Attr("id", "wiz-credit"),
+						Attr("aria-label", uistate.T("documents.wizardCredit")),
+						OnChange(onCredit), colOpts(selCredit)),
+				),
+			),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt2),
+				Button(css.Class("btn btn-primary"), Type("submit"),
+					Attr("data-testid", "wizard-apply-btn"),
+					uistate.T("documents.wizardApply")),
+			),
+		),
+		Div(css.Class(tw.Mt2),
+			H3(css.Class("card-title"), uistate.T("documents.profileSaveTitle")),
+			Form(css.Class("form-grid"), OnSubmit(onSaveProfile),
+				Input(css.Class("field"), Type("text"),
+					Attr("aria-label", uistate.T("documents.profileSaveTitle")),
+					Placeholder(uistate.T("documents.profileNamePlaceholder")),
+					Value(profileNameVal),
+					OnInput(onProfileName),
+				),
+				Button(css.Class("btn"), Type("submit"), uistate.T("documents.profileSave")),
+			),
+		),
+	)
+}
+
+// savedProfilesCard renders the saved-profile picker. It is shown alongside
+// the wizard or via the "Saved mappings" toggle. Each profile row is its own
+// component so Apply/Delete hooks stay at stable render positions.
+func savedProfilesCard(
+	app *appstate.App,
+	_ []domain.Account,
+	_ string,
+	shown bool,
+	onToggle func(),
+	onApply func(importmap.SavedProfile),
+	onDelete func(string),
+) ui.Node {
+	profiles := app.ImportProfiles()
+	return Section(css.Class("card"),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+			H2(css.Class("card-title"), uistate.T("documents.profileLoadTitle")),
+			Button(css.Class("btn btn-sm"), Type("button"), OnClick(func() { onToggle() }),
+				IfElse(shown, Text("Hide"), Text("Show"))),
+		),
+		If(shown,
+			IfElse(len(profiles) == 0,
+				P(css.Class("empty"), uistate.T("documents.profileNone")),
+				Div(css.Class("rows"), MapKeyed(profiles,
+					func(sp importmap.SavedProfile) any { return sp.ID },
+					func(sp importmap.SavedProfile) ui.Node {
+						return ui.CreateElement(ProfileRow, profileRowProps{
+							Profile:  sp,
+							OnApply:  onApply,
+							OnDelete: onDelete,
+						})
+					},
+				)),
+			),
+		),
+	)
+}
+
+// profileRowProps configures a ProfileRow component.
+type profileRowProps struct {
+	Profile  importmap.SavedProfile
+	OnApply  func(importmap.SavedProfile)
+	OnDelete func(string)
+}
+
+// ProfileRow renders one saved import profile in the profile picker list.
+// It owns its Apply and Delete handlers so hooks stay at a stable render
+// position (per the no-hooks-in-loops rule).
+func ProfileRow(props profileRowProps) ui.Node {
+	sp := props.Profile
+	apply := ui.UseEvent(func() { props.OnApply(sp) })
+	del := ui.UseEvent(func() { props.OnDelete(sp.ID) })
+	meta := "Date col " + strconv.Itoa(sp.Profile.DateCol) +
+		" · Desc col " + strconv.Itoa(sp.Profile.DescCol) +
+		" · Amount col " + strconv.Itoa(sp.Profile.AmountCol)
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), sp.Profile.Name),
+			Span(css.Class("row-meta"), meta),
+		),
+		Button(css.Class("btn btn-sm"), Type("button"), OnClick(apply),
+			uistate.T("documents.profileLoad")),
+		Button(css.Class("btn-del"), Type("button"),
+			Attr("aria-label", uistate.T("documents.profileDelete")),
+			Title(uistate.T("documents.profileDelete")),
+			OnClick(del),
+			uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+	)
 }

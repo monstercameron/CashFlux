@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS earmarks         (id TEXT PRIMARY KEY, data TEXT NOT 
 CREATE TABLE IF NOT EXISTS subcancellations  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subignores        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit_log         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 `
 
 // NewMemory opens a fresh in-memory SQLite database and creates the schema. A
@@ -175,6 +177,15 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "subignores", ds.SubscriptionIgnores, func(ig domain.SubscriptionIgnore) string { return ig.ID }); err != nil {
 		return err
 	}
+	// Audit log: persist at most AuditLogCap entries (drop-oldest) so the table
+	// never grows unbounded.
+	auditEntries := ds.AuditEntries
+	if len(auditEntries) > AuditLogCap {
+		auditEntries = auditEntries[len(auditEntries)-AuditLogCap:]
+	}
+	if err := replaceRows(tx, "audit_log", auditEntries, func(e auditlog.Entry) string { return e.ID }); err != nil {
+		return err
+	}
 
 	settingsData, err := json.Marshal(ds.Settings)
 	if err != nil {
@@ -266,6 +277,10 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionIgnores, err = loadRows[domain.SubscriptionIgnore](s.db, "subignores"); err != nil {
+		return Dataset{}, err
+	}
+	// Audit log entries ordered oldest-first for consistent round-trips.
+	if ds.AuditEntries, err = loadRows[auditlog.Entry](s.db, "audit_log"); err != nil {
 		return Dataset{}, err
 	}
 

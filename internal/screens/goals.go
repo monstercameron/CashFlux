@@ -279,12 +279,12 @@ type goalRowProps struct {
 	OnRedirect     func()                        // a completed goal frees its monthly — jump to Allocate (L20)
 }
 
-// goalAccountOptions builds the linked-account <option>s for a goal, with a
-// leading "no link" choice; selected matches the current AccountID.
-func goalAccountOptions(accounts []domain.Account, selected string) []ui.Node {
-	opts := []ui.Node{Option(Value(""), SelectedIf(selected == ""), "— No linked account —")}
+// goalAccountOptions builds the linked-account SelectOptions for a goal, with a
+// leading "no link" choice.
+func goalAccountOptions(accounts []domain.Account, selected string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: "— No linked account —"}}
 	for _, a := range accounts {
-		opts = append(opts, Option(Value(a.ID), SelectedIf(selected == a.ID), a.Name))
+		opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
 	}
 	return opts
 }
@@ -396,8 +396,10 @@ func GoalRow(props goalRowProps) ui.Node {
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
-	onAcct := ui.UseEvent(func(e ui.Event) { acctS.Set(e.GetValue()) })
-	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
+	// onAcct/onOwner hooks kept for stable hook ordering; SelectInput owns the
+	// change event internally so these handlers are no longer wired to DOM.
+	ui.UseEvent(func(e ui.Event) { acctS.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(g.Name)
 		targetS.Set(targetMajor)
@@ -457,9 +459,19 @@ func GoalRow(props goalRowProps) ui.Node {
 				labeledField(uistate.T("goals.dateLabel"),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
 				labeledField(uistate.T("goals.owner"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("goals.owner")), Title(uistate.T("goals.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
+						Selected:  ownerS.Get(),
+						OnChange:  func(v string) { ownerS.Set(v) },
+						AriaLabel: uistate.T("goals.owner"),
+					})),
 				labeledField(uistate.T("goals.linked"),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("goals.linked")), Title(uistate.T("goals.linked")), OnChange(onAcct), goalAccountOptions(props.Accounts, acctS.Get()))),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   goalAccountOptions(props.Accounts, acctS.Get()),
+						Selected:  acctS.Get(),
+						OnChange:  func(v string) { acctS.Set(v) },
+						AriaLabel: uistate.T("goals.linked"),
+					})),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

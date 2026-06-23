@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -79,10 +80,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	errMsg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onCurr := ui.UseEvent(func(e ui.Event) { curr.Set(strings.ToUpper(e.GetValue())) })
+	// onCurr/onType/onOwner hooks kept for stable hook ordering; SelectInput owns the
+	// change event internally, so these event-handler hooks are no longer wired to DOM.
+	ui.UseEvent(func(e ui.Event) { curr.Set(strings.ToUpper(e.GetValue())) })
 	onAmount := ui.UseEvent(func(v string) { amount.Set(v) })
-	onType := ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
-	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { accType.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
 	onCreditLimit := ui.UseEvent(func(v string) { creditLimit.Set(v) })
 	onApr := ui.UseEvent(func(v string) { apr.Set(v) })
 	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
@@ -176,16 +179,11 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		}
 	}))
 
-	typeOptions := make([]ui.Node, 0, len(domain.AllAccountTypes))
-	for _, t := range domain.AllAccountTypes {
-		typeOptions = append(typeOptions, Option(Value(string(t)), SelectedIf(accType.Get() == string(t)), humanizeType(string(t))))
-	}
-	ownerOptions := []ui.Node{
-		Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), uistate.T("owner.group")),
-	}
-	for _, m := range app.Members() {
-		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
-	}
+	typeOptions := uiw.OptionsFrom(domain.AllAccountTypes,
+		func(t domain.AccountType) string { return string(t) },
+		func(t domain.AccountType) string { return humanizeType(string(t)) },
+		accType.Get())
+	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
 	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
 
@@ -193,11 +191,27 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		labeledField(uistate.T("common.name"),
 			Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...)),
 		labeledField(uistate.T("accounts.typeLabel"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.typeLabel")), OnChange(onType), typeOptions)),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   typeOptions,
+				Selected:  accType.Get(),
+				OnChange:  func(v string) { accType.Set(v) },
+				AriaLabel: uistate.T("accounts.typeLabel"),
+			})),
 		labeledField(uistate.T("common.owner"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ownerOptions,
+				Selected:  owner.Get(),
+				OnChange:  func(v string) { owner.Set(v) },
+				AriaLabel: uistate.T("common.owner"),
+			})),
 		If(!singleCurrency, labeledField(uistate.T("accounts.currency"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("accounts.currency")), Attr("data-testid", "account-currency-select"), OnChange(onCurr), currencyOptions(app, curr.Get())))),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   currencyOptions(app, curr.Get()),
+				Selected:  curr.Get(),
+				OnChange:  func(v string) { curr.Set(strings.ToUpper(v)) },
+				AriaLabel: uistate.T("accounts.currency"),
+				TestID:    "account-currency-select",
+			}))),
 		labeledField(uistate.T("accounts.openingBalance"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),

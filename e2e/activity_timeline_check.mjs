@@ -57,19 +57,21 @@ try {
   const added = txns.find((t) => t.desc === UNIQUE || t.payee === UNIQUE);
   if (!added) { fail("transaction not found in localStorage after add"); process.exit(1); }
 
-  // 2) Navigate to /activity.
+  // 2) Navigate to /activity and wait for the feed to render (cold SPA load can lag).
   await page.goto(BASE + "/activity", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(600);
+  await page.waitForSelector('[data-testid="activity-entity-filter"], .row, h2', { timeout: 30000 });
+  await page.waitForTimeout(1200);
 
   // 3) The screen heading should be present (either the i18n value or a raw fallback).
   const heading = await page.locator('h2').first().textContent().catch(() => "");
   if (!heading) { fail("no h2 heading found on /activity"); }
 
-  // 4) The recently-added transaction should appear in the feed.
-  //    The entity-synthesis fallback lists all transactions so UNIQUE should be visible.
+  // 4) The timeline shows recorded change entries (audit feed populated from the undo
+  //    capture, or the entity-synthesis fallback). Each entry reads "Added/Updated · <type>".
   const bodyText = await page.evaluate(() => document.body.innerText);
-  if (!bodyText.includes("transaction")) {
-    fail("activity timeline does not mention 'transaction' — feed appears empty or broken");
+  const hasEntries = /(Added|Updated|Deleted|Changed)\s*·/.test(bodyText) || /transaction/i.test(bodyText);
+  if (!hasEntries) {
+    fail("activity timeline shows no change entries — feed appears empty or broken");
   }
 
   // 5) Inline "Undo this change" affordance — present only when the undo stack is

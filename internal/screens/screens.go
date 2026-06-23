@@ -71,7 +71,7 @@ func All() []Route {
 		{Path: "/artifacts", Label: "nav.artifacts", Title: "nav.artifacts", Subtitle: "screen.artifactsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Artifacts},
 		{Path: "/activity", Label: "nav.activity", Title: "nav.activity", Subtitle: "screen.activitySub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Activity},
 		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Workflows},
-		{Path: "/widget-builder", Label: "nav.widgetBuilder", Title: "nav.widgetBuilder", Subtitle: "screen.widgetBuilderSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: WidgetBuilder},
+		{Path: "/widget-builder", Label: "nav.widgetBuilder", Title: "nav.widgetBuilder", Subtitle: "screen.widgetBuilderSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: VisualBuilder},
 		{Path: "/widget-manager", Label: "nav.widgetManager", Title: "nav.widgetManager", Subtitle: "screen.widgetManagerSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: WidgetManager},
 		{Path: "/members", Label: "nav.members", Title: "nav.members", Subtitle: "screen.membersSub", Phase: 1, Group: GroupSystem, View: Members},
 		{Path: "/categories", Label: "nav.categories", Title: "nav.categories", Subtitle: "screen.categoriesSub", Phase: 1, Group: GroupSystem, View: Categories},

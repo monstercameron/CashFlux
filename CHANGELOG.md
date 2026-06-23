@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C73/C74/C78 epic build-out (2026-06-23).**
+  - **C73:** migrated Accounts/Budgets/Goals selects to the `SelectInput` primitive + consolidated the
+    category-tree indent helpers (`IndentPx`/`IndentLabel`) across Categories.
+  - **C74:** **XLSX, DOCX, and text-PDF parsers** (pure Go, zip-bomb-guarded) routed through
+    `statement.ParseAny`; a **Map-columns import wizard** + saved profiles + per-bank cadence reminder
+    on Documents.
+  - **C78:** **SQLite `audit_log` persistence** + Phase-2 commit seam (replay-guarded), an inline **Undo**
+    button on the Toast, and a per-entity filter on the **Activity** timeline (loaded into the feed at boot).
+
+### Added
 - **C-series epic + tail closeout (2026-06-23).** Built the genuinely-open remainder:
   - **C56** subscription correction path — `SubscriptionIgnore` entity (SQLite-persisted) + "Not a
     subscription" / Undo UI.

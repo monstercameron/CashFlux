@@ -77,7 +77,7 @@ type widgetSettingsFormProps struct {
 func notifySettings() uic.Node {
 	on := uic.UseState(uistate.BrowserNotifyEnabled())
 	return Div(
-		H4(css.Class("set-label"),uistate.T("settings.notifyTitle")),
+		H4(css.Class("set-label"), uistate.T("settings.notifyTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label: uistate.T("settings.notifyBrowser"),
 			On:    on.Get(),
@@ -116,7 +116,7 @@ func musicSettings() uic.Node {
 	onVol := uic.UseEvent(apply)
 	onVolCommit := uic.UseEvent(func(e uic.Event) { apply(e); checkpointMusic() })
 	return Div(
-		H4(css.Class("set-label"),uistate.T("settings.music")),
+		H4(css.Class("set-label"), uistate.T("settings.music")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label:    uistate.T("settings.musicOn"),
 			On:       enabled.Get(),
@@ -151,13 +151,13 @@ func widgetSettingsForm(props widgetSettingsFormProps) uic.Node {
 	schema, ok := widgetcfg.SchemaFor(props.ID)
 	if !ok {
 		return Div(
-			H4(css.Class("set-label"),props.Title),
+			H4(css.Class("set-label"), props.Title),
 			colorRow,
 			importance,
 		)
 	}
 	rows := make([]any, 0, len(schema.Fields)+3)
-	rows = append(rows, H4(css.Class("set-label"),schema.Title))
+	rows = append(rows, H4(css.Class("set-label"), schema.Title))
 	for _, f := range schema.Fields {
 		rows = append(rows, uic.CreateElement(widgetFieldRow, widgetFieldRowProps{Field: f, Cfg: cfg, OnSet: set}))
 	}
@@ -644,24 +644,24 @@ func globalSettingsForm() uic.Node {
 	}
 
 	left := Div(
-		H4(css.Class("set-label"),uistate.T("settings.householdMembers")),
+		H4(css.Class("set-label"), uistate.T("settings.householdMembers")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), memberChips),
-		H4(css.Class("set-label"),uistate.T("settings.baseCurrency")),
+		H4(css.Class("set-label"), uistate.T("settings.baseCurrency")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(onBase), baseCurrencyOptions(base)),
-		H4(css.Class("set-label"),uistate.T("settings.budgetMethod")),
+		H4(css.Class("set-label"), uistate.T("settings.budgetMethod")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
 			Option(Value(string(budgeting.MethodSimple)), SelectedIf(curMethod == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(curMethod == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
 			Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(curMethod == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
 		),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.budgetMethodNote")),
-		H4(css.Class("set-label"),uistate.T("settings.exchangeRates")),
+		H4(css.Class("set-label"), uistate.T("settings.exchangeRates")),
 		If(len(fxRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(fxRows),
-		H4(css.Class("set-label"),uistate.T("settings.screens")),
+		H4(css.Class("set-label"), uistate.T("settings.screens")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
 		Div(screenToggles),
-		H4(css.Class("set-label"),uistate.T("settings.freshnessTitle")),
+		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(freshnessRows),
 		uic.CreateElement(notifySettings),
@@ -678,7 +678,7 @@ func globalSettingsForm() uic.Node {
 	// Ordered by usage frequency: Appearance is everyday, AI is setup-once, Cloud is power-user.
 	right := Div(
 		// 1 · Appearance — most-used first so Renée can set her theme without scrolling.
-		H4(css.Class("set-label"),uistate.T("settings.appearance")),
+		H4(css.Class("set-label"), uistate.T("settings.appearance")),
 		ui.Segmented(ui.SegmentedProps{
 			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
 			Selected: string(pr.Theme),
@@ -705,7 +705,7 @@ func globalSettingsForm() uic.Node {
 		uic.CreateElement(themeEditor),
 
 		// 2 · Preferences — date/week-start sit naturally after appearance.
-		H4(css.Class("set-label"),uistate.T("settings.preferences")),
+		H4(css.Class("set-label"), uistate.T("settings.preferences")),
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
 			ui.Segmented(ui.SegmentedProps{
@@ -726,7 +726,7 @@ func globalSettingsForm() uic.Node {
 		),
 
 		// 3 · AI — setup-once; key + model select in one logical cluster.
-		H4(css.Class("set-label"),uistate.T("settings.aiTitle")),
+		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
 		If(strings.TrimSpace(aiKey.Get()) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
@@ -749,12 +749,12 @@ func globalSettingsForm() uic.Node {
 			Option(Value("gpt-4.1"), SelectedIf(curModel == "gpt-4.1"), "GPT-4.1"),
 			Option(Value("o4-mini"), SelectedIf(curModel == "o4-mini"), "o4-mini (reasoning)"),
 		),
-		H4(css.Class("set-label"),uistate.T("settings.webSearchTitle")),
+		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
 
 		// 4 · Cloud & server — power-user sync config after AI.
-		H4(css.Class("set-label"),uistate.T("settings.backendTitle")),
+		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
 		// backend never throws websocket errors the user can't dismiss.
@@ -787,7 +787,7 @@ func globalSettingsForm() uic.Node {
 			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
 		If(cloudSelected, Fragment(
-			H4(css.Class("set-label"),uistate.T("settings.cloudPlanTitle")),
+			H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
 			Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), cloudPrice),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrialNote")),
@@ -808,7 +808,7 @@ func globalSettingsForm() uic.Node {
 		)),
 
 		// 5 · Data — export/import/wipe actions.
-		H4(css.Class("set-label"),uistate.T("settings.data")),
+		H4(css.Class("set-label"), uistate.T("settings.data")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, func() { exportJSON(notify) }),
 			dataBtn(uistate.T("settings.exportCSV"), false, func() { exportCSV(notify) }),
@@ -816,7 +816,7 @@ func globalSettingsForm() uic.Node {
 			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
 			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
 		),
-		H4(css.Class("set-label"),uistate.T("settings.backupCadence")),
+		H4(css.Class("set-label"), uistate.T("settings.backupCadence")),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.backupCadenceHint")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(onBackupCadence),
 			Option(Value("monthly"), SelectedIf(loadBackupCadence() == backup.Monthly), uistate.T("settings.cadenceMonthly")),
@@ -825,13 +825,13 @@ func globalSettingsForm() uic.Node {
 		),
 
 		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
-		H4(css.Class("set-label"),uistate.T("ws.section")),
+		H4(css.Class("set-label"), uistate.T("ws.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(bump),
-		H4(css.Class("set-label"),uistate.T("applock.section")),
+		H4(css.Class("set-label"), uistate.T("applock.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("applock.sectionHint")),
 		appLockSection(bump),
-		H4(css.Class("set-label"),uistate.T("settings.languages")),
+		H4(css.Class("set-label"), uistate.T("settings.languages")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(onLang), langOptions),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportLangs"), false, func() { exportLanguages(notify) }),
@@ -862,7 +862,7 @@ func globalSettingsForm() uic.Node {
 	}
 	debugLog := Div(css.Class(tw.Mt5),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-			H4(css.Class("set-label"),uistate.T("settings.debugLog")),
+			H4(css.Class("set-label"), uistate.T("settings.debugLog")),
 			dataBtn(uistate.T("settings.refresh"), false, refreshLog),
 		),
 		logBody,

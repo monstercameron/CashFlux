@@ -40,6 +40,9 @@ func Run() {
 	initBlobStore()
 	hydrateDataset()
 	initUndo() // capture the baseline undo snapshot after hydration (C78)
+	if appstate.Default != nil {
+		appstate.Default.LoadAuditIntoFeed() // restore persisted audit history into the Activity feed (C78)
+	}
 	// Seed this device's music resume point from the dataset (e.g. a just-imported
 	// workspace) BEFORE mounting, so the player reads the restored point on init.
 	seedMusicFromDataset()

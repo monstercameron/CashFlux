@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -492,4 +493,30 @@ func (s *SQLiteStore) DeleteSettlement(id string) (bool, error) {
 }
 func (s *SQLiteStore) ListSettlements() ([]domain.Settlement, error) {
 	return loadRows[domain.Settlement](s.db, "settlements")
+}
+
+// --- Audit Log ---
+
+// PutAuditEntry inserts or replaces one audit-log entry. The entry must have a
+// non-empty ID. Callers are responsible for ensuring the summary has been passed
+// through auditlog.Redact before storage.
+func (s *SQLiteStore) PutAuditEntry(e auditlog.Entry) error {
+	return putJSON(s.db, "audit_log", e.ID, e)
+}
+
+// ListAuditEntries returns at most limit entries in reverse-chronological order
+// (newest first). If limit ≤ 0 all stored entries are returned.
+func (s *SQLiteStore) ListAuditEntries(limit int) ([]auditlog.Entry, error) {
+	entries, err := loadRows[auditlog.Entry](s.db, "audit_log")
+	if err != nil {
+		return nil, err
+	}
+	// Reverse for newest-first.
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
+	if limit > 0 && limit < len(entries) {
+		entries = entries[:limit]
+	}
+	return entries, nil
 }
