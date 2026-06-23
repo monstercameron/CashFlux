@@ -26,7 +26,7 @@ import (
 func Categories() ui.Node {
 	app := appstate.Default
 	if app == nil {
-		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
 	rev := state.UseAtom("rev:categories", 0)
@@ -228,15 +228,17 @@ func Categories() ui.Node {
 			}
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
 		}
-		reassignPanel = Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("common.reassignTitle")),
-			P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
-			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+		reassignPanel = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("common.reassignTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
+				Form(css.Class("form-grid"), OnSubmit(confirmReassign),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
+					Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
+				),
 			),
-		)
+		})
 	}
 
 	// Resolve the current flat lists once (respects sort-by-usage toggle).
@@ -253,10 +255,10 @@ func Categories() ui.Node {
 		reassignPanel,
 		// Visual category map (GI2): moved first so it's visible on arrival
 		// without scrolling past the full expense/income lists (C70/C63 tree view).
-		If(len(cats) > 0, Section(css.Class("card"),
-			H2(css.Class("card-title"), "Category map"),
-			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
-		)),
+		If(len(cats) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: "Category map",
+			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
+		})),
 		Section(css.Class("card"),
 			Div(css.Class("card-head"),
 				H2(css.Class("card-title"), uistate.T("categories.expenseTitle")),
