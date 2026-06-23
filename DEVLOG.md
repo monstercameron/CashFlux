@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — C74 final 3 sub-bullets complete
+
+**C74 Tier 3 (scanned PDF):** In `parseStatement`, unwrapped the wrapped `pdftext.ErrNoText`/`ErrEncrypted`
+errors and short-circuit to a plain user message instead of the wizard. String fallback for belt-and-suspenders
+since `parsePDF` wraps with `fmt.Errorf("statement: pdf: %w", ...)`.
+
+**C74 Extract with AI:** Added `extractWithAI` UseEvent mirroring `readAI`. Sends pasted statement text to
+`ai.SendChat`/`SendProxyChat` with a structured extraction system prompt; result goes through `extract.ParseRows`
+→ `draft.Set` — same pipeline as image import. Gated on key (sets `needsKey` like image path). Button rendered
+next to "Parse statement" with loading state.
+
+**C74 Suggest categories:** Added `categorizeDraft` UseEvent. Pass 1: `rules.Category` (deterministic, no
+network). Pass 2 (opt-in, BYO-key): gathers uncategorized descriptions, sends to LLM with category list,
+parses line-by-line reply. "Suggest categories" button only shown when draft is non-empty. Reviews/edits still
+required before import.
+
+**e2e:** `e2e/c74_ai_extract_check.mjs` gates UI affordances — both buttons present, no crash on key-absent
+click, deterministic categorization path runs clean.
+
 ## 2026-06-23 — refactor: C73 Phase 2 COMPLETE — every screen card on the primitive
 
 Finished the C73 component-ization epic: zero hand-rolled Section(css.Class("card")) remain in internal/screens — every card renders through Card/EntityListSection. Drove raw scaffolds 68 -> 38. Unlock was extending the primitive (Header slot for verbatim bespoke headers — H3 titles, flex headers, .card-head/.budget-head, card-alert banner, receipt overlay; Rows slot wrapping Div(.rows); TestID; ClassParts merging extra classes into ONE css.Class — which caught a latent bug where a second css.Class prop overrides the first, silently dropping the base class). Ported screen-by-screen with build + per-screen gates; every timing-out gate confirmed to fail identically at HEAD (pre-existing +Add-menu + bulk-delete). Phase-5 ratchet rewritten: TestNoBespokeCardScaffold is a hard zero invariant, TestRowsContainerRatchet caps the 38 Div(.rows) list containers. C73 fully checked.
