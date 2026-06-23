@@ -2327,9 +2327,10 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
 - [x] **`Allocate()`** → `ProfileConfig`, `WeightEditor`, `SuggestionList`, `AiExplainCard` (allocate_*.go, 2026-06-23).
 - [x] **`Customize()`** → split Custom-Fields manager from Formula calculator (C61) — `FormulaCalculator()` + `CustomFieldsManager()` (2026-06-23).
 - [x] **`settings.go` global panel** → per-section sub-components (`settingsLeftColumn`/`settingsRightColumn`, 2026-06-23).
-- [ ] **Big row components** (`AccountRow` ~180 lines, `BudgetRow`, `GoalRow`, `TransactionRow`) → split each into
-      **`*DisplayRow`** + **`*EditForm`** (+ `SetBalanceForm`/`ContributeForm`); fold the display halves onto `EntityRow`.
-      _(TransactionRow extracted to transactions_row.go 2026-06-23; AccountRow/BudgetRow/GoalRow still to split.)_
+- [x] **Big row components** (`AccountRow`, `BudgetRow`, `GoalRow`, `TransactionRow`) → each extracted into its own
+      self-contained row file (transactions_row.go / accounts_row.go / budgets_row.go / goals_row.go, 2026-06-23),
+      carrying its display + inline-edit/set-balance/transfer/reconcile/contribute sub-forms. Each owns its hooks
+      (per-row component rule); behavior byte-identical, all per-screen gates green.
 
 **Phased plan (bottom-up, behavior-preserving, one commit per screen).**
 - [x] **Phase 0 — Foundations:** build the new primitives above with unit tests. No screen edits. _(All structural primitives built + unit-tested 2026-06-21..23; inline-Style utility-class sweep is the only foundation item left, tracked above.)_
@@ -17477,6 +17478,481 @@ The following C-tickets were confirmed fixed by the GLAMOR drive scripts:
 6. **Tier 3 one-offs** — schedule individually. The MY PAGES rail gap (G22 C32 #67) is the highest-priority Tier 3 item as it leaves a user stranded after creating a page.
 
 ---
+
+## GX. GLAMOR — cross-cutting & shell UI/UX reviews ★
+
+# GX1. App shell (top bar + rail + breadcrumb) — "Twenty Trips a Day" — 2026-06-23 ★
+
+## The story
+
+A user who navigates the rail and top bar constantly — twenty trips a day. She opens
+CashFlux on a 1280-wide desktop and on her 768-wide work laptop. She toggles between
+light and dark mode throughout the day. The chrome frames every screen: if it has
+blemishes they multiply with every click.
+
+---
+
+## Drive script
+
+`e2e/gx_01_shell.mjs`
+
+```
+node --experimental-vm-modules e2e/gx_01_shell.mjs
+# EXIT: 0
+```
+
+Screenshots produced (all in `e2e/screenshots/`):
+
+| Filename | Width | Theme |
+|---|---|---|
+| `gx01_shell_1280_dark.png` | 1280 | dark |
+| `gx01_shell_1280_light.png` | 1280 | light |
+| `gx01_shell_768_dark.png` | 768 | dark |
+| `gx01_shell_768_light.png` | 768 | light |
+| `gx01_add_menu_1280_dark.png` | 1280 | dark |
+| `gx01_add_menu_1280_light.png` | 1280 | light |
+| `gx01_add_menu_768_dark.png` | 768 | dark |
+| `gx01_add_menu_768_light.png` | 768 | light |
+| `gx01_rail_collapsed_1280_dark.png` | 1280 | dark (rail collapsed) |
+| `gx01_rail_collapsed_1280_light.png` | 1280 | light (rail collapsed) |
+
+Measurements JSON: `e2e/screenshots/gx01_measurements.json`
+
+---
+
+## What already works well (keep) ✓
+
+- **Focus rings present and correct.** `outline: rgb(46,139,87) solid 2px; outline-offset: 2px` on rail nav items — accent-colored, 2px, offset. Immediately visible in both themes. ✓
+- **`aria-current="page"` on the active nav link.** Dashboard `<a>` correctly gets `aria-current` from the Go layer. ✓
+- **Icon button sizing consistent.** `.muzak-btn`, `.notify-btn`, `.add-btn` all measure exactly 30×30 px at every width/theme combination. ✓
+- **Active nav item has a distinct background.** `background-color: rgb(28,28,30)` (slightly elevated from rail) with `border-radius: 4px` — visible without needing color alone. ✓
+- **+Add menu z-index and shadow correct.** `z-index: 50`, `box-shadow: rgba(0,0,0,.3) 0px 8px 24px` — sits cleanly above content. ✓
+- **+Add menu border-radius consistent with shell cards** (`8px`). ✓
+- **Rail collapse transition wired.** `transition: width .18s ease` and the `.collapsed` class reduce the rail to 58px; collapsed-rail flyout labels are styled and positioned correctly. ✓
+- **Topbar backdrop-filter blur.** Dark mode: `rgba(11,16,32,0.85)` + `backdrop-filter: blur(8px)` — sticky header feels polished in dark. ✓
+- **Household card present with correct text/role.** `.hh` card at rail bottom shows "Your household / 2 members · USD base" and the flip-settings trigger. ✓
+- **Dark theme topbar and rail backgrounds are legible.** `rgb(14,14,15)` topbar, `rgba(0,0,0,0)` rail inheriting the body dark bg — visually correct against content in dark mode. ✓
+
+---
+
+## Structure fixes (bottom-up, grouped)
+
+### GX1-F1. CRITICAL — Light-mode topbar does not switch to the light surface [CSS-ONLY] ★★
+
+**Evidence:** `gx01_shell_1280_light.png`, `gx01_shell_768_light.png`
+
+Computed at 1280/light:
+```
+topbar background-color: rgb(14, 14, 15)   ← near-black in light mode
+```
+The CSS rule `[data-theme="light"] .topbar { background: rgba(247,246,243,0.92); }` is present
+in `web/index.html` (line 286). The theme is confirmed applied (`data-theme="light"`) because
+the rail switches, but the topbar rule is being outranked at runtime — the WASM engine is
+emitting inline `background` or a Tailwind utility class on the `.topbar` element that takes
+priority over the `[data-theme="light"]` attribute selector. The result is a stark black band
+at the top of a warm-white page: both screenshots confirm it visually.
+
+The rail (`aside.rail`) has the same symptom — `rgba(0,0,0,0)` transparent in both themes
+(it inherits from the body dark background), and the light rule
+`[data-theme="light"] aside.rail { background: var(--bg-elev); }` is not applying either.
+At 1280/light the rail reads as a black left stripe on a warm-white content area.
+
+**Fix:**
+Add `!important` to the light-mode topbar and rail rules so they override any inline or
+framework-emitted background:
+
+```css
+/* web/index.html — strengthen light-theme shell overrides */
+[data-theme="light"] .topbar {
+  background: rgba(247,246,243,0.92) !important;
+  border-bottom-color: #e4e2dd !important;
+}
+[data-theme="light"] aside.rail,
+[data-theme="light"] .rail {
+  background: var(--bg-elev) !important;   /* #efede8 */
+}
+```
+
+Cross-ref: C69 (ApplyTheme drives data-theme), G23 T1-B (shell/nav backgrounds switch to
+light tokens — rule was added but is being outranked at runtime).
+
+---
+
+### GX1-F2. CRITICAL — Light-mode rail nav active state shows dark chip on dark rail [CSS-ONLY] ★★
+
+**Evidence:** `gx01_shell_1280_light.png`
+
+Measured at 1280/light:
+```
+active nav item background-color: rgb(28,28,30)   ← dark chip
+active nav item color: rgb(244,244,245)             ← near-white label
+```
+Both are the dark-theme values. Because the rail itself is also dark (GX1-F1), the items
+appear readable, but once GX1-F1 is fixed the active chip will be dark on a light rail —
+invisible or near-invisible. Must be co-fixed with GX1-F1.
+
+**Fix (same CSS block as GX1-F1):**
+```css
+[data-theme="light"] aside.rail .nv.active,
+[data-theme="light"] aside.rail a[aria-current] {
+  background-color: var(--accent-dim, #e4f3ea) !important;  /* warm-green tint */
+  color: var(--accent, #2e8b57) !important;
+}
+[data-theme="light"] aside.rail .nv {
+  color: var(--text-dim, #56565c);
+}
+[data-theme="light"] aside.rail .nv:hover {
+  background-color: var(--hover, #e8e6e1);
+  color: var(--text, #1c1c1e);
+}
+```
+
+---
+
+### GX1-F3. CRITICAL — Light-mode +Add button has no visible border/fill [CSS-ONLY] ★★
+
+**Evidence:** `gx01_add_menu_1280_light.png`, `gx01_shell_1280_light.png`
+
+Measured at 1280/light:
+```
+.add-btn background-color: rgb(32,32,34)   ← dark surface
+.add-btn border: 0px none                  ← no border
+.add-btn color: rgb(46,139,87)             ← accent icon
+```
+On a dark topbar this reads fine; once GX1-F1 is fixed (warm-white topbar), the dark `.add-btn`
+becomes the most prominent element on the topbar, looking out of place. The existing light rule
+`[data-theme="light"] .add-btn { border: 1px solid var(--border); border-radius: 6px; }` (line 323)
+adds a border but leaves the background dark. The same applies to `.muzak-btn` and `.notify-btn`
+which share the same base class with `background-color: rgb(32,32,34)`.
+
+**Fix:**
+```css
+[data-theme="light"] .muzak-btn,
+[data-theme="light"] .notify-btn,
+[data-theme="light"] .add-btn {
+  background-color: var(--bg-card, #ffffff) !important;
+  border: 1px solid var(--border, #e4e2dd) !important;
+  color: var(--accent, #2e8b57) !important;
+}
+[data-theme="light"] .muzak-btn:hover,
+[data-theme="light"] .notify-btn:hover,
+[data-theme="light"] .add-btn:hover {
+  background-color: var(--hover, #e8e6e1) !important;
+}
+```
+
+---
+
+### GX1-F4. CRITICAL — Light-mode +Add menu panel is dark on a light page [CSS-ONLY] ★★
+
+**Evidence:** `gx01_add_menu_768_light.png`, `gx01_add_menu_1280_light.png`
+
+Measured at both widths/light:
+```
+.add-menu background-color: rgb(32,32,34)       ← dark surface
+.add-menu border: 1px solid rgb(42,42,44)       ← dark border
+```
+The menu items ("New transaction", "New account", …) appear as white text on a near-black
+panel that floats over the light content area. The `.add-menu` uses `var(--bg-elev)` which
+has a light override (`#efede8`) but the WASM-rendered element is receiving the dark-theme
+computed value, matching the same override-ranking issue as GX1-F1.
+
+The menu items are also clipped at the left edge in the `768_light` screenshot — the first
+few characters of each label ("transaction", "account", "budget" etc.) are cut off because
+the popover opens `right:0` inside `.add-wrap`, but at 768 the topbar wraps to two rows and
+the `.add-wrap` is positioned in a narrow slot. This is a layout issue, not just a color one.
+
+**Fix (color — CSS-ONLY):**
+```css
+[data-theme="light"] .add-menu {
+  background-color: var(--bg-card, #ffffff) !important;
+  border-color: var(--border, #e4e2dd) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12) !important;
+}
+[data-theme="light"] .add-item {
+  color: var(--text, #1c1c1e) !important;
+}
+```
+
+**Fix (clipping at 768 — CSS-ONLY):**
+The popover needs `right: auto; left: 0` when the topbar wraps, or use `min-width` clamped to
+viewport. Safest cross-viewport fix:
+```css
+@media (max-width: 1024px) {
+  .add-menu {
+    right: auto;
+    left: 0;
+    min-width: 200px;
+  }
+}
+```
+
+---
+
+### GX1-F5. HIGH — 768 topbar is 200px tall — wraps to four rows [CSS-ONLY] ★
+
+**Evidence:** `gx01_shell_768_dark.png`, `gx01_shell_768_light.png`
+
+Measured:
+```
+768/dark  topbar height: 200px   (min-height: 54px set but overridden by content wrap)
+768/light topbar height: 200px
+1280/dark topbar height: 101px
+```
+At 768 the `@media (max-width: 1024px)` rule correctly wraps `.topbar-controls` to a second
+row. But the screenshot shows four visible rows: brand row, period stepper row, icon buttons
+row, and the sample-data banner row — all stacked inside the sticky topbar. The 200px tall
+topbar consumes ~22% of the 900-high viewport and pushes content down. The icon buttons row
+(muzak / notify / +Add) and the period stepper land on separate lines, and the `Members`
+select and breadcrumb area read poorly.
+
+The root cause: `.topbar-controls` takes `flex: 1 0 100%` (its own full-width row), but it
+also contains the resolution segmented control AND the jump + stepper + add cluster. Those
+then wrap internally onto more lines because 768px is narrower than the row content. The
+banner is rendered inside `main`, not the topbar, so it is not contributing to the 200px
+height — but the topbar itself is genuinely 200px high.
+
+**Fix options:**
+- At ≤640px further simplify the topbar: hide the resolution labels (`Week / Quarter / Year`
+  text, show only the selected one), collapse the jump dropdown, and keep the stepper + add
+  on one compact row. The `.rcap { display:none }` rule at ≤640px already helps for labels;
+  extend it to hide the full `.seg` resolution control at ≤480px and rely on the stepper
+  arrows only.
+- More immediately, wrap the icon trio (muzak/notify/add) into `.topbar-controls` so they
+  co-locate with the period control on the second row and do not push to a third row.
+
+```css
+/* Ensure icon cluster and period row share the second line, not separate lines */
+@media (max-width: 768px) {
+  .topbar-controls {
+    align-items: center;
+    justify-content: space-between;
+  }
+  .reso-control {
+    flex: 1;
+    min-width: 0;
+  }
+}
+```
+
+---
+
+### GX1-F6. HIGH — 768 rail does not auto-collapse (media query width mismatch) [CSS-ONLY] ★
+
+**Evidence:** `gx01_shell_768_dark.png`, `gx01_shell_768_light.png`
+
+Measured:
+```
+768/dark  rail width: 240px   ← expected 56px (auto-collapse)
+768/light rail width: 240px   ← expected 56px
+```
+The media query is `@media (max-width: 767px)` (collapses to 56px) and the viewport being
+tested is exactly 768px. Because 768 is not ≤767, the collapse rule does not fire. The full
+240px rail at this width is correct by the current breakpoint definition.
+
+However, the screenshots show a 240px expanded rail alongside a topbar that is already
+wrapping — the combined layout feels cramped and unlike a responsive design. The breakpoint
+should be `max-width: 768px` (inclusive), not `max-width: 767px`, so that the canonical
+tablet-portrait width gets an icon-only rail.
+
+**Fix:**
+```css
+/* web/index.html — widen the phone/narrow rail-collapse breakpoint by 1px */
+@media (max-width: 768px) {    /* was: max-width: 767px */
+  html, body, #app { overflow-x: hidden; max-width: 100vw; }
+  aside.rail { width: 56px; }
+  aside.rail .brand-name,
+  aside.rail .nv span,
+  aside.rail nav .rail-section,
+  aside.rail .hh-text { display: none; }
+  aside.rail .nv { justify-content: center; gap: 0; padding-left: 0; padding-right: 0; }
+  aside.rail .railhead { padding-left: 0; padding-right: 0; justify-content: center; }
+  aside.rail .hh { justify-content: center; padding-left: 0; padding-right: 0; }
+}
+```
+This also aligns the bento breakpoint (currently `min-width: 768px` for the 2-column grid)
+so they form a coherent system.
+
+---
+
+### GX1-F7. MEDIUM — Household card background transparent in both themes [CSS-ONLY]
+
+**Evidence:** measured all 4 width/theme combinations.
+
+```
+.hh background-color: rgba(0,0,0,0)   ← in all 4 conditions
+```
+The card itself is visually distinct because it sits below a `border-top: 1px solid
+rgb(35,35,37)` divider and the text is legible in dark mode, but in light mode (once GX1-F1
+is fixed and the rail is warm-white) there will be no visual separation between the nav list
+and the household card — they will merge into one undivided strip.
+
+**Fix:**
+```css
+[data-theme="light"] .hh {
+  background-color: var(--bg-card, #ffffff);
+  border-top-color: var(--border, #e4e2dd);
+}
+```
+Dark mode: leave transparent (body dark bg provides enough separation with the hairline).
+
+Cross-ref: C3 (household card broken).
+
+---
+
+### GX1-F8. MEDIUM — Breadcrumb element is absent from the DOM [GO-STRUCTURAL]
+
+**Evidence:** all 4 width/theme conditions return `{ "_missing": true }` for `.breadcrumb`,
+`[aria-label="breadcrumb"]`, and `nav.breadcrumb`.
+
+There is no breadcrumb element rendered at any width or theme. The topbar shows only the
+period control area and icon buttons — there is no current-page breadcrumb or page title
+visible in the top bar itself. The page title appears inside `main` (as an h1 in the page
+content) but is not promoted to the topbar breadcrumb position.
+
+Cross-ref: B9 (breadcrumb present per L76 — the ticket says it is present but computed
+measurements and screenshots do not show a `.breadcrumb` element in the DOM; needs Go-side
+investigation to confirm whether it exists under a different selector or is truly absent).
+
+**Action:** Go-side audit of `internal/app/shell.go` to confirm the breadcrumb component
+is rendered and has the `.breadcrumb` class (or update the probe selector to match the
+actual selector used).
+
+---
+
+### GX1-F9. MEDIUM — +Add backdrop div blocks notify-btn click [CSS-ONLY]
+
+**Evidence:** all 4 width/theme conditions — `notify-btn click failed: page.click: Timeout
+5000ms exceeded` with log entry:
+```
+<div class="add-backdrop"></div> from <div class="add-wrap">…</div>
+subtree intercepts pointer events
+```
+The `.add-backdrop` `(position:fixed; inset:0; z-index:40)` is rendered in the DOM even when
+the +Add menu is closed. It is intended to close the menu on an outside-click, but it exists
+permanently and blocks any element below z-index 40 that is not in the add-wrap subtree from
+receiving click events — including the `.notify-btn` (which has no explicit z-index).
+
+**Fix:**
+The backdrop must only be present (or pointer-events:auto) when the menu is open. The current
+`.hidden-menu { display:none }` hides the menu panel but not the backdrop.
+
+```css
+/* Disable pointer events on the backdrop while the menu is closed */
+.add-backdrop { pointer-events: none; }
+.add-wrap:not(.hidden-menu) .add-backdrop { pointer-events: auto; }
+```
+
+Or, if the Go component conditionally renders the backdrop only when the menu is open (the
+`hidden-menu` class is on the `.add-menu`, not the `.add-backdrop`), the CSS fix is:
+
+```css
+.add-wrap .hidden-menu + .add-backdrop,
+.add-wrap .hidden-menu ~ .add-backdrop { display: none; }
+```
+
+The cleanest fix is for the Go shell to only render `.add-backdrop` when the popover is open
+(toggle via the same state atom that toggles `.hidden-menu`). That is [GO-STRUCTURAL] but the
+CSS pointer-events workaround is [CSS-ONLY].
+
+---
+
+### GX1-F10. LOW — Collapsed rail probe did not capture `aside.rail.collapsed` [Probe hardening]
+
+**Evidence:** all collapsed-rail measurements return `{ "_missing": true }`.
+
+The collapse toggle was clicked (the `gx01_rail_collapsed_*` screenshots show the +Add menu
+open, not a collapsed rail — the first `.hidden-menu` button in the rail was clicked but it
+opened the +Add menu instead). The selector `aside.rail button.collapse-toggle, aside.rail
+.railhead button, aside.rail button[title]` matches the first button found, which happens to
+be the +Add button (rendered outside the rail but picked up by the fallback). The actual
+collapse toggle selector needs to be tightened.
+
+**Probe fix (see Probe hardening section).**
+
+---
+
+### GX1-F11. LOW — Nav section group headers ("TOOLS", "PLAN & ANALYZE", "BILLS & RECURRING") use all-caps micro-text but have no light-mode color override [CSS-ONLY]
+
+**Evidence:** `gx01_shell_768_dark.png` (clearly visible in expanded rail).
+
+The `.rail-section` label class is visible in dark with `color: var(--text-faint)` / near-muted
+text. In light mode once the rail background switches to `--bg-elev` (#efede8), `var(--text-faint)`
+resolves to the dark-mode faint value (~rgb(104,104,112)) which is readable but not explicitly
+pinned. If the runtime var stays dark-mode, the section headers would disappear.
+
+**Fix:**
+```css
+[data-theme="light"] .rail-section {
+  color: var(--text-faint, #686870);
+}
+```
+Low-risk one-liner that prevents the re-emergence of the known "label invisible in light" class
+of bugs.
+
+---
+
+## UI/UX defects (screenshot-confirmed + named file)
+
+| ID | Screenshot | Description |
+|---|---|---|
+| GX1-D1 | `gx01_shell_1280_light.png` | Dark topbar on warm-white page — stark black band, no visual coherence with page surface |
+| GX1-D2 | `gx01_shell_1280_light.png` | Dark rail stripe at left on light page — full left side is near-black on warm-white |
+| GX1-D3 | `gx01_add_menu_1280_light.png` | +Add menu panel is near-black in light mode — floats incongruously over warm content |
+| GX1-D4 | `gx01_add_menu_768_light.png` | +Add menu labels clipped at left edge at 768 ("ransaction", "ccount") — unreadable |
+| GX1-D5 | `gx01_shell_768_dark.png` | 200px topbar at 768 consumes ~22% of viewport — cramped, non-standard UX |
+| GX1-D6 | `gx01_shell_768_dark.png` | 240px rail at 768 leaves only ~530px for content — too narrow for comfortably reading budgets/transactions |
+| GX1-D7 | `gx01_rail_collapsed_1280_dark.png` | Collapsed-rail shot actually shows +Add menu open — toggle probe fired wrong button |
+
+---
+
+## Probe hardening
+
+The following script adjustments are needed before re-running:
+
+1. **Notify-btn click order:** click `.add-btn` to open the menu, then press `Escape`, then
+   wait for `.add-backdrop` to clear before clicking `.notify-btn`. Or close the backdrop
+   via JS before clicking notify. Current probe fires notify immediately after Escape which
+   leaves the backdrop live.
+
+   ```js
+   // After Escape, wait for backdrop to not intercept:
+   await page.waitForFunction(() => {
+     const bd = document.querySelector('.add-backdrop');
+     return !bd || getComputedStyle(bd).pointerEvents === 'none' || bd.style.display === 'none';
+   }, { timeout: 2000 }).catch(() => {});
+   ```
+
+2. **Collapse toggle selector:** the rail collapse chevron is a `<button>` inside `.railhead`
+   with a `←` or `›` icon. Target it precisely:
+
+   ```js
+   await page.click('aside.rail .railhead button:last-child', { timeout: 5000 });
+   ```
+   Or use `page.evaluate` to click the button whose text content is `‹` / `›`.
+
+3. **Breadcrumb selector fallback:** also probe `.topbar [class*="crumb"], .topbar nav,
+   .topbar .bc, .topbar > *:nth-child(2)` to catch the breadcrumb under any class name.
+
+4. **Collapsed rail measurement:** after clicking collapse, wait for `aside.rail.collapsed`
+   to appear before querying:
+   ```js
+   await page.waitForSelector('aside.rail.collapsed', { timeout: 3000 }).catch(() => {});
+   ```
+
+---
+
+## Cross-references
+
+- C3 — household card broken (GX1-F7 extends)
+- C15, C20 — collapsed rail (GX1-F10 probe hardening)
+- C31 — rail scrollbar done
+- C34 — topbar wrap done (but 768 still wraps to 200px — GX1-F5)
+- C43 — +Add z-index done (but backdrop blocks other buttons — GX1-F9)
+- C67 — rail nav v2 done
+- B9, C76 — breadcrumb (GX1-F8)
+- G23 T1-B — shell/nav light-mode backgrounds (rule exists, is outranked at runtime — GX1-F1)
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 

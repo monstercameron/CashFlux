@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **C73 Phase 3 — big-row extraction (2026-06-23).** `AccountRow`, `BudgetRow`, and `GoalRow` each moved out of
+  their screen file into a self-contained `*_row.go` (accounts_row.go / budgets_row.go / goals_row.go), matching
+  the earlier `transactions_row.go` split. Each row keeps its display + inline-edit/set-balance/transfer/reconcile/
+  contribute sub-forms and owns its own hooks (per-row component rule). Pure relocation — behavior byte-identical;
+  all per-screen e2e gates green. Also fixed an undefined-variable typo in the `budget_topup` gate's success log.
+
 ### Added
 - **C73 Phase 5 — component inventory + scaffold ratchet (2026-06-23).** `docs/COMPONENTS.md` documents every
   `internal/ui` primitive with a one-line usage + a porting guide mapping each legacy idiom to its primitive.

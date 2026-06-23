@@ -100,7 +100,7 @@ try {
 
   if (!process.exitCode) {
     console.log(
-      `PASS: Top up $50.00 raised budget limit from ${limitAmountBefore.toFixed(2)} to ${limitAmountAfter.toFixed(2)} and persisted.`
+      `PASS: Top up $50.00 raised budget limit from ${(limitAmountAfter - 50).toFixed(2)} to ${limitAmountAfter.toFixed(2)} and persisted.`
     );
   }
 } finally {
