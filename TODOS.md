@@ -20328,6 +20328,21 @@ Per B18 spec, a "Replay tour" or "View quick guide" button should live in Settin
 
 # GX10. Lock screen / app lock — "Eyes Off My Money" — 2026-06-23 ★
 
+## ✅ RESOLVED (2026-06-23).
+
+**Shipped:**
+- **F1 (CRITICAL):** Gate `div` now has `role="dialog"`, `aria-modal="true"`, and `aria-label` using i18n key `applock.gateAriaLabel` ("CashFlux is locked"). Added key to `internal/i18n/en.go`.
+- **F2 (MEDIUM):** Unlock button vertical padding bumped to `0.75rem` + explicit `min-height:44px` — meets WCAG 2.5.5 44px tap-target minimum.
+- **F3 (MEDIUM):** "Forgot passcode?" initializes with `display:none`; revealed after ≥5 failed attempts (same progressive pattern as the hint button). Reset to hidden on successful unlock.
+- **F4 (LOW):** `#cf-applock-msg` now carries `aria-live="polite"` and `role="status"` inline in the `innerHTML` template — screen readers will announce wrong-passcode feedback without focus moving.
+- **F5 (LOW):** Card element style updated with `background:var(--surface,#ffffff)` + border-radius, padding, and box-shadow — creates elevation separation in light mode.
+
+**Deferred:**
+- **F6 (LOW — font-display/first-load polish):** Fraunces brand mark uses correct `font-family` string; first-visit cold-load fallback to Georgia is a latent polish gap. Deferred — no probe regression, fix requires `document.fonts.ready` refactor.
+- **F7 (LOW — poll interval):** 30 s inactivity poll is coarse for 1-minute auto-lock. Deferred — no user complaint; acceptable for current usage patterns.
+
+**Build:** clean (`GOOS=js GOARCH=wasm go build` exits 0 with no errors in edited files).
+
 **Drive script:** `node e2e/gx_10_lock.mjs` — exit code **0**
 **Server:** `http://localhost:8080` (gwc dev; GI0 wasm build broken — stale wasm; CSS/index.html fixes land live)
 **Screenshots:** `e2e/screenshots/gx10_*.png` (10 files — dark + light, 1280 + 768, wrong-passcode + unlock states)

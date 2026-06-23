@@ -320,6 +320,7 @@ var english = Catalog{
 	"applock.greetingMorning":   "Good morning",
 	"applock.greetingAfternoon": "Good afternoon",
 	"applock.greetingEvening":   "Good evening",
+	"applock.gateAriaLabel":     "CashFlux is locked",
 
 	// Common actions (shared across screens)
 	"action.add":     "Add",

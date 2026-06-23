@@ -114,13 +114,16 @@ func buildAppLockGate(doc js.Value) {
 	gate := doc.Call("createElement", "div")
 	gate.Set("id", appLockGateID)
 	gate.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:var(--bg,#0e0e0f);")
+	gate.Call("setAttribute", "role", "dialog")
+	gate.Call("setAttribute", "aria-modal", "true")
+	gate.Call("setAttribute", "aria-label", uistate.T("applock.gateAriaLabel"))
 
 	card := doc.Call("createElement", "div")
-	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);")
+	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);background:var(--surface,#ffffff);border-radius:12px;padding:2rem 1.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.08);")
 	card.Set("innerHTML", `<div id="cf-lock-greeting" style="font-size:1rem;opacity:0.85;"></div>`+
 		`<div id="cf-lock-date" style="font-size:0.82rem;opacity:0.55;margin-bottom:0.3rem;"></div>`+
 		`<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+
-		`<div id="cf-applock-msg" style="font-size:0.9rem;opacity:0.7;">`+htmlEscaper.Replace(uistate.T("applock.unlockPrompt"))+`</div>`)
+		`<div id="cf-applock-msg" aria-live="polite" role="status" style="font-size:0.9rem;opacity:0.7;">`+htmlEscaper.Replace(uistate.T("applock.unlockPrompt"))+`</div>`)
 
 	inp := doc.Call("createElement", "input")
 	inp.Set("id", "cf-applock-input")
@@ -133,13 +136,13 @@ func buildAppLockGate(doc js.Value) {
 	btn := doc.Call("createElement", "button")
 	btn.Set("type", "button")
 	btn.Set("textContent", uistate.T("applock.unlock"))
-	btn.Get("style").Set("cssText", "padding:0.6rem 0.8rem;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
+	btn.Get("style").Set("cssText", "padding:0.75rem 0.8rem;min-height:44px;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
 	card.Call("appendChild", btn)
 
 	forgot := doc.Call("createElement", "button")
 	forgot.Set("type", "button")
 	forgot.Set("textContent", uistate.T("applock.forgot"))
-	forgot.Get("style").Set("cssText", "background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
+	forgot.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
 	card.Call("appendChild", forgot)
 
 	gate.Call("appendChild", card)
@@ -158,6 +161,7 @@ func buildAppLockGate(doc js.Value) {
 			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
 				hb.Get("style").Set("display", "none")
 			}
+			forgot.Get("style").Set("display", "none")
 			return
 		}
 		fails++
@@ -185,6 +189,11 @@ func buildAppLockGate(doc js.Value) {
 			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
 				hb.Get("style").Set("display", "block")
 			}
+		}
+		// Reveal "Forgot passcode?" progressively — only after several failures so
+		// it isn't the first thing a stranger sees at the lock screen (GX10-F3).
+		if fails >= 5 {
+			forgot.Get("style").Set("display", "block")
 		}
 		inp.Set("value", "")
 		inp.Call("focus")
