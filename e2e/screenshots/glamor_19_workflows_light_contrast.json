@@ -1,0 +1,18 @@
+{
+  "dataTheme": "light",
+  "pageBg": "rgb(247, 246, 243)",
+  "cardTitleColor": "rgb(28, 28, 30)",
+  "cardBg": "rgb(255, 255, 255)",
+  "rowDescColor": "rgb(28, 28, 30)",
+  "rowDescBg": "rgba(0, 0, 0, 0)",
+  "rowMetaColor": "rgb(86, 86, 92)",
+  "mutedColor": "N/A",
+  "fieldBg": "rgb(241, 241, 242)",
+  "fieldColor": "rgb(28, 28, 30)",
+  "mainBg": "rgba(0, 0, 0, 0)",
+  "dryResultColor": "rgb(86, 86, 92)",
+  "btnPrimaryColor": "rgb(5, 46, 19)",
+  "btnPrimaryBg": "rgb(46, 139, 87)",
+  "btnColor": "rgb(28, 28, 30)",
+  "btnBg": "rgb(241, 241, 242)"
+}

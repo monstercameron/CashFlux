@@ -1,0 +1,22 @@
+{
+  "dataTheme": "light",
+  "pageBg": "rgb(247, 246, 243)",
+  "mainBg": "rgba(0, 0, 0, 0)",
+  "panelBg": "rgba(4, 4, 6, 0.6)",
+  "bodyBg": "#f7f6f3",
+  "fg": "#1c1c1e",
+  "setLabelColor": "rgb(86, 86, 92)",
+  "setLabelBg": "rgba(0, 0, 0, 0)",
+  "toggleColor": "rgb(244, 244, 245)",
+  "dataBtnColor": "rgb(28, 28, 30)",
+  "dataBtnBg": "rgb(255, 255, 255)",
+  "dataBtnBorder": "rgb(228, 226, 221)",
+  "primaryBtnColor": "n/a",
+  "primaryBtnBg": "n/a",
+  "mutedColor": "rgb(104, 104, 112)",
+  "mutedBg": "rgba(0, 0, 0, 0)",
+  "inputColor": "rgb(28, 28, 30)",
+  "inputBg": "rgb(255, 255, 255)",
+  "selectColor": "rgb(28, 28, 30)",
+  "selectBg": "rgb(255, 255, 255)"
+}

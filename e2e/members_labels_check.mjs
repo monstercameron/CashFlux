@@ -55,9 +55,10 @@ try {
   await addForm.locator('button[type="submit"]').click();
   await flush(page);
 
-  // Navigate back to /members and find the edit button.
+  // Navigate back to /members and find the edit button (wait for the member rows
+  // to render after the fresh load, not a fixed short timeout).
   await page.goto(BASE + "/members", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(300);
+  await page.waitForSelector('button[title*="Edit"]', { timeout: 30000 });
 
   // Click the Edit button on the new member's row.
   const editBtn = page.locator(`button[title*="Edit"]`).last();

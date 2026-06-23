@@ -1,0 +1,74 @@
+{
+  "cardCount": 0,
+  "cardTitles": [],
+  "cardHeadingLevels": [],
+  "tileCount": 2,
+  "tileTitles": [
+    "Savings KPI",
+    "Transactions List"
+  ],
+  "draggableCount": 10,
+  "hasToolbar": false,
+  "toolbarBtns": [],
+  "hasAddWidget": true,
+  "addWidgetBtnTexts": [
+    "Add widget"
+  ],
+  "emptyText": null,
+  "topbarText": "Dashboard›Theo Light PageEveryoneDaniel CarterJordan Lee (roommate)New transactionNew accountNew budgetNew goalNew taskN",
+  "headings": [
+    {
+      "tag": "H1",
+      "text": "Theo Light Page"
+    },
+    {
+      "tag": "H3",
+      "text": "Savings KPI"
+    },
+    {
+      "tag": "H3",
+      "text": "Transactions List"
+    }
+  ],
+  "btnTexts": [
+    "Default",
+    "Plan & analyze",
+    "Bills & recurring",
+    "Data & import",
+    "Build",
+    "System",
+    "My pages",
+    "Your household2 members · USD base",
+    "Dashboard",
+    "New transaction",
+    "New account",
+    "New budget",
+    "New goal",
+    "New task",
+    "New category",
+    "New member",
+    "New rule",
+    "Scan a document",
+    "↔",
+    "↕",
+    "↔",
+    "↕",
+    "Add widget",
+    "Add",
+    "Install CashFlux"
+  ],
+  "labelCount": 0,
+  "myPagesLinks": [],
+  "overflowCount": 1,
+  "tileButtons": [
+    "↔",
+    "↕",
+    "Edit widget",
+    "Remove widget",
+    "↔",
+    "↕",
+    "Edit widget",
+    "Remove widget"
+  ],
+  "hasGear": false
+}

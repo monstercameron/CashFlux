@@ -133,10 +133,17 @@ func Customize() ui.Node {
 	sort.Strings(names)
 	varRows := make([]ui.Node, 0, len(names))
 	for _, k := range names {
-		varRows = append(varRows, Div(css.Class("row"),
-			Span(css.Class("row-desc"), k),
-			Span(css.Class("amount fig"), groupThousands(vars[k])),
-		))
+		kk := k // capture for closure
+		varRows = append(varRows, ui.CreateElement(varInsertRow, varInsertRowProps{
+			Name: kk, Value: vars[kk], OnInsert: func(name string) {
+				cur := expr.Get()
+				if cur != "" {
+					expr.Set(cur + " " + name)
+				} else {
+					expr.Set(name)
+				}
+			},
+		}))
 	}
 
 	return Div(
@@ -169,6 +176,7 @@ func Customize() ui.Node {
 		savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula),
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("customize.varsTitle")),
+			P(css.Class("muted"), uistate.T("customize.varsInsertHint")),
 			Div(css.Class("rows"), varRows),
 		),
 		// Custom fields are a separate, advanced tool — divider makes the two-tool
@@ -261,6 +269,25 @@ func groupThousands(f float64) string {
 		out = "-" + out
 	}
 	return out
+}
+
+type varInsertRowProps struct {
+	Name     string
+	Value    float64
+	OnInsert func(string)
+}
+
+// varInsertRow renders one available variable with its live value and a click-to-insert
+// button so the user can tap the name to append it to the formula expression (C61).
+func varInsertRow(props varInsertRowProps) ui.Node {
+	ins := ui.UseEvent(Prevent(func() { props.OnInsert(props.Name) }))
+	return Div(css.Class("row"),
+		Button(css.Class("btn-link row-desc"), Type("button"),
+			Title("Insert "+props.Name+" into the formula"),
+			Attr("aria-label", "Insert "+props.Name),
+			OnClick(ins), props.Name),
+		Span(css.Class("amount fig"), groupThousands(props.Value)),
+	)
 }
 
 // formatFormulaValue renders a formula result (number, bool, or string).

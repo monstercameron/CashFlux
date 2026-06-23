@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
@@ -69,6 +70,7 @@ func Documents() ui.Node {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
+	nav := router.UseNavigate()
 	rev := state.UseAtom("rev:documents", 0)
 	csvText := ui.UseState("")
 	stmtText := ui.UseState("")
@@ -82,6 +84,7 @@ func Documents() ui.Node {
 	imageURL := ui.UseState("")
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
+	needsKey := ui.UseState(false)
 	draft := ui.UseState([]extract.Row{})
 	importAcct := ui.UseState(defaultAcc)
 	receiptMode := ui.UseState(false)  // import the draft as ONE split transaction
@@ -172,6 +175,7 @@ func Documents() ui.Node {
 		pickImageDataURL(func(u string) {
 			imageURL.Set(u)
 			aiErr.Set("")
+			needsKey.Set(false)
 			draft.Set([]extract.Row{})
 		})
 	})
@@ -185,7 +189,7 @@ func Documents() ui.Node {
 	}
 	readAI := ui.UseEvent(func() {
 		if settings.OpenAIKey == "" && !useBackendAI {
-			aiErr.Set(uistate.T("documents.needKey"))
+			needsKey.Set(true)
 			return
 		}
 		if imageURL.Get() == "" {
@@ -194,6 +198,7 @@ func Documents() ui.Node {
 		}
 		aiLoading.Set(true)
 		aiErr.Set("")
+		needsKey.Set(false)
 		onResult := func(content string, _ ai.Usage) {
 			aiLoading.Set(false)
 			rows, err := extract.ParseRows(content)
@@ -450,7 +455,7 @@ func Documents() ui.Node {
 			P(css.Class("muted"), uistate.T("documents.imageDesc")),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				Button(css.Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
-				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(readAI), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
+				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(readAI), Disabled(aiLoading.Get()), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
 			),
 			// Image preview: show the chosen image alongside the draft rows so the user
 			// can check the scan results against the original receipt (C60). The data
@@ -462,6 +467,15 @@ func Documents() ui.Node {
 						Attr("data-testid", "doc-image-preview"),
 						css.Class(tw.MaxWFull, tw.ObjectContain, tw.Rounded, tw.BorderLine70),
 						Style(map[string]string{"border-width": "1px", "border-style": "solid", "max-width": "200px", "max-height": "160px"})),
+				),
+			),
+			If(needsKey.Get(),
+				Div(css.Class("notice notice-warn", tw.Mt1, tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Span(uistate.T("documents.needKey")),
+					Button(css.Class("btn btn-sm"), Type("button"),
+						OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }),
+						uistate.T("documents.goToSettings"),
+					),
 				),
 			),
 			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),

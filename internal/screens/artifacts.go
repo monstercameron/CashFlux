@@ -4,6 +4,7 @@ package screens
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"syscall/js"
 	"time"
@@ -151,6 +152,7 @@ func Artifacts() ui.Node {
 				Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
 			),
 			P(css.Class("muted", tw.Mt2), storageLabel),
+			artifactStorageBar(total, blobUsage),
 			quotaNudge,
 		),
 		Section(css.Class("card"),
@@ -233,6 +235,32 @@ func artifactRow(props artifactRowProps) ui.Node {
 		meta = a.Kind + " · " + itoaPct0(len(a.Rows)) + " rows"
 	}
 
+	var csvPreview ui.Node = Fragment()
+	if a.Kind == artifacts.KindCSV && len(a.Columns) > 0 {
+		headerCells := make([]any, 0, len(a.Columns))
+		for _, col := range a.Columns {
+			headerCells = append(headerCells, Th(col))
+		}
+		var bodyRows []any
+		limit := len(a.Rows)
+		if limit > 3 {
+			limit = 3
+		}
+		for _, row := range a.Rows[:limit] {
+			cells := make([]any, 0, len(row))
+			for _, cell := range row {
+				cells = append(cells, Td(cell))
+			}
+			bodyRows = append(bodyRows, Tr(cells...))
+		}
+		csvPreview = Div(Style(map[string]string{"overflow-x": "auto", "margin-top": "0.25rem", "font-size": "0.78rem"}),
+			Table(css.Class("csv-preview"),
+				Thead(Tr(headerCells...)),
+				Tbody(bodyRows...),
+			),
+		)
+	}
+
 	if renaming.Get() {
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveRename),
@@ -254,6 +282,7 @@ func artifactRow(props artifactRowProps) ui.Node {
 				If(props.UsedByPages > 0,
 					Div(css.Class("row-meta"), Attr("data-testid", "artifact-page-refs"),
 						uistate.T("artifacts.usedByPages", props.UsedByPages))),
+				csvPreview,
 			),
 		),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
@@ -316,6 +345,28 @@ func pickFile(accept string, onData func(name, mime string, data []byte)) {
 	})
 	input.Set("onchange", onChange)
 	input.Call("click")
+}
+
+// artifactStorageBar renders a thin progress bar showing how much of the practical
+// storage limit (~10 MB combined) is used, with a warning tone when near the limit (C66).
+func artifactStorageBar(totalBytes int, blobBytes int64) ui.Node {
+	const limitBytes = 10 * 1024 * 1024 // 10 MB practical cap
+	used := totalBytes
+	if int(blobBytes) > used {
+		used = int(blobBytes)
+	}
+	pct := float64(used) / float64(limitBytes) * 100
+	if pct > 100 {
+		pct = 100
+	}
+	cls := "storage-bar-fill"
+	if pct > 80 {
+		cls = "storage-bar-fill storage-bar-warn"
+	}
+	barStyle := map[string]string{"width": fmt.Sprintf("%.1f%%", pct)}
+	return Div(css.Class("storage-bar", tw.Mt1),
+		Div(css.Class(cls), Style(barStyle)),
+	)
 }
 
 // decodeDataURL splits a `data:<mime>;base64,<payload>` URL into its MIME type and

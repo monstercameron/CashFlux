@@ -1,0 +1,85 @@
+{
+  "dark": {
+    "cardCount": 2,
+    "cardTitles": [
+      "Upload an artifact",
+      "Your artifacts"
+    ],
+    "cardHeadingLevels": [
+      "H2",
+      "H2"
+    ],
+    "btnTexts": [
+      "Default",
+      "Plan & analyze",
+      "Bills & recurring",
+      "Data & import",
+      "Build",
+      "System",
+      "My pages",
+      "",
+      "Your household2 members · USD base",
+      "",
+      "Dashboard",
+      "",
+      "",
+      "",
+      "New transaction",
+      "New account",
+      "New budget",
+      "New goal",
+      "New task",
+      "New category",
+      "New member",
+      "New rule",
+      "Scan a document",
+      "Start fresh",
+      "Dismiss",
+      "Upload image",
+      "Import CSV",
+      "",
+      "",
+      "",
+      "",
+      "Add",
+      "Install CashFlux"
+    ],
+    "btnPrimaryCount": 1,
+    "fieldCount": 0,
+    "rowCount": 2,
+    "artifactNames": [
+      "bestbuy-receipt.png",
+      "spending-by-category.csv"
+    ],
+    "artifactRefs": [
+      "Referenced by 1 transaction",
+      "Not referenced by any transaction"
+    ],
+    "artifactPageRefs": [],
+    "emptyTexts": [],
+    "mutedTexts": [
+      "Upload images or CSV datasets to use in your custom pages.",
+      "Image storage (IndexedDB): 132.3 KB · total footprint: 371.7 KB"
+    ],
+    "hrefActionCount": 1,
+    "delBtnCount": 2,
+    "renameBtnCount": 2,
+    "overflowCount": 1,
+    "pageHeight": 900,
+    "viewportH": 900,
+    "noticeTexts": []
+  },
+  "contrastDark": {
+    "cardBg": "rgb(18, 18, 20)",
+    "cardTitleColor": "rgb(244, 244, 245)",
+    "mutedColor": "rgb(171, 171, 179)",
+    "rowDescColor": "rgb(244, 244, 245)",
+    "rowMetaColor": "rgb(171, 171, 179)",
+    "mainBg": "rgb(14, 14, 15)",
+    "bodyBg": "rgb(14, 14, 15)",
+    "btnPrimaryBg": "rgb(46, 139, 87)",
+    "btnPrimaryColor": "rgb(5, 46, 19)",
+    "emptyColor": "n/a",
+    "titleOnCard": "17.02"
+  }
+}

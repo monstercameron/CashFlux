@@ -18,14 +18,135 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// WidgetBuilder is the (placeholder) widget-creation screen: a future surface for
-// composing a dashboard widget from a data source, transform, and visualization.
-// Blank for now — routing + rail entry only.
+// Bento cell geometry, mirrored from the dashboard grid (.bento --cell + gap) so
+// the builder stage previews a tile at its true on-dashboard proportions.
+const dashCellPx, dashGapPx = 152, 10
+
+// WidgetBuilder is the widget-creation screen. It is laid out top-to-bottom: a
+// stage rendering a live preview tile at its true bento proportions, an n8n-style
+// pipeline canvas (data source → transform → visualization), and a size control
+// (width 1–4, height 1–3). Per-step configuration and real source/transform/viz
+// values land in later phases; for now the stage shows a sample tile and the
+// pipeline nodes carry placeholder summaries.
 func WidgetBuilder() ui.Node {
-	return Section(css.Class("card"),
-		H3(css.Class("card-title"), uistate.T("widgetBuilder.title")),
-		P(css.Class("empty"), uistate.T("widgetBuilder.empty")),
+	col := ui.UseState(1)
+	row := ui.UseState(1)
+	c, r := col.Get(), row.Get()
+
+	// Which pipeline step is selected for configuration (its panel comes later).
+	active := ui.UseState(wbStepSource)
+
+	// Faithful tile footprint: N cells plus the gaps between them.
+	span := func(n int) string {
+		return strconv.Itoa(n*dashCellPx+(n-1)*dashGapPx) + "px"
+	}
+	setCol := func(n int) { col.Set(clampSpan(n, dashMaxColSpan)) }
+	setRow := func(n int) { row.Set(clampSpan(n, dashMaxRowSpan)) }
+
+	return Div(css.Class("wb"),
+		Section(css.Class("card"),
+			H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
+			Div(css.Class("wb-stage"),
+				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
+					Div(css.Class("wh"),
+						Span(css.Class("grip"), Attr("aria-hidden", "true"), "⠿"),
+						H3(uistate.T("widgetBuilder.sampleTitle")),
+					),
+					Div(css.Class("wbody"),
+						Div(css.Class("fig t-figure", tw.FontDisplay), "$12,480"),
+						P(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("widgetBuilder.sampleSub")),
+					),
+				),
+			),
+		),
+		Section(css.Class("card"),
+			H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
+			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
+			wbPipeline(active.Get(), func(step string) { active.Set(step) }),
+		),
+		Section(css.Class("card"),
+			H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
+			P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
+			Div(css.Class("wb-size"),
+				wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
+					func() { setCol(c - 1) }, func() { setCol(c + 1) }),
+				wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
+					func() { setRow(r - 1) }, func() { setRow(r + 1) }),
+			),
+		),
 	)
+}
+
+// Pipeline step ids, in left-to-right flow order. Each step's output feeds the
+// next: a data source → an optional transform → a visualization.
+const (
+	wbStepSource    = "source"
+	wbStepTransform = "transform"
+	wbStepVisualize = "visualize"
+)
+
+// wbPipeline renders the n8n-style node canvas: a horizontal flow of step nodes
+// joined by directed connectors. Clicking a node selects it (active) so its
+// configuration panel can open; the per-step config + real source/transform/viz
+// values land in later phases — for now the nodes show placeholder summaries.
+func wbPipeline(active string, onSelect func(string)) ui.Node {
+	steps := []wbNodeProps{
+		{Step: wbStepSource, Title: uistate.T("widgetBuilder.nodeSource"), Value: uistate.T("widgetBuilder.nodeSourceVal")},
+		{Step: wbStepTransform, Title: uistate.T("widgetBuilder.nodeTransform"), Value: uistate.T("widgetBuilder.nodeTransformVal")},
+		{Step: wbStepVisualize, Title: uistate.T("widgetBuilder.nodeVisualize"), Value: uistate.T("widgetBuilder.nodeVisualizeVal")},
+	}
+
+	flow := make([]ui.Node, 0, len(steps)*2-1)
+	for i, s := range steps {
+		if i > 0 {
+			flow = append(flow, Div(css.Class("wb-edge"), Attr("aria-hidden", "true")))
+		}
+		s := s
+		s.Active = s.Step == active
+		s.OnSelect = onSelect
+		flow = append(flow, ui.CreateElement(wbPipelineNode, s))
+	}
+	return Div(css.Class("wb-canvas"), Attr("role", "list"), flow)
+}
+
+type wbNodeProps struct {
+	Step     string
+	Title    string
+	Value    string
+	Active   bool
+	OnSelect func(string)
+}
+
+// wbPipelineNode is one pipeline step card with an inbound/outbound port. It is
+// its own component so its click hook stays at a stable position (the On*-hooks
+// rule), mirroring the manager's row components.
+func wbPipelineNode(p wbNodeProps) ui.Node {
+	cls := "wb-node"
+	if p.Active {
+		cls += " is-active"
+	}
+	step := p.Step
+	on := ui.UseEvent(func() {
+		if p.OnSelect != nil {
+			p.OnSelect(step)
+		}
+	})
+	return Button(ClassStr(cls), Type("button"), Attr("role", "listitem"),
+		Attr("aria-pressed", boolAttr(p.Active)), OnClick(on),
+		Span(css.Class("wb-port wb-port-in"), Attr("aria-hidden", "true")),
+		Div(css.Class("wb-node-body"),
+			Span(css.Class("wb-node-kind"), p.Title),
+			Span(css.Class("wb-node-val"), p.Value),
+		),
+		Span(css.Class("wb-port wb-port-out"), Attr("aria-hidden", "true")),
+	)
+}
+
+func boolAttr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 const dashMaxColSpan, dashMaxRowSpan = 4, 3

@@ -729,7 +729,7 @@ func accountsWidget(app *appstate.App, txns []domain.Transaction, cfg widgetcfg.
 		}
 		cells = append(cells, Div(
 			Div(css.Class(tw.TextDim), a.Name),
-			Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.Mt05)+" "+tw.ColorClass(tone)), fmtMoney(bal)),
+			Div(ClassStr("fig t-body "+tw.Fold(tw.FontDisplay, tw.Mt05)+" "+tw.ColorClass(tone)), fmtMoney(bal)),
 		))
 		if len(cells) >= limit {
 			break
@@ -949,7 +949,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	body := Div(
 		Div(css.Class("t-body", tw.Flex, tw.JustifyBetween),
 			Span(css.Class(tw.TextDim), "saved"),
-			Span(css.Class("fig", tw.FontDisplay), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
+			Span(css.Class("fig t-body", tw.FontDisplay), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 		),
 		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), caption),

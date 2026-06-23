@@ -215,7 +215,11 @@ func Split() ui.Node {
 
 	var memberBody ui.Node
 	if len(members) == 0 {
-		memberBody = P(css.Class("empty"), uistate.T("split.noMembers"))
+		memberBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{
+			Message:  uistate.T("split.noMembers"),
+			CTALabel: uistate.T("split.goToMembers"),
+			Href:     uistate.RoutePath("/members"),
+		})
 	} else {
 		memberBody = Div(css.Class("rows"), memberRows)
 	}
@@ -346,8 +350,10 @@ func SplitMemberRow(props splitMemberRowProps) ui.Node {
 	if props.Share != "" {
 		share = Span(css.Class("budget-amount"), props.Share)
 	}
-	return Div(css.Class("row"),
-		uiw.ToggleRow(uiw.ToggleRowProps{Label: m.Name, On: props.On, OnChange: func(bool) { props.OnToggle(m.ID) }}),
+	return Div(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2),
+		Div(css.Class(tw.Flex1),
+			uiw.ToggleRow(uiw.ToggleRowProps{Label: m.Name, On: props.On, OnChange: func(bool) { props.OnToggle(m.ID) }}),
+		),
 		weightField,
 		share,
 	)

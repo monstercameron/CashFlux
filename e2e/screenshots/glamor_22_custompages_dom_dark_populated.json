@@ -1,0 +1,74 @@
+{
+  "cardCount": 0,
+  "cardTitles": [],
+  "cardHeadingLevels": [],
+  "tileCount": 2,
+  "tileTitles": [
+    "My KPI",
+    "My List"
+  ],
+  "draggableCount": 10,
+  "hasToolbar": false,
+  "toolbarBtns": [],
+  "hasAddWidget": true,
+  "addWidgetBtnTexts": [
+    "Add widget"
+  ],
+  "emptyText": null,
+  "topbarText": "Dashboard›Theo Budget ViewEveryoneDaniel CarterJordan Lee (roommate)New transactionNew accountNew budgetNew goalNew task",
+  "headings": [
+    {
+      "tag": "H1",
+      "text": "Theo Budget View"
+    },
+    {
+      "tag": "H3",
+      "text": "My KPI"
+    },
+    {
+      "tag": "H3",
+      "text": "My List"
+    }
+  ],
+  "btnTexts": [
+    "Default",
+    "Plan & analyze",
+    "Bills & recurring",
+    "Data & import",
+    "Build",
+    "System",
+    "My pages",
+    "Your household2 members · USD base",
+    "Dashboard",
+    "New transaction",
+    "New account",
+    "New budget",
+    "New goal",
+    "New task",
+    "New category",
+    "New member",
+    "New rule",
+    "Scan a document",
+    "↔",
+    "↕",
+    "↔",
+    "↕",
+    "Add widget",
+    "Add",
+    "Install CashFlux"
+  ],
+  "labelCount": 0,
+  "myPagesLinks": [],
+  "overflowCount": 1,
+  "tileButtons": [
+    "↔",
+    "↕",
+    "Edit widget",
+    "Remove widget",
+    "↔",
+    "↕",
+    "Edit widget",
+    "Remove widget"
+  ],
+  "hasGear": false
+}

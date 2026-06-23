@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C-series 6-lane sweep (2026-06-23).** Audited the C backlog (mostly already-shipped via the L-series
+  work) and closed the remaining gaps: on-panel rail collapse toggle (C20); dashboard band-span + figure
+  type tokens (C48); Accounts inline-edit advanced disclosure (C49); Allocate amount-field labels + AI
+  "needs key → Open Settings" link (C54); To-do long-notes truncation (C52); Workflows inline edit +
+  H2 headings + labels (C65); Documents "needs key → Settings" link + loading state (C60); Customize
+  click-to-insert variable (C61); Artifacts storage-meter bar + CSV preview (C66); Split no-members CTA +
+  ToggleRow alignment (C58). The dashboard bugs (C1 income, C14/C22 resize), money formatting (C2),
+  empty-gear panel (C11), and many screen-review items were confirmed already-fixed with file:line proof.
+
+### Added
 - **L-series 6-lane sweep, round 3 — closing the long tail (2026-06-23).** Documents CSV-import account
   selector + above-fold Import button (L44); Reports category-row drill-through to Transactions (L58);
   budget "Top up" for under-limit budgets (L43) + rollover label fix (L40); definitive load-splash

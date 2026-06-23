@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -136,6 +137,10 @@ func Allocate() ui.Node {
 	if app == nil {
 		return Section(css.Class("card"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
+
+	// nav is used to route the user to Settings when AI credentials are missing (C54).
+	nav := router.UseNavigate()
+	goToSettings := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/settings")) }))
 
 	// amountStr is declared early so the income pre-fill handler (below) can reference
 	// it; its OnInput handler (onAmount) is wired after the other form-state hooks.
@@ -596,9 +601,12 @@ func Allocate() ui.Node {
 						Option(Value("goals"), SelectedIf(profile.Get() == "goals"), uistate.T("allocate.goals")),
 						savedOpts,
 					)),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount)),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("allocate.reservePlaceholder", base)), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve)),
-				Input(css.Class("field"), Type("number"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer)),
+				labeledField("Amount to allocate",
+					Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to allocate"), Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(amountStr.Get()), Step("0.01"), OnInput(onAmount))),
+				labeledField("Emergency buffer",
+					Input(css.Class("field"), Type("number"), Attr("aria-label", "Emergency buffer"), Placeholder(uistate.T("allocate.reservePlaceholder", base)), Value(reserveStr.Get()), Step("0.01"), OnInput(onReserve))),
+				labeledField("Cap per destination",
+					Input(css.Class("field"), Type("number"), Attr("aria-label", "Cap per destination"), Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), Value(maxPerStr.Get()), Step("0.01"), OnInput(onMaxPer))),
 			),
 			Button(css.Class("btn disclosure-toggle"), Type("button"),
 				Attr("aria-expanded", ariaBool(weightsOpen.Get())), Attr("data-testid", "allocate-advanced-toggle"),
@@ -639,7 +647,19 @@ func Allocate() ui.Node {
 		If(len(ranked) > 0, Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("allocate.whyTitle")),
 			Button(css.Class("btn"), Type("button"), OnClick(explain), IfElse(aiLoading.Get(), Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
-			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
+			If(aiErr.Get() != "", Div(css.Class("err"), Attr("role", "alert"),
+				Text(aiErr.Get()),
+				// When the error is the missing-key message, offer a one-hop route to
+				// Settings → AI so the user can fix it without hunting through the nav (C54).
+				If(aiErr.Get() == uistate.T("allocate.needKey"),
+					Button(css.Class("btn"), Type("button"),
+						Attr("aria-label", "Open Settings to add your AI key"),
+						Style(map[string]string{"margin-left": "0.5rem"}),
+						OnClick(goToSettings),
+						"Open Settings",
+					),
+				),
+			)),
 			If(aiResult.Get() != "", P(css.Class("muted"), aiResult.Get())),
 		)),
 		If(totalMinor > 0, Section(css.Class("card"), Attr("aria-label", uistate.T("allocate.applyTitle")),

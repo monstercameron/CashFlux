@@ -558,6 +558,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	}
 	lockS := ui.UseState(lockISO)
 	ownerS := ui.UseState(a.OwnerID)
+	// editAdvOpen tracks whether the advanced asset fields are expanded in the
+	// inline-edit form (mirrors the add form's disclosure, C49).
+	editAdvOpen := ui.UseState(false)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
@@ -570,6 +573,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
 	onLock := ui.UseEvent(func(v string) { lockS.Set(v) })
 	onOwner := ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
+	onToggleEditAdv := ui.UseEvent(func() { editAdvOpen.Set(!editAdvOpen.Get()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
 		balS.Set(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -583,6 +587,9 @@ func AccountRow(props accountRowProps) ui.Node {
 		stabS.Set(intOrEmpty(a.StabilityScore))
 		lockS.Set(lockISO)
 		ownerS.Set(a.OwnerID)
+		// Collapse advanced section on open so returning users start from a clean
+		// short form; they can expand again if they need to adjust an advanced field.
+		editAdvOpen.Set(false)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
@@ -825,6 +832,7 @@ func AccountRow(props accountRowProps) ui.Node {
 					Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), Title(uistate.T("common.owner")), OnChange(onOwner), ownerSelectOptions(props.Members, ownerS.Get()))),
 				labeledField(uistate.T("accounts.openingBalance"),
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
+				// Liability-specific fields (always shown when editing a liability).
 				If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
 					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim)))),
 				If(isLiab, labeledField(uistate.T("accounts.apr"),
@@ -835,13 +843,17 @@ func AccountRow(props accountRowProps) ui.Node {
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
 				If(isLiab, labeledField(uistate.T("accounts.lender"),
 					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
-				If(!isLiab, labeledField(uistate.T("accounts.expReturn"),
+				// Asset advanced fields: tucked behind a disclosure so the common edit
+				// path (name · owner · balance) stays short — mirrors the add form (C49).
+				If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
+					IfElse(editAdvOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
-				If(!isLiab, labeledField(uistate.T("accounts.liquidity"),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
-				If(!isLiab, labeledField(uistate.T("accounts.stability"),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
-				If(!isLiab, labeledField(uistate.T("accounts.lockUntilEdit"),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),

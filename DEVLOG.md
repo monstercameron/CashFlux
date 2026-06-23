@@ -11268,3 +11268,17 @@ health-sort; account_currency_hide forces single-currency via injection; reports
 the removed inline form). The L38 goal-add disclosure hid saved-so-far/linked-account, which broke 6 goal
 gates — fixed each to expand "Show advanced fields" first. All round-3 gates + regressions green; go test
 ./... green.
+
+## 2026-06-23 — C-series 6-agent audit+build sweep
+Audited the whole C backlog with 6 agents (disjoint files). The vast majority was already done — much of
+it via the recent L-series per-screen work — so most lanes returned "already-done with file:line proof".
+Genuine gaps built: rail collapse toggle (C20), dashboard band spans (C48), accounts edit disclosure
+(C49), allocate labels + AI-settings link (C54), todo notes truncation (C52), workflows inline edit (C65),
+documents settings link (C60), customize var-insert (C61), artifacts storage bar + CSV preview (C66),
+split CTA + alignment (C58). Reverted an incomplete out-of-scope widget-builder change that broke the
+build (undefined wb* symbols). Fixed the artifacts CSV-preview []ui.Node→[]any table type. Three items
+are genuine large OPEN epics, NOT completed: C73 (component-ization migration tail), C74 (statement
+import Tier 2/3: XLSX/OFX/PDF/AI), C78 (audit-log SQLite + activity-timeline UI). A few sub-items are
+out-of-scope follow-ups: C56 subscription confirm/ignore (needs a domain entity), C60 CSV file-picker,
+C65 condition-help, and C52/C54/C62 narrow-screen action-wrap (CSS/responsive). All built gates green;
+go test ./... green.

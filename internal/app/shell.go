@@ -567,10 +567,14 @@ func navItem(props navItemProps) uic.Node {
 }
 
 // HouseholdCard sits at the bottom of the rail, summarizing the household and
-// opening the global settings flip panel on click. It reads live member count
-// and base currency from app state.
+// opening the global settings flip panel on click. It also renders the
+// on-panel rail-collapse toggle (C20) — a small chevron button anchored at
+// the top-right of the footer area so users can collapse/expand the rail from
+// within the panel rather than relying solely on the top-bar menu button.
 func HouseholdCard() uic.Node {
 	settings := uistate.UseSettings()
+	collapsed := uistate.UseRailCollapsed()
+	isCollapsed := collapsed.Get()
 	name := uistate.T("household.title")
 	summary := uistate.T("household.settings")
 	if app := appstate.Default; app != nil {
@@ -585,12 +589,37 @@ func HouseholdCard() uic.Node {
 		}
 		summary = fmt.Sprintf("%d %s · %s base", members, noun, base)
 	}
+	collapseIcon := icon.ChevronLeft
+	collapseTitle := uistate.T("rail.collapse")
+	if isCollapsed {
+		collapseIcon = icon.ChevronRight
+		collapseTitle = uistate.T("rail.expand")
+	}
 	// The household card plus a small muted version line anchored at the rail foot
 	// (mt-auto on the wrapper). One source of truth: internal/version (C80).
 	// The horizontal inset lives on this wrapper's padding (not the button's margin):
 	// a <button> is fit-content by default so it needs w-full to span the rail, and
 	// w-full + horizontal margins would overflow (the margins add onto 100%).
 	return Div(css.Class(tw.MtAuto, tw.Px3),
+		// On-panel collapse toggle (C20): sits above the household card, right-aligned.
+		// Using its own component (HouseholdCard) keeps this OnClick at a stable render
+		// position — the On*-hooks-in-loops rule is satisfied because this is called via
+		// uic.CreateElement, not inside a variable-length loop.
+		Div(css.Class("rail-collapse-row", tw.Flex, tw.JustifyBetween, tw.ItemsCenter, tw.Pt2),
+			Span(), // spacer so the button floats right
+			Button(css.Class("rail-collapse-btn", tw.W7, tw.H7, tw.Flex, tw.ItemsCenter, tw.JustifyCenter, tw.Rounded4, tw.TextFaint, tw.HoverTextFg, tw.HoverBgHover),
+				Type("button"),
+				Title(collapseTitle),
+				Attr("aria-label", collapseTitle),
+				Attr("data-testid", "rail-collapse-btn"),
+				OnClick(func() {
+					next := !collapsed.Get()
+					collapsed.Set(next)
+					uistate.PersistRailCollapsed(next)
+				}),
+				ui.Icon(collapseIcon, css.Class(tw.W4, tw.H4)),
+			),
+		),
 		Button(
 			css.Class("hh", tw.Mt3, tw.Mb3, tw.P3, tw.Rounded4, tw.Border, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextLeft, tw.HoverBgHover, tw.WFull),
 			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon

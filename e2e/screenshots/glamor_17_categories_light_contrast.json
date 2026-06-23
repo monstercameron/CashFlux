@@ -1,0 +1,16 @@
+{
+  "dataTheme": "light",
+  "pageBg": "rgb(247, 246, 243)",
+  "cardTitleColor": "rgb(28, 28, 30)",
+  "cardBg": "rgb(255, 255, 255)",
+  "rowDescColor": "rgb(28, 28, 30)",
+  "rowBg": "rgba(0, 0, 0, 0)",
+  "mutedColor": "N/A",
+  "badgeColor": "rgb(86, 86, 92)",
+  "badgeBg": "rgba(0, 0, 0, 0)",
+  "mainBg": "rgba(0, 0, 0, 0)",
+  "kindHeaderColor": "rgb(28, 28, 30)",
+  "kindHeaderBg": "rgb(255, 255, 255)",
+  "indentedColor": "rgb(28, 28, 30)",
+  "indentedBg": "rgba(0, 0, 0, 0)"
+}

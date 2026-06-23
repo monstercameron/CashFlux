@@ -1,0 +1,252 @@
+package cardgraph
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestCanFeed(t *testing.T) {
+	tests := []struct {
+		out, in PortType
+		want    bool
+	}{
+		{TypeNumber, TypeNumber, true},
+		{TypeBool, TypeNumber, true},  // bool→number coercion
+		{TypeNumber, TypeText, true},  // number→text coercion
+		{TypeBool, TypeText, true},    // bool→text coercion
+		{TypeNumber, TypeBool, false}, // no number→bool
+		{TypeText, TypeNumber, false}, // no text→number
+		{TypeViz, TypeNumber, false},  // viz feeds nothing scalar
+		{TypeNumber, TypeViz, false},  // nothing feeds a viz input scalarly
+	}
+	for _, tt := range tests {
+		if got := CanFeed(tt.out, tt.in); got != tt.want {
+			t.Errorf("CanFeed(%s,%s)=%v want %v", tt.out, tt.in, got, tt.want)
+		}
+	}
+}
+
+// kpiFromLiteral wires literal.number("42") → viz.kpi and returns the graph.
+func kpiFromLiteral(value, format string) Graph {
+	return Graph{
+		Nodes: []Node{
+			{ID: "lit", Kind: KindLiteralNumber, Props: map[string]string{"value": value}},
+			{ID: "kpi", Kind: KindVizKPI, Props: map[string]string{"title": "Net worth", "format": format}},
+		},
+		Edges: []Edge{{From: PortRef{"lit", OutPort}, To: PortRef{"kpi", "value"}}},
+		Root:  "kpi",
+	}
+}
+
+func TestEvalLiteralKPI(t *testing.T) {
+	res := Eval(kpiFromLiteral("42", "number"), Context{})
+	if len(res.Issues) != 0 {
+		t.Fatalf("unexpected issues: %+v", res.Issues)
+	}
+	if res.Render == nil {
+		t.Fatal("no render")
+	}
+	if res.Render.Kind != "kpi" || res.Render.Title != "Net worth" || res.Render.Text != "42" {
+		t.Errorf("render = %+v", *res.Render)
+	}
+}
+
+func TestEvalSourceFormulaKPI(t *testing.T) {
+	// source.scalar(net_worth=1000) → formula("a / 2") → viz.kpi(auto tone)
+	g := Graph{
+		Nodes: []Node{
+			{ID: "src", Kind: KindSourceScalar, Props: map[string]string{"name": "net_worth"}},
+			{ID: "f", Kind: KindFormula, Props: map[string]string{"expr": "a / 2"}},
+			{ID: "kpi", Kind: KindVizKPI, Props: map[string]string{"title": "Half", "tone": "auto"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"src", OutPort}, To: PortRef{"f", "a"}},
+			{From: PortRef{"f", OutPort}, To: PortRef{"kpi", "value"}},
+		},
+		Root: "kpi",
+	}
+	res := Eval(g, Context{Vars: map[string]float64{"net_worth": 1000}})
+	if len(res.Issues) != 0 {
+		t.Fatalf("unexpected issues: %+v", res.Issues)
+	}
+	if res.Render.Text != "500" {
+		t.Errorf("text = %q want 500", res.Render.Text)
+	}
+	if res.Render.Tone != "up" {
+		t.Errorf("tone = %q want up", res.Render.Tone)
+	}
+}
+
+func TestEvalPercentFormatAndCoercion(t *testing.T) {
+	g := kpiFromLiteral("12.5", "percent")
+	res := Eval(g, Context{})
+	if res.Render.Text != "12.5%" {
+		t.Errorf("text = %q want 12.5%%", res.Render.Text)
+	}
+}
+
+func TestEvalDegradesOnBrokenNode(t *testing.T) {
+	// A bad literal makes its node fatal; the KPI downstream then can't resolve, but
+	// Eval returns issues instead of panicking.
+	g := kpiFromLiteral("not-a-number", "number")
+	res := Eval(g, Context{})
+	if res.Render != nil {
+		t.Fatal("expected no render for a broken graph")
+	}
+	if len(res.Issues) == 0 {
+		t.Fatal("expected issues")
+	}
+	foundLit := false
+	for _, is := range res.Issues {
+		if is.Node == "lit" {
+			foundLit = true
+		}
+	}
+	if !foundLit {
+		t.Errorf("expected an issue on the literal node, got %+v", res.Issues)
+	}
+}
+
+func TestLogicCompareBranchKPI(t *testing.T) {
+	// "Is net worth positive?" → show 1 if net_worth > 0 else 0.
+	//   src(net_worth) ─┐
+	//   lit0(0) ────────┴► compare(>) ─► branch.cond
+	//   lit1(1) ──────────────────────► branch.whenTrue
+	//   lit0b(0) ─────────────────────► branch.whenFalse ─► kpi
+	g := Graph{
+		Nodes: []Node{
+			{ID: "src", Kind: KindSourceScalar, Props: map[string]string{"name": "net_worth"}},
+			{ID: "zero", Kind: KindLiteralNumber, Props: map[string]string{"value": "0"}},
+			{ID: "cmp", Kind: KindCompare, Props: map[string]string{"op": ">"}},
+			{ID: "one", Kind: KindLiteralNumber, Props: map[string]string{"value": "1"}},
+			{ID: "zero2", Kind: KindLiteralNumber, Props: map[string]string{"value": "0"}},
+			{ID: "br", Kind: KindBranchNumber},
+			{ID: "kpi", Kind: KindVizKPI, Props: map[string]string{"title": "Positive?"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"src", OutPort}, To: PortRef{"cmp", "a"}},
+			{From: PortRef{"zero", OutPort}, To: PortRef{"cmp", "b"}},
+			{From: PortRef{"cmp", OutPort}, To: PortRef{"br", "cond"}},
+			{From: PortRef{"one", OutPort}, To: PortRef{"br", "whenTrue"}},
+			{From: PortRef{"zero2", OutPort}, To: PortRef{"br", "whenFalse"}},
+			{From: PortRef{"br", OutPort}, To: PortRef{"kpi", "value"}},
+		},
+		Root: "kpi",
+	}
+	if issues := Validate(g); len(issues) != 0 {
+		t.Fatalf("validate: %+v", issues)
+	}
+	pos := Eval(g, Context{Vars: map[string]float64{"net_worth": 1000}})
+	if pos.Render == nil || pos.Render.Text != "1" {
+		t.Errorf("positive case = %+v", pos)
+	}
+	neg := Eval(g, Context{Vars: map[string]float64{"net_worth": -50}})
+	if neg.Render == nil || neg.Render.Text != "0" {
+		t.Errorf("negative case = %+v", neg)
+	}
+}
+
+func TestTopoOrderCycle(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "a", Kind: KindFormula, Props: map[string]string{"expr": "b"}},
+			{ID: "b", Kind: KindFormula, Props: map[string]string{"expr": "a"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"a", OutPort}, To: PortRef{"b", "a"}},
+			{From: PortRef{"b", OutPort}, To: PortRef{"a", "a"}},
+		},
+		Root: "b",
+	}
+	if _, err := TopoOrder(g); err == nil {
+		t.Fatal("expected a cycle error")
+	}
+	res := Eval(g, Context{})
+	if res.Render != nil || len(res.Issues) == 0 {
+		t.Errorf("cycle should yield issues and no render, got %+v", res)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name      string
+		g         Graph
+		wantClean bool
+	}{
+		{"good", kpiFromLiteral("1", "number"), true},
+		{"unknown kind", Graph{Nodes: []Node{{ID: "x", Kind: "nope"}}, Root: "x"}, false},
+		{"no root", func() Graph { g := kpiFromLiteral("1", ""); g.Root = ""; return g }(), false},
+		{"root not viz", Graph{Nodes: []Node{{ID: "lit", Kind: KindLiteralNumber, Props: map[string]string{"value": "1"}}}, Root: "lit"}, false},
+		{"type mismatch", Graph{
+			Nodes: []Node{
+				{ID: "t", Kind: KindLiteralText, Props: map[string]string{"value": "hi"}},
+				{ID: "f", Kind: KindFormula, Props: map[string]string{"expr": "a"}},
+				{ID: "kpi", Kind: KindVizKPI},
+			},
+			// text → formula's number input "a" is not allowed.
+			Edges: []Edge{
+				{From: PortRef{"t", OutPort}, To: PortRef{"f", "a"}},
+				{From: PortRef{"f", OutPort}, To: PortRef{"kpi", "value"}},
+			},
+			Root: "kpi",
+		}, false},
+		{"double-wired input", Graph{
+			Nodes: []Node{
+				{ID: "l1", Kind: KindLiteralNumber, Props: map[string]string{"value": "1"}},
+				{ID: "l2", Kind: KindLiteralNumber, Props: map[string]string{"value": "2"}},
+				{ID: "kpi", Kind: KindVizKPI},
+			},
+			Edges: []Edge{
+				{From: PortRef{"l1", OutPort}, To: PortRef{"kpi", "value"}},
+				{From: PortRef{"l2", OutPort}, To: PortRef{"kpi", "value"}},
+			},
+			Root: "kpi",
+		}, false},
+		{"edge to missing node", Graph{
+			Nodes: []Node{{ID: "kpi", Kind: KindVizKPI}},
+			Edges: []Edge{{From: PortRef{"ghost", OutPort}, To: PortRef{"kpi", "value"}}},
+			Root:  "kpi",
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issues := Validate(tt.g)
+			if tt.wantClean && len(issues) != 0 {
+				t.Errorf("expected clean, got %+v", issues)
+			}
+			if !tt.wantClean && len(issues) == 0 {
+				t.Error("expected issues, got none")
+			}
+		})
+	}
+}
+
+func TestJSONRoundTrip(t *testing.T) {
+	g := kpiFromLiteral("99", "currency")
+	b, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Graph
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	res := Eval(back, Context{})
+	if res.Render == nil || res.Render.Text != "99" {
+		t.Errorf("round-trip eval = %+v", res)
+	}
+}
+
+func TestParsePortRef(t *testing.T) {
+	p := ParsePortRef("node1:value")
+	if p.Node != "node1" || p.Port != "value" {
+		t.Errorf("got %+v", p)
+	}
+	if p.String() != "node1:value" {
+		t.Errorf("String() = %q", p.String())
+	}
+	bare := ParsePortRef("solo")
+	if bare.Node != "solo" || bare.Port != "" {
+		t.Errorf("bare = %+v", bare)
+	}
+}

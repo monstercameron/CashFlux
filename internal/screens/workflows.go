@@ -48,7 +48,7 @@ func Workflows() ui.Node {
 	return Div(
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
 		Section(css.Class("card"),
-			H3(css.Class("card-title"), uistate.T("workflows.yours")),
+			H2(css.Class("card-title"), uistate.T("workflows.yours")),
 			listBody,
 		),
 		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
@@ -177,6 +177,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		paramControl = P(css.Class("muted"), uistate.T("workflows.noParam"))
 	default: // createTask / notify / addTag
 		paramControl = Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
+			Attr("aria-label", uistate.T("workflows.actionText")),
 			Value(draftText.Get()), OnInput(onDraftText))
 	}
 
@@ -189,10 +190,10 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	}
 
 	return Section(css.Class("card"),
-		H3(css.Class("card-title"), uistate.T("workflows.create")),
+		H2(css.Class("card-title"), uistate.T("workflows.create")),
 		Div(css.Class("form-grid"),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
-			Select(css.Class("field"), OnChange(onTrigger),
+			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
+			Select(css.Class("field"), Attr("aria-label", "Trigger"), OnChange(onTrigger),
 				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
 				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
 				Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
@@ -208,7 +209,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 					Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
 				),
 			),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Value(condition.Get()), OnInput(onCondition)),
+			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
 		),
 		// Action builder. The parameter control depends on the chosen action:
 		// a category picker for "set category", a text field for create-task /
@@ -246,6 +247,33 @@ type workflowRowProps struct {
 func workflowRow(props workflowRowProps) ui.Node {
 	w := props.Workflow
 	last := ui.UseState((*workflow.Run)(nil))
+	editing := ui.UseState(false)
+	editName := ui.UseState(w.Name)
+	editCond := ui.UseState(w.Condition)
+	onEditName := ui.UseEvent(func(v string) { editName.Set(v) })
+	onEditCond := ui.UseEvent(func(v string) { editCond.Set(v) })
+	startEdit := ui.UseEvent(Prevent(func() {
+		editName.Set(w.Name)
+		editCond.Set(w.Condition)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	saveEdit := ui.UseEvent(Prevent(func() {
+		app := appstate.Default
+		n := strings.TrimSpace(editName.Get())
+		if n == "" {
+			return
+		}
+		w2 := w
+		w2.Name = n
+		w2.Condition = strings.TrimSpace(editCond.Get())
+		if err := app.PutWorkflow(w2); err == nil {
+			editing.Set(false)
+			if props.Refresh != nil {
+				props.Refresh()
+			}
+		}
+	}))
 
 	run := func(dry bool) {
 		app := appstate.Default
@@ -272,6 +300,19 @@ func workflowRow(props workflowRowProps) ui.Node {
 		if err := app.DeleteWorkflow(w.ID); err == nil && props.Refresh != nil {
 			props.Refresh()
 		}
+	}
+
+	if editing.Get() {
+		return Div(css.Class("row-edit"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				labeledField(uistate.T("workflows.name"),
+					Input(css.Class("field"), Attr("aria-label", uistate.T("workflows.name")), Value(editName.Get()), OnInput(onEditName))),
+				labeledField(uistate.T("workflows.conditionLabel"),
+					Input(css.Class("field"), Attr("aria-label", uistate.T("workflows.conditionLabel")), Placeholder(uistate.T("workflows.condition")), Value(editCond.Get()), OnInput(onEditCond))),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+			),
+		)
 	}
 
 	enableLabel := uistate.T("workflows.enable")
@@ -308,6 +349,7 @@ func workflowRow(props workflowRowProps) ui.Node {
 				Button(css.Class("btn"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
 				Button(css.Class("btn"), Type("button"), OnClick(toggle), enableLabel),
+				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("action.edit")), Title(uistate.T("action.edit")), OnClick(startEdit), uistate.T("action.edit")),
 				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 		),
@@ -350,7 +392,7 @@ func workflowHistory(_ workflowHistoryProps) ui.Node {
 		))
 	}
 	return Section(css.Class("card"),
-		H3(css.Class("card-title"), uistate.T("workflows.history")),
+		H2(css.Class("card-title"), uistate.T("workflows.history")),
 		Div(css.Class("rows"), rows),
 	)
 }

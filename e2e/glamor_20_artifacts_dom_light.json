@@ -1,0 +1,86 @@
+{
+  "light": {
+    "cardCount": 2,
+    "cardTitles": [
+      "Upload an artifact",
+      "Your artifacts"
+    ],
+    "cardHeadingLevels": [
+      "H2",
+      "H2"
+    ],
+    "btnTexts": [
+      "Default",
+      "Plan & analyze",
+      "Bills & recurring",
+      "Data & import",
+      "Build",
+      "System",
+      "My pages",
+      "",
+      "Your household2 members · USD base",
+      "",
+      "Dashboard",
+      "",
+      "",
+      "",
+      "New transaction",
+      "New account",
+      "New budget",
+      "New goal",
+      "New task",
+      "New category",
+      "New member",
+      "New rule",
+      "Scan a document",
+      "Upload image",
+      "Import CSV",
+      "Dismiss",
+      "",
+      "",
+      "",
+      "",
+      "Add",
+      "Install CashFlux"
+    ],
+    "btnPrimaryCount": 1,
+    "fieldCount": 0,
+    "rowCount": 2,
+    "artifactNames": [
+      "bestbuy-receipt.png",
+      "spending-by-category.csv"
+    ],
+    "artifactRefs": [
+      "Referenced by 1 transaction",
+      "Not referenced by any transaction"
+    ],
+    "artifactPageRefs": [],
+    "emptyTexts": [],
+    "mutedTexts": [
+      "Upload images or CSV datasets to use in your custom pages.",
+      "Image storage (IndexedDB): 65.4 MB · total footprint: 65.6 MB"
+    ],
+    "hrefActionCount": 1,
+    "delBtnCount": 2,
+    "renameBtnCount": 2,
+    "overflowCount": 1,
+    "pageHeight": 900,
+    "viewportH": 900,
+    "noticeTexts": [
+      "You're using 65.4 MB for receipt images — consider exporting a backup and removing some to free up space.Dismiss"
+    ]
+  },
+  "contrastLight": {
+    "cardBg": "rgb(255, 255, 255)",
+    "cardTitleColor": "rgb(28, 28, 30)",
+    "mutedColor": "rgb(86, 86, 92)",
+    "rowDescColor": "rgb(28, 28, 30)",
+    "rowMetaColor": "rgb(86, 86, 92)",
+    "mainBg": "rgb(14, 14, 15)",
+    "bodyBg": "rgb(247, 246, 243)",
+    "btnPrimaryBg": "rgb(46, 139, 87)",
+    "btnPrimaryColor": "rgb(5, 46, 19)",
+    "emptyColor": "n/a",
+    "titleOnCard": "17.01"
+  }
+}

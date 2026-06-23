@@ -391,7 +391,14 @@ func TaskRow(props taskRowProps) ui.Node {
 		meta = append(meta, Span(ClassStr(dueCls), dueText))
 	}
 	if t.Notes != "" {
-		meta = append(meta, Span(css.Class("row-meta"), t.Notes))
+		// Truncate long notes inline and expose the full text in a tooltip so the
+		// row stays scannable without cutting off information (C52).
+		const maxNoteRune = 80
+		noteDisplay := t.Notes
+		if len([]rune(noteDisplay)) > maxNoteRune {
+			noteDisplay = string([]rune(noteDisplay)[:maxNoteRune]) + "…"
+		}
+		meta = append(meta, Span(css.Class("row-meta"), Title(t.Notes), noteDisplay))
 	}
 	if t.Recurrence != "" {
 		recurLabel := taskCadenceLabel(t.Recurrence)
