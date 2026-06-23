@@ -21,6 +21,23 @@
       })();
     </script>
 
+    <script>
+      /* GX9-F3: apply the saved theme synchronously BEFORE the boot splash paints, so
+         a light-mode user never sees a dark flash on cold start (WASM applies the theme
+         too late, after mount). Mirrors uistate.resolveTheme: theme field on the
+         cashflux:prefs store; "system" follows the OS color scheme. */
+      (function () {
+        try {
+          var t = "dark", raw = localStorage.getItem("cashflux:prefs");
+          if (raw) { var p = JSON.parse(raw); if (p && p.theme) t = p.theme; }
+          if (t === "system") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) { /* default dark */ }
+      })();
+    </script>
+
     <title>CashFlux</title>
 
     <!-- PWA: installable, standalone, dark theme -->
@@ -139,6 +156,15 @@
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @keyframes boot-breathe { 0%,100% { opacity: 0.55; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1); } }
       @keyframes boot-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      /* GX9-F3/F4: light-mode splash variant — warm-white background + dark text so a
+         returning light-mode user never sees a dark-on-light flash. The head <script>
+         applies data-theme synchronously before first paint; these rules ensure the splash
+         and its card surface match the saved preference immediately. */
+      [data-theme="light"] #boot { background: #f7f6f3; }
+      [data-theme="light"] .boot-card { background: transparent; }
+      [data-theme="light"] .boot-c, [data-theme="light"] .boot-word { color: #1c1c1e; }
+      [data-theme="light"] .boot-sub { color: #56565c; }
+      [data-theme="light"] .boot-ring-track { stroke: #e4e2dd; }
 
       /* Display scale: zoom the whole app by the user's preference (default 1). */
       #app { zoom: var(--ui-scale, 1); }

@@ -91,6 +91,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Changed
 - **GLAMOR series, GX8 motion (2026-06-23).** **Motion (GX8):** reduced-motion guards on all interactive transitions, unified hover timing, light hover bg, draggable :active feedback.
+- **GLAMOR series, GX9 onboarding/splash (2026-06-23).** **Onboarding/splash (GX9):** light-mode boot splash + synchronous theme-on-first-paint, splash card surface, sample-banner action spacing (full onboarding flow F1 deferred as a feature build).
 - **GLAMOR series, GX6 iconography (2026-06-23).** **Iconography (GX6):** replaced stray Unicode glyphs (grip/carets/alert-triangle) with the SVG icon registry.
 - **Empty states (GX2):** Transactions/Accounts/Insights now show a proper EmptyStateCTA with icon + action instead of a bare line.
 - **App shell (GX1):** light-mode topbar/rail-active-chip/+Add button now switch correctly.

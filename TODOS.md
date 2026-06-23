@@ -20318,6 +20318,13 @@ Per B18 spec, a "Replay tour" or "View quick guide" button should live in Settin
 4. GX9-F5 [CSS-ONLY] — Fix "Start freshDismiss" spacing in sample-data banner.
 5. GX9-F6 [GO-STRUCTURAL] — Add "Replay tour" to Settings (blocked on F1).
 
+✅ RESOLVED (2026-06-23). Shipped CSS-only contained fixes:
+- **F3 (SHIPPED):** Synchronous head `<script>` applies saved `cashflux:prefs` theme to `<html data-theme>` before splash paints — light-mode users no longer see a dark flash on cold boot. Handles "system" (OS color scheme), defaults to dark defensively (try/catch). Added `[data-theme="light"] #boot { background: #f7f6f3 }` + sibling rules so the splash background, text, and ring respond to the attribute immediately on first paint.
+- **F4 (SHIPPED):** Added `[data-theme="light"] .boot-card`, `.boot-c`, `.boot-word`, `.boot-sub`, `.boot-ring-track` light-mode overrides; splash card elements now read on the warm-white background — dark text (`#1c1c1e`), muted sub (`#56565c`), warm border ring (`#e4e2dd`). Co-resolved with GX2-F6 (boot splash transparent card bg).
+- **F5 (CONFIRMED ALREADY FIXED):** `.sample-banner-actions { gap: .6rem }` is in `web/index.html` from a prior pass; "Start freshDismiss" spacing is correct. No regression.
+- **F1 DEFERRED:** The entire B18 onboarding feature (welcome panel, sample-vs-fresh choice, quick-guide slideshow, first-run checklist, Settings replay). This is a multi-file GO-STRUCTURAL feature build — not a CSS-only glamor fix. Out of scope for this pass; the WASM tree is mid-refactor (C73). Track under B18 backlog.
+- **F2 DEFERRED:** GO-STRUCTURAL boot-sequence debug (why theme pref is not respected on cold boot after flag clear). Partially mitigated by F3 — the head script now applies the theme before WASM mounts, so a stored light pref IS respected on normal return visits. The remaining edge case (clear-all-flags path) requires a Go fix in `uistate/prefs.go`.
+- **F6 DEFERRED:** "Replay tour" in Settings — blocked on F1 (the tour itself does not exist yet).
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 
