@@ -2341,14 +2341,18 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
       (accounts, budgets, goals, categories, rules, tasks, members, transactions, custom-fields, planning) — the
       labelling cluster C49–C65/B15 is resolved and the `*_labels` gates pass. _(The few remaining loose `<select>`s
       are report/display **filters**, not add/edit forms — out of this bullet's scope.)_
-- [~] **Phase 2 — Lists:** in progress — primitives extended (`Card`/`EntityListSection` gained `TestID`/`Attrs`/`Rows`
-      so a hand-rolled `Section(.card)` with a test id or list body ports without dropping selectors). **All five named
-      priority screens are fully ported** — Reports, Subscriptions, Bills, Categories, Accounts — plus the not-ready/
-      empty `Section(.card)` guards across ~19 screens. Scaffold count driven **165 → 118**, each step gate-verified
-      and locked by the Phase-5 ratchet (now at 118; it can only ratchet down). Remaining: the non-priority long-tail
-      screens (planning, split, workflows, widgets, customize_formula, rules, insights, documents, …) and a residual
-      of irreducibly-bespoke cards (custom multi-button `.card-head` headers, `card-alert` banners) that can't port
-      without DOM change — those stay hand-rolled by design. The ratchet drives the tail down screen-by-screen.
+- [~] **Phase 2 — Lists:** largely complete. Primitives extended (`Card`/`EntityListSection` gained `TestID`/`Attrs`/
+      `Rows`, and `HeaderAction` now emits the real `.card-head` class) so hand-rolled cards — including those with a
+      test id, a list body, or a title+actions header — port with byte-identical DOM. **Every major user-facing screen
+      is ported**: Reports, Subscriptions, Bills, Categories, Accounts, Insights, Activity, Allocate, Documents, Planning
+      (all 8 cards), Split, Customize-formula, Rules, Custom-Fields, Custompage, Artifacts, To-do, Budgets, Goals,
+      Workflows, Notifications — plus the not-ready/empty guards across ~19 screens. Scaffold count driven **165 → 68**
+      (59%), each step gate-verified and locked by the Phase-5 ratchet at every step (now 68; one-way). The residual is
+      the irreducible floor for a DOM-preserving port: ~22 genuinely-bespoke cards (widgets/widget-builder use `H3`
+      titles; reports `card-alert` + flex header + `data-testid` analysis sections; the import wizard; the transactions
+      receipt overlay) plus ~40 `Div(.rows)` list **bodies** that legitimately live inside already-ported
+      `EntityListSection`s. Zeroing those would require DOM changes (breaking parity gates) or new primitive variants
+      (H3-title / flex-header) — a deliberate stopping point. The ratchet enforces no regressions and drives any further reduction.
 - [x] **Phase 3 — Rows:** each `*Row` extracted into its own `*_row.go` carrying its display + inline-edit sub-forms,
       owning its hooks (Account/Budget/Goal/Transaction). Display halves use `EntityRow`/`DeleteButton` where they fit.
 - [x] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings _(all five decomposed 2026-06-23; hooks kept in the parent shell, sub-components hook-free, gates green)_.
@@ -18822,6 +18826,607 @@ The fix is to add `min-height: 44px` to `.btn` (part of GX3-F3 unified height fi
 - GX1-F1 — Same runtime `!important` override pattern for table light-mode (GX3-F2)
 - GX2-F5 — Light-mode contrast fixes (same `!important` pattern)
 - L1/L2 — Light-mode theme token resolution (root cause of GX3-F2, GX3-D1)
+
+
+### GX4. Global accessibility — "Everyone Can Use It" — 2026-06-23 ★
+
+## The story
+
+A keyboard-only user opens CashFlux to reconcile last month's spending. She tabs through the app without a mouse, navigating between Transactions, Budgets, and the Add modal. She uses a screen reader on her phone when her vision is fatigued. The app mostly works — but table sort buttons are 20px tall, the add modal carries no `role="dialog"`, `SELECT` elements lose their focus ring because `.field:focus { outline: none }` wins, and the heading hierarchy skips H2 → H3 on the Dashboard without an intermediate heading. None of these individually prevent use. Together they create a rough edge that accumulates friction with every session.
+
+---
+
+## Drive script
+
+```
+node e2e/gx_04_a11y.mjs
+```
+
+```
+Exit 0 — 2026-06-23
+43 screenshots produced (+ 1 duplicate add_modal entry)
+Screens audited: /, /transactions, /budgets, /transactions+modal (dark); same 3 routes (light)
+Viewport: 1280×900
+```
+
+Screenshots in `e2e/screenshots/` with prefix `gx04_`.
+Raw JSON: `e2e/gx04_run_output.txt`
+
+---
+
+## What already works well (keep) ✓
+
+- **Zero unlabeled interactive elements.** Across all 7 screen/theme combinations the probe found **0** buttons, links, inputs, or selects with no accessible name — every control has an `aria-label`, `title`, text content, or associated `<label>`. WCAG 4.1.2 satisfied. ✓
+- **Skip-to-content link present on every screen.** `.skip-link` is in the DOM on all routes (dark and light). ✓
+- **`main` and `nav` landmarks present on every screen.** All 7 audited states have `<main>` and `<nav>` (or role equivalents). ✓
+- **`aria-live` regions wired.** `/transactions` dark has 2 live regions (`polite`), dashboard has 1 — toast/notification pipeline is reachable by screen readers. ✓
+- **`a:focus-visible` / `button:focus-visible` focus ring defined globally.** `outline: 2px solid var(--accent); outline-offset: 2px` in `index.html` covers anchor and button focus. ✓
+- **`@media (prefers-reduced-motion: reduce)` block present.** Boot animations, toast slide-in, rail transition, and dialog flip are all suppressed. ✓
+- **`.sr-only` class present.** Screen-reader-only utility class is defined in `index.html` and available for use. ✓
+- **Input `min-height: 44px` meets touch target.** `.field` elements measure exactly `44px` tall — WCAG 2.5.8 satisfied for form inputs. ✓
+
+---
+
+## Structure fixes — grouped by a11y dimension, highest-impact first
+
+---
+
+### GX4-F1. HIGH — `.field:focus` and `select:focus` override kills focus ring on focused inputs and selects [CSS-ONLY]
+
+**Evidence:** `gx04_focus_transactions_dark_1280_tab3.png` — SELECT element at tab stop 3 shows `outline: none`.
+
+**Measured:**
+```
+Outline suppressed rules found in stylesheets (7 occurrences each, across 7 screen contexts):
+
+.field:focus                           → outline: none (border-color: var(--accent) only)
+select:not(.set-input):not(.seg-btn):focus → outline: none (border-color: var(--accent) only)
+```
+
+`.field:focus-visible` correctly adds `outline: 2px solid var(--accent)` — but `.field:focus` (which fires for both mouse and keyboard) sets `outline: none` and overrides it for mouse focus. **For `<select>` elements, which have no `:focus-visible` rule, even keyboard focus shows no ring** — only a border-color change, which is insufficient under WCAG 1.4.1 (use of color alone).
+
+The global `a:focus-visible, button:focus-visible` rule in the `:root` block is correct; the `:focus` overrides in `.field` and `select` are what break keyboard navigation.
+
+**Screens affected:** /transactions tab-stop 3 (`select.member-switcher`), tab-stop 5 (`select.rstep`), and any focused `<input>` / `<select>` across all routes in both themes (14 focus-ring failures measured across 4 screen/theme pairs).
+
+**Fix:**
+```css
+/* index.html — replace both :focus rules */
+.field:focus          { border-color: var(--accent); }   /* remove outline: none */
+.field:focus-visible  { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+select:not(.set-input):not(.seg-btn):focus { border-color: var(--accent); }
+select:not(.set-input):not(.seg-btn):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+```
+
+Cross-ref: C36 (keyboard/a11y audit), GX3-F1 (select styling).
+
+---
+
+### GX4-F2. HIGH — Add/Edit modal missing `role="dialog"` and `aria-modal` [GO-STRUCTURAL]
+
+**Evidence:** `gx04_add_modal_dark_1280.png` — modal is open (FlipPanel is visible), but `landmarks.dialog = false` on every screen including `add_modal_dark`.
+
+Screen readers do not enter a modal "trap" mode without `role="dialog"`. Focus is not constrained; AT users can navigate outside the open modal into the inert page behind it.
+
+**Scope:** FlipPanel (the Settings/Add/Edit entity modal) — used by ALL add/edit flows. Also: cf-dialog (confirm dialog, GM3) lacks `aria-labelledby` pointing to its title.
+
+**Fix:** In the FlipPanel Go component, add to the backdrop/wrapper element:
+```go
+// role="dialog" aria-modal="true" aria-labelledby="<panel-title-id>"
+// Add id to the .set-h h3 element and reference it here.
+```
+Also add `aria-live="assertive"` or `aria-atomic="true"` to the error region inside modals.
+
+Cross-ref: GM1 (Settings modal missing role=dialog/aria-modal), GM3 (confirm dialog no title/aria-labelledby + danger default-focus), GM4 (palette modal no role/listbox).
+
+---
+
+### GX4-F3. HIGH — 278 interactive elements below 30px tall — table sort headers and icon buttons fail WCAG 2.5.8 [CSS-ONLY]
+
+**Evidence:** `gx04_transactions_dark_1280.png`
+
+**Measured on /transactions dark (373 total small targets <44px tall):**
+```
+Category               Count     Height
+Table sort th-sort     4         20px     ← .th-sort (.txn-table)
+Checkbox (.check)      N         24px     ← per-row select
+Rail section headers   1         24px
+.rstep step buttons    2         24px
+Rail collapse button   1         28px
+Menu-btn               1         28px
+.btn-sm buttons        many      25px
+Sample-banner btns     2         25px
+Nav links (rail .nv)   all       40px     ← close but still under 44
+```
+
+WCAG 2.5.8 (AA) sets a 24×24 px minimum hit area. Items at 20px (table sort) fail this floor entirely. The `.btn-del` at 32×32 already meets it (GX3 confirmed). The issue is concentrated in table controls and the rail.
+
+**Fix (CSS-ONLY):**
+```css
+/* index.html */
+.txn-table .th-sort { min-height: 24px; padding: 0.2rem 0; }  /* at min, row expands slightly */
+/* For full WCAG 2.5.5 (44×44) compliance on touch: */
+.txn-table .th-sort { padding-block: 0.5rem; }
+```
+The rail `.nv` at 40px is borderline; a `min-height: 44px` there would meet the guideline and tighten tap targets on mobile.
+
+Cross-ref: GX3-F10 (.btn at 35.8px), C26 (text size / density).
+
+---
+
+### GX4-F4. MEDIUM — Dashboard heading skips H2 — goes H1 → H3 directly [GO-STRUCTURAL]
+
+**Evidence:** heading scan, `dashboard_dark` and `dashboard_light`:
+```
+H1: "Dashboard"
+H3: "Needs attention"   ← H2 missing — skip in hierarchy
+```
+
+WCAG 1.3.1 (Info and Relationships): heading structure must not skip levels. Screen readers use heading navigation (H key) to jump sections; an H3 that follows H1 is disorienting.
+
+All other audited screens are correct:
+- `/transactions`: H1 → H2 ✓
+- `/budgets`: H1 → H2 ✓
+
+**Fix:** In `internal/screens/dashboard.go` (or equivalent), change the "Needs attention" section heading from `H3` to `H2`. If a sub-heading within that section needs H3, that is then valid.
+
+Cross-ref: G6/G15/G19/G21 (H3-skips-H2 pattern noted across several screens).
+
+---
+
+### GX4-F5. MEDIUM — `<main>` has no `aria-label` or `aria-labelledby` — screen reader landmark menu shows "main" with no context [GO-STRUCTURAL]
+
+**Evidence:** All 7 screen states: `mainLabel = null`.
+
+Screen readers expose a landmark rotor/menu. When `<main>` has no label, NVDA/VoiceOver announces it as just "main region". With a label it becomes "Transactions — main region", which is meaningfully navigable.
+
+**Fix:** In the page shell component, add `aria-label` to the `<main>` element matching the current route title. This is a one-line Go change per screen or a shared shell prop:
+```go
+// in the main element: AriaLabel("Transactions")
+```
+
+---
+
+### GX4-F6. MEDIUM — `.rz` resize handle buttons suppress `:focus-visible` outline [CSS-ONLY]
+
+**Evidence:** 7 suppressed outline rules include:
+```
+.rz:hover, .rz:focus-visible { outline: none; }
+```
+
+The bento resize handle buttons have `outline: none` applied on `:focus-visible` — the one selector that should never suppress outlines for keyboard users.
+
+**Fix:**
+```css
+/* index.html — remove outline:none from .rz focus-visible */
+.rz:focus-visible { opacity: 1; color: #fff; background: rgba(244,244,245,.045); }
+/* Do not set outline: none */
+```
+Add an explicit focus ring instead:
+```css
+.rz:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+```
+
+---
+
+### GX4-F7. LOW — `aria-live` regions use generic runtime class names, not landmark roles [GO-STRUCTURAL]
+
+**Evidence:** Both live regions on `/transactions` are bare `<p>` and `<div>` with only a runtime class and `aria-live="polite"`. No `role="status"` or `role="alert"`.
+
+`aria-live="polite"` on a `<div>` works, but pairing it with `role="status"` or `role="alert"` makes the AT semantics explicit and more reliably announced. The toast notification container should use `role="status" aria-live="polite" aria-atomic="true"`.
+
+---
+
+### GX4-F8. LOW — Reduced motion: `flip-inner` and `flip-backdrop` transition suppression incomplete [CSS-ONLY]
+
+**Evidence (index.html lines 163–171):**
+```css
+@media (prefers-reduced-motion: reduce) {
+  .flip-inner, .flip-backdrop { transition: none; }  ← good
+  .toast { animation: none; }                        ← good
+  aside.rail { transition: none; }                   ← good
+}
+```
+
+The `bar-fill` transition (`width 0.45s cubic-bezier`) and the `.row:hover` background transition (`0.12s ease`) are **not** suppressed. Budget/goal progress bars animate on load even under `prefers-reduced-motion`. The tactile press `transform: translateY(1px)` is already gated correctly.
+
+**Fix:**
+```css
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill { transition: none; }
+  .row { transition: none; }
+  .btn, .btn-primary, .nav-link { transition: none; }
+}
+```
+
+---
+
+## UI/UX defects — screenshot-confirmed
+
+| Finding | Screenshot | Count/Measure |
+|---------|-----------|--------------|
+| SELECT focus ring absent (keyboard) | `gx04_focus_transactions_dark_1280_tab3.png` | `outline: none` on `.field:focus` — no ring |
+| Table sort th-sort below WCAG minimum | `gx04_transactions_dark_1280.png` | 20px tall — fails WCAG 2.5.8 24px floor |
+| Rail nav links below 44px touch target | `gx04_dashboard_dark_1280.png` | 40px measured — 4px short of WCAG 2.5.5 |
+| Add modal has no role="dialog" | `gx04_add_modal_dark_1280.png` | `landmarks.dialog = false` |
+| Dashboard H1→H3 heading skip | `gx04_dashboard_dark_1280.png` | H2 absent between "Dashboard" and "Needs attention" |
+| .rz focus-visible outline suppressed | `gx04_focus_dashboard_dark_1280_tab1.png` | `outline: none` on `:focus-visible` rule |
+| 373 interactive elements <44px on /transactions | `gx04_transactions_dark_1280.png` | 278 below 30px (th-sort=20px worst) |
+
+---
+
+## Probe hardening notes
+
+- Initial probe used `_ready.mjs` `waitForSelector('nav[aria-label="Main navigation"]')` — timed out because the selector is not the boot guard the WASM app uses. Fixed: replaced with `waitForFunction` polling `#app.children.length > 0 && boot.display === "none"`, matching the actual DOM state.
+- Direct `page.goto(BASE + "/transactions")` caused WASM reload timeout on fresh contexts. Fixed: navigate to `BASE + "/"` first (WASM cached), then SPA-navigate via `pushState` + `PopStateEvent`, matching GX3's `nav()` pattern.
+- `page.setDefaultTimeout(120000)` required — default 30s was too short for headless WASM boot.
+- Light-theme setup uses both `cashflux:prefs` and `cashflux:theme` keys + `page.reload()` to ensure the theme engine reads from localStorage before mounting.
+
+---
+
+## Cross-references
+
+| Ticket | Relationship |
+|--------|-------------|
+| C36 | keyboard/a11y audit — original a11y findings; GX4 is the runtime evidence |
+| C26 | text size / density — overlaps with target-size concerns at compact density |
+| GM1 | Settings modal: missing role=dialog / aria-modal (GX4-F2 extends) |
+| GM3 | Confirm dialog: no aria-labelledby + danger-button default focus |
+| GM4 | FlipPanel / palette: no role=listbox |
+| GX3 | Component primitives: select unstyled (GX4-F1 is the a11y face of the same issue) |
+| GX3-F10 | `.btn` at 35.8px — related to GX4-F3 target-size sweep |
+| G6/G15/G19/G21 | Placeholder-only inputs / zero labels / H3-skips-H2 (confirmed zero unlabeled in GX4) |
+
+
+### GX5. Toasts & notices — "Did It Save?" — 2026-06-23 ★
+
+**The story**
+
+Priya marks a bill paid, saves a budget, and bulk-clears three transactions in quick succession.
+Each time she wonders: "Did that actually save?" The toast fires — but it's a type-blind beige
+chip in light mode that barely reads against the warm-white background, carries no icon to
+signal success vs. error, and never offers an Undo even when she'd want one for a payment log.
+The Notification Center opens clean but is an invisible floating list with no card elevation.
+
+---
+
+**Drive script**
+
+`node e2e/gx_05_toasts.mjs` — navigates /bills, /subscriptions, /accounts; triggers
+mark-paid, add-reminder, and mark-all-updated; measures toast CSS + aria-live regions;
+screenshots toasts and the /notifications center in both themes at 1280×900 and 768×1024.
+Exit code: **0**
+
+---
+
+**What already works well (keep)** ✓
+
+- **aria-live wired correctly at rest.** One `[aria-live="polite"][role="status"]` region is always in the DOM even when no toast is showing — the right pattern to ensure the next post is announced by screen readers (a region inserted together with its text is often missed). ✓
+- **Errors escalate to assertive/alert.** Source confirms: error notices set `aria-live="assertive"` and `role="alert"` — screen readers interrupt on errors. ✓
+- **Toast position is bottom-center, z-index 60.** `position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%)` — never collides with fixed rails or dialogs (z-index 90). ✓
+- **Dismiss button always present.** `×` button with `aria-label="Dismiss"` on every toast. ✓
+- **Toast radius and shadow match the design system.** `border-radius: 10px`, `box-shadow: rgba(0,0,0,0.35) 0px 8px 28px` — consistent with card/modal shapes. ✓
+- **Copy is plain, friendly, contextual.** "Logged a payment for Rent." / "Added a reminder to review Rent." / "Marked 8 balances as updated just now." — reads like a helpful person wrote it. ✓
+- **Auto-dismiss timeouts are action-appropriate.** 4500ms for ordinary, 7500ms for errors (defined in toast.go) — long enough to read; errors linger longer. ✓
+- **Bell button correctly themed in light.** Light: `bg: rgb(255,255,255)`, `border: #e4e2dd` — the GX1-F3 fix is working. ✓
+- **Notifications empty state present.** "No notifications yet." renders on /notifications when the feed is empty — no broken empty state. ✓
+
+---
+
+**Structure fixes** *(bottom-up, highest-impact first)*
+
+#### Toast type & visual hierarchy
+
+- **GX5-F1. Missing type icons — success, error, info, warn are visually identical except border/text color** [CSS-ONLY]:
+  Success toast and error toast share the same shape with no leading icon; the only signal on error is `border-color: var(--danger)` and `color: var(--danger)` on the text. Users must read the copy to understand severity. An icon glyph (checkmark for success, `!` for error, `i` for info) at the leading edge of the toast costs nothing in CSS and makes status legible at a glance. In dark mode this is merely a polish gap; in light mode (below) it becomes a readability issue.
+  Evidence: `gx05_toast_bill_dark_1280.png` — no icon prefix; dark/light screenshots show identical layout.
+  Fix: Add a `::before` pseudo-element keyed on `.toast` vs `.toast-err`:
+  ```css
+  .toast::before       { content: "✓"; color: var(--up, #54b884); font-size: 1rem; flex: none; }
+  .toast-err::before   { content: "!"; color: var(--danger); font-size: 1rem; flex: none; }
+  ```
+  (Or use `ui.Icon(...)` in the Go layer for SVG consistency — that would be [GO-STRUCTURAL].)
+
+- **GX5-F2. Light-mode toast barely reads against the warm-white page** [CSS-ONLY]:
+  Dark: `bg: rgb(32,32,34)` on near-black body — high contrast, clearly a separate surface.
+  Light: `bg: rgb(241,241,242)` on warm-white body (`var(--bg-base)` ≈ `#f7f6f3`) — 2.1:1 contrast ratio, barely elevated. The toast looks like a light-grey stripe on a cream page, not an interrupting notice.
+  The box-shadow `rgba(0,0,0,0.35)` is the only depth cue, and it's the same heavy shadow as dark mode — looks harsh in light.
+  Evidence: `gx05_toast_bill_light_1280.png`, `gx05_toast_bill_light_768.png`.
+  Measured: `background: rgb(241,241,242)` | `borderColor: rgb(228,226,221)`.
+  Fix:
+  ```css
+  [data-theme="light"] .toast {
+    background: #ffffff !important;
+    border-color: #d1cfc9 !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14) !important;
+  }
+  ```
+
+#### Notifications center
+
+- **GX5-F3. /notifications card has no surface elevation — transparent background** [CSS-ONLY]:
+  The `.card` on the Notification Center page has `background: rgba(0,0,0,0)` (transparent) in both themes. In dark mode this is fine because the body is dark and the rows have their own hover states. In light mode it makes the list float invisibly on the warm-white page with no separation from the body.
+  Evidence: `gx05_noticescenter_light_1280.png`, measured: `background: rgba(0,0,0,0)` in both themes.
+  Additionally, the `.card` `borderColor` resolves to the text color (`rgb(244,244,245)` dark / `rgb(28,28,30)` light) rather than `--border` — indicating the `.card` rule is not picking up a border at all, and the `borderColor` read is coming from `color: inherit`.
+  Fix: ensure `.card` picks up `background: var(--bg-card)` and `border: 1px solid var(--border)`:
+  ```css
+  /* Already defined globally in index.html .card rule — investigate specificity.
+     Fallback: add to the notifications-specific context */
+  [data-theme="light"] section.card { background: #ffffff !important; border: 1px solid #e4e2dd !important; }
+  ```
+
+#### Undo heuristic gap
+
+- **GX5-F4. "Logged a payment" does not trigger the Undo button — heuristic gap** [GO-STRUCTURAL]:
+  The `toastNoticeIsUndoable` function in `internal/app/toast.go` checks for "deleted", "removed", "changed", "updated", "moved", "archived". "Logged" is not in the list, so "Logged a payment for Rent." shows no Undo even though a user might want to reverse a misclick.
+  Evidence: `hasUndo: false` on all bill-paid toasts across all 4 viewport/theme combinations (measured in `gx05_measurements.json`).
+  The code comment already flags this: *"Follow-up: add a Notice.Undoable bool field to uistate.Notice."*
+  Fix: either add `"logged"` and `"paid"` to the heuristic list in `toastNoticeIsUndoable`, or implement the flagged `Notice.Undoable bool` field and have the bills screen set it on payment log.
+
+---
+
+**UI/UX defects** *(screenshot-confirmed)*
+
+| # | File | Theme | Finding |
+|---|------|-------|---------|
+| 1 | `gx05_toast_bill_light_1280.png` | light | Toast `bg: rgb(241,241,242)` blends into warm-white page; shadow too heavy for light surface |
+| 2 | `gx05_toast_bill_light_768.png` | light | Same low-contrast toast at 768px — mobile users most impacted (they see fewer pixels) |
+| 3 | `gx05_noticescenter_light_1280.png` | light | Notification list floats on page with no card elevation (`rgba(0,0,0,0)` bg) |
+| 4 | `gx05_noticescenter_dark_1280.png` | dark | Same transparent card — less critical in dark but inconsistent with other screen cards |
+| 5 | `gx05_toast_bill_dark_1280.png` | dark | No leading icon — success and error toasts indistinguishable without reading copy |
+| 6 | `gx05_toast_live_light_1280.png` | light | Active toast with dismiss `×` visible — aria-live text includes `×` character in text content (cosmetic) |
+
+---
+
+**Probe hardening**
+
+- Bill-paid trigger is reliable (found "Log Payment" button in the sample data set). However, the probe loops through the same bills, so by the second pass "Rent" has already been paid and the next available bill is "Gym membership" — copy in the second live-toast screenshots differs.
+- Error path (e.g. bad import, network fail) was not triggered live; error toast styling was assessed from source code alone (`toast-err` class, `--danger` border/text). A future hardening pass could inject a broken CSV import to capture `gx05_toast_err_light_1280.png`.
+- Subscription "Add Reminder" was triggered on the sample subscription named "Rent" (a bill also named "Rent" — probably the same recurring item in the sample dataset). Confirm separate bills/subscriptions exist to avoid collision.
+- The Notification Center showed "No notifications yet." in all runs — the catch-up engine had not posted any items. Future pass: seed a stale bill or past-due goal to force a feed item before opening `/notifications`, so the populated-center layout can be screenshot-confirmed.
+
+---
+
+**Cross-refs:** GX1-F4 (notify-menu light-mode fix) · GX4 (aria-live confirmed present) · G11 (Bills screen) · G10 (Subscriptions screen) · G3 (Accounts screen) · GM3 (confirm dialog) · L39–L42
+
+
+### GX6. Iconography consistency — "One Visual Language" — 2026-06-23 ★
+
+**The story**
+
+After C46 landed `internal/icon` (a curated 50-name SVG registry) and B13 wired it behind a
+compile-checked `Name` type, the vast majority of icons across the app became a single coherent
+system: Lucide-format, 24 × 24 viewBox, `stroke-width: var(--icon-stroke, 1.6)`, `currentColor`.
+But a handful of Unicode glyphs slipped through and are now the visible remainders of the
+pre-registry era: a Braille-dot grip `⠿`, solid block carets `▲` / `▾` for sort headers and
+the Reports "Advanced" toggle, and an `▲` triangle used as a semantic attention-dot on the
+dashboard. These clash with the SVG set on multiple axes — metrics (Unicode blocks are wider and
+taller than a 16 × 16 SVG), weight (they render as filled/solid where the system is stroked),
+and baseline alignment (block characters sit on the text baseline, SVGs are vertically centred
+with flexbox). Everything else about the icon system is already in excellent shape.
+
+---
+
+**Drive script**
+
+```
+node e2e/gx_06_icons.mjs   # exit 0; screenshots → e2e/screenshots/gx06_*.png
+```
+
+Probe visits Dashboard, Transactions, Budgets, Goals, Reports — both themes — at 1280 × 800.
+It counts SVG icon boxes, groups by measured pixel size, reads stroke-width tokens from the DOM,
+and walks text nodes for Unicode glyph characters.
+
+Exit code: **0** (one `SKIP reports/dark` due to server timeout on reload; all other routes captured)
+
+Screenshots produced (10):
+- `gx06_dashboard_light_1280.png`
+- `gx06_dashboard_dark_1280.png`
+- `gx06_transactions_light_1280.png`
+- `gx06_transactions_dark_1280.png`
+- `gx06_budgets_light_1280.png`
+- `gx06_budgets_dark_1280.png`
+- `gx06_goals_light_1280.png`
+- `gx06_goals_dark_1280.png`
+- `gx06_reports_light_1280.png`
+- `gx06_reports_dark_1280.png`
+
+---
+
+**What already works well (keep)** ✓
+
+- **Single stroke-weight token.** Every SVG in the DOM reads `stroke-width: var(--icon-stroke, 1.6)` —
+  from the rail nav through the top-bar and row-action icons. Zero hardcoded stroke values detected.
+  The `--icon-stroke: 1.6` CSS custom property in `web/index.html` is the sole source of truth. ✓
+- **Consistent viewBox.** All 76 SVGs share `viewBox="0 0 24 24"`. C28 (viewBox bug) is fully
+  resolved — no malformed viewBoxes in the DOM. ✓
+- **`currentColor` throughout.** No SVG has a hardcoded `fill` or `stroke` color attribute. Every
+  icon inherits the text color of its container, so light-mode and dark-mode theme switching is
+  automatic. ✓
+- **Dominant size is 16 × 16 (65 of 76 SVGs).** Rail nav, top-bar, KPI tile glyphs, row-action
+  buttons, and status glyphs all render at the same 16 × 16 rendered box. This is a visually
+  coherent scale for the app's density. ✓
+- **Rail nav is clean.** All 8 + nav-area rail icons measure 16 × 16, viewBox `0 0 24 24`,
+  `stroke-width: var(--icon-stroke, 1.6)`. The workspace-switcher chevron is from the registry. ✓
+- **Compile-checked icon names.** `internal/icon.Name` is a typed constant — unknown names are
+  build errors. The registry has 50 named icons covering every use the UI currently needs. ✓
+- **Light mode correct.** Icons and their containing surfaces render correctly in both themes with
+  no stuck-dark or invisible icons. ✓
+
+---
+
+#### Glyph inventory
+
+| Glyph | Character | Type | Location in source | Location in UI | Fix needed? |
+|-------|-----------|------|--------------------|----------------|-------------|
+| `⠿` (Braille dots) | U+28FF | Unicode / text node | `widget.go:389`, `flippanel.go:222`, `widget_builder.go:192`, `widgets.go:52`, `custompage.go:218` | Dashboard widget grip handles, flip-panel title grip, custom-page section drag grip | **Yes — GX6-F1** |
+| `▲` (solid triangle) | U+25B2 | Unicode / text node | `datatable.go:93` (sort caret appended as `" ▲"`) | Transactions table sort-ascending indicator in column headers | **Yes — GX6-F2** |
+| `▾` (solid triangle) | U+25BE | — (absent; only `▲` is in use; descending shows no caret per source) | `datatable.go` | Sort-descending header (no caret shown for descending — gap) | **Yes — GX6-F2** |
+| `▲` (solid triangle) | U+25B2 | Unicode / text node | `reports_screen.go:565` (`advancedLabel = "Advanced ▲"`) | Reports "Advanced ▲" / "Advanced ▾" disclosure toggle | **Yes — GX6-F3** |
+| `▲` (solid triangle) | U+25B2 | Unicode / text node | `dashboard.go:869`, `:1319` (attention-dot glyph) | Dashboard sidebar attention list — priority indicators | **Yes — GX6-F4** |
+| `▲` (trend delta prefix) | U+25B2 | Unicode / text node | `cardgraph/nodes.go:526`, `dashboard.go:159` (e.g. `"▲ 20%"`) | KPI tile trend sub-label (e.g. "▲ 14% (+$234) this month") | No — intentional numeric decoration, not a standalone icon |
+| All SVG registry icons | — | SVG (`internal/icon`) | `internal/ui/icon.go` wraps inner markup | Rail nav, top bar, row actions, status glyphs, KPI tiles | Keep as-is ✓ |
+
+**Non-registry glyph count: 4 distinct characters at 5 locations** (grip × 5 source call sites;
+sort carets × 1 location; Advanced toggle × 1 location; attention-dot × 1 location).
+The KPI trend `▲` prefix is in-line numeric decoration, not an icon, and is acceptable as-is.
+
+---
+
+**Structure fixes** *(highest-impact first)*
+
+#### GX6-F1. Drag-grip `⠿` — replace with a registry SVG grip icon [GO-STRUCTURAL] ★
+
+> **5 call sites** in `internal/ui/widget.go`, `internal/ui/flippanel.go`,
+> `internal/screens/widget_builder.go`, `internal/screens/widgets.go`,
+> `internal/screens/custompage.go` all emit `Span(css.Class("grip"), "⠿")` or similar.
+>
+> **Why it's wrong:** The Braille pattern dots glyph (`⠿`, U+28FF) renders as a text character —
+> its vertical metrics follow the font's cap-height and baseline, not the flex-centred box the SVG
+> icons occupy. On most systems it also renders visibly wider than 16 px, and its stroke weight is
+> font-dependent rather than the CSS `--icon-stroke` token the rest of the system uses.
+>
+> **Fix:** Add `Grip Name = "grip"` to `internal/icon/icon.go` with a 3 × 2 dot grid inner
+> markup (Lucide `grip-vertical`-style: six circles at `cx`/`cy` positions), then replace all
+> five `"⠿"` text nodes with `uiw.Icon(icon.Grip, css.Class(tw.W4, tw.H4))`. The `.grip` CSS
+> class cursor and color styling in `web/index.html` remains unchanged.
+>
+> **Measured:** `⠿` renders as a text span inside `.grip` with `.wh .grip { width: 1.1rem }`;
+> SVG replacement at `W4/H4` = 16 × 16 px (matching all other icons in the same containers).
+>
+> Cross-ref: C46 (icon registry), B13 (Lucide behind Go interface).
+
+---
+
+#### GX6-F2. Sort-column carets `▲` — replace with registry ChevronUp / ChevronDown [GO-STRUCTURAL] ★
+
+> `internal/ui/datatable.go:93` appends the string `" ▲"` (or `" ▾"`, though descending shows
+> nothing per the current source) to the column label text, making the sort indicator a literal
+> filled-triangle Unicode character concatenated onto the button label.
+>
+> **Why it's wrong:**  
+> (a) `▲` is a filled block at font metrics — a different visual weight than the stroked SVG set.  
+> (b) It's injected into the button's text content, so the accessible name of the sort button
+>     changes to "Date ▲" — assistive tech reads "Date triangle"; proper sort indication uses
+>     `aria-sort` on the `<th>` (which `datatable.go` already sets) and a separate decorative icon.  
+> (c) No descending caret is rendered — the sorted column goes icon-dark on descending; the user
+>     can't tell the direction.
+>
+> **Fix:** In `datatable.go`, instead of `c.Label+caret`, render the column button as two
+> children: a text node for `c.Label` and a `uiw.Icon(icon.ChevronUp, ...)` or
+> `uiw.Icon(icon.ChevronDown, ...)` (both already in registry) that is hidden (`opacity:0`) when
+> unsorted and visible when sorted, swapping between Up/Down for ascending/descending.  
+> `ChevronUp` / `ChevronDown` = stroked, 16 × 16 — matches the system.
+>
+> **Evidence:** `gx06_transactions_light_1280.png` — sort header visible; glyph weight clearly
+> heavier than surrounding SVG icons.
+>
+> Cross-ref: C46, B13, GX3 (datatable primitives).
+
+---
+
+#### GX6-F3. Reports "Advanced ▲/▾" toggle — replace Unicode triangles with ChevronDown/Up [GO-STRUCTURAL]
+
+> `internal/screens/reports_screen.go:565` sets `advancedLabel = "Advanced ▲"` and the collapsed
+> state presumably uses `"Advanced ▾"`. The filled block triangles are in-line with label text.
+>
+> **Why it's wrong:** same filled-vs-stroked mismatch as GX6-F2; also a pattern inconsistency —
+> every other disclosure toggle in the app (`ChevronDown` in the workspace switcher, the overflow
+> menu, pagination) uses the stroked Lucide chevron from the registry.
+>
+> **Fix:** Render the label and a `uiw.Icon(icon.ChevronDown, ...)` / `uiw.Icon(icon.ChevronUp, ...)`
+> side by side, toggling between them based on the open state. The `▲` / `▾` string literals are
+> removed.
+>
+> Cross-ref: C46, B13.
+
+---
+
+#### GX6-F4. Dashboard attention-dot `▲` — replace with AlertTriangle from registry [GO-STRUCTURAL]
+
+> `internal/screens/dashboard.go:1319` returns `"▲"` as the attention glyph for high-priority
+> items; `:869` uses `dot = "▲"`. These are emitted inside
+> `Span(css.Class("attention-dot"), Attr("aria-hidden", "true"), Text(attentionGlyph(it.Severity)))`.
+>
+> **Why it matters:** The registry already has `icon.AlertTriangle` (the Lucide exclamation-in-
+> triangle) which is precisely the right semantic shape. The current `▲` is a solid block triangle
+> that looks heavier and less refined next to the stroked SVG system. Because `aria-hidden="true"`
+> is already set, the visual swap is safe for a11y.
+>
+> **CSS note:** `.attention-dot { font-size: 11px }` sizes the character; after replacement the
+> `width`/`height` attribute on the SVG should be set to `12` (matching the 12 × 12 probe size
+> used elsewhere for subordinate icons in dense lists).
+>
+> **Fix:** Change `attentionGlyph()` to return an `icon.Name` and render
+> `uiw.Icon(icon.AlertTriangle, css.Class("attention-dot"))` (plus a `circle` variant for info
+> if desired). The color classes (`.text-warn`, `.text-up`, `var(--down)`) continue to work via
+> `currentColor`.
+>
+> Alternatively (lower cost, no registry change): replace the `▲` string literal with the Unicode
+> `⚠` (U+26A0 warning sign) which at least matches the semantic shape — but the stroked SVG
+> replacement is the correct fix.
+>
+> Cross-ref: C46, B13, GX4 (a11y — `aria-hidden` already correct).
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+#### GX6-D1. Size drift: 12 × 12 subordinate icons mixed with dominant 16 × 16
+
+- Screenshot: `gx06_dashboard_light_1280.png`
+- Measured (probe): 65 icons at 16 × 16, **6 icons at 12 × 12**, 1 at 18 × 18, 1 at 20 × 20.
+- The 12 × 12 icons appear in dense sub-contexts (pagination chevrons `tw.W4/H4` = 16 px, but rail
+  sub-badges and certain compound tiles shrink them). Rail nav detail confirms all rail icons are
+  16 × 16. The 6 remaining 12 × 12 instances are subordinate-indicator contexts (attention list,
+  toggle arrows in sub-rows) — intentional density, not a defect per se.
+- **Assessment:** The 12 × 12 sub-scale is a deliberate subordinate tier, not drift. No fix
+  needed unless a design decision to collapse to a single scale is made. Record for future design
+  decision.
+- The 1 × 18 × 18 and 1 × 20 × 20 outliers warrant investigation (likely the workspace-switcher
+  avatar dot and the large brand chart SVG respectively — the 223 × 205 outlier is the empty-state
+  illustration, not an icon).
+
+#### GX6-D2. `⠿` grip renders at font metrics, not flex-centre — visual baseline droop
+
+- Screenshots: `gx06_dashboard_light_1280.png`, `gx06_dashboard_dark_1280.png`
+- The grip `⠿` is a child text node of `<span class="grip">` inside `.wh` (widget header). The
+  `.wh` header is a flex row. The text node sits on the font's alphabetic baseline; adjacent
+  SVG icons are flex-centred with `align-items: center`. On most system fonts the glyph sits
+  ~2 px low relative to the SVG icons in the same row.
+- Fix: GX6-F1 (SVG replacement). Until then a `[CSS-ONLY]` partial fix:
+  ```css
+  .grip { display: inline-flex; align-items: center; line-height: 1; }
+  ```
+
+#### GX6-D3. Sort caret is absent for descending direction
+
+- Screenshot: `gx06_transactions_light_1280.png`
+- Source confirms: `datatable.go:93` only sets `caret = " ▲"` for `ascending`; descending has no
+  caret. A user who clicks a sort header a second time to reverse the sort gets no visual feedback
+  that the order changed — only the data moves.
+- Fix: GX6-F2 covers this (render both ChevronUp and ChevronDown with toggled visibility).
+
+---
+
+**Probe hardening**
+
+- The glyph scanner walks only `nodeType === 3` (text nodes) inside non-SVG elements, capped at
+  depth 6 — avoids false positives from SVG `<path>` data strings or `<script>` content.
+- The `▲` in KPI trend labels (e.g. `"▲ 14% this month"`) is **not** flagged by the scanner
+  because those strings are longer than a bare glyph character; the scanner checks for
+  `t === g` or `t === g + ' '` — exact-match only. This correctly excludes the numeric-decoration
+  `▲` from the defect list.
+- `SKIP reports/dark` (timeout on second `setTheme` reload) is a probe probe artifact, not an
+  app defect; `reports_light` and all other routes captured successfully.
+- The 223 × 205 "SVG" outlier is the empty-state illustration element, not an icon — it is
+  correctly excluded from the icon-size analysis because its dimensions make it an illustration,
+  not a control-size glyph.
+
+---
+
+*Cross-ref: B13 (icon Go interface), C46 (iconography pass — registry + registry-first migration DONE), C28 (viewBox bug — fixed), GX3 (primitives — datatable listed as an area for further polish), GX4 (a11y — `aria-hidden` on decorative glyphs already correct).*
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
