@@ -2392,23 +2392,23 @@ review + `dedupe` + `domain.Document` history; `extract.Row`; AI vision `SendStr
 
 **A. Multi-format extraction — `internal/docextract` (per-format adapters → a normalized `Grid`/text, pure & tested).**
 The mapping + AI layers operate on the normalized output, so adding a format = one adapter.
-- [ ] **Tier 1 (local, deterministic, lead with these):** **CSV/TSV** (stdlib), **XLSX** (ZIP+XML — minimal
+- [x] **Tier 1 (local, deterministic, lead with these):** **CSV/TSV** (stdlib), **XLSX** (ZIP+XML — minimal
       SpreadsheetML reader or excelize, **watch wasm bundle size** via `gwc size`), **OFX/QFX** (structured →
       **no mapping needed**).
-- [ ] **Tier 2 (local):** **DOCX** tables (`<w:tbl>` from ZIP+XML), **text-based PDF** (pure-Go extractor).
+- [x] **Tier 2 (local):** **DOCX** tables (`<w:tbl>` from ZIP+XML), **text-based PDF** (pure-Go extractor).
 - [ ] **Tier 3 (AI fallback, opt-in):** **scanned/columnar PDF** (render → vision, reuse existing), **legacy
       .xls/.doc** (binary — pure-Go is weak; AI or guide "save as .xlsx/.csv"), images.
-- [ ] **Security:** XLSX/DOCX are zip archives → **zip-bomb guard** (cap decompressed size); keep
+- [x] **Security:** XLSX/DOCX are zip archives → **zip-bomb guard** (cap decompressed size); keep
       `encoding/xml` external-entity resolution off (XXE). **Bundle size:** Go parsers compile into the wasm
       binary (no lazy-load) → prefer minimal readers; if a heavy parser is needed, do it in a **lazy JS shim**
       (D3/Mermaid pattern) instead of wasm. Cross-link **C45**, **C44**.
 
 **B. Manual mapping engine — `internal/importmap` (pure, tested) — the deterministic core.**
-- [ ] An **`ImportProfile`** = field→column map + transforms: date layout, **amount sign convention**
+- [x] An **`ImportProfile`** = field→column map + transforms: date layout, **amount sign convention**
       (single signed col vs separate debit/credit cols), decimal/thousands locale, **description regex
       cleanup**, default account/category, header/skip-row + summary-row detection. `Apply(profile, grid) →
       []extract.Row`. Table-test with **real bank-export fixtures**.
-- [ ] **Save profiles per bank** (reusable, like alloc profiles/rules); deterministic + **previewable** (live
+- [x] **Save profiles per bank** (reusable, like alloc profiles/rules); deterministic + **previewable** (live
       preview in the wizard) → satisfies the determinism/explainability rule and keeps data **fully local**.
 
 **C. AI extraction (||) + AI categorization.**
@@ -2418,14 +2418,14 @@ The mapping + AI layers operate on the normalized output, so adding a format = o
       (BYO-key) for unmatched rows, surfaced as accept/dismiss in the draft review. Reuses `ai` + `rules`.
 
 **D. Scheduled upload reminders.**
-- [ ] Per-account/source **import cadence** (e.g. monthly) → a dated **nudge/task** "Import your <Bank>
+- [x] Per-account/source **import cadence** (e.g. monthly) → a dated **nudge/task** "Import your <Bank>
       statement," reusing the `Recurring` cadence + task/freshness pattern. **Off by default, dismissible**
       (friendly-not-naggy rule).
 
 **Pipeline & UX.** File → **detect format** (`docextract`) → normalized grid/text → **column-map step with
 live preview** (or AI extract) → existing **draft review + dedupe + import** → history. Idempotent re-import is
 critical (overlapping statement periods) → lean on `dedupe` (hash date+amount+desc) and show "N skipped".
-- [ ] **Verify:** real CSV/XLSX/OFX/PDF samples import correctly; profiles persist + preview; sign/date/locale
+- [x] **Verify:** real CSV/XLSX/OFX/PDF samples import correctly; profiles persist + preview; sign/date/locale
       edge cases handled; re-import dedupes; AI path is opt-in with a privacy notice; wasm size stays in budget.
 _Cross-links: **C60** (Documents — the home), **C64** (rules categorization), **C56** (richer history → better
 subscription detection), **C45/B17** (privacy — local vs AI), **C44** (no CDN/bundle), Recurring/Bills (cadence)._
@@ -2549,19 +2549,19 @@ only** (settings/appearance/layout are audited but excluded from data-undo).
 **Open (decide at spec):** audit retention cap (rec. 500 entries / 90 days); per-entity rollback vs
 global-only restore; actor model (needs a "current member" concept for who-changed-what).
 **Build bottom-up (one feature per commit):**
-- [ ] **Phase 1 — `internal/history` (pure Go, native-tested):** `Diff(before, after) ChangeSet`,
+- [x] **Phase 1 — `internal/history` (pure Go, native-tested):** `Diff(before, after) ChangeSet`,
       `ChangeSet.Invert()`, `Apply(ds, cs)`, bounded `Stack` (undo/redo cursor + byte cap + coalescing
       of rapid same-entity edits). Rows stored as `json.RawMessage` so the differ is generic over all
       ~20 `Dataset` collections. Exhaustive table tests (insert/update/delete/cascade/no-op/settings-
       only/bulk). No `syscall/js`, no UI.
-- [ ] **Phase 2 — `appstate` commit seam:** add `commit(label, actor, mutate)` + a `replaying` flag;
+- [x] **Phase 2 — `appstate` commit seam:** add `commit(label, actor, mutate)` + a `replaying` flag;
       route every `Put*`/`Delete*`/bulk through it (bulk import/ApplyRules/Reassign = one entry).
       Tests: one entry per action, **none on validation failure**, cascades reverse, replay runs with
       `triggersSuspended` so undo doesn't re-fire workflows/rules or record new history.
-- [ ] **Phase 3 — persistence:** `audit_log` SQLite table + `SchemaVersion` bump + migration step +
+- [x] **Phase 3 — persistence:** `audit_log` SQLite table + `SchemaVersion` bump + migration step +
       **secret redaction** (never log `Settings.OpenAIKey`) + export; persisted bounded undo stack;
       special-case `Artifact.Bytes`/`BlobRef` (diff on hash, never copy bytes). Round-trip tests.
-- [ ] **Phase 4 — UI (last):** (1) inline **Undo** action on the existing `Toast`/`Notice` atom
+- [x] **Phase 4 — UI (last):** (1) inline **Undo** action on the existing `Toast`/`Notice` atom
       ("Deleted transaction · Undo") — highest value; (2) global `⌘Z`/`⌘⇧Z`/`Ctrl+Y` in the keyboard
       layer (suppressed while typing) + Undo/Redo in the ⌘K palette; (3) **Activity/History timeline**
       screen (registry-driven Tools screen, auto-railed per B7) with before→after diffs + "Restore to
@@ -20325,6 +20325,734 @@ Per B18 spec, a "Replay tour" or "View quick guide" button should live in Settin
 - **F1 DEFERRED:** The entire B18 onboarding feature (welcome panel, sample-vs-fresh choice, quick-guide slideshow, first-run checklist, Settings replay). This is a multi-file GO-STRUCTURAL feature build — not a CSS-only glamor fix. Out of scope for this pass; the WASM tree is mid-refactor (C73). Track under B18 backlog.
 - **F2 DEFERRED:** GO-STRUCTURAL boot-sequence debug (why theme pref is not respected on cold boot after flag clear). Partially mitigated by F3 — the head script now applies the theme before WASM mounts, so a stored light pref IS respected on normal return visits. The remaining edge case (clear-all-flags path) requires a Go fix in `uistate/prefs.go`.
 - **F6 DEFERRED:** "Replay tour" in Settings — blocked on F1 (the tour itself does not exist yet).
+
+# GX10. Lock screen / app lock — "Eyes Off My Money" — 2026-06-23 ★
+
+**Drive script:** `node e2e/gx_10_lock.mjs` — exit code **0**
+**Server:** `http://localhost:8080` (gwc dev; GI0 wasm build broken — stale wasm; CSS/index.html fixes land live)
+**Screenshots:** `e2e/screenshots/gx10_*.png` (10 files — dark + light, 1280 + 768, wrong-passcode + unlock states)
+
+---
+
+## The story
+
+Cam opens CashFlux at a shared family computer. He set a passcode last week. He comes back to it, the screen is locked. He needs to unlock cleanly — a calm, trustworthy first impression.
+
+**What actually ships for B17:**
+
+App lock IS implemented and substantially complete. The feature was not in the "approved-but-unbuilt" category (unlike B18 onboarding — cross-ref GX9). The full stack shipped: `internal/applock` pure logic package with SHA-256 verifier + salt + `ShouldAutoLock`, `internal/app/applockgate.go` building the gate in imperative DOM (by design — pre-Shell, no wasm component needed), `internal/app/applocksettings.go` rendering the Settings → App lock section, `wireAutoLock()` inactivity timer (setInterval, 30 s polling), and a setup form (`buildAppLockSetup`). The gate:
+
+- Appears full-screen on boot when a passcode is set (`maybeLockOnBoot()`)
+- Shows brand mark ("CashFlux" in Fraunces), time-of-day greeting, date, rotating quote
+- Has a `type="password" inputmode="numeric"` field (password managers work, numeric pad on mobile)
+- Auto-focuses the input
+- Shakes on wrong passcode + turns message red
+- Dismisses with blur→fade animation on correct entry
+- Traps Tab focus within the gate (focus trap implemented)
+- "Forgot passcode?" → native `confirm()` → `wipeAllLocalData()` + reload (honest: data is lost)
+- Lock-screen content (quotes, meta) is toggleable in Settings
+- Correct passcode in Enter-keydown path works
+
+---
+
+## What already works well (keep) ✓
+
+- **Boot-lock is wired.** `maybeLockOnBoot()` fires after mount; the gate covers the whole app before any content is visible. No flash of content before lock.
+- **Theme-aware in BOTH modes.** Dark: gate bg `rgb(14,14,15)` (`--bg #0e0e0f`). Light: `rgb(247,246,243)` (`--bg #f7f6f3`). Unlike GX9's splash (which was stuck dark), the lock gate correctly picks up the CSS variable in light mode. Confirmed via `gx10_lock_gate_light_1280.png`.
+- **Input affordance is solid.** `type="password"`, `inputmode="numeric"`, centered text, `letter-spacing: 3.52px` — the spacing reads as PIN dots even though it's a standard field. Aria-label "Passcode" present.
+- **Auto-focus lands on the input.** `document.activeElement === #cf-applock-input` confirmed in both themes.
+- **Enter key works.** Dispatching `keydown Enter` on the input dismisses the gate (`display: none` confirmed in probe).
+- **Wrong-passcode feedback.** Message turns red-toned (`rgb(216,113,111)` dark / `rgb(179,50,47)` light) and text changes to "Wrong passcode — try again". Web Animations shake is wired (respects `prefers-reduced-motion`).
+- **Correct unlock animation.** blur + fade + scale out (0.35 s). `unlockGate()` resets styles cleanly for next show.
+- **Focus trap.** Tab cycles through `[input, Unlock, Forgot passcode?]` — background app is not reachable.
+- **Inactivity logic present.** `wireAutoLock()` registers pointer/key/scroll/touchstart activity listeners + 30 s `setInterval` check against `ShouldAutoLock(idleMinutes)`. Config: `autoLockMinutes = 0` = no auto-lock (correct default).
+- **Quote + meta toggles wired.** `HideQuotes` / `HideMeta` flags persisted in `cashflux:applock`, honored on every gate show via `refreshLockMeta()`.
+- **Fraunces brand mark present.** `font-family:Fraunces,Georgia,serif` in the card — on-brand.
+- **Calm, centered layout.** Card `width: min(90vw, 320px)`, `place-items: center`, single-column — correct at both 1280 and 768.
+
+---
+
+## Structure fixes (bottom-up, grouped, highest-impact first)
+
+### GX10-F1. CRITICAL — Gate `div` has no dialog role or aria-modal [CSS-ONLY partial / GO-STRUCTURAL for role] ★★
+
+**Measured:** `gateRole: null`, `gateAriaLabel: null`, `gateAriaModal: null` (both themes, confirmed by probe).
+
+The gate is a full-screen `<div>` with no `role="dialog"`, no `aria-modal="true"`, and no `aria-labelledby`. Screen readers do not announce it as a modal — they will read through to the locked app behind it. This is a blocking a11y failure for L7 (keyboard/screen-reader workstream).
+
+**Fix (in `buildAppLockGate`, `applockgate.go` line 113):**
+
+```go
+gate.Call("setAttribute", "role", "dialog")
+gate.Call("setAttribute", "aria-modal", "true")
+gate.Call("setAttribute", "aria-label", uistate.T("applock.gateAriaLabel")) // "CashFlux is locked"
+```
+
+Add `applock.gateAriaLabel = "CashFlux is locked"` to the i18n strings. This is a **[GO-STRUCTURAL]** change (modifies Go source, build-gated GI0) but the only code change is three `setAttribute` calls in the existing `buildAppLockGate` function — trivial once the build is fixed.
+
+Cross-ref: L7 (keyboard/screen-reader), B17.1 (A11y spec item).
+
+---
+
+### GX10-F2. MEDIUM — Unlock button height 40px — below 44px WCAG minimum [GO-STRUCTURAL] ★
+
+**Measured:** `btnHeight: 40` (both themes, both viewports). WCAG 2.5.5 (AAA) and Apple HIG recommend ≥44px hit targets; 40px is below the floor. The passcode input is fine at 47px.
+
+**Current inline style** (`applockgate.go` line 136):
+```
+padding:0.6rem 0.8rem
+```
+0.6rem × 2 + ~1.4rem line-height ≈ 2.56rem = 40px at 16px base.
+
+**Fix:** bump vertical padding to `0.75rem 0.8rem` → ≈ 44px. One-line change in `buildAppLockGate`.
+
+**[GO-STRUCTURAL]** — modifies Go source.
+
+---
+
+### GX10-F3. MEDIUM — "Forgot passcode?" always visible, not revealed progressively [GO-STRUCTURAL]
+
+**Measured:** `forgotBtnDisplay: "block"` on first render (zero failed attempts). The hint button is correctly hidden (`hintBtnDisplay: "none"` until 3 fails), but the forgot button is always shown. This creates a UX tension: a stranger at the screen can immediately see a "Forgot passcode?" escape hatch before making a single attempt.
+
+**B17 spec** ("Forgot passcode → Recover vs. Reset — clearly distinct") intends recovery to be available but not the first thing visible. The current implementation is honest ("wipe + reload" — no false "reset without losing data"), but showing it immediately invites accidental taps.
+
+**Fix:** initialize `forgot` with `display:none` (like `hintBtn`), reveal it after ≥5 failed attempts (same reveal pattern as the hint). Alternatively keep it visible but make it text-link sized and muted (already done stylistically — see current style). Either approach acceptable; hiding until 5 fails is safer.
+
+**[GO-STRUCTURAL]** — modifies `buildAppLockGate` init style.
+
+---
+
+### GX10-F4. LOW — No `aria-live` region for wrong-passcode message [GO-STRUCTURAL]
+
+**Measured:** `#cf-applock-msg` receives `textContent` changes on wrong passcode, but has no `aria-live="polite"` or `role="status"`. Screen readers won't announce "Wrong passcode — try again" unless focus moves to the element (it doesn't — focus returns to the input).
+
+**Fix:** add `aria-live="polite"` to the msg element at creation:
+```go
+msg.Call("setAttribute", "aria-live", "polite")
+msg.Call("setAttribute", "role", "status")
+```
+In `buildAppLockGate` where `innerHTML` is set (or as a separate `setAttribute` call).
+
+**[GO-STRUCTURAL]** — one-line change.
+
+---
+
+### GX10-F5. LOW — Card background is transparent in light mode (visual layering) [CSS-ONLY]
+
+**Measured:** `cardBg: "rgba(0,0,0,0)"` in light mode. The card sits directly on the gate's `--bg` (#f7f6f3). In dark mode this is invisible (dark-on-dark works). In light mode, the card and gate background are both light with no elevation separation, making the card indistinguishable from the gate — no depth cue.
+
+**Current card style** (`applockgate.go` line 119):
+```
+display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);
+```
+
+**Fix:** add a subtle card background and shadow to create elevation in both themes. The dark fallback `#f4f4f5` in the color also becomes visible text on the light `#f7f6f3` — it's currently correct only because `var(--text)` overrides it to `#1c1c1e`, but the hardcoded fallback is misleading.
+
+```
+background:var(--bg-card,rgba(255,255,255,0.6));border:1px solid var(--border,#e4e2dd);border-radius:12px;padding:2rem 1.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.08);
+```
+
+Dark: `--bg-card: #121214` gives a slightly elevated dark card against the `#0e0e0f` gate. Light: `rgba(255,255,255,0.6)` gives a soft white card on the warm-grey gate — visible, calm.
+
+**[GO-STRUCTURAL]** — modifies inline style string in `buildAppLockGate`. (Could be CSS-only if the card had a class, but it's imperative DOM — requires Go build.)
+
+---
+
+### GX10-F6. LOW — Brand mark uses hardcoded serif font string, not the preloaded Fraunces [GO-STRUCTURAL]
+
+**Measured:** the brand div uses `font-family:Fraunces,Georgia,serif` inline. The CSS in `index.html` loads Fraunces via `@font-face` (it's used in the boot splash too). The imperative DOM string is correct but depends on the font being loaded before the gate appears on a cold boot. If Fraunces hasn't loaded yet (first visit), Georgia is the fallback. No visible defect in the probe (font was already cached), but it's a latent first-load polish gap.
+
+**Fix (minor):** the lock gate CSS text could add `font-display: swap` consideration — but since this is imperative DOM, the simplest fix is to ensure the gate is built after the `document.fonts.ready` promise. Non-blocking; note for future refactor.
+
+**[GO-STRUCTURAL]** — minor.
+
+---
+
+### GX10-F7. LOW — Inactivity check polls every 30 s — too coarse for a 1-minute timeout [GO-STRUCTURAL]
+
+**Source:** `wireAutoLock()` uses `setInterval(check, 30000)`. For a 1-minute auto-lock setting, idle detection can be up to 30 s late (nearly 2× the configured window). For a 5-minute window this is fine; for 1-minute it's noticeable.
+
+**Fix:** reduce interval to 10 s, or use `Math.min(autoLockMinutes * 60000 / 3, 30000)` — poll at 1/3 the window, max 30 s. Negligible battery cost.
+
+**[GO-STRUCTURAL]**
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| # | Defect | Screenshot | Theme | Measured |
+|---|--------|-----------|-------|---------|
+| D1 | Unlock button 40px — below 44px hit target | `gx10_lock_gate_dark_1280.png` | both | `btnHeight: 40` |
+| D2 | "Forgot passcode?" visible at zero attempts — invites accidental tap | `gx10_lock_gate_dark_768.png` | both | `forgotBtnDisplay: "block"` |
+| D3 | No dialog role/aria-modal — SR sees raw div | (probe output) | both | `gateRole: null`, `gateAriaModal: null` |
+| D4 | Card has no background or border in light mode — no depth | `gx10_lock_gate_light_1280.png` | light | `cardBg: rgba(0,0,0,0)` |
+| D5 | Wrong-passcode message not aria-live — SR silent | `gx10_lock_wrong_dark_768.png` | both | no `aria-live` on `#cf-applock-msg` |
+
+**What's NOT a defect (previously suspected):**
+- Light-mode bg: `rgb(247,246,243)` — correct, theme resolves via `var(--bg)`. NOT stuck dark (unlike GX9 splash). ✓
+- Focus lands on input: `activeEl: "cf-applock-input"` confirmed. ✓
+- Enter key dismisses gate: `display: none` confirmed. ✓
+- Wrong-passcode error color: red in both themes (adapts). ✓
+
+---
+
+## Recovery path assessment
+
+"Forgot passcode?" → native `window.confirm("…")` → `wipeAllLocalData()` + `reloadPage()`. 
+
+**Honest:** the implementation is honest. There is no fake "password reset". The confirm text (pulled from i18n key `applock.forgotConfirm`) warns the user. `suspendAutosave = true` is set before wipe to prevent the pagehide handler from re-writing the dataset (correctly prevents a subtle race from L6 — see comment in source).
+
+**Gap vs B17 spec (GO-STRUCTURAL, build-gated):**
+- No recovery key path. B17 specifies envelope key-wrapping with a separately-stored recovery code that can unlock without the passcode. Currently the only recovery is full wipe. The spec acknowledges this (the B17 "option b" encrypted-at-rest path with multi-KEK wrapping is not yet built).
+- No "Recover vs Reset" split: B17 wants two distinct flows — "Recover" (recovery key → keep data) vs "Reset" (wipe). Currently only "Reset" exists.
+- No encrypted-at-rest: the dataset stays plaintext. The gate is "soft gate only" (B17 option a).
+
+These are missing features (GO-STRUCTURAL, build-gated GI0), not CSS defects. Note them as open B17 backlog items, not GX10 regressions.
+
+---
+
+## Probe hardening
+
+- **Overlay intercept:** `page.$('button').click()` fails — the gate `div` intercepts pointer events (correct behavior; gate IS a full-screen overlay). Solution: use `page.evaluate(() => btn.click())` for all gate interactions. Fixed in script.
+- **Passcode hash:** JS `SubtleCrypto.digest('SHA-256', encoder.encode(salt + passcode))` matches Go's `HashPasscode` (hex SHA-256 of `salt+passcode`). Probe uses `salt = 'deadbeefcafebabe1234567890abcdef'` + `passcode = '123456'` → hash prefix `83e88a44141a75c1…`. Verified: gate accepted it.
+- **Settings section:** `lockLabelText: null` — the Settings → App lock section exists in Go source (`applocksettings.go`) but is not visible in the probe because the gwc dev server serves stale wasm (GI0). The section is implemented; it's not a missing feature. Settings probe is labeled accordingly.
+
+---
+
+## Cross-references
+
+- **B17** (feature spec, 2026-06-18) — the backing ticket; GX10 covers the visual/a11y pass.
+- **B17.1** (lock screen experience — quotes, metadata, animations) — shipped: quotes ✓, metadata ✓, fade-out ✓; locking animation is the reverse of unlock (no bespoke lock animation yet per B17.1).
+- **B17.2** (enable/disable toggle preserving creds) — `Suspended` flag implemented; toggle in Settings (`applocksettings.go`).
+- **6.18** (lock screen interaction review pass, 2026-06-18) — the UX notes from that review informed the setup form (replaced native prompts), auto-focus, Enter key, focus trap. All of those items are implemented.
+- **L7** (keyboard/screen-reader) — GX10-F1 (missing dialog role) and GX10-F4 (no aria-live) are direct L7 defects. Both are [GO-STRUCTURAL].
+- **GX9** (onboarding) — the splash light-mode bug (stuck dark) does NOT affect the lock gate. The gate correctly resolves `var(--bg)` in light mode. Two different code paths: splash is CSS class on `#boot`; gate is imperative DOM with `var(--bg,#0e0e0f)` inline — the inline fallback is for no-CSS/first-paint, but the variable wins once the stylesheet is applied.
+- **GI0** (build broken) — all [GO-STRUCTURAL] fixes are blocked until GI0 is resolved. CSS-ONLY fixes can land in `web/index.html` immediately but the lock gate has no CSS classes — all styling is inline Go strings — so there are no pure-CSS-only changes for this surface.
+
+
+> **⚠️ VERIFICATION CORRECTION (2026-06-23):** A follow-up measurement on the REAL tile
+> elements (.w, .wh-title — the original probe measured a wrapper/wrong nodes) found the
+> dashboard is CORRECT in light mode: .w tiles = 
+gb(255,255,255) (white, not transparent),
+> .wh-title = 
+gb(28,28,30) (dark, visible). **GX11-F2 (transparent cards) and GX11-F3
+> (invisible titles) DID NOT REPRODUCE — they are false alarms from a probe class-name gap.**
+> A belt-and-suspenders [data-theme=light] .wh .wh-title { color:#1c1c1e } was landed anyway.
+> PART A regression confirm (all landed fixes hold on the dashboard) is the real value of this run.
+
+# GX11. Dashboard re-check (post-fixes) — "The 7am Glance, Revisited" — 2026-06-23 ★
+
+## The story
+
+The dashboard is the highest-traffic screen — the first thing a user sees every morning. After GX1
+through GX10 landed, this pass returns specifically to the dashboard to confirm the critical shell
+fixes actually held, measure what the bento grid looks like now, and surface anything residual that
+the broad-sweep tickets missed. This is a tight-focus audit: one screen, six viewport/theme combos,
+measurement-first.
+
+---
+
+## Drive script
+
+`e2e/gx_11_dashboard_recheck.mjs` — viewports: 1280, 1440, 768 × themes: light, dark
+
+```
+node e2e/gx_11_dashboard_recheck.mjs
+EXIT: 0
+```
+
+Screenshots produced (all in `e2e/screenshots/`):
+
+| Filename | Width | Theme |
+|---|---|---|
+| `gx11_dashboard_1280_light.png` | 1280 | light |
+| `gx11_dashboard_1280_dark.png` | 1280 | dark |
+| `gx11_dashboard_1440_light.png` | 1440 | light |
+| `gx11_dashboard_1440_dark.png` | 1440 | dark |
+| `gx11_dashboard_768_light.png` | 768 | light |
+| `gx11_dashboard_768_dark.png` | 768 | dark |
+
+---
+
+## Regression confirm (landed fixes — PASS/FAIL with measured values)
+
+| Fix | Expected | Measured | Result |
+|-----|----------|----------|--------|
+| GX1-F1 topbar bg (light) | `rgba(247,246,243,0.92)` | `rgba(247, 246, 243, 0.92)` | ✅ PASS |
+| GX1-F1 topbar bg (dark) | `rgb(14,14,15)` | `rgb(14, 14, 15)` | ✅ PASS |
+| GX1-F1 rail bg (light) | warm surface (not near-black) | `rgb(241, 241, 242)` | ✅ PASS |
+| GX1-F1 rail bg (dark) | transparent/dark inherit | `rgba(0, 0, 0, 0)` | ✅ PASS |
+| GX1-F1 body bg (light) | warm white ~`rgb(247,246,243)` | `rgb(247, 246, 243)` | ✅ PASS |
+| GX1-F1 body bg (dark) | near-black `rgb(14,14,15)` | `rgb(14, 14, 15)` | ✅ PASS |
+| GX2-F5 .empty contrast (light) | color visible on warm-white | `.empty` absent from DOM | N/A — dashboard uses different structure (widgets have data, no empty els) |
+| GX3 bento grid responsive | 2-col at 768, 4-col at 1280 | 768: `249px 249px` (2-col ✓); 1280: `247.5px ×4` (4-col ✓); 1440: `287.5px ×4` (4-col ✓) | ✅ PASS |
+| GX8/GX9 data-theme switch | `data-theme` set correctly | light: `light` ✓; dark: `dark` ✓ | ✅ PASS |
+
+---
+
+## What already works well (keep) ✓
+
+- **Topbar light-mode fix fully landed.** `rgba(247,246,243,0.92)` confirmed at all three light
+  viewports. The stark black band from GX1 is gone. Rail likewise switches to `rgb(241,241,242)`.
+
+- **Body background coherent in both themes.** Light: `rgb(247,246,243)`; dark: `rgb(14,14,15)`.
+  No dark bleed onto page background in light mode.
+
+- **Bento grid column arithmetic is correct.** At 1280 it snaps to 4×247.5px; at 1440 to
+  4×287.5px (grows with viewport); at 768 to 2×249px. Gap is a consistent 10px in all cases.
+  The responsive breakpoint works as intended.
+
+- **Active nav chip visible in light mode.** Screenshots confirm the Dashboard nav entry in the
+  rail has a distinct green-tinted chip (`rgb(241,241,242)` rail with green highlight) — legible
+  and non-invasive. GX1-F2 regression does not reappear.
+
+- **"Needs attention" widget renders and is prominent.** Present at the top of the bento grid at
+  all viewports. The alert chips show correctly in dark mode (text + border visible). The widget
+  holds its full-width span across the grid.
+
+- **Metric tiles (Net worth, Income, Spending, Liabilities) show dollar amounts.** Visually
+  confirmed: `$60,386.00`, `$3,775.00`, `$4,068.00`, `$25,427.00` all render with green/red
+  accent colors in both themes. Typography is large and legible.
+
+- **The bento grid populates correctly at 768px (2-col).** The narrower layout stacks the tiles
+  cleanly in two columns without overflow or clipping. Dashboard is usable at tablet width.
+
+- **Household card present and styled.** Visible at the bottom of the rail in all screenshots,
+  shows "Your household / members · USD base" with the GWC branding element. Rail separation
+  line present.
+
+- **Dark-mode topbar buttons (notify/music/+) are correctly styled.** Small icon buttons visible
+  as outlined circles against the dark topbar — consistent with the existing dark shell.
+
+---
+
+## Residual structure fixes (bottom-up, grouped)
+
+### GX11-F1. HIGH — "Needs attention" alert chips: first chip has no background in either theme [CSS-ONLY]
+
+**Evidence:** `gx11_dashboard_1280_light.png`, `gx11_dashboard_1280_dark.png`
+
+**Measured (all viewports, both themes):**
+```
+chip[0] bg: rgba(0,0,0,0)   color: rgb(244,244,245)   borderRadius: 0px
+chip[1] bg: rgb(255,255,255) [light] / rgb(26,26,29) [dark]   color: rgb(28,28,30) / rgb(244,244,245)   borderRadius: 4px
+```
+
+The first alert chip (e.g. "Schedule annual physical · 53d overdue") has a transparent background
+and zero border-radius, while the remaining chips have a proper filled background and 4px radius.
+This is inconsistent: the first chip renders as plain inline text with only its icon triangle,
+while chips 2–5 render as proper pill-shaped badges. In light mode the first chip is invisible
+against the card background — white text on white — because `color: rgb(244,244,245)` was set for
+dark mode and doesn't switch. Screenshots confirm the first row of the "Needs attention" widget
+in light mode shows only a triangle icon with no legible label text.
+
+**Screenshot evidence:** `gx11_dashboard_1280_light.png` — first alert row shows faint triangle
+only, no text visible. `gx11_dashboard_768_light.png` — same, 5 rows all render as near-invisible
+ghost chips in light mode.
+
+**Fix:**
+```css
+/* Ensure all alert chips inherit the same base style */
+[class*="chip"]:first-child,
+.alert-chip:first-child,
+.needs-attention .chip:first-of-type {
+  background-color: var(--bg-card, #ffffff);
+  border-radius: 4px;
+  color: var(--text, #1c1c1e);
+}
+[data-theme="light"] [class*="chip"] {
+  color: var(--text, #1c1c1e) !important;
+}
+```
+Root cause is likely the first chip element using a different class or being rendered without the
+`.chip` wrapper that the others use — worth auditing the Go template for the alerts list.
+
+---
+
+### GX11-F2. HIGH — Widget card backgrounds are fully transparent — no surface color [CSS-ONLY]
+
+**Evidence:** all 6 screenshots; measured across all conditions.
+
+**Measured:**
+```
+[class*="card"] background-color: rgba(0,0,0,0)   ← all viewports, both themes
+```
+
+Every bento widget card has a transparent background. In dark mode this works because the body
+background (`rgb(14,14,15)`) provides the visual surface and the cards appear as floating panels
+due to subtle borders. In light mode, however, the dashboard has a warm-white body
+(`rgb(247,246,243)`) and the cards merge into it — there is no visual card "lift" or separation.
+The tile boundaries in light mode are defined only by the bento gap, not by any card surface.
+The 1280/light screenshot shows a grid of content zones with no card depth.
+
+This is the GX1-F7 pattern extended to the bento widgets. The shell household card had the same
+issue; the fix for `.hh` was noted but the bento widget cards were not co-fixed.
+
+**Fix:**
+```css
+[data-theme="light"] .bento-item,
+[data-theme="light"] .widget,
+[data-theme="light"] [class*="card"] {
+  background-color: var(--bg-card, #ffffff) !important;
+  border: 1px solid var(--border, #e4e2dd);
+  border-radius: 8px;
+}
+```
+
+---
+
+### GX11-F3. MEDIUM — Widget title text invisible in light mode — white on white [CSS-ONLY]
+
+**Evidence:** `gx11_dashboard_1280_light.png`, `gx11_dashboard_1440_light.png`
+
+**Observed:** In both 1280 and 1440 light screenshots, the widget header area (`.whead`) shows only
+the icon and the ellipsis/settings controls — the actual title text ("Net worth", "Income",
+"Spending", "Liabilities", "Recent transactions", "Budgets", etc.) is completely invisible. The
+dark mode screenshots show these titles clearly (e.g. "Net worth", "Income", etc.). The probe did
+not find a `.wtitle` selector, confirming the title element uses a different class; the `h2`
+selector returned `16px / weight:600` but this is for the page H2 ("Dashboard"), not widget
+titles.
+
+The light-mode screenshots at 768 also confirm: the widget header row shows icon + "..." but no
+label text next to the icon. In dark mode all six tile titles read clearly. This is the same
+`[data-theme="light"]` color override gap as GX1-F1 — widget title text color stays at a
+dark-mode faint value that becomes invisible on a light card/body surface.
+
+**Fix:** Identify the widget title selector (likely `.whead span`, `.whead .label`, or a class like
+`.wtitle`, `.wlabel`) and add:
+```css
+[data-theme="light"] .whead span,
+[data-theme="light"] .whead .label,
+[data-theme="light"] .wtitle,
+[data-theme="light"] .wlabel {
+  color: var(--text-dim, #56565c) !important;
+}
+```
+
+---
+
+### GX11-F4. MEDIUM — Widget padding is unmeasured / selectors not matching bento items [Probe hardening + CSS-ONLY]
+
+**Evidence:** probe measurement
+
+**Measured:**
+```
+PART_B_4 widget padding: undefined × all conditions
+```
+
+The selectors `.bento-item`, `.widget`, `.card` all returned no padding values. The actual bento
+item DOM class is not one of these standard names — the Go template likely uses a project-specific
+class. Visual inspection of the screenshots suggests uniform internal padding (~12–16px) inside
+each tile, but this cannot be confirmed without the correct selector.
+
+**Action:** Identify the actual bento widget wrapper class from the DOM (e.g. `gx11_dashboard_1280_dark.png`
+shows structured tiles — audit the rendered HTML for the exact class). Once found, measure padding
+consistency across tiles: all four stat tiles (Net worth / Income / Spending / Liabilities) should
+use identical padding values.
+
+---
+
+### GX11-F5. LOW — "Needs attention" widget: light-mode chip border renders as visible red outline on transparent body [CSS-ONLY]
+
+**Evidence:** `gx11_dashboard_1280_light.png`, `gx11_dashboard_768_light.png`
+
+In both light screenshots, the "Needs attention" widget shows the alert chip rows as red-bordered
+rectangles with no fill — they look like empty boxes with a warning triangle. In dark mode the
+same chips render as filled dark surfaces. The transparent `rgba(0,0,0,0)` background combined
+with a `color: rgb(244,244,245)` (white text) means the labels are invisible while the red border
+box is the only visible element. This is a direct consequence of GX11-F1 (no fill on first chip)
+plus GX11-F3 (text color not overriding for light theme). The chips read as a series of
+malformed error boxes rather than alert notifications.
+
+**Fix:** co-fixed by GX11-F1 + adding the `[data-theme="light"]` color override.
+
+---
+
+## UI/UX defects (screenshot-confirmed + named file)
+
+| ID | Screenshot | Description |
+|---|---|---|
+| GX11-D1 | `gx11_dashboard_1280_light.png` | Widget titles ("Net worth", "Income", "Spending", "Liabilities") invisible in light — white text on white surface |
+| GX11-D2 | `gx11_dashboard_1280_light.png` | Bento widget cards have no background — no card lift or separation in light mode; tiles float as invisible zones |
+| GX11-D3 | `gx11_dashboard_1280_light.png` | "Needs attention" chips render as empty red-bordered boxes in light — transparent bg + white text = no visible label |
+| GX11-D4 | `gx11_dashboard_768_light.png` | Same as D1–D3 at 768px — 5 alert rows all invisible labels, 4 metric tiles all invisible headers |
+| GX11-D5 | `gx11_dashboard_1280_dark.png` | Dark mode is fully legible and visually coherent; confirms light is the remaining problem domain |
+| GX11-D6 | `gx11_dashboard_1440_light.png` | At 1440 the light mode issues are identical to 1280 — all widget titles invisible, no card surfaces |
+
+---
+
+## Probe hardening
+
+1. **`.wtitle` selector not matched.** The probe used `.wtitle`, `.card-title`, `.widget-title`,
+   `.whead h2/h3/span` but none returned a measurement. The Go template for bento widget headers
+   uses a class not in that list. Add a fallback: query all child text nodes of `.whead` and
+   measure the computed color of the first non-icon text element.
+
+2. **`.bento-item` / `.widget` not matched for padding.** The actual bento tile class name is not
+   one of the generic candidates tried. The correct approach is to enumerate direct grid children
+   of `.bento`: `document.querySelectorAll('.bento > *')` and measure padding on those.
+
+3. **Net-worth tile selector.** The probe tried `.net-worth`, `[data-widget="net-worth"]`, `.nw`,
+   etc. — none matched. The net-worth tile renders as a standard bento child with no dedicated
+   selector. To compare its dimensions against other tiles, use `.bento > *:nth-child(n)` to grab
+   each by position rather than by semantic class.
+
+4. **Amount/value selector not matched.** Dollar amounts render in a class that does not contain
+   "amount", "value", or "balance". Inspect the rendered DOM for the actual class name on the
+   large `$60,386.00` figure (likely something like `.wval`, `.wtotal`, or an inline style).
+
+5. **`.empty` absent in dashboard.** Dashboard widgets show data (seeded dataset active), so no
+   `.empty` elements exist — GX2-F5 light contrast for `.empty` cannot be tested on this populated
+   state. To re-test, run with a wiped dataset (set `cashflux:seeded: "1"` + `cashflux:data: ""`
+   via localStorage before reload).
+
+---
+
+## Summary
+
+GX1-F1 shell fix is solid — topbar and rail light-mode backgrounds are confirmed correct at all
+three viewports. The critical regressions from the original shell audit have not returned. The
+bento grid column arithmetic and responsive breakpoints are working correctly.
+
+The remaining dashboard-specific issues are all in the same family as the original GX1 bug: the
+light-mode CSS token resolution is incomplete for widget-level elements. Widget titles, alert chip
+labels, and bento card surfaces all need light-mode overrides that parallel what was done for the
+topbar. These are CSS-ONLY fixes — no Go structural changes needed.
+
+Priority order for the next fix pass:
+1. GX11-F1 — alert chip first-child missing fill + light-mode text color (highest visual damage)
+2. GX11-F2 — widget card transparent backgrounds (no card depth in light)
+3. GX11-F3 — widget title text invisible in light
+4. GX11-F5 — follows automatically from F1+F3
+
+---
+
+## Cross-references
+
+- GX1-F1 — topbar/rail fix (confirmed holding; same CSS-override pattern extends to widgets)
+- GX1-F7 — household card transparent bg (same root cause as GX11-F2 for bento widgets)
+- GX2-F4 — dashboard empty state color inconsistency (not testable in seeded state)
+- GX2-F5 — light-mode `.empty` contrast (not testable in seeded state)
+
+
+# GX12. Transactions re-check (post-fixes) — "The Reconciler, Revisited" — 2026-06-23 ★
+
+## The story
+
+G2 first probed Transactions when light-mode capture was broken by the WASM prefs boot-overwrite
+issue. GX3 shipped the critical fixes (GX3-F1 select styling, GX3-F2 DataTable light-mode contrast)
+and confirmed them in code. This pass returns to the Transactions page with the corrected
+light-theme recipe — `localStorage.setItem('cashflux:prefs', JSON.stringify({theme:'light'}))` +
+reload + `waitForFunction` — to measure real computed values on real elements and settle the
+regression record.
+
+50 sample-data rows render. The table is fully interactive. All six viewport/theme combinations
+were captured.
+
+---
+
+## Drive script
+
+`e2e/gx_12_transactions_recheck.mjs` — viewports: 1280, 1440, 768 × themes: light, dark
+Server: `http://localhost:8099`
+
+```
+node e2e/gx_12_transactions_recheck.mjs
+EXIT: 0
+```
+
+Screenshots produced (all in `e2e/screenshots/`):
+
+| Filename | Width | Theme |
+|---|---|---|
+| `gx12_light_1280.png` | 1280 | light |
+| `gx12_light_1440.png` | 1440 | light |
+| `gx12_light_768.png` | 768 | light |
+| `gx12_dark_1280.png` | 1280 | dark |
+| `gx12_dark_1440.png` | 1440 | dark |
+| `gx12_dark_768.png` | 768 | dark |
+
+---
+
+## Regression confirm (landed fixes — PASS/FAIL with measured values)
+
+Reference probe: light @ 1280px for light-mode checks; dark @ 1280px for dark-mode checks.
+Selector: actual styled element, not a layout wrapper. Values are `getComputedStyle`.
+
+| Check | Fix | Expected | Measured | Result |
+|-------|-----|----------|----------|--------|
+| A1 [LIGHT] `.txn-table thead th` `background-color` | GX3-F2 | `rgb(247,246,243)` warm white | `rgb(247, 246, 243)` | ✅ PASS |
+| A2 [LIGHT] `.txn-table tbody td` `color` | GX3-F2 | dark text ~`rgb(28,28,30)` | `rgb(28, 28, 30)` | ✅ PASS |
+| A3 [LIGHT] `select` height | GX3-F1 | ≥ 40px | `44px` | ✅ PASS |
+| A3 [LIGHT] `select` background | GX3-F1 | themed (not bare white) | `rgb(241, 241, 242)` | ✅ PASS |
+| A4 [LIGHT] Zebra even ≠ odd | GX3-F2 | even and odd differ | even `rgba(0,0,0,0.024)` / odd `rgba(0,0,0,0)` | ✅ PASS |
+| A5 [LIGHT] Row hover `background-color` | GX3-F2 | `#efede8` warm surface | `rgb(239, 237, 232)` ✓ exact | ✅ PASS |
+| A1d [DARK] `.txn-table thead th` `background-color` | GX3-F2 (not regressed) | dark ~`rgb(14,14,15)` | `rgb(14, 14, 15)` | ✅ PASS |
+| A3d [DARK] `select` height | GX3-F1 | ≥ 40px | `44px` | ✅ PASS |
+
+**All 8 regression checks PASS.** GX3-F1 and GX3-F2 are confirmed landed and stable across both themes.
+
+---
+
+## What already works well (keep) ✓
+
+- **Light-mode DataTable contrast fully resolved.** `thead th` is `rgb(247,246,243)` (warm white);
+  `tbody td` is `rgb(28,28,30)` (near-black). The dark-on-dark defect from GX3-D2 is gone.
+
+- **Select height meets touch target.** `44px` in both themes — exactly the 44px minimum. GX3-F1 confirmed.
+
+- **Select background is themed.** Light: `rgb(241,241,242)` (near `.bg-hover`), dark inherits
+  dark surface. Not the bare-white browser default that GX3-D1 showed.
+
+- **Row hover is warm and correct.** `rgb(239,237,232)` = `#efede8` — the exact light-mode override
+  from index.html line 550. No transparency gap; color is solid and deliberate.
+
+- **Amount column is production-ready.** `text-align: right` + `font-variant-numeric: tabular-nums`
+  + `font-weight: 600` — numbers align vertically, currency glyphs won't shift columns.
+
+- **Description truncation is correct.** `overflow: hidden` + `text-overflow: ellipsis` +
+  `white-space: nowrap` — long payee names clip cleanly. `max-width: 280px` is in CSS.
+
+- **Header font-weight 600.** Consistent across all 6 combos.
+
+- **Sortable columns present.** 5 `.th-sort` buttons render with `aria-sort` attributes — keyboard-
+  sortable, screen-reader friendly.
+
+- **Zebra striping exists.** Even rows: `rgba(0,0,0,0.024)` (light) / `rgba(255,255,255,0.03)`
+  (dark). Technically correct; see note on contrast below.
+
+- **50 rows of sample data.** The table renders with content in all 6 combos — no empty-state
+  masking measurement.
+
+---
+
+## Residual structure fixes
+
+### GX12-F1. MEDIUM — Row height inconsistent: 42px at 1440px vs 50px at 1280px/768px [CSS-ONLY]
+
+**Measured:**
+
+| Width | Theme | `tbody tr` `clientHeight` |
+|-------|-------|--------------------------|
+| 1280 | light | 50px |
+| 1440 | light | **42px** |
+| 768 | light | 50px |
+| 1280 | dark | 50px |
+| 1440 | dark | **42px** |
+| 768 | dark | 50px |
+
+**Why it's wrong:** Row height should be consistent regardless of viewport width for a fixed-layout
+table. The 1440px collapse to 42px (vs 50px elsewhere) suggests content in one or more cells is
+wrapping or shrinking at that width, causing the row to compress. A viewport-width-driven row height
+change in a table that doesn't change column layout is a layout bug. Possible cause: a hidden
+`word-break` or `max-width` on a column that kicks in between 1280 and 1440.
+
+**Fix [CSS-ONLY]:** Investigate which column is driving the 42px collapse at 1440px. Add
+`min-height` (via `line-height` or `padding`) to `.txn-table tbody td` to enforce a consistent
+floor. A row height of ~44–48px is the right target (one comfortable content line + vertical
+padding).
+
+Cross-ref: C47 (table introduced), GX3 (table primitives).
+
+---
+
+### GX12-F2. LOW — Zebra contrast is extremely subtle — 2.4% alpha barely perceptible [CSS-ONLY]
+
+**Measured (light mode):**
+- Even rows: `rgba(0,0,0,0.024)` — 2.4% black overlay
+- Odd rows: `rgba(0,0,0,0)` — transparent
+
+**Why it's wrong:** At `rgba(0,0,0,0.024)`, the contrast between even and odd rows on a
+`#f7f6f3` base is approximately Δ≈2.5 CIEDE (barely at the edge of perceptibility). The intent
+of zebra striping is to help users track rows across wide columns. At 2.4% alpha the effect is
+cosmetically present in devtools but visually negligible for most users. The dark-mode value
+`rgba(255,255,255,0.03)` is similarly faint.
+
+**Fix [CSS-ONLY]:** Increase light-mode even-row to `rgba(0,0,0,0.04)` and dark-mode to
+`rgba(255,255,255,0.055)` — still subtle, but reaches the perceptibility threshold for 80th-
+percentile display calibrations. Selector is already present on index.html lines 543–544.
+
+Cross-ref: G2 (table density), C47.
+
+---
+
+### GX12-F3. LOW — Actions column width 168–170px — oversized for icon-only content [CSS-ONLY]
+
+**Measured:**
+
+| Width | Theme | Actions th `offsetWidth` |
+|-------|-------|--------------------------|
+| 1280 | light | 167.94px |
+| 1440 | light | 170.34px |
+
+**Why it's worth noting:** The actions column (`td-actions`) holds small icon buttons (edit,
+delete, clear-toggle). 168px is the same width as a large data column — the table surrenders
+roughly 170px of width to a column that carries 2–3 icon buttons. This compresses the description
+and category columns unnecessarily at 768px where space is already tight.
+
+**Fix [CSS-ONLY]:** Add `width: 96px` (or `max-width: 96px`) to `.txn-table .td-actions` and
+`.txn-table th:last-child`. The icon buttons (`btn-icon`) at `0.2rem 0.35rem` padding fit
+comfortably in 96px with `white-space: nowrap`.
+
+Cross-ref: C47, GX3 (table primitives).
+
+---
+
+### GX12-F4. LOW — Sort caret text not present in header text content [GO-STRUCTURAL / existing GX6-F2]
+
+**Measured:** All 6 combos: `th-sort-btns=5` (sort buttons present), `aria-sort=true` (active
+sort column has `aria-sort` attribute), `caret-text=false` (no `▲`/`▾` in DOM text nodes).
+
+**Why it's noted:** The script probed `textContent` of `thead th` elements for the Unicode
+caret. The caret is absent from DOM text — either it renders via CSS pseudo-element (not
+measurable by `textContent`) or it is genuinely missing. The existing GX6-F2 ticket covers
+replacing the Unicode `▲` with ChevronUp/Down SVG icons; the descending case has no caret at
+all per GX6-D3. **This is not a new finding** — it is a measurement confirmation that GX6-F2/D3
+remain open. No new ticket needed; cross-ref GX6-F2.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+### GX12-D1. MEDIUM — No `.filter-toolbar` rendering at 768px (probe: toolbar may be collapsed/hidden) [investigate]
+
+The script queried `.filter-bar` (wrong selector) and got N/A. The correct class from index.html
+is `.filter-toolbar`. Re-run with `.filter-toolbar` to confirm it exists in DOM. At 768px the
+filter toolbar may wrap to two lines or collapse — the screenshots should be checked for toolbar
+overflow. **This is a probe gap, not a confirmed defect** — see Probe hardening below.
+
+---
+
+## Probe hardening
+
+**PH-1: Wrong filter-toolbar selector.** The script used `.filter-bar` and `.txn-filters` as
+fallbacks. The actual class in index.html line 590 is `.filter-toolbar`. Update the script to
+query `.filter-toolbar` first so filter-bar alignment can be measured.
+
+**PH-2: Selected-row probe requires user action.** `.txn-table tbody tr.selected` times out
+because no row is selected by default. To probe selected-row styling, the script should click a
+checkbox (`td.td-select .check`) first, then measure. This was listed as B7 but was not
+actionable without the click step.
+
+**PH-3: Sort caret presence via textContent misses CSS pseudo-elements.** The probe checks
+`textContent` but sort carets may be rendered via `:after` pseudo-elements. A more reliable probe
+is `window.getComputedStyle(el, '::after').content` on each `th` or scanning for `svg` children.
+Upgrade the B6 probe if GX6-F2 ships SVG carets.
+
+---
+
+## Cross-references
+
+| Ticket | Relationship |
+|--------|-------------|
+| C47 | Transactions table + filter toolbar introduced; DataTable + pagination |
+| G2 | Original Transactions G-ticket (sort, zebra, density review) |
+| GX3-F1 | Select styling fix — A3 confirms landed |
+| GX3-F2 | DataTable light-mode contrast fix — A1/A2 confirms landed |
+| GX3-D2 | Screenshot evidence of original dark-on-dark defect — now RESOLVED |
+| GX6-F2 | Sort caret Unicode → SVG replacement (open; GX12 measurement confirms no text caret) |
+| GX6-D3 | Descending sort has no caret (open; confirmed still absent) |
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 
