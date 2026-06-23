@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — refactor: C73 Phase 2 COMPLETE — every screen card on the primitive
+
+Finished the C73 component-ization epic: zero hand-rolled Section(css.Class("card")) remain in internal/screens — every card renders through Card/EntityListSection. Drove raw scaffolds 68 -> 38. Unlock was extending the primitive (Header slot for verbatim bespoke headers — H3 titles, flex headers, .card-head/.budget-head, card-alert banner, receipt overlay; Rows slot wrapping Div(.rows); TestID; ClassParts merging extra classes into ONE css.Class — which caught a latent bug where a second css.Class prop overrides the first, silently dropping the base class). Ported screen-by-screen with build + per-screen gates; every timing-out gate confirmed to fail identically at HEAD (pre-existing +Add-menu + bulk-delete). Phase-5 ratchet rewritten: TestNoBespokeCardScaffold is a hard zero invariant, TestRowsContainerRatchet caps the 38 Div(.rows) list containers. C73 fully checked.
+
 ## 2026-06-23 — feat: G9.1a Reports charts — ranked bars + donuts from existing aggregates
 
 Wired the existing D3 chart engine (`uiw.Chart` / `chartspec.Spec`) into the Reports screen for four

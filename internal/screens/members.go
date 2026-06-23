@@ -209,9 +209,9 @@ func Members() ui.Node {
 			Title: uistate.T("members.listTitle"),
 			Body:  IfElse(len(members) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}), Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow))),
 		}),
-		If(len(members) > 0, uiw.Card(uiw.CardProps{
+		If(len(members) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("members.netWorthTitle"),
-			Body:  Div(css.Class("rows"), ownerRows),
+			Rows:  ownerRows,
 		})),
 	)
 }

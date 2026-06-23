@@ -13,37 +13,32 @@ import (
 	"testing"
 )
 
-// Raw-markup scaffolds the C73 component-ization epic is migrating away from.
-// Each screen should reach for a primitive (Card / EntityListSection / DataTable)
-// instead of hand-rolling these. See docs/COMPONENTS.md for the porting guide.
+// Markup the C73 component-ization epic governs. Screens reach for a primitive
+// (Card / EntityListSection / DataTable) instead of hand-rolling these. See
+// docs/COMPONENTS.md for the porting guide.
 const (
 	// cardScaffold is the bespoke card container `Section(css.Class("card"...`.
+	// As of 2026-06-23 every screen card renders through the Card/EntityListSection
+	// primitive, so this MUST stay at ZERO — a new occurrence means someone
+	// hand-rolled a card instead of using the primitive.
 	cardScaffold = `Section(css.Class("card`
-	// rowsScaffold is the bespoke list container `Div(css.Class("rows"...`.
+
+	// rowsScaffold is the list-row container `Div(css.Class("rows"...`. This is the
+	// exact markup EntityListSection.Rows itself emits; the remaining occurrences are
+	// list bodies INSIDE ported primitive cards (a description + list, or an
+	// empty-or-list branch) — not bespoke card scaffolds. It is a one-way ratchet:
+	// the count may only fall as those bodies adopt the Rows slot. Introduced at 48,
+	// now 38.
 	rowsScaffold = `Div(css.Class("rows`
 
-	// scaffoldBaseline is the TOTAL count of the two raw scaffolds across
-	// internal/screens. Introduced at 165 (117 card + 48 rows) on 2026-06-23 and
-	// ratcheted down as screens migrate to EntityListSection/Card/DataTable. This
-	// is a ONE-WAY ratchet —
-	// contributors may only ever LOWER it as screens are ported to primitives.
-	// If this constant needs to go UP, you are adding bespoke markup the epic is
-	// trying to delete: use a primitive instead. Lower it whenever you migrate.
-	scaffoldBaseline = 39
+	// rowsBaseline caps the list-container count (one-way; only lower it).
+	rowsBaseline = 38
 )
 
-// countScaffolds returns the combined occurrences of the two raw scaffolds in a
-// single source file's text.
-func countScaffolds(src string) int {
-	return strings.Count(src, cardScaffold) + strings.Count(src, rowsScaffold)
-}
-
-// TestScaffoldBaseline asserts the number of raw card/rows scaffolds in the
-// screens package never EXCEEDS the recorded baseline — preventing new bespoke
-// markup while allowing the existing offenders to be migrated down over time.
-func TestScaffoldBaseline(t *testing.T) {
-	// Resolve internal/screens relative to this test file (../screens), so the
-	// check is path-independent of the working directory.
+// countMatches returns the occurrences of substr across every non-test .go file
+// in internal/screens.
+func countMatches(t *testing.T, substr string) int {
+	t.Helper()
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -53,7 +48,6 @@ func TestScaffoldBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read screens dir %q: %v", screensDir, err)
 	}
-
 	total := 0
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
@@ -63,16 +57,32 @@ func TestScaffoldBaseline(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}
-		total += countScaffolds(string(b))
+		total += strings.Count(string(b), substr)
 	}
+	return total
+}
 
-	if total > scaffoldBaseline {
-		t.Fatalf("raw card/rows scaffolds in internal/screens rose to %d, above the baseline of %d — "+
-			"use a primitive (Card/EntityListSection/DataTable, see docs/COMPONENTS.md) instead of hand-rolling markup",
-			total, scaffoldBaseline)
+// TestNoBespokeCardScaffold is the hard invariant: every card in internal/screens
+// renders through the Card/EntityListSection primitive, so there must be ZERO
+// hand-rolled `Section(css.Class("card"...` scaffolds. A failure means a new card
+// was hand-rolled — use the primitive (see docs/COMPONENTS.md) instead.
+func TestNoBespokeCardScaffold(t *testing.T) {
+	if n := countMatches(t, cardScaffold); n != 0 {
+		t.Fatalf("found %d bespoke Section(css.Class(\"card\")) scaffold(s) in internal/screens — "+
+			"every card must render through uiw.Card / uiw.EntityListSection (docs/COMPONENTS.md)", n)
 	}
-	if total < scaffoldBaseline {
-		t.Logf("raw scaffolds down to %d (baseline %d) — lower the scaffoldBaseline constant to lock in the win",
-			total, scaffoldBaseline)
+}
+
+// TestRowsContainerRatchet caps the list-row containers (Div(.rows)) that live
+// inside ported primitive cards. One-way: the count may fall as those bodies adopt
+// the EntityListSection.Rows slot, never rise.
+func TestRowsContainerRatchet(t *testing.T) {
+	n := countMatches(t, rowsScaffold)
+	if n > rowsBaseline {
+		t.Fatalf("Div(css.Class(\"rows\")) list containers rose to %d, above the baseline of %d — "+
+			"use EntityListSection.Rows for new lists instead of a hand-rolled Div(.rows)", n, rowsBaseline)
+	}
+	if n < rowsBaseline {
+		t.Logf("list containers down to %d (baseline %d) — lower rowsBaseline to lock in the win", n, rowsBaseline)
 	}
 }

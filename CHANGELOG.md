@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **C73 Phase 2 COMPLETE — every screen card ported to primitives (2026-06-23).** Drove the raw-scaffold count
+  **165 → 38**, eliminating **all** bespoke `Section(css.Class("card"))` markup from `internal/screens` (now zero):
+  every card on every screen renders through `Card`/`EntityListSection`, byte-identically. The primitives gained
+  `TestID`, `Header` (verbatim bespoke header — H3 titles, flex headers, `.card-head`/`.budget-head`), `Rows`
+  (wraps the canonical `Div(.rows)`), `ClassParts` (extra classes merged into one `css.Class` — fixed a latent bug
+  where a second `css.Class` prop silently dropped the base class), and `HeaderAction` now emits the real `.card-head`
+  class. The remaining 38 `Div(.rows)` are list-row containers inside ported cards. The Phase-5 ratchet now
+  hard-asserts `Section(.card) == 0` and one-way-caps the row containers. **C73 epic fully complete.**
 - **Accessibility (GX4):** visible focus rings on inputs/selects (removed `outline:none` from `:focus` overrides — `:focus-visible` ring now displays correctly for keyboard users), larger sort tap-targets (`.th-sort` meets WCAG 2.5.8 24px minimum), heading-hierarchy fix (widget titles are now H2, not H3, so H1→H2 is correct on dashboard and all bento screens), and resize-handle keyboard ring (`.rz:focus-visible` no longer suppresses `outline`).
 - **Component primitives (GX3):** selects now match inputs; consistent button/input/badge states. Unified `--btn-py`/`--btn-px` tokens bring `.btn` and `.set-btn` to a shared 44px touch target. Select elements styled to match `.field` (eliminates white-box-in-dark glitch). DataTable light-mode pinned. Modal Save button now reads as primary. Pace badges get consistent 1px border ring.
 - **C73 Phase 3 — big-row extraction (2026-06-23).** `AccountRow`, `BudgetRow`, and `GoalRow` each moved out of

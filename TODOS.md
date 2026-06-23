@@ -1,4 +1,4 @@
-﻿# CashFlux — Master Feature Backlog
+# CashFlux — Master Feature Backlog
 
 Single source of truth, **ordered top-to-bottom by implementation priority**. Work in order;
 within a section earlier items unblock later ones. Build **bottom-up** per the SDLC rule
@@ -2341,18 +2341,18 @@ an adoption + decomposition refactor (behavior-preserving), done **bottom-up, on
       (accounts, budgets, goals, categories, rules, tasks, members, transactions, custom-fields, planning) — the
       labelling cluster C49–C65/B15 is resolved and the `*_labels` gates pass. _(The few remaining loose `<select>`s
       are report/display **filters**, not add/edit forms — out of this bullet's scope.)_
-- [~] **Phase 2 — Lists:** largely complete. Primitives extended (`Card`/`EntityListSection` gained `TestID`/`Attrs`/
-      `Rows`, and `HeaderAction` now emits the real `.card-head` class) so hand-rolled cards — including those with a
-      test id, a list body, or a title+actions header — port with byte-identical DOM. **Every major user-facing screen
-      is ported**: Reports, Subscriptions, Bills, Categories, Accounts, Insights, Activity, Allocate, Documents, Planning
-      (all 8 cards), Split, Customize-formula, Rules, Custom-Fields, Custompage, Artifacts, To-do, Budgets, Goals,
-      Workflows, Notifications — plus the not-ready/empty guards across ~19 screens. Scaffold count driven **165 → 68**
-      (59%), each step gate-verified and locked by the Phase-5 ratchet at every step (now 68; one-way). The residual is
-      the irreducible floor for a DOM-preserving port: ~22 genuinely-bespoke cards (widgets/widget-builder use `H3`
-      titles; reports `card-alert` + flex header + `data-testid` analysis sections; the import wizard; the transactions
-      receipt overlay) plus ~40 `Div(.rows)` list **bodies** that legitimately live inside already-ported
-      `EntityListSection`s. Zeroing those would require DOM changes (breaking parity gates) or new primitive variants
-      (H3-title / flex-header) — a deliberate stopping point. The ratchet enforces no regressions and drives any further reduction.
+- [x] **Phase 2 — Lists:** DONE. **Zero bespoke `Section(css.Class("card"))` scaffolds remain in `internal/screens`** —
+      every card across every screen now renders through the `Card`/`EntityListSection` primitive, byte-identically.
+      Primitives were extended to make this possible without DOM changes: `TestID`, `ClassParts` (extra classes merged
+      into one `css.Class` — a second `css.Class` prop silently overrides, which had to be fixed), a `Header` slot
+      (renders any bespoke header verbatim — `H3` titles, flex headers, `.card-head`/`.budget-head` with custom
+      controls), a `Rows` slot (wraps the canonical `Div(.rows)` so screens stop hand-writing it), and `HeaderAction`
+      now emits the real `.card-head` class. Drove **165 → 38** raw scaffolds; the remaining 38 are `Div(.rows)`
+      list-row **containers** living inside already-ported primitive cards (the exact markup `EntityListSection.Rows`
+      emits), not bespoke scaffolds. The Phase-5 ratchet now hard-asserts `Section(.card) == 0`
+      (`TestNoBespokeCardScaffold`) and one-way-caps the `Div(.rows)` containers (`TestRowsContainerRatchet`). Every
+      screen was gate-verified per port; the only failing gates fail identically at HEAD (pre-existing: the +Add-menu
+      timeout and the bulk-delete issue).
 - [x] **Phase 3 — Rows:** each `*Row` extracted into its own `*_row.go` carrying its display + inline-edit sub-forms,
       owning its hooks (Account/Budget/Goal/Transaction). Display halves use `EntityRow`/`DeleteButton` where they fit.
 - [x] **Phase 4 — Super-screens:** decompose Planning, Documents, Allocate, Customize, settings _(all five decomposed 2026-06-23; hooks kept in the parent shell, sub-components hook-free, gates green)_.
@@ -20155,6 +20155,168 @@ All fixes are [CSS-ONLY] and landable in `web/index.html` now (GI0 does not bloc
 - **F3 (light-mode row hover bg):** `[data-theme="light"] .row:hover { background: #efede8; }` added — non-transaction rows (Goals, Planning, etc.) now use the same warm hover bg as transaction rows in light mode.
 - **F4 (draggable :active feedback):** `.row[draggable="true"]:active` now also applies `background: var(--bg-elev); opacity: .85` alongside the existing `cursor: grabbing` — subtle visual press state when picking up a row.
 - Deferred: none — all four fixes shipped.
+
+
+### GX9. Onboarding & splash — "The First Night" — 2026-06-23 ★
+
+**Drive script:** `node e2e/gx_09_onboarding.mjs` — exit code **0**
+**Server:** `http://localhost:8080` (gwc dev; GI0 build failure in `documents.go:1068` unrelated to onboarding path)
+**Screenshots:** `e2e/screenshots/gx09_*.png` (12 files, dark + light, 1280×768)
+
+---
+
+## The story
+
+Tessa opens CashFlux for the first time on a laptop. She has no accounts, no data. This is the onboarding story (L6 — "The First Night").
+
+**What actually happens:**
+
+1. The browser loads `index.html`. A branded `#boot` splash appears instantly — dark background, spinning arc, the letter "C" in Fraunces, "CashFlux" wordmark, tagline "Getting your money in order…".
+2. The WASM boots (sub-1 s in dev; ~2 s typical production transfer). The app mounts. The splash fades out and is set `display:none` — fully gone.
+3. The app lands on `/dashboard`. It is **not** empty. It shows a populated household: "Daniel Carter", "Jordan Lee (roommate)", accounts, net-worth figures, budget summaries. This is the sample dataset, seeded silently on first load.
+4. There is **no welcome panel, no tour, no slideshow, no checklist, no "You're using sample data" banner on first run.** The user is dropped into a stranger's household with no orientation whatsoever.
+5. There is no way to reach a genuinely empty state without manually wiping localStorage or knowing to look in the sample-data banner (if one appears — it does not appear on the dashboard itself).
+6. Clearing all `cashflux:*` keys from localStorage and reloading re-seeds sample data again (because `cashflux:seeded` was cleared too). The only guard that prevents re-seeding is the `cashflux:seeded` flag, which the "Start fresh" action presumably sets — but that action is only available from a sample-data banner that is not shown on the dashboard.
+
+**Light-mode first run:** After clearing all flags and setting `cashflux:prefs = {theme: "light"}`, the app still boots with `data-theme="dark"`. The theme preference written via localStorage before the reload is not respected on cold boot — the dark-mode default wins. The boot splash card background is `rgb(14,14,15)` (pure dark), regardless of the stored preference.
+
+---
+
+## What already works well (keep)
+
+- **Boot splash is branded and correct.** `gx09_splash_early_dark_1280.png` shows the mark appearing immediately (7 KB — captured before WASM is done). `gx09_splash_mid_dark_1280.png` shows the full animated state. Dark background, accent-colored arc, Fraunces wordmark, muted tagline — on-brand and calm.
+- **Splash dismisses cleanly.** After 3 s: `display: none`, `opacity: 0`, `z-index: -1`. No linger. The L12 root-cause fix (MutationObserver + `transitionend` + 700 ms fallback + CSS belt-and-suspenders) is working correctly. This definitively closes the L1/L2/L3/L6/L11 splash linger concern.
+- **App-enter animation.** The app fades in with `app-settle` after the splash. Smooth.
+- **`cashflux:seeded` guard logic is correct in isolation.** `decideHydrate()` in `internal/app/hydrate.go` properly distinguishes "true first run" (seed), "returning user with data" (import), and "returning user who wiped" (empty). The logic itself is right; the UX layer around it is missing.
+- **Dark-mode splash and boot visuals are polished.** Screenshots confirm the mark, wordmark, and sub-text render correctly with proper opacity ramp-up animation.
+
+---
+
+## Structure fixes (grouped, highest-impact first)
+
+### GX9-F1. CRITICAL — No onboarding flow shipped for B18 [GO-STRUCTURAL] ★★
+
+**What shipped for B18:** Nothing. The full B18 spec (splash + welcome panel + optional quick guide slideshow + first-run sample-vs-fresh choice + checklist card + empty-state CTAs) is approved but unimplemented.
+
+The probe found zero elements matching any of: `.onboarding`, `#onboarding`, `.welcome`, `#welcome`, `.tour`, `.guide`, `.modal`, `.overlay`, `.first-run`. `localStorage` on first boot contains only `cashflux:workspaces`, `cashflux:seeded`, `cashflux:muzak-pos`, `cashflux:dataset` — no `onboardingSeen`, no tour step, no checklist flag.
+
+**Minimum viable onboarding (ordered build steps):**
+
+1. `internal/onboarding` package: `Step` type, `checklist` predicates, `IsSeen(ls)` / `MarkSeen(ls)` — pure Go, no `syscall/js`, table-tested. Persist flag as `cashflux:onboardingSeen` in localStorage.
+2. Welcome panel: one-shot FlipPanel on first load (when `onboardingSeen` is absent). Cards: "Welcome to CashFlux", sample-vs-fresh choice, key feature callouts. Actions: "Take a tour", "Start fresh", "Skip". Set flag on any dismiss path.
+3. Sample-vs-fresh choice: two buttons inside the welcome panel. "Explore sample data" = keep and close. "Start fresh" = wipe dataset + set `cashflux:seeded` so the guard knows re-seed was intentional = dismiss.
+4. Quick guide slideshow: 4–5 FlipPanel slides covering Dashboard / Accounts / Budgets / Goals / AI. Accessible from welcome panel + Settings "Replay tour".
+5. First-run banner on Dashboard (if `onboardingSeen` absent and dataset is sample): "You're exploring sample data. Start fresh or keep looking around." Dismissible, never reappears after dismiss.
+
+**Cross-ref:** B18 spec in TODOS.md §B18; L6 UX gaps §4568; GX2-F7 (Planning CTA terse "Add").
+
+---
+
+### GX9-F2. HIGH — Light-mode theme not applied on cold boot after first-run flag clear [GO-STRUCTURAL]
+
+**Measured:** After `localStorage.setItem('cashflux:prefs', JSON.stringify({theme:'light'}))` + reload (clearing all flags first), `document.documentElement.getAttribute('data-theme')` is still `"dark"`. Screenshot `gx09_firstrun_light_1280.png` and `gx09_empty_dashboard_light_1280.png` are byte-for-byte identical to the dark variants (`146151` bytes each — same file size).
+
+**Root cause:** The `uistate.prefs` boot path reads preferences from `cashflux:prefs` in localStorage, but the clear operation removed the key, so there is no preference to read — the dark default wins. This is expected behaviour when all flags are cleared. However, the probe also set a theme pref *after* clearing and *before* reload; the fact it didn't take effect suggests the preference key name or the format used does not match what the boot loader reads.
+
+**Fix (GO-STRUCTURAL):** Confirm the exact key and format `internal/uistate/prefs.go` reads at boot. If the probe's `cashflux:prefs` JSON blob is correct, the issue may be that `ApplyPrefs()` runs before the DOM is ready or the key is read with a different name. Add a small integration test that verifies theme persistence across a simulated cold boot.
+
+**Note:** This also means the boot splash itself is always dark-themed regardless of the user's preference — the `#boot` background is `rgb(14,14,15)` (dark) in both runs.
+
+---
+
+### GX9-F3. HIGH — Boot splash always renders dark; no light-mode splash variant [CSS-ONLY]
+
+**Measured:** `bootBg = rgb(14,14,15)` for both dark and light themes. The `#boot` element uses `background: var(--bg)`, which should respond to `[data-theme="light"]` if that attribute is set on `<html>` before the splash renders.
+
+**Problem:** The theme attribute is applied by the WASM app after it mounts — after the splash is already displayed. The splash therefore always inherits the dark-theme default. For a user who has previously chosen light mode, the cold-boot splash flashes dark then the app appears in light — a jarring flash.
+
+**Fix (CSS-ONLY):** Read the stored theme preference from localStorage in the inline `<script>` at the top of `<head>` (before the `<body>` is parsed) and apply `document.documentElement.setAttribute('data-theme', savedTheme)` synchronously. The theme vars are already defined in `[data-theme="light"]` CSS above, so applying the attribute early will make the splash respect the saved theme with no additional CSS work.
+
+```html
+<!-- In <head>, before any other scripts: -->
+<script>
+  (function(){
+    try {
+      var p = JSON.parse(localStorage.getItem('cashflux:prefs') || '{}');
+      if (p.theme === 'light') document.documentElement.setAttribute('data-theme','light');
+    } catch(e){}
+  })();
+</script>
+```
+
+---
+
+### GX9-F4. MEDIUM — Boot splash card background is transparent in light mode [CSS-ONLY]
+
+**Status from GX2-F6:** listed as "deferred, cosmetic". Now confirmed in probe: the `.boot-card` itself has no explicit background; it inherits from `#boot` which is `var(--bg)`. In dark mode this is `rgb(14,14,15)` — opaque, correct. If GX9-F3 is fixed and the splash renders in light mode, the card area will show the warm-white body (`#f7f6f3`) — correct. But the boot mark area (the "C" letter, the SVG ring) needs to be verified it still reads well on the light background. No additional card background is needed once F3 is fixed.
+
+**Action:** Co-verify with GX9-F3. If the "C" glyph uses `color: var(--text)` and the ring uses `stroke: var(--accent)` and `var(--border)`, they should already work correctly in light mode via the theme vars. Confirm visually.
+
+---
+
+### GX9-F5. MEDIUM — "Start freshDismiss" run together on sample-data banner [CSS-ONLY]
+
+**Status:** Previously observed (G1, G2 reviews). `gx09_firstrun_dark_1280.png` shows the dashboard with sample data — the sample-data banner (if it appears) has "Start fresh" and "Dismiss" as adjacent inline links with no spacing between them, reading "Start freshDismiss".
+
+**Fix (CSS-ONLY):** Add `gap: 0.5rem` or `margin-left: 0.5rem` to the second action in `.sample-banner` / `.sample-banner-actions`. Cross-ref: G2 D1 defect in TODOS.md §14051.
+
+---
+
+### GX9-F6. LOW — No "Replay tour" entry in Settings [GO-STRUCTURAL]
+
+Per B18 spec, a "Replay tour" or "View quick guide" button should live in Settings. It does not exist. This is a secondary deliverable from B18 — blocked on GX9-F1 (the tour itself). File as dependent.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+| ID | Screenshot | Measured value | Defect |
+|----|-----------|---------------|--------|
+| D1 | `gx09_splash_early_dark_1280.png` | 7,448 bytes | Boot splash appears immediately (correct) — branded mark visible before WASM |
+| D2 | `gx09_after_splash_dark_1280.png` / `gx09_after_splash_light_1280.png` | `display:none`, `z-index:-1`, `opacity:0` after 3 s | Splash correctly fully dismissed — no linger |
+| D3 | `gx09_firstrun_dark_1280.png` | 0 onboarding elements found | **CRITICAL:** No welcome panel, no tour, no banner on first run — user dropped into sample household silently |
+| D4 | `gx09_firstrun_light_1280.png` | `data-theme: dark`; file size `146,151` bytes = identical to dark variant | **HIGH:** Light-mode preference not respected on cold boot |
+| D5 | `gx09_empty_dashboard_dark_1280.png` | `bodyText` contains "Daniel Carter", "Jordan Lee" — sample household | **CRITICAL:** After clearing all flags, sample re-seeds immediately; no empty state reachable |
+| D6 | Boot card bg measured | `rgb(14,14,15)` in both themes | **MEDIUM:** Splash always dark-themed; light-mode users see dark flash before app renders |
+| D7 | `gx09_firstrun_light_1280.png` | Guide buttons: `[]` | **HIGH:** No onboarding guide button anywhere in the app |
+
+---
+
+## Probe hardening notes
+
+- The probe uses `BASE = 'http://localhost:8080'` (not 7070 — gwc binds 8080 by default; no `-port` flag was passed).
+- `clearFirstRunFlags` deletes all `cashflux:*` keys including `cashflux:seeded`. This causes re-seeding on reload — which is the correct probe of the "true first run" path, but means subsequent runs of the probe within the same browser session will always re-seed. To test the "user wiped intentionally" path (`hydrateEmpty`), the probe should delete everything *except* `cashflux:seeded`.
+- Light-mode theme capture failed because `setTheme` runs *after* `clearFirstRunFlags` + reload, but the flags were already cleared in the prior step — the theme write succeeds but the subsequent `clearFirstRunFlags` + reload removes it. Probe ordering should be: (1) set theme, (2) clear flags except prefs, (3) reload.
+- The `networkidle` wait on reload times out silently (caught) because the gwc live-reload WebSocket counts as a persistent network connection. The `2000 ms` post-reload sleep is sufficient; no fix needed.
+- `page.$('button:has-text(...)')` is deprecated Playwright CSS pseudo-class syntax; replace with `page.getByRole('button', {name: /guide/i})` in future probe iterations.
+
+---
+
+## Cross-references
+
+- **B18** — Onboarding + quick guide + splash (the full feature spec). GX9 is the glamor audit of that spec. Nothing from B18 has shipped yet.
+- **L6** — "The First Night" story: identified silent sample seeding, missing first-run banner, missing sample-vs-fresh choice, missing empty state path. The UX gaps logged there (§4592–§4608) remain open.
+- **L12** — Splash root-cause investigation. Established that the splash linger was a test-harness timing artifact, not a dismiss bug. GX9 probe confirms: splash is fully dismissed correctly (D2 above).
+- **GX1** — Shell light-mode fixes (resolved 2026-06-23). GX9-F3 is a related but distinct issue: the splash specifically needs its theme applied before WASM mounts.
+- **GX2** — Empty state CTAs. GX2-F1 (Transactions/Accounts CTAs) and GX2-F2 (Insights) shipped. GX2-F6 (boot splash transparent card bg, cosmetic) remains deferred — co-resolves with GX9-F3/F4. GX2-F7 (Planning CTA "Add" terse label) still deferred.
+- **GX2-F5** — Light-mode `.empty` contrast (CSS token gap). Related to GX9-F2: if the theme doesn't apply on cold boot, this fix has no effect on first-run users.
+
+---
+
+## Summary verdict
+
+**Onboarding shipped for B18: nothing.** The approved full-scope B18 spec (splash + welcome + slideshow tour + sample-vs-fresh choice + checklist + Settings replay) has zero implementation. The boot splash is the only delivered element, and it is good. Everything else is missing.
+
+**Splash linger: resolved.** Probe measured `display:none`, `z-index:-1`, `opacity:0` at 3 s post-load. No cover, no bleed. The L12 fix holds.
+
+**Light-mode splash/onboarding status:** The splash always renders dark (boot card bg `rgb(14,14,15)`). Light-mode preference is not applied until after WASM mounts. No light-mode splash exists. Post-clear reloads ignore the stored theme pref.
+
+**Top fixes:**
+1. GX9-F1 [GO-STRUCTURAL] — Implement B18 onboarding (welcome panel + sample-vs-fresh choice + quick guide). This is the entire missing feature.
+2. GX9-F3 [CSS-ONLY] — Apply saved theme to `<html>` synchronously in `<head>` so the splash respects the user's preference.
+3. GX9-F2 [GO-STRUCTURAL] — Debug and fix why theme pref written before cold-boot reload is not respected.
+4. GX9-F5 [CSS-ONLY] — Fix "Start freshDismiss" spacing in sample-data banner.
+5. GX9-F6 [GO-STRUCTURAL] — Add "Replay tour" to Settings (blocked on F1).
 
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
