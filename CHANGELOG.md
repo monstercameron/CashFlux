@@ -34,6 +34,9 @@ and every commit updates this file under `Unreleased`.
   destructive "Clear" member button is now a ghost-danger style, visually distinct from "Select all".
   **Insights (G13):** the no-key "Settings" CTA is now a primary button, the New-chat/Edit-prompt
   pills stay outlined in light mode, and the starter chips get a softer dedicated pill style.
+  **Documents (G14):** parsed-statement review rows now render *below* the statement card (not above
+  it), and the neutral draft-import amounts are readable in light mode (scoped so the green/red
+  semantic amount colors are preserved). This completes the GLAMOR per-page review series (G1–G14).
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

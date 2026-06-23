@@ -466,8 +466,6 @@ func Documents() ui.Node {
 			),
 			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
 		),
-		draftBody,
-		summaryBody,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("documents.stmtTitle")),
 			P(css.Class("muted"), uistate.T("documents.stmtDesc")),
@@ -481,6 +479,11 @@ func Documents() ui.Node {
 				),
 			),
 		),
+		// Review results sit below the import inputs that produce them (G14 §1): a
+		// parsed statement / scanned receipt's draft rows no longer pop in *above* the
+		// card the user just acted in.
+		draftBody,
+		summaryBody,
 		Section(css.Class("card"),
 			H2(css.Class("card-title"), uistate.T("documents.csvTitle")),
 			P(css.Class("muted"), uistate.T("documents.csvDesc")),

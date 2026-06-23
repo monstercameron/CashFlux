@@ -13666,6 +13666,18 @@ with weights tucked into a disclosure, (c) all placeholder text readable at 768p
 
 ### G14. Documents — "Import the Statement" (Omar) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Both CRITICALs fixed:
+- **CRITICAL §1: review appeared above the statement card** — moved `draftBody`/`summaryBody` below
+  the statement card in `documents.go`, so parsed rows pop in *under* the input the user just acted in.
+- **CRITICAL §3: draft rows/amounts invisible in light mode** — the review amounts used `.amount`
+  (plain, no semantic modifier), which kept the dark theme's near-white `--text` on white. Added
+  `[data-theme="light"] .amount:not(.amount-income):not(.amount-expense) { #1c1c1e }` — scoped with
+  `:not()` so it fixes the neutral draft amounts without overriding the green/red semantic colors.
+  Draft row descriptions were already covered by the G9 `.row-desc` pin.
+- **Intentionally deferred**: collapsing the tall textareas to expand-on-focus, a "Step 2" indicator on
+  the review card, and clearing the sample-seeded draft on first load are polish items; the two
+  CRITICALs (mis-ordered + invisible review) were the page-breaking ones.
+
 **The story**
 Omar opens the Documents page to bring in a bank CSV or snap a receipt, reviews the
 parsed rows, dedupes against existing transactions, and confirms the import.

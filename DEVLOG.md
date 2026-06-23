@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 - feat: GLAMOR series wave 3 — G12 Split, G13 Insights, G14 Documents
+
+Cam added five more glamor tickets (G12–G14 plus the earlier G7–G11). Worked through G12–G14.
+
+G12 Split and G13 Insights were mostly already-working pages — their CRITICAL light-mode title issues
+were already closed by the G9 root-cause fix. Contained fixes: G12 a ghost-danger "Clear" to
+distinguish it from "Select all"; G13 a primary no-key Settings CTA, outlined chat pills (the
+BorderBlack10 tint vanished on white), and a softer dedicated `.chip-suggest` style.
+
+G14 Documents had two real page-breaking CRITICALs. (1) The parsed-statement review table rendered
+*above* the statement card that produced it — a simple render-order move of draftBody/summaryBody
+below the statement card. (2) Draft-import amounts were invisible in light mode: they use the plain
+`.amount` class (no income/expense modifier), which kept the dark theme's near-white `--text`. Added
+a `[data-theme="light"] .amount:not(.amount-income):not(.amount-expense)` pin — the `:not()` scoping
+matters, otherwise it would clobber the green/red semantic amount colors everywhere in light mode.
+
+Recurring theme worth flagging: the deepest remaining light-mode issues (black bands between cards,
+dark nav rail in light mode) are *shell-level* — the theme engine emits `--bg-base`/`--bg-card` but
+the shell/bento containers read different tokens. That's a dedicated shell-theming pass, not a
+per-page glamor fix, and the shell is under Cam's active concurrent edit, so I deferred it with notes.
+
+That brings the GLAMOR per-page review series to G1–G14, all reviewed and the high-value/CRITICAL
+items shipped.
+
 ## 2026-06-23 - feat: GLAMOR series wave 2 — G11 Bills (series G1–G11 complete)
 
 Last screen, and a light one: the audit confirmed Bills already nails the core loop (mark-paid per
