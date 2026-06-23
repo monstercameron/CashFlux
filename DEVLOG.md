@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: GLAMOR GM3 confirm dialogs — bulk-delete gate, safe focus, aria
+
+GM3 audit surfaced 7 defects across the cf-dialog system. All 4 structural ones are fixed in
+this commit; the CSS-only D5/D6 were already landed in the prior patch block.
+
+**D1 — Bulk-delete had no confirmation (CRITICAL / L50):** `bulkDelete` in `screens/transactions.go`
+previously executed immediately after "Delete selected" — no dialog, no count, one mis-click nukes
+all selected rows. Wrapped the delete logic in `uistate.ConfirmModal` with a count-aware message
+("Delete N transactions? This can't be undone."). The existing undo button is kept as a secondary
+safety net. New i18n key: `transactions.bulkDeleteConfirm`.
+
+**D2 — Wrong default focus on destructive confirms:** All 4 audit runs showed `focusedId:
+"cf-dialog-confirm"` — the red danger button was receiving default focus. Added a third branch to
+the focus-id logic in `dialoghost.go`: when `req.Destructive`, point focus to `"cf-dialog-cancel"`
+instead. Added `id="cf-dialog-cancel"` to the Cancel button element.
+
+**D3 — No title on destructive confirm dialogs:** `ConfirmModal` has no `title` parameter (no
+API change wanted). In `DialogHost`, when `req.Destructive && req.Title == ""`, the title is
+auto-derived to `dialog.deleteTitle` ("Are you sure?"). This also enables D4.
+
+**D4 — No `aria-labelledby`:** `<h3>` gets `id="cf-dialog-title"`, backdrop gets
+`aria-labelledby="cf-dialog-title"`. Role upgraded from `dialog` to `alertdialog` for
+destructive confirms (screen-reader urgency signal per ARIA APG).
+
+**D7 — Cramped dialog at 110px:** CSS override block updated with `padding:1.5rem 1.5rem 1.25rem`
+and `min-height:6rem` so the dialog has breathing room at 768 and 1280.
+
+Trade-off on D3: chose Option B (auto-derive in DialogHost) over Option A (add `title` param to
+`ConfirmModal`) to keep API surface stable and avoid updating ~10 call sites.
+
+
 ## 2026-06-23 - feat: GLAMOR GM1 Settings modal — 768px collapse, h4 headings, password aria-labels
 
 GM1 audit of the Settings FlipPanel surfaced ~10 open items after the G21 global light-mode fix

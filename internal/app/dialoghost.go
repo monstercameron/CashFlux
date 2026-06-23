@@ -111,6 +111,10 @@ func DialogHost() uic.Node {
 		focusID := "cf-dialog-confirm"
 		if req.Kind == uistate.DialogPrompt {
 			focusID = dialogInputID
+		} else if req.Destructive {
+			// Default focus to Cancel for destructive confirms so Enter can't
+			// accidentally trigger the danger action (WCAG SC 3.2.4).
+			focusID = "cf-dialog-cancel"
 		}
 		var fcb js.Func
 		fcb = js.FuncOf(func(js.Value, []js.Value) any {
@@ -140,24 +144,33 @@ func DialogHost() uic.Node {
 		}
 	}
 	confirmCls := "btn btn-primary"
+	dialogRole := "dialog"
 	if req.Destructive {
 		confirmCls = "btn btn-danger"
+		// alertdialog is announced with urgency by screen readers (ARIA APG).
+		dialogRole = "alertdialog"
+		// Auto-derive a title for destructive confirms that didn't supply one,
+		// so the heading is always present for aria-labelledby.
+		if req.Title == "" {
+			req.Title = uistate.T("dialog.deleteTitle")
+		}
 	}
 
 	panel := Div(css.Class("cf-dialog"),
-		If(req.Title != "", H3(css.Class("cf-dialog-title"), req.Title)),
+		If(req.Title != "", H3(css.Class("cf-dialog-title"), Attr("id", "cf-dialog-title"), req.Title)),
 		P(css.Class("cf-dialog-msg"), req.Message),
 		If(req.Kind == uistate.DialogPrompt,
 			Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
 				Attr("aria-label", req.Message), Value(req.Default))),
 		Div(css.Class("cf-dialog-actions"),
-			Button(css.Class("btn"), Type("button"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
 			Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),
 		),
 	)
 	// Scrim is a sibling of the panel so clicking the panel never bubbles a cancel.
 	return Div(css.Class("cf-dialog-root"),
-		Div(css.Class("cf-dialog-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "true"),
+		Div(css.Class("cf-dialog-backdrop"), Attr("role", dialogRole), Attr("aria-modal", "true"),
+			Attr("aria-labelledby", "cf-dialog-title"),
 			Div(css.Class("cf-dialog-scrim"), OnClick(func() { finish(false) })),
 			panel,
 		),

@@ -17943,6 +17943,44 @@ Fix priority: D1 then D2 then D3/D4 (a11y), then CSS-only D5/D6.
 
 _Cross-links: C42 (replace native popups — DONE), L50 (bulk delete had no confirmation — this review confirms still open)._
 
+---
+
+### ✅ RESOLVED (2026-06-23).
+
+**Shipped:**
+- **D1 — Bulk-delete confirmation dialog** (`internal/screens/transactions.go`): `bulkDelete`
+  now calls `uistate.ConfirmModal` before executing. Message is count-aware ("Delete N
+  transactions? This can't be undone."). New i18n key `transactions.bulkDeleteConfirm`.
+- **D2 — Default focus to Cancel for destructive confirms** (`internal/app/dialoghost.go`):
+  `focusID` now falls back to `"cf-dialog-cancel"` when `req.Destructive` is true; Cancel button
+  given `id="cf-dialog-cancel"` so focus lands correctly.
+- **D3 — Auto-derived title for destructive confirms** (`internal/app/dialoghost.go`): when
+  `req.Title == ""` and `req.Destructive`, title is set to `dialog.deleteTitle` ("Are you
+  sure?"). New i18n key `dialog.deleteTitle`.
+- **D4 — `aria-labelledby` on dialog backdrop** (`internal/app/dialoghost.go`): backdrop now
+  carries `aria-labelledby="cf-dialog-title"`; `<h3>` gets `id="cf-dialog-title"`. Role
+  upgraded to `alertdialog` for destructive confirms.
+- **D5/D6 — Scrim blur + theme-ring shadow** (already shipped in prior CSS patch; verified in
+  `web/index.html` lines ~338–341).
+- **D7 (item 7) — Dialog padding / min-height** (`web/index.html`): override block updated to
+  `padding:1.5rem 1.5rem 1.25rem; min-height:6rem` to relieve cramped 110px layout.
+
+**Verified already done (no change needed):**
+- No native `window.confirm/prompt/alert` dialogs — C42 stable. ✓
+- Danger button carries `btn-danger` (red/crimson in both themes). ✓
+- Backdrop + scrim present; click-outside cancels. ✓
+- Dialog centered at 1280 and 768. ✓
+- ARIA `role=dialog` + `aria-modal=true` present (now upgraded for destructive). ✓
+- Enter confirms, Escape cancels, Tab trapped. ✓
+- Prompt dialog auto-focuses input + `.select()`. ✓
+- Light-mode contrast correct. ✓
+- Undo button retained as post-hoc safety net (D8). ✓
+
+**Deferred:**
+- Custom-page delete path (P3 probe note) — probe skipped when no custom page seeded;
+  the dialog host is shared, so fix propagates automatically; no custom-page-specific
+  change needed here.
+- Frosted scrim was already patched (GM3-5 block) — no further work.
 
 ### GM4. FlipPanel system + widget gear + command palette — UX review — 2026-06-23 ★
 
