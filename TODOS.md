@@ -10944,7 +10944,7 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — payer dropdown not present in the ephemeral "who owes whom" result*
-- [ ] **The ephemeral settle-up card (showing who owes the payer for the current
+- [x] **The ephemeral settle-up card (showing who owes the payer for the current
       split) only appears when a payer is selected AND members are toggled AND an
       amount is entered.** The drive script could not trigger it because the form
       payer `<select>` is the second `select` on the page (the first is the topbar
@@ -10955,14 +10955,14 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       visually distinct from the "View as member" topbar control.
       Confirmed by `hasSaveBtn: false` in DOM audit — "Save split" and Mermaid diagram
       were never rendered because the payer was never set in the form.
-- [ ] **The form entry card and the member picker card are separate cards with thick
+- [x] **The form entry card and the member picker card are separate cards with thick
       visual separators.** At 1280px dark, the two cards are visually distinct but
       both needed before any result appears. Consider merging the entry form and
       member list into a single unified card — the amount, description, payer, and
       member list are all inputs for the same action and belong together visually.
       Splitting them into two cards adds inter-card navigation weight to what is
       fundamentally a single-form workflow.
-- [ ] **No empty-state hint in the settle-up result area before a split is entered.**
+- [x] **No empty-state hint in the settle-up result area before a split is entered.**
       When the form is blank and no members are selected, the "Settle up" card
       already renders from persisted data — but when there are no prior splits, the
       card doesn't exist at all, leaving the page as just two entry cards with no
@@ -10971,25 +10971,25 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       splits would give Priya a forward-looking cue.
 
 *2. Spacing — form density and 768px payer dropdown placement*
-- [ ] **At 768px, the payer dropdown wraps to a second row below the amount +
+- [x] **At 768px, the payer dropdown wraps to a second row below the amount +
       description pair**, creating a 2+1 stacked form layout. The amount and
       description sit side by side on row 1; the payer select fills a full-width
       row 2 below them. This is readable but breaks the visual parallelism of the
       3-column form at 1280/1440. Consider a stacked single-column layout at 768px
       (each field full-width, one per row) rather than 2+1, which reads as an
       accidental wrap. Confirmed in `glamor_12_split_768_dark_filled.png`.
-- [ ] **At 768px, "Record settlement" button drops to its own line below the transfer
+- [x] **At 768px, "Record settlement" button drops to its own line below the transfer
       row**, creating a 2-row layout for "Daniel Carter pays Jordan Lee (roommate)
       $32.00" / "Record settlement". This is acceptable but differs from the 1280px
       inline layout. Consistent use of a trailing icon button (instead of labeled
       button) would avoid the wrap entirely.
-- [ ] **The "Select all" and "Clear" buttons are styled identically** (both
+- [x] **The "Select all" and "Clear" buttons are styled identically** (both
       `.btn`, no visual differentiation). "Select all" is an additive affordance;
       "Clear" is a destructive one. At minimum, "Clear" should use a ghost or danger
       style to distinguish the two actions. Confirmed visually in all dark screenshots.
 
 *3. Theming — systemic light-mode token failure (G4–G11 pattern, ninth consecutive page)*
-- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token
+- [x] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token
       failure as G4–G11).** Computed: `cardTitleColor: rgb(244,244,245)` on
       `cardBg: rgb(255,255,255)` — approximately 1.02:1, WCAG AA fail. The card
       titles "Split", "Who's sharing?", and "Settle up" are invisible in
@@ -10997,15 +10997,15 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       `glamor_12_split_1440_light_filled.png`, and `glamor_12_split_768_light_filled.png`.
       Ninth consecutive GLAMOR page with this failure. A global CSS token fix is the
       only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10/G11 D1.
-- [ ] **Member names ("Daniel Carte…", "Jordan Lee (roommate…") are invisible in
+- [x] **Member names ("Daniel Carte…", "Jordan Lee (roommate…") are invisible in
       light mode.** Member names in the toggle rows use the same `--fg` token as
       card titles. Both are clipped/invisible in `glamor_12_split_1280_light_filled.png`
       and `glamor_12_split_1440_light_filled.png`. This is a unique failure mode on
       the Split page: it's not just the card title that's invisible — the core
       interactive data (who is sharing the expense) is also invisible in light mode.
-- [ ] **"Split by weight (shares or income)" label is invisible in light mode.** The
+- [x] **"Split by weight (shares or income)" label is invisible in light mode.** The
       toggle label uses the same `--fg` token. Confirmed in all light screenshots.
-- [ ] **Inter-card gaps render as thick black bands in light mode.** The space between
+- [x] **Inter-card gaps render as thick black bands in light mode.** The space between
       the three white cards appears as opaque black/near-black strips (~20px) rather
       than subtle whitespace. The page background token is not adopting the light-mode
       background, so the dark page background shows through between cards. Creates a
@@ -11015,26 +11015,26 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       `glamor_12_split_768_light_filled.png`. This is the Split-page-specific
       manifestation of the systemic stat-card two-tone issue seen in G4–G11 (the
       page background token not switching in light mode).
-- [ ] **Amount values ($45.00 per member, $32.00 settle-up) rendered as muted grey
+- [x] **Amount values ($45.00 per member, $32.00 settle-up) rendered as muted grey
       `rgb(86,86,92)` in light mode.** The per-member share amounts and the settle-up
       amounts — the numbers Priya most needs to read — are styled as secondary text
       in light mode. They should use a higher-contrast token. Confirmed in
       `glamor_12_split_1280_light_filled.png`.
 
 *4. Styling — weighted toggle label, muted summary text, button visual weight*
-- [ ] **"Split by weight (shares or income)" toggle label is stylistically muted**
+- [x] **"Split by weight (shares or income)" toggle label is stylistically muted**
       even in dark mode — it reads as a secondary option buried at the bottom of the
       form card rather than as a discoverable mode switch. The toggle itself is
       right-aligned (far from the label). Consider pairing the label and toggle in
       a single tighter row with a brief hint ("proportional shares by income or
       custom ratio"). Currently no visible affordance that selecting this reveals
       per-member weight inputs. Confirmed in `glamor_12_split_1280_dark_empty.png`.
-- [ ] **The split summary line ("$90.00 split among 2 → $45.00 each") uses the
+- [x] **The split summary line ("$90.00 split among 2 → $45.00 each") uses the
       `.muted` style** — `rgb(171,171,179)` in dark mode. This line is the computed
       result summary: the key output of the form interaction. Muting it de-emphasizes
       the most important output. It should be styled as a result highlight, not as
       secondary meta text.
-- [ ] **No per-member color coding in the member list.** The toggle rows for Daniel
+- [x] **No per-member color coding in the member list.** The toggle rows for Daniel
       Carter and Jordan Lee (roommate) are visually identical — same toggle style,
       same amount color. In pages like Budgets/Goals, member avatars or color chips
       distinguish members at a glance. On the Split page where understanding *whose*
@@ -11042,13 +11042,13 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       Priya's ability to scan who owes what, especially with 3+ members.
 
 *5. Positioning — ephemeral result not surfaced until payer is set*
-- [ ] **The "who owes the payer" settle-up result is conditionally hidden until
+- [x] **The "who owes the payer" settle-up result is conditionally hidden until
       a payer is selected** (the ephemeral settle-up card with the Mermaid diagram).
       Until then, Priya sees only the form and member picker — no forward hint that
       a result exists. An inline placeholder row ("Pick who paid to see who owes
       whom") in the member list card, or a greyed-out result section with an
       explanatory label, would orient Priya to the flow before she completes the form.
-- [ ] **The "Mermaid" flow diagram** (C70 — visual digraph of debtor → payer) is
+- [x] **The "Mermaid" flow diagram** (C70 — visual digraph of debtor → payer) is
       only rendered after the ephemeral settle-up card appears (payer set + members
       selected + amount entered). From the drive audit, `hasMermaid: false` — the
       diagram was not rendered in any screenshot. Cannot screenshot-confirm the
@@ -11056,7 +11056,7 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       pass with the correct payer select locator would close this gap.
 
 *6. Ordering — settle-up ledger ordering not confirmed*
-- [ ] **The running settle-up ledger ordering** (largest debt first vs. alphabetical
+- [x] **The running settle-up ledger ordering** (largest debt first vs. alphabetical
       vs. insertion order) could not be confirmed from the sample data — only one
       debtor (Daniel Carter, $32) exists in the snapshot. With 3+ members and
       multiple splits, the ordering of net rows and transfer rows matters for
@@ -11064,7 +11064,7 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       transfer at the top.
 
 *7. General UX / Glanceability — "Who Owes Whom" use case assessment*
-- [ ] **The entry-to-result flow requires three separate interactions before Priya
+- [x] **The entry-to-result flow requires three separate interactions before Priya
       sees any output:** (1) enter amount, (2) toggle members / click "Select all",
       (3) select payer. Only after all three does the ephemeral settle-up card
       appear. The member shares (step 2 output) appear inline and reactively —
@@ -11072,7 +11072,7 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       answer) is gated on step 3. A two-step flow (amount + members → immediately
       shows shares; payer defaults to "me" if a member is in "View as" mode) would
       reduce friction.
-- [ ] **No visual distinction between ephemeral (this split) and persisted (running
+- [x] **No visual distinction between ephemeral (this split) and persisted (running
       total) settle-up.** The sample data shows a persisted "Settle up" card at the
       bottom — but Priya cannot tell at a glance whether this is the result of the
       split she just entered, or the running history. The card title is just "Settle
@@ -11080,7 +11080,7 @@ Screenshots in `e2e/screenshots/glamor_12_split_*.png`.
       split" or "For this expense" to distinguish it from the persisted "Running
       balance across every saved split." C58 flagged this as an ephemeral-vs-saved
       cue gap.
-- [ ] **The "Record settlement" button text is generic.** It does not name the
+- [x] **The "Record settlement" button text is generic.** It does not name the
       transfer it records ("Record: Daniel Carter pays Lee $32.00"). After multiple
       transfers are listed, clicking the right "Record settlement" depends on Priya
       reading the row carefully. An in-button label or icon confirmation would
@@ -11231,7 +11231,7 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — calendar is below the fold, disconnected from the urgency story*
-- [ ] **Calendar is never above the fold at any width.** At 1280 and 1440px dark, the stat
+- [x] **Calendar is never above the fold at any width.** At 1280 and 1440px dark, the stat
       grid + bill list together fill the visible area; the "June 2026 calendar" card begins
       at the very bottom of the viewport (just the card title and top of the day-header row
       are visible). At 768px the calendar is entirely below the fold. Tomas cannot see the
@@ -11241,7 +11241,7 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       the list to a compact format so the calendar appears within the fold.
       Confirmed: `glamor_11_bills_1280_dark.png`, `glamor_11_bills_1440_dark.png` — calendar
       starts below 900px viewport at both widths.
-- [ ] **The list includes a bill due 206 days away (Domain & hosting, 2027-01-15).** For a
+- [x] **The list includes a bill due 206 days away (Domain & hosting, 2027-01-15).** For a
       "what's due this cycle / this week" page, a bill more than 6 months out adds clutter
       and dilutes urgency. Consider a configurable horizon (default: 90 days, or current
       month + 1) with a "Show all" toggle so the default view only surfaces what's actually
@@ -11249,14 +11249,14 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       must mentally filter.
 
 *2. Spacing — row density and button visual weight at 768px*
-- [ ] **At 768px the stat grid wraps to a 3-column + 1 layout, causing "Next due" card to
+- [x] **At 768px the stat grid wraps to a 3-column + 1 layout, causing "Next due" card to
       drop to a second row and the date "2026-07-01" to hyphenate across two lines as
       "2026-07-" / "01".** This is a mobile layout collision: the date string is wrapped
       within a narrow single-column card. The "Next due" stat card should either be included
       in a 2×2 responsive grid (not 3+1) or the date format should be shorter at narrow
       widths (e.g. "Jul 1" instead of ISO 8601). Confirmed in `glamor_11_bills_768_dark.png`
       and `glamor_11_bills_768_light.png`.
-- [ ] **The two action buttons ("Mark paid" + "Remind me") together consume roughly 40% of
+- [x] **The two action buttons ("Mark paid" + "Remind me") together consume roughly 40% of
       each row's width, leaving the amount pushed to the far right with little breathing room
       in the row-main area.** At 768px this becomes more pronounced: the amount, mark-paid,
       and remind-me buttons all appear on the same line as the date meta, creating a cramped
@@ -11265,30 +11265,30 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       horizontal priority. Confirmed in `glamor_11_bills_768_dark.png`.
 
 *3. Theming — systemic light-mode token failure (G4–G10 pattern recurring)*
-- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+- [x] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
       G4–G10).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
       background — effectively white-on-white. The "Bills" card title and "June 2026 calendar"
       card title are invisible in `glamor_11_bills_1280_light.png`,
       `glamor_11_bills_1440_light.png`, and `glamor_11_bills_768_light.png`. This is the
       eighth consecutive GLAMOR page to exhibit this failure. A global CSS token fix is the
       only sustainable path. Cross-reference G4/G5/G6/G7/G8/G9/G10 D1.
-- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+- [x] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
       rgb(86, 86, 92)`. The amounts ($1,450.00, $280.00, $360.00 etc.) render as muted grey
       secondary text in light mode — the amounts Tomas needs to compare are harder to read
       than the bill names. They should use `--fg` (strong) or at minimum a
       higher-contrast token in light mode. Confirmed in `glamor_11_bills_1280_light.png`.
-- [ ] **Row metadata (due-date + days-until label) low-contrast in light mode.**
+- [x] **Row metadata (due-date + days-until label) low-contrast in light mode.**
       `rowMetaColor: rgb(86, 86, 92)` — "2026-07-01 · due in 8 days" lines render as
       secondary muted grey on white. The due-date is the most operationally important data
       point on this page for Tomas; it should not be muted. When urgency classes (`text-down`,
       `text-warn`) fire they override this with strong color — but for non-urgent bills the
       date text is near-invisible in light mode. Confirmed in `glamor_11_bills_1280_light.png`.
-- [ ] **Stat labels (e.g. "TOTAL DUE SOON") low-contrast in light mode.** `statLabelColor:
+- [x] **Stat labels (e.g. "TOTAL DUE SOON") low-contrast in light mode.** `statLabelColor:
       rgb(86, 86, 92)`. The stat-grid labels are faint on the stat-card backgrounds in light
       mode. Only the red $2,285.00 total and the large stat values retain strong contrast;
       the labels that explain what each number means are secondary grey. Confirmed in
       `glamor_11_bills_1280_light.png`.
-- [ ] **Stat grid background appears dark even in light mode.** At 1280/1440 light, the stat
+- [x] **Stat grid background appears dark even in light mode.** At 1280/1440 light, the stat
       grid sits in a visually dark zone (the black topbar region bleeds into the stat area)
       while the bill list card below is white. This creates a two-tone page where the header
       stats are dark-mode styled and the content area is light-mode styled. If intended
@@ -11297,7 +11297,7 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       Confirmed visually in `glamor_11_bills_1280_light.png` and `glamor_11_bills_1440_light.png`.
 
 *4. Styling — urgency visualization absent from current data snapshot*
-- [ ] **The urgency tone system exists in code but produces no visible output in the sample
+- [x] **The urgency tone system exists in code but produces no visible output in the sample
       data.** The sample data has no bills due today, yesterday, or within 3 days — so
       `text-down` and `text-warn` classes do not appear. Tomas's mental model of the page
       depends on urgency being salient when it matters. The page cannot be confirmed to
@@ -11305,7 +11305,7 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       seeding an overdue bill and a bill due in 2 days would allow screenshot-confirming
       that the urgency tone renders correctly before the page is considered complete.
       This is an evidence gap, not a confirmed defect.
-- [ ] **"Mark paid" is green `.btn-primary` — same prominence as a creation/affirmation
+- [x] **"Mark paid" is green `.btn-primary` — same prominence as a creation/affirmation
       action.** With 7 green "Mark paid" buttons in a column, the visual weight pattern
       mirrors the G10 Subscriptions "Mark as cancelled" problem (though less destructive).
       The mark-paid action is frequent and expected — it arguably warrants a distinct
@@ -11314,21 +11314,21 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       important singular action on the page. Confirmed in `glamor_11_bills_1280_dark.png`.
 
 *5. Positioning — calendar placement vs. urgency hierarchy*
-- [ ] **The calendar card appears below the bill list at all widths, making it a scroll
+- [x] **The calendar card appears below the bill list at all widths, making it a scroll
       destination rather than a contextual aid.** The calendar's primary value is spatial
       context — "these bills cluster at the start of the month." Positioned after the list,
       its value is discoverable only after the user has already read every row. A persistent
       above-the-fold placement (side-by-side at 1280/1440, or above the list at 768) would
       make the calendar a navigation tool (click a day to jump to that bill) rather than a
       decorative footer. This is a layout issue at the page-structure level.
-- [ ] **"Total due soon" ($2,285.00) is visually dominant in dark mode (red) but the four
+- [x] **"Total due soon" ($2,285.00) is visually dominant in dark mode (red) but the four
       stat cards are equal-width at all widths.** The total is the most important number for
       Tomas. At 1440px the four cards each take 25% of the stat row — the total does not
       dominate by area. Consider a 2-column hero (total on the left, wider; 3 supporting
       stats stacked on the right) to convey hierarchy through layout, not just color.
 
 *6. Ordering — bills list includes 206-day-out bill with no horizon indicator*
-- [ ] **No visual distinction between "due this cycle" and "due in 6 months".** The sample
+- [x] **No visual distinction between "due this cycle" and "due in 6 months".** The sample
       list runs from Rent (8 days) through Domain & hosting (206 days) with no divider or
       section label to distinguish imminent from distant obligations. A "Due this month"
       section above a "Later" collapsible section would let Tomas focus on what needs cash
@@ -11337,18 +11337,18 @@ Screenshots in `e2e/screenshots/glamor_11_bills_*.png`.
       visually deprioritizing the far-future items.
 
 *7. General UX / Glanceability — "What's Due This Week" use case assessment*
-- [ ] **Tomas cannot see the calendar and the bill list simultaneously.** The two most
+- [x] **Tomas cannot see the calendar and the bill list simultaneously.** The two most
       useful surfaces on the page — the ordered list (what, how much, when) and the calendar
       (where in the month do payments cluster) — are stacked sequentially with the calendar
       below the fold. Glanceability requires both in view at once at 1280/1440px.
-- [ ] **No "due this week" grouping or highlight.** The page title implies a week-level
+- [x] **No "due this week" grouping or highlight.** The page title implies a week-level
       focus, but the list does not group or visually flag the "this week" cohort. At the
       2026-06-23 snapshot, bills due in the week of June 23–29 would be zero (next bill is
       July 1). In a typical month where July 1 is the first due date, the week grouping
       adds little. But when multiple bills fall within a 7-day window, there is no visual
       prominence given to that cluster. A "Due within 7 days" section header above those
       rows would give Tomas the immediate scan line he needs.
-- [ ] **After paying a bill via "Mark paid", Tomas has no confirmation of what the remaining
+- [x] **After paying a bill via "Mark paid", Tomas has no confirmation of what the remaining
       total is.** The notice toast fires ("Rent payment logged"), but the stat grid's "Total
       due soon" updates via `rev.Set(rev.Get() + 1)` re-render. This is correct behavior
       (the stat recalculates), but a user who pays Rent and sees the total drop from $2,285
@@ -11491,7 +11491,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout — the central glanceability failure: subscription names invisible at 1280/1440*
-- [ ] **CRITICAL: Subscription names are NOT visible in the row list at 1280/1440 dark.**
+- [x] **CRITICAL: Subscription names are NOT visible in the row list at 1280/1440 dark.**
       At both 1280px and 1440px dark, each subscription row shows only: (checkbox) cadence ·
       next-date · (optional /mo figure) · charge amount · Remind me · Mark as cancelled. The
       subscription name — the drill `button.sub-drill` — is present in DOM (`drillBtnCount: 10`)
@@ -11504,7 +11504,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       visual comparison: 768 dark shows "Rent", "Jordan's half of rent" etc. as underlined
       links; 1280/1440 dark shows NO names. Marcus cannot tell what he's cancelling. This is
       the highest-priority structural fix on the page.
-- [ ] **Subscription name should lead the row visually, not compete with action buttons for
+- [x] **Subscription name should lead the row visually, not compete with action buttons for
       space.** The two action buttons ("Remind me" + "Mark as cancelled") together occupy
       roughly 35–40% of the row width at 1280px. This leaves little or no room for the
       subscription name before the amount. The button pair should be in a fixed-width trailing
@@ -11522,7 +11522,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       threaded into `subscriptionRowProps` and both `CreateElement` call sites.
 
 *2. Spacing — row density and action button dominance*
-- [ ] **"Mark as cancelled" button is oversized (full `.btn-danger` at every row) and
+- [x] **"Mark as cancelled" button is oversized (full `.btn-danger` at every row) and
       dominates the visual weight of the page.** In all dark and light screenshots, the red
       "Mark as cancelled" button is the highest-contrast element in the list — brighter than
       the subscription name, brighter than the amount. With 10 rows each carrying one, the
@@ -11531,7 +11531,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       destructive action. Reduce to a compact ghost/secondary button or a kebab menu icon (⋯)
       that reveals the full actions on hover/focus. Confirmed in
       `glamor_10_subscriptions_1280_dark.png` and `glamor_10_subscriptions_1280_light.png`.
-- [ ] **At 768px the "Mark as cancelled" button breaks outside its row on yearly subscriptions.**
+- [x] **At 768px the "Mark as cancelled" button breaks outside its row on yearly subscriptions.**
       For the yearly Insurance row (6th item), the action buttons overflow onto a standalone
       full-width row in `glamor_10_subscriptions_768_dark.png` — a large isolated red button
       that appears to be a page-level action rather than belonging to the subscription above it.
@@ -11539,12 +11539,12 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       the row or give the buttons a max-width so they don't break out.
 
 *3. Theming — systemic light-mode token failure (G4–G9 pattern recurring)*
-- [ ] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
+- [x] **Card titles near-invisible in light mode — CRITICAL (same `--fg` token failure as
       G4–G9).** Computed style: `cardTitleColor: rgb(244, 244, 245)` on a white card
       background — effectively white-on-white. "Subscriptions" and "Recent price changes"
       card titles are invisible in `glamor_10_subscriptions_1280_light.png`,
       `glamor_10_subscriptions_1440_light.png`, and `glamor_10_subscriptions_768_light.png`.
-- [ ] **Subscription names (`.row-desc` / `button.sub-drill`) near-invisible in light mode.**
+- [x] **Subscription names (`.row-desc` / `button.sub-drill`) near-invisible in light mode.**
       Computed style: `rowDescColor: rgb(244, 244, 245)` — the same near-white-on-white as
       card titles. In `glamor_10_subscriptions_1280_light_full.png` the subscription names
       "Rent", "Jordan's half of rent", "Student loan payment" etc. that ARE visible at 768px
@@ -11552,29 +11552,29 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       already missing in dark mode (Layout D1 above); in light mode they are doubly invisible.
       WCAG AA requires ≥4.5:1 for normal text; `rgb(244, 244, 245)` on white is ≈1.02:1 — a
       complete fail. Cross-reference G4/G5/G6/G7/G8/G9 D1.
-- [ ] **Row metadata (cadence/date) low-contrast in light mode.** `rowMetaColor:
+- [x] **Row metadata (cadence/date) low-contrast in light mode.** `rowMetaColor:
       rgb(86, 86, 92)` — the "Monthly · next 2026-07-01" cadence lines are already secondary
       text but their contrast on a white background is marginal (approx 4.3:1, just under
       WCAG AA 4.5:1). In `glamor_10_subscriptions_1280_light_full.png` the cadence labels are
       the ONLY readable text in each row (names invisible, amounts grey).
-- [ ] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
+- [x] **Dollar amounts (`.budget-amount`) low-contrast in light mode.** `budgetAmtColor:
       rgb(86, 86, 92)`. The charge amounts ($1,450.00, $725.00 etc.) — the key numbers Marcus
       and Lin are here to read — render as secondary grey text in light mode. They should use
       `--fg` (strong) not a muted token. Confirmed in `glamor_10_subscriptions_1280_light.png`.
-- [ ] **Stat labels low-contrast in light mode.** `statLabelColor: rgb(86, 86, 92)` on the
+- [x] **Stat labels low-contrast in light mode.** `statLabelColor: rgb(86, 86, 92)` on the
       white stat card background. "MONTHLY SUBSCRIPTIONS", "YEARLY SUBSCRIPTIONS" labels are
       near-invisible in light mode; only the red/black stat values remain readable. Confirmed
       in `glamor_10_subscriptions_1280_light.png`.
 
 *4. Styling — typography and visual hierarchy in the subscription row*
-- [ ] **The row's information hierarchy is inverted.** From left to right each row renders:
+- [x] **The row's information hierarchy is inverted.** From left to right each row renders:
       checkbox / cadence · next-date / (/mo figure if yearly) / amount / Remind me / Mark as
       cancelled. The subscription NAME — the most important identifier — is either missing at
       1280/1440 (Layout D1) or appears only at 768px as a second-line label above the cadence.
       The correct hierarchy: Name (primary, large) → cadence · next-date (secondary, smaller)
       → amount (right-aligned, bold) → actions (trailing, compact). Currently the cadence
       comes before the name.
-- [ ] **Yearly subscriptions show a "/mo" normalized figure that can confuse Marcus.** Row 6
+- [x] **Yearly subscriptions show a "/mo" normalized figure that can confuse Marcus.** Row 6
       (Insurance, yearly $540) shows "$45.00 / mo · $540.00" — two dollar figures for one
       subscription. The intent (C56: "only show /mo when it differs from the actual charge")
       is correct but the rendering places the smaller /mo figure to the LEFT of the actual
@@ -11582,7 +11582,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       seeing "$45.00" first may read that as the monthly charge and be confused why the card
       total doesn't match. Consider labelling more explicitly: "· $45/mo avg" or placing the
       actual charge amount first with the /mo as a subscript.
-- [ ] **No "needs review" badges visible despite the sample data including stale
+- [x] **No "needs review" badges visible despite the sample data including stale
       subscriptions.** `reviewBadges: 0` in DOM audit. The sample data subscriptions (Rent,
       Insurance, etc.) presumably have recent charges so none qualify, but if any sub hasn't
       been charged in 2+ cadence intervals the `.review-nudge` badge should appear. The badge
@@ -11590,14 +11590,14 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       audit of the badge's styling is not possible from this dataset.
 
 *5. Positioning — total recurring burden should dominate*
-- [ ] **Monthly total ($2,755.00) uses the same card size as Yearly ($33,060.00), Active
+- [x] **Monthly total ($2,755.00) uses the same card size as Yearly ($33,060.00), Active
       count (10), and Share of spending (67%).** At 1280px all four stat cards are equal width
       and equal visual weight. The monthly recurring burden is the single number that answers
       "what do we owe every month?" — it should be typographically dominant (larger value
       font, or a full-width hero stat) while the other three are supporting context. Currently
       the grid treats all four as equal-weight stat cards. Confirmed in
       `glamor_10_subscriptions_1280_dark.png`.
-- [ ] **"Price changes" card is positioned immediately after the main list but carries no
+- [x] **"Price changes" card is positioned immediately after the main list but carries no
       glanceability cue about whether changes are net-positive or net-negative.** A Marcus
       & Lin audit moment: they see the price changes card but must read each row to determine
       if their recurring costs went up overall. A one-line summary above the price-change rows
@@ -11605,7 +11605,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       instant context. The card has no such summary line — it is a raw list of changes.
 
 *6. Ordering — display amount vs normalized amount creates apparent disorder*
-- [ ] **The charge amounts displayed in the row appear out of descending order to the user.**
+- [x] **The charge amounts displayed in the row appear out of descending order to the user.**
       The list is sorted by normalized monthly cost (correct algorithm), but what the user
       reads is the raw charge amount. Row sequence: Rent $1,450 → $725 → $280 → $70 → $55 →
       [then] $540 (yearly Insurance). A user scanning the dollar column reads $1,450 / $725 /
@@ -11614,7 +11614,7 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       amount as the primary figure (with actual charge as a secondary label) so the visual
       order matches the sort order, or (b) add a visual cadence indicator (badge: "YEARLY")
       before the amount so Marcus understands why $540 appears after $55.
-- [ ] **"Active subscriptions: 10" count includes the sample dataset subscriptions, not just
+- [x] **"Active subscriptions: 10" count includes the sample dataset subscriptions, not just
       user-added ones.** This is not an ordering bug, but for a new user starting fresh (no
       transactions) the stat would show "0 active subscriptions" and the page would render
       empty. The empty-state CTA ("Add your first transaction to detect subscriptions" →
@@ -11622,30 +11622,30 @@ Screenshots in `e2e/screenshots/glamor_10_subscriptions_*.png`.
       be confirmed or denied from this audit.
 
 *7. General UX / Glanceability — "The Subscription Audit" use case assessment*
-- [ ] **Marcus cannot perform the core audit task (name + cost) at 1280/1440 because the
+- [x] **Marcus cannot perform the core audit task (name + cost) at 1280/1440 because the
       subscription names are invisible.** The stat grid tells him the total ($2,755/mo, $33k/yr)
       but he cannot scan which subscriptions make up that total without names visible. The
       most critical UX fix is ensuring the name is the first and most prominent element in
       each row across all viewport widths. Cross-reference Layout D1 (above).
-- [ ] **No "wasteful subscription" surfacing beyond the "needs review" badge.** A subscription
+- [x] **No "wasteful subscription" surfacing beyond the "needs review" badge.** A subscription
       that was charged 3 months ago but not since is the easiest catch (stale). But there is
       no "you haven't used this in 3 months" or "this went up 20%" prominence on the list —
       the price-changes card is separate, not integrated into the row. A Marcus-and-Lin audit
       would benefit from a subtle "⚠ price increased" icon inline on the subscription row
       where a price change was detected.
-- [ ] **Cancel multi-select is discoverable only if you notice the checkboxes.** The 10
+- [x] **Cancel multi-select is discoverable only if you notice the checkboxes.** The 10
       checkboxes are present but visually light (unchecked, no label). A user who doesn't see
       them will cancel subscriptions one by one. A short "Select to bulk-cancel →" label or
       a visible "Select all" affordance at the top of the list would make the multi-select
       pattern discoverable. Confirmed: `hasSavingsBar: false` (no rows selected, so the
       savings bar is not rendered and there is no prompt to use multi-select).
-- [ ] **No "Renewing soon" card visible in the current data snapshot.** `hasRenewingSoonCard:
+- [x] **No "Renewing soon" card visible in the current data snapshot.** `hasRenewingSoonCard:
       false` in DOM audit. The card appears only when a subscription renews within 7 days
       (B25 spec). This is correct behavior — the current snapshot has no imminent renewals —
       but the 7-day window means Marcus may miss an upcoming charge until the day it appears
       in the "Renewing soon" card. A 14-day or 30-day configurable window would give more
       lead time.
-- [ ] **"Download CSV" button is at the bottom of the Subscriptions card, below all 10 rows.**
+- [x] **"Download CSV" button is at the bottom of the Subscriptions card, below all 10 rows.**
       At 1280px with 10 subscriptions, the export button is well below the fold. Marcus
       who wants to export his subscription list for a spreadsheet audit must scroll past all
       10 rows to reach it. Moving "Download CSV" to the card header (alongside the card title)
@@ -12690,7 +12690,7 @@ Screenshots in `e2e/screenshots/glamor_07_planning_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **Eight cards stacked vertically with no visual grouping by purpose — the page reads as a
+- [x] **Eight cards stacked vertically with no visual grouping by purpose — the page reads as a
       single undifferentiated scroll of tools (CRITICAL overload — C53 confirmed still present
       beyond the forecast).** Card order: Net worth forecast → Can I afford it? → Cash runway →
       Recurring cash flows → Savings & spending plans → Debt payoff strategy → Debt payoff
@@ -12699,93 +12699,93 @@ Screenshots in `e2e/screenshots/glamor_07_planning_*.png`.
       must scroll past five cards before reaching the payoff strategy and seven before the payoff
       calculator. DOM confirms only 3 cards above fold at 1280px. A section-header or grouped-
       card pattern with a compact anchor bar would let Dev jump directly to the tool he needs.
-- [ ] **"Debt payoff calculator" (card 6) and "Projection" (card 7) are split across two cards
+- [x] **"Debt payoff calculator" (card 6) and "Projection" (card 7) are split across two cards
       with a card boundary between inputs and results.** The manual payoff calc and its result
       panel are separate cards — typing a balance into card 6 shows the result in a detached
       card 7 below. Inputs and results for the same calculation must be in the same card. Merge
       these two into a single "Debt payoff calculator" card with the form at top and the result
       inline below the form.
-- [ ] **Input fields have no placeholder text inside the box** — the label floats above, the
+- [x] **Input fields have no placeholder text inside the box** — the label floats above, the
       number input is blank at rest. At 1280px dark, the "What if I trim monthly spending by..."
       label is above an empty `<input type="number">` with no in-field cue. Minor, but reduces
       scannability when multiple adjacent number fields have no in-field identity.
 
 *2. Spacing*
-- [ ] **Inter-card gap is approximately 8px — eight tightly-packed cards read as one continuous
+- [x] **Inter-card gap is approximately 8px — eight tightly-packed cards read as one continuous
       dense block.** At 1280px dark, card borders are nearly flush. Increasing the inter-card gap
       to 16–20px would give each tool visual breathing room and make the page read as distinct
       sections rather than a single overloaded pane. Confirmed in `glamor_07_planning_1280_dark.png`.
-- [ ] **The forecast chart has minimal top padding from the hint-text above it** — the chart
+- [x] **The forecast chart has minimal top padding from the hint-text above it** — the chart
       starts approximately 10px below the last hint line. A 16px gap between the hint text block
       and the chart plot area would give the chart visual separation from its explanatory text.
-- [ ] **The what-if inputs sit directly below the chart's X-axis line (~6px gap)** — at 1440px
+- [x] **The what-if inputs sit directly below the chart's X-axis line (~6px gap)** — at 1440px
       the trim input looks like it is inside the chart rather than beneath it. An 8–12px gap
       between chart bottom and the input row would clarify the spatial relationship.
 
 *3. Theming*
-- [ ] **Card titles near-invisible in light mode (CRITICAL — same blanket `--fg` token failure
+- [x] **Card titles near-invisible in light mode (CRITICAL — same blanket `--fg` token failure
       as G4/G5/G6).** In `glamor_07_planning_1280_light.png` and `glamor_07_planning_1440_light.png`:
       "Net worth in 12 months", "Can I afford it?", and "Cash runway" all render in extremely
       faint grey on white — effectively invisible. Card `<h2>` elements must use `--fg` or a
       full-weight token passing WCAG AA (4.5:1) on white. Screenshots: `glamor_07_planning_1280_light.png`,
       `glamor_07_planning_1440_light.png`, `glamor_07_planning_768_light.png`.
-- [ ] **Input field labels near-invisible in light mode.** In `glamor_07_planning_1440_light.png`,
+- [x] **Input field labels near-invisible in light mode.** In `glamor_07_planning_1440_light.png`,
       all `labeledField` label texts above number inputs ("What if I trim monthly spending by...",
       "Purchase amount (USD)", "In how many months?", "Warn me below, optional (USD)") render in
       the same faint grey as card titles — the field context is completely invisible to Dev in
       light mode. The `labeledField` component must apply `--fg` for label text in light mode.
       Screenshots: `glamor_07_planning_1280_light.png`, `glamor_07_planning_1440_light.png`.
-- [ ] **Y-axis labels render in amber/orange in light mode — semantically misleading.** In
+- [x] **Y-axis labels render in amber/orange in light mode — semantically misleading.** In
       `glamor_07_planning_1280_light.png`, the Y-axis tick labels ($61k, $62k, $63k) render in
       a warm amber/orange color — the same accent used for links and highlighted text elsewhere —
       rather than neutral grey. On a financial chart, orange implies a warning or negative
       condition. Axis tick labels should use `--text-dim` (neutral grey), not the accent color.
-- [ ] **Chart projection line desaturates in light mode.** The green line is bold on the dark
+- [x] **Chart projection line desaturates in light mode.** The green line is bold on the dark
       chart background but thinner/lighter against white. Increasing stroke weight to ~2px in
       light mode would maintain visual weight of the primary data element.
 
 *4. Styling*
-- [ ] **Terminal projection value ($63,589.16) is buried in a hint-text sentence, not surfaced
+- [x] **Terminal projection value ($63,589.16) is buried in a hint-text sentence, not surfaced
       as a headline stat (CRITICAL glanceability gap).** "$63,589.16" is Dev's primary answer
       ("where will I be in 12 months?") but sits embedded in a muted sentence at the same visual
       weight as surrounding text. A display-weight figure ("$63,589" in large type) at the top
       of the card or beside the card title would make the answer instantly scannable — before
       reading the chart, before parsing the hint text.
-- [ ] **"Compare with plan" selector is styled as a full-width dropdown equal in visual weight
+- [x] **"Compare with plan" selector is styled as a full-width dropdown equal in visual weight
       to the primary trim input.** The compare dropdown is a secondary action (overlay a saved
       plan curve). It should be styled subordinately — compact inline select, chip, or label-
       above-select with smaller width — not a 40%-wide equal sibling to the primary number input.
-- [ ] **"Projection" card is an orphaned result panel with no visible connection to its input
+- [x] **"Projection" card is an orphaned result panel with no visible connection to its input
       card above it.** At rest state it shows only a muted placeholder text. As a detached
       result pane it looks like an empty card. Merging with the payoff calculator card (see
       Layout fix) eliminates this.
 
 *5. Positioning*
-- [ ] **Terminal projection value is not positioned as a headline figure.** Unlike every other
+- [x] **Terminal projection value is not positioned as a headline figure.** Unlike every other
       CashFlux page (Accounts: total assets; Budgets: spent/budgeted/left; Goals: overall
       progress), the forecast card has no headline stat strip. The single most actionable number
       — projected net worth at month 12 — is derivable only from the chart end-point or inline
       hint text. Placing it as a display-weight figure in the card header gives Dev his answer
       at glance-speed, before processing the chart.
-- [ ] **Payoff calculator inputs and their results are separated by a card boundary and buried
+- [x] **Payoff calculator inputs and their results are separated by a card boundary and buried
       seven cards below the fold.** Inputs in card 6, results in card 7 — the user must hold the
       mental context of their inputs across a card break to interpret the results. Merge into one
       card and promote both above the recurring/plans management tools.
 
 *6. Ordering*
-- [ ] **Card order does not match the analytical-to-operational priority for Dev's session.**
+- [x] **Card order does not match the analytical-to-operational priority for Dev's session.**
       Current: forecast → affordability → runway → recurring → plans → debt strategy →
       debt calc → projection. A more glanceable order: 1. Net worth forecast + what-if levers
       (keep), 2. Debt payoff calculator + projection (merged, promoted), 3. Debt payoff strategy
       (automated multi-debt), 4. Can I afford it?, 5. Cash runway, 6. Savings & spending plans,
       7. Recurring cash flows. The analytical/interactive tools lead; the operational/management
       tools follow.
-- [ ] **Manual "Debt payoff calculator" (simple, single-debt) appears after the automated "Debt
+- [x] **Manual "Debt payoff calculator" (simple, single-debt) appears after the automated "Debt
       payoff strategy" (complex, multi-debt).** The simpler tool should come first — most users
       reach for the single-debt calc before building a full multi-debt strategy. Swap their order.
 
 *7. General UX / Glanceability*
-- [ ] **X-axis tick labels show month indices (0, 2, 4, 6, 8, 10) not calendar month labels —
+- [x] **X-axis tick labels show month indices (0, 2, 4, 6, 8, 10) not calendar month labels —
       L61 CONFIRMED STILL PRESENT.** DOM audit: `xAxisLabels: []`; visual inspection of
       `glamor_07_planning_1280_dark.png` confirms the X-axis reads `0 · 2 · 4 · 6 · 8 · 10`.
       Dev cannot answer "by when will I reach $63k?" from the chart — he sees only "at month
@@ -12794,23 +12794,23 @@ Screenshots in `e2e/screenshots/glamor_07_planning_*.png`.
       "Sep 2026", "Nov 2026", "Jan 2027", "Mar 2027", "May 2027") in the chart spec or renderer.
       This is the single highest-priority glanceability fix on this page. Screenshots:
       `glamor_07_planning_1280_dark.png`, `glamor_07_planning_1440_dark.png`.
-- [ ] **No headline stat above the chart — Dev has no at-a-glance answer to "where am I headed?"
+- [x] **No headline stat above the chart — Dev has no at-a-glance answer to "where am I headed?"
       without parsing the hint sentence or reading the chart end-point.** A compact stat chip
       "Projected net worth in 12 months: $63,589 ↑" in the card header would give Dev his answer
       at glance-speed, before any chart processing. Cross-reference Positioning #1 and Styling #1.
-- [ ] **The what-if trim input has no contextual hint about the current monthly net.** The input
+- [x] **The what-if trim input has no contextual hint about the current monthly net.** The input
       is an empty number box with no pre-fill, no ghost text, and no mention of the current
       average ($266.93/mo). Dev's first experiment has no calibration point — he doesn't know if
       trimming $50 or $500 is meaningful without doing the mental math from the hint text. A
       ghost-text ("e.g. $100") or inline note ("your current monthly net: $266.93") near the
       input would give Dev an anchoring reference for his first what-if attempt. Screenshots:
       `glamor_07_planning_1280_dark.png`.
-- [ ] **No in-page section anchors or jump links for the 8-card page.** A user who wants the
+- [x] **No in-page section anchors or jump links for the 8-card page.** A user who wants the
       "Cash runway" tool must scroll past the forecast and affordability cards. A compact anchor
       bar at the top of the content area ("Forecast · Affordability · Runway · Recurring · Plans
       · Payoff · Strategy") would give power users direct access and implicitly communicate the
       full scope of the page — so Dev knows the payoff calc exists without scrolling to find it.
-- [ ] **At 768px, the "What if I trim monthly spending by... (USD)" label wraps mid-phrase.**
+- [x] **At 768px, the "What if I trim monthly spending by... (USD)" label wraps mid-phrase.**
       In `glamor_07_planning_768_dark.png`, the label reads "What if I trim monthly spending
       by... / (USD)" across two lines at 768px. Shorten to "Trim monthly spending (USD)" or
       structure the label so only the unit "(USD)" wraps, keeping the action phrase intact.
@@ -12924,7 +12924,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **No "Add task" affordance is visible anywhere on the page at rest (CRITICAL — Nina's
+- [x] **No "Add task" affordance is visible anywhere on the page at rest (CRITICAL — Nina's
       add-new flow is hidden).** The task list has no persistent add input at the bottom, no
       "+ Add task" button in the card header, and no floating action button in the content area.
       The only way to add a task is via the global "+" button in the top-right corner, which opens
@@ -12935,14 +12935,14 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       button in the `.budget-head` header row, or a persistent inline add form at the bottom of
       `.rows` (the modal-form route already exists — just needs a header-level trigger). Confirmed:
       `glamor_06_todo_dark_1280.png`, `glamor_06_todo_dark_1440.png`.
-- [ ] **The "All priorities" filter and "Hide done" button are stacked vertically in the top-right
+- [x] **The "All priorities" filter and "Hide done" button are stacked vertically in the top-right
       of the card, consuming ~220px of horizontal space that could be on a single header row.**
       At 1440px (`glamor_06_todo_dark_1440.png`), the card header row shows "Tasks" on the left
       and then a gap before the priority dropdown appears in the upper-right corner — but "Hide
       done" appears below it on a second line, creating a two-row header with dead whitespace. A
       single inline control bar `[Tasks] [All priorities ▾] [Hide done] [+ Add task]` on one row
       would match every other page's `.budget-head` pattern and reclaim the vertical space.
-- [ ] **No sub-tasks are visible in the seeded data (C72 confirmed done, but sub-task nesting UI
+- [x] **No sub-tasks are visible in the seeded data (C72 confirmed done, but sub-task nesting UI
       is not exercised in sample data).** DOM audit: `subTaskCount: 0`. The "+ Sub" button appears
       on every row — the affordance exists — but no sample task demonstrates the nesting depth.
       The visual indentation and nesting behavior cannot be assessed from these screenshots.
@@ -12950,7 +12950,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       visual hierarchy, and checkbox alignment at depth > 0. Cross-reference C72.
 
 *2. Spacing*
-- [ ] **Checkbox tap targets are visually approximately 20×20px — well below WCAG 2.5.5's 44×44px
+- [x] **Checkbox tap targets are visually approximately 20×20px — well below WCAG 2.5.5's 44×44px
       minimum.** DOM audit: `cbRect: null` (the checkbox is rendered as a Unicode ☐ character,
       not a native `<input type="checkbox">`, so the bounding-rect query returned null). In
       `glamor_06_todo_dark_1280.png`, the checkbox column shows small square outlines
@@ -12959,20 +12959,20 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       WCAG 2.5.5 failure. The surrounding row has enough vertical height, so a CSS
       `min-width/min-height: 44px` with negative margin trick (or a larger `<button>` wrapper)
       would fix it without reflowing the layout.
-- [ ] **Row vertical padding is tight — rows feel dense at all widths.** At 1440px
+- [x] **Row vertical padding is tight — rows feel dense at all widths.** At 1440px
       (`glamor_06_todo_dark_1440.png`), each task row has approximately 12–14px top/bottom
       padding, making rows approximately 48–54px tall. For a touch-primary action surface (Nina
       checks off tasks on mobile), the minimum recommended row height for comfortable tapping is
       ~56–64px. The current density works at desktop but will feel cramped on a 375px phone screen
       (not tested here — 768px is the narrowest shot).
-- [ ] **The filter controls ("All priorities" + "Hide done") have no top margin from the card
+- [x] **The filter controls ("All priorities" + "Hide done") have no top margin from the card
       title.** At 1280px dark, the "Tasks" heading and the filters below it have approximately
       12px gap — the controls feel like they float, with no visual grouping that says "these are
       controls for this list." Increasing the gap from the heading or using a subtle separator
       line between the heading row and controls row would give the filter zone clearer identity.
 
 *3. Theming*
-- [ ] **Task titles are near-invisible in light mode (CRITICAL contrast failure — same blanket
+- [x] **Task titles are near-invisible in light mode (CRITICAL contrast failure — same blanket
       light-mode foreground token failure as G4/G5).** Confirmed in `glamor_06_todo_light_1280.png`
       and `glamor_06_todo_light_1440.png`: every task title ("Schedule annual physical," "Pay
       credit card before the 22nd," "Top up Roth IRA to hit the annual max," "Groceries trending
@@ -12985,16 +12985,16 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       title must use `--fg` or a full-weight token that passes WCAG AA (4.5:1) on white.
       Screenshots: `glamor_06_todo_light_1280.png`, `glamor_06_todo_light_1440.png`,
       `glamor_06_todo_light_768.png`.
-- [ ] **"Tasks" card heading is also faint in light mode.** In `glamor_06_todo_light_1280.png`,
+- [x] **"Tasks" card heading is also faint in light mode.** In `glamor_06_todo_light_1280.png`,
       the "Tasks" heading text at the top-left of the card renders in a low-contrast grey — not
       as invisible as the task titles but clearly below the dark-mode heading weight. Same token
       failure: heading should use `--fg` or `var(--text)` in light mode.
-- [ ] **Light-mode shell contrast is correct (rail, topbar, breadcrumb) but the card content is
+- [x] **Light-mode shell contrast is correct (rail, topbar, breadcrumb) but the card content is
       entirely dim.** The dark sidebar and black topbar render at full contrast in light mode
       (they don't switch to a light rail). The card background switches to white, but all text
       inside the card uses the dim token. This is a systemic issue that will affect every content
       card, not just To-do. Cross-reference G4 Budgets and G5 Goals for the same pattern.
-- [ ] **The "Refinanced student loan" (done) strikethrough renders in dark grey in dark mode —
+- [x] **The "Refinanced student loan" (done) strikethrough renders in dark grey in dark mode —
       correctly dimmed.** In light mode (`glamor_06_todo_light_1280.png`), the strikethrough is
       visible because it is even lighter than the already-faint open tasks. The done-task styling
       is correct in dark mode but will merge visually with open tasks in light mode once the open-
@@ -13002,7 +13002,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       `--fg` value, not just the current absolute dim token.
 
 *4. Styling*
-- [ ] **Priority badge label-priority mismatch on "Pay credit card before the 22nd" row: badge
+- [x] **Priority badge label-priority mismatch on "Pay credit card before the 22nd" row: badge
       reads "HIGH" but seeded metadata shows `LOW`.** Confirmed: DOM audit `sampleRows[1]` reports
       `"☐Pay credit card before the 22nd High due 2026-06-22..."` and the badge visually shows
       "HIGH" in red in `glamor_06_todo_dark_1280.png`. Yet in the raw DOM text the badge text
@@ -13012,7 +13012,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       tasks due today vs. due in the future there is no further priority sort. "Pay credit card
       before the 22nd" is HIGH and due TODAY — it should arguably be first or second, not behind
       the overdue LOW task. See Ordering #1.
-- [ ] **The "→ Entity" chips are styled as dark outline buttons and compete with the "+ Sub" and
+- [x] **The "→ Entity" chips are styled as dark outline buttons and compete with the "+ Sub" and
       "Edit" action buttons on the right side of the row.** At 1280px, on the "Pay credit card"
       row, there are five distinct interactive elements: checkbox, entity chip ("→ Rewards Credit
       Card"), "+ Sub," "Edit," and "×" — all the same visual weight. Nina's eye has no clear
@@ -13021,14 +13021,14 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       small, inline text with an arrow) rather than a pill button competing with action controls.
       Cross-reference C52 "unlabelled controls" fix — labels are now present, but visual hierarchy
       is still flat.
-- [ ] **The "×" delete button is visible at rest on every row at all widths.** A destructive
+- [x] **The "×" delete button is visible at rest on every row at all widths.** A destructive
       action (delete the task) is always visible, equal-weight with "+ Sub" and "Edit," with no
       confirmation pattern. While this is consistent with other list screens, for a task with sub-
       tasks the deletion is cascading (deletes the whole tree — see `todo.go` `deleteTask`).
       Consider making "×" hover-only on desktop (it is already the smallest element), or requiring
       a two-step confirm on rows with sub-tasks. This mirrors the G5 Goals recommendation for
       destructive actions.
-- [ ] **No due-date badge differentiation between "due today" and "due in future."** "Pay credit
+- [x] **No due-date badge differentiation between "due today" and "due in future."** "Pay credit
       card before the 22nd" has `due 2026-06-22` (today) and renders in the same unstyled grey
       date text as "Top up Roth IRA" with `due 2026-12-15` (6 months away). Only overdue tasks
       get a danger-tone colored meta. A task due TODAY should get an amber/warning color
@@ -13037,7 +13037,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       identical to a task due in December. Screenshots: `glamor_06_todo_dark_1280.png`.
 
 *5. Positioning*
-- [ ] **The filter controls ("All priorities" + "Hide done") are positioned in the top-right of
+- [x] **The filter controls ("All priorities" + "Hide done") are positioned in the top-right of
       the card, far from the "Tasks" heading on the left.** At 1280px, this is a wide gap (the
       two controls float in the right corner with no visible grouping to the heading). The
       conventional CashFlux pattern (seen on Budgets, Goals) places controls inline with the
@@ -13045,14 +13045,14 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       controls appear stacked below the filter rather than inline beside "Tasks". A single-row
       `[Tasks heading] [spacer] [priority filter] [hide done] [+ add task]` would match house
       style and be more scannable.
-- [ ] **No "add task" affordance is positioned within the task list flow.** On every other CashFlux
+- [x] **No "add task" affordance is positioned within the task list flow.** On every other CashFlux
       list page, the add entry point is either in the card header (Goals, Budgets) or at the bottom
       of the list (Transactions inline row). The To-do page has neither — the only affordance is
       the global "+" in the topbar, 700–900px away from the task list at 1280px. The add action
       should be proximate to the list it affects.
 
 *6. Ordering*
-- [ ] **Within open tasks, priority is not a sort key — only overdue status is.** The seeded order
+- [x] **Within open tasks, priority is not a sort key — only overdue status is.** The seeded order
       is: [overdue LOW] → [HIGH due today] → [MEDIUM due Dec] → [MEDIUM no date] → [LOW no date].
       The overdue task correctly leads. But among the remaining four open tasks, a HIGH task due
       TODAY (the credit card) appears before a MEDIUM due in December — which is accidentally
@@ -13060,20 +13060,20 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       visible sorting effect. The ordering rule should be explicit: overdue → due-today (with
       priority as tiebreak) → due-soon → undated (priority-sorted) → done. The current ordering
       is partially correct but not intentionally so. Cross-reference `tasksort` package.
-- [ ] **Completed tasks appear at the bottom of the visible list regardless of "Hide done"
+- [x] **Completed tasks appear at the bottom of the visible list regardless of "Hide done"
       state.** This is correct — done tasks sink. But when "Hide done" is active, the list
       shrinks to 5 tasks with no visual indication that 1 completed task is hidden. A small
       "1 completed task hidden" affordance (same pattern as the Transactions filter summary)
       would confirm to Nina that she has completed work without showing it.
 
 *7. General UX / Glanceability*
-- [ ] **Nina cannot add a task without leaving the list context.** The "+" global button opens a
+- [x] **Nina cannot add a task without leaving the list context.** The "+" global button opens a
       multi-entity menu ("New transaction / New account / New budget / New goal / New task…"). Nina
       must find and click "New task" from that menu, which opens a modal. This is 3–4 interactions
       for what should be 1–2 on a page whose primary purpose is task management. The To-do page
       should have a direct, single-tap add-task affordance within the list — consistent with the
       page's role as a task management surface, not a secondary feature of a financial ledger.
-- [ ] **At 768px, the "Pay credit card before the 22nd" and "Top up Roth IRA" rows suffer severe
+- [x] **At 768px, the "Pay credit card before the 22nd" and "Top up Roth IRA" rows suffer severe
       layout collapse.** In `glamor_06_todo_dark_768.png` and `glamor_06_todo_light_768.png`: the
       entity link chip ("→ Rewards Credit Card") overlaps the "+ Sub" and "Edit" buttons,
       creating a visual collision where the chip text partially obscures the button labels. The "→
@@ -13083,7 +13083,7 @@ e2e/glamor_06_todo.mjs` against `:8099`. Screenshots in `e2e/screenshots/glamor_
       At 768px, the action buttons (+ Sub, Edit, ×) should either collapse to icon-only or move
       below the task content row — the 3-button cluster at constant width is consuming ~160px
       that the content cannot spare at this viewport.
-- [ ] **The page has no "summary bar" or count of tasks (open / overdue / done).** Every other
+- [x] **The page has no "summary bar" or count of tasks (open / overdue / done).** Every other
       list page (Budgets: SPENT/BUDGETED/LEFT; Goals: SAVED/TARGET/PROGRESS; Accounts: TOTAL
       ASSETS/NET WORTH) opens with a headline stat panel above the rows. The To-do page opens
       directly to the list with no summary. Nina has no immediate count of "5 open, 1 overdue, 1
@@ -14300,7 +14300,7 @@ Screenshots in `e2e/screenshots/glamor_08_allocate_*.png`.
 **Structure fixes (bottom-up)**
 
 *1. Layout*
-- [ ] **Config card stacks three `form-grid`s before the user sees a single candidate (C54
+- [x] **Config card stacks three `form-grid`s before the user sees a single candidate (C54
       critical — still present).** DOM confirms `configFormGrids: 3`, `configInputCount: 11`.
       Card 1 is: mode select + profile select + 3 amount inputs (row 1) → 5 weight inputs
       (row 2) → profile name save form (row 3). Marcus's common path is: pick profile → see
@@ -14308,87 +14308,87 @@ Screenshots in `e2e/screenshots/glamor_08_allocate_*.png`.
       save-profile forms should be collapsed into an "Advanced — tune weights" disclosure
       (`<details>`) so the typical user sees: mode, profile, amount fields, then the list.
       Cross-reference C54 (config-heavy top).
-- [ ] **"Amount to allocate" is visually equal to "Keep back" and "Max per destination" —
+- [x] **"Amount to allocate" is visually equal to "Keep back" and "Max per destination" —
       all three are plain placeholder-only inputs in the same row at equal weight.** The
       amount field is Marcus's primary action but looks identical to the secondary constraint
       fields. It needs visual primacy — a persistent label above it, or separation from the
       constraint inputs. Cross-reference C54 (amount-split entry point buried).
-- [ ] **Three cards with no page-level orientation affordance.** Cards are: (1) config,
+- [x] **Three cards with no page-level orientation affordance.** Cards are: (1) config,
       (2) suggestions, (3) "Why this order?". The apply card only appears after an amount is
       entered. No page-level section header or hint orients a new user about the three-step
       structure (Setup → Results → Action).
 
 *2. Spacing*
-- [ ] **Inter-card gap between config and suggestions cards is approximately 8px.**
+- [x] **Inter-card gap between config and suggestions cards is approximately 8px.**
       At 1280px dark, the two cards are nearly flush. A 16–20px gap would give each section
       breathing room and reinforce the step structure. Consistent with G7 Planning inter-card
       finding.
-- [ ] **"CRITERION WEIGHTS" sub-section has only ~8px separation from the amount inputs above.**
+- [x] **"CRITERION WEIGHTS" sub-section has only ~8px separation from the amount inputs above.**
       The `set-label` text appears immediately below the amount row with minimal breathing room.
       A 16px top margin would clarify it as a distinct sub-step.
-- [ ] **Score bar and breakdown sub-line are tightly packed (~4px each) under the candidate
+- [x] **Score bar and breakdown sub-line are tightly packed (~4px each) under the candidate
       head row.** Increasing to 6–8px each would improve scannability of the candidate list.
 
 *3. Theming*
-- [ ] **Card titles near-invisible in light mode (CRITICAL — same systemic `--fg` token
+- [x] **Card titles near-invisible in light mode (CRITICAL — same systemic `--fg` token
       failure as G4/G5/G6/G7).** In `glamor_08_allocate_1280_light.png`,
       `glamor_08_allocate_1440_light.png`, and `glamor_08_allocate_768_light.png`: "Allocation
       profile" and "Where to put your money next" render in extremely faint grey on white —
       effectively invisible. `card-title` does not apply `--fg` in light mode.
-- [ ] **Weight input labels near-invisible in light mode.** "Returns weight", "Stability
+- [x] **Weight input labels near-invisible in light mode.** "Returns weight", "Stability
       weight", etc. render in faint green-grey against white in `glamor_08_allocate_1280_light.png`.
       The `<span class="muted">` label inside label wrappers needs `--fg` in light mode.
-- [ ] **"CRITERION WEIGHTS" sub-section label near-invisible in light mode.** The `set-label`
+- [x] **"CRITERION WEIGHTS" sub-section label near-invisible in light mode.** The `set-label`
       element renders in faint grey caps on white in all light screenshots.
-- [ ] **Breakdown sub-line text faint in light mode.** "returns 100 · stability 100 · liquidity
+- [x] **Breakdown sub-line text faint in light mode.** "returns 100 · stability 100 · liquidity
       0 · pays debt" is too low-contrast against the white card background. Screenshots:
       `glamor_08_allocate_1280_light.png`, `glamor_08_allocate_1440_light.png`.
 
 *4. Styling*
-- [ ] **Mode and profile selects have no persistent visible label — placeholder-only (C54
+- [x] **Mode and profile selects have no persistent visible label — placeholder-only (C54
       open).** DOM confirms `unlabelledSelects: 2`. A user who loaded a saved profile won't
       know what the second select represents. Add "Mode" and "Profile" as persistent labels
       (Span-above-select pattern, consistent with weight inputs). Cross-reference C54.
-- [ ] **Score percent ("60%") in the candidate head-right is unlabeled at first sight.**
+- [x] **Score percent ("60%") in the candidate head-right is unlabeled at first sight.**
       A new user doesn't know if this is a return rate, a completion percent, or a priority
       score. A subtle "score" column header above the list or a "Priority" label on the first
       row would clarify the data dimension.
-- [ ] **"Save profile" button spans full remaining row width (~50% at 1280px, ~full width at
+- [x] **"Save profile" button spans full remaining row width (~50% at 1280px, ~full width at
       768px).** It is the tertiary action in the config card but visually dominates the card
       bottom as a large green button. Reduce to `width: fit-content` or compact secondary style.
 
 *5. Positioning*
-- [ ] **"Amount to allocate" is slot 3 of 5 in a five-column row — primary input is buried.**
+- [x] **"Amount to allocate" is slot 3 of 5 in a five-column row — primary input is buried.**
       At 1280px: [Weighted] [Balanced] [Amount to allocate (US…)] [Keep back (emergenc…)]
       [Max per destination (L…)]. The placeholder clips to "Amount to allocate (US…)" because
       the field is one-fifth of row width. Elevate to its own row or 2x width.
-- [ ] **Apply/commit card is hidden with no affordance below the suggestions card.** No hint
+- [x] **Apply/commit card is hidden with no affordance below the suggestions card.** No hint
       tells Marcus that entering an amount unlocks a split and apply flow. A ghost card or
       inline hint below the suggestions card would guide him through the full loop.
 
 *6. Ordering*
-- [ ] **Weight tuning (advanced) appears before amount entry (primary) within the config card.**
+- [x] **Weight tuning (advanced) appears before amount entry (primary) within the config card.**
       Natural Marcus flow: (a) pick profile, (b) enter amount, (c) see split, (d) apply. Weight
       editing is a power-user override of step (a). Current order forces weight inputs between
       steps (a) and (b), interrupting the primary flow. Re-order: mode/profile → amount/reserve/
       max-per → collapsed "Advanced: tune weights" disclosure.
 
 *7. General UX / Glanceability*
-- [ ] **No rank number on each candidate row.** Candidates are ordered by score but carry no
+- [x] **No rank number on each candidate row.** Candidates are ordered by score but carry no
       #1 / #2 / #3 ordinal — only relative bar lengths and percentages. A compact ordinal in
       the row head would let Marcus answer "what is my first priority?" at glance-speed.
-- [ ] **"Why this order?" card requires an API key to surface any content.** The heading
+- [x] **"Why this order?" card requires an API key to surface any content.** The heading
       implies there is always an explanation — the breakdown sub-line already supplies the
       mechanical "why". The AI card should show an inline algorithmic summary even without AI
       (e.g. "Debt ranked first: highest effective return under current weights"), or label the
       button accurately as "Get AI narrative (requires API key)". Cross-reference C54 (AI
       dead-end / settings link missing).
-- [ ] **Full-page flow (config → suggestions → apply) requires scrolling twice.** Config fills
+- [x] **Full-page flow (config → suggestions → apply) requires scrolling twice.** Config fills
       the first viewport; after entering an amount the apply card appears below the long
       suggestions list, requiring another scroll to commit. A sticky "Apply $X split" bar at
       the viewport bottom (visible whenever `totalMinor > 0`) would let Marcus commit without
       scrolling to the card.
-- [ ] **At 768px, amount input placeholders clip.** "Keep back (emergency buff…)" and "Max per
+- [x] **At 768px, amount input placeholders clip.** "Keep back (emergency buff…)" and "Max per
       destination (USD)" clip in the column layout. Confirmed visually in
       `glamor_08_allocate_768_dark.png`. Shorten to "Emergency buffer (USD)" and
       "Cap per destination (USD)".
@@ -23384,6 +23384,135 @@ row with `.field-wide` so it spans full width; (c) **dry-run primary** — "Dry 
 action-kind select; card titles already H2 (no change needed); (e) **condition variable hint** — already
 present from prior C65 pass (txn_abs / txn_amount / txn_payee / txn_category pills + muted hint text).
 Deferred: full inline-Edit for existing workflows (C65) — scope too large for this pass.
+
+---
+
+### GX17. Loading & skeleton states — "The Waiting Moment" — 2026-06-23 ★
+
+**The story:** Every async moment in CashFlux — the initial boot, the wasm hydration window, an AI call in Insights or Documents, an allocation explanation — is a moment where the app either earns the user's trust or loses it. This pass audits every loading affordance end-to-end: boot splash, the `common.notReady` hydration guard, the Insights thinking bubble, the Documents/Allocate AI-loading states, and the absence of skeleton placeholders. GX2 covered empty states and flagged loading as not deeply reviewed; this completes it. Cross-ref: GX9 (splash dismiss), GX2 (boot splash card bg GX2-F6), W1-W19 (shimmer roadmap item).
+
+**Drive script:** `node e2e/gx_17_loading.mjs`
+Exit code: 0. Screenshots: `e2e/screenshots/gx17_boot_dark.png`, `gx17_boot_light.png`, `gx17_boot_dark2.png`, `gx17_insights_light_full.png`, `gx17_insights_light_chat.png`, `gx17_insights_send_light.png`, `gx17_insights_dark_full.png`, `gx17_insights_dark_chat.png`, `gx17_documents_light_full.png`, `gx17_allocate_light_full.png`, `gx17_transactions_light_full.png`.
+Note: build is broken (GI0 — `todo.go:213:6 declared and not used: hiddenDoneNote`); probe ran against stale wasm via gwc dev server; ESC dismisses the build-failed overlay. All async state inspection is source-grounded.
+
+---
+
+**What already works well (keep)** ✓
+
+- **Boot splash spinner is polished.** SVG ring with `stroke: var(--accent)` + `stroke-dasharray: 70 126` gives a clean arc. `@keyframes boot-spin 1.15s linear` + `boot-fade-up` animations. Light overrides for `.boot-word`, `.boot-sub`, `.boot-ring-track` are all wired. Observed in `gx17_boot_dark.png` and `gx17_boot_light.png` — legible and on-brand in both themes.
+- **Boot dismiss is correct.** MutationObserver on `#app` triggers `hideBoot()` which adds `.hidden` + `display:none` fallback at 700 ms. No splash ghost (GX9 fixed). Observed: splash gone by time of `gx17_insights_light_full.png`.
+- **Insights send↔cancel swap is correct.** Source (`insights.go:784–787`): `loading.Get()` true → Cancel button; false → Send with sparkle icon. No double-submit window.
+- **Documents "Read with AI" button is correctly gated.** `Disabled(props.AILoading)` + label swap `documents.reading` ↔ `documents.readAI`. Source: `documents_image_import.go:39–44`.
+- **notReady `.empty` light contrast is adequate.** Measured `rgb(75,75,82)` (#4b4b52) on `#f7f6f3` bg — ~6:1, passes WCAG AA. GX2-F5 fix held.
+- **Insights "thinking" bubble positions correctly in dark.** `rgba(0,0,0,0.04)` on dark bg renders as a subtle near-black pill with `--text-faint: #888890` text — readable at 5.0:1 on dark surface. `gx17_insights_dark_chat.png` confirms.
+
+---
+
+**Structure fixes (bottom-up, grouped)**
+
+#### GX17-F1. HIGH — Insights "thinking" bubble is invisible in light mode [CSS-ONLY] ★★
+
+**Evidence:** Source `insights.go:770` — `tw.BgBlack04 = css.Bg(css.Color("rgb(0 0 0 / 0.04)"))`. In light mode (`--bg: #f7f6f3`, measured), `rgba(0,0,0,0.04)` on `#f7f6f3` = computed `~#f2f1ef` — a 1.02:1 luminance difference vs the page surface. The thinking bubble has zero visual differentiation from the page in light mode. Probe synthesis: background `rgba(0,0,0,0.04)`, `--text-faint: #686870` on that near-white surface = 3.7:1 (passes AA for normal text), but the bubble itself is indistinguishable from the surrounding content area — there is no "something is happening" signal. Screenshot `gx17_insights_send_light.png` shows the light-mode chat area; when a thinking bubble would appear it would be invisible against `#f7f6f3`.
+
+**Fix (CSS-ONLY):** Add a light-mode override that gives the thinking bubble a visually distinct surface:
+```css
+/* GX17-F1: thinking bubble needs contrast on light bg */
+[data-theme="light"] .insights-thinking {
+  background: var(--border, #e4e2dd) !important;
+}
+```
+This requires either (a) adding a CSS class `insights-thinking` to the thinking `<div>` in `insights.go:770`, or (b) a structural selector on the class chain. Option (a) is a one-line Go change (add `css.Class("insights-thinking")` to the existing `tw.BgBlack04` element) — the CSS fix is CSS-ONLY once that class exists.
+
+Tag: [CSS-ONLY] for the rule; one-line Go class addition is minimal [GO-STRUCTURAL].
+
+---
+
+#### GX17-F2. HIGH — notReady hydration guard has no visual affordance — bare italic text [GO-STRUCTURAL] ★★
+
+**Evidence:** All 15+ screens use `P(css.Class("empty"), uistate.T("common.notReady"))` which renders as the i18n string `"App state is not ready yet."` — plain italic text, no spinner, no animation. Measured: `fontStyle: italic`, `color: rgb(75,75,82)`. This guard fires in the wasm-loading window (~200–1500 ms depending on device). On a slow connection or first load, users see blinking italic text instead of a purposeful loading indicator. Screenshots `gx17_boot_dark.png` + `gx17_boot_light.png` show the boot splash correctly covers this window during initial page load; however, on navigation to a route before atoms are ready the guard fires without the boot splash. No skeleton, no spinner, no animation.
+
+**Fix [GO-STRUCTURAL]:** Replace the raw `P(css.Class("empty"), ...)` in at least the 5 highest-traffic screens (Dashboard, Transactions, Accounts, Insights, Budgets) with a dedicated `LoadingCard` component that shows a pulsing content skeleton or a centered spinner. Minimum viable version: a Card containing a simple CSS-animated spinner ring (reuse the `.boot-ring` keyframe already defined in `index.html`) + "Loading…" text. Full skeleton version cross-refs W1-W19 shimmer.
+
+```go
+// Candidate component signature
+type LoadingCardProps struct{}
+func LoadingCard(p LoadingCardProps) ui.Node {
+  return uiw.Card(uiw.CardProps{Body: Div(css.Class("loading-card-body"),
+    Div(css.Class("inline-spinner")),
+    Span(css.Class("muted"), uistate.T("common.loading")),
+  )})
+}
+```
+
+Add i18n key `"common.loading": "Loading…"` to `internal/i18n/en.go`.
+
+---
+
+#### GX17-F3. MEDIUM — No skeleton placeholders on any screen — pop-in after wasm hydrates [GO-STRUCTURAL] ★
+
+**Evidence:** DOM audit (`section 11` of probe) found zero `[class*="skeleton"]`, `[class*="shimmer"]`, `[aria-busy]`, `[role="status"]` elements. All content is absent then present — pure pop-in with no layout reservation. On the Dashboard bento grid this means 4–8 KPI cards and a chart materialize simultaneously. No CLS mitigation.
+
+**Fix [GO-STRUCTURAL]:** Not blocking (the boot splash covers the initial load), but add at minimum:
+- A `[role="status"]` + `aria-live="polite"` on the notReady guard element (minimal a11y + signals to screen readers).
+- On Dashboard specifically, a fixed-height bento grid placeholder (even blank cards) prevents the most severe CLS.
+
+Cross-ref W1-W19: once the shimmer keyframe is added globally, skeleton cards become CSS-only additions on top of this structural change.
+
+---
+
+#### GX17-F4. MEDIUM — Allocate "Explain with AI" button renders a raw i18n key [GO-STRUCTURAL] ★
+
+**Evidence:** Probe measured `button.innerText = "allocate.explainAINarrative"` on the Allocate screen. Source `allocate_ai_explain.go:33` uses `uistate.T("allocate.explainAI")` — but the probe captured `allocate.explainAINarrative`, suggesting a missing or mismatched key. During AI loading, the button swaps to `uistate.T("allocate.thinking")` — verify that key exists too. Screenshot `gx17_allocate_light_full.png` (Explain AI button visible but not inspected for text at that crop).
+
+**Fix [GO-STRUCTURAL]:** Verify/add `"allocate.explainAINarrative"`, `"allocate.explainAI"`, and `"allocate.thinking"` in `internal/i18n/en.go`. This is a one-line data fix per missing key.
+
+---
+
+#### GX17-F5. LOW — No `aria-busy` on AI loading buttons [CSS-ONLY adjacent] ★
+
+**Evidence:** Documents image import button sets `Disabled(props.AILoading)` (correct) but no `aria-busy="true"` during loading. Insights sends `loading.Get()` state to swap the button but no `aria-busy` on the form container. Screen readers have no signal that an async operation is in flight beyond the button becoming disabled.
+
+**Fix:** Add `Attr("aria-busy", "true")` to the chat input container and the AI action buttons when loading is true. One-line Go per site; no CSS needed.
+
+Tag: [GO-STRUCTURAL] (minimal, one-liner per site)
+
+---
+
+#### GX17-F6. LOW — `.boot-ring-arc` has no light-mode stroke override — relies on `--accent` [CSS-ONLY]
+
+**Evidence:** `index.html:141` — `.boot-ring-arc { stroke: var(--accent); }`. `index.html:167` adds `.boot-ring-track` light override (stroke: #e4e2dd) but there is no `.boot-ring-arc` light override. The arc uses the green accent (#2e8b57) — which is correct and intentional on both themes (accent doesn't change). This is a NON-ISSUE on current design but worth noting: if the accent is ever theme-split, the arc will not follow without adding an explicit light override. Screenshot `gx17_boot_light.png` confirms the arc reads fine in light. No fix required now; note for future.
+
+Tag: [CSS-ONLY] — deferred, non-blocking.
+
+---
+
+**UI/UX defects (screenshot-confirmed)**
+
+| ID | File | Observation |
+|----|------|-------------|
+| GX17-D1 | `gx17_boot_light.png` | Boot splash correctly centered + legible in light. The "C" mark, "CashFlux" wordmark, and "Getting your money in order…" subtitle all render in dark ink on warm-white. ✓ |
+| GX17-D2 | `gx17_insights_send_light.png` | Light-mode Insights chat area: no API key → "Settings" CTA + disabled input field. Clearly communicates the blocked state. ✓ |
+| GX17-D3 | `gx17_insights_send_light.png` | "New chat" and "Edit prompt" chips are very low contrast in light (rendered as near-invisible outlines). Related to GX1 token gap but visible in loading context — chips guide the user to start a session. |
+| GX17-D4 | `gx17_allocate_light_full.png` | Allocate "Explain with AI" button text shows raw i18n key `allocate.explainAINarrative` — confirmed broken string lookup (GX17-F4). |
+| GX17-D5 | `gx17_documents_light_full.png` | Documents "Read with AI" (primary green button) and "Parse statement" are styled clearly. No loading state visible yet (no AI call in flight) — button affordance is correct at rest. ✓ |
+| GX17-D6 | `gx17_insights_dark_chat.png` | Dark-mode chat area: "New chat" + "Edit prompt" chips have visible outline on dark bg. Starter question chips render as rounded pill outlines — legible. ✓ |
+
+---
+
+**Probe hardening**
+
+- The gwc dev server shows a build-failed overlay (GI0: `todo.go:213:6 declared and not used: hiddenDoneNote`) when the wasm fails to recompile. The probe must press `Escape` after each page load to dismiss it. Added `dismissBuildError()` helper using `page.keyboard.press('Escape')`.
+- Hash-based navigation (`/#/insights`) did not scroll correctly with stale wasm — using `goto(base)` + `page.click('text=Insights')` proved more reliable.
+- Boot splash capture requires `waitUntil: 'domcontentloaded'` + 300 ms delay — `waitUntil: 'load'` waits for wasm and misses the splash.
+- The "thinking" bubble (`tw.BgBlack04`) only renders when `loading.Get()` is true (an actual AI call is in flight) — cannot be captured without making a paid call. Light-mode contrast was verified by synthesizing the element via `page.evaluate()` injection.
+
+---
+
+**Cross-refs**
+- GX2-F6: boot splash card transparent bg (cosmetic, deferred) — still outstanding.
+- GX9: splash dismiss timing — resolved and holding.
+- W1-W19: shimmer keyframe for skeleton cards — GX17-F2/F3 are the structural prerequisite; shimmer is additive on top.
+- GI0: build broken (`todo.go:213`). Fix before any [GO-STRUCTURAL] items land.
 
 ---
 

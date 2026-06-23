@@ -288,11 +288,55 @@ func Subscriptions() ui.Node {
 		},
 	)
 
+	// Select-all / Clear affordance (G10 §7): makes multi-select cancel
+	// discoverable — a user who misses the individual checkboxes sees this
+	// prompt and understands the pattern immediately.
+	allSelected := selectedCount == len(subs) && len(subs) > 0
+	selectAllToggle := ui.UseEvent(Prevent(func() {
+		if allSelected {
+			selectedState.Set(map[string]bool{})
+		} else {
+			next := make(map[string]bool, len(subs))
+			for _, s := range subs {
+				next[s.Name] = true
+			}
+			selectedState.Set(next)
+		}
+	}))
+
 	var body ui.Node
 	if len(subs) == 0 {
 		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("subs.empty"), CTALabel: uistate.T("subs.addFirst"), Href: "/transactions"})
 	} else {
-		body = Div(css.Class("rows"), rows)
+		selectAllLabel := uistate.T("subs.selectAll")
+		if allSelected {
+			selectAllLabel = uistate.T("subs.clearSelection")
+		}
+		body = Fragment(
+			Div(css.Class(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)+" subs-select-all-bar"),
+				Button(
+					css.Class("btn btn-sm"),
+					Type("button"),
+					Attr("aria-label", selectAllLabel),
+					Attr("data-testid", "subs-select-all-btn"),
+					OnClick(selectAllToggle),
+					selectAllLabel,
+				),
+				If(selectedCount > 0,
+					Span(css.Class("row-meta"),
+						uistate.T("subs.selectedCount", selectedCount),
+					),
+				),
+			),
+			Div(css.Class("rows"), rows),
+		)
+	}
+
+	// Net price-change summary (G10 §5): sum all deltas to give an instant
+	// "your subscriptions cost $X more/less per month" headline above the rows.
+	var netChangeDelta int64
+	for _, c := range changes {
+		netChangeDelta += c.Delta
 	}
 
 	// Price-change rows have no per-row interactive elements, so they render
@@ -372,20 +416,29 @@ func Subscriptions() ui.Node {
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.subscriptions"),
-			Body: Fragment(
-				body,
-				savingsSummary,
-				If(len(subs) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")), OnClick(func() {
+			// CSV export moves to the card header (G10 §7): keeps the export path
+			// above the fold so Marcus can export without scrolling past all rows.
+			HeaderAction: If(len(subs) > 0,
+				Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")),
+					OnClick(func() {
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 						downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
 					}), uistate.T("subs.downloadCsv")),
-				)),
+			),
+			Body: Fragment(
+				body,
+				savingsSummary,
 			),
 		}),
 		If(len(changes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("subs.priceChangesTitle"),
-			Rows:  changeRows,
+			Body: Fragment(
+				// Net summary line (G10 §5): "Your subscriptions cost $X more/less
+				// per month than they did recently" — instant context before the
+				// per-row detail.
+				netChangeSummary(netChangeDelta, base),
+				Div(css.Class("rows"), changeRows),
+			),
 		})),
 		If(len(soon) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("subs.renewingSoon"),
@@ -573,6 +626,37 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		selectCheckbox = Fragment()
 	}
 
+	// For non-monthly subscriptions, build the cadence badge and normalized
+	// monthly average. The actual charge comes first (C56 fix, G10 §4):
+	// "$540.00 [YEARLY] · avg $45/mo" reads clearly — the big number leads, the
+	// badge explains why it appears after the $55 row, and the /mo average gives
+	// the mental-model anchor without confusing the sort order (G10 §6).
+	var cadenceBadge ui.Node
+	var perMonthNote ui.Node
+	if s.Cadence != subscriptions.CadenceMonthly {
+		cadenceKey := "subs.yearly"
+		if s.Cadence == subscriptions.CadenceWeekly {
+			cadenceKey = "subs.weekly"
+		}
+		cadenceBadge = Span(
+			css.Class(tw.Fold(tw.TextXs, tw.FontMedium)+" cadence-badge"),
+			Style(map[string]string{
+				"display":        "inline-block",
+				"padding":        "0.1em 0.4em",
+				"border-radius":  "4px",
+				"border":         "1px solid var(--border)",
+				"color":          "var(--text-dim)",
+				"text-transform": "uppercase",
+				"letter-spacing": "0.04em",
+				"font-size":      "0.68rem",
+				"vertical-align": "middle",
+			}),
+			uistate.T(cadenceKey),
+		)
+		perMonthNote = Span(css.Class("row-meta"),
+			uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))
+	}
+
 	return Div(css.Class("row sub-row"),
 		selectCheckbox,
 		Div(css.Class("row-main"),
@@ -584,12 +668,12 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			reviewBadge,
 			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),
 		),
-		// Only show the normalized "/mo" figure when it differs from the actual
-		// charge (i.e. weekly/yearly). For monthly subs they're identical, so
-		// showing both reads as a duplicated amount (C56).
-		If(s.Cadence != subscriptions.CadenceMonthly,
-			Span(css.Class("row-meta"), uistate.T("subs.perMonth", fmtMoney(money.New(s.MonthlyAmount(), props.Base))))),
+		// Actual charge amount leads (G10 §4/§6): the charge the user sees on
+		// their bank statement is the primary figure; cadence badge clarifies
+		// why a $540 yearly charge appears after a $55 monthly one.
 		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),
+		cadenceBadge,
+		perMonthNote,
 		actions,
 	)
 }
@@ -623,6 +707,31 @@ func subShareBar(monthly, total int64) ui.Node {
 			"background":    "var(--accent)",
 			"border-radius": "999px",
 		})),
+	)
+}
+
+// netChangeSummary renders the one-line net price-change headline for the price-changes
+// card (G10 §5). A positive delta (net price rise) renders in the danger tone; a
+// negative delta (net savings) renders in the success tone. Returns an empty fragment
+// when delta is zero or when there are no changes.
+func netChangeSummary(netDelta int64, base string) ui.Node {
+	if netDelta == 0 {
+		return Fragment()
+	}
+	abs := netDelta
+	if abs < 0 {
+		abs = -abs
+	}
+	amt := fmtMoney(money.New(abs, base))
+	key := "subs.netPriceUp"
+	tone := "text-down"
+	if netDelta < 0 {
+		key = "subs.netPriceDown"
+		tone = "text-up"
+	}
+	return P(
+		ClassStr("row-meta "+tw.ColorClass(tone)),
+		uistate.T(key, amt),
 	)
 }
 

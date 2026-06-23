@@ -207,6 +207,14 @@ func Todo() ui.Node {
 		}
 	}
 
+	// G6: when "hide done" is active and there ARE completed tasks, show a small
+	// muted acknowledgment so Nina knows she has completed work without seeing it —
+	// mirrors the Transactions filter-summary pattern.
+	var hiddenDoneNote ui.Node
+	if hideDone.Get() && doneCount > 0 {
+		hiddenDoneNote = P(css.Class("empty", tw.TextDim), uistate.T("todo.hiddenDone", doneCount))
+	}
+
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("todo.listTitle"),
 		HeaderAction: Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
@@ -229,6 +237,7 @@ func Todo() ui.Node {
 				Text(uistate.T("todo.summary", openCount, overdueCount, doneCount)))),
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 			listBody,
+			hiddenDoneNote,
 		),
 	})
 }
@@ -398,17 +407,29 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 	plabel, pclass := priorityMeta(t.Priority)
 
-	// Overdue = an open task whose due date is before today. Flag it with the danger
-	// tone plus an explicit "overdue" word (colour + text, not colour alone — B15)
-	// so a past-due task is actionable at a glance (C52).
-	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < dateutil.FormatDate(time.Now())
+	// Overdue = open task whose due date is before today. Due-today = open task
+	// due on today's date. Flag overdue with danger tone + word "overdue" (colour
+	// + text, not colour alone — B15). Flag due-today with warning tone + "due today"
+	// so Nina can distinguish time-sensitive-now from comfortably-future (G6 D4).
+	todayISO := dateutil.FormatDate(time.Now())
+	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < todayISO
+	dueToday := !done && !overdue && !t.Due.IsZero() && dateutil.FormatDate(t.Due) == todayISO
 	meta := []ui.Node{Span(ClassStr("badge badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
-		dueText := uistate.T("todo.due") + " " + pr.FormatDate(t.Due)
+		var dueText string
 		dueCls := "row-meta"
-		if overdue {
-			dueText += " · overdue"
+		switch {
+		case overdue:
+			// Keep the existing "· overdue" literal so the text-down style and word
+			// are unchanged for the danger cue (C52 regression anchor).
+			dueText = uistate.T("todo.due") + " " + pr.FormatDate(t.Due) + " · overdue"
 			dueCls = "row-meta text-down"
+		case dueToday:
+			// G6 D4: amber "due today" — distinct from both overdue (red) and future (neutral).
+			dueText = uistate.T("todo.dueToday")
+			dueCls = "row-meta text-warn"
+		default:
+			dueText = uistate.T("todo.due") + " " + pr.FormatDate(t.Due)
 		}
 		meta = append(meta, Span(ClassStr(dueCls), dueText))
 	}

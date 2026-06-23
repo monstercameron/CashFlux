@@ -28,6 +28,29 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// allocAlgoSummary returns a plain-English one-liner explaining the top-ranked
+// candidate under the current profile — shown in the "Why this order?" card
+// without requiring an AI key (G8 §7).
+func allocAlgoSummary(ranked []allocate.Ranked, profileKey string) string {
+	if len(ranked) == 0 {
+		return ""
+	}
+	top := ranked[0]
+	reason := ""
+	bd := top.Breakdown
+	switch {
+	case top.Candidate.DebtReduction && bd.DebtReduction >= bd.Returns && bd.DebtReduction >= bd.Stability:
+		reason = "paying it down is a guaranteed effective return"
+	case bd.Returns >= bd.Stability && bd.Returns >= bd.Liquidity:
+		reason = "it has the highest expected return"
+	case bd.Stability >= bd.Returns && bd.Stability >= bd.Liquidity:
+		reason = "it scores highest on stability"
+	default:
+		reason = "it best matches your current weights"
+	}
+	return fmt.Sprintf("%s ranks first: %s under the %s profile.", top.Candidate.Name, reason, profileKey)
+}
+
 // applyRowProps holds the props for one confirmation row in the apply-confirm panel.
 type applyRowProps struct {
 	Label string
@@ -609,9 +632,15 @@ func Allocate() ui.Node {
 			AiLoading:      aiLoading.Get(),
 			AiErr:          aiErr.Get(),
 			NeedKeyMsg:     uistate.T("allocate.needKey"),
+			AlgoSummary:    allocAlgoSummary(ranked, profile.Get()),
 			OnExplain:      explain,
 			OnGoToSettings: goToSettings,
 		}),
+		// G8: when no amount has been entered yet, show a quiet hint so Marcus
+		// knows the apply flow exists and is unlocked by entering an amount above.
+		If(totalMinor == 0, P(css.Class("muted alloc-apply-hint"),
+			uistate.T("allocate.applyHint"),
+		)),
 		If(totalMinor > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("allocate.applyTitle"),
 			Attrs: []any{Attr("aria-label", uistate.T("allocate.applyTitle"))},

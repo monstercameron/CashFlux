@@ -378,10 +378,12 @@ func Planning() ui.Node {
 				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
 				Form(css.Class("form-grid"),
-					labeledField(uistate.T("planning.trimPlaceholder", base), Input(css.Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
+					labeledField(uistate.T("planning.trimLabel", base), Input(css.Class("field"), Type("number"), Value(trimStr.Get()), Step("0.01"), OnInput(onTrim))),
 					If(len(savedPlans) > 0,
+						// G7: compare-with is a secondary overlay action; compact class
+						// keeps it visually subordinate to the primary trim input.
 						Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
-							Select(css.Class("field"), Attr("aria-label", uistate.T("plans.compareLabel")),
+							Select(css.Class("field", "plan-compare-select--compact"), Attr("aria-label", uistate.T("plans.compareLabel")),
 								Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
 						),
 					),

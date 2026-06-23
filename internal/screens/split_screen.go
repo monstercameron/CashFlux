@@ -42,7 +42,11 @@ func Split() ui.Node {
 	amountS := ui.UseState("")
 	descS := ui.UseState("")
 	selected := ui.UseState(map[string]bool{})
-	payerS := ui.UseState("")
+	// Seed the payer from the "View as" member (if one is active) so Priya
+	// doesn't have to select herself separately (G12 §7, item 18).
+	activeMember := uistate.UseActiveMember()
+	initialPayer := activeMember.Get() // "" == everyone; a member ID seeds the payer
+	payerS := ui.UseState(initialPayer)
 	weighted := ui.UseState(false)
 	weights := ui.UseState(map[string]string{})
 	errS := ui.UseState("")
@@ -230,7 +234,8 @@ func Split() ui.Node {
 	var splitSummary ui.Node = Fragment()
 	if n := len(ids); n > 0 && amt > 0 {
 		if weighted.Get() {
-			splitSummary = P(css.Class("muted"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
+			// The summary is the key computed output — highlight it, not muted (G12 §4).
+			splitSummary = P(css.Class("split-summary"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
 		} else {
 			each := amt / int64(n)
 			rem := amt - each*int64(n)
@@ -238,7 +243,7 @@ func Split() ui.Node {
 			if rem > 0 {
 				s += fmt.Sprintf(" (+%s remainder to the first)", fmtMoney(money.New(rem, base)))
 			}
-			splitSummary = P(css.Class("muted"), s)
+			splitSummary = P(css.Class("split-summary"), s)
 		}
 	}
 	// Select-all / clear for households with several members.
@@ -274,8 +279,16 @@ func Split() ui.Node {
 				splitSummary,
 			),
 		}),
+		// Forward hint: show a placeholder prompt when the user has entered an amount +
+		// selected members but hasn't chosen who paid — so Priya sees where the result
+		// will appear before she completes the form (G12 §5).
+		If(len(ids) > 0 && amt > 0 && payerS.Get() == "",
+			P(css.Class("muted"), "Pick who paid to see who owes whom."),
+		),
+		// "This split" — ephemeral card; only visible when a payer + members + amount are
+		// all set. Title distinguishes it from the persisted "Running balance" card (G12 §7).
 		If(len(owes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("split.settleUp"),
+			Title: "This split",
 			Body: Fragment(
 				Div(css.Class("rows"), owes),
 				// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
@@ -296,18 +309,26 @@ func Split() ui.Node {
 				),
 			),
 		})),
-		If(len(net) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "Settle up",
+		// Persisted running balance — always shown (with empty-state when no splits yet),
+		// titled "Running balance" to distinguish it from the ephemeral "This split" card
+		// above (G12 §7 item 19; G12 §1 item 3 empty-state).
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: "Running balance",
 			Body: Fragment(
 				P(css.Class("muted"), "Running balance across every saved split."),
-				Div(css.Class("rows"), netRows),
-				If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
-					P(css.Class("budget-sub"), "Simplest way to square up:"),
-					Div(css.Class("rows"), ledgerRows),
+				If(len(net) == 0,
+					P(css.Class("muted"), "Add a shared expense to see who owes whom."),
+				),
+				If(len(net) > 0, Fragment(
+					Div(css.Class("rows"), netRows),
+					If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
+						P(css.Class("budget-sub"), "Simplest way to square up:"),
+						Div(css.Class("rows"), ledgerRows),
+					)),
+					If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
 				)),
-				If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
 			),
-		})),
+		}),
 	)
 }
 
@@ -324,10 +345,13 @@ type settleTransferRowProps struct {
 // ledger can list many rows safely.
 func settleTransferRow(props settleTransferRowProps) ui.Node {
 	onRec := ui.UseEvent(Prevent(func() { props.OnRecord(props.From, props.To, props.AmountRaw) }))
+	// Button names the specific transfer so Priya can't click the wrong one when
+	// several are listed (G12 §7 item 20).
+	btnLabel := "Record: " + props.FromName + " pays " + props.ToName + " " + props.Amount
 	return Div(css.Class("row"),
 		Span(css.Class("row-desc"), props.FromName+" pays "+props.ToName),
 		Span(css.Class("budget-amount"), props.Amount),
-		Button(css.Class("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), "Record settlement"),
+		Button(css.Class("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), btnLabel),
 	)
 }
 

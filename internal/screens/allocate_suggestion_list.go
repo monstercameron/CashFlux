@@ -39,12 +39,17 @@ func SuggestionList(p suggestionListProps) ui.Node {
 		for i, r := range ranked {
 			rankByID[r.Candidate.ID] = i + 1
 		}
-		listBody = Div(MapKeyed(ranked,
-			func(r allocate.Ranked) any { return r.Candidate.ID },
-			func(r allocate.Ranked) ui.Node {
-				return ui.CreateElement(AllocRow, allocRowProps{R: r, Rank: rankByID[r.Candidate.ID], Amount: p.AmountFor(r.Candidate.ID), OnExclude: p.OnExclude})
-			},
-		))
+		listBody = Div(
+			// G8: "Priority" column header so the score % is immediately legible.
+			Div(css.Class("alloc-list-header"),
+				Span(css.Class("muted"), uistate.T("allocate.priorityHeader")),
+			),
+			MapKeyed(ranked,
+				func(r allocate.Ranked) any { return r.Candidate.ID },
+				func(r allocate.Ranked) ui.Node {
+					return ui.CreateElement(AllocRow, allocRowProps{R: r, Rank: rankByID[r.Candidate.ID], Amount: p.AmountFor(r.Candidate.ID), OnExclude: p.OnExclude})
+				},
+			))
 	}
 
 	return Fragment(

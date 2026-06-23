@@ -12,11 +12,14 @@ import (
 
 // aiExplainCardProps carries the AI-explain state and callbacks.
 type aiExplainCardProps struct {
-	HasRanked      bool
-	AiResult       string
-	AiLoading      bool
-	AiErr          string
-	NeedKeyMsg     string // the i18n value of "allocate.needKey", for comparison
+	HasRanked  bool
+	AiResult   string
+	AiLoading  bool
+	AiErr      string
+	NeedKeyMsg string // the i18n value of "allocate.needKey", for comparison
+	// AlgoSummary is a pre-computed plain-English summary of the top-ranked
+	// candidate, shown inline without requiring an API key (G8 §7).
+	AlgoSummary    string
 	OnExplain      any
 	OnGoToSettings any
 }
@@ -30,7 +33,10 @@ func AiExplainCard(p aiExplainCardProps) ui.Node {
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("allocate.whyTitle"),
 		Body: Fragment(
-			Button(css.Class("btn"), Type("button"), OnClick(p.OnExplain), IfElse(p.AiLoading, Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAI")))),
+			// G8: always show the algorithmic summary so the card is meaningful
+			// without an API key.  The AI narrative is an optional enrichment on top.
+			If(p.AlgoSummary != "", P(css.Class("muted alloc-algo-summary"), p.AlgoSummary)),
+			Button(css.Class("btn"), Type("button"), OnClick(p.OnExplain), IfElse(p.AiLoading, Text(uistate.T("allocate.thinking")), Text(uistate.T("allocate.explainAINarrative")))),
 			If(p.AiErr != "", Div(css.Class("err"), Attr("role", "alert"),
 				Text(p.AiErr),
 				If(p.AiErr == p.NeedKeyMsg,
