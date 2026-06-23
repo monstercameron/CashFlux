@@ -21,6 +21,12 @@ type CardProps struct {
 	// HeaderAction is an optional node placed to the right of the title row
 	// (e.g. an IconButton for a section-level action). Ignored when Title is empty.
 	HeaderAction uic.Node
+	// TestID, when non-empty, is rendered as data-testid on the section root so a
+	// hand-rolled Section(.card) carrying a test id can be ported without losing it.
+	TestID string
+	// Attrs holds any extra attributes/nodes to place on the section root (e.g. an
+	// aria-label or a second data-* attribute) — appended right after the class.
+	Attrs []any
 	// Body is the card's content area.
 	Body uic.Node
 }
@@ -30,6 +36,12 @@ type CardProps struct {
 // repeated across screens so callers need only supply title and body.
 func Card(props CardProps) uic.Node {
 	args := []any{css.Class("card")}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	if len(props.Attrs) > 0 {
+		args = append(args, props.Attrs...)
+	}
 	if props.Title != "" {
 		if props.HeaderAction != nil {
 			args = append(args, Div(css.Class("card-header"),
@@ -264,6 +276,11 @@ type EntityListSectionProps struct {
 	Title string
 	// HeaderAction is an optional node placed to the right of the title (e.g. add button).
 	HeaderAction uic.Node
+	// TestID, when non-empty, lands as data-testid on the section root (preserves a
+	// hand-rolled card's test id during a port).
+	TestID string
+	// Attrs holds extra attributes/nodes for the section root (e.g. aria-label).
+	Attrs []any
 	// Empty is rendered when Body is nil and EmptyState is non-nil. If both Body
 	// and EmptyState are nil, nothing is rendered inside the card body area.
 	EmptyState uic.Node
@@ -286,6 +303,8 @@ func EntityListSection(props EntityListSectionProps) uic.Node {
 	return Card(CardProps{
 		Title:        props.Title,
 		HeaderAction: props.HeaderAction,
+		TestID:       props.TestID,
+		Attrs:        props.Attrs,
 		Body:         content,
 	})
 }
