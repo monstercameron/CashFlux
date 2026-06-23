@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -71,9 +72,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
-	onCat := ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
-	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
-	onPeriod := ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
+	// onCat/onOwner/onPeriod hooks kept for stable hook ordering; SelectInput owns
+	// the change event internally so these handlers are no longer wired to DOM.
+	ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
 	onRollover := ui.UseEvent(func() { rollover.Set(!rollover.Get()) })
 
 	budgetDefs := app.CustomFieldDefsFor("budget")
@@ -124,10 +127,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 	}))
 
-	catOptions := make([]ui.Node, 0, len(expenseCats))
-	for _, c := range expenseCats {
-		catOptions = append(catOptions, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
-	}
+	catOptions := uiw.OptionsFrom(expenseCats,
+		func(c domain.Category) string { return c.ID },
+		func(c domain.Category) string { return c.Name },
+		catID.Get())
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
 	// Suggest a limit from the selected category's recent monthly spend (D6).
@@ -138,11 +141,26 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		labeledField(uistate.T("common.name"),
 			Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...)),
 		labeledField(uistate.T("budgets.categoryLabel"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.categoryLabel")), OnChange(onCat), catOptions)),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   catOptions,
+				Selected:  catID.Get(),
+				OnChange:  func(v string) { catID.Set(v) },
+				AriaLabel: uistate.T("budgets.categoryLabel"),
+			})),
 		labeledField(uistate.T("common.owner"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("common.owner")), OnChange(onOwner), ownerOptions)),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ownerOptions,
+				Selected:  owner.Get(),
+				OnChange:  func(v string) { owner.Set(v) },
+				AriaLabel: uistate.T("common.owner"),
+			})),
 		labeledField(uistate.T("budgets.period"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("budgets.period")), Title(uistate.T("budgets.period")), OnChange(onPeriod), periodOptions(period.Get()))),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   periodOptions(period.Get()),
+				Selected:  period.Get(),
+				OnChange:  func(v string) { period.Set(v) },
+				AriaLabel: uistate.T("budgets.period"),
+			})),
 		labeledField(uistate.T("budgets.limitLabel"),
 			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
 		Label(css.Class("field"),
@@ -152,7 +170,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.add")),
 		If(suggestion > 0, Div(css.Class("suggest-row"),
 			Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
 			Button(css.Class("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),

@@ -133,8 +133,12 @@ func QuickAddHost() uic.Node {
 		reviewedArgs = append(reviewedArgs, Attr("checked", ""))
 	}
 
+	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
+	// Wrap each in ui.FormField so they render a visible caption above the control,
+	// matching the .labeled-field pattern used by all entity add modals.
 	body := Div(css.Class("form-grid"),
-		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts),
+		ui.FormField(uistate.T("quickAdd.account"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
 		ui.Segmented(ui.SegmentedProps{
 			Label: uistate.T("quickAdd.kind"),
 			Options: []ui.SegOption{
@@ -144,10 +148,14 @@ func QuickAddHost() uic.Node {
 			Selected: kind.Get(),
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
-		Input(css.Class("field"), Type("number"), Attr("title", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount)),
-		Input(css.Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc)),
-		Select(css.Class("field"), Attr("title", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
-		Input(css.Class("field"), Type("date"), Attr("title", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate)),
+		ui.FormField(uistate.T("quickAdd.amount"),
+			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+		ui.FormField(uistate.T("quickAdd.description"),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
+		ui.FormField(uistate.T("quickAdd.category"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
+		ui.FormField(uistate.T("quickAdd.date"),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
 		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 			Input(reviewedArgs...),
 			uistate.T("quickAdd.reviewed")),

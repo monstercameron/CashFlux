@@ -180,8 +180,10 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	var foot uic.Node
 	if props.CloseOnly {
 		// Nothing to save: a single Close button (no Cancel/Save pair).
+		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
+		// (green/primary styling) — so the button reads as "dismiss" not "submit".
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn save"), Type("button"), OnClick(save), "Close"),
+			Button(css.Class("set-btn close"), Type("button"), OnClick(save), "Close"),
 		)
 	} else {
 		foot = Div(css.Class("set-foot"),

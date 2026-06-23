@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -61,8 +62,10 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	onTarget := ui.UseEvent(func(v string) { target.Set(v) })
 	onCurrent := ui.UseEvent(func(v string) { current.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateStr.Set(v) })
-	onOwner := ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
-	onLinkAcct := ui.UseEvent(func(e ui.Event) { linkAcct.Set(e.GetValue()) })
+	// onOwner/onLinkAcct hooks kept for stable hook ordering; SelectInput owns the
+	// change event internally so these handlers are no longer wired to DOM.
+	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
+	ui.UseEvent(func(e ui.Event) { linkAcct.Set(e.GetValue()) })
 	onToggleAdv := ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
 
 	goalDefs := app.CustomFieldDefsFor("goal")
@@ -118,15 +121,13 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 		linkAcct.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
+		uistate.PostNotice(uistate.T("goals.addedToast"), false)
 		if props.OnDone != nil {
 			props.OnDone()
 		}
 	}))
 
-	ownerOptions := []ui.Node{Option(Value(domain.GroupOwnerID), SelectedIf(owner.Get() == domain.GroupOwnerID), uistate.T("owner.group"))}
-	for _, m := range app.Members() {
-		ownerOptions = append(ownerOptions, Option(Value(m.ID), SelectedIf(owner.Get() == m.ID), m.Name))
-	}
+	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
@@ -141,13 +142,23 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 		If(advOpen.Get(), labeledField(uistate.T("goals.savedSoFar"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
 		If(advOpen.Get(), labeledField(uistate.T("goals.owner"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("goals.owner")), OnChange(onOwner), ownerOptions))),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ownerOptions,
+				Selected:  owner.Get(),
+				OnChange:  func(v string) { owner.Set(v) },
+				AriaLabel: uistate.T("goals.owner"),
+			}))),
 		If(advOpen.Get(), labeledField(uistate.T("goals.linkedOptional"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("goals.linkedOptional")), Title(uistate.T("goals.linkedOptional")), OnChange(onLinkAcct), linkOptions))),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   linkOptions,
+				Selected:  linkAcct.Get(),
+				OnChange:  func(v string) { linkAcct.Set(v) },
+				AriaLabel: uistate.T("goals.linkedOptional"),
+			}))),
 		MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
+		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.add")),
 		errText("goal-err", errMsg.Get()),
 	)
 }

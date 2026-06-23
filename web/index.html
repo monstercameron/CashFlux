@@ -321,6 +321,17 @@
       /* GM2-6: the top-bar "+" Add button had no border/fill in light and read as
          invisible. Give it a subtle outline so the primary entry point is findable. */
       [data-theme="light"] .add-btn { border: 1px solid var(--border); border-radius: 6px; }
+      /* GM2-10: CloseOnly footer button used .set-btn.save styling (green, primary-
+         looking) on a dismiss action, misleading users. .set-btn.close styles it as
+         a neutral dismiss action matching .set-btn.cancel. */
+      .set-btn.close { background: transparent; border: 1px solid #34343a; color: #a6a6ac; font-weight: 500; }
+      .set-btn.close:hover { color: #f4f4f5; border-color: #44444c; }
+      [data-theme="light"] .set-btn.close { background: #ffffff; border-color: #e4e2dd; color: #1c1c1e; }
+      [data-theme="light"] .set-btn.close:hover { border-color: #cfcdc7; color: #000; }
+      /* GM2-12: .set-body scrollbar was hardcoded dark. In light mode the dark-grey
+         thumb on white looks jarring; switch to a warm-neutral thumb. */
+      [data-theme="light"] .set-body { scrollbar-color: #c5c3be transparent; }
+      [data-theme="light"] .set-body::-webkit-scrollbar-thumb { background: #c5c3be; border-color: #ffffff; }
       /* GM4-7: command-palette backdrop used a harsh dark scrim in light while the
          FlipPanel uses a warm tint. Match it (inline 0,0,0,.5 needs !important). */
       [data-theme="light"] #cf-cmd-palette { background: rgba(239,237,232,0.72) !important; }

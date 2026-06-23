@@ -788,11 +788,16 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		if props.ShowTags {
 			editColspan = "9"
 		}
+		// GM2-4: inline-edit had 0 labeled-field wrappers (description + amount were
+		// placeholder-only, invisible to screen readers once text is entered). Wrap
+		// each in labeledField() to match the entity add-form pattern.
 		return Tr(css.Class("row-edit"),
 			Td(Attr("colspan", editColspan),
 				Form(css.Class("form-grid"), OnSubmit(saveEdit),
-					Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
+					labeledField(uistate.T("transactions.descPlaceholder"),
+						Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
+					labeledField(uistate.T("transactions.amountPlaceholder"),
+						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount))),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryLabel")), OnChange(onCat), catOptions),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
 					If(len(props.Members) > 1, Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.whoLabel")), Attr("data-testid", "txn-who-edit"), OnChange(onMember), memberOptions)),

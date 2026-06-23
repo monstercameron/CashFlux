@@ -1327,6 +1327,85 @@ surface that makes plaintext-at-rest reachable), B32 Cluster (CIA/OWASP), B29 (s
 
 ---
 
+### B34. Move the theming engine to its own Appearance page (de-crowd Settings) ★ (UX/structure, user-requested 2026-06-23)
+
+**Why.** The Settings FlipPanel is overloaded — G21 measured **23 sections in a ~380px scroll window** with no
+section nav, and the everyday Appearance controls share that cramped space with setup-once concerns (AI key, Cloud,
+modules, data import/export, exchange rates, debug). The theming engine (B20) is the richest control set in the app —
+a preset picker, every design token, fonts, density, display scale, icon pack, header image — and deserves a calm,
+full-width, routed page of its own instead of a squeezed panel column. This also fixes the L47 gripe that appearance
+lives only in a non-routed fly-in (no deep-link, no back/forward, not bookmarkable).
+
+**Good news — the hard layers already exist; this is mostly a UI relocation + routing.** Model, logic, persistence,
+and state are done and reusable: `internal/theme` (`Theme`, `Banner`, `FontAsset`, presets, validation, `derived`,
+`islight`, `migrate`), `internal/uistate/theme.go` (`LoadTheme`/`ApplyTheme`/`PersistTheme`, `cashflux:theme`),
+`internal/uistate/prefs.go` (theme/accent/density/scale, `cashflux:prefs`), `internal/uistate/fonts.go`
+(`LoadFonts`/`AddFont`/`RemoveFont`/`ApplyFonts`), `internal/uistate/banner.go` (header image). The whole editor is
+already a self-contained component: `internal/app/theme_editor.go` `func themeEditor()`. So NO new bottom-up model
+work — the SDLC layers below UI are green. Build order below reflects that (it's UI → route → nav → wire, not
+model-first).
+
+**SCOPE — what MOVES to the new Appearance page:**
+- Theme mode segment (Dark / Light / System) — `settings.go` ~L681-683.
+- Accent color + the accent-contrast note — `settings.go` ~L692-703 (`accentContrastNote`, `accentSurfaceHexes`).
+- The full theme editor — `uic.CreateElement(themeEditor)` (`theme_editor.go`): preset picker, surface/text/accent
+  token editors, corner radius, font-size scale, UI/display font pickers + **font upload**, **density**, **display
+  scale**, live validation warnings, import/export theme JSON, reset-to-default.
+- Icon pack / icon line-weight (B13/B20) and **header image / banner** (`uistate.Banner`) — fold these in if currently
+  in the panel or scattered; the Appearance page is their natural home.
+
+**SCOPE — what STAYS in Settings:** AI provider + key, Cloud & server, module-visibility toggles, base currency + FX
+rate rows, household members, data import/export, danger zone (wipe), debug log. (Settings becomes appreciably shorter.)
+
+**Build order (UI-relocation, bottom-up where it applies):**
+- [ ] **1 · New routed screen** `internal/screens/appearance.go` (`//go:build js && wasm`, package `screens`) exposing
+      `func Appearance() ui.Node`. NOTE the layering constraint surfaced by GI0: the theme editor currently lives in
+      package `app` (`theme_editor.go`) and uses `uistate`/`theme`/`artifacts`/`icon` — which `screens` may import, but
+      `screens` must NOT import `app` (import cycle, see GI0). **Decide the home:** either (a) move `theme_editor.go`
+      (and its helpers `accentContrastNote`/`accentSurfaceHexes`/`fontFamilyFromName`/`pickFileNamed`) from
+      `internal/app` into `internal/screens` (or a new shared `internal/appearanceui` package both can import), or
+      (b) keep it in `app` and have `app` mount the route. Prefer extracting to a shared package so both the panel-link
+      and the page can render it. Keep `themeEditor`'s isolated-hooks contract (mount via `CreateElement`).
+- [ ] **2 · Register the route** in `internal/screens/screens.go` `All()` — add an entry with `Path "/appearance"`,
+      title "Appearance", placed under the existing nav group used for tools/settings-adjacent screens
+      (`GroupTools`/SubGroup as appropriate). `internal/app/app.go` already loops `screens.All()` to register routes —
+      no change needed there if the registry entry is added.
+- [ ] **3 · Rail nav entry** — add "Appearance" to the left-rail nav (same mechanism as other screens; include an icon
+      via `internal/icon`). Confirm it respects collapsed-rail + nested-group behavior (C67).
+- [ ] **4 · Page layout** — full-width, calm, GLANCEABLE (apply the GLAMOR principles): group the editor into clear
+      sections with headings (Theme · Color · Typography · Density & scale · Icons · Header image), each its own card;
+      live-preview stays (the app is its own preview); **both light + dark correct** (reuse the landed `[data-theme=
+      "light"]` tokens). Responsive at 768. Page-title + breadcrumb present.
+- [ ] **5 · Replace the Settings Appearance block with a link** — in `internal/app/settings.go` swap the inline theme
+      segment + accent + `themeEditor` (~L680-705) for a single row: **"Appearance & theme →"** that closes the panel
+      (`settingsAtom`/close) and `nav.Navigate("/appearance")`. Keep the quick Dark/Light/System segment in Settings IF
+      desired as a convenience (optional — decide), but the full editor moves out.
+- [ ] **6 · i18n** — add `nav.appearance`, `screen.appearanceSub`, and any new strings to `internal/i18n/en.go`
+      (the theme editor currently inlines English — fold those into the bundle while relocating, or keep inline and just
+      add the nav/title keys; note the decision).
+- [ ] **7 · e2e** `e2e/appearance_page.mjs` (story-grounded — "Renée makes the app hers"): navigate to /appearance from
+      the rail AND from the Settings "Appearance & theme →" link; change theme mode, accent, a token, density, upload a
+      font, set a header image; assert each **applies live AND persists across a hard reload** (the existing
+      `cashflux:theme`/`cashflux:prefs` round-trip); assert deep-link `/appearance` loads the page directly (fixes L47);
+      screenshot both themes at 1280 + 768.
+
+**Acceptance criteria / invariants:**
+- [ ] `/appearance` is a real route (deep-linkable, back/forward works, survives reload) — not a fly-in (closes L47 for
+      appearance).
+- [ ] Every appearance control that worked in the panel still works on the page and **persists identically** (same
+      `cashflux:theme` + `cashflux:prefs` stores; density/scale still mirrored into prefs as `theme_editor.go` does now).
+- [ ] Live theming still applies instantly to the running shell (C69 — theme reaches rail/header/dashboard).
+- [ ] Settings panel is visibly shorter; the Appearance link is obvious and lands on the page.
+- [ ] Page passes the GLAMOR bar in BOTH themes (no light-mode contrast regressions; reuse landed tokens).
+- [ ] No import cycle introduced (resolve the `app`↔`screens` layering per step 1 — coordinate with **GI0**, which must
+      be green to build/verify this).
+
+**Cross-refs:** B20 (theming engine), B13 (icons), C69 (theme reaches shell), G21 (Settings overcrowding — 23 sections),
+GM1 (settings-modal structural fixes), L47/L62 (Settings/appearance not routed), GI0 (build blocker + the
+`screens`-must-not-import-`app` layering rule this ticket must honor).
+
+---
+
 ## C. Live UI/UX review findings — 2026-06-16 (sample data) ★
 
 Captured by driving the running app (`http://127.0.0.1:8080`) in a real headless Chromium via the
@@ -17120,6 +17199,31 @@ _7. GENERAL MODAL UX_ **[GO-STRUCTURAL + CSS-ONLY]**
 - **S3/item 9**: base `height` on short viewports — global settings already passes `Height: "min(90vh, 900px)"` from Go so default `height:470px` only affects widget panels (not the global panel). Not a real issue for the global settings panel.
 
 ### GM2. Add/Edit entity modals — UX review — 2026-06-23 ★
+
+✅ RESOLVED (2026-06-23) — GM2 implementation pass
+
+**Shipped (this commit):**
+- **#1 (CRITICAL)**: Modal title invisible in light mode — `[data-theme="light"] .set-h h3 { color: #1c1c1e; }` (already landed in prior CSS pass; confirmed present).
+- **#2 (HIGH)**: Footer Save/Cancel buttons hardcoded dark-green in light — light-mode overrides already landed; confirmed in `web/index.html` lines 314-317.
+- **#3 (HIGH)**: QuickAdd 5/6 inputs placeholder-only — wrapped all 5 (Account, Amount, Description, Category, Date) in `ui.FormField()` in `internal/app/quickadd.go`. Added `"quickAdd.description"` i18n key.
+- **#4 (HIGH)**: Inline-edit 0 labeled-field wrappers — wrapped Description and Amount inputs in `labeledField()` in `internal/screens/transactions.go`. Selects already had `aria-label`.
+- **#6 (MEDIUM)**: Add-btn invisible in light — `[data-theme="light"] .add-btn { border: 1px solid var(--border); ... }` already landed.
+- **#8 (MEDIUM)**: "Add" generic label on Budget/Goal CTA → changed to `"budgets.add"` ("Add budget") and `"goals.add"` ("Add goal") in `budgetaddform.go` and `goaladdform.go`.
+- **#9 (MEDIUM)**: No toast on successful goal add → added `uistate.PostNotice(uistate.T("goals.addedToast"), false)` in `goaladdform.go`. Added `"goals.addedToast"` key. (Budget already had this.)
+- **#10 (LOW)**: CloseOnly footer button used `.set-btn.save` (green/primary) on a dismiss action → changed to `.set-btn.close` in `flippanel.go`; added neutral `.set-btn.close` CSS rule in `web/index.html`.
+- **#12 (LOW)**: `.set-body` scrollbar hardcoded dark → added `[data-theme="light"] .set-body` scrollbar overrides in `web/index.html`.
+
+**Already done (confirmed by GM2 audit — not redone):**
+- #1 Modal title light fix — already in CSS from GM1/GM4 pass.
+- #2 Footer button light fix — already in CSS from GM4-9 pass.
+- #6 Add-btn light border — already in CSS from GM1 pass.
+- FlipPanel `role=dialog` / `aria-modal` / Esc-to-close — confirmed in `flippanel.go`.
+- `.labeled-field` in account/budget/goal entity add forms — confirmed in source.
+- Account number field (#5): all 5 labeled-field wrappers confirmed present in `accountaddform.go`; no unlabeled field found. May have been fixed in a prior pass.
+
+**Deferred (with reason):**
+- **#7**: Modal height dead space (Goal/Budget 200px empty below 3-field form) — CSS `height:auto` conflicts with 3D flip animation; full fix requires post-animation height reset; deferred as GM2b.
+- **#11**: "Scan a document" breaks modal mental model (navigates instead of opening modal) — requires Go structural change + divider; deferred as GM2c.
 
 **The story**
 A user opens CashFlux and wants to add several things in a session: an account, a budget, a goal,
