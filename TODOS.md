@@ -19781,6 +19781,374 @@ findings for ~4 lines of CSS.
 Cross-references: B31 (container max-width strategy), C10/C19 (narrow overflow/topbar fixes),
 G3 (768 px accounts broken), G6 (768 chip wrap).
 
+✅ RESOLVED (2026-06-23). Shipped:
+- **F1 (ultra-wide max-width):** `@media (min-width: 1441px) { main { max-width: 1440px; margin-inline: auto; } }` — caps content at 1440px, resolves D2 (txn table sprawl) and F5 (reports chart width) as side-effects.
+- **F2 (narrow portrait topbar):** `@media (max-width: 480px)` — switches topbar to `flex-wrap: nowrap; overflow-x: auto` (Option B), eliminating the 296px chrome tower; controls remain accessible via horizontal scroll, no functionality hidden.
+- **F4 (stat-grid single-column at 400px):** `@media (max-width: 767px) { .page .stat-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important; } }` — prevents bento 1-column override from clobbering stat tiles; 3 KPI tiles now fit in 344px.
+- Deferred: F3 (ultra-wide 5-column bento) — LOW priority; needs tile span audit before enabling. D3 (attention chip ellipsis) — acceptable behavior, no fix.
+
+# GX8. Micro-interactions & motion — "It Feels Alive" — 2026-06-23 ★
+
+---
+
+## The story
+
+CashFlux already has a principled motion system: defined keyframe animations, a consistent
+`prefers-reduced-motion: reduce` guard for the heavy boot/flip/toast/rail animations, and fast
+hover/active feedback on buttons and rows. That foundation is good. GX8 surfaces what's missing
+on top of it: **five interactive element types carry their hover transitions into reduced-motion
+contexts without a `reduce` guard**, the `:active` press-down rule fires only under
+`no-preference` (correct) but is narrower than it looks (the `.row` draggable gets a grabbing
+cursor but no press visual), and the motion scale has a mild three-tier drift
+(`0.12s` / `0.15s` / `0.18s`) that is close enough to feel intentional but worth anchoring
+in a single fast band. Nothing is janky or gratuitous — the animations that exist are calm and
+purposeful. The work here is gap-filling and guard-hardening, not a redesign.
+
+Cross-ref: §6.16 (UI interaction & motion polish pass), GX5 (toast-in animation 160 ms,
+confirmed working), GX1 (rail flyout `.12s` ease, confirmed), GX3 (FlipPanel `.55s` cubic-bezier).
+
+---
+
+## Drive script
+
+```
+node e2e/gx_08_motion.mjs   # exit 0
+```
+
+Screenshots written to `e2e/screenshots/gx08_*.png` (13 files).
+
+### Run evidence
+
+```
+=== DARK THEME ===
+  📸 gx08_01_dark_shell.png
+
+--- Stylesheet analysis (dark) ---
+@keyframes: boot-spin, boot-breathe, boot-fade-up, app-settle, toast-in, rail-flyout, cf-jump-flash-kf
+
+prefers-reduced-motion: reduce blocks:
+  (prefers-reduced-motion: reduce)
+    .skip-link { transition: none; }
+  (prefers-reduced-motion: reduce)
+    #boot, #boot.hidden { transition: opacity 0.2s; transform: none; }
+    .boot-ring, .boot-c, .boot-word, .boot-sub, #app.app-enter { animation: none; opacity: 1; }
+    .flip-inner, .flip-backdrop { transition: none; }
+    .toast { animation: none; }
+    aside.rail { transition: none; }
+  (prefers-reduced-motion: no-preference)
+    .btn:active ... .nv:active { transform: translateY(1px); }
+  (prefers-reduced-motion: no-preference)
+    .bar-fill { transition: width 0.45s cubic-bezier(0.2, 0.75, 0.2, 1); }
+  (prefers-reduced-motion: no-preference)
+    aside.rail.collapsed .nv:hover > span ... { animation: 0.12s ease rail-flyout both; }
+  (prefers-reduced-motion: reduce)
+    .cf-jump-flash { animation: none; }
+
+--- Transition measurements (dark, /transactions) ---
+  .btn:          dur=0.12s  ease=ease  prop=filter
+  aside.rail:    dur=0.18s  ease=ease  prop=width
+
+--- Full transition duration inventory (dark, /dashboard) ---
+  0.12s, 0.12s, 0.12s: .rz
+  0.12s, 0.12s:        .attention-item
+  0.12s:               .btn, .gear-inline
+  0.15s:               .w
+  0.18s:               aside.rail
+
+=== REDUCED MOTION EMULATION ===
+  Boot animations under reduced-motion:
+    bootRingAnim: "none"   ✓
+    appSettleAnim: "none"  ✓
+    bootTransition: "0.2s" (intentional short fade — OK)
+
+  Interactive elements under reduced-motion:
+  ⚠ UNGUARDED .btn:            dur=0.12s ease=ease
+  ⚠ UNGUARDED .attention-item: dur=0.12s, 0.12s ease=ease, ease
+  ⚠ UNGUARDED .gear-inline:    dur=0.12s ease=ease
+  ⚠ UNGUARDED .rz:             dur=0.12s, 0.12s, 0.12s ease=ease, ease, ease
+  ⚠ UNGUARDED .w:              dur=0.15s ease=ease
+
+  Total unguarded interactive transitions: 5
+
+Exit code: 0
+```
+
+---
+
+## What already works well (keep) ✓
+
+- **Boot sequence is fully guarded.** Under `prefers-reduced-motion: reduce`: `boot-spin`,
+  `boot-breathe`, `boot-fade-up` all collapse to `animation: none; opacity: 1` — no
+  infinite-spin or fade-up plays. `#boot` retains a short `0.2s` opacity fade for the exit
+  (intentional — the boot screen must still disappear; this is correct and proportionate).
+  Screenshot: `gx08_11_rm_shell.png`.
+
+- **App settle-in is guarded.** `#app.app-enter` → `animation: none` under `reduce`. The
+  `0.55s cubic-bezier(0.22, 1, 0.36, 1)` app-settle only plays when the user permits it.
+
+- **FlipPanel (settings modal) is guarded.** `.flip-inner { transition: none }` and
+  `.flip-backdrop { transition: none }` are both in the reduce block. The 3D flip collapses
+  instantly when motion is off — correct.
+
+- **Toast is guarded.** `.toast { animation: none }` under reduce. The 160 ms `toast-in`
+  slide-up (GX5 — confirmed) only plays under `no-preference`. Screenshot: `gx08_01_dark_shell.png`.
+
+- **Rail width transition is guarded.** `aside.rail { transition: none }` under reduce. The
+  expand/collapse does not animate when motion is off.
+
+- **Rail flyout tooltip is guarded.** The `rail-flyout` keyframe animation is inside a
+  `@media (prefers-reduced-motion: no-preference)` block — it never plays under `reduce`.
+
+- **Progress bar fill is guarded.** `.bar-fill { transition: width 0.45s }` is also inside a
+  `no-preference` block — no animated fill under `reduce`. Screenshot: `gx08_13_rm_budgets.png`.
+
+- **Jump-flash is guarded.** `@media (prefers-reduced-motion: reduce) { .cf-jump-flash { animation: none } }`.
+
+- **`:active` press-down feedback is well-designed.** `translateY(1px)` on a broad set of
+  interactive elements (`.btn`, `.nav-link`, `.data-btn`, `.seg-btn`, `.menu-btn`, `.check`,
+  `.btn-del`, `.member-add`, `.member-chip`, `.set-btn`, `.rstep`, `.toast-x`, `.nav`, `.nv`)
+  — gated under `no-preference`. Subtle, fast, correct.
+
+- **Hover states are visible and fast.** `.btn { filter: brightness(1.12) }` on hover,
+  `.row { background: var(--bg-elev) }` (dark) / `#efede8` (light), `.nav-link { background:
+  var(--bg-elev) }`, `.w:hover { border-color: #44444c }`. All have 0.12–0.15s transitions —
+  snappy, not sluggish. Both themes confirmed. Screenshots: `gx08_03_dark_btn_hover.png`,
+  `gx08_09_light_btn_hover.png`.
+
+- **Bento widget hover is coherent.** `.w:hover` lifts the border color; `.gear-inline` and
+  `.rz` reveal only on widget hover/focus-within (opacity 0 → 0.9). Clean progressive disclosure.
+  Screenshot: `gx08_06_dark_bento_hover.png`.
+
+- **No `transition: all` smell detected.** Every transition in the codebase targets a specific
+  property (`filter`, `background`, `color`, `width`, `opacity`, `transform`, `border-color`).
+  No performance-trap catch-alls.
+
+- **No infinite animations outside the boot/loading context.** `boot-spin` and `boot-breathe`
+  loop only during the boot splash — they are removed from the DOM once the app mounts.
+
+- **Motion scale is calm and fast.** Dominant duration is `0.12s`. The heavier transitions
+  (`bar-fill` 0.45s, `flip-inner` 0.55s, `app-settle` 0.55s) are reserved for large-surface
+  animations where the longer duration is justified. No sluggish 400ms hover states.
+
+---
+
+## Structure fixes
+
+### F1. [CSS-ONLY] HIGH — Five interactive element transitions unguarded under `prefers-reduced-motion: reduce`
+
+**Measured:** Under `reducedMotion: "reduce"` browser context (Playwright `browser.newContext`),
+the following elements retain their transitions:
+
+| Element | Transition | Property |
+|---|---|---|
+| `.btn` | `0.12s ease` | `filter` |
+| `.attention-item` | `0.12s, 0.12s ease` | `background, border-color` |
+| `.gear-inline` | `0.12s ease` | `color` |
+| `.rz` | `0.12s, 0.12s, 0.12s ease` | `opacity, background, color` |
+| `.w` | `0.15s ease` | `border-color` |
+
+The existing reduce block only covers: `.skip-link`, `#boot`, `.boot-ring/.boot-c/.boot-word/.boot-sub`,
+`#app.app-enter`, `.flip-inner/.flip-backdrop`, `.toast`, `aside.rail`, `.cf-jump-flash`.
+
+The five unguarded elements are mid-tier feedback transitions — 0.12–0.15s, subtle, almost
+certainly harmless to most users with vestibular disorders at this duration. However, the
+principle established by the existing guards (and WCAG 2.3.3 Animation from Interactions, AAA)
+is "disable motion when asked." Add them to the reduce block for completeness.
+
+**Screenshot:** `gx08_12_rm_transactions.png` (shows `.btn` with transition still active under
+reduced-motion emulation).
+
+**Fix:**
+
+```css
+/* GX8-F1: extend prefers-reduced-motion: reduce to cover interactive hover transitions */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-primary,
+  .attention-item,
+  .gear-inline,
+  .gear-abs,
+  .rz,
+  .w,
+  .nav-link,
+  .row,
+  .chip-x,
+  .chip-suggest,
+  .wb-node,
+  .wb-tile,
+  .wm-step-btn,
+  .wm-arrow,
+  .wm-clear,
+  .data-btn,
+  .member-add,
+  .menu-btn,
+  .seg-btn,
+  .set-btn,
+  .btn-link,
+  .btn-del,
+  .btn-ghost-danger,
+  .btn-danger,
+  .disclosure-toggle,
+  .mobile-tabbar .tab-item {
+    transition: none;
+  }
+}
+```
+
+Add this block immediately after the existing reduce block (around line 170 in index.html).
+The block is additive — the existing `aside.rail`, `flip-inner`, etc. guards remain in place.
+
+Cross-ref: §6.16, WCAG 2.3.3.
+
+---
+
+### F2. [CSS-ONLY] MEDIUM — Motion scale has a three-tier drift (0.12s / 0.15s / 0.18s)
+
+**Measured from computed styles (dark, /dashboard):**
+
+```
+0.12s:               .btn, .gear-inline, .attention-item, .rz (each property)
+0.15s:               .w (bento widget border-color)
+0.18s:               aside.rail (width)
+```
+
+Plus from source (not in DOM on dashboard): `.row 0.12s`, `.nav-link 0.15s (background, color)`,
+`.flip-backdrop 0.28s`, `.bar-fill 0.45s`, `.flip-inner 0.55s`, `toast-in 160ms`.
+
+The fast interactive tier should ideally be a single value. `0.12s` and `0.15s` are both
+reasonable, but mixing them without intention creates subtle inconsistency — hovering `.btn`
+resolves in 120ms while `.w` border resolves in 150ms.
+
+**Recommendation:** Collapse the fast interactive tier to `0.12s` for `.nav-link` (currently
+`0.15s, 0.15s` per source line 201) and `.w` (currently `0.15s` per source line 882). The
+rail's `0.18s` is a structural expand/collapse animation — it belongs in a separate "structural"
+tier and is fine as-is.
+
+Proposed motion scale after fix:
+
+| Tier | Duration | Used for |
+|---|---|---|
+| Fast hover/feedback | `0.12s ease` | buttons, rows, chips, icons, bento border |
+| Structural | `0.18s ease` | rail width |
+| Bar fill | `0.45s cubic-bezier(.2,.75,.2,1)` | budget progress bars |
+| Overlay / flip | `0.28s` / `0.55s cubic-bezier(.2,.75,.2,1)` | modal backdrop / flip card |
+| App boot / settle | `0.6s ease` / `0.55s cubic-bezier(.22,1,.36,1)` | boot words / app-settle |
+
+**Fix:**
+
+```css
+/* GX8-F2: unify fast hover tier to 0.12s */
+/* Change line 201 */
+.nav-link { transition: background 0.12s, color 0.12s; }   /* was 0.15s, 0.15s */
+
+/* Change line 882 */
+.w { transition: border-color 0.12s ease; will-change: transform; }  /* was 0.15s */
+```
+
+---
+
+### F3. [CSS-ONLY] LOW — `.row:hover` has no explicit light-theme bg override in the hover rule
+
+**Source:** `.row:hover { background: var(--bg-elev); }` (line 467). There is a separate
+light-mode override for `.txn-table tbody tr.row:hover { background: #efede8 !important; }`
+(line 512), but the generic `.row:hover` relies on the light-mode `--bg-elev` token.
+
+The light-mode `--bg-elev` resolves to a value that may not produce the same warm hover seen on
+nav items (`#efede8`). The transaction rows get the explicit override via the `!important` rule,
+but non-transaction `.row` elements (e.g. in Goals, Planning) use only `var(--bg-elev)`.
+
+**Impact:** Low — affects only non-transaction `.row` usage in light mode. In practice most rows
+in the app ARE in the transaction table, which has the specific override. But for consistency:
+
+```css
+/* GX8-F3: ensure all .row:hover uses the warm light-mode hover bg */
+[data-theme="light"] .row:hover { background: #efede8; }
+```
+
+---
+
+### F4. [CSS-ONLY] LOW — `.row[draggable="true"]` has no `:active` visual feedback
+
+**Source:** `.row[draggable="true"]:active { cursor: grabbing; }` (line 1291). This changes the
+cursor but gives no visual press state (no `translateY`, no background darken). All other
+interactive elements in the `:active` block get a `translateY(1px)` nudge.
+
+Draggable rows are a special case — adding `translateY` to a drag-initiating element can feel
+wrong (a press down that immediately starts a drag). The cursor change is probably sufficient.
+Flag as LOW / accepted tradeoff; document for future review.
+
+**No fix required.** Noted for the record.
+
+---
+
+## UI/UX defects (screenshot-confirmed)
+
+### D1. `.btn` transition fires under `prefers-reduced-motion: reduce`
+
+**Screenshot:** `gx08_12_rm_transactions.png`  
+**Measured:** `.btn` computed `transitionDuration = 0.12s` when browser reports
+`prefers-reduced-motion: reduce`.  
+**Expected:** `0s` (transition should be stripped by the reduce guard).  
+**Fix:** GX8-F1 above adds `.btn` to the extended reduce block.
+
+### D2. `.w` (bento widget) transition fires under `prefers-reduced-motion: reduce`
+
+**Screenshot:** `gx08_06_dark_bento_hover.png` (hover visual confirms transition plays normally
+in standard mode); `gx08_12_rm_transactions.png` (not on this page, but computed style confirmed
+via Playwright evaluate).  
+**Measured:** `.w` computed `transitionDuration = 0.15s` under reduced-motion.  
+**Fix:** GX8-F1 adds `.w` to the extended reduce block.
+
+### D3. `.gear-inline` and `.rz` transitions fire under `prefers-reduced-motion: reduce`
+
+**Measured:** `.gear-inline dur=0.12s`, `.rz dur=0.12s, 0.12s, 0.12s` under reduced-motion.  
+These are opacity/color reveals on widget hover — small but still motion the user asked to disable.  
+**Fix:** GX8-F1 adds both to the extended reduce block.
+
+### D4. `.attention-item` transition fires under `prefers-reduced-motion: reduce`
+
+**Measured:** `.attention-item dur=0.12s, 0.12s` under reduced-motion.  
+**Fix:** GX8-F1 above.
+
+---
+
+## Probe hardening
+
+The probe at `e2e/gx_08_motion.mjs` is solid but has three limitations worth noting:
+
+1. **Many selectors return `NOT IN DOM`** on the pages visited (transactions baseline, dashboard).
+   `.nav-link`, `.row`, `.chip-x`, `.bar-fill`, `.flip-inner`, etc. are not present on those pages
+   in the stale-WASM build (GI0). Selectors that need sample data to render are expected misses —
+   the probe notes them and moves on. The most important measurements (`.btn`, `aside.rail`,
+   `.gear-inline`, `.rz`, `.w`, `.attention-item`) ARE reachable on the dashboard.
+
+2. **The `:active scale rule` query** in the probe searched for `scale` and returned null — this
+   is a probe bug. The actual `:active` rule uses `translateY(1px)`, not `scale`. The source rule
+   (index.html lines 631–637) is confirmed to exist and is correctly gated under `no-preference`.
+   The probe's `activeRuleText` output should search for `:active` + `transform` instead of `:active`
+   + `scale` in a future run.
+
+3. **FlipPanel open was not captured** — `.gear-abs` was not found on the dashboard in the stale
+   WASM build. The FlipPanel CSS was analyzed via stylesheet inspection instead. Confirmed values:
+   `.flip-inner { transition: transform 0.55s cubic-bezier(.2,.75,.2,1) }`,
+   `.flip-backdrop { transition: opacity 0.28s }`, both guarded under `reduce`.
+
+   To make the FlipPanel screenshot reachable: add a fallback click target
+   (`[title="Settings"], [aria-label="Settings"]`) or navigate to the settings route directly.
+
+---
+
+## Summary — impact ranking
+
+| # | Fix | Tag | Impact |
+|---|---|---|---|
+| F1 | Add 20+ interactive elements to the `prefers-reduced-motion: reduce` block | [CSS-ONLY] | HIGH |
+| F2 | Unify fast hover tier to `0.12s` (`.nav-link` + `.w`) | [CSS-ONLY] | MEDIUM |
+| F3 | Light-mode `.row:hover` uses `#efede8` for non-transaction rows | [CSS-ONLY] | LOW |
+| F4 | Draggable row `:active` visual — accepted tradeoff, no fix | — | LOW/skip |
+
+All fixes are [CSS-ONLY] and landable in `web/index.html` now (GI0 does not block them).
+
 
 ## GM. GLAMOR — modal/dialog UX review (all app-wide modals) ★
 

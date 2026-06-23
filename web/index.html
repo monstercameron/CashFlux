@@ -168,6 +168,11 @@
         .flip-inner, .flip-backdrop { transition: none; }
         .toast { animation: none; }
         aside.rail { transition: none; }
+        /* GX8-F1: the explicit list above missed ~20 interactive-element transitions
+           (.btn, .w, .row, .nav-link, .seg-btn, .data-btn, etc.) which still animated
+           under reduce. Universally neutralize TRANSITIONS (keyframe animations are
+           already guarded individually above + via no-preference blocks). */
+        *, *::before, *::after { transition-duration: 0.001ms !important; }
       }
       #boot-error {
         display: none; position: fixed; inset: auto 1rem 1rem 1rem; z-index: 20;
@@ -1056,6 +1061,24 @@
           grid-auto-rows: minmax(var(--cell), auto) !important; }
         .bento > * { grid-column: auto !important; grid-row: auto !important; }
         .bento > *:first-child { grid-column: 1 / -1 !important; } /* dashboard header spans both columns */
+      }
+      /* GX7-F2: at narrow portrait widths (≤480px) the topbar controls wrap to 3–4 rows,
+         consuming up to 296px (37%) of an 800px phone screen before any content appears.
+         Switch to a horizontally-scrollable single-row strip so all controls stay accessible
+         without bloating the vertical chrome. The existing two-row wrap (C19, ≤1024px) is
+         preserved at tablet widths; this override only kicks in at phone width. */
+      @media (max-width: 480px) {
+        .topbar { flex-wrap: nowrap; overflow-x: auto; min-height: 3rem; height: auto !important;
+          -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .topbar::-webkit-scrollbar { display: none; }
+        .topbar-controls { flex: 0 0 auto; flex-wrap: nowrap; overflow-x: visible; row-gap: 0; }
+        .reso-control { flex-wrap: nowrap; }
+      }
+      /* GX7-F4: at ≤767px the bento override (.bento>* { grid-column: 1/-1 }) can leak into
+         .stat-grid when it sits inside the bento flow, collapsing the KPI row to 1 column.
+         Re-assert auto-fit with a tighter minmax (120px) so 3 stat tiles fit in 344px. */
+      @media (max-width: 767px) {
+        .page .stat-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important; }
       }
       .menu-btn { background:transparent; border:0; color:#a6a6ac; cursor:pointer; display:grid; place-items:center; }
       /* "+ Add" popover menu (C23): a button that opens a small list of add
