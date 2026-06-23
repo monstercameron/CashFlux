@@ -144,21 +144,23 @@ func Artifacts() ui.Node {
 	}
 
 	return Div(
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("artifacts.uploadTitle")),
-			P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
-			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
-				Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("artifacts.uploadTitle"),
+			Body: Fragment(
+				P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
+				Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
+					Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
+					Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
+				),
+				P(css.Class("muted", tw.Mt2), storageLabel),
+				artifactStorageBar(total, blobUsage),
+				quotaNudge,
 			),
-			P(css.Class("muted", tw.Mt2), storageLabel),
-			artifactStorageBar(total, blobUsage),
-			quotaNudge,
-		),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("artifacts.listTitle")),
-			listBody,
-		),
+		}),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("artifacts.listTitle"),
+			Body:  listBody,
+		}),
 	)
 }
 
