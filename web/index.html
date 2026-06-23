@@ -277,6 +277,10 @@
       [data-theme="light"] .gear-inline, [data-theme="light"] .gear-abs, [data-theme="light"] .menu-btn, [data-theme="light"] .set-close { color: #6a6a72; }
       /* Flip panel + settings controls */
       [data-theme="light"] .flip-face, [data-theme="light"] .set-face { background: #ffffff; border-color: #e4e2dd; }
+      /* G21 CRITICAL: panel backdrop was dark semi-transparent in light mode; use warm-white surface. */
+      [data-theme="light"] .flip-backdrop { background: rgba(239,237,232,0.75); }
+      /* G21 CRITICAL: toggle-row labels were near-white (rgb(244,244,245)) in light — white-on-white. */
+      [data-theme="light"] .toggle-row span { color: #1c1c1e; }
       [data-theme="light"] .set-input, [data-theme="light"] .member-chip, [data-theme="light"] .rate-row .rate-in, [data-theme="light"] .data-btn { background: #ffffff; border-color: #e4e2dd; color: #1c1c1e; }
       [data-theme="light"] .badge-soon { background: #e8f2ff; color: #1d4ed8; border-color: #bfdbfe; }
       [data-theme="light"] .switch { background: #d4d2cc; }
@@ -915,6 +919,13 @@
       .rate-row .rate-in { width:90px; padding:.35rem .5rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; color:#f4f4f5; font:inherit; text-align:right; }
       .data-btn { padding:.45rem .7rem; border:1px solid #34343a; border-radius:4px; color:#d6d6da; background:#1a1a1d; cursor:pointer; font-size:.82rem; }
       .data-btn:hover { border-color:#44444c; color:#f4f4f5; }
+      /* G21: theme-safe danger variant — replaces inline Style() on the Wipe data button. */
+      .data-btn-danger { color: var(--danger, #d8716f); border-color: var(--danger-muted, #5a2a2a); }
+      .data-btn-danger:hover { color: var(--danger, #d8716f); border-color: var(--danger, #d8716f); }
+      /* G21: collapse to single column at ≤768px to prevent overflowCount:25 overflow. */
+      @media (max-width: 768px) {
+        .flip-wrap .grid-cols-2 { grid-template-columns: 1fr !important; }
+      }
 
       /* unified widget header: grip (left) · title (center) · gear (right) */
       .wh { display:flex; align-items:center; gap:.55rem; padding:.7rem .85rem .55rem; }

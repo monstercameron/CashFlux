@@ -59,6 +59,7 @@ and every commit updates this file under `Unreleased`.
   "Referenced by N" shown in green vs neutral-muted "not referenced", upload date added per row,
   `.notice`/`.notice-warn`/`.storage-bar`/`.csv-preview`/`.ref-positive` CSS rules added (were
   used in Go but missing from the stylesheet — quota nudge and storage bar were invisible).
+  **Settings (G21):** two CRITICALs fixed — toggle-row labels were white-on-white in light mode (`[data-theme="light"] .toggle-row span { color:#1c1c1e }`) and the flip-backdrop was a dark overlay in light mode (now warm-white `rgba(239,237,232,0.75)`); panel height raised from fixed 560px to `min(90vh,900px)`; right column reordered to Appearance → Preferences → AI → Cloud → Data → Advanced (usage-frequency); "Import…" dataset button renamed to "Import dataset…" (L47); AI key password input gets explicit `aria-label`; Save now fires a "Settings saved" toast via `PostNotice`; danger button moved from inline `Style()` to `.data-btn-danger` CSS class (`var(--danger)`/`var(--danger-muted)`); two-column grid collapses to single column at ≤768px.
 
 ### Added
 - **L-series 6-lane parallel sweep, round 2 (2026-06-23).**

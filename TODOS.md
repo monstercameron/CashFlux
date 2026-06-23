@@ -15685,6 +15685,18 @@ _7 · General UX / Glanceability_
 
 ### G21. Settings — "Make It Mine" (Renée) — 2026-06-23 ★
 
+**✅ RESOLVED (2026-06-23).** Contained fixes shipped:
+- **CRITICAL: `.toggle-row span` invisible in light mode** — added `[data-theme="light"] .toggle-row span { color: #1c1c1e; }` to `web/index.html`; all 26 toggle-row labels now read full-contrast on the white panel card.
+- **CRITICAL: `.flip-backdrop` dark in light mode** — added `[data-theme="light"] .flip-backdrop { background: rgba(239,237,232,0.75); }` so the panel overlay switches to a warm-white surface in light mode.
+- **Panel height raised** — `SettingsHost` global case: `"560px"` → `"min(90vh, 900px)"` so 23 sections have far more visible area at typical desktop heights.
+- **Right column reordered** — Appearance → Preferences → AI → Cloud & server → Data → Advanced (was AI-first then Cloud then Appearance). Usage-frequency ordering: everyday controls first, power-user/setup-once last.
+- **"Import dataset…" label** — the generic "Import…" data button renamed to "Import dataset…" (new i18n key `settings.importDataset`) so it's unambiguous among the five Import buttons.
+- **AI key `aria-label`** — password input for the OpenAI API key now carries `aria-label` matching the section title.
+- **"Settings saved" toast** — `OnSave` callback in `SettingsHost` fires `PostNotice("Settings saved.", false)` so clicking Save gives visible confirmation.
+- **`.data-btn-danger` CSS class** — danger variant of `dataButton()` now uses `css.Class("data-btn data-btn-danger")` with `color: var(--danger)` / `border-color: var(--danger-muted)` instead of inline `Style()`, making it theme-safe.
+- **Single column at ≤768px** — `@media (max-width:768px) { .flip-wrap .grid-cols-2 { grid-template-columns: 1fr !important; } }` collapses the two-column grid to avoid `overflowCount:25` at mobile widths.
+- **Deferred**: Panel height + section tabs/sidebar nav (full sectioned navigation is a larger structural effort — DEFERRED); Cloud & server accordion collapse (DEFERRED); `set-label` div → `<h4>` semantic heading change (needs framework-level testing — DEFERRED); "Enable AI features" toggle does not disable AI inputs (DEFERRED, state-management refactor); C81 multi-provider AI (gating feature, separate ticket); shell-level light-mode black bands (systemic, DEFERRED per series rule); contrast-aware primary-button text for custom accents (DEFERRED per series rule).
+
 **The story**
 Renée is a household manager who opens Settings for the first time on a new device. She
 clicks the household card at the bottom of the rail, sees the Settings fly-in panel, and

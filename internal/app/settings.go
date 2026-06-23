@@ -45,8 +45,9 @@ func SettingsHost() uic.Node {
 		return ui.FlipPanel(ui.FlipPanelProps{
 			Title:   uistate.T("settings.panelTitle"),
 			Width:   "760px",
-			Height:  "560px",
+			Height:  "min(90vh, 900px)",
 			Back:    uic.CreateElement(globalSettingsForm),
+			OnSave:  func() { uistate.PostNotice(uistate.T("settings.saved"), false) },
 			OnClose: closePanel,
 		})
 	default: // "widget"
@@ -673,10 +674,61 @@ func globalSettingsForm() uic.Node {
 		langOptions = append(langOptions, Option(Value(string(l)), SelectedIf(activeLang == l), langDisplay(l)))
 	}
 
+	// Right column: Appearance → Preferences → AI → Cloud & server → Data → Advanced.
+	// Ordered by usage frequency: Appearance is everyday, AI is setup-once, Cloud is power-user.
 	right := Div(
+		// 1 · Appearance — most-used first so Renée can set her theme without scrolling.
+		Div(css.Class("set-label"), uistate.T("settings.appearance")),
+		ui.Segmented(ui.SegmentedProps{
+			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
+			Selected: string(pr.Theme),
+			OnSelect: func(v string) {
+				p := prefsAtom.Get()
+				p.Theme = prefs.Theme(v)
+				savePrefs(p)
+			},
+		}),
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.accent")),
+			ui.SwatchPicker(ui.SwatchPickerProps{
+				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
+				Selected: pr.Accent,
+				OnSelect: func(c string) {
+					p := prefsAtom.Get()
+					p.Accent = c
+					savePrefs(p)
+				},
+			}),
+		),
+		accentContrastNote(pr.Accent, pr.Theme),
+		// Density and display scale are in the theme editor (B20 unify).
+		uic.CreateElement(themeEditor),
+
+		// 2 · Preferences — date/week-start sit naturally after appearance.
+		Div(css.Class("set-label"), uistate.T("settings.preferences")),
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.weekStart")),
+			ui.Segmented(ui.SegmentedProps{
+				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
+				Selected: string(pr.WeekStart),
+				OnSelect: func(v string) {
+					p := prefsAtom.Get()
+					p.WeekStart = prefs.WeekStart(v)
+					savePrefs(p)
+				},
+			}),
+		),
+		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
+			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
+			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
+			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
+			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
+		),
+
+		// 3 · AI — setup-once; key + model select in one logical cluster.
 		Div(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: aiOn.Get(), OnChange: func(v bool) { aiOn.Set(v) }}),
-		Input(css.Class("set-input", tw.Mt045), Type("password"), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
+		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiTitle")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(aiKey.Get()), OnInput(onKey)),
 		If(strings.TrimSpace(aiKey.Get()) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: pr.RememberAIKey, OnChange: func(v bool) {
 			p := prefsAtom.Get()
@@ -689,9 +741,19 @@ func globalSettingsForm() uic.Node {
 			}
 		}}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
+		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
+			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
+			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),
+			Option(Value("gpt-4.1-mini"), SelectedIf(curModel == "gpt-4.1-mini"), "GPT-4.1 mini"),
+			Option(Value("gpt-4o"), SelectedIf(curModel == "gpt-4o"), "GPT-4o"),
+			Option(Value("gpt-4.1"), SelectedIf(curModel == "gpt-4.1"), "GPT-4.1"),
+			Option(Value("o4-mini"), SelectedIf(curModel == "o4-mini"), "o4-mini (reasoning)"),
+		),
 		Div(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchTitle")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(wsKey.Get()), OnInput(onWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
+
+		// 4 · Cloud & server — power-user sync config after AI.
 		Div(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
@@ -744,64 +806,13 @@ func globalSettingsForm() uic.Node {
 			),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
 		)),
-		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(onModel),
-			Option(Value("gpt-4o-mini"), SelectedIf(curModel == "gpt-4o-mini" || curModel == ""), "GPT-4o mini"),
-			Option(Value("gpt-4.1-nano"), SelectedIf(curModel == "gpt-4.1-nano"), "GPT-4.1 nano"),
-			Option(Value("gpt-4.1-mini"), SelectedIf(curModel == "gpt-4.1-mini"), "GPT-4.1 mini"),
-			Option(Value("gpt-4o"), SelectedIf(curModel == "gpt-4o"), "GPT-4o"),
-			Option(Value("gpt-4.1"), SelectedIf(curModel == "gpt-4.1"), "GPT-4.1"),
-			Option(Value("o4-mini"), SelectedIf(curModel == "o4-mini"), "o4-mini (reasoning)"),
-		),
-		Div(css.Class("set-label"), uistate.T("settings.appearance")),
-		ui.Segmented(ui.SegmentedProps{
-			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
-			Selected: string(pr.Theme),
-			OnSelect: func(v string) {
-				p := prefsAtom.Get()
-				p.Theme = prefs.Theme(v)
-				savePrefs(p)
-			},
-		}),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.accent")),
-			ui.SwatchPicker(ui.SwatchPickerProps{
-				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
-				Selected: pr.Accent,
-				OnSelect: func(c string) {
-					p := prefsAtom.Get()
-					p.Accent = c
-					savePrefs(p)
-				},
-			}),
-		),
-		accentContrastNote(pr.Accent, pr.Theme),
-		// Density and display scale moved into the theme editor below — the theme
-		// engine is now the single source of truth for both (B20 unify).
-		uic.CreateElement(themeEditor),
-		Div(css.Class("set-label"), uistate.T("settings.preferences")),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.weekStart")),
-			ui.Segmented(ui.SegmentedProps{
-				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
-				Selected: string(pr.WeekStart),
-				OnSelect: func(v string) {
-					p := prefsAtom.Get()
-					p.WeekStart = prefs.WeekStart(v)
-					savePrefs(p)
-				},
-			}),
-		),
-		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(onDateStyle),
-			Option(Value(string(prefs.DateISO)), SelectedIf(pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
-			Option(Value(string(prefs.DateUS)), SelectedIf(pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
-			Option(Value(string(prefs.DateEU)), SelectedIf(pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
-			Option(Value(string(prefs.DateLong)), SelectedIf(pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
-		),
+
+		// 5 · Data — export/import/wipe actions.
 		Div(css.Class("set-label"), uistate.T("settings.data")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, func() { exportJSON(notify) }),
 			dataBtn(uistate.T("settings.exportCSV"), false, func() { exportCSV(notify) }),
-			dataBtn(uistate.T("settings.import"), false, func() { importJSON(bump, notify) }),
+			dataBtn(uistate.T("settings.importDataset"), false, func() { importJSON(bump, notify) }),
 			dataBtn(uistate.T("settings.loadSample"), false, func() { loadSample(bump, notify) }),
 			dataBtn(uistate.T("settings.wipe"), true, func() { wipeData(bump, notify) }),
 		),
@@ -812,6 +823,8 @@ func globalSettingsForm() uic.Node {
 			Option(Value("weekly"), SelectedIf(loadBackupCadence() == backup.Weekly), uistate.T("settings.cadenceWeekly")),
 			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
 		),
+
+		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
 		Div(css.Class("set-label"), uistate.T("ws.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(bump),
@@ -1102,10 +1115,11 @@ func dataBtn(label string, danger bool, onClick func()) uic.Node {
 }
 
 func dataButton(props dataBtnProps) uic.Node {
-	args := []any{css.Class("data-btn"), Type("button")}
+	cls := "data-btn"
 	if props.Danger {
-		args = append(args, Style(map[string]string{"color": "#d8716f", "border-color": "#5a2a2a"}))
+		cls += " data-btn-danger"
 	}
+	args := []any{css.Class(cls), Type("button")}
 	onClick := props.OnClick
 	args = append(args, OnClick(func() {
 		if onClick != nil {

@@ -864,6 +864,7 @@ var english = Catalog{
 	"settings.exportJSON":        "Export JSON",
 	"settings.exportCSV":         "Export CSV",
 	"settings.import":            "Import…",
+	"settings.importDataset":     "Import dataset…",
 	"settings.loadSample":        "Load sample",
 	"settings.wipe":              "Wipe data",
 	"settings.languages":         "Languages",
@@ -891,6 +892,7 @@ var english = Catalog{
 	"settings.wipeConfirm":    "Erase all CashFlux data on this device? This can't be undone.",
 	"settings.wiped":          "Erased all data on this device.",
 	"settings.wipeErr":        "Couldn't erase your data: %s",
+	"settings.saved":          "Settings saved.",
 
 	// Settings screen
 	"settings.household":            "Household",
