@@ -47,10 +47,10 @@ func Workflows() ui.Node {
 
 	return Div(
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
-		Section(css.Class("card"),
-			H2(css.Class("card-title"), uistate.T("workflows.yours")),
-			listBody,
-		),
+		uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("workflows.yours"),
+			Body:  listBody,
+		}),
 		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
 	)
 }
