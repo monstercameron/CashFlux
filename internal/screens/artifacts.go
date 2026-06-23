@@ -86,10 +86,25 @@ func Artifacts() ui.Node {
 			refCount[att.ArtifactID]++
 		}
 	}
+	// Count how many custom-page widgets bind each artifact (C66), so the delete
+	// guard can warn before breaking a page that uses this image or dataset.
+	pageRefCount := map[string]int{}
+	for _, pg := range app.CustomPages() {
+		for _, w := range pg.Widgets {
+			if w.Binding.ArtifactID != "" {
+				pageRefCount[w.Binding.ArtifactID]++
+			}
+		}
+	}
 	list := app.Artifacts()
 	var rows []ui.Node
 	for _, a := range list {
-		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{Artifact: a, Refresh: refresh, ReferencedBy: refCount[a.ID]}))
+		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{
+			Artifact: a, Refresh: refresh,
+			ReferencedBy: refCount[a.ID],
+			UsedByPages:  pageRefCount[a.ID],
+			Notice:       notify,
+		}))
 	}
 	listBody := P(css.Class("empty"), uistate.T("artifacts.empty"))
 	if len(rows) > 0 {
@@ -101,34 +116,84 @@ func Artifacts() ui.Node {
 
 	return Div(
 		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("artifacts.uploadTitle")),
+			P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
 				Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
 			),
 			P(css.Class("muted", tw.Mt2), uistate.T("artifacts.storage", artifacts.HumanSize(total))),
 		),
-		Section(css.Class("card"), listBody),
+		Section(css.Class("card"),
+			H2(css.Class("card-title"), uistate.T("artifacts.listTitle")),
+			listBody,
+		),
 	)
 }
 
 type artifactRowProps struct {
 	Artifact     domain.Artifact
 	Refresh      func()
-	ReferencedBy int // how many transactions attach this artifact (L29)
+	ReferencedBy int          // how many transactions attach this artifact (L29)
+	UsedByPages  int          // how many custom-page widgets reference this artifact (C66)
+	Notice       func(string) // surface errors to the screen-level notice
 }
 
-// artifactRow is one artifact entry with a delete action — its own component so
-// the delete hook is stable across the list.
+// artifactRow is one artifact entry with rename and delete actions — its own
+// component so its hooks stay stable across the list. Rename is inline (no
+// modal required for a single text field). Delete is guarded when the artifact
+// is referenced by custom-page widgets (C66).
 func artifactRow(props artifactRowProps) ui.Node {
 	a := props.Artifact
-	del := func() {
-		if appstate.Default == nil {
+	app := appstate.Default
+
+	renaming := ui.UseState(false)
+	nameS := ui.UseState(a.Name)
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+
+	startRename := ui.UseEvent(Prevent(func() {
+		nameS.Set(a.Name)
+		renaming.Set(true)
+	}))
+	cancelRename := ui.UseEvent(Prevent(func() { renaming.Set(false) }))
+	saveRename := ui.UseEvent(Prevent(func() {
+		n := strings.TrimSpace(nameS.Get())
+		if n == "" || app == nil {
+			renaming.Set(false)
 			return
 		}
-		if err := appstate.Default.DeleteArtifact(a.ID); err == nil && props.Refresh != nil {
+		updated := a
+		updated.Name = n
+		if err := app.PutArtifact(updated); err != nil {
+			if props.Notice != nil {
+				props.Notice(err.Error())
+			}
+		} else if props.Refresh != nil {
 			props.Refresh()
 		}
-	}
+		renaming.Set(false)
+	}))
+
+	del := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		if props.UsedByPages > 0 {
+			// Warn instead of silently deleting an in-use artifact (C66).
+			noun := "page"
+			if props.UsedByPages != 1 {
+				noun = "pages"
+			}
+			if props.Notice != nil {
+				props.Notice(uistate.T("artifacts.deleteUsedBy", props.UsedByPages, noun))
+			}
+			return
+		}
+		if err := app.DeleteArtifact(a.ID); err == nil && props.Refresh != nil {
+			props.Refresh()
+		}
+	}))
+
 	var preview ui.Node = Fragment()
 	if a.Kind == artifacts.KindImage && len(a.Bytes) > 0 {
 		preview = Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
@@ -138,16 +203,35 @@ func artifactRow(props artifactRowProps) ui.Node {
 	if len(a.Rows) > 0 {
 		meta = a.Kind + " · " + itoaPct0(len(a.Rows)) + " rows"
 	}
+
+	if renaming.Get() {
+		return Div(css.Class("row"),
+			Form(css.Class("form-grid"), OnSubmit(saveRename),
+				Input(css.Class("field"), Attr("aria-label", uistate.T("artifacts.renameLabel")),
+					Value(nameS.Get()), OnInput(onName), Attr("data-testid", "artifact-rename-input")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelRename), uistate.T("action.cancel")),
+			),
+		)
+	}
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main", tw.Flex, tw.ItemsCenter),
 			preview,
 			Div(
-				Div(css.Class("row-desc"), a.Name),
+				Div(css.Class("row-desc"), Attr("data-testid", "artifact-name"), a.Name),
 				Div(css.Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
 				Div(css.Class("row-meta"), Attr("data-testid", "artifact-refs"), referencedByLabel(props.ReferencedBy)),
+				If(props.UsedByPages > 0,
+					Div(css.Class("row-meta"), Attr("data-testid", "artifact-page-refs"),
+						uistate.T("artifacts.usedByPages", props.UsedByPages))),
 			),
 		),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("aria-label", uistate.T("artifacts.renameTitle")), Title(uistate.T("artifacts.renameTitle")),
+			OnClick(startRename), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")),
+			Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 

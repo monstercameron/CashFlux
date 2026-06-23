@@ -11009,3 +11009,13 @@ regression: removing the inline transaction form lost rule auto-categorization o
 quick-add (now the only manual path) called PutTransaction directly — quick-add now runs
 AutoCategorizeTransaction first (rules_check green again). Updated ~23 add-form e2es to open the +Add
 modal. add_modal_entities + 10 regression gates + a11y all green.
+
+## 2026-06-22 — L-series lane D (dashboard/todo/documents/artifacts) + 4-agent sweep close
+Integrated the 4th parallel worktree-isolated agent. Built: widgetdata SourceBills (custom-page bills
+list, table-tested), todo priority filter, documents image preview, artifact inline rename + section
+headings + page-reference delete guard. Fixed the agent's two invalid tw tokens (tw.MaxH40/BorderSolid
+→ inline style). The 4 new e2e gates initially failed on a shared root cause — injecting into
+localStorage then navigating clobbers the injection via the in-memory store's pagehide-autosave; fixed
+all by switching to the codebase's one-shot addInitScript document-start injection. Also fixed the
+pre-existing todo_nesting gate (port 8080→8099 + open the +Add task modal + nav-away/back to refresh
+the list after a modal add). All lane-D gates + a11y green; en.go merged by disjoint key prefix.

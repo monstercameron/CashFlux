@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Dashboard/To-do/Documents/Artifacts polish (L-series lane D).** Custom pages gain a **Bills** list
+  source (`widgetdata` SourceBills, table-tested); the To-do screen gains a **priority filter**; the
+  Documents importer shows an **image preview** of the picked receipt; Artifacts get **inline rename**,
+  **section headings**, and a **"used by N pages" delete guard** so an artifact referenced by a custom
+  page can't be silently removed. 4 new e2e gates; existing `todo_nesting` updated for the +Add modal.
+
 ### Changed
 - **"+ Add" modal-in-place completed for all entities (C73/C79, C72A).** To-do task, Category, Member,
   and Rule add forms now open in the +Add FlipPanel modal too, and the inline add card was removed from

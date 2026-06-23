@@ -450,8 +450,19 @@ func Documents() ui.Node {
 			P(css.Class("muted"), uistate.T("documents.imageDesc")),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				Button(css.Class("btn"), Type("button"), OnClick(chooseImage), uistate.T("documents.chooseImage")),
-				If(imageURL.Get() != "", Span(css.Class("muted"), uistate.T("documents.imageReady"))),
 				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(readAI), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), IfElse(aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("documents.readAI")))),
+			),
+			// Image preview: show the chosen image alongside the draft rows so the user
+			// can check the scan results against the original receipt (C60). The data
+			// URL is already in memory (it was read by pickImageDataURL), so no extra
+			// round-trip is needed. Max-height keeps the preview compact.
+			If(imageURL.Get() != "",
+				Div(css.Class(tw.Mt2, tw.Flex, tw.Gap3, tw.ItemsStart),
+					Img(Attr("src", imageURL.Get()), Attr("alt", uistate.T("documents.imagePreviewAlt")),
+						Attr("data-testid", "doc-image-preview"),
+						css.Class(tw.MaxWFull, tw.ObjectContain, tw.Rounded, tw.BorderLine70),
+						Style(map[string]string{"border-width": "1px", "border-style": "solid", "max-width": "200px", "max-height": "160px"})),
+				),
 			),
 			If(aiErr.Get() != "", P(css.Class("err"), Attr("role", "alert"), aiErr.Get())),
 		),

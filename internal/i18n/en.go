@@ -1453,6 +1453,25 @@ var english = Catalog{
 	"workflows.dryNoMatch":            "Condition wouldn't match — nothing would run.",
 	"workflows.history":               "Run history",
 	"workflows.deleted":               "(deleted workflow)",
+
+	// To-do screen additions (C52 priority filter)
+	"todo.filterPrioLabel": "Filter by priority",
+	"todo.filterPrioAll":   "All priorities",
+
+	// Artifacts screen additions (C66 rename + page-ref guard + section headings)
+	"artifacts.uploadTitle":  "Upload an artifact",
+	"artifacts.uploadDesc":   "Upload images or CSV datasets to use in your custom pages.",
+	"artifacts.listTitle":    "Your artifacts",
+	"artifacts.renameTitle":  "Rename",
+	"artifacts.renameLabel":  "New name",
+	"artifacts.usedByPages":  "Used by %d custom %s",
+	"artifacts.deleteUsedBy": "This artifact is used by %d custom %s. Remove it from those pages first.",
+
+	// Documents screen additions (C60 image preview)
+	"documents.imagePreviewAlt": "Receipt or statement preview",
+
+	// Widget list source for bills (L63 GAP-A)
+	"widget.sourceBills": "Bills",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

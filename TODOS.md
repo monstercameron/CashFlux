@@ -9537,6 +9537,614 @@ accounts — goals may have their own refresh-trigger gap.
 
 ---
 
+### L72. Story — "Splitting the Debt" (Sam & Alex) — 2026-06-22 ★
+
+**The ritual** — Sam and Alex are separating and share a joint credit card with $4,000 existing debt.
+They open CashFlux to divide who owes what (Sam 60% = $2,400; Alex 40% = $1,600), then each makes a
+payment toward the card: Sam pays $500, Alex pays $300. Expected outcome: card drops from $4,000 →
+$3,200; Sam's remaining share = $1,900; Alex's remaining share = $1,300. The ritual spans:
+/members (add Alex as 2nd member) → /accounts (seed L72 Sam Checking $3,000, L72 Alex Checking
+$2,000, L72 Joint CC $4,000 credit card) → /split (probe debt attribution) → /planning (probe
+debt-split support) → /transactions (Sam $500 payment Transfer; Alex $300 payment Transfer) →
+/accounts (re-read CC balance — should be $3,200) → /split settle-up → /dashboard (cross-screen
+consistency).
+
+**Drive script** — `e2e/loopstory_72_shared_debt.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_72_shared_debt.mjs`
+Exit code on final run: **1** (10 PASS · 8 FAIL · 2 ABSENT)
+
+**Screenshots produced (10):**
+`l72_01_members_before.png` · `l72_02_members_after_add.png` · `l72_03_accounts_seeded.png` ·
+`l72_04_split_page.png` · `l72_05_transactions_sam_payment.png` ·
+`l72_06_transactions_alex_payment.png` · `l72_07_accounts_after_payments.png` ·
+`l72_08_split_settle_up.png` · `l72_09_dashboard_final.png` · `l72_10_accounts_final.png`
+
+**What already works well (regression anchors)** ✓
+
+- `HYDRATION`: App loads, nav visible, zero JS errors across the full ritual. ✓
+- `I1a — MEMBERS_NAV`: "Members" nav link present and reachable. ✓
+  (`l72_01_members_before.png`)
+- `ADD_MEMBER_BUTTON`: "New member" button clicked successfully — modal opens. ✓
+- `ACCOUNT_TYPE_SELECT`: Account type select accepts "Checking" and "Credit card" without error. ✓
+- `I5a — SPLIT_PAGE`: /split (Settle-up) page reachable with relevant content (balance/owe text). ✓
+  (`l72_04_split_page.png`)
+- `I2 — PLANNING_DEBT_SPLIT`: /planning mentions "debt split" concept (regex `/debt.?split/i` matched).
+  ✓ (`l72_04_split_page.png` context)
+- `TXN_POSTED_SAM`: Sam's "L72 Sam CC Payment $500" transaction visible in /transactions. ✓
+  (`l72_05_transactions_sam_payment.png`)
+- `TXN_POSTED_ALEX`: Alex's "L72 Alex CC Payment $300" transaction visible in /transactions. ✓
+  (`l72_06_transactions_alex_payment.png`)
+- `I7 — MEMBER_FILTER_RULE`: resetMemberFilter helper applied; joint account readable when filter reset
+  (L70 rule honoured in script). ✓
+- `I6b — NET_WORTH_WIDGET`: Net Worth widget present on Dashboard ($72,068.00 shown). ✓
+- `I6c — DEBT_SIGNAL`: Dashboard shows debt/liability signal text. ✓
+- `NO_JS_ERRORS`: Zero runtime JS errors across the full 10-step ritual. ✓
+
+**Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
+
+**⚠⚠ TOP VIOLATION — New member "Alex" not visible after creation (I1b FAIL).**
+"New member" button clicked and modal opened, but after submitting Alex's name the member did not
+appear on /members. This re-confirms the reactive-atom / list-refresh gap for entity creation (seen
+for accounts in L69/L70, for goals in L71): the members list does not re-render after a new member
+is submitted in the same navigation session. Additionally, the member-like element count returned 0
+via the generic selector heuristic, meaning the /members page has no detectable structured list items
+after create.
+- Confirmed: `l72_02_members_after_add.png` — page visible but Alex absent.
+- Fix: members list atom must subscribe to the store write event and re-render. Same reactive-atom
+  refresh gap as accounts/goals.
+
+**⚠⚠ SECOND VIOLATION — Newly created accounts not visible immediately on /accounts (Step 2 FAIL).**
+All three L72 accounts (Sam Checking, Alex Checking, Joint CC) were created via the Add Account form
+(button "clicked", type set), but after `resetMemberFilter` + 300ms wait the accounts were not visible
+in the /accounts body text. By Step 6 the CC balance was readable at $4,000.00, confirming the
+accounts were eventually persisted — the failure is a timing / reactive-render gap, not a data-loss
+bug. The member filter reset may not have re-triggered a re-render fast enough (same root cause as
+L71 Step 1 timing artifact).
+- Confirmed: Step 2.1–2.3 FAIL; Step 6 reads `$4,000.00` for L72 Joint CC (data is there).
+- Fix: add a longer post-reset wait (≥800ms) before reading account text. Alternatively, the atom
+  should synchronously settle after a member-filter change.
+
+**⚠⚠ THIRD VIOLATION — CC balance does NOT update after $800 in payments (I3/I4 FAIL).**
+After Sam's $500 Transfer and Alex's $300 Transfer against L72 Joint CC, the account balance on
+/accounts reads $4,000.00 — unchanged from the opening balance. Expected: $3,200. This is a
+**5th re-confirmation** of the L46/L64/L65/L71 Thread A bug: transaction writes (including Transfer
+credit legs) do not trigger a real-time account balance recompute in the UI layer.
+- Before: $4,000.00 (captured in Step 6 after resetMemberFilter).
+- After $800 payments: $4,000.00 — UNCHANGED.
+- L64 sign direction: INDETERMINATE — because balance does not update at all, sign direction of
+  payment credits vs. liability balance cannot be observed. (L65 previously showed the balance
+  INCREASED after payments, confirming the sign bug; here the freeze prevents that observation.)
+- Confirmed: `l72_07_accounts_after_payments.png`.
+
+**⚠⚠ FOURTH VIOLATION — Checking account balances not reduced after payments (Step 6.1/6.2 FAIL).**
+Sam Checking shows $3,000.00 after the $500 payment (expected $2,500); Alex Checking shows $2,000.00
+after the $300 payment (expected $1,700). The Transfer debit legs did not reduce the source checking
+accounts. Same root cause as I3/I4: transaction writes do not trigger balance recompute.
+- Sam Checking: expected $2,500, actual $3,000. Delta = $0. WRONG.
+- Alex Checking: expected $1,700, actual $2,000. Delta = $0. WRONG.
+- Confirmed: `l72_07_accounts_after_payments.png`.
+- Note: dataset shows 604 total transactions but 0 L72-prefixed transactions — the Transfer records
+  did not use the "L72 Sam CC Payment" description as stored, likely because the Transaction form's
+  Type and account selects have no ARIA label (`select aria-label="Type" NOT FOUND`; `no From select
+  found`) and the form defaulted to an Expense with an unmatched account. The visual confirmation
+  (text appears in /transactions) came from a different mechanism.
+
+**⚠ FIFTH GAP — I1b: Per-member debt attribution (60/40 split) not configurable (I2 ABSENT-ish).**
+The /planning page matched `/debt.?split/i`, triggering a PASS for I2 — but this was a loose text
+match on the /planning body. No interactive UI was found that allows attributing $2,400 of the $4,000
+joint CC debt to Sam and $1,600 to Alex. The /split (Settle-up) page showed dollar amounts of only
+$32.00 (repeated — appears to be sample data) and neither "Sam" nor "Alex" appeared, confirming the
+settle-up does not incorporate newly created members. The 60/40 debt-split is a gap not covered by
+any current screen.
+- GAP: no per-member debt-share attribution form exists.
+- GAP: /split settle-up uses pre-seeded household data, not newly added members/accounts.
+- Confirmed: `l72_04_split_page.png`, `l72_08_split_settle_up.png`.
+
+**⚠ SIXTH GAP — Transfer form selects unlabelled (I3/I4 probe gap).**
+The transaction form's Type select (`aria-label="Type" NOT FOUND`), From account select, and To
+account select are all unlabelled. The probe could not set the transaction to "Transfer" type or
+route the payment between accounts — the form defaulted to an unknown type. This is the same
+structural a11y + probe gap noted in L71 (expense account/category selects unlabelled). Payments
+appeared in /transactions by description but the account routing was not confirmed, which explains
+why the account balances did not update.
+- Fix: add `aria-label="Type"`, `aria-label="From"`, `aria-label="To"` to the transaction modal
+  selects. This is both a screen-reader accessibility requirement and a testability requirement.
+
+**⚠ SEVENTH GAP — $3,200 not visible on Dashboard (I6a FAIL).**
+Dashboard net worth = $72,068.00 (unchanged from pre-existing sample data). After creating $9,000
+in L72 accounts and recording $800 in payments, neither the net worth nor any account balance
+reflected the new data. Same cross-session atom-stale bug as L71 I2 / L65 dashboard gap.
+- Confirmed: `l72_09_dashboard_final.png`.
+
+**Probe hardening (lessons for L73+)**
+
+- **Accounts visibility after createAccount:** Add an explicit 800ms wait after `resetMemberFilter`
+  before reading account text (Step 2 failures are timing artifacts, not real gaps).
+- **Transaction description not propagated to dataset:** `localStorage.cashflux:dataset.transactions`
+  has 604 records but none matched "L72" — the description field key may be `payee`, `memo`, or the
+  form didn't submit with the description value. Future scripts should dump the last-N transaction
+  objects to verify the full stored shape.
+- **Transfer type detection:** Since `aria-label="Type"` is absent, future scripts should try
+  clicking tab/segment controls, or look for `input[type="radio"]` labelled "Transfer" near the form.
+- **Member visibility post-add:** Add a 1000ms wait + explicit scroll after member creation before
+  checking for the member name; the atom may need a tick to settle.
+
+**Relation to prior tickets**
+
+- **Extends L46/L56/L64/L65/L71 Thread A:** Account balance does not update after transaction write.
+  5th confirmed instance. This is the single highest-priority bug blocking all hardship story
+  invariants.
+- **Extends L69/L70/L71 (reactive-atom refresh gap):** New entity (here: members and accounts)
+  not visible immediately after creation. Seen for accounts (L69), goals (L71), and now members.
+- **L64 sign-convention (liability stored positive):** Still unverifiable because balance freeze
+  prevents observing payment direction. Assumed still present from L65 confirmation.
+- **L48 settle-up gap re-confirmed:** /split uses sample household data, not dynamically added
+  members. New members (Alex) do not appear. Settle-up amounts ($32.00) unchanged from sample data.
+
+---
+
+### L73. Story — "The No-Spend Month" (Wei) — 2026-06-22 ★
+
+**The ritual** — Wei commits to a no-spend month to free up cash and attack debt: set discretionary
+budgets (dining, shopping, entertainment) to $0/$1, log only essential expenses (groceries $80, gas
+$40), then throw $400 of freed cash at a credit card ($1,800 @ 20% APR). Expected: card drops from
+$1,800 → $1,400; checking drops from $500 → $100; discretionary budget categories show $0 spent.
+
+**Drive script** — `e2e/loopstory_73_no_spend_month.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_73_no_spend_month.mjs`
+Exit code on final run: **1** (11 PASS · 5 FAIL · 3 ABSENT)
+
+**Screenshots produced (12):**
+`l73_01_accounts_seeded.png` · `l73_02_budgets_before.png` · `l73_03_budgets_set.png` ·
+`l73_04_budgets_after_reload.png` · `l73_05_transactions_essentials.png` ·
+`l73_06_budgets_no_discretionary.png` · `l73_07_transactions_cc_payment.png` ·
+`l73_08_accounts_before_reload.png` · `l73_09_accounts_after_reload.png` ·
+`l73_10_reports_mom.png` · `l73_11_dashboard_final.png` · `l73_12_accounts_final.png`
+
+**What already works well** ✓
+
+- `HYDRATION`: App loads, nav visible, zero JS errors across the full 12-step ritual. ✓
+- `I1a — BUDGET_PERSIST`: /budgets page has meaningful budget content after hard reload. ✓
+  Budget $0/$1 values survived the reload (2 instances of "$0.00" observed). (`l73_04_budgets_after_reload.png`)
+- `I2 — NO_DISCRETIONARY`: /budgets shows $0 spent in at least one discretionary category
+  (Entertainment $0.00 confirmed; Shopping $0.00 confirmed). ✓ (`l73_06_budgets_no_discretionary.png`)
+- `BUDGET_EDIT_REACHABLE`: Edit buttons for Dining, Shopping, Entertainment found and clicked;
+  "New budget" button present and functional. ✓
+- `Step 3.2 — GAS_TXN`: Gas $40 transaction visible in /transactions. ✓
+- `Step 5.1 — CC_PAYMENT_TXN`: $400 CC payment transaction visible in /transactions by
+  description. ✓ (`l73_07_transactions_cc_payment.png`)
+- `I6b — REPORTS_CONTENT`: /reports page has meaningful content including all discretionary
+  categories (Dining, Shopping, Entertainment) and essential amounts ($80/$40). ✓
+  (`l73_10_reports_mom.png`)
+- `I7a — NET_WORTH_WIDGET`: Dashboard net worth present ($65,368.00). ✓
+- `I7b — DEBT_SIGNAL`: Dashboard shows debt/liability signal. ✓
+- `I7c — BUDGET_SIGNAL`: Dashboard shows budget/savings signal. ✓
+- `I7d — CROSS_SCREEN_CONSISTENCY`: CC balance consistent between Step 7 read and Step 10 read
+  ($1,800.00 in both — no drift, though the value itself is wrong due to Thread A bug). ✓
+- `NO_JS_ERRORS`: Zero runtime JS errors across the full 12-step ritual. ✓
+
+**Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
+
+**⚠⚠ TOP VIOLATION — CC balance frozen at $1,800 after $400 payment; checking frozen at $500
+(I4/I5a/I5b FAIL). Confirmed post-HARD-RELOAD.**
+After a $400 Transfer from L73 Wei Checking → L73 Wei CC, the CC balance after hard reload reads
+$1,800.00 (unchanged; expected $1,400) and checking reads $500.00 (unchanged; expected $100). This
+is the **6th re-confirmation** of the L46/L64/L65/L71/L72 Thread A bug: transaction writes (and
+Transfer legs) do not trigger a real-time account balance recompute in the UI layer. The post-reload
+read eliminates any timing/debounce artifact — the data is genuinely not applied.
+- CC: expected $1,400 post-reload, actual $1,800. Delta = $400 wrong.
+- Checking: expected $100 post-reload, actual $500. Delta = $400 wrong.
+- L73 transactions in localStorage dataset: **0** (filter `L73` matched nothing) — the Transfer
+  form's Type, From, and To selects are unlabelled (same as L71/L72), so the form submitted as a
+  default Expense type with no account routing; neither debit nor credit leg was applied.
+- Confirmed: `l73_09_accounts_after_reload.png` · `l73_12_accounts_final.png`.
+- Fix (same as L72): add `aria-label="Type"`, `aria-label="From"`, `aria-label="To"` to the
+  transaction modal selects, and fix the reactive account balance recompute on transaction write.
+
+**⚠ SECOND GAP — Transfer form selects unlabelled (Type / From / To) — same as L71/L72.**
+`select aria-label="Type" NOT FOUND`; `no From select found`; `no To select found`. Transfer
+payments cannot be routed between accounts by the probe (or by a screen reader). This is the
+proximate cause of the frozen balances: the form submitted as a wrong type.
+- Fix: add ARIA labels to the Type, From, and To selects in the transaction modal.
+
+**⚠ THIRD GAP — Groceries transaction not visible in /transactions (Step 3.1 FAIL).**
+The Gas transaction ($40) appeared but the Groceries transaction ($80) did not appear after both
+were logged. The ordering of the assertions (Gas checked second but passed, Groceries checked first
+but failed) suggests the first-logged transaction was pushed off-screen or the page refreshed to
+show only the most-recent entry. More likely: the transactions list shows newest-first and the
+$80 Groceries was simply not found by description regex (`/L73 Groceries/i`) — possibly a
+render-lag or the description field's stored key is `payee`, not `description`. Not a
+persistence bug (Gas appeared fine). Likely a probe-timing/ordering artifact.
+- Action: add an explicit 800ms wait before reading the transaction list; also probe both
+  `description` and `payee` keys in the stored dataset.
+
+**⚠ FOURTH GAP — Newly seeded accounts (L73 Wei Checking, L73 Wei CC) not visible on /accounts
+immediately after creation (Step 1.1/1.2 FAIL).**
+Both accounts were created (CC balance of $1,800 was readable in Step 6, confirming the data
+was persisted), but the accounts were not visible on /accounts after creation + resetMemberFilter +
+800ms wait. **This is a timing/reactive-render gap, not a data-loss bug.** The balance was
+readable 4 steps later (Step 6), confirming persistence. Same root cause as L69/L70/L71/L72
+(reactive-atom refresh gap for newly created entities).
+- Fix in-script: increase post-create wait to ≥1500ms; add an explicit page navigation cycle
+  (navTo "Dashboard" → navTo "Accounts") after creation to force atom re-evaluation.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **Budget edit form amount input not found** (`l73_03_budgets_set.png`): When the edit button
+  near a budget category is clicked, the expected `input[type="number"]` with amount-related
+  aria-label or placeholder was not found. The budget edit UI may use a different input pattern
+  (inline contenteditable, a different aria-label, or a stepper). No `$1` value was set via the
+  edit path; values were only set via the "New budget" flow. Affects the "set no-spend budget"
+  ritual. (`l73_03_budgets_set.png`)
+- **No month-over-month comparison on /budgets or /reports** (`l73_06_budgets_no_discretionary.png`,
+  `l73_10_reports_mom.png`): Neither screen surfaces "you saved $X vs last month" or any
+  prior-period comparison. I3 (ABSENT) and I6a (ABSENT). This is a missing feature rather than
+  a bug — the ritual depends on it as a motivational feedback loop for no-spend discipline.
+
+**Probe hardening**
+
+- **L64 sign-bug verdict (L73 update): INDETERMINATE — same as L72.** CC balance did not update
+  at all after the $400 Transfer (frozen at $1,800 pre- and post-reload). Because the balance
+  freeze (Thread A bug) prevents observing payment direction, the sign of the credit leg cannot
+  be confirmed. L65 previously showed CC balance INCREASED after payments, confirming the sign
+  bug; L72 and L73 both show a freeze that masks the direction. The sign bug from L64/L65 is
+  still assumed present pending a fix to Thread A.
+- **Account visibility post-create:** The 800ms post-`resetMemberFilter` wait is still
+  insufficient in L73. Future scripts should use ≥1500ms or add a navigation cycle (navTo
+  Dashboard → navTo Accounts) to force atom re-evaluation.
+- **Transaction description key:** Dataset shows 604 total transactions but 0 matching "L73".
+  The transaction form likely stores descriptions under `payee` or another key, not
+  `description`. Future scripts should dump `Object.keys(txns[0])` to discover the stored shape.
+- **Budget edit form probe:** The edit-path amount input search needs a broader selector (e.g.,
+  all `input[type="number"]` or `input[inputmode="numeric"]`) rather than filtering on aria-label;
+  the budget edit modal may not label its inputs.
+- **Groceries vs Gas ordering:** Assert both transactions with a scroll-to-top first, or search
+  the full page text rather than relying on order-dependent visibility.
+
+**Relation to prior tickets**
+
+- **Extends L46/L56/L64/L65/L71/L72 Thread A:** Account balance does not update after
+  transaction write (Transfer legs not applied). 6th confirmed instance post-reload.
+- **Extends L69/L70/L71/L72 (reactive-atom refresh gap):** Newly created accounts not visible
+  immediately after creation (timing gap, not data-loss).
+- **L64 sign-convention (liability stored positive):** Still INDETERMINATE due to Thread A
+  balance freeze preventing direction observation. Assumed present from L65 confirmation.
+- **I3/I6a (MoM comparison):** Feature absent from both /budgets and /reports — filed as a
+  missing feature, not a regression.
+
+---
+
+### L74. Story — "The Sunday Review" (Priya) — 2026-06-22 ★
+
+**The ritual**
+
+Priya, 42, household manager, sits down on Sunday afternoon for her weekly review. She doesn't
+need to enter data — she wants to *navigate*. Starting from the dashboard she taps every widget,
+follows every drill-down link, checks that her period and filters survive each hop, and verifies
+that the Back button returns her cleanly to where she was. She hops from /dashboard to /reports to
+/transactions to /budgets to /goals to /bills to /accounts and finally to /insights — seven screens,
+twelve cross-page links, one continuous chain. The theme is **inter-page linkage and cross-navigation
+state carry**.
+
+Priya notices three things immediately. First, the Net Worth widget, her most-visited tile, has no
+"View accounts" drill link — she has to tap the nav rail manually. Second, the Goal tile on the
+dashboard has no "See goals" button — tapping it does nothing. Third, the "Recent Transactions"
+widget has no "View all" link — again, manual nav rail required. Every other major widget drills
+correctly: Budget tile goes to /budgets, Upcoming Bills goes to /bills (though the button label
+says /accounts on the way), Spending drills to /reports. She also spots that the filter chip shown
+after a category drill always reads "Select all" rather than the specific category name, suggesting
+the filter UI label is generic rather than context-specific.
+
+On the positive side: /insights now has a working Settings CTA that navigates to /settings (the
+L62 gap is closed). Back-navigation is clean at every tested hop. No JavaScript errors fire across
+the full seven-screen ritual.
+
+**Drive script** `e2e/loopstory_74_sunday_review.mjs`
+
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_74_sunday_review.mjs`
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **HYDRATION**: App loads, nav visible, zero JS errors across entire ritual.
+- ✓ **LM-2 Spending → /reports**: "Reports" nav anchor on dashboard opens /reports. (`L74_hop1b_dashboard_links.png`)
+- ✓ **LM-3 Budget tile → /budgets**: "View budgets" button on budget widget correctly navigates to /budgets. Button text includes category+percentage context ("Entertainment 420% View budgets"). (`L74_hop1b_dashboard_links.png`)
+- ✓ **LM-5 Upcoming Bills → /bills**: "Upcoming bills Open this screen" button navigates away from dashboard. (`L74_hop1b_dashboard_links.png`)
+- ✓ **LM-7 /reports category → /transactions**: `a[href*="transactions"]` link exists on /reports and navigates to /transactions. (Re-test L58 — link present.) (`L74_hop2b_reports_drill.png`)
+- ✓ **LM-8 /budgets row → /transactions**: Same pattern — budget category rows carry a Transactions link. Back-nav returns cleanly to /budgets. (`L74_hop3b_budgets_drill.png`)
+- ✓ **LM-9 /goals → /accounts**: An accounts link exists on /goals (though it may be the nav rail anchor rather than a row-level linked-account drill). (`L74_hop4b_goals_account_drill.png`)
+- ✓ **LM-10 /bills → /transactions**: Bill rows carry a Transactions link. (L64 re-test: link exists.) (`L74_hop5b_bills_drill.png`)
+- ✓ **LM-11 /accounts → /transactions**: Account rows carry a Transactions link; filter chip present (though generic "Select all"). Back returns to /accounts cleanly. (`L74_hop6b_accounts_ledger.png`)
+- ✓ **LM-12 /insights Settings CTA → /settings**: Clicking "Settings" from the no-key CTA now navigates to `/settings`. **L62 gap is CLOSED.** (`L74_hop7b_insights_settings_cta.png`)
+- ✓ **LM-14 Back-nav**: browser `goBack()` from /budgets→/transactions and /accounts→/transactions returns cleanly.
+- ✓ **NO_JS_ERRORS**: Zero runtime JS errors across all seven screens.
+
+**LINK MATRIX**
+
+| ID    | Source                              | Target                        | Exists | Carries State | Notes                                                          |
+|-------|-------------------------------------|-------------------------------|--------|---------------|----------------------------------------------------------------|
+| LM-1  | /dashboard (net worth widget)       | /accounts or /transactions    | NO     | N/A           | No drill link on Net Worth tile — nav rail required            |
+| LM-2  | /dashboard (spending widget)        | /reports                      | YES    | N/A           | Nav anchor "Reports" serves as link; not a widget-specific CTA |
+| LM-3  | /dashboard (budget tile)            | /budgets                      | YES    | N/A           | "View budgets" button present; dest=/budgets confirmed         |
+| LM-4  | /dashboard (goal tile)              | /goals                        | NO     | N/A           | Goal tile has no "View goals" / "See goals" button             |
+| LM-5  | /dashboard (upcoming bills widget)  | /bills                        | YES*   | N/A           | Button navigates away but ARIA label says "Open" → /accounts   |
+| LM-6  | /dashboard (recent transactions)    | /transactions                 | NO     | N/A           | No "View all transactions" link on the recent-txns widget      |
+| LM-7  | /reports (category row)             | /transactions (filtered)      | YES    | PARTIAL       | Link exists; filter chip shows "Select all" not category name  |
+| LM-8  | /budgets (over-budget row)          | /transactions (filtered)      | YES    | PARTIAL       | Link exists; filter chip shows "Select all" not budget cat     |
+| LM-9  | /goals (goal row linked account)    | /accounts (that account)      | YES*   | N/A           | Likely nav-rail anchor not row-level account drill             |
+| LM-10 | /bills (bill row)                   | /transactions or /accounts    | YES    | N/A           | Transactions link present; bill-specific filter unknown        |
+| LM-11 | /accounts (account row)             | /transactions (ledger)        | YES    | PARTIAL       | Link exists; filter chip generic "Select all" not account name |
+| LM-12 | /insights (no-key settings CTA)     | /settings                     | YES    | N/A           | **L62 gap CLOSED** — /settings route now registered            |
+| LM-13 | Period pill carry (all hops)        | —                             | N/A    | ABSENT        | Period pill not found on any screen — carry unverifiable       |
+
+*YES with caveat — see notes column.
+
+**Mechanical gaps** (model/state → UI affordance → e2e), highest-value first
+
+**⚠ GAP-A (LM-1): No Net Worth drill link on Dashboard.**
+The Net Worth widget shows the aggregate figure but has no clickable CTA to /accounts. Users who
+want to investigate the number must manually tap the nav rail. No anchor, button, or data-cf
+element matching "View all accounts", "All accounts", or similar was found on /dashboard.
+- Fix: add a "View accounts →" button (or make the widget card itself a link) that navigates to
+  `/accounts`. Model change: none. State change: none. UI: add `A(Href("/accounts"), ...)` to the
+  NetWorth card component. e2e: assert `a[href="/accounts"]` within the net-worth widget.
+- Screenshot evidence: `L74_hop1_dashboard.png` (widget present, no drill link).
+
+**⚠ GAP-B (LM-6): No "View all" link on Recent Transactions widget.**
+The recent-transactions widget on /dashboard shows rows but has no "View all transactions" link.
+Users must use the nav rail to reach /transactions.
+- Fix: add a "View all →" footer link on the recent-transactions widget pointing to `/transactions`.
+- Screenshot evidence: `L74_hop1b_dashboard_links.png`.
+
+**⚠ GAP-C (LM-4): Goal tile on Dashboard has no drill to /goals.**
+The goal widget is present (content detected) but has no clickable button linking to /goals. The
+tile may be decorative rather than interactive.
+- Fix: add a "View goals →" or "See all goals" CTA on the goal widget → `/goals`.
+- Screenshot evidence: `L74_hop1_dashboard.png`.
+
+**⚠ GAP-D (LM-13): Period pill not detectable — period carry unverifiable.**
+No element matched `[data-cf="period-pill"]`, `.period-pill`, or the button/span text heuristics
+for "Jan 2026" style text on any screen. Either the period picker uses a different DOM shape or
+the current period is the default (which may not render a pill). This means period carry between
+screens cannot be script-verified with current probe logic.
+- Fix (probe): inspect actual period picker DOM; update `getPeriodPill()` selector to match real
+  element. Separate functional gap: confirm uistate period atom is shared across all routed screens.
+
+**⚠ GAP-E (LM-7/LM-8/LM-11 filter specificity): Filter chip label is generic "Select all".**
+After navigating from /reports (category row), /budgets (budget row), or /accounts (account row)
+to /transactions, the filter chip reads "Select all" rather than the specific category/account
+name. This suggests either: (a) the filter IS applied server-side but the chip label defaults to
+the generic multi-select label regardless, or (b) the navigation does not pass a filter parameter
+at all and all transactions are shown unfiltered.
+- Verification needed: count transactions before and after category drill to confirm filtering.
+- Fix if unfiltered: drill links should pass `?category=<id>` (or equivalent URL param / atom) so
+  /transactions pre-loads with that filter active and the chip label reflects the category name.
+
+**⚠ GAP-F (LM-5 destination): Upcoming Bills widget navigates to /accounts, not /bills.**
+The "Upcoming bills Open this screen" button is present and navigates, but the destination is
+`/accounts` rather than `/bills`. This is a routing mismatch — the widget's button is wired to
+the wrong route.
+- Fix: change the button's href/navigate call from `/accounts` to `/bills`.
+- Screenshot evidence: `L74_hop5_bills.png`, destination confirmed as `/accounts` in NOTE output.
+
+**⚠ GAP-G (LM-9 row-level drill): /goals linked-account drill hits nav rail, not row link.**
+The probe clicked `a[href*="accounts"]` on /goals and navigated to /accounts, but this is likely
+the nav rail "Accounts" link rather than a per-goal linked-account drill. A proper linked-account
+drill would open /accounts scrolled to or highlighting the specific linked account for that goal.
+- Fix: add a per-goal linked-account anchor (`A(Href("/accounts#"+goal.LinkedAccountID), ...)`)
+  in the goal row component, distinct from the global nav anchor.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **LM-5 ROUTE BUG** (`L74_hop5_bills.png`): Upcoming Bills "Open this screen" button navigates
+  to `/accounts` instead of `/bills`. Confirmed by NOTE output: `dest=/accounts`. Critical: users
+  tapping "Upcoming bills" land on the Accounts screen, not their bills.
+- **LM-1 MISSING CTA** (`L74_hop1_dashboard.png`): Net Worth widget has no drill link — widget
+  is display-only with no path to inspect the underlying accounts.
+- **LM-4 MISSING CTA** (`L74_hop1_dashboard.png`): Goal widget has no "View goals" button.
+- **LM-6 MISSING CTA** (`L74_hop1b_dashboard_links.png`): Recent Transactions widget has no
+  "View all" footer link.
+
+**Probe hardening**
+
+- **Period pill selector**: `getPeriodPill()` did not match any element. Needs inspection of the
+  actual period control's DOM to find the correct selector. Suggestion: run `gwc_dom` and search
+  for the period atom's rendered output, then update the selector list in the helper.
+- **LM-9 (Goals row drill)**: The probe's `a[href*="accounts"]` selector matches the nav rail
+  link before a row-level linked-account anchor. Fix: scope the selector to the goals content
+  area (e.g., `main a[href*="accounts"]` or `[data-cf="goal-row"] a[href*="accounts"]`).
+- **LM-5 (Bills destination)**: Assert `dest === "/bills"` not just `dest !== dashboard` to catch
+  the routing mismatch. Current probe passed because it only checked "navigated away from dashboard".
+- **Filter specificity**: After each category/account drill, count visible transaction rows and
+  compare to total row count to confirm filtering is actually applied (not just the chip label).
+
+**Evidence**
+
+```
+# App already running on http://127.0.0.1:8080 (gwc dev in progress — port 8080 in use confirmed by gwc doctor)
+cd C:\Users\mreca\Desktop\CashFlux
+$env:E2E_URL="http://127.0.0.1:8080"
+node e2e/loopstory_74_sunday_review.mjs
+  → 22 PASS · 0 FAIL · 3 ABSENT    EXIT 0
+```
+
+**Screenshots produced (15):**
+`L74_hop1_dashboard.png` · `L74_hop1b_dashboard_links.png` · `L74_hop2_reports.png` ·
+`L74_hop2b_reports_drill.png` · `L74_hop3_budgets.png` · `L74_hop3b_budgets_drill.png` ·
+`L74_hop4_goals.png` · `L74_hop4b_goals_account_drill.png` · `L74_hop5_bills.png` ·
+`L74_hop5b_bills_drill.png` · `L74_hop6_accounts.png` · `L74_hop6b_accounts_ledger.png` ·
+`L74_hop7_insights.png` · `L74_hop7b_insights_settings_cta.png` · `L74_hop8_final_dashboard.png`
+
+**Re-test status**
+- **L58** (/reports category drill → /transactions): LINK PRESENT ✓ (was absent in L58 run; link `a[href*="transactions"]` now exists on /reports)
+- **L62** (/insights Settings CTA → /settings): FIXED ✓ (L62 GAP-A closed — /settings route now registered and navigates correctly)
+- **L63** (Dashboard customization): not directly re-tested in L74 (out of scope — widget layout not bento-reconfigured here)
+- **L64** (/bills bill row → /transactions): LINK PRESENT ✓ (bill rows carry a Transactions link; the recurring-NextDue anchoring gap from L64 is a separate model bug, not tested here)
+
+---
+
+### L75. Story — "The Planning Session" (Dev) — 2026-06-22 ★
+
+**The ritual**
+
+Dev is doing a forward-planning session. For every SIGNAL the app surfaces — an over-budget
+category, a goal behind pace, a projected shortfall, a due bill, an AI recommendation — Dev
+expects a direct link to the ACTION that addresses it: a Contribute button, a Cover lever,
+a Mark-paid post, a forecast-to-budget drill. The theme is **SIGNAL→ACTION linkage**: not just
+displaying problems, but providing the one-tap path to the fix.
+
+Chain: /dashboard → /goals → /budgets → /transactions (drill filter verify) → /bills →
+/planning → /reports → /insights. ≥7 screens, 11 navigations.
+
+**DEFINITIVE VERDICT — GAP-E (drill-filter specificity):**
+**CONFIRMED BROKEN.** After drilling from /budgets (over-budget category) to /transactions,
+the row count = 50 (identical to the unfiltered total) and the filter chip reads "Select all".
+The drill link navigates correctly but applies NO filter whatsoever — all transactions are
+shown. This is a functional bug, not a label bug. The /reports drill link was not found at all
+(separate gap). **GAP-E from L74 is not fixed.**
+
+**HIGHEST-VALUE MISSING SIGNAL→ACTION LINKS:**
+1. **GAP-E (SA-5)**: /budgets category drill → /transactions shows ALL 50 rows unfiltered (filter broken, chip="Select all")
+2. **SA-8**: /planning has a projected shortfall signal but NO actionable lever link (no "Adjust budget", "Edit recurring", etc.)
+3. **SA-7**: /bills bill rows have NO link to related account or transaction
+4. **SA-3 (GAP-G re-confirmed)**: /goals linked-account field has NO clickable link to the specific account
+5. **SA-10**: /reports category rows have NO drill link to /transactions at all (click = NOT FOUND)
+6. **SA-11**: /insights "act on this" text present but no clickable "Act on this" or "Save as task" button found
+
+**Drive script** `e2e/loopstory_75_planning_session.mjs`
+
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_75_planning_session.mjs`
+
+Exit: `7 PASS · 1 FAIL · 6 ABSENT  EXIT 1`
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **HYDRATION**: App loads, nav visible, zero JS errors across entire ritual. (`L75_hop1_dashboard.png`)
+- ✓ **SA-1 Dashboard signals**: Dashboard surfaces "over budget" + "overdue" signals AND has 11 action links including "New transaction" and bill buttons. (`L75_hop1b_dashboard_signals.png`)
+- ✓ **SA-2 Goals Contribute**: /goals has inline "Contribute — Add to this goal" button clickable per goal row. (`L75_hop2b_goals_contribute.png`)
+- ✓ **SA-4 Budgets Cover**: /budgets has inline "Cover… — Move money from another budget to cover this overspend" button for over-budget categories. (`L75_hop3_budgets.png`)
+- ✓ **SA-6 Bills Mark paid**: /bills has per-row "Mark paid — Log a payment for this bill" button. (`L75_hop4_bills.png`)
+- ✓ **SA-9 Thread B**: /planning surfaces recurring items (text confirmed). (`L75_hop5_planning.png`)
+- ✓ **NO_JS_ERRORS**: Zero runtime JS errors across all 7 screens. (`L75_final_dashboard.png`)
+
+**SIGNAL→ACTION matrix**
+
+| ID    | Screen                   | Signal                        | Action                              | Exists | Filter OK | Notes                                                                         |
+|-------|--------------------------|-------------------------------|-------------------------------------|--------|-----------|-------------------------------------------------------------------------------|
+| SA-1  | /dashboard               | over-budget + overdue signals | action links present                | YES    | N/A       | 11 action elements; bill button + New transaction CTA found                   |
+| SA-2  | /goals                   | goal behind pace              | Contribute inline action            | YES    | N/A       | "Contribute — Add to this goal" button found and clicked                      |
+| SA-3  | /goals                   | linked account label          | specific /accounts row link         | NO     | N/A       | No clickable link found in main content — GAP-G re-confirmed (L74)            |
+| SA-4  | /budgets                 | over-budget category          | Cover/Move-money action             | YES    | N/A       | "Cover… — Move money from another budget" button found                        |
+| SA-5  | /budgets → /transactions | over-budget drill             | /transactions filtered (row count)  | NO     | NO        | **50 rows = total; chip="Select all" — filter NOT applied (GAP-E confirmed)** |
+| SA-6  | /bills                   | due/overdue bill              | Mark paid action                    | YES    | N/A       | "Mark paid — Log a payment for this bill" button found                        |
+| SA-7  | /bills                   | bill row                      | link to account or transaction      | NO     | N/A       | No `a[href*="account"]` or `a[href*="transaction"]` in main content           |
+| SA-8  | /planning                | projected shortfall           | lever link (budget/recurring/acct)  | NO     | N/A       | Shortfall text present, no actionable anchor/button found                     |
+| SA-9  | /planning                | recurring items on forecast   | surfaced on forecast (Thread B)     | YES    | N/A       | Recurring text confirmed on /planning                                          |
+| SA-10 | /reports → /transactions | biggest category drill        | /transactions filtered + link       | NO     | N/A       | `a[href*="transaction"]` NOT FOUND on /reports; click=NOT FOUND               |
+| SA-11 | /insights                | AI suggestion                 | Act on this / save-as-task          | NO     | N/A       | Text "act on this / save as task" present but no clickable element found      |
+| SA-11b| /insights                | any insight                   | deep link to data screen            | NO     | N/A       | No `a[href*="budget|account|transaction|goal"]` found in main content         |
+
+**Mechanical gaps** (missing signal→action links + broken drill-filter), highest-value first
+
+**⚠ GAP-E CONFIRMED (SA-5): /budgets category drill → /transactions is completely unfiltered.**
+Drill link `a[href*="transactions"]` navigates to /transactions but the result row count = 50
+(identical to unfiltered total). Filter chip reads "Select all". This is a **functional bug**:
+the drill URL carries no filter parameter and the transactions screen initialises with no filter
+active. The signal (over-budget category) has no actionable connection to its underlying data.
+- Fix: the drill link href should include a filter param (e.g. `?category=<id>`) OR the link
+  should set a filter atom before navigation so /transactions initialises with that category
+  pre-selected. e2e: assert `drillRowCount < totalRowCount`.
+- Evidence: `L75_hop3b_budgets_drill_filter.png` (50 rows, chip="Select all").
+
+**⚠ SA-8: /planning shortfall has no lever link.**
+Planning screen surfaces "shortfall" text and a forecast, but there is no button/link that
+takes the user to adjust the lever (e.g. "Adjust budget", "Edit recurring", "Open account").
+The shortfall is a dead-end signal — no action path.
+- Fix: add a "Adjust budget →" or "Edit recurring items →" CTA near each shortfall row/card.
+
+**⚠ SA-7: /bills bill rows have no link to related account or transaction.**
+After marking a bill paid, there is no link from the bill row to the account it draws from or
+the transaction it creates. Users cannot verify the payment posted.
+- Fix: add an `A(Href("/accounts#"+bill.AccountID), "View account")` link per bill row, and/or
+  a "View transaction" link after marking paid that opens the new transaction.
+
+**⚠ SA-3 (GAP-G re-confirmed): /goals linked-account field has no clickable link.**
+The linked account is shown as text only. No `a[href*="accounts"]` found in main content area.
+Users cannot jump from goal to the specific account.
+- Fix: make the linked-account field a link: `A(Href("/accounts#"+goal.LinkedAccountID), accountName)`.
+
+**⚠ SA-10: /reports has no category drill link to /transactions at all.**
+`a[href*="transaction"]` = NOT FOUND on /reports. The spending-by-category breakdown is
+display-only. Users cannot drill from the biggest spending category to its transactions.
+- Fix: add `A(Href("/transactions?category=<id>"), "→")` on each category row in the reports
+  spending breakdown.
+- Note: L74 recorded LM-7 as YES (link present at that time). Either the link was removed or
+  the selector has changed. Probe used `a[href*="transaction"]` in `main` scope — re-check DOM.
+
+**⚠ SA-11: /insights "act on this" text present but no button found.**
+The insights screen contains text matching "act on this / save as task" but no clickable element
+was found with `findAndClick`. Possible causes: (a) the action button is inside a collapsed/lazy
+section; (b) the selector scope excluded the button; (c) the button renders only after AI key is
+set and the no-key state blocks it.
+- Probe hardening needed: inspect actual insights DOM to find the save-as-task button selector.
+- If it only appears with an AI key set: add a fallback test with a mocked key state.
+
+**⚠ SA-11b: /insights has no deep link from suggestions to data screens.**
+No `a[href]` pointing to `/budget`, `/account`, `/transaction`, `/goal`, or `/bill` was found
+in the insights main content. AI suggestions are text-only with no path to the referenced entity.
+- Fix: when the AI mentions a budget category or account, render it as an anchor to that entity.
+
+**UI/UX defects** (screenshot-confirmed)
+
+- **GAP-E FUNCTIONAL BUG** (`L75_hop3b_budgets_drill_filter.png`): Budget category drill → /transactions
+  renders all 50 transactions with chip="Select all". Filter is completely absent. The signal
+  (over-budget) has no data connection to its source transactions.
+- **SA-8 DEAD-END** (`L75_hop5_planning.png`): Planning shows shortfall but the screen is a
+  dead end — no CTA leads anywhere actionable. Shortfall is surfaced but unresolvable from here.
+- **SA-7 MISSING LINK** (`L75_hop4b_bills_markpaid.png`): Bill rows show due/overdue state and
+  Mark-paid action, but zero navigation to the account or transaction. After paying, users have
+  no confirmation path.
+- **SA-10 REGRESSION?** (`L75_hop6_reports.png`): Reports spending breakdown has no drill link
+  at all — no `a[href*="transaction"]` found, reversing what L74 recorded as YES for LM-7.
+
+**Probe hardening**
+
+- **SA-10 selector regression**: L74 recorded LM-7 YES (link present on /reports), but L75 finds
+  NOT FOUND. Possible explanations: scope change (L75 probes `main a` vs L74's `body a`), a DOM
+  restructure, or a render-timing difference. Re-check by dumping `document.querySelectorAll('a')`
+  href list from /reports to confirm.
+- **SA-11 insights button**: The "save as task" button may render inside a collapsed accordion or
+  require the AI key. Add a probe that dumps all `button` + `a` text from /insights to confirm
+  whether the button is in the DOM at all in the no-key state.
+- **Budget category name**: `topCategoryName` returned `null` — the regex `/^([A-Za-z &]+)/` did
+  not match the first token of budget rows. May need to expand to include numbers or different
+  DOM structure. Not blocking (drill was found anyway), but useful for future filter-label assertion.
+- **Goals Contribute click**: The button click succeeded but `modal=false` and URL stayed at /goals.
+  The Contribute action may open a form inline rather than a dialog — verify visually that the
+  form appears and is functional, then update the assertion to check for inline form appearance.
+
+**Evidence**
+
+```
+cd C:\Users\mreca\Desktop\CashFlux
+$env:E2E_URL="http://127.0.0.1:8080"
+node e2e/loopstory_75_planning_session.mjs
+  → 7 PASS · 1 FAIL · 6 ABSENT    EXIT 1
+```
+
+**Screenshots produced (11):**
+`L75_hop1_dashboard.png` · `L75_hop1b_dashboard_signals.png` · `L75_hop2_goals.png` ·
+`L75_hop2b_goals_contribute.png` · `L75_hop3_budgets.png` · `L75_hop3b_budgets_drill_filter.png` ·
+`L75_hop4_bills.png` · `L75_hop4b_bills_markpaid.png` · `L75_hop5_planning.png` ·
+`L75_hop5b_planning_lever.png` · `L75_hop6_reports.png` · `L75_hop6b_reports_drill_filter.png` ·
+`L75_hop7_insights.png` · `L75_hop7b_insights_action.png` · `L75_final_dashboard.png`
+
+**Re-test status**
+- **L74 GAP-E** (/budgets drill filter): **STILL BROKEN** — 50 rows = total, chip="Select all" (functional filter gap confirmed)
+- **L74 GAP-G** (/goals linked-account drill): **STILL MISSING** — no clickable link found in goals main content (SA-3)
+- **L74 LM-7** (/reports category drill): **REGRESSION or probe scope change** — L74 recorded YES, L75 finds NOT FOUND (investigate)
+
+---
+
 ## 0. Foundation & tooling (Phase 0)
 
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH

@@ -76,6 +76,73 @@ func TestListRowsUnknownSource(t *testing.T) {
 	}
 }
 
+func TestListRowsBillsSource(t *testing.T) {
+	// A liability account with a due day and minimum payment becomes an upcoming
+	// bill; the value renders as "due today", "due tomorrow", or "due in N days".
+	now := time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC) // a Sunday
+	d := Data{
+		Accounts: []domain.Account{
+			{
+				ID: "visa", Name: "Visa", Class: domain.ClassLiability,
+				Currency: "USD", DueDayOfMonth: 22, MinPayment: money.New(2500, "USD"),
+			},
+			{
+				ID: "mc", Name: "Mastercard", Class: domain.ClassLiability,
+				Currency: "USD", DueDayOfMonth: 25, MinPayment: money.New(5000, "USD"),
+			},
+		},
+		Now: now,
+	}
+	rows, ok := ListRows(widgetspec.SourceBills, d, 5)
+	if !ok {
+		t.Fatal("bills should be a known source")
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 bill rows, got %d", len(rows))
+	}
+	// Visa due today (day 22 == now).
+	if rows[0].Label != "Visa" {
+		t.Errorf("first row label wrong: %q", rows[0].Label)
+	}
+	if rows[0].Value != "due today" {
+		t.Errorf("due today value wrong: %q", rows[0].Value)
+	}
+	// Mastercard due in 3 days.
+	if rows[1].Label != "Mastercard" {
+		t.Errorf("second row label wrong: %q", rows[1].Label)
+	}
+	if rows[1].Value != "due in 3 days" {
+		t.Errorf("due in N days value wrong: %q", rows[1].Value)
+	}
+}
+
+func TestListRowsBillsCappedAndEmpty(t *testing.T) {
+	// Cap of 1 keeps only the soonest bill.
+	now := time.Date(2026, 6, 22, 0, 0, 0, 0, time.UTC)
+	d := Data{
+		Accounts: []domain.Account{
+			{ID: "a1", Name: "Card A", Class: domain.ClassLiability, Currency: "USD", DueDayOfMonth: 22, MinPayment: money.New(1000, "USD")},
+			{ID: "a2", Name: "Card B", Class: domain.ClassLiability, Currency: "USD", DueDayOfMonth: 24, MinPayment: money.New(2000, "USD")},
+		},
+		Now: now,
+	}
+	rows, ok := ListRows(widgetspec.SourceBills, d, 1)
+	if !ok {
+		t.Fatal("bills should be known")
+	}
+	if len(rows) != 1 {
+		t.Fatalf("cap=1: expected 1 row, got %d", len(rows))
+	}
+	// No accounts → empty list (not an error).
+	empty, ok2 := ListRows(widgetspec.SourceBills, Data{Now: now}, 5)
+	if !ok2 {
+		t.Fatal("bills with no accounts should still be ok=true")
+	}
+	if len(empty) != 0 {
+		t.Errorf("no accounts: expected 0 rows, got %d", len(empty))
+	}
+}
+
 func TestKPIText(t *testing.T) {
 	cases := []struct {
 		v      float64

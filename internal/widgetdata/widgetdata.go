@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -38,7 +39,9 @@ type Data struct {
 	Budgets      []domain.Budget
 	Goals        []domain.Goal
 	Tasks        []domain.Task
+	Recurring    []domain.Recurring // for SourceBills (L63 GAP-A)
 	Rates        currency.Rates
+	Now          time.Time // reference time for SourceBills due-date calculation
 }
 
 // fmtMoney renders money the same way the rest of the app does (accounting style:
@@ -94,6 +97,30 @@ func ListRows(source string, d Data, n int) (rows []Row, ok bool) {
 				break
 			}
 			rows = append(rows, Row{Label: tk.Title, Value: string(tk.Status)})
+		}
+	case widgetspec.SourceBills:
+		// Upcoming bills: account-due-day bills + negative recurring items, soonest
+		// first. "Due today" / "in N days" / "due <date>" as the value. Uses the
+		// Data.Now reference time; falls back to the real clock when zero.
+		now := d.Now
+		if now.IsZero() {
+			now = time.Now()
+		}
+		upcoming := bills.UpcomingAll(d.Accounts, d.Recurring, now)
+		for i, b := range upcoming {
+			if i >= n {
+				break
+			}
+			var when string
+			switch b.DaysUntil {
+			case 0:
+				when = "due today"
+			case 1:
+				when = "due tomorrow"
+			default:
+				when = "due in " + strconv.Itoa(b.DaysUntil) + " days"
+			}
+			rows = append(rows, Row{Label: b.Name, Value: when})
 		}
 	default:
 		return nil, false

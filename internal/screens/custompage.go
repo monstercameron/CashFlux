@@ -494,7 +494,8 @@ func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 func listBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	rows, ok := widgetdata.ListRows(w.Binding.Source, widgetdata.Data{
 		Transactions: ctx.App.Transactions(), Accounts: ctx.App.Accounts(),
-		Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(), Rates: ctx.Rates,
+		Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
+		Recurring: ctx.App.Recurring(), Rates: ctx.Rates, Now: time.Now(),
 	}, widgetdata.DefaultListRows)
 	if !ok {
 		return P(css.Class("empty"), uistate.T("pages.pickSource"))

@@ -39,9 +39,14 @@ func Todo() ui.Node {
 	_ = uistate.UseDataRevision().Get()
 
 	hideDone := ui.UseState(false)
+	// filterPrio is "" (all), "high", "medium", or "low" (C52 lightweight priority
+	// filter — lets the user focus on just one priority level without a full filter
+	// panel).
+	filterPrio := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	toggleHideDone := ui.UseEvent(func() { hideDone.Set(!hideDone.Get()) })
+	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()) })
 
 	tasks := app.Tasks()
 	accounts := app.Accounts()
@@ -143,7 +148,19 @@ func Todo() ui.Node {
 
 	// Order + filter, then nest into the parent/child tree (C72). hide-done filters
 	// first so a done parent's open child surfaces as a root (tasktree handles it).
-	visible := tasksort.Visible(tasks, hideDone.Get())
+	// The priority filter runs after the done filter so it cooperates with hide-done:
+	// if you filter to "High" and hide done, only open high-priority tasks appear.
+	filtered := tasksort.Visible(tasks, hideDone.Get())
+	if p := domain.TaskPriority(filterPrio.Get()); p.Valid() {
+		kept := filtered[:0:0]
+		for _, t := range filtered {
+			if t.Priority == p {
+				kept = append(kept, t)
+			}
+		}
+		filtered = kept
+	}
+	visible := filtered
 	nodes := tasktree.Flatten(visible)
 
 	var listBody ui.Node
@@ -174,8 +191,19 @@ func Todo() ui.Node {
 	return Section(css.Class("card"),
 		Div(css.Class("budget-head"),
 			H2(css.Class("card-title"), uistate.T("todo.listTitle")),
-			Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
+				// Priority filter — lightweight selector; "" means show all (C52).
+				Select(css.Class("field"), Attr("aria-label", uistate.T("todo.filterPrioLabel")),
+					Attr("data-testid", "todo-filter-prio"), OnChange(onFilterPrio),
+					Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
+					Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+					Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+					Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
+				),
+				Button(css.Class("btn"), Type("button"), OnClick(toggleHideDone), hideLabel),
+			),
 		),
+		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		listBody,
 	)
 }

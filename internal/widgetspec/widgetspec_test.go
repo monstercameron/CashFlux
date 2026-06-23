@@ -59,8 +59,8 @@ func TestCatalogAndSources(t *testing.T) {
 			t.Errorf("catalog type %q not Known", d.Type)
 		}
 	}
-	if len(ListSources()) != 5 {
-		t.Errorf("expected 5 list sources, got %d", len(ListSources()))
+	if len(ListSources()) != 6 { // transactions/accounts/budgets/goals/tasks/bills
+		t.Errorf("expected 6 list sources, got %d", len(ListSources()))
 	}
 	if Known("bogus") {
 		t.Error("bogus should not be Known")

@@ -56,6 +56,7 @@ const (
 	SourceBudgets      = "budgets"
 	SourceGoals        = "goals"
 	SourceTasks        = "tasks"
+	SourceBills        = "bills" // upcoming recurring bills (L63 GAP-A)
 )
 
 var listSources = []Def{
@@ -64,6 +65,7 @@ var listSources = []Def{
 	{SourceBudgets, "Budgets", "Spending limits and their status."},
 	{SourceGoals, "Goals", "Savings targets and progress."},
 	{SourceTasks, "Tasks", "Your to-do items."},
+	{SourceBills, "Bills", "Upcoming recurring bills and subscriptions."},
 }
 
 // ListSources returns the data sources a List widget can bind to, in display order.
