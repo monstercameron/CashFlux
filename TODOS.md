@@ -11973,6 +11973,15 @@ captured cleanly.
 
 ### G9.1. Reports — DEEP beautification + redesign spec (extends G9, from C55) — 2026-06-23 ★★
 
+**✅ RESOLVED (2026-06-23).** Core 6-item redesign shipped:
+- **Item 1 — Hero zone:** Net at 2.5rem/800, Income+Spend flankers at 1.75rem/700, period caption at 0.825rem/500; savings rate / runway / no-spend days in a secondary row. Old stat-grid removed.
+- **Item 2 — Card-title weight:** `font-weight: 600` added to `.card-title` — app-wide lift in one CSS line.
+- **Item 3 — Heads-up alert urgency:** `.card-alert` class (`border-left: 4px solid var(--danger)` + `color-mix` 6% tint) applied to the anomaly card.
+- **Item 4 — Tabular amounts:** `.budget-amount` color switched to `var(--fg, var(--text))` for full contrast; `font-variant-numeric: tabular-nums` was already present.
+- **Item 5 — Sankey up:** reordered return block to category → Sankey → top payees → biggest expenses; Income section (deposits + income by source) follows.
+- **Item 6 — Advanced collapse:** custom field spend + deductible totals wrapped in `ui.UseState` disclosure toggle ("Advanced ▾/▲"), collapsed by default. Deductible card compiled cleanly, both included.
+Deferred micro-items: chart variety catalog (G9.1a — V1–V8 chart upgrades, axis labels, a11y, responsive — requires separate build+e2e pass); `.hero-net` light-mode pin (low-priority; hero uses `var(--text)` which is already dark in light theme via existing override).
+
 ---
 
 ## The story
