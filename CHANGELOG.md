@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Component primitives (GX3):** selects now match inputs; consistent button/input/badge states. Unified `--btn-py`/`--btn-px` tokens bring `.btn` and `.set-btn` to a shared 44px touch target. Select elements styled to match `.field` (eliminates white-box-in-dark glitch). DataTable light-mode pinned. Modal Save button now reads as primary. Pace badges get consistent 1px border ring.
 - **C73 Phase 3 — big-row extraction (2026-06-23).** `AccountRow`, `BudgetRow`, and `GoalRow` each moved out of
   their screen file into a self-contained `*_row.go` (accounts_row.go / budgets_row.go / goals_row.go), matching
   the earlier `transactions_row.go` split. Each row keeps its display + inline-edit/set-balance/transfer/reconcile/
