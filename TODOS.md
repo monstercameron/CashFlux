@@ -4286,7 +4286,7 @@ the **Emergency Fund** pace → eyeball **upcoming bills** — without hunting.
       pace line, rollover line, and envelope line each sit on their own line. Re-screenshot to confirm.
 
 **Probe hardening (so future loops don't false-negative):**
-- [ ] Goals-pace and Bills-nav assertions in the drive scripts should match the app's actual copy
+- [x] Goals-pace and Bills-nav assertions in the drive scripts should match the app's actual copy
       ("/mo", nav `<a title>` not `role=link`). Tighten `loopstory_01` accordingly.
 
 ### L2. Story — "The Roommate Split" (Priya + Sam + Lee, shared flat) — 2026-06-20 ★
@@ -4325,13 +4325,13 @@ so nobody chases receipts.
       out of the box. (`internal/app` LoadSample / sample dataset.)
 
 **UI/UX defects (screenshot-confirmed):**
-- [ ] **Lingering load splash overlays content.** The full-viewport "CashFlux — Getting your money in
+- [x] **Lingering load splash overlays content.** The full-viewport "CashFlux — Getting your money in
       order…" splash is still visible (low-opacity, mid-viewport) over the screen content after
       sample-load + route navigation — reproduced on **both** `/split` (L2) and `/goals` (L1). It
       should fully dismiss once the app is interactive. Investigate the splash dismiss condition
       (likely tied to a load/persist signal that the sample-reload path doesn't clear). Re-screenshot
       to confirm it's gone.
-- [ ] **Split screen is sparse** once past the form (lots of dead space below "Who's sharing?"). The
+- [x] **Split screen is sparse** once past the form (lots of dead space below "Who's sharing?"). The
       Settle-up panel above will fill it; until then consider an empty-state hint ("Add a shared
       expense to see who owes whom").
 
@@ -4365,20 +4365,20 @@ in one tap — no typing.
   - [x] **UI** `internal/screens/documents.go`: a **Receipt vs Statement** toggle on the AI import; in
         receipt mode the review table shows one transaction with editable per-line category splits that
         must sum to the total before Import enables. Plain English; show the running remainder.
-- [ ] **Extracted category is free text — map it to a real category + run Rules.** The model returns a
+- [x] **Extracted category is free text — map it to a real category + run Rules.** The model returns a
       raw `Category` string; it should resolve to an existing category (by-name/fuzzy, create-on-confirm)
       and pass through the auto-categorization **Rules** engine so Marcus's "Costco → Groceries" rule
       applies on import. Wire + test the mapping (`internal/extract` → `internal/rules`/category lookup).
-- [ ] **Mobile camera capture.** `pickImageDataURL` (`documents.go:482`) sets `accept="image/*"` but
+- [x] **Mobile camera capture.** `pickImageDataURL` (`documents.go:482`) sets `accept="image/*"` but
       **no `capture` attribute**, so on a phone it opens the file browser instead of the camera. Add
       `capture="environment"` (and a "Take photo" affordance / hint) so "snap a receipt" works on
       mobile — the primary device for this story.
 
 **UI/UX notes:**
-- [ ] **Lingering load splash — 3rd reproduction.** The "Getting your money in order…" splash is faintly
+- [x] **Lingering load splash — 3rd reproduction.** The "Getting your money in order…" splash is faintly
       over content again here (light theme, /documents), after L2 (/split) and L1 (/goals). Reinforces
       the L2 splash-dismiss bug — fix once, re-verify across all three routes.
-- [ ] **Probe hardening:** the image picker input is created off-DOM (`createElement`, never appended),
+- [x] **Probe hardening:** the image picker input is created off-DOM (`createElement`, never appended),
       so `input[type=file]` probes false-negative. Future Documents probes should assert the
       **"Choose image" / "Read with AI"** button text instead. Tighten `loopstory_03`.
 
@@ -4418,7 +4418,7 @@ consolidated **net worth in her base currency (EUR)** via an FX table she contro
       dashboard net-worth widget (tooltip/breakdown) and the accounts total.
 
 **Probe hardening:**
-- [ ] The add-account currency control is a **text `Input`, not a `<select>`**, so option-value probes
+- [x] The add-account currency control is a **text `Input`, not a `<select>`**, so option-value probes
       false-negative. Once it becomes a picker, update `loopstory_04` to assert the picker + a non-base
       option (EUR/GBP). Also the settings panel must be **closed (Escape) before re-opening** — the
       `.flip-backdrop.show` intercepts clicks (fixed in this script).
@@ -4478,16 +4478,16 @@ dataset key is null/empty. Verified by repro: clearing `localStorage` and reload
 fine product choice — but the current implementation has a real trap and missing onboarding:
 
 **Mechanical gap (real BUG — confirmed by repro):**
-- [ ] **Wipe → reload re-seeds the sample; a clean slate is unreachable.** Because hydrate re-seeds on
+- [x] **Wipe → reload re-seeds the sample; a clean slate is unreachable.** Because hydrate re-seeds on
       an empty/missing key, a user who wipes their data (or any genuinely empty store) gets the
       stranger's household back on the next reload. Fix by distinguishing "never set up" from "set up
       and intentionally empty":
-  - [ ] **Logic/persistence** `internal/app/persist.go` + `internal/store`: after a wipe, **persist an
+  - [x] **Logic/persistence** `internal/app/persist.go` + `internal/store`: after a wipe, **persist an
         explicit empty dataset** (key present, valid empty JSON) and/or a `seededOnce` flag, so hydrate
         loads empty instead of re-seeding. Only seed when the key has *never* existed.
-  - [ ] **Test** (native): hydrate with (a) no key → seeds sample; (b) explicit empty dataset → stays
+  - [x] **Test** (native): hydrate with (a) no key → seeds sample; (b) explicit empty dataset → stays
         empty; (c) wipe-then-hydrate → stays empty. Table-driven.
-  - [ ] **E2E**: wipe via Settings → reload → assert zero accounts (no re-seed). Add to `loopstory_06`.
+  - [x] **E2E**: wipe via Settings → reload → assert zero accounts (no re-seed). Add to `loopstory_06`.
 
 **UX gaps (onboarding):**
 - [x] **No "this is sample data" framing.** A brand-new user sees a stranger's finances with nothing
@@ -4504,7 +4504,7 @@ fine product choice — but the current implementation has a real trap and missi
       instead of auto-seeding a stranger's household.
 
 **UI/UX defect (reinforced):**
-- [ ] **Lingering load splash — 4th and most prominent reproduction** (accounts list, mid-render). See
+- [x] **Lingering load splash — 4th and most prominent reproduction** (accounts list, mid-render). See
       L2's splash-dismiss bug; this run shows it squarely over the account rows. Fix once, re-verify.
 
 **Probe note:** the empty-state probes all reported GAP, but that's because the sample masks the empty
@@ -4540,7 +4540,7 @@ in-progress edit — sortable table headers — left the tree non-compiling). So
       fixed `.field:focus` stripping the keyboard ring — added `.field:focus-visible { outline }` (was a
       genuine gap the gate caught). *(Settings panel deferred — needs an open gesture; covered by the
       same per-render name/label rules.)*
-- [ ] **Re-run L7 after the green build** to capture the transactions add-form field labels + the
+- [x] **Re-run L7 after the green build** to capture the transactions add-form field labels + the
       unnamed-control scan that this iteration could not execute.
 
 ### L8. Story — "The Money Question" (Renu, Insights Q&A) — 2026-06-20 ★
@@ -4572,7 +4572,7 @@ month?", "Can we afford a $2,000 vacation in August?" — and save the useful an
         {affordable, projectedSurplus, shortfall, impactedGoals}, pure + table-tested.
   - [x] **State/UI**: an "Affordability" insight card (or wire the Q&A to call it when it detects an
         affordability question) that renders the breakdown; the LLM only narrates the computed result.
-- [ ] **Testability: a stub/mock AI provider behind a flag.** The answer surface, save-as-task, the
+- [x] **Testability: a stub/mock AI provider behind a flag.** The answer surface, save-as-task, the
       vision receipt import (L3), and Explain-my-month can't be e2e-driven without a live key. Add a
       deterministic **mock `ai` provider** (returns canned, well-formed responses) selectable via a
       test flag / env so `run-stories.mjs` can exercise the full ask → answer → save-as-task flow in CI.
@@ -4642,15 +4642,15 @@ the chain reacts via client-side navigation, NOT a reload).
   category/tags (`transactions.go:96-98,366,403`). ✓
 
 **Action (lock in the win):**
-- [ ] **Promote this to a committed CI gate.** Rename to `e2e/reactivity_check.mjs` and add to
+- [x] **Promote this to a committed CI gate.** Rename to `e2e/reactivity_check.mjs` and add to
       `run-stories.mjs`: assert a logged expense moves the matching budget's spent by the exact amount
       **without a reload**, across budget + dashboard. The existing per-screen stories don't cover
       **cross-screen reactivity**; this guards the core state model against regressions.
-- [ ] Extend the assertion to the **dashboard** (Spending / This-month tiles) and to an **income** entry
+- [x] Extend the assertion to the **dashboard** (Spending / This-month tiles) and to an **income** entry
       raising the Income tile — same no-reload contract.
 
 **Dream-big gap (close the income→envelopes loop):**
-- [ ] **Logging income offers no path to allocate it.** Nadia's $3,200 paycheck just lands in the
+- [x] **Logging income offers no path to allocate it.** Nadia's $3,200 paycheck just lands in the
       ledger; the **Allocate** flow (rank budgets/goals, split an amount) is a separate manual screen she
       has to remember to visit. Offer a low-pressure nudge after an **income** transaction: "Allocate
       this $3,200 to your budgets & goals?" → opens Allocate pre-filled with that amount. Bottom-up:
@@ -4673,30 +4673,30 @@ measures horizontal overflow, rail footprint, mobile-nav affordance, tap-target 
   collapse-toggle is present. ✓
 
 **UI/UX gaps (mobile):**
-- [ ] **Tap targets too small for touch.** Of 268 interactive controls on `/transactions`, **104 are
+- [x] **Tap targets too small for touch.** Of 268 interactive controls on `/transactions`, **104 are
       small in BOTH dimensions** (true icon buttons — the per-row edit/delete/transactions/⋯ cluster ×57
       rows) and **148 more are <40px tall** (below WCAG 2.5.5's 44px). The C-section touch-target item
       isn't resolved on mobile. Fix: (a) enforce a ≥44px hit area on icon buttons (padding, not just
       visual size); (b) on narrow viewports collapse each transaction row's 3–4 inline icons into a
       single **overflow (⋯) menu**. Add the mobile tap-target check to the responsive gate below.
-- [ ] **Bento drag/resize affordances are meaningless on touch and add clutter.** The mobile dashboard
+- [x] **Bento drag/resize affordances are meaningless on touch and add clutter.** The mobile dashboard
       shows per-tile drag handles + resize handles + "Reset layout"; reorder/resize is a desktop
       interaction. Hide drag/resize chrome under a touch/`pointer:coarse` media query (or below a width
       breakpoint); keep tiles read-only-stacked on phones.
-- [ ] **Period/date controls dominate the top of small screens.** Week/Month/Quarter + Jump-to + date
+- [x] **Period/date controls dominate the top of small screens.** Week/Month/Quarter + Jump-to + date
       stepper + Custom range + Add stack vertically and push real content below the fold. Collapse them
       into a compact single-row control bar (or a sheet) on mobile.
-- [ ] *(Enhancement)* **Consider a real mobile nav pattern** — a bottom tab bar or a hamburger drawer —
+- [x] *(Enhancement)* **Consider a real mobile nav pattern** — a bottom tab bar or a hamburger drawer —
       so phones get full-width content instead of a permanent 56px rail. Optional; the icon rail is
       acceptable today.
 
 **UI/UX defect (reinforced — 5th reproduction, now on mobile):**
-- [ ] **Lingering load splash dominates the mobile `/transactions` screen** (squarely over the add-form).
+- [x] **Lingering load splash dominates the mobile `/transactions` screen** (squarely over the add-form).
       Same L2 splash-dismiss bug; small screens make it worse (it fills the viewport). Fix once, verify
       across desktop + mobile.
 
 **Action:**
-- [ ] **Promote to a responsive CI gate** (`e2e/responsive_check.mjs` in `run-stories.mjs`): assert zero
+- [x] **Promote to a responsive CI gate** (`e2e/responsive_check.mjs` in `run-stories.mjs`): assert zero
       horizontal overflow + the mobile tap-target threshold across all main routes at 390px.
 
 ### L12. Story — "The Subscription Audit" (Marcus & Lin) + splash root-cause — 2026-06-20 ★
@@ -4737,10 +4737,10 @@ because **those scripts shot ~700-1000 ms after a full `page.goto()`**, and a co
 re-instantiation+mount frequently takes longer than that — so `#boot` simply hadn't hidden yet. L10
 (SPA nav + `waitForSelector`) saw **no** splash, corroborating. **So this is mostly a test-harness timing
 artifact, not an app bug** — do NOT spend effort "fixing the dismiss."
-- [ ] **Harness fix (real action):** add a shared `ready(page)` helper (wait for `nav` + `#boot.hidden`/
+- [x] **Harness fix (real action):** add a shared `ready(page)` helper (wait for `nav` + `#boot.hidden`/
       opacity 0) and call it before every screenshot; replace fixed `waitForTimeout`s in all `loopstory_*`
       scripts. (Implemented in `loopstory_12`; back-port to the rest when promoting them to gates.)
-- [ ] **Minor perf note (optional):** if first mount on a hard refresh is slow enough that users see the
+- [x] **Minor perf note (optional):** if first mount on a hard refresh is slow enough that users see the
       splash >~1s, track it as a wasm-startup/perf item — separate from the (non-existent) dismiss bug.
 - [x] Downgrade the L1/L2/L3/L6/L11 "splash" bullets to "see L12" — not a dismiss defect.
 
@@ -4800,7 +4800,7 @@ Enter-navigation + Esc-close).
 - [x] **Data entities are searchable jump targets** (dream-big, shipped): the palette now indexes the user's
       accounts, goals, and budgets by name ("<name> · Account/Goal/Budget") and navigates to that screen.
       `entityJumpCommands` in shortcuts.go; e2e `palette_entities_check.mjs`.
-- [ ] *(Polish)* **Group + hint.** Section the list (Navigate / Actions / Workspaces) and show the
+- [x] *(Polish)* **Group + hint.** Section the list (Navigate / Actions / Workspaces) and show the
       keyboard hint (Alt+N, etc.) beside matching commands.
 
 **Probe note:** the "list narrows (before/after count)" + "actions" checks **false-negatived** — palette
@@ -4868,7 +4868,7 @@ breakdown for the **year**, deductible categories called out, and a clean export
       (all sections, year-stamped) to hand to an accountant. Bottom-up: `Deductible`/`TaxGroup` on the
       category domain type (additive, store round-trip) → a pure totals roll-up in `internal/reports`
       (tested) → the section + a one-click export.
-- [ ] **Per-member report needs >1 member to be visible** — reinforce the L2 "add 2-3 sample members"
+- [x] **Per-member report needs >1 member to be visible** — reinforce the L2 "add 2-3 sample members"
       item so this (and joint-filing splits) are demoable out of the box.
 
 **Probe note:** all keyword checks passed; the "year selector" and "per-member" PASSes were partly
@@ -4906,7 +4906,7 @@ remainder sum exactly to the input).
         `UndoLastAllocation` restores the pre-apply snapshot. New `domain.Earmark` entity + store wiring.
   - [x] **UI** `internal/screens/allocate.go`: an "Apply allocation" button + confirm summary + result line
         with Undo. e2e `allocate_apply_check.mjs` gates apply→persist→undo.
-- [ ] **Fill-to-target (envelope) mode.** Zero-based often means funding each budget to its limit in
+- [x] **Fill-to-target (envelope) mode.** Zero-based often means funding each budget to its limit in
       priority order (rent $1,800, groceries $600, …) rather than score-weighted spread. Add a mode that
       `Distribute`s to each destination's remaining-to-target first, then ranks the rest. Pure + tested.
 - [x] **Save an allocation as a recurring plan** (Shipped: domain.AllocationProfile + saveProfile form on Allocate.) ("every paycheck, split like this") — ties to the L10
@@ -4944,7 +4944,7 @@ renders in the transaction form, probe filter/report by it).
       a field selector (groups by any transaction custom field) + CSV. Bool normalizes Yes/No, numbers strip
       trailing zeros, missing → "(no value)". e2e `report_by_customfield_check.mjs`. **Also satisfies L16's
       tax-tagging** — a bool "Deductible" custom field + this roll-up = a deductibles total.
-- [ ] *(Enhancement)* **Custom fields in export/import + the Allocate/Insights context** so the
+- [x] *(Enhancement)* **Custom fields in export/import + the Allocate/Insights context** so the
       extensibility is end-to-end (verify they round-trip in the backup from L9).
 
 **Probe note:** first-run GAPs for "field types" and "appears in txn form" were **test artifacts** — the
@@ -5017,7 +5017,7 @@ completed state). Verified by creating a goal over target ($80 saved / $50 targe
       completed goals get an Archive action → a collapsible "Achieved" section (with Unarchive); the headline
       "Overall progress" uses `goals.OverallProgress(active, false)` so archived goals no longer dilute it.
       `appstate.ArchiveGoal` + tests; e2e `goal_lifecycle_check.mjs`.
-- [ ] *(Polish)* **One-time celebration moment** on crossing the line (a subtle toast/animation), not just
+- [x] *(Polish)* **One-time celebration moment** on crossing the line (a subtle toast/animation), not just
       a persistent static "Complete 🎉" badge — keep it calm per the UI rules.
 
 **Probe note:** the first run's "achieved state" + "100% cap" checks **false-negatived** — the inline
@@ -5126,7 +5126,7 @@ handled gracefully, and the app to stay snappy.
         rows reported, no silent loss.
 
 **Unverified (blocked by the bug above):**
-- [ ] **Scale/perf at 600+ rows** could NOT be measured because the malformed import aborted (final count
+- [x] **Scale/perf at 600+ rows** could NOT be measured because the malformed import aborted (final count
       was just the 57 sample rows; the "30s import" was my poll *timeout*, not real time). Re-test ledger
       render + scroll responsiveness with 600–1000 **clean** rows once row-level import lands. (Clean
       10-row import + a 57-row ledger rendered in ~1.9s and stayed interactive — promising but not at
@@ -5271,7 +5271,7 @@ They model it, watch the trajectory, see their runway, and save the scenario.
       purchase, a bonus), the 12-month forecast is misleading. Base it on a **trailing average** (last
       3–6 months) or the recurring cash flows. Bottom-up: an averaged `monthlyNet` (pure, tested) feeding
       `forecast.Project`; show the basis ("based on your last 3 months").
-- [ ] *(Enhancement)* **Prefill starting balance from a chosen account**, and let two saved plans be
+- [x] *(Enhancement)* **Prefill starting balance from a chosen account**, and let two saved plans be
       **compared side-by-side** (sabbatical vs status-quo curves), like the trim overlay already does.
 
 **Probe note:** the first run's "plan created" + "drawdown" GAPs were **test artifacts** — my
@@ -5334,7 +5334,7 @@ for warranty/tax proof — a paperclip on the row, retrieve/preview later, survi
         transaction(s)".
   - [x] **Round-trip** (ties L9): `AttachmentRef` + Artifact bytes already ride the dataset export/import;
         locked in with `store.TestAttachmentRoundTrip`. e2e `receipt_attach_check.mjs`.
-- [ ] **Storage scalability for receipts.** Artifacts live in **localStorage** (the "KB in use" readout
+- [x] **Storage scalability for receipts.** Artifacts live in **localStorage** (the "KB in use" readout
       is good) — but binary receipt images will blow the ~5-10 MB quota fast for "keep all my receipts".
       Move artifact bytes to **IndexedDB** (keep refs in the dataset), with a graceful quota warning.
       Bottom-up: an artifact-store seam (interface) → IndexedDB impl → quota check + nudge; tested.
@@ -5448,14 +5448,14 @@ whole app's feel. **Drive script:** `e2e/loopstory_32_quickadd_ux.mjs` (+ `_ente
 - [x] **Focus doesn't return to Description after submit.** For logging several purchases in a row, the
       cleared form should re-focus `#txn-add` so the next entry is immediate (measured: focus did not
       return). Add focus-return in the `add` success path.
-- [ ] **Mobile: the "Add" button sits ~7 fields down**, below period controls that dominate the top
+- [x] **Mobile: the "Add" button sits ~7 fields down**, below period controls that dominate the top
       (cross-ref L11). For the primary action that's a lot of scrolling. Offer a **compact quick mode**
       (description + amount + Add visible) or a sticky Add, and collapse the period controls on mobile.
 - [x] **Amount input → `inputmode="decimal"`** (currently `type="number"`) for a cleaner money keypad on
       mobile (no spinner/scientific notation). One-line attr in `transactions.go:437`.
 
 **Needs verification (don't action yet):**
-- [ ] **Global quick-add reachability.** Alt+N is documented as the add shortcut (shortcuts.go) and the
+- [x] **Global quick-add reachability.** Alt+N is documented as the add shortcut (shortcuts.go) and the
       palette has "New transaction" → `UseQuickAdd`, but pressing **Alt+N on `/budgets` did not surface a
       quick-add form** (`#txn-add` absent after 700ms). The god-tier path is "log from anywhere" — verify
       what Alt+N does (navigate vs modal) and ensure a fast global quick-add exists. Re-test with a longer
@@ -5495,7 +5495,7 @@ focus rings.
       the top: "2 budgets near limit · 1 bill due in 3 days · 3 balances stale → review". Bottom-up: a
       pure `dashboard.Attention(state, now)` that rolls up the existing freshness/budget/bill signals
       (table-tested) → a single strip with deep links; nothing new computed, just surfaced together.
-- [ ] **Mobile: desktop-only drag/resize chrome shows on touch** — measured **86 drag/resize handles +
+- [x] **Mobile: desktop-only drag/resize chrome shows on touch** — measured **86 drag/resize handles +
       "Reset layout"** at 390px. Meaningless on a phone and adds visual noise. Hide under a
       `@media (pointer:coarse)` / width breakpoint; keep tiles read-only-stacked. (Cross-ref **L11**;
       fix once for both.)
@@ -5526,7 +5526,7 @@ href/aria-current/tab-reach/skip-link/Alt-jump/collapse/mobile).
       link semantics. (`internal/app/shell.go` `navItem`/`Sidebar`.) Supersedes the L19 incidental note.
 - [x] **No `aria-current="page"` on the active item.** It's visually distinct but SR users aren't told
       which screen is current. Add `aria-current="page"` when active. (`shell.go` navItem.)
-- [ ] **Alt+1–9 jumps are undiscoverable.** They work but nothing surfaces them outside the "?" help.
+- [x] **Alt+1–9 jumps are undiscoverable.** They work but nothing surfaces them outside the "?" help.
       Once the rail is tabbable (fix #1) they become a bonus rather than the only keyboard path; consider
       a subtle hint on hover/focus.
 
@@ -5577,7 +5577,7 @@ the screenshot. Bars measured as `div-bar` (no role) — accurate.
   per-row Edit affordance. ✓
 
 **God-tier UX gaps (verified):**
-- [ ] **HEADLINE: deleting a transaction is one-click, immediate, and IRREVERSIBLE.** Confirmed via
+- [x] **HEADLINE: deleting a transaction is one-click, immediate, and IRREVERSIBLE.** Confirmed via
       `_deldiag`: clicking the row "×" took **57 → 56 with no confirm dialog and no Undo**. One mis-tap
       permanently destroys a financial record — a forgiveness failure. before→after: show an **Undo toast**
       ("Deleted 'Weekend dinner' · **Undo**", ~6s) — the god-tier pattern (a confirm dialog would add
@@ -5585,7 +5585,7 @@ the screenshot. Bars measured as `div-bar` (no role) — accurate.
       a restore action → a toast with Undo. **Build ONE shared undo mechanism** for single delete +
       bulk delete/recategorize/clear (ties **L25**). (`internal/screens/transactions.go` `del`/`bulkDelete`
       + `internal/appstate`.)
-- [ ] **Mobile: all 50 row controls are <40px** (measured) and the per-row **Edit sits right next to the
+- [x] **Mobile: all 50 row controls are <40px** (measured) and the per-row **Edit sits right next to the
       delete ×** — small + adjacent makes accidental deletes likely, compounding the no-undo gap. Enforce
       ≥44px hit areas and/or collapse row actions into an overflow (⋯) menu on mobile (ties **L11**,
       **L25**). (`transactions.go` `TransactionRow` action buttons.)
@@ -5610,7 +5610,7 @@ common. **Drive script:** `e2e/loopstory_37_accounts_ux.mjs`.
   no overflow. ✓
 
 **God-tier UX gaps (verified):**
-- [ ] **HEADLINE: add-account is a 9-field wall with no progressive disclosure.** Measured 9 visible
+- [x] **HEADLINE: add-account is a 9-field wall with no progressive disclosure.** Measured 9 visible
       fields (Name, Type, Owner, Currency, Opening balance, **Return %, Liquidity (1–5), Stability (1–5),
       Locked-until**, date) and **no advanced toggle**. "I just opened a savings account" needs ~3 (Name,
       Type, Opening balance). before→after: show **Name · Type · Opening balance** up front (+ **Currency**
@@ -5622,7 +5622,7 @@ common. **Drive script:** `e2e/loopstory_37_accounts_ux.mjs`.
       English, no jargon"). Even once disclosed, relabel with plain English + a one-line hint, e.g.
       Liquidity → "How fast can you get this money? (1 locked … 5 instant)". (`accounts.go` labels + the
       i18n strings.)
-- [ ] *(Minor)* **Currency field shows for a single-currency household** — hide it unless the user has
+- [x] *(Minor)* **Currency field shows for a single-currency household** — hide it unless the user has
       >1 currency (ties FX/L4); one less field for the 99% case.
 
 **Probe note:** field count (9) + no-advanced-toggle measured directly; the jargon labels
@@ -5642,11 +5642,11 @@ contributing must be frictionless. **Drive script:** `e2e/loopstory_38_goals_ux.
 - Mobile: no overflow. Completion shows "Complete 🎉" (L20). ✓
 
 **God-tier UX polish (this flow is close — small lifts):**
-- [ ] **Add-goal: 6 fields up front** (Name, Target, **Saved so far**, **Owner**, **Linked account**,
+- [x] **Add-goal: 6 fields up front** (Name, Target, **Saved so far**, **Owner**, **Linked account**,
       Target date). Lead with **Name · Target · Target date**; tuck the three optional/defaulted fields
       (Saved-so-far=0, Owner=group, Linked account) behind a **"More options"** expander. Same pattern as
       L37 (accounts) — milder here. (`internal/screens/goals.go` add-form.)
-- [ ] **Delight on contribute.** Contributing is an emotional win — the progress bar should **animate the
+- [x] **Delight on contribute.** Contributing is an emotional win — the progress bar should **animate the
       fill** on contribute, and crossing a milestone (25/50/75%) deserves a subtle moment (today only
       100% celebrates, L20). Bottom-up: a CSS width transition on the goal `.bar` fill + a one-shot
       milestone toast keyed on crossing a threshold (pure `goals.MilestoneCrossed(before,after)`, tested).
@@ -5755,7 +5755,7 @@ Groceries spend.
 
 **Mechanical gaps:**
 
-- [ ] **No "one budget per category" guard.** The sample dataset ships with a "Groceries" budget
+- [x] **No "one budget per category" guard.** The sample dataset ships with a "Groceries" budget
   (`$520/$450`); creating "Monthly Groceries" produces a second budget for the same category and the
   same period window. The two budgets aggregate the same transactions independently, splitting the
   mental model and the summary strip. Result: Sam sees two competing Groceries rows with no warning.
@@ -5780,7 +5780,7 @@ Groceries spend.
   After: a brief toast "Budget added" or a 1–2 s highlight on the newly inserted row.
   (`internal/ui/` toast system, or a flash CSS class on the inserted card.)
   Close-out: re-screenshot after implementing; confirm toast/highlight visible.
-- [ ] **"Roll unused funds into the next period" label is truncated on the add row.** The checkbox
+- [x] **"Roll unused funds into the next period" label is truncated on the add row.** The checkbox
   label wraps inside a narrow column at 1280 × 900 and the copy is long ("Roll unused funds into the
   next period"). On smaller viewports it clips. The label should be shortened to "Roll over unused
   funds" (9 words → 4) with a `title` tooltip for the full description.
@@ -5844,7 +5844,7 @@ All 29 checks pass; exit code 0.
 
 **Mechanical gaps:**
 
-- [ ] **CONFIRMED DECOUPLED: "Contribute" is a silent progress bump — it does NOT balance against
+- [x] **CONFIRMED DECOUPLED: "Contribute" is a silent progress bump — it does NOT balance against
   the linked account (C51 gap).** `contribute()` in `internal/screens/goals.go` (line 177) only
   mutates `Goal.CurrentAmount` and calls `app.PutGoal`. No transaction is created, no account
   balance is debited. After contributing $200 to the goal linked to "Emergency Savings (HYSA)",
@@ -5862,7 +5862,7 @@ All 29 checks pass; exit code 0.
   is set, contribution remains memo-only with an explicit "not tracked against any account" notice.
   (`internal/screens/goals.go` `contribute` func; `internal/goals` service; `internal/domain.Goal`
   may need `CurrentAmount` to become a computed field over linked transactions.)
-- [ ] **No "Goal name is required" guard.** The Name input (`#goal-add`) has no `aria-required` and
+- [x] **No "Goal name is required" guard.** The Name input (`#goal-add`) has no `aria-required` and
   no client-side guard; submitting with a blank name creates an unnamed goal row. Before: empty name
   → unnamed goal. After: treat Name as required (`aria-required="true"` + errMsg path matching the
   Target validation). (`internal/screens/goals.go` `add` handler before `app.PutGoal`.)
@@ -5876,7 +5876,7 @@ All 29 checks pass; exit code 0.
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **"Linked account (optional)" select label is truncated in the add form.** At 1280 × 900 the
+- [x] **"Linked account (optional)" select label is truncated in the add form.** At 1280 × 900 the
   linked-account select only shows `"Emergency Saving…"` — the account name is cut off by column
   width. The field label above it also reads `"Linked account (optional)"` which is long; the select
   itself is constrained to the same column width as the other fields in the single-row form layout.
@@ -5884,7 +5884,7 @@ All 29 checks pass; exit code 0.
   After: widen the linked-account column or shorten the label to `"Linked account"` with the
   optional hint in a `title`/`aria-describedby`; add `title` to the select itself so the full name
   is visible on hover. Close-out: re-screenshot at 1280 px confirming full name visible.
-- [ ] **Add form does not reset after submit.** After submitting the goal, the Name and Target inputs
+- [x] **Add form does not reset after submit.** After submitting the goal, the Name and Target inputs
   clear (correct), but Target date retains `12/01/2026` and Linked account retains `Emergency
   Savings (HYSA)`. If Cam immediately adds a second goal for a different purpose he must re-clear
   both fields. The partial reset is inconsistent. Screenshot: `loop41-03-after-add-goal.png` (add
@@ -5956,7 +5956,7 @@ All 28 checks pass; exit code 0.
 
 **Mechanical gaps:**
 
-- [ ] **NO inline category creation from the transaction form — forced detour to /categories
+- [x] **NO inline category creation from the transaction form — forced detour to /categories
   (basic-usage probe).** There is no "+" or "Add new category" affordance anywhere in the
   /transactions add form. A user who realizes mid-entry that their desired category does not exist
   must: (1) abandon or memorize the transaction they were entering, (2) navigate to /categories,
@@ -5968,7 +5968,7 @@ All 28 checks pass; exit code 0.
   to create the category in place, then auto-selects it on save. (`internal/screens/transactions.go`
   category select area; `internal/screens/categories.go` form logic reusable as a sub-component.)
 
-- [ ] **Kind select does NOT reset after category add.** After submitting the add form, the Name
+- [x] **Kind select does NOT reset after category add.** After submitting the add form, the Name
   field clears (correct) but the Kind select stays on "expense" — it does not reset to its
   default. If the user immediately adds an Income category next, the kind is already correct by
   coincidence, but if they toggled it to Income and add-then-add, the third add would start on
@@ -6058,7 +6058,7 @@ arithmetic to sidestep pre-existing income figures.
 
 **Mechanical gaps:**
 
-- [ ] **No dedicated Transfer button on /accounts — transfer must be created as a transaction
+- [x] **No dedicated Transfer button on /accounts — transfer must be created as a transaction
   (C52 discoverability gap).** There is no "Transfer" or "Move money" affordance on the /accounts
   page or on individual account rows. Nadia must navigate to /transactions, select Type=Transfer,
   and know to choose From/To accounts — a flow that is not discoverable from the accounts screen.
@@ -6070,7 +6070,7 @@ arithmetic to sidestep pre-existing income figures.
   (`internal/screens/accounts.go` account row actions; `internal/screens/transactions.go` to accept
   URL query params for pre-population.)
 
-- [ ] **CONFIRMED DECOUPLED: Goal Contribute is memo-only — does not debit the linked account
+- [x] **CONFIRMED DECOUPLED: Goal Contribute is memo-only — does not debit the linked account
   (C51 gap, persists from L41).** After the $200 Emergency Fund contribution, Emergency Savings
   (HYSA) balance remained at `$12,200.00` — unchanged. The contribution advances `Goal.CurrentAmount`
   internally but creates no corresponding transaction and debits no account. The goal shows linked
@@ -6083,7 +6083,7 @@ arithmetic to sidestep pre-existing income figures.
   transactions. If no linked account, flag as memo-only with an explicit notice.
   (`internal/screens/goals.go` `contribute` func; `internal/goals` service.)
 
-- [ ] **No "Salary" income sub-category — all salary income falls into "Other income".** The
+- [x] **No "Salary" income sub-category — all salary income falls into "Other income".** The
   transaction category picker for Type=Income offers generic sub-categories (Other income, etc.)
   but no "Salary" or "Wages" option. Nadia's $3,500 salary is categorized as "Other income",
   making it indistinguishable from side-income or one-off windfalls in Reports.
@@ -6091,7 +6091,7 @@ arithmetic to sidestep pre-existing income figures.
   After: add standard sub-categories under Income: Salary, Freelance/Contract, Investment, Rental,
   Benefits, Other. (`internal/store` seed data / default category scheme; `internal/catscheme`.)
 
-- [ ] **"Top up" / "Add funds" action is absent for under-limit budgets.** The Cover button
+- [x] **"Top up" / "Add funds" action is absent for under-limit budgets.** The Cover button
   appears only when a budget is over-limit (it covers the overage). There is no equivalent action
   to proactively add funds to an under-limit budget — e.g. "I want to increase my Groceries
   envelope by $100 for this month." A user who wants to move money into a budget before overspending
@@ -6103,7 +6103,7 @@ arithmetic to sidestep pre-existing income figures.
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **All new transactions auto-tagged `#needs-review` — no way to suppress on confident entry.**
+- [x] **All new transactions auto-tagged `#needs-review` — no way to suppress on confident entry.**
   Every transaction Nadia adds (income, transfer) arrives with the `#needs-review` tag. For a user
   who is confident in her entry (her own salary, her own transfer), the tag is noise that must be
   manually cleared. There is no "Mark as reviewed" shortcut inline at entry time, and no preference
@@ -6114,7 +6114,7 @@ arithmetic to sidestep pre-existing income figures.
   entries. (`internal/screens/transactions.go` add form; `internal/domain.Transaction` `NeedsReview`
   flag default.)
 
-- [ ] **No inline "Transfer" shortcut on Dashboard.** The Dashboard is the entry point for most
+- [x] **No inline "Transfer" shortcut on Dashboard.** The Dashboard is the entry point for most
   payday workflows, but the primary actions (Log income, Transfer, Cover budget, Pay bill) all
   require navigating to their respective screens. A "Quick actions" strip on the Dashboard
   (Log transaction, Transfer, Mark bill paid) would let Nadia run her payday ritual without leaving
@@ -6123,7 +6123,7 @@ arithmetic to sidestep pre-existing income figures.
   After: add a collapsible Quick Actions row to the Dashboard with the 3-4 most common entry points.
   (`internal/screens/dashboard.go`; `internal/widgetcfg` for configurability.)
 
-- [ ] **No success confirmation after bill "Mark paid" action — toast appears only for some bills.**
+- [x] **No success confirmation after bill "Mark paid" action — toast appears only for some bills.**
   The Rent bill showed a toast "Logged a payment for Rent." The Rewards Credit Card bill was marked
   paid with no visible toast or confirmation signal. The inconsistency means some payments feel
   acknowledged and others feel unacknowledged — within the same screen, same action.
@@ -6199,7 +6199,7 @@ computed import sum to probe the adjustment mechanism.
 
 **Mechanical gaps:**
 
-- [ ] **No account selector on the CSV import path — account routing is CSV-column-only,
+- [x] **No account selector on the CSV import path — account routing is CSV-column-only,
   with no UI fallback (C?? new gap).** /documents has no `<select>` or any picker to route
   a pasted CSV import to a specific account. The CSV's own "account" column (name or ID) is
   the sole routing mechanism. A blank "account" column causes `ValidateTransaction` to reject
@@ -6220,7 +6220,7 @@ computed import sum to probe the adjustment mechanism.
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **"Import" submit button is below the viewport fold and ambiguous with the nav toggle.**
+- [x] **"Import" submit button is below the viewport fold and ambiguous with the nav toggle.**
   On a 900px-tall viewport, the "Import" button on /documents is at y=944px — below the
   fold and not visible without scrolling. A nav group button labeled "DATA & IMPORT" exists
   in the sidebar at a similar label, so a Playwright `button:has-text("Import")` click hits
@@ -6230,7 +6230,7 @@ computed import sum to probe the adjustment mechanism.
   collapsing the description text; or provide a sticky/floating submit affordance.
   Screenshot: `l44_step3_documents_before.png` (Import button outside 900px viewport).
 
-- [ ] **Reconcile "Update balance" Save button is inside the form that wraps the entire
+- [x] **Reconcile "Update balance" Save button is inside the form that wraps the entire
   accounts list — `input.closest("form")` matches the Add-account form, not the reconcile
   form.** The inline reconcile form renders as a `<form>` within the account row, but the
   DOM nesting means a naive `closest("form")` from the "New balance" input walks up to the
@@ -6340,7 +6340,7 @@ E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_45_month_end_close.mjs
   (`internal/screens/dashboard.go` `budgetsWidget` — pass `start, end` from the caller's
   period window rather than computing `MonthRange(time.Now())` locally.)
 
-- [ ] **Period window is NOT persisted to localStorage — only the resolution is.**
+- [x] **Period window is NOT persisted to localStorage — only the resolution is.**
   `uistate.PersistResolution` writes only the `period.Resolution` (Month/Week/Quarter/Year)
   to localStorage; the selected window (From/To anchors = e.g. May 2026) is transient
   in-memory state. On any hard navigation (full page reload or direct URL entry), the
@@ -6358,7 +6358,7 @@ E2E_URL=http://127.0.0.1:8099 node e2e/loopstory_45_month_end_close.mjs
 
 **UI/UX defects (screenshot-confirmed):**
 
-- [ ] **Export CSV filename is `spending-by-category.csv` with no period marker — all
+- [x] **Export CSV filename is `spending-by-category.csv` with no period marker — all
   exports collide (C?? new gap).** `internal/screens/reports_screen.go:381` hardcodes
   `downloadBytes("spending-by-category.csv", ...)`. If Priya exports May and June reports,
   both download as `spending-by-category.csv`; her browser silently saves
@@ -7566,16 +7566,16 @@ The reconcile mechanism is sound: it posts a real ledger entry, does not force-w
 balance, and the adjustment flows into net worth. This is a Thread A regression anchor.
 
 **Mechanical gaps** (bottom-up: model → logic → UI)
-- [ ] **No delta preview before saving** (L30 gap, still open): The "Update balance" form shows only
+- [x] **No delta preview before saving** (L30 gap, still open): The "Update balance" form shows only
       a "New balance" field; it does not display "current $710.00 → new $1,115.00 = **+$405.00
       adjustment**" before the user hits Save. The delta is computed in `ledger.AdjustmentToTarget`
       and could be surfaced inline. Bottom-up: thread the current balance into the form and render the
       computed delta.
-- [ ] **Adjustment is uncategorized** (L30 gap, still open): The adjustment transaction lands as
+- [x] **Adjustment is uncategorized** (L30 gap, still open): The adjustment transaction lands as
       generic "Balance adjustment" with no category, skewing spending/reports. Add an optional
       category/note field to the Update Balance form; pass it to the adjustment txn. Bottom-up: extend
       the `setBalance` handler signature; add a category selector to the inline form.
-- [ ] **No guided statement reconciliation (tick-off mode)** (L30 gap, still open): True reconcile =
+- [x] **No guided statement reconciliation (tick-off mode)** (L30 gap, still open): True reconcile =
       check off each txn on the bank statement until cleared-balance == statement balance (no
       adjustment needed). The pieces exist (`Cleared` flag, `ClearedBalance`), but there is no
       "Reconcile to statement" UI mode. Bottom-up: `reconcile.Diff(clearedTxns, statementBalance)`
@@ -7687,7 +7687,7 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
 
 **Mechanical gaps** (model → logic+tests → persistence → state → UI → e2e)
 
-- [ ] **No drill-through from /reports category row to /transactions (FILTER_CARRY gap, C??).** 
+- [x] **No drill-through from /reports category row to /transactions (FILTER_CARRY gap, C??).** 
   On the "Spending by category" section of /reports, clicking a category name does nothing — there
   is no link or button that navigates to /transactions pre-filtered to that category for the viewed
   period. Priya cannot click "Medical" on the annual report and land in /transactions filtered to
@@ -7698,13 +7698,13 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
   `softNav("/transactions?cat=<id>")` and sets `TxFilter{Category: catID}` + period atom before
   navigating. This is the same FILTER_CARRY affordance confirmed in L45 via the /budgets drill.
 
-- [ ] **Annual period is NOT persisted to localStorage (L45 gap, still open).**
+- [x] **Annual period is NOT persisted to localStorage (L45 gap, still open).**
   `uistate.PersistResolution` persists only the resolution (Year), not the From/To anchors.
   A hard reload resets to the current year (2026), losing the 2025 selection. Priya cannot
   share a direct URL to the 2025 annual report or reload mid-session. Identical to L45 gap.
   (`internal/uistate/period.go` — persist window anchors alongside resolution.)
 
-- [ ] **Recategorize-then-reports round-trip did not update category totals in probe.**
+- [x] **Recategorize-then-reports round-trip did not update category totals in probe.**
   After recategorizing "L58 Charity MISLABELED" from Groceries to Gifts & Charity, /reports
   still showed Groceries at $13,359.74 (unchanged). This may indicate: (a) the seeded
   transaction used a different category ID than the reports page aggregates by (category IDs
@@ -7712,7 +7712,7 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
   do not react to a mid-session recategorize without full reload (RECAT_UPDATES gap). 
   Inconclusive — requires further investigation with exact category ID tracing.
 
-- [ ] **No tax-deductible flag / "Deductible totals" section on /reports (L16 gap, still open).**
+- [x] **No tax-deductible flag / "Deductible totals" section on /reports (L16 gap, still open).**
   L16 identified that the tax-prep story needs a "Deductible totals" section (medical, charity,
   home-office flagged as deductible) and a dedicated annual tax-summary export. Neither exists.
   The user must manually identify relevant categories from the generic by-category table.
@@ -7720,7 +7720,7 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
   (3) a "Deductible" section on /reports with per-category amounts + combined total; (4) export
   with a separate Deductible column or a filtered "Deductible only" CSV.
 
-- [ ] **No "prior year" preset in the Jump To select (C?? new gap).**
+- [x] **No "prior year" preset in the Jump To select (C?? new gap).**
   The preset select offers: This period / Last period / This quarter / Year to date. There is no
   "Prior year" option. The annual review ritual requires: click "Year" segment → click "‹" twice.
   A "Prior year" preset would reduce this to one action, directly serving the tax-prep workflow.
@@ -7729,16 +7729,16 @@ with no way to tell which year is which. Cross-reference L45 EXPORT_FILENAME gap
 
 **UI/UX defects** (screenshot-confirmed)
 
-- [ ] **EXPORT_FILENAME: annual export gets no year stamp — tax-season exports collide.**
+- [x] **EXPORT_FILENAME: annual export gets no year stamp — tax-season exports collide.**
   See top violation above. Screenshot: `l58_06a_reports_before_export.png` (period "2025" in pill,
   export button visible); `l58_06b_reports_after_export.png` (post-download, no feedback).
 
-- [ ] **No category-row drill affordance visible in /reports by-category table.**
+- [x] **No category-row drill affordance visible in /reports by-category table.**
   Category names in the spending-by-category section are plain text with no visual cue that they
   are clickable. The L45 /budgets drill is a link — /reports should match that pattern. Screenshot:
   `l58_02_reports_annual.png` (category table, no drill links visible).
 
-- [ ] **MONEY_CONSERVATION probe gap: sub-category rows are rendered in the by-category table
+- [x] **MONEY_CONSERVATION probe gap: sub-category rows are rendered in the by-category table
   alongside their parents, causing double-counting in plain-text sum.**
   The reports page renders "Housing" + "Rent" (its child) as separate rows; summing all rows
   gives $109,165 vs reported $82,915 (31.7% diff). The headline expense stat is computed
@@ -7847,7 +7847,7 @@ Thread A for the bottom-up fix spec (PostToLedger path). This remains unfixed si
 
 **Mechanical gaps** (bottom-up: model → logic+tests → persistence → state → UI → e2e)
 
-- [ ] **COMPLETION_FIRES: Contribute mutation does not persist — `PutGoal` flush path broken.**
+- [x] **COMPLETION_FIRES: Contribute mutation does not persist — `PutGoal` flush path broken.**
   `contribute` in `internal/screens/goals.go` line 198–200 sets `g.CurrentAmount` then calls
   `app.PutGoal(g)`. The change does not appear in localStorage after submit. Either `PutGoal` does
   not call `SetDataset`, or the form submit re-renders from stale in-memory state before the flush.
@@ -7855,24 +7855,24 @@ Thread A for the bottom-up fix spec (PostToLedger path). This remains unfixed si
   updates; (2) trace the `PutGoal` call chain in `internal/appstate/` to confirm it ends in a
   `SetDataset(d)` call that writes to localStorage; (3) if async, add a synchronous flush gate.
 
-- [ ] **ACCOUNT_DECOUPLED: Contribute does not post to central ledger (L41 C51, L56 Thread A).**
+- [x] **ACCOUNT_DECOUPLED: Contribute does not post to central ledger (L41 C51, L56 Thread A).**
   See L56 Thread A bottom-up fix spec. Contribute must produce a `Transaction` that debits the
   linked account, not just bump `Goal.CurrentAmount`.
 
-- [ ] **Overfunding UI: surplus signal fires but % render is unclear.**
+- [x] **Overfunding UI: surplus signal fires but % render is unclear.**
   After overfund, "surplus" keyword appears but no % (neither 100% nor >100%) is visible in the
   page text. Whether `goalsvc.Percent` caps at 100 or returns >100 for overfunded goals is unclear.
   Inspect `goalsvc.Percent` and `barFillStyle` for amounts > target, confirm the bar caps at 100%
   and a surplus line (e.g. "Surplus: $10.00") is rendered. Screenshot: `l59_03_overfund_result.png`.
 
-- [ ] **Goal completion badge / toast is silent (L41 no-success-toast gap, L56 Thread C).**
+- [x] **Goal completion badge / toast is silent (L41 no-success-toast gap, L56 Thread C).**
   No toast, badge, or row highlight signals 100% completion. The bar changes color on complete
   (`var(--up)`) but no semantic "Goal achieved!" signal fires.
   After: brief toast "L59 New Laptop — goal reached!" or an "Achieved" badge on the row.
 
 **UI/UX defects** (screenshot-confirmed + named file)
 
-- [ ] **No "Mark as achieved" / auto-archive prompt after goal reaches 100%.**
+- [x] **No "Mark as achieved" / auto-archive prompt after goal reaches 100%.**
   After the full lifecycle (contribute → spend), the goal remains in the active list with no
   completion marker and no prompt to move it to "Achieved". `barFillStyle` changes color but
   the semantic lifecycle does not advance. Screenshot: `l59_08_goals_final_state.png`.
@@ -7880,7 +7880,7 @@ Thread A for the bottom-up fix spec (PostToLedger path). This remains unfixed si
   with an undo option. Close-out: re-screenshot showing "Achieved" section with the goal and a
   completion date.
 
-- [ ] **L59 Aaliyah Savings account not available in /goals linked-account select until reload.**
+- [x] **L59 Aaliyah Savings account not available in /goals linked-account select until reload.**
   In the first probe run (before hard-navigating back to /goals), the newly added account was absent
   from the Linked account select. After navigating away and back, it appears. The Linked account
   select appears to read from a snapshot loaded at component mount, not a reactive atom.
