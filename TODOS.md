@@ -20557,6 +20557,8 @@ gb(28,28,30) (dark, visible). **GX11-F2 (transparent cards) and GX11-F3
 
 # GX11. Dashboard re-check (post-fixes) — "The 7am Glance, Revisited" — 2026-06-23 ★
 
+✅ RESOLVED (2026-06-23). GX11-F1 alert-chip bg, F2 widget-card surface (light), F3 light-mode widget title, F4 bento padding, F5 light critical-chip tint — CSS shipped (code live on origin; block restored after a rebase dropped it).
+
 ## The story
 
 The dashboard is the highest-traffic screen — the first thing a user sees every morning. After GX1
@@ -20851,6 +20853,8 @@ Priority order for the next fix pass:
 
 
 # GX12. Transactions re-check (post-fixes) — "The Reconciler, Revisited" — 2026-06-23 ★
+
+✅ RESOLVED (2026-06-23). F1 uniform row height (min-height: 44px + padding-block bump), F2 zebra striping (already at correct alpha: rgba(255,255,255,0.055) dark / rgba(0,0,0,0.04) light — confirmed), F3 actions column capped to 96px — CSS shipped. F4 (sort-caret DOM absence) deferred to GX6-F2.
 
 ## The story
 

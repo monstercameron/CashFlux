@@ -550,12 +550,18 @@
       .txn-table tr { display: table-row; }                 /* override the legacy .row flex */
       /* Denser rows for a scan-heavy ledger (G2 §2): tighter vertical padding lifts
          visible row count toward the 15–20 target. */
-      .txn-table tbody td { padding: 0.28rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      /* GX12-F1: row height varied (42px@1440 vs 50px@1280/768) because the description/amount
+         columns drove height differently at each viewport. A uniform min-height on the row and
+         matching padding-block on every cell floors all rows at ~44px regardless of column width. */
+      .txn-table tbody tr.row { min-height: 44px; }
+      .txn-table tbody td { padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
       .txn-table tbody tr.selected { background: var(--accent-dim); }
       /* Zebra striping + themed hover (G2 §3): alternating tint + a clear hover band
          so the eye doesn't lose its place across the columns. */
-      .txn-table tbody tr.row:nth-child(even) { background: rgba(255,255,255,0.03); }
-      [data-theme="light"] .txn-table tbody tr.row:nth-child(even) { background: rgba(0,0,0,0.025); }
+      /* GX12-F2: zebra alpha was below the perceptibility threshold (3% dark / 2.4% light).
+         Bump slightly so rows are scannable without becoming stripey. */
+      .txn-table tbody tr.row:nth-child(even) { background: rgba(255,255,255,0.055); }
+      [data-theme="light"] .txn-table tbody tr.row:nth-child(even) { background: rgba(0,0,0,0.04); }
       /* GX3-D2: the DataTable stayed dark-on-dark in light (runtime vars resolved to the
          dark palette in the table context, outranking var(--bg)/(--text)). Pin light
          surfaces + text with !important, matching the GX1 shell pattern. */
@@ -573,7 +579,9 @@
       /* Actions collapse to an icon strip (G2 §1): compact square buttons, labels
          live in title/aria — no more 560px text-button sprawl. */
       .txn-table .td-actions .btn-icon { padding: 0.2rem 0.35rem; min-height: 0; }
-      .txn-table .td-actions { white-space: nowrap; text-align: right; }
+      /* GX12-F3: actions column measured 168–170px — oversized for 2–3 icon-only buttons.
+         Cap it to 96px so the ledger reclaims that space for data columns. */
+      .txn-table .td-actions { white-space: nowrap; text-align: right; width: 96px; max-width: 96px; }
       /* Cleared toggle (G2 §5): a ✓/○ status glyph, green when cleared. */
       .txn-table .clr-toggle { background: transparent; border: 0; cursor: pointer; font-size: 1.05rem; line-height: 1; color: var(--text-faint); width: 1.6rem; }
       .txn-table .clr-toggle.is-cleared { color: var(--accent); font-weight: 700; }
