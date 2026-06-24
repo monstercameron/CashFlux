@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART series: Accounts rule engines (the first Free features)
+
+Built `internal/smartengine` — the deterministic engine layer — and the five Accounts rule engines.
+Design choices worth recording: (1) Engines are pure `func(Input) []smart.Insight` registered by code
+in `init()`, and `register()` *panics* on an unknown/non-Free/duplicate code, so a wiring mistake
+fails loudly in tests rather than silently doing nothing. (2) `Run` iterates only `Settings.EnabledCodes()`
+— the off-features-cost-nothing guarantee is structural, not a runtime check sprinkled through the
+UI. (3) Every engine reuses an existing tested engine (`ledger.Balance`, `runway.Project`,
+`subscriptions.Detect`) — the SMART layer adds *judgment and a sentence*, never new arithmetic, so
+there's one source of truth for the numbers. (4) Insight `Key`s are built from the feature code + a
+stable subject (account id, or +month for the anomaly so a new month re-surfaces it) so a dismissal
+sticks across recompute without freezing a genuinely new event.
+
+Thresholds (dormant 6mo, anomaly 3×, $1k/1pp cash-positioning floors, 60-day overdraft horizon) are
+named constants at the top of `accounts.go` so they're visible and tunable, and the tests assert both
+the trigger and the just-below-threshold non-trigger for each.
+
+**Next.** Keep going through the Free engines page by page (Bills BL2/BL3/BL7…, Transactions T2/T6/T7…,
+Goals, Budgets, Subscriptions, Planning, Allocate, To-dos), then build the shared Smart UI surface +
+`Settings` persistence, then the AI features behind the provider gate, then e2e.
+
 ## 2026-06-24 — SMART series kickoff: the foundation under all per-page intelligence
 
 Starting the full SMART series (the ~84-item per-page Smart/AI backlog). The owner's directive:
