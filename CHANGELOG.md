@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engines D1, P5, BL1 (2026-06-24):** **D1** auto-generated to-dos (turns a backlog of recent uncategorized transactions into a one-tap to-do); **P5** goal-aware forecast overlay (how much the active goals consume monthly and the net left after); **BL1** predicted amount for variable bills (averages a varying biller's recent charges to estimate the next one). 48 Free engines total. Table-driven tests.
+
 - **SMART series — 6 more Free engines: G3, P6, P9, SU6, SU8, BL4 (2026-06-24):** **G3** auto-allocate surplus to goals; **P6** forecast confidence band (±swing from trailing monthly-net range); **P9** break-even spending threshold; **SU6** per-subscription cost-creep history; **SU8** forgotten-since (stale subscription) surfacing; **BL4** autopay reconciliation (a payment near the due date marks a bill auto-paid). 45 Free engines total. Table-driven tests.
 
 - **SMART series — Free engines G15 + SU11 (2026-06-24):** **G15 Debt-payoff optimizer** reuses payoff.BuildPlan to compare avalanche vs snowball total interest and surfaces the interest saved by paying the highest-APR debt first. **SU11 Zombie-charge detection** flags small ($226410/mo), long-running (6+ periods) recurring charges that are easy to forget. 39 Free engines total. Table-driven tests.

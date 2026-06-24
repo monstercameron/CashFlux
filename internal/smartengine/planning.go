@@ -16,10 +16,45 @@ import (
 func init() {
 	register("SMART-P1", p1DiscoverRecurring)
 	register("SMART-P4", p4Affordability)
+	register("SMART-P5", p5GoalOverlay)
 	register("SMART-P6", p6ConfidenceBand)
 	register("SMART-P8", p8ExtraDebt)
 	register("SMART-P9", p9BreakEven)
 	register("SMART-P10", p10BillShock)
+}
+
+// SMART-P5 — Goal-aware forecast overlay. Shows how much funding the active
+// goals consumes each month and the net that's left after — reconciling the
+// forecast with the goals in one figure.
+func p5GoalOverlay(in Input) []smart.Insight {
+	needs := in.goalMonthlyNeedsBase()
+	if needs <= 0 {
+		return nil
+	}
+	income, expense := in.trailingMonthly()
+	net := income - expense
+	after := net - needs
+	detail := "Your active goals need about " + in.baseMoney(needs).Format(2) + "/mo. "
+	if after >= 0 {
+		detail += "After funding them your typical net stays positive at about " + in.baseMoney(after).Format(2) + "/mo."
+	} else {
+		detail += "After funding them your typical net is about " + in.baseMoney(after).Format(2) +
+			"/mo — the goals outpace your surplus, so something has to give."
+	}
+	sev := smart.SeverityInfo
+	if after < 0 {
+		sev = smart.SeverityWarn
+	}
+	ins := smart.Insight{
+		Feature:  "SMART-P5",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P5:" + in.Now.Format("2006-01"),
+		Title:    "Goals consume " + in.baseMoney(needs).Format(2) + "/mo of your forecast",
+		Detail:   detail,
+		Severity: sev,
+	}.WithAmount(in.baseMoney(needs)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
 }
 
 const (

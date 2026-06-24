@@ -3,6 +3,8 @@
 package smartengine
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/bills"
@@ -18,10 +20,84 @@ func init() {
 	register("SMART-BL2", bl2CanCover)
 	register("SMART-BL3", bl3MissedBill)
 	register("SMART-BL6", bl6LateFeeRisk)
+	register("SMART-BL1", bl1PredictVariable)
 	register("SMART-BL4", bl4Autopay)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
 	register("SMART-BL13", bl13StatementClarity)
+}
+
+const (
+	bl1MinCharges = 3     // need this many charges to predict
+	bl1MinAmount  = 20_00 // ignore trivial billers
+)
+
+// SMART-BL1 — Predicted amount for variable bills. For a biller whose charges
+// vary month to month (utilities, statements), predicts the next amount from the
+// recent average so the upcoming list shows a real estimate, not the minimum.
+func bl1PredictVariable(in Input) []smart.Insight {
+	type charge struct {
+		date   time.Time
+		amount int64 // base minor, magnitude
+	}
+	byMerchant := map[string][]charge{}
+	labels := map[string]string{}
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		label := txnLabel(t)
+		key := strings.ToLower(strings.TrimSpace(label))
+		if key == "" {
+			continue
+		}
+		byMerchant[key] = append(byMerchant[key], charge{date: t.Date, amount: abs64(in.toBaseMinor(t.Amount.Amount, t.Amount.Currency))})
+		labels[key] = label
+	}
+	var out []smart.Insight
+	for key, charges := range byMerchant {
+		if len(charges) < bl1MinCharges {
+			continue
+		}
+		sort.Slice(charges, func(i, j int) bool { return charges[i].date.Before(charges[j].date) })
+		// Variable means the amounts aren't all identical.
+		min, mx := charges[0].amount, charges[0].amount
+		for _, c := range charges {
+			if c.amount < min {
+				min = c.amount
+			}
+			if c.amount > mx {
+				mx = c.amount
+			}
+		}
+		if min == mx {
+			continue // fixed bill — the minimum/recurring amount already covers it
+		}
+		// Predict from the last 3 charges.
+		last3 := charges
+		if len(last3) > 3 {
+			last3 = last3[len(last3)-3:]
+		}
+		var sum int64
+		for _, c := range last3 {
+			sum += c.amount
+		}
+		pred := sum / int64(len(last3))
+		if pred < bl1MinAmount {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-BL1",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL1:" + key,
+			Title:   labels[key] + ": about " + in.baseMoney(pred).Format(2) + " expected",
+			Detail: labels[key] + " varies; its last " + plural(int64(len(last3)), "charge") + " averaged " +
+				in.baseMoney(pred).Format(2) + " (range " + in.baseMoney(min).Format(2) + "–" + in.baseMoney(mx).Format(2) + ").",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(in.baseMoney(pred)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
+	}
+	return out
 }
 
 // SMART-BL4 — Autopay reconciliation. When a liability's most recent due date has

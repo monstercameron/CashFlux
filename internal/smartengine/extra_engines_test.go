@@ -331,7 +331,7 @@ func TestSU6CostCreep(t *testing.T) {
 }
 
 func TestSU8Forgotten(t *testing.T) {
-	in := baseInput() // now June 15
+	in := baseInput()                                                   // now June 15
 	in.Transactions = monthlyCharges("OldGym", -3000, time.February, 4) // last charge Feb → stale
 	if got := su8Forgotten(in); len(got) != 1 {
 		t.Fatalf("want 1 forgotten insight, got %d: %+v", len(got), got)
@@ -350,6 +350,74 @@ func TestBL4Autopay(t *testing.T) {
 	}
 	if got[0].Severity != smart.SeverityInfo {
 		t.Errorf("autopay should be info, got %v", got[0].Severity)
+	}
+}
+
+func TestD1AutoTodos(t *testing.T) {
+	in := baseInput()
+	var txns []domain.Transaction
+	for i := range 5 {
+		txns = append(txns, domain.Transaction{ID: "u" + itoa64(int64(i)), AccountID: "x",
+			Date: ref.AddDate(0, 0, -i), Amount: usd(-1000), Desc: "Misc"}) // no CategoryID
+	}
+	in.Transactions = txns
+	got := d1AutoTodos(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 todo nudge, got %d: %+v", len(got), got)
+	}
+	if got[0].Action == nil || got[0].Action.Kind != smart.ActionCreateTask {
+		t.Errorf("expected a create-task action")
+	}
+}
+
+func TestD1SkipsWhenFewUncategorized(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "u", AccountID: "x", Date: ref, Amount: usd(-1000), Desc: "Misc"},
+	}
+	if got := d1AutoTodos(in); len(got) != 0 {
+		t.Errorf("below threshold — want 0, got %d", len(got))
+	}
+}
+
+func TestP5GoalOverlay(t *testing.T) {
+	in := baseInput().withBaseline(500000, 300000)
+	due := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{goal("g", "Car", 300000, 0, due)} // needs ~$1000/mo
+	got := p5GoalOverlay(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 overlay insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 100000 {
+		t.Errorf("monthly need = %d, want 100000", got[0].Amount.Amount)
+	}
+}
+
+func TestBL1PredictVariable(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "e1", AccountID: "x", Date: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-12000), Desc: "Electric"},
+		{ID: "e2", AccountID: "x", Date: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-14000), Desc: "Electric"},
+		{ID: "e3", AccountID: "x", Date: time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-16000), Desc: "Electric"},
+	}
+	got := bl1PredictVariable(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 prediction, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 14000 { // mean of 120/140/160
+		t.Errorf("predicted = %d, want 14000", got[0].Amount.Amount)
+	}
+}
+
+func TestBL1SkipsFixedBill(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "r1", AccountID: "x", Date: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-15000), Desc: "Rent"},
+		{ID: "r2", AccountID: "x", Date: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-15000), Desc: "Rent"},
+		{ID: "r3", AccountID: "x", Date: time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-15000), Desc: "Rent"},
+	}
+	if got := bl1PredictVariable(in); len(got) != 0 {
+		t.Errorf("fixed bill — want 0, got %d", len(got))
 	}
 }
 
