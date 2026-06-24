@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -288,13 +289,49 @@ type smartAIControlProps struct {
 // the answer area. Its own component so the state hooks sit at stable positions.
 func smartAIControl(props smartAIControlProps) ui.Node {
 	question := ui.UseState("")
+	settings := uistate.LoadSmartSettings()
 	// Seed the answer from the cached last result so a manual/scheduled run
 	// persists across navigation and reloads without re-spending.
-	answer := ui.UseState(uistate.LoadSmartSettings().ResultFor(props.Code))
+	answer := ui.UseState(settings.ResultFor(props.Code))
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 
 	onInput := ui.UseEvent(func(v string) { question.Set(v) })
+
+	// Scheduled auto-run: a non-Manual/Live button-type AI feature runs itself
+	// once per due window. The run stamps LastRun BEFORE the call, so the effect's
+	// deps key (which embeds LastRun) changes and it cannot re-enter within the
+	// window — at most one paid call per schedule period. Input features and
+	// Manual/Live cadences never auto-run (click-before-run).
+	cad := settings.CadenceFor(props.Code)
+	last := settings.LastRunAt(props.Code)
+	autoKey := "smartauto|" + props.Code + "|" + string(cad) + "|" + strconv.FormatInt(last.Unix(), 10)
+	ui.UseEffect(func() func() {
+		if props.Spec.input || cad == smart.CadenceManual || cad == smart.CadenceLive {
+			return nil
+		}
+		if loading.Get() || !cad.Due(last, time.Now(), false, false) {
+			return nil
+		}
+		app := appstate.Default
+		if app == nil {
+			return nil
+		}
+		uistate.MarkSmartRun(props.Code, time.Now()) // guard re-entry before the call
+		req := props.Spec.build(app, "")
+		loading.Set(true)
+		errMsg.Set("")
+		runSmartAI(props.Conn, req,
+			func(text string) {
+				t := strings.TrimSpace(text)
+				loading.Set(false)
+				answer.Set(t)
+				uistate.SetSmartResult(props.Code, t, time.Now())
+			},
+			func(e string) { loading.Set(false); errMsg.Set(e) },
+		)
+		return nil
+	}, autoKey)
 
 	run := ui.UseEvent(func() {
 		if loading.Get() {
