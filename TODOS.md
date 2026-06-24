@@ -23744,6 +23744,15 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
 
 ## 0. Foundation & tooling (Phase 0)
 
+> ⚠️ OPS NOTE (2026-06-24) — if the app shows only the boot splash (blank `#app`, console
+> "Refused to execute wasm_exec.js (MIME text/plain)" + "WebAssembly compile: status not ok"),
+> the git-ignored build artifacts `web/wasm_exec.js` and/or `web/bin/main.wasm` are missing
+> (a concurrent `git pull --rebase`/clean wiped them this session). Restore:
+> `cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js` and rebuild
+> `GOOS=js GOARCH=wasm go build -o web/bin/main.wasm .`. Done + verified 2026-06-24 (app boots
+> ~3s, dashboard renders 17 cards, 0 console errors). NB: the wasm is ~60MB (≈2-3× normal) due to
+> the in-flight Cloud-sync changeset — worth a size audit once that work lands.
+
 - [x] Install toolchain (Go 1.26.4, Git, GitHub CLI) on PATH
 - [x] Init repo, name project, git on `main`
 - [x] Consume GoWebComponents as a versioned Go module (no local replace)

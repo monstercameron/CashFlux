@@ -12,9 +12,15 @@
 # Design candidates copied into web/ for local preview (canonical copies live in design/)
 /web/design/
 
-# UI/UX review captures (screenshots + rendered text from gwc/Playwright runs)
+# UI/UX review captures (screenshots + rendered text from gwc/Playwright runs).
+# ALL e2e images, any format, any subdirectory — these are throwaway run output,
+# never source (canonical product screenshots live in docs/screenshots/).
 /.review-screenshots/
-/e2e/*.png
+/e2e/**/*.png
+/e2e/**/*.jpg
+/e2e/**/*.jpeg
+/e2e/**/*.gif
+/e2e/**/*.webp
 /e2e/.artifacts/
 /e2e/serve-bin
 /e2e/serve-bin.exe
@@ -32,13 +38,26 @@
 .vscode/
 .claude/
 
-# verification/scratch artifacts (not source)
+# verification/scratch artifacts (not source).
+# node_modules/ matches at any depth, so it covers ./node_modules, .tools/node_modules,
+# and their .bin/ contents.
 node_modules/
 e2e/screenshots/
+# gwc / scratch console dumps (e.g. .gwc_out2.txt, gwc_out.txt, *.gwc_run.txt)
 *.gwc_*.txt
-.gwc_*.txt
+.gwc_*
+gwc_out*.txt
+*_gwc_out*.txt
 e2e/*_output.txt
-/wonder_w*.png
+e2e/*_out.txt
+# Root-level scratch screenshots dumped by verification runs (wonder_*, fix_*, etc.).
+# No legitimate image lives at the repo root — real assets are in web/ and
+# docs/screenshots/ — so ignore every root-level image outright.
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
 
 # Stray root-level wasm build output (build to web/bin/ instead)
 /CashFlux
