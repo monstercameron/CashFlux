@@ -38,6 +38,7 @@ var implemented = map[string]bool{
 	"SMART-SU10": true, // category-benchmark context
 	"SMART-SU13": true, // bundle-opportunity finder
 	"SMART-T10":  true, // smart import field-mapping
+	"SMART-T8":   true, // receipt OCR (vision)
 	"SMART-D4":   true, // natural-language to-do quick-add
 }
 
@@ -255,4 +256,15 @@ const importSystem = "You map CSV columns for a bank-statement import. Given the
 // optionally a sample line).
 func ImportMapping(header string) Request {
 	return Request{System: importSystem, User: "CSV header (and optional sample):\n" + strings.TrimSpace(header)}
+}
+
+// receiptSystem frames SMART-T8: read a receipt image.
+const receiptSystem = "You read receipt images. Extract the merchant name, the date, the total amount, and the main " +
+	"line items. Reply concisely as \"merchant: ... | date: ... | total: ... | items: ...\". Use 'unknown' for any " +
+	"field you can't read."
+
+// ReceiptOCR builds the SMART-T8 vision request's text parts. The image itself is
+// supplied separately to the vision transport by the caller.
+func ReceiptOCR() Request {
+	return Request{System: receiptSystem, User: "Extract the details from this receipt."}
 }

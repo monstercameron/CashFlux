@@ -68,6 +68,9 @@ var smartKeys = Catalog{
 	"smart.bundleBtn":             "Check for bundles",
 	"smart.importTitle":           "Map CSV columns for import",
 	"smart.importPlaceholder":     "paste your CSV header row (e.g. Date,Description,Amount)",
+	"smart.receiptTitle":          "Scan a receipt",
+	"smart.receiptBtn":            "Snap or upload a receipt",
+	"smart.receiptNeedsKey":       "Receipt scanning needs an OpenAI key (vision). Add one in Settings.",
 }
 
 func init() {

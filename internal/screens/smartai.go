@@ -360,6 +360,67 @@ func smartAIControl(props smartAIControlProps) ui.Node {
 	)
 }
 
+// smartReceiptProps carries the T8 receipt-OCR control's config.
+type smartReceiptProps struct {
+	Conn smartAIConn
+	Cost string
+}
+
+// smartReceiptCard is the SMART-T8 control: snap or upload a receipt image and
+// extract its details via the vision model. Its own component for stable hooks.
+func smartReceiptCard(props smartReceiptProps) ui.Node {
+	answer := ui.UseState("")
+	loading := ui.UseState(false)
+	errMsg := ui.UseState("")
+
+	pick := ui.UseEvent(func() {
+		if loading.Get() {
+			return
+		}
+		if props.Conn.Key == "" {
+			errMsg.Set(uistate.T("smart.receiptNeedsKey"))
+			return
+		}
+		pickImageDataURL(func(dataURL string) {
+			req := smartai.ReceiptOCR()
+			model := aiprovider.SmartModelID
+			if _, m, ok := aiprovider.SmartModel(); ok {
+				model = m.ID
+			}
+			loading.Set(true)
+			errMsg.Set("")
+			answer.Set("")
+			ai.SendVisionChat(props.Conn.Key, ai.DefaultBaseURL, model, req.System, req.User, dataURL, 0,
+				func(text string, _ ai.Usage) { loading.Set(false); answer.Set(strings.TrimSpace(text)) },
+				func(e string) { loading.Set(false); errMsg.Set(e) },
+			)
+		})
+	})
+
+	var result ui.Node = Fragment()
+	if errMsg.Get() != "" {
+		result = P(ClassStr(tw.Fold(tw.Text13, tw.TextDown, tw.Mt2)), errMsg.Get())
+	} else if answer.Get() != "" {
+		result = P(ClassStr(tw.Fold(tw.Text14, tw.Mt2)), Attr("data-testid", "smart-receipt-answer"), answer.Get())
+	}
+	btnLabel := uistate.T("smart.receiptBtn")
+	if loading.Get() {
+		btnLabel = uistate.T("smart.asking")
+	}
+
+	return Div(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap2, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
+		Attr("data-testid", "smart-ai-feature-SMART-T8"),
+		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)),
+			Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), uistate.T("smart.receiptTitle")),
+			Span(ClassStr(tw.Fold(tw.Text11, tw.TextFaint)), props.Cost),
+		),
+		Button(ClassStr("btn btn-primary "+tw.Fold(tw.SelfStart)), Type("button"),
+			Attr("data-testid", "smart-receipt-btn"), OnClick(pick), btnLabel,
+		),
+		result,
+	)
+}
+
 // smartAISection renders the enabled, implemented AI features. It is shown only
 // when an inference provider is configured (the AI cost is real, so the gate is
 // honest); otherwise it shows a "configure a provider" hint, never dead controls.
@@ -382,11 +443,14 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 			MapKeyed(enabled,
 				func(f smart.Feature) any { return f.Code },
 				func(f smart.Feature) ui.Node {
+					cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
+					if f.Code == "SMART-T8" { // vision: file upload, not the generic input/button
+						return ui.CreateElement(smartReceiptCard, smartReceiptProps{Conn: conn, Cost: cost})
+					}
 					spec, ok := aiSpec(f.Code)
 					if !ok {
 						return Fragment()
 					}
-					cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
 					return ui.CreateElement(smartAIControl, smartAIControlProps{Code: f.Code, Spec: spec, Conn: conn, Cost: cost})
 				},
 			),
