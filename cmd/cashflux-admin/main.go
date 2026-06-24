@@ -781,8 +781,10 @@ func App() ui.Node {
 		}()
 	})
 
-	// Auto-load any stored token on mount (runs once — no deps). If a valid
-	// token exists, bypass home and go straight to the console.
+	// Auto-load any stored token on mount. The constant deps key makes this run
+	// exactly once (mount) instead of on every render — without it the effect
+	// re-fired each render, re-fetching admin data ~continuously and replaying
+	// the entrance animations (visible page flicker + request spam).
 	ui.UseEffect(func() func() {
 		tok := lsGet()
 		if tok == "" {
@@ -809,7 +811,7 @@ func App() ui.Node {
 			view.Set(screenReady)
 		}()
 		return nil
-	})
+	}, "admin-autoload")
 
 	// Render based on current navigation state.
 	switch view.Get() {

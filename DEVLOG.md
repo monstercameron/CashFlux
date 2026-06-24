@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Fix: console page flicker (render loop)
+
+**Symptom.** User reported `/console/#features` flickering. The backend's request log was the smoking gun: 9,373 `/v1/admin/overview` requests, arriving ~1/second.
+
+**Root cause.** The auto-load `ui.UseEffect` in the console SPA had no deps key. In this GWC build, an effect with no key re-runs on every render. With a stored token the effect set view state (loading → fetch → ready), each state change re-rendered, which re-ran the effect → an endless fetch/re-render cycle. The visible flicker was the `.fade` entrance animations restarting on every re-render. (The "runs once — no deps" comment was simply wrong.)
+
+**Fix.** Pass a constant deps key — `ui.UseEffect(fn, "admin-autoload")` — mirroring the run-once `"vb-drag-shim"` pattern in `widget_builder.go`. One-line change.
+
+**Verify.** Headless Playwright: seed the token, load the console, sit 6s, count overview requests → **1** (was ~6). Loop gone.
+
 ## 2026-06-24 — Landing copy that sells + real product screenshots
 
 **Why.** The redesigned landing still *read* like infra docs ("tenant-safe admin API", "zero-knowledge AES-GCM blob store") — accurate, but nobody buys on jargon, and a money product with no picture of itself doesn't convert. Rewrote it to sell outcomes and show the actual app.
