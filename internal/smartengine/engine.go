@@ -36,6 +36,10 @@ type Input struct {
 	Base  string
 	Rates currency.Rates
 
+	// WeekStart is the household's first day of the week, used to bound weekly
+	// budget periods. The zero value (Sunday) is a sensible default.
+	WeekStart time.Weekday
+
 	Accounts      []domain.Account
 	Transactions  []domain.Transaction
 	Categories    []domain.Category
