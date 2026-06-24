@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
 
@@ -19,7 +20,40 @@ func init() {
 	register("SMART-G12", g12SuggestGoals)
 	register("SMART-G8", g8GoalImpact)
 	register("SMART-G13", g13Windfall)
+	register("SMART-G15", g15DebtStrategy)
 	register("SMART-G18", g18Feasibility)
+}
+
+// SMART-G15 — Debt-payoff strategy optimizer. Compares avalanche (highest APR
+// first) against snowball (smallest balance first) and surfaces the interest
+// saved by avalanche, naming where to send the extra payment.
+func g15DebtStrategy(in Input) []smart.Insight {
+	debts := buildDebts(in)
+	if len(debts) < 2 {
+		return nil // with one debt both strategies are identical
+	}
+	extra := payoff.SuggestedExtra(debts)
+	ava, ok1 := payoff.BuildPlan(debts, extra, payoff.Avalanche)
+	sno, ok2 := payoff.BuildPlan(debts, extra, payoff.Snowball)
+	if !ok1 || !ok2 {
+		return nil
+	}
+	saved := sno.TotalInterest - ava.TotalInterest
+	if saved <= 0 {
+		return nil // no avalanche advantage (a tie) — nothing to recommend
+	}
+	target := highestAPRDebt(debts)
+	ins := smart.Insight{
+		Feature: "SMART-G15",
+		Page:    smart.PageGoals,
+		Key:     "SMART-G15:" + in.Now.Format("2006-01"),
+		Title:   "Avalanche could save " + in.baseMoney(saved).Format(2) + " in interest",
+		Detail: "Paying your highest-interest debt (" + target + ") first instead of the smallest balance " +
+			"saves about " + in.baseMoney(saved).Format(2) + " in interest over the payoff.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(saved)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
 }
 
 const g8MinExpense = 100_00 // only translate sizable purchases into goal terms

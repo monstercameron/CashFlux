@@ -223,6 +223,47 @@ func TestP1SkipsAlreadyTracked(t *testing.T) {
 	}
 }
 
+func TestG15DebtStrategy(t *testing.T) {
+	in := baseInput()
+	hi := domain.Account{ID: "hi", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
+		Currency: "USD", InterestRateAPR: 24.0, OpeningBalance: usd(-500000), MinPayment: usd(10000)}
+	lo := domain.Account{ID: "lo", Name: "Car Loan", Type: domain.TypeLoan, Class: domain.ClassLiability,
+		Currency: "USD", InterestRateAPR: 5.0, OpeningBalance: usd(-300000), MinPayment: usd(10000)}
+	in.Accounts = []domain.Account{hi, lo}
+	got := g15DebtStrategy(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 strategy insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount <= 0 {
+		t.Errorf("expected positive interest saved, got %+v", got[0].Amount)
+	}
+}
+
+func TestG15SingleDebtNoComparison(t *testing.T) {
+	in := baseInput()
+	in.Accounts = []domain.Account{liabilityCardAPR("c", 18, -500000, 24.0)}
+	if got := g15DebtStrategy(in); len(got) != 0 {
+		t.Errorf("one debt — want 0, got %d", len(got))
+	}
+}
+
+func TestSU11Zombie(t *testing.T) {
+	in := baseInput()
+	in.Transactions = monthlyCharges("CloudBackup", -500, time.June, 7) // $5/mo, 7 periods
+	got := su11Zombie(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 zombie insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSU11SkipsLargeOrShort(t *testing.T) {
+	in := baseInput()
+	in.Transactions = monthlyCharges("Netflix", -1599, time.June, 7) // $16/mo > $10 floor
+	if got := su11Zombie(in); len(got) != 0 {
+		t.Errorf("large charge — want 0, got %d", len(got))
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

@@ -15,7 +15,39 @@ func init() {
 	register("SMART-SU1", su1CancelCandidates)
 	register("SMART-SU3", su3TrialConversion)
 	register("SMART-SU4", su4AnnualSavings)
+	register("SMART-SU11", su11Zombie)
 	register("SMART-SU14", su14CancellationTally)
+}
+
+const (
+	zombieMinCount   = 6     // a charge running this many periods is well-established
+	zombieMaxMonthly = 10_00 // … but small ($10/mo) — easy to forget
+)
+
+// SMART-SU11 — Zombie-charge detection. Flags small, long-running recurring
+// charges that are easy to forget and worth a periodic "still using it?" check.
+func su11Zombie(in Input) []smart.Insight {
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, s := range subs {
+		if s.Count < zombieMinCount || s.MonthlyAmount() > zombieMaxMonthly {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU11",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU11:" + strings.ToLower(s.Name),
+			Title:   s.Name + " has quietly charged for " + plural(int64(s.Count), "period"),
+			Detail: "A small recurring charge (" + mny(s.Amount, s.Currency).Format(2) + ") that's been running a long time — " +
+				"easy to forget. Worth a check that you still use it.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
 }
 
 const (
