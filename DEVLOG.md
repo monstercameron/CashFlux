@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART series kickoff: the foundation under all per-page intelligence
+
+Starting the full SMART series (the ~84-item per-page Smart/AI backlog). The owner's directive:
+make every feature **optional + additive** (engage at will, never blocks a core flow), be **honest
+about cost** (clear Free tier vs. what needs an LLM provider), world-class glanceable UX, idiomatic
+performant Go, thorough unit/integration/e2e tests. So before any single feature, I built the spine
+the whole series shares, so each feature is cheap, consistent, and uniform to surface.
+
+**Decisions.** (1) *Catalog as data* — every SMART item is a `Feature` row (code, page, summary,
+tier), mirroring the `aiprovider` registry pattern, so the settings UI, cost preview, and engines
+all read one source of truth and adding a feature is a table row, not new code. (2) *Tier is the
+cost-transparency primitive* — `TierFree` (deterministic, on-device, $0) vs `TierAI` (needs a
+provider, billed per call). The split lets the UI label honestly and lets a `RuleCore` AI feature
+degrade to a rule-only form with no key. (3) *Strictly opt-out* — `Settings.Enabled` is empty by
+default; an engine does zero work for a feature until the user turns it on, which is how "never
+blocks a core flow" is guaranteed structurally, not by discipline. (4) *Model routing per the
+owner* — smart AI calls default to **gpt-5.4-mini** (medium effort) and escalate to **gpt-5.5 at
+LOW effort** only when the cheap model is not enough; modeled purely in `aiprovider` so the wasm
+layer just reads which model + profile to use and decides when to escalate.
+
+**Why pure first.** The CLAUDE.md SDLC is strict bottom-up: model → tested logic → persistence →
+state → UI. The `smart` package is the model+logic layer for the entire series; persistence
+(KV/dataset), state (atoms), and per-page UI surfaces come next, then the Free rule engines
+page-by-page (each its own tested function returning `[]smart.Insight`), then the AI features behind
+the provider gate, then e2e.
+
+**Next.** Wire `smart.Settings` persistence into the store/KV, add the shared Smart UI surface
+(glanceable insight card + cost badge + dismiss + opt-in toggles), then start the Accounts rule
+engines (A1/A2/A4/A7/A8) reusing `runway`/`cashflow`/`subscriptions`.
+
 ## 2026-06-24 — WIP checkpoint: snapshot in-flight work (owner request)
 
 Owner asked to commit everything so progress isn't lost while a parallel session is actively
