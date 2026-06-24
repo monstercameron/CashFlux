@@ -3,6 +3,8 @@
 package server
 
 import (
+	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,4 +26,44 @@ func consoleHandler(cfg Config) http.Handler {
 		}
 		fs.ServeHTTP(w, r)
 	}))
+}
+
+// devCredsResponse is the JSON body returned by GET /console/devcreds.
+type devCredsResponse struct {
+	AdminToken string `json:"adminToken"`
+}
+
+// devCredsHandler handles GET /console/devcreds.
+//
+// Security gate: this endpoint is available ONLY when ALL three conditions hold:
+//  1. cfg.DevMode is true (set via CASHFLUX_SERVER_DEV_MODE=true) — disabled by default;
+//  2. the request originates from a loopback address (127.0.0.1 / ::1 / localhost);
+//  3. cfg.Token is non-empty (the raw admin token is available in config).
+//
+// If any condition is not met the handler responds with 404 (Not Found) so
+// that production deployments expose no information about the endpoint's existence.
+// DevMode must never be set to true in production.
+func devCredsHandler(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Gate 1: dev mode must be explicitly enabled.
+		if !cfg.DevMode {
+			http.NotFound(w, r)
+			return
+		}
+		// Gate 2: request must come from a loopback address.
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil || !isLoopbackHost(host) {
+			http.NotFound(w, r)
+			return
+		}
+		// Gate 3: a raw token must actually be configured.
+		if cfg.Token == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(devCredsResponse{AdminToken: cfg.Token}); err != nil {
+			http.Error(w, "encode failed", http.StatusInternalServerError)
+		}
+	}
 }

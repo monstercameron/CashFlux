@@ -176,9 +176,12 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
 	// Operator console SPA: /console/ serves the web/admin static assets.
 	// /console (no trailing slash) redirects to /console/ for clean URLs.
+	// /console/devcreds is registered BEFORE the /console/ catch-all so the
+	// more-specific pattern takes precedence (Go 1.22 ServeMux routing rules).
 	mux.HandleFunc("GET /console", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/console/", http.StatusFound)
 	})
+	mux.HandleFunc("GET /console/devcreds", devCredsHandler(cfg))
 	mux.Handle("GET /console/", consoleHandler(cfg))
 	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
 }

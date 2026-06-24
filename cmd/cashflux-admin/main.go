@@ -5,6 +5,10 @@
 // cashflux-admin is a Go→WebAssembly SPA that serves as the CashFlux operator
 // console. It is loaded from web/admin/index.html under the /console/ route of
 // the CashFlux backend server.
+//
+// Navigation flow: Home (landing) → Login → Console.
+// If a valid token already exists in localStorage the user lands on Console
+// directly (auto-load on mount). Sign-out returns to Home.
 package main
 
 import (
@@ -54,19 +58,45 @@ type adminUsersResp struct {
 	Users []adminUserRow `json:"users"`
 }
 
+// devCredsResp mirrors server.devCredsResponse.
+type devCredsResp struct {
+	AdminToken string `json:"adminToken"`
+}
+
 // ---------------------------------------------------------------------------
-// View state
+// View state — top-level navigation
 // ---------------------------------------------------------------------------
 
-type viewState int
+// screen is the top-level navigation state for the SPA.
+type screen int
 
 const (
-	viewLogin   viewState = iota // token entry form
-	viewLoading                  // skeleton while fetching
-	viewAuthErr                  // 401/403 from the API
-	viewNetErr                   // network/other error
-	viewReady                    // data loaded successfully
+	screenHome    screen = iota // landing / hero
+	screenLogin                 // token-entry form
+	screenLoading               // skeleton while fetching data
+	screenAuthErr               // 401/403 from the API
+	screenNetErr                // network / other error
+	screenReady                 // data loaded, console visible
 )
+
+// ---------------------------------------------------------------------------
+// Feature highlight data (static — no interactivity, safe to range)
+// ---------------------------------------------------------------------------
+
+type featureCard struct {
+	icon  string
+	title string
+	body  string
+}
+
+var featureCards = []featureCard{
+	{icon: "🔐", title: "Tenant-safe admin API", body: "Bearer-authenticated endpoints with per-user rate limits and full audit trail."},
+	{icon: "☁️", title: "Encrypted artifact sync", body: "Zero-knowledge AES-GCM blob store — the server never sees plaintext client data."},
+	{icon: "📈", title: "Subscriptions & MRR at a glance", body: "Active, trialing, past-due and canceled counts with estimated monthly recurring revenue."},
+	{icon: "🔢", title: "Per-user usage metering", body: "Daily request and token counters per account, with configurable alert thresholds."},
+	{icon: "📋", title: "Audit log", body: "Every sensitive admin action is recorded with actor, resource, and timestamp."},
+	{icon: "🖥️", title: "Self-host or cloud", body: "Run locally with a single binary, or deploy to any server. No vendor lock-in."},
+}
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -152,6 +182,32 @@ func fetchAdminData(token string) (ov *adminOverview, users []adminUserRow, auth
 	return &o, ur.Users, false, nil
 }
 
+// fetchDevCreds calls GET /console/devcreds. It returns ("", false) when the
+// endpoint 404s (production) or any other non-200 status. It returns
+// (token, true) only when the server is in dev mode and the request is local.
+func fetchDevCreds() (token string, ok bool) {
+	resp, err := http.Get("/console/devcreds")
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", false
+	}
+	var dc devCredsResp
+	if err := json.Unmarshal(body, &dc); err != nil {
+		return "", false
+	}
+	if dc.AdminToken == "" {
+		return "", false
+	}
+	return dc.AdminToken, true
+}
+
 // ---------------------------------------------------------------------------
 // localStorage helpers
 // ---------------------------------------------------------------------------
@@ -179,17 +235,78 @@ func lsRemove() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-views (pure render functions — no hooks, only receive plain values and
-// func callbacks)
+// Sub-views (pure render functions — no hooks, receive plain values + callbacks)
 // ---------------------------------------------------------------------------
 
-func loginView(tokenVal string, onInput ui.Handler, onSignIn ui.Handler) ui.Node {
+// homeView renders the landing / hero screen.
+// hasToken controls whether the "Open console" button is shown.
+func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
+	return Div(
+		css.Class("home-page"),
+		Div(
+			css.Class("home-hero"),
+			H1(css.Class("home-title"), Text("CashFlux — Operator Console")),
+			P(css.Class("home-tagline"), Text("Manage your CashFlux backend: users, subscriptions, usage, and encrypted sync — from one secure interface.")),
+			Div(
+				css.Class("home-actions"),
+				Button(
+					Type("button"),
+					css.Class("btn btn-primary"),
+					Attr("aria-label", "Sign in to the operator console"),
+					OnClick(onSignIn),
+					Text("Sign in"),
+				),
+				If(hasToken,
+					Button(
+						Type("button"),
+						css.Class("btn btn-secondary"),
+						Attr("aria-label", "Open the console using the stored token"),
+						OnClick(onOpenConsole),
+						Text("Open console"),
+					),
+				),
+			),
+		),
+		Div(
+			css.Class("feature-grid"),
+			Map(featureCards, func(f featureCard) ui.Node {
+				return Div(
+					css.Class("feature-card"),
+					Div(css.Class("feature-icon"), Text(f.icon)),
+					Div(
+						css.Class("feature-card-body"),
+						Div(css.Class("feature-card-title"), Text(f.title)),
+						Div(css.Class("feature-card-desc"), Text(f.body)),
+					),
+				)
+			}),
+		),
+	)
+}
+
+// loginView renders the token-entry screen.
+// devToken is non-empty only when the server returned a dev-mode token; the
+// prefill button is shown only in that case.
+func loginView(tokenVal, devToken string, onInput, onSignIn, onBack, onPrefill ui.Handler) ui.Node {
 	return Div(
 		css.Class("login-page"),
 		Div(
 			css.Class("login-card"),
-			H1(css.Class("login-title"), Text("CashFlux — Operator Console")),
-			P(css.Class("login-sub"), Text("Enter the admin token to sign in.")),
+			H1(css.Class("login-title"), Text("Sign in")),
+			P(css.Class("login-sub"), Text("Enter the admin token to access the operator console.")),
+			If(devToken != "",
+				Div(
+					css.Class("dev-banner"),
+					P(css.Class("dev-hint"), Text("Dev mode — local only")),
+					Button(
+						Type("button"),
+						css.Class("btn btn-dev"),
+						Attr("aria-label", "Prefill admin token from dev mode"),
+						OnClick(onPrefill),
+						Text("Prefill admin (dev)"),
+					),
+				),
+			),
 			Label(
 				For("admin-token"),
 				css.Class("login-label"),
@@ -206,8 +323,16 @@ func loginView(tokenVal string, onInput ui.Handler, onSignIn ui.Handler) ui.Node
 			Button(
 				Type("button"),
 				css.Class("btn btn-primary"),
+				Attr("aria-label", "Sign in with the entered token"),
 				OnClick(onSignIn),
 				Text("Sign in"),
+			),
+			Button(
+				Type("button"),
+				css.Class("btn btn-link"),
+				Attr("aria-label", "Back to home"),
+				OnClick(onBack),
+				Text("Back"),
 			),
 		),
 	)
@@ -232,10 +357,11 @@ func loadingView() ui.Node {
 func authErrView(onSignOut ui.Handler) ui.Node {
 	return Div(
 		css.Class("error-page"),
-		P(css.Class("error-msg"), Text("Not authorized — check the admin token.")),
+		P(css.Class("error-msg"), Text("Not authorized — check the token.")),
 		Button(
 			Type("button"),
 			css.Class("btn btn-secondary"),
+			Attr("aria-label", "Sign out and return to home"),
 			OnClick(onSignOut),
 			Text("Sign out"),
 		),
@@ -249,6 +375,7 @@ func netErrView(msg string, onSignOut ui.Handler) ui.Node {
 		Button(
 			Type("button"),
 			css.Class("btn btn-secondary"),
+			Attr("aria-label", "Sign out and return to home"),
 			OnClick(onSignOut),
 			Text("Sign out"),
 		),
@@ -275,12 +402,14 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 				Button(
 					Type("button"),
 					css.Class("btn btn-secondary"),
+					Attr("aria-label", "Refresh console data"),
 					OnClick(onRefresh),
 					Text("Refresh"),
 				),
 				Button(
 					Type("button"),
 					css.Class("btn btn-danger"),
+					Attr("aria-label", "Sign out and return to home"),
 					OnClick(onSignOut),
 					Text("Sign out"),
 				),
@@ -347,9 +476,12 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 // ---------------------------------------------------------------------------
 
 // App is the root component for the CashFlux operator console SPA.
+// Navigation flow: Home → Login → Console (or Home directly to Console when a
+// stored token is present).
 func App() ui.Node {
-	view := ui.UseState(viewLogin)
+	view := ui.UseState(screenHome)
 	tokenInput := ui.UseState("")
+	devToken := ui.UseState("") // non-empty only in dev mode
 	overview := ui.UseState[*adminOverview](nil)
 	users := ui.UseState[[]adminUserRow](nil)
 	netErrMsg := ui.UseState("")
@@ -365,101 +497,159 @@ func App() ui.Node {
 		if tok == "" {
 			return
 		}
-		view.Set(viewLoading)
+		view.Set(screenLoading)
 		go func() {
 			ov, us, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
-				view.Set(viewAuthErr)
+				view.Set(screenAuthErr)
 				return
 			}
 			if err != nil {
 				netErrMsg.Set(err.Error())
-				view.Set(viewNetErr)
+				view.Set(screenNetErr)
 				return
 			}
 			lsSet(tok)
 			overview.Set(ov)
 			users.Set(us)
-			view.Set(viewReady)
+			view.Set(screenReady)
 		}()
 	})
 
-	// handleSignOut clears stored state and returns to the login view.
+	// handleSignOut clears stored state and returns to the home screen.
 	handleSignOut := ui.UseEvent(func() {
 		lsRemove()
 		overview.Set(nil)
 		users.Set(nil)
 		tokenInput.Set("")
-		view.Set(viewLogin)
+		devToken.Set("")
+		view.Set(screenHome)
 	})
 
 	// handleRefresh re-fetches using the stored token.
 	handleRefresh := ui.UseEvent(func() {
 		tok := lsGet()
 		if tok == "" {
+			view.Set(screenHome)
 			return
 		}
-		view.Set(viewLoading)
+		view.Set(screenLoading)
 		go func() {
 			ov, us, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
-				view.Set(viewAuthErr)
+				view.Set(screenAuthErr)
 				return
 			}
 			if err != nil {
 				netErrMsg.Set(err.Error())
-				view.Set(viewNetErr)
+				view.Set(screenNetErr)
 				return
 			}
 			overview.Set(ov)
 			users.Set(us)
-			view.Set(viewReady)
+			view.Set(screenReady)
 		}()
 	})
 
-	// Auto-load any stored token on mount (runs once — no deps).
+	// handleGoToLogin transitions to the login screen and fetches dev creds.
+	handleGoToLogin := ui.UseEvent(func() {
+		view.Set(screenLogin)
+		go func() {
+			tok, ok := fetchDevCreds()
+			if ok {
+				devToken.Set(tok)
+			}
+		}()
+	})
+
+	// handleBack returns from login to home.
+	handleBack := ui.UseEvent(func() {
+		tokenInput.Set("")
+		devToken.Set("")
+		view.Set(screenHome)
+	})
+
+	// handlePrefill fills the token input with the dev-mode token.
+	handlePrefill := ui.UseEvent(func() {
+		tokenInput.Set(devToken.Get())
+	})
+
+	// handleOpenConsole goes straight to the console using the stored token.
+	handleOpenConsole := ui.UseEvent(func() {
+		tok := lsGet()
+		if tok == "" {
+			view.Set(screenLogin)
+			return
+		}
+		tokenInput.Set(tok)
+		view.Set(screenLoading)
+		go func() {
+			ov, us, isAuthErr, err := fetchAdminData(tok)
+			if isAuthErr {
+				view.Set(screenAuthErr)
+				return
+			}
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			overview.Set(ov)
+			users.Set(us)
+			view.Set(screenReady)
+		}()
+	})
+
+	// Auto-load any stored token on mount (runs once — no deps). If a valid
+	// token exists, bypass home and go straight to the console.
 	ui.UseEffect(func() func() {
 		tok := lsGet()
 		if tok == "" {
 			return nil
 		}
 		tokenInput.Set(tok)
-		view.Set(viewLoading)
+		view.Set(screenLoading)
 		go func() {
 			ov, us, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
-				view.Set(viewAuthErr)
+				// Token is stored but no longer valid; return to home.
+				lsRemove()
+				tokenInput.Set("")
+				view.Set(screenHome)
 				return
 			}
 			if err != nil {
 				netErrMsg.Set(err.Error())
-				view.Set(viewNetErr)
+				view.Set(screenNetErr)
 				return
 			}
 			overview.Set(ov)
 			users.Set(us)
-			view.Set(viewReady)
+			view.Set(screenReady)
 		}()
 		return nil
 	})
 
-	// Render based on the current view state.
+	// Render based on current navigation state.
 	switch view.Get() {
-	case viewLoading:
+	case screenLoading:
 		return loadingView()
-	case viewAuthErr:
+	case screenAuthErr:
 		return authErrView(handleSignOut)
-	case viewNetErr:
+	case screenNetErr:
 		return netErrView(netErrMsg.Get(), handleSignOut)
-	case viewReady:
+	case screenReady:
 		ov := overview.Get()
 		us := users.Get()
 		if ov == nil {
 			return loadingView()
 		}
 		return readyView(ov, us, handleSignOut, handleRefresh)
-	default: // viewLogin
-		return loginView(tokenInput.Get(), handleTokenInput, handleSignIn)
+	case screenLogin:
+		return loginView(tokenInput.Get(), devToken.Get(), handleTokenInput, handleSignIn, handleBack, handlePrefill)
+	default: // screenHome
+		hasToken := lsGet() != ""
+		return homeView(hasToken, handleGoToLogin, handleOpenConsole)
 	}
 }
 

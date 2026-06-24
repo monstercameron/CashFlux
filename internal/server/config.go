@@ -81,8 +81,11 @@ type Config struct {
 	LogFormat                         string
 	LogLevel                          string
 	LogHotPathSampleRate              int
-	Logger                            *slog.Logger
-	Metrics                           *Metrics
+	// DevMode enables developer-only features such as the /console/devcreds
+	// endpoint. Must never be set to true in production deployments.
+	DevMode bool
+	Logger  *slog.Logger
+	Metrics *Metrics
 }
 
 type OAuthProviderConfig struct {
@@ -114,6 +117,7 @@ func FromEnv() (Config, error) {
 	cfg.StripeSuccessURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SUCCESS_URL"))
 	cfg.StripeCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_CANCEL_URL"))
 	cfg.StripePortalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL"))
+	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))

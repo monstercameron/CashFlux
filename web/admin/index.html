@@ -28,6 +28,82 @@
       }
       #app { min-height: 100vh; }
 
+      /* Home / landing page */
+      .home-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 64px 24px 48px;
+        gap: 56px;
+        min-height: 100vh;
+      }
+      .home-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 16px;
+        max-width: 680px;
+      }
+      .home-title {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--text);
+      }
+      .home-tagline {
+        font-size: 15px;
+        color: var(--text-dim);
+        line-height: 1.6;
+        max-width: 520px;
+      }
+      .home-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 8px;
+      }
+
+      /* Feature highlight grid */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        width: 100%;
+        max-width: 960px;
+      }
+      .feature-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+      }
+      .feature-icon {
+        font-size: 22px;
+        line-height: 1;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .feature-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .feature-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .feature-card-desc {
+        font-size: 12px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+
       /* Login page */
       .login-page {
         display: flex;
@@ -77,6 +153,44 @@
       .login-input:focus {
         border-color: var(--accent);
       }
+
+      /* Dev-mode prefill banner */
+      .dev-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: rgba(46, 139, 87, 0.1);
+        border: 1px solid rgba(46, 139, 87, 0.35);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+      }
+      .dev-hint {
+        font-size: 11px;
+        color: var(--accent);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .btn-dev {
+        background: transparent;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-size: 12px;
+        padding: 5px 10px;
+      }
+      .btn-dev:hover { opacity: 0.8; }
+      .btn-link {
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-size: 13px;
+        padding: 4px 0;
+        text-decoration: underline;
+        cursor: pointer;
+        align-self: flex-start;
+      }
+      .btn-link:hover { color: var(--text); }
 
       /* Buttons */
       .btn {

@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Console landing + login flow with dev-only credential prefill
+
+**What changed.** The operator console SPA previously dropped the user directly into a token-login form with no context about what they were signing into. Restructured it into a proper three-screen flow: Home → Login → Console.
+
+**Home screen.** A centered hero with `<h1>`, a one-line tagline, a primary "Sign in" button, and an "Open console" shortcut button rendered only when `localStorage["cashflux.admin.token"]` is present. Below the hero: a 6-card responsive grid (`repeat(auto-fill, minmax(240px, 1fr))`) describing the backend's operator surfaces (admin API, encrypted sync, subscriptions/MRR, usage metering, audit log, self-host). The cards are static data (`[]featureCard`), no interactivity — safe to `Map`.
+
+**Login screen.** Same token-password field as before plus a "Back" link to Home. On mount (via a goroutine on the login-view transition, not a hook — hooks can't fire conditionally) the SPA fetches `GET /console/devcreds`. 200 → store the returned token in `devToken` UseState and render a `.dev-banner` strip with a "Prefill admin (dev)" button and "Dev mode — local only" hint. 404 (prod) → `devToken` stays empty, the banner is never rendered. No hardcoded token anywhere in the SPA.
+
+**Server-side gate.** `devCredsHandler` in `console.go` applies three independent checks — DevMode flag, loopback RemoteAddr, non-empty Token — any failure → 404 (not 403, not 401; 404 avoids confirming the endpoint exists in prod). Registered as `GET /console/devcreds` BEFORE `GET /console/` in `NewMux` so the Go 1.22 ServeMux specificity rule gives it priority.
+
+**Auto-load on mount.** If a stored token exists the SPA immediately tries to load the console; on auth failure it now clears the token and returns to Home (previous behavior was to show the auth-error screen — not great UX when the token has expired).
+
+**Decision — no URL router.** A hash-based router was considered but adds complexity with no benefit here: the three screens are pure state transitions (no deep links needed) and the SPA is loaded from a single `/console/` entry point anyway.
+
+**Tests.** Three new cases in `console_test.go`: `TestDevCredsReturns200InDevMode` (overrides `RemoteAddr` to `127.0.0.1:9999`), `TestDevCredsReturns404WhenDevModeOff`, `TestDevCredsReturns404FromNonLoopback`. The existing 5 console tests continue to pass.
+
+**Builds.** WASM rc=0, server rc=0, `go test ./internal/server/...` pass.
+
 ## 2026-06-24 — Widget Builder: styling + layout tools, persistent card sizes
 
 Cam's feedback after the first Widget Builder pass: "I don't see any styling and layout based
