@@ -24,8 +24,40 @@ func init() {
 	register("SMART-G13", g13Windfall)
 	register("SMART-G14", g14LinkAccount)
 	register("SMART-G15", g15DebtStrategy)
+	register("SMART-G17", g17AutoContribute)
 	register("SMART-G18", g18Feasibility)
 	register("SMART-G19", g19BorrowWarning)
+}
+
+// SMART-G17 — Recurring auto-contribution scheduling. For a goal with a deadline
+// and a detected payday, nudges the user to automate a standing "on payday, move
+// $X" contribution rather than remembering it each month.
+func g17AutoContribute(in Input) []smart.Insight {
+	payday, ok := recentPayday(in)
+	if !ok {
+		return nil
+	}
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived {
+			continue
+		}
+		needed, ok, err := goals.MonthlyNeeded(g, in.Now)
+		if err != nil || !ok {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G17",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G17:" + g.ID,
+			Title:   "Automate " + g.Name + ": " + needed.Format(2) + " each payday",
+			Detail: "Setting a standing rule to move " + needed.Format(2) + " to " + g.Name + " on each payday (around the " +
+				ordinalDay(payday) + ") keeps it on track without remembering it every month.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(needed).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
 }
 
 const g19MinShortfall = 50_00 // ignore small differences between goal and balance

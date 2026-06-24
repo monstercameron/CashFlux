@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engines B7 + G17 (2026-06-24):** **B7** seasonal-budget adjustment (detects categories whose monthly spend swings widely and suggests month-specific budgets); **G17** recurring auto-contribution nudge (for a deadline goal + detected payday, suggests automating an on-payday contribution). 55 Free engines + 17 AI = 72 SMART items. Table-driven tests.
+
 - **SMART series — T10 (AI import-mapping) + BL5/BL15 Free engines (2026-06-24):** **T10** (AI) maps pasted CSV columns to date/amount/merchant/category via the input control. **BL5** suggests timing flexible payments to just after payday when bills cluster pre-paycheck. **BL15** learns each liability's real payment timing from history and shows the typical days-after-due (the effective last-safe-pay date). 53 Free engines + 17 AI features. Tests.
 
 - **SMART series — Free engines G14 + G19 (2026-06-24):** **G14** suggests linking an unlinked goal to an account so its progress tracks the real balance automatically; **G19** borrow-from-goal warning compares a goal-linked account's balance to the goal's recorded progress and warns when funds appear to have been pulled out (setback amount shown). 51 Free engines total. Table-driven tests.

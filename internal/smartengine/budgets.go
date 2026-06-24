@@ -12,9 +12,77 @@ import (
 )
 
 func init() {
+	register("SMART-B7", b7Seasonal)
 	register("SMART-B8", b8SafeToSpend)
 	register("SMART-B9", b9PacingNudge)
 	register("SMART-B10", b10UncoveredSpending)
+}
+
+const (
+	seasonalMonths    = 6     // look back this many months for seasonality
+	seasonalMinMonths = 3     // need this many active months to judge
+	seasonalRatio     = 2     // peak ≥ this × the trough to call it seasonal
+	seasonalMinSwing  = 50_00 // and the peak-trough gap must be meaningful
+)
+
+// SMART-B7 — Seasonal budget adjustment. Detects categories whose monthly spend
+// swings widely across the year and suggests month-specific budgets instead of a
+// flat number.
+func b7Seasonal(in Input) []smart.Insight {
+	curStart := dateutil.MonthStart(in.Now)
+	// category -> per-month spend (base minor), only counting months with spend.
+	byCat := map[string][]int64{}
+	for k := 1; k <= seasonalMonths; k++ {
+		s := dateutil.AddMonths(curStart, -k)
+		e := dateutil.AddMonths(curStart, -k+1)
+		month := map[string]int64{}
+		for _, t := range in.Transactions {
+			if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
+				continue
+			}
+			if t.Date.Before(s) || !t.Date.Before(e) {
+				continue
+			}
+			month[t.CategoryID] += in.toBaseMinor(-t.Amount.Amount, t.Amount.Currency)
+		}
+		for cat, v := range month {
+			byCat[cat] = append(byCat[cat], v)
+		}
+	}
+	names := categoryNames(in.Categories)
+	var out []smart.Insight
+	for cat, vals := range byCat {
+		if len(vals) < seasonalMinMonths {
+			continue
+		}
+		lo, hi := vals[0], vals[0]
+		for _, v := range vals {
+			if v < lo {
+				lo = v
+			}
+			if v > hi {
+				hi = v
+			}
+		}
+		if lo <= 0 || hi < lo*seasonalRatio || hi-lo < seasonalMinSwing {
+			continue
+		}
+		name := names[cat]
+		if name == "" {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-B7",
+			Page:    smart.PageBudgets,
+			Key:     "SMART-B7:" + cat,
+			Title:   name + " spending is seasonal",
+			Detail: name + " ranged from " + mny(lo, in.Base).Format(2) + " to " + mny(hi, in.Base).Format(2) +
+				"/mo across recent months. A month-specific budget fits it better than a flat number.",
+			Severity: smart.SeverityNudge,
+		}.WithAmount(mny(hi-lo, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open budgets", Route: "/budgets", RelatedType: "category", RelatedID: cat}))
+	}
+	return out
 }
 
 const (

@@ -451,7 +451,7 @@ func TestBL8NoIncomeNoInsight(t *testing.T) {
 func TestG19BorrowWarning(t *testing.T) {
 	in := baseInput()
 	in.Accounts = []domain.Account{acct("sav", "Savings", domain.TypeSavings, 100000, ref)} // account holds $1000
-	g := goal("g", "Vacation", 500000, 300000, time.Time{})                                  // goal says $3000 saved
+	g := goal("g", "Vacation", 500000, 300000, time.Time{})                                 // goal says $3000 saved
 	g.AccountID = "sav"
 	in.Goals = []domain.Goal{g}
 	got := g19BorrowWarning(in)
@@ -521,6 +521,54 @@ func TestBL15GracePeriod(t *testing.T) {
 	got := bl15GracePeriod(in)
 	if len(got) != 1 {
 		t.Fatalf("want 1 grace-period insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestB7Seasonal(t *testing.T) {
+	in := baseInput()
+	in.Categories = []domain.Category{{ID: "heat", Name: "Heating"}}
+	mk := func(id string, m time.Month, amt int64) domain.Transaction {
+		return domain.Transaction{ID: id, AccountID: "x", CategoryID: "heat",
+			Date: time.Date(2026, m, 10, 0, 0, 0, 0, time.UTC), Amount: usd(amt), Desc: "Gas"}
+	}
+	in.Transactions = []domain.Transaction{
+		mk("a", time.March, -5000), mk("b", time.April, -30000), mk("c", time.May, -3000),
+	}
+	got := b7Seasonal(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 seasonal insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Key != "SMART-B7:heat" {
+		t.Errorf("wrong category flagged: %s", got[0].Key)
+	}
+}
+
+func TestB7SkipsSteadyCategory(t *testing.T) {
+	in := baseInput()
+	in.Categories = []domain.Category{{ID: "rent", Name: "Rent"}}
+	mk := func(id string, m time.Month) domain.Transaction {
+		return domain.Transaction{ID: id, AccountID: "x", CategoryID: "rent",
+			Date: time.Date(2026, m, 10, 0, 0, 0, 0, time.UTC), Amount: usd(-150000), Desc: "Rent"}
+	}
+	in.Transactions = []domain.Transaction{mk("a", time.March), mk("b", time.April), mk("c", time.May)}
+	if got := b7Seasonal(in); len(got) != 0 {
+		t.Errorf("steady category — want 0, got %d", len(got))
+	}
+}
+
+func TestG17AutoContribute(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "pay", AccountID: "x", Date: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Amount: usd(300000), Desc: "Salary"},
+	}
+	due := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{goal("g", "Car", 120000, 0, due)}
+	got := g17AutoContribute(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 auto-contribute nudge, got %d: %+v", len(got), got)
+	}
+	if !got[0].HasAmount {
+		t.Errorf("expected a contribution amount")
 	}
 }
 
