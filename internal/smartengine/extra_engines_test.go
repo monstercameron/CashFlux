@@ -195,6 +195,34 @@ func TestP8ExtraDebt(t *testing.T) {
 	}
 }
 
+func TestP1DiscoverRecurring(t *testing.T) {
+	in := baseInput()
+	txns := monthlyCharges("Netflix", -1599, time.June, 4)
+	txns = append(txns, monthlyCharges("Gym", -3000, time.June, 4)...)
+	in.Transactions = txns
+	got := p1DiscoverRecurring(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 discovery insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount <= 0 {
+		t.Errorf("expected a monthly total, got %+v", got[0].Amount)
+	}
+}
+
+func TestP1SkipsAlreadyTracked(t *testing.T) {
+	in := baseInput()
+	txns := monthlyCharges("Netflix", -1599, time.June, 4)
+	txns = append(txns, monthlyCharges("Gym", -3000, time.June, 4)...)
+	in.Transactions = txns
+	in.Recurring = []domain.Recurring{
+		{ID: "1", Label: "Netflix", Amount: usd(-1599), Cadence: domain.CadenceMonthly, NextDue: ref},
+		{ID: "2", Label: "Gym", Amount: usd(-3000), Cadence: domain.CadenceMonthly, NextDue: ref},
+	}
+	if got := p1DiscoverRecurring(in); len(got) != 0 {
+		t.Errorf("all tracked — want 0, got %d: %+v", len(got), got)
+	}
+}
+
 func TestP8NoSurplusNoSuggestion(t *testing.T) {
 	in := baseInput().withBaseline(300000, 500000) // negative surplus
 	card := domain.Account{

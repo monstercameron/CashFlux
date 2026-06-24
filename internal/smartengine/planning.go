@@ -3,15 +3,56 @@
 package smartengine
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 )
 
 func init() {
+	register("SMART-P1", p1DiscoverRecurring)
 	register("SMART-P8", p8ExtraDebt)
 	register("SMART-P10", p10BillShock)
+}
+
+// SMART-P1 — Auto-discovered recurring cash flows. Scans the transaction history
+// and reports recurring charges that aren't yet in the Planning recurring set, so
+// the user can add them for a sharper forecast.
+func p1DiscoverRecurring(in Input) []smart.Insight {
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil || len(subs) == 0 {
+		return nil
+	}
+	existing := map[string]bool{}
+	for _, r := range in.Recurring {
+		existing[strings.ToLower(strings.TrimSpace(r.Label))] = true
+	}
+	var newCount int
+	var monthly int64
+	for _, s := range subs {
+		if existing[strings.ToLower(strings.TrimSpace(s.Name))] {
+			continue
+		}
+		newCount++
+		monthly += s.MonthlyAmount()
+	}
+	if newCount == 0 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-P1",
+		Page:    smart.PagePlanning,
+		Key:     "SMART-P1:" + in.Now.Format("2006-01"),
+		Title:   plural(int64(newCount), "recurring charge") + " not in your plan yet",
+		Detail: "Your history shows about " + in.baseMoney(monthly).Format(2) + "/mo of recurring charges that aren't " +
+			"in Planning. Adding them sharpens the forecast and runway.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(monthly)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
 }
 
 const p8MinExtra = 25_00 // only suggest an extra payment worth at least $25/mo
