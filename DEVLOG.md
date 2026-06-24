@@ -2,6 +2,10 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — i18n: routed more hardcoded a11y labels through uistate.T()
+
+Replaced the remaining hardcoded English `aria-label` and `Title()` strings with `uistate.T()` calls across five files: datatable row-size select (`ui.table.rowsPerPage`), budgets row cover/topup buttons and amount inputs (5 keys), planning snapshot/fill-sensible buttons (2 keys), documents draft-review store-name/receipt-total/import-account (3 keys, reused for both receipt and draft paths), and customize-formula insert-variable (2 printf-style keys). All 13 new keys registered in `internal/i18n/en.go`. All three packages build clean under `GOOS=js GOARCH=wasm`.
+
 ## 2026-06-24 — feat: WONDER W-10 route cross-fade — View Transitions API progressive enhancement
 
 **What shipped:** CSS scaffold (`view-transition-name: cf-page`, `::view-transition-old/new`

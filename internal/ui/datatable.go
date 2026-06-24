@@ -153,6 +153,6 @@ func dtPager(props dtPagerProps) ui.Node {
 		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),
 		Span(css.Class("muted data-pager-label"), "Rows per page"),
-		Select(css.Class("field"), Attr("aria-label", "Rows per page"), OnChange(onSize), sizeOpts),
+		Select(css.Class("field"), Attr("aria-label", uistate.T("ui.table.rowsPerPage")), OnChange(onSize), sizeOpts),
 	)
 }

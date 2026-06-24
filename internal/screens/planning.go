@@ -687,7 +687,7 @@ func Planning() ui.Node {
 		} else if len(debts) > 0 {
 			owed := currentOwed
 			progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				Button(css.Class("btn"), Type("button"), Title("Snapshot today's balances to track how much you pay off over time"),
+				Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.snapshotTitle")),
 					OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), "Start tracking progress"),
 			)
 		}
@@ -804,7 +804,7 @@ func Planning() ui.Node {
 				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
 					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 						Span(css.Class("muted"), "At $0 extra the strategies tie."),
-						Button(css.Class("btn"), Type("button"), Title("Fill a sensible extra to compare snowball vs avalanche"),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
 							OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
 							"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
 					),

@@ -130,13 +130,13 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		footer = Div(
 			Div(css.Class("form-grid"),
 				Input(css.Class("field"), Type("text"),
-					Attr("aria-label", "Store name (optional)"),
+					Attr("aria-label", uistate.T("documents.storeName")),
 					Placeholder("Store name (optional)"),
 					Value(props.ReceiptMerchant),
 					OnInput(props.OnReceiptMerchant),
 				),
 				Input(css.Class("field"), Type("text"),
-					Attr("aria-label", "Receipt total"),
+					Attr("aria-label", uistate.T("documents.receiptTotal")),
 					Placeholder("Receipt total"),
 					Value(props.ReceiptTotal),
 					OnInput(props.OnReceiptTotal),
@@ -144,14 +144,14 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 			),
 			remainderLine,
 			Form(css.Class("form-grid"), OnSubmit(props.OnImportReceipt),
-				Select(css.Class("field"), Attr("aria-label", "Import into account"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")),
 					OnChange(props.OnAcctChange), acctOptions),
 				Button(importBtn...),
 			),
 		)
 	} else {
 		footer = Form(css.Class("form-grid"), OnSubmit(props.OnImportDraft),
-			Select(css.Class("field"), Attr("aria-label", "Import into account"), OnChange(props.OnAcctChange), acctOptions),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), acctOptions),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
 		)
 	}

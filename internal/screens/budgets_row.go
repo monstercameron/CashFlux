@@ -222,14 +222,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	hasSource := firstSource() != ""
 	var coverBtn ui.Node = Fragment()
 	if isOver && hasSource && !covering.Get() {
-		coverBtn = Button(css.Class("btn"), Type("button"), Title("Move money from another budget to cover this overspend"), OnClick(startCover), "Cover…")
+		coverBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.coverTitle")), OnClick(startCover), "Cover…")
 	}
 
 	// "Top up…" is offered on budgets that are not over, letting the user raise
 	// the limit proactively before they hit the ceiling (L43).
 	var topupBtn ui.Node = Fragment()
 	if !isOver && props.OnTopUp != nil && !toppingUp.Get() && !covering.Get() {
-		topupBtn = Button(css.Class("btn"), Type("button"), Title("Increase this budget's limit for the current period"), OnClick(startTopup), "Top up…")
+		topupBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.topupTitle")), OnClick(startTopup), "Top up…")
 	}
 	var topupForm ui.Node = Fragment()
 	if toppingUp.Get() {
@@ -240,7 +240,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		topupForm = Div(css.Class("cover-form"),
 			Span(css.Class("budget-sub"), "Increase this budget's limit by:"),
 			Form(css.Class("form-grid"), OnSubmit(submitTopup),
-				Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to add"), Placeholder("Amount"), Value(topupAmt.Get()), Step("0.01"), OnInput(onTopupAmt)),
+				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder("Amount"), Value(topupAmt.Get()), Step("0.01"), OnInput(onTopupAmt)),
 				Button(css.Class("btn btn-primary"), Type("submit"), "Add funds"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelTopup), uistate.T("action.cancel")),
 			),
@@ -269,8 +269,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					OnChange:  func(v string) { coverFrom.Set(v) },
 					AriaLabel: "Cover from budget",
 				}),
-				Input(css.Class("field"), Type("number"), Attr("aria-label", "Amount to move"), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
-				Button(css.Class("btn"), Type("button"), Title("Use the full overspend amount"), OnClick(fullCover), "Full "+props.CoverShortfall),
+				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
+				Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")), OnClick(fullCover), "Full "+props.CoverShortfall),
 				Button(css.Class("btn btn-primary"), Type("submit"), "Cover"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelCover), uistate.T("action.cancel")),
 			),

@@ -293,8 +293,8 @@ func varInsertRow(props varInsertRowProps) ui.Node {
 	ins := ui.UseEvent(Prevent(func() { props.OnInsert(props.Name) }))
 	return Div(css.Class("row"),
 		Button(css.Class("btn-link row-desc"), Type("button"),
-			Title("Insert "+props.Name+" into the formula"),
-			Attr("aria-label", "Insert "+props.Name),
+			Title(uistate.T("customize.insertFormula", props.Name)),
+			Attr("aria-label", uistate.T("customize.insertShort", props.Name)),
 			OnClick(ins), props.Name),
 		Span(css.Class("amount fig"), groupThousands(props.Value)),
 	)

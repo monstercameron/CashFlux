@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **i18n:** routed hardcoded aria-label/Title strings through uistate.T() in datatable row-size control, budgets row cover/topup, planning, documents draft-review, and customize-formula; added catalog keys.
 - **Per-member preferences (§1.19):** members now carry an optional personal date style + default account (`domain.MemberPrefs`), edited inline on the Members screen; resolution layers member over household via the new pure, tested `internal/memberprefs` package (built on `configlayer`). Quick-add preselects the active member's default account when set. Verified via `e2e/verify_memberprefs*.mjs` (fields render + save round-trips).
 - **Segmented-control sliding pill (§6.16):** a `.seg-pill` slides under the active segment (measured offset → standard `transform`/`width`), animating selection instead of snapping.
 - **playwrightgo `gwc`** built (`.tools/gwc-pw.exe`) for automated DOM verification driving Chromium.
