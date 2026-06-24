@@ -288,7 +288,9 @@ type smartAIControlProps struct {
 // the answer area. Its own component so the state hooks sit at stable positions.
 func smartAIControl(props smartAIControlProps) ui.Node {
 	question := ui.UseState("")
-	answer := ui.UseState("")
+	// Seed the answer from the cached last result so a manual/scheduled run
+	// persists across navigation and reloads without re-spending.
+	answer := ui.UseState(uistate.LoadSmartSettings().ResultFor(props.Code))
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 
@@ -311,7 +313,12 @@ func smartAIControl(props smartAIControlProps) ui.Node {
 		errMsg.Set("")
 		answer.Set("")
 		runSmartAI(props.Conn, req,
-			func(text string) { loading.Set(false); answer.Set(strings.TrimSpace(text)) },
+			func(text string) {
+				t := strings.TrimSpace(text)
+				loading.Set(false)
+				answer.Set(t)
+				uistate.SetSmartResult(props.Code, t, time.Now()) // cache + stamp run
+			},
 			func(e string) { loading.Set(false); errMsg.Set(e) },
 		)
 	})
@@ -369,7 +376,7 @@ type smartReceiptProps struct {
 // smartReceiptCard is the SMART-T8 control: snap or upload a receipt image and
 // extract its details via the vision model. Its own component for stable hooks.
 func smartReceiptCard(props smartReceiptProps) ui.Node {
-	answer := ui.UseState("")
+	answer := ui.UseState(uistate.LoadSmartSettings().ResultFor("SMART-T8"))
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 
@@ -391,7 +398,12 @@ func smartReceiptCard(props smartReceiptProps) ui.Node {
 			errMsg.Set("")
 			answer.Set("")
 			ai.SendVisionChat(props.Conn.Key, ai.DefaultBaseURL, model, req.System, req.User, dataURL, 0,
-				func(text string, _ ai.Usage) { loading.Set(false); answer.Set(strings.TrimSpace(text)) },
+				func(text string, _ ai.Usage) {
+					t := strings.TrimSpace(text)
+					loading.Set(false)
+					answer.Set(t)
+					uistate.SetSmartResult("SMART-T8", t, time.Now())
+				},
 				func(e string) { loading.Set(false); errMsg.Set(e) },
 			)
 		})
@@ -421,6 +433,34 @@ func smartReceiptCard(props smartReceiptProps) ui.Node {
 	)
 }
 
+// smartAIFeatureNode renders the interactive control for one implemented AI
+// feature (the vision receipt card for T8, otherwise the generic input/button
+// control), with its per-use cost label. Shared by the /smart hub AI section and
+// the inline per-page strips so AI is runnable from a page, not only the hub.
+func smartAIFeatureNode(f smart.Feature, conn smartAIConn) ui.Node {
+	cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
+	if f.Code == "SMART-T8" { // vision: file upload, not the generic input/button
+		return ui.CreateElement(smartReceiptCard, smartReceiptProps{Conn: conn, Cost: cost})
+	}
+	spec, ok := aiSpec(f.Code)
+	if !ok {
+		return Fragment()
+	}
+	return ui.CreateElement(smartAIControl, smartAIControlProps{Code: f.Code, Spec: spec, Conn: conn, Cost: cost})
+}
+
+// enabledPageAIFeatures returns the page's enabled, implemented, non-muted AI
+// features — what the inline strip surfaces as run-controls for that page.
+func enabledPageAIFeatures(settings smart.Settings, page smart.Page) []smart.Feature {
+	var out []smart.Feature
+	for _, f := range smart.FeaturesForPage(page) {
+		if f.Tier == smart.TierAI && smartai.Implemented(f.Code) && settings.IsEnabled(f.Code) && !settings.IsMuted(f.Code) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // smartAISection renders the enabled, implemented AI features. It is shown only
 // when an inference provider is configured (the AI cost is real, so the gate is
 // honest); otherwise it shows a "configure a provider" hint, never dead controls.
@@ -442,17 +482,7 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 		Body: Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap3)),
 			MapKeyed(enabled,
 				func(f smart.Feature) any { return f.Code },
-				func(f smart.Feature) ui.Node {
-					cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
-					if f.Code == "SMART-T8" { // vision: file upload, not the generic input/button
-						return ui.CreateElement(smartReceiptCard, smartReceiptProps{Conn: conn, Cost: cost})
-					}
-					spec, ok := aiSpec(f.Code)
-					if !ok {
-						return Fragment()
-					}
-					return ui.CreateElement(smartAIControl, smartAIControlProps{Code: f.Code, Spec: spec, Conn: conn, Cost: cost})
-				},
+				func(f smart.Feature) ui.Node { return smartAIFeatureNode(f, conn) },
 			),
 		),
 	})

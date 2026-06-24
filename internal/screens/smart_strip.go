@@ -57,7 +57,17 @@ func SmartStrip(props smartStripProps) ui.Node {
 	} else {
 		insights = smartengine.RunPage(in, settings, props.Page)
 	}
-	if len(insights) == 0 {
+
+	// The page's enabled AI features surface inline as run-controls (the
+	// click-before-run analysis on the page itself, not only the hub). Only on a
+	// concrete page, not the Dashboard cross-page summary.
+	var aiFeats []smart.Feature
+	backendAI := pr.Normalize().BackendActive()
+	if props.Page != "" {
+		aiFeats = enabledPageAIFeatures(settings, props.Page)
+	}
+
+	if len(insights) == 0 && len(aiFeats) == 0 {
 		return Fragment() // additive: nothing enabled or nothing to say → no footprint
 	}
 	total := len(insights)
@@ -89,11 +99,37 @@ func SmartStrip(props smartStripProps) ui.Node {
 	if pageKey == "" {
 		pageKey = "all"
 	}
+
+	// Body: the Free insight cards, then the page's AI run-controls (gated on a
+	// configured provider — an honest hint instead of dead controls otherwise).
+	var bodyParts []any
+	if len(insights) > 0 {
+		bodyParts = append(bodyParts, smartInsightList(insights))
+	}
+	if len(aiFeats) > 0 {
+		conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+		if aiProviderConfigured(app, backendAI) {
+			bodyParts = append(bodyParts,
+				Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap3)),
+					MapKeyed(aiFeats,
+						func(f smart.Feature) any { return f.Code },
+						func(f smart.Feature) ui.Node { return smartAIFeatureNode(f, conn) },
+					),
+				),
+			)
+		} else {
+			bodyParts = append(bodyParts,
+				P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.aiNeedsProvider")),
+			)
+		}
+	}
+
+	bodyArgs := append([]any{ClassStr(tw.Fold(tw.FlexCol, tw.Gap3))}, bodyParts...)
 	return uiw.Card(uiw.CardProps{
 		Header:     smartBrandHeader(uistate.T("smart.stripTitle"), false, headerAction),
 		TestID:     "smart-strip-" + pageKey,
 		ClassParts: []any{tw.Mb3},
-		Body:       smartInsightList(insights),
+		Body:       Div(bodyArgs...),
 	})
 }
 

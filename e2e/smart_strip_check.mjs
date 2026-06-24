@@ -91,6 +91,22 @@ async function goto(page, route, waitSel) {
       "toggling SMART-B8 OFF removes the strip from Budgets (the toggle is a feature flag)",
     );
 
+    // AI features surface inline on their page too — the click-before-run analysis
+    // on the page itself, gated on a provider. Enable SMART-A5 (an Accounts AI
+    // feature) and confirm the Accounts strip now appears with the provider gate.
+    await goto(page, "/smart", '[data-testid="smart-hub"]');
+    await page.locator('[data-testid="smart-feature-SMART-A5"] button, [data-testid="smart-feature-SMART-A5"] input, [data-testid="smart-feature-SMART-A5"] [role="switch"]').first().click();
+    await page.waitForTimeout(4000);
+    await goto(page, "/accounts", "#cf-page-view");
+    ok(
+      await page.locator('[data-testid="smart-strip-accounts"]').count() > 0,
+      "enabling an AI feature surfaces it inline on its page (Accounts strip appears)",
+    );
+    ok(
+      /provider/i.test(await page.locator('[data-testid="smart-strip-accounts"]').innerText()),
+      "the inline AI control is provider-gated (honest — no dead control)",
+    );
+
     const releasedOnly = consoleErrors.every((e) => /released function/i.test(e));
     if (consoleErrors.length && !releasedOnly) console.log("  console errors (non-gating):", consoleErrors.slice(0, 5));
 
