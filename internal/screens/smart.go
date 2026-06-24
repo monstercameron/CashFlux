@@ -110,10 +110,11 @@ func pagesWithImplemented() []smart.Page {
 }
 
 // smartManageSection renders the opt-in catalog grouped by page. Only features
-// with a working engine are listed, so every toggle has a real effect.
+// with a working engine are listed, so every toggle has a real effect. Its
+// header carries the global controls: the density dial + bulk enable/disable.
 func smartManageSection(settings smart.Settings, hasProvider bool) ui.Node {
 	return uiw.Card(uiw.CardProps{
-		Header: smartBrandHeader(uistate.T("smart.manageTitle"), false, nil),
+		Header: smartBrandHeader(uistate.T("smart.manageTitle"), false, ui.CreateElement(smartManageControls, struct{}{})),
 		TestID: "smart-manage",
 		Body: Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap2)),
 			P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.manageHint")),
@@ -125,6 +126,64 @@ func smartManageSection(settings smart.Settings, hasProvider bool) ui.Node {
 			),
 		),
 	})
+}
+
+// smartManageControls renders the global SMART controls in the manage header: the
+// density dial (how much smart weaves into the app) plus Enable all / Disable all.
+// Its own component so the On* hooks sit at stable positions.
+func smartManageControls(_ struct{}) ui.Node {
+	rev := uistate.UseDataRevision()
+	settings := uistate.LoadSmartSettings()
+	density := settings.DensityOrDefault()
+	enabledCount := settings.EnabledCount()
+
+	onDensity := ui.UseEvent(func(v string) {
+		uistate.SetSmartDensity(smart.Density(v))
+		rev.Set(rev.Get() + 1)
+	})
+	onEnableAll := ui.UseEvent(func() {
+		uistate.EnableAllSmart()
+		rev.Set(rev.Get() + 1)
+	})
+	onDisableAll := ui.UseEvent(func() {
+		uistate.DisableAllSmart()
+		rev.Set(rev.Get() + 1)
+	})
+
+	disableAllBtn := Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+		Attr("data-testid", "smart-disable-all"),
+		Attr("aria-label", uistate.T("smart.disableAll")),
+		OnClick(onDisableAll),
+		uistate.T("smart.disableAll"),
+	)
+	if enabledCount == 0 {
+		disableAllBtn = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-disable-all"), Attr("disabled", "true"),
+			uistate.T("smart.disableAll"),
+		)
+	}
+
+	return Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
+		Span(ClassStr(tw.Fold(tw.Text12, tw.TextFaint)), uistate.T("smart.densityLabel")),
+		Select(ClassStr("field "+tw.Fold(tw.Text12)),
+			Attr("data-testid", "smart-density"),
+			Attr("aria-label", uistate.T("smart.densityLabel")),
+			OnChange(onDensity),
+			MapKeyed(smart.AllDensities(),
+				func(d smart.Density) any { return string(d) },
+				func(d smart.Density) ui.Node {
+					return Option(Value(string(d)), SelectedIf(d == density), d.Label())
+				},
+			),
+		),
+		Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-enable-all"),
+			Attr("aria-label", uistate.T("smart.enableAll")),
+			OnClick(onEnableAll),
+			uistate.T("smart.enableAll"),
+		),
+		disableAllBtn,
+	)
 }
 
 // smartPageGroup renders one page's heading and its feature toggle rows.

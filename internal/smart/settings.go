@@ -32,6 +32,9 @@ type Settings struct {
 	// Results caches each AI feature's last produced text, shown between runs so a
 	// scheduled/manual AI result persists without re-spending on every render.
 	Results map[string]string `json:"results,omitempty"`
+	// Density is the global "how much smart weaves into the app" dial (see
+	// density.go). The empty value means the Standard default.
+	Density Density `json:"density,omitempty"`
 }
 
 // IsEnabled reports whether the feature code is opted in. Unknown codes are off.
@@ -232,4 +235,66 @@ func (s Settings) ActiveCodes() []string {
 		}
 	}
 	return out
+}
+
+// --- global density + bulk enable/disable ---------------------------------
+
+// DensityOrDefault returns the configured density, defaulting to Standard when
+// unset or invalid. Density gates which KINDS of affordance show (see density.go);
+// callers AND it with the per-feature enabled/mute check.
+func (s Settings) DensityOrDefault() Density {
+	if s.Density.Valid() {
+		return s.Density
+	}
+	return DensityStandard
+}
+
+// SetDensity sets the global density dial. An invalid value is ignored.
+func (s Settings) SetDensity(d Density) Settings {
+	if d.Valid() {
+		s.Density = d
+	}
+	return s
+}
+
+// ShowsAffordance reports whether a feature's affordance of the given kind should
+// render right now: the feature is enabled and not muted, AND the global density
+// permits that affordance kind. This is the single gate every inline smart
+// surface checks.
+func (s Settings) ShowsAffordance(code string, a Affordance) bool {
+	if !s.Enabled[code] || s.Muted[code] {
+		return false
+	}
+	return s.DensityOrDefault().Shows(a)
+}
+
+// EnableAll opts into every catalog feature at once (the hub "Enable all"). It
+// leaves schedules/mutes/dismissals untouched.
+func (s Settings) EnableAll() Settings {
+	if s.Enabled == nil {
+		s.Enabled = map[string]bool{}
+	}
+	for _, f := range catalog {
+		s.Enabled[f.Code] = true
+	}
+	return s
+}
+
+// DisableAll opts out of every feature at once (the hub "Disable all"), clearing
+// the enabled set. Schedules/mutes are kept so re-enabling restores intent.
+func (s Settings) DisableAll() Settings {
+	s.Enabled = nil
+	return s
+}
+
+// EnabledCount returns how many catalog features are currently enabled — used by
+// the hub to label/disable the bulk buttons.
+func (s Settings) EnabledCount() int {
+	n := 0
+	for _, f := range catalog {
+		if s.Enabled[f.Code] {
+			n++
+		}
+	}
+	return n
 }

@@ -143,6 +143,17 @@ async function gotoSmart(page) {
     const cadOpts = await page.locator('[data-testid="smart-cadence-SMART-A5"] option').allInnerTexts();
     ok(cadOpts.some((o) => /manual/i.test(o)) && cadOpts.some((o) => /weekly/i.test(o)), "cadence picker offers Manual + Weekly schedules");
 
+    // Global controls: the density dial + Enable all / Disable all.
+    ok(await page.locator('[data-testid="smart-density"]').count() > 0, "the density dial is present");
+    const dens = await page.locator('[data-testid="smart-density"] option').allInnerTexts();
+    ok(dens.some((o) => /standard/i.test(o)) && dens.some((o) => /everywhere/i.test(o)), "density offers Standard + Everywhere");
+    await page.locator('[data-testid="smart-enable-all"]').first().click();
+    await page.waitForTimeout(1200);
+    ok(await page.locator('[data-testid="smart-card"]').count() >= 1, "Enable all surfaces insights across the catalog");
+    await page.locator('[data-testid="smart-disable-all"]').first().click();
+    await page.waitForTimeout(1200);
+    ok(await page.locator('[data-testid="smart-card"]').count() === 0, "Disable all clears every insight");
+
     const releasedFnOnly = consoleErrors.every((e) => /released function/i.test(e));
     if (consoleErrors.length && !releasedFnOnly) {
       console.log("  console errors (non-gating):", consoleErrors.slice(0, 5));

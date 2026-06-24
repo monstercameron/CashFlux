@@ -96,3 +96,26 @@ func SetSmartResult(code, text string, now time.Time) smart.Settings {
 	SaveSmartSettings(s)
 	return s
 }
+
+// SetSmartDensity sets the global "how much smart weaves into the app" dial and
+// persists.
+func SetSmartDensity(d smart.Density) smart.Settings {
+	s := LoadSmartSettings().SetDensity(d)
+	SaveSmartSettings(s)
+	return s
+}
+
+// EnableAllSmart opts into every catalog feature at once and persists.
+func EnableAllSmart() smart.Settings {
+	s := LoadSmartSettings().EnableAll()
+	SaveSmartSettings(s)
+	return s
+}
+
+// DisableAllSmart opts out of every feature at once and persists (keeping
+// schedules/mutes so re-enabling restores intent).
+func DisableAllSmart() smart.Settings {
+	s := LoadSmartSettings().DisableAll()
+	SaveSmartSettings(s)
+	return s
+}

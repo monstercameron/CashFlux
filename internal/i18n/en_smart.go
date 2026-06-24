@@ -23,6 +23,11 @@ var smartKeys = Catalog{
 	"smart.runNow":   "Run now",
 	"smart.running":  "Running…",
 
+	// Global controls (manage header).
+	"smart.densityLabel": "Show smart",
+	"smart.enableAll":    "Enable all",
+	"smart.disableAll":   "Disable all",
+
 	// Insights section.
 	"smart.insightsTitle": "Your insights",
 	"smart.onboard":       "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
