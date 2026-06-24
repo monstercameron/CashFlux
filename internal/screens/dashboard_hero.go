@@ -142,6 +142,8 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		Div(css.Class("home-hero-nw"),
 			Span(css.Class("home-hero-nw-label t-caption", tw.TextFaint),
 				uistate.T("home.netWorth"),
+				// Optional smart explainer (gated by the global density dial).
+				smartTooltipFor(uistate.LoadSmartSettings(), "networth", uistate.T("home.netWorth"), uistate.T("smart.tipNetWorth")),
 			),
 			Div(ClassStr("home-hero-nw-fig fig t-figure-lg "+
 				tw.Fold(tw.FontDisplay)+" "+

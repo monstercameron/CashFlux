@@ -28,6 +28,9 @@ var smartKeys = Catalog{
 	"smart.enableAll":    "Enable all",
 	"smart.disableAll":   "Disable all",
 
+	// Inline explainer tooltips (Free, templated).
+	"smart.tipNetWorth": "Everything you own (assets) minus everything you owe (debts) — your bottom-line worth.",
+
 	// Insights section.
 	"smart.insightsTitle": "Your insights",
 	"smart.onboard":       "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
