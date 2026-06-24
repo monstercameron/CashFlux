@@ -17,9 +17,115 @@ func init() {
 	register("SMART-SU4", su4AnnualSavings)
 	register("SMART-SU6", su6CostCreep)
 	register("SMART-SU8", su8Forgotten)
+	register("SMART-SU7", su7UsageVsCost)
 	register("SMART-SU9", su9RenewalReminders)
 	register("SMART-SU11", su11Zombie)
+	register("SMART-SU12", su12Attribution)
 	register("SMART-SU14", su14CancellationTally)
+}
+
+// SMART-SU7 — Usage-vs-cost flag. When a subscription's category shows no other
+// engagement (e.g. a gym membership but no other fitness spend), flags it as
+// "paying but maybe not using."
+func su7UsageVsCost(in Input) []smart.Insight {
+	// Total non-transfer expense count per category.
+	catCount := map[string]int{}
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
+			continue
+		}
+		catCount[t.CategoryID]++
+	}
+	names := categoryNames(in.Categories)
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, s := range subs {
+		cat := categoryForMerchant(in, s.Name)
+		if cat == "" {
+			continue
+		}
+		// If the category's only activity is the subscription itself, there's no
+		// other engagement to justify it.
+		if catCount[cat] > s.Count {
+			continue
+		}
+		catName := names[cat]
+		if catName == "" {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU7",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU7:" + strings.ToLower(s.Name),
+			Title:   s.Name + ": paying but maybe not using",
+			Detail: s.Name + " is your only activity in " + catName + " — you're paying " +
+				mny(s.Amount, s.Currency).Format(2) + " with nothing else in that category. Worth a look.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
+}
+
+// SMART-SU12 — Shared/household sub attribution. In a multi-member household,
+// flags subscriptions whose charges aren't attributed to any member.
+func su12Attribution(in Input) []smart.Insight {
+	if len(in.Members) < 2 {
+		return nil // only relevant for multi-member households
+	}
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, s := range subs {
+		if merchantHasMember(in, s.Name) {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU12",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU12:" + strings.ToLower(s.Name),
+			Title:   s.Name + " isn't assigned to anyone",
+			Detail: s.Name + " (" + mny(s.Amount, s.Currency).Format(2) +
+				") isn't attributed to a household member. Assign it so everyone's share is clear.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
+}
+
+// categoryForMerchant returns the category id of the most recent transaction
+// matching the merchant name, or "".
+func categoryForMerchant(in Input, name string) string {
+	target := strings.ToLower(strings.TrimSpace(name))
+	var best time.Time
+	cat := ""
+	for _, t := range in.Transactions {
+		if strings.ToLower(strings.TrimSpace(txnLabel(t))) != target || t.CategoryID == "" {
+			continue
+		}
+		if cat == "" || t.Date.After(best) {
+			best, cat = t.Date, t.CategoryID
+		}
+	}
+	return cat
+}
+
+// merchantHasMember reports whether any transaction for the merchant carries a
+// member attribution.
+func merchantHasMember(in Input, name string) bool {
+	target := strings.ToLower(strings.TrimSpace(name))
+	for _, t := range in.Transactions {
+		if strings.ToLower(strings.TrimSpace(txnLabel(t))) == target && t.MemberID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 const su9RenewalWindow = 7 // remind this many days before a renewal

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engines SU7 + SU12 (2026-06-24):** **SU7** usage-vs-cost (flags a subscription whose category shows no other activity — paying but maybe not using); **SU12** household sub attribution (in a multi-member household, flags subscriptions whose charges aren't assigned to any member). 59 Free engines + 17 AI = 76 SMART items. Table-driven tests.
+
 - **SMART series — Free engines SU9 + BL10 (2026-06-24):** **SU9** renewal-timed reminders (offers a one-tap "keep this?" to-do a few days before a subscription renews); **BL10** one-tap pay-all-due (surfaces several bills due within a few days together). 57 Free engines + 17 AI = 74 SMART items. Table-driven tests.
 
 - **SMART series — Free engines B7 + G17 (2026-06-24):** **B7** seasonal-budget adjustment (detects categories whose monthly spend swings widely and suggests month-specific budgets); **G17** recurring auto-contribution nudge (for a deadline goal + detected payday, suggests automating an on-payday contribution). 55 Free engines + 17 AI = 72 SMART items. Table-driven tests.

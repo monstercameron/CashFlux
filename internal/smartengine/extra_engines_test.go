@@ -615,6 +615,57 @@ func TestBL10SingleBillNoNudge(t *testing.T) {
 	}
 }
 
+func TestSU7UsageVsCost(t *testing.T) {
+	in := baseInput()
+	in.Categories = []domain.Category{{ID: "fit", Name: "Fitness"}}
+	var txns []domain.Transaction
+	for _, m := range []time.Month{time.April, time.May, time.June} {
+		txns = append(txns, domain.Transaction{ID: "g" + m.String(), AccountID: "x", CategoryID: "fit",
+			Date: time.Date(2026, m, 8, 0, 0, 0, 0, time.UTC), Amount: usd(-3000), Desc: "Gym"})
+	}
+	in.Transactions = txns // Gym is the only Fitness activity
+	got := su7UsageVsCost(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 usage flag, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSU7SkipsEngagedCategory(t *testing.T) {
+	in := baseInput()
+	in.Categories = []domain.Category{{ID: "fit", Name: "Fitness"}}
+	var txns []domain.Transaction
+	for _, m := range []time.Month{time.April, time.May, time.June} {
+		txns = append(txns, domain.Transaction{ID: "g" + m.String(), AccountID: "x", CategoryID: "fit",
+			Date: time.Date(2026, m, 8, 0, 0, 0, 0, time.UTC), Amount: usd(-3000), Desc: "Gym"})
+	}
+	// Other fitness activity beyond the gym sub.
+	txns = append(txns, domain.Transaction{ID: "shoes", AccountID: "x", CategoryID: "fit",
+		Date: time.Date(2026, 6, 9, 0, 0, 0, 0, time.UTC), Amount: usd(-8000), Desc: "Running Shoes"})
+	in.Transactions = txns
+	if got := su7UsageVsCost(in); len(got) != 0 {
+		t.Errorf("category has other activity — want 0, got %d", len(got))
+	}
+}
+
+func TestSU12Attribution(t *testing.T) {
+	in := baseInput()
+	in.Members = []domain.Member{{ID: "m1", Name: "A"}, {ID: "m2", Name: "B"}}
+	in.Transactions = monthlyCharges("Netflix", -1599, time.June, 4) // no MemberID
+	got := su12Attribution(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 attribution flag, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSU12SingleMemberSkipped(t *testing.T) {
+	in := baseInput()
+	in.Members = []domain.Member{{ID: "m1", Name: "A"}}
+	in.Transactions = monthlyCharges("Netflix", -1599, time.June, 4)
+	if got := su12Attribution(in); len(got) != 0 {
+		t.Errorf("single-member household — want 0, got %d", len(got))
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)
