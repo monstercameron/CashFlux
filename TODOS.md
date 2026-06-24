@@ -10772,6 +10772,66 @@ Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78
 
 ---
 
+### L79. Story — "The Money Move" (Renu) — 2026-06-24 ★
+
+**The ritual.** Renu does the most common household money action: move money between her own
+accounts (Everyday Checking → Emergency Savings). Theme = **transfer integrity + cross-screen
+consistency**. Drive script `e2e/loopstory_79_money_move.mjs` (run `E2E_URL=http://127.0.0.1:8099
+node e2e/loopstory_79_money_move.mjs`). Result **7 PASS · 0 FAIL · 2 ABSENT** (the 2 ABSENT are the
+finding below). Screenshots `L79_01..05`.
+
+**🔴 CRITICAL (found + FIXED this pass) — the app did not boot at all.** Before any ritual could
+run, both `serve.go` (:8099) and `gwc dev` (:8080) rendered a blank page: the wasm panicked on
+startup with `panic: GoUseAtom called outside component context`. Root cause: the admin-console
+gating added `uistate.UseAdminConsoleAvailable()` (a framework **hook**) into `app.navGroup`
+(`shell.go:246`); but `navGroup` is also called at **boot** by `wireKeyboardShortcuts()`
+(`shortcuts.go:32` ← `app.Run` ← `main.main`) to enumerate primary-nav paths for digit shortcuts.
+Hooks may only run during a component render, so the boot-time call aborted `main()` and the whole
+app failed to start. **Fix:** added a hook-free `primaryNavStatic()` in `shell.go` (enumerates the
+primary group straight from `screens.All()`, excludes `AdminOnly`, calls no hook) and pointed
+`wireKeyboardShortcuts` at it. Build rc=0 (PARENT-VERIFIED); `go test ./internal/app` ok. MEASURED:
+the app now boots — `navLinks=27`, `#app` body 79 KB, **zero pageerrors/console errors** (was
+`navLinks=0`, panic). This is a committed-HEAD regression, not local churn (git diff of shell.go/
+shortcuts.go was empty). **A boot smoke test belongs in CI** — nothing caught "the app won't start".
+
+**⚠ FINDING (dev ticket) — a transfer gives NO visible balance feedback on /accounts.** The transfer
+itself is *correct*: the form submits, a labelled "Transfer" ledger entry is created (the $250/$500
+legs show up in /transactions), and **net worth is conserved** across 1 + 3 stress transfers
+(`$60,386.00` throughout — the double-entry integrity invariant holds, T-2/T-3/T-5 all PASS, zero JS
+errors). BUT on /accounts the **displayed balances do not move**: source `Everyday Checking` stayed
+`$6,473.50` and destination `Emergency Savings (HYSA)` stayed `$12,200.00` after a $500 transfer
+(measured delta = 0 for both; T-1a/T-1b ABSENT). Cause: the row shows the **cleared** balance
+("… cleared $6,473.50") and a newly-created transfer leg is **uncleared**, so the cleared figure is
+unchanged. From the user's POV: *"I just moved $500 between my accounts and both balances look exactly
+the same"* — confusing, looks broken, and undermines trust on the single most common household action.
+- [ ] **L79-T1 — give transfers immediate, visible balance feedback on /accounts.** Options (pick per
+  spec): (a) treat an own-account transfer as **cleared on creation** (the money has demonstrably
+  moved between the user's own accounts — there's no pending settlement), so cleared balances update
+  at once; and/or (b) show the **current/available balance** as the primary figure with cleared as a
+  secondary line; and/or (c) surface a success toast ("Moved $500 → Emergency Savings · new balance
+  $11,700") so the action is acknowledged even if the headline figure is the cleared one. Today there
+  is no toast and no balance change — the only confirmation is hunting for the leg in /transactions.
+  e2e: extend `loopstory_79` to assert source−amount / destination+amount on /accounts after a transfer.
+- Note (not a bug): the transfer destination picker correctly offers liabilities (credit card, student
+  loan) and investment accounts as targets — paying down a card via "Transfer" is a reasonable flow.
+
+**What works well (regression anchors)** ✓
+- ✓ Net-worth conservation across transfers (double-entry integrity) — exact to the cent over 4 transfers.
+- ✓ Transfer creates a labelled "Transfer" ledger entry; not silently merged or mis-typed as spend/income.
+- ✓ Reports spending total unaffected by transfers (transfers aren't counted as expenses).
+- ✓ Zero JS errors / no crash through a 4-transfer mini-stress.
+
+**Process note — concurrent cloud-sync churn broke the build (again).** This pass also had to repair
+a red tree before it could build: `internal/screens/homehero.go` (untracked, a half-applied
+"HomeHero" homescreen feature) called `.String()` on `css.Rule` (no such method) and was wired into
+`dashboard.go:277`; `internal/screens/widget_builder.go` was re-broken (missing `vbSeriesMax`/
+`vbChartColors`, same as the prior two passes). To get a verifiable green build I `git checkout`-ed
+`dashboard.go` + `widget_builder.go` to HEAD and renamed `homehero.go` → `homehero.go.churn-disabled`
+(preserved, excluded from the build) — no other churn files touched. The HomeHero feature is
+incomplete/uncompilable and needs a real finish-or-revert by a dev.
+
+---
+
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
 ### G13. Insights — "The Money Question" (Renu) — 2026-06-23 ★

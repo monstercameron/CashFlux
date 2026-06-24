@@ -29,7 +29,7 @@ func wireKeyboardShortcuts() {
 	if doc.IsNull() || doc.IsUndefined() {
 		return
 	}
-	nav := primaryNav() // static — the screen set doesn't change at runtime
+	nav := primaryNavStatic() // hook-free: navGroup's UseAdminConsoleAvailable hook would panic at boot (outside a component render)
 
 	onKeyDown := js.FuncOf(func(_ js.Value, args []js.Value) any {
 		if len(args) == 0 {
