@@ -3,6 +3,54 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Widget Builder: visual node-graph card designer (1:1 dashboard clones)
+
+Shipped the Widget Builder — an n8n-style visual-scripting screen for composing dashboard
+cards from a typed node graph. The brief: it should be flexible enough to feel "almost like
+its own visual programming language," and ultimately be able to clone the existing dashboard
+widgets 1:1 (values, styling, charts, glyphs, bars, KPI figures).
+
+**Architecture (bottom-up, per the SDLC rule).** The language/engine is a pure package,
+`internal/cardgraph` (no `syscall/js`, fully unit-tested): typed ports with safe coercions
+(`CanFeed`), a tagged `Value` union (number/text/bool/color/collection/series/viz), node specs
+registered with eval funcs, Kahn topological order with implicit deps from named-variable
+references, cycle/type/dangling-edge validation, and evaluation that degrades gracefully around
+broken nodes rather than blanking the whole card. The wasm/UI layer (`internal/screens/
+widget_builder.go`) is a thin shell: it draws the canvas and renders the engine's `VizBlock`
+output through the dashboard's OWN renderers, so a clone is structurally identical, not a
+look-alike — KPIs go through `kpiBody`/`kpiBodyHero`, charts through `uiw.Chart`+`chartspec`
+(the same D3 path the dashboard uses), money through `fmtMoney`/`figTone`/`ColorClass`.
+
+**Canvas.** A JS pointer shim does cursor-anchored wheel-zoom (invariant-point formula),
+drag-to-pan, scale-aware node dragging, drag-output-port → input-port to wire, and
+click-a-wire to disconnect, with a MutationObserver rerouting wires as nodes move. Pan/zoom
+state and node positions persist to `localStorage`.
+
+**Problems hit / decisions.**
+- A parallel agent working the same repo kept reverting my uncommitted `widget_builder.go`
+  (the `cardgraph` engine survived because it's a separate package). Fix: commit aggressively
+  after each working increment to lock the work against reverts — which is the one-feature-per-
+  commit rule anyway.
+- HTML5 dragend reports `clientX=0` in headless Chromium, so drag-to-wire is a pointer-event
+  shim, not native DnD — also lets the same code handle pan and node-drag.
+- A real engine bug surfaced while adding the net-worth-trend preset: `data.groupby` ignored
+  its `sort` prop and always sorted value-descending, so time-series charts were silently
+  mis-ordered. The existing chronological test passed only by coincidence (its values descended
+  in date order). Fixed to honour `value`/`label`/`none`; added `TestGroupBySortModes` with
+  orders that genuinely diverge across the three modes.
+
+**Quality loop.** Drove it with a critical subagent reviewing against the spec: 78 → 93 → 100.
+Round 2 fixed live-preview count-up animation, chart-height collapse in auto-height bodies,
+currency/headerless parity of the recent-transactions list clone, persistent toggle state, and
+the groupby sort bug, and added the net-worth-series dataset + cash-flow/assets/net-worth-trend
+presets. Round 3 strengthened the e2e to assert an actual plotted area path (not just an empty
+svg) and that the assets KPI subline is the real month-over-month string surface. All checks
+pass in `e2e/widget_builder_check.mjs`.
+
+**Next.** Cash-flow as a true paired-bar (income vs spending per month) would need a grouped/
+paired-series chart kind in `chartspec`; budgets/goals progress-bar clones; a node-search box in
+the palette as the catalog grows.
+
 ## 2026-06-24 — a11y: name Appearance control groups for screen readers (+ notifications list semantics)
 
 Accessibility / i18n sweep targeting the Appearance screen and the Notification Center.
