@@ -3,6 +3,44 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART layer, deepened: interspersed, branded, schedulable, mutable, runnable
+
+Owner feedback after the 84/84 completion: the hub was nice but the layer felt "half baked" — the
+strips were deterministic read-outs with no inline AI ("where is the click-before-run analysis?"),
+no way to run features manually, mute them, or **schedule when/how they run** (weekly, on new
+transaction, on app open, monthly…). Also asked: intersperse them throughout the app, and add a glyph
+brand for Smart / Smart AI. Built all of it this session:
+
+1. **Interspersed inline strips.** `SmartStrip` renders a page's enabled, active insights inline,
+   wired once in the Shell via `SmartStripForPath(activePath)` (route→`smart.Page`; Dashboard = cross-
+   page). Strictly additive + feature-flagged: a page is untouched until you toggle on a feature for
+   it (`RunPage` runs only enabled engines).
+2. **Brand glyph.** A shared sparkle (`icon.Sparkles`) via `smartBrandHeader` — neutral = Smart,
+   accent = Smart AI — on every SMART surface.
+3. **Scheduling.** Pure `Cadence` model (Always/Manual/On-open/On-change/Daily/Weekly/Monthly) with
+   `Due`/`FreshFor` + tier defaults (Free=Live, AI=Manual). `Settings` gained Schedules/Muted/LastRun/
+   Results. The catalog row shows a cadence `<select>` for AI features + a Mute button for all.
+4. **Run controls.** AI features now render inline on their page strips as click-to-run controls
+   (not hub-only); each caches its last result (persisted) so a run survives navigation without
+   re-spending; and a non-Manual schedule **auto-runs when due** via a guarded `UseEffect`.
+
+**The two design calls worth recording.** (a) *Free features aren't schedulable* — they're free +
+instant, so a cadence would be a no-op control; they get on/off + mute, and AI gets the schedule
+(where cost makes timing matter). Honest over uniform. (b) *Auto-run safety* — the scariest part was
+an effect that spends money in a loop. The guard: stamp `LastRun` **before** the call and embed it in
+the effect's deps key, so the key changes the instant we run and the effect can't re-enter within the
+due window — provably ≤1 paid call per period. It also only mounts behind the provider gate, so it
+can't fire without a key (which is also why e2e can't exercise it — the manual path + `Due` unit tests
+cover the logic).
+
+**Multi-agent hygiene.** `shell.go`/`smart.go` had concurrent agents' uncommitted hunks (a Sidebar
+brand-mark fix, a tierBadge `BgUp15` tweak) mixed with mine. Split each `git diff` by hunk, kept only
+the SMART hunks, `git apply --cached` — so my commits never authored or swept their WIP.
+
+**Tests.** `smart` schedule/settings unit tests (cadence validity/Due/FreshFor, mute/run/result round-
+trips); e2e `smart_hub_check.mjs` (cadence picker + mute render) and `smart_strip_check.mjs` (inline
+strips, feature-flag on/off, AI surfaces inline + provider-gated).
+
 ## 2026-06-24 — SMART series COMPLETE (84/84)
 
 The full ~84-item per-page Smart/AI backlog is shipped, tested, and pushed: **66 deterministic Free
