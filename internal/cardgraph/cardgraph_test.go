@@ -287,6 +287,51 @@ func TestGroupByChronologicalSort(t *testing.T) {
 	}
 }
 
+func TestGroupBySortModes(t *testing.T) {
+	// Values are arranged so value-descending, label-ascending, and input order are
+	// all DIFFERENT — so each mode is genuinely exercised (the older test passed by
+	// coincidence because its values happened to descend chronologically).
+	c := Collection{
+		Cols: []Column{{Name: "month", Type: TypeText}, {Name: "amount", Type: TypeNumber}},
+		Rows: []Row{
+			{"month": Text("2026-02"), "amount": Num(10)}, // input[0]
+			{"month": Text("2026-03"), "amount": Num(99)}, // input[1] (highest)
+			{"month": Text("2026-01"), "amount": Num(50)}, // input[2]
+		},
+	}
+	build := func(sortMode string) []string {
+		g := Graph{
+			Nodes: []Node{
+				{ID: "ds", Kind: KindSourceDataset, Props: map[string]string{"which": "txns"}},
+				{ID: "gb", Kind: KindGroupBy, Props: map[string]string{"group": "month", "value": "amount", "fn": "sum", "sort": sortMode}},
+				{ID: "ch", Kind: KindVizChart, Props: map[string]string{"chart": "line"}},
+			},
+			Edges: []Edge{
+				{From: PortRef{"ds", OutPort}, To: PortRef{"gb", "in"}},
+				{From: PortRef{"gb", OutPort}, To: PortRef{"ch", "series"}},
+			},
+			Root: "ch",
+		}
+		res := Eval(g, Context{Datasets: map[string]Collection{"txns": c}})
+		if res.Render == nil || len(res.Render.Series) != 3 {
+			t.Fatalf("sort %q: series %+v", sortMode, res)
+		}
+		return []string{res.Render.Series[0].Label, res.Render.Series[1].Label, res.Render.Series[2].Label}
+	}
+	cases := map[string][]string{
+		"value": {"2026-03", "2026-01", "2026-02"}, // 99, 50, 10
+		"label": {"2026-01", "2026-02", "2026-03"}, // chronological
+		"none":  {"2026-02", "2026-03", "2026-01"}, // input order
+		"":      {"2026-03", "2026-01", "2026-02"}, // default = value
+	}
+	for mode, want := range cases {
+		got := build(mode)
+		if got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+			t.Errorf("sort %q = %v, want %v", mode, got, want)
+		}
+	}
+}
+
 func TestFilterThenAggregate(t *testing.T) {
 	// Keep Food rows, sum amount → 50.
 	g := Graph{

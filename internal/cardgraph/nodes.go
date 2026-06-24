@@ -456,7 +456,18 @@ func init() {
 				a := groups[k]
 				pts = append(pts, SeriesPoint{Label: k, Value: aggValue(fn, a.sum, a.min, a.max, a.n)})
 			}
-			sort.SliceStable(pts, func(i, j int) bool { return pts[i].Value > pts[j].Value })
+			// Ordering selects the chart shape: value-descending for ranked breakdowns
+			// (the default — biggest category first), label-ascending for chronological
+			// time series (e.g. "Jan","Feb",… months), or none to preserve the input
+			// order verbatim (for an already-ordered series like end-of-month net worth).
+			switch strings.TrimSpace(props["sort"]) {
+			case "none":
+				// keep insertion order
+			case "label":
+				sort.SliceStable(pts, func(i, j int) bool { return pts[i].Label < pts[j].Label })
+			default:
+				sort.SliceStable(pts, func(i, j int) bool { return pts[i].Value > pts[j].Value })
+			}
 			return Ser(pts), nil
 		},
 	})
