@@ -261,7 +261,7 @@ func Dashboard() ui.Node {
 			tiles = append(tiles, render())
 		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
 			// User-published Widget Builder card: render the saved cardgraph tile.
-			if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix)); w != nil {
+			if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
 				tiles = append(tiles, w)
 			}
 		}

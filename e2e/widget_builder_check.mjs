@@ -83,8 +83,13 @@ try {
   // Undo reverts the add; fit-to-view + the expanded palette (rule/color/stack/button)
   // exist. These close the canvas-polish + node-breadth gaps.
   if ((await page.locator(".wb-zoom [data-zoom='fit']").count()) === 0) fail("no fit-to-view control");
-  for (const k of ["data.rule", "literal.color", "viz.stack", "ui.button", "ui.toggle"]) {
+  for (const k of ["data.rule", "literal.color", "viz.stack", "ui.button", "ui.toggle", "style.accent", "style.tone"]) {
     if ((await page.locator(`.vb-pal-btn[data-kind="${k}"]`).count()) === 0) fail(`palette missing node: ${k}`);
+  }
+  // Styling + layout are their own palette groups (Cam: "no styling and layout tools").
+  for (const grp of ["Style", "Layout"]) {
+    const has = (await page.locator(".vb-pal-group").allTextContents()).some((t) => t.trim() === grp);
+    if (!has) fail(`palette missing group: ${grp}`);
   }
   await page.locator('[data-testid="vb-undo"]').click();
   await page.waitForTimeout(300);
@@ -156,6 +161,31 @@ try {
     if (!/month/i.test(subTxt)) fail(`assets-card subline is not the net-worth MoM string: "${subTxt}"`);
   }
 
+  // 4g) Styling tool: the styled-KPI preset wires a color through style.accent, so the
+  // figure renders in that accent (#8b5cf6 → rgb(139, 92, 246)) instead of the tone color.
+  await page.locator('.vb-toolbar select').first().selectOption("styled-kpi");
+  await page.waitForTimeout(500);
+  {
+    const fig = page.locator(".wb-tile .fig").first();
+    if ((await fig.count()) === 0) fail("styled-kpi did not render a figure");
+    // The accent is applied as inline color on a wrapper that cascades to the figure.
+    const color = await page.locator(".wb-tile").first().evaluate((tile) => {
+      const f = tile.querySelector(".fig");
+      return f ? getComputedStyle(f).color : "";
+    });
+    if (!/rgb\(\s*139,\s*92,\s*246\s*\)/.test(color)) fail(`styled-kpi figure is not the accent color: ${color}`);
+  }
+
+  // 4h) Layout tool: the dual-KPI preset composes two KPIs side by side via a row stack.
+  await page.locator('.vb-toolbar select').first().selectOption("dual-kpi");
+  await page.waitForTimeout(500);
+  {
+    const figs = await page.locator(".wb-tile .vb-stack .fig").count();
+    if (figs < 2) fail(`dual-kpi should render two figures, got ${figs}`);
+    const isRow = await page.locator(".wb-tile .vb-stack").first().evaluate((el) => getComputedStyle(el).display === "flex");
+    if (!isRow) fail("dual-kpi stack is not laid out as a row (flex)");
+  }
+
   // 5) Another preset: recent transactions → a list/table renders.
   await page.locator('.vb-toolbar select').first().selectOption("recent");
   await page.waitForTimeout(500);
@@ -196,12 +226,18 @@ try {
   if (!(await tile.evaluate((el) => el.classList.contains("w")))) fail("published tile is not a standard .w bento cell");
   if ((await tile.locator(".wh").count()) === 0 || (await tile.locator(".wbody").count()) === 0) fail("published tile lacks the standard .wh/.wbody chrome");
 
-  // 8b) Publish a SECOND custom card (a KPI) → BOTH coexist on the dashboard.
+  // 8b) Publish a SECOND custom card (a KPI), RESIZED to 4 wide × 1 tall → it must
+  // coexist with the first AND honor its chosen size on the dashboard (Cam: tiles
+  // "don't respect the multiple widget sizes"). Default is 2×2: widen twice, shorten once.
   await page.locator('a[title="Widget builder"]').first().click();
   await page.waitForSelector(".vb-main", { timeout: 10000 });
   await page.locator('.vb-toolbar select').first().selectOption("networth");
   await page.waitForTimeout(300);
   await page.locator('input[aria-label="Card name"]').fill("my kpi");
+  // Drive to a known 4×1 regardless of the starting size (steppers clamp at [1..4]/[1..3]).
+  for (let i = 0; i < 3; i++) await page.locator('button[aria-label="Wider"]').click();
+  for (let i = 0; i < 3; i++) await page.locator('button[aria-label="Shorter"]').click();
+  await page.waitForTimeout(200);
   await page.locator('[data-testid="vb-publish"]').click();
   await page.waitForTimeout(300);
   await page.locator('a[title="Dashboard"]').first().click();
@@ -211,13 +247,43 @@ try {
   const kpiTile = page.locator('.bento [data-widget="wb:my kpi"]');
   if ((await kpiTile.count()) === 0) fail("second published custom card did not appear on the dashboard");
   if ((await kpiTile.locator(".fig.t-figure").count()) === 0) fail("published KPI does not use .fig.t-figure (dashboard KPI typography)");
+  // Size respect: the dashboard packs the tile from its layout span, exposed as
+  // data-col-span / data-row-span (the canonical size signal) — 4 wide × 1 tall.
+  {
+    const cs = await kpiTile.getAttribute("data-col-span");
+    const rs = await kpiTile.getAttribute("data-row-span");
+    if (cs !== "4") fail(`published KPI did not respect width 4: data-col-span="${cs}"`);
+    if (rs !== "1") fail(`published KPI did not respect height 1: data-row-span="${rs}"`);
+    // And it really spans 4 of the grid's 4 columns: wider than a 1-col tile.
+    const w = await kpiTile.evaluate((el) => el.getBoundingClientRect().width);
+    const narrow = await page.locator('.bento [data-col-span="1"]').first().evaluate((el) => el.getBoundingClientRect().width).catch(() => 0);
+    if (narrow && w < narrow * 2) fail(`4-wide tile (${Math.round(w)}px) is not visibly wider than a 1-wide tile (${Math.round(narrow)}px)`);
+  }
 
-  // 8c) Reload → both custom cards persist.
+  // 8c) Reload → both custom cards persist AND the resized KPI keeps its 4×1 span.
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector(".bento", { timeout: 15000 });
   await page.waitForTimeout(700);
   if ((await page.locator('.bento [data-widget="wb:my chart"]').count()) === 0) fail("custom chart did not survive reload");
-  if ((await page.locator('.bento [data-widget="wb:my kpi"]').count()) === 0) fail("custom KPI did not survive reload");
+  const kpiTile2 = page.locator('.bento [data-widget="wb:my kpi"]');
+  if ((await kpiTile2.count()) === 0) fail("custom KPI did not survive reload");
+  {
+    const cs = await kpiTile2.getAttribute("data-col-span");
+    if (cs !== "4") fail(`resized KPI lost its width after reload: data-col-span="${cs}"`);
+  }
+
+  // 8d) Reload the resized card in the builder → the W/H steppers restore to 4 / 1
+  // (size persists with the saved card, not just the published layout item).
+  await page.locator('a[title="Widget builder"]').first().click();
+  await page.waitForSelector(".vb-main", { timeout: 10000 });
+  await page.locator('select[aria-label="My cards"]').selectOption("my kpi");
+  await page.waitForTimeout(400);
+  {
+    const w = await page.locator(".wm-step-val").first().textContent();
+    const h = await page.locator(".wm-step-val").nth(1).textContent();
+    if (!/4/.test(w || "")) fail(`reloaded card width stepper not restored to 4: "${w}"`);
+    if (!/1/.test(h || "")) fail(`reloaded card height stepper not restored to 1: "${h}"`);
+  }
 
   if (!process.exitCode) console.log("PASS: canvas builder — palette/inspector/variables, presets (KPI/bar/line/donut/list), saved cards, publish MULTIPLE custom cards to the dashboard matching built-in chrome+typography, surviving reload.");
 } finally {

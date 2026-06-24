@@ -233,19 +233,42 @@ func VisualBuilder() ui.Node {
 		return nil
 	}, "vb-style")
 
-	col := ui.UseState(2)
-	row := ui.UseState(2)
-	graph := ui.UseState(vbLoadGraph())
+	loaded := vbLoadGraph()
+	col := ui.UseState(vbDim(loaded.Cols, 4))
+	row := ui.UseState(vbDim(loaded.Rows, 3))
+	graph := ui.UseState(loaded)
 	selected := ui.UseState(cardgraph.NodeID(""))
 	undoStack := ui.UseState([]cardgraph.Graph{})
 	redoStack := ui.UseState([]cardgraph.Graph{})
 
 	g := graph.Get()
+	// sized stamps the card's current width/height onto a graph so the size travels with
+	// it everywhere it is persisted (working draft, library, published tile).
+	sized := func(gr cardgraph.Graph) cardgraph.Graph {
+		gr.Cols, gr.Rows = col.Get(), row.Get()
+		return gr
+	}
+	// setCol/setRow change the card size and immediately persist it onto the working
+	// draft (no undo entry — resizing is a view choice, not a structural edit) so the
+	// chosen size survives a reload of the in-progress card.
+	setCol := func(n int) {
+		col.Set(n)
+		ng := g
+		ng.Cols, ng.Rows = n, row.Get()
+		vbSaveGraph(ng)
+	}
+	setRow := func(n int) {
+		row.Set(n)
+		ng := g
+		ng.Cols, ng.Rows = col.Get(), n
+		vbSaveGraph(ng)
+	}
 	// setGraph records the prior graph for undo (and clears the redo stack), so every
 	// structural edit is reversible.
 	setGraph := func(ng cardgraph.Graph) {
 		undoStack.Set(append(append([]cardgraph.Graph{}, undoStack.Get()...), g))
 		redoStack.Set(nil)
+		ng = sized(ng)
 		vbSaveGraph(ng)
 		graph.Set(ng)
 	}
@@ -389,6 +412,14 @@ func VisualBuilder() ui.Node {
 	}
 	loadPreset := ui.UseEvent(func(e ui.Event) {
 		if p, ok := vbPresets()[e.GetValue()]; ok {
+			// Restore the preset's intended size (if it carries one) before setGraph, so
+			// the W/H steppers and the stamped graph agree (setGraph reads col/row).
+			if p.Cols > 0 {
+				col.Set(vbDim(p.Cols, 4))
+			}
+			if p.Rows > 0 {
+				row.Set(vbDim(p.Rows, 3))
+			}
 			setGraph(p)
 			selected.Set("")
 		}
@@ -411,7 +442,7 @@ func VisualBuilder() ui.Node {
 			return
 		}
 		lib := vbLoadCards()
-		lib[name] = g
+		lib[name] = sized(g)
 		vbSaveCards(lib)
 		id := vbCardPrefix + name
 		// Build a brand-new slice (never append into the atom's backing array) so the
@@ -419,9 +450,11 @@ func VisualBuilder() ui.Node {
 		// leave the dashboard reading a stale layout until a reload.
 		next := append([]dashlayout.Item(nil), layoutAtom.Get()...)
 		exists := false
-		for _, it := range next {
+		for i, it := range next {
 			if it.ID == id {
 				exists = true
+				// Re-publishing after a resize updates the tile's span in place.
+				next[i].ColSpan, next[i].RowSpan = col.Get(), row.Get()
 			}
 		}
 		if !exists {
@@ -437,12 +470,15 @@ func VisualBuilder() ui.Node {
 			return
 		}
 		lib := vbLoadCards()
-		lib[name] = g
+		lib[name] = sized(g)
 		vbSaveCards(lib)
 		rev.Set(rev.Get() + 1)
 	})
 	loadCard := ui.UseEvent(func(e ui.Event) {
 		if c, ok := vbLoadCards()[e.GetValue()]; ok {
+			// Restore the saved card's size onto the W/H steppers before loading it.
+			col.Set(vbDim(c.Cols, 4))
+			row.Set(vbDim(c.Rows, 3))
 			setGraph(c)
 			cardName.Set(e.GetValue())
 			selected.Set("")
@@ -503,8 +539,8 @@ func VisualBuilder() ui.Node {
 			Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
 			If(published.Get() != "", Span(css.Class("t-caption"), Style(map[string]string{"color": "var(--up,#16a34a)"}), published.Get())),
 			Span(css.Class("vb-sep")),
-			wmStepper("W", col.Get(), "Narrower", "Wider", func() { col.Set(clampSpan(col.Get()-1, 4)) }, func() { col.Set(clampSpan(col.Get()+1, 4)) }),
-			wmStepper("H", row.Get(), "Shorter", "Taller", func() { row.Set(clampSpan(row.Get()-1, 3)) }, func() { row.Set(clampSpan(row.Get()+1, 3)) }),
+			wmStepper("W", col.Get(), "Narrower", "Wider", func() { setCol(clampSpan(col.Get()-1, 4)) }, func() { setCol(clampSpan(col.Get()+1, 4)) }),
+			wmStepper("H", row.Get(), "Shorter", "Taller", func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
 		),
 		// Three-pane: palette | canvas | inspector
 		Div(css.Class("vb-main"),
@@ -714,6 +750,15 @@ func vbDatasets() map[string]cardgraph.Collection {
 
 // ---- graph persistence + helpers ----------------------------------------------
 
+// vbDim returns a stored card dimension clamped to [1,max], treating 0/unset as the
+// 2×2 default (so an older card saved before sizes were persisted opens at 2).
+func vbDim(v, max int) int {
+	if v < 1 {
+		return 2
+	}
+	return clampSpan(v, max)
+}
+
 func vbLoadGraph() cardgraph.Graph {
 	v := js.Global().Get("localStorage").Call("getItem", vbGraphKey)
 	if v.Type() == js.TypeString && v.String() != "" {
@@ -742,15 +787,27 @@ const vbCardPrefix = "wb:"
 // vbPublishedWidget renders a published builder card (by saved name) as a
 // dashboard tile. Returns nil if the named card no longer exists in the library
 // (e.g. the user deleted it after publishing) so the tile silently drops out.
-func vbPublishedWidget(name string) ui.Node {
+// vbPublishedWidget renders a published builder card at the given dashboard-grid span
+// (colSpan×rowSpan from the layout item). A zero span falls back to the size saved with
+// the card, then to 2×2 — so a custom card honors its chosen width/height like the
+// built-in tiles, instead of collapsing to a single cell.
+func vbPublishedWidget(name string, colSpan, rowSpan int) ui.Node {
 	g, ok := vbLoadCards()[name]
 	if !ok {
 		return nil
 	}
+	if colSpan < 1 {
+		colSpan = vbDim(g.Cols, 4)
+	}
+	if rowSpan < 1 {
+		rowSpan = vbDim(g.Rows, 3)
+	}
 	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Strs: vbStringSurface(), Datasets: vbDatasets()})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: vbCardPrefix + name, Title: name, Draggable: true, Resizable: true,
-		Body: vbRenderTile(res, g),
+		GridColumn: "span " + strconv.Itoa(clampSpan(colSpan, 4)),
+		GridRow:    "span " + strconv.Itoa(clampSpan(rowSpan, 3)),
+		Body:       vbRenderTile(res, g),
 	})
 }
 
@@ -869,7 +926,6 @@ func vbCatalog() []vbCatItem {
 		{cardgraph.KindLiteralNumber, "Number", "Data"},
 		{cardgraph.KindLiteralText, "Text", "Data"},
 		{cardgraph.KindLiteralBool, "Yes / No", "Data"},
-		{cardgraph.KindLiteralColor, "Color", "Data"},
 		{cardgraph.KindFilter, "Filter", "Transform"},
 		{cardgraph.KindRule, "Rule", "Transform"},
 		{cardgraph.KindGroupBy, "Group by", "Transform"},
@@ -884,7 +940,10 @@ func vbCatalog() []vbCatItem {
 		{cardgraph.KindVizProgress, "Progress", "Display"},
 		{cardgraph.KindVizBadge, "Badge", "Display"},
 		{cardgraph.KindVizText, "Text", "Display"},
-		{cardgraph.KindVizStack, "Stack (compose)", "Display"},
+		{cardgraph.KindLiteralColor, "Color", "Style"},
+		{cardgraph.KindStyleAccent, "Accent color", "Style"},
+		{cardgraph.KindStyleTone, "Tone (▲▼)", "Style"},
+		{cardgraph.KindVizStack, "Stack (compose)", "Layout"},
 		{cardgraph.KindUIButton, "Button", "Interact"},
 		{cardgraph.KindUIToggle, "Toggle", "Interact"},
 	}
@@ -938,7 +997,11 @@ func vbDefaultProps(kind string) map[string]string {
 	case cardgraph.KindRule:
 		return map[string]string{"textcol": "payee", "amountcol": "amount", "any": "", "min": "0", "max": "0"}
 	case cardgraph.KindVizStack:
-		return map[string]string{"title": "Card"}
+		return map[string]string{"title": "Card", "dir": "column"}
+	case cardgraph.KindStyleAccent:
+		return map[string]string{"color": "#3b82f6"}
+	case cardgraph.KindStyleTone:
+		return map[string]string{"tone": "up"}
 	case cardgraph.KindUIButton:
 		return map[string]string{"label": "Apply rules", "action": "applyRules"}
 	case cardgraph.KindUIToggle:
@@ -982,7 +1045,11 @@ func vbParamSchema(kind string) []vbParam {
 	case cardgraph.KindRule:
 		return []vbParam{{"textcol", "Text column", "text", nil}, {"any", "Keywords (any)", "text", nil}, {"amountcol", "Amount column", "text", nil}, {"min", "Min amount", "number", nil}, {"max", "Max amount", "number", nil}}
 	case cardgraph.KindVizStack:
-		return []vbParam{{"title", "Title", "text", nil}}
+		return []vbParam{{"title", "Title", "text", nil}, {"dir", "Direction", "select", [][2]string{{"column", "Stacked (top→bottom)"}, {"row", "Side by side"}}}}
+	case cardgraph.KindStyleAccent:
+		return []vbParam{{"color", "Accent color", "color", nil}}
+	case cardgraph.KindStyleTone:
+		return []vbParam{{"tone", "Tone", "select", [][2]string{{"up", "Positive (green)"}, {"down", "Negative (red)"}, {"", "Neutral"}}}}
 	case cardgraph.KindUIButton, cardgraph.KindUIToggle:
 		return []vbParam{{"label", "Label", "text", nil}, {"action", "Action", "select", [][2]string{{"applyRules", "Apply rules"}, {"postRecurring", "Post recurring"}, {"addTask", "Add task"}}}}
 	case cardgraph.KindLiteralNumber:
@@ -1163,6 +1230,43 @@ func vbPresets() map[string]cardgraph.Graph {
 		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
 		Root:  "n2",
 	}
+
+	// Styled KPI: net worth → KPI → style.accent (custom color) → root. Demonstrates the
+	// styling tools — the figure renders in the chosen accent instead of the default tone.
+	p["styled-kpi"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "net_worth"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Net worth", "format": "currency", "tone": "", "hero": "true"}, Pos: cardgraph.Point{X: 320, Y: 40}},
+			{ID: "n3", Kind: cardgraph.KindLiteralColor, Props: map[string]string{"value": "#8b5cf6"}, Pos: cardgraph.Point{X: 320, Y: 200}},
+			{ID: "n4", Kind: cardgraph.KindStyleAccent, Props: map[string]string{"color": "#8b5cf6"}, Pos: cardgraph.Point{X: 620, Y: 90}},
+		},
+		Edges: []cardgraph.Edge{
+			{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}},
+			{From: cardgraph.PortRef{Node: "n2", Port: "out"}, To: cardgraph.PortRef{Node: "n4", Port: "in"}},
+			{From: cardgraph.PortRef{Node: "n3", Port: "out"}, To: cardgraph.PortRef{Node: "n4", Port: "color"}},
+		},
+		Root: "n4",
+		Cols: 2, Rows: 1,
+	}
+
+	// Side-by-side layout: two KPIs composed in a row via the layout stack.
+	p["dual-kpi"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "a1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "income"}, Pos: cardgraph.Point{X: 40, Y: 30}},
+			{ID: "a2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Income", "format": "currency", "tone": "auto"}, Pos: cardgraph.Point{X: 320, Y: 30}},
+			{ID: "b1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "expense"}, Pos: cardgraph.Point{X: 40, Y: 200}},
+			{ID: "b2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Spending", "format": "currency", "tone": "auto"}, Pos: cardgraph.Point{X: 320, Y: 200}},
+			{ID: "st", Kind: cardgraph.KindVizStack, Props: map[string]string{"title": "This month", "dir": "row"}, Pos: cardgraph.Point{X: 620, Y: 110}},
+		},
+		Edges: []cardgraph.Edge{
+			{From: cardgraph.PortRef{Node: "a1", Port: "out"}, To: cardgraph.PortRef{Node: "a2", Port: "value"}},
+			{From: cardgraph.PortRef{Node: "b1", Port: "out"}, To: cardgraph.PortRef{Node: "b2", Port: "value"}},
+			{From: cardgraph.PortRef{Node: "a2", Port: "out"}, To: cardgraph.PortRef{Node: "st", Port: "block1"}},
+			{From: cardgraph.PortRef{Node: "b2", Port: "out"}, To: cardgraph.PortRef{Node: "st", Port: "block2"}},
+		},
+		Root: "st",
+		Cols: 4, Rows: 1,
+	}
 	return p
 }
 
@@ -1180,6 +1284,8 @@ func vbPresetOptions() [][2]string {
 		{"spend-trend", "Spending trend (line)"},
 		{"spend-donut", "Spending breakdown (donut)"},
 		{"networth-trend", "Net worth trend (area)"},
+		{"styled-kpi", "Styled KPI (accent color)"},
+		{"dual-kpi", "Income + Spending (side by side)"},
 		{"recent", "Recent transactions (list)"},
 		{"accounts", "Accounts (list)"},
 	}
@@ -1188,7 +1294,7 @@ func vbPresetOptions() [][2]string {
 // ---- panes ---------------------------------------------------------------------
 
 func vbPalette(onAdd func(string)) ui.Node {
-	groups := []string{"Data", "Transform", "Logic", "Display", "Interact"}
+	groups := []string{"Data", "Transform", "Logic", "Display", "Style", "Layout", "Interact"}
 	children := []ui.Node{Span(css.Class("vb-pane-title"), "Nodes")}
 	for _, grp := range groups {
 		children = append(children, Span(css.Class("vb-pal-group"), grp))
@@ -1613,8 +1719,9 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 	case "text":
 		return P(css.Class("t-body"), v.Text)
 	case "badge":
+		accent := vbAccentOr(v.Accent, "var(--accent,#3b82f6)")
 		st := map[string]string{"display": "inline-block", "padding": "0.25rem 0.7rem", "border-radius": "999px", "font-weight": "600",
-			"background": "color-mix(in srgb, var(--accent,#3b82f6) 18%, transparent)", "color": "var(--accent,#3b82f6)"}
+			"background": "color-mix(in srgb, " + accent + " 18%, transparent)", "color": accent}
 		if v.Tone == "up" {
 			st["background"], st["color"] = "color-mix(in srgb, var(--up,#16a34a) 18%, transparent)", "var(--up,#16a34a)"
 		} else if v.Tone == "down" {
@@ -1624,7 +1731,7 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 	case "progress":
 		fillW := strconv.FormatFloat(v.Pct*100, 'f', 1, 64) + "%"
 		track := map[string]string{"width": "100%", "height": "10px", "border-radius": "999px", "background": "color-mix(in srgb, var(--dim,#6b7280) 25%, transparent)", "overflow": "hidden", "margin-top": "0.4rem"}
-		fill := map[string]string{"width": fillW, "height": "100%", "background": "var(--accent,#3b82f6)"}
+		fill := map[string]string{"width": fillW, "height": "100%", "background": vbAccentOr(v.Accent, "var(--accent,#3b82f6)")}
 		if v.Tone == "up" {
 			fill["background"] = "var(--up,#16a34a)"
 		}
@@ -1634,8 +1741,14 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 			Div(css.Class("wb-bar"), Style(track), Div(css.Class("wb-bar-fill"), Style(fill))),
 		)
 	case "stat":
+		figStyle := map[string]string{}
+		// Accent recolors the figure only when there's no semantic ± tone (tone wins,
+		// since red/green carry meaning a decorative accent shouldn't override).
+		if v.Accent != "" && v.Tone == "" {
+			figStyle["color"] = v.Accent
+		}
 		return Div(
-			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
+			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), Style(figStyle), vbMoneyFmt(v.Text, format)),
 			P(css.Class("t-caption"+vbToneClass(v.Tone)), v.Sub),
 		)
 	case "chart":
@@ -1643,13 +1756,23 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 	case "list":
 		return vbList(v)
 	case "stack":
-		// Composite tile: render each child block top-to-bottom (header + chart + list).
+		// Composite tile: render each child block. Direction = column (top→bottom,
+		// default) or row (side by side) per the layout node.
 		blocks := make([]ui.Node, 0, len(v.Blocks))
+		rowDir := v.Dir == "row"
 		for i := range v.Blocks {
 			b := v.Blocks[i]
-			blocks = append(blocks, Div(Style(map[string]string{"margin-bottom": "0.6rem"}), vbRenderViz(&b, format)))
+			margin := map[string]string{"margin-bottom": "0.6rem"}
+			if rowDir {
+				margin = map[string]string{"flex": "1", "min-width": "0"}
+			}
+			blocks = append(blocks, Div(Style(margin), vbRenderViz(&b, format)))
 		}
-		return Div(css.Class("vb-stack"), blocks)
+		stackStyle := map[string]string{}
+		if rowDir {
+			stackStyle = map[string]string{"display": "flex", "gap": "0.6rem", "align-items": "flex-start"}
+		}
+		return Div(css.Class("vb-stack"), Style(stackStyle), blocks)
 	case "button":
 		return ui.CreateElement(vbActionButton, vbActionButtonProps{Label: v.Text, Action: v.Action})
 	case "toggle":
@@ -1662,11 +1785,28 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 			figTone = "text-down"
 		}
 		fig := vbMoneyFmt(v.Text, format)
+		var body ui.Node
 		if v.Hero {
-			return kpiBodyHero(fig, figTone, v.Sub, "text-dim")
+			body = kpiBodyHero(fig, figTone, v.Sub, "text-dim")
+		} else {
+			body = kpiBody(fig, figTone, v.Sub, "text-dim")
 		}
-		return kpiBody(fig, figTone, v.Sub, "text-dim")
+		// Accent recolors the KPI figure when no ± tone applies: the figure inherits
+		// color (ColorClass("") sets none), so a colored wrapper cascades onto it.
+		if v.Accent != "" && figTone == "" {
+			return Div(Style(map[string]string{"color": v.Accent}), body)
+		}
+		return body
 	}
+}
+
+// vbAccentOr returns the explicit accent color if set, else the fallback (the theme
+// accent var). Centralizes the "honor a wired style.accent, else theme" rule.
+func vbAccentOr(accent, fallback string) string {
+	if strings.TrimSpace(accent) != "" {
+		return accent
+	}
+	return fallback
 }
 
 // vbChart renders through the SAME D3 stack (uiw.Chart + chartspec) the dashboard
