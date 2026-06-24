@@ -3,6 +3,44 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Operator console: real user management + usage analytics
+
+Cam: "the console makes no sense, how can we see the user accounts and manage their account
+or [pertinent] usage stats … make it a usable SPA for maintaining the business." He also
+asked for "accounting and financing and bills."
+
+**Reality check first.** The console (operator SPA at `/console/`, `/admin` screen, admin API)
+is owned by a *parallel agent actively committing every few minutes*. And the finance asks —
+bills, financing/debt, accounting/reports — **already exist and are surfaced**: `internal/bills`
++ Bills screen (calendar, mark-paid, CSV), `internal/payoff` (snowball/avalanche/amortization)
+via Planning, Reports, Subscriptions, Split, Allocate, Insights, budgets/goals. So I did *not*
+build redundant finance screens. The genuine gap was the console: its admin API was read-only
+(overview + users list) with **no way to view or manage a single user** — even though the repo
+already had the primitives (`DeleteAccount`, `RevokeRefreshSessionsForUser`, `GetSubscription`,
+per-user `Usage`, `UserBlobBytes`).
+
+**What I built (bottom-up, collision-aware).**
+1. *Admin management API* (`internal/server/admin_manage.go`, new file, avoids the shared
+   `admin.go`): user detail, per-user usage history (new read method `Store.ListUserUsage`),
+   set-plan, revoke-sessions, delete — mirroring the existing CORS→store→bearer→IsAdmin→audit
+   guard, never leaking secrets. Tests in `admin_manage_test.go` (success, 404/403/401/412,
+   self-delete block, no-secret-leak).
+2. *Console management UI* (`cmd/cashflux-admin/manage.go`, new file): clickable users table
+   (each row its own component to own an OnClick hook — the no-On*-in-loops rule), a per-user
+   view with account summary + 14-day usage bar chart + actions (override plan, revoke sessions,
+   two-step delete). CSS injected from Go so the layer is self-contained; only a small hook in
+   the hot `main.go`.
+
+**Collision management.** The package went uncompilable *twice mid-session* as the parallel agent
+rewrote `config.go`/`store`/`billing_http` (`cfg.IsAdmin`, `handleBillingStatus` flicking
+undefined). I never touched their files; each time the build settled I re-verified and committed.
+Everything substantive lives in my *own* new files so a clobbered `main.go`/`http.go` hook is
+cheap to re-apply.
+
+**Next.** Per-user audit-trail view (data exists via `ListAuditEvents`); optional account
+*suspend* (needs a users-table status column — deferred to avoid colliding with the in-flight
+store rewrite).
+
 ## 2026-06-24 — Fix: console page flicker (render loop)
 
 **Symptom.** User reported `/console/#features` flickering. The backend's request log was the smoking gun: 9,373 `/v1/admin/overview` requests, arriving ~1/second.
