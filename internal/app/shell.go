@@ -228,12 +228,12 @@ var railMeta = map[string]struct {
 	"/workflows":      {"nav.workflows", icon.Customize},
 	"/widget-builder": {"nav.widgetBuilder", icon.PlusCircle},
 	"/widget-manager": {"nav.widgetManager", icon.Dashboard},
-	"/members":       {"nav.members", icon.Users},
-	"/categories":    {"nav.categories", icon.Tag},
-	"/rules":         {"nav.rules", icon.Tag},
-	"/notifications": {"nav.notifications", icon.Bell},
-	"/appearance":    {"nav.appearance", icon.Appearance},
-	"/admin":         {"nav.admin", icon.Settings},
+	"/members":        {"nav.members", icon.Users},
+	"/categories":     {"nav.categories", icon.Tag},
+	"/rules":          {"nav.rules", icon.Tag},
+	"/notifications":  {"nav.notifications", icon.Bell},
+	"/appearance":     {"nav.appearance", icon.Appearance},
+	"/admin":          {"nav.admin", icon.Settings},
 }
 
 // navGroup builds the rail items for one screen group, in registry order. The

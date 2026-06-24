@@ -7,8 +7,8 @@ package i18n
 // changes do not land in the user's working tree.
 var adminKeys = Catalog{
 	// Nav + screen chrome
-	"nav.admin":        "Admin",
-	"screen.adminSub":  "Operator overview and user management",
+	"nav.admin":       "Admin",
+	"screen.adminSub": "Operator overview and user management",
 
 	// Overview card labels
 	"admin.totalUsers":    "Total users",
@@ -30,17 +30,17 @@ var adminKeys = Catalog{
 	"admin.colCreated":  "Joined",
 
 	// Empty / access states
-	"admin.signInPrompt":    "Sign in to the cloud to view the admin console.",
-	"admin.accessDenied":    "Admin access only. Your account does not have operator permissions.",
-	"admin.noUsers":         "No users found.",
+	"admin.signInPrompt": "Sign in to the cloud to view the admin console.",
+	"admin.accessDenied": "Admin access only. Your account does not have operator permissions.",
+	"admin.noUsers":      "No users found.",
 
 	// Loading / error
-	"admin.loading":          "Loading admin data…",
-	"admin.loadingOverview":  "Loading overview",
-	"admin.loadingUsers":     "Loading users",
-	"admin.errorOverview":    "Could not load overview.",
-	"admin.errorUsers":       "Could not load users.",
-	"admin.retry":            "Retry",
+	"admin.loading":         "Loading admin data…",
+	"admin.loadingOverview": "Loading overview",
+	"admin.loadingUsers":    "Loading users",
+	"admin.errorOverview":   "Could not load overview.",
+	"admin.errorUsers":      "Could not load users.",
+	"admin.retry":           "Retry",
 
 	// Section headings
 	"admin.overviewTitle": "Platform overview",

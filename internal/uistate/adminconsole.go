@@ -19,8 +19,8 @@ func UseAdminConsoleAvailable() state.Atom[bool] {
 // UseAdminConsoleAvailable so SetAdminConsoleAvailable can post from outside a
 // component (boot probe goroutine). Mirrors the online/sampledata seam.
 var (
-	adminConsoleAtom    state.Atom[bool]
-	adminConsoleReady   bool
+	adminConsoleAtom  state.Atom[bool]
+	adminConsoleReady bool
 )
 
 // CaptureAdminConsole registers the atom so SetAdminConsoleAvailable can write

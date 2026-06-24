@@ -1,7 +1,36 @@
-﻿# CashFlux â€” Developer Journal
+﻿# CashFlux — Developer Journal
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+
+## 2026-06-24 — feat: admin console screen (EC3)
+
+Implemented the operator UI for the EC1 admin API.
+
+**What shipped:**
+
+- `internal/i18n/en_enterprise.go` (new): `adminKeys` catalog for all admin.*/nav.admin/screen.adminSub keys, registered into the `english` source catalog via `init()`. Kept separate from `en.go` (user WIP) so the key set lands in its own file.
+- `internal/uistate/adminconsole.go` (new): `UseAdminConsoleAvailable() state.Atom[bool]` (default false) + `CaptureAdminConsole` / `SetAdminConsoleAvailable` seam — same pattern as the online indicator and sample-data banner.
+- `internal/app/adminprobe.go` (new): `probeAdminAccess()` — a non-blocking goroutine that fires `GET /v1/admin/overview` on boot; HTTP 200 sets the admin atom true and caches the parsed overview; any other outcome leaves the atom false.
+- `internal/screens/admin.go` (new, `//go:build js && wasm`): `AdminConsole()` view with five states: loading skeleton, sign-in prompt (no endpoint/token), admin-only empty state (401/403), error + retry button, and ready (overview stat grid + users DataTable). Client-side mirrors of server's `AdminOverviewResponse` and `AdminUserRow` JSON shapes match the server field names exactly. Overview card uses `uiw.StatGrid`; users table uses `uiw.DataTable` + `uiw.EntityListSection`. Inline formatting: `fmtCents` (MRR via `money.FormatAccounting`), `fmtInt64` (comma-grouped counts via `money.Group`), `fmtBytes` (B/KB/MB/GB humaniser). All buttons carry `Type(“button”)` + `aria-label` + `Title`.
+- `internal/screens/screens.go`: added `AdminOnly bool` doc-commented field to `Route`; registered `/admin` route.
+- `internal/app/shell.go`: `navGroup` reads + captures the admin atom, skips `r.AdminOnly` routes when the atom is false; added `/admin` to `railMeta` with `icon.Settings`.
+- `internal/app/app.go`: calls `probeAdminAccess()` immediately after `startBackendSync()`.
+
+**Key design decisions:**
+
+*i18n isolation.* All EC3 keys go in `en_enterprise.go` using an `init()` loop that writes into the `english` map (the same map `DefaultBundle()` reads). This avoids any `en.go` diff, keeps the file attributable to EC3, and is forward-compatible — a future merge into `en.go` is a pure concatenation.
+
+*Admin atom seam.* The `SetAdminConsoleAvailable` / `CaptureAdminConsole` pattern (online indicator, sample-data banner) is the established way to drive a re-render from outside a component. The probe goroutine calls `SetAdminConsoleAvailable(true)` after a 200; the sidebar re-renders and the Admin nav entry appears without a reload.
+
+*Hook ordering in `navGroup`.* `navGroup` is called from `primaryNav()`, `toolsNav()`, and `systemNav()`. Every call site is inside `Sidebar` (a component), so calling `UseAdminConsoleAvailable()` inside `navGroup` is hook-stable: it's always called in the same order (primary → tools → system, three calls per render). The admin atom is only checked in the `systemNav()` path (the only group with an AdminOnly route), so the hook call count never varies by data.
+
+*Boot probe timing.* `probeAdminAccess()` runs after `startBackendSync()` so the prefs (endpoint + token) are already loaded. It is non-blocking (goroutine) and does not gate app startup. First render shows the Admin entry absent; after the probe resolves the sidebar re-renders and it appears — typically sub-second on a local backend, imperceptible on a fast remote.
+
+*Field-name sourcing.* JSON struct tags confirmed against `internal/server/admin.go` `AdminOverviewResponse` and `internal/server/repository.go` `AdminUserRow` directly. No guessing.
+
+**Build:** WASM `go build` exits 0. `go test ./internal/i18n/...` passes.
+
 ## 2026-06-24 — feat(app): zero-knowledge encrypted artifact blobs (EC2)
 
 Implemented client-side AES-GCM encryption for backend artifact blob uploads.
