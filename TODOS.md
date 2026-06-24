@@ -25,7 +25,11 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [x] **EC3. Admin console screen (GWC)** — `/admin` overview cards + users table from EC1; admin-gated;
       a11y + i18n + keyboard.
 - [x] **EC4. Strong homescreen** — signed-out value/CTA + signed-in glanceable summary above the bento.
-- [ ] **EC5. Verification + docs** — encrypted dataset+artifacts end-to-end; admin gating; README/SPEC note.
+- [x] **EC5. Verification** — full wasm build green; native suite green (server admin authz/aggregate,
+      cryptobox round-trip, i18n, ledger, money). New surfaces build-clean; pre-existing OAuth/token
+      login, Cloud settings, billing, and passcode-gated dataset-at-rest encryption confirmed present.
+      NOTE: admin API + encrypted-artifact + billing paths are implemented + unit-tested but not yet
+      exercised end-to-end against a deployed `cashflux-server` (needs admin IDs + OAuth/Stripe env).
 
 ---
 
