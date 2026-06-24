@@ -1973,12 +1973,20 @@ func vbList(v *cardgraph.VizBlock, tileRows int) ui.Node {
 	if len(v.Rows) == 0 {
 		return P(css.Class("empty t-body", tw.TextDim), "No rows.")
 	}
-	// Respect the tile's height: a taller tile shows more rows. ~4 rows fit per grid-row
-	// (a 152px cell, less the header). The engine's "limit" prop is still the hard
-	// ceiling — this only trims to what fits, so a 1-tall list isn't a clipped overflow.
+	// Respect the tile's height: show as many rows as actually fit. The tile is
+	// tileRows grid cells tall (vbCellPx each + gaps); subtract the header band and
+	// divide by a table row's height. The engine's "limit" prop remains the hard
+	// ceiling — this only trims to what fits, so a 1-tall list isn't a clipped overflow
+	// and a 3-tall list grows toward its limit (≈3 rows at 1-tall, ≈12 at 3-tall).
 	src := v.Rows
 	if tileRows >= 1 {
-		if fit := tileRows * 3; fit < len(src) {
+		const vbListHeaderPx, vbListRowPx = 44, 34
+		tilePx := tileRows*vbCellPx + (tileRows-1)*vbGapPx
+		fit := (tilePx - vbListHeaderPx) / vbListRowPx
+		if fit < 1 {
+			fit = 1
+		}
+		if fit < len(src) {
 			src = src[:fit]
 		}
 	}

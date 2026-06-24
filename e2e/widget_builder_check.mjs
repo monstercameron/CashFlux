@@ -209,6 +209,10 @@ try {
     await page.waitForTimeout(300);
     const tallRows = await page.locator(".wb-tile .vb-table tbody tr").count();
     if (!(tallRows > shortRows)) fail(`list did not reflow to tile height: short=${shortRows}, tall=${tallRows} (expected tall > short)`);
+    // A 1-tall tile shows only a few rows; a 3-tall tile fills toward the engine limit
+    // (12 for this preset, with ample sample data) — guards against a premature row cap.
+    if (shortRows > 4) fail(`1-tall list should show ~3 rows, got ${shortRows}`);
+    if (tallRows < 9) fail(`3-tall list should fill toward its 12-row limit, got ${tallRows}`);
   }
 
   // 6) Wiring via the inspector: on the recent-list graph, select the dataset node and
