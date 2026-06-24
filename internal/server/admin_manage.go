@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -87,6 +88,104 @@ func adminGuard(cfg Config, store *Store, w http.ResponseWriter, r *http.Request
 		return AuthUser{}, "", false
 	}
 	return user, target, true
+}
+
+// handleAdminDevSeed serves POST /v1/admin/dev/seed — a DEV-ONLY helper that populates
+// the store with demo users, subscriptions, and usage so the operator console isn't
+// empty during local development. Returns 404 unless DevMode is on (so it never exists
+// in production), and is otherwise admin-gated. Idempotent: skips if users already exist.
+func handleAdminDevSeed(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !cfg.DevMode {
+			writeErrorJSON(w, ErrorReasonNotFound, "not found")
+			return
+		}
+		// Own guard (not adminGuard, which requires an {id} path value this route lacks).
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		if store == nil {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+			return
+		}
+		admin, ok := httpBearerUser(r, cfg)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+			return
+		}
+		if !cfg.IsAdmin(admin.ID) {
+			auditFromRequest(r, store, admin, "admin.dev.seed.denied", "admin", "dev")
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
+			return
+		}
+		existing, err := store.ListUsers(1, 0)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "seed precheck failed")
+			return
+		}
+		if len(existing) > 0 {
+			writeJSON(w, AdminActionResponse{OK: true, Action: "seed", Detail: "store already has users; skipped"})
+			return
+		}
+		n, err := seedDemoData(store, time.Now().UTC())
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "seed failed: "+err.Error())
+			return
+		}
+		auditFromRequest(r, store, admin, "admin.dev.seed", "dev", "demo-users")
+		writeJSON(w, AdminActionResponse{OK: true, Action: "seed", Detail: fmt.Sprintf("seeded %d demo users", n)})
+	}
+}
+
+// seedDemoData inserts a spread of demo users with subscriptions and recent usage.
+func seedDemoData(store *Store, now time.Time) (int, error) {
+	type demo struct {
+		id, provider, email, plan, status string
+		reqs, toks                        int64
+	}
+	demos := []demo{
+		{"demo-alice", "github", "alice@demo.dev", "monthly", "active", 42, 18400},
+		{"demo-bob", "google", "bob@demo.dev", "annual", "active", 17, 9100},
+		{"demo-carol", "github", "carol@demo.dev", "monthly", "trialing", 88, 31200},
+		{"demo-dave", "google", "dave@demo.dev", "monthly", "past_due", 4, 1200},
+		{"demo-erin", "github", "erin@demo.dev", "annual", "canceled", 0, 0},
+		{"demo-frank", "google", "frank@demo.dev", "monthly", "active", 61, 24800},
+		{"demo-grace", "github", "grace@demo.dev", "annual", "active", 9, 5300},
+		{"demo-heidi", "google", "heidi@demo.dev", "monthly", "trialing", 130, 47600},
+	}
+	count := 0
+	for i, d := range demos {
+		created := now.AddDate(0, 0, -(i*9 + 3))
+		if err := store.UpsertUser(User{ID: d.id, Provider: d.provider, Subject: d.id, Email: d.email, CreatedAt: created}); err != nil {
+			return count, err
+		}
+		if err := store.PutSubscription(Subscription{
+			UserID: d.id, StripeCustomer: "cus_" + d.id, StripeSubscription: "sub_" + d.id,
+			Status: d.status, Plan: d.plan, CurrentPeriodEnd: now.AddDate(0, 0, 20), UpdatedAt: now,
+		}); err != nil {
+			return count, err
+		}
+		// Spread usage across the last 12 days so the per-user usage chart has shape.
+		for day := 0; day < 12; day++ {
+			req := d.reqs - int64(day*2)
+			tok := d.toks - int64(day*900)
+			if req < 0 {
+				req = 0
+			}
+			if tok < 0 {
+				tok = 0
+			}
+			if req == 0 && tok == 0 {
+				continue
+			}
+			if _, err := store.AddUsage(d.id, now.AddDate(0, 0, -day), req, tok); err != nil {
+				return count, err
+			}
+		}
+		count++
+	}
+	return count, nil
 }
 
 // handleAdminUserDetail serves GET /v1/admin/users/{id}.
