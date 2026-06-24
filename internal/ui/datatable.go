@@ -6,6 +6,7 @@ package ui
 
 import (
 	"strconv"
+	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/pagination"
@@ -119,10 +120,22 @@ type dtPagerProps struct {
 
 // dtPager renders the prev/next + "from-to of total" + rows-per-page footer.
 func dtPager(props dtPagerProps) ui.Node {
+	sizeSelID := ui.UseId()
 	onPrev := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page - 1) })
 	onNext := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page + 1) })
 	onSize := ui.UseEvent(func(e ui.Event) {
-		if n, err := strconv.Atoi(e.GetValue()); err == nil {
+		// Read the <select>'s LIVE DOM value: the framework's GetValue() can lag a
+		// render for a controlled select, which made selecting "All" (-1) read the
+		// previous value and silently keep the old page size (L78-T2).
+		v := e.GetValue()
+		if doc := js.Global().Get("document"); doc.Truthy() {
+			if el := doc.Call("getElementById", sizeSelID); el.Truthy() {
+				if dv := el.Get("value"); dv.Type() == js.TypeString {
+					v = dv.String()
+				}
+			}
+		}
+		if n, err := strconv.Atoi(v); err == nil {
 			props.OnPageSize(n)
 		}
 	})
@@ -153,6 +166,6 @@ func dtPager(props dtPagerProps) ui.Node {
 		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),
 		Span(css.Class("muted data-pager-label"), "Rows per page"),
-		Select(css.Class("field"), Attr("aria-label", uistate.T("ui.table.rowsPerPage")), OnChange(onSize), sizeOpts),
+		Select(css.Class("field"), Attr("id", sizeSelID), Attr("aria-label", uistate.T("ui.table.rowsPerPage")), OnChange(onSize), sizeOpts),
 	)
 }

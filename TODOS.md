@@ -10712,7 +10712,7 @@ Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78
 
 **Dev tickets (for a dev agent to pick up) — model/logic → UI → e2e**
 
-- [ ] **L78-T1 (★HIGH) — Fix empty-required-field save: disable Save until valid, keep modal open on
+- [x] **L78-T1 (★HIGH) — Fix empty-required-field save: disable Save until valid, keep modal open on
   validation failure, never discard input, and replace the jargon toast.** (a) Compute form validity
   and bind it to the Save button's `disabled` state (Save stays disabled while Description/Amount are
   empty/invalid). (b) If Save is somehow triggered while invalid, **do not close the modal** — keep it
@@ -10726,16 +10726,16 @@ Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78
   for perf, rename it to the real cap and add a clear "Showing 100 of 612 — load more" affordance so
   nothing is hidden silently). e2e: select "All" and assert rendered row count == total counter value.
 
-- [ ] **L78-T3 (MEDIUM) — Default the add-transaction Account to the primary/most-used spending
+- [x] **L78-T3 (MEDIUM) — Default the add-transaction Account to the primary/most-used spending
   account, not "401(k) / Brokerage."** Add a notion of a default/primary account (or pick the most
   recently used, or first non-investment asset account) and preselect it in the form. e2e: open the
   add form, assert the default Account option is not an investment account.
 
-- [ ] **L78-T4 (MEDIUM a11y) — Add `aria-label` to the Amount and Description inputs** in the
+- [x] **L78-T4 (MEDIUM a11y) — Add `aria-label` to the Amount and Description inputs** in the
   add/edit-transaction form (keep the placeholders as hints). e2e: assert both inputs expose an
   accessible name.
 
-- [ ] **L78-T5 (LOW, cross-ref L39–L42) — Show a success toast/confirmation after a transaction is
+- [x] **L78-T5 (LOW, cross-ref L39–L42) — Show a success toast/confirmation after a transaction is
   saved** ("Added — $64.20 Groceries"), so success is visibly distinct from the validation-failure
   case (L78-T1). Folds into the broader L39–L42 "silent add, no toast" work.
 
@@ -12865,10 +12865,23 @@ fresh-light load identical. **Dark mode unchanged** (override is `[data-theme="l
 buckets stayed `#6c6c71`/`#f4f4f5`/`#ababb3` — no regression). Build rc=0 (CSS-only; no Go touched).
 Visually confirmed: donut legend/center + ranked-bar axis labels crisp in light
 (`e2e/screenshots/light_chart_{1,2}.png`, `switch_light_charts.png`).
-**FOLLOW-UP (GO-STRUCTURAL, deferred):** the proper fix is to re-render the D3 charts on theme change
-(re-invoke `cashfluxRenderChart` when `data-theme` flips, e.g. a MutationObserver in chart.js or a
-theme-keyed `UseEffect` in `chartD3`), which would also fix the symmetric render-in-light-then-dark
-edge that the CSS mitigation (light-only, matching the mermaid precedent) does not cover.
+✅ FOLLOW-UP DONE — charts now RE-RENDER on theme change (2026-06-24). `web/chart.js` adds a single
+one-shot `MutationObserver` on `<html>` (`attributeFilter:["data-theme"]`) that re-invokes
+`cashfluxRenderChart(el, el.__cfChartSpecJSON)` for every connected `.cf-chart` when the theme flips —
+so axis ticks, donut center/legend, grid, and line/area colors are all re-read from the live theme
+tokens in BOTH directions (this is the proper fix; the earlier `[data-theme="light"]` CSS pin is now a
+belt-and-suspenders fallback, harmless). The existing `data-cf-drawn` guard prevents the draw-in
+animation from replaying on a theme switch. `web/sw.js` CACHE bumped v250→v251 so the PWA evicts the
+stale `chart.js`. JS-only (no Go); wasm `go build` rc=0 (parent-verified). NB: in the current app no UI
+flips `data-theme` while a chart is *mounted* (theme changes only via the Appearance screen, which has
+no charts, and nav remounts charts fresh) — so this is a robustness/correctness fix that future-proofs
+a global theme toggle or a live `prefers-color-scheme` listener; it is NOT papering over a current
+user-visible bug. MEASURED (`e2e/chart_theme_rerender_verify.mjs` vs `serve.go`, 4/4 PASS): fresh-dark
+chart data text light (`rgb(244,244,245)`/`rgb(171,171,179)`), fresh-light dark (`rgb(28,28,30)`), and
+a MOUNTED live light→dark switch that mimics `uistate.ApplyTheme` EXACTLY (sets the inline `--text*`/
+`--border` tokens AND `data-theme` together, charts stay mounted) re-renders the data text back to
+light (`244`/`172`) — proving the observer re-renders against the real token state, zero JS errors.
+Screenshot `e2e/screenshots/chart_mounted_switch_dark.png` (token-only hybrid harness state).
 
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.

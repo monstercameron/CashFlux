@@ -1,0 +1,20 @@
+import { createRequire } from "module"; import { fileURLToPath } from "url"; import path from "path";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
+const { chromium } = require("playwright");
+const BASE = "http://127.0.0.1:8099";
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage(); page.setViewportSize({width:1280,height:1000});
+await page.goto(BASE+"/",{waitUntil:"domcontentloaded"});
+await page.evaluate(()=>localStorage.setItem('cashflux:prefs',JSON.stringify({theme:'light'})));
+await page.reload({waitUntil:"domcontentloaded"});
+await page.waitForSelector('nav[aria-label="Main navigation"] a[title]',{timeout:60000});
+await page.evaluate(()=>{const l=[...document.querySelectorAll('nav[aria-label="Main navigation"] a[title]')].find(x=>x.getAttribute("title")==="Insights"); if(l)l.click();});
+await page.waitForTimeout(1500);
+const info = await page.evaluate(()=>{
+  const hits=[...document.querySelectorAll('button,a,span,div')].filter(e=>{const t=e.textContent&&e.textContent.trim(); return (t==="New chat"||t==="Edit prompt") && ![...e.children].some(c=>c.textContent.trim());});
+  return hits.map(e=>({tag:e.tagName, cls:e.className, color:getComputedStyle(e).color, bg:getComputedStyle(e).backgroundColor, outer:e.outerHTML.slice(0,160)}));
+});
+console.log(JSON.stringify(info,null,2));
+await page.screenshot({path:'e2e/screenshots/insights_light_before.png', fullPage:true});
+await browser.close();

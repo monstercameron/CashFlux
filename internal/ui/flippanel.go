@@ -26,6 +26,10 @@ type FlipPanelProps struct {
 	// panels that have nothing to save (e.g. a widget with no settings), so the UI
 	// doesn't imply there's something to commit.
 	CloseOnly bool
+	// SaveDisabled greys out and blocks the Save button while the form is invalid
+	// (e.g. a required field is empty), so an invalid submit can't close the panel
+	// or discard input (L78-T1). OnSave is not invoked while it is true.
+	SaveDisabled bool
 }
 
 // FlipPanel is the candidate-C settings overlay shared by both per-widget and
@@ -188,6 +192,11 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	onClose, onSave := props.OnClose, props.OnSave
 
 	save := func() {
+		// Block save while the form is invalid: don't run OnSave and, crucially,
+		// don't close — so no entered input is lost (L78-T1).
+		if props.SaveDisabled {
+			return
+		}
 		if onSave != nil {
 			onSave()
 		}
@@ -209,9 +218,13 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			Button(css.Class("set-btn close"), Type("button"), OnClick(save), "Close"),
 		)
 	} else {
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), OnClick(save), "Save"}
+		if props.SaveDisabled {
+			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
+		}
 		foot = Div(css.Class("set-foot"),
 			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
-			Button(css.Class("set-btn save"), Type("button"), OnClick(save), "Save"),
+			Button(saveArgs...),
 		)
 	}
 

@@ -447,8 +447,19 @@ func Transactions() ui.Node {
 		if pageSize == 0 {
 			pageSize = txnfilter.DefaultPageSize
 		}
-		curPage := pagination.Clamp(f.Page, total, pageSize)
-		page := pagination.Slice(shown, curPage, pageSize)
+		// "All" (negative sentinel) must render every row — slice the whole set on a
+		// single page, not the default window (L78-T2).
+		curPage := 1
+		sliceSize := pageSize
+		if pageSize > 0 {
+			curPage = pagination.Clamp(f.Page, total, pageSize)
+		} else {
+			sliceSize = total
+			if sliceSize < 1 {
+				sliceSize = 1
+			}
+		}
+		page := pagination.Slice(shown, curPage, sliceSize)
 		// Hide the Tags column when nothing on this page is tagged (G2 §6): tags are
 		// sparse, so an always-on empty column just wastes scan width.
 		anyTags := false

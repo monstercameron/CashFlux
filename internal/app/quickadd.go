@@ -72,8 +72,18 @@ func QuickAddHost() uic.Node {
 				}
 			}
 		}
-		if effAcct == "" && len(accounts) > 0 {
-			effAcct = accounts[0].ID
+		if effAcct == "" {
+			// Default to the first non-investment asset (a real spending account), not
+			// e.g. a 401(k)/Brokerage, which shouldn't seed a transaction (L78-T3).
+			for _, a := range accounts {
+				if a.Class == domain.ClassAsset && a.Type != domain.TypeInvestment && !a.Archived {
+					effAcct = a.ID
+					break
+				}
+			}
+			if effAcct == "" && len(accounts) > 0 {
+				effAcct = accounts[0].ID
+			}
 		}
 	}
 	effDate := date.Get()
@@ -104,6 +114,11 @@ func QuickAddHost() uic.Node {
 		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency))
 		if err != nil || amt == 0 {
 			post(uistate.T("quickAdd.needAmount"), true)
+			return
+		}
+		if strings.TrimSpace(desc.Get()) == "" {
+			// Plain-English, not the generic validator's "desc is required" (L78-T1c).
+			post(uistate.T("quickAdd.needDesc"), true)
 			return
 		}
 		if kind.Get() == "Expense" {
@@ -168,9 +183,9 @@ func QuickAddHost() uic.Node {
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+			Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		ui.FormField(uistate.T("quickAdd.description"),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
+			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
 		ui.FormField(uistate.T("quickAdd.category"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
 		ui.FormField(uistate.T("quickAdd.date"),
@@ -180,6 +195,16 @@ func QuickAddHost() uic.Node {
 			uistate.T("quickAdd.reviewed")),
 	)
 
+	// Form validity (L78-T1): Save is disabled until Description and a non-zero
+	// Amount are present, so an invalid submit can't close the panel or lose input.
+	formValid := strings.TrimSpace(desc.Get()) != ""
+	if acc, ok := accountByID(accounts, effAcct); ok {
+		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr != nil || v == 0 {
+			formValid = false
+		}
+	} else {
+		formValid = false
+	}
 	return ui.FlipPanel(ui.FlipPanelProps{
 		Title: uistate.T("quickAdd.title"),
 		Back:  body,
@@ -187,7 +212,8 @@ func QuickAddHost() uic.Node {
 		// float in a tall, mostly-empty panel (C13). The body scrolls if it ever
 		// overflows.
 		Height:  "420px",
-		OnSave:  save,
+		OnSave:       save,
+		SaveDisabled: !formValid,
 		OnClose: closePanel,
 	})
 }

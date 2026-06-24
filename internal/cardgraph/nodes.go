@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/rules"
+
 	"github.com/monstercameron/CashFlux/internal/formula"
 )
 
@@ -81,6 +83,10 @@ const (
 	KindFilter        = "data.filter"
 	KindGroupBy       = "data.groupby"
 	KindAggregate     = "data.aggregate"
+	KindRule          = "data.rule"
+	KindLiteralColor  = "literal.color"
+	KindVizStack      = "viz.stack"
+	KindUIButton      = "ui.button"
 )
 
 func init() {
@@ -232,7 +238,7 @@ func init() {
 	// a fixed tone, or "auto" derives up/down from the sign of a numeric value.
 	register(Spec{
 		Kind: KindVizKPI, Out: TypeViz,
-		Inputs: []Port{{Name: "value", Type: TypeNumber}},
+		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "sub", Type: TypeText}},
 		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
 			in, ok := inputs["value"]
 			if !ok {
@@ -256,7 +262,13 @@ func init() {
 			if tone == "auto" {
 				tone = ""
 			}
-			return Viz(VizBlock{Kind: "kpi", Title: props["title"], Text: text, Tone: tone}), nil
+			// Optional sub-line (e.g. a "▲ 4% this month" context line) + hero variant,
+			// so a cloned KPI tile matches the dashboard's kpiBody/kpiBodyHero.
+			sub := props["sub"]
+			if sv, ok := inputs["sub"]; ok && sv.Str != "" {
+				sub = sv.Str
+			}
+			return Viz(VizBlock{Kind: "kpi", Title: props["title"], Text: text, Tone: tone, Sub: sub, Hero: props["hero"] == "true"}), nil
 		},
 	})
 
@@ -534,6 +546,90 @@ func init() {
 				}
 			}
 			return Viz(VizBlock{Kind: "stat", Title: props["title"], Text: formatNumber(val, props["format"]), Sub: sub, Tone: tone, Accent: inputs["accent"].Str}), nil
+		},
+	})
+
+	// literal.color — a fixed CSS color, for wiring into a display node's accent port.
+	register(Spec{
+		Kind: KindLiteralColor, Out: TypeColor,
+		Eval: func(_ map[string]Value, props map[string]string, _ Context) (Value, error) {
+			c := strings.TrimSpace(props["value"])
+			if c == "" {
+				c = "#3b82f6"
+			}
+			return Color(c), nil
+		},
+	})
+
+	// data.rule — applies the auto-categorization rules engine (internal/rules) as a
+	// collection filter: keep rows whose Text column contains the keyword(s) and fall
+	// within the amount range. This is the "rule node" — a saved rule embedded in the
+	// graph. props: textcol, amountcol, any (comma keywords), min, max.
+	register(Spec{
+		Kind: KindRule, Out: TypeCollection,
+		Inputs: []Port{{Name: "in", Type: TypeCollection}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Coll == nil {
+				return Coll(Collection{}), nil
+			}
+			textCol := strings.TrimSpace(props["textcol"])
+			amountCol := strings.TrimSpace(props["amountcol"])
+			var any []string
+			for _, k := range strings.Split(props["any"], ",") {
+				if s := strings.TrimSpace(k); s != "" {
+					any = append(any, s)
+				}
+			}
+			minA, _ := strconv.ParseFloat(strings.TrimSpace(props["min"]), 64)
+			maxA, _ := strconv.ParseFloat(strings.TrimSpace(props["max"]), 64)
+			cond := rules.Condition{AnyKeywords: any, MinAmount: int64(minA), MaxAmount: int64(maxA)}
+			out := Collection{Cols: in.Coll.Cols}
+			for _, row := range in.Coll.Rows {
+				amt, _ := row[amountCol].AsNumber()
+				tv := rules.TxnView{Text: row[textCol].Str, Amount: int64(amt)}
+				if cond.Matches(tv) {
+					out.Rows = append(out.Rows, row)
+				}
+			}
+			return Coll(out), nil
+		},
+	})
+
+	// ui.button — an interactive button that runs a workflow action when clicked (the
+	// builder's basic interactivity, like the dashboard To-do tile's controls). props:
+	// label, action (a workflow.Action kind such as postRecurring/applyRules).
+	register(Spec{
+		Kind: KindUIButton, Out: TypeViz,
+		Eval: func(_ map[string]Value, props map[string]string, _ Context) (Value, error) {
+			label := props["label"]
+			if strings.TrimSpace(label) == "" {
+				label = "Run"
+			}
+			return Viz(VizBlock{Kind: "button", Text: label, Action: props["action"]}), nil
+		},
+	})
+
+	// viz.stack — composes up to four child visualizations into one card (header + chart
+	// + list composites, like the real dashboard tiles). Each input accepts a Viz; the
+	// non-empty ones render top-to-bottom.
+	register(Spec{
+		Kind: KindVizStack, Out: TypeViz,
+		Inputs: []Port{
+			{Name: "block1", Type: TypeViz}, {Name: "block2", Type: TypeViz},
+			{Name: "block3", Type: TypeViz}, {Name: "block4", Type: TypeViz},
+		},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			var blocks []VizBlock
+			for _, name := range []string{"block1", "block2", "block3", "block4"} {
+				if v, ok := inputs[name]; ok && v.Type == TypeViz && v.Viz != nil {
+					blocks = append(blocks, *v.Viz)
+				}
+			}
+			if len(blocks) == 0 {
+				return Value{}, fmt.Errorf("viz.stack: connect at least one block")
+			}
+			return Viz(VizBlock{Kind: "stack", Title: props["title"], Blocks: blocks}), nil
 		},
 	})
 }

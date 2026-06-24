@@ -46,7 +46,7 @@ func TestExactTailwindValues(t *testing.T) {
 		{"W18px", W18px, []string{"width:18px"}},
 		{"HScreen", HScreen, []string{"height:100vh"}},
 		{"MinW0", MinW0, []string{"min-width:0"}},
-		{"TextFaint", TextFaint, []string{"color:#7d7d85"}},
+		{"TextFaint", TextFaint, []string{"color:var(--text-faint,#7d7d85)"}},
 		{"TextDown", TextDown, []string{"color:#d8716f"}},
 		{"BgBase", BgBase, []string{"background-color:#0e0e0f"}},
 		{"Rounded4", Rounded4, []string{"border-radius:4px"}},

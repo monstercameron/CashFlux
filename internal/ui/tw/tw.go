@@ -234,9 +234,15 @@ var (
 	BgFg      = css.Bg(css.Color(cFg))
 	BgDown    = css.Bg(css.Color(cDown))
 	BgUp      = css.Bg(css.Color(cUp))
-	TextFg    = css.TextColor(css.Color(cFg))
-	TextDim   = css.TextColor(css.Color(cDim))
-	TextFaint = css.TextColor(css.Color(cFaint))
+	// Foreground text tokens follow the live theme: `var(--text…)` so they flip with
+	// data-theme (the hex fallback equals the dark default, so dark mode is unchanged).
+	// Hardcoding the dark hex made these vanish on white in light mode — e.g. the
+	// Insights "New chat"/"Edit prompt" pills (TextFg, contrast 1.04) and the breadcrumb
+	// parent crumb (TextDim, contrast 1.4). NB: only TEXT color follows the theme; BgFg
+	// (an intentional inverted surface) keeps the literal hex.
+	TextFg    = css.TextColor(css.Color("var(--text, " + cFg + ")"))
+	TextDim   = css.TextColor(css.Color("var(--text-dim, " + cDim + ")"))
+	TextFaint = css.TextColor(css.Color("var(--text-faint, " + cFaint + ")"))
 	TextDown  = css.TextColor(css.Color(cDown))
 	TextUp    = css.TextColor(css.Color(cUp))
 	TextWarn  = css.TextColor(css.Color(cWarn))
@@ -248,7 +254,7 @@ var (
 	BgBlack04     = css.Bg(css.Color("rgb(0 0 0 / 0.04)"))
 
 	HoverBgHover = css.Hover(css.Bg(css.Color(cHover)))
-	HoverTextFg  = css.Hover(css.TextColor(css.Color(cFg)))
+	HoverTextFg  = css.Hover(css.TextColor(css.Color("var(--text, " + cFg + ")")))
 )
 
 // --- border & radius (border re-includes border-style:solid — no CDN preflight)

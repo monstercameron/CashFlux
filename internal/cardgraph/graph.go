@@ -109,10 +109,13 @@ type VizBlock struct {
 	Tone   string        // "" | "up" | "down" — display tone
 	Accent string        // optional CSS color override (from a design node)
 	Pct    float64       // 0..1 fill fraction, for "progress"
-	Chart  string        // "line" | "bar" | "donut" — for "chart"
+	Chart  string        // "line" | "area" | "bar" | "donut" — for "chart"
 	Series []SeriesPoint // data for "chart"
 	Cols   []Column      // columns for "list"
 	Rows   []Row         // rows for "list"
+	Hero   bool          // KPI hero variant (larger figure, matches kpiBodyHero)
+	Action string        // workflow action kind, for "button"
+	Blocks []VizBlock    // child blocks, for "stack" (composite multi-block tiles)
 }
 
 // Num builds a number value. Text, Bln, and Viz are the sibling constructors.

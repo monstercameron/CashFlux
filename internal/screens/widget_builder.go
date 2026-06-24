@@ -661,7 +661,9 @@ func vbCatalog() []vbCatItem {
 		{cardgraph.KindLiteralNumber, "Number", "Data"},
 		{cardgraph.KindLiteralText, "Text", "Data"},
 		{cardgraph.KindLiteralBool, "Yes / No", "Data"},
+		{cardgraph.KindLiteralColor, "Color", "Data"},
 		{cardgraph.KindFilter, "Filter", "Transform"},
+		{cardgraph.KindRule, "Rule", "Transform"},
 		{cardgraph.KindGroupBy, "Group by", "Transform"},
 		{cardgraph.KindAggregate, "Aggregate", "Transform"},
 		{cardgraph.KindFormula, "Formula", "Transform"},
@@ -674,6 +676,8 @@ func vbCatalog() []vbCatItem {
 		{cardgraph.KindVizProgress, "Progress", "Display"},
 		{cardgraph.KindVizBadge, "Badge", "Display"},
 		{cardgraph.KindVizText, "Text", "Display"},
+		{cardgraph.KindVizStack, "Stack (compose)", "Display"},
+		{cardgraph.KindUIButton, "Button", "Interact"},
 	}
 }
 
@@ -707,7 +711,7 @@ func vbDefaultProps(kind string) map[string]string {
 	case cardgraph.KindCompare:
 		return map[string]string{"op": ">"}
 	case cardgraph.KindVizKPI:
-		return map[string]string{"title": "KPI", "format": "number", "tone": "auto"}
+		return map[string]string{"title": "KPI", "format": "number", "tone": "auto", "hero": "false"}
 	case cardgraph.KindVizStat:
 		return map[string]string{"title": "Stat", "format": "currency"}
 	case cardgraph.KindVizChart:
@@ -720,6 +724,14 @@ func vbDefaultProps(kind string) map[string]string {
 		return map[string]string{"title": "Badge", "tone": "auto"}
 	case cardgraph.KindVizText:
 		return map[string]string{"title": "Text"}
+	case cardgraph.KindLiteralColor:
+		return map[string]string{"value": "#3b82f6"}
+	case cardgraph.KindRule:
+		return map[string]string{"textcol": "payee", "amountcol": "amount", "any": "", "min": "0", "max": "0"}
+	case cardgraph.KindVizStack:
+		return map[string]string{"title": "Card"}
+	case cardgraph.KindUIButton:
+		return map[string]string{"label": "Apply rules", "action": "applyRules"}
 	}
 	return map[string]string{}
 }
@@ -750,7 +762,15 @@ func vbParamSchema(kind string) []vbParam {
 		}
 		return []vbParam{{"name", "Figure", "select", opts}}
 	case cardgraph.KindSourceDataset:
-		return []vbParam{{"which", "Dataset", "select", [][2]string{{"transactions", "Transactions"}, {"accounts", "Accounts"}}}}
+		return []vbParam{{"which", "Dataset", "select", [][2]string{{"transactions", "Transactions"}, {"accounts", "Accounts"}, {"budgets", "Budgets"}, {"goals", "Goals"}, {"tasks", "Tasks"}, {"bills", "Bills"}}}}
+	case cardgraph.KindLiteralColor:
+		return []vbParam{{"value", "Color", "color", nil}}
+	case cardgraph.KindRule:
+		return []vbParam{{"textcol", "Text column", "text", nil}, {"any", "Keywords (any)", "text", nil}, {"amountcol", "Amount column", "text", nil}, {"min", "Min amount", "number", nil}, {"max", "Max amount", "number", nil}}
+	case cardgraph.KindVizStack:
+		return []vbParam{{"title", "Title", "text", nil}}
+	case cardgraph.KindUIButton:
+		return []vbParam{{"label", "Label", "text", nil}, {"action", "Action", "select", [][2]string{{"applyRules", "Apply rules"}, {"postRecurring", "Post recurring"}, {"addTask", "Add task"}}}}
 	case cardgraph.KindLiteralNumber:
 		return []vbParam{{"value", "Value", "number", nil}}
 	case cardgraph.KindLiteralText:
@@ -768,7 +788,7 @@ func vbParamSchema(kind string) []vbParam {
 	case cardgraph.KindCompare:
 		return []vbParam{{"op", "Operator", "select", vbOpOpts()}}
 	case cardgraph.KindVizKPI:
-		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}, {"tone", "Tone", "select", [][2]string{{"auto", "Auto (±)"}, {"", "None"}}}}
+		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}, {"tone", "Tone", "select", [][2]string{{"auto", "Auto (±)"}, {"", "None"}}}, {"hero", "Hero (large)", "select", [][2]string{{"false", "No"}, {"true", "Yes"}}}}
 	case cardgraph.KindVizStat:
 		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}}
 	case cardgraph.KindVizChart:
@@ -904,7 +924,7 @@ func vbPresetOptions() [][2]string {
 // ---- panes ---------------------------------------------------------------------
 
 func vbPalette(onAdd func(string)) ui.Node {
-	groups := []string{"Data", "Transform", "Logic", "Display"}
+	groups := []string{"Data", "Transform", "Logic", "Display", "Interact"}
 	children := []ui.Node{Span(css.Class("vb-pane-title"), "Nodes")}
 	for _, grp := range groups {
 		children = append(children, Span(css.Class("vb-pal-group"), grp))
@@ -1152,7 +1172,7 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 			children = append(children, ui.CreateElement(vbSelectField, vbSelectFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Opts: pm.Opts,
 				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
 		} else {
-			children = append(children, ui.CreateElement(vbTextField, vbTextFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Numeric: pm.Kind == "number",
+			children = append(children, ui.CreateElement(vbTextField, vbTextFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Numeric: pm.Kind == "number", Color: pm.Kind == "color",
 				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
 		}
 	}
@@ -1203,6 +1223,7 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 type vbTextFieldProps struct {
 	Label, Value, Placeholder string
 	Numeric                   bool
+	Color                     bool
 	OnSet                     func(string)
 }
 
@@ -1215,6 +1236,8 @@ func vbTextField(p vbTextFieldProps) ui.Node {
 	typ := "text"
 	if p.Numeric {
 		typ = "number"
+	} else if p.Color {
+		typ = "color"
 	}
 	return Div(css.Class("wb-field"),
 		Span(css.Class("wb-field-label"), p.Label),
