@@ -387,8 +387,8 @@ var english = Catalog{
 	// Rules screen (auto-categorization)
 	"rules.add":                "Add rule",
 	"settings.jumpTo":          "Jump to:",
-	"toast.txnDeleted":          "Transaction deleted.",
-	"toast.accountDeleted":      "Account deleted.",
+	"toast.txnDeleted":         "Transaction deleted.",
+	"toast.accountDeleted":     "Account deleted.",
 	"rules.addRule":            "+ Add rule",
 	"rules.quickAddTitle":      "Quick add a rule",
 	"rules.added":              "Rule added.",
@@ -545,6 +545,10 @@ var english = Catalog{
 	"goals.milestone75":       "75%% funded — almost there!",
 	"goals.milestone100":      "Goal reached! 🎉",
 	"goals.nameRequired":      "Enter a name for this goal.",
+	"goals.remaining":         "%s to go",
+	"goals.overfundFmt":       "Funded %d%% — %s",
+	"goals.showAdvanced":      "Show advanced fields",
+	"goals.hideAdvanced":      "Hide advanced fields",
 
 	// Planning screen
 	"planning.snapshotTitle":     "Snapshot today's balances to track how much you pay off over time",

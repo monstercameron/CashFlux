@@ -140,7 +140,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 		labeledField(uistate.T("goals.dateLabel"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
 		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
-			IfElse(advOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields"))),
+			IfElse(advOpen.Get(), Text(uistate.T("goals.hideAdvanced")), Text(uistate.T("goals.showAdvanced")))),
 		If(advOpen.Get(), labeledField(uistate.T("goals.savedSoFar"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
 		If(advOpen.Get(), labeledField(uistate.T("goals.owner"),

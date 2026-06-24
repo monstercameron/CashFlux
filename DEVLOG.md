@@ -2,6 +2,19 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — a11y: Goals page — T() routing, aria-label gaps, focus-restore on delete
+
+Audited `goals.go`, `goals_row.go`, and `goaladdform.go` against the established patterns in `budgets_row.go`, `focus.go`, and `aria.go`. Found and fixed five gaps:
+
+1. **`goals.noLink` hardcoded** in `goalAccountOptions` — the `"— No linked account —"` string was built directly; the key already existed in `en.go` so it just needed routing through `uistate.T()`.
+2. **`" to go"` suffix hardcoded** in the sub-line of `GoalRow` — now uses new key `goals.remaining` (`"%s to go"`), making the phrase translatable.
+3. **`"Funded %d%% — %s"` hardcoded** in the over-fund note — now uses new key `goals.overfundFmt`.
+4. **`"Show/Hide advanced fields"` hardcoded** in `GoalAddForm` — now uses `goals.showAdvanced` / `goals.hideAdvanced`.
+5. **`aria-label` missing on Contribute and Edit buttons** — `Title()` was set but `aria-label` was absent; screen readers use `aria-label` over `title`, so both are needed. Added `Attr("aria-label", ...)` matching the existing `Title()` value.
+6. **Focus-restore missing on goal delete** — wired `captureRowDeleteFocus` in the row's delete click handler and `consumeRowDeleteFocus` + `focusRowAfterDelete` in the parent `deleteGoal` callback (same pattern as transactions). Added `.goal-list` sentinel class to the active-goals list `Div` so the selector resolves correctly.
+
+Also patched a pre-existing uncommitted type mismatch in `widget_builder.go` (line 1061: `[]ui.Node` → `[]any`) that was already in the working tree and blocked the wasm build regardless of goals changes.
+
 ## 2026-06-24 — i18n: routed remaining hardcoded a11y labels through uistate.T()
 
 Second pass completing the a11y label cleanup. Routed 10 hardcoded English `aria-label`/`Title()` strings through `uistate.T()` across accounts_row (mark-cleared title), allocate_ai_explain (open-settings button), budgetaddform (rollover checkbox tooltip), categories (view-transactions button), custompage (drag-grip), split_screen (what-for input — aria-label + placeholder on the same node), taskaddform + todo (due-date field label + aria-label, shared `common.dueDate` key), transactions (cleared-status column head), and workflows (trigger + action-type selects). Registered 9 new catalog keys in `internal/i18n/en.go`; `transactions.clearedStatus` was already present and reused. Build clean under `GOOS=js GOARCH=wasm`.

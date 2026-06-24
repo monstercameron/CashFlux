@@ -34,7 +34,12 @@ func GoalRow(props goalRowProps) ui.Node {
 		dateISO = dateutil.FormatDate(g.TargetDate)
 	}
 
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(g.ID) }))
+	del := ui.UseEvent(Prevent(func() {
+		// Capture which row holds focus before the row is removed, so focus can
+		// be restored to the next row after the delete (§6.7).
+		captureRowDeleteFocus(".goal-list", "[data-testid^='goal-row-']")
+		props.OnDelete(g.ID)
+	}))
 	doArchive := ui.UseEvent(Prevent(func() {
 		if props.OnArchive != nil {
 			props.OnArchive(g.ID, true)
@@ -173,7 +178,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	if complete {
 		subPrimary = uistate.T("goals.complete")
 	} else {
-		subPrimary = fmtMoney(rem) + " to go"
+		subPrimary = uistate.T("goals.remaining", fmtMoney(rem))
 		subSecondary = fmt.Sprintf("%d%%", pct)
 		if !g.TargetDate.IsZero() {
 			subPrimary += uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
@@ -214,7 +219,7 @@ func GoalRow(props goalRowProps) ui.Node {
 			css.Class("budget-sub"),
 			Attr("data-testid", "goal-overfund-"+g.ID),
 			Style(map[string]string{"color": "var(--up)"}),
-			fmt.Sprintf("Funded %d%% — %s", realPct, uistate.T("goals.overTarget", fmtMoney(overfund))),
+			uistate.T("goals.overfundFmt", realPct, uistate.T("goals.overTarget", fmtMoney(overfund))),
 		)
 	}
 
@@ -260,8 +265,8 @@ func GoalRow(props goalRowProps) ui.Node {
 			Span(css.Class("row-desc"), g.Name),
 			paceBadge(pace),
 			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
-			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			archiveBtn,
 			Button(css.Class("btn-del", "btn-del-hover"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),

@@ -64,11 +64,13 @@ func Goals() ui.Node {
 	errMsg := ui.UseState("")
 
 	deleteGoal := func(goalID string) {
+		focusIdx := consumeRowDeleteFocus()
 		if err := app.DeleteGoal(goalID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
+		focusRowAfterDelete(".goal-list", "[data-testid^='goal-row-']", focusIdx)
 	}
 
 	archiveGoal := func(goalID string, archive bool) {
@@ -214,7 +216,7 @@ func Goals() ui.Node {
 				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
 			},
 		)
-		listBody = Div(rows)
+		listBody = Div(css.Class("goal-list"), rows)
 	}
 
 	achievedOpen := ui.UseState(true)
@@ -281,7 +283,7 @@ type goalRowProps struct {
 // goalAccountOptions builds the linked-account SelectOptions for a goal, with a
 // leading "no link" choice.
 func goalAccountOptions(accounts []domain.Account, selected string) []uiw.SelectOption {
-	opts := []uiw.SelectOption{{Value: "", Label: "— No linked account —"}}
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("goals.noLink")}}
 	for _, a := range accounts {
 		opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
 	}

@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **a11y/i18n — Goals page (2026-06-24):** routed all remaining hardcoded English strings through `uistate.T()` (`goals.noLink` in account-option list, `" to go"` sub-line suffix, `"Funded %d%% — %s"` over-fund note, `"Show/Hide advanced fields"` toggle); added `aria-label` to Contribute and Edit row buttons (Title was present but aria-label was missing); wired focus-restore on goal delete using `captureRowDeleteFocus` / `focusRowAfterDelete` + `.goal-list` sentinel class so keyboard focus never drops to `<body>` after a delete; added four new catalog keys (`goals.remaining`, `goals.overfundFmt`, `goals.showAdvanced`, `goals.hideAdvanced`).
+
 ### Added
 - **i18n (2026-06-24):** routed remaining hardcoded aria-label/Title strings through uistate.T() across accounts/allocate/budgets/categories/custompage/split/task/todo/transactions/workflows; added catalog keys (`accounts.markClearedTitle`, `allocate.openSettingsAiKey`, `budgets.rolloverTitle`, `categories.viewTxnsTitle`, `common.dueDate`, `custompage.dragReorder`, `split.whatForLabel`, `transactions.clearedStatus` (pre-existing), `workflows.actionTypeLabel`, `workflows.triggerLabel`).
 - **i18n:** routed hardcoded aria-label/Title strings through uistate.T() in datatable row-size control, budgets row cover/topup, planning, documents draft-review, and customize-formula; added catalog keys.
