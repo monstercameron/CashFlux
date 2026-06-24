@@ -129,6 +129,9 @@ try {
   await page.locator('.vb-toolbar select').first().selectOption("networth-trend");
   await page.waitForTimeout(600);
   if ((await page.locator(".wb-tile .vb-chart svg").count()) === 0) fail("networth-trend did not render a D3 svg");
+  // Assert an actual plotted area path (not just an empty svg / "No data" fallback), so
+  // the 6-month series really flows dataset → group-by(keep-order) → area chart.
+  if ((await page.locator(".wb-tile .vb-chart svg path").count()) === 0) fail("networth-trend has no D3 area path");
 
   // 4e) Cash flow: income − spending via a formula node → a stat figure (the dashboard's
   // surplus/deficit number). Confirms scalar→formula→viz wiring produces a money figure.
@@ -148,7 +151,9 @@ try {
     // The subline is the dashboard's exact text ("▲ x% (+$…) this month", "… this month",
     // or "No change this month"); assert a non-empty caption is present under the figure.
     const subTxt = (await page.locator(".wb-tile .wbody p, .wb-tile .wbody .t-caption").last().textContent()) || "";
-    if (subTxt.trim().length === 0) fail("assets-card KPI is missing its month-over-month subline");
+    // The net-worth string surface always renders "… this month" / "No change this month";
+    // require that pattern so a bare prop fallback can't silently pass.
+    if (!/month/i.test(subTxt)) fail(`assets-card subline is not the net-worth MoM string: "${subTxt}"`);
   }
 
   // 5) Another preset: recent transactions → a list/table renders.
