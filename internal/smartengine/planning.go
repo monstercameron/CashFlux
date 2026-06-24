@@ -41,10 +41,7 @@ func p10BillShock(in Input) []smart.Insight {
 			continue // not imminent enough to warn about yet
 		}
 		charge := abs64(in.toBaseMinor(r.Amount.Amount, r.Amount.Currency))
-		monthsOut := monthsBetween(in.Now, due)
-		if monthsOut < 1 {
-			monthsOut = 1
-		}
+		monthsOut := max(monthsBetween(in.Now, due), 1)
 		setAside := charge / monthsOut
 		out = append(out, smart.Insight{
 			Feature: "SMART-P10",
