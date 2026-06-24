@@ -178,7 +178,16 @@ func Shell(props ShellProps) uic.Node {
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(SubscriptionBanner),
-			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"), uic.CreateElement(props.View)),
+			// Each screen renders as its OWN component (CreateElement → its own fiber,
+			// so its hooks never share the Shell's), keyed by the active route path.
+			// The key is what makes navigating BETWEEN two pages of the same component
+			// type work: every "/p/:slug" View closure is created at one source line, so
+			// they share a function code-pointer and the reconciler would treat them as
+			// the same element and skip the re-render (custom→custom showed the previous
+			// page's body). A per-path key gives each route a distinct identity, so the
+			// reconciler unmounts the old page and mounts the new one on every navigation
+			// (regression covered by e2e/loopstory_90_custompage_nav.mjs).
+			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"), WithKey(uic.CreateElement(props.View), props.ActivePath)),
 		),
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
 		// the breakpoint). The desktop left rail is unchanged — this is additive.
@@ -911,7 +920,10 @@ func ResolutionControl() uic.Node {
 			Attr("title", uistate.T("resolution.thisPeriodTitle")),
 			OnClick(func() { atom.Set(period.NewWindow(w.Res, time.Now(), w.WeekStart)) }),
 			uistate.T("resolution.thisPeriod"))),
-		Button(css.Class(tw.Px2, tw.Py1, tw.TextFaint, tw.HoverTextFg, tw.Text12), Type("button"),
+		// Custom range toggle: TextDim (not TextFaint) so the clickable control clears
+		// AA — TextFaint (#7d7d85) measured 1.87:1 on the light page bg. Matches its
+		// sibling "This period" button above, which already uses TextDim.
+		Button(css.Class(tw.Px2, tw.Py1, tw.TextDim, tw.HoverTextFg, tw.Text12), Type("button"),
 			OnClick(func() {
 				if rangeMode.Get() {
 					// Leaving range mode collapses back to a single period.

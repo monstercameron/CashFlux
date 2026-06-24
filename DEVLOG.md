@@ -3,6 +3,39 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Custom-page → custom-page navigation (body didn't swap)
+
+Reported: Dashboard → custom page A renders fine; clicking custom page B *directly* in the rail
+changed the URL + top-bar title but the body kept A's content. custom→built-in→custom worked.
+
+Traced it through the GoWebComponents reconciler: a component element is skipped when its type and
+props are unchanged. Every `/p/:slug` View closure is built at one source line, so they share a
+function code-pointer (the same component "type"), and `CreateElement(props.View)` carries no props
+— so two custom-page hops looked identical and the page subtree was skipped. A built-in page in
+between has a different component type, forcing a remount; hence the workaround.
+
+The working tree already held an attempt: a `pageView` wrapper that called `props.View()` *inline*
+and keyed by path. It DID fix the visual symptom (verified — the user's "stale wasm / hard-refresh"
+note was right that the build hadn't loaded), but it rendered every screen inside one shared
+Shell-child fiber, so each page's hooks became positional slots in that single fiber, shared across
+different page types (Dashboard's hooks, then Accounts' hooks, in the same slots). Replaced it with
+the framework-idiomatic key: `WithKey(uic.CreateElement(props.View), props.ActivePath)`. Each screen
+is its own fiber (own hooks); the per-path key gives each route a distinct identity, so the
+reconciler cleanly unmounts the old page and mounts the new one on every navigation.
+
+Verified empirically by building three Shell variants and running the exact repro headless: old
+`CreateElement(props.View)` = broken; inline `pageView` = works but shares fibers; keyed
+`CreateElement` = works with each page in its own fiber. The regression test
+`e2e/loopstory_90_custompage_nav.mjs` creates two custom pages with distinct widgets and asserts the
+body swaps on a direct custom→custom hop in both directions, with built-in pages staying distinct —
+all green.
+
+**Pre-existing finding (deliberately not fixed here):** every navigation — built-in routes included
+— logs one "call to released function" console error (isolated to ~1 per route change; widget-add =
+0; present on the *old* code too). It's app-wide and predates this change, so it's a separate issue;
+flagged rather than chased to keep this commit to one fix. Likely a handler-release timing issue
+around the focus-move-on-navigate effect — a good next pass.
+
 ## 2026-06-24 — Operator console: real user management + usage analytics
 
 Cam: "the console makes no sense, how can we see the user accounts and manage their account
