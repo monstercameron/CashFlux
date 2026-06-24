@@ -1234,6 +1234,31 @@ func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
 	return usage, true, nil
 }
 
+// ListUserUsage returns a user's daily usage rows on or after sinceDay, newest first —
+// the per-user time series behind the admin console's usage analytics. Read-only.
+func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error) {
+	if strings.TrimSpace(userID) == "" {
+		return nil, fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("ListUserUsage", time.Now())
+	rows, err := s.db.Query(
+		`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day >= ? ORDER BY day DESC`,
+		strings.TrimSpace(userID), usageDay(sinceDay))
+	if err != nil {
+		return nil, fmt.Errorf("server store: list user usage: %w", err)
+	}
+	defer rows.Close()
+	var out []Usage
+	for rows.Next() {
+		var u Usage
+		if err := rows.Scan(&u.UserID, &u.Day, &u.Requests, &u.Tokens); err != nil {
+			return nil, fmt.Errorf("server store: scan usage: %w", err)
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // PutSubscription upserts the current Stripe subscription state for a user.
 func (s *Store) PutSubscription(sub Subscription) error {
 	if strings.TrimSpace(sub.UserID) == "" || strings.TrimSpace(sub.StripeCustomer) == "" ||
