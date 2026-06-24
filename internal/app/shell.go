@@ -228,21 +228,31 @@ var railMeta = map[string]struct {
 	"/workflows":      {"nav.workflows", icon.Customize},
 	"/widget-builder": {"nav.widgetBuilder", icon.PlusCircle},
 	"/widget-manager": {"nav.widgetManager", icon.Dashboard},
-	"/members":     {"nav.members", icon.Users},
-	"/categories":  {"nav.categories", icon.Tag},
-	"/rules":       {"nav.rules", icon.Tag},
+	"/members":       {"nav.members", icon.Users},
+	"/categories":    {"nav.categories", icon.Tag},
+	"/rules":         {"nav.rules", icon.Tag},
 	"/notifications": {"nav.notifications", icon.Bell},
-	"/appearance":  {"nav.appearance", icon.Appearance},
+	"/appearance":    {"nav.appearance", icon.Appearance},
+	"/admin":         {"nav.admin", icon.Settings},
 }
 
 // navGroup builds the rail items for one screen group, in registry order. The
 // screens registry (Route.Group) is the single source of truth for membership, so
 // a newly registered screen can't be silently dropped from the rail (B7); if its
 // path isn't in railMeta it still shows, with its registry label and a default icon.
+// Routes with AdminOnly=true are excluded when the admin atom is false (non-admins
+// never see the entry; the route is still registered so a direct URL load works).
 func navGroup(group string) []railItem {
+	adminAvailable := uistate.UseAdminConsoleAvailable()
+	uistate.CaptureAdminConsole(adminAvailable)
+	isAdmin := adminAvailable.Get()
+
 	var items []railItem
 	for _, r := range screens.All() {
 		if r.Group != group {
+			continue
+		}
+		if r.AdminOnly && !isAdmin {
 			continue
 		}
 		if meta, ok := railMeta[r.Path]; ok {

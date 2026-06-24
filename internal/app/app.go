@@ -130,6 +130,7 @@ func Run() {
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
 	startBackendSync()
+	probeAdminAccess() // non-blocking: sets uistate.AdminConsoleAvailable on HTTP 200
 
 	// Auto-post any due recurring transactions (bills, "pay yourself first")
 	// caught up to today, so scheduled money posts the moment the app opens

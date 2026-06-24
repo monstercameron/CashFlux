@@ -6,7 +6,6 @@ package ui
 
 import (
 	"strconv"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/pagination"
@@ -118,36 +117,51 @@ type dtPagerProps struct {
 	OnPageSize            func(int)
 }
 
+type pagerSizeBtnProps struct {
+	Size   int // the page-size value (AllPageSize for "All")
+	Label  string
+	Active bool
+	OnPick func(int)
+}
+
+// pagerSizeBtn is one rows-per-page choice, rendered as a button so its click
+// handler carries the exact value directly. This replaced a controlled <select>
+// whose change handler couldn't reliably read the chosen value (the framework's
+// GetValue lagged a render), so picking "All" silently kept the old size (L78-T2).
+// Its own component so the click hook stays at a stable call-site (On*-in-loop rule).
+func pagerSizeBtn(props pagerSizeBtnProps) ui.Node {
+	onClick := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPick(props.Size) })
+	cls := "btn pager-size"
+	if props.Active {
+		cls += " active"
+	}
+	args := []any{css.Class(cls), Type("button"), OnClick(onClick)}
+	if props.Active {
+		args = append(args, Attr("aria-pressed", "true"))
+	} else {
+		args = append(args, Attr("aria-pressed", "false"))
+	}
+	args = append(args, props.Label)
+	return Button(args...)
+}
+
 // dtPager renders the prev/next + "from-to of total" + rows-per-page footer.
 func dtPager(props dtPagerProps) ui.Node {
-	sizeSelID := ui.UseId()
 	onPrev := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page - 1) })
 	onNext := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page + 1) })
-	onSize := ui.UseEvent(func(e ui.Event) {
-		// Read the <select>'s LIVE DOM value: the framework's GetValue() can lag a
-		// render for a controlled select, which made selecting "All" (-1) read the
-		// previous value and silently keep the old page size (L78-T2).
-		v := e.GetValue()
-		if doc := js.Global().Get("document"); doc.Truthy() {
-			if el := doc.Call("getElementById", sizeSelID); el.Truthy() {
-				if dv := el.Get("value"); dv.Type() == js.TypeString {
-					v = dv.String()
-				}
-			}
-		}
-		if n, err := strconv.Atoi(v); err == nil {
-			props.OnPageSize(n)
-		}
-	})
 
 	from, to := pagination.Window(props.Page, props.Total, props.PageSize)
 	totalPages := pagination.TotalPages(props.Total, props.PageSize)
 
-	sizeOpts := make([]ui.Node, 0, len(props.PageSizes)+1)
+	sizeBtns := make([]any, 0, len(props.PageSizes)+1)
 	for _, s := range props.PageSizes {
-		sizeOpts = append(sizeOpts, Option(Value(strconv.Itoa(s)), SelectedIf(props.PageSize == s), strconv.Itoa(s)))
+		sizeBtns = append(sizeBtns, ui.CreateElement(pagerSizeBtn, pagerSizeBtnProps{
+			Size: s, Label: strconv.Itoa(s), Active: props.PageSize == s, OnPick: props.OnPageSize,
+		}))
 	}
-	sizeOpts = append(sizeOpts, Option(Value(strconv.Itoa(AllPageSize)), SelectedIf(props.PageSize < 0), "All"))
+	sizeBtns = append(sizeBtns, ui.CreateElement(pagerSizeBtn, pagerSizeBtnProps{
+		Size: AllPageSize, Label: "All", Active: props.PageSize < 0, OnPick: props.OnPageSize,
+	}))
 
 	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.prevPage")), OnClick(onPrev)}
 	if props.Page <= 1 {
@@ -161,11 +175,13 @@ func dtPager(props dtPagerProps) ui.Node {
 	nextArgs = append(nextArgs, "Next")
 
 	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
+	groupArgs := []any{css.Class("pager-sizes"), Attr("role", "group"), Attr("aria-label", uistate.T("ui.table.rowsPerPage"))}
+	groupArgs = append(groupArgs, sizeBtns...)
 	return Div(css.Class("data-pager"),
 		Button(prevArgs...),
 		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),
 		Span(css.Class("muted data-pager-label"), "Rows per page"),
-		Select(css.Class("field"), Attr("id", sizeSelID), Attr("aria-label", uistate.T("ui.table.rowsPerPage")), OnChange(onSize), sizeOpts),
+		Div(groupArgs...),
 	)
 }

@@ -11,6 +11,24 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ---
 
+### EC. Enterprise completion — admin/user interfaces, auth, encrypted storage, homescreen ★ (goal, 2026-06-24)
+> "Complete the picture": user + admin interfaces, login auth, commercial features, a strong
+> homescreen, end-to-end encrypted artifact + client-dataset storage. Bottom-up, one feature/commit.
+> Already in place (do not rebuild): client dataset encryption at rest (`cryptobox` + `datasetcrypto`,
+> PBKDF2-600k→AES-GCM-256, passcode-gated), OAuth+token client login (`app/backend.go`), Cloud
+> settings UI, Stripe billing+entitlements, content-addressed artifact blobs.
+- [x] **EC1. Server admin role + tenant-safe admin API** — `Config.AdminUserIDs` / `IsAdmin`,
+      `GET /v1/admin/overview` (users, subs by status, est. MRR, blob bytes, daily usage) +
+      `GET /v1/admin/users` (paginated, no secrets), deny-by-default + audited; table-tested. (119f48d)
+- [ ] **EC2. Zero-knowledge encrypted artifact blobs** — envelope-encrypt artifact bytes client-side
+      before blob upload; decrypt on download; legacy plaintext still readable; no-passcode = unchanged.
+- [ ] **EC3. Admin console screen (GWC)** — `/admin` overview cards + users table from EC1; admin-gated;
+      a11y + i18n + keyboard.
+- [ ] **EC4. Strong homescreen** — signed-out value/CTA + signed-in glanceable summary above the bento.
+- [ ] **EC5. Verification + docs** — encrypted dataset+artifacts end-to-end; admin gating; README/SPEC note.
+
+---
+
 ## B. Bug fixes (active, high priority) ★
 
 ### B1. Deep-link refresh 404 on non-root paths ★
@@ -10721,7 +10739,7 @@ Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78
   remove the stray `×` glued to the text. e2e: extend `loopstory_78` to assert Save is disabled with an
   empty description, that the modal stays open on an invalid submit, and that no entered field is lost.
 
-- [ ] **L78-T2 (★HIGH) — "All" rows-per-page must render all rows.** Audit the `/transactions` list
+- [x] **L78-T2 (★HIGH) — "All" rows-per-page must render all rows.** Audit the `/transactions` list
   pagination: the "All" option caps at 100. Make "All" remove the page-size limit (or, if intentional
   for perf, rename it to the real cap and add a clear "Showing 100 of 612 — load more" affordance so
   nothing is hidden silently). e2e: select "All" and assert rendered row count == total counter value.
@@ -10759,6 +10777,32 @@ Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78
   one action that unblocks AI chat instead of reading as a neutral secondary button.
 - **Chat switcher pills visible in light** (§2) — "New chat"/"Edit prompt" pills gained a `.chat-pill`
   `--border` outline (the `BorderBlack10` tint vanished on white).
+
+✅ FOLLOW-UP — chat-pill *text* was still invisible in light; fixed at the token root (2026-06-24).
+The G13 border fix made the pill outlines visible but their **label text** ("New chat"/"Edit prompt")
+stayed `#f4f4f5` on white (measured contrast **1.04** — fully invisible). Root cause was systemic, not
+local: the pill `<span>`s are unclassed and inherited `color` from the shell content container, which
+uses `tw.TextFg` — and in `internal/ui/tw/tw.go` the foreground text tokens **hardcoded the dark hex**
+(`TextFg=css.TextColor(css.Color("#f4f4f5"))`, `TextDim`→`#ababb3`) instead of the theme var, so the
+`[data-theme="light"]` overrides (which key off the `.text-fg`/`.text-dim` *utility* classes, not the
+scoped `c-*` classes these emit) never caught them. This also dimmed the **breadcrumb parent crumb**
+(`TextDim`, contrast 1.4) on every screen. Fix: make `TextFg`/`TextDim`/`HoverTextFg` theme-aware —
+`css.Color("var(--text, #f4f4f5)")` / `var(--text-dim, #ababb3)` (hex fallback == the old dark default,
+so **dark mode is byte-identical**). `BgFg` (an intentional inverted *background*) and `TextFaint` are
+left as literals — `TextFaint` was deliberately NOT converted because the app's current light
+`--text-faint` derivation resolves to `#969698`, which is *lighter* (worse) than the literal `#7d7d85`;
+that belongs to the GX14 light-token-derivation work, not here. Build rc=0 (PARENT-VERIFIED);
+`go test ./internal/ui/tw` ok (golden `TestExactTailwindValues` unchanged — only TextFaint is asserted,
+and it's untouched). MEASURED via `e2e/textfg_textdim_lightmode_verify.mjs` + `e2e/light_contrast_audit.mjs`
+vs `serve.go` (4/4 + audit): light → New chat/Edit prompt `rgb(28,28,30)`, breadcrumb readable; dark →
+both unchanged at `rgb(244,244,245)` (no regression); the full-screen light audit dropped from 36→23
+low-contrast findings (the TextFg invisible-pill + the per-screen TextDim breadcrumb leak both gone; the
+remaining 23 are unrelated — Allocate rank-badge green-on-green, Bills calendar day-of-week `#969698`,
+semantic-red stats — separate component colors, not these tokens). Screenshot `e2e/screenshots/
+textfix_insights_light.png`. Cross-ref **GX14** (this is the `tw`-token sibling of that runtime-var leak).
+NB: this pass also had to `git checkout` a **broken half-applied `internal/screens/widget_builder.go`**
+(referenced `vbSeriesMax`/`vbChartColors` whose defs had been dropped — uncompilable, from the concurrent
+cloud-sync churn) to restore a green build; no other churn-modified files were touched.
 - **Starter chips softened** (§4) — dedicated `.chip-suggest` style (rounded, elevated, accent hover).
 - Pinned-insight / highlights / "Show more" light contrast — covered by the G9 `[data-theme="light"]`
   legacy-text pins.
@@ -11099,6 +11143,26 @@ Screenshots in `e2e/screenshots/glamor_13_insights_*.png`.
       state and render user + assistant bubbles. This would confirm bubble contrast,
       markdown rendering (C71), token cost note display, Copy/Pin/Retry action
       visibility, and the typing indicator.
+
+### G14. Allocate — rank badge green-on-green illegible (both themes) — 2026-06-24 ★
+
+✅ RESOLVED (2026-06-24). The Allocate priority chips (`.rank-badge`, "#1".."#12") rendered the rank
+number in `var(--accent)` on a `var(--accent-dim)` fill — **accent-on-accent-tint**, i.e. green-on-green,
+illegible in BOTH themes (measured WCAG: **light 1.46**, dark ~1.5; even the *intended* pale-mint tint
+only reaches ~1.96). A light-mode contrast sweep flagged all 12 badges. Root cause is the colour
+*pairing*, not a token leak — a tinted chip with same-hue text can't separate. Fix (CSS-only,
+`web/index.html`): give `.rank-badge` the proven `.btn-primary` treatment — a **solid `var(--accent)`
+fill** with `color:#052e13` (dark-green text, dark theme) and `[data-theme="light"] .rank-badge{color:#fff}`
+(white text, light theme). Solid fill also reads as a stronger "rank #N" cue and matches the green
+"Allocate" primary button. No Go change; `go build` rc=0 (PARENT-VERIFIED). MEASURED with proper WCAG
+linearised luminance (`e2e/rank_badge_contrast_verify.mjs` vs `serve.go`, 2/2): **light 4.25** (was 1.46),
+**dark 3.52** — both clear AA-large/bold (≥3:1). Full light-mode contrast audit
+(`e2e/light_contrast_audit.mjs`): Allocate findings **12→0**, page total **23→11** (remaining 11 are
+unrelated — Bills calendar day-of-week `#969698`, "Custom range" `TextFaint`, semantic-red stats — each a
+separate component colour, not this badge). Screenshots `e2e/screenshots/rankbadge_{light,dark}.png`.
+NB: the audit's *simple* (non-linearised) luminance under-reports accent contrast (~2.1 for white-on-green
+vs the true 4.25); the verify script uses the correct WCAG formula. Cross-ref **G13** (sibling light-mode
+contrast pass), **GX14** (token system).
 
 ### G12. Split — "Who Owes Whom" (Priya) — 2026-06-23 ★
 

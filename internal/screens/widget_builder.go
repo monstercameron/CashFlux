@@ -16,6 +16,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cardgraph"
+	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
@@ -144,8 +145,20 @@ const vbDragShimJS = `
     var v = getView(); var r = vp.getBoundingClientRect();
     var dir = btn.getAttribute("data-zoom");
     if(dir==="reset"){ v = {tx:0,ty:0,s:1}; }
+    else if(dir==="fit"){
+      // Frame all nodes in the viewport (with padding).
+      var nodes = world.querySelectorAll(".wb-node"); if(nodes.length===0){ v={tx:0,ty:0,s:1}; }
+      else {
+        var minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+        nodes.forEach(function(n){ var x=parseFloat(n.style.left)||0, y=parseFloat(n.style.top)||0;
+          if(x<minX)minX=x; if(y<minY)minY=y; if(x+176>maxX)maxX=x+176; if(y+n.offsetHeight>maxY)maxY=y+n.offsetHeight; });
+        var pad=40, bw=(maxX-minX)+pad*2, bh=(maxY-minY)+pad*2;
+        var s2=clampS(Math.min(r.width/bw, r.height/bh));
+        v.s=s2; v.tx = r.width/2 - ((minX+maxX)/2)*s2; v.ty = r.height/2 - ((minY+maxY)/2)*s2;
+      }
+    }
     else { var cx=r.width/2, cy=r.height/2, wx=(cx-v.tx)/v.s, wy=(cy-v.ty)/v.s;
-      var s2 = clampS(v.s * (dir==="in" ? 1.2 : 1/1.2)); v.tx = cx-wx*s2; v.ty = cy-wy*s2; v.s = s2; }
+      var s2b = clampS(v.s * (dir==="in" ? 1.2 : 1/1.2)); v.tx = cx-wx*s2b; v.ty = cy-wy*s2b; v.s = s2b; }
     applyView(world, v); save(VIEW_KEY, v);
   });
   // Snap wires to their actual ports after Go re-renders the canvas (nodes/edges
@@ -218,9 +231,42 @@ func VisualBuilder() ui.Node {
 	row := ui.UseState(2)
 	graph := ui.UseState(vbLoadGraph())
 	selected := ui.UseState(cardgraph.NodeID(""))
+	undoStack := ui.UseState([]cardgraph.Graph{})
+	redoStack := ui.UseState([]cardgraph.Graph{})
 
 	g := graph.Get()
-	setGraph := func(ng cardgraph.Graph) { vbSaveGraph(ng); graph.Set(ng) }
+	// setGraph records the prior graph for undo (and clears the redo stack), so every
+	// structural edit is reversible.
+	setGraph := func(ng cardgraph.Graph) {
+		undoStack.Set(append(append([]cardgraph.Graph{}, undoStack.Get()...), g))
+		redoStack.Set(nil)
+		vbSaveGraph(ng)
+		graph.Set(ng)
+	}
+	undo := ui.UseEvent(func() {
+		h := undoStack.Get()
+		if len(h) == 0 {
+			return
+		}
+		prev := h[len(h)-1]
+		undoStack.Set(h[:len(h)-1])
+		redoStack.Set(append(append([]cardgraph.Graph{}, redoStack.Get()...), g))
+		vbSaveGraph(prev)
+		graph.Set(prev)
+		selected.Set("")
+	})
+	redo := ui.UseEvent(func() {
+		f := redoStack.Get()
+		if len(f) == 0 {
+			return
+		}
+		nx := f[len(f)-1]
+		redoStack.Set(f[:len(f)-1])
+		undoStack.Set(append(append([]cardgraph.Graph{}, undoStack.Get()...), g))
+		vbSaveGraph(nx)
+		graph.Set(nx)
+		selected.Set("")
+	})
 
 	// Drag-to-wire bridge: the canvas shim drags from an output port to an input port
 	// and calls window.__wbConnect(from, to, port); clicking a wire calls
@@ -251,14 +297,18 @@ func VisualBuilder() ui.Node {
 		})
 		js.Global().Set("__wbConnect", connect)
 		js.Global().Set("__wbDisconnect", disconnect)
-		return func() { connect.Release(); disconnect.Release() }
+		// On unmount, null the globals so the shim's guard skips them. We intentionally
+		// do NOT Release here: the shim could still hold a reference and calling a
+		// released FuncOf panics ("call to released function"); a single leaked callback
+		// per mount is the safe trade.
+		return func() { js.Global().Set("__wbConnect", js.Null()); js.Global().Set("__wbDisconnect", js.Null()) }
 	}, "vb-connect")
 
 	// Mutations.
 	addNode := func(kind string) {
 		ng := vbCloneGraph(g)
 		id := vbFreshID(ng)
-		n := cardgraph.Node{ID: id, Kind: kind, Props: vbDefaultProps(kind), Pos: vbCascadePos(len(ng.Nodes))}
+		n := cardgraph.Node{ID: id, Kind: kind, Props: vbDefaultProps(kind), Pos: vbNextPos(ng)}
 		ng.Nodes = append(ng.Nodes, n)
 		if ng.Root == "" && vbOutType(kind) == cardgraph.TypeViz {
 			ng.Root = id
@@ -427,6 +477,8 @@ func VisualBuilder() ui.Node {
 			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), "Save"),
 			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), "Publish ▸ dashboard"),
 			Button(css.Class("data-btn"), Type("button"), OnClick(deleteCard), "Delete"),
+			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-undo"), OnClick(undo), "↶ Undo"),
+			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-redo"), OnClick(redo), "↷ Redo"),
 			Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
 			If(published.Get() != "", Span(css.Class("t-caption"), Style(map[string]string{"color": "var(--up,#16a34a)"}), published.Get())),
 			Span(css.Class("vb-sep")),
@@ -521,6 +573,41 @@ func vbDatasets() map[string]cardgraph.Collection {
 		acctRows = append(acctRows, cardgraph.Row{"name": cardgraph.Text(a.Name), "type": cardgraph.Text(string(a.Type))})
 	}
 	out["accounts"] = cardgraph.Collection{Cols: acctCols, Rows: acctRows}
+
+	// Budgets: name + limit (major units).
+	budCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "limit", Type: cardgraph.TypeNumber}}
+	var budRows []cardgraph.Row
+	for _, b := range app.Budgets() {
+		budRows = append(budRows, cardgraph.Row{"name": cardgraph.Text(b.Name), "limit": cardgraph.Num(major(b.Limit))})
+	}
+	out["budgets"] = cardgraph.Collection{Cols: budCols, Rows: budRows}
+
+	// Goals: name, target, saved (major units).
+	goalCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "target", Type: cardgraph.TypeNumber}, {Name: "saved", Type: cardgraph.TypeNumber}}
+	var goalRows []cardgraph.Row
+	for _, gl := range app.Goals() {
+		goalRows = append(goalRows, cardgraph.Row{"name": cardgraph.Text(gl.Name), "target": cardgraph.Num(major(gl.TargetAmount)), "saved": cardgraph.Num(major(gl.CurrentAmount))})
+	}
+	out["goals"] = cardgraph.Collection{Cols: goalCols, Rows: goalRows}
+
+	// Tasks: title + done flag (as text "done"/"open").
+	taskCols := []cardgraph.Column{{Name: "title", Type: cardgraph.TypeText}, {Name: "status", Type: cardgraph.TypeText}}
+	var taskRows []cardgraph.Row
+	for _, t := range app.Tasks() {
+		taskRows = append(taskRows, cardgraph.Row{"title": cardgraph.Text(t.Title), "status": cardgraph.Text(string(t.Status))})
+	}
+	out["tasks"] = cardgraph.Collection{Cols: taskCols, Rows: taskRows}
+
+	// Bills: upcoming recurring charges — reuse the transactions surface labeled as a
+	// separate dataset for discoverability (expenses only).
+	billCols := []cardgraph.Column{{Name: "payee", Type: cardgraph.TypeText}, {Name: "amount", Type: cardgraph.TypeNumber}}
+	var billRows []cardgraph.Row
+	for _, t := range app.Transactions() {
+		if t.IsExpense() {
+			billRows = append(billRows, cardgraph.Row{"payee": cardgraph.Text(t.Payee), "amount": cardgraph.Num(major(t.Amount))})
+		}
+	}
+	out["bills"] = cardgraph.Collection{Cols: billCols, Rows: billRows}
 	return out
 }
 
@@ -622,8 +709,28 @@ func vbFreshID(g cardgraph.Graph) cardgraph.NodeID {
 	}
 }
 
-func vbCascadePos(n int) cardgraph.Point {
-	return cardgraph.Point{X: float64(30 + (n%4)*185), Y: float64(20 + (n/4)*92)}
+// vbNextPos picks a non-overlapping spot for a new node: below the lowest existing
+// node (using each node's dragged position when present, else its stored Pos), so
+// adding nodes after rearranging the canvas never stacks them on top of others.
+func vbNextPos(g cardgraph.Graph) cardgraph.Point {
+	dragged := vbLoadPositions()
+	maxBottom, minLeft := 0.0, 1e9
+	for _, n := range g.Nodes {
+		p := n.Pos
+		if dp, ok := dragged[string(n.ID)]; ok {
+			p = dp
+		}
+		if p.Y+vbNodeH > maxBottom {
+			maxBottom = p.Y + vbNodeH
+		}
+		if p.X < minLeft {
+			minLeft = p.X
+		}
+	}
+	if len(g.Nodes) == 0 || minLeft > 1e8 {
+		minLeft = 40
+	}
+	return cardgraph.Point{X: minLeft, Y: maxBottom + 28}
 }
 
 func vbLoadPositions() map[string]cardgraph.Point {
@@ -1011,7 +1118,7 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 	return Div(css.Class("vb-canvas-scroll"),
 		Div(css.Class("wb-canvas"), Attr("role", "list"), Style(worldStyle), children),
 		Div(css.Class("wb-zoom"),
-			zoomBtn("out", "−"), zoomBtn("reset", "⤢"), zoomBtn("in", "+")),
+			zoomBtn("fit", "⤡"), zoomBtn("out", "−"), zoomBtn("reset", "⤢"), zoomBtn("in", "+")),
 	)
 }
 
@@ -1378,105 +1485,95 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 		return vbChart(v)
 	case "list":
 		return vbList(v)
-	default: // kpi
-		return Div(
-			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
-		)
+	case "stack":
+		// Composite tile: render each child block top-to-bottom (header + chart + list).
+		blocks := make([]ui.Node, 0, len(v.Blocks))
+		for i := range v.Blocks {
+			b := v.Blocks[i]
+			blocks = append(blocks, Div(Style(map[string]string{"margin-bottom": "0.6rem"}), vbRenderViz(&b, format)))
+		}
+		return Div(css.Class("vb-stack"), blocks)
+	case "button":
+		return ui.CreateElement(vbActionButton, vbActionButtonProps{Label: v.Text, Action: v.Action})
+	default: // kpi — render through the dashboard's own KPI body so a clone matches 1:1.
+		figTone := ""
+		if v.Tone == "up" {
+			figTone = "text-up"
+		} else if v.Tone == "down" {
+			figTone = "text-down"
+		}
+		fig := vbMoneyFmt(v.Text, format)
+		if v.Hero {
+			return kpiBodyHero(fig, figTone, v.Sub, "text-dim")
+		}
+		return kpiBody(fig, figTone, v.Sub, "text-dim")
 	}
 }
 
-var vbChartColors = []string{"#3b82f6", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"}
-
+// vbChart renders through the SAME D3 stack (uiw.Chart + chartspec) the dashboard
+// uses, so a cloned chart tile is visually identical (axes, area fill, animation,
+// theme color) rather than a separate CSS approximation.
 func vbChart(v *cardgraph.VizBlock) ui.Node {
 	if len(v.Series) == 0 {
 		return P(css.Class("t-caption", tw.TextDim), "No data to chart.")
 	}
+	kind := chartspec.Bar
 	switch v.Chart {
-	case "donut":
-		return vbDonut(v.Series)
 	case "line":
-		return vbLine(v.Series)
-	default:
-		return vbBars(v.Series)
+		kind = chartspec.Line
+	case "area":
+		kind = chartspec.Area
+	case "donut":
+		kind = chartspec.Donut
 	}
+	pts := make([]chartspec.Point, len(v.Series))
+	for i, p := range v.Series {
+		pts[i] = chartspec.Point{X: float64(i), Y: p.Value, Label: p.Label}
+	}
+	sym := currency.Symbol(vbBaseCurrency())
+	yFmt := ".2~s"
+	if sym == "$" {
+		yFmt = "$.2~s"
+	}
+	spec := chartspec.Spec{
+		Kind:   kind,
+		Series: []chartspec.Series{{Color: v.Accent, Points: pts}},
+		Y:      chartspec.Axis{Format: yFmt},
+	}
+	if kind == chartspec.Donut {
+		spec.Legend = true
+	}
+	return uiw.Chart(uiw.ChartProps{Spec: spec, Height: "100%", Class: "vb-chart", CurrencySymbol: sym})
 }
 
-func vbSeriesMax(s []cardgraph.SeriesPoint) float64 {
-	m := 0.0
-	for _, p := range s {
-		if p.Value > m {
-			m = p.Value
-		}
-	}
-	if m == 0 {
-		m = 1
-	}
-	return m
+// vbActionButtonProps configures an interactive button node.
+type vbActionButtonProps struct {
+	Label, Action string
 }
 
-func vbBars(s []cardgraph.SeriesPoint) ui.Node {
-	max := vbSeriesMax(s)
-	cols := make([]ui.Node, 0, len(s))
-	for i, p := range s {
-		h := strconv.FormatFloat(p.Value/max*100, 'f', 1, 64) + "%"
-		bar := Div(Style(map[string]string{"width": "100%", "height": h, "min-height": "2px", "border-radius": "4px 4px 0 0", "background": vbChartColors[i%len(vbChartColors)]}))
-		col := Div(css.Class("vb-bar-col"), Style(map[string]string{"flex": "1", "display": "flex", "flex-direction": "column", "justify-content": "flex-end", "align-items": "center", "gap": "0.2rem", "min-width": "0", "height": "100%"}),
-			Div(Style(map[string]string{"width": "70%", "display": "flex", "align-items": "flex-end", "height": "100%"}), bar),
-			Span(Style(map[string]string{"font-size": "10px", "color": "var(--faint,#9ca3af)", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis", "max-width": "100%"}), p.Label),
-		)
-		cols = append(cols, col)
-	}
-	return Div(css.Class("vb-chart"), Style(map[string]string{"display": "flex", "align-items": "stretch", "gap": "0.4rem", "height": "120px", "padding-top": "0.3rem"}), cols)
+// vbActionButton renders the ui.button node: a button that runs a workflow action
+// (postRecurring / applyRules / addTask) against app state on click — the builder's
+// basic interactivity, the same class of action the dashboard To-do tile performs.
+func vbActionButton(p vbActionButtonProps) ui.Node {
+	action := p.Action
+	on := ui.UseEvent(func() { vbRunAction(action) })
+	return Button(css.Class("data-btn"), Type("button"), Attr("data-vb-action", action), OnClick(on), p.Label)
 }
 
-func vbLine(s []cardgraph.SeriesPoint) ui.Node {
-	max := vbSeriesMax(s)
-	w, h := 280.0, 110.0
-	pts := ""
-	var dots []ui.Node
-	n := len(s)
-	for i, p := range s {
-		x := 0.0
-		if n > 1 {
-			x = float64(i) / float64(n-1) * w
-		}
-		y := h - (p.Value/max)*h
-		pts += fmt.Sprintf("%.1f,%.1f ", x, y)
-		dots = append(dots, Circle(Attr("cx", fmt.Sprintf("%.1f", x)), Attr("cy", fmt.Sprintf("%.1f", y)), Attr("r", "2.5"), Attr("fill", vbChartColors[0])))
+// vbRunAction applies a builder button's action to app state.
+func vbRunAction(action string) {
+	app := appstate.Default
+	if app == nil {
+		return
 	}
-	children := []ui.Node{Polyline(Attr("points", strings.TrimSpace(pts)), Attr("fill", "none"), Attr("stroke", vbChartColors[0]), Attr("stroke-width", "2"))}
-	children = append(children, dots...)
-	return Svg(css.Class("vb-chart"), Attr("width", "100%"), Attr("viewBox", fmt.Sprintf("0 0 %.0f %.0f", w, h)), Attr("preserveAspectRatio", "none"), Style(map[string]string{"height": "120px"}), children)
-}
-
-func vbDonut(s []cardgraph.SeriesPoint) ui.Node {
-	total := 0.0
-	for _, p := range s {
-		total += p.Value
+	switch action {
+	case "postRecurring":
+		_, _ = app.PostDueRecurring(time.Now())
+	case "applyRules":
+		_, _ = app.ApplyRules()
+	case "addTask":
+		_, _ = app.CreateFreshnessReminderTask("From a custom widget")
 	}
-	if total == 0 {
-		total = 1
-	}
-	stops, acc := "", 0.0
-	legend := []ui.Node{}
-	for i, p := range s {
-		start := acc / total * 100
-		acc += p.Value
-		end := acc / total * 100
-		c := vbChartColors[i%len(vbChartColors)]
-		if stops != "" {
-			stops += ", "
-		}
-		stops += fmt.Sprintf("%s %.2f%% %.2f%%", c, start, end)
-		legend = append(legend, Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.3rem", "font-size": "11px"}),
-			Span(Style(map[string]string{"width": "9px", "height": "9px", "border-radius": "2px", "background": c})),
-			Span(Style(map[string]string{"color": "var(--dim,#9ca3af)"}), p.Label)))
-	}
-	ring := Div(Style(map[string]string{"width": "96px", "height": "96px", "border-radius": "999px",
-		"background": "conic-gradient(" + stops + ")", "mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)",
-		"-webkit-mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)"}))
-	return Div(css.Class("vb-chart"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "1rem"}),
-		ring, Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}), legend))
 }
 
 func vbList(v *cardgraph.VizBlock) ui.Node {

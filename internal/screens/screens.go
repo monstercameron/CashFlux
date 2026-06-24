@@ -25,7 +25,11 @@ type Route struct {
 	Phase    int
 	Group    string
 	SubGroup string // sub-section within a group (Tools only); "" for Primary/System
-	View     func() ui.Node
+	// AdminOnly, when true, hides this route from the rail for non-admin users
+	// (gated by uistate.AdminConsoleAvailable). The route is still registered so
+	// a direct URL load works; the shell simply omits it from nav.
+	AdminOnly bool
+	View      func() ui.Node
 }
 
 // Rail navigation groups a screen can belong to. The shell renders one rail
@@ -79,6 +83,7 @@ func All() []Route {
 		{Path: "/categories", Label: "nav.categories", Title: "nav.categories", Subtitle: "screen.categoriesSub", Phase: 1, Group: GroupSystem, View: Categories},
 		{Path: "/rules", Label: "nav.rules", Title: "nav.rules", Subtitle: "screen.rulesSub", Phase: 2, Group: GroupSystem, View: Rules},
 		{Path: "/appearance", Label: "nav.appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, Group: GroupSystem, View: Appearance},
+		{Path: "/admin", Label: "nav.admin", Title: "nav.admin", Subtitle: "screen.adminSub", Phase: 2, Group: GroupSystem, AdminOnly: true, View: AdminConsole},
 	}
 }
 

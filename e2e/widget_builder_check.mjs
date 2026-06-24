@@ -80,6 +80,16 @@ try {
   const after = await page.locator(".wb-canvas .wb-node").count();
   if (after !== before + 1) fail(`adding a node didn't grow the canvas: ${before} -> ${after}`);
 
+  // Undo reverts the add; fit-to-view + the expanded palette (rule/color/stack/button)
+  // exist. These close the canvas-polish + node-breadth gaps.
+  if ((await page.locator(".wb-zoom [data-zoom='fit']").count()) === 0) fail("no fit-to-view control");
+  for (const k of ["data.rule", "literal.color", "viz.stack", "ui.button"]) {
+    if ((await page.locator(`.vb-pal-btn[data-kind="${k}"]`).count()) === 0) fail(`palette missing node: ${k}`);
+  }
+  await page.locator('[data-testid="vb-undo"]').click();
+  await page.waitForTimeout(300);
+  if ((await page.locator(".wb-canvas .wb-node").count()) !== before) fail("undo did not revert the node add");
+
   // 2) Selecting a node opens the inspector with its parameter fields.
   await page.locator(".wb-canvas .wb-node").first().click();
   await page.waitForTimeout(300);
@@ -98,7 +108,9 @@ try {
   await page.waitForTimeout(500);
   if ((await page.locator(".wb-canvas .wb-node").count()) !== 4) fail("spend-by-cat preset should have 4 nodes");
   if ((await page.locator(".wb-tile .vb-chart").count()) === 0) fail("chart preset did not render a chart");
-  if ((await page.locator(".wb-tile .vb-bar-col").count()) < 2) fail("bar chart should have multiple bars");
+  // Charts now go through the dashboard's own D3 renderer (1:1 parity) → an <svg>.
+  await page.waitForTimeout(400);
+  if ((await page.locator(".wb-tile .vb-chart svg").count()) === 0) fail("bar chart did not render a D3 svg");
 
   // 4b) Save this complex widget to the library under a name.
   await page.locator('input[aria-label="Card name"]').fill("my chart");
@@ -108,9 +120,9 @@ try {
   // 4c) Time-series trend: the spending-trend preset (dataset → filter → group-by-month
   // chronological → line chart) renders an SVG line chart.
   await page.locator('.vb-toolbar select').first().selectOption("spend-trend");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
   if ((await page.locator(".wb-tile .vb-chart").count()) === 0) fail("spend-trend did not render a chart");
-  if ((await page.locator(".wb-tile svg polyline").count()) === 0) fail("line trend has no SVG polyline");
+  if ((await page.locator(".wb-tile .vb-chart svg path").count()) === 0) fail("line trend has no D3 svg path");
 
   // 5) Another preset: recent transactions → a list/table renders.
   await page.locator('.vb-toolbar select').first().selectOption("recent");
