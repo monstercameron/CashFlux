@@ -14,8 +14,32 @@ import (
 
 func init() {
 	register("SMART-P1", p1DiscoverRecurring)
+	register("SMART-P4", p4Affordability)
 	register("SMART-P8", p8ExtraDebt)
 	register("SMART-P10", p10BillShock)
+}
+
+const p4MinEssentials = 50_00 // need this much essential spend to suggest a buffer
+
+// SMART-P4 — Suggested affordability & runway inputs. Derives a sensible cash
+// buffer from real essential monthly spend, so the runway floor and the "Can I
+// afford it?" reserve aren't guesses.
+func p4Affordability(in Input) []smart.Insight {
+	essentials := in.avgMonthlyExpenseBase()
+	if essentials < p4MinEssentials {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-P4",
+		Page:    smart.PagePlanning,
+		Key:     "SMART-P4:" + in.Now.Format("2006-01"),
+		Title:   "Suggested cash buffer: " + in.baseMoney(essentials).Format(2),
+		Detail: "Your essentials run about " + in.baseMoney(essentials).Format(2) +
+			"/mo. Using that as the runway floor and the affordability reserve keeps the projections grounded in real spending rather than a guess.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(essentials)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
 }
 
 // SMART-P1 — Auto-discovered recurring cash flows. Scans the transaction history

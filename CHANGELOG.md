@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engine P4 (suggested affordability inputs) (2026-06-24):** derives a sensible cash buffer from real essential monthly spend so the runway floor and the "Can I afford it?" reserve are grounded in actual spending, not a guess. 37 Free engines total. Table-driven tests.
+
 - **SMART series — Free engine P1 (auto-discovered recurring) (2026-06-24):** scans transaction history (reusing subscriptions.Detect) for recurring charges not yet in the Planning recurring set and nudges the user to add them (with the estimated monthly total) for a sharper forecast and runway. 36 Free engines total. Table-driven tests.
 
 - **SMART series — Free engines G8 + P8 (2026-06-24):** **G8 Goal-impact preview** expresses the month's biggest expense in terms of a goal's saving pace ("that $300 TV is ~7 weeks of your Vacation"). **P8 Auto-suggested extra debt payment** reuses `payoff.SuggestedExtra` over the household's liabilities, capped by the monthly surplus so it never pushes cash flow negative, and names the highest-APR debt to target. 35 Free engines total. Table-driven tests.

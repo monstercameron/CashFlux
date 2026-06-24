@@ -223,6 +223,23 @@ func TestP1SkipsAlreadyTracked(t *testing.T) {
 	}
 }
 
+func TestP4Affordability(t *testing.T) {
+	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
+	got := p4Affordability(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 buffer suggestion, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 250000 {
+		t.Errorf("buffer = %d, want 250000", got[0].Amount.Amount)
+	}
+}
+
+func TestP4NoSpendNoSuggestion(t *testing.T) {
+	if got := p4Affordability(baseInput()); len(got) != 0 {
+		t.Errorf("no spend history — want 0, got %d", len(got))
+	}
+}
+
 func TestP8NoSurplusNoSuggestion(t *testing.T) {
 	in := baseInput().withBaseline(300000, 500000) // negative surplus
 	card := domain.Account{
