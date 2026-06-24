@@ -666,6 +666,7 @@ func globalSettingsForm() uic.Node {
 		Pr:          pr,
 		OnTheme:     func(v string) { p := prefsAtom.Get(); p.Theme = prefs.Theme(v); savePrefs(p) },
 		OnAccent:    func(c string) { p := prefsAtom.Get(); p.Accent = c; savePrefs(p) },
+		OnMotion:    func(v string) { p := prefsAtom.Get(); p.Motion = prefs.Motion(v); savePrefs(p) },
 		OnDateStyle: onDateStyle,
 		OnWeekStart: func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 

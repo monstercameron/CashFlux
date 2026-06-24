@@ -80,6 +80,16 @@ func ApplyPrefs(p prefs.Prefs) {
 	}
 	root.Call("setAttribute", "data-theme", resolveTheme(p.Theme))
 	root.Get("style").Call("setProperty", "--accent", p.Accent)
+	// WONDER: motion level drives data-wonder on <html>, which keys all
+	// CSS WONDER tokens (--wonder-on, durations, etc.). "full" keeps the
+	// default :root values, so we omit the attribute when full to let the
+	// stylesheet's defaults win — identical visual result, cleaner DOM.
+	switch p.Motion {
+	case prefs.MotionOff, prefs.MotionSubtle:
+		root.Call("setAttribute", "data-wonder", string(p.Motion))
+	default:
+		root.Call("removeAttribute", "data-wonder")
+	}
 }
 
 // resolveTheme turns the theme preference into a concrete "dark"/"light" value,

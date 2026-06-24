@@ -21874,8 +21874,8 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
       `data-theme`/density). Default = full. — **LANDED 2026-06-23** (`prefs.Motion` field + `ApplyPrefs` sets `data-wonder`)
 - [x] Theme editor (B20): add a **"Motion / flourishes"** control — an off/subtle/full segment or an
       intensity slider — persisted with the theme. Live-preview (the app animates as you drag). — **LANDED 2026-06-23** (Settings → Appearance Motion segment control)
-- [ ] Respect the OS `prefers-reduced-motion` as the hard override regardless of the setting (CSS already does;
-      mirror in the setting copy: "Following your system's reduced-motion setting").
+- [x] Respect the OS `prefers-reduced-motion` as the hard override regardless of the setting (CSS already does;
+      mirror in the setting copy: "Following your system's reduced-motion setting"). — **LANDED 2026-06-23** (settings.motionHint already says "Follows your system's reduced-motion setting"; CSS universal guard in index.html covers it)
 
 **LANDED 2026-06-23 — Motion pref (full/subtle/off) wired end-to-end.**
 

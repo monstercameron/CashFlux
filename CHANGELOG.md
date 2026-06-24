@@ -13,6 +13,7 @@ and every commit updates this file under `Unreleased`.
 - C74 e2e: `e2e/c74_ai_extract_check.mjs` asserts Extract-with-AI + Suggest-categories buttons render and are operable
 
 ### Changed
+- **WONDER theme integration:** `prefs.Motion` (off/subtle/full) drives `data-wonder` on `<html>` via `ApplyPrefs`; a Motion segment control in appearance settings (Off / Subtle / Full) persists the choice and live-updates flourish intensity; OS prefers-reduced-motion remains a hard CSS override regardless.
 - **WONDER (W-11..W-20):** list stagger, bento entrance, modal backdrop blur, toast spring, progress ease, skeleton shimmer, focus-ring ease — token-driven + reduced-motion safe.
 - **WONDER (W-3..W-8):** tile/row/nav/icon hover flourishes, primary-button click ripple, switch spring — all token-driven + reduced-motion safe. W-3 adds bento `.w` tile hover lift (excluded during drag); W-4 adds list `.row` 2px translateX nudge on hover (table rows excluded for column alignment). W-5..W-8 previously landed.
 - **C73 Phase 2 COMPLETE — every screen card ported to primitives (2026-06-23).** Drove the raw-scaffold count

@@ -39,6 +39,23 @@ const (
 	ThemeSystem Theme = "system"
 )
 
+// Motion controls animated-flourish intensity. The UI maps it to the
+// data-wonder attribute on <html>, which drives all CSS WONDER tokens.
+type Motion string
+
+// The supported motion levels, from most animated to fully static.
+const (
+	// MotionFull is the default: all flourishes at full intensity.
+	MotionFull Motion = "full"
+	// MotionSubtle reduces flourish intensity to ~55% (shorter durations, less travel).
+	MotionSubtle Motion = "subtle"
+	// MotionOff disables all animated flourishes; the app is fully static.
+	MotionOff Motion = "off"
+)
+
+// Valid reports whether m is a known motion level.
+func (m Motion) Valid() bool { return m == MotionFull || m == MotionSubtle || m == MotionOff }
+
 // ServerMode distinguishes paid CashFlux Cloud from a user-managed backend.
 type ServerMode string
 
@@ -84,6 +101,10 @@ type Prefs struct {
 	ServerURL     string     `json:"serverUrl,omitempty"`
 	ServerToken   string     `json:"serverToken,omitempty"`
 	ServerCSRF    string     `json:"serverCsrf,omitempty"`
+	// Motion controls animated-flourish intensity for the WONDER system. The
+	// wasm layer writes this as the data-wonder attribute on <html>, which the
+	// CSS WONDER tokens key off. Defaults to MotionFull.
+	Motion Motion `json:"motion,omitempty"`
 	// BackendDisabled turns off all backend connections (sync + AI proxy) even when
 	// a server URL and token are configured. It is inverted (default false = on) so
 	// existing prefs keep working; the user flips it from the Settings modal to stop
@@ -102,9 +123,9 @@ func (p Prefs) BackendActive() bool {
 }
 
 // Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
-// dark theme, green accent, comfortable density, 100% scale).
+// dark theme, green accent, comfortable density, 100% scale, full motion).
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -143,6 +164,9 @@ func (p Prefs) Normalize() Prefs {
 		p.Scale = ScaleMin
 	case p.Scale > ScaleMax:
 		p.Scale = ScaleMax
+	}
+	if !p.Motion.Valid() {
+		p.Motion = MotionFull
 	}
 	return p
 }
