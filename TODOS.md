@@ -25343,7 +25343,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       AI keys already store encrypted AES-GCM ciphertext; self-host docs now require secret-manager/KMS-backed
       master-key sourcing, and `cashflux-server rotate-ai-master-key` provides the maintenance-window
       re-encryption path without asking users to re-enter keys.
-- [ ] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
+- [x] Consider per-user dataset encryption-at-rest (envelope encryption) as a later privacy upgrade.
 - [x] SQLi-safe by construction (parameterized queries only); path-traversal-safe blob paths.
       Blob paths now reject malformed hashes before disk access and stay rooted under the blob directory.
       Formal SQLi coverage is now in `TestRepositorySQLAuditUsesParameterizedQueries`, which rejects dynamic SQL
