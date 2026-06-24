@@ -19,6 +19,7 @@ var curated = []Name{
 	ScanLine, Upload, History, Ban, HelpCircle,
 	Volume, VolumeMute, Bell,
 	Paperclip,
+	Appearance,
 }
 
 func TestEveryConstantResolves(t *testing.T) {

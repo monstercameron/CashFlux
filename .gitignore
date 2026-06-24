@@ -31,3 +31,11 @@
 .DS_Store
 .vscode/
 .claude/
+
+# verification/scratch artifacts (not source)
+node_modules/
+e2e/screenshots/
+*.gwc_*.txt
+.gwc_*.txt
+e2e/*_output.txt
+/wonder_w*.png

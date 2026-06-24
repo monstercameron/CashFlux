@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/contrast"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -315,20 +314,22 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 // The dashboard is intentionally omitted — it is locked visible in
 // internal/modules. Covers every routed main-line screen (primary nav, the Tools
 // group, and the System group).
-var hideableScreens = []struct{ Label, Path string }{
-	{"Accounts", "/accounts"},
-	{"Transactions", "/transactions"},
-	{"Budgets", "/budgets"},
-	{"Goals", "/goals"},
-	{"To-do", "/todo"},
-	{"Planning", "/planning"},
-	{"Allocate", "/allocate"},
-	{"Insights", "/insights"},
-	{"Documents", "/documents"},
-	{"Customize", "/customize"},
-	{"Members", "/members"},
-	{"Categories", "/categories"},
-	{"Rules", "/rules"},
+// LabelKey is an i18n key (reuses the nav.* catalog) so screen names localize
+// with the active language instead of being hardcoded English (§6.12).
+var hideableScreens = []struct{ LabelKey, Path string }{
+	{"nav.accounts", "/accounts"},
+	{"nav.transactions", "/transactions"},
+	{"nav.budgets", "/budgets"},
+	{"nav.goals", "/goals"},
+	{"nav.todo", "/todo"},
+	{"nav.planning", "/planning"},
+	{"nav.allocate", "/allocate"},
+	{"nav.insights", "/insights"},
+	{"nav.documents", "/documents"},
+	{"nav.customize", "/customize"},
+	{"nav.members", "/members"},
+	{"nav.categories", "/categories"},
+	{"nav.rules", "/rules"},
 }
 
 // globalSettingsForm is the two-column household/global settings back face:
@@ -637,7 +638,7 @@ func globalSettingsForm() uic.Node {
 	for _, sc := range hideableScreens {
 		path := sc.Path
 		screenToggles = append(screenToggles, ui.ToggleRow(ui.ToggleRowProps{
-			Label:    uistate.T("settings.showScreen", sc.Label),
+			Label:    uistate.T("settings.showScreen", uistate.T(sc.LabelKey)),
 			On:       !hidden.IsHidden(path),
 			OnChange: func(bool) { toggleModule(path) },
 		}))
@@ -663,10 +664,11 @@ func globalSettingsForm() uic.Node {
 	// Right column: Appearance → Preferences → AI → Cloud & server → Data → Advanced.
 	// Ordered by usage frequency: Appearance is everyday, AI is setup-once, Cloud is power-user.
 	right := settingsRightColumn(settingsRightProps{
-		Pr:          pr,
-		OnTheme:     func(v string) { p := prefsAtom.Get(); p.Theme = prefs.Theme(v); savePrefs(p) },
-		OnAccent:    func(c string) { p := prefsAtom.Get(); p.Accent = c; savePrefs(p) },
-		OnMotion:    func(v string) { p := prefsAtom.Get(); p.Motion = prefs.Motion(v); savePrefs(p) },
+		Pr: pr,
+		OnAppearanceLink: func() {
+			settingsAtom.Set(uistate.SettingsTarget{})
+			nav.Navigate(uistate.RoutePath("/appearance"))
+		},
 		OnDateStyle: onDateStyle,
 		OnWeekStart: func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 
@@ -749,9 +751,11 @@ func globalSettingsForm() uic.Node {
 			logBody = Div(css.Class("rows"), rows)
 		}
 	}
-	debugLog := Div(css.Class(tw.Mt5),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-			H4(css.Class("set-label"), uistate.T("settings.debugLog")),
+	// Developer debug log behind a collapsed <details> disclosure so it doesn't
+	// clutter the user-facing settings panel (§6.12) — power users expand it on demand.
+	debugLog := Details(css.Class(tw.Mt5),
+		Summary(css.Class("set-label"), Style(map[string]string{"cursor": "pointer"}), uistate.T("settings.debugLog")),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Mt2), Style(map[string]string{"justify-content": "flex-end"}),
 			dataBtn(uistate.T("settings.refresh"), false, refreshLog),
 		),
 		logBody,
@@ -768,42 +772,6 @@ func globalSettingsForm() uic.Node {
 		debugLog,
 		about,
 	)
-}
-
-// accentSurfaceHexes returns the elevated surface color(s) the accent is judged
-// against for the given theme — both when the theme follows the system, since we
-// can't know which is active at render time.
-func accentSurfaceHexes(theme prefs.Theme) []string {
-	const darkElev, lightElev = "#1a1a1d", "#efede8"
-	switch theme {
-	case prefs.ThemeLight:
-		return []string{lightElev}
-	case prefs.ThemeDark:
-		return []string{darkElev}
-	default: // system: judged against both
-		return []string{darkElev, lightElev}
-	}
-}
-
-// accentContrastNote renders a small line stating the selected accent's contrast
-// ratio against the theme surface and whether it clears WCAG AA for UI/large
-// elements (3:1), using the pure internal/contrast helpers. Accent is used for
-// fills, active states, and the focus ring, so the large/UI threshold applies.
-func accentContrastNote(accent string, theme prefs.Theme) uic.Node {
-	if accent == "" {
-		accent = "#2e8b57" // the default swatch
-	}
-	worst := 21.0
-	for _, surf := range accentSurfaceHexes(theme) {
-		if r, err := contrast.Ratio(accent, surf); err == nil && r < worst {
-			worst = r
-		}
-	}
-	if contrast.PassesAA(worst, true) {
-		return Span(css.Class("muted", tw.TextXs), uistate.T("settings.accentContrastOk", worst))
-	}
-	return Span(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--danger)"}),
-		uistate.T("settings.accentContrastLow", worst))
 }
 
 // langDisplay gives a human label for a language code: English by name, any

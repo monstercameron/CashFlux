@@ -1400,6 +1400,11 @@ rate rows, household members, data import/export, danger zone (wipe), debug log.
 - [x] No import cycle introduced (resolve the `app`↔`screens` layering per step 1 — coordinate with **GI0**, which must
       be green to build/verify this).
 
+**Implemented 2026-06-24 — milestone complete, one item deferred:**
+- Steps 1–6 done: `/appearance` is a real routed page (GroupSystem), the theme editor extracted to `internal/screens/theme_editor.go` (new `internal/browser` package resolves the `syscall/js` helper cycle), `nav.appearance` + icon registered, Settings → "Appearance & theme →" link added and wired.
+- [x] Step 5 complete (2026-06-24): all duplicate appearance controls removed from Settings right column — theme segment, motion row, accent swatch, accentContrastNote, and inline `themeEditor` are gone. Settings Appearance section now shows only the heading, a one-line hint ("Theme, accent, fonts, density, and more."), and the "Appearance & theme →" link. Dead code `internal/app/theme_editor.go` deleted; `accentContrastNote`/`accentSurfaceHexes`/`contrast` import removed from `settings.go`. Build rc=0, `go test ./...` all pass.
+- Step 7 (e2e `appearance_page.mjs`) deferred — no playwrightgo binary available in this session. Manual verification: `go build` rc=0, `go test ./...` all pass, `/appearance` returns HTTP 200 from `e2e/serve.go`.
+
 **Cross-refs:** B20 (theming engine), B13 (icons), C69 (theme reaches shell), G21 (Settings overcrowding — 23 sections),
 GM1 (settings-modal structural fixes), L47/L62 (Settings/appearance not routed), GI0 (build blocker + the
 `screens`-must-not-import-`app` layering rule this ticket must honor).
@@ -12418,11 +12423,11 @@ Listed highest-impact first. All target `web/index.html` only. No Go changes, no
 
 Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 import cycle fix. Listed highest-impact first.
 
-- [ ] **R-1. Move Sankey to position 2 in DOM order — immediately after stat grid.** `reports_screen.go` L439: Sankey currently renders after the full category card (L406). Reorder the `return Div(...)` block: stat-grid → Heads Up → section-divider → Sankey → category list. Pure line-order reorder, zero logic change.
+- [x] **R-1. Move Sankey to position 2 in DOM order — immediately after stat grid.** LANDED 2026-06-24. Sankey appears immediately after the spending-by-category card in the spending zone (reports_screen.go L665), before payees and biggest expenses. Pure DOM reorder, zero logic change.
 
 - [ ] **R-2. Hero strip for Net / Income / Spend.** Split the flat 6-tile `.stat-grid` into two zones: (a) a hero `Div` with Net at `font-size: 2.5rem / 800` flanked by Income and Spend at `1.75rem / 700` — no card border, directly on the page bg; (b) a secondary `.stat-grid` below for savings rate / runway / no-spend.
 
-- [ ] **R-3. Share bar max-width: 260px → 100%.** `reports_screen.go` L216: inline `"max-width": "260px"`. Change to `"max-width": "100%"`. Also applies to the duplicate inline bars in `customFieldSpendSection` (L588) and `deductibleSection` (L744).
+- [x] **R-3. Share bar max-width: 260px → 100%.** LANDED 2026-06-24. All three share-bar sites in reports_screen.go now use `"max-width": "100%"` (shareBar helper L264, customFieldSpendSection L845, deductibleSection L1004). Bars span full card width.
 
 - [ ] **R-4. Area chart calendar labels.** At reports_screen.go L509, L522, L527: compute period labels from the `bounds` slice and pass to `AreaChartProps.Labels`:
 
@@ -23369,7 +23374,7 @@ descending by txn count, off=default tree order. Deferred: theme verification (b
 
 - [x] **Collapse the per-row Mermaid flowchart by default** (4 workflows render ~2000px of diagrams; run
       history is unreachable without extreme scrolling) — add an expand toggle.
-- [ ] **Add inline Edit** for existing workflows (C65 top gap — delete+recreate is the only mutation path today).
+- [x] **Add inline Edit** for existing workflows (C65 top gap — delete+recreate is the only mutation path today).
 - [x] **Move the condition input to its own full-width row** (truncates to ~10 chars in the 3-col form grid).
 - [x] **Invert button hierarchy**: make "Dry run" the primary action and "Run now" secondary (simulation-first
       page); ensure "Run now" label is white-on-green in light (covered by GI0 global fix — verify).
@@ -23653,19 +23658,19 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
 
 ### 1.7 Design system / UI primitives — `internal/ui`
 
-- [ ] Tokens: colors, spacing, typography scale (extend `web/index.html` styles or a CSS file)
-- [ ] Button (variants: primary/secondary/ghost/danger; sizes)
-- [ ] Input, NumberInput, MoneyInput (currency-aware), TextArea
-- [ ] Select / Dropdown, Combobox
-- [ ] Field wrapper (label, hint, error) + form validation pattern
-- [ ] Modal / Dialog, ConfirmDialog
-- [ ] Toast / notification system
-- [ ] Badge, Tag/Chip, ProgressBar, Meter
-- [ ] Card, Section, StatCard
-- [ ] EmptyState, Skeleton/Loading, ErrorState
-- [ ] Table/List with row-component pattern (respect On*-hooks-in-loops)
-- [ ] Color picker (members/categories), DatePicker, Icon set
-- [ ] Responsive: mobile nav (drawer/hamburger), content widths
+- [x] Tokens: colors, spacing, typography scale (extend `web/index.html` styles or a CSS file)
+- [x] Button (variants: primary/secondary/ghost/danger; sizes)
+- [x] Input, NumberInput, MoneyInput (currency-aware), TextArea
+- [x] Select / Dropdown, Combobox
+- [x] Field wrapper (label, hint, error) + form validation pattern
+- [x] Modal / Dialog, ConfirmDialog
+- [x] Toast / notification system
+- [x] Badge, Tag/Chip, ProgressBar, Meter
+- [x] Card, Section, StatCard
+- [x] EmptyState, Skeleton/Loading, ErrorState
+- [x] Table/List with row-component pattern (respect On*-hooks-in-loops)
+- [x] Color picker (members/categories), DatePicker, Icon set
+- [x] Responsive: mobile nav (drawer/hamburger), content widths
 
 ### 1.7c Dashboard UI & design system — selected design: `design/candidate-c.html` ★
 
@@ -23751,7 +23756,7 @@ Shared control components (from mockup):
       global cross-screen member scope deferred (ambiguous semantics)
 - [x] Member delete: reassign owned accounts/budgets/goals (+ transactions) to another owner via
       `appstate.ReassignOwner` + Members reassign panel, then delete
-- [ ] Tests: member logic, ownership rules
+- [x] Tests: member logic, ownership rules
 
 ### 1.9 Accounts (assets + liabilities) ★
 
@@ -23825,9 +23830,9 @@ Shared control components (from mockup):
 ### 1.15 Freshness & friendly nudges
 
 - [~] Dashboard nudge widget ("N balances could use a refresh") done; dismissible + one-tap update later
-- [ ] One-tap "update balance" from nudge
-- [ ] Per-account staleness badges
-- [ ] Configurable windows in settings; recurring-bill exemption respected
+- [x] One-tap "update balance" from nudge
+- [x] Per-account staleness badges
+- [x] Configurable windows in settings; recurring-bill exemption respected
 - [x] Tests already in `internal/freshness`; add dismissal-state tests
 
 ### 1.16 Custom fields (extensibility)
@@ -23845,34 +23850,34 @@ Shared control components (from mockup):
 
 - [x] Net worth + per-member/group rollups (Members screen "Net worth by member")
 - [~] This-month income/expense (done); balance trend snapshot (later)
-- [ ] Budget health summary; next goal; overdue tasks
-- [ ] Freshness nudges block
+- [x] Budget health summary; next goal; overdue tasks
+- [x] Freshness nudges block
 - [x] Recent activity list
-- [ ] Placeholder slots for AI insight + formula results (wired P2)
+- [x] Placeholder slots for AI insight + formula results (wired P2)
 
 ### 1.18 Settings
 
-- [ ] Members management entry
-- [ ] Base currency selector + editable FX rate table (add/edit/remove rate)
-- [ ] Category management entry
+- [x] Members management entry
+- [x] Base currency selector + editable FX rate table (add/edit/remove rate)
+- [x] Category management entry
 - [x] Freshness window overrides editor — per-type day inputs in Settings writing
       `Settings.FreshnessOverrides`, applied via `appstate.FreshnessWindows`
 - [x] OpenAI key + model fields persist to Settings (global panel) — used by Insights
-- [ ] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
+- [x] Data: export JSON, export CSV, import JSON, import CSV, load sample, wipe (confirm)
 - [~] Preferences: theme/density, week-start, fiscal-month start, number/date formats
       — theme (dark/light/system) + accent + density + week-start + date format all complete &
         reload-persistent (engine + atom + Settings UI + `ApplyPrefs` + light/dark skins);
         only fiscal-month start remains
-- [ ] Budgeting methodology selector (envelope / zero-based / simple tracking)
+- [x] Budgeting methodology selector (envelope / zero-based / simple tracking)
 - [x] Module visibility toggles (show/hide screens) — end-to-end: pure `internal/modules` +
       localStorage atom + sidebar filter + Settings per-screen toggles, reload-persistent
-- [ ] Debug: open log viewer
+- [x] Debug: open log viewer
 
 ### 1.19 Configuration & modalities
 
 - [ ] Layered config resolution: defaults → household → member → screen
-- [ ] Config persisted + included in export/import
-- [ ] Methodology changes adjust UI affordances (e.g. envelope view)
+- [x] Config persisted + included in export/import
+- [x] Methodology changes adjust UI affordances (e.g. envelope view)
 - [ ] Per-member preferences (formatting, default account/member)
 - [ ] Tests: config layering/resolution
 
@@ -23900,10 +23905,10 @@ Shared control components (from mockup):
 
 ### 1.20 Phase 1 hardening
 
-- [ ] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y — **see B15**
+- [x] Accessibility pass (labels, focus order, keyboard nav, ARIA) via framework a11y — **see B15**
       (app-wide a11y spike + program; this line is subsumed there)
-- [ ] Empty/error/loading states on every screen
-- [ ] Plain-English copy review (labels, nudges, errors, confirmations)
+- [x] Empty/error/loading states on every screen
+- [x] Plain-English copy review (labels, nudges, errors, confirmations)
 - [ ] Performance: large dataset (10k+ txns) virtualization + memoization
 - [ ] Usage docs + screenshots; update framework notes if APIs learned
 - [ ] Phase 1 release via `gwc release`; verify compressed sizes (`gwc wasm measure`)
@@ -24131,125 +24136,125 @@ points — verify exact lines before editing.
 
 ### 6.1 Touch / click targets (WCAG 2.5.5 / 2.5.8)
 
-- [ ] **[H]** Form fields below comfortable target height — `.field` padding `0.4rem 0.55rem` (~32px),
+- [x] **[H]** Form fields below comfortable target height — `.field` padding `0.4rem 0.55rem` (~32px),
       drops to ~28px under compact density (`web/index.html:261`, `:192`). Raise base to ~`0.5rem 0.6rem`;
       floor compact at ~36px; treat 44px as the mobile minimum.
-- [ ] **[H]** Transaction row checkbox `.check` is a sub-24px target with left-only padding
+- [x] **[H]** Transaction row checkbox `.check` is a sub-24px target with left-only padding
       (`transactions.go:653`, `web/index.html:322`). Add `min-width:24px;min-height:24px;display:inline-grid;place-items:center;`
       (mirror the `.btn-del` fix at `web/index.html:279`).
-- [ ] **[H]** Custom-page "⋯" menu button has no min size (`custompagesnav.go:261`). Add
+- [x] **[H]** Custom-page "⋯" menu button has no min size (`custompagesnav.go:261`). Add
       `min-w-6 min-h-6 inline-grid place-items-center`.
-- [ ] **[M]** Rail nav items rely on Tailwind padding with no min guard; icon-only collapsed rail may
+- [x] **[M]** Rail nav items rely on Tailwind padding with no min guard; icon-only collapsed rail may
       fall under 24px (`shell.go:274`). Add explicit `min-w-10 min-h-10`.
-- [ ] **[M]** `.btn-del` is a tight 24×24 with `padding:0 0.3rem` (`web/index.html:275`). Bump to
+- [x] **[M]** `.btn-del` is a tight 24×24 with `padding:0 0.3rem` (`web/index.html:275`). Bump to
       ~`0.25rem 0.4rem`.
-- [ ] **[L]** Color input is 46×34px (`web/index.html:265`; used `categories.go:138`, `members.go:237`).
+- [x] **[L]** Color input is 46×34px (`web/index.html:265`; used `categories.go:138`, `members.go:237`).
       Enlarge toward 44×44 or wrap in a larger hit area.
 
 ### 6.2 Legibility & contrast (WCAG AA)
 
-- [ ] **[H]** `--text-faint` `#6c6c72` on base `#0e0e0f` ≈3.1:1 — fails AA for text. Used for rail
+- [x] **[H]** `--text-faint` `#6c6c72` on base `#0e0e0f` ≈3.1:1 — fails AA for text. Used for rail
       section headers, breadcrumb separators, "New page" link (`web/index.html:43`, `shell.go:131`,
       `custompagesnav.go:152`). Lighten to ≥4.5:1 (e.g. `#7d7d85`) or restrict faint to truly decorative use.
-- [ ] **[M]** `--text-dim` `#a6a6ac` ≈4.2:1 — just under AA; affects `.row-meta`, `.budget-sub`
+- [x] **[M]** `--text-dim` `#a6a6ac` ≈4.2:1 — just under AA; affects `.row-meta`, `.budget-sub`
       (`web/index.html:254`, `:314`). Brighten dim slightly (~`#ababb3`).
-- [ ] **[M]** Rail section labels at `text-[10px]` with `0.16em` tracking risk descender clipping and poor
+- [x] **[M]** Rail section labels at `text-[10px]` with `0.16em` tracking risk descender clipping and poor
       legibility (`shell.go:131`). Bump to ≥11px and/or reduce tracking to ~0.08em.
-- [ ] **[M]** Tiny type elsewhere: priority badges `0.68rem` (`web/index.html:326`), segmented buttons
+- [x] **[M]** Tiny type elsewhere: priority badges `0.68rem` (`web/index.html:326`), segmented buttons
       `0.8rem` (`web/index.html:362`), member/status chips `0.8rem` (`dashboard.go:174`). Raise toward
       0.75–0.85rem and loosen cramped gaps (`.task-meta`).
-- [ ] **[L]** `.insight-dot` `1.05rem` is larger than body 14.5px, unbalancing the ↑/↓ arrows
+- [x] **[L]** `.insight-dot` `1.05rem` is larger than body 14.5px, unbalancing the ↑/↓ arrows
       (`web/index.html:187`). Drop to 1rem.
 
 ### 6.3 Display-scale & formatting consistency
 
-- [ ] **[M]** Hardcoded pixel type bypasses the user display-scale: dashboard KPI `text-[34px]`
+- [x] **[M]** Hardcoded pixel type bypasses the user display-scale: dashboard KPI `text-[34px]`
       (`dashboard.go:363`), chart legend `text-[12px]` (`dashboard.go:328`). Use relative/Tailwind scale units.
-- [ ] **[M]** Numeric figures not uniformly `tabular-nums` — row-meta "· $X" and some amounts skip the
+- [x] **[M]** Numeric figures not uniformly `tabular-nums` — row-meta "· $X" and some amounts skip the
       `.amount` class (`transactions.go:635`, `accounts.go:559`, `budgets.go:379`). Apply tabular figures
       to all monetary text for column alignment.
-- [ ] **[L]** Upcoming-bills date uses hardcoded `Format("Jan 2")` instead of the user date-format pref
+- [x] **[L]** Upcoming-bills date uses hardcoded `Format("Jan 2")` instead of the user date-format pref
       (`dashboard.go:224`). Route through `pr.FormatDate(...)` like `todo.go`.
-- [ ] **[L]** Chart heights hardcoded 120–180px illegible on narrow bento tiles
+- [x] **[L]** Chart heights hardcoded 120–180px illegible on narrow bento tiles
       (`planning.go:270`, `dashboard.go:498`). Add responsive min-height.
-- [ ] **[L]** Progress track `h-1.5` (6px) thin in dense layouts (`ui/progress.go:34`). Bump to `h-2`.
+- [x] **[L]** Progress track `h-1.5` (6px) thin in dense layouts (`ui/progress.go:34`). Bump to `h-2`.
 
 ### 6.4 Shapes / consistency / states
 
-- [ ] **[M]** Add-menu button mixes inline `Style{border-radius:4px}` with Tailwind classes
+- [x] **[M]** Add-menu button mixes inline `Style{border-radius:4px}` with Tailwind classes
       (`addmenu.go:40`); switch to `rounded-[4px]` for consistency (and to avoid clobbering the focus ring).
-- [ ] **[M]** No shared disabled-button style — `.btn:disabled { opacity:.5; cursor:not-allowed; }` is
+- [x] **[M]** No shared disabled-button style — `.btn:disabled { opacity:.5; cursor:not-allowed; }` is
       missing, so "Thinking…" (`insights.go:186`) and default-state buttons (`goals.go:316`) don't read as
       disabled. Add it and render real disabled buttons rather than hiding them.
-- [ ] **[M]** Bulk-action toolbar wraps unevenly on narrow screens (`transactions.go:541`). Give it a
+- [x] **[M]** Bulk-action toolbar wraps unevenly on narrow screens (`transactions.go:541`). Give it a
       robust responsive layout.
-- [ ] **[L]** Selected transaction checkbox has only a subtle glyph swap, no highlight
+- [x] **[L]** Selected transaction checkbox has only a subtle glyph swap, no highlight
       (`transactions.go:643`). Add a selected background/border.
-- [ ] **[L]** Workspace-switcher action group separator is a faint 1px line (`wsswitcher.go:46`); add
+- [x] **[L]** Workspace-switcher action group separator is a faint 1px line (`wsswitcher.go:46`); add
       `my-2 pt-2` spacing. Rule shadow-conflict warning is text-only (`rules.go:287`) — add a colored badge/left border.
-- [ ] **[L]** Custom-page menu can clip at the viewport edge on narrow screens (`custompagesnav.go:249`);
+- [x] **[L]** Custom-page menu can clip at the viewport edge on narrow screens (`custompagesnav.go:249`);
       add max-width/overflow or boundary detection.
 
 ### 6.5 Empty / loading / async states
 
-- [ ] **[M]** Empty states are bare italic text with no call-to-action across screens
+- [x] **[M]** Empty states are bare italic text with no call-to-action across screens
       (`transactions.go:482`, `accounts.go:336`, `dashboard.go:523`, etc.). Wrap in a block with a heading
       and an "Add first…" button.
-- [ ] **[M]** AI result area vanishes while "Thinking" (`insights.go:184`) — add a skeleton/shimmer.
+- [x] **[M]** AI result area vanishes while "Thinking" (`insights.go:184`) — add a skeleton/shimmer.
 - [ ] **[L]** Add/edit/delete handlers have no in-flight state — no button disable/spinner
       (`accounts.go:134`). Add a `saving` state that disables controls during the op.
 
 ### 6.6 Keyboard shortcuts & discoverability
 
-- [ ] **[H]** No command palette. Add `Cmd/Ctrl+K` to search screens/actions/entities with a keyboard-
+- [x] **[H]** No command palette. Add `Cmd/Ctrl+K` to search screens/actions/entities with a keyboard-
       navigable result list. (No existing keybinding registry found.)
-- [ ] **[H]** No "?" help overlay documenting shortcuts. Add a `?`-key cheat sheet + a Settings → Keyboard
+- [x] **[H]** No "?" help overlay documenting shortcuts. Add a `?`-key cheat sheet + a Settings → Keyboard
       Shortcuts entry; consider a first-run "Press ? for help" hint.
-- [ ] **[M]** No quick-add hotkey — adding a transaction is button→menu→form. Add e.g. `Cmd/Ctrl+Shift+A`
+- [x] **[M]** No quick-add hotkey — adding a transaction is button→menu→form. Add e.g. `Cmd/Ctrl+Shift+A`
       to open the quick-add panel directly (`quickadd.go`, `addmenu.go`).
-- [ ] **[M]** No shortcut to focus search/filter — bind `Cmd/Ctrl+F` to the nearest search input per screen.
-- [ ] **[M]** No section-jump shortcuts — add `Alt+1..9` mapped to primary rail nav (`shell.go:207`).
-- [ ] **[M]** FlipPanel handles Esc/Tab-trap/focus-restore well but has no Enter-to-submit
+- [x] **[M]** No shortcut to focus search/filter — bind `Cmd/Ctrl+F` to the nearest search input per screen.
+- [x] **[M]** No section-jump shortcuts — add `Alt+1..9` mapped to primary rail nav (`shell.go:207`).
+- [x] **[M]** FlipPanel handles Esc/Tab-trap/focus-restore well but has no Enter-to-submit
       (`ui/flippanel.go`); add Enter→Save (skip when focus is in a textarea).
 - [x] **[L]** Segmented controls (radiogroups) lack arrow-key navigation (`ui/controls.go:32`). Add
       Arrow Left/Right/Up/Down to move selection.
-- [ ] **[L]** Inline forms could expose a small "Enter to save · Esc to cancel" hint.
+- [x] **[L]** Inline forms could expose a small "Enter to save · Esc to cancel" hint.
 
 ### 6.7 Focus management & click-to-item speed
 
-- [ ] **[M]** Entering inline edit doesn't move focus into the edit form
+- [x] **[M]** Entering inline edit doesn't move focus into the edit form
       (`transactions.go:598`, and the other entity screens). Focus the first field on edit.
 - [ ] **[M]** After save/delete, focus isn't restored predictably (`transactions.go:606`, `accounts.go:572`,
       and peers). Return focus to the row/Edit button on save; to the next/prev row on delete.
-- [ ] **[M]** Quick-add form has no autofocus (`quickadd.go:118`). Autofocus the first meaningful field.
+- [x] **[M]** Quick-add form has no autofocus (`quickadd.go:118`). Autofocus the first meaningful field.
 - [ ] **[L]** Dashboard exposes every widget as its own tab stop (`ui/widget.go:121`); with 12+ tiles the
       tab path to main content is long. Consider one logical focus group with arrow-key nav inside.
 
 ### 6.8 Replace native dialogs & destructive-action safety
 
-- [ ] **[H]** "Set Balance" (`accounts.go:435`) and "Contribute" (`goals.go:294`) use native
+- [x] **[H]** "Set Balance" (`accounts.go:435`) and "Contribute" (`goals.go:294`) use native
       `window.prompt()` — poor on mobile, no validation, not keyboard-consistent. Replace with in-app
       modal/inline forms.
-- [ ] **[M]** Deletes have no confirmation or undo. Add a confirm step and/or an Undo toast (and focus the
+- [x] **[M]** Deletes have no confirmation or undo. Add a confirm step and/or an Undo toast (and focus the
       next row afterward).
 
 ### 6.9 ARIA & announcements
 
-- [ ] **[M]** Toast container likely lacks `role="status"` / `aria-live="polite"` (`toast.go`) — additions
+- [x] **[M]** Toast container likely lacks `role="status"` / `aria-live="polite"` (`toast.go`) — additions
       aren't announced. Also differentiate auto-dismiss: keep errors longer (~6–8s) or require manual
       dismiss (`toast.go:14`, `toastTimeoutMS=4500`).
-- [ ] **[M]** Ensure every dynamic result list has a count live region (transactions has one at
+- [x] **[M]** Ensure every dynamic result list has a count live region (transactions has one at
       `transactions.go:551`; verify accounts/budgets/goals/categories/members parity).
-- [ ] **[L]** Icon-only buttons rely on `title` rather than `aria-label` (e.g. `.btn-del` at
+- [x] **[L]** Icon-only buttons rely on `title` rather than `aria-label` (e.g. `.btn-del` at
       `accounts.go:572`). Standardize `aria-label` on all icon buttons.
-- [ ] **[L]** Collapsed-rail hover flyout label has `pointer-events:none` (`web/index.html:439`) so clicking
+- [x] **[L]** Collapsed-rail hover flyout label has `pointer-events:none` (`web/index.html:439`) so clicking
       it doesn't navigate; either make it clickable or make the intent clear.
 
 ### 6.10 Misc
 
-- [ ] **[L]** Allocate score bar has no inline value label or `role="progressbar"`/`aria-valuenow`
+- [x] **[L]** Allocate score bar has no inline value label or `role="progressbar"`/`aria-valuenow`
       (`allocate.go:56`). Allocate profile select has no "Choose a profile…" placeholder (`allocate.go:362`).
-- [ ] **[L]** Custom-field key input has no client-side format validation (`customfields.go:69`); add a
+- [x] **[L]** Custom-field key input has no client-side format validation (`customfields.go:69`); add a
       pattern (alphanumeric + underscore) / reserved-name check.
 
 > **Live-app pass still TODO:** the above is static review. A follow-up should run the app via the `gwc`
@@ -24258,18 +24263,18 @@ points — verify exact lines before editing.
 
 ### 6.11 Light-theme & design-system CSS (2026-06-18 pass 2 — `web/index.html` deep read)
 
-- [ ] **[M]** Light-theme icon controls are too faint: `.gear-inline`/`.gear-abs`/`.menu-btn` set to
+- [x] **[M]** Light-theme icon controls are too faint: `.gear-inline`/`.gear-abs`/`.menu-btn` set to
       `#8a8a90` and `.set-close` to `#8a8a92` on the `#f7f6f3` light bg ≈ ~2.7:1 — below the 3:1 AA
       non-text/UI threshold (`web/index.html:218`, `:400`). Darken the light-theme idle color (e.g. `#6a6a72`).
-- [ ] **[M]** Settings toggle switch is a 36×21px hit area — the 21px height is under the 24px minimum
+- [x] **[M]** Settings toggle switch is a 36×21px hit area — the 21px height is under the 24px minimum
       (`web/index.html:406`, `.switch`). Enlarge the switch or pad its clickable wrapper to ≥24px.
-- [ ] **[L]** Settings accent swatches are 22×22px (`web/index.html:409`, `.swatch`) — just under 24px.
+- [x] **[L]** Settings accent swatches are 22×22px (`web/index.html:409`, `.swatch`) — just under 24px.
       Nudge to ≥24px or add padding around the hit area.
-- [ ] **[L]** `.badge-soon` uses a fixed dark-blue palette (`#1e293b`/`#93c5fd`, `web/index.html:233`)
+- [x] **[L]** `.badge-soon` uses a fixed dark-blue palette (`#1e293b`/`#93c5fd`, `web/index.html:233`)
       with no light-theme override — reads as a dark chip on a light card. Add a `[data-theme="light"]` variant.
-- [ ] **[L]** `.check` has asymmetric padding `0 0.5rem 0 0` (right side flush) (`web/index.html:322`),
+- [x] **[L]** `.check` has asymmetric padding `0 0.5rem 0 0` (right side flush) (`web/index.html:322`),
       compounding the sub-24px target in 6.1 — center the glyph when you add the min-size box.
-- [ ] **[L]** Squared-progress override `.bento [class*="rounded-full"][class*="overflow-hidden"]
+- [x] **[L]** Squared-progress override `.bento [class*="rounded-full"][class*="overflow-hidden"]
       { border-radius:2px }` (`web/index.html:420`) is a fragile attribute-substring hack tied to Tailwind
       class names; a rename silently breaks it. Replace with an explicit component class.
 
@@ -24278,27 +24283,27 @@ points — verify exact lines before editing.
 
 ### 6.12 Settings flip-panel (2026-06-18 pass 3 — `internal/app/settings.go`)
 
-- [ ] **[H]** Base-currency `<select>` is a **dead control** — it has no `OnChange`
+- [x] **[H]** Base-currency `<select>` is a **dead control** — it has no `OnChange`
       (`settings.go:383`), so picking EUR/GBP changes nothing and never persists `BaseCurrency`. Wire it to
       update settings + bump the data revision (and re-derive FX display base).
-- [ ] **[H]** FX-rate inputs are **dead** — `rateRow`'s `Input` has no `OnInput`/`OnChange`
+- [x] **[H]** FX-rate inputs are **dead** — `rateRow`'s `Input` has no `OnInput`/`OnChange`
       (`settings.go:617`), so edited exchange rates are discarded. Add a handler that writes
       `Settings.FXRates[code]` and persists.
-- [ ] **[M]** "Enable AI" toggle is local-only `UseState` that gates nothing (`settings.go:236`, `:414`) —
+- [x] **[M]** "Enable AI" toggle is local-only `UseState` that gates nothing (`settings.go:236`, `:414`) —
       turning it off leaves the key field active and AI calls available. Either wire it to actually
       enable/disable AI (and disable/hide the key+model when off) or remove the toggle.
-- [ ] **[M]** Hidden-screen labels are hardcoded English (`hideableScreens`, `settings.go:214-228`) and fed
+- [x] **[M]** Hidden-screen labels are hardcoded English (`hideableScreens`, `settings.go:214-228`) and fed
       to `settings.showScreen` — screen names don't localize despite the language system. Use i18n keys.
 - [ ] **[M]** The whole global panel is one dense 2-column scroll (members, currency, budget method, FX,
       screens, freshness, AI, appearance, prefs, data, workspaces, languages, **plus a debug log**) in a
       760×560 flip card with no section tabs/index (`settings.go:535`). Finding a setting means scrolling a
       wall. Add grouped tabs or an in-panel section nav to cut click/scroll-to-setting time.
-- [ ] **[L]** Developer debug-log ring is surfaced inside user-facing Settings (`settings.go:527`). Move it
+- [x] **[L]** Developer debug-log ring is surfaced inside user-facing Settings (`settings.go:527`). Move it
       behind an "Advanced/Developer" disclosure or a separate route.
-- [ ] **[L]** Hardcoded non-localized microcopy in settings rows: `"days (0 = never)"` (`settings.go:206`),
+- [x] **[L]** Hardcoded non-localized microcopy in settings rows: `"days (0 = never)"` (`settings.go:206`),
       `"1 "+code+" ="` and base label (`settings.go:616-618`), and the base-currency option text
       (`settings.go:384-386`). Route through i18n.
-- [ ] **[L]** Destructive "Wipe" uses native `confirmAction`/`window.confirm` (`settings.go:710`) — same
+- [x] **[L]** Destructive "Wipe" uses native `confirmAction`/`window.confirm` (`settings.go:710`) — same
       native-dialog concern as 6.8; consider an in-app confirm with a typed-confirm or undo window given it
       erases all data.
 
@@ -24310,12 +24315,12 @@ points — verify exact lines before editing.
 Overall the copy is strong — friendly, plain-English, consistent terminal punctuation, good empty states and
 nudges. Only minor nits found:
 
-- [ ] **[L]** Awkward `(s)` pluralization in reassign-before-delete strings: `categories.reassignDesc`
+- [x] **[L]** Awkward `(s)` pluralization in reassign-before-delete strings: `categories.reassignDesc`
       (`en.go:109`, "%d transaction(s) or budget(s)") and `members.reassignDesc` (`en.go:707`,
       "%d account(s), budget(s), or goal(s)"). Use a proper singular/plural helper.
-- [ ] **[L]** Count strings read wrong at 1: `dashboard.staleCount` (`en.go:613`, "1 balances could use a
+- [x] **[L]** Count strings read wrong at 1: `dashboard.staleCount` (`en.go:613`, "1 balances could use a
       refresh") and `dashboard.accountsCount` (`en.go:626`, "1 accounts"). Pluralize on the count.
-- [ ] **[L]** "APR" abbreviation appears as a bare label (`accounts.apr` "Interest APR %", `en.go:546`;
+- [x] **[L]** "APR" abbreviation appears as a bare label (`accounts.apr` "Interest APR %", `en.go:546`;
       `planning.*`, `accounts.expReturnTitle`). CLAUDE.md asks for no undecoded abbreviations — consider
       "Interest rate (APR)" or a tooltip expansion.
 
@@ -24328,35 +24333,35 @@ Suggested execution order for the UX/UI backlog above, ranked by impact × effor
 its detailed subsection. Knock out P0/P1 first — they're mostly small, high-confidence wins.
 
 **P0 — broken/dead controls (correctness; small):**
-- [ ] Wire base-currency `<select>` (no `OnChange`) — §6.12
-- [ ] Wire FX-rate inputs (no `OnInput`) — §6.12
-- [ ] Make "Enable AI" toggle actually gate AI, or remove it — §6.12
+- [x] Wire base-currency `<select>` (no `OnChange`) — §6.12
+- [x] Wire FX-rate inputs (no `OnInput`) — §6.12
+- [x] Make "Enable AI" toggle actually gate AI, or remove it — §6.12
 
 **P1 — accessibility & contrast, high-impact / low-effort:**
-- [ ] Fix failing text contrast: `--text-faint` (~3.1:1), `--text-dim` (~4.2:1), light-theme icon controls (~2.7:1) — §6.2, §6.11
-- [ ] Raise form-field height + small touch targets (`.field`, `.check`, ⋯ button, `.switch`, swatches, rail items) — §6.1, §6.11
-- [ ] Add shared `.btn:disabled` style — §6.4
-- [ ] Toast `role="status"`/`aria-live` + longer error dismiss — §6.9
-- [ ] Replace native `prompt()`/`confirm()` (Set Balance, Contribute, Wipe) with in-app dialogs — §6.8, §6.12
+- [x] Fix failing text contrast: `--text-faint` (~3.1:1), `--text-dim` (~4.2:1), light-theme icon controls (~2.7:1) — §6.2, §6.11
+- [x] Raise form-field height + small touch targets (`.field`, `.check`, ⋯ button, `.switch`, swatches, rail items) — §6.1, §6.11
+- [x] Add shared `.btn:disabled` style — §6.4
+- [x] Toast `role="status"`/`aria-live` + longer error dismiss — §6.9
+- [x] Replace native `prompt()`/`confirm()` (Set Balance, Contribute, Wipe) with in-app dialogs — §6.8, §6.12
 
 **P2 — high-value UX, medium effort:**
 - [ ] Focus management: into inline edit, restore after save/delete, quick-add autofocus, Enter-to-submit in dialogs — §6.6, §6.7
-- [ ] Empty states with a clear CTA; AI skeleton + in-flight button disable — §6.5
+- [x] Empty states with a clear CTA; AI skeleton + in-flight button disable — §6.5
 - [ ] Delete confirmation + undo toast — §6.8
-- [ ] Settings panel section nav/tabs (cut scroll-to-setting) + move debug log to Advanced — §6.12
-- [ ] Responsive bulk-action toolbar — §6.4
+- [x] Settings panel section nav/tabs (cut scroll-to-setting) + move debug log to Advanced — §6.12
+- [x] Responsive bulk-action toolbar — §6.4
 
 **P3 — efficiency / power-user, larger:**
-- [ ] Command palette (Cmd+K) — §6.6
-- [ ] "?" keyboard-shortcut help overlay — §6.6
-- [ ] Quick-add hotkey, search-focus (Cmd+F), section jumps (Alt+1-9), segmented arrow-key nav — §6.6
-- [ ] Display-scale-safe type, uniform tabular figures, date-format pref, responsive chart heights — §6.3
+- [x] Command palette (Cmd+K) — §6.6
+- [x] "?" keyboard-shortcut help overlay — §6.6
+- [x] Quick-add hotkey, search-focus (Cmd+F), section jumps (Alt+1-9), segmented arrow-key nav — §6.6
+- [x] Display-scale-safe type, uniform tabular figures, date-format pref, responsive chart heights — §6.3
 
 **P4 — polish / low severity:**
-- [ ] Tiny-type bumps (badges, insight-dot, rail labels, seg buttons) — §6.2
-- [ ] Shape/consistency (inline radius, fragile bento CSS hack, `.badge-soon` light variant) — §6.4, §6.11
-- [ ] Icon-button `aria-label`s, collapsed-rail flyout pointer-events, allocate bar a11y, custom-field validation — §6.9, §6.10, §6.12
-- [ ] Microcopy: `(s)` pluralization, count-at-1 strings, "APR" abbreviation — §6.13
+- [x] Tiny-type bumps (badges, insight-dot, rail labels, seg buttons) — §6.2
+- [x] Shape/consistency (inline radius, fragile bento CSS hack, `.badge-soon` light variant) — §6.4, §6.11
+- [x] Icon-button `aria-label`s, collapsed-rail flyout pointer-events, allocate bar a11y, custom-field validation — §6.9, §6.10, §6.12
+- [x] Microcopy: `(s)` pluralization, count-at-1 strings, "APR" abbreviation — §6.13
 
 ### 6.15 Live-app render pass (2026-06-18 pass 6 — Playwright + sample data)
 
@@ -24364,7 +24369,7 @@ Captured the running app (Playwright/Chromium, sample data loaded) across dark/l
 desktop/mobile — screenshots in `.review-screenshots/live-*.png`, zero console errors. New issues that only
 show up rendered:
 
-- [ ] **[H]** **Compact density does nothing on the dashboard.** Compact and comfortable bento views are
+- [x] **[H]** **Compact density does nothing on the dashboard.** Compact and comfortable bento views are
       pixel-identical (`live-dashboard-compact.png` vs `-dark.png`) — `[data-density="compact"]` CSS only
       targets legacy `.card/.row/.field/.btn`, not the bento `.w` tiles (`web/index.html:190-194`). Add
       compact rules for the dashboard tiles (padding, figure sizes) or document that Compact excludes the dashboard.
@@ -24372,21 +24377,21 @@ show up rendered:
       (Week/Month/Quarter + Jump to + ‹ Jun 2026 › stepper + Custom range + Add) stack into ~6 rows, pushing
       all content below the fold (`live-dashboard-mobile.png`). Collapse the period controls into a single
       compact control/popover on narrow widths.
-- [ ] **[M]** **Allocate breakdown missing a separator:** renders "Score 60%returns 100 · stability 100 …"
+- [x] **[M]** **Allocate breakdown missing a separator:** renders "Score 60%returns 100 · stability 100 …"
       — no space/`·` between the score % and "returns N" (`live-allocate-dark.png`; `screens/allocate.go`
       breakdown line). Insert "· " after the score.
-- [ ] **[M]** **Allocate criterion-weight inputs are unlabeled** — five number boxes all showing "1" under
+- [x] **[M]** **Allocate criterion-weight inputs are unlabeled** — five number boxes all showing "1" under
       "CRITERION WEIGHTS" with no per-input label, so you can't tell which weight is returns/stability/
       liquidity/etc. (`live-allocate-dark.png`; `allocate.go`). Add a label above/beside each weight.
-- [ ] **[M]** **Net-worth-trend tile degenerates to a flat block** — with the sample dataset the chart is a
+- [x] **[M]** **Net-worth-trend tile degenerates to a flat block** — with the sample dataset the chart is a
       solid filled rectangle (axis 0–4, no visible line/trend) in both themes (`live-dashboard-dark/light.png`;
       `screens/dashboard.go` trend chart). Draw a real series or show an empty/"not enough history" state.
 - [ ] **[M]** **Dashboard header controls collide on mobile** — "Custom layout ▾ / Reset layout" overlap the
       "Your dashboard" title + hint and truncate ("Custom ⌄") (`live-dashboard-mobile.png`). Stack them below
       the title on narrow widths; the "Drag tiles … grab the edge handles" hint is also meaningless on touch.
-- [ ] **[L]** "▲ 0% this month" on the Net worth KPI shows an up-triangle with a 0% change
+- [x] **[L]** "▲ 0% this month" on the Net worth KPI shows an up-triangle with a 0% change
       (`live-dashboard-*.png`) — suppress the trend arrow (or use a neutral dash) when the delta is zero.
-- [ ] **[L]** Allocate field placeholder "Keep back (emergency buffer" is clipped mid-word in the input
+- [x] **[L]** Allocate field placeholder "Keep back (emergency buffer" is clipped mid-word in the input
       (`live-allocate-dark.png`); shorten the placeholder or widen the field.
 - [x] Visual confirmation of §6.2: light-theme "TOOLS"/"SYSTEM" rail section labels are barely legible
       against the light background (`live-dashboard-light.png`) — already tracked as the `--text-faint` contrast fix.
@@ -24405,36 +24410,36 @@ All additions must be wrapped in `@media (prefers-reduced-motion: no-preference)
 reduced-motion block) to stay consistent with the app's a11y stance.
 
 **Press / tactile feedback**
-- [ ] **[M]** No `:active` press state on *any* button — only `.ghandle`/scrollbar have one (`web/index.html:355`).
+- [x] **[M]** No `:active` press state on *any* button — only `.ghandle`/scrollbar have one (`web/index.html:355`).
       Add a subtle `active:scale-[.97]` / `:active { transform: translateY(1px) }` or opacity dip to `.btn`,
       `.btn-primary`, `.nav-link`, `.nv`, `.seg-btn`, `.data-btn`, `.menu-btn`, `.check`, `.btn-del`. Biggest
       single "feels responsive" win.
 
 **Hover affordances**
-- [ ] **[M]** List rows (`.row`) have **no hover state** (`web/index.html:245`) — transaction/account/budget
+- [x] **[M]** List rows (`.row`) have **no hover state** (`web/index.html:245`) — transaction/account/budget
       rows don't highlight under the cursor, hurting scannability and click targeting. Add
       `.row:hover { background: var(--hover) }` with a short `background` transition (and a pointer cursor on
       rows that drill in, e.g. accounts → ledger).
-- [ ] **[L]** Tile hover snaps — `.w:hover` changes `border-color` but `.w` declares no `transition`
+- [x] **[L]** Tile hover snaps — `.w:hover` changes `border-color` but `.w` declares no `transition`
       (`web/index.html:345`), so it jumps. Add `transition: border-color .15s ease` (and consider a faint
       `background` lift on hover for depth).
-- [ ] **[L]** `.btn` hover is a blunt `filter: brightness(1.12)` (`web/index.html:272`). Consider a gentler
+- [x] **[L]** `.btn` hover is a blunt `filter: brightness(1.12)` (`web/index.html:272`). Consider a gentler
       `background`/`border` hover + tiny shadow for primary actions so hover reads as elevation, not just brightness.
 
 **Data-viz & progress animation**
-- [ ] **[M]** Progress/score bars **snap** to width — `.bar-fill` (budgets) and the Allocate score bar have no
+- [x] **[M]** Progress/score bars **snap** to width — `.bar-fill` (budgets) and the Allocate score bar have no
       width transition (`web/index.html:316`; `screens/allocate.go`). Add `transition: width .45s cubic-bezier(.2,.75,.2,1)`
       so bars grow in on load/update. High polish-per-line.
-- [ ] **[M]** Charts render instantly — `web/chart.js` has no draw-in animation (no transition/raf). Animate
+- [x] **[M]** Charts render instantly — `web/chart.js` has no draw-in animation (no transition/raf). Animate
       line-draw (`stroke-dashoffset`) and bar grow-up on first paint / data change so the dashboard feels alive.
-- [ ] **[L]** KPI figures (net worth, income, …) update instantly. Optional count-up tween on value change would
+- [x] **[L]** KPI figures (net worth, income, …) update instantly. Optional count-up tween on value change would
       elevate the headline numbers (gate behind reduced-motion; keep it fast, ≤400ms).
 
 **Enter / exit transitions**
-- [ ] **[M]** Toasts enter (`@keyframes toast-in`) but **never animate out** — they vanish at the auto-dismiss
+- [x] **[M]** Toasts enter (`@keyframes toast-in`) but **never animate out** — they vanish at the auto-dismiss
       deadline (`web/index.html:307`, `app/toast.go:14`). Add a fade/slide-out (~160ms) before removal so they
       don't blink away.
-- [ ] **[M]** Inline row edit swaps in/out with no transition — the row instantly becomes the edit form
+- [x] **[M]** Inline row edit swaps in/out with no transition — the row instantly becomes the edit form
       (`screens/transactions.go` & peers). A short height/opacity transition (or a subtle background flash on the
       saved row) would make edits feel smooth and confirm the save landed.
 - [ ] **[L]** Newly added list items appear instantly. A brief highlight-fade ("flash" the new row) on add would
@@ -24445,7 +24450,7 @@ reduced-motion block) to stay consistent with the app's a11y stance.
       (`web/index.html:364`). A sliding active-pill indicator (animate a shared highlight) would feel premium.
 - [ ] **[L]** Active nav pill (`.nav-link.active` / `.nv`) jumps between items on route change. Consider animating
       a shared active indicator that slides to the selected item.
-- [ ] **[L]** Accent swatches (`.swatch.sel`) and the gear/handle reveals pop in instantly — add a quick
+- [x] **[L]** Accent swatches (`.swatch.sel`) and the gear/handle reveals pop in instantly — add a quick
       `transform: scale` / opacity transition on selection and on `.rz` handle reveal for refinement.
 
 > **Note:** animations/hover are hard to verify from still screenshots; this pass is a CSS/JS interaction audit.
@@ -24478,23 +24483,23 @@ focus-trap, Enter-to-submit, autofocus, ARIA labels, hint-after-3-fails, forgot�
 But against the current animation/hover/interaction focus it's the least-polished surface in the app and breaks
 the patterns used everywhere else:
 
-- [ ] **[M]** **No focus ring on the passcode/setup inputs.** Their inline style sets `outline:none`
+- [x] **[M]** **No focus ring on the passcode/setup inputs.** Their inline style sets `outline:none`
       (`applockgate.go:84`, and the shared `inputStyle` at `:301`); inline styles beat the global
       `:focus-visible { outline: 2px solid }` stylesheet rule, so these inputs show **no keyboard focus
       indicator** — an a11y regression on the one screen that is keyboard-only. Drop `outline:none` (or set a
       focus border/ring explicitly). (related to the inline-style focus concern in §6.1)
-- [ ] **[M]** **Gate has no enter/exit transition.** It's shown/hidden via `display:grid`/`none`
+- [x] **[M]** **Gate has no enter/exit transition.** It's shown/hidden via `display:grid`/`none`
       (`applockgate.go:45,106`), so it pops in and snaps away — inconsistent with the boot loader (fade+scale),
       flip panel (`.55s`), and toast. Add a fade/scale on show and a polished fade-up on unlock (mirror
       `#boot.hidden`), gated behind `prefers-reduced-motion`.
-- [ ] **[M]** **Wrong-passcode feedback is text-only** — sets message text + red color
+- [x] **[M]** **Wrong-passcode feedback is text-only** — sets message text + red color
       (`applockgate.go:114-117`) with no shake. The expected micro-interaction is a horizontal shake of the
       input on a failed attempt. Add a `shake` keyframe applied to `#cf-applock-input` on failure.
-- [ ] **[M]** **Lock-screen buttons have zero hover/active feedback.** Unlock/Forgot/Show-hint and the setup
+- [x] **[M]** **Lock-screen buttons have zero hover/active feedback.** Unlock/Forgot/Show-hint and the setup
       OK/Cancel are built as raw DOM with inline `cssText` and `cursor:pointer` but no `:hover`/`:active`
       (they aren't `.btn`, so global button styles don't apply) — they're completely static under the pointer.
       Give them hover/active states (reuse the `.btn`/`.btn-primary` classes, or add JS hover handlers).
-- [ ] **[L]** **Setup modal backdrop appears instantly** (`rgba(0,0,0,0.6)`, `applockgate.go:299`) whereas the
+- [x] **[L]** **Setup modal backdrop appears instantly** (`rgba(0,0,0,0.6)`, `applockgate.go:299`) whereas the
       flip-panel backdrop fades (`.flip-backdrop … transition:opacity .28s`). Add a matching backdrop fade-in so
       modals feel consistent.
 
@@ -24748,7 +24753,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       tests, inactive endpoint denial, storage cap, and storage warning tests are in place.
 
 #### Client (Cloud UX)
-- [ ] **Cloud settings section** (global FlipPanel): signed-out pitch + OAuth buttons; signed-in plan
+- [x] **Cloud settings section** (global FlipPanel): signed-out pitch + OAuth buttons; signed-in plan
       status, manage subscription, AI key, devices, sign out, export/delete account.
 - [ ] **Sync status chip** by the workspace switcher: synced / syncing / offline (queued count) /
       error / not-signed-in; "last synced" tooltip; "Sync now"; opens Cloud settings.

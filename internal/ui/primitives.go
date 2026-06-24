@@ -312,6 +312,10 @@ type EntityListSectionProps struct {
 	// Body is the list content when you need full control (non-list bodies, or a
 	// pre-built Div(.rows)). Used when Rows is nil. EmptyState is ignored when set.
 	Body uic.Node
+	// CountLabel, when non-empty, is announced through a visually-hidden polite
+	// live region inside the card so screen-reader users hear the row count change
+	// on filter/add/delete — bringing every list to parity with Transactions (§6.9).
+	CountLabel string
 }
 
 // EntityListSection renders the canonical Card + title + (empty-state OR rows body)
@@ -331,6 +335,14 @@ func EntityListSection(props EntityListSectionProps) uic.Node {
 		content = props.Body
 	case props.EmptyState != nil:
 		content = props.EmptyState
+	}
+	if props.CountLabel != "" {
+		region := Div(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), props.CountLabel)
+		if content != nil {
+			content = Fragment(region, content)
+		} else {
+			content = region
+		}
 	}
 	return Card(CardProps{
 		Title:        props.Title,

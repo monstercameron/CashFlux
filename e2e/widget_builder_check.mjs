@@ -32,6 +32,23 @@ try {
   if ((await page.locator(".wb-canvas").count()) === 0) fail("no node canvas");
   if ((await page.locator(".vb-previewpane .wb-tile").count()) === 0) fail("no live preview tile");
 
+  // The canvas pans + zooms like a real node editor: the world is a transformed layer
+  // with zoom controls. Zooming in must increase its transform scale; reset returns it.
+  const worldScale = () => page.locator(".wb-canvas").first().evaluate((el) => {
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+    return m.a; // x-scale
+  });
+  if ((await page.locator(".wb-zoom [data-zoom='in']").count()) === 0) fail("canvas has no zoom controls");
+  const z0 = await worldScale();
+  await page.locator(".wb-zoom [data-zoom='in']").click();
+  await page.waitForTimeout(150);
+  const z1 = await worldScale();
+  if (!(z1 > z0)) fail(`zoom-in did not scale the canvas world: ${z0} -> ${z1}`);
+  await page.locator(".wb-zoom [data-zoom='reset']").click();
+  await page.waitForTimeout(150);
+  const z2 = await worldScale();
+  if (Math.abs(z2 - 1) > 0.001) fail(`zoom reset did not return to 100%: ${z2}`);
+
   // Starter graph = net worth KPI → preview shows a currency figure.
   if ((await page.locator(".wb-tile .fig").count()) === 0) fail("starter KPI did not render a figure");
 
@@ -67,6 +84,13 @@ try {
   await page.locator('[data-testid="vb-save"]').click();
   await page.waitForTimeout(300);
 
+  // 4c) Time-series trend: the spending-trend preset (dataset → filter → group-by-month
+  // chronological → line chart) renders an SVG line chart.
+  await page.locator('.vb-toolbar select').first().selectOption("spend-trend");
+  await page.waitForTimeout(400);
+  if ((await page.locator(".wb-tile .vb-chart").count()) === 0) fail("spend-trend did not render a chart");
+  if ((await page.locator(".wb-tile svg polyline").count()) === 0) fail("line trend has no SVG polyline");
+
   // 5) Another preset: recent transactions → a list/table renders.
   await page.locator('.vb-toolbar select').first().selectOption("recent");
   await page.waitForTimeout(500);
@@ -87,7 +111,43 @@ try {
   if ((await page.locator(".wb-canvas .wb-node").count()) !== 4) fail("reloading the saved card did not restore its 4 nodes");
   if ((await page.locator(".wb-tile .vb-chart").count()) === 0) fail("reloaded saved card did not render its chart");
 
-  if (!process.exitCode) console.log("PASS: canvas-first builder — palette/inspector/variables, presets render KPI/chart/list, and saved cards round-trip.");
+  // 8) Publish the saved card to the dashboard → it appears as a real bento tile with
+  // the same chrome as built-ins, and survives a page reload (Reconcile keeps it).
+  await page.locator('[data-testid="vb-publish"]').click();
+  await page.waitForTimeout(400);
+  await page.locator('a[title="Dashboard"]').first().click();
+  await page.waitForSelector(".bento", { timeout: 10000 });
+  await page.waitForTimeout(600);
+  const tile = page.locator('.bento [data-widget="wb:my chart"]');
+  if ((await tile.count()) === 0) fail("published custom card did not appear on the dashboard");
+  if ((await tile.locator(".vb-chart").count()) === 0) fail("published dashboard tile did not render its chart");
+  if (!(await tile.evaluate((el) => el.classList.contains("w")))) fail("published tile is not a standard .w bento cell");
+  if ((await tile.locator(".wh").count()) === 0 || (await tile.locator(".wbody").count()) === 0) fail("published tile lacks the standard .wh/.wbody chrome");
+
+  // 8b) Publish a SECOND custom card (a KPI) → BOTH coexist on the dashboard.
+  await page.locator('a[title="Widget builder"]').first().click();
+  await page.waitForSelector(".vb-main", { timeout: 10000 });
+  await page.locator('.vb-toolbar select').first().selectOption("networth");
+  await page.waitForTimeout(300);
+  await page.locator('input[aria-label="Card name"]').fill("my kpi");
+  await page.locator('[data-testid="vb-publish"]').click();
+  await page.waitForTimeout(300);
+  await page.locator('a[title="Dashboard"]').first().click();
+  await page.waitForSelector(".bento", { timeout: 10000 });
+  await page.waitForTimeout(600);
+  if ((await page.locator('.bento [data-widget="wb:my chart"]').count()) === 0) fail("first custom card vanished when a second was published");
+  const kpiTile = page.locator('.bento [data-widget="wb:my kpi"]');
+  if ((await kpiTile.count()) === 0) fail("second published custom card did not appear on the dashboard");
+  if ((await kpiTile.locator(".fig.t-figure").count()) === 0) fail("published KPI does not use .fig.t-figure (dashboard KPI typography)");
+
+  // 8c) Reload → both custom cards persist.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".bento", { timeout: 15000 });
+  await page.waitForTimeout(700);
+  if ((await page.locator('.bento [data-widget="wb:my chart"]').count()) === 0) fail("custom chart did not survive reload");
+  if ((await page.locator('.bento [data-widget="wb:my kpi"]').count()) === 0) fail("custom KPI did not survive reload");
+
+  if (!process.exitCode) console.log("PASS: canvas builder — palette/inspector/variables, presets (KPI/bar/line/donut/list), saved cards, publish MULTIPLE custom cards to the dashboard matching built-in chrome+typography, surviving reload.");
 } finally {
   await browser.close();
 }

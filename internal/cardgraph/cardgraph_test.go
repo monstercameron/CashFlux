@@ -253,6 +253,38 @@ func TestDatasetGroupByChart(t *testing.T) {
 	}
 }
 
+func TestGroupByChronologicalSort(t *testing.T) {
+	// Group by month with sort=label → chronological order (not value-descending).
+	c := Collection{
+		Cols: []Column{{Name: "month", Type: TypeText}, {Name: "amount", Type: TypeNumber}},
+		Rows: []Row{
+			{"month": Text("2026-03"), "amount": Num(10)},
+			{"month": Text("2026-01"), "amount": Num(99)},
+			{"month": Text("2026-02"), "amount": Num(50)},
+		},
+	}
+	g := Graph{
+		Nodes: []Node{
+			{ID: "ds", Kind: KindSourceDataset, Props: map[string]string{"which": "txns"}},
+			{ID: "gb", Kind: KindGroupBy, Props: map[string]string{"group": "month", "value": "amount", "fn": "sum", "sort": "label"}},
+			{ID: "ch", Kind: KindVizChart, Props: map[string]string{"chart": "line"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"ds", OutPort}, To: PortRef{"gb", "in"}},
+			{From: PortRef{"gb", OutPort}, To: PortRef{"ch", "series"}},
+		},
+		Root: "ch",
+	}
+	res := Eval(g, Context{Datasets: map[string]Collection{"txns": c}})
+	if res.Render == nil || len(res.Render.Series) != 3 {
+		t.Fatalf("series: %+v", res)
+	}
+	got := []string{res.Render.Series[0].Label, res.Render.Series[1].Label, res.Render.Series[2].Label}
+	if got[0] != "2026-01" || got[1] != "2026-02" || got[2] != "2026-03" {
+		t.Errorf("not chronological: %v", got)
+	}
+}
+
 func TestFilterThenAggregate(t *testing.T) {
 	// Keep Food rows, sum amount → 50.
 	g := Graph{

@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"syscall/js"
+
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -50,6 +52,21 @@ func InlineEditForm(props InlineEditFormProps) uic.Node {
 }
 
 func inlineEditForm(props InlineEditFormProps) uic.Node {
+	// On mount, focus the first editable field so the keyboard path starts inside
+	// the edit chrome (§6.7). Inline edit is one-at-a-time per screen, so the first
+	// `.row-edit` field on the page is the just-opened one.
+	uic.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		if doc.IsNull() || doc.IsUndefined() {
+			return nil
+		}
+		el := doc.Call("querySelector", ".row-edit input:not([type=hidden]), .row-edit select, .row-edit textarea")
+		if !el.IsNull() && !el.IsUndefined() {
+			el.Call("focus")
+		}
+		return nil
+	}, []any{})
+
 	saveLabel := props.SaveLabel
 	if saveLabel == "" {
 		saveLabel = "Save"
@@ -80,6 +97,8 @@ func inlineEditForm(props InlineEditFormProps) uic.Node {
 				onCancel()
 			}
 		}), cancelLabel),
+		// Discoverability hint for the keyboard path (§6.6).
+		Span(css.Class("kbd-hint"), "Enter to save · Esc to cancel"),
 	)
 	if props.ExtraContent != nil {
 		formArgs = append(formArgs, props.ExtraContent)

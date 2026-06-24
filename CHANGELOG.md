@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **B34 — Appearance page (`/appearance`):** the theming engine (theme mode, accent, density, Motion, full theme editor) moved out of the crowded Settings panel into its own routed, deep-linkable page reachable from the left rail + a Settings "Appearance & theme →" link. New `internal/browser` package (file pick/download) so the theme editor could move `internal/app` → `internal/screens` without an import cycle; Settings de-crowded to a single link + the dead `internal/app/theme_editor.go` removed.
+- `internal/ui` primitives: `Skeleton` (WONDER-gated shimmer placeholder for loading content) and `MeterBar` (proportion meter).
+- `e2e/wonder.spec.mjs` — WONDER flourish regression suite (45 checks) with a **perceptibility guard** that fails if the page-enter rise / hover-lift fall below a visible threshold (guards against "tasteful" tweaks silently making flourishes invisible).
 - GLAMOR Quick-wins QW-1..10 (CSS-only): card/stat border-radius, card-title weight, semantic stat-value colors (!important), 8px share bars, tabular budget amounts, section-divider rhythm, card gap, mermaid font alignment, period-caption promotion, ghost-small export buttons
 - GLAMOR GX1 shell fixes (F1â€“F9): light-mode topbar/rail/active-chip/icon-buttons/+Add-menu surfaces, household-card surface, 768px topbar+rail collapse, `.breadcrumb` class on the topbar nav (F8), backdrop pointer-events guard (F9)
 - Widget Builder publish path completed: `vbCardPrefix` + `vbPublishedWidget` render published cardgraph tiles on the dashboard (was an unbuildable stub)

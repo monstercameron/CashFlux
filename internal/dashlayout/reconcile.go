@@ -1,5 +1,13 @@
 package dashlayout
 
+import "strings"
+
+// IsCustomID reports whether an item id is a user-built (namespaced) widget rather
+// than a built-in. Built-in widget ids are bare slugs ("kpi-networth", "recent");
+// custom cards published from the Widget Builder are namespaced with a ":" ("wb:my
+// chart"). Reconcile preserves custom ids so published cards survive reloads.
+func IsCustomID(id string) bool { return strings.Contains(id, ":") }
+
 // Reconcile merges a persisted item list against the current DefaultItems set so
 // a saved layout survives across releases: it keeps the user's items, order, and
 // sizes, drops any ids that are no longer real widgets, and splices in any
@@ -17,7 +25,8 @@ func Reconcile(saved []Item) []Item {
 	have := make(map[string]bool, len(saved))
 	result := make([]Item, 0, len(defs))
 	for _, s := range saved {
-		if _, known := defOrder[s.ID]; known && !have[s.ID] {
+		_, known := defOrder[s.ID]
+		if (known || IsCustomID(s.ID)) && !have[s.ID] {
 			result = append(result, s)
 			have[s.ID] = true
 		}

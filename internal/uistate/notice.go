@@ -11,6 +11,9 @@ type Notice struct {
 	Seq  int
 	Text string
 	Err  bool
+	// Leaving marks the notice as animating out: the toast keeps its text/styling
+	// so the exit transition (.toast.hide) can play, then a short timer clears it.
+	Leaving bool
 }
 
 const noticeAtomID = "app:notice"
@@ -52,4 +55,10 @@ func (n Notice) With(text string, isErr bool) Notice {
 // or auto-expiring a toast doesn't look like a fresh post to the effect.
 func (n Notice) Cleared() Notice {
 	return Notice{Seq: n.Seq}
+}
+
+// MarkLeaving returns n marked as animating out: Text/Err/Seq are preserved so
+// the exit transition plays and the dismiss effect isn't treated as a fresh post.
+func (n Notice) MarkLeaving() Notice {
+	return Notice{Seq: n.Seq, Text: n.Text, Err: n.Err, Leaving: true}
 }

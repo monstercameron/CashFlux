@@ -246,6 +246,10 @@ var english = Catalog{
 	"screen.membersSub":        "Your household",
 	"screen.categoriesSub":     "Income and expense categories",
 	"screen.rulesSub":          "Auto-categorize transactions by keyword",
+	"nav.appearance":           "Appearance",
+	"screen.appearanceSub":     "Theme, colors, fonts, and display preferences",
+	"settings.appearanceHint": "Theme, accent, fonts, density, and more.",
+	"settings.appearanceLink": "Appearance & theme →",
 	"custompage.fallbackTitle": "Page",
 
 	// Keyboard shortcuts help overlay (§6.6)

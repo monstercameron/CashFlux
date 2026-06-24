@@ -46,45 +46,86 @@ const vbDragShimJS = `
 (function(){
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
-  var POS_KEY = "cashflux:wb-canvas-pos";
+  var POS_KEY = "cashflux:wb-canvas-pos", VIEW_KEY = "cashflux:wb-canvas-view";
   var NODE_W = 168, NODE_H = 64;
-  var drag = null;
-  function load(){ try { return JSON.parse(localStorage.getItem(POS_KEY) || "{}"); } catch(e){ return {}; } }
-  function save(p){ try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch(e){} }
-  function reroute(canvas){
+  function load(k){ try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch(e){ return {}; } }
+  function save(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  function getView(){ var v = load(VIEW_KEY); return { tx: v.tx||0, ty: v.ty||0, s: v.s||1 }; }
+  function applyView(world, v){ world.style.transformOrigin="0 0"; world.style.transform="translate("+v.tx+"px,"+v.ty+"px) scale("+v.s+")"; }
+  function clampS(s){ return Math.max(0.3, Math.min(2.5, s)); }
+  function reroute(world){
     var ports = {};
-    canvas.querySelectorAll(".wb-node").forEach(function(n){
+    world.querySelectorAll(".wb-node").forEach(function(n){
       var id = n.getAttribute("data-step");
       var x = parseFloat(n.style.left) || 0, y = parseFloat(n.style.top) || 0;
       ports[id] = { inX:x, inY:y+NODE_H/2, outX:x+NODE_W, outY:y+NODE_H/2 };
     });
-    canvas.querySelectorAll("path.wb-wire").forEach(function(p){
+    world.querySelectorAll("path.wb-wire").forEach(function(p){
       var f = ports[p.getAttribute("data-from")], t = ports[p.getAttribute("data-to")];
       if(!f || !t) return;
       var x1=f.outX,y1=f.outY,x2=t.inX,y2=t.inY,dx=(x2-x1)/2; if(dx<40) dx=40;
       p.setAttribute("d","M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2);
     });
   }
+  var node=null, pan=null;
   document.addEventListener("mousedown", function(e){
-    var node = e.target.closest ? e.target.closest(".wb-node") : null;
-    if(!node) return;
-    var canvas = node.closest(".wb-canvas"); if(!canvas) return;
-    var rect = node.getBoundingClientRect();
-    drag = { id:node.getAttribute("data-step"), el:node, canvas:canvas, offX:e.clientX-rect.left, offY:e.clientY-rect.top, moved:false };
-    e.preventDefault();
+    var nodeEl = e.target.closest ? e.target.closest(".wb-node") : null;
+    if(nodeEl){
+      var world = nodeEl.closest(".wb-canvas"); if(!world) return;
+      var v = getView();
+      node = { id:nodeEl.getAttribute("data-step"), el:nodeEl, world:world,
+        startL:parseFloat(nodeEl.style.left)||0, startT:parseFloat(nodeEl.style.top)||0,
+        mx:e.clientX, my:e.clientY, s:v.s, moved:false };
+      e.preventDefault();
+      return;
+    }
+    var bg = e.target.closest ? e.target.closest(".wb-canvas") : null;  // pan on empty world
+    if(bg){
+      var vv = getView();
+      pan = { world:bg, startTX:vv.tx, startTY:vv.ty, mx:e.clientX, my:e.clientY };
+      var vp = bg.parentElement; if(vp) vp.style.cursor="grabbing";
+      e.preventDefault();
+    }
   });
   document.addEventListener("mousemove", function(e){
-    if(!drag) return;
-    var c = drag.canvas.getBoundingClientRect();
-    var nx = e.clientX - c.left - drag.offX, ny = e.clientY - c.top - drag.offY;
-    if(nx<0) nx=0; if(ny<0) ny=0;
-    drag.el.style.left = nx+"px"; drag.el.style.top = ny+"px"; drag.moved = true;
-    reroute(drag.canvas);
+    if(node){
+      var nx = node.startL + (e.clientX-node.mx)/node.s, ny = node.startT + (e.clientY-node.my)/node.s;
+      if(nx<0) nx=0; if(ny<0) ny=0;
+      node.el.style.left = nx+"px"; node.el.style.top = ny+"px"; node.moved = true;
+      reroute(node.world);
+    } else if(pan){
+      var v = getView(); v.tx = pan.startTX + (e.clientX-pan.mx); v.ty = pan.startTY + (e.clientY-pan.my);
+      applyView(pan.world, v); save(VIEW_KEY, v);
+    }
   });
   document.addEventListener("mouseup", function(){
-    if(!drag) return;
-    if(drag.moved){ var p = load(); p[drag.id] = { x: parseFloat(drag.el.style.left)||0, y: parseFloat(drag.el.style.top)||0 }; save(p); }
-    drag = null;
+    if(node){ if(node.moved){ var p = load(POS_KEY); p[node.id] = { x:parseFloat(node.el.style.left)||0, y:parseFloat(node.el.style.top)||0 }; save(POS_KEY, p); } node=null; }
+    if(pan){ var vp = pan.world.parentElement; if(vp) vp.style.cursor=""; pan=null; }
+  });
+  document.addEventListener("wheel", function(e){
+    var vp = e.target.closest ? e.target.closest(".vb-canvas-scroll") : null; if(!vp) return;
+    var world = vp.querySelector(".wb-canvas"); if(!world) return;
+    e.preventDefault();
+    var v = getView(); var r = vp.getBoundingClientRect();
+    var mx = e.clientX-r.left, my = e.clientY-r.top;
+    var wx = (mx-v.tx)/v.s, wy = (my-v.ty)/v.s;
+    var s2 = clampS(v.s * (e.deltaY<0 ? 1.1 : 0.9));
+    v.tx = mx - wx*s2; v.ty = my - wy*s2; v.s = s2;
+    applyView(world, v); save(VIEW_KEY, v);
+  }, {passive:false});
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest ? e.target.closest("[data-zoom]") : null; if(!btn) return;
+    var vp = btn.closest(".vb-canvas-scroll"); if(!vp) return;
+    var world = vp.querySelector(".wb-canvas"); if(!world) return;
+    var v = getView(); var r = vp.getBoundingClientRect();
+    var dir = btn.getAttribute("data-zoom");
+    if(dir==="reset"){ v = {tx:0,ty:0,s:1}; }
+    else {
+      var cx=r.width/2, cy=r.height/2, wx=(cx-v.tx)/v.s, wy=(cy-v.ty)/v.s;
+      var s2 = clampS(v.s * (dir==="in" ? 1.2 : 1/1.2));
+      v.tx = cx-wx*s2; v.ty = cy-wy*s2; v.s = s2;
+    }
+    applyView(world, v); save(VIEW_KEY, v);
   });
 })();
 `
@@ -103,7 +144,12 @@ const vbStyleCSS = `
 .vb-pal-group{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.5rem}
 .vb-pal-btn{text-align:left;padding:.3rem .5rem;border-radius:7px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);color:inherit;cursor:pointer;font-size:12px}
 .vb-pal-btn:hover{border-color:var(--accent,#3b82f6)}
-.vb-canvas-scroll{flex:1;min-width:0;overflow:auto;border-radius:10px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px}
+.vb-canvas-scroll{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:10px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);cursor:grab}
+.vb-canvas-scroll:active{cursor:grabbing}
+.vb-canvas-scroll .wb-canvas{background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px;will-change:transform}
+.wb-zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:5px;z-index:5}
+.wb-zoom-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line,#2a2a2d);background:var(--bg-elev,#1a1a1d);color:inherit;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.wb-zoom-btn:hover{border-color:var(--accent,#3b82f6)}
 .vb-inspector{width:250px;flex:0 0 250px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
 .vb-insp-section{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.4rem}
 .vb-insp-actions{display:flex;gap:.4rem;margin-top:.5rem}
@@ -240,18 +286,21 @@ func VisualBuilder() ui.Node {
 		lib[name] = g
 		vbSaveCards(lib)
 		id := vbCardPrefix + name
-		items := layoutAtom.Get()
+		// Build a brand-new slice (never append into the atom's backing array) so the
+		// atom sees a distinct value and notifies subscribers — an in-place append can
+		// leave the dashboard reading a stale layout until a reload.
+		next := append([]dashlayout.Item(nil), layoutAtom.Get()...)
 		exists := false
-		for _, it := range items {
+		for _, it := range next {
 			if it.ID == id {
 				exists = true
 			}
 		}
 		if !exists {
-			items = append(items, dashlayout.Item{ID: id, ColSpan: col.Get(), RowSpan: row.Get()})
-			layoutAtom.Set(items)
-			uistate.PersistItems(items)
+			next = append(next, dashlayout.Item{ID: id, ColSpan: col.Get(), RowSpan: row.Get()})
 		}
+		layoutAtom.Set(next)
+		uistate.PersistItems(next)
 		published.Set("Published “" + name + "” to your dashboard.")
 	})
 	saveCard := ui.UseEvent(func() {
@@ -368,6 +417,7 @@ func vbDatasets() map[string]cardgraph.Collection {
 	txCols := []cardgraph.Column{
 		{Name: "category", Type: cardgraph.TypeText}, {Name: "payee", Type: cardgraph.TypeText},
 		{Name: "amount", Type: cardgraph.TypeNumber}, {Name: "type", Type: cardgraph.TypeText},
+		{Name: "month", Type: cardgraph.TypeText},
 	}
 	var txRows []cardgraph.Row
 	for _, t := range app.Transactions() {
@@ -385,6 +435,7 @@ func vbDatasets() map[string]cardgraph.Collection {
 		txRows = append(txRows, cardgraph.Row{
 			"category": cardgraph.Text(cat), "payee": cardgraph.Text(t.Payee),
 			"amount": cardgraph.Num(major(t.Amount)), "type": cardgraph.Text(kind),
+			"month": cardgraph.Text(t.Date.Format("2006-01")),
 		})
 	}
 	out["transactions"] = cardgraph.Collection{Cols: txCols, Rows: txRows}
@@ -732,6 +783,24 @@ func vbPresets() map[string]cardgraph.Graph {
 	}
 	p["spend-donut"] = donut
 
+	// Spending trend over time: transactions → expense filter → group by month
+	// (chronological) → line chart — the time-series shape the dashboard trend/cash-flow
+	// tiles use.
+	p["spend-trend"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "transactions"}, Pos: cardgraph.Point{X: 30, Y: 30}},
+			{ID: "n2", Kind: cardgraph.KindFilter, Props: map[string]string{"col": "type", "op": "==", "value": "expense"}, Pos: cardgraph.Point{X: 230, Y: 30}},
+			{ID: "n3", Kind: cardgraph.KindGroupBy, Props: map[string]string{"group": "month", "value": "amount", "fn": "sum", "sort": "label"}, Pos: cardgraph.Point{X: 430, Y: 30}},
+			{ID: "n4", Kind: cardgraph.KindVizChart, Props: map[string]string{"title": "Spending trend", "chart": "line"}, Pos: cardgraph.Point{X: 630, Y: 30}},
+		},
+		Edges: []cardgraph.Edge{
+			{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}},
+			{From: cardgraph.PortRef{Node: "n2", Port: "out"}, To: cardgraph.PortRef{Node: "n3", Port: "in"}},
+			{From: cardgraph.PortRef{Node: "n3", Port: "out"}, To: cardgraph.PortRef{Node: "n4", Port: "series"}},
+		},
+		Root: "n4",
+	}
+
 	// Accounts list.
 	p["accounts"] = cardgraph.Graph{
 		Nodes: []cardgraph.Node{
@@ -753,6 +822,7 @@ func vbPresetOptions() [][2]string {
 		{"liabilities", "Liabilities (KPI)"},
 		{"accounts-count", "Account count (KPI)"},
 		{"spend-by-cat", "Spending by category (bar)"},
+		{"spend-trend", "Spending trend (line)"},
 		{"spend-donut", "Spending breakdown (donut)"},
 		{"recent", "Recent transactions (list)"},
 		{"accounts", "Accounts (list)"},
@@ -816,7 +886,7 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 	}
 	children := []ui.Node{
 		Svg(css.Class("wb-wires"), Style(map[string]string{"position": "absolute", "left": "0", "top": "0", "overflow": "visible", "pointer-events": "none"}),
-			Attr("width", "1400"), Attr("height", "900"), wires),
+			Attr("width", "2600"), Attr("height", "1600"), wires),
 	}
 	for _, n := range g.Nodes {
 		children = append(children, ui.CreateElement(vbNodeBox, vbNodeBoxProps{
@@ -824,10 +894,47 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 			Selected: n.ID == selected, IsRoot: n.ID == g.Root, OnSelect: onSelect,
 		}))
 	}
-	canvasStyle := map[string]string{"position": "relative", "width": "1400px", "height": "560px"}
+	// The world layer is large and absolutely positioned; pan/zoom is a CSS transform
+	// (translate + scale) applied here from the persisted view and updated live by the
+	// drag shim. transform-origin 0 0 keeps the math simple (screen = world*scale + t).
+	view := vbLoadView()
+	worldStyle := map[string]string{
+		"position": "absolute", "left": "0", "top": "0", "width": "2600px", "height": "1600px",
+		"transform-origin": "0 0",
+		"transform":        fmt.Sprintf("translate(%.2fpx, %.2fpx) scale(%.3f)", view.TX, view.TY, view.S),
+	}
+	zoomBtn := func(dir, label string) ui.Node {
+		return Button(ClassStr("wb-zoom-btn"), Type("button"), Attr("data-zoom", dir), Attr("aria-label", "zoom "+dir), label)
+	}
 	return Div(css.Class("vb-canvas-scroll"),
-		Div(css.Class("wb-canvas"), Attr("role", "list"), Style(canvasStyle), children),
+		Div(css.Class("wb-canvas"), Attr("role", "list"), Style(worldStyle), children),
+		Div(css.Class("wb-zoom"),
+			zoomBtn("out", "−"), zoomBtn("reset", "⤢"), zoomBtn("in", "+")),
 	)
+}
+
+// vbView is the canvas pan/zoom state: a translate (tx,ty in screen px) and a scale.
+type vbView struct {
+	TX, TY, S float64
+}
+
+const vbViewKey = "cashflux:wb-canvas-view"
+
+// vbLoadView reads the persisted pan/zoom (written by the drag shim), defaulting to
+// the identity view (no pan, 100% zoom).
+func vbLoadView() vbView {
+	out := vbView{S: 1}
+	v := js.Global().Get("localStorage").Call("getItem", vbViewKey)
+	if v.Type() == js.TypeString {
+		var saved struct{ TX, TY, S float64 }
+		if err := json.Unmarshal([]byte(v.String()), &saved); err == nil {
+			out.TX, out.TY = saved.TX, saved.TY
+			if saved.S > 0 {
+				out.S = saved.S
+			}
+		}
+	}
+	return out
 }
 
 type vbNodeBoxProps struct {
@@ -1184,7 +1291,7 @@ func vbLine(s []cardgraph.SeriesPoint) ui.Node {
 	}
 	children := []ui.Node{Polyline(Attr("points", strings.TrimSpace(pts)), Attr("fill", "none"), Attr("stroke", vbChartColors[0]), Attr("stroke-width", "2"))}
 	children = append(children, dots...)
-	return Svg(Attr("width", "100%"), Attr("viewBox", fmt.Sprintf("0 0 %.0f %.0f", w, h)), Attr("preserveAspectRatio", "none"), Style(map[string]string{"height": "120px"}), children)
+	return Svg(css.Class("vb-chart"), Attr("width", "100%"), Attr("viewBox", fmt.Sprintf("0 0 %.0f %.0f", w, h)), Attr("preserveAspectRatio", "none"), Style(map[string]string{"height": "120px"}), children)
 }
 
 func vbDonut(s []cardgraph.SeriesPoint) ui.Node {
@@ -1213,7 +1320,7 @@ func vbDonut(s []cardgraph.SeriesPoint) ui.Node {
 	ring := Div(Style(map[string]string{"width": "96px", "height": "96px", "border-radius": "999px",
 		"background": "conic-gradient(" + stops + ")", "mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)",
 		"-webkit-mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)"}))
-	return Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "1rem"}),
+	return Div(css.Class("vb-chart"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "1rem"}),
 		ring, Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}), legend))
 }
 

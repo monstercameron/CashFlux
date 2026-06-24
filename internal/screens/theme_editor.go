@@ -1,12 +1,13 @@
 //go:build js && wasm
 
-package app
+package screens
 
 import (
 	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/browser"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
@@ -17,15 +18,14 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
-// themeEditor is the Settings → Appearance theme editor: pick a built-in preset,
+// ThemeEditor is the appearance theme editor component: pick a built-in preset,
 // tweak every design token (surface/text/accent colors, corner radius, font-size
 // scale, UI/display fonts, density), see live validation warnings, and reset to
-// the default migrated from your display preferences. Every change applies and
-// persists immediately (live theming), so the surrounding app is itself the
-// preview. It is a self-contained component so its hooks stay isolated; mount it
-// with uic.CreateElement(themeEditor). English strings are inline here rather
-// than going through the shared i18n bundle, to keep this new panel decoupled.
-func themeEditor() uic.Node {
+// the default. Every change applies and persists immediately (live theming), so
+// the surrounding app is itself the preview. Mount with uic.CreateElement(ThemeEditor).
+// English strings are inline here rather than going through the shared i18n bundle,
+// to keep this component decoupled from the i18n bundle's update cadence.
+func ThemeEditor() uic.Node {
 	cur := uic.UseState(uistate.LoadTheme())
 	importMsg := uic.UseState("")
 	fonts := uic.UseState(uistate.LoadFonts())
@@ -48,7 +48,7 @@ func themeEditor() uic.Node {
 		cur.Set(next)
 	}
 	uploadFont := func() {
-		pickFileNamed(".woff2,.woff,.ttf,.otf", func(name, mime string, data []byte) {
+		browser.PickFileNamed(".woff2,.woff,.ttf,.otf", func(name, mime string, data []byte) {
 			if mime == "" {
 				mime = theme.FontMIMEForName(name)
 			}
@@ -56,7 +56,7 @@ func themeEditor() uic.Node {
 				fontMsg.Set(strings.Join(errs, " "))
 				return
 			}
-			family := fontFamilyFromName(name)
+			family := themeFontFamilyFromName(name)
 			fonts.Set(uistate.AddFont(theme.FontAsset{Family: family, MIME: mime, DataURL: artifacts.DataURL(mime, data)}))
 			fontMsg.Set("")
 			// Start using the uploaded font for the interface right away.
@@ -96,7 +96,7 @@ func themeEditor() uic.Node {
 		banner.Set(b)
 	}
 	uploadBanner := func() {
-		pickFileNamed(".png,.jpg,.jpeg,.webp,.gif", func(name, mime string, data []byte) {
+		browser.PickFileNamed(".png,.jpg,.jpeg,.webp,.gif", func(name, mime string, data []byte) {
 			if mime == "" {
 				mime = theme.ImageMIMEForName(name)
 			}
@@ -111,7 +111,7 @@ func themeEditor() uic.Node {
 	var bannerBtns []uic.Node
 	for _, p := range theme.BannerPresets() {
 		p := p
-		bannerBtns = append(bannerBtns, dataBtn(p.Name, false, func() {
+		bannerBtns = append(bannerBtns, themeDataBtn(p.Name, false, func() {
 			bannerMsg.Set("")
 			setBanner(p)
 		}))
@@ -224,14 +224,14 @@ func themeEditor() uic.Node {
 		),
 		Div(css.Class("toggle-row"),
 			Span("Interface font"),
-			Select(css.Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), fontOptions(t.FontUI, fonts.Get())),
+			Select(css.Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), themeFontOptions(t.FontUI, fonts.Get())),
 		),
 		Div(css.Class("toggle-row"),
 			Span("Heading font"),
-			Select(css.Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), fontOptions(t.FontDisplay, fonts.Get())),
+			Select(css.Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), themeFontOptions(t.FontDisplay, fonts.Get())),
 		),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
-			dataBtn("Upload font…", false, uploadFont),
+			themeDataBtn("Upload font…", false, uploadFont),
 			Span(css.Class("muted", tw.TextXs), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
 		),
 		If(fontMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
@@ -264,8 +264,8 @@ func themeEditor() uic.Node {
 		P(css.Class("muted", tw.TextXs), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), bannerBtns),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
-			dataBtn("Upload image…", false, uploadBanner),
-			dataBtn("Remove banner", false, func() {
+			themeDataBtn("Upload image…", false, uploadBanner),
+			themeDataBtn("Remove banner", false, func() {
 				bannerMsg.Set("")
 				setBanner(theme.Banner{})
 			}),
@@ -277,13 +277,13 @@ func themeEditor() uic.Node {
 		validationNode,
 
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1, tw.Mt2),
-			dataBtn("Export theme", false, func() {
+			themeDataBtn("Export theme", false, func() {
 				if b, err := t.ToJSON(); err == nil {
-					downloadBytes("cashflux-theme.json", "application/json", b)
+					browser.DownloadBytes("cashflux-theme.json", "application/json", b)
 				}
 			}),
-			dataBtn("Import theme", false, func() {
-				pickFile(".json", func(data []byte) {
+			themeDataBtn("Import theme", false, func() {
+				browser.PickFile(".json", func(data []byte) {
 					next, err := theme.FromJSON(data)
 					if err != nil {
 						importMsg.Set("That file isn't a valid theme.")
@@ -293,7 +293,7 @@ func themeEditor() uic.Node {
 					apply(next)
 				})
 			}),
-			dataBtn("Reset to default", false, func() {
+			themeDataBtn("Reset to default", false, func() {
 				importMsg.Set("")
 				apply(uistate.DefaultTheme())
 			}),
@@ -302,8 +302,7 @@ func themeEditor() uic.Node {
 	)
 }
 
-// curatedFonts are the font families offered for the UI and display fonts. Inter
-// and Fraunces are already loaded; "system" falls back to the OS sans stack.
+// curatedFonts are the font families offered for the UI and display fonts.
 var curatedFonts = []struct{ value, label string }{
 	{"Inter", "Inter"},
 	{"Fraunces", "Fraunces"},
@@ -312,10 +311,9 @@ var curatedFonts = []struct{ value, label string }{
 	{"ui-monospace, SFMono-Regular, monospace", "Monospace"},
 }
 
-// fontOptions renders the curated font <option>s plus any uploaded custom
-// families, with the current one selected. Uploaded families that duplicate a
-// curated value are skipped so the list stays clean.
-func fontOptions(current string, uploaded []theme.FontAsset) []uic.Node {
+// themeFontOptions renders the curated font <option>s plus any uploaded custom
+// families, with the current one selected.
+func themeFontOptions(current string, uploaded []theme.FontAsset) []uic.Node {
 	seen := map[string]bool{}
 	var opts []uic.Node
 	for _, f := range curatedFonts {
@@ -332,10 +330,9 @@ func fontOptions(current string, uploaded []theme.FontAsset) []uic.Node {
 	return opts
 }
 
-// fontFamilyFromName derives a CSS font-family name from an uploaded file's name
-// by stripping any directory and extension. Spaces are kept (the family is quoted
-// in the @font-face rule). A blank result falls back to a generic label.
-func fontFamilyFromName(name string) string {
+// themeFontFamilyFromName derives a CSS font-family name from an uploaded file's
+// name by stripping any directory and extension.
+func themeFontFamilyFromName(name string) string {
 	base := name
 	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
 		base = base[i+1:]
@@ -418,5 +415,34 @@ func themeColorField(props themeColorFieldProps) uic.Node {
 	return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.TextXs),
 		Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", props.Label), Value(val), OnChange(on)),
 		Span(css.Class("muted"), props.Label),
+	)
+}
+
+// themeDataBtnProps configures a data-action button used by the theme editor.
+type themeDataBtnProps struct {
+	Label   string
+	Danger  bool
+	OnClick func()
+}
+
+// themeDataBtn renders a data-action button. Own component so each click hook
+// stays stable across the button list.
+func themeDataBtn(label string, danger bool, onClick func()) uic.Node {
+	return uic.CreateElement(themeDataButton, themeDataBtnProps{Label: label, Danger: danger, OnClick: onClick})
+}
+
+func themeDataButton(props themeDataBtnProps) uic.Node {
+	cls := "data-btn"
+	if props.Danger {
+		cls += " data-btn-danger"
+	}
+	onClick := props.OnClick
+	return Button(css.Class(cls), Type("button"),
+		OnClick(func() {
+			if onClick != nil {
+				onClick()
+			}
+		}),
+		props.Label,
 	)
 }

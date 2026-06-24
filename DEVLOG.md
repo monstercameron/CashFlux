@@ -29,6 +29,40 @@ prefers-reduced-motion → crossFade skips startViewTransition. All paths produc
 
 **sw.js:** Bumped cache to `cashflux-v250` to evict stale assets.
 
+## 2026-06-24 — B34 Appearance page + de-crowd; WONDER perceptibility fix + e2e suite; worktree cleanup
+
+**B34 — Appearance page.** Extracted the theming engine out of the overcrowded Settings panel (G21: 23
+sections in a 380px scroll) into its own routed `/appearance` page: theme mode, accent, density, Motion,
+and the full theme editor. The editor lived in package `internal/app`, which `internal/screens` can't
+import (cycle), so I pulled its `syscall/js` file-pick/download helpers into a new cycle-safe
+`internal/browser` package and moved `themeEditor` → `internal/screens/theme_editor.go` as `ThemeEditor()`.
+Settings is now a one-line "Appearance & theme →" link; dead `app/theme_editor.go` deleted. Verified by
+driving the app: `/appearance` renders the controls, rail + Settings link navigate there, Motion Off flips
+`data-wonder` live + persists.
+
+**WONDER — invisible because too subtle.** The user reported seeing no flairs. Motion *was* on and firing,
+but an 8px page rise / 2px hover lift are imperceptible. Amplified defaults (lift 5px + stronger shadow,
+page-enter 20px + scale), still token-gated. Built `e2e/wonder.spec.mjs` — a 45-check regression suite with
+a perceptibility guard (asserts rise/lift exceed a visible minimum) so a future "tasteful" tweak can't
+silently re-break it. It immediately caught 3 real bugs: card `:hover` lift overridden by a
+`.wonder-reveal.in-view{transform:none}` scroll-reveal rule (source order); `.btn` had no `transform`
+transition; row-enter not suppressed under `data-wonder=off`. All fixed; suite 45/45.
+
+**Process — no more git worktrees.** Subagents had been running in `.claude/worktrees/agent-*`, piling up
+30+ stale dirs/branches that spewed phantom LSP diagnostics and tricked agents into over-claiming "rc=0 /
+verified" on a tree not reflecting main. Cleaned up via `git worktree remove` (keeps branch commits);
+scanned all 37 for unique commits — found `be26b4f` (Reports ranked-bars + donuts) and `8654d27` (WONDER
+W-10 route cross-fade, deliberately deferred). Moved back to `main` (FF over the WONDER commits, dropped the
+side branch). `be26b4f` was based on a pre-C73 `reports_screen.go`, so taking its full file reverted the
+primitive-porting (14 bespoke `card` scaffolds → screenlint fail) — reverted that file; charts stay safe on
+the branch for a chart-funcs-only merge later. Caveat: the GX17 LoadingCard screen-wiring (29 guards) was
+lost (uncommitted in a removed worktree / prior `reset`), though the `Skeleton` + `MeterBar` primitives
+survive — the wiring is a redo.
+
+**Next:** merge just the Reports chart functions onto the ported `reports_screen.go`; re-wire
+`Skeleton`/`LoadingCard` into the `notReady` guards; L47 deep-link routing so `/appearance` doesn't flicker
+to dashboard on cold boot.
+
 ## 2026-06-23 — feat: WONDER W-15 count-up + W-18 chart draw-in (fail-safe, reduced-motion safe)
 
 **W-15 (count-up):** A standalone `web/countup.js` shim exposes `window.cashfluxCountUpScan()`. On

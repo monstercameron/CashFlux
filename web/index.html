@@ -2113,6 +2113,25 @@
       /* F9: backdrop must not eat clicks while the menu is closed */
       .add-backdrop { pointer-events: none; }
       .add-backdrop:not(.hidden-menu) { pointer-events: auto; }
+
+      /* §6.18 Lock screen: focus ring on the passcode input + button feedback.
+         The gate is built imperatively with stable ids, so we target those. */
+      #cf-applock-input:focus, #cf-applock-setup input:focus {
+        outline: 2px solid var(--accent, #2e8b57); outline-offset: 2px;
+      }
+      #cf-applock-gate button, #cf-applock-setup button {
+        transition: filter .12s ease, transform .08s ease;
+      }
+      #cf-applock-gate button:hover, #cf-applock-setup button:hover { filter: brightness(1.08); }
+      #cf-applock-gate button:active, #cf-applock-setup button:active { transform: scale(.97); }
+      /* wrong-passcode shake (toggled by a class on the input in applockgate.go) */
+      @keyframes cf-applock-shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
+      @media (prefers-reduced-motion: no-preference) {
+        #cf-applock-input.cf-applock-shake { animation: cf-applock-shake .35s ease; }
+        /* §6.18 item 5: setup overlay (backdrop + card) fades in instead of popping */
+        #cf-applock-setup { animation: cf-applock-fade .25s ease both; }
+      }
+      @keyframes cf-applock-fade { from { opacity: 0; } to { opacity: 1; } }
     </style>
   </head>
   <body>

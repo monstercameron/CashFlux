@@ -2,6 +2,37 @@ package dashlayout
 
 import "testing"
 
+func TestReconcileKeepsCustomCards(t *testing.T) {
+	saved := []Item{
+		{ID: "kpi-networth", ColSpan: 1, RowSpan: 1},
+		{ID: "wb:my chart", ColSpan: 2, RowSpan: 2},
+	}
+	got := Reconcile(saved)
+	found := false
+	for _, it := range got {
+		if it.ID == "wb:my chart" {
+			found = true
+			if it.ColSpan != 2 || it.RowSpan != 2 {
+				t.Errorf("custom card lost its spans: %+v", it)
+			}
+		}
+	}
+	if !found {
+		t.Error("Reconcile dropped a published custom card (wb: id)")
+	}
+	for _, it := range Reconcile([]Item{{ID: "retired-widget"}}) {
+		if it.ID == "retired-widget" {
+			t.Error("Reconcile kept a retired built-in id")
+		}
+	}
+}
+
+func TestIsCustomID(t *testing.T) {
+	if !IsCustomID("wb:my chart") || IsCustomID("kpi-networth") || IsCustomID("recent") {
+		t.Error("IsCustomID misclassified an id")
+	}
+}
+
 func TestReconcileSurfacesNewWidgetAtTopAndKeepsOrder(t *testing.T) {
 	// A realistic saved layout from before "attention" existed: every other widget
 	// is present (the user reordered the front and widened todo), only attention is

@@ -73,12 +73,10 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 // Fields typed func(…) are plain closures that do not go through UseEvent.
 type settingsRightProps struct {
 	// Appearance
-	Pr          prefs.Prefs
-	OnTheme     func(string)
-	OnAccent    func(string)
-	OnMotion    func(string)
-	OnDateStyle uic.Handler // UseEvent
-	OnWeekStart func(string)
+	Pr               prefs.Prefs
+	OnAppearanceLink func() // closes panel + navigates to /appearance
+	OnDateStyle      uic.Handler // UseEvent
+	OnWeekStart      func(string)
 	// AI
 	AiOn          bool
 	OnAiToggle    func(bool)
@@ -134,33 +132,18 @@ type settingsRightProps struct {
 // helper — no hooks.
 func settingsRightColumn(p settingsRightProps) uic.Node {
 	return Div(
-		// 1 · Appearance — most-used first so Renée can set her theme without scrolling.
+		// 1 · Appearance — link to the dedicated /appearance page (B34); all
+		// theming controls live there so the Settings panel stays focused.
 		H4(css.Class("set-label"), uistate.T("settings.appearance")),
-		ui.Segmented(ui.SegmentedProps{
-			Options:  []ui.SegOption{{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")}, {Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")}, {Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")}},
-			Selected: string(p.Pr.Theme),
-			OnSelect: p.OnTheme,
-		}),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.motion")),
-			ui.Segmented(ui.SegmentedProps{
-				Options:  []ui.SegOption{{Value: string(prefs.MotionFull), Label: uistate.T("settings.motionFull")}, {Value: string(prefs.MotionSubtle), Label: uistate.T("settings.motionSubtle")}, {Value: string(prefs.MotionOff), Label: uistate.T("settings.motionOff")}},
-				Selected: string(p.Pr.Motion),
-				OnSelect: p.OnMotion,
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.appearanceHint")),
+		If(p.OnAppearanceLink != nil, Button(css.Class("btn", tw.Mt2), Type("button"),
+			OnClick(func() {
+				if p.OnAppearanceLink != nil {
+					p.OnAppearanceLink()
+				}
 			}),
-		),
-		P(css.Class("muted", tw.TextXs), uistate.T("settings.motionHint")),
-		Div(css.Class("toggle-row"),
-			Span(uistate.T("settings.accent")),
-			ui.SwatchPicker(ui.SwatchPickerProps{
-				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},
-				Selected: p.Pr.Accent,
-				OnSelect: p.OnAccent,
-			}),
-		),
-		accentContrastNote(p.Pr.Accent, p.Pr.Theme),
-		// Density and display scale are in the theme editor (B20 unify).
-		uic.CreateElement(themeEditor),
+			uistate.T("settings.appearanceLink"),
+		)),
 
 		// 2 · Preferences — date/week-start sit naturally after appearance.
 		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
@@ -183,7 +166,9 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// 3 · AI — setup-once; key + model select in one logical cluster.
 		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiEnable"), On: p.AiOn, OnChange: p.OnAiToggle}),
+		// AI is enabled by the presence of an API key (the no-key hint below is the
+		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
+		// to off on every open, so it was removed to avoid a misleading dead control (§6.12).
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(p.AiKey), OnInput(p.OnKey)),
 		If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
