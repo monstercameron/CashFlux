@@ -253,6 +253,7 @@ var english = Catalog{
 	"settings.appearanceHint":  "Theme, accent, fonts, density, and more.",
 	"settings.appearanceLink":  "Appearance & theme →",
 	"custompage.fallbackTitle": "Page",
+	"custompage.dragReorder":   "Drag to reorder",
 
 	// Keyboard shortcuts help overlay (§6.6)
 	"shortcuts.title":      "Keyboard shortcuts",
@@ -381,6 +382,7 @@ var english = Catalog{
 	"categories.collapseTitle":   "Collapse %s",
 	"categories.expandTitle":     "Expand %s",
 	"categories.addedToast":      "%s added.",
+	"categories.viewTxnsTitle":   "View these transactions",
 
 	// Rules screen (auto-categorization)
 	"rules.add":                "Add rule",
@@ -424,7 +426,8 @@ var english = Catalog{
 	"rules.suggestShowFewer":   "Show fewer",
 	"rules.dragHint":           "Drag to reorder — first match wins",
 
-	"common.owner": "Owner",
+	"common.owner":   "Owner",
+	"common.dueDate": "Due date",
 
 	// Budgets screen
 	"budgets.progressLabel":      "Budget usage",
@@ -455,12 +458,15 @@ var english = Catalog{
 	"workflows.conditionLabel":   "Condition (optional)",
 	"workflows.removeAction":     "Remove action",
 	"workflows.insertCondVar":    "Insert %s into condition",
+	"workflows.triggerLabel":     "Trigger",
+	"workflows.actionTypeLabel":  "Action type",
 	"customize.varsInsertHint":   "Click a variable to insert it into the formula.",
 	"customize.insertFormula":    "Insert %s into the formula",
 	"customize.insertShort":      "Insert %s",
 	"split.goToMembers":          "Go to Members →",
 	"split.saveSplitTitle":       "Save this split to the settle-up ledger below",
 	"split.recordSettledTitle":   "Record this payment as settled",
+	"split.whatForLabel":         "What was it for? (optional)",
 	"budgets.coverTitle":         "Move money from another budget to cover this overspend",
 	"budgets.topupTitle":         "Increase this budget's limit for the current period",
 	"budgets.amountToAdd":        "Amount to add",
@@ -474,6 +480,7 @@ var english = Catalog{
 	"budgets.envelopeRow":        "Envelope balance: %s",
 	"budgets.paceOver":           "At this pace, projected to go over by %s",
 	"budgets.rollover":           "Roll unused funds into the next period",
+	"budgets.rolloverTitle":      "Roll unused funds into the next period",
 	"budgets.rolloverCarry":      "Carried from previous period: %s",
 	"budgets.suggest":            "You've averaged %s/mo here recently.",
 	"budgets.useSuggest":         "Use this",
@@ -797,6 +804,7 @@ var english = Catalog{
 	"allocate.mode":                   "Allocation mode",
 	"allocate.modeWeighted":           "Weighted",
 	"allocate.modeFillToTarget":       "Fill to target",
+	"allocate.openSettingsAiKey":      "Open Settings to add your AI key",
 
 	// Custom fields (manager + types)
 	"cf.typeText":           "Text",
@@ -1184,6 +1192,7 @@ var english = Catalog{
 	"accounts.editTitle":          "Edit account",
 	"accounts.deleteTitle":        "Delete account",
 	"accounts.deleteHasTxns":      "This account still has transactions. Archive it to keep the history, or move or delete those transactions first.",
+	"accounts.markClearedTitle":   "Mark this transaction cleared",
 
 	// Dashboard
 	"dashboard.netWorth":               "Net worth",

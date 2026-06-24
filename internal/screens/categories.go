@@ -468,7 +468,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 				// this category, and drill into Transactions filtered by it when
 				// there are any (matches the Accounts/Members drill pattern).
 				IfElse(props.TxnCount > 0,
-					Button(css.Class("btn-link cat-usage"), Type("button"), Title("View these transactions"), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
+					Button(css.Class("btn-link cat-usage"), Type("button"), Title(uistate.T("categories.viewTxnsTitle")), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
 					Span(css.Class(tw.TextFaint), Text("No transactions"))),
 			),
 		),

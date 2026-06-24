@@ -43,7 +43,7 @@ func AiExplainCard(p aiExplainCardProps) ui.Node {
 				Text(p.AiErr),
 				If(p.AiErr == p.NeedKeyMsg,
 					Button(css.Class("btn"), Type("button"),
-						Attr("aria-label", "Open Settings to add your AI key"),
+						Attr("aria-label", uistate.T("allocate.openSettingsAiKey")),
 						Style(map[string]string{"margin-left": "0.5rem"}),
 						OnClick(p.OnGoToSettings),
 						"Open Settings",

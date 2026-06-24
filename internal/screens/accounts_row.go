@@ -556,7 +556,7 @@ func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
 		Span(ClassStr("fig "+amountClass(t.Amount)), money.FormatMinor(t.Amount.Amount, dec)),
 		Button(css.Class("btn"), Type("button"),
 			Attr("data-testid", "reconcile-txn-clear-btn"),
-			Title("Mark this transaction cleared"),
+			Title(uistate.T("accounts.markClearedTitle")),
 			OnClick(toggle), "Mark cleared"),
 	)
 }

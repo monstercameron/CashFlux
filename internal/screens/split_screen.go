@@ -266,7 +266,7 @@ func Split() ui.Node {
 				P(css.Class("muted"), uistate.T("split.hint")),
 				Div(css.Class("form-grid"),
 					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
-					Input(css.Class("field"), Type("text"), Attr("aria-label", "What was it for? (optional)"), Placeholder("What was it for? (optional)"), Value(descS.Get()), OnInput(onDesc)),
+					Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("split.whatForLabel")), Placeholder(uistate.T("split.whatForLabel")), Value(descS.Get()), OnInput(onDesc)),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),

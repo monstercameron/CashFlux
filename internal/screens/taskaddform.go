@@ -194,8 +194,8 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 				OnChange:  func(v string) { priority.Set(v) },
 				AriaLabel: "Priority",
 			})),
-		uiw.FormField("Due date",
-			Input(css.Class("field"), Type("date"), Attr("aria-label", "Due date"), Value(dueStr.Get()), OnInput(onDue))),
+		uiw.FormField(uistate.T("common.dueDate"),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), Value(dueStr.Get()), OnInput(onDue))),
 		Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesPlaceholder")), Value(notes.Get()), OnInput(onNotes)),
 		uiw.FormField(uistate.T("todo.repeat"),
 			uiw.SelectInput(uiw.SelectInputProps{

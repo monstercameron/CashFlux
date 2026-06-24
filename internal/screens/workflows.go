@@ -215,7 +215,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		Body: Fragment(
 			Div(css.Class("form-grid"),
 				Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
-				Select(css.Class("field"), Attr("aria-label", "Trigger"), OnChange(onTrigger),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
 					Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
 					Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
 					Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
@@ -261,7 +261,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			Hr(css.Class(tw.Mt2)),
 			P(css.Class("muted"), "Actions"),
 			Div(css.Class("form-grid", tw.Mt1),
-				Select(css.Class("field"), Attr("aria-label", "Action type"), OnChange(onDraftKind),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
 					Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
 					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
 					Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),

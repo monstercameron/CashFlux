@@ -2,6 +2,10 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — i18n: routed remaining hardcoded a11y labels through uistate.T()
+
+Second pass completing the a11y label cleanup. Routed 10 hardcoded English `aria-label`/`Title()` strings through `uistate.T()` across accounts_row (mark-cleared title), allocate_ai_explain (open-settings button), budgetaddform (rollover checkbox tooltip), categories (view-transactions button), custompage (drag-grip), split_screen (what-for input — aria-label + placeholder on the same node), taskaddform + todo (due-date field label + aria-label, shared `common.dueDate` key), transactions (cleared-status column head), and workflows (trigger + action-type selects). Registered 9 new catalog keys in `internal/i18n/en.go`; `transactions.clearedStatus` was already present and reused. Build clean under `GOOS=js GOARCH=wasm`.
+
 ## 2026-06-24 — i18n: routed more hardcoded a11y labels through uistate.T()
 
 Replaced the remaining hardcoded English `aria-label` and `Title()` strings with `uistate.T()` calls across five files: datatable row-size select (`ui.table.rowsPerPage`), budgets row cover/topup buttons and amount inputs (5 keys), planning snapshot/fill-sensible buttons (2 keys), documents draft-review store-name/receipt-total/import-account (3 keys, reused for both receipt and draft paths), and customize-formula insert-variable (2 printf-style keys). All 13 new keys registered in `internal/i18n/en.go`. All three packages build clean under `GOOS=js GOARCH=wasm`.

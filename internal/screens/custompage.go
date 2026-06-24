@@ -217,7 +217,7 @@ func customTile(props customTileProps) ui.Node {
 				props.OnDrop()
 			}
 		})),
-		Span(css.Class("grip", tw.CursorGrab), Attr("aria-label", "Drag to reorder"), Attr("role", "button"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+		Span(css.Class("grip", tw.CursorGrab), Attr("aria-label", uistate.T("custompage.dragReorder")), Attr("role", "button"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		H2(title),
 		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")), Attr("aria-label", uistate.T("pages.resizeWidth")),
 			OnClick(func() {

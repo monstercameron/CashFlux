@@ -479,7 +479,7 @@ func Transactions() ui.Node {
 			cols = append(cols, uiw.Column{Label: "Tags"})
 		}
 		cols = append(cols,
-			uiw.Column{Head: Span(Attr("aria-label", "Cleared status"), "✓"), Class: "td-cleared"},
+			uiw.Column{Head: Span(Attr("aria-label", uistate.T("transactions.clearedStatus")), "✓"), Class: "td-cleared"},
 			uiw.Column{Label: "Actions", Class: "td-actions"},
 		)
 		listBody = uiw.DataTable(uiw.DataTableProps{
