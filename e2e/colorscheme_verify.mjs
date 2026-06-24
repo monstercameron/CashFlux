@@ -1,0 +1,23 @@
+import { createRequire } from "module"; import { fileURLToPath } from "url"; import path from "path";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
+const { chromium } = require("playwright");
+const BASE="http://127.0.0.1:8099"; const browser=await chromium.launch({headless:true});
+let pass=0,fail=0; const P=m=>{console.log("PASS: "+m);pass++}; const F=m=>{console.log("FAIL: "+m);fail++};
+const run=async(theme,want)=>{
+  const p=await browser.newPage(); p.setViewportSize({width:1280,height:1000});
+  await p.goto(BASE+"/",{waitUntil:"domcontentloaded",timeout:20000});
+  await p.evaluate(t=>localStorage.setItem('cashflux:prefs',JSON.stringify({theme:t})),theme);
+  await p.reload({waitUntil:"domcontentloaded"}); await p.waitForSelector('nav[aria-label="Main navigation"] a[title]',{timeout:30000});
+  await p.evaluate(()=>{const l=[...document.querySelectorAll('nav[aria-label="Main navigation"] a[title]')].find(x=>x.getAttribute("title")==="Transactions");if(l)l.click();});
+  await p.waitForTimeout(1000);
+  await p.evaluate(()=>{const btn=[...document.querySelectorAll("button")].find(b=>/new transaction|add transaction|^\s*add\s*$/i.test(b.textContent.trim())); if(btn)btn.click();});
+  await p.waitForTimeout(600);
+  const cs=await p.evaluate(()=>{const d=document.querySelector('input[type="date"]'); return d?getComputedStyle(d).colorScheme:getComputedStyle(document.documentElement).colorScheme;});
+  console.log(`[${theme}] date input color-scheme = ${cs}`);
+  if(cs.includes(want)) P(`${theme}: color-scheme is ${want} (native controls themed)`); else F(`${theme}: color-scheme=${cs}, expected ${want}`);
+  const el=await p.$('input[type="date"]'); if(el) await el.screenshot({path:`e2e/screenshots/dateinput2_${theme}.png`}).catch(()=>{});
+  await p.close();
+};
+await run("dark","dark"); await run("light","light"); await browser.close();
+console.log(`\nRESULT: ${pass} PASS / ${fail} FAIL`); process.exit(fail>0?1:0);

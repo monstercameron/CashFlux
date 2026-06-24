@@ -8,11 +8,12 @@ import (
 	"errors"
 )
 
-// allTables lists every entity table plus settings, in dependency-free order.
-var allTables = []string{
-	"members", "accounts", "categories", "transactions", "budgets", "goals", "tasks",
-	"customfielddefs", "settings",
-}
+// preservedOnWipe is the set of tables a Wipe must NOT clear. Settings (base
+// currency, FX table, theme/prefs) are configuration, not financial data, so they
+// survive "wipe all data" — everything else (financial data and anything derived
+// from it: transactions, budgets, goals, recurring, plans, subscriptions, earmarks,
+// insights, conversations, workflows, audit, …) is removed.
+var preservedOnWipe = map[string]bool{"settings": true, "settingskv": true}
 
 // GetSettings returns the stored settings, or the zero value if none are saved.
 func (s *SQLiteStore) GetSettings() (Settings, error) {
@@ -51,14 +52,40 @@ func (s *SQLiteStore) PutSettings(st Settings) error {
 	return nil
 }
 
-// Wipe removes all data from the store (used by "wipe all data"). It is atomic.
+// Wipe removes all financial data (and everything derived from it) from the store
+// while preserving settings (see preservedOnWipe). It enumerates the live tables
+// from the schema so every entity table — including any added later — is cleared
+// automatically; a partial list is exactly how stale recurring/plans/subscriptions
+// data used to survive a wipe. It is atomic.
 func (s *SQLiteStore) Wipe() error {
+	// Discover every user table from the schema (excluding SQLite internals).
+	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		return err
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if !preservedOnWipe[name] {
+			tables = append(tables, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	_ = rows.Close()
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	for _, t := range allTables {
+	for _, t := range tables {
 		if _, err := tx.Exec("DELETE FROM " + t); err != nil {
 			return err
 		}

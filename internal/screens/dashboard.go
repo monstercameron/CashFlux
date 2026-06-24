@@ -648,9 +648,9 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	for i, m := range series {
 		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: trendPointLabel(cutoffs[i], months)}
 	}
-	yFmt := ".2~s" // compact SI, e.g. "21k"
+	yFmt := ".3~s" // compact SI w/ enough precision to keep narrow-range ticks distinct, e.g. "21.4k"
 	if currency.Symbol(net.Currency) == "$" {
-		yFmt = "$.2~s" // "$21k" for dollar currencies
+		yFmt = "$.3~s" // "$21.4k" for dollar currencies
 	}
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,

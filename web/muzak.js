@@ -87,7 +87,13 @@
     var now = Date.now();
     if (!force && now - lastSave < 4000) return;
     lastSave = now;
-    try { localStorage.setItem(POS_KEY, JSON.stringify({ i: pl.index, t: el.currentTime })); } catch (e) {}
+    // Persist through the IndexedDB-backed store (no localStorage). Falls back to
+    // localStorage only if the wasm store bridge hasn't registered yet.
+    try {
+      var posStr = JSON.stringify({ i: pl.index, t: el.currentTime });
+      if (typeof window.cashfluxStoreSet === "function") window.cashfluxStoreSet(POS_KEY, posStr);
+      else localStorage.setItem(POS_KEY, posStr);
+    } catch (e) {}
     // At coarse checkpoints, ask Go to mirror the state into the dataset so it
     // travels with export/import + backups (not streamed — only on force).
     if (force && typeof window.cashfluxMusicSave === "function") {
@@ -96,7 +102,10 @@
   }
   function loadPos() {
     try {
-      var o = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+      var raw = (typeof window.cashfluxStoreGet === "function")
+        ? window.cashfluxStoreGet(POS_KEY)
+        : localStorage.getItem(POS_KEY);
+      var o = JSON.parse(raw || "null");
       if (o && typeof o.i === "number" && typeof o.t === "number") return o;
     } catch (e) {}
     return null;

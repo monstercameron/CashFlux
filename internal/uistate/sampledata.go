@@ -5,8 +5,7 @@
 package uistate
 
 import (
-	"syscall/js"
-
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
@@ -20,9 +19,7 @@ const sampleActiveKey = "cashflux:sampleActive"
 // false = user has personalized or dismissed. The atom is initialised from
 // localStorage so the first render reflects the persisted state.
 func UseSampleActive() state.Atom[bool] {
-	ls := js.Global().Get("localStorage")
-	live := ls.Call("getItem", sampleActiveKey)
-	initial := !live.IsNull() && !live.IsUndefined() && live.String() == "1"
+	initial := browserstore.GetString(sampleActiveKey) == "1"
 	return state.UseAtom("app:sampleActive", initial)
 }
 
@@ -30,11 +27,10 @@ func UseSampleActive() state.Atom[bool] {
 // subscribed component re-renders immediately. Call with true when the sample
 // is seeded; call with false on wipe, import, or banner dismiss.
 func SetSampleActive(v bool) {
-	ls := js.Global().Get("localStorage")
 	if v {
-		ls.Call("setItem", sampleActiveKey, "1")
+		browserstore.Set(sampleActiveKey, "1")
 	} else {
-		ls.Call("removeItem", sampleActiveKey)
+		browserstore.Remove(sampleActiveKey)
 	}
 	// Notify via the captured atom if the banner has already mounted.
 	if sampleActiveReady {

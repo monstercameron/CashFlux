@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -33,19 +32,19 @@ func PersistItems(items []dashlayout.Item) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", layoutStoreID, string(data))
+	kvSet(layoutStoreID, string(data))
 }
 
 // loadItems reads the saved items from localStorage, falling back to the default
 // arrangement when absent or invalid. The legacy []Placement format migrates for
 // free: unmarshaling it into []Item picks up id + spans and ignores col/row.
 func loadItems() []dashlayout.Item {
-	v := js.Global().Get("localStorage").Call("getItem", layoutStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(layoutStoreID)
+	if raw == "" {
 		return dashlayout.DefaultItems()
 	}
 	var items []dashlayout.Item
-	if err := json.Unmarshal([]byte(v.String()), &items); err != nil || len(items) == 0 || items[0].ID == "" {
+	if err := json.Unmarshal([]byte(raw), &items); err != nil || len(items) == 0 || items[0].ID == "" {
 		return dashlayout.DefaultItems()
 	}
 	// Reconcile against the current widget set so a layout saved by an older build
@@ -71,16 +70,16 @@ func PersistLayoutMode(m dashlayout.Mode) {
 	if !m.Valid() {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", layoutModeStore, string(m))
+	kvSet(layoutModeStore, string(m))
 }
 
 // loadLayoutMode reads the saved mode, defaulting to Custom when absent/invalid.
 func loadLayoutMode() dashlayout.Mode {
-	v := js.Global().Get("localStorage").Call("getItem", layoutModeStore)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(layoutModeStore)
+	if raw == "" {
 		return dashlayout.ModeCustom
 	}
-	if m := dashlayout.Mode(v.String()); m.Valid() {
+	if m := dashlayout.Mode(raw); m.Valid() {
 		return m
 	}
 	return dashlayout.ModeCustom

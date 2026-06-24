@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -34,18 +33,18 @@ func PersistTxFilter(f TxFilter) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", txFilterStoreID, string(data))
+	kvSet(txFilterStoreID, string(data))
 }
 
 // loadTxFilter reads the saved filter from localStorage, defaulting to an empty
 // (newest-first) filter when absent or invalid. Always normalized.
 func loadTxFilter() TxFilter {
-	v := js.Global().Get("localStorage").Call("getItem", txFilterStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(txFilterStoreID)
+	if raw == "" {
 		return TxFilter{}.Normalize()
 	}
 	var f TxFilter
-	if err := json.Unmarshal([]byte(v.String()), &f); err != nil {
+	if err := json.Unmarshal([]byte(raw), &f); err != nil {
 		return TxFilter{}.Normalize()
 	}
 	return f.Normalize()

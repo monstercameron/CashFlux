@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — WIP checkpoint: snapshot in-flight work (owner request)
+
+Owner asked to commit everything so progress isn't lost while a parallel session is actively
+editing. This is a **WIP checkpoint**, not a single clean feature commit — it bundles in-flight
+work from a concurrent agent so it's captured in history. Before committing I confirmed the whole
+working tree still compiles for the app target (`GOOS=js GOARCH=wasm go build` → rc=0); native
+unit tests were not run as part of this snapshot, so some in-progress areas may not be green yet.
+
+Scope (broad strokes, ~150 files): a large batch of `e2e/` scripts (42 new `.mjs` from the QA
+loop), `internal/uistate` (24), `internal/app`, `internal/screens`, `internal/store`,
+`internal/aiprovider`, `web/`, plus assorted i18n/tw/docs. Excluded the untracked build artifact
+`cashflux-server.exe` from the commit (binaries don't belong in git). Individual features in this
+batch are documented by whoever authored them; this entry only records that the snapshot was taken.
+
 ## 2026-06-24 — Custom-page → custom-page navigation (body didn't swap)
 
 Reported: Dashboard → custom page A renders fine; clicking custom page B *directly* in the rail

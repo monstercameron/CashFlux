@@ -10,14 +10,18 @@
          project site the app lives under /<repo>/, so derive the base from the
          first path segment there; everywhere else (local dev, custom domain) it's
          the server root. Must run first in <head>. -->
+    <!-- STATIC base so the browser's preload scanner (which does not execute
+         scripts) resolves ./assets against the server root, not the current SPA
+         route's directory. A dynamically document.write()'n base was invisible to
+         the scanner, so deep links like /p/<slug> fetched /p/d3.min.js → 404. The
+         script below only *adjusts* this for *.github.io project sites (/<repo>/). -->
+    <base href="/" />
     <script>
       (function () {
-        var base = "/";
         if (location.hostname.endsWith("github.io")) {
           var seg = location.pathname.split("/")[1];
-          if (seg) base = "/" + seg + "/";
+          if (seg) document.querySelector("base").setAttribute("href", "/" + seg + "/");
         }
-        document.write('<base href="' + base + '">');
       })();
     </script>
 
@@ -71,6 +75,11 @@
         --brand: #7c83ff;
         --danger: #d8716f;
         --radius: 0px;
+        /* Theme native form controls (date-picker calendar icon, select dropdowns,
+           scrollbars) to the dark palette. Without this the native date input's
+           calendar indicator renders black on the dark #202022 field — near-invisible.
+           The [data-theme="light"] block flips this back to light. */
+        color-scheme: dark;
         /* Default type tokens (B20). The theme engine overrides these on :root;
            consumers keep a static fallback chain after var() so text still
            renders if a chosen font fails to load. */
@@ -112,6 +121,11 @@
       p, h1, h2, h3, h4, h5, h6, blockquote, figure, pre, fieldset, hr { margin: 0; }
       table { border-collapse: collapse; }
       html, body { margin: 0; height: 100%; }
+      /* On-brand text selection: an accent-tinted highlight that keeps the text color
+         (so selected amounts/labels stay readable) instead of the off-brand OS default.
+         color-mix keeps it theme- and custom-accent-aware; works in light and dark. */
+      ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); }
+      ::-moz-selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); }
       body {
         font-family: var(--font-ui), Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         background: var(--bg);
@@ -123,6 +137,47 @@
         font-size: 14.5px;
         line-height: 1.45;
         -webkit-font-smoothing: antialiased;
+      }
+
+      /* Print / save-to-PDF (statements, reports, ledgers). With no @media print rules,
+         printing output the dark UI + nav rail + topbar + banners (ink-heavy, unreadable).
+         Force an ink-friendly light palette regardless of the active theme (override the
+         theme engine's INLINE --* vars with !important on <html>), keep semantic accent/
+         danger colors, hide the app chrome, let the content flow across pages, and keep
+         cards from splitting mid-page. */
+      @media print {
+        html {
+          --bg: #fff !important; --bg-base: #fff !important; --bg-card: #fff !important;
+          --bg-elev: #f6f6f6 !important; --border: #ccc !important;
+          --text: #111 !important; --text-dim: #333 !important; --text-faint: #555 !important;
+          color-scheme: light !important;
+        }
+        body { background: #fff !important; }
+        /* The shell/main/page wrappers AND the bento widgets (.w) bake a dark bg via the
+           hardcoded tw palette (BgBase #0e0e0f / BgTile #121214, not var(--bg-card)), so force
+           the layout containers + widgets white — else the whole dashboard prints dark with
+           dark-on-dark text. */
+        .cf-shell, main, main.cf-scroll, #cf-page-view, .bento, .card-alert, .w, .bento .w { background: #fff !important; }
+        /* Hide app chrome + interactive-only bits — print just the statement content.
+           The per-row Actions column and the select checkboxes are noise on paper. Form
+           controls (the search box, filter selects) are interactive-only too — the ledger
+           data is plain <td> text, not inputs, so hiding controls never drops statement data. */
+        aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner,
+        .app-banner, .toast, .reso-control, .home-hero-actions,
+        input, select, textarea,
+        .txn-table .td-actions, .txn-table th.td-actions,
+        .txn-table .td-select, .txn-table th.td-select { display: none !important; }
+        /* Let the scrolling shell flow naturally across printed pages. */
+        .cf-shell { display: block !important; height: auto !important; overflow: visible !important; }
+        main.cf-scroll { overflow: visible !important; height: auto !important; }
+        /* Clean blocks that don't split across a page break. */
+        .card, .reports-hero, .w, .home-hero {
+          box-shadow: none !important; break-inside: avoid; page-break-inside: avoid;
+        }
+        /* Keep each ledger row whole across page breaks; let table headers repeat. */
+        .txn-table tr { break-inside: avoid; page-break-inside: avoid; }
+        .txn-table thead { display: table-header-group; }
+        @page { margin: 1.5cm; }
       }
 
       /* Boot loader: an on-brand animated mark while the wasm downloads and
@@ -615,6 +670,19 @@
         background: var(--bg-card); border: 1px solid var(--border);
         border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
       }
+      /* Refined resting elevation (design pass 2026-06-24): give cards + bento tiles real
+         depth instead of flat fills — a soft ambient shadow plus a hairline top highlight so
+         surfaces read as layered, premium panels. WONDER hover still lifts further via
+         --wonder-shadow (these are the resting state). Theme-aware: airy grey shadows on
+         light, deeper shadows + a faint white top edge on dark. */
+      .card, .bento .w {
+        box-shadow: 0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),
+                    inset 0 1px 0 rgba(255,255,255,0.035);
+      }
+      [data-theme="light"] .card, [data-theme="light"] .bento .w {
+        box-shadow: 0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),
+                    inset 0 1px 0 rgba(255,255,255,0.7);
+      }
       /* Spending highlights (Insights anomaly cards) */
       .insight-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
       .insight-row { display: flex; align-items: flex-start; gap: 0.6rem; margin: 0; line-height: 1.45; }
@@ -660,6 +728,7 @@
         --border: #e4e2dd; --text: #1c1c1e; --text-dim: #56565c; --text-faint: #686870;
         --muted: #56565c; --accent-dim: #e4f3ea;
         --hover: #e8e6e1;
+        color-scheme: light; /* native controls (date picker, dropdowns, scrollbars) light-themed */
       }
       [data-theme="light"] .bg-base { background-color: #f7f6f3; }
       [data-theme="light"] .bg-tile { background-color: #ffffff; }
@@ -667,6 +736,12 @@
       [data-theme="light"] .text-fg { color: #1c1c1e; }
       [data-theme="light"] .text-dim { color: #56565c; }
       [data-theme="light"] .text-faint { color: #686870; }
+      /* Bills calendar weekday headers (.cal-head) read var(--text-faint); in light the
+         theme engine's runtime --text-faint resolves to a too-pale #969698 (≈1.6:1 on
+         the white card — fails AA). Pin to the palette's intended faint tone #686870
+         (≈5:1) so "Sun…Sat" stay legible. Scoped to .cal-head only — does NOT touch the
+         systemic --text-faint token (its light derivation is separate GX14/Go work). */
+      [data-theme="light"] .cal-head { color: #686870; }
       /* Legacy components read var(--text)/(--text-dim), but the theme engine emits
          those as runtime vars that can outrank the [data-theme="light"] palette
          override — so in light mode a card title or category name could keep the
@@ -850,6 +925,29 @@
       .hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
       .hero-stat-label { font-size: 0.73rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
       .hero-stat-value { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+      /* Semantic tone for the hero-secondary stats (savings rate / runway / no-spend days).
+         reports_screen.go already emits .pos/.neg here (toneForSavingsRate, accentForRunway, and
+         "pos" on no-spend days) but no CSS rendered them, so a negative savings rate read as plain
+         white like a healthy one. Color by sign/health so the warning states (short runway, negative
+         savings rate) are glanceable — matching the Net/Income/Spending strip directly above. */
+      .hero-stat-value.pos { color: var(--accent); }
+      .hero-stat-value.neg { color: var(--danger); }
+      [data-theme="light"] .hero-stat-value.pos { color: var(--accent) !important; }
+      [data-theme="light"] .hero-stat-value.neg { color: var(--danger) !important; }
+      /* Dashboard HomeHero band (EC4): the component (internal/screens/homehero.go) ships
+         these class names but no CSS existed for the layout wrappers, so the this-month
+         stat blocks collapsed to display:block and the label+value jammed together
+         ("Income$6,982.00"). Lay them out like the Reports hero secondary stats: a wrapping
+         row of label-above-value blocks. Greeting/figure/label spans already carry scoped
+         tw styles; these rules add only the missing container/spacing. */
+      .home-hero { margin-bottom: 1.25rem; }
+      .home-hero-greeting { margin: 0 0 0.75rem; }
+      .home-hero-nw { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.85rem; }
+      .home-hero-nw-fig { line-height: 1.1; }
+      .home-hero-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: baseline; }
+      .home-hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
+      .home-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.1rem; }
+      .home-hero-welcome-body { max-width: 42rem; }
       /* G9.1 Alert card strip — heads-up anomaly urgency. */
       .card-alert { border-left: 4px solid var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--card-bg)); }
       .muted { color: var(--text-dim); margin: 0.25rem 0; }
@@ -944,7 +1042,11 @@
       /* Primary row label stays full-contrast in both themes (G4/G5/G6): it
          inherits body text, but pin it explicitly so a muted wrapper or a stale
          utility class can never wash a task/account/goal name out in light mode. */
-      .row-desc { font-weight: 500; color: var(--text); }
+      /* overflow-wrap:anywhere so a long unbroken name (email/URL/ID, or a no-space
+         string) breaks and wraps inside list rows instead of overflowing the card —
+         white-space:normal alone only breaks at spaces. The txn-table's row-desc uses
+         nowrap+ellipsis (more specific rule), so this only affects the list-row variant. */
+      .row-desc { font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
       /* To-do portfolio summary line (G6). */
       .todo-summary { margin: 0 0 0.6rem; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
       .row-meta { color: var(--text-dim); font-size: 0.82rem; }
@@ -991,7 +1093,12 @@
          Cap it to 96px so the ledger reclaims that space for data columns. */
       .txn-table .td-actions { white-space: nowrap; text-align: right; width: 96px; max-width: 96px; }
       /* Cleared toggle (G2 §5): a ✓/○ status glyph, green when cleared. */
-      .txn-table .clr-toggle { background: transparent; border: 0; cursor: pointer; font-size: 1.05rem; line-height: 1; color: var(--text-faint); width: 1.6rem; }
+      /* Cleared toggle: a discrete per-row control, so give it a ≥24px hit area on
+         desktop too (WCAG 2.2 §2.5.8). It was 26×17px with a mouse — the 44×44 sizing
+         only kicked in under the 640px touch breakpoint. The glyph stays the same size;
+         only the clickable box grows, centered, and the 55px row easily absorbs it. */
+      .txn-table .clr-toggle { background: transparent; border: 0; cursor: pointer; font-size: 1.05rem; line-height: 1; color: var(--text-faint); width: 1.6rem;
+        display: inline-flex; align-items: center; justify-content: center; min-height: 1.5rem; }
       .txn-table .clr-toggle.is-cleared { color: var(--accent); font-weight: 700; }
       .txn-table tbody tr.row.cleared .td-date, .txn-table tbody tr.row.cleared .row-desc { color: var(--text-dim); }
       .txn-table .td-select .check { background: transparent; border: 0; cursor: pointer; font-size: 1rem; line-height: 1; }
@@ -1090,6 +1197,24 @@
          outranks every non-important author rule regardless of specificity — so
          without it the dim never applies once the entrance settles. */
       .cat-zero-usage { opacity: 0.55 !important; }
+      /* Category map (GI2): a wrapping grid of group chips replacing the old mermaid
+         flowchart, which stacked every top-level category in one tall column and wasted
+         most of the horizontal width. Each group box shows a parent category + its
+         sub-categories as pills; the boxes flow left-to-right and wrap, filling the row. */
+      .cat-map { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+      .cat-map-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
+        padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 12px;
+        background: var(--bg-elev); }
+      .cat-map-chip { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+      /* Sub-category pill. Uses a theme-adaptive tint of the text color (not --bg-tile,
+         which is undefined in light mode and rendered the pill transparent + borderless),
+         so the pill reads consistently in BOTH themes — a faint dark tint on light, a faint
+         light tint on dark — and the border is always visible against the group fill. */
+      .cat-map-sub { font-size: 0.78rem; font-weight: 500; color: var(--text-dim);
+        padding: 0.1rem 0.5rem; border-radius: 999px;
+        background: color-mix(in srgb, var(--text) 6%, transparent);
+        border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+      .cat-map-sub2 { opacity: 0.8; }
       /* GX3-F3/F10: unified button-scale tokens so page buttons, modal buttons, and inputs
          all hit the 44px touch-target floor and share the same height. Previously .btn
          measured 35.8px (below WCAG 2.5.8) while inputs and modal buttons were 40–44px.
@@ -1098,11 +1223,12 @@
       .btn { padding: var(--btn-py) var(--btn-px); min-height: 44px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font: inherit; font-weight: 500; cursor: pointer; transition: filter 0.12s; display: inline-flex; align-items: center; justify-content: center; }
       .btn:hover { filter: brightness(1.12); }
       .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; filter: none; }
-      .btn-primary { background: var(--accent); color: #052e13; border-color: var(--accent); font-weight: 600; }
-      /* In light mode the dark-green primary text on the mid-green accent measured
-         ~2.1:1 (G19 "Run now") — fails AA. White on the same accent clears the
-         large/bold-text 3:1 bar and reads cleanly across the app's primary buttons. */
-      [data-theme="light"] .btn-primary { color: #ffffff; }
+      /* White text on the mid-green accent, BOTH themes. Light was already white (G19:
+         dark-green text measured ~2.1:1 there). Dark still used dark-green #052e13 = only
+         3.52:1 — lower than white's 4.25:1 on the same accent, so it was the weaker outlier.
+         Unify to white: dark improves 3.52→4.25 and matches light. (Both clear the bold/large
+         3:1 bar; full AA-normal 4.5 would need a deeper accent — a brand call, left to a dev.) */
+      .btn-primary { background: var(--accent); color: #ffffff; border-color: var(--accent); font-weight: 600; }
       .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0.25rem 0.4rem; }
       .btn-del:hover { color: var(--danger); }
       /* WCAG 2.5.8 (AA): small icon-only buttons get at least a 24x24 hit area,
@@ -1236,14 +1362,14 @@
 
       /* Allocate rank badge (G8): a compact "#1/#2" ordinal so the priority order
          is glanceable, not just inferred from bar length. */
-      /* Rank badge: a solid accent chip mirroring .btn-primary's proven contrast pair
-         (dark-green text on accent in dark, white text on accent in light). The old
-         accent-on-accent-dim pairing was green-on-green — ~1.5:1, illegible in BOTH
-         themes (G14). Solid fill also reads as a stronger "this is rank #N" cue. */
+      /* Rank badge: a solid accent chip with WHITE text in BOTH themes. It used dark-green
+         #052e13 in dark mode, which on the mid-green accent is only 3.52:1 — below white's
+         4.25:1 and the weaker of the pair (same issue fixed for .btn-primary). Unifying to
+         white lifts dark 3.52→4.25 and matches light; the old accent-on-accent-dim green-on-
+         green (~1.5:1, G14) is long gone. Solid fill reads as a strong "this is rank #N" cue. */
       .rank-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem;
         height: 1.5rem; padding: 0 0.35rem; border-radius: 999px; background: var(--accent);
-        color: #052e13; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
-      [data-theme="light"] .rank-badge { color: #ffffff; }
+        color: #ffffff; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
       /* "Advanced" disclosure toggle (G8): subordinate, left-aligned, not a primary button. */
       .disclosure-toggle { background: transparent; border: 0; color: var(--accent); font: inherit;
         padding: 0.35rem 0; cursor: pointer; text-align: left; }
@@ -1261,7 +1387,11 @@
       .pace-badge { display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
         padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap; line-height: 1.5;
         border: 1px solid var(--border); /* GX3-D7: was borderless; every other pill has a 1px ring */ }
-      .pace-final { background: var(--accent-dim); color: var(--accent); }
+      /* Final-stretch pace badge: neutral --bg-elev pill with accent TEXT (not accent-on-
+         accent-dim, which was green-on-green — 2.1:1 dark / 1.95:1 light). Mirrors the sibling
+         .pace-ontrack pill (same bg) but keeps the celebratory accent text, so it reads while
+         staying accent-aware for custom themes. */
+      .pace-final { background: var(--bg-elev); color: var(--accent); }
       .pace-overdue { background: rgba(216,113,111,0.18); color: var(--danger); }
       .pace-soon { background: rgba(245,158,11,0.18); color: #d98c00; }
       [data-theme="light"] .pace-soon { color: #b45309; }
@@ -1713,9 +1843,16 @@
         border-radius:var(--radius); font-size:.86rem; }
       .sample-banner-text { color:var(--text-dim); }
       .sample-banner-actions { display:flex; align-items:center; gap:.6rem; }
-      .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:var(--accent);
+      /* Banner CTA color: --text (not --accent). In dark the banner bg is var(--accent-dim)
+         (#205337) and accent-green text on it measured only 1.55:1 (illegible green-on-green).
+         --text reads on the banner in dark (~8:1); light keeps the green CTA via the override
+         below (accent-on-pale-green passes AA in light and is the friendlier look). The
+         underline + cursor already signal the action, so dropping the green in dark is safe. */
+      .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:var(--text);
         cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
-      .sample-banner-btn:hover { color:var(--text); }
+      .sample-banner-btn:hover { text-decoration-thickness:2px; }
+      [data-theme="light"] .sample-banner-btn { color:var(--accent); }
+      [data-theme="light"] .sample-banner-btn:hover { color:var(--text); }
       .sample-banner-dismiss { color:var(--text-dim); }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
@@ -1895,8 +2032,13 @@
       .cf-dialog-msg { color:var(--text,inherit); margin:0 0 .9rem; line-height:1.5; }
       .cf-dialog-input { width:100%; margin-bottom:1rem; }
       .cf-dialog-actions { display:flex; justify-content:flex-end; gap:.5rem; }
-      .btn-danger { background:var(--down,#dc2626); border-color:var(--down,#dc2626); color:#fff; }
-      .btn-danger:hover { filter:brightness(1.05); }
+      /* Danger button uses a dedicated, constant danger red — NOT var(--down). In dark
+         --down is a deliberately soft red (#d8716f, tuned for amount/text legibility), and
+         white text on it measured only 3.23:1 (fails WCAG AA) on the destructive confirm
+         buttons (Delete/Wipe). #c0392b keeps the same red identity with white text at
+         ~5.5:1 in both themes; danger shouldn't vary by theme anyway. */
+      .btn-danger { background:#c0392b; border-color:#c0392b; color:#fff; }
+      .btn-danger:hover { filter:brightness(1.08); }
       .row.subtask { border-left:2px solid var(--line,#e5e7eb); }
       .rule-grip { display:inline-flex; align-items:center; color:var(--faint,#9ca3af); cursor:grab; flex:none; margin-right:.25rem; }
       /* GX8-F4: add subtle visual press state to draggable rows — bg tint signals the
@@ -1988,6 +2130,13 @@
         display: none; /* hidden on desktop */
       }
       @media (max-width: 640px) {
+        /* The bottom tab bar is position:fixed (56px + safe-area), so it floats over the
+           bottom of the scroll area. Without clearance the last content — e.g. the
+           "Rows per page" selector + pagination on /transactions — is hidden behind it and
+           can't be tapped. Pad the scroller so content can scroll clear of the bar. */
+        main.cf-scroll {
+          padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 12px) !important;
+        }
         .mobile-tabbar {
           display: flex;
           position: fixed;
@@ -2173,11 +2322,16 @@
       }
       [data-theme="light"] aside.rail,
       [data-theme="light"] .rail { background: var(--bg-elev) !important; }
-      /* F2: active rail chip readable on light rail */
+      /* F2: active rail chip readable on light rail. The active background renders as a
+         medium green tint, on which accent-green text only reached ~1.95:1 (fails WCAG) —
+         a core wayfinding label. Use near-black --text + bold so the active item is legible
+         on any greenish tint; the accent identity is carried by the tinted background, and
+         inactive items stay gray (--text-dim), so "active" still reads at a glance. */
       [data-theme="light"] aside.rail .nv.active,
       [data-theme="light"] aside.rail a[aria-current] {
         background-color: var(--accent-dim, #e4f3ea) !important;
-        color: var(--accent, #2e8b57) !important;
+        color: var(--text, #1c1c1e) !important;
+        font-weight: 600 !important;
       }
       [data-theme="light"] aside.rail .nv { color: var(--text-dim, #56565c); }
       [data-theme="light"] aside.rail .nv:hover {

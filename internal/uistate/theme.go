@@ -19,9 +19,8 @@ const themeStoreID = "cashflux:theme"
 // app's default appearance exactly. A "system" preference is resolved to a
 // concrete light/dark palette here, where the OS color scheme is readable.
 func LoadTheme() theme.Theme {
-	v := js.Global().Get("localStorage").Call("getItem", themeStoreID)
-	if !v.IsNull() && !v.IsUndefined() {
-		if t, err := theme.FromJSON([]byte(v.String())); err == nil {
+	if raw := SettingKVGet(themeStoreID); raw != "" {
+		if t, err := theme.FromJSON([]byte(raw)); err == nil {
 			return t
 		}
 	}
@@ -43,7 +42,7 @@ func PersistTheme(t theme.Theme) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", themeStoreID, string(data))
+	SettingKVSet(themeStoreID, string(data))
 }
 
 // ApplyTheme reflects a theme's design tokens onto the document root as CSS

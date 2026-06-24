@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/GoWebComponents/state"
 )
@@ -35,16 +34,16 @@ func PersistCollapsedToolGroups(m map[string]bool) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", toolGroupsStoreID, string(data))
+	SettingKVSet(toolGroupsStoreID, string(data))
 }
 
 func loadCollapsedToolGroups() map[string]bool {
-	v := js.Global().Get("localStorage").Call("getItem", toolGroupsStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(toolGroupsStoreID)
+	if raw == "" {
 		return map[string]bool{}
 	}
 	var m map[string]bool
-	if err := json.Unmarshal([]byte(v.String()), &m); err != nil {
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		return map[string]bool{}
 	}
 	return m

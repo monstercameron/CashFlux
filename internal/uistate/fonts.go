@@ -21,12 +21,12 @@ const (
 // their own slot, separate from the theme, so theme writes stay small). An empty
 // or unreadable slot yields no fonts.
 func LoadFonts() []theme.FontAsset {
-	v := js.Global().Get("localStorage").Call("getItem", fontsStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(fontsStoreID)
+	if raw == "" {
 		return nil
 	}
 	var fonts []theme.FontAsset
-	if err := json.Unmarshal([]byte(v.String()), &fonts); err != nil {
+	if err := json.Unmarshal([]byte(raw), &fonts); err != nil {
 		return nil
 	}
 	return fonts
@@ -38,7 +38,7 @@ func PersistFonts(fonts []theme.FontAsset) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", fontsStoreID, string(data))
+	SettingKVSet(fontsStoreID, string(data))
 }
 
 // AddFont stores a custom font (replacing any existing one with the same family),

@@ -84,7 +84,15 @@ type Dataset struct {
 	SubscriptionIgnores       []domain.SubscriptionIgnore       `json:"subscriptionIgnores,omitempty"`
 	SubscriptionCancellations []domain.SubscriptionCancellation `json:"subscriptionCancellations,omitempty"`
 	AuditEntries              []auditlog.Entry                  `json:"auditEntries,omitempty"`
-	Settings                  Settings                          `json:"settings"`
+	// KV is app/UI state ported off scattered localStorage into the SQLite dataset:
+	// dashboard layout, widget config, view filters, the activity feed, etc. Keeping
+	// it here makes the dataset the single source of truth and a wipe clears it too.
+	KV map[string]string `json:"appState,omitempty"`
+	// SettingsKV is config/preferences ported off localStorage (theme, fonts,
+	// language, prefs, muzak, rail, …). Unlike KV it is PRESERVED by a wipe — it's
+	// settings, not financial data.
+	SettingsKV map[string]string `json:"settingsState,omitempty"`
+	Settings   Settings          `json:"settings"`
 }
 
 // AuditLogCap is the maximum number of audit entries persisted to the dataset.

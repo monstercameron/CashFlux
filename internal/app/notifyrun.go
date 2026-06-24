@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -186,49 +187,32 @@ const backupCadenceKey = "cashflux:backupCadence"
 // loadBackupCadence reads the chosen reminder cadence, defaulting to the gentle
 // monthly cadence when unset (an explicit "off" disables reminders).
 func loadBackupCadence() backup.Cadence {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
+	raw := browserstore.GetString(backupCadenceKey)
+	if raw == "" {
 		return backup.DefaultCadence
 	}
-	v := ls.Call("getItem", backupCadenceKey)
-	if !v.Truthy() {
-		return backup.DefaultCadence
-	}
-	return backup.ParseCadence(v.String())
+	return backup.ParseCadence(raw)
 }
 
 // saveBackupCadence persists the chosen reminder cadence (Settings → Data).
 func saveBackupCadence(c backup.Cadence) {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return
-	}
-	ls.Call("setItem", backupCadenceKey, string(c))
+	browserstore.Set(backupCadenceKey, string(c))
 }
 
 // recordBackupNow stamps the current time as the last backup — called after a
-// successful data export. Safe to call from any package-app code (no-op without
-// localStorage).
+// successful data export.
 func recordBackupNow() {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return
-	}
-	ls.Call("setItem", lastBackupKey, time.Now().Format(time.RFC3339))
+	browserstore.Set(lastBackupKey, time.Now().Format(time.RFC3339))
 }
 
 // loadLastBackup reads the last-backup timestamp, or the zero time when never set
 // or unparseable (which reads as "never backed up").
 func loadLastBackup() time.Time {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
+	raw := browserstore.GetString(lastBackupKey)
+	if raw == "" {
 		return time.Time{}
 	}
-	v := ls.Call("getItem", lastBackupKey)
-	if !v.Truthy() {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, v.String())
+	t, err := time.Parse(time.RFC3339, raw)
 	if err != nil {
 		return time.Time{}
 	}
@@ -290,16 +274,12 @@ func currentBudgetStatuses(app *appstate.App, now time.Time) []budgeting.Status 
 // loadDeliveredLog reads the delivered-notification keys from localStorage.
 func loadDeliveredLog() notify.DeliveredLog {
 	log := notify.NewDeliveredLog()
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return log
-	}
-	v := ls.Call("getItem", notifyDeliveredKey)
-	if !v.Truthy() {
+	raw := uistate.KVGet(notifyDeliveredKey)
+	if raw == "" {
 		return log
 	}
 	var keys []string
-	if err := json.Unmarshal([]byte(v.String()), &keys); err != nil {
+	if err := json.Unmarshal([]byte(raw), &keys); err != nil {
 		return log
 	}
 	for _, k := range keys {
@@ -308,15 +288,12 @@ func loadDeliveredLog() notify.DeliveredLog {
 	return log
 }
 
-// saveDeliveredLog writes the delivered-notification keys back to localStorage.
+// saveDeliveredLog writes the delivered-notification keys into the SQLite-backed
+// app KV (single source of truth; cleared by a wipe like all other data).
 func saveDeliveredLog(log notify.DeliveredLog) {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return
-	}
 	data, err := json.Marshal(log.Keys())
 	if err != nil {
 		return
 	}
-	ls.Call("setItem", notifyDeliveredKey, string(data))
+	uistate.KVSet(notifyDeliveredKey, string(data))
 }

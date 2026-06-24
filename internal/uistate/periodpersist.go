@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -43,7 +42,7 @@ func PersistPeriodWindow(w period.Window) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", periodWindowStoreID, string(data))
+	kvSet(periodWindowStoreID, string(data))
 }
 
 // LoadPeriodWindow reads the persisted window from localStorage and returns
@@ -55,12 +54,12 @@ func PersistPeriodWindow(w period.Window) {
 // Returns (zero, false) when nothing is persisted, the JSON is malformed, the
 // resolution is unrecognised, or the window is stale.
 func LoadPeriodWindow(now time.Time) (period.Window, bool) {
-	v := js.Global().Get("localStorage").Call("getItem", periodWindowStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(periodWindowStoreID)
+	if raw == "" {
 		return period.Window{}, false
 	}
 	var j periodWindowJSON
-	if err := json.Unmarshal([]byte(v.String()), &j); err != nil {
+	if err := json.Unmarshal([]byte(raw), &j); err != nil {
 		return period.Window{}, false
 	}
 	res := period.Resolution(j.Res)

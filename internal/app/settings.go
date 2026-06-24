@@ -1006,8 +1006,11 @@ func wipeData(onChange func(), notify func(string, bool)) {
 		}
 		// A wipe means the user is starting fresh — hide the sample banner (L6).
 		uistate.SetSampleActive(false)
-		onChange()
-		notify(uistate.T("settings.wiped"), false)
+		// Make the wipe authoritative: clear non-settings keys and persist the emptied
+		// store, then reload (after the IndexedDB write commits) so all in-memory state
+		// re-hydrates from the clean slate (nothing survives the wipe).
+		suspendAutosave = true
+		wipeFinancialLocalState(reloadPage)
 	})
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cardgraph"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -52,8 +53,8 @@ const vbDragShimJS = `
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
   var POS_KEY = "cashflux:wb-canvas-pos", VIEW_KEY = "cashflux:wb-canvas-view";
-  function load(k){ try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch(e){ return {}; } }
-  function save(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  function load(k){ try { var r = (typeof window.cashfluxStoreGet==="function") ? window.cashfluxStoreGet(k) : localStorage.getItem(k); return JSON.parse(r || "{}"); } catch(e){ return {}; } }
+  function save(k,v){ try { var s = JSON.stringify(v); if (typeof window.cashfluxStoreSet==="function") window.cashfluxStoreSet(k,s); else localStorage.setItem(k,s); } catch(e){} }
   function getView(){ var v = load(VIEW_KEY); return { tx: v.tx||0, ty: v.ty||0, s: v.s||1 }; }
   function applyView(world, v){ world.style.transformOrigin="0 0"; world.style.transform="translate("+v.tx+"px,"+v.ty+"px) scale("+v.s+")"; }
   function clampS(s){ return Math.max(0.3, Math.min(2.5, s)); }
@@ -762,10 +763,9 @@ func vbDim(v, max int) int {
 }
 
 func vbLoadGraph() cardgraph.Graph {
-	v := js.Global().Get("localStorage").Call("getItem", vbGraphKey)
-	if v.Type() == js.TypeString && v.String() != "" {
+	if raw := uistate.KVGet(vbGraphKey); raw != "" {
 		var g cardgraph.Graph
-		if err := json.Unmarshal([]byte(v.String()), &g); err == nil && len(g.Nodes) > 0 {
+		if err := json.Unmarshal([]byte(raw), &g); err == nil && len(g.Nodes) > 0 {
 			return g
 		}
 	}
@@ -774,7 +774,7 @@ func vbLoadGraph() cardgraph.Graph {
 
 func vbSaveGraph(g cardgraph.Graph) {
 	if b, err := json.Marshal(g); err == nil {
-		js.Global().Get("localStorage").Call("setItem", vbGraphKey, string(b))
+		uistate.KVSet(vbGraphKey, string(b))
 	}
 }
 
@@ -815,16 +815,15 @@ func vbPublishedWidget(name string, colSpan, rowSpan int) ui.Node {
 
 func vbLoadCards() map[string]cardgraph.Graph {
 	out := map[string]cardgraph.Graph{}
-	v := js.Global().Get("localStorage").Call("getItem", vbCardsKey)
-	if v.Type() == js.TypeString && v.String() != "" {
-		_ = json.Unmarshal([]byte(v.String()), &out)
+	if raw := uistate.KVGet(vbCardsKey); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &out)
 	}
 	return out
 }
 
 func vbSaveCards(lib map[string]cardgraph.Graph) {
 	if b, err := json.Marshal(lib); err == nil {
-		js.Global().Get("localStorage").Call("setItem", vbCardsKey, string(b))
+		uistate.KVSet(vbCardsKey, string(b))
 	}
 }
 
@@ -895,12 +894,12 @@ func vbNextPos(g cardgraph.Graph) cardgraph.Point {
 
 func vbLoadPositions() map[string]cardgraph.Point {
 	out := map[string]cardgraph.Point{}
-	v := js.Global().Get("localStorage").Call("getItem", vbCanvasPosKey)
-	if v.Type() != js.TypeString {
+	raw := browserstore.GetString(vbCanvasPosKey)
+	if raw == "" {
 		return out
 	}
 	var saved map[string]struct{ X, Y float64 }
-	if err := json.Unmarshal([]byte(v.String()), &saved); err != nil {
+	if err := json.Unmarshal([]byte(raw), &saved); err != nil {
 		return out
 	}
 	for k, p := range saved {
@@ -1434,10 +1433,9 @@ const vbViewKey = "cashflux:wb-canvas-view"
 // the identity view (no pan, 100% zoom).
 func vbLoadView() vbView {
 	out := vbView{S: 1}
-	v := js.Global().Get("localStorage").Call("getItem", vbViewKey)
-	if v.Type() == js.TypeString {
+	if raw := browserstore.GetString(vbViewKey); raw != "" {
 		var saved struct{ TX, TY, S float64 }
-		if err := json.Unmarshal([]byte(v.String()), &saved); err == nil {
+		if err := json.Unmarshal([]byte(raw), &saved); err == nil {
 			out.TX, out.TY = saved.TX, saved.TY
 			if saved.S > 0 {
 				out.S = saved.S
@@ -1841,9 +1839,9 @@ func vbChart(v *cardgraph.VizBlock) ui.Node {
 		pts[i] = chartspec.Point{X: float64(i), Y: p.Value, Label: p.Label}
 	}
 	sym := currency.Symbol(vbBaseCurrency())
-	yFmt := ".2~s"
+	yFmt := ".3~s"
 	if sym == "$" {
-		yFmt = "$.2~s"
+		yFmt = "$.3~s"
 	}
 	spec := chartspec.Spec{
 		Kind:   kind,
@@ -1931,8 +1929,7 @@ const vbTogglePrefix = "cashflux:wb-toggle:"
 
 // vbToggleState reads a toggle's persisted checked state from localStorage.
 func vbToggleState(action string) bool {
-	v := js.Global().Get("localStorage").Call("getItem", vbTogglePrefix+action)
-	return v.Type() == js.TypeString && v.String() == "1"
+	return browserstore.GetString(vbTogglePrefix+action) == "1"
 }
 
 // vbSetToggleState persists a toggle's checked state.
@@ -1941,7 +1938,7 @@ func vbSetToggleState(action string, on bool) {
 	if on {
 		val = "1"
 	}
-	js.Global().Get("localStorage").Call("setItem", vbTogglePrefix+action, val)
+	browserstore.Set(vbTogglePrefix+action, val)
 }
 
 // vbRunAction applies a builder button/toggle action to app state, then bumps the data

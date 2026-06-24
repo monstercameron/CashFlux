@@ -2,7 +2,7 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v251";
+const CACHE = "cashflux-v258";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
@@ -29,48 +29,65 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// appShell resolves to the cached SPA entry document, trying index.html then "./".
-const appShell = () => caches.match("./index.html").then((m) => m || caches.match("./"));
+// A guaranteed Response so respondWith() is NEVER handed undefined (which throws
+// "Failed to convert value to 'Response'") and never a rejected promise (ERR_FAILED).
+const offlineResp = () => new Response("", { status: 504, statusText: "offline" });
+
+// appShell always resolves to a real Response: the cached SPA entry document, then a
+// network fetch of it, then a synthetic 504. Each step is guarded so it can't reject.
+async function appShell() {
+  try {
+    const cached = (await caches.match("./index.html")) || (await caches.match("./"));
+    if (cached) return cached;
+  } catch (e) {}
+  try {
+    const net = await fetch("./index.html");
+    if (net) return net;
+  } catch (e) {}
+  return offlineResp();
+}
+
+// handleNavigate serves real files, else the SPA shell — so a deep link / refresh at
+// /p/<slug> works on a static host with no history fallback (e.g. gwc dev returns 404
+// for the route). It can never reject: every branch resolves to a Response.
+async function handleNavigate(req) {
+  try {
+    const resp = await fetch(req, { cache: "no-store" });
+    if (resp && resp.ok) {
+      if (new URL(req.url).origin === self.location.origin) {
+        try { (await caches.open(CACHE)).put("./index.html", resp.clone()); } catch (e) {}
+      }
+      return resp;
+    }
+  } catch (e) {}
+  return appShell(); // 404/offline on a deep link → serve the shell, not the error
+}
+
+// handleAsset is network-first with a cache fallback; never returns undefined.
+async function handleAsset(req, sameOrigin) {
+  try {
+    const resp = await fetch(req, sameOrigin ? { cache: "no-store" } : undefined);
+    if (resp) {
+      if (resp.ok && sameOrigin) {
+        try { (await caches.open(CACHE)).put(req, resp.clone()); } catch (e) {}
+      }
+      return resp;
+    }
+  } catch (e) {}
+  try {
+    const cached = await caches.match(req);
+    if (cached) return cached;
+  } catch (e) {}
+  return offlineResp(); // e.g. favicon.ico on a server that has none
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
-
-  // SPA navigations (e.g. hard-refresh at /accounts): client-side routes don't
-  // exist as files, so a static host or offline returns 404 / fails. Serve the
-  // cached app shell instead â€” it boots and the router resolves the path. This
-  // is the SW side of deep-link refresh (the static 404.html covers first load).
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req, { cache: "no-store" })
-        .then((resp) => {
-          if (resp.ok) {
-            if (new URL(req.url).origin === self.location.origin) {
-              const copy = resp.clone();
-              caches.open(CACHE).then((c) => c.put("./index.html", copy));
-            }
-            return resp;
-          }
-          return appShell().then((m) => m || resp);
-        })
-        .catch(() => appShell())
-    );
+    event.respondWith(handleNavigate(req));
     return;
   }
-
-  // Same-origin assets are fetched with no-store so the SW never returns a stale
-  // copy from the browser's HTTP cache (otherwise a rebuilt main.wasm wouldn't load
-  // even though the SW is "network-first"). Cross-origin passes through normally.
   const sameOrigin = new URL(req.url).origin === self.location.origin;
-  event.respondWith(
-    fetch(req, sameOrigin ? { cache: "no-store" } : undefined)
-      .then((resp) => {
-        if (resp.ok && sameOrigin) {
-          const copy = resp.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return resp;
-      })
-      .catch(() => caches.match(req))
-  );
+  event.respondWith(handleAsset(req, sameOrigin));
 });

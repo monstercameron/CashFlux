@@ -45,7 +45,10 @@ func SampleDataBanner() uic.Node {
 			return
 		}
 		uistate.SetSampleActive(false)
-		uistate.BumpDataRevision()
+		// Authoritative wipe: clear non-settings keys + persist empty, then reload
+		// clean once the IndexedDB write commits.
+		suspendAutosave = true
+		wipeFinancialLocalState(reloadPage)
 	}
 
 	onDismiss := uic.UseEvent(dismiss)

@@ -87,8 +87,10 @@ func Appearance() uic.Node {
 			}),
 		),
 
-		// Theme editor: presets, color tokens, typography, density, banner
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1.25rem 0 0"})),
+		// Theme editor: presets, color tokens, typography, density, banner.
+		// css.Class wraps the border utilities — passing tw.* css.Rule values directly as
+		// Hr children dumped them as literal text ("{[{border-top-width 1px}]...}") above THEME.
+		Hr(css.Class(tw.BorderT, tw.BorderLine), Style(map[string]string{"border-bottom": "none", "margin": "1.25rem 0 0"})),
 		uic.CreateElement(ThemeEditor),
 	)
 }

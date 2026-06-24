@@ -61,7 +61,7 @@ func PersistPrefs(p prefs.Prefs) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", prefsStoreID, string(data))
+	SettingKVSet(prefsStoreID, string(data))
 }
 
 // LoadPrefs returns the persisted preferences directly (without the atom), for
@@ -111,12 +111,12 @@ func resolveTheme(t prefs.Theme) string {
 // loadPrefs reads saved preferences from localStorage, falling back to defaults
 // when absent or invalid. The result is always normalized.
 func loadPrefs() prefs.Prefs {
-	v := js.Global().Get("localStorage").Call("getItem", prefsStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(prefsStoreID)
+	if raw == "" {
 		return prefs.Default()
 	}
 	var p prefs.Prefs
-	if err := json.Unmarshal([]byte(v.String()), &p); err != nil {
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
 		return prefs.Default()
 	}
 	return p.Normalize()

@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/lockquotes"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -314,10 +315,16 @@ func refreshLockMeta(doc js.Value) {
 	set("cf-lock-quote", lockquotes.ForIndex(dayOrdinal), !cfg.HideQuotes)
 }
 
-// wipeAllLocalData removes every cashflux:* localStorage key — the reset path for
-// a forgotten passcode. The caller reloads afterward (boot then re-seeds a fresh
-// sample, as on first run).
+// wipeAllLocalData removes every cashflux:* entry from the browser store (and any
+// lingering localStorage copy) — the reset path for a forgotten passcode. The caller
+// reloads afterward (boot then re-seeds a fresh sample, as on first run).
 func wipeAllLocalData() {
+	for _, k := range browserstore.Keys() {
+		if strings.HasPrefix(k, "cashflux:") {
+			browserstore.Remove(k)
+		}
+	}
+	// Belt-and-suspenders: clear any localStorage copies left from before migration.
 	ls := js.Global().Get("localStorage")
 	if ls.IsNull() || ls.IsUndefined() {
 		return

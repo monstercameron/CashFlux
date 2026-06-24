@@ -250,6 +250,31 @@ func (a *App) LoadSample() error {
 	return nil
 }
 
+// GetKV returns the persisted app/UI value for key (centralized in SQLite, not
+// scattered localStorage), and whether it was present.
+func (a *App) GetKV(key string) (string, bool) {
+	v, ok, err := a.store.GetKV(key)
+	a.logErr("get kv", err)
+	return v, ok
+}
+
+// SetKV persists an app/UI value into the SQLite dataset (so it survives reloads
+// and is cleared by a wipe like every other non-settings table).
+func (a *App) SetKV(key, val string) error { return a.store.SetKV(key, val) }
+
+// DeleteKV removes a persisted app/UI value.
+func (a *App) DeleteKV(key string) error { return a.store.DeleteKV(key) }
+
+// GetSettingKV/SetSettingKV/DeleteSettingKV persist config & preferences into the
+// SQLite dataset's preserved settings KV (survives a wipe, unlike GetKV/SetKV).
+func (a *App) GetSettingKV(key string) (string, bool) {
+	v, ok, err := a.store.GetSettingKV(key)
+	a.logErr("get setting kv", err)
+	return v, ok
+}
+func (a *App) SetSettingKV(key, val string) error { return a.store.SetSettingKV(key, val) }
+func (a *App) DeleteSettingKV(key string) error   { return a.store.DeleteSettingKV(key) }
+
 // Wipe removes all data from the store (the "wipe data" action).
 func (a *App) Wipe() error {
 	if err := a.store.Wipe(); err != nil {

@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"strconv"
-	"syscall/js"
 
 	"github.com/monstercameron/GoWebComponents/state"
 )
@@ -34,16 +33,16 @@ func PersistMuzakEnabled(on bool) {
 	if !on {
 		v = "0"
 	}
-	js.Global().Get("localStorage").Call("setItem", muzakStoreID, v)
+	SettingKVSet(muzakStoreID, v)
 }
 
 // loadMuzakEnabled reads the saved choice, defaulting to ON when unset.
 func loadMuzakEnabled() bool {
-	v := js.Global().Get("localStorage").Call("getItem", muzakStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(muzakStoreID)
+	if raw == "" {
 		return true
 	}
-	return v.String() != "0"
+	return raw != "0"
 }
 
 // UseMuzakVolume returns the shared background-music volume atom (0..1), seeded
@@ -55,16 +54,16 @@ func UseMuzakVolume() state.Atom[float64] {
 // PersistMuzakVolume remembers the music volume across reloads.
 func PersistMuzakVolume(v float64) {
 	v = clampVolume(v)
-	js.Global().Get("localStorage").Call("setItem", muzakVolStoreID, strconv.FormatFloat(v, 'f', 3, 64))
+	SettingKVSet(muzakVolStoreID, strconv.FormatFloat(v, 'f', 3, 64))
 }
 
 // loadMuzakVolume reads the saved volume, defaulting to DefaultMuzakVolume.
 func loadMuzakVolume() float64 {
-	v := js.Global().Get("localStorage").Call("getItem", muzakVolStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(muzakVolStoreID)
+	if raw == "" {
 		return DefaultMuzakVolume
 	}
-	f, err := strconv.ParseFloat(v.String(), 64)
+	f, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return DefaultMuzakVolume
 	}

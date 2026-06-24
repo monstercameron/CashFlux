@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -25,15 +26,9 @@ const (
 	muzakPosKey     = "cashflux:muzak-pos"
 )
 
-func muzakLSGet(k string) (string, bool) {
-	v := js.Global().Get("localStorage").Call("getItem", k)
-	if v.IsNull() || v.IsUndefined() {
-		return "", false
-	}
-	return v.String(), true
-}
+func muzakLSGet(k string) (string, bool) { return browserstore.Get(k) }
 
-func muzakLSPut(k, v string) { js.Global().Get("localStorage").Call("setItem", k, v) }
+func muzakLSPut(k, v string) { browserstore.Set(k, v) }
 
 // seedMusicFromDataset copies the dataset's saved music state into localStorage
 // when this device has none yet (a fresh load or just-imported workspace), so the

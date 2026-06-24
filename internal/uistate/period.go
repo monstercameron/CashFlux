@@ -9,7 +9,6 @@
 package uistate
 
 import (
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -49,17 +48,17 @@ func PersistResolution(r period.Resolution) {
 	if !r.Valid() {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", periodStoreID, string(r))
+	kvSet(periodStoreID, string(r))
 }
 
 // loadResolution reads the saved resolution, defaulting to Month when absent or
 // invalid.
 func loadResolution() period.Resolution {
-	v := js.Global().Get("localStorage").Call("getItem", periodStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(periodStoreID)
+	if raw == "" {
 		return period.Month
 	}
-	if r := period.Resolution(v.String()); r.Valid() {
+	if r := period.Resolution(raw); r.Valid() {
 		return r
 	}
 	return period.Month

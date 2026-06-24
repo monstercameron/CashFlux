@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -29,16 +28,16 @@ func PersistFreshnessDismissals(d freshness.Dismissals) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", freshnessDismissalsStore, string(data))
+	kvSet(freshnessDismissalsStore, string(data))
 }
 
 func loadFreshnessDismissals() freshness.Dismissals {
-	v := js.Global().Get("localStorage").Call("getItem", freshnessDismissalsStore)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(freshnessDismissalsStore)
+	if raw == "" {
 		return freshness.Dismissals{}
 	}
 	var d freshness.Dismissals
-	if err := json.Unmarshal([]byte(v.String()), &d); err != nil {
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
 		return freshness.Dismissals{}
 	}
 	return d

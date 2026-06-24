@@ -53,9 +53,14 @@
     if (!series.length) return;
 
     // Animate the chart in only on its first draw (not on every data tick — el
-    // persists across re-renders), and never under reduced motion (§6.16).
-    var animate = !el.hasAttribute("data-cf-drawn") &&
-      !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    // persists across re-renders), never under reduced motion, AND never when the
+    // WONDER dial is off (--wonder-on: 0 via [data-wonder="off"]). Mirrors
+    // countup.js's wonderEnabled() so charts honor the same toggle as every other
+    // flourish — "reduced-motion + data-wonder=off → fully static" (§6.16 / WONDER).
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var wonderRaw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--wonder-on").trim());
+    var wonderOn = !isNaN(wonderRaw) && wonderRaw > 0;
+    var animate = !el.hasAttribute("data-cf-drawn") && !reduceMotion && wonderOn;
     el.setAttribute("data-cf-drawn", "1");
 
     var W = el.clientWidth || 320;

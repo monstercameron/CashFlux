@@ -53,12 +53,32 @@ func TestWipe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	if len(got.Accounts) != 0 || len(got.Transactions) != 0 || len(got.Members) != 0 {
-		t.Errorf("store not empty after wipe: %d accounts, %d txns, %d members",
-			len(got.Accounts), len(got.Transactions), len(got.Members))
+
+	// Settings are configuration, not financial data — they MUST survive a wipe.
+	if got.Settings.BaseCurrency == "" {
+		t.Error("wipe cleared settings: BaseCurrency is empty (settings must be preserved)")
 	}
-	if got.Settings.BaseCurrency != "" {
-		t.Errorf("settings not cleared: %q", got.Settings.BaseCurrency)
+
+	// Every financial collection and everything derived from it must be empty.
+	// Counts are tabulated by name so a survivor is reported explicitly — this guards
+	// the regression where Wipe missed recurring/plans/subscriptions/earmarks/etc.
+	leftovers := map[string]int{
+		"members": len(got.Members), "accounts": len(got.Accounts), "categories": len(got.Categories),
+		"transactions": len(got.Transactions), "budgets": len(got.Budgets), "goals": len(got.Goals),
+		"tasks": len(got.Tasks), "customFields": len(got.CustomFields), "rules": len(got.Rules),
+		"documents": len(got.Documents), "savedInsights": len(got.SavedInsights),
+		"conversations": len(got.Conversations), "recurring": len(got.Recurring),
+		"allocProfiles": len(got.AllocProfiles), "formulas": len(got.Formulas), "plans": len(got.Plans),
+		"customPages": len(got.CustomPages), "artifacts": len(got.Artifacts), "workflows": len(got.Workflows),
+		"workflowRuns": len(got.WorkflowRuns), "sharedExpenses": len(got.SharedExpenses),
+		"settlements": len(got.Settlements), "earmarks": len(got.Earmarks),
+		"subscriptionIgnores": len(got.SubscriptionIgnores), "subscriptionCancellations": len(got.SubscriptionCancellations),
+		"auditEntries": len(got.AuditEntries),
+	}
+	for name, n := range leftovers {
+		if n != 0 {
+			t.Errorf("wipe left %d %s rows (expected 0)", n, name)
+		}
 	}
 }
 

@@ -97,6 +97,20 @@ func accentForRunway(months int) string {
 	}
 }
 
+// toneForSavingsRate colors the savings-rate stat by sign: a negative rate
+// (spending exceeded income) reads as a warning, a positive rate as healthy —
+// matching the sibling runway/no-spend-day stats in the hero-secondary row.
+func toneForSavingsRate(pct int) string {
+	switch {
+	case pct < 0:
+		return "neg"
+	case pct > 0:
+		return "pos"
+	default:
+		return ""
+	}
+}
+
 // Reports is the read-only reporting screen (B21): for the period chosen in the
 // top bar it shows income / expense / net, a plain-English summary, and spending
 // by category compared to the prior period — all from the pure internal/reports
@@ -629,7 +643,7 @@ func Reports() ui.Node {
 			Div(css.Class("hero-secondary"),
 				Div(css.Class("hero-stat"),
 					Span(css.Class("hero-stat-label"), uistate.T("dashboard.savingsRate")),
-					Span(css.Class("hero-stat-value"), fmt.Sprintf("%d%%", flow.SavingsRate())),
+					Span(ClassStr("hero-stat-value "+toneForSavingsRate(flow.SavingsRate())), fmt.Sprintf("%d%%", flow.SavingsRate())),
 				),
 				If(burn > 0, Div(css.Class("hero-stat"),
 					Span(css.Class("hero-stat-label"), uistate.T("reports.runway")),

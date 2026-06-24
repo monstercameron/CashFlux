@@ -389,7 +389,7 @@ var english = Catalog{
 	"settings.jumpTo":          "Jump to:",
 	"toast.txnDeleted":         "Transaction deleted.",
 	"toast.accountDeleted":     "Account deleted.",
-	"quickAdd.needDesc":          "Add a description so you can recognise this later.",
+	"quickAdd.needDesc":        "Add a description so you can recognise this later.",
 	"rules.addRule":            "+ Add rule",
 	"rules.quickAddTitle":      "Quick add a rule",
 	"rules.added":              "Rule added.",

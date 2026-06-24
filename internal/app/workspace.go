@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -52,16 +53,9 @@ var perWorkspaceKeys = []string{
 	"cashflux:active-lang",
 }
 
-func lsGet(key string) string {
-	v := js.Global().Get("localStorage").Call("getItem", key)
-	if v.IsNull() || v.IsUndefined() {
-		return ""
-	}
-	return v.String()
-}
-
-func lsSet(key, val string) { js.Global().Get("localStorage").Call("setItem", key, val) }
-func lsRemove(key string)   { js.Global().Get("localStorage").Call("removeItem", key) }
+func lsGet(key string) string    { return browserstore.GetString(key) }
+func lsSet(key, val string)       { browserstore.Set(key, val) }
+func lsRemove(key string)         { browserstore.Remove(key) }
 func reloadPage()           { js.Global().Get("location").Call("reload") }
 
 // loadRegistry reads the workspace registry from localStorage (empty when absent).

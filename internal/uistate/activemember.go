@@ -5,8 +5,6 @@
 package uistate
 
 import (
-	"syscall/js"
-
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
@@ -48,15 +46,11 @@ func SetActiveMember(memberID string) {
 // PersistActiveMember saves the active member ID to localStorage. An empty
 // string is stored as "" to distinguish "Everyone" from "never set".
 func PersistActiveMember(memberID string) {
-	js.Global().Get("localStorage").Call("setItem", activeMemberStore, memberID)
+	kvSet(activeMemberStore, memberID)
 }
 
 // loadActiveMember reads the saved active member from localStorage, defaulting
 // to "" (Everyone) when absent.
 func loadActiveMember() string {
-	v := js.Global().Get("localStorage").Call("getItem", activeMemberStore)
-	if v.IsNull() || v.IsUndefined() {
-		return ""
-	}
-	return v.String()
+	return kvGet(activeMemberStore)
 }

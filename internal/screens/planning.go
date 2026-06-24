@@ -298,9 +298,9 @@ func Planning() ui.Node {
 			}
 			return pts
 		}
-		yFmt := ".2~s"
+		yFmt := ".3~s"
 		if currency.Symbol(base) == "$" {
-			yFmt = "$.2~s"
+			yFmt = "$.3~s"
 		}
 		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Points: toPoints(series)}}
 		// Calendar X-axis labels (G7 §7 / L61): the chart's X values are month indices
@@ -766,9 +766,9 @@ func Planning() ui.Node {
 					for i, b := range aval.Schedule {
 						burnPts = append(burnPts, chartspec.Point{X: float64(i + 1), Y: float64(b) / divf})
 					}
-					yFmt := ".2~s"
+					yFmt := ".3~s"
 					if currency.Symbol(base) == "$" {
-						yFmt = "$.2~s"
+						yFmt = "$.3~s"
 					}
 					burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 						P(css.Class("budget-sub"), "Balance burn-down to zero:"),

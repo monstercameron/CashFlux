@@ -1,0 +1,11 @@
+import { createRequire } from "module"; import { fileURLToPath } from "url"; import path from "path";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
+const { chromium } = require("playwright");
+const b = await chromium.launch({headless:true}); const p = await b.newPage(); p.setViewportSize({width:1440,height:1100});
+await p.goto("http://127.0.0.1:8099/",{waitUntil:"domcontentloaded",timeout:20000});
+await p.waitForSelector('nav[aria-label="Main navigation"] a[title]',{timeout:30000});
+await p.evaluate(()=>{const x=[...document.querySelectorAll("button")].find(b=>/load sample|sample data/i.test(b.textContent)); if(x)x.click();});
+await p.waitForTimeout(1500);
+await p.screenshot({path:'e2e/screenshots/design_dashboard.png'});
+await b.close(); console.log("shot");

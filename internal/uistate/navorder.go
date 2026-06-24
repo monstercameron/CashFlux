@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/GoWebComponents/state"
 )
@@ -38,18 +37,18 @@ func PersistNavOrder(order []string) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", navOrderStore, string(data))
+	kvSet(navOrderStore, string(data))
 }
 
 // loadNavOrder reads the saved nav order, or nil (the default order) when absent
 // or unreadable.
 func loadNavOrder() []string {
-	v := js.Global().Get("localStorage").Call("getItem", navOrderStore)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(navOrderStore)
+	if raw == "" {
 		return nil
 	}
 	var order []string
-	if err := json.Unmarshal([]byte(v.String()), &order); err != nil {
+	if err := json.Unmarshal([]byte(raw), &order); err != nil {
 		return nil
 	}
 	return order

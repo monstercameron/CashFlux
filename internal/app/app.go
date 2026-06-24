@@ -7,7 +7,11 @@
 package app
 
 import (
+	"strings"
+	"syscall/js"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -16,11 +20,42 @@ import (
 	"github.com/monstercameron/GoWebComponents/utils"
 )
 
+// liveCustomPageSlug reads the current custom-page slug from location.pathname at
+// render time, rather than capturing it in the route's View closure. This is the
+// fix for navigating *between* two custom pages: every "/p/:slug" View closure is
+// created at the same source line, so they share a function code-pointer and the
+// reconciler treats them as the same component — reusing the FIRST one, which had
+// the old slug captured. Reading the slug live makes the closure body identical
+// for every page, so it always renders the page the URL currently points at.
+func liveCustomPageSlug() string {
+	loc := js.Global().Get("location")
+	if !loc.Truthy() {
+		return ""
+	}
+	logical := uistate.LogicalPath(loc.Get("pathname").String()) // strip any base prefix
+	const pfx = "/p/"
+	if !strings.HasPrefix(logical, pfx) {
+		return ""
+	}
+	s := logical[len(pfx):]
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		s = s[:i]
+	}
+	return s
+}
+
 // Run initializes app state, builds the router, registers every screen wrapped
 // in the shell, mounts the app, and blocks the wasm runtime so the page stays
 // interactive.
 func Run() {
 	utils.DisableAllDebug()
+
+	// Open the IndexedDB-backed storage primitive and migrate any legacy localStorage
+	// data into it FIRST — before anything reads persisted state. After this the app
+	// depends on no localStorage at all; every Get/Set/Remove routes through SQLite
+	// (the dataset) or this store (the dataset blob + bootstrap keys).
+	browserstore.Init()
+	browserstore.RegisterJSBridge() // let vendored JS (music player) persist via IndexedDB too
 
 	// Start with an empty in-memory store, then load the user's saved dataset from
 	// localStorage (or seed the sample on first run). Logs (os.Stderr) surface in
@@ -105,7 +140,9 @@ func Run() {
 		return ui.CreateElement(Shell, ShellProps{
 			Title:      title,
 			ActivePath: "/p/" + slug,
-			View:       func() ui.Node { return screens.CustomPage(slug) },
+			// Read the slug live (not the captured `slug`) so navigating between two
+			// custom pages renders the right one — see liveCustomPageSlug.
+			View: func() ui.Node { return screens.CustomPage(liveCustomPageSlug()) },
 		})
 	})
 	// Unknown paths fall back to the dashboard, still inside the Shell.

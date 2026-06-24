@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -34,7 +33,7 @@ func PersistWidgetConfigs(c WidgetConfigs) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", widgetCfgStoreID, string(data))
+	kvSet(widgetCfgStoreID, string(data))
 }
 
 // For returns one widget's config, never nil.
@@ -66,12 +65,12 @@ func (c WidgetConfigs) WithField(id, key, value string) WidgetConfigs {
 // loadWidgetConfigs reads saved widget settings from localStorage, defaulting to
 // empty when absent or invalid.
 func loadWidgetConfigs() WidgetConfigs {
-	v := js.Global().Get("localStorage").Call("getItem", widgetCfgStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(widgetCfgStoreID)
+	if raw == "" {
 		return WidgetConfigs{}
 	}
 	var c WidgetConfigs
-	if err := json.Unmarshal([]byte(v.String()), &c); err != nil {
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
 		return WidgetConfigs{}
 	}
 	return c

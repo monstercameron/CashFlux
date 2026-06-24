@@ -5,13 +5,97 @@
 package app
 
 import (
+	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
+
+// keptOnWipeKeys are the localStorage keys preserved by a data wipe: genuine
+// settings/config, sync identity, the workspace registry, and the sample/seed
+// control flags. Everything else under "cashflux:" is financial data or derived
+// from it — the dataset blob, the activity feed, dashboard layout/widget config,
+// the widget-builder pages, filters, period, freshness dismissals — and is removed
+// so a wipe leaves nothing behind on reload. ("non-settings data" must die.)
+var keptOnWipeKeys = map[string]bool{
+	"cashflux:prefs":                   true,
+	"cashflux:theme":                   true,
+	"cashflux:fonts":                   true,
+	"cashflux:active-lang":             true,
+	"cashflux:languages":               true,
+	"cashflux:applock":                 true,
+	"cashflux:openai-key":              true,
+	"cashflux:websearch-key":           true,
+	"cashflux:cloud-ai-key-set":        true,
+	"cashflux:cloud-mention-dismissed": true,
+	"cashflux:chat-system-prompt":      true,
+	"cashflux:rail-collapsed":          true,
+	"cashflux:rail-tool-groups":        true,
+	"cashflux:backupCadence":           true,
+	"cashflux:muzak":                   true,
+	"cashflux:muzak-pos":               true,
+	"cashflux:muzak-volume":            true,
+	"cashflux:banner":                  true,
+	"cashflux:notify:browser":          true,
+	"cashflux:sampleActive":            true,
+	"cashflux:seeded":                  true,
+	"cashflux:sync-device-id":          true,
+	"cashflux:sync-status":             true,
+	"cashflux:sync-queue":              true,
+	"cashflux:workspaces":              true,
+}
+
+// keptOnWipePrefixes preserves whole families: other workspaces' bundled state and
+// per-workspace sync metadata stay intact (a wipe targets the active workspace's
+// financial data, not the multi-workspace registry).
+var keptOnWipePrefixes = []string{
+	"cashflux:ws-data:",
+	"cashflux:sync-meta:",
+}
+
+// wipeFinancialLocalState makes a data wipe authoritative and reload-proof. Call it
+// AFTER the SQLite store's tables are cleared (app.Wipe). It (1) overwrites the
+// persisted dataset blob with the now-empty SQLite snapshot so a reload can't
+// restore it, then (2) removes every other "cashflux:" localStorage key that holds
+// financial data or anything derived from it, preserving only genuine settings and
+// the workspace/sync infrastructure (see keptOnWipeKeys / keptOnWipePrefixes).
+//
+// The persisted dataset stays the single source of truth in SQLite; this just stops
+// the satellite keys from resurrecting wiped data.
+// wipeFinancialLocalState clears the non-settings browser-store keys, persists the
+// emptied dataset, and then runs `then` (typically a page reload) ONCE the dataset
+// write has actually committed to IndexedDB — so the reload can't race the async
+// write and re-hydrate the old data.
+func wipeFinancialLocalState(then func()) {
+	// 1) Remove every non-preserved cashflux:* key (bootstrap/settings stay).
+	for _, key := range browserstore.Keys() {
+		if !strings.HasPrefix(key, "cashflux:") || key == datasetStoreKey || keptOnWipeKeys[key] {
+			continue
+		}
+		kept := false
+		for _, p := range keptOnWipePrefixes {
+			if strings.HasPrefix(key, p) {
+				kept = true
+				break
+			}
+		}
+		if !kept {
+			browserstore.Remove(key)
+		}
+	}
+	// 2) Persist the emptied store, then continue (reload) after it commits.
+	if app := appstate.Default; app != nil {
+		if data, err := app.ExportJSONRedacted(); err == nil {
+			browserstore.SetThen(datasetStoreKey, string(data), then)
+			return
+		}
+	}
+	then()
+}
 
 // datasetStoreKey is the localStorage key holding the autosaved dataset, so the
 // app's data survives a page reload (previously every reload reset to the sample
@@ -38,11 +122,7 @@ func hydrateDataset() {
 	if app == nil {
 		return
 	}
-	ls := js.Global().Get("localStorage")
-	raw := ""
-	if v := ls.Call("getItem", datasetStoreKey); !v.IsNull() && !v.IsUndefined() {
-		raw = v.String()
-	}
+	raw := browserstore.GetString(datasetStoreKey)
 	// Encrypted-at-rest dataset (C45): defer hydration until the passcode gate is
 	// satisfied. We stash the ciphertext and leave the store empty; the autosave is
 	// held off (see save's pendingEnvelopeRaw guard) so it can't overwrite it, and
@@ -52,11 +132,8 @@ func hydrateDataset() {
 		pendingEnvelopeRaw = raw
 		return
 	}
-	seededBefore := false
-	if f := ls.Call("getItem", seededFlagKey); !f.IsNull() && !f.IsUndefined() && f.String() != "" {
-		seededBefore = true
-	}
-	markSeeded := func() { ls.Call("setItem", seededFlagKey, "1") }
+	seededBefore := browserstore.GetString(seededFlagKey) != ""
+	markSeeded := func() { browserstore.Set(seededFlagKey, "1") }
 
 	switch decideHydrate(raw, seededBefore) {
 	case hydrateImport:
@@ -178,14 +255,14 @@ func startDatasetAutosave() {
 						app.Log().Error("encrypted dataset write failed", "err", r)
 					}
 				}()
-				js.Global().Get("localStorage").Call("setItem", datasetStoreKey, string(env))
+				browserstore.Set(datasetStoreKey, string(env))
 				last = target
 				afterWrite()
 			})
 			return
 		}
 		last = s
-		js.Global().Get("localStorage").Call("setItem", datasetStoreKey, s)
+		browserstore.Set(datasetStoreKey, s)
 		afterWrite()
 	}
 	// resaveDataset forces an immediate rewrite even when the dataset bytes are
@@ -199,6 +276,10 @@ func startDatasetAutosave() {
 	cb := js.FuncOf(func(js.Value, []js.Value) any { save(); return nil })
 	js.Global().Call("addEventListener", "pagehide", cb)
 	js.Global().Call("addEventListener", "visibilitychange", cb)
+	// Persist once immediately so a freshly seeded/imported dataset reaches the
+	// (async) IndexedDB store right after boot — otherwise a reload within the 4s
+	// tick could race the write and lose the seed. Subsequent saves run on the ticker.
+	save()
 	go func() {
 		for {
 			time.Sleep(4 * time.Second)

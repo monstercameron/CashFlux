@@ -243,8 +243,14 @@ var (
 	TextFg    = css.TextColor(css.Color("var(--text, " + cFg + ")"))
 	TextDim   = css.TextColor(css.Color("var(--text-dim, " + cDim + ")"))
 	TextFaint = css.TextColor(css.Color(cFaint))
-	TextDown  = css.TextColor(css.Color(cDown))
-	TextUp    = css.TextColor(css.Color(cUp))
+	// Semantic up/down TEXT follows the live theme so amounts stay legible in light
+	// mode: the literal dark-mode reds/greens (#d8716f/#54b884) measure ~1.8:1 on a
+	// white card (a negative "−$1,718.00" is barely readable). The theme engine emits
+	// readable light values (--down #b3322f, --up #1f8a52) and the dark values equal
+	// these literals exactly, so dark mode is byte-identical. BgDown/BgUp keep the
+	// literal hex (intentional fills, like BgFg).
+	TextDown  = css.TextColor(css.Color("var(--down, " + cDown + ")"))
+	TextUp    = css.TextColor(css.Color("var(--up, " + cUp + ")"))
 	TextWarn  = css.TextColor(css.Color(cWarn))
 
 	// tinted backgrounds / borders (Tailwind color/opacity)

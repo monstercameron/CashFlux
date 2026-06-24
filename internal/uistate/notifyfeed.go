@@ -6,8 +6,8 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
@@ -40,7 +40,7 @@ func PersistNotifyFeed(items []FeedItem) {
 		items = items[:notifyFeedCap]
 	}
 	if data, err := json.Marshal(items); err == nil {
-		js.Global().Get("localStorage").Call("setItem", notifyFeedStoreID, string(data))
+		kvSet(notifyFeedStoreID, string(data)) // SQLite-backed app KV (not localStorage)
 	}
 }
 
@@ -66,12 +66,12 @@ func PrependNotifyFeed(items []FeedItem) {
 }
 
 func loadNotifyFeed() []FeedItem {
-	v := js.Global().Get("localStorage").Call("getItem", notifyFeedStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(notifyFeedStoreID)
+	if raw == "" {
 		return nil
 	}
 	var items []FeedItem
-	if err := json.Unmarshal([]byte(v.String()), &items); err != nil {
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
 		return nil
 	}
 	return items
@@ -91,8 +91,7 @@ func UnreadNotifyCount(items []FeedItem) int {
 // BrowserNotifyEnabled reports whether the user has opted into OS/browser
 // notifications (defaults off until explicitly enabled).
 func BrowserNotifyEnabled() bool {
-	v := js.Global().Get("localStorage").Call("getItem", notifyBrowserKey)
-	return !v.IsNull() && !v.IsUndefined() && v.String() == "1"
+	return browserstore.GetString(notifyBrowserKey) == "1"
 }
 
 // SetBrowserNotifyEnabled persists the browser-notification opt-in.
@@ -101,5 +100,5 @@ func SetBrowserNotifyEnabled(on bool) {
 	if on {
 		val = "1"
 	}
-	js.Global().Get("localStorage").Call("setItem", notifyBrowserKey, val)
+	browserstore.Set(notifyBrowserKey, val)
 }

@@ -1169,3 +1169,168 @@ params / guards)** blocks URL-shareable state and unsaved-changes guards. G43 an
 Two categories produced nothing new, which is itself a useful signal: the global-atom architecture (at
 the cost of G39) genuinely retired prop-drilling, and the forms layer's gaps were already captured by
 U4/U6. Net: **5 new gaps (G40–G44)**.
+
+---
+
+## Addendum 8 — a11y announcements & i18n plurals (G45–G46)
+
+A sixth pass targeting four untouched surfaces: a11y live-region announcements, animation/FLIP
+coordination (`web/flip.js`), i18n (plurals/RTL/locale formatting), and async-data/loading. Two of
+the four produced **nothing new** and are recorded as clean negatives below — at diminishing returns,
+a verified non-gap is as useful as a finding. All evidence confirmed at `path:line`.
+
+| ID  | Area                       | Severity | One-line gap |
+|-----|----------------------------|----------|--------------|
+| G45 | A11y live-region announce  | med      | No `Announce()`/`LiveRegion` primitive → every SR announcement hand-wires `role`/`aria-live` + the "empty region must pre-exist" trick |
+| G46 | i18n plural forms (app-layer)| med    | App's `i18n.Bundle.T` is singular-only; plurals are two independently-written English-only helpers — no CLDR plural rules (GWC ships no i18n at all) |
+
+### Clean negatives (verified, no new gap)
+- **Animation / FLIP** — the `web/flip.js` bento-reorder seam is fully explained by existing gaps: Go
+  calls `cashfluxFlipBento()` from a `UseEffect` (`internal/screens/dashboard.go:62-67`) and the drag
+  coordinators via raw `js.Global()` (`internal/ui/widget.go:359,369,416,442`). That's G27 (no
+  rAF/animation hook) + G9 (no global-event hook) + G35 (JS shim owns interaction state). Notably the
+  pre-paint effect timing (G36) is here a *benefit* — the effect snapshots tile positions before paint,
+  which is exactly FLIP's "First" step. No new gap; the integration is deliberate and clean.
+- **Async data / loading** — no Suspense/async-boundary primitive exists and the app doesn't need one:
+  data loads synchronously from the SQLite store before render (grep for `isLoading`/`loadingState` →
+  zero), AI streaming flows through a Go channel into a `UseState` atom (`internal/screens/insights.go:151`), and the only true async reads are IndexedDB (G34) and Web Crypto (G31), already documented. No
+  new gap.
+- **RTL / locale formatting** (sub-finding of category 3) — no gap: no RTL work exists yet
+  (English-only; no `dir=rtl` in Go or the HTML), and number/date/currency formatting is done Go-side
+  via `internal/money` + `internal/dateutil` (no `Intl.*` DOM formatting), which is the correct
+  deliberate choice.
+
+### G45 — No live-region announcement primitive; every SR announcement is hand-wired
+- **Area:** accessibility — screen-reader announcements · **Severity:** med
+- **Symptom:** There is no framework `Announce(text, urgency)` / `LiveRegion`. Every dynamic
+  announcement — toasts, filter-result counts, skeleton loaders, the offline indicator, progress —
+  hand-assembles `Attr("role","status"|"alert")` + `Attr("aria-live","polite"|"assertive")` +
+  `Attr("aria-atomic","true")`, and must independently re-derive the critical subtlety that **a region
+  inserted together with its text often isn't announced** — it must pre-exist *empty* in the DOM, then
+  have text written in.
+- **Evidence:** `internal/app/toast.go:129-136` (polite/assertive + role switch + the empty-region-
+  stays-mounted comment: "a region inserted together with its text often isn't [announced]" — the
+  canonical correct implementation); the same manual pattern re-derived in `internal/ui/skeleton.go:43`,
+  `internal/ui/primitives.go:342` (`CountLabel`), `internal/screens/transactions.go:706` (filter count),
+  `internal/screens/subscriptions_screen.go:246,407`, `internal/app/shell.go:746` (offline), and
+  hand-embedded in the raw-DOM lock screen `internal/app/applockgate.go:128`.
+- **Impact:** The live-region analog of U4 (form-error wiring): correct by effort, not by support.
+  Every new announcing surface re-implements polite-vs-assertive + the pre-mounted-empty-region rule;
+  forgetting the latter is a silent a11y regression.
+- **Proposed direction:** A framework `Announce(text, urgency)` (or a `LiveRegion` component with an
+  `Announce` method) that owns the pre-mounted-empty-region lifecycle — `toast.go` is the blueprint.
+
+### G46 — App i18n layer has no plural-form support (GWC ships no i18n primitive)
+- **Area:** internationalization — pluralization · **Severity:** med
+- **Scope note:** This gap is in the *app's* `internal/i18n` package, not GWC itself — but GWC ships **no
+  i18n primitive at all**, so the app had to build a partial i18n layer, and that layer lacks plurals.
+  Catalogued here as framework-adjacent (a candidate framework feature), clearly scoped so the framework
+  team can decide whether i18n belongs in GWC.
+- **Symptom:** `i18n.Bundle.T(lang, key, args...)` resolves a flat `Catalog map[string]string` with
+  `fmt.Sprintf` interpolation — one string per key, no plural variants, no CLDR plural rules, no ICU
+  `{count, plural, …}`. Count-dependent strings are instead solved by **per-file, English-only**
+  `plural()` helpers, at least two of them independently defined with different signatures (one even
+  naively appends `"s"`).
+- **Evidence:** `internal/i18n/i18n.go:54` (`T()` is singular-only); duplicate helpers
+  `internal/screens/dashboard.go:1358-1365` (`plural(n, singular)` → `n + singular + "s"`) and
+  `internal/reports/narrative.go:81-86` (`plural(n, singular, plural)`); ~32 `plural(...)` call sites
+  across `internal/screens` (e.g. `accounts.go:113,299,302`, 12 in `documents.go`, `categories.go:471`).
+  The `internal/translate` AI-translation layer validates placeholders but has no plural-variant concept.
+- **Impact:** The app markets multi-language household use (translate + AI-translation pipeline), but any
+  non-English locale with count-dependent strings gets untranslated English plurals or a single
+  grammatically-wrong form (Russian has 4 plural forms, Arabic 6) — the catalog can't even represent the
+  variants. The duplicate helpers are also a divergence risk.
+- **Proposed direction:** Add `Bundle.Tn(lang, key, n, args...)` with CLDR plural-rule dispatch (catalog
+  maps the key to a `{"one":…, "other":…}` variant set, resolver picks the form for count+language);
+  retire the per-file `plural()` helpers. If GWC adopts an i18n primitive, this is the shape.
+
+### Confirmations (existing IDs, new evidence)
+- **U5** — `internal/ui/widget.go:237-356`: a full hand-rolled roving-tabindex + keyboard grab/move for
+  the bento grid (~120 lines) — a substantial new instance beyond the Segmented/Swatch/Toggle sites.
+- **G27 / G9** — `internal/screens/dashboard.go:62-67` (`cashfluxFlipBento` from a `UseEffect`) and
+  `internal/ui/widget.go:359,369,416,442` (raw-JS drag coordinators).
+- **G34 / G31** — `internal/app/deviceslist.go` (skeleton + manual async-load atom over IDB) and
+  `internal/app/artifactcrypto.go` (more `crypto.subtle`).
+- **G37** — `internal/screens/insights.go:1044-1058` re-confirmed as the innerHTML-clobber instance.
+
+### Cross-cutting (sixth pass)
+
+Both new gaps are "correct by effort, not by framework support": **G45** (live regions) is the
+announcement analog of U4 (form a11y) and U5 (roving-tabindex) — accessibility primitives the app
+keeps re-deriving — so a small `a11y` primitive set (`Announce` + `Field` + `RadioGroup`) would close a
+coherent cluster. **G46** is app-layer but flags that GWC has no i18n story at all. Two of four
+categories were clean negatives, and the FLIP case is a useful positive note: the framework's pre-paint
+effect timing (G36), a liability elsewhere, is exactly what FLIP needs — evidence that the fix for G36
+should *add* `UseLayoutEffect` rather than change `UseEffect`'s timing. Net: **2 new gaps (G45–G46)**;
+the well is running dry, which is the expected signal at this depth.
+
+---
+
+## Addendum 9 — clipboard + the sync-over-async technique (G47)
+
+A seventh, deliberately narrow pass over the last untouched surfaces — clipboard, wasm
+threading/main-thread blocking, the logging/console seam, and bundle/lazy-load. This pass was
+expected to be near-empty and largely was: **one new low-severity gap**, plus a notable technique that
+materially strengthens G31's proposed fix, and several verified non-gaps. Recorded for completeness.
+
+| ID  | Area      | Severity | One-line gap |
+|-----|-----------|----------|--------------|
+| G47 | Clipboard | low      | No clipboard hook → `navigator.clipboard.writeText` called raw, fire-and-forget (Promise ignored, no permission/fallback) |
+
+### G47 — No clipboard primitive; `navigator.clipboard` accessed raw
+- **Area:** clipboard / Web APIs · **Severity:** low
+- **Symptom:** Copy-to-clipboard goes straight to `navigator.clipboard.writeText` in `syscall/js`,
+  best-effort: the returned Promise is discarded (no success/failure feedback), there's no permission
+  handling and no `execCommand` fallback for older/insecure contexts. Same "every browser API = raw
+  interop" family as G31/G32/G33.
+- **Evidence:** `internal/screens/insights.go:1198-1207` (`copyText` → `nav.Get("clipboard").Call("writeText", text)`, Truthy-guarded, return value ignored).
+- **Impact:** Low — one site, and the no-op-on-failure is acceptable for a copy button — but the user
+  gets no confirmation/error, and a read/paste path would need the same raw wiring.
+- **Proposed direction:** A `Clipboard.Write(text)` / `UseClipboard()` helper returning success
+  (Promise-aware via the G31 bridge), with a graceful fallback.
+
+### Strengthens G31 — the app's hand-rolled "await": channel-park over the wasm scheduler
+- New, important evidence for the **Promise→Go bridge (G31)**: the app makes async `crypto.subtle`
+  Promises *appear synchronous* to Go callers via a channel-park idiom — launch the async op with a
+  callback that sends into a buffered `chan`, then block on `<-ch`. The comment at
+  `internal/app/artifactcrypto.go:125-127` spells out why it's safe: "blocks the calling goroutine while
+  async crypto.subtle Promises resolve … safe to call from a goroutine (the WASM scheduler yields to the
+  JS event loop while the goroutine is parked on the channel)." Sites: `cachedArtifactKey`
+  (`:93-114`), `encryptArtifactSync`/`decryptArtifactSync` (`artifactcrypto.go`), mirrored in
+  `datasetcrypto.go`.
+- **Why it matters:** this *is* the missing Promise bridge, hand-built and relying on a subtle property
+  of the Go/wasm scheduler. It confirms G31's proposed direction precisely — a framework
+  `promise.Await(jsPromise) (js.Value, error)` that wraps exactly this channel-park pattern (with managed
+  `js.Func` lifetime) would let every async browser API (crypto, IDB, Notifications, rAF) be written as
+  straight-line Go. Highest-leverage single primitive, now with a proven implementation blueprint.
+
+### Verified non-gaps
+- **Logging/console** — `internal/logging` is a clean custom `slog.Handler` writing to a console-backed
+  writer + in-app ring buffer (`logging.go:3-9,76-80`). Idiomatic stdlib `log/slog`, not a framework
+  workaround; GWC offering no logging story here is fine. No gap.
+- **wasm threading / main-thread blocking** — `app.Run()` parking the wasm runtime to stay interactive
+  (`app.go:20-22`) is the standard wasm-keepalive idiom, not a gap. Heavy compute (the G40 dup-scan) runs
+  on the single wasm thread, but that's the G40 memoization gap, not a separate threading one; no Web
+  Worker offloading is attempted or needed at current scale.
+- **Bundle / lazy-load / code-splitting** — none used; a single `web/bin/main.wasm` is shipped. Go/wasm
+  has no code-splitting story, but the app neither needs nor attempts it. No gap to catalog.
+
+### Cross-cutting (seventh pass)
+
+A near-empty pass, as anticipated: **1 new low-severity gap (G47)** plus three clean non-gaps. The most
+valuable output isn't G47 — it's confirming that the app has already *built* the Promise→Go bridge by
+hand (channel-park over the wasm scheduler) for its crypto paths, turning G31's "proposed direction"
+into a known-good blueprint the framework can lift directly. This is the natural stopping point: new
+sweeps now return single low-severity items and re-confirmations, not new territory.
+
+---
+
+## Status of this catalog
+
+After seven sweeps the catalog spans **G1–G47, U1–U7, CSS1–CSS6 (60 findings)**. Coverage is saturated:
+the last passes returned diminishing, low-severity, cluster-adjacent items and verified non-gaps. The
+high-leverage framework fixes have stabilized into six clusters — (1) DOM ref + `UseLayoutEffect`
+(G2/G22/G26/G36), (2) portal + RawHTML + reconciler-opaque-innerHTML (G3/G4/G24/G37), (3) a Promise→Go
+bridge (G31/G33/G34/G47, blueprint proven in `artifactcrypto.go`), (4) global + persisted atoms
+(G39/G21), (5) `Memo`/`UseMemo` + error boundary (G40/G41), (6) an a11y primitive set —
+`Announce`/`Field`/`RadioGroup` (G45/U4/U5) — plus the standalone `On*`-in-loops structural fix (G1).

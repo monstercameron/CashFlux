@@ -14,6 +14,8 @@ var registry = []Provider{
 		Models: []Model{
 			{ID: "gpt-5.5", Label: "GPT-5.5", InputCentsPerMTok: 200, OutputCentsPerMTok: 800,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Reasoning: true, Structured: StructuredJSONSchema}},
+			{ID: "gpt-5.4-mini", Label: "GPT-5.4 mini", InputCentsPerMTok: 25, OutputCentsPerMTok: 200,
+				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Reasoning: true, Structured: StructuredJSONSchema}},
 			{ID: "gpt-4o", Label: "GPT-4o", InputCentsPerMTok: 250, OutputCentsPerMTok: 1000,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONSchema}},
 			{ID: "gpt-4o-mini", Label: "GPT-4o mini", InputCentsPerMTok: 15, OutputCentsPerMTok: 60,

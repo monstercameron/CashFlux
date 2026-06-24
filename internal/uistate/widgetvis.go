@@ -6,7 +6,6 @@ package uistate
 
 import (
 	"encoding/json"
-	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/widgetvis"
 	"github.com/monstercameron/GoWebComponents/state"
@@ -32,18 +31,18 @@ func PersistHiddenWidgets(s widgetvis.Set) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", hiddenWidgetsStoreID, string(data))
+	kvSet(hiddenWidgetsStoreID, string(data))
 }
 
 // loadHiddenWidgets reads the saved hidden-widget set, falling back to an empty
 // (all-visible) set when absent or invalid. Always normalized.
 func loadHiddenWidgets() widgetvis.Set {
-	v := js.Global().Get("localStorage").Call("getItem", hiddenWidgetsStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := kvGet(hiddenWidgetsStoreID)
+	if raw == "" {
 		return widgetvis.Set{}
 	}
 	var s widgetvis.Set
-	if err := json.Unmarshal([]byte(v.String()), &s); err != nil {
+	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		return widgetvis.Set{}
 	}
 	return s.Normalize()

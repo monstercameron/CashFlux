@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS subcancellations  (id TEXT PRIMARY KEY, data TEXT NOT
 CREATE TABLE IF NOT EXISTS subignores        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS appkv             (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settingskv        (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 `
 
 // NewMemory opens a fresh in-memory SQLite database and creates the schema. A
@@ -199,6 +201,13 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if _, err := tx.Exec("INSERT INTO settings(id, data) VALUES('app', ?)", string(settingsData)); err != nil {
 		return err
 	}
+	// App/UI key-value state.
+	if err := replaceKVTable(tx, "appkv", ds.KV); err != nil {
+		return err
+	}
+	if err := replaceKVTable(tx, "settingskv", ds.SettingsKV); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -283,6 +292,15 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 	}
 	// Audit log entries ordered oldest-first for consistent round-trips.
 	if ds.AuditEntries, err = loadRows[auditlog.Entry](s.db, "audit_log"); err != nil {
+		return Dataset{}, err
+	}
+	// App/UI key-value state (dashboard layout, filters, the activity feed, …) —
+	// ported off scattered localStorage so it lives in the one SQLite dataset.
+	if ds.KV, err = loadKV(s.db); err != nil {
+		return Dataset{}, err
+	}
+	// Config/preferences ported off localStorage (preserved by a wipe).
+	if ds.SettingsKV, err = loadSettingsKV(s.db); err != nil {
 		return Dataset{}, err
 	}
 

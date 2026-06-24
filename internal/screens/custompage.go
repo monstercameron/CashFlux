@@ -530,9 +530,9 @@ func chartBody(ctx pageCtx) ui.Node {
 	for i, m := range series {
 		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div}
 	}
-	yFmt := ".2~s"
+	yFmt := ".3~s"
 	if currency.Symbol(net.Currency) == "$" {
-		yFmt = "$.2~s"
+		yFmt = "$.3~s"
 	}
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,

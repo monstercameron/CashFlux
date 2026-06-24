@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/mermaid"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -22,6 +21,32 @@ import (
 	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
+
+// categoryMapGrid renders the at-a-glance "Category map" as a wrapping grid of
+// group chips (a parent name with its sub-categories as pills) instead of the old
+// mermaid flowchart. A flowchart laid every top-level category out as an isolated
+// node, so dagre stacked them in a single tall column that wasted ~75% of the
+// horizontal space; a wrapping grid fills the width and stays glanceable (GI2).
+func categoryMapGrid(roots []categorytree.Node) ui.Node {
+	if len(roots) == 0 {
+		return Fragment()
+	}
+	groups := make([]any, 0, len(roots)+1)
+	groups = append(groups, css.Class("cat-map"))
+	for _, r := range roots {
+		items := []any{css.Class("cat-map-group")}
+		items = append(items, Span(css.Class("cat-map-chip"), r.Category.Name))
+		for _, ch := range r.Children {
+			items = append(items, Span(css.Class("cat-map-sub"), ch.Category.Name))
+			// one level of grandchildren keeps the map readable without nesting noise
+			for _, gc := range ch.Children {
+				items = append(items, Span(css.Class("cat-map-sub", "cat-map-sub2"), gc.Category.Name))
+			}
+		}
+		groups = append(groups, Div(items...))
+	}
+	return Div(groups...)
+}
 
 // Categories manages income and expense categories: add, list (grouped by kind),
 // and per-row delete.
@@ -259,7 +284,7 @@ func Categories() ui.Node {
 		// without scrolling past the full expense/income lists (C70/C63 tree view).
 		If(len(cats) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: "Category map",
-			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.FromCategories(cats), Label: "Category hierarchy diagram"}),
+			Body:  categoryMapGrid(categorytree.Build(cats)),
 		})),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title:        uistate.T("categories.expenseTitle"),

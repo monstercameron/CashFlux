@@ -5,8 +5,10 @@
 package uistate
 
 import (
+	"sync"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 )
 
@@ -15,32 +17,39 @@ const (
 	activeLangStoreID = "cashflux:active-lang"
 )
 
-// bundle is the app's shared language bundle: the English source catalog with any
-// imported languages merged in from localStorage. English is the source/fallback.
-var bundle = loadBundle()
+// Language state is LAZILY initialized (not at package-init) so it reads from the
+// SQLite-backed browser store AFTER boot has opened it — IndexedDB can't be read
+// synchronously at package-init. ensureI18n runs once, on the first T()/Languages
+// call (which happens during the first render, well after browserstore.Init).
+var (
+	i18nOnce    sync.Once
+	bundle      *i18n.Bundle
+	activeLang  i18n.Lang
+)
 
-// activeLang is the language T resolves to, loaded from localStorage at boot.
-var activeLang = loadActiveLang()
+func ensureI18n() {
+	i18nOnce.Do(func() {
+		bundle = loadBundle()
+		activeLang = loadActiveLang()
+	})
+}
 
 // loadBundle seeds the English source catalog and merges any persisted imported
-// languages (from a prior Import) on top.
+// languages on top.
 func loadBundle() *i18n.Bundle {
 	b := i18n.DefaultBundle()
-	v := js.Global().Get("localStorage").Call("getItem", langStoreID)
-	if !v.IsNull() && !v.IsUndefined() {
-		_ = b.ImportJSON([]byte(v.String()))
+	if raw := browserstore.GetString(langStoreID); raw != "" {
+		_ = b.ImportJSON([]byte(raw))
 	}
 	return b
 }
 
-// loadActiveLang reads the chosen language from localStorage, defaulting to
-// English when absent.
+// loadActiveLang reads the chosen language, defaulting to English when absent.
 func loadActiveLang() i18n.Lang {
-	v := js.Global().Get("localStorage").Call("getItem", activeLangStoreID)
-	if v.IsNull() || v.IsUndefined() || v.String() == "" {
-		return i18n.English
+	if raw := browserstore.GetString(activeLangStoreID); raw != "" {
+		return i18n.Lang(raw)
 	}
-	return i18n.Lang(v.String())
+	return i18n.English
 }
 
 // T translates a dot-namespaced key in the active language for display,
@@ -48,21 +57,23 @@ func loadActiveLang() i18n.Lang {
 // it is safe inside loops and row components); the bundle falls back to English
 // (then the key) for anything untranslated.
 func T(key string, args ...any) string {
+	ensureI18n()
 	return bundle.T(activeLang, key, args...)
 }
 
 // Languages lists the languages available to pick (default first).
-func Languages() []i18n.Lang { return bundle.Languages() }
+func Languages() []i18n.Lang { ensureI18n(); return bundle.Languages() }
 
 // ActiveLanguage returns the currently selected language.
-func ActiveLanguage() i18n.Lang { return activeLang }
+func ActiveLanguage() i18n.Lang { ensureI18n(); return activeLang }
 
 // SetActiveLanguage persists the chosen language and reloads so every rendered
 // string re-resolves in it (T is non-reactive by design, so a reload is the
 // clean, reliable way to switch the whole UI at once).
 func SetActiveLanguage(l i18n.Lang) {
+	ensureI18n()
 	activeLang = l
-	js.Global().Get("localStorage").Call("setItem", activeLangStoreID, string(l))
+	browserstore.Set(activeLangStoreID, string(l))
 	js.Global().Get("location").Call("reload")
 }
 
@@ -79,7 +90,7 @@ func ImportLanguages(data []byte) error {
 		return err
 	}
 	if out, err := bundle.ExportJSON(); err == nil {
-		js.Global().Get("localStorage").Call("setItem", langStoreID, string(out))
+		browserstore.Set(langStoreID, string(out))
 	}
 	return nil
 }

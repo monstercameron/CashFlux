@@ -5,8 +5,6 @@
 package uistate
 
 import (
-	"syscall/js"
-
 	"github.com/monstercameron/GoWebComponents/state"
 )
 
@@ -52,14 +50,10 @@ func PersistRailCollapsed(collapsed bool) {
 	if collapsed {
 		v = "1"
 	}
-	js.Global().Get("localStorage").Call("setItem", railCollapsedStore, v)
+	SettingKVSet(railCollapsedStore, v)
 }
 
 // loadRailCollapsed reads the saved collapsed state, defaulting to expanded.
 func loadRailCollapsed() bool {
-	v := js.Global().Get("localStorage").Call("getItem", railCollapsedStore)
-	if v.IsNull() || v.IsUndefined() {
-		return false
-	}
-	return v.String() == "1"
+	return SettingKVGet(railCollapsedStore) == "1"
 }

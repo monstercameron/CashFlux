@@ -17,12 +17,12 @@ const bannerStoreID = "cashflux:banner"
 // slot, separate from the theme, since an uploaded image can be large). An empty
 // or unreadable slot yields no banner.
 func LoadBanner() theme.Banner {
-	v := js.Global().Get("localStorage").Call("getItem", bannerStoreID)
-	if v.IsNull() || v.IsUndefined() {
+	raw := SettingKVGet(bannerStoreID)
+	if raw == "" {
 		return theme.Banner{}
 	}
 	var b theme.Banner
-	if err := json.Unmarshal([]byte(v.String()), &b); err != nil {
+	if err := json.Unmarshal([]byte(raw), &b); err != nil {
 		return theme.Banner{}
 	}
 	return b
@@ -34,7 +34,7 @@ func PersistBanner(b theme.Banner) {
 	if err != nil {
 		return
 	}
-	js.Global().Get("localStorage").Call("setItem", bannerStoreID, string(data))
+	SettingKVSet(bannerStoreID, string(data))
 }
 
 // ApplyBanner reflects the banner onto the document root: it sets the
