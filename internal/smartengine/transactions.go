@@ -5,6 +5,7 @@ package smartengine
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -20,7 +21,43 @@ func init() {
 	register("SMART-T2", t2Duplicates)
 	register("SMART-T6", t6SpendingSpike)
 	register("SMART-T7", t7MissingTxn)
+	register("SMART-T11", t11Timeline)
 	register("SMART-T13", t13RefundMatch)
+}
+
+// SMART-T11 — Cash-flow timeline annotation. Surfaces a notable recent moment —
+// the month's biggest single expense — as a calm informational marker.
+func t11Timeline(in Input) []smart.Insight {
+	curStart := dateutil.MonthStart(in.Now)
+	end := in.Now.AddDate(0, 0, 1)
+	var big domain.Transaction
+	var bigMag int64
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		if t.Date.Before(curStart) || !t.Date.Before(end) {
+			continue
+		}
+		mag := in.toBaseMinor(-t.Amount.Amount, t.Amount.Currency)
+		if mag > bigMag {
+			big, bigMag = t, mag
+		}
+	}
+	if bigMag == 0 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature:  "SMART-T11",
+		Page:     smart.PageTransactions,
+		Key:      "SMART-T11:big:" + curStart.Format("2006-01") + ":" + big.ID,
+		Title:    "Biggest expense this month: " + mny(bigMag, in.Base).Format(2),
+		Detail:   txnLabel(big) + " on " + big.Date.Format("Jan 2") + " is your largest single expense so far this month.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(mny(bigMag, in.Base)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transaction",
+			Route: "/transactions", RelatedType: "transaction", RelatedID: big.ID})
+	return []smart.Insight{ins}
 }
 
 const (

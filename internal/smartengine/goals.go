@@ -16,7 +16,83 @@ func init() {
 	register("SMART-G5", g5GoalConflict)
 	register("SMART-G6", g6MilestoneNudge)
 	register("SMART-G11", g11EmergencyFund)
+	register("SMART-G12", g12SuggestGoals)
 	register("SMART-G13", g13Windfall)
+	register("SMART-G18", g18Feasibility)
+}
+
+const emergencyStartMonths = 3 // a sensible starting emergency-fund target
+
+// SMART-G12 — Auto-create suggested goals. When the user has no emergency fund
+// and enough spend history to size one, suggests starting one.
+func g12SuggestGoals(in Input) []smart.Insight {
+	if _, ok := emergencyGoal(in.Goals); ok {
+		return nil // already has one — G11 tracks its adequacy instead
+	}
+	essentials := in.avgMonthlyExpenseBase()
+	if essentials < emergencyMinMonthly {
+		return nil
+	}
+	target := essentials * emergencyStartMonths
+	ins := smart.Insight{
+		Feature: "SMART-G12",
+		Page:    smart.PageGoals,
+		Key:     "SMART-G12:emergency",
+		Title:   "Consider starting an emergency fund",
+		Detail: "You don't have an emergency fund yet. A common starting target is " +
+			in.baseMoney(target).Format(2) + " — about " + itoa64(emergencyStartMonths) +
+			" months of your roughly " + in.baseMoney(essentials).Format(2) + "/mo essentials.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(target)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Create a goal", Route: "/goals"})
+	return []smart.Insight{ins}
+}
+
+// SMART-G18 — Goal feasibility traffic-light. Flags each deadline goal whose
+// required monthly contribution exceeds a fair share of the available surplus —
+// the "red light" that its deadline is unrealistic at the current pace.
+func g18Feasibility(in Input) []smart.Insight {
+	surplus := in.monthlySurplusBase()
+	type dg struct {
+		g      domain.Goal
+		needed int64
+	}
+	var deadlined []dg
+	for _, g := range in.Goals {
+		if g.Archived {
+			continue
+		}
+		needed, ok, err := goals.MonthlyNeeded(g, in.Now)
+		if err != nil || !ok {
+			continue
+		}
+		deadlined = append(deadlined, dg{g: g, needed: in.toBaseMinor(needed.Amount, needed.Currency)})
+	}
+	if len(deadlined) == 0 {
+		return nil
+	}
+	fair := int64(0)
+	if surplus > 0 {
+		fair = surplus / int64(len(deadlined))
+	}
+	var out []smart.Insight
+	for _, d := range deadlined {
+		if d.needed <= fair { // green — comfortably affordable
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G18",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G18:" + d.g.ID,
+			Title:   d.g.Name + "'s deadline looks tight",
+			Detail: d.g.Name + " needs " + in.baseMoney(d.needed).Format(2) + "/mo to hit " +
+				d.g.TargetDate.Format("Jan 2006") + ", but only about " + in.baseMoney(fair).Format(2) +
+				"/mo is realistically free for it — consider extending the date or trimming elsewhere.",
+			Severity: smart.SeverityWarn,
+		}.WithAmount(in.baseMoney(d.needed)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: d.g.ID}))
+	}
+	return out
 }
 
 const (

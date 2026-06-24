@@ -20,6 +20,45 @@ func init() {
 	register("SMART-BL6", bl6LateFeeRisk)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
+	register("SMART-BL13", bl13StatementClarity)
+}
+
+// SMART-BL13 — Statement-vs-minimum clarity. For a revolving liability, shows the
+// full balance, the minimum payment, and the monthly interest cost of paying only
+// the minimum, so the cheaper choice is obvious.
+func bl13StatementClarity(in Input) []smart.Insight {
+	var out []smart.Insight
+	for _, a := range in.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability || a.InterestRateAPR <= 0 {
+			continue
+		}
+		minPay := abs64(in.toBaseMinor(a.MinPayment.Amount, a.Currency))
+		if minPay == 0 {
+			continue
+		}
+		bal, err := ledger.Balance(a, in.Transactions)
+		if err != nil {
+			continue
+		}
+		owed := abs64(in.toBaseMinor(bal.Amount, a.Currency))
+		if owed <= minPay { // not revolving — the minimum clears it
+			continue
+		}
+		monthlyInterest := pctOf(owed, a.InterestRateAPR) / 12
+		out = append(out, smart.Insight{
+			Feature: "SMART-BL13",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL13:" + a.ID + ":" + in.Now.Format("2006-01"),
+			Title:   a.Name + ": paying only the minimum costs you",
+			Detail: a.Name + " owes " + in.baseMoney(owed).Format(2) + " at " + fmtPct(a.InterestRateAPR) +
+				" APR. Paying just the " + in.baseMoney(minPay).Format(2) + " minimum leaves roughly " +
+				in.baseMoney(monthlyInterest).Format(2) + "/mo in interest — paying more saves it.",
+			Severity: smart.SeverityNudge,
+		}.WithAmount(in.baseMoney(monthlyInterest)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+	}
+	return out
 }
 
 const (
