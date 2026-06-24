@@ -17,8 +17,70 @@ func init() {
 	register("SMART-G6", g6MilestoneNudge)
 	register("SMART-G11", g11EmergencyFund)
 	register("SMART-G12", g12SuggestGoals)
+	register("SMART-G8", g8GoalImpact)
 	register("SMART-G13", g13Windfall)
 	register("SMART-G18", g18Feasibility)
+}
+
+const g8MinExpense = 100_00 // only translate sizable purchases into goal terms
+
+// SMART-G8 — Goal-impact preview. Expresses the month's biggest expense in terms
+// of a goal's saving pace, making the trade-off tangible.
+func g8GoalImpact(in Input) []smart.Insight {
+	// Pick the most demanding deadline goal as the reference pace.
+	var refGoal domain.Goal
+	var pace int64
+	for _, g := range in.Goals {
+		if g.Archived {
+			continue
+		}
+		needed, ok, err := goals.MonthlyNeeded(g, in.Now)
+		if err != nil || !ok {
+			continue
+		}
+		p := in.toBaseMinor(needed.Amount, needed.Currency)
+		if p > pace {
+			refGoal, pace = g, p
+		}
+	}
+	if pace <= 0 {
+		return nil
+	}
+	// The biggest recent expense.
+	cut := in.Now.AddDate(0, 0, -spikeRecentDays)
+	var big domain.Transaction
+	var bigMag int64
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() || t.Date.Before(cut) || t.Date.After(in.Now) {
+			continue
+		}
+		mag := in.toBaseMinor(-t.Amount.Amount, t.Amount.Currency)
+		if mag > bigMag {
+			big, bigMag = t, mag
+		}
+	}
+	if bigMag < g8MinExpense {
+		return nil
+	}
+	weeklyPace := pace * 12 / 52
+	if weeklyPace <= 0 {
+		return nil
+	}
+	weeks := (bigMag + weeklyPace/2) / weeklyPace
+	if weeks < 1 {
+		weeks = 1
+	}
+	ins := smart.Insight{
+		Feature: "SMART-G8",
+		Page:    smart.PageGoals,
+		Key:     "SMART-G8:" + big.ID,
+		Title:   "That " + in.baseMoney(bigMag).Format(2) + " is " + plural(weeks, "week") + " of " + refGoal.Name,
+		Detail: txnLabel(big) + " on " + big.Date.Format("Jan 2") + " (" + in.baseMoney(bigMag).Format(2) +
+			") equals about " + plural(weeks, "week") + " of your " + refGoal.Name + " saving pace.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(bigMag)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: refGoal.ID})
+	return []smart.Insight{ins}
 }
 
 const emergencyStartMonths = 3 // a sensible starting emergency-fund target

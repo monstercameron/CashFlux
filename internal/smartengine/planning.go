@@ -4,11 +4,92 @@ package smartengine
 
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
 
 func init() {
+	register("SMART-P8", p8ExtraDebt)
 	register("SMART-P10", p10BillShock)
+}
+
+const p8MinExtra = 25_00 // only suggest an extra payment worth at least $25/mo
+
+// SMART-P8 — Auto-suggested extra debt payment. When there's debt and spare
+// monthly surplus, recommends the largest sensible extra payment (capped by the
+// surplus so it never pushes cash flow negative).
+func p8ExtraDebt(in Input) []smart.Insight {
+	debts := buildDebts(in)
+	if len(debts) == 0 {
+		return nil
+	}
+	surplus := in.monthlySurplusBase()
+	if surplus <= 0 {
+		return nil
+	}
+	extra := payoff.SuggestedExtra(debts)
+	if extra > surplus {
+		extra = surplus // never recommend more than you free up
+	}
+	if extra < p8MinExtra {
+		return nil
+	}
+	// Name the highest-APR debt as the place to send it.
+	target := highestAPRDebt(debts)
+	ins := smart.Insight{
+		Feature: "SMART-P8",
+		Page:    smart.PagePlanning,
+		Key:     "SMART-P8:" + in.Now.Format("2006-01"),
+		Title:   "Put an extra " + in.baseMoney(extra).Format(2) + "/mo toward debt",
+		Detail: "You free up about " + in.baseMoney(surplus).Format(2) + "/mo. Sending " +
+			in.baseMoney(extra).Format(2) + " of it to " + target + " each month clears your debt faster and saves interest.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(extra)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
+}
+
+// buildDebts assembles payoff.Debt records from non-archived liability accounts
+// with a balance owed, in base-currency minor units.
+func buildDebts(in Input) []payoff.Debt {
+	var out []payoff.Debt
+	for _, a := range in.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability {
+			continue
+		}
+		bal, err := ledger.Balance(a, in.Transactions)
+		if err != nil {
+			continue
+		}
+		owed := abs64(in.toBaseMinor(bal.Amount, a.Currency))
+		if owed <= 0 {
+			continue
+		}
+		out = append(out, payoff.Debt{
+			Name:       a.Name,
+			Balance:    owed,
+			AprPercent: a.InterestRateAPR,
+			MinPayment: abs64(in.toBaseMinor(a.MinPayment.Amount, a.Currency)),
+		})
+	}
+	return out
+}
+
+// highestAPRDebt returns the name of the debt with the highest APR, or "your
+// highest-interest debt" when none stands out.
+func highestAPRDebt(debts []payoff.Debt) string {
+	name := ""
+	best := -1.0
+	for _, d := range debts {
+		if d.AprPercent > best {
+			best, name = d.AprPercent, d.Name
+		}
+	}
+	if name == "" {
+		return "your highest-interest debt"
+	}
+	return name
 }
 
 const (

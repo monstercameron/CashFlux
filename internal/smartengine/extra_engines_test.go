@@ -162,3 +162,47 @@ func TestBL13SkipsClearedCard(t *testing.T) {
 		t.Errorf("minimum clears the balance — want 0, got %d", len(got))
 	}
 }
+
+func TestG8GoalImpact(t *testing.T) {
+	in := baseInput()
+	due := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{goal("g", "Vacation", 60000, 0, due)} // needs ~$200/mo
+	in.Transactions = []domain.Transaction{
+		{ID: "buy", AccountID: "x", Date: time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC), Amount: usd(-30000), Desc: "TV"},
+	}
+	got := g8GoalImpact(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 impact insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 30000 {
+		t.Errorf("expense amount = %d, want 30000", got[0].Amount.Amount)
+	}
+}
+
+func TestP8ExtraDebt(t *testing.T) {
+	in := baseInput().withBaseline(500000, 300000) // $2000/mo surplus
+	card := domain.Account{
+		ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
+		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000), DueDayOfMonth: 18,
+	}
+	in.Accounts = []domain.Account{card}
+	got := p8ExtraDebt(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 extra-payment suggestion, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount <= 0 {
+		t.Errorf("expected a positive extra amount, got %+v", got[0].Amount)
+	}
+}
+
+func TestP8NoSurplusNoSuggestion(t *testing.T) {
+	in := baseInput().withBaseline(300000, 500000) // negative surplus
+	card := domain.Account{
+		ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
+		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000),
+	}
+	in.Accounts = []domain.Account{card}
+	if got := p8ExtraDebt(in); len(got) != 0 {
+		t.Errorf("no surplus — want 0, got %d", len(got))
+	}
+}
