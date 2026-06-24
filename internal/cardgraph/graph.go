@@ -117,6 +117,7 @@ type VizBlock struct {
 	Action string        // workflow action kind, for "button"/"toggle"
 	XLabel string        // x-axis label, for "chart"
 	Blocks []VizBlock    // child blocks, for "stack" (composite multi-block tiles)
+	Dir    string        // "row" | "column" (default) — layout direction, for "stack"
 }
 
 // Num builds a number value. Text, Bln, and Viz are the sibling constructors.
@@ -218,6 +219,12 @@ type Graph struct {
 	Nodes []Node `json:"nodes"`
 	Edges []Edge `json:"edges"`
 	Root  NodeID `json:"root"`
+	// Cols/Rows are the card's size on the dashboard grid (UI-only; ignored by
+	// evaluation, like Node.Pos): width 1..4 columns, height 1..3 rows. Zero means
+	// "unset" and the UI treats it as the 2×2 default. Persisting them with the graph
+	// lets a saved/published card keep its chosen size across reload and republish.
+	Cols int `json:"cols,omitempty"`
+	Rows int `json:"rows,omitempty"`
 }
 
 // node returns the node with the given id and whether it was found.

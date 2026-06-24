@@ -332,6 +332,82 @@ func TestGroupBySortModes(t *testing.T) {
 	}
 }
 
+func TestStyleAccentRecolorsAnyViz(t *testing.T) {
+	// number → KPI → style.accent(color) : the KPI's accent should be set to the color,
+	// proving the styling transform composes onto an already-built visualization.
+	g := Graph{
+		Nodes: []Node{
+			{ID: "n", Kind: KindLiteralNumber, Props: map[string]string{"value": "42"}},
+			{ID: "k", Kind: KindVizKPI, Props: map[string]string{"title": "X"}},
+			{ID: "c", Kind: KindLiteralColor, Props: map[string]string{"value": "#ff0000"}},
+			{ID: "s", Kind: KindStyleAccent},
+		},
+		Edges: []Edge{
+			{From: PortRef{"n", OutPort}, To: PortRef{"k", "value"}},
+			{From: PortRef{"k", OutPort}, To: PortRef{"s", "in"}},
+			{From: PortRef{"c", OutPort}, To: PortRef{"s", "color"}},
+		},
+		Root: "s",
+	}
+	res := Eval(g, Context{})
+	if res.Render == nil {
+		t.Fatalf("no render: %+v", res.Issues)
+	}
+	if res.Render.Accent != "#ff0000" {
+		t.Errorf("accent = %q, want #ff0000", res.Render.Accent)
+	}
+	if res.Render.Kind != "kpi" || res.Render.Text != "42" {
+		t.Errorf("style.accent changed the underlying viz: %+v", res.Render)
+	}
+}
+
+func TestStyleToneForcesTone(t *testing.T) {
+	// A positive number normally tones "up"; style.tone=down must override it to "down".
+	g := Graph{
+		Nodes: []Node{
+			{ID: "n", Kind: KindLiteralNumber, Props: map[string]string{"value": "10"}},
+			{ID: "k", Kind: KindVizKPI, Props: map[string]string{"tone": "auto"}},
+			{ID: "s", Kind: KindStyleTone, Props: map[string]string{"tone": "down"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"n", OutPort}, To: PortRef{"k", "value"}},
+			{From: PortRef{"k", OutPort}, To: PortRef{"s", "in"}},
+		},
+		Root: "s",
+	}
+	res := Eval(g, Context{})
+	if res.Render == nil || res.Render.Tone != "down" {
+		t.Errorf("forced tone = %+v, want down", res.Render)
+	}
+}
+
+func TestGraphSizeRoundTrips(t *testing.T) {
+	// Cols/Rows are UI-only but must survive JSON round-trip (so a saved/published card
+	// keeps its size) and must not affect evaluation.
+	g := Graph{
+		Nodes: []Node{
+			{ID: "n", Kind: KindLiteralNumber, Props: map[string]string{"value": "1"}},
+			{ID: "k", Kind: KindVizKPI},
+		},
+		Edges: []Edge{{From: PortRef{"n", OutPort}, To: PortRef{"k", "value"}}},
+		Root:  "k", Cols: 4, Rows: 3,
+	}
+	b, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Graph
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Cols != 4 || back.Rows != 3 {
+		t.Errorf("size lost in round-trip: cols=%d rows=%d", back.Cols, back.Rows)
+	}
+	if res := Eval(back, Context{}); res.Render == nil || res.Render.Text != "1" {
+		t.Errorf("size affected eval: %+v", res.Render)
+	}
+}
+
 func TestFilterThenAggregate(t *testing.T) {
 	// Keep Food rows, sum amount → 50.
 	g := Graph{

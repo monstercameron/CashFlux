@@ -88,6 +88,8 @@ const (
 	KindVizStack      = "viz.stack"
 	KindUIButton      = "ui.button"
 	KindUIToggle      = "ui.toggle"
+	KindStyleAccent   = "style.accent"
+	KindStyleTone     = "style.tone"
 )
 
 func init() {
@@ -239,7 +241,7 @@ func init() {
 	// a fixed tone, or "auto" derives up/down from the sign of a numeric value.
 	register(Spec{
 		Kind: KindVizKPI, Out: TypeViz,
-		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "sub", Type: TypeText}},
+		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "sub", Type: TypeText}, {Name: "accent", Type: TypeColor}},
 		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
 			in, ok := inputs["value"]
 			if !ok {
@@ -269,7 +271,7 @@ func init() {
 			if sv, ok := inputs["sub"]; ok && sv.Str != "" {
 				sub = sv.Str
 			}
-			return Viz(VizBlock{Kind: "kpi", Title: props["title"], Text: text, Tone: tone, Sub: sub, Hero: props["hero"] == "true"}), nil
+			return Viz(VizBlock{Kind: "kpi", Title: props["title"], Text: text, Tone: tone, Sub: sub, Hero: props["hero"] == "true", Accent: inputs["accent"].Str}), nil
 		},
 	})
 
@@ -296,7 +298,7 @@ func init() {
 	// toned up when full. A missing/zero max degrades to an empty bar (no divide-by-0).
 	register(Spec{
 		Kind: KindVizProgress, Out: TypeViz,
-		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "max", Type: TypeNumber}},
+		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "max", Type: TypeNumber}, {Name: "accent", Type: TypeColor}},
 		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
 			vv, ok := inputs["value"]
 			if !ok {
@@ -326,6 +328,7 @@ func init() {
 				Text: formatNumber(val, props["format"]),
 				Sub:  "of " + formatNumber(max, props["format"]),
 				Tone: tone, Pct: pct,
+				Accent: inputs["accent"].Str,
 			}), nil
 		},
 	})
@@ -334,7 +337,7 @@ func init() {
 	// badge text; props["tone"] sets the color, or "auto" derives up/down from a number.
 	register(Spec{
 		Kind: KindVizBadge, Out: TypeViz,
-		Inputs: []Port{{Name: "value", Type: TypeText}},
+		Inputs: []Port{{Name: "value", Type: TypeText}, {Name: "accent", Type: TypeColor}},
 		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
 			in, ok := inputs["value"]
 			if !ok {
@@ -358,7 +361,7 @@ func init() {
 			if tone == "auto" {
 				tone = ""
 			}
-			return Viz(VizBlock{Kind: "badge", Title: props["title"], Text: text, Tone: tone}), nil
+			return Viz(VizBlock{Kind: "badge", Title: props["title"], Text: text, Tone: tone, Accent: inputs["accent"].Str}), nil
 		},
 	})
 
@@ -672,7 +675,62 @@ func init() {
 			if len(blocks) == 0 {
 				return Value{}, fmt.Errorf("viz.stack: connect at least one block")
 			}
-			return Viz(VizBlock{Kind: "stack", Title: props["title"], Blocks: blocks}), nil
+			dir := strings.TrimSpace(props["dir"])
+			if dir != "row" {
+				dir = "column"
+			}
+			return Viz(VizBlock{Kind: "stack", Title: props["title"], Blocks: blocks, Dir: dir}), nil
+		},
+	})
+
+	// style.accent — a styling transform: takes any visualization and a color and returns
+	// the same visualization recolored (its accent). Composable, so one color node can be
+	// fanned into several displays, or a display restyled without rebuilding it. This is
+	// the builder's styling tool — it works on every viz kind (chart series, KPI/stat
+	// figure, badge, progress fill).
+	register(Spec{
+		Kind: KindStyleAccent, Out: TypeViz,
+		Inputs: []Port{{Name: "in", Type: TypeViz}, {Name: "color", Type: TypeColor}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Type != TypeViz || in.Viz == nil {
+				return Value{}, fmt.Errorf("style.accent: connect a visualization")
+			}
+			out := *in.Viz
+			color := strings.TrimSpace(props["color"])
+			if c, ok := inputs["color"]; ok && c.Str != "" {
+				color = c.Str
+			}
+			if color == "" {
+				color = "#3b82f6"
+			}
+			out.Accent = color
+			return Viz(out), nil
+		},
+	})
+
+	// style.tone — a styling transform that forces a visualization's tone (the
+	// positive/negative/neutral coloring) regardless of the value's sign. props["tone"]
+	// is "up" (green), "down" (red), or "" (neutral). Lets a designer override the
+	// automatic ± coloring (e.g. show spending in red even though it's a positive number).
+	register(Spec{
+		Kind: KindStyleTone, Out: TypeViz,
+		Inputs: []Port{{Name: "in", Type: TypeViz}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Type != TypeViz || in.Viz == nil {
+				return Value{}, fmt.Errorf("style.tone: connect a visualization")
+			}
+			out := *in.Viz
+			switch strings.TrimSpace(props["tone"]) {
+			case "up":
+				out.Tone = "up"
+			case "down":
+				out.Tone = "down"
+			default:
+				out.Tone = ""
+			}
+			return Viz(out), nil
 		},
 	})
 }
