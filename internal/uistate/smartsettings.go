@@ -6,6 +6,7 @@ package uistate
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
@@ -60,6 +61,38 @@ func DismissSmartInsight(key string) smart.Settings {
 // affordance) and persists.
 func RestoreSmartInsight(key string) smart.Settings {
 	s := LoadSmartSettings().Restore(key)
+	SaveSmartSettings(s)
+	return s
+}
+
+// SetSmartCadence sets a feature's run schedule (when it runs) and persists.
+func SetSmartCadence(code string, c smart.Cadence) smart.Settings {
+	s := LoadSmartSettings().SetCadence(code, c)
+	SaveSmartSettings(s)
+	return s
+}
+
+// SetSmartMuted snoozes/un-snoozes a feature (without changing its opt-in or
+// schedule) and persists.
+func SetSmartMuted(code string, on bool) smart.Settings {
+	s := LoadSmartSettings().SetMuted(code, on)
+	SaveSmartSettings(s)
+	return s
+}
+
+// MarkSmartRun stamps a feature's last-run time (after a manual or scheduled run)
+// and persists, so cadence due/freshness survives reloads.
+func MarkSmartRun(code string, now time.Time) smart.Settings {
+	s := LoadSmartSettings().MarkRun(code, now)
+	SaveSmartSettings(s)
+	return s
+}
+
+// SetSmartResult caches an AI feature's produced text (and stamps its run time)
+// and persists, so a scheduled/manual AI result shows between renders without
+// re-spending.
+func SetSmartResult(code, text string, now time.Time) smart.Settings {
+	s := LoadSmartSettings().SetResult(code, text).MarkRun(code, now)
 	SaveSmartSettings(s)
 	return s
 }

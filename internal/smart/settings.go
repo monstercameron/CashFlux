@@ -2,6 +2,8 @@
 
 package smart
 
+import "time"
+
 // Settings is the user's opt-in state for the SMART series. The series is
 // strictly opt-in: every feature is OFF until the user enables it, so nothing in
 // here can block, gate, or slow a core flow until the user has asked for it.
@@ -17,6 +19,19 @@ package smart
 type Settings struct {
 	Enabled   map[string]bool `json:"enabled,omitempty"`
 	Dismissed map[string]bool `json:"dismissed,omitempty"`
+
+	// Schedules is the per-feature run cadence (when it runs). A missing entry
+	// uses the tier default (Free→Live, AI→Manual). See schedule.go.
+	Schedules map[string]Cadence `json:"schedules,omitempty"`
+	// Muted features are snoozed: enabled but not surfaced (a per-feature "not
+	// now" that's reversible without losing the opt-in or its schedule).
+	Muted map[string]bool `json:"muted,omitempty"`
+	// LastRun records the unix-second timestamp of each feature's last run, so
+	// cadence Due/freshness checks and AI result caching work across reloads.
+	LastRun map[string]int64 `json:"lastRun,omitempty"`
+	// Results caches each AI feature's last produced text, shown between runs so a
+	// scheduled/manual AI result persists without re-spending on every render.
+	Results map[string]string `json:"results,omitempty"`
 }
 
 // IsEnabled reports whether the feature code is opted in. Unknown codes are off.
@@ -102,18 +117,119 @@ func (s Settings) AnyAIEnabled() bool {
 }
 
 // Active filters a fresh batch of insights to the ones that should be shown:
-// their feature is still enabled and they are not dismissed. It does not mutate
-// the input. The result keeps the input order (engines sort before display).
+// their feature is enabled, not muted, and the insight is not dismissed. It does
+// not mutate the input. The result keeps the input order (engines sort before
+// display).
 func (s Settings) Active(in []Insight) []Insight {
 	out := in[:0:0] // new backing array; never alias the caller's slice
 	for _, ins := range in {
-		if !s.Enabled[ins.Feature] {
+		if !s.Enabled[ins.Feature] || s.Muted[ins.Feature] {
 			continue
 		}
 		if s.Dismissed[ins.Key] {
 			continue
 		}
 		out = append(out, ins)
+	}
+	return out
+}
+
+// --- scheduling, mute, run-tracking, and AI result cache ------------------
+
+// CadenceFor returns the feature's run cadence: the user's choice, or the tier
+// default (Free→Live, AI→Manual) when unset or unknown.
+func (s Settings) CadenceFor(code string) Cadence {
+	if c, ok := s.Schedules[code]; ok && c.Valid() {
+		return c
+	}
+	if f, ok := byCode[code]; ok {
+		return DefaultCadence(f.Tier)
+	}
+	return CadenceLive
+}
+
+// SetCadence sets a feature's run cadence. Setting it to the tier default clears
+// the override so the stored map stays small. No-op for unknown codes/cadences.
+func (s Settings) SetCadence(code string, c Cadence) Settings {
+	f, ok := byCode[code]
+	if !ok || !c.Valid() {
+		return s
+	}
+	if c == DefaultCadence(f.Tier) {
+		delete(s.Schedules, code)
+		return s
+	}
+	if s.Schedules == nil {
+		s.Schedules = map[string]Cadence{}
+	}
+	s.Schedules[code] = c
+	return s
+}
+
+// IsMuted reports whether the feature is snoozed.
+func (s Settings) IsMuted(code string) bool { return s.Muted[code] }
+
+// SetMuted snoozes or un-snoozes a feature (without changing its opt-in/schedule).
+func (s Settings) SetMuted(code string, on bool) Settings {
+	if _, ok := byCode[code]; !ok {
+		return s
+	}
+	if !on {
+		delete(s.Muted, code)
+		return s
+	}
+	if s.Muted == nil {
+		s.Muted = map[string]bool{}
+	}
+	s.Muted[code] = true
+	return s
+}
+
+// LastRunAt returns when the feature last ran (zero if never).
+func (s Settings) LastRunAt(code string) time.Time {
+	if ts, ok := s.LastRun[code]; ok && ts > 0 {
+		return time.Unix(ts, 0)
+	}
+	return time.Time{}
+}
+
+// MarkRun stamps a feature's last-run time (used by the cadence Due/freshness
+// checks and to gate the next scheduled AI call).
+func (s Settings) MarkRun(code string, now time.Time) Settings {
+	if _, ok := byCode[code]; !ok {
+		return s
+	}
+	if s.LastRun == nil {
+		s.LastRun = map[string]int64{}
+	}
+	s.LastRun[code] = now.Unix()
+	return s
+}
+
+// ResultFor returns the cached AI result text for a feature (empty if none).
+func (s Settings) ResultFor(code string) string { return s.Results[code] }
+
+// SetResult caches an AI feature's produced text so a scheduled/manual result
+// persists between renders without re-spending.
+func (s Settings) SetResult(code, text string) Settings {
+	if _, ok := byCode[code]; !ok {
+		return s
+	}
+	if s.Results == nil {
+		s.Results = map[string]string{}
+	}
+	s.Results[code] = text
+	return s
+}
+
+// ActiveCodes returns the enabled, non-muted feature codes in catalog order —
+// the set the engine actually runs (an off OR muted feature costs nothing).
+func (s Settings) ActiveCodes() []string {
+	var out []string
+	for _, f := range catalog {
+		if s.Enabled[f.Code] && !s.Muted[f.Code] {
+			out = append(out, f.Code)
+		}
 	}
 	return out
 }

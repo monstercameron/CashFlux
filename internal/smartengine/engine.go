@@ -100,7 +100,7 @@ func ImplementedCodes() []string {
 // never slows a core flow until asked for.
 func Run(in Input, s smart.Settings) []smart.Insight {
 	var out []smart.Insight
-	for _, code := range s.EnabledCodes() {
+	for _, code := range s.ActiveCodes() { // enabled AND not muted
 		if fn := engines[code]; fn != nil {
 			out = append(out, fn(in)...)
 		}
@@ -115,6 +115,9 @@ func Run(in Input, s smart.Settings) []smart.Insight {
 func RunPage(in Input, s smart.Settings, page smart.Page) []smart.Insight {
 	var out []smart.Insight
 	for _, f := range s.EnabledFeaturesForPage(page) {
+		if s.IsMuted(f.Code) { // a muted feature costs nothing and shows nothing
+			continue
+		}
 		if fn := engines[f.Code]; fn != nil {
 			out = append(out, fn(in)...)
 		}
