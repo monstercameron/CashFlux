@@ -63,6 +63,7 @@ func Accounts() ui.Node {
 		}
 		bump()
 		restoreFocus()
+		uistate.PostUndoable(uistate.T("toast.accountDeleted"))
 	}
 
 	archiveAccount := func(ac domain.Account) {

@@ -94,6 +94,21 @@ func UseDragSource() state.Atom[string] {
 	return state.UseAtom(dragSrcAtomID, "")
 }
 
+const (
+	currentTileAtomID = "dashboard:current-tile"
+	grabbedTileAtomID = "dashboard:grabbed-tile"
+)
+
+// UseCurrentTile holds the id of the dashboard tile that is the single keyboard
+// Tab stop (roving tabindex). Empty means "use the first tile". Arrow keys move
+// this between tiles so the grid is one Tab stop, not 12+ (§6.7 / widget a11y).
+func UseCurrentTile() state.Atom[string] { return state.UseAtom(currentTileAtomID, "") }
+
+// UseGrabbedTile holds the id of the tile currently "grabbed" for keyboard
+// move/resize (APG grid pattern): empty = navigating focus with arrows; non-empty
+// = arrows move/resize that tile until released (Space/Enter/Escape).
+func UseGrabbedTile() state.Atom[string] { return state.UseAtom(grabbedTileAtomID, "") }
+
 const dragPreviewAtomID = "dashboard:drag-preview"
 
 // UseDragPreview returns the shared atom holding the id of the widget currently

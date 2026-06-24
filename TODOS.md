@@ -10643,6 +10643,113 @@ Most of these pivots are state+UI only — the target screens already filter cor
 
 ---
 
+### L78. Story — "The Catch-Up" (Nadia) — 2026-06-24 ★
+
+**The ritual**
+
+Nadia, 38, a busy parent, fell a week behind on logging. She sits down to **bulk-enter a stack of
+receipts in one sitting**, then spot-checks that the numbers she just typed are reflected
+*everywhere* — the transactions list, the dashboard spending widget, the reports category
+breakdown, and the budgets "spent" figures. The everyday-household question is **write → read
+cross-screen data consistency**: "I just entered this — does the app believe me, and does it show me
+the truth fast on every screen?" Secondary theme: **rapid-entry stress** (8 adds back-to-back).
+
+**Drive script** `e2e/loopstory_78_catch_up_consistency.mjs`
+Run: `E2E_URL=http://127.0.0.1:8080 node e2e/loopstory_78_catch_up_consistency.mjs`
+Result: **8 PASS · 0 FAIL · 3 ABSENT**. Screenshots: `L78_p1_before.png`, `L78_p1_after_adds.png`,
+`L78_p2_dashboard.png`, `L78_p3_reports.png`, `L78_p4_budgets.png`, `L78_p5_after_delete.png`,
+`L78_p6_after_reload.png`.
+
+**What already works well (regression anchors)** ✓
+
+- ✓ **C-2 STRESS** — 8 rapid sequential transaction adds submitted with **zero JS errors** and no
+  crash, hang, or wedged modal. The add→close→re-open→add cycle is stable under fast repetition.
+- ✓ **C-9 NO_JS_ERRORS** — zero runtime JS errors across the entire bulk-entry + 5-screen
+  verification ritual.
+- ✓ **C-4 / C-5 / C-6** — Dashboard, Reports (with category breakdown), and Budgets (spent/remaining)
+  all render live spend figures after entry; no blank/error states.
+- ✓ **C-3 math** — reported spending total ≥ the sum just entered (no negative/under-count drift).
+- ✓ **C-8 persistence** — entered rows survive a soft reload (in-memory store rehydrates).
+- ✓ **Transaction counter present** — `/transactions` shows a "*N* transactions" total (e.g.
+  "612 transactions"). Good top-level data-visibility anchor. *(Corrects an earlier probe note that
+  claimed no counter — it exists.)*
+
+**Bugs & UX defects found (highest-value first)** — each is filed as a dev ticket below.
+
+1. **★ HIGH — Saving a transaction with an empty description silently discards the whole entry,
+   then flashes a developer-jargon error.** With the Description field empty, the **Save button is
+   NOT disabled** (looks ready), clicking it **closes the modal** (looks like success), and *only
+   then* a transient toast reads literally **`desc is required×`** — a raw internal field id plus a
+   mangled close glyph. The transaction is not saved and **all the user's typed data (amount,
+   account, category, date) is destroyed**. During rapid catch-up entry a user can easily miss the
+   flash and believe receipts were logged when they weren't. Three defects in one: (a) jargon error
+   text violates the plain-English UI rule, (b) Save is enabled on an invalid form, (c) a validation
+   failure closes the modal and discards in-progress input instead of keeping it open to fix.
+   *Evidence: `e2e/_debug_l78_empty.mjs` → `saveDisabled=false dialogStillOpen=false alerts=["desc is required×"]`.*
+
+2. **★ HIGH — "All" rows-per-page renders only 100 of 612 transactions (silent truncation).**
+   On `/transactions`, the "Rows per page" select offers 25 / 50 / 100 / **All**. Selecting **All**
+   still renders only **100** rows while the counter says "612 transactions" — so the user believes
+   they are viewing everything but 80%+ of their data is silently hidden. A finance app must never
+   silently truncate the ledger. *Evidence: `e2e/_debug_l78_all.mjs` → DEFAULT(50)=50, SIZE 100=100,
+   SIZE All=100 with counter "612 transactions".*
+
+3. **MEDIUM — Add-transaction form defaults the Account to "401(k) / Brokerage."** The very first
+   account option (and the form default) is an **investment account** — a poor, even risky default
+   for everyday expense entry, where the source is almost always checking or a credit card. A
+   distracted user who skips the account dropdown logs spend against their retirement/brokerage
+   account. Default to the household's primary/most-used spending account instead.
+
+4. **MEDIUM (a11y) — Amount and Description inputs have only placeholders, no `aria-label`.**
+   `input[placeholder="Amount"]` and `input[placeholder="What was it for?"]` carry no accessible
+   label, so once the user types, the placeholder disappears and screen-reader users lose the field's
+   name. Violates the "every control is labelled" rule. (Type is a button toggle and Account/Category
+   are correctly `aria-label`led — only these two text inputs are missing labels.)
+
+5. **LOW (cross-ref L39–L42) — No success toast on a successful add.** The modal closes silently
+   with no positive confirmation, indistinguishable at a glance from the failure case in bug #1.
+   This is the same "silent add" pattern flagged in L39–L42; bug #1 makes it actively dangerous.
+
+**Dev tickets (for a dev agent to pick up) — model/logic → UI → e2e**
+
+- [ ] **L78-T1 (★HIGH) — Fix empty-required-field save: disable Save until valid, keep modal open on
+  validation failure, never discard input, and replace the jargon toast.** (a) Compute form validity
+  and bind it to the Save button's `disabled` state (Save stays disabled while Description/Amount are
+  empty/invalid). (b) If Save is somehow triggered while invalid, **do not close the modal** — keep it
+  open, focus the first invalid field, and show an inline field-level error. (c) Replace
+  `"desc is required×"` with plain English ("Add a description so you can recognise this later.") and
+  remove the stray `×` glued to the text. e2e: extend `loopstory_78` to assert Save is disabled with an
+  empty description, that the modal stays open on an invalid submit, and that no entered field is lost.
+
+- [ ] **L78-T2 (★HIGH) — "All" rows-per-page must render all rows.** Audit the `/transactions` list
+  pagination: the "All" option caps at 100. Make "All" remove the page-size limit (or, if intentional
+  for perf, rename it to the real cap and add a clear "Showing 100 of 612 — load more" affordance so
+  nothing is hidden silently). e2e: select "All" and assert rendered row count == total counter value.
+
+- [ ] **L78-T3 (MEDIUM) — Default the add-transaction Account to the primary/most-used spending
+  account, not "401(k) / Brokerage."** Add a notion of a default/primary account (or pick the most
+  recently used, or first non-investment asset account) and preselect it in the form. e2e: open the
+  add form, assert the default Account option is not an investment account.
+
+- [ ] **L78-T4 (MEDIUM a11y) — Add `aria-label` to the Amount and Description inputs** in the
+  add/edit-transaction form (keep the placeholders as hints). e2e: assert both inputs expose an
+  accessible name.
+
+- [ ] **L78-T5 (LOW, cross-ref L39–L42) — Show a success toast/confirmation after a transaction is
+  saved** ("Added — $64.20 Groceries"), so success is visibly distinct from the validation-failure
+  case (L78-T1). Folds into the broader L39–L42 "silent add, no toast" work.
+
+**Probe hardening (for future loop stories)**
+- The add-transaction form fields are addressed by **placeholder** ("Amount", "What was it for?"),
+  and **Type** is a button toggle ("Expense"/"Income"), not a `<select>`. Earlier stories' helpers
+  that matched description by `aria-label /description|payee|note/` silently failed to fill it — which
+  is exactly how this run first surfaced bug #1. Future write-stories should fill by placeholder and
+  click the Type button. `e2e/loopstory_78_catch_up_consistency.mjs::addExpense` now does this.
+- `/transactions` caps page size at 100 even on "All" (bug #2); probes that need the full ledger must
+  read the "*N* transactions" counter rather than counting rendered rows.
+
+---
+
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
 
 ### G13. Insights — "The Money Question" (Renu) — 2026-06-23 ★
@@ -24454,7 +24561,7 @@ points — verify exact lines before editing.
 - [x] **[M]** After save/delete, focus isn't restored predictably (`transactions.go:606`, `accounts.go:572`,
       and peers). Return focus to the row/Edit button on save; to the next/prev row on delete.
 - [x] **[M]** Quick-add form has no autofocus (`quickadd.go:118`). Autofocus the first meaningful field.
-- [ ] **[L]** Dashboard exposes every widget as its own tab stop (`ui/widget.go:121`); with 12+ tiles the
+- [x] **[L]** Dashboard exposes every widget as its own tab stop (`ui/widget.go:121`); with 12+ tiles the
       tab path to main content is long. Consider one logical focus group with arrow-key nav inside.
 
 ### 6.8 Replace native dialogs & destructive-action safety

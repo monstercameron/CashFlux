@@ -73,6 +73,20 @@ const flush = async (page) => {
   await page.waitForTimeout(250);
 };
 
+// The /transactions list caps at a page size (default 50). Set it to "All" so newly
+// added rows are not hidden below the fold.
+const showAllRows = async (page) => {
+  await page.evaluate(() => {
+    const sel = Array.from(document.querySelectorAll("select")).find(s =>
+      Array.from(s.options).map(o => o.text).join(",") === "25,50,100,All");
+    if (sel) {
+      const all = Array.from(sel.options).find(o => o.text === "All");
+      if (all) { sel.value = all.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    }
+  });
+  await page.waitForTimeout(400);
+};
+
 const selectByText = (page, label, valueRe) => page.evaluate(({ label, valueRe }) => {
   const sel = Array.from(document.querySelectorAll("select")).find(s =>
     s.getAttribute("aria-label") === label);
@@ -117,22 +131,38 @@ const addExpense = async (page, { desc, amount, category, dateStr }) => {
   if (openR !== "opened") return openR;
   await page.waitForTimeout(500);
 
+  // Description: the field uses placeholder "What was it for?" (no aria-label) — L78 finding.
   await page.evaluate(({ desc }) => {
-    const inp = Array.from(document.querySelectorAll("input, textarea")).find(i =>
-      /description|payee|note/i.test(i.getAttribute("aria-label") || i.getAttribute("placeholder") || ""));
+    const inp = document.querySelector('input[placeholder="What was it for?"]') ||
+      Array.from(document.querySelectorAll("input, textarea")).find(i =>
+        /what was it for|description|payee|note/i.test(i.getAttribute("aria-label") || i.getAttribute("placeholder") || ""));
     if (inp) { inp.focus(); inp.value = desc;
       inp.dispatchEvent(new Event("input", { bubbles: true }));
       inp.dispatchEvent(new Event("change", { bubbles: true })); }
   }, { desc });
 
   await page.evaluate((a) => {
-    const inp = document.querySelector('input[type="number"]');
+    const inp = document.querySelector('input[placeholder="Amount"]') || document.querySelector('input[type="number"]');
     if (inp) { inp.value = a;
       inp.dispatchEvent(new Event("input", { bubbles: true }));
       inp.dispatchEvent(new Event("change", { bubbles: true })); }
   }, String(amount));
 
-  await selectByText(page, "Type", "Expense");
+  // Type is a button toggle ("Expense"/"Income"), not a select — L78 finding.
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll("button")).find(b => b.textContent.trim() === "Expense");
+    if (b) b.click();
+  });
+
+  // Default account in the form is an investment account ("401(k)/Brokerage") — pick a
+  // realistic everyday spending account instead (L78 finding: poor default).
+  await page.evaluate(() => {
+    const acct = Array.from(document.querySelectorAll("select")).find(s => s.getAttribute("aria-label") === "Account");
+    if (acct) {
+      const o = Array.from(acct.options).find(o => /Everyday Checking|Checking|Credit Card/i.test(o.text));
+      if (o) { acct.value = o.value; acct.dispatchEvent(new Event("change", { bubbles: true })); }
+    }
+  });
 
   if (category) {
     await page.evaluate((match) => {
@@ -211,6 +241,7 @@ try {
   await navTo(page, "Transactions");
   await dismissModal(page);
   await page.waitForTimeout(600);
+  await showAllRows(page);
   await page.screenshot({ path: SS("L78_p1_before.png") });
 
   const baselineCount = await countTxnRows(page);
@@ -236,7 +267,9 @@ try {
       fail(`C-2 add #${i+1} "${r.desc}" did not submit: ${res}`);
     }
   }
-  note(`Added ${added}/${RECEIPTS.length} receipts. Final visible rows: ${lastCount}`);
+  await showAllRows(page);
+  lastCount = await countTxnRows(page);
+  note(`Added ${added}/${RECEIPTS.length} receipts. Final visible rows (page=All): ${lastCount}`);
 
   if (added === RECEIPTS.length) pass(`C-2 STRESS — all ${RECEIPTS.length} rapid adds submitted without crash`);
   else                           fail(`C-2 STRESS — only ${added}/${RECEIPTS.length} adds submitted`);
@@ -317,6 +350,7 @@ try {
   await navTo(page, "Transactions");
   await dismissModal(page);
   await page.waitForTimeout(700);
+  await showAllRows(page);
   const preDelCount = await countTxnRows(page);
 
   const delR = await page.evaluate((stamp) => {
@@ -364,6 +398,7 @@ try {
   await navTo(page, "Transactions");
   await dismissModal(page);
   await page.waitForTimeout(800);
+  await showAllRows(page);
   const afterReloadStamped = await page.evaluate((stamp) =>
     (document.body.textContent.match(new RegExp(stamp, "g")) || []).length, STAMP);
   note(`Stamped rows after reload: ${afterReloadStamped}`);

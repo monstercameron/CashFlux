@@ -251,6 +251,7 @@ func Transactions() ui.Node {
 		}
 		bump()
 		focusRowAfterDelete(".txn-table tbody", "tr.row", focusIdx)
+		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
 	}
 
 	toggleSelect := func(txnID string) {

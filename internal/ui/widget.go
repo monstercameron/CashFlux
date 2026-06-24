@@ -131,6 +131,11 @@ func widget(props WidgetProps) uic.Node {
 	items := itemsAtom.Get()
 	modeAtom := uistate.UseLayoutMode()
 	mode := modeAtom.Get()
+	// Roving tabindex + grab-mode state (unconditional hooks, used below only for
+	// draggable tiles): the grid is a single Tab stop and arrows move focus between
+	// tiles, with Space/Enter to grab a tile for keyboard move/resize (widget a11y).
+	rovingAtom := uistate.UseCurrentTile()
+	grabbedAtom := uistate.UseGrabbedTile()
 
 	// Drop hidden widgets before packing so the visible tiles reflow into the gaps
 	// (the dashboard skips rendering hidden tiles; this keeps everyone else's
@@ -214,47 +219,53 @@ func widget(props WidgetProps) uic.Node {
 	args = append(args, Style(style))
 	if props.Draggable {
 		id := props.ID
+		// Roving tabindex: the grid is a SINGLE Tab stop — only the "current" tile is
+		// tabbable (tabindex 0), the rest are -1 — so Tab no longer steps through all
+		// 12+ tiles. The current tile defaults to the first in document order.
+		baked := dashlayout.Arrange(items, mode)
+		firstID := ""
+		if len(baked) > 0 {
+			firstID = baked[0].ID
+		}
+		cur := rovingAtom.Get()
+		isTabStop := id != "" && (id == cur || (cur == "" && id == firstID))
+		grabbed := id != "" && grabbedAtom.Get() == id
+		tabidx := "-1"
+		if isTabStop {
+			tabidx = "0"
+		}
+		grabbedAttr := "false"
+		if grabbed {
+			grabbedAttr = "true"
+		}
 		args = append(args,
 			Attr("draggable", "true"),
-			// Keyboard alternatives to pointer drag/resize (WCAG 2.1.1): focus a tile
-			// and use the arrow keys to move it one slot earlier/later; hold Shift to
-			// grow/shrink its span instead (B15).
-			Attr("tabindex", "0"),
-			Attr("aria-keyshortcuts", "ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight"),
+			Attr("tabindex", tabidx),
+			Attr("aria-grabbed", grabbedAttr),
+			// APG grid pattern (WCAG 2.1.1 keyboard, without 12+ tab stops): arrows move
+			// FOCUS between tiles; Space/Enter GRABS a tile, then arrows move it (Shift
+			// to resize) until Space/Enter/Escape drops it.
+			Attr("aria-keyshortcuts", "Space Enter ArrowUp ArrowDown ArrowLeft ArrowRight"),
 			OnKeyDown(func(e uic.KeyboardEvent) {
 				key := e.GetKey()
-				shift := e.JSValue().Get("shiftKey").Bool()
-				if shift {
-					// Resize: ←/→ adjust width, ↑/↓ adjust height (clamped to bounds).
-					dc, dr := 0, 0
-					switch key {
-					case "ArrowLeft":
-						dc = -1
-					case "ArrowRight":
-						dc = 1
-					case "ArrowUp":
-						dr = -1
-					case "ArrowDown":
-						dr = 1
-					default:
-						return
-					}
+				// Grab / release toggle.
+				if key == " " || key == "Spacebar" || key == "Enter" {
 					e.PreventDefault()
-					curCol, curRow := 1, 1
-					for _, it := range items {
-						if it.ID == id {
-							curCol, curRow = it.ColSpan, it.RowSpan
-							break
-						}
+					if grabbed {
+						grabbedAtom.Set("")
+					} else {
+						grabbedAtom.Set(id)
+						rovingAtom.Set(id)
 					}
-					nc := dashlayout.ClampSpan(curCol+dc, maxColSpan)
-					nr := dashlayout.ClampSpan(curRow+dr, maxRowSpan)
-					next := dashlayout.ResizeItem(items, id, nc, nr)
-					itemsAtom.Set(next)
-					uistate.PersistItems(next)
 					return
 				}
-				// Move one slot earlier (←/↑) or later (→/↓).
+				if key == "Escape" {
+					if grabbed {
+						e.PreventDefault()
+						grabbedAtom.Set("")
+					}
+					return
+				}
 				var delta int
 				switch key {
 				case "ArrowLeft", "ArrowUp":
@@ -265,9 +276,55 @@ func widget(props WidgetProps) uic.Node {
 					return
 				}
 				e.PreventDefault()
-				baked := dashlayout.Arrange(items, mode)
+				if grabbed {
+					// MOVE / RESIZE the grabbed tile.
+					if e.JSValue().Get("shiftKey").Bool() {
+						dc, dr := 0, 0
+						if key == "ArrowLeft" {
+							dc = -1
+						} else if key == "ArrowRight" {
+							dc = 1
+						} else if key == "ArrowUp" {
+							dr = -1
+						} else {
+							dr = 1
+						}
+						curCol, curRow := 1, 1
+						for _, it := range items {
+							if it.ID == id {
+								curCol, curRow = it.ColSpan, it.RowSpan
+								break
+							}
+						}
+						next := dashlayout.ResizeItem(items, id, dashlayout.ClampSpan(curCol+dc, maxColSpan), dashlayout.ClampSpan(curRow+dr, maxRowSpan))
+						itemsAtom.Set(next)
+						uistate.PersistItems(next)
+						return
+					}
+					bk := dashlayout.Arrange(items, mode)
+					ci := -1
+					for i, it := range bk {
+						if it.ID == id {
+							ci = i
+							break
+						}
+					}
+					if ci < 0 {
+						return
+					}
+					next := dashlayout.Move(bk, id, ci+delta)
+					itemsAtom.Set(next)
+					uistate.PersistItems(next)
+					if mode != dashlayout.ModeCustom {
+						modeAtom.Set(dashlayout.ModeCustom)
+						uistate.PersistLayoutMode(dashlayout.ModeCustom)
+					}
+					return
+				}
+				// NOT grabbed: arrows move FOCUS between tiles (roving tabindex).
+				bk := dashlayout.Arrange(items, mode)
 				ci := -1
-				for i, it := range baked {
+				for i, it := range bk {
 					if it.ID == id {
 						ci = i
 						break
@@ -276,12 +333,19 @@ func widget(props WidgetProps) uic.Node {
 				if ci < 0 {
 					return
 				}
-				next := dashlayout.Move(baked, id, ci+delta)
-				itemsAtom.Set(next)
-				uistate.PersistItems(next)
-				if mode != dashlayout.ModeCustom {
-					modeAtom.Set(dashlayout.ModeCustom)
-					uistate.PersistLayoutMode(dashlayout.ModeCustom)
+				ni := ci + delta
+				if ni < 0 {
+					ni = 0
+				}
+				if ni >= len(bk) {
+					ni = len(bk) - 1
+				}
+				nextID := bk[ni].ID
+				rovingAtom.Set(nextID)
+				if doc := js.Global().Get("document"); doc.Truthy() {
+					if el := doc.Call("querySelector", "[data-widget=\""+nextID+"\"]"); el.Truthy() && el.Get("focus").Type() == js.TypeFunction {
+						el.Call("focus")
+					}
 				}
 			}),
 			OnDragStart(func() {

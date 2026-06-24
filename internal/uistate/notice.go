@@ -16,6 +16,10 @@ type Notice struct {
 	// Leaving marks the notice as animating out: the toast keeps its text/styling
 	// so the exit transition (.toast.hide) can play, then a short timer clears it.
 	Leaving bool
+	// Undoable marks a notice whose action can be reversed (a delete or change), so
+	// the toast shows an explicit "Undo" button instead of relying on a text-pattern
+	// heuristic. Set it via WithUndoable / PostUndoable from delete/change handlers.
+	Undoable bool
 }
 
 const noticeAtomID = "app:notice"
@@ -51,6 +55,22 @@ func PostNotice(text string, isErr bool) {
 // for identical text). isErr styles it as an error rather than an info notice.
 func (n Notice) With(text string, isErr bool) Notice {
 	return Notice{Seq: n.Seq + 1, Text: text, Err: isErr}
+}
+
+// WithUndoable returns n advanced to show an undoable info notice — the toast
+// renders an explicit "Undo" button (when the undo stack is non-empty). Use it
+// from delete/change handlers so the action can be reversed in one click (§6.8).
+func (n Notice) WithUndoable(text string) Notice {
+	return Notice{Seq: n.Seq + 1, Text: text, Undoable: true}
+}
+
+// PostUndoable shows an undoable toast from outside a component render (delete
+// handlers run inside one, but this keeps parity with PostNotice). No-op until the
+// toast surface has rendered once.
+func PostUndoable(text string) {
+	if noticeCaptured {
+		capturedNotice.Set(capturedNotice.Get().WithUndoable(text))
+	}
 }
 
 // Cleared returns n with its message removed but Seq preserved, so dismissing

@@ -142,7 +142,9 @@ func Toast() uic.Node {
 
 	// Show the inline Undo button when the undo stack has something to undo and
 	// the notice text indicates a destructive or mutating operation.
-	showUndo := auditview.CanUndoFunc() && toastNoticeIsUndoable(n.Text)
+	// Prefer the explicit Notice.Undoable flag (set by delete/change handlers);
+	// fall back to the text heuristic for callers that haven't been updated yet.
+	showUndo := auditview.CanUndoFunc() && (n.Undoable || toastNoticeIsUndoable(n.Text))
 
 	return Div(ClassStr(cls), Attr("role", role), Attr("aria-live", live),
 		Span(css.Class("toast-msg"), n.Text),
