@@ -198,6 +198,18 @@ try {
     const moneyCells = await page.locator(".wb-tile .vb-table tbody tr td.fig").allTextContents();
     if (!moneyCells.some((t) => /[$€£¥]/.test(t))) fail(`recent list amount column is not currency-formatted: ${JSON.stringify(moneyCells.slice(0, 4))}`);
   }
+  // 5b) The list CONTENT respects the tile height (Cam: "don't respect the multiple
+  // widget sizes"): a shorter tile shows fewer rows than a taller one. recent loads at
+  // 2-tall; shrink to 1-tall → fewer rows, then grow to 3-tall → more rows.
+  {
+    for (let i = 0; i < 3; i++) await page.locator('button[aria-label="Shorter"]').click();
+    await page.waitForTimeout(300);
+    const shortRows = await page.locator(".wb-tile .vb-table tbody tr").count();
+    for (let i = 0; i < 3; i++) await page.locator('button[aria-label="Taller"]').click();
+    await page.waitForTimeout(300);
+    const tallRows = await page.locator(".wb-tile .vb-table tbody tr").count();
+    if (!(tallRows > shortRows)) fail(`list did not reflow to tile height: short=${shortRows}, tall=${tallRows} (expected tall > short)`);
+  }
 
   // 6) Wiring via the inspector: on the recent-list graph, select the dataset node and
   // confirm an input-source dropdown drives connections (the list node has an "in"

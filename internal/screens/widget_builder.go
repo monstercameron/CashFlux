@@ -211,12 +211,14 @@ const vbStyleCSS = `
 .vb-previewpane{display:flex;flex-direction:column;gap:.35rem}
 .vb .wb-field{display:flex;flex-direction:column;gap:.2rem}
 .vb .wb-field-label{font-size:12px;color:var(--dim,#9ca3af)}
-.vb .wb-stage{display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:10px;background:var(--bg,#0e0e10)}
+.vb .wb-stage{display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:10px;background:var(--bg,#0e0e10);max-height:360px;overflow:auto}
 .vb .wtitle{font-family:'Fraunces',serif;font-weight:600}
-.vb .wb-tile .wbody{flex:1;min-height:0;display:flex;flex-direction:column}
+.vb .wb-tile .wbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 /* D3 reads the container's measured height; guarantee one so charts never collapse to
    0px in an auto-height tile body (preview pane or a freshly-published card). */
-.vb-chart{width:100%;min-height:170px;flex:1}
+/* Charts fill the tile body (flex:1) with a small floor so they stay legible without
+   overflowing a 1-row tile; taller tiles give the chart more height automatically. */
+.vb-chart{width:100%;min-height:90px;flex:1}
 `
 
 // VisualBuilder is the node-graph widget editor.
@@ -553,7 +555,7 @@ func VisualBuilder() ui.Node {
 			Span(css.Class("vb-tool-label"), "Live preview"),
 			Div(css.Class("wb-stage"),
 				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(col.Get()), "height": span(row.Get())}),
-					vbRenderTile(res, g)),
+					vbRenderTile(res, g, row.Get())),
 			),
 		),
 	)
@@ -807,7 +809,7 @@ func vbPublishedWidget(name string, colSpan, rowSpan int) ui.Node {
 		ID: vbCardPrefix + name, Title: name, Draggable: true, Resizable: true,
 		GridColumn: "span " + strconv.Itoa(clampSpan(colSpan, 4)),
 		GridRow:    "span " + strconv.Itoa(clampSpan(rowSpan, 3)),
-		Body:       vbRenderTile(res, g),
+		Body:       vbRenderTile(res, g, clampSpan(rowSpan, 3)),
 	})
 }
 
@@ -1123,10 +1125,13 @@ func vbPresets() map[string]cardgraph.Graph {
 	p["recent"] = cardgraph.Graph{
 		Nodes: []cardgraph.Node{
 			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "transactions"}, Pos: cardgraph.Point{X: 40, Y: 40}},
-			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Recent transactions", "limit": "6", "cols": "date,desc,signed"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+			// limit is the hard ceiling; the tile height trims it to what fits (≈3/row), so
+			// a 2-tall tile shows ~6 like the dashboard while a 3-tall tile shows more.
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Recent transactions", "limit": "12", "cols": "date,desc,signed"}, Pos: cardgraph.Point{X: 340, Y: 40}},
 		},
 		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
 		Root:  "n2",
+		Cols:  2, Rows: 2,
 	}
 
 	// figureCard builds a one-figure KPI/stat card from an engine figure.
@@ -1692,7 +1697,10 @@ func vbRootFormat(g cardgraph.Graph) string {
 	return ""
 }
 
-func vbRenderTile(res cardgraph.Result, g cardgraph.Graph) ui.Node {
+// vbRenderTile renders the card body at the given row height (rowSpan, 1..3) so
+// height-sensitive content (lists) can show more rows in a taller tile — the card
+// respecting its size, not just the grid cell.
+func vbRenderTile(res cardgraph.Result, g cardgraph.Graph, rows int) ui.Node {
 	if res.Render == nil {
 		msg := "This card isn't finished — wire a value into the output node."
 		for _, is := range res.Issues {
@@ -1710,11 +1718,11 @@ func vbRenderTile(res cardgraph.Result, g cardgraph.Graph) ui.Node {
 	format := vbRootFormat(g)
 	return Div(
 		Div(css.Class("wh"), Span(css.Class("wtitle"), v.Title)),
-		Div(css.Class("wbody"), vbRenderViz(v, format)),
+		Div(css.Class("wbody"), vbRenderViz(v, format, rows)),
 	)
 }
 
-func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
+func vbRenderViz(v *cardgraph.VizBlock, format string, rows int) ui.Node {
 	switch v.Kind {
 	case "text":
 		return P(css.Class("t-body"), v.Text)
@@ -1754,7 +1762,7 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 	case "chart":
 		return vbChart(v)
 	case "list":
-		return vbList(v)
+		return vbList(v, rows)
 	case "stack":
 		// Composite tile: render each child block. Direction = column (top→bottom,
 		// default) or row (side by side) per the layout node.
@@ -1766,7 +1774,7 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 			if rowDir {
 				margin = map[string]string{"flex": "1", "min-width": "0"}
 			}
-			blocks = append(blocks, Div(Style(margin), vbRenderViz(&b, format)))
+			blocks = append(blocks, Div(Style(margin), vbRenderViz(&b, format, rows)))
 		}
 		stackStyle := map[string]string{}
 		if rowDir {
@@ -1961,12 +1969,21 @@ func vbRunAction(action string) {
 // as accounting money (currency symbol, parentheses for negatives) toned green/red via
 // the same fmtMoney/figTone/ColorClass path the dashboard uses — so a list clone is
 // byte-for-byte the same DOM, not a look-alike.
-func vbList(v *cardgraph.VizBlock) ui.Node {
+func vbList(v *cardgraph.VizBlock, tileRows int) ui.Node {
 	if len(v.Rows) == 0 {
 		return P(css.Class("empty t-body", tw.TextDim), "No rows.")
 	}
-	rows := make([]ui.Node, 0, len(v.Rows))
-	for _, r := range v.Rows {
+	// Respect the tile's height: a taller tile shows more rows. ~4 rows fit per grid-row
+	// (a 152px cell, less the header). The engine's "limit" prop is still the hard
+	// ceiling — this only trims to what fits, so a 1-tall list isn't a clipped overflow.
+	src := v.Rows
+	if tileRows >= 1 {
+		if fit := tileRows * 3; fit < len(src) {
+			src = src[:fit]
+		}
+	}
+	rows := make([]ui.Node, 0, len(src))
+	for _, r := range src {
 		cells := make([]ui.Node, 0, len(v.Cols))
 		for i, c := range v.Cols {
 			cell := r[c.Name]
