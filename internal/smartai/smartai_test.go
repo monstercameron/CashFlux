@@ -8,14 +8,26 @@ import (
 )
 
 func TestImplemented(t *testing.T) {
-	if !Implemented("SMART-A5") {
-		t.Errorf("A5 should be implemented")
+	for _, c := range []string{"SMART-A5", "SMART-P3"} {
+		if !Implemented(c) {
+			t.Errorf("%s should be implemented", c)
+		}
 	}
 	if Implemented("SMART-NOPE") {
 		t.Errorf("unknown code should not be implemented")
 	}
-	if len(ImplementedCodes()) == 0 {
-		t.Errorf("expected at least one implemented AI feature")
+	if len(ImplementedCodes()) < 2 {
+		t.Errorf("expected at least two implemented AI features, got %d", len(ImplementedCodes()))
+	}
+}
+
+func TestOutlook(t *testing.T) {
+	r := Outlook("Net worth: $42,000\nThis month: +$800")
+	if r.System != OutlookSystem {
+		t.Errorf("system prompt mismatch")
+	}
+	if !strings.Contains(r.User, "Net worth: $42,000") {
+		t.Errorf("context not embedded: %q", r.User)
 	}
 }
 

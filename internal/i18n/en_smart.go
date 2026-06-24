@@ -35,6 +35,8 @@ var smartKeys = Catalog{
 	"smart.askPlaceholder":  "e.g. Which account grew the most this year?",
 	"smart.ask":             "Ask",
 	"smart.asking":          "Asking…",
+	"smart.outlookTitle":    "Summarize my outlook",
+	"smart.outlookBtn":      "Summarize",
 }
 
 func init() {

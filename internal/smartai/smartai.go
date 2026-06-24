@@ -23,6 +23,7 @@ type Request struct {
 // (mirroring the Free-engine HasEngine gate). It grows as features ship.
 var implemented = map[string]bool{
 	"SMART-A5": true, // natural-language account Q&A
+	"SMART-P3": true, // narrated forecast/outlook summary
 }
 
 // Implemented reports whether the AI feature has a shipped UI.
@@ -75,4 +76,16 @@ func AccountQA(question, accountContext string) Request {
 	q := strings.TrimSpace(question)
 	user := "Accounts:\n" + strings.TrimSpace(accountContext) + "\n\nQuestion: " + q
 	return Request{System: AccountQASystem, User: user}
+}
+
+// OutlookSystem is the system prompt for SMART-P3: narrate the figures into one
+// short, calm paragraph a person can act on.
+const OutlookSystem = "You are a calm personal-finance assistant. Given the figures below, write ONE short " +
+	"paragraph (2–4 sentences) summarizing the person's financial outlook in plain English: what's going " +
+	"well, what to watch, and the single most useful next step. Use the actual numbers. No headings, no lists, no disclaimers."
+
+// Outlook builds the SMART-P3 request from a pre-formatted snapshot of the
+// household's position (net worth, this-month flows, runway, upcoming bills).
+func Outlook(context string) Request {
+	return Request{System: OutlookSystem, User: "Figures:\n" + strings.TrimSpace(context)}
 }

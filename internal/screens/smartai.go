@@ -214,11 +214,91 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 
 // smartAIControl renders the interactive control for one implemented AI feature.
 func smartAIControl(f smart.Feature, conn smartAIConn) ui.Node {
+	cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
 	switch f.Code {
 	case "SMART-A5":
-		cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
 		return ui.CreateElement(smartAskBar, smartAskBarProps{Conn: conn, Cost: cost})
+	case "SMART-P3":
+		return ui.CreateElement(smartOutlookCard, smartOutlookProps{Conn: conn, Cost: cost})
 	default:
 		return Fragment()
 	}
+}
+
+// outlookContextString builds a compact snapshot of the household's position for
+// the P3 narration: net worth, this-month income/expense/net, and liquid cash.
+func outlookContextString(app *appstate.App, rates currency.Rates) string {
+	accounts := app.Accounts()
+	txns := app.Transactions()
+	net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
+	var b strings.Builder
+	b.WriteString("Net worth: " + fmtMoney(net) + " (assets " + fmtMoney(assets) + ", debts " + fmtMoney(liab) + ")\n")
+	w := uistate.UsePeriod().Get()
+	start, end := w.Range()
+	income, expense, err := ledger.PeriodTotals(txns, start, end, rates)
+	if err == nil {
+		b.WriteString("This period — income " + fmtMoney(income) + ", spending " + fmtMoney(expense) + "\n")
+	}
+	return b.String()
+}
+
+// smartOutlookProps carries the P3 narration control's config.
+type smartOutlookProps struct {
+	Conn smartAIConn
+	Cost string
+}
+
+// smartOutlookCard is the SMART-P3 control: a "Summarize my outlook" button that
+// narrates the live figures into one plain-English paragraph. Its own component
+// for stable state hooks.
+func smartOutlookCard(props smartOutlookProps) ui.Node {
+	answer := ui.UseState("")
+	loading := ui.UseState(false)
+	errMsg := ui.UseState("")
+
+	run := ui.UseEvent(func() {
+		if loading.Get() {
+			return
+		}
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		base := app.Settings().BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		req := smartai.Outlook(outlookContextString(app, rates))
+		loading.Set(true)
+		errMsg.Set("")
+		answer.Set("")
+		runSmartAI(props.Conn, req,
+			func(text string) { loading.Set(false); answer.Set(strings.TrimSpace(text)) },
+			func(e string) { loading.Set(false); errMsg.Set(e) },
+		)
+	})
+
+	var result ui.Node = Fragment()
+	if errMsg.Get() != "" {
+		result = P(ClassStr(tw.Fold(tw.Text13, tw.TextDown, tw.Mt2)), errMsg.Get())
+	} else if answer.Get() != "" {
+		result = P(ClassStr(tw.Fold(tw.Text14, tw.Mt2)), Attr("data-testid", "smart-outlook-answer"), answer.Get())
+	}
+	btnLabel := uistate.T("smart.outlookBtn")
+	if loading.Get() {
+		btnLabel = uistate.T("smart.asking")
+	}
+
+	return Div(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap2, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
+		Attr("data-testid", "smart-outlook-P3"),
+		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)),
+			Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), uistate.T("smart.outlookTitle")),
+			Span(ClassStr(tw.Fold(tw.Text11, tw.TextFaint)), props.Cost),
+		),
+		Button(ClassStr("btn btn-primary "+tw.Fold(tw.SelfStart)), Type("button"),
+			Attr("data-testid", "smart-outlook-btn"), OnClick(run), btnLabel,
+		),
+		result,
+	)
 }
