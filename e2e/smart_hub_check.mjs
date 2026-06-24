@@ -135,6 +135,14 @@ async function gotoSmart(page) {
     const aiText = await page.locator('[data-testid="smart-ai"]').innerText();
     ok(/provider/i.test(aiText), "AI section explains a provider is required (honest gating, no dead control)");
 
+    // An enabled AI feature exposes per-feature run controls: a schedule/cadence
+    // picker (when it runs) and a mute/snooze button.
+    ok(await page.locator('[data-testid="smart-cadence-SMART-A5"]').count() > 0, "enabled AI feature shows a schedule/cadence picker");
+    ok(await page.locator('[data-testid="smart-mute-SMART-A5"]').count() > 0, "enabled AI feature shows a mute control");
+    // The cadence picker offers Manual (the click-before-run default) and Weekly.
+    const cadOpts = await page.locator('[data-testid="smart-cadence-SMART-A5"] option').allInnerTexts();
+    ok(cadOpts.some((o) => /manual/i.test(o)) && cadOpts.some((o) => /weekly/i.test(o)), "cadence picker offers Manual + Weekly schedules");
+
     const releasedFnOnly = consoleErrors.every((e) => /released function/i.test(e));
     if (consoleErrors.length && !releasedFnOnly) {
       console.log("  console errors (non-gating):", consoleErrors.slice(0, 5));

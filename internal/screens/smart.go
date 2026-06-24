@@ -168,25 +168,88 @@ func tierBadge(f smart.Feature, hasProvider bool) ui.Node {
 	)
 }
 
-// smartFeatureRow is one opt-in toggle row: the feature name + summary, its
-// Free/AI cost badge, and a switch. Its own component so the toggle's hook sits
-// at a stable position (the On*-hooks-in-loops rule).
+// smartFeatureRow is one feature's management row: the name + cost badge, and —
+// when enabled — its run controls (a cadence/schedule picker for AI features, a
+// mute/snooze button) plus the on/off switch. Its own component so the On* hooks
+// sit at stable positions (the On*-hooks-in-loops rule).
 func smartFeatureRow(props smartRowProps) ui.Node {
 	rev := uistate.UseDataRevision()
 	f := props.F
+	settings := uistate.LoadSmartSettings()
+	muted := settings.IsMuted(f.Code)
+	cad := settings.CadenceFor(f.Code)
+
 	onChange := func(on bool) {
 		uistate.SetSmartFeatureEnabled(f.Code, on)
 		rev.Set(rev.Get() + 1)
 	}
+	onMute := ui.UseEvent(func() {
+		uistate.SetSmartMuted(f.Code, !muted)
+		rev.Set(rev.Get() + 1)
+	})
+	onCadence := ui.UseEvent(func(v string) {
+		uistate.SetSmartCadence(f.Code, smart.Cadence(v))
+		rev.Set(rev.Get() + 1)
+	})
+
+	// Run controls — only meaningful when the feature is on.
+	var controls ui.Node = Fragment()
+	if props.On {
+		// Cadence/schedule picker: AI only (Free features are free + instant, so
+		// they always run live — scheduling them would be a no-op control).
+		var cadencePicker ui.Node = Fragment()
+		if f.Tier == smart.TierAI {
+			cadencePicker = Select(ClassStr("field "+tw.Fold(tw.Text12)),
+				Attr("data-testid", "smart-cadence-"+f.Code),
+				Attr("aria-label", uistate.T("smart.schedule")),
+				OnChange(onCadence),
+				MapKeyed(smart.AllCadences(),
+					func(c smart.Cadence) any { return string(c) },
+					func(c smart.Cadence) ui.Node {
+						return Option(Value(string(c)), SelectedIf(c == cad), c.Label())
+					},
+				),
+			)
+		}
+		muteLabel := uistate.T("smart.mute")
+		if muted {
+			muteLabel = uistate.T("smart.muted")
+		}
+		controls = Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
+			cadencePicker,
+			Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+				Attr("data-testid", "smart-mute-"+f.Code),
+				Attr("aria-pressed", boolAttrStr(muted)),
+				OnClick(onMute),
+				muteLabel,
+			),
+		)
+	}
+
+	leftCls := tw.Fold(tw.FlexCol, tw.Gap1, tw.MinW0)
+	if muted {
+		leftCls = tw.Fold(tw.FlexCol, tw.Gap1, tw.MinW0, tw.Opacity60)
+	}
 	return Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap3, tw.Py2, tw.BorderB, tw.BorderLine)),
 		Attr("data-testid", "smart-feature-"+f.Code),
-		Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap1, tw.MinW0)),
+		Div(ClassStr(leftCls),
 			Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
 				Span(ClassStr(tw.Fold(tw.Text14, tw.FontMedium)), f.Title),
 				tierBadge(f, props.HasProvider),
 			),
 			Span(ClassStr(tw.Fold(tw.Text12, tw.TextDim)), f.Summary),
 		),
-		uiw.Toggle(uiw.ToggleProps{On: props.On, OnChange: onChange, Label: f.Title}),
+		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap3)),
+			controls,
+			uiw.Toggle(uiw.ToggleProps{On: props.On, OnChange: onChange, Label: f.Title}),
+		),
 	)
+}
+
+// boolAttrStr renders a bool as an aria attribute value.
+func boolAttrStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
