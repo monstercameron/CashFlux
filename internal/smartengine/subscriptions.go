@@ -22,6 +22,69 @@ func init() {
 	register("SMART-SU11", su11Zombie)
 	register("SMART-SU12", su12Attribution)
 	register("SMART-SU14", su14CancellationTally)
+	register("SMART-SU15", su15Pause)
+}
+
+const su15MinCharges = 3 // need this many charges to judge a seasonal pattern
+
+// SMART-SU15 — Pause-instead-of-cancel. Detects a merchant charged only part of
+// the year (gaps between charges) and suggests pausing in off-months rather than
+// cancelling outright.
+func su15Pause(in Input) []smart.Insight {
+	type info struct {
+		months map[int]bool // year*12+month buckets that had a charge
+		amt    int64        // a representative amount (base)
+		label  string
+	}
+	byMerchant := map[string]*info{}
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(txnLabel(t)))
+		if key == "" {
+			continue
+		}
+		m := byMerchant[key]
+		if m == nil {
+			m = &info{months: map[int]bool{}, label: txnLabel(t)}
+			byMerchant[key] = m
+		}
+		m.months[t.Date.Year()*12+int(t.Date.Month())-1] = true
+		m.amt = abs64(in.toBaseMinor(t.Amount.Amount, t.Amount.Currency))
+	}
+	var out []smart.Insight
+	for key, m := range byMerchant {
+		if len(m.months) < su15MinCharges {
+			continue
+		}
+		lo, hi := 1<<30, -1
+		for k := range m.months {
+			if k < lo {
+				lo = k
+			}
+			if k > hi {
+				hi = k
+			}
+		}
+		span := hi - lo + 1
+		// A seasonal pattern spans more months than it actually charged in — i.e.
+		// there are off-months with no charge between the first and last.
+		if span <= len(m.months) {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU15",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU15:" + key,
+			Title:   m.label + " looks seasonal",
+			Detail: m.label + " charges only part of the year. Pausing it in the off-months — rather than cancelling " +
+				"and re-subscribing — keeps your settings and saves the gap months.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(m.amt, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
 }
 
 // SMART-SU7 — Usage-vs-cost flag. When a subscription's category shows no other

@@ -20,9 +20,51 @@ func mny(minor int64, cur string) money.Money { return money.New(minor, cur) }
 func init() {
 	register("SMART-T2", t2Duplicates)
 	register("SMART-T6", t6SpendingSpike)
+	register("SMART-T4", t4BulkEdit)
 	register("SMART-T7", t7MissingTxn)
 	register("SMART-T11", t11Timeline)
 	register("SMART-T13", t13RefundMatch)
+}
+
+const t4MinTxns = 3 // need this many same-merchant entries to suggest unifying
+
+// SMART-T4 — Bulk-edit suggestions. Finds a merchant whose transactions are split
+// across different categories and suggests unifying them in one pass.
+func t4BulkEdit(in Input) []smart.Insight {
+	byMerchant := map[string]map[string]int{}
+	counts := map[string]int{}
+	labels := map[string]string{}
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || t.CategoryID == "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(txnLabel(t)))
+		if key == "" {
+			continue
+		}
+		if byMerchant[key] == nil {
+			byMerchant[key] = map[string]int{}
+		}
+		byMerchant[key][t.CategoryID]++
+		counts[key]++
+		labels[key] = txnLabel(t)
+	}
+	var out []smart.Insight
+	for key, cats := range byMerchant {
+		if len(cats) < 2 || counts[key] < t4MinTxns {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-T4",
+			Page:    smart.PageTransactions,
+			Key:     "SMART-T4:" + key,
+			Title:   labels[key] + " transactions use different categories",
+			Detail: plural(int64(counts[key]), "entry") + " from " + labels[key] + " are split across " +
+				plural(int64(len(cats)), "category") + ". Unifying them keeps your reports consistent.",
+			Severity: smart.SeverityNudge,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review transactions", Route: "/transactions"}))
+	}
+	return out
 }
 
 // SMART-T11 — Cash-flow timeline annotation. Surfaces a notable recent moment —

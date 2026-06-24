@@ -24,9 +24,109 @@ func init() {
 	register("SMART-G13", g13Windfall)
 	register("SMART-G14", g14LinkAccount)
 	register("SMART-G15", g15DebtStrategy)
+	register("SMART-G2", g2Forecast)
+	register("SMART-G10", g10WhatIf)
 	register("SMART-G17", g17AutoContribute)
 	register("SMART-G18", g18Feasibility)
 	register("SMART-G19", g19BorrowWarning)
+	register("SMART-G20", g20Shared)
+}
+
+// SMART-G2 — Goal completion forecast. Projects a deadline goal's finish date if
+// the user put their whole spare surplus toward it, and warns when even that
+// lands after the planned date.
+func g2Forecast(in Input) []smart.Insight {
+	surplus := in.monthlySurplusBase()
+	if surplus <= 0 {
+		return nil
+	}
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived || g.TargetDate.IsZero() {
+			continue
+		}
+		if c, err := goals.IsComplete(g); err != nil || c {
+			continue
+		}
+		finish, ok, err := goals.Project(g, mny(surplus, g.TargetAmount.Currency), in.Now)
+		if err != nil || !ok || !finish.After(g.TargetDate) {
+			continue // on track or ahead at this pace — no warning
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G2",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G2:" + g.ID,
+			Title:   g.Name + " is likely to finish late",
+			Detail: "Even putting your full ~" + in.baseMoney(surplus).Format(2) + "/mo surplus toward " + g.Name +
+				", it lands around " + finish.Format("Jan 2006") + " — later than the planned " + g.TargetDate.Format("Jan 2006") + ".",
+			Severity: smart.SeverityWarn,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
+}
+
+const g10ExtraStep = 100_00 // the illustrative "add $100/mo" what-if
+
+// SMART-G10 — "What if" goal simulator. Shows how much sooner a deadline goal
+// finishes if the user adds a fixed extra contribution each month.
+func g10WhatIf(in Input) []smart.Insight {
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived || g.TargetDate.IsZero() {
+			continue
+		}
+		needed, ok, err := goals.MonthlyNeeded(g, in.Now)
+		if err != nil || !ok {
+			continue
+		}
+		cur := needed.Amount
+		base, ok1, _ := goals.Project(g, mny(cur, needed.Currency), in.Now)
+		faster, ok2, _ := goals.Project(g, mny(cur+g10ExtraStep, needed.Currency), in.Now)
+		if !ok1 || !ok2 {
+			continue
+		}
+		months := monthsBetween(faster, base)
+		if months < 1 {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G10",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G10:" + g.ID,
+			Title:   "Add " + mny(g10ExtraStep, in.Base).Format(2) + "/mo to finish " + g.Name + " sooner",
+			Detail: "Contributing " + mny(g10ExtraStep, in.Base).Format(2) + "/mo beyond the planned pace brings " +
+				g.Name + " in about " + plural(months, "month") + " sooner.",
+			Severity: smart.SeverityInfo,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
+}
+
+// SMART-G20 — Shared / household goal contributions. For a shared goal in a
+// multi-member household, nudges tracking who contributes what.
+func g20Shared(in Input) []smart.Insight {
+	if len(in.Members) < 2 {
+		return nil
+	}
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived || g.Scope != domain.ScopeShared {
+			continue
+		}
+		if c, err := goals.IsComplete(g); err != nil || c {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G20",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G20:" + g.ID,
+			Title:   g.Name + " is a shared goal",
+			Detail: g.Name + " is shared across your " + plural(int64(len(in.Members)), "household member") +
+				". Logging contributions by member keeps each person's share clear.",
+			Severity: smart.SeverityInfo,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
 }
 
 // SMART-G17 — Recurring auto-contribution scheduling. For a goal with a deadline

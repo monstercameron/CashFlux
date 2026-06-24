@@ -57,7 +57,7 @@ func TestAL1BalancedWhenSteady(t *testing.T) {
 }
 
 func TestAL1SafetyForThinEmergency(t *testing.T) {
-	in := baseInput().withBaseline(0, 200000) // $2000/mo essentials
+	in := baseInput().withBaseline(0, 200000)                                            // $2000/mo essentials
 	in.Goals = []domain.Goal{goal("ef", "Emergency Fund", 1200000, 100000, time.Time{})} // 0.5 months
 	got := al1SuggestedProfile(in)
 	if len(got) != 1 || got[0].Key != "SMART-AL1:safety" {

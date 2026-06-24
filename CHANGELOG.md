@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — 7 more Free engines: T4, G2, G10, G20, AL5, SU15, BL14 (2026-06-24):** **T4** bulk-edit (a merchant split across categories → unify); **G2** completion forecast (warns when even the full surplus finishes a goal late); **G10** what-if (how much sooner +$100/mo finishes a goal); **G20** shared-goal contribution nudge; **AL5** allocation outcome preview (surplus→debt payoff months); **SU15** pause-instead-of-cancel (seasonal charge gaps); **BL14** seasonal bill forecast (variable biller's high-end). 66 Free engines + 17 AI = 83 SMART items. Table-driven tests.
+
 - **SMART series — Free engines SU7 + SU12 (2026-06-24):** **SU7** usage-vs-cost (flags a subscription whose category shows no other activity — paying but maybe not using); **SU12** household sub attribution (in a multi-member household, flags subscriptions whose charges aren't assigned to any member). 59 Free engines + 17 AI = 76 SMART items. Table-driven tests.
 
 - **SMART series — Free engines SU9 + BL10 (2026-06-24):** **SU9** renewal-timed reminders (offers a one-tap "keep this?" to-do a few days before a subscription renews); **BL10** one-tap pay-all-due (surfaces several bills due within a few days together). 57 Free engines + 17 AI = 74 SMART items. Table-driven tests.

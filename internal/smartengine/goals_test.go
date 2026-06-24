@@ -104,7 +104,7 @@ func TestG6Milestone(t *testing.T) {
 }
 
 func TestG11EmergencyFund(t *testing.T) {
-	in := baseInput().withBaseline(0, 200000) // $2000/mo essentials
+	in := baseInput().withBaseline(0, 200000)                                            // $2000/mo essentials
 	in.Goals = []domain.Goal{goal("ef", "Emergency Fund", 1200000, 400000, time.Time{})} // $4000 saved
 	got := g11EmergencyFund(in)
 	if len(got) != 1 {
@@ -120,7 +120,7 @@ func TestG11EmergencyFund(t *testing.T) {
 }
 
 func TestG11AdequateFundNoInsight(t *testing.T) {
-	in := baseInput().withBaseline(0, 200000) // $2000/mo essentials
+	in := baseInput().withBaseline(0, 200000)                                             // $2000/mo essentials
 	in.Goals = []domain.Goal{goal("ef", "Emergency Fund", 1200000, 1300000, time.Time{})} // > 6 months
 	if got := g11EmergencyFund(in); len(got) != 0 {
 		t.Errorf("adequate fund — want 0, got %d: %+v", len(got), got)

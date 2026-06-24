@@ -5,12 +5,44 @@ package smartengine
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
 
 func init() {
 	register("SMART-AL1", al1SuggestedProfile)
 	register("SMART-AL3", al3SmartReserve)
+	register("SMART-AL5", al5OutcomePreview)
+}
+
+// SMART-AL5 — Allocation outcome preview. Previews the impact of allocating the
+// monthly surplus to the highest-interest debt — how soon it clears — so the
+// payoff of allocating is visible before doing it.
+func al5OutcomePreview(in Input) []smart.Insight {
+	surplus := in.monthlySurplusBase()
+	if surplus <= 0 {
+		return nil
+	}
+	debts := buildDebts(in)
+	if len(debts) == 0 {
+		return nil
+	}
+	plan, ok := payoff.BuildPlan(debts, surplus, payoff.Avalanche)
+	if !ok || plan.Months <= 0 {
+		return nil
+	}
+	target := highestAPRDebt(debts)
+	ins := smart.Insight{
+		Feature: "SMART-AL5",
+		Page:    smart.PageAllocate,
+		Key:     "SMART-AL5:" + in.Now.Format("2006-01"),
+		Title:   "Allocating your surplus clears debt in " + plural(int64(plan.Months), "month"),
+		Detail: "Putting your ~" + in.baseMoney(surplus).Format(2) + "/mo surplus toward " + target +
+			" (highest-interest first) clears your debt in about " + plural(int64(plan.Months), "month") + ".",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(surplus)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open allocate", Route: "/allocate"})
+	return []smart.Insight{ins}
 }
 
 const (

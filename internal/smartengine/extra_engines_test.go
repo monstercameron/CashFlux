@@ -666,6 +666,101 @@ func TestSU12SingleMemberSkipped(t *testing.T) {
 	}
 }
 
+func TestT4BulkEdit(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "a", AccountID: "x", CategoryID: "c1", Date: ref, Amount: usd(-1000), Desc: "Amazon"},
+		{ID: "b", AccountID: "x", CategoryID: "c2", Date: ref, Amount: usd(-2000), Desc: "Amazon"},
+		{ID: "c", AccountID: "x", CategoryID: "c1", Date: ref, Amount: usd(-3000), Desc: "Amazon"},
+	}
+	got := t4BulkEdit(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 bulk-edit suggestion, got %d: %+v", len(got), got)
+	}
+}
+
+func TestT4ConsistentCategorySkipped(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "a", AccountID: "x", CategoryID: "c1", Date: ref, Amount: usd(-1000), Desc: "Amazon"},
+		{ID: "b", AccountID: "x", CategoryID: "c1", Date: ref, Amount: usd(-2000), Desc: "Amazon"},
+		{ID: "c", AccountID: "x", CategoryID: "c1", Date: ref, Amount: usd(-3000), Desc: "Amazon"},
+	}
+	if got := t4BulkEdit(in); len(got) != 0 {
+		t.Errorf("consistent category — want 0, got %d", len(got))
+	}
+}
+
+func TestG2Forecast(t *testing.T) {
+	in := baseInput().withBaseline(400000, 380000) // ~$200/mo surplus
+	due := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{goal("g", "Car", 300000, 0, due)} // far too big for $200/mo
+	got := g2Forecast(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 late-forecast, got %d: %+v", len(got), got)
+	}
+}
+
+func TestG10WhatIf(t *testing.T) {
+	in := baseInput()
+	due := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{goal("g", "Laptop", 120000, 0, due)}
+	got := g10WhatIf(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 what-if insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestG20Shared(t *testing.T) {
+	in := baseInput()
+	in.Members = []domain.Member{{ID: "m1"}, {ID: "m2"}}
+	g := goal("g", "House", 1000000, 100000, time.Time{})
+	g.Scope = domain.ScopeShared
+	in.Goals = []domain.Goal{g}
+	got := g20Shared(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 shared-goal insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestAL5OutcomePreview(t *testing.T) {
+	in := baseInput().withBaseline(500000, 300000) // $2000/mo surplus
+	card := domain.Account{ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
+		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000)}
+	in.Accounts = []domain.Account{card}
+	got := al5OutcomePreview(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 outcome preview, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSU15Pause(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "a", AccountID: "x", Date: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-2000), Desc: "SkiPass"},
+		{ID: "b", AccountID: "x", Date: time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-2000), Desc: "SkiPass"},
+		{ID: "c", AccountID: "x", Date: time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-2000), Desc: "SkiPass"}, // gaps in Feb, Apr
+	}
+	got := su15Pause(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 seasonal-pause insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestBL14SeasonalBill(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "a", AccountID: "x", Date: time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-5000), Desc: "Electric"},
+		{ID: "b", AccountID: "x", Date: time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-5000), Desc: "Electric"},
+		{ID: "c", AccountID: "x", Date: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-15000), Desc: "Electric"},
+		{ID: "d", AccountID: "x", Date: time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC), Amount: usd(-5000), Desc: "Electric"},
+	}
+	got := bl14SeasonalBill(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 seasonal-bill insight, got %d: %+v", len(got), got)
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

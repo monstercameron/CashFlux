@@ -25,6 +25,7 @@ func init() {
 	register("SMART-BL5", bl5OptimalPayDate)
 	register("SMART-BL8", bl8PaycheckGrouping)
 	register("SMART-BL10", bl10PayAllDue)
+	register("SMART-BL14", bl14SeasonalBill)
 	register("SMART-BL15", bl15GracePeriod)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
@@ -99,6 +100,66 @@ func bl1PredictVariable(in Input) []smart.Insight {
 				in.baseMoney(pred).Format(2) + " (range " + in.baseMoney(min).Format(2) + "–" + in.baseMoney(mx).Format(2) + ").",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(pred)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
+	}
+	return out
+}
+
+const (
+	bl14MinCharges = 4     // need this many charges to call a swing seasonal
+	bl14MinSwing   = 40_00 // and the peak-trough gap must be meaningful
+)
+
+// SMART-BL14 — Seasonal bill forecast. For a variable biller whose charges swing
+// widely across the year, flags the seasonal high so the user plans for peak
+// months instead of a flat average.
+func bl14SeasonalBill(in Input) []smart.Insight {
+	type info struct {
+		amounts []int64
+		label   string
+	}
+	byMerchant := map[string]*info{}
+	for _, t := range in.Transactions {
+		if t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(txnLabel(t)))
+		if key == "" {
+			continue
+		}
+		m := byMerchant[key]
+		if m == nil {
+			m = &info{label: txnLabel(t)}
+			byMerchant[key] = m
+		}
+		m.amounts = append(m.amounts, abs64(in.toBaseMinor(t.Amount.Amount, t.Amount.Currency)))
+	}
+	var out []smart.Insight
+	for key, m := range byMerchant {
+		if len(m.amounts) < bl14MinCharges {
+			continue
+		}
+		lo, hi := m.amounts[0], m.amounts[0]
+		for _, v := range m.amounts {
+			if v < lo {
+				lo = v
+			}
+			if v > hi {
+				hi = v
+			}
+		}
+		if lo <= 0 || hi-lo < bl14MinSwing || hi < lo*2 {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-BL14",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL14:" + key,
+			Title:   m.label + " swings seasonally up to " + in.baseMoney(hi).Format(2),
+			Detail: m.label + " has ranged from " + in.baseMoney(lo).Format(2) + " to " + in.baseMoney(hi).Format(2) +
+				" across the year. Budget for the high end in peak months rather than the average.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(in.baseMoney(hi)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
 	}
 	return out
