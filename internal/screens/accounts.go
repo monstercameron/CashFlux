@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
@@ -63,6 +64,7 @@ func Accounts() ui.Node {
 		}
 		bump()
 		restoreFocus()
+		auditview.CaptureNow()
 		uistate.PostUndoable(uistate.T("toast.accountDeleted"))
 	}
 

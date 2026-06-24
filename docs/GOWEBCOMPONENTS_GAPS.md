@@ -1046,3 +1046,126 @@ with delayed callbacks and redundant effect keys. A single `UseLayoutEffect` (G3
 opaque-innerHTML/raw-HTML handling (G37/G3) would remove most of it. G39 is a structural state gap
 (hook-only atoms can't be driven from global code without a footgun), and G38 is a low-severity
 ergonomics item. Net: **4 new gaps (G36–G39)**, two of them `high`.
+
+---
+
+## Addendum 7 — performance, resilience & routing gaps (G40–G44)
+
+A fifth pass targeting five previously-unmined categories: performance / re-render scope, error
+resilience, prop-drilling/context, routing features, and forms/validation. Two categories
+(**prop-drilling** and most of **forms/validation**) yielded *nothing new* — the global-atom
+architecture has largely solved prop-drilling (only `ActivePath`/G6 is threaded), and submit-only
+validation + parse-at-submit currency inputs are deliberate app choices already covered by U4/U6. The
+five findings below are from the other three categories. All confirmed at `path:line`.
+
+| ID  | Area                     | Severity | One-line gap |
+|-----|--------------------------|----------|--------------|
+| G40 | Memoization / perf       | med      | No `Memo`/`UseMemo` → every component re-renders on parent render and every derived value (filter, O(n) dup scan, balances) recomputes each render |
+| G41 | Error boundary / panics  | med      | No top-level panic recovery → an unguarded panic freezes the whole wasm page; `notifyrun.go` silently swallows panics (`_ = recover()`) |
+| G42 | Router: query + guards   | med      | Router has no query-string param API and no navigation guards (`beforeNavigate`) → no URL-shareable filter state, no unsaved-changes intercept |
+| G43 | Composition events       | low      | No `OnCompositionStart`/`End` → `OnInput` fires mid-CJK-composition, breaking amount/search parse for IME users |
+| G44 | Router immutable after mount | low   | Routes must all register before `Mount()`; dynamic routes ride a single `/p/:slug` catch-all, anything else needs a reload |
+
+### G40 — No memoization primitive; expensive per-render recomputation has no framework escape
+- **Area:** performance / re-render control · **Severity:** med
+- **Symptom:** The framework has no `Memo(component, equalFn)` or `UseMemo(fn, deps)` (grep for
+  `ui.Memo`/`Memo(`/`shouldUpdate`/`UseMemo` → zero matches). Every component re-renders whenever its
+  parent does, and every derived view value recomputes from scratch each render — the app cannot tell
+  the framework "these inputs didn't change, skip it."
+- **Evidence:** `internal/screens/transactions.go:399` recomputes `txnfilter.ApplyWithLabels(txns, …)`
+  over the full transaction set on every render, plus a duplicate scan and balance summation nearby —
+  re-run even when neither filter nor data changed (a modal opening on the same screen triggers it).
+  Row DOM is paginated (`:449`) so the *node count* is capped, but the *computation* is not. Goals
+  (`goals.go:211,225`), Budgets (`:281`), and Accounts sub-rows (`accounts_row.go:392`) `MapKeyed`
+  their full slices with no pagination.
+- **Impact:** Cost grows with dataset size; a large household re-scans for duplicates on any unrelated
+  state change. No framework path to cache the filtered/aggregated result across renders.
+- **Proposed direction:** `ui.Memo(component, propsEqual)` (skip re-render on equal props) and/or
+  `ui.UseMemo(fn, deps)` (cached derived value); document pagination as the current mitigation.
+
+### G41 — No top-level error boundary / wasm panic recovery; one dangerous silent-swallow
+- **Area:** error resilience · **Severity:** med
+- **Symptom:** A Go panic outside an explicit `recover()` crashes the whole wasm module — the page
+  freezes with no message or reload prompt. The framework has no error-boundary primitive (React
+  `componentDidCatch`-style) to catch a render/effect panic, show a fallback UI, and offer recovery.
+  Separately, `notifyrun.go` wraps a whole path in `_ = recover()` (discards the panic value, no
+  logging), silently swallowing any framework panic there.
+- **Evidence:** `internal/app/notifyrun.go:34-36` (`defer func() { _ = recover() }()`, comment "a
+  notification hiccup can never break app boot" — but the value is discarded); `internal/app/app.go:29`
+  (`panic(err)` on store init with no recovery wrapper around `main()`). Contrast the *correct* guarded
+  sites: `internal/app/persist.go:138,177` (localStorage quota panics, logged via `app.Log().Error`).
+- **Impact:** Any framework regression that escapes a guarded site (nil component return, reconciler
+  panic, atom-before-render) produces a dead page — the wasm equivalent of an uncaught exception with no
+  overlay. Large-store users are most exposed (quota panics are already known).
+- **Proposed direction:** A framework-owned top-level catcher (`recover()` around the render/effect
+  dispatch loop) that renders a fallback "app crashed — reload" UI; app-side, `notifyrun.go` should log
+  `r` rather than discard it.
+
+### G42 — Router has no query-string param API and no navigation guards
+- **Area:** routing features · **Severity:** med
+- **Symptom:** (a) `router.Attrs` carries only path-segment params (`:slug`); there is no read/write API
+  for query-string params (`?key=value`). (b) No navigation lifecycle callbacks
+  (`beforeNavigate`/`routeWillChange`/`onNavigate`), so a component can't intercept a navigation to
+  guard unsaved changes or run cleanup.
+- **Evidence:** No `URLSearchParams`/`location.search`/query extraction anywhere in client code (the
+  only `RawQuery` hits are server-side OAuth: `internal/server/oauth_http.go:84`). Grep for
+  `beforeNavigate`/`routeWillChange`/`onNavigate` → zero. The one parametric route is path-only
+  (`internal/app/app.go:97`). Filter state that would naturally live in the URL instead lives in
+  localStorage-persisted atoms (`internal/uistate/txfilter.go`), so it isn't URL-shareable and
+  back/forward don't restore it. (Distinct from G7, which is base-href/deep-link 404.)
+- **Impact:** Bookmarkable/shareable filtered views are impossible; "unsaved changes" guards need
+  app-level modal-intercept workarounds; can't deep-link to a pre-filtered view.
+- **Proposed direction:** A `Query()` accessor on `router.Attrs` (read/write query params) and a
+  `router.BeforeNavigate(fn)` / `UseBeforeNavigate` guard that can block or redirect a navigation.
+
+### G43 — No composition-event hooks; `OnInput` fires mid-CJK-composition
+- **Area:** forms / input · **Severity:** low
+- **Symptom:** The event API exposes `OnInput(func(string))` but no `OnCompositionStart`/`Update`/`End`.
+  For inputs that parse/react per keystroke (currency amount, live search), `OnInput` fires on each
+  character of an IME composition sequence before commit — producing parse errors or wrong incremental
+  search mid-composition.
+- **Evidence:** Zero `compositionstart`/`compositionend`/`onComposition` anywhere (no app workaround
+  exists). Per-keystroke handlers: `internal/screens/transactions.go:213` (amount parsed on input),
+  `internal/ui/filtertoolbar.go:75-77` (search). The documented handler set (`docs/GOWEBCOMPONENTS.md`)
+  lists click/input/change/key/focus/blur/drag — no composition events.
+- **Impact:** Low for an English userbase; a correctness bug for CJK users (and the app markets
+  multi-currency/international households).
+- **Proposed direction:** `OnCompositionStart`/`OnCompositionEnd`, or an `OnInputCommitted` that fires
+  only after composition completes.
+
+### G44 — Router is immutable after `Mount()`; dynamic routes require a reload
+- **Area:** routing · **Severity:** low
+- **Symptom:** All routes must register before `r.Mount("#app")`; the router can't take new
+  registrations afterward. User-created pages ride a single catch-all parametric route (`/p/:slug`);
+  any structure outside that pattern needs a page reload + re-registration.
+- **Evidence:** `internal/app/app.go:96` (comment: "new pages are reachable without re-registering
+  routes (**the router can't be mutated after mount**)" — the slug catch-all is the deliberate
+  workaround); `:75-82` (the flat-vs-layout note; a `router.Options{Layout:true}` outlet structure was
+  tried and reverted because child routes rendered outside the Shell).
+- **Impact:** Low today (slug pattern covers all dynamic pages) but blocks any feature wanting a new
+  navigable path from user data (per-workspace sub-routes, per-entity detail routes).
+- **Proposed direction:** Allow post-mount route registration, or ship a typed
+  `UseDynamicRoute(prefix, resolver)` and document the slug/param pattern as canonical.
+
+### Confirmations (existing IDs, new evidence)
+- **G5** — `internal/screens/transactions.go:73` (`bump := func(){ rev.Set(rev.Get()+1) }`) — the
+  revision-counter idiom on the app's largest data surface.
+- **G6** — `internal/app/app.go:85-92,105` — `ActivePath` must be baked into `ShellProps` at
+  registration; the route callback has no live-route access at render.
+- **G21** — `internal/uistate/txfilter.go` (`loadTxFilter`/`PersistTxFilter`) — the canonical
+  load+persist triad applied to filter state.
+- **G36** — `internal/screens/focus.go` (`focusRowAfterDelete`, `captureRowFocus`) called from the
+  transactions row component — the rAF-deferred focus pattern on the most-used list.
+- **G39** — `internal/app/shortcuts.go:112` — `router.Navigate` from a global key handler, working only
+  because `nav` is a `js.Value`, not a hook atom.
+
+### Cross-cutting (fifth pass)
+
+The new theme is **missing primitives for scale and resilience**: **G40 (no memoization)** is the
+highest-leverage — the app cannot skip re-renders or cache derived results, and the transactions screen
+already recomputes a full filter/dup-scan on every render. **G41 (no error boundary)** means any
+unguarded panic is a dead page, with blast radius growing as the app and dataset grow. **G42 (no query
+params / guards)** blocks URL-shareable state and unsaved-changes guards. G43 and G44 are low-severity.
+Two categories produced nothing new, which is itself a useful signal: the global-atom architecture (at
+the cost of G39) genuinely retired prop-drilling, and the forms layer's gaps were already captured by
+U4/U6. Net: **5 new gaps (G40–G44)**.

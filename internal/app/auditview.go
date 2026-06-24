@@ -36,6 +36,7 @@ func init() {
 	// without importing the app package directly.
 	auditview.UndoFunc = func() bool { return undoLastChange() }
 	auditview.CanUndoFunc = func() bool { return undoStack.CanUndo() }
+	auditview.CaptureNow = func() { captureUndoPoint() }
 }
 
 // RecordAuditPoint translates cs into an auditlog.Entry, appends it to the

@@ -24681,7 +24681,7 @@ its detailed subsection. Knock out P0/P1 first — they're mostly small, high-co
 **P2 — high-value UX, medium effort:**
 - [x] Focus management: into inline edit, restore after save/delete, quick-add autofocus, Enter-to-submit in dialogs — §6.6, §6.7
 - [x] Empty states with a clear CTA; AI skeleton + in-flight button disable — §6.5
-- [ ] Delete confirmation + undo toast — §6.8
+- [x] Delete confirmation + undo toast — §6.8
 - [x] Settings panel section nav/tabs (cut scroll-to-setting) + move debug log to Advanced — §6.12
 - [x] Responsive bulk-action toolbar — §6.4
 

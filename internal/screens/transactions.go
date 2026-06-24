@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -251,6 +252,7 @@ func Transactions() ui.Node {
 		}
 		bump()
 		focusRowAfterDelete(".txn-table tbody", "tr.row", focusIdx)
+		auditview.CaptureNow()
 		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
 	}
 

@@ -184,6 +184,38 @@ func VisualBuilder() ui.Node {
 	g := graph.Get()
 	setGraph := func(ng cardgraph.Graph) { vbSaveGraph(ng); graph.Set(ng) }
 
+	// Drag-to-wire bridge: the canvas shim drags from an output port to an input port
+	// and calls window.__wbConnect(from, to, port); clicking a wire calls
+	// window.__wbDisconnect(to, port). These mutate the graph via graph.Update (which
+	// reads the live value, so it's safe from this once-installed callback).
+	ui.UseEffect(func() func() {
+		connect := js.FuncOf(func(_ js.Value, a []js.Value) any {
+			if len(a) >= 3 {
+				from, to, port := a[0].String(), a[1].String(), a[2].String()
+				graph.Update(func(old cardgraph.Graph) cardgraph.Graph {
+					ng := vbWireEdge(old, from, to, port)
+					vbSaveGraph(ng)
+					return ng
+				})
+			}
+			return nil
+		})
+		disconnect := js.FuncOf(func(_ js.Value, a []js.Value) any {
+			if len(a) >= 2 {
+				to, port := a[0].String(), a[1].String()
+				graph.Update(func(old cardgraph.Graph) cardgraph.Graph {
+					ng := vbUnwire(old, to, port)
+					vbSaveGraph(ng)
+					return ng
+				})
+			}
+			return nil
+		})
+		js.Global().Set("__wbConnect", connect)
+		js.Global().Set("__wbDisconnect", disconnect)
+		return func() { connect.Release(); disconnect.Release() }
+	}, "vb-connect")
+
 	// Mutations.
 	addNode := func(kind string) {
 		ng := vbCloneGraph(g)

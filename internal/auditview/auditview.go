@@ -32,3 +32,9 @@ var UndoFunc = func() bool { return false }
 // CanUndoFunc reports whether the undo stack currently has an action to undo.
 // Wired to app.undoStack.CanUndo by internal/app/auditbridge.go's init().
 var CanUndoFunc = func() bool { return false }
+
+// CaptureNow records an undo point immediately for the change that just happened,
+// instead of waiting up to one autosave tick (~4s). Delete/change handlers call it
+// right before showing an "Undo" toast so the undo stack is ready when the user
+// clicks Undo (§6.8). Wired to app.captureUndoPoint; default is a no-op.
+var CaptureNow = func() {}
