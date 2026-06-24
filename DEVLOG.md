@@ -3,6 +3,32 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — feat: strong dashboard homescreen hero (EC4)
+
+Implemented the EC4 "home band" — a glanceable, enterprise-grade greeting strip above the bento grid.
+
+**What shipped:**
+
+- `internal/screens/dashboard_hero.go` (new, `//go:build js && wasm`): `dashboardHero()` (top-level component registered via `ui.CreateElement`), `heroSummary` + `heroSummaryProps` (non-empty state: greeting + net-worth hero + stats row + quick actions), `heroWelcome` (first-run state: value prop + Load-sample CTA + Add-first-account), `heroStat` (shared label/value/tone stat block). Each visible variant is its own component so its hooks occupy stable positions regardless of which branch renders — the On*-hooks-in-loops rule applied across conditional top-level branches.
+- `internal/i18n/en_home.go` (new): 14 new `home.*` keys (`home.greetingMorning/Afternoon/Evening`, `home.netWorth`, `home.income`, `home.spending`, `home.net`, `home.savingsRate`, `home.quickAddTxn/Account`, `home.welcomeTitle/Body`, `home.loadSample`, `home.addFirst`, and four aria-label variants). Same `init()` loop pattern as `en_enterprise.go`; `en.go` is untouched (the four pre-existing `home.*` keys there are deliberately omitted here).
+- `internal/screens/dashboard.go`: one-line insertion — `ui.CreateElement(dashboardHero)` between the app-banner `Div` and the bento `Div(tiles...)`.
+
+**Key design decisions:**
+
+*Two states, two components.* `dashboardHero()` reads `app.Accounts()` and `app.Transactions()` and branches early: empty → `heroWelcome`, non-empty → `heroSummary`. Each is its own component so its hook list is stable (same number and order of hooks every render of that component). A single-function approach with conditional `ui.UseEvent` calls would violate the framework's hook-position rule.
+
+*Memoized selectors reused, not re-invented.* `useNetWorth` and `usePeriodTotals` (from `selectors.go`) are called in `dashboardHero()` and their results passed as props, so the memo keys work exactly as they do for the bento. `ledger.SavingsRate` is the same pure function the savings-rate widget uses. `fmtMoney` and `figTone` from `format.go` are the same formatters used everywhere else.
+
+*Load-sample action mirrors accounts.go.* `heroWelcome` calls `app.LoadSample()` directly (same as the Accounts screen empty state and the Settings panel), bumps `UseDataRevision()`, and calls `uistate.SetSampleActive(true)` to light the banner. Consistent with all other load-sample entry points.
+
+*Quick-add routing.* "Add transaction" → `uistate.SetQuickAdd(true)` (opens the existing quick-add flip panel). "Add account" → `uistate.SetAddTarget("account")` (opens the add-account modal). Both are the standard write paths used elsewhere, not new routes or duplicate forms.
+
+*i18n isolation.* `en_home.go` uses the `init()` loop into `english` established by `en_enterprise.go` so `en.go` stays clean. The four pre-existing `home.*` keys in `en.go` are intentionally omitted from the new file to avoid duplicate-key writes.
+
+*Insertion point in dashboard.go.* A single `ui.CreateElement(dashboardHero)` line inserted between the decorative `app-banner` div and the bento `Div(tiles...)`. The edit touches two lines (comment + call) and leaves the rest of `Dashboard()` unchanged.
+
+**Build verification:** WASM build clean (`go build -o web/bin/main.wasm .`); only pre-existing WIP errors in `widget_builder.go`/`cardgraph/*`. i18n tests: 10/10 pass (`go test ./internal/i18n/...`). `gofmt -l` on all changed files reports no reformatting needed.
+
 ## 2026-06-24 — feat: admin console screen (EC3)
 
 Implemented the operator UI for the EC1 admin API.

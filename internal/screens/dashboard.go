@@ -272,6 +272,9 @@ func Dashboard() ui.Node {
 		// banner; driven entirely by CSS vars/attribute set by uistate.ApplyBanner,
 		// so it needs no state here. Decorative, hence aria-hidden.
 		Div(css.Class("app-banner"), Attr("aria-hidden", "true")),
+		// Home band (EC4): glanceable greeting + net-worth hero + this-month stats
+		// + quick actions. Sits above the bento; data comes from the §1.6 selectors.
+		ui.CreateElement(dashboardHero),
 		Div(tiles...),
 		// L43: Quick Transfer shortcut — a persistent affordance on the dashboard so
 		// users can initiate a transfer without hunting for the Transactions screen.
