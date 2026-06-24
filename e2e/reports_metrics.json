@@ -2,13 +2,13 @@
   "dark": {
     "768": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -18,7 +18,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(244, 244, 245)"
         },
         "rowDesc": {
@@ -40,8 +40,8 @@
           "color": "rgb(171, 171, 179)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(171, 171, 179)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -57,13 +57,13 @@
       "card": {
         "padding": "19.2px",
         "marginBottom": "16px",
-        "bg": "rgb(18, 18, 20)",
-        "border": "rgb(42, 42, 44)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(42, 42, 44) rgb(42, 42, 44) rgb(42, 42, 44) rgb(216, 113, 111)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "161.328px 161.328px 161.328px"
+        "cols": "227.812px 227.812px"
       },
       "shareBar": {
         "height": "4px",
@@ -112,23 +112,23 @@
       "amounts": {
         "income": null,
         "expense": null,
-        "budget": "rgb(171, 171, 179)"
+        "budget": "rgb(244, 244, 245)"
       },
       "rollupToggle": {
         "size": "14.5px",
         "color": "rgb(244, 244, 245)"
       },
-      "cardBgActual": "rgb(18, 18, 20)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     },
     "1280": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -138,7 +138,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(244, 244, 245)"
         },
         "rowDesc": {
@@ -160,8 +160,8 @@
           "color": "rgb(171, 171, 179)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(171, 171, 179)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -177,13 +177,13 @@
       "card": {
         "padding": "20px",
         "marginBottom": "16px",
-        "bg": "rgb(18, 18, 20)",
-        "border": "rgb(42, 42, 44)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(42, 42, 44) rgb(42, 42, 44) rgb(42, 42, 44) rgb(216, 113, 111)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "160px 160px 160px 160px 160px 160px"
+        "cols": "235.5px 235.5px 235.5px 235.5px 0px"
       },
       "shareBar": {
         "height": "4px",
@@ -232,23 +232,23 @@
       "amounts": {
         "income": null,
         "expense": null,
-        "budget": "rgb(171, 171, 179)"
+        "budget": "rgb(244, 244, 245)"
       },
       "rollupToggle": {
         "size": "14.5px",
         "color": "rgb(244, 244, 245)"
       },
-      "cardBgActual": "rgb(18, 18, 20)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     },
     "1440": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -258,7 +258,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(244, 244, 245)"
         },
         "rowDesc": {
@@ -280,8 +280,8 @@
           "color": "rgb(171, 171, 179)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(171, 171, 179)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -297,13 +297,13 @@
       "card": {
         "padding": "20px",
         "marginBottom": "16px",
-        "bg": "rgb(18, 18, 20)",
-        "border": "rgb(42, 42, 44)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(42, 42, 44) rgb(42, 42, 44) rgb(42, 42, 44) rgb(216, 113, 111)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "186.656px 186.672px 186.672px 186.656px 186.672px 186.672px"
+        "cols": "275.5px 275.5px 275.5px 275.5px 0px 0px"
       },
       "shareBar": {
         "height": "4px",
@@ -352,25 +352,25 @@
       "amounts": {
         "income": null,
         "expense": null,
-        "budget": "rgb(171, 171, 179)"
+        "budget": "rgb(244, 244, 245)"
       },
       "rollupToggle": {
         "size": "14.5px",
         "color": "rgb(244, 244, 245)"
       },
-      "cardBgActual": "rgb(18, 18, 20)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     }
   },
   "light": {
     "768": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -380,7 +380,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(28, 28, 30)"
         },
         "rowDesc": {
@@ -402,8 +402,8 @@
           "color": "rgb(60, 60, 67)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(60, 60, 67)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -419,13 +419,13 @@
       "card": {
         "padding": "19.2px",
         "marginBottom": "16px",
-        "bg": "rgb(255, 255, 255)",
-        "border": "rgb(228, 226, 221)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(228, 226, 221) rgb(228, 226, 221) rgb(228, 226, 221) rgb(179, 50, 47)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "161.328px 161.328px 161.328px"
+        "cols": "227.812px 227.812px"
       },
       "shareBar": {
         "height": "4px",
@@ -480,17 +480,17 @@
         "size": "14.5px",
         "color": "rgb(28, 28, 30)"
       },
-      "cardBgActual": "rgb(255, 255, 255)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     },
     "1280": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -500,7 +500,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(28, 28, 30)"
         },
         "rowDesc": {
@@ -522,8 +522,8 @@
           "color": "rgb(60, 60, 67)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(60, 60, 67)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -539,13 +539,13 @@
       "card": {
         "padding": "20px",
         "marginBottom": "16px",
-        "bg": "rgb(255, 255, 255)",
-        "border": "rgb(228, 226, 221)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(228, 226, 221) rgb(228, 226, 221) rgb(228, 226, 221) rgb(179, 50, 47)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "160px 160px 160px 160px 160px 160px"
+        "cols": "235.5px 235.5px 235.5px 235.5px 0px"
       },
       "shareBar": {
         "height": "4px",
@@ -600,17 +600,17 @@
         "size": "14.5px",
         "color": "rgb(28, 28, 30)"
       },
-      "cardBgActual": "rgb(255, 255, 255)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     },
     "1440": {
       "counts": {
-        "cardCount": 13,
-        "rowCount": 37,
+        "cardCount": 12,
+        "rowCount": 36,
         "sectionDividers": 3,
         "shareBars": 30,
-        "svgs": 70,
-        "areaCharts": 0,
-        "exportBtns": 6
+        "svgs": 75,
+        "areaCharts": 5,
+        "exportBtns": 5
       },
       "scroll": {
         "scrollHeight": 900,
@@ -620,7 +620,7 @@
       "typeScale": {
         "cardTitle": {
           "size": "16.8px",
-          "weight": "400",
+          "weight": "600",
           "color": "rgb(28, 28, 30)"
         },
         "rowDesc": {
@@ -642,8 +642,8 @@
           "color": "rgb(60, 60, 67)"
         },
         "caption": {
-          "size": "12px",
-          "color": "rgb(60, 60, 67)"
+          "size": null,
+          "color": null
         },
         "allCardTitles": [
           "16.8px",
@@ -659,13 +659,13 @@
       "card": {
         "padding": "20px",
         "marginBottom": "16px",
-        "bg": "rgb(255, 255, 255)",
-        "border": "rgb(228, 226, 221)",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "rgb(228, 226, 221) rgb(228, 226, 221) rgb(228, 226, 221) rgb(179, 50, 47)",
         "radius": "0px"
       },
       "statGrid": {
         "gap": "12px",
-        "cols": "186.656px 186.672px 186.672px 186.656px 186.672px 186.672px"
+        "cols": "275.5px 275.5px 275.5px 275.5px 0px 0px"
       },
       "shareBar": {
         "height": "4px",
@@ -720,7 +720,7 @@
         "size": "14.5px",
         "color": "rgb(28, 28, 30)"
       },
-      "cardBgActual": "rgb(255, 255, 255)"
+      "cardBgActual": "rgba(0, 0, 0, 0)"
     }
   }
 }

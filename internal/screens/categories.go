@@ -376,6 +376,9 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		}
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				// Visible label for the name field (C63 labelling gap: placeholder-only
+				// is insufficient for screen readers and sighted users who clear the field).
+				Label(css.Class("field-label"), Attr("for", "cat-edit-"+c.ID), uistate.T("common.name")),
 				Input(css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options:   kindOpts,

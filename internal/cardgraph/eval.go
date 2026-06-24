@@ -2,8 +2,62 @@ package cardgraph
 
 import (
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/formula"
 )
+
+// referencedVars returns the variable names a node reads by name (not by wire): the
+// identifiers in a formula expression, or a scalar source's figure name. These create
+// implicit dependencies on the upstream node that defines each name, so evaluation
+// order is correct even without a wire.
+func referencedVars(n Node) []string {
+	switch n.Kind {
+	case KindFormula:
+		toks, err := formula.Tokenize(n.Props["expr"])
+		if err != nil {
+			return nil
+		}
+		var out []string
+		for _, t := range toks {
+			if t.Kind == formula.TIdent {
+				out = append(out, t.Text)
+			}
+		}
+		return out
+	case KindSourceScalar:
+		if v := strings.TrimSpace(n.Props["name"]); v != "" {
+			return []string{v}
+		}
+	}
+	return nil
+}
+
+// implicitDeps returns synthetic edges for variable references: an edge from the node
+// that defines a variable (Var) to each node that references that name. Used only for
+// ordering (not as real input wires).
+func implicitDeps(g Graph) []Edge {
+	owner := map[string]NodeID{}
+	for _, n := range g.Nodes {
+		if n.Var != "" {
+			owner[n.Var] = n.ID
+		}
+	}
+	if len(owner) == 0 {
+		return nil
+	}
+	var deps []Edge
+	for _, n := range g.Nodes {
+		for _, ref := range referencedVars(n) {
+			if from, ok := owner[ref]; ok && from != n.ID {
+				deps = append(deps, Edge{From: PortRef{Node: from, Port: OutPort}, To: PortRef{Node: n.ID, Port: "__var"}})
+			}
+		}
+	}
+	return deps
+}
 
 // Issue is a problem found while validating or evaluating a graph, tied to a node (or
 // empty for a graph-level issue). Severity lets the UI show error vs. needs-input
@@ -22,9 +76,12 @@ func TopoOrder(g Graph) ([]NodeID, error) {
 	for _, n := range g.Nodes {
 		indeg[n.ID] = 0
 	}
-	// deps[x] = nodes that depend on x (x feeds them).
+	// deps[x] = nodes that depend on x (x feeds them). Includes real wires plus the
+	// implicit dependencies created by variable references (a node that reads "income"
+	// must run after the node named "income").
+	edges := append(append([]Edge(nil), g.Edges...), implicitDeps(g)...)
 	deps := map[NodeID][]NodeID{}
-	for _, e := range g.Edges {
+	for _, e := range edges {
 		from, to := e.From.Node, e.To.Node
 		if _, ok := indeg[to]; !ok {
 			continue // dangling edge; validation reports it separately
@@ -91,6 +148,15 @@ func Eval(g Graph, ctx Context) Result {
 		incoming[e.To.Node] = append(incoming[e.To.Node], e)
 	}
 
+	// boundVars/boundStrs accumulate the named-node outputs (Node.Var) as evaluation
+	// proceeds in topological order, so a node can reference any upstream node's value
+	// by its variable name without a wire. They start from the base context and grow;
+	// names shadow base figures of the same name.
+	boundVars := map[string]float64{}
+	maps.Copy(boundVars, ctx.Vars)
+	boundStrs := map[string]string{}
+	maps.Copy(boundStrs, ctx.Strs)
+
 	values := map[NodeID]Value{} // successfully-computed node outputs
 	for _, id := range order {
 		n, ok := g.node(id)
@@ -118,12 +184,23 @@ func Eval(g Graph, ctx Context) Result {
 				inputs[e.To.Port] = coerce(src, want)
 			}
 		}
-		v, err := spec.Eval(inputs, n.Props, ctx)
+		// Each node sees the base context plus all named upstream outputs (so formula/
+		// source nodes can reference variables by name). Datasets pass through.
+		effCtx := Context{Vars: boundVars, Strs: boundStrs, Datasets: ctx.Datasets}
+		v, err := spec.Eval(inputs, n.Props, effCtx)
 		if err != nil {
 			res.Issues = append(res.Issues, Issue{Node: id, Message: err.Error(), Fatal: true})
 			continue
 		}
 		values[id] = v
+		// Bind this node's output to its variable name for downstream references.
+		if n.Var != "" {
+			if v.Type == TypeText {
+				boundStrs[n.Var] = v.Str
+			} else if num, ok := v.AsNumber(); ok {
+				boundVars[n.Var] = num
+			}
+		}
 	}
 
 	if g.Root == "" {

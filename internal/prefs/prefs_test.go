@@ -110,6 +110,25 @@ func TestNormalizeThemeAndAccent(t *testing.T) {
 	}
 }
 
+func TestMotionNormalize(t *testing.T) {
+	// Default() must use MotionFull.
+	if got := Default().Motion; got != MotionFull {
+		t.Errorf("Default motion = %q, want %q", got, MotionFull)
+	}
+	// Each valid value round-trips through Normalize unchanged.
+	for _, m := range []Motion{MotionFull, MotionSubtle, MotionOff} {
+		if got := (Prefs{Motion: m}).Normalize().Motion; got != m {
+			t.Errorf("Normalize motion %q = %q, want same", m, got)
+		}
+	}
+	// Unknown / empty falls back to MotionFull.
+	for _, bad := range []Motion{"", "medium", "on", "100%"} {
+		if got := (Prefs{Motion: bad}).Normalize().Motion; got != MotionFull {
+			t.Errorf("Normalize motion %q = %q, want MotionFull", bad, got)
+		}
+	}
+}
+
 func TestIsHexColor(t *testing.T) {
 	good := []string{"#fff", "#54b884", "#ABCDEF", "#000000"}
 	bad := []string{"", "fff", "#ff", "#12345", "#gggggg", "54b884"}

@@ -463,6 +463,44 @@
         .shimmer, .skeleton.shimmer { animation: none; background: var(--bg-elev, rgba(255,255,255,0.04)); }
       }
 
+      /* W-21 · Scroll-reveal — cards in long pages (Reports) fade + rise as they
+         enter the viewport (IntersectionObserver in wonder.js). The JS adds the
+         .wonder-reveal class to eligible cards THEN observes them, so content is
+         always visible if JS fails or is blocked. The transition reads
+         --wonder-dur-slow so off/subtle/full scale duration; --wonder-on scales
+         the translateY lift so it zeroes out at intensity 0.
+         Off + reduced-motion: wonder.js skips everything and reveals immediately. */
+      .wonder-reveal {
+        opacity: 0;
+        transform: translateY(calc(14px * var(--wonder-on, 1)));
+        transition: opacity var(--wonder-dur-slow) var(--wonder-ease-out),
+                    transform var(--wonder-dur-slow) var(--wonder-ease-out);
+        /* will-change: pre-promote so the first-frame composite avoids a repaint */
+        will-change: opacity, transform;
+      }
+      .wonder-reveal.in-view {
+        opacity: 1;
+        transform: none;
+      }
+      /* Safety: if [data-wonder="off"] or prefers-reduced-motion, skip entirely
+         (JS also bails early, but CSS is the last-resort guarantee). */
+      [data-wonder="off"] .wonder-reveal,
+      [data-wonder="off"] .wonder-reveal.in-view {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+        will-change: auto !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .wonder-reveal,
+        .wonder-reveal.in-view {
+          opacity: 1 !important;
+          transform: none !important;
+          transition: none !important;
+          will-change: auto !important;
+        }
+      }
+
       /* ========================== /WONDER ============================ */
 
       #boot-error {
@@ -1906,6 +1944,112 @@
       .page-title { font-size: clamp(1.25rem, 4vw, 1.6rem); }
       .card { padding: clamp(0.75rem, 2.5vw, 1.25rem); }
       .topbar { min-height: clamp(3rem, 6svh, 3.5rem); }
+
+      /* === Quick-wins (QW-1..10): CSS-only polish, last-wins by source order === */
+      /* QW-1 radius */
+      .card { border-radius: 12px; }
+      .stat { border-radius: 10px; }
+      [data-density="compact"] .card { border-radius: 8px; }
+      /* QW-2 title weight (already 600 at L716; reasserted) */
+      .card-title { font-weight: 600; }
+      /* QW-3 stat value semantic color — beats .stat-value{color:var(--text)} at L1140 */
+      .stat-value.neg { color: var(--danger) !important; }
+      .stat-value.pos { color: var(--accent) !important; }
+      /* QW-4 share bar height */
+      .share-bar { height: 8px !important; }
+      .share-bar > div { height: 8px !important; }
+      /* QW-5 budget amount weight + contrast */
+      .budget-amount { font-variant-numeric: tabular-nums; font-weight: 600; }
+      .card .budget-amount { color: var(--text); }
+      [data-theme="light"] .card .budget-amount { color: #1c1c1e; }
+      /* QW-6 section divider rhythm */
+      .section-divider { margin-top: 2.25rem; margin-bottom: 0.85rem; }
+      .section-divider:first-child { margin-top: 0; }
+      /* QW-7 card gap matches padding */
+      .card { margin-bottom: 1.25rem; }
+      /* QW-8 mermaid font alignment */
+      .mermaid { font-family: inherit; }
+      .mermaid svg text { font-family: inherit !important; font-size: 13px !important; }
+      /* QW-9 period caption promotion */
+      main .t-caption:first-child {
+        font-size: 0.825rem;
+        font-weight: 500;
+        color: var(--text-dim);
+        margin-bottom: 0.85rem;
+      }
+      /* QW-10 demote export buttons to ghost-small */
+      .card .btn[title*="Download"], .card .btn[title*="Tax"] {
+        font-size: 0.78rem;
+        padding: 0.2rem 0.55rem;
+        opacity: 0.65;
+      }
+      .card .btn[title*="Download"]:hover, .card .btn[title*="Tax"]:hover { opacity: 1; }
+
+      /* === GX1 shell light-mode + responsive fixes (F1..F7, F9) === */
+      /* F1: topbar + rail switch to light surface (override inline/framework bg) */
+      [data-theme="light"] .topbar {
+        background: rgba(247,246,243,0.92) !important;
+        border-bottom-color: #e4e2dd !important;
+      }
+      [data-theme="light"] aside.rail,
+      [data-theme="light"] .rail { background: var(--bg-elev) !important; }
+      /* F2: active rail chip readable on light rail */
+      [data-theme="light"] aside.rail .nv.active,
+      [data-theme="light"] aside.rail a[aria-current] {
+        background-color: var(--accent-dim, #e4f3ea) !important;
+        color: var(--accent, #2e8b57) !important;
+      }
+      [data-theme="light"] aside.rail .nv { color: var(--text-dim, #56565c); }
+      [data-theme="light"] aside.rail .nv:hover {
+        background-color: var(--hover, #e8e6e1);
+        color: var(--text, #1c1c1e);
+      }
+      /* F3: topbar icon buttons get light surface */
+      [data-theme="light"] .muzak-btn,
+      [data-theme="light"] .notify-btn,
+      [data-theme="light"] .add-btn {
+        background-color: var(--bg-card, #ffffff) !important;
+        border: 1px solid var(--border, #e4e2dd) !important;
+        color: var(--accent, #2e8b57) !important;
+      }
+      [data-theme="light"] .muzak-btn:hover,
+      [data-theme="light"] .notify-btn:hover,
+      [data-theme="light"] .add-btn:hover { background-color: var(--hover, #e8e6e1) !important; }
+      /* F4: +Add menu panel light + un-clip at <=1024 */
+      [data-theme="light"] .add-menu {
+        background-color: var(--bg-card, #ffffff) !important;
+        border-color: var(--border, #e4e2dd) !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,.12) !important;
+      }
+      [data-theme="light"] .add-item { color: var(--text, #1c1c1e) !important; }
+      @media (max-width: 1024px) {
+        .add-menu { right: auto; left: 0; min-width: 200px; }
+      }
+      /* F5: keep period row + icon cluster on one compact line at <=768 */
+      @media (max-width: 768px) {
+        .topbar-controls { align-items: center; justify-content: space-between; }
+        .reso-control { flex: 1; min-width: 0; }
+      }
+      /* F6: collapse rail to icons at the canonical 768 tablet width */
+      @media (max-width: 768px) {
+        html, body, #app { overflow-x: hidden; max-width: 100vw; }
+        aside.rail { width: 56px; }
+        aside.rail .brand-name,
+        aside.rail .nv span,
+        aside.rail nav .rail-section,
+        aside.rail .hh-text { display: none; }
+        aside.rail .nv { justify-content: center; gap: 0; padding-left: 0; padding-right: 0; }
+        aside.rail .railhead { padding-left: 0; padding-right: 0; justify-content: center; }
+        aside.rail .hh { justify-content: center; padding-left: 0; padding-right: 0; }
+      }
+      /* F7: household card surface in light mode */
+      [data-theme="light"] .hh {
+        background-color: var(--bg-card, #ffffff);
+        border-top-color: var(--border, #e4e2dd);
+      }
+      /* F9: backdrop must not eat clicks while the menu is closed */
+      .add-backdrop { pointer-events: none; }
+      .add-backdrop:not(.hidden-menu) { pointer-events: auto; }
     </style>
   </head>
   <body>
@@ -1962,8 +2106,13 @@
     <script src="./d3.min.js"></script>
     <script src="./chart.js"></script>
     <script src="./flip.js"></script>
+    <!-- W-15 WONDER: count-up animation for KPI hero figures on dashboard mount. -->
+    <script src="./countup.js"></script>
     <!-- Calming background music ("muzak"): low-volume looping ambient player. -->
     <script src="./muzak.js"></script>
+    <!-- W-21 WONDER: scroll-reveal IntersectionObserver hook. Must load before
+         the wasm boots so cashfluxWonder is available on first render. -->
+    <script src="./wonder.js"></script>
     <!-- Mermaid diagrams (C70): vendored locally (no CDN, C44) + its shim. -->
     <script src="./mermaid.min.js"></script>
     <script src="./mermaid.js"></script>

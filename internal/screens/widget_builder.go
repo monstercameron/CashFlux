@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -14,8 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cardgraph"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -25,75 +26,51 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// This file owns the Widget Builder screen — the visual programming system (see
-// docs/WIDGET_BUILDER_DESIGN.md). It is deliberately self-contained with vb-prefixed
-// symbols so it never collides with anything in widgets.go (which a parallel effort
-// edits). The route in screens.go points at VisualBuilder.
+// This file owns the Widget Builder — a free-form node-graph editor (the visual
+// programming system; see docs/WIDGET_BUILDER_PLAN.md). The canvas is the primary
+// surface: add nodes from the palette, name them (variables usable downstream), wire
+// inputs in the inspector, pick the output node, and watch the live preview render the
+// evaluated card. All symbols are vb-prefixed so they never collide with widgets.go
+// (which a parallel effort edits). The route in screens.go points at VisualBuilder.
 
-// Bento cell geometry, mirrored from the dashboard grid (.bento --cell + gap) so the
-// builder stage previews a tile at its true on-dashboard proportions.
-const vbCellPx, vbGapPx = 152, 10
+const vbCellPx, vbGapPx = 152, 10               // bento cell geometry (true tile proportions)
+const vbNodeW, vbNodeH = 168.0, 64.0            // canvas node box size
+const vbGraphKey = "cashflux:wb-graph"          // localStorage: the whole card graph
+const vbCanvasPosKey = "cashflux:wb-canvas-pos" // localStorage: node positions (drag shim)
 
-// Pipeline step ids, in left-to-right flow order: a data source → an optional
-// transform → a visualization. Each step's output feeds the next.
-const (
-	vbStepSource    = "source"
-	vbStepTransform = "transform"
-	vbStepVisualize = "visualize"
-)
-
-// Canvas geometry: node box size and the fixed drawing surface the wires are
-// computed against (the surface scrolls within its wrapper).
-const (
-	vbNodeW      = 156.0
-	vbNodeH      = 66.0
-	vbCanvasW    = 760.0
-	vbCanvasH    = 340.0
-	vbCanvasWStr = "760"
-	vbCanvasHStr = "340"
-)
-
-// vbCanvasPosKey is the localStorage key the drag shim writes node positions to; the
-// builder reads it so dragged layouts persist across re-renders.
-const vbCanvasPosKey = "cashflux:wb-canvas-pos"
-
-// vbDragShimJS is the canvas drag behavior, evaluated once from VisualBuilder. It
-// delegates pointer events on the document so it survives the Go virtual-DOM
-// re-rendering the canvas: mousedown on a .wb-node starts a drag, mousemove updates
-// the node's left/top and re-routes the connected SVG wires live, and mouseup
-// persists the position to localStorage. Guarded so repeated eval is a no-op. Kept in
-// sync with web/wb-canvas.js. Uses string concatenation (no backticks) so it can live
-// in a Go raw string.
+// vbDragShimJS is the canvas drag behavior, evaluated once. It delegates pointer events
+// on the document so it survives Go re-rendering the canvas: mousedown on a .wb-node
+// drags it (updating left/top + re-routing wires live), mouseup persists the position
+// keyed by the node's data-step (= node id). Guarded against double-install.
 const vbDragShimJS = `
 (function(){
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
   var POS_KEY = "cashflux:wb-canvas-pos";
-  var NODE_W = 156, NODE_H = 66;
+  var NODE_W = 168, NODE_H = 64;
   var drag = null;
   function load(){ try { return JSON.parse(localStorage.getItem(POS_KEY) || "{}"); } catch(e){ return {}; } }
   function save(p){ try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch(e){} }
   function reroute(canvas){
     var ports = {};
     canvas.querySelectorAll(".wb-node").forEach(function(n){
-      var step = n.getAttribute("data-step");
+      var id = n.getAttribute("data-step");
       var x = parseFloat(n.style.left) || 0, y = parseFloat(n.style.top) || 0;
-      ports[step] = { inX:x, inY:y+NODE_H/2, outX:x+NODE_W, outY:y+NODE_H/2 };
+      ports[id] = { inX:x, inY:y+NODE_H/2, outX:x+NODE_W, outY:y+NODE_H/2 };
     });
     canvas.querySelectorAll("path.wb-wire").forEach(function(p){
       var f = ports[p.getAttribute("data-from")], t = ports[p.getAttribute("data-to")];
       if(!f || !t) return;
-      var x1=f.outX,y1=f.outY,x2=t.inX,y2=t.inY,dx=(x2-x1)/2; if(dx<50) dx=50;
+      var x1=f.outX,y1=f.outY,x2=t.inX,y2=t.inY,dx=(x2-x1)/2; if(dx<40) dx=40;
       p.setAttribute("d","M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2);
     });
   }
   document.addEventListener("mousedown", function(e){
     var node = e.target.closest ? e.target.closest(".wb-node") : null;
     if(!node) return;
-    var canvas = node.closest(".wb-canvas");
-    if(!canvas) return;
+    var canvas = node.closest(".wb-canvas"); if(!canvas) return;
     var rect = node.getBoundingClientRect();
-    drag = { step:node.getAttribute("data-step"), el:node, canvas:canvas, offX:e.clientX-rect.left, offY:e.clientY-rect.top, moved:false };
+    drag = { id:node.getAttribute("data-step"), el:node, canvas:canvas, offX:e.clientX-rect.left, offY:e.clientY-rect.top, moved:false };
     e.preventDefault();
   });
   document.addEventListener("mousemove", function(e){
@@ -101,222 +78,259 @@ const vbDragShimJS = `
     var c = drag.canvas.getBoundingClientRect();
     var nx = e.clientX - c.left - drag.offX, ny = e.clientY - c.top - drag.offY;
     if(nx<0) nx=0; if(ny<0) ny=0;
-    drag.el.style.left = nx+"px"; drag.el.style.top = ny+"px";
-    drag.moved = true;
+    drag.el.style.left = nx+"px"; drag.el.style.top = ny+"px"; drag.moved = true;
     reroute(drag.canvas);
   });
   document.addEventListener("mouseup", function(){
     if(!drag) return;
-    if(drag.moved){
-      var p = load();
-      p[drag.step] = { x: parseFloat(drag.el.style.left)||0, y: parseFloat(drag.el.style.top)||0 };
-      save(p);
-      window.dispatchEvent(new CustomEvent("cashflux-wb-moved"));
-    }
+    if(drag.moved){ var p = load(); p[drag.id] = { x: parseFloat(drag.el.style.left)||0, y: parseFloat(drag.el.style.top)||0 }; save(p); }
     drag = null;
   });
 })();
 `
 
-// VisualBuilder is the widget-creation screen and front end of the visual programming
-// system. Top-to-bottom: a stage rendering a LIVE preview tile — the card is built as
-// an internal/cardgraph graph (source → optional transform → visualization) and
-// evaluated against the real app figures, so the figure shown is your actual data; an
-// n8n-style node canvas with draggable boxes and bezier wires; a per-step config
-// panel; and a size control (width 1–4, height 1–3). The graph is the single source
-// of truth — the canvas and the stage both read it.
+// vbStyleCSS is the builder's layout stylesheet, injected once from Go so it survives
+// even if index.html is reverted by a parallel effort. (Node boxes + wires also carry
+// inline styles; this covers the surrounding panes.)
+const vbStyleCSS = `
+.vb{display:flex;flex-direction:column;gap:.75rem;height:calc(100vh - 120px);min-height:560px}
+.vb-toolbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.vb-tool-label{font-weight:600;font-size:14px}
+.vb-sep{flex:1}
+.vb-main{display:flex;gap:.6rem;flex:1;min-height:0}
+.vb-palette{width:170px;flex:0 0 170px;overflow:auto;display:flex;flex-direction:column;gap:.25rem;padding:.5rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
+.vb-pane-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint,#9ca3af);margin-bottom:.25rem}
+.vb-pal-group{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.5rem}
+.vb-pal-btn{text-align:left;padding:.3rem .5rem;border-radius:7px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);color:inherit;cursor:pointer;font-size:12px}
+.vb-pal-btn:hover{border-color:var(--accent,#3b82f6)}
+.vb-canvas-scroll{flex:1;min-width:0;overflow:auto;border-radius:10px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px}
+.vb-inspector{width:250px;flex:0 0 250px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
+.vb-insp-section{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.4rem}
+.vb-insp-actions{display:flex;gap:.4rem;margin-top:.5rem}
+.vb-previewpane{display:flex;flex-direction:column;gap:.35rem}
+.vb .wb-field{display:flex;flex-direction:column;gap:.2rem}
+.vb .wb-field-label{font-size:12px;color:var(--dim,#9ca3af)}
+.vb .wb-stage{display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:10px;background:var(--bg,#0e0e10)}
+.vb .wtitle{font-family:'Fraunces',serif;font-weight:600}
+`
+
+// VisualBuilder is the node-graph widget editor.
 func VisualBuilder() ui.Node {
-	col := ui.UseState(1)
-	row := ui.UseState(1)
-	c, r := col.Get(), row.Get()
-
-	active := ui.UseState(vbStepSource)
-	// Install the canvas drag behavior (pointer drag + live wire re-routing) by
-	// evaluating the shim once. It's injected from here rather than relying on a
-	// <script> tag so it survives even if index.html is unavailable; the shim guards
-	// against double-install. (web/wb-canvas.js holds the same source for reference.)
+	ui.UseEffect(func() func() { js.Global().Call("eval", vbDragShimJS); return nil }, "vb-drag-shim")
 	ui.UseEffect(func() func() {
-		js.Global().Call("eval", vbDragShimJS)
+		doc := js.Global().Get("document")
+		if doc.Call("getElementById", "vb-style").Type() == js.TypeNull {
+			st := doc.Call("createElement", "style")
+			st.Set("id", "vb-style")
+			st.Set("textContent", vbStyleCSS)
+			doc.Get("head").Call("appendChild", st)
+		}
 		return nil
-	}, "vb-drag-shim")
-	// Node positions come from localStorage (written by the drag shim), merged over
-	// the default layout, so dragged positions survive re-renders.
-	positions := vbLoadPositions()
+	}, "vb-style")
 
-	// Source: pick the kind of primitive (a live figure or a literal number/text/bool)
-	// and its value. Transform: an optional formula. Visualize: pick the display widget
-	// (KPI / Text / Progress / Badge) and its options. All held as small atoms; the
-	// handlers are created once here (stable hook order) and threaded into the panel.
-	sourceKind := ui.UseState("figure")
-	sourceFigure := ui.UseState("net_worth")
-	sourceNumber := ui.UseState("0")
-	sourceText := ui.UseState("")
-	sourceBool := ui.UseState("false")
-	transformExpr := ui.UseState("")
-	vizKind := ui.UseState("kpi")
-	vizTitle := ui.UseState("")
-	vizFormat := ui.UseState("number")
-	vizMax := ui.UseState("100")
+	col := ui.UseState(2)
+	row := ui.UseState(2)
+	graph := ui.UseState(vbLoadGraph())
+	selected := ui.UseState(cardgraph.NodeID(""))
 
-	h := vbHandlers{
-		SourceKind:   ui.UseEvent(func(e ui.Event) { sourceKind.Set(e.GetValue()) }),
-		SourceFigure: ui.UseEvent(func(e ui.Event) { sourceFigure.Set(e.GetValue()) }),
-		SourceNumber: ui.UseEvent(func(v string) { sourceNumber.Set(v) }),
-		SourceText:   ui.UseEvent(func(v string) { sourceText.Set(v) }),
-		SourceBool:   ui.UseEvent(func(e ui.Event) { sourceBool.Set(e.GetValue()) }),
-		Transform:    ui.UseEvent(func(v string) { transformExpr.Set(v) }),
-		VizKind:      ui.UseEvent(func(e ui.Event) { vizKind.Set(e.GetValue()) }),
-		Title:        ui.UseEvent(func(v string) { vizTitle.Set(v) }),
-		Format:       ui.UseEvent(func(e ui.Event) { vizFormat.Set(e.GetValue()) }),
-		Max:          ui.UseEvent(func(v string) { vizMax.Set(v) }),
+	g := graph.Get()
+	setGraph := func(ng cardgraph.Graph) { vbSaveGraph(ng); graph.Set(ng) }
+
+	// Mutations.
+	addNode := func(kind string) {
+		ng := vbCloneGraph(g)
+		id := vbFreshID(ng)
+		n := cardgraph.Node{ID: id, Kind: kind, Props: vbDefaultProps(kind), Pos: vbCascadePos(len(ng.Nodes))}
+		ng.Nodes = append(ng.Nodes, n)
+		if ng.Root == "" && vbOutType(kind) == cardgraph.TypeViz {
+			ng.Root = id
+		}
+		setGraph(ng)
+		selected.Set(id)
+	}
+	deleteNode := func(id cardgraph.NodeID) {
+		ng := vbCloneGraph(g)
+		kept := ng.Nodes[:0:0]
+		for _, n := range ng.Nodes {
+			if n.ID != id {
+				kept = append(kept, n)
+			}
+		}
+		ng.Nodes = kept
+		edges := ng.Edges[:0:0]
+		for _, e := range ng.Edges {
+			if e.From.Node != id && e.To.Node != id {
+				edges = append(edges, e)
+			}
+		}
+		ng.Edges = edges
+		if ng.Root == id {
+			ng.Root = ""
+		}
+		setGraph(ng)
+		selected.Set("")
+	}
+	setProp := func(id cardgraph.NodeID, key, val string) {
+		ng := vbCloneGraph(g)
+		for i := range ng.Nodes {
+			if ng.Nodes[i].ID == id {
+				if ng.Nodes[i].Props == nil {
+					ng.Nodes[i].Props = map[string]string{}
+				}
+				ng.Nodes[i].Props[key] = val
+			}
+		}
+		setGraph(ng)
+	}
+	setVar := func(id cardgraph.NodeID, v string) {
+		ng := vbCloneGraph(g)
+		for i := range ng.Nodes {
+			if ng.Nodes[i].ID == id {
+				ng.Nodes[i].Var = strings.TrimSpace(v)
+			}
+		}
+		setGraph(ng)
+	}
+	setRoot := func(id cardgraph.NodeID) {
+		ng := vbCloneGraph(g)
+		ng.Root = id
+		setGraph(ng)
+	}
+	wireInput := func(to cardgraph.NodeID, port, fromID string) {
+		ng := vbCloneGraph(g)
+		edges := ng.Edges[:0:0]
+		for _, e := range ng.Edges { // drop any existing wire into this input
+			if !(e.To.Node == to && e.To.Port == port) {
+				edges = append(edges, e)
+			}
+		}
+		if fromID != "" {
+			edges = append(edges, cardgraph.Edge{
+				From: cardgraph.PortRef{Node: cardgraph.NodeID(fromID), Port: cardgraph.OutPort},
+				To:   cardgraph.PortRef{Node: to, Port: port},
+			})
+		}
+		ng.Edges = edges
+		setGraph(ng)
+	}
+	loadPreset := ui.UseEvent(func(e ui.Event) {
+		if p, ok := vbPresets()[e.GetValue()]; ok {
+			setGraph(p)
+			selected.Set("")
+		}
+	})
+	clearGraph := ui.UseEvent(func() { setGraph(vbStarterGraph()); selected.Set("") })
+
+	// Saved-cards library: name + Save persists the current graph under that name to a
+	// local library; "My cards" loads one back; Delete removes it. rev forces a
+	// re-render so the library dropdown refreshes after a save/delete.
+	cardName := ui.UseState("")
+	rev := ui.UseState(0)
+	_ = rev.Get()
+	published := ui.UseState("")
+	layoutAtom := uistate.UseLayoutItems()
+	onCardName := ui.UseEvent(func(v string) { cardName.Set(v) })
+	publish := ui.UseEvent(func() {
+		name := strings.TrimSpace(cardName.Get())
+		if name == "" {
+			published.Set("Name the card first, then Publish.")
+			return
+		}
+		lib := vbLoadCards()
+		lib[name] = g
+		vbSaveCards(lib)
+		id := vbCardPrefix + name
+		items := layoutAtom.Get()
+		exists := false
+		for _, it := range items {
+			if it.ID == id {
+				exists = true
+			}
+		}
+		if !exists {
+			items = append(items, dashlayout.Item{ID: id, ColSpan: col.Get(), RowSpan: row.Get()})
+			layoutAtom.Set(items)
+			uistate.PersistItems(items)
+		}
+		published.Set("Published “" + name + "” to your dashboard.")
+	})
+	saveCard := ui.UseEvent(func() {
+		name := strings.TrimSpace(cardName.Get())
+		if name == "" {
+			return
+		}
+		lib := vbLoadCards()
+		lib[name] = g
+		vbSaveCards(lib)
+		rev.Set(rev.Get() + 1)
+	})
+	loadCard := ui.UseEvent(func(e ui.Event) {
+		if c, ok := vbLoadCards()[e.GetValue()]; ok {
+			setGraph(c)
+			cardName.Set(e.GetValue())
+			selected.Set("")
+		}
+	})
+	deleteCard := ui.UseEvent(func() {
+		name := strings.TrimSpace(cardName.Get())
+		lib := vbLoadCards()
+		if _, ok := lib[name]; ok {
+			delete(lib, name)
+			vbSaveCards(lib)
+			rev.Set(rev.Get() + 1)
+		}
+	})
+
+	// Evaluate against live data.
+	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Datasets: vbDatasets()})
+	issues := cardgraph.Validate(g)
+
+	// Apply dragged positions onto the nodes for rendering.
+	pos := vbLoadPositions()
+	for i := range g.Nodes {
+		if p, ok := pos[string(g.Nodes[i].ID)]; ok {
+			g.Nodes[i].Pos = p
+		}
 	}
 
-	cfg := vbConfig{
-		SourceKind: sourceKind.Get(), Figure: sourceFigure.Get(), Number: sourceNumber.Get(),
-		TextVal: sourceText.Get(), BoolVal: sourceBool.Get(), TransformExpr: transformExpr.Get(),
-		VizKind: vizKind.Get(), Title: vizTitle.Get(), Format: vizFormat.Get(), Max: vizMax.Get(),
-	}
-	g := vbBuildGraph(cfg)
-	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface()})
+	span := func(n int) string { return strconv.Itoa(n*vbCellPx+(n-1)*vbGapPx) + "px" }
 
-	span := func(n int) string {
-		return strconv.Itoa(n*vbCellPx+(n-1)*vbGapPx) + "px"
-	}
-	setCol := func(n int) { col.Set(clampSpan(n, dashMaxColSpan)) }
-	setRow := func(n int) { row.Set(clampSpan(n, dashMaxRowSpan)) }
-
-	return Div(css.Class("wb"),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.stageTitle")),
-			Body: Div(css.Class("wb-stage"),
-				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(c), "height": span(r)}),
-					Div(css.Class("wh"),
-						Span(css.Class("grip"), Attr("aria-hidden", "true"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-						H3(vbCardTitle(res, vbDefaultTitle(cfg))),
-					),
-					Div(ClassStr("wbody"), vbStageBody(res, vizFormat.Get())),
-				),
+	return Div(css.Class("vb"),
+		// Toolbar
+		Div(css.Class("vb-toolbar"),
+			Span(css.Class("vb-tool-label"), "Widget builder"),
+			vbSelectRaw("Preset", "", append([][2]string{{"", "Load a preset…"}}, vbPresetOptions()...), loadPreset),
+			vbSelectRaw("My cards", "", append([][2]string{{"", "My cards…"}}, vbCardOptions()...), loadCard),
+			Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", "Card name"),
+				Attr("aria-label", "Card name"), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
+			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), "Save"),
+			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), "Publish ▸ dashboard"),
+			Button(css.Class("data-btn"), Type("button"), OnClick(deleteCard), "Delete"),
+			Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
+			If(published.Get() != "", Span(css.Class("t-caption"), Style(map[string]string{"color": "var(--up,#16a34a)"}), published.Get())),
+			Span(css.Class("vb-sep")),
+			wmStepper("W", col.Get(), "Narrower", "Wider", func() { col.Set(clampSpan(col.Get()-1, 4)) }, func() { col.Set(clampSpan(col.Get()+1, 4)) }),
+			wmStepper("H", row.Get(), "Shorter", "Taller", func() { row.Set(clampSpan(row.Get()-1, 3)) }, func() { row.Set(clampSpan(row.Get()+1, 3)) }),
+		),
+		// Three-pane: palette | canvas | inspector
+		Div(css.Class("vb-main"),
+			vbPalette(addNode),
+			vbCanvas(g, selected.Get(), func(id cardgraph.NodeID) { selected.Set(id) }),
+			vbInspector(g, selected.Get(), issues, setProp, setVar, setRoot, deleteNode, wireInput),
+		),
+		// Live preview
+		Div(css.Class("vb-previewpane"),
+			Span(css.Class("vb-tool-label"), "Live preview"),
+			Div(css.Class("wb-stage"),
+				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(col.Get()), "height": span(row.Get())}),
+					vbRenderTile(res, g)),
 			),
-		}),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.pipelineTitle")),
-			Body: Fragment(
-				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.pipelineHint")),
-				vbCanvas(active.Get(), vbStepValues(cfg), positions, func(step string) { active.Set(step) }),
-			),
-		}),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.configTitle")),
-			Body:   vbConfigPanel(active.Get(), cfg, h),
-		}),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetBuilder.sizeTitle")),
-			Body: Fragment(
-				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetBuilder.sizeHint")),
-				Div(css.Class("wb-size"),
-					wmStepper("W", c, uistate.T("widget.narrower"), uistate.T("widget.wider"),
-						func() { setCol(c - 1) }, func() { setCol(c + 1) }),
-					wmStepper("H", r, uistate.T("widget.shorter"), uistate.T("widget.taller"),
-						func() { setRow(r - 1) }, func() { setRow(r + 1) }),
-				),
-			),
-		}),
+		),
 	)
 }
 
-// vbConfig is the full builder state, flattened — the single description the graph,
-// the canvas summaries, and the config panel are all derived from.
-type vbConfig struct {
-	SourceKind    string // "figure" | "number" | "text" | "bool"
-	Figure        string // engineenv variable name (figure source)
-	Number        string // literal number value
-	TextVal       string // literal text value
-	BoolVal       string // "true" | "false"
-	TransformExpr string // optional formula over the source value (var "a")
-	VizKind       string // "kpi" | "text" | "progress" | "badge"
-	Title         string // override title ("" = derived)
-	Format        string // "number" | "percent" | "currency"
-	Max           string // progress denominator
-}
+// ---- data + eval context ------------------------------------------------------
 
-// vbHandlers bundles the event handlers the config panel needs, created once in
-// VisualBuilder so hook order stays stable regardless of which step is shown.
-type vbHandlers struct {
-	SourceKind, SourceFigure, SourceNumber, SourceText, SourceBool ui.Handler
-	Transform, VizKind, Title, Format, Max                         ui.Handler
-}
-
-// vbNumericSource reports whether the chosen source produces a number (so a transform
-// formula and numeric viz make sense); text sources don't.
-func (c vbConfig) vbNumericSource() bool {
-	return c.SourceKind != "text"
-}
-
-// vbDefaultTitle derives a card title when the user hasn't typed one.
-func vbDefaultTitle(c vbConfig) string {
-	if t := strings.TrimSpace(c.Title); t != "" {
-		return t
-	}
-	if c.SourceKind == "figure" {
-		return vbPretty(c.Figure)
-	}
-	return uistate.T("widgetBuilder.sampleTitle")
-}
-
-// vbBuildGraph assembles the card's node graph from the config: a source primitive →
-// an optional formula transform (numeric sources only) → the chosen visualization. A
-// progress viz also gets a literal "max" node wired into its second input.
-func vbBuildGraph(c vbConfig) cardgraph.Graph {
-	var src cardgraph.Node
-	switch c.SourceKind {
-	case "number":
-		src = cardgraph.Node{ID: "src", Kind: cardgraph.KindLiteralNumber, Props: map[string]string{"value": c.Number}}
-	case "text":
-		src = cardgraph.Node{ID: "src", Kind: cardgraph.KindLiteralText, Props: map[string]string{"value": c.TextVal}}
-	case "bool":
-		src = cardgraph.Node{ID: "src", Kind: cardgraph.KindLiteralBool, Props: map[string]string{"value": c.BoolVal}}
-	default:
-		src = cardgraph.Node{ID: "src", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": c.Figure}}
-	}
-
-	title := vbDefaultTitle(c)
-	var viz cardgraph.Node
-	switch c.VizKind {
-	case "text":
-		viz = cardgraph.Node{ID: "viz", Kind: cardgraph.KindVizText, Props: map[string]string{"title": title}}
-	case "progress":
-		viz = cardgraph.Node{ID: "viz", Kind: cardgraph.KindVizProgress, Props: map[string]string{"title": title, "format": c.Format}}
-	case "badge":
-		viz = cardgraph.Node{ID: "viz", Kind: cardgraph.KindVizBadge, Props: map[string]string{"title": title, "tone": "auto"}}
-	default:
-		viz = cardgraph.Node{ID: "viz", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": title, "format": c.Format, "tone": "auto"}}
-	}
-
-	nodes := []cardgraph.Node{src}
-	var edges []cardgraph.Edge
-	last := cardgraph.PortRef{Node: "src", Port: cardgraph.OutPort}
-
-	// Transform: only for numeric sources, and only when an expression is set.
-	if c.vbNumericSource() && strings.TrimSpace(c.TransformExpr) != "" {
-		nodes = append(nodes, cardgraph.Node{ID: "xf", Kind: cardgraph.KindFormula, Props: map[string]string{"expr": c.TransformExpr}})
-		edges = append(edges, cardgraph.Edge{From: last, To: cardgraph.PortRef{Node: "xf", Port: "a"}})
-		last = cardgraph.PortRef{Node: "xf", Port: cardgraph.OutPort}
-	}
-
-	nodes = append(nodes, viz)
-	edges = append(edges, cardgraph.Edge{From: last, To: cardgraph.PortRef{Node: "viz", Port: "value"}})
-
-	if c.VizKind == "progress" {
-		nodes = append(nodes, cardgraph.Node{ID: "max", Kind: cardgraph.KindLiteralNumber, Props: map[string]string{"value": c.Max}})
-		edges = append(edges, cardgraph.Edge{From: cardgraph.PortRef{Node: "max", Port: cardgraph.OutPort}, To: cardgraph.PortRef{Node: "viz", Port: "max"}})
-	}
-
-	return cardgraph.Graph{Nodes: nodes, Edges: edges, Root: "viz"}
-}
-
-// vbVariableSurface returns the live engine variable surface (net_worth, income,
-// counts, …) the builder evaluates cards against, or an empty map when app state isn't
-// hydrated yet.
 func vbVariableSurface() map[string]float64 {
 	app := appstate.Default
 	if app == nil {
@@ -327,42 +341,689 @@ func vbVariableSurface() map[string]float64 {
 		base = "USD"
 	}
 	return engineenv.Vars(engineenv.Data{
-		Accounts:     app.Accounts(),
-		Transactions: app.Transactions(),
-		Members:      app.Members(),
-		Budgets:      app.Budgets(),
-		Goals:        app.Goals(),
-		Tasks:        app.Tasks(),
-		Rates:        currency.Rates{Base: base, Rates: app.Settings().FXRates},
-		Now:          time.Now(),
+		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
+		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
+		Rates: currency.Rates{Base: base, Rates: app.Settings().FXRates}, Now: time.Now(),
 	})
 }
 
-// vbCardTitle is the preview tile's header: the evaluated card's title, falling back
-// to the in-progress title while the graph can't render.
-func vbCardTitle(res cardgraph.Result, fallback string) string {
-	if res.Render != nil && res.Render.Title != "" {
-		return res.Render.Title
+// vbDatasets builds the app collections a source.dataset node can read.
+func vbDatasets() map[string]cardgraph.Collection {
+	out := map[string]cardgraph.Collection{}
+	app := appstate.Default
+	if app == nil {
+		return out
 	}
-	if strings.TrimSpace(fallback) != "" {
-		return fallback
+	catName := map[string]string{}
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
 	}
-	return uistate.T("widgetBuilder.sampleTitle")
+	major := func(m money.Money) float64 {
+		div := 1.0
+		for i := 0; i < currency.Decimals(m.Currency); i++ {
+			div *= 10
+		}
+		return math.Abs(float64(m.Amount) / div)
+	}
+	txCols := []cardgraph.Column{
+		{Name: "category", Type: cardgraph.TypeText}, {Name: "payee", Type: cardgraph.TypeText},
+		{Name: "amount", Type: cardgraph.TypeNumber}, {Name: "type", Type: cardgraph.TypeText},
+	}
+	var txRows []cardgraph.Row
+	for _, t := range app.Transactions() {
+		kind := "transfer"
+		switch {
+		case t.IsIncome():
+			kind = "income"
+		case t.IsExpense():
+			kind = "expense"
+		}
+		cat := catName[t.CategoryID]
+		if strings.TrimSpace(cat) == "" {
+			cat = "Uncategorized"
+		}
+		txRows = append(txRows, cardgraph.Row{
+			"category": cardgraph.Text(cat), "payee": cardgraph.Text(t.Payee),
+			"amount": cardgraph.Num(major(t.Amount)), "type": cardgraph.Text(kind),
+		})
+	}
+	out["transactions"] = cardgraph.Collection{Cols: txCols, Rows: txRows}
+
+	acctCols := []cardgraph.Column{{Name: "name", Type: cardgraph.TypeText}, {Name: "type", Type: cardgraph.TypeText}}
+	var acctRows []cardgraph.Row
+	for _, a := range app.Accounts() {
+		if a.Archived {
+			continue
+		}
+		acctRows = append(acctRows, cardgraph.Row{"name": cardgraph.Text(a.Name), "type": cardgraph.Text(string(a.Type))})
+	}
+	out["accounts"] = cardgraph.Collection{Cols: acctCols, Rows: acctRows}
+	return out
 }
 
-// toneClass maps a viz tone to the figure color class.
-func toneClass(tone string) string {
-	switch tone {
-	case "up":
-		return " text-up"
-	case "down":
-		return " text-down"
+// ---- graph persistence + helpers ----------------------------------------------
+
+func vbLoadGraph() cardgraph.Graph {
+	v := js.Global().Get("localStorage").Call("getItem", vbGraphKey)
+	if v.Type() == js.TypeString && v.String() != "" {
+		var g cardgraph.Graph
+		if err := json.Unmarshal([]byte(v.String()), &g); err == nil && len(g.Nodes) > 0 {
+			return g
+		}
+	}
+	return vbStarterGraph()
+}
+
+func vbSaveGraph(g cardgraph.Graph) {
+	if b, err := json.Marshal(g); err == nil {
+		js.Global().Get("localStorage").Call("setItem", vbGraphKey, string(b))
+	}
+}
+
+// vbCardsKey holds the saved-cards library (name → graph) in localStorage.
+const vbCardsKey = "cashflux:wb-cards"
+
+// vbCardPrefix namespaces a published builder card's dashboard-layout Item.ID so
+// the dashboard render loop can tell user-built tiles apart from the built-in
+// widgets and route them through vbPublishedWidget.
+const vbCardPrefix = "wb:"
+
+// vbPublishedWidget renders a published builder card (by saved name) as a
+// dashboard tile. Returns nil if the named card no longer exists in the library
+// (e.g. the user deleted it after publishing) so the tile silently drops out.
+func vbPublishedWidget(name string) ui.Node {
+	g, ok := vbLoadCards()[name]
+	if !ok {
+		return nil
+	}
+	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Datasets: vbDatasets()})
+	return uiw.Widget(uiw.WidgetProps{
+		ID: vbCardPrefix + name, Title: name, Draggable: true, Resizable: true,
+		Body: vbRenderTile(res, g),
+	})
+}
+
+func vbLoadCards() map[string]cardgraph.Graph {
+	out := map[string]cardgraph.Graph{}
+	v := js.Global().Get("localStorage").Call("getItem", vbCardsKey)
+	if v.Type() == js.TypeString && v.String() != "" {
+		_ = json.Unmarshal([]byte(v.String()), &out)
+	}
+	return out
+}
+
+func vbSaveCards(lib map[string]cardgraph.Graph) {
+	if b, err := json.Marshal(lib); err == nil {
+		js.Global().Get("localStorage").Call("setItem", vbCardsKey, string(b))
+	}
+}
+
+// vbCardOptions lists saved card names (sorted) for the "My cards" dropdown.
+func vbCardOptions() [][2]string {
+	lib := vbLoadCards()
+	names := make([]string, 0, len(lib))
+	for n := range lib {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([][2]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, [2]string{n, n})
+	}
+	return out
+}
+
+func vbCloneGraph(g cardgraph.Graph) cardgraph.Graph {
+	ng := cardgraph.Graph{Root: g.Root}
+	for _, n := range g.Nodes {
+		props := map[string]string{}
+		for k, val := range n.Props {
+			props[k] = val
+		}
+		ng.Nodes = append(ng.Nodes, cardgraph.Node{ID: n.ID, Kind: n.Kind, Var: n.Var, Pos: n.Pos, Props: props})
+	}
+	ng.Edges = append(ng.Edges, g.Edges...)
+	return ng
+}
+
+func vbFreshID(g cardgraph.Graph) cardgraph.NodeID {
+	used := map[cardgraph.NodeID]bool{}
+	for _, n := range g.Nodes {
+		used[n.ID] = true
+	}
+	for i := 1; ; i++ {
+		id := cardgraph.NodeID("n" + strconv.Itoa(i))
+		if !used[id] {
+			return id
+		}
+	}
+}
+
+func vbCascadePos(n int) cardgraph.Point {
+	return cardgraph.Point{X: float64(30 + (n%4)*185), Y: float64(20 + (n/4)*92)}
+}
+
+func vbLoadPositions() map[string]cardgraph.Point {
+	out := map[string]cardgraph.Point{}
+	v := js.Global().Get("localStorage").Call("getItem", vbCanvasPosKey)
+	if v.Type() != js.TypeString {
+		return out
+	}
+	var saved map[string]struct{ X, Y float64 }
+	if err := json.Unmarshal([]byte(v.String()), &saved); err != nil {
+		return out
+	}
+	for k, p := range saved {
+		out[k] = cardgraph.Point{X: p.X, Y: p.Y}
+	}
+	return out
+}
+
+// vbOutType returns a node kind's output type (via the cardgraph registry).
+func vbOutType(kind string) cardgraph.PortType {
+	if s, ok := cardgraph.Lookup(kind); ok {
+		return s.Out
 	}
 	return ""
 }
 
-// vbMoneyFmt formats a plain numeric string as money when format=="currency"; other
-// formats pass through (the pure core already appended "%" for percent).
+// ---- node catalog (palette) ----------------------------------------------------
+
+type vbCatItem struct{ Kind, Label, Group string }
+
+func vbCatalog() []vbCatItem {
+	return []vbCatItem{
+		{cardgraph.KindSourceScalar, "Figure", "Data"},
+		{cardgraph.KindSourceDataset, "Dataset", "Data"},
+		{cardgraph.KindLiteralNumber, "Number", "Data"},
+		{cardgraph.KindLiteralText, "Text", "Data"},
+		{cardgraph.KindLiteralBool, "Yes / No", "Data"},
+		{cardgraph.KindFilter, "Filter", "Transform"},
+		{cardgraph.KindGroupBy, "Group by", "Transform"},
+		{cardgraph.KindAggregate, "Aggregate", "Transform"},
+		{cardgraph.KindFormula, "Formula", "Transform"},
+		{cardgraph.KindCompare, "Compare", "Logic"},
+		{cardgraph.KindBranchNumber, "Branch", "Logic"},
+		{cardgraph.KindVizKPI, "KPI", "Display"},
+		{cardgraph.KindVizStat, "Stat + Δ", "Display"},
+		{cardgraph.KindVizChart, "Chart", "Display"},
+		{cardgraph.KindVizList, "List / table", "Display"},
+		{cardgraph.KindVizProgress, "Progress", "Display"},
+		{cardgraph.KindVizBadge, "Badge", "Display"},
+		{cardgraph.KindVizText, "Text", "Display"},
+	}
+}
+
+func vbKindLabel(kind string) string {
+	for _, c := range vbCatalog() {
+		if c.Kind == kind {
+			return c.Label
+		}
+	}
+	return kind
+}
+
+func vbDefaultProps(kind string) map[string]string {
+	switch kind {
+	case cardgraph.KindSourceScalar:
+		return map[string]string{"name": "net_worth"}
+	case cardgraph.KindSourceDataset:
+		return map[string]string{"which": "transactions"}
+	case cardgraph.KindLiteralNumber:
+		return map[string]string{"value": "0"}
+	case cardgraph.KindLiteralBool:
+		return map[string]string{"value": "true"}
+	case cardgraph.KindFilter:
+		return map[string]string{"col": "type", "op": "==", "value": "expense"}
+	case cardgraph.KindGroupBy:
+		return map[string]string{"group": "category", "value": "amount", "fn": "sum"}
+	case cardgraph.KindAggregate:
+		return map[string]string{"col": "amount", "fn": "sum"}
+	case cardgraph.KindFormula:
+		return map[string]string{"expr": "a"}
+	case cardgraph.KindCompare:
+		return map[string]string{"op": ">"}
+	case cardgraph.KindVizKPI:
+		return map[string]string{"title": "KPI", "format": "number", "tone": "auto"}
+	case cardgraph.KindVizStat:
+		return map[string]string{"title": "Stat", "format": "currency"}
+	case cardgraph.KindVizChart:
+		return map[string]string{"title": "Chart", "chart": "bar"}
+	case cardgraph.KindVizList:
+		return map[string]string{"title": "List", "limit": "6"}
+	case cardgraph.KindVizProgress:
+		return map[string]string{"title": "Progress", "format": "number"}
+	case cardgraph.KindVizBadge:
+		return map[string]string{"title": "Badge", "tone": "auto"}
+	case cardgraph.KindVizText:
+		return map[string]string{"title": "Text"}
+	}
+	return map[string]string{}
+}
+
+// ---- param schema (drives the inspector) ---------------------------------------
+
+type vbParam struct {
+	Key, Label, Kind string // Kind: text | number | select
+	Opts             [][2]string
+}
+
+func vbFormatOpts() [][2]string {
+	return [][2]string{{"number", "Number"}, {"percent", "Percent"}, {"currency", "Currency"}}
+}
+func vbFnOpts() [][2]string {
+	return [][2]string{{"sum", "Sum"}, {"avg", "Average"}, {"count", "Count"}, {"min", "Min"}, {"max", "Max"}}
+}
+func vbOpOpts() [][2]string {
+	return [][2]string{{"==", "="}, {"!=", "≠"}, {"contains", "contains"}, {">", ">"}, {"<", "<"}, {">=", "≥"}, {"<=", "≤"}}
+}
+
+func vbParamSchema(kind string) []vbParam {
+	switch kind {
+	case cardgraph.KindSourceScalar:
+		opts := [][2]string{}
+		for _, n := range engineenv.SortedNames() {
+			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
+		}
+		return []vbParam{{"name", "Figure", "select", opts}}
+	case cardgraph.KindSourceDataset:
+		return []vbParam{{"which", "Dataset", "select", [][2]string{{"transactions", "Transactions"}, {"accounts", "Accounts"}}}}
+	case cardgraph.KindLiteralNumber:
+		return []vbParam{{"value", "Value", "number", nil}}
+	case cardgraph.KindLiteralText:
+		return []vbParam{{"value", "Value", "text", nil}}
+	case cardgraph.KindLiteralBool:
+		return []vbParam{{"value", "Value", "select", [][2]string{{"true", "Yes"}, {"false", "No"}}}}
+	case cardgraph.KindFilter:
+		return []vbParam{{"col", "Column", "text", nil}, {"op", "Operator", "select", vbOpOpts()}, {"value", "Value", "text", nil}}
+	case cardgraph.KindGroupBy:
+		return []vbParam{{"group", "Group by column", "text", nil}, {"value", "Value column", "text", nil}, {"fn", "Function", "select", vbFnOpts()}}
+	case cardgraph.KindAggregate:
+		return []vbParam{{"col", "Column", "text", nil}, {"fn", "Function", "select", vbFnOpts()}}
+	case cardgraph.KindFormula:
+		return []vbParam{{"expr", "Expression", "text", nil}}
+	case cardgraph.KindCompare:
+		return []vbParam{{"op", "Operator", "select", vbOpOpts()}}
+	case cardgraph.KindVizKPI:
+		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}, {"tone", "Tone", "select", [][2]string{{"auto", "Auto (±)"}, {"", "None"}}}}
+	case cardgraph.KindVizStat:
+		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}}
+	case cardgraph.KindVizChart:
+		return []vbParam{{"title", "Title", "text", nil}, {"chart", "Chart", "select", [][2]string{{"bar", "Bar"}, {"line", "Line"}, {"donut", "Donut"}}}}
+	case cardgraph.KindVizList:
+		return []vbParam{{"title", "Title", "text", nil}, {"limit", "Max rows", "number", nil}}
+	case cardgraph.KindVizProgress:
+		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}}
+	case cardgraph.KindVizBadge:
+		return []vbParam{{"title", "Title", "text", nil}, {"tone", "Tone", "select", [][2]string{{"auto", "Auto (±)"}, {"up", "Good"}, {"down", "Bad"}, {"", "Neutral"}}}}
+	case cardgraph.KindVizText:
+		return []vbParam{{"title", "Title", "text", nil}}
+	}
+	return nil
+}
+
+// ---- starter graph + presets ---------------------------------------------------
+
+func vbStarterGraph() cardgraph.Graph {
+	return cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Var: "net_worth", Props: map[string]string{"name": "net_worth"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Net worth", "format": "currency", "tone": "auto"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}}},
+		Root:  "n2",
+	}
+}
+
+// vbPresets reproduces several current dashboard widgets as graphs, so they're
+// reachable from the builder (proving the existing tiles are expressible this way).
+func vbPresets() map[string]cardgraph.Graph {
+	p := map[string]cardgraph.Graph{}
+	p["networth"] = vbStarterGraph()
+
+	p["spend-by-cat"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "transactions"}, Pos: cardgraph.Point{X: 30, Y: 30}},
+			{ID: "n2", Kind: cardgraph.KindFilter, Props: map[string]string{"col": "type", "op": "==", "value": "expense"}, Pos: cardgraph.Point{X: 230, Y: 30}},
+			{ID: "n3", Kind: cardgraph.KindGroupBy, Props: map[string]string{"group": "category", "value": "amount", "fn": "sum"}, Pos: cardgraph.Point{X: 430, Y: 30}},
+			{ID: "n4", Kind: cardgraph.KindVizChart, Props: map[string]string{"title": "Spending by category", "chart": "bar"}, Pos: cardgraph.Point{X: 630, Y: 30}},
+		},
+		Edges: []cardgraph.Edge{
+			{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}},
+			{From: cardgraph.PortRef{Node: "n2", Port: "out"}, To: cardgraph.PortRef{Node: "n3", Port: "in"}},
+			{From: cardgraph.PortRef{Node: "n3", Port: "out"}, To: cardgraph.PortRef{Node: "n4", Port: "series"}},
+		},
+		Root: "n4",
+	}
+
+	p["recent"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "transactions"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Recent transactions", "limit": "6"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
+		Root:  "n2",
+	}
+
+	// figureCard builds a one-figure KPI/stat card from an engine figure.
+	figureCard := func(figure, title, vizKind, format string) cardgraph.Graph {
+		return cardgraph.Graph{
+			Nodes: []cardgraph.Node{
+				{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": figure}, Pos: cardgraph.Point{X: 40, Y: 40}},
+				{ID: "n2", Kind: vizKind, Props: map[string]string{"title": title, "format": format, "tone": "auto"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+			},
+			Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}}},
+			Root:  "n2",
+		}
+	}
+	p["income-stat"] = figureCard("income", "Income", cardgraph.KindVizStat, "currency")
+	p["spending"] = figureCard("expense", "Spending", cardgraph.KindVizStat, "currency")
+	p["liabilities"] = figureCard("liabilities", "Liabilities", cardgraph.KindVizKPI, "currency")
+	p["assets"] = figureCard("assets", "Assets", cardgraph.KindVizKPI, "currency")
+	p["accounts-count"] = figureCard("accounts", "Accounts", cardgraph.KindVizKPI, "number")
+
+	// Spending breakdown as a donut (same pipeline as the bar, different chart).
+	donut := vbCloneGraph(p["spend-by-cat"])
+	for i := range donut.Nodes {
+		if donut.Nodes[i].ID == "n4" {
+			donut.Nodes[i].Props["chart"] = "donut"
+			donut.Nodes[i].Props["title"] = "Spending breakdown"
+		}
+	}
+	p["spend-donut"] = donut
+
+	// Accounts list.
+	p["accounts"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "accounts"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Accounts", "limit": "8"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
+		Root:  "n2",
+	}
+	return p
+}
+
+func vbPresetOptions() [][2]string {
+	return [][2]string{
+		{"networth", "Net worth (KPI)"},
+		{"income-stat", "Income (stat)"},
+		{"spending", "Spending (stat)"},
+		{"assets", "Assets (KPI)"},
+		{"liabilities", "Liabilities (KPI)"},
+		{"accounts-count", "Account count (KPI)"},
+		{"spend-by-cat", "Spending by category (bar)"},
+		{"spend-donut", "Spending breakdown (donut)"},
+		{"recent", "Recent transactions (list)"},
+		{"accounts", "Accounts (list)"},
+	}
+}
+
+// ---- panes ---------------------------------------------------------------------
+
+func vbPalette(onAdd func(string)) ui.Node {
+	groups := []string{"Data", "Transform", "Logic", "Display"}
+	children := []ui.Node{Span(css.Class("vb-pane-title"), "Nodes")}
+	for _, grp := range groups {
+		children = append(children, Span(css.Class("vb-pal-group"), grp))
+		for _, c := range vbCatalog() {
+			if c.Group != grp {
+				continue
+			}
+			children = append(children, ui.CreateElement(vbPaletteBtn, vbPalBtnProps{Kind: c.Kind, Label: c.Label, OnAdd: onAdd}))
+		}
+	}
+	return Div(css.Class("vb-palette"), children)
+}
+
+type vbPalBtnProps struct {
+	Kind, Label string
+	OnAdd       func(string)
+}
+
+func vbPaletteBtn(p vbPalBtnProps) ui.Node {
+	kind := p.Kind
+	on := ui.UseEvent(func() {
+		if p.OnAdd != nil {
+			p.OnAdd(kind)
+		}
+	})
+	return Button(css.Class("vb-pal-btn"), Type("button"), Attr("data-kind", p.Kind), OnClick(on), "+ "+p.Label)
+}
+
+func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgraph.NodeID)) ui.Node {
+	posOf := func(id cardgraph.NodeID) cardgraph.Point {
+		for _, n := range g.Nodes {
+			if n.ID == id {
+				return n.Pos
+			}
+		}
+		return cardgraph.Point{}
+	}
+	var wires []ui.Node
+	for _, e := range g.Edges {
+		a, b := posOf(e.From.Node), posOf(e.To.Node)
+		x1, y1 := a.X+vbNodeW, a.Y+vbNodeH/2
+		x2, y2 := b.X, b.Y+vbNodeH/2
+		dx := (x2 - x1) / 2
+		if dx < 40 {
+			dx = 40
+		}
+		d := fmt.Sprintf("M %.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f", x1, y1, x1+dx, y1, x2-dx, y2, x2, y2)
+		wires = append(wires, Path(css.Class("wb-wire"), Attr("d", d), Attr("fill", "none"),
+			Attr("stroke", "var(--dim,#6b7280)"), Attr("stroke-width", "2"),
+			Attr("data-from", string(e.From.Node)), Attr("data-to", string(e.To.Node))))
+	}
+	children := []ui.Node{
+		Svg(css.Class("wb-wires"), Style(map[string]string{"position": "absolute", "left": "0", "top": "0", "overflow": "visible", "pointer-events": "none"}),
+			Attr("width", "1400"), Attr("height", "900"), wires),
+	}
+	for _, n := range g.Nodes {
+		children = append(children, ui.CreateElement(vbNodeBox, vbNodeBoxProps{
+			ID: n.ID, Kind: n.Kind, Var: n.Var, X: n.Pos.X, Y: n.Pos.Y,
+			Selected: n.ID == selected, IsRoot: n.ID == g.Root, OnSelect: onSelect,
+		}))
+	}
+	canvasStyle := map[string]string{"position": "relative", "width": "1400px", "height": "560px"}
+	return Div(css.Class("vb-canvas-scroll"),
+		Div(css.Class("wb-canvas"), Attr("role", "list"), Style(canvasStyle), children),
+	)
+}
+
+type vbNodeBoxProps struct {
+	ID               cardgraph.NodeID
+	Kind, Var        string
+	X, Y             float64
+	Selected, IsRoot bool
+	OnSelect         func(cardgraph.NodeID)
+}
+
+func vbNodeBox(p vbNodeBoxProps) ui.Node {
+	id := p.ID
+	on := ui.UseEvent(func() {
+		if p.OnSelect != nil {
+			p.OnSelect(id)
+		}
+	})
+	style := map[string]string{
+		"left": strconv.FormatFloat(p.X, 'f', 0, 64) + "px", "top": strconv.FormatFloat(p.Y, 'f', 0, 64) + "px",
+		"position": "absolute", "width": "168px", "min-height": "64px", "box-sizing": "border-box",
+		"display": "flex", "flex-direction": "column", "gap": "0.1rem", "padding": "0.5rem 0.6rem",
+		"border-radius": "10px", "cursor": "grab", "background": "var(--bg-elev,#1a1a1d)",
+		"border": "1.5px solid var(--line,#3a3a3d)",
+	}
+	if p.Selected {
+		style["border-color"] = "var(--accent,#3b82f6)"
+		style["box-shadow"] = "0 0 0 3px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent)"
+	}
+	port := func(side string) ui.Node {
+		s := map[string]string{"position": "absolute", "top": "50%", "width": "11px", "height": "11px", "border-radius": "999px",
+			"background": "var(--bg,#0e0e10)", "border": "2px solid var(--dim,#6b7280)", "transform": "translateY(-50%)"}
+		s[side] = "-6px"
+		return Span(Style(s), Attr("aria-hidden", "true"))
+	}
+	head := vbKindLabel(p.Kind)
+	if p.IsRoot {
+		head = "★ " + head
+	}
+	sub := p.Var
+	if sub == "" {
+		sub = "—"
+	}
+	return Div(ClassStr("wb-node"), Style(style), Attr("data-step", string(p.ID)), Attr("data-kind", p.Kind),
+		Attr("role", "listitem"), OnClick(on),
+		port("left"),
+		Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "11px", "text-transform": "uppercase", "letter-spacing": "0.05em", "color": "var(--faint,#9ca3af)"}), head),
+		Span(css.Class("wb-node-val"), Style(map[string]string{"font-size": "13px", "font-weight": "600", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis"}), sub),
+		port("right"),
+	)
+}
+
+func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgraph.Issue,
+	setProp func(cardgraph.NodeID, string, string), setVar func(cardgraph.NodeID, string),
+	setRoot func(cardgraph.NodeID), deleteNode func(cardgraph.NodeID),
+	wireInput func(cardgraph.NodeID, string, string)) ui.Node {
+
+	if selected == "" {
+		return Div(css.Class("vb-inspector"),
+			Span(css.Class("vb-pane-title"), "Inspector"),
+			P(css.Class("t-caption", tw.TextDim), "Select a node to configure it, or add one from the palette."))
+	}
+	var node cardgraph.Node
+	found := false
+	for _, n := range g.Nodes {
+		if n.ID == selected {
+			node, found = n, true
+		}
+	}
+	if !found {
+		return Div(css.Class("vb-inspector"), Span(css.Class("vb-pane-title"), "Inspector"))
+	}
+
+	children := []ui.Node{
+		Span(css.Class("vb-pane-title"), vbKindLabel(node.Kind)),
+		// Variable name
+		ui.CreateElement(vbTextField, vbTextFieldProps{Label: "Name (variable)", Value: node.Var, Placeholder: "e.g. income",
+			OnSet: func(v string) { setVar(node.ID, v) }}),
+	}
+	// Params
+	for _, pm := range vbParamSchema(node.Kind) {
+		pm := pm
+		if pm.Kind == "select" {
+			children = append(children, ui.CreateElement(vbSelectField, vbSelectFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Opts: pm.Opts,
+				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
+		} else {
+			children = append(children, ui.CreateElement(vbTextField, vbTextFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Numeric: pm.Kind == "number",
+				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
+		}
+	}
+	// Input wiring: one select per input port, listing compatible upstream nodes.
+	if spec, ok := cardgraph.Lookup(node.Kind); ok && len(spec.Inputs) > 0 {
+		children = append(children, Span(css.Class("vb-insp-section"), "Inputs"))
+		for _, port := range spec.Inputs {
+			port := port
+			opts := [][2]string{{"", "— none —"}}
+			for _, other := range g.Nodes {
+				if other.ID == node.ID {
+					continue
+				}
+				if cardgraph.CanFeed(vbOutType(other.Kind), port.Type) {
+					label := vbKindLabel(other.Kind)
+					if other.Var != "" {
+						label += " (" + other.Var + ")"
+					}
+					opts = append(opts, [2]string{string(other.ID), label})
+				}
+			}
+			cur := ""
+			for _, e := range g.Edges {
+				if e.To.Node == node.ID && e.To.Port == port.Name {
+					cur = string(e.From.Node)
+				}
+			}
+			pname := port.Name
+			children = append(children, ui.CreateElement(vbSelectField, vbSelectFieldProps{
+				Label: pname + " ←", Value: cur, Opts: opts,
+				OnSet: func(v string) { wireInput(node.ID, pname, v) }}))
+		}
+	}
+	// Output / delete actions
+	rootBtn := Button(css.Class("data-btn", tw.Mt3), Type("button"), OnClick(ui.UseEvent(func() { setRoot(node.ID) })), "Set as output ★")
+	delBtn := Button(css.Class("data-btn"), Type("button"), OnClick(ui.UseEvent(func() { deleteNode(node.ID) })), "Delete node")
+	children = append(children, Div(css.Class("vb-insp-actions"), rootBtn, delBtn))
+
+	// This node's issues (if any)
+	for _, is := range issues {
+		if is.Node == node.ID && is.Message != "" {
+			children = append(children, P(css.Class("t-caption"), Style(map[string]string{"color": "var(--down,#dc2626)"}), is.Message))
+		}
+	}
+	return Div(css.Class("vb-inspector"), children)
+}
+
+type vbTextFieldProps struct {
+	Label, Value, Placeholder string
+	Numeric                   bool
+	OnSet                     func(string)
+}
+
+func vbTextField(p vbTextFieldProps) ui.Node {
+	on := ui.UseEvent(func(v string) {
+		if p.OnSet != nil {
+			p.OnSet(v)
+		}
+	})
+	typ := "text"
+	if p.Numeric {
+		typ = "number"
+	}
+	return Div(css.Class("wb-field"),
+		Span(css.Class("wb-field-label"), p.Label),
+		Input(css.Class("set-input"), Type(typ), Value(p.Value), Attr("placeholder", p.Placeholder), Attr("aria-label", p.Label), OnInput(on)),
+	)
+}
+
+type vbSelectFieldProps struct {
+	Label, Value string
+	Opts         [][2]string
+	OnSet        func(string)
+}
+
+func vbSelectField(p vbSelectFieldProps) ui.Node {
+	on := ui.UseEvent(func(e ui.Event) {
+		if p.OnSet != nil {
+			p.OnSet(e.GetValue())
+		}
+	})
+	nodes := make([]ui.Node, 0, len(p.Opts))
+	for _, o := range p.Opts {
+		nodes = append(nodes, Option(Value(o[0]), SelectedIf(o[0] == p.Value), o[1]))
+	}
+	return Div(css.Class("wb-field"),
+		Span(css.Class("wb-field-label"), p.Label),
+		Select(css.Class("set-input"), Attr("aria-label", p.Label), OnChange(on), nodes),
+	)
+}
+
+// vbSelectRaw is a label-less select for the toolbar (preset picker).
+func vbSelectRaw(aria, value string, opts [][2]string, on ui.Handler) ui.Node {
+	nodes := make([]ui.Node, 0, len(opts))
+	for _, o := range opts {
+		nodes = append(nodes, Option(Value(o[0]), SelectedIf(o[0] == value), o[1]))
+	}
+	return Select(css.Class("set-input"), Attr("aria-label", aria), OnChange(on), nodes)
+}
+
+// ---- preview rendering ---------------------------------------------------------
+
+func vbBaseCurrency() string {
+	app := appstate.Default
+	if app == nil || app.Settings().BaseCurrency == "" {
+		return "USD"
+	}
+	return app.Settings().BaseCurrency
+}
+
 func vbMoneyFmt(text, format string) string {
 	if format != "currency" {
 		return text
@@ -379,344 +1040,204 @@ func vbMoneyFmt(text, format string) string {
 	return fmtMoney(money.Money{Amount: int64(math.Round(f * pow)), Currency: base})
 }
 
-// vbStageBody renders the evaluated card into the preview tile body by visualization
-// kind (kpi / text / progress / badge), or a friendly "unfinished" note carrying the
-// first issue's message when the graph can't resolve. Currency is formatted at the
-// edge (the pure core leaves it a plain number, since formatting needs the base
-// currency).
-func vbStageBody(res cardgraph.Result, format string) ui.Node {
+func vbToneClass(tone string) string {
+	switch tone {
+	case "up":
+		return " text-up"
+	case "down":
+		return " text-down"
+	}
+	return ""
+}
+
+// vbRootFormat finds the root node's "format" prop (for currency formatting at edge).
+func vbRootFormat(g cardgraph.Graph) string {
+	for _, n := range g.Nodes {
+		if n.ID == g.Root {
+			return n.Props["format"]
+		}
+	}
+	return ""
+}
+
+func vbRenderTile(res cardgraph.Result, g cardgraph.Graph) ui.Node {
 	if res.Render == nil {
-		msg := uistate.T("widgetBuilder.unfinished")
+		msg := "This card isn't finished — wire a value into the output node."
 		for _, is := range res.Issues {
 			if is.Message != "" {
 				msg = is.Message
 				break
 			}
 		}
-		return P(css.Class("t-caption", tw.TextDim), msg)
+		return Div(
+			Div(css.Class("wh"), Span(css.Class("wtitle"), "Preview")),
+			Div(css.Class("wbody"), P(css.Class("t-caption", tw.TextDim), msg)),
+		)
 	}
 	v := res.Render
+	format := vbRootFormat(g)
+	return Div(
+		Div(css.Class("wh"), Span(css.Class("wtitle"), v.Title)),
+		Div(css.Class("wbody"), vbRenderViz(v, format)),
+	)
+}
+
+func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 	switch v.Kind {
 	case "text":
-		return Div(P(css.Class("t-body"), v.Text))
+		return P(css.Class("t-body"), v.Text)
 	case "badge":
-		badgeStyle := map[string]string{
-			"display": "inline-block", "padding": "0.25rem 0.7rem", "border-radius": "999px",
-			"font-weight": "600", "font-size": "0.95rem",
-			"background": "color-mix(in srgb, var(--accent,#3b82f6) 18%, transparent)",
-			"color":      "var(--accent,#3b82f6)",
-		}
+		st := map[string]string{"display": "inline-block", "padding": "0.25rem 0.7rem", "border-radius": "999px", "font-weight": "600",
+			"background": "color-mix(in srgb, var(--accent,#3b82f6) 18%, transparent)", "color": "var(--accent,#3b82f6)"}
 		if v.Tone == "up" {
-			badgeStyle["background"] = "color-mix(in srgb, var(--up,#16a34a) 18%, transparent)"
-			badgeStyle["color"] = "var(--up,#16a34a)"
+			st["background"], st["color"] = "color-mix(in srgb, var(--up,#16a34a) 18%, transparent)", "var(--up,#16a34a)"
 		} else if v.Tone == "down" {
-			badgeStyle["background"] = "color-mix(in srgb, var(--down,#dc2626) 18%, transparent)"
-			badgeStyle["color"] = "var(--down,#dc2626)"
+			st["background"], st["color"] = "color-mix(in srgb, var(--down,#dc2626) 18%, transparent)", "var(--down,#dc2626)"
 		}
-		return Div(Span(Style(badgeStyle), v.Text))
+		return Span(Style(st), v.Text)
 	case "progress":
 		fillW := strconv.FormatFloat(v.Pct*100, 'f', 1, 64) + "%"
-		track := map[string]string{"width": "100%", "height": "10px", "border-radius": "999px",
-			"background": "color-mix(in srgb, var(--dim,#6b7280) 25%, transparent)", "overflow": "hidden", "margin-top": "0.5rem"}
-		fill := map[string]string{"width": fillW, "height": "100%", "border-radius": "999px",
-			"background": "var(--accent,#3b82f6)"}
+		track := map[string]string{"width": "100%", "height": "10px", "border-radius": "999px", "background": "color-mix(in srgb, var(--dim,#6b7280) 25%, transparent)", "overflow": "hidden", "margin-top": "0.4rem"}
+		fill := map[string]string{"width": fillW, "height": "100%", "background": "var(--accent,#3b82f6)"}
 		if v.Tone == "up" {
 			fill["background"] = "var(--up,#16a34a)"
 		}
 		return Div(
-			Div(css.Class("fig t-figure"+toneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
+			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
 			P(css.Class("t-caption", tw.TextDim), vbMoneyFmt(v.Sub, format)),
 			Div(css.Class("wb-bar"), Style(track), Div(css.Class("wb-bar-fill"), Style(fill))),
 		)
+	case "stat":
+		return Div(
+			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
+			P(css.Class("t-caption"+vbToneClass(v.Tone)), v.Sub),
+		)
+	case "chart":
+		return vbChart(v)
+	case "list":
+		return vbList(v)
 	default: // kpi
 		return Div(
-			Div(css.Class("fig t-figure"+toneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
-			P(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("widgetBuilder.liveSub")),
+			Div(css.Class("fig t-figure"+vbToneClass(v.Tone), tw.FontDisplay), vbMoneyFmt(v.Text, format)),
 		)
 	}
 }
 
-// vbBaseCurrency is the user's base currency for formatting money figures, or USD when
-// app state isn't ready.
-func vbBaseCurrency() string {
-	app := appstate.Default
-	if app == nil || app.Settings().BaseCurrency == "" {
-		return "USD"
+var vbChartColors = []string{"#3b82f6", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"}
+
+func vbChart(v *cardgraph.VizBlock) ui.Node {
+	if len(v.Series) == 0 {
+		return P(css.Class("t-caption", tw.TextDim), "No data to chart.")
 	}
-	return app.Settings().BaseCurrency
-}
-
-// vbPretty turns a variable name ("net_worth") into a label ("net worth").
-func vbPretty(name string) string { return strings.ReplaceAll(name, "_", " ") }
-
-// vbStepValues resolves each node's summary line from the card config, so the nodes
-// mirror the real graph (chosen figure, transform expression, viz type). Keyed by step.
-func vbStepValues(c vbConfig) map[string]string {
-	var srcVal string
-	switch c.SourceKind {
-	case "number":
-		srcVal = "# " + c.Number
-	case "text":
-		srcVal = "\"" + c.TextVal + "\""
-	case "bool":
-		srcVal = "bool " + c.BoolVal
+	switch v.Chart {
+	case "donut":
+		return vbDonut(v.Series)
+	case "line":
+		return vbLine(v.Series)
 	default:
-		srcVal = vbPretty(c.Figure)
-	}
-	xf := uistate.T("widgetBuilder.nodeTransformVal")
-	if e := strings.TrimSpace(c.TransformExpr); e != "" && c.vbNumericSource() {
-		xf = "a → " + e
-	}
-	viz := map[string]string{"kpi": "KPI", "text": "Text", "progress": "Progress", "badge": "Badge"}[c.VizKind]
-	if viz == "" {
-		viz = "KPI"
-	}
-	return map[string]string{
-		vbStepSource:    srcVal,
-		vbStepTransform: xf,
-		vbStepVisualize: viz,
+		return vbBars(v.Series)
 	}
 }
 
-// vbPoint is a node's top-left position on the canvas.
-type vbPoint struct{ X, Y float64 }
-
-// vbInitialPositions lays the three steps out left-to-right with the transform node
-// dropped a little lower, giving the graph an n8n-like shape from the start.
-func vbInitialPositions() map[string]vbPoint {
-	return map[string]vbPoint{
-		vbStepSource:    {X: 40, Y: 70},
-		vbStepTransform: {X: 300, Y: 190},
-		vbStepVisualize: {X: 560, Y: 70},
-	}
-}
-
-// vbLoadPositions returns the node positions saved by the drag shim, merged over the
-// default layout (so an undragged node keeps its default spot).
-func vbLoadPositions() map[string]vbPoint {
-	out := vbInitialPositions()
-	v := js.Global().Get("localStorage").Call("getItem", vbCanvasPosKey)
-	if v.Type() != js.TypeString {
-		return out
-	}
-	var saved map[string]struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-	}
-	if err := json.Unmarshal([]byte(v.String()), &saved); err != nil {
-		return out
-	}
-	for k, p := range saved {
-		out[k] = vbPoint{X: p.X, Y: p.Y}
-	}
-	return out
-}
-
-// vbCanvas renders the n8n-style node canvas: draggable node boxes positioned on a 2D
-// surface, joined by curved bezier wires drawn from each node's output port to the
-// next node's input port. Clicking a node selects it (opens its config panel);
-// dragging is handled by web/wb-canvas.js. All three steps are always shown (each is
-// clickable to configure); the transform is a pass-through until a formula is set.
-func vbCanvas(active string, values map[string]string, pos map[string]vbPoint, onSelect func(string)) ui.Node {
-	wire := func(from, to string) ui.Node {
-		a, b := pos[from], pos[to]
-		x1, y1 := a.X+vbNodeW, a.Y+vbNodeH/2
-		x2, y2 := b.X, b.Y+vbNodeH/2
-		dx := (x2 - x1) / 2
-		if dx < 50 {
-			dx = 50
+func vbSeriesMax(s []cardgraph.SeriesPoint) float64 {
+	m := 0.0
+	for _, p := range s {
+		if p.Value > m {
+			m = p.Value
 		}
-		d := fmt.Sprintf("M %.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f", x1, y1, x1+dx, y1, x2-dx, y2, x2, y2)
-		// Stroke is set inline too so wires are visible without the stylesheet.
-		return Path(css.Class("wb-wire"), Attr("d", d), Attr("fill", "none"),
-			Attr("stroke", "var(--dim,#6b7280)"), Attr("stroke-width", "2"), Attr("stroke-linecap", "round"),
-			Attr("data-from", from), Attr("data-to", to))
 	}
-	// The SVG wire layer fills the surface; structural styles are inline so the canvas
-	// lays out correctly even if the stylesheet is unavailable.
-	svgStyle := map[string]string{"position": "absolute", "left": "0", "top": "0", "overflow": "visible", "pointer-events": "none"}
-	children := []ui.Node{
-		Svg(css.Class("wb-wires"), Style(svgStyle), Attr("width", vbCanvasWStr), Attr("height", vbCanvasHStr),
-			Attr("viewBox", "0 0 "+vbCanvasWStr+" "+vbCanvasHStr),
-			wire(vbStepSource, vbStepTransform), wire(vbStepTransform, vbStepVisualize)),
+	if m == 0 {
+		m = 1
 	}
-	add := func(step, ttl string) {
-		p := pos[step]
-		children = append(children, ui.CreateElement(vbCanvasNode, vbNodeProps{
-			Step: step, Title: ttl, Value: values[step], X: p.X, Y: p.Y,
-			Active: step == active, OnSelect: onSelect,
-		}))
-	}
-	add(vbStepSource, uistate.T("widgetBuilder.nodeSource"))
-	add(vbStepTransform, uistate.T("widgetBuilder.nodeTransform"))
-	add(vbStepVisualize, uistate.T("widgetBuilder.nodeVisualize"))
-
-	scrollStyle := map[string]string{
-		"position": "relative", "overflow": "auto", "border-radius": "12px",
-		"border":           "1px solid var(--line,#e5e7eb)",
-		"background-image": "radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px)",
-		"background-size":  "16px 16px",
-	}
-	canvasStyle := map[string]string{"position": "relative", "width": vbPx(vbCanvasW), "height": vbPx(vbCanvasH)}
-	return Div(css.Class("wb-canvas-scroll"), Style(scrollStyle),
-		Div(css.Class("wb-canvas"), Attr("role", "list"), Style(canvasStyle), children),
-	)
+	return m
 }
 
-// vbPx renders a pixel length for an inline style.
-func vbPx(v float64) string { return strconv.FormatFloat(v, 'f', 0, 64) + "px" }
-
-type vbNodeProps struct {
-	Step     string
-	Title    string
-	Value    string
-	X, Y     float64
-	Active   bool
-	OnSelect func(string)
-}
-
-// vbCanvasNode is one node box on the canvas, with an inbound and outbound port.
-// Clicking selects it (for the config panel); the data-step attribute lets the
-// wb-canvas.js shim handle pointer dragging and live wire re-routing. Its own
-// component so the click hook stays at a stable position (the On*-hooks rule).
-func vbCanvasNode(p vbNodeProps) ui.Node {
-	cls := "wb-node"
-	if p.Active {
-		cls += " is-active"
-	}
-	step := p.Step
-	onSelect := ui.UseEvent(func() {
-		if p.OnSelect != nil {
-			p.OnSelect(step)
-		}
-	})
-	// Structural + cosmetic styles are inline so a node renders as a positioned box on
-	// the canvas even without the stylesheet (which a parallel effort sometimes reverts).
-	style := map[string]string{
-		"left": vbPx(p.X), "top": vbPx(p.Y), "position": "absolute",
-		"width": "156px", "box-sizing": "border-box", "display": "flex", "align-items": "center",
-		"gap": "0.5rem", "padding": "0.6rem 0.7rem", "border-radius": "10px", "cursor": "grab",
-		"background": "var(--bg-elev,#1a1a1d)", "border": "1.5px solid var(--line,#3a3a3d)",
-	}
-	if p.Active {
-		style["border-color"] = "var(--accent,#3b82f6)"
-		style["box-shadow"] = "0 0 0 3px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent)"
-	}
-	portStyle := func(side string) map[string]string {
-		s := map[string]string{
-			"position": "absolute", "top": "50%", "width": "11px", "height": "11px", "border-radius": "999px",
-			"background": "var(--bg,#0e0e10)", "border": "2px solid var(--dim,#6b7280)", "transform": "translateY(-50%)",
-		}
-		s[side] = "-6px"
-		return s
-	}
-	return Div(ClassStr(cls), Style(style),
-		Attr("data-step", p.Step), Attr("role", "listitem"), Attr("tabindex", "0"),
-		Attr("aria-pressed", vbBoolAttr(p.Active)),
-		OnClick(onSelect),
-		Span(css.Class("wb-port wb-port-in"), Style(portStyle("left")), Attr("aria-hidden", "true")),
-		Div(css.Class("wb-node-body"), Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.15rem", "min-width": "0"}),
-			Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "11px", "text-transform": "uppercase", "letter-spacing": "0.06em", "color": "var(--faint,#9ca3af)"}), p.Title),
-			Span(css.Class("wb-node-val"), Style(map[string]string{"font-size": "13px", "font-weight": "600", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis", "max-width": "118px"}), p.Value),
-		),
-		Span(css.Class("wb-port wb-port-out"), Style(portStyle("right")), Attr("aria-hidden", "true")),
-	)
-}
-
-func vbBoolAttr(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
-// vbField wraps a labeled control.
-func vbField(label string, control ui.Node) ui.Node {
-	return Div(css.Class("wb-field"),
-		Span(css.Class("wb-field-label"), label),
-		control,
-	)
-}
-
-// vbSelect builds a labeled <select> from {value,label} options with the current
-// value pre-selected.
-func vbSelect(label string, current string, opts [][2]string, on ui.Handler) ui.Node {
-	nodes := make([]ui.Node, 0, len(opts))
-	for _, o := range opts {
-		nodes = append(nodes, Option(Value(o[0]), SelectedIf(o[0] == current), o[1]))
-	}
-	return vbField(label, Select(css.Class("set-input"), Attr("aria-label", label), OnChange(on), nodes))
-}
-
-// vbConfigPanel renders the controls for the selected step, branching on the chosen
-// kind so each primitive/visualization gets the right fields. Handlers are created
-// once at the VisualBuilder level (stable hook positions) and passed in via h.
-func vbConfigPanel(active string, c vbConfig, h vbHandlers) ui.Node {
-	switch active {
-	case vbStepSource:
-		kindSel := vbSelect(uistate.T("widgetBuilder.cfgSourceKind"), c.SourceKind, [][2]string{
-			{"figure", uistate.T("widgetBuilder.srcFigure")},
-			{"number", uistate.T("widgetBuilder.srcNumber")},
-			{"text", uistate.T("widgetBuilder.srcText")},
-			{"bool", uistate.T("widgetBuilder.srcBool")},
-		}, h.SourceKind)
-
-		var detail ui.Node
-		switch c.SourceKind {
-		case "number":
-			detail = vbField(uistate.T("widgetBuilder.cfgValue"),
-				Input(css.Class("set-input"), Type("number"), Value(c.Number), Attr("aria-label", uistate.T("widgetBuilder.cfgValue")), OnInput(h.SourceNumber)))
-		case "text":
-			detail = vbField(uistate.T("widgetBuilder.cfgValue"),
-				Input(css.Class("set-input"), Type("text"), Value(c.TextVal), Attr("aria-label", uistate.T("widgetBuilder.cfgValue")), OnInput(h.SourceText)))
-		case "bool":
-			detail = vbSelect(uistate.T("widgetBuilder.cfgValue"), c.BoolVal, [][2]string{
-				{"true", uistate.T("widgetBuilder.boolTrue")}, {"false", uistate.T("widgetBuilder.boolFalse")},
-			}, h.SourceBool)
-		default: // figure
-			fopts := make([][2]string, 0, len(engineenv.Names))
-			for _, name := range engineenv.SortedNames() {
-				fopts = append(fopts, [2]string{name, vbPretty(name)})
-			}
-			detail = vbSelect(uistate.T("widgetBuilder.cfgSource"), c.Figure, fopts, h.SourceFigure)
-		}
-		return Div(css.Class("wb-config"), kindSel, detail,
-			P(css.Class("t-caption", tw.TextDim, tw.Mt2), uistate.T("widgetBuilder.cfgSourceHint")))
-
-	case vbStepVisualize:
-		kindSel := vbSelect(uistate.T("widgetBuilder.cfgVizKind"), c.VizKind, [][2]string{
-			{"kpi", uistate.T("widgetBuilder.vizKpi")},
-			{"text", uistate.T("widgetBuilder.vizText")},
-			{"progress", uistate.T("widgetBuilder.vizProgress")},
-			{"badge", uistate.T("widgetBuilder.vizBadge")},
-		}, h.VizKind)
-		fields := []ui.Node{kindSel,
-			vbField(uistate.T("widgetBuilder.cfgTitle"),
-				Input(css.Class("set-input"), Type("text"), Value(c.Title),
-					Attr("placeholder", uistate.T("widgetBuilder.cfgTitlePlaceholder")),
-					Attr("aria-label", uistate.T("widgetBuilder.cfgTitle")), OnInput(h.Title))),
-		}
-		// Number format applies to the figure-bearing widgets (KPI, Progress).
-		if c.VizKind == "kpi" || c.VizKind == "progress" {
-			fields = append(fields, vbSelect(uistate.T("widgetBuilder.cfgFormat"), c.Format, [][2]string{
-				{"number", uistate.T("widgetBuilder.fmtNumber")},
-				{"percent", uistate.T("widgetBuilder.fmtPercent")},
-				{"currency", uistate.T("widgetBuilder.fmtCurrency")},
-			}, h.Format))
-		}
-		if c.VizKind == "progress" {
-			fields = append(fields, vbField(uistate.T("widgetBuilder.cfgMax"),
-				Input(css.Class("set-input"), Type("number"), Value(c.Max), Attr("aria-label", uistate.T("widgetBuilder.cfgMax")), OnInput(h.Max))))
-		}
-		return Div(css.Class("wb-config"), fields)
-
-	default: // transform
-		return Div(css.Class("wb-config"),
-			vbField(uistate.T("widgetBuilder.cfgTransform"),
-				Input(css.Class("set-input"), Type("text"), Value(c.TransformExpr),
-					Attr("placeholder", uistate.T("widgetBuilder.cfgTransformPlaceholder")),
-					Attr("aria-label", uistate.T("widgetBuilder.cfgTransform")), OnInput(h.Transform))),
-			P(css.Class("t-caption", tw.TextDim, tw.Mt2), uistate.T("widgetBuilder.cfgTransformHint")),
+func vbBars(s []cardgraph.SeriesPoint) ui.Node {
+	max := vbSeriesMax(s)
+	cols := make([]ui.Node, 0, len(s))
+	for i, p := range s {
+		h := strconv.FormatFloat(p.Value/max*100, 'f', 1, 64) + "%"
+		bar := Div(Style(map[string]string{"width": "100%", "height": h, "min-height": "2px", "border-radius": "4px 4px 0 0", "background": vbChartColors[i%len(vbChartColors)]}))
+		col := Div(css.Class("vb-bar-col"), Style(map[string]string{"flex": "1", "display": "flex", "flex-direction": "column", "justify-content": "flex-end", "align-items": "center", "gap": "0.2rem", "min-width": "0", "height": "100%"}),
+			Div(Style(map[string]string{"width": "70%", "display": "flex", "align-items": "flex-end", "height": "100%"}), bar),
+			Span(Style(map[string]string{"font-size": "10px", "color": "var(--faint,#9ca3af)", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis", "max-width": "100%"}), p.Label),
 		)
+		cols = append(cols, col)
 	}
+	return Div(css.Class("vb-chart"), Style(map[string]string{"display": "flex", "align-items": "stretch", "gap": "0.4rem", "height": "120px", "padding-top": "0.3rem"}), cols)
+}
+
+func vbLine(s []cardgraph.SeriesPoint) ui.Node {
+	max := vbSeriesMax(s)
+	w, h := 280.0, 110.0
+	pts := ""
+	var dots []ui.Node
+	n := len(s)
+	for i, p := range s {
+		x := 0.0
+		if n > 1 {
+			x = float64(i) / float64(n-1) * w
+		}
+		y := h - (p.Value/max)*h
+		pts += fmt.Sprintf("%.1f,%.1f ", x, y)
+		dots = append(dots, Circle(Attr("cx", fmt.Sprintf("%.1f", x)), Attr("cy", fmt.Sprintf("%.1f", y)), Attr("r", "2.5"), Attr("fill", vbChartColors[0])))
+	}
+	children := []ui.Node{Polyline(Attr("points", strings.TrimSpace(pts)), Attr("fill", "none"), Attr("stroke", vbChartColors[0]), Attr("stroke-width", "2"))}
+	children = append(children, dots...)
+	return Svg(Attr("width", "100%"), Attr("viewBox", fmt.Sprintf("0 0 %.0f %.0f", w, h)), Attr("preserveAspectRatio", "none"), Style(map[string]string{"height": "120px"}), children)
+}
+
+func vbDonut(s []cardgraph.SeriesPoint) ui.Node {
+	total := 0.0
+	for _, p := range s {
+		total += p.Value
+	}
+	if total == 0 {
+		total = 1
+	}
+	stops, acc := "", 0.0
+	legend := []ui.Node{}
+	for i, p := range s {
+		start := acc / total * 100
+		acc += p.Value
+		end := acc / total * 100
+		c := vbChartColors[i%len(vbChartColors)]
+		if stops != "" {
+			stops += ", "
+		}
+		stops += fmt.Sprintf("%s %.2f%% %.2f%%", c, start, end)
+		legend = append(legend, Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.3rem", "font-size": "11px"}),
+			Span(Style(map[string]string{"width": "9px", "height": "9px", "border-radius": "2px", "background": c})),
+			Span(Style(map[string]string{"color": "var(--dim,#9ca3af)"}), p.Label)))
+	}
+	ring := Div(Style(map[string]string{"width": "96px", "height": "96px", "border-radius": "999px",
+		"background": "conic-gradient(" + stops + ")", "mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)",
+		"-webkit-mask": "radial-gradient(circle 28px at center, transparent 98%, #000 100%)"}))
+	return Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "1rem"}),
+		ring, Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}), legend))
+}
+
+func vbList(v *cardgraph.VizBlock) ui.Node {
+	if len(v.Rows) == 0 {
+		return P(css.Class("t-caption", tw.TextDim), "No rows.")
+	}
+	header := make([]ui.Node, 0, len(v.Cols))
+	for _, c := range v.Cols {
+		header = append(header, Th(Style(map[string]string{"text-align": "left", "font-size": "11px", "color": "var(--faint,#9ca3af)", "padding": "0.2rem 0.4rem", "text-transform": "uppercase"}), c.Name))
+	}
+	rows := make([]ui.Node, 0, len(v.Rows))
+	for _, r := range v.Rows {
+		cells := make([]ui.Node, 0, len(v.Cols))
+		for _, c := range v.Cols {
+			cell := r[c.Name]
+			txt := cell.Str
+			if cell.Type == cardgraph.TypeNumber {
+				txt = strconv.FormatFloat(cell.Num, 'f', -1, 64)
+			}
+			cells = append(cells, Td(Style(map[string]string{"padding": "0.2rem 0.4rem", "font-size": "13px", "white-space": "nowrap"}), txt))
+		}
+		rows = append(rows, Tr(cells))
+	}
+	return Table(css.Class("vb-table"), Style(map[string]string{"width": "100%", "border-collapse": "collapse"}),
+		Thead(Tr(header)), Tbody(rows))
 }

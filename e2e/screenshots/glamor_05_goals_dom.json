@@ -12,45 +12,47 @@
   "goalCards": [],
   "allBars": [
     {
-      "valuenow": "61",
+      "valuenow": "91",
       "label": "Goal progress",
-      "fillClass": "bar-fill"
+      "fillClass": "bar-fill final"
     },
     {
-      "valuenow": "20",
+      "valuenow": "61",
       "label": "Goal progress",
-      "fillClass": "bar-fill"
+      "fillClass": "bar-fill "
     },
     {
       "valuenow": "36",
       "label": "Goal progress",
-      "fillClass": "bar-fill"
+      "fillClass": "bar-fill "
     },
     {
-      "valuenow": "91",
+      "valuenow": "20",
       "label": "Goal progress",
-      "fillClass": "bar-fill"
+      "fillClass": "bar-fill "
     },
     {
       "valuenow": "22",
       "label": "Goal progress",
-      "fillClass": "bar-fill"
+      "fillClass": "bar-fill "
     }
   ],
   "pills": [],
   "contributeButtons": [
     "Add something new",
+    "+ Add goal",
     "Contribute",
     "Contribute",
     "Contribute",
     "Contribute",
-    "Contribute"
+    "Contribute",
+    "Add"
   ],
   "addGoalBtns": [
     "Add something new",
     "New goal",
-    "Contribute",
-    "Edit"
+    "+ Add goal",
+    "Contribute"
   ],
   "sortControls": [
     "Everyone\nDaniel Carter\nJordan Lee (roommate)"

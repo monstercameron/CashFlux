@@ -87,9 +87,9 @@ type SeriesPoint struct {
 }
 
 // Coll builds a collection value; Series and Color are the sibling constructors.
-func Coll(c Collection) Value     { return Value{Type: TypeCollection, Coll: &c} }
-func Ser(s []SeriesPoint) Value   { return Value{Type: TypeSeries, Series: s} }
-func Color(hex string) Value      { return Value{Type: TypeColor, Str: hex} }
+func Coll(c Collection) Value   { return Value{Type: TypeCollection, Coll: &c} }
+func Ser(s []SeriesPoint) Value { return Value{Type: TypeSeries, Series: s} }
+func Color(hex string) Value    { return Value{Type: TypeColor, Str: hex} }
 
 // VizBlock is a renderable result the wasm layer turns into a dashboard tile body.
 // Kind selects the renderer; the other fields are interpreted per Kind:
@@ -100,12 +100,17 @@ func Color(hex string) Value      { return Value{Type: TypeColor, Str: hex} }
 //
 // List/table/chart blocks extend this in later phases.
 type VizBlock struct {
-	Kind  string  // "kpi" | "text" | "progress" | "badge"
-	Title string  //
-	Text  string  // the formatted value/label to display
-	Sub   string  // secondary line (e.g. progress denominator)
-	Tone  string  // "" | "up" | "down" — display tone
-	Pct   float64 // 0..1 fill fraction, for "progress"
+	Kind   string        // "kpi" | "text" | "progress" | "badge" | "chart" | "list" | "stat"
+	Title  string        //
+	Text   string        // the formatted value/label to display
+	Sub    string        // secondary line (e.g. progress denominator, delta)
+	Tone   string        // "" | "up" | "down" — display tone
+	Accent string        // optional CSS color override (from a design node)
+	Pct    float64       // 0..1 fill fraction, for "progress"
+	Chart  string        // "line" | "bar" | "donut" — for "chart"
+	Series []SeriesPoint // data for "chart"
+	Cols   []Column      // columns for "list"
+	Rows   []Row         // rows for "list"
 }
 
 // Num builds a number value. Text, Bln, and Viz are the sibling constructors.
@@ -140,10 +145,34 @@ type Point struct{ X, Y float64 }
 // a scalar source's variable name, a KPI's title/format, …) as plain strings so the
 // whole graph serializes losslessly to JSON.
 type Node struct {
-	ID    NodeID            `json:"id"`
-	Kind  string            `json:"kind"`
+	ID   NodeID `json:"id"`
+	Kind string `json:"kind"`
+	// Var is an optional user-given variable name bound to this node's output. Once
+	// named, any downstream node evaluated after it can reference the value by that
+	// name — e.g. a formula node can write "income - rent" if upstream nodes are named
+	// "income" and "rent" — without an explicit wire. Empty = unnamed. Must be a valid
+	// identifier (letter/underscore then letters/digits/underscore) and unique.
+	Var   string            `json:"var,omitempty"`
 	Pos   Point             `json:"pos"`
 	Props map[string]string `json:"props,omitempty"`
+}
+
+// ValidIdent reports whether s is a usable variable name (formula identifier rules).
+func ValidIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, c := range s {
+		isLetter := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		isDigit := c >= '0' && c <= '9'
+		if i == 0 && !isLetter {
+			return false
+		}
+		if i > 0 && !isLetter && !isDigit {
+			return false
+		}
+	}
+	return true
 }
 
 // Prop returns the named prop or "" if unset.

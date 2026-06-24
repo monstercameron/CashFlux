@@ -94,6 +94,21 @@ func Dashboard() ui.Node {
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
 	income, expense, _ := ledger.PeriodTotals(kpiTxns, start, end, rates)
+
+	// W-15: trigger count-up animation on the KPI hero figures whenever the
+	// underlying values change. The sig is keyed on the four headline amounts so
+	// the effect fires exactly on mount and on genuine data changes — not on every
+	// re-render that leaves the numbers unchanged. cashfluxCountUpScan (countup.js)
+	// tracks per-element last-animated values so it skips elements whose text
+	// hasn't changed and always restores the exact original string at end-of-tween.
+	kpiSig := fmt.Sprintf("%d|%d|%d|%d", net.Amount, income.Amount, expense.Amount, liabilities.Amount)
+	ui.UseEffect(func() func() {
+		if fn := js.Global().Get("cashfluxCountUpScan"); fn.Type() == js.TypeFunction {
+			fn.Invoke()
+		}
+		return nil
+	}, kpiSig)
+
 	// Cash flow = income − spending for the period (G1 §7): the surplus/deficit Elena
 	// wants in one line. Shown as a signed sub-line on the Income tile so "what
 	// changed?" is answerable above the fold without mental arithmetic.
@@ -238,6 +253,11 @@ func Dashboard() ui.Node {
 		}
 		if render, ok := renderers[it.ID]; ok {
 			tiles = append(tiles, render())
+		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
+			// User-published Widget Builder card: render the saved cardgraph tile.
+			if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix)); w != nil {
+				tiles = append(tiles, w)
+			}
 		}
 	}
 
@@ -1339,7 +1359,8 @@ func plural(n int, singular string) string {
 // subline. figTone/subTone are color classes (e.g. "text-up", "text-dim").
 func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 	return Div(
-		Div(ClassStr("fig t-figure "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)), figure),
+		Div(ClassStr("fig t-figure "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)),
+			Attr("data-countup", ""), figure),
 		Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(subTone)), subline),
 	)
 }
@@ -1349,7 +1370,8 @@ func kpiBody(figure, figTone, subline, subTone string) ui.Node {
 // Net Worth, the most important single number on the dashboard (L33).
 func kpiBodyHero(figure, figTone, subline, subTone string) ui.Node {
 	return Div(
-		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)), figure),
+		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone)),
+			Attr("data-countup", ""), figure),
 		Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(subTone)), subline),
 	)
 }

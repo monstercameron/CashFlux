@@ -208,6 +208,169 @@ func TestVizProgressZeroMaxNoPanic(t *testing.T) {
 	}
 }
 
+// sampleTxns is a small transactions collection for data-node tests.
+func sampleTxns() Collection {
+	return Collection{
+		Cols: []Column{{Name: "category", Type: TypeText}, {Name: "amount", Type: TypeNumber}},
+		Rows: []Row{
+			{"category": Text("Food"), "amount": Num(20)},
+			{"category": Text("Food"), "amount": Num(30)},
+			{"category": Text("Rent"), "amount": Num(900)},
+			{"category": Text("Fun"), "amount": Num(50)},
+		},
+	}
+}
+
+func TestDatasetGroupByChart(t *testing.T) {
+	// dataset(txns) → groupby category sum(amount) → chart. Rent(900) should lead.
+	g := Graph{
+		Nodes: []Node{
+			{ID: "ds", Kind: KindSourceDataset, Props: map[string]string{"which": "txns"}},
+			{ID: "gb", Kind: KindGroupBy, Props: map[string]string{"group": "category", "value": "amount", "fn": "sum"}},
+			{ID: "ch", Kind: KindVizChart, Props: map[string]string{"chart": "bar", "title": "By category"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"ds", OutPort}, To: PortRef{"gb", "in"}},
+			{From: PortRef{"gb", OutPort}, To: PortRef{"ch", "series"}},
+		},
+		Root: "ch",
+	}
+	res := Eval(g, Context{Datasets: map[string]Collection{"txns": sampleTxns()}})
+	if res.Render == nil {
+		t.Fatalf("no render: %+v", res.Issues)
+	}
+	if res.Render.Kind != "chart" || res.Render.Chart != "bar" {
+		t.Errorf("render = %+v", *res.Render)
+	}
+	if len(res.Render.Series) != 3 {
+		t.Fatalf("want 3 groups, got %d: %+v", len(res.Render.Series), res.Render.Series)
+	}
+	if res.Render.Series[0].Label != "Rent" || res.Render.Series[0].Value != 900 {
+		t.Errorf("top group = %+v, want Rent=900", res.Render.Series[0])
+	}
+	if res.Render.Series[1].Label != "Food" || res.Render.Series[1].Value != 50 {
+		t.Errorf("second group = %+v, want Food=50", res.Render.Series[1])
+	}
+}
+
+func TestFilterThenAggregate(t *testing.T) {
+	// Keep Food rows, sum amount → 50.
+	g := Graph{
+		Nodes: []Node{
+			{ID: "ds", Kind: KindSourceDataset, Props: map[string]string{"which": "txns"}},
+			{ID: "f", Kind: KindFilter, Props: map[string]string{"col": "category", "op": "==", "value": "food"}},
+			{ID: "a", Kind: KindAggregate, Props: map[string]string{"col": "amount", "fn": "sum"}},
+			{ID: "k", Kind: KindVizKPI, Props: map[string]string{"title": "Food"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"ds", OutPort}, To: PortRef{"f", "in"}},
+			{From: PortRef{"f", OutPort}, To: PortRef{"a", "in"}},
+			{From: PortRef{"a", OutPort}, To: PortRef{"k", "value"}},
+		},
+		Root: "k",
+	}
+	res := Eval(g, Context{Datasets: map[string]Collection{"txns": sampleTxns()}})
+	if res.Render == nil || res.Render.Text != "50" {
+		t.Errorf("filter+agg = %+v (want 50)", res.Render)
+	}
+}
+
+func TestVizListLimit(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "ds", Kind: KindSourceDataset, Props: map[string]string{"which": "txns"}},
+			{ID: "l", Kind: KindVizList, Props: map[string]string{"title": "Recent", "limit": "2"}},
+		},
+		Edges: []Edge{{From: PortRef{"ds", OutPort}, To: PortRef{"l", "in"}}},
+		Root:  "l",
+	}
+	res := Eval(g, Context{Datasets: map[string]Collection{"txns": sampleTxns()}})
+	if res.Render == nil || res.Render.Kind != "list" {
+		t.Fatalf("no list render: %+v", res)
+	}
+	if len(res.Render.Rows) != 2 {
+		t.Errorf("limit 2 → %d rows", len(res.Render.Rows))
+	}
+	if len(res.Render.Cols) != 2 {
+		t.Errorf("expected 2 columns, got %d", len(res.Render.Cols))
+	}
+}
+
+func TestVizStatDelta(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "v", Kind: KindLiteralNumber, Props: map[string]string{"value": "120"}},
+			{ID: "p", Kind: KindLiteralNumber, Props: map[string]string{"value": "100"}},
+			{ID: "s", Kind: KindVizStat, Props: map[string]string{"title": "Net worth"}},
+		},
+		Edges: []Edge{
+			{From: PortRef{"v", OutPort}, To: PortRef{"s", "value"}},
+			{From: PortRef{"p", OutPort}, To: PortRef{"s", "prev"}},
+		},
+		Root: "s",
+	}
+	res := Eval(g, Context{})
+	if res.Render == nil || res.Render.Kind != "stat" {
+		t.Fatalf("no stat render: %+v", res)
+	}
+	if res.Render.Tone != "up" || res.Render.Text != "120" {
+		t.Errorf("stat = %+v (want up, 120)", *res.Render)
+	}
+	if res.Render.Sub != "▲ 20%" {
+		t.Errorf("delta = %q want ▲ 20%%", res.Render.Sub)
+	}
+}
+
+func TestNamedVariableReference(t *testing.T) {
+	// Two named source nodes (income, rent) and a formula that references them BY NAME
+	// — no wire from the sources into the formula. Topo order must still place the
+	// named nodes before the formula because... they're unwired. So we force order via
+	// a wire only for the formula→kpi; the named nodes are roots evaluated first by id.
+	// income=5000, rent=1500 → "income - rent" = 3500.
+	g := Graph{
+		Nodes: []Node{
+			{ID: "a_income", Kind: KindSourceScalar, Var: "income", Props: map[string]string{"name": "income"}},
+			{ID: "b_rent", Kind: KindLiteralNumber, Var: "rent", Props: map[string]string{"value": "1500"}},
+			{ID: "c_f", Kind: KindFormula, Props: map[string]string{"expr": "income - rent"}},
+			{ID: "d_kpi", Kind: KindVizKPI, Props: map[string]string{"title": "Left over"}},
+		},
+		Edges: []Edge{{From: PortRef{"c_f", OutPort}, To: PortRef{"d_kpi", "value"}}},
+		Root:  "d_kpi",
+	}
+	res := Eval(g, Context{Vars: map[string]float64{"income": 5000}})
+	if res.Render == nil {
+		t.Fatalf("no render: %+v", res.Issues)
+	}
+	if res.Render.Text != "3500" {
+		t.Errorf("named-var formula = %q want 3500", res.Render.Text)
+	}
+}
+
+func TestDuplicateVariableNameRejected(t *testing.T) {
+	g := Graph{
+		Nodes: []Node{
+			{ID: "x", Kind: KindLiteralNumber, Var: "v", Props: map[string]string{"value": "1"}},
+			{ID: "y", Kind: KindLiteralNumber, Var: "v", Props: map[string]string{"value": "2"}},
+			{ID: "k", Kind: KindVizKPI},
+		},
+		Edges: []Edge{{From: PortRef{"x", OutPort}, To: PortRef{"k", "value"}}},
+		Root:  "k",
+	}
+	issues := Validate(g)
+	if len(issues) == 0 {
+		t.Error("expected a duplicate-variable issue")
+	}
+}
+
+func TestInvalidVariableNameRejected(t *testing.T) {
+	if ValidIdent("1bad") || ValidIdent("has space") || ValidIdent("") {
+		t.Error("ValidIdent accepted an invalid name")
+	}
+	if !ValidIdent("net_worth2") || !ValidIdent("_x") {
+		t.Error("ValidIdent rejected a valid name")
+	}
+}
+
 func TestTopoOrderCycle(t *testing.T) {
 	g := Graph{
 		Nodes: []Node{

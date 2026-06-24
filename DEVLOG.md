@@ -3,6 +3,42 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-23 — feat: WONDER W-9 page-enter + W-21 scroll-reveal (fail-safe, reduced-motion safe)
+
+W-9 was already complete (landed earlier in the batch): `pageenter.go` drives `triggerPageEnter()`
+from Shell's UseEffect on each route change; `@keyframes wonder-page-enter` + `.page-enter` rule
+in index.html handles the 300ms opacity/translateY entrance; `[data-wonder="off"]` and
+`prefers-reduced-motion` both zero it via CSS.
+
+W-21 landed now. Approach: a thin `web/wonder.js` (no framework, no build step) sets up
+`window.cashfluxWonder.observe()`. On each route change the Go side (double-rAF in `pageenter.go`)
+calls `triggerScrollReveal()` → `cashfluxWonder.observe()`. The JS stamps `.wonder-reveal` on
+unprocessed `.card` elements inside `#cf-page-view` (guarded with `data-wonder-observed` to avoid
+double-processing), then registers them with an IntersectionObserver (8% threshold, fire-once, then
+unobserve). Cards already in viewport get `.in-view` on the first scroll tick. If IO is absent
+(old browsers), if the script fails to load, or if motion is off/reduced, the function either
+reveals all immediately or no class is ever added — content stays visible. CSS covers it twice:
+`.wonder-reveal` is opt-in (added by JS, not Go), and `[data-wonder="off"]`+`prefers-reduced-motion`
+force opacity:1 + transform:none with !important regardless. Added `wonder.js` to sw.js CORE (v248).
+
+## 2026-06-23 — feat: GLAMOR quick-wins + GX1 shell fixes + Widget Builder build-fix
+
+Cleared the design-system tail of the GLAMOR backlog. Landed all 10 CSS-only Quick-wins
+(QW-1..10) and the nine GX1 app-shell fixes (F1–F9) as one consolidated last-wins style block
+appended to `web/index.html` — radius/weight/semantic-color/spacing polish plus the critical
+light-mode shell bugs (black topbar/rail on warm-white page, dark active chip, dark icon buttons
+and +Add menu, transparent household card, 768px topbar wrap + rail-collapse breakpoint). F8 added
+a real `.breadcrumb` class to the topbar nav (the element existed but had no class the probes could
+match); F9 guards the +Add backdrop with `pointer-events` so it can't eat `notify-btn` clicks.
+
+Also fixed a pre-existing **unbuildable** `widget_builder.go`: `vbCardPrefix` was referenced but
+never defined and `uiw` was imported-unused. Finished the publish→dashboard path — added the
+`wb:` ID namespace + `vbPublishedWidget` (evaluates the saved cardgraph and renders it via
+`uiw.Widget`), and wired a dashboard render-loop fallback so published builder cards actually
+appear as tiles. `GOOS=js GOARCH=wasm go build` is green; scaffold-lint passes.
+
+Next: GLAMOR TIER 1–3 cross-cutting items and the deep-analysis §1–10 / R-redesign backlog.
+
 ## 2026-06-23 — feat: WONDER W-11..W-20 — entrance/reveal/polish flourishes (token-driven, reduced-motion safe)
 
 Batch 2 of the WONDER series — all CSS-only, no JS.

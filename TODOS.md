@@ -12335,7 +12335,7 @@ Locations: Spending by category card (2 buttons: CSV + Tax Summary), Income by s
 
 Listed highest-impact first. All target `web/index.html` only. No Go changes, no wasm rebuild.
 
-- [ ] **QW-1. Card and stat border-radius.** The single highest-impact cosmetic fix. Confirmed: `card.radius: "0px"` across all 6 captures; visible as hard square edges in every screenshot. Transforms the page character from spreadsheet to product.
+- [x] **QW-1. Card and stat border-radius.** The single highest-impact cosmetic fix. Confirmed: `card.radius: "0px"` across all 6 captures; visible as hard square edges in every screenshot. Transforms the page character from spreadsheet to product.
 
   ```css
   .card { border-radius: 12px; }
@@ -12343,27 +12343,27 @@ Listed highest-impact first. All target `web/index.html` only. No Go changes, no
   [data-density="compact"] .card { border-radius: 8px; }
   ```
 
-- [ ] **QW-2. Card title font-weight 400 → 600.** Confirmed: `cardTitle.weight: "400"` in all 6 captures. `index.html` L353 sets `font-size: 1.05rem` with no `font-weight` — browser defaults to 400. Bumping to 600 creates section hierarchy.
+- [x] **QW-2. Card title font-weight 400 → 600.** Confirmed: `cardTitle.weight: "400"` in all 6 captures. `index.html` L353 sets `font-size: 1.05rem` with no `font-weight` — browser defaults to 400. Bumping to 600 creates section hierarchy.
 
   ```css
   .card-title { font-weight: 600; }
   ```
 
-- [ ] **QW-3. Fix spending stat value color — !important on .stat-value.neg.** Confirmed defect: spend value is `rgb(46,139,87)` green in all 6 captures. Root cause: `index.html` L699 `.stat-value { color: var(--text); }` wins over `.stat-value.neg { color: var(--danger); }` by source order. Fix:
+- [x] **QW-3. Fix spending stat value color — !important on .stat-value.neg.** Confirmed defect: spend value is `rgb(46,139,87)` green in all 6 captures. Root cause: `index.html` L699 `.stat-value { color: var(--text); }` wins over `.stat-value.neg { color: var(--danger); }` by source order. Fix:
 
   ```css
   .stat-value.neg { color: var(--danger) !important; }
   .stat-value.pos { color: var(--accent) !important; }
   ```
 
-- [ ] **QW-4. Share bars height 4px → 8px.** Confirmed: `shareBar.height: "4px"` in all 6 captures. The CSS can override the inner fill div height (the outer `.share-bar` max-width is inline and cannot be overridden without Go changes — that is QW-4b under redesign):
+- [x] **QW-4. Share bars height 4px → 8px.** Confirmed: `shareBar.height: "4px"` in all 6 captures. The CSS can override the inner fill div height (the outer `.share-bar` max-width is inline and cannot be overridden without Go changes — that is QW-4b under redesign):
 
   ```css
   .share-bar { height: 8px !important; }
   .share-bar > div { height: 8px !important; }
   ```
 
-- [ ] **QW-5. `.budget-amount` — tabular-nums + full contrast in dark.** Confirmed: `amounts.budget: "rgb(171,171,179)"` in dark — same dim color as metadata. Dollar amounts in every row list are visually de-emphasized.
+- [x] **QW-5. `.budget-amount` — tabular-nums + full contrast in dark.** Confirmed: `amounts.budget: "rgb(171,171,179)"` in dark — same dim color as metadata. Dollar amounts in every row list are visually de-emphasized.
 
   ```css
   .budget-amount { font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -12371,26 +12371,26 @@ Listed highest-impact first. All target `web/index.html` only. No Go changes, no
   [data-theme="light"] .card .budget-amount { color: #1c1c1e; }
   ```
 
-- [ ] **QW-6. Section divider spacing — increase margin-top from 1.6rem to 2.25rem.** Confirmed: `sectionDivider.marginTop: "25.6px"` (1.6rem). Barely larger than the 16px card gap — sections don't feel spatially distinct.
+- [x] **QW-6. Section divider spacing — increase margin-top from 1.6rem to 2.25rem.** Confirmed: `sectionDivider.marginTop: "25.6px"` (1.6rem). Barely larger than the 16px card gap — sections don't feel spatially distinct.
 
   ```css
   .section-divider { margin-top: 2.25rem; margin-bottom: 0.85rem; }
   ```
 
-- [ ] **QW-7. Card margin-bottom — match internal padding.** Confirmed: `card.marginBottom: "16px"` vs `card.padding: "20px"`. Inverted rhythm — content inside breathes more than the gap between cards.
+- [x] **QW-7. Card margin-bottom — match internal padding.** Confirmed: `card.marginBottom: "16px"` vs `card.padding: "20px"`. Inverted rhythm — content inside breathes more than the gap between cards.
 
   ```css
   .card { margin-bottom: 1.25rem; }
   ```
 
-- [ ] **QW-8. Mermaid font alignment.** Sankey uses browser-default font stack, not the app's. One CSS rule:
+- [x] **QW-8. Mermaid font alignment.** Sankey uses browser-default font stack, not the app's. One CSS rule:
 
   ```css
   .mermaid { font-family: inherit; }
   .mermaid svg text { font-family: inherit !important; font-size: 13px !important; }
   ```
 
-- [ ] **QW-9. Period caption — promote weight and size.** Confirmed: `caption.size: "12px"`, `caption.color: "rgb(60,60,67)"` — smallest text answers the most important context question.
+- [x] **QW-9. Period caption — promote weight and size.** Confirmed: `caption.size: "12px"`, `caption.color: "rgb(60,60,67)"` — smallest text answers the most important context question.
 
   ```css
   main .t-caption:first-child {
@@ -12401,7 +12401,7 @@ Listed highest-impact first. All target `web/index.html` only. No Go changes, no
   }
   ```
 
-- [ ] **QW-10. Demote export buttons to ghost-small.** Confirmed: 6 full `.btn` (6.4px×12.8px padding) scattered across card footers. Interim demotion:
+- [x] **QW-10. Demote export buttons to ghost-small.** Confirmed: 6 full `.btn` (6.4px×12.8px padding) scattered across card footers. Interim demotion:
 
   ```css
   .card .btn[title*="Download"], .card .btn[title*="Tax"] {
@@ -17587,7 +17587,7 @@ Measurements JSON: `e2e/screenshots/gx01_measurements.json`
 
 ## Structure fixes (bottom-up, grouped)
 
-### GX1-F1. CRITICAL — Light-mode topbar does not switch to the light surface [CSS-ONLY] ★★
+### GX1-F1. CRITICAL — Light-mode topbar does not switch to the light surface [CSS-ONLY] ★★  ✅ DONE
 
 **Evidence:** `gx01_shell_1280_light.png`, `gx01_shell_768_light.png`
 
@@ -17628,7 +17628,7 @@ light tokens — rule was added but is being outranked at runtime).
 
 ---
 
-### GX1-F2. CRITICAL — Light-mode rail nav active state shows dark chip on dark rail [CSS-ONLY] ★★
+### GX1-F2. CRITICAL — Light-mode rail nav active state shows dark chip on dark rail [CSS-ONLY] ★★  ✅ DONE
 
 **Evidence:** `gx01_shell_1280_light.png`
 
@@ -17659,7 +17659,7 @@ invisible or near-invisible. Must be co-fixed with GX1-F1.
 
 ---
 
-### GX1-F3. CRITICAL — Light-mode +Add button has no visible border/fill [CSS-ONLY] ★★
+### GX1-F3. CRITICAL — Light-mode +Add button has no visible border/fill [CSS-ONLY] ★★  ✅ DONE
 
 **Evidence:** `gx01_add_menu_1280_light.png`, `gx01_shell_1280_light.png`
 
@@ -17693,7 +17693,7 @@ which share the same base class with `background-color: rgb(32,32,34)`.
 
 ---
 
-### GX1-F4. CRITICAL — Light-mode +Add menu panel is dark on a light page [CSS-ONLY] ★★
+### GX1-F4. CRITICAL — Light-mode +Add menu panel is dark on a light page [CSS-ONLY] ★★  ✅ DONE
 
 **Evidence:** `gx01_add_menu_768_light.png`, `gx01_add_menu_1280_light.png`
 
@@ -17739,7 +17739,7 @@ viewport. Safest cross-viewport fix:
 
 ---
 
-### GX1-F5. HIGH — 768 topbar is 200px tall — wraps to four rows [CSS-ONLY] ★
+### GX1-F5. HIGH — 768 topbar is 200px tall — wraps to four rows [CSS-ONLY] ★  ✅ DONE
 
 **Evidence:** `gx01_shell_768_dark.png`, `gx01_shell_768_light.png`
 
@@ -17787,7 +17787,7 @@ height — but the topbar itself is genuinely 200px high.
 
 ---
 
-### GX1-F6. HIGH — 768 rail does not auto-collapse (media query width mismatch) [CSS-ONLY] ★
+### GX1-F6. HIGH — 768 rail does not auto-collapse (media query width mismatch) [CSS-ONLY] ★  ✅ DONE
 
 **Evidence:** `gx01_shell_768_dark.png`, `gx01_shell_768_light.png`
 
@@ -17825,7 +17825,7 @@ so they form a coherent system.
 
 ---
 
-### GX1-F7. MEDIUM — Household card background transparent in both themes [CSS-ONLY]
+### GX1-F7. MEDIUM — Household card background transparent in both themes [CSS-ONLY]  ✅ DONE
 
 **Evidence:** measured all 4 width/theme combinations.
 
@@ -17850,7 +17850,7 @@ Cross-ref: C3 (household card broken).
 
 ---
 
-### GX1-F8. MEDIUM — Breadcrumb element is absent from the DOM [GO-STRUCTURAL]
+### GX1-F8. MEDIUM — Breadcrumb element is absent from the DOM [GO-STRUCTURAL]  ✅ DONE
 
 **Evidence:** all 4 width/theme conditions return `{ "_missing": true }` for `.breadcrumb`,
 `[aria-label="breadcrumb"]`, and `nav.breadcrumb`.
@@ -17870,7 +17870,7 @@ actual selector used).
 
 ---
 
-### GX1-F9. MEDIUM — +Add backdrop div blocks notify-btn click [CSS-ONLY]
+### GX1-F9. MEDIUM — +Add backdrop div blocks notify-btn click [CSS-ONLY]  ✅ DONE
 
 **Evidence:** all 4 width/theme conditions — `notify-btn click failed: page.click: Timeout
 5000ms exceeded` with log entry:
@@ -21857,8 +21857,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 - [x] W-13 Modal/flip backdrop blur-in — `.flip-backdrop` now transitions `backdrop-filter` (`blur(0)` → `blur(3px * --wonder-on)`) over `--wonder-dur-slow` in addition to existing opacity; existing `transition:none` in reduce block covers it. **LANDED 2026-06-23**
 - [x] W-14 Toast spring — `toast-in` keyframe redefined with spring overshoot (mid-frame -0.15rem bounce) + `cubic-bezier(.34,1.56,.64,1)` easing; `.toast.hide` class adds smooth exit (opacity+transform over `--wonder-dur-fast`); `animation:none`/`transition:none` under off+reduce. **LANDED 2026-06-23**
 *Value / state changes*
-- [ ] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). [GO-STRUCTURAL:
-      needs a JS tween or a Go-driven interpolation; high delight on the dashboard.]
+- [x] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). **LANDED 2026-06-23** — `web/countup.js` shim (`cashfluxCountUpScan`) uses rAF ease-out tween; `data-countup` attr on KPI `fig` divs in `dashboard.go`; `UseEffect` keyed on KPI amounts triggers scan on mount/value-change; gated by `--wonder-on` + `prefers-reduced-motion`; final text always restored exactly; `data-countup-last` prevents re-animation on same value.
 - [x] W-16 Progress-bar fill ease — verified: all bar variants (`.near`/`.over`/`.done`/`.final`/`.overdue`/`.soon`/`.storage-bar-fill`) share `.bar-fill` which already carries `width 0.45s cubic-bezier(.2,.75,.2,1)` under `no-preference`; no additional rules needed. **LANDED 2026-06-23** (pass-through verification)
 - [x] W-17 Success pulse — **LANDED 2026-06-23** `@keyframes wonder-success-pulse` (scale .6→1.15→1) on `.toast:not(.toast-err)::before`; duration `calc(--wonder-dur-slow * --wonder-on)` → instant/static when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`.
 - [ ] W-18 Chart draw-in — area/line charts animate their path on first render; donut sweeps; bars grow.
@@ -21866,7 +21865,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 *Polish*
 - [x] W-19 Skeleton shimmer — `.skeleton` + `.shimmer` classes added: `@keyframes wonder-shimmer` sweeps a gradient left-to-right at `4 * --wonder-dur-slow`; under off+reduce → static `--bg-elev` block, no sweep. **LANDED 2026-06-23**
 - [x] W-20 Focus ring ease — `:focus-visible` ring now transitions `outline-offset` + `box-shadow` over 100ms `var(--wonder-ease)`; ring remains fully visible (a11y preserved), onset only is eased; reduced-motion neutralises via universal 0.001ms rule. **LANDED 2026-06-23**
-- [ ] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver). **DEFERRED** — requires IntersectionObserver JS; not trivially CSS-only; will ship in a future JS-scripting pass.
+- [x] W-21 Scroll-reveal — long pages (Reports) reveal sections as they enter the viewport (IntersectionObserver). **LANDED 2026-06-23** — `web/wonder.js`: feature-detects IO; if absent or motion off/reduced, reveals all immediately (fail-safe visible). JS stamps `.wonder-reveal` on `.card` elements inside `#cf-page-view` then registers with IO (8% threshold, fire-once). CSS: `.wonder-reveal` opacity 0 + `translateY(14px * --wonder-on)`; `.in-view` → opacity 1 + `none`; `[data-wonder="off"]` + `prefers-reduced-motion` hard-override to visible. Go (`pageenter.go`) calls `window.cashfluxWonder.observe()` after each route change (inside double-rAF, after `.page-enter` is applied). `wonder.js` added to sw.js CORE cache (v248).
 
 **Theme-engine integration (GO-STRUCTURAL, build-gated GI0):**
 - [x] Add a motion field to `theme.Theme` (e.g. `Motion: off|subtle|full` or a 0..1 intensity) +

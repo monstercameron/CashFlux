@@ -7,12 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- GLAMOR Quick-wins QW-1..10 (CSS-only): card/stat border-radius, card-title weight, semantic stat-value colors (!important), 8px share bars, tabular budget amounts, section-divider rhythm, card gap, mermaid font alignment, period-caption promotion, ghost-small export buttons
+- GLAMOR GX1 shell fixes (F1–F9): light-mode topbar/rail/active-chip/icon-buttons/+Add-menu surfaces, household-card surface, 768px topbar+rail collapse, `.breadcrumb` class on the topbar nav (F8), backdrop pointer-events guard (F9)
+- Widget Builder publish path completed: `vbCardPrefix` + `vbPublishedWidget` render published cardgraph tiles on the dashboard (was an unbuildable stub)
 - C74 Tier 3: friendly message for scanned/encrypted PDFs directing user to "Extract with AI" or image import
 - C74: "Extract with AI" button on statement card — sends pasted text to LLM, parses result into draft rows (same pipeline as image import)
 - C74: "Suggest categories" button on draft review — applies deterministic rules first (free/local), then optional AI for uncategorized rows
 - C74 e2e: `e2e/c74_ai_extract_check.mjs` asserts Extract-with-AI + Suggest-categories buttons render and are operable
 
 ### Changed
+- **WONDER (W-9, W-21):** page-enter transition on route change + scroll-reveal for long pages (IntersectionObserver, fail-safe visible, reduced-motion safe).
 - **WONDER theme integration:** `prefs.Motion` (off/subtle/full) drives `data-wonder` on `<html>` via `ApplyPrefs`; a Motion segment control in appearance settings (Off / Subtle / Full) persists the choice and live-updates flourish intensity; OS prefers-reduced-motion remains a hard CSS override regardless.
 - **WONDER (W-11..W-20):** list stagger, bento entrance, modal backdrop blur, toast spring, progress ease, skeleton shimmer, focus-ring ease — token-driven + reduced-motion safe.
 - **WONDER (W-3..W-8):** tile/row/nav/icon hover flourishes, primary-button click ripple, switch spring — all token-driven + reduced-motion safe. W-3 adds bento `.w` tile hover lift (excluded during drag); W-4 adds list `.row` 2px translateX nudge on hover (table rows excluded for column alignment). W-5..W-8 previously landed.

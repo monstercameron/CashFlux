@@ -10,6 +10,7 @@ func Validate(g Graph) []Issue {
 	var issues []Issue
 
 	ids := map[NodeID]Node{}
+	seenVar := map[string]NodeID{}
 	for _, n := range g.Nodes {
 		if _, dup := ids[n.ID]; dup {
 			issues = append(issues, Issue{Node: n.ID, Message: "duplicate node id", Fatal: true})
@@ -17,6 +18,17 @@ func Validate(g Graph) []Issue {
 		ids[n.ID] = n
 		if _, ok := Lookup(n.Kind); !ok {
 			issues = append(issues, Issue{Node: n.ID, Message: fmt.Sprintf("unknown node kind %q", n.Kind), Fatal: true})
+		}
+		// A named output must be a valid, unique identifier so downstream references
+		// resolve unambiguously.
+		if n.Var != "" {
+			if !ValidIdent(n.Var) {
+				issues = append(issues, Issue{Node: n.ID, Message: fmt.Sprintf("%q is not a valid variable name (use a letter or _ then letters/digits)", n.Var)})
+			} else if prev, dup := seenVar[n.Var]; dup {
+				issues = append(issues, Issue{Node: n.ID, Message: fmt.Sprintf("variable name %q is already used by node %s", n.Var, prev)})
+			} else {
+				seenVar[n.Var] = n.ID
+			}
 		}
 	}
 

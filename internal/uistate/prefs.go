@@ -79,6 +79,7 @@ func ApplyPrefs(p prefs.Prefs) {
 		return
 	}
 	root.Call("setAttribute", "data-theme", resolveTheme(p.Theme))
+	root.Call("setAttribute", "data-wonder", string(p.Motion))
 	root.Get("style").Call("setProperty", "--accent", p.Accent)
 	// WONDER: motion level drives data-wonder on <html>, which keys all
 	// CSS WONDER tokens (--wonder-on, durations, etc.). "full" keeps the

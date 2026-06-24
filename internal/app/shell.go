@@ -161,6 +161,7 @@ func Shell(props ShellProps) uic.Node {
 			return nil
 		}
 		focusMain()
+		triggerPageEnter()
 		return nil
 	}, props.ActivePath)
 
@@ -174,7 +175,7 @@ func Shell(props ShellProps) uic.Node {
 		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			uic.CreateElement(SampleDataBanner),
-			Div(css.Class(tw.P10px), uic.CreateElement(props.View)),
+			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"), uic.CreateElement(props.View)),
 		),
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
 		// the breakpoint). The desktop left rail is unchanged — this is additive.
@@ -669,7 +670,7 @@ func TopBar(props topBarProps) uic.Node {
 			}),
 			ui.Icon(icon.Menu, css.Class(tw.W5, tw.H5)),
 		),
-		Nav(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
+		Nav(css.Class("breadcrumb", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
 			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
 			If(!onDashboard, Span(css.Class(tw.TextFaint), "›")),
 			// The current page's title is the screen's single <h1> — so every screen

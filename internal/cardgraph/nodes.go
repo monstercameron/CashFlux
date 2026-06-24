@@ -18,12 +18,14 @@ type Port struct {
 }
 
 // Context is the evaluation environment a graph runs against: the named numeric and
-// string figures a Source/Formula node can reference. The wasm layer builds this from
-// engineenv.Vars(...) (the app variable surface) so the core stays decoupled from the
-// dataset and unit-testable with a hand-built map.
+// string figures a Source/Formula node references, plus the named datasets a
+// source.dataset node reads (transactions, accounts, …). The wasm layer builds this
+// from engineenv.Vars(...) and appstate so the core stays decoupled and unit-testable
+// with hand-built maps.
 type Context struct {
-	Vars map[string]float64
-	Strs map[string]string
+	Vars     map[string]float64
+	Strs     map[string]string
+	Datasets map[string]Collection
 }
 
 // Spec is a node kind's contract: its input ports, its output type, and a pure
@@ -70,6 +72,13 @@ const (
 	KindVizText       = "viz.text"
 	KindVizProgress   = "viz.progress"
 	KindVizBadge      = "viz.badge"
+	KindVizChart      = "viz.chart"
+	KindVizList       = "viz.list"
+	KindVizStat       = "viz.stat"
+	KindSourceDataset = "source.dataset"
+	KindFilter        = "data.filter"
+	KindGroupBy       = "data.groupby"
+	KindAggregate     = "data.aggregate"
 )
 
 func init() {
@@ -337,6 +346,246 @@ func init() {
 			return Viz(VizBlock{Kind: "badge", Title: props["title"], Text: text, Tone: tone}), nil
 		},
 	})
+
+	// source.dataset — emits a named app dataset as a Collection (props["which"] one of
+	// transactions/accounts/budgets/goals/tasks/bills). The rows come from Context.
+	register(Spec{
+		Kind: KindSourceDataset, Out: TypeCollection,
+		Eval: func(_ map[string]Value, props map[string]string, ctx Context) (Value, error) {
+			which := strings.TrimSpace(props["which"])
+			if which == "" {
+				return Value{}, fmt.Errorf("source.dataset: pick a dataset")
+			}
+			c, ok := ctx.Datasets[which]
+			if !ok {
+				return Coll(Collection{}), nil // no data yet → empty collection, not an error
+			}
+			return Coll(c), nil
+		},
+	})
+
+	// data.filter — keep rows where column props["col"] satisfies props["op"] vs
+	// props["value"]. Numeric columns compare numerically; others compare as text
+	// (== / != / contains, case-insensitive). A blank column passes everything through.
+	register(Spec{
+		Kind: KindFilter, Out: TypeCollection,
+		Inputs: []Port{{Name: "in", Type: TypeCollection}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Coll == nil {
+				return Coll(Collection{}), nil
+			}
+			col := strings.TrimSpace(props["col"])
+			if col == "" {
+				return in, nil
+			}
+			op, want := props["op"], props["value"]
+			out := Collection{Cols: in.Coll.Cols}
+			for _, row := range in.Coll.Rows {
+				if filterMatch(row[col], op, want) {
+					out.Rows = append(out.Rows, row)
+				}
+			}
+			return Coll(out), nil
+		},
+	})
+
+	// data.groupby — group rows by the text column props["group"], aggregating the
+	// numeric column props["value"] with props["fn"] (sum/avg/count/min/max). Outputs a
+	// Series (one point per group), sorted by value descending — ready for a chart.
+	register(Spec{
+		Kind: KindGroupBy, Out: TypeSeries,
+		Inputs: []Port{{Name: "in", Type: TypeCollection}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Coll == nil {
+				return Ser(nil), nil
+			}
+			group := strings.TrimSpace(props["group"])
+			valCol := strings.TrimSpace(props["value"])
+			fn := props["fn"]
+			if group == "" {
+				return Value{}, fmt.Errorf("data.groupby: pick a column to group by")
+			}
+			type acc struct {
+				sum, min, max float64
+				n             int
+			}
+			order := []string{}
+			groups := map[string]*acc{}
+			for _, row := range in.Coll.Rows {
+				key := row[group].Str
+				if key == "" {
+					if n, ok := row[group].AsNumber(); ok {
+						key = formatNumber(n, "")
+					}
+				}
+				a := groups[key]
+				if a == nil {
+					a = &acc{}
+					groups[key] = a
+					order = append(order, key)
+				}
+				v, _ := row[valCol].AsNumber()
+				if a.n == 0 || v < a.min {
+					a.min = v
+				}
+				if a.n == 0 || v > a.max {
+					a.max = v
+				}
+				a.sum += v
+				a.n++
+			}
+			pts := make([]SeriesPoint, 0, len(order))
+			for _, k := range order {
+				a := groups[k]
+				pts = append(pts, SeriesPoint{Label: k, Value: aggValue(fn, a.sum, a.min, a.max, a.n)})
+			}
+			sort.SliceStable(pts, func(i, j int) bool { return pts[i].Value > pts[j].Value })
+			return Ser(pts), nil
+		},
+	})
+
+	// data.aggregate — reduce a collection's numeric column props["col"] to a single
+	// Number via props["fn"] (sum/avg/count/min/max). count ignores the column.
+	register(Spec{
+		Kind: KindAggregate, Out: TypeNumber,
+		Inputs: []Port{{Name: "in", Type: TypeCollection}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Coll == nil {
+				return Num(0), nil
+			}
+			col, fn := strings.TrimSpace(props["col"]), props["fn"]
+			var sum, min, max float64
+			n := 0
+			for _, row := range in.Coll.Rows {
+				v, _ := row[col].AsNumber()
+				if n == 0 || v < min {
+					min = v
+				}
+				if n == 0 || v > max {
+					max = v
+				}
+				sum += v
+				n++
+			}
+			return Num(aggValue(fn, sum, min, max, n)), nil
+		},
+	})
+
+	// viz.chart — renders a Series as a chart (props["chart"] = line|bar|donut).
+	register(Spec{
+		Kind: KindVizChart, Out: TypeViz,
+		Inputs: []Port{{Name: "series", Type: TypeSeries}, {Name: "accent", Type: TypeColor}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			s := inputs["series"].Series
+			chart := props["chart"]
+			if chart == "" {
+				chart = "line"
+			}
+			return Viz(VizBlock{Kind: "chart", Title: props["title"], Chart: chart, Series: s, Accent: inputs["accent"].Str}), nil
+		},
+	})
+
+	// viz.list — renders a Collection as a list/table, capped at props["limit"] rows.
+	register(Spec{
+		Kind: KindVizList, Out: TypeViz,
+		Inputs: []Port{{Name: "in", Type: TypeCollection}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			in, ok := inputs["in"]
+			if !ok || in.Coll == nil {
+				return Viz(VizBlock{Kind: "list", Title: props["title"]}), nil
+			}
+			rows := in.Coll.Rows
+			if lim, err := strconv.Atoi(strings.TrimSpace(props["limit"])); err == nil && lim > 0 && lim < len(rows) {
+				rows = rows[:lim]
+			}
+			return Viz(VizBlock{Kind: "list", Title: props["title"], Cols: in.Coll.Cols, Rows: rows}), nil
+		},
+	})
+
+	// viz.stat — a KPI plus its change vs a previous value: inputs "value" and "prev"
+	// produce a delta % with up/down tone. props["title"], props["format"].
+	register(Spec{
+		Kind: KindVizStat, Out: TypeViz,
+		Inputs: []Port{{Name: "value", Type: TypeNumber}, {Name: "prev", Type: TypeNumber}, {Name: "accent", Type: TypeColor}},
+		Eval: func(inputs map[string]Value, props map[string]string, _ Context) (Value, error) {
+			vv, ok := inputs["value"]
+			if !ok {
+				return Value{}, fmt.Errorf("viz.stat: connect a value")
+			}
+			val, _ := vv.AsNumber()
+			sub, tone := "", ""
+			if pv, ok := inputs["prev"]; ok {
+				prev, _ := pv.AsNumber()
+				if prev != 0 {
+					d := (val - prev) / prev * 100
+					switch {
+					case d > 0:
+						tone, sub = "up", "▲ "+formatNumber(d, "")+"%"
+					case d < 0:
+						tone, sub = "down", "▼ "+formatNumber(-d, "")+"%"
+					default:
+						sub = "no change"
+					}
+				}
+			}
+			return Viz(VizBlock{Kind: "stat", Title: props["title"], Text: formatNumber(val, props["format"]), Sub: sub, Tone: tone, Accent: inputs["accent"].Str}), nil
+		},
+	})
+}
+
+// filterMatch evaluates a single-column predicate for data.filter. Numeric comparisons
+// when the cell is numeric; otherwise case-insensitive text equality/contains.
+func filterMatch(cell Value, op, want string) bool {
+	if n, ok := cell.AsNumber(); ok {
+		w, err := strconv.ParseFloat(strings.TrimSpace(want), 64)
+		if err == nil {
+			switch op {
+			case "==":
+				return n == w
+			case "!=":
+				return n != w
+			case "<":
+				return n < w
+			case "<=":
+				return n <= w
+			case ">":
+				return n > w
+			case ">=":
+				return n >= w
+			}
+		}
+	}
+	s, w := strings.ToLower(cell.Str), strings.ToLower(strings.TrimSpace(want))
+	switch op {
+	case "!=":
+		return s != w
+	case "contains":
+		return strings.Contains(s, w)
+	default: // "==" and unknown ops
+		return s == w
+	}
+}
+
+// aggValue applies an aggregation function to pre-collected stats.
+func aggValue(fn string, sum, min, max float64, n int) float64 {
+	switch fn {
+	case "count":
+		return float64(n)
+	case "avg":
+		if n == 0 {
+			return 0
+		}
+		return sum / float64(n)
+	case "min":
+		return min
+	case "max":
+		return max
+	default: // sum
+		return sum
+	}
 }
 
 // formatNumber renders a KPI figure per format. Currency is left to the caller (it
