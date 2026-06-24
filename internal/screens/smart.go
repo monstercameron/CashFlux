@@ -80,7 +80,7 @@ func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled 
 		body = smartInsightList(insights)
 	}
 	return uiw.Card(uiw.CardProps{
-		Title:  uistate.T("smart.insightsTitle"),
+		Header: smartBrandHeader(uistate.T("smart.insightsTitle"), false, nil),
 		TestID: "smart-insights",
 		Body:   body,
 	})
@@ -113,7 +113,7 @@ func pagesWithImplemented() []smart.Page {
 // with a working engine are listed, so every toggle has a real effect.
 func smartManageSection(settings smart.Settings, hasProvider bool) ui.Node {
 	return uiw.Card(uiw.CardProps{
-		Title:  uistate.T("smart.manageTitle"),
+		Header: smartBrandHeader(uistate.T("smart.manageTitle"), false, nil),
 		TestID: "smart-manage",
 		Body: Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap2)),
 			P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.manageHint")),

@@ -187,7 +187,12 @@ func Shell(props ShellProps) uic.Node {
 			// page's body). A per-path key gives each route a distinct identity, so the
 			// reconciler unmounts the old page and mounts the new one on every navigation
 			// (regression covered by e2e/loopstory_90_custompage_nav.mjs).
-			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"), WithKey(uic.CreateElement(props.View), props.ActivePath)),
+			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"),
+				// Intersperse the SMART layer: a glanceable, opt-in insight strip
+				// above each relevant page's content (additive — nothing renders
+				// until the user enables features that produce insights here).
+				screens.SmartStripForPath(props.ActivePath),
+				WithKey(uic.CreateElement(props.View), props.ActivePath)),
 		),
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
 		// the breakpoint). The desktop left rail is unchanged — this is additive.

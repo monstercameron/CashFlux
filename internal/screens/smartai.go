@@ -435,10 +435,10 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 		return Fragment()
 	}
 	if !hasProvider {
-		return uiw.Card(uiw.CardProps{Title: uistate.T("smart.aiTitle"), TestID: "smart-ai",
+		return uiw.Card(uiw.CardProps{Header: smartBrandHeader(uistate.T("smart.aiTitle"), true, nil), TestID: "smart-ai",
 			Body: P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.aiNeedsProvider"))})
 	}
-	return uiw.Card(uiw.CardProps{Title: uistate.T("smart.aiTitle"), TestID: "smart-ai",
+	return uiw.Card(uiw.CardProps{Header: smartBrandHeader(uistate.T("smart.aiTitle"), true, nil), TestID: "smart-ai",
 		Body: Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap3)),
 			MapKeyed(enabled,
 				func(f smart.Feature) any { return f.Code },

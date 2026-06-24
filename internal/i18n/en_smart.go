@@ -12,6 +12,10 @@ var smartKeys = Catalog{
 	"nav.smart":       "Smart",
 	"screen.smartSub": "Optional, on-device intelligence for every page",
 
+	// Inline per-page strip.
+	"smart.stripTitle": "Smart",
+	"smart.viewAll":    "View all",
+
 	// Insights section.
 	"smart.insightsTitle": "Your insights",
 	"smart.onboard":       "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
