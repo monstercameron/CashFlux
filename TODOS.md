@@ -12425,7 +12425,7 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
 
 - [x] **R-1. Move Sankey to position 2 in DOM order — immediately after stat grid.** LANDED 2026-06-24. Sankey appears immediately after the spending-by-category card in the spending zone (reports_screen.go L665), before payees and biggest expenses. Pure DOM reorder, zero logic change.
 
-- [ ] **R-2. Hero strip for Net / Income / Spend.** Split the flat 6-tile `.stat-grid` into two zones: (a) a hero `Div` with Net at `font-size: 2.5rem / 800` flanked by Income and Spend at `1.75rem / 700` — no card border, directly on the page bg; (b) a secondary `.stat-grid` below for savings rate / runway / no-spend.
+- [x] **R-2. Hero strip for Net / Income / Spend.** Split the flat 6-tile `.stat-grid` into two zones: (a) a hero `Div` with Net at `font-size: 2.5rem / 800` flanked by Income and Spend at `1.75rem / 700` — no card border, directly on the page bg; (b) a secondary `.stat-grid` below for savings rate / runway / no-spend.
 
 - [x] **R-3. Share bar max-width: 260px → 100%.** LANDED 2026-06-24. All three share-bar sites in reports_screen.go now use `"max-width": "100%"` (shareBar helper L264, customFieldSpendSection L845, deductibleSection L1004). Bars span full card width.
 
@@ -12448,7 +12448,7 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
   }
   ```
 
-- [ ] **R-6. Rollup toggle — demote to small ghost button.** `reports_screen.go` L409–412: add inline style or a `btn-xs` class to the rollup toggle so it does not compete with the 16.8px card title.
+- [x] **R-6. Rollup toggle — demote to small ghost button.** `reports_screen.go` L409–412: add inline style or a `btn-xs` class to the rollup toggle so it does not compete with the 16.8px card title.
 
 - [ ] **R-7. Consolidate 6 CSV export buttons into page-level Export dropdown.** Remove per-card export rows (L418–435, L451–455, L461–469, L474–483, L492–503). Add a single page-header Export control with labeled options: "Spending by category", "Income by source", "Top payees", "Biggest expenses", "By member", "Tax summary".
 
@@ -12551,6 +12551,8 @@ if (tabNum) expect(tabNum).toContain('tabular');
 #### G9.1a — Chart variety & workflow-diagram catalog (addendum to G9.1) ★★
 
 ✅ RESOLVED (2026-06-23). Charts wired: V2 (ranked bar, top-8 spending categories), V3 (donut, top-5 categories + Other), V4 (income-by-source donut), V7 (ranked bars for top payees and biggest expenses). Helpers: reportsBarSpec / reportsDonutSpec in reports_screen.go. DEFERRED (need new primitives or screenshot verification): treemap, calendar heatmap, V6 stacked-area, V10 bullet, V11 grouped-bar, e2e harness.
+
+✅ VERIFIED RENDERING (2026-06-24). Parent-built `GOOS=js GOARCH=wasm go build` rc=0, then drove the real app via playwright (`e2e/reports_charts_verify.mjs`, in main checkout, no worktree). Measured on `/reports`: 76 chart SVGs, **10 donut arc slices** (category + income donuts), **58 ranked-bar rects** (the 3 ranked bars), 6 area-chart draw-in paths, 5 chart hosts — **identical counts in dark AND light** → all chart variety renders in both themes. 7/7 PASS, exit 0. Screenshots: `e2e/screenshots/reports_charts_{dark,light}.png`. Note: the charts are built on the `uiw.Chart`/`uiw.AreaChart` primitive (so screenlint stays green) — the earlier `be26b4f` rescue branch is **redundant/superseded** (it used 14 bespoke cards) and can be dropped without losing functionality.
 
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.
@@ -23569,7 +23571,7 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
 - [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)
 - [ ] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
 - [ ] Install Claude Code design skills (`frontend-design`, `playground`) — user action
-- [ ] Decide native test command (logic pkgs only; js/wasm pkgs excluded) + document it
+- [x] Decide native test command (logic pkgs only; js/wasm pkgs excluded) + document it
 
 ---
 
@@ -24086,7 +24088,7 @@ Shared control components (from mockup):
 - [~] Web manifest done (`manifest.webmanifest` + theme-color/apple meta); icons later
 - [x] Service worker (`sw.js`): network-first cache of shell + assets, offline fallback
 - [~] Installability prompt done (beforeinstallprompt button); offline read works (sw); update flow later
-- [ ] Verify via framework `pwa` package
+- [x] Verify via framework `pwa` package
 
 ---
 
@@ -24114,16 +24116,16 @@ Wrap the existing WASM/PWA build as a native, installable desktop app (Windows/m
 CashFlux can be distributed and launched outside the browser while reusing the exact same Go→wasm
 bundle and `web/` shell. Local-first; no behavior change — just a native window + installer.
 
-- [ ] Decide the wrapper: Electron shell loading the existing `web/` build (vs. evaluate a lighter
+- [x] Decide the wrapper: Electron shell loading the existing `web/` build (vs. evaluate a lighter
       alternative like Tauri/Wails) — record the choice and trade-offs in DEVLOG
-- [ ] Electron scaffold: `main` process that serves/loads `index.html` + `bin/main.wasm` +
+- [x] Electron scaffold: `main` process that serves/loads `index.html` + `bin/main.wasm` +
       `wasm_exec.js` + `sw.js` + `manifest` (correct MIME for `.wasm`; relative asset paths)
-- [ ] Reuse the production `web/` build as the renderer payload — no separate UI codebase; keep the
+- [x] Reuse the production `web/` build as the renderer payload — no separate UI codebase; keep the
       wasm bundle the single source of truth
-- [ ] App window chrome: title, icon, sensible default size, native menu (minimal)
-- [ ] Packaging/installers per OS (e.g. `electron-builder`): Windows installer, macOS `.dmg`, Linux
+- [x] App window chrome: title, icon, sensible default size, native menu (minimal)
+- [x] Packaging/installers per OS (e.g. `electron-builder`): Windows installer, macOS `.dmg`, Linux
       AppImage/deb
-- [ ] Build script / CI job to produce the desktop artifacts from the same wasm build (don't hand-copy)
+- [x] Build script / CI job to produce the desktop artifacts from the same wasm build (don't hand-copy)
 - [ ] Verify: app installs and launches natively, loads offline, and matches the PWA behavior
 
 ---
@@ -24755,9 +24757,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 #### Client (Cloud UX)
 - [x] **Cloud settings section** (global FlipPanel): signed-out pitch + OAuth buttons; signed-in plan
       status, manage subscription, AI key, devices, sign out, export/delete account.
-- [ ] **Sync status chip** by the workspace switcher: synced / syncing / offline (queued count) /
+- [x] **Sync status chip** by the workspace switcher: synced / syncing / offline (queued count) /
       error / not-signed-in; "last synced" tooltip; "Sync now"; opens Cloud settings.
-- [ ] **Contextual upgrade sheet** when a free user taps a Cloud-only action (non-blocking; benefits +
+- [x] **Contextual upgrade sheet** when a free user taps a Cloud-only action (non-blocking; benefits +
       price + Start trial + Maybe later). Never blocks local features.
 - [x] **Pricing screen**: annual/monthly segmented toggle (annual-first), price, trial note, Subscribe
       → Stripe Checkout (redirect); trust line (cancel/export anytime, encrypted, BYO key).
@@ -24768,7 +24770,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] **AI key (Cloud)**: move key entry into Cloud settings (encrypted server-side, shown as "Key set",
       replace/remove); keep the client-side key field for free users.
 - [ ] **Devices** list + revoke; **Manage subscription** → Stripe portal (redirect).
-- [ ] **First-run Cloud mention** (calm, dismissible) + LWW pulled-newer toast.
+- [x] **First-run Cloud mention** (calm, dismissible) + LWW pulled-newer toast.
 - [ ] a11y + plain-English copy on every Cloud surface; empty/loading/offline/error states (sign-in
       failure, payment failure with retry).
 
@@ -24825,11 +24827,11 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 > Keep an unconditional plain self-host path (any host, no referral). Disclose referral plainly.
 
 #### Packaging
-- [ ] Publish the server as a **Docker image** (multi-arch) on a registry; `docker-compose.yml` with the
+- [x] Publish the server as a **Docker image** (multi-arch) on a registry; `docker-compose.yml` with the
       server + **Caddy** (automatic HTTPS) + a persistent volume for the SQLite file + blobs dir.
-- [ ] **cloud-init / user-data script**: installs Docker, runs the compose stack, generates + prints the
+- [x] **cloud-init / user-data script**: installs Docker, runs the compose stack, generates + prints the
       first-run access token, configures Caddy for the droplet's domain/IP. Hosted at a stable URL.
-- [ ] **One-command installer** (`curl -fsSL <url>/install.sh | sh`) for any fresh VPS (host-agnostic).
+- [x] **One-command installer** (`curl -fsSL <url>/install.sh | sh`) for any fresh VPS (host-agnostic).
 - [x] Config via `.env` (domain, auth mode token|oauth, master key, fair-use off, providers if oauth).
 - [ ] **DO Marketplace 1-Click**: Packer build of a droplet image; submit for vendor approval (later,
       after the script path is proven).
@@ -24838,7 +24840,7 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [ ] Add the **DO referral link** to the "Deploy your own server" button + install docs + Marketplace
       listing, with a clear disclosure line.
 - [ ] Verify current DO referral terms before relying on it; track referral credit as reduced COGS.
-- [ ] Provide a non-referral deploy path/link too (unconditional free promise).
+- [x] Provide a non-referral deploy path/link too (unconditional free promise).
 
 #### In-app hook
 - [x] Settings → Cloud (self-hosted): a **"Deploy your own server"** link → the deploy docs (with the

@@ -29,6 +29,44 @@ prefers-reduced-motion → crossFade skips startViewTransition. All paths produc
 
 **sw.js:** Bumped cache to `cashflux-v250` to evict stale assets.
 
+## 2026-06-24 (later) — WONDER fixes truly landed (45/45); W-10 rejected; Reports charts verified
+
+**The "lift 5px" fix never reached main.** `e2e/wonder.spec.mjs` was committed but ran **40/45** — the W-1
+card-lift, W-2 button-transform-transition, W-4 row-nudge and W-11 off-suppression that the earlier entry
+claims were made in a worktree that got removed before commit (same loss pattern as LoadingCard). Main still
+shipped `--wonder-lift: 2px` and the clobbered transitions. Re-derived them as a single late **override-
+hardening block** at the end of the first `<style>` in `web/index.html`, and this time pinned down *why*
+they were being clobbered rather than just nudging values:
+- `.card`/`.w` hover-lift was zeroed by `.wonder-reveal.in-view { transform: none }` (equal specificity,
+  later source order) → fixed with an `html`-prefixed re-assert (+1 element specificity).
+- `.btn` lost its `transform` transition to a later `.btn { transition: filter }` base rule → re-added.
+- **W-4 was the deep one.** Even a higher-specificity row-hover rule lost. Root cause: list rows carry the
+  `wonder-row-enter` entrance animation with `fill-mode: both`, whose final keyframe is `transform: none`.
+  A *filled animation's* computed value outranks every non-`!important` author declaration regardless of
+  specificity (CSS cascade origin: animations beat normal author rules). So the hover nudge only wins with
+  `!important`. Verified the mechanism live via CDP `CSS.forcePseudoState` + runtime rule injection before
+  committing the one-line `!important`. Still off-safe: every transform scales by `--wonder-on`, which the
+  off and reduced-motion blocks force to 0. Suite now **45/45** (parent-run).
+
+**W-10 route cross-fade — recovered, fixed, then rejected.** The stranded WONDER branch's only unique commit
+(`8654d27`) was the W-10 View-Transitions-API cross-fade, absent from main. Ported the three additive pieces
+(wonder.js `crossFade`, `pageenter.go` delegation, index.html `::view-transition-*` CSS) and found a real
+latent bug: `defer cb.Release()` freed the `js.Func` immediately, but `startViewTransition` invokes its
+callback **asynchronously** — a use-after-release crash on every Chrome navigation. Fixed with a self-
+releasing one-shot callback and verified 0 console/page errors across two in-app navs. *But* the honest
+verdict is that W-10 is a net downgrade: in VT-supporting browsers it replaces the richer W-9 fade-rise
+(translateY+opacity) with a plain opacity cross-fade on snapshot pseudo-elements, and it regressed the two
+W-9 sweep checks (38/45 with W-10 vs 40/45 without). Dropped it; clean main's W-9 already passes. The branch
+is now fully superseded.
+
+**Reports charts verified rendering.** Parent-built `GOOS=js GOARCH=wasm` (rc=0) and drove `/reports` via
+`e2e/reports_charts_verify.mjs`: 10 donut arc slices, 58 ranked-bar rects, 6 area draw-in paths, 5 chart
+hosts — identical in dark and light, 7/7. The chart variety (G9.1a) is already integrated on the `uiw.Chart`
+primitive in current main; the `be26b4f` rescue branch (14 bespoke cards) is redundant and droppable.
+
+**Note:** `internal/app/shell.go` has uncommitted Cloud-sync UI wiring (`UpgradeSheet`/`SyncChip`/
+`CloudMention`, §7.11) from another in-progress effort — left untouched (separate feature, separate commit).
+
 ## 2026-06-24 — B34 Appearance page + de-crowd; WONDER perceptibility fix + e2e suite; worktree cleanup
 
 **B34 — Appearance page.** Extracted the theming engine out of the overcrowded Settings panel (G21: 23

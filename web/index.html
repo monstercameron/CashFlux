@@ -230,7 +230,7 @@
         --wonder-dur-slow: 300ms;
         --wonder-ease: cubic-bezier(.2,.75,.2,1);
         --wonder-ease-out: cubic-bezier(.16,1,.3,1);
-        --wonder-lift: 2px;                    /* hover rise distance */
+        --wonder-lift: 5px;                    /* hover rise distance (>=4px so the lift reads, W-1) */
         --wonder-press: .975;                  /* active/click scale */
         --wonder-shadow: 0 6px 22px rgba(0,0,0,.16);
       }
@@ -1283,6 +1283,47 @@
       .prio-high { background: #3b0d0d; color: #fca5a5; border: 1px solid #7f1d1d; }
       .prio-med { background: #2a230c; color: #fcd34d; border: 1px solid #854d0e; }
       .prio-low { background: #0c2a17; color: #86efac; border: 1px solid #166534; }
+
+      /* ───────────────────────────────────────────────────────────────────
+         WONDER override hardening (W-1/W-2/W-4/W-11). These re-assert the
+         flourish transforms LATE in the cascade so later base component rules
+         can't silently clobber them:
+           • .card / .w hover-lift was being zeroed by .wonder-reveal.in-view
+             { transform:none } (equal specificity, later source order). The
+             `html` prefix adds +1 element specificity so the lift wins.
+           • a later `.btn { transition: filter }` rule dropped the `transform`
+             transition the press-scale (W-2) animates through — re-added here.
+           • the row stagger (W-11) is hard-killed when wonder is off, beating
+             the per-nth-child rules that wire it (which out-specify the plain
+             off-guard above).
+         Every transform scales by --wonder-on, which resolves to 0 under
+         [data-wonder="off"] and prefers-reduced-motion, so these stay
+         identity (no movement) in those modes — no extra off-guard needed. */
+      html .card:hover,
+      html .w:not(.drag):hover {
+        transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on)));
+        box-shadow: var(--wonder-shadow);
+      }
+      /* !important is required here (and only here): list rows carry the
+         wonder-row-enter entrance animation with fill-mode:both, whose final
+         keyframe is `transform: none`. A filled animation's value outranks every
+         non-important author rule regardless of specificity, so the hover nudge
+         can only win with !important. Still off-safe — translateX scales by
+         --wonder-on, which is 0 under off/reduced-motion. */
+      html .row:not(.txn-table .row):hover {
+        transform: translateX(calc(3px * var(--wonder-on))) !important;
+      }
+      html .btn,
+      html .data-btn, html .seg-btn, html .add-item, html .menu-btn, html .icon-btn {
+        transition: transform var(--wonder-dur-fast) var(--wonder-ease),
+                    filter 0.12s ease,
+                    background-color var(--wonder-dur-fast) ease,
+                    color var(--wonder-dur-fast) ease;
+      }
+      [data-wonder="off"] .rows .row,
+      [data-wonder="off"] .list-rows .row,
+      [data-wonder="off"] .rows .row:not(.txn-table .row),
+      [data-wonder="off"] .list-rows .row:not(.txn-table .row) { animation: none !important; }
     </style>
 
     <!-- ============================================================
@@ -2132,6 +2173,40 @@
         #cf-applock-setup { animation: cf-applock-fade .25s ease both; }
       }
       @keyframes cf-applock-fade { from { opacity: 0; } to { opacity: 1; } }
+
+      /* §7.11 Cloud-sync status chip (by the workspace switcher) */
+      .sync-chip { margin: 0 0.75rem 0.4rem; padding: 0.2rem 0.5rem; border-radius: 999px;
+        font-size: 0.72rem; font-weight: 600; border: 1px solid var(--border); background: var(--bg-elev);
+        color: var(--text-dim); cursor: pointer; width: calc(100% - 1.5rem); justify-content: flex-start; }
+      .sync-chip:hover { color: var(--text); border-color: var(--accent); }
+      .sync-chip .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+      .sync-chip .sync-pending { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.8; }
+      .sync-ok   { color: var(--up, #54b884); }
+      .sync-busy .sync-dot { animation: cf-pulse 1s ease-in-out infinite; }
+      .sync-off  { color: var(--text-faint); }
+      .sync-warn { color: var(--warn, #f59e0b); }
+      .sync-err  { color: var(--danger); }
+      @keyframes cf-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+      /* §7.11 First-run Cloud mention (calm, dismissible, in the rail) */
+      .cloud-mention { margin: 0 0.75rem 0.6rem; padding: 0.6rem 0.7rem; border-radius: 8px;
+        border: 1px solid var(--border); background: var(--bg-elev); }
+      .cloud-mention-title { font-size: 0.8rem; font-weight: 600; color: var(--text); margin: 0; }
+      .cloud-mention-body { margin: 0.15rem 0 0; }
+
+      /* §7.11 Contextual upgrade sheet (non-blocking bottom sheet) */
+      .upsheet-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end;
+        justify-content: center; background: rgba(4,4,6,.45); }
+      .upsheet { width: 100%; max-width: 420px; margin: 0 0.75rem 0.75rem; padding: 1.1rem 1.2rem 1.25rem;
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+        box-shadow: 0 20px 50px -16px rgba(0,0,0,.6); }
+      .upsheet-title { font-family: var(--font-display),'Fraunces',serif; font-size: 1.15rem; font-weight: 600; margin: 0 0 0.5rem; }
+      .upsheet-benefits { margin: 0 0 0.6rem; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.2rem; }
+      .upsheet-price { margin: 0.2rem 0; }
+      .upsheet-trust { margin: 0 0 0.2rem; }
+      @media (prefers-reduced-motion: no-preference) {
+        .upsheet { animation: cf-applock-fade .2s ease both; }
+      }
     </style>
   </head>
   <body>

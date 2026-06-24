@@ -288,6 +288,21 @@ and every commit updates this file under `Unreleased`.
   member reassign panel moves focus to its select.
 
 ### Fixed
+- **WONDER amplification fixes actually landed in `main` (W-1/W-2/W-4/W-11).** The earlier "lift 5px /
+  hover + row + off-suppression" fixes were made in a worktree that was removed before committing, so
+  `main` still shipped the imperceptible values and `e2e/wonder.spec.mjs` ran 40/45. Re-derived and
+  committed them as a late **WONDER override-hardening block** in `web/index.html`: `--wonder-lift` 2px→5px
+  (hover lift now ≥4px perceptibility), and the hover/press transforms re-asserted after the base
+  component rules that were silently clobbering them. Root cause newly diagnosed: list rows carry the
+  `wonder-row-enter` entrance animation (`fill-mode: both`, final keyframe `transform: none`), and a
+  filled animation's value outranks every non-`!important` author rule regardless of specificity — so the
+  W-4 row-hover nudge needs `!important` (still off-safe; it scales by `--wonder-on`→0). Suite now **45/45**.
+- **W-10 route cross-fade deliberately NOT shipped.** The stranded `8654d27` branch's View-Transitions-API
+  cross-fade was recovered, fixed (its `defer cb.Release()` freed the `js.Func` before `startViewTransition`
+  invoked it asynchronously — a use-after-release crash on every Chrome navigation), and verified — then
+  rejected: it *suppresses* the richer W-9 fade-rise (replacing translateY+opacity with a plain opacity
+  cross-fade on snapshot pseudo-elements) and regressed the two W-9 sweep checks. Net downgrade; clean
+  main's W-9 transitions already pass.
 - **Customize no longer duplicates a formula on loadâ†’save (L #43).** Editing a saved formula now updates
   it in place (the editor tracks the loaded id) instead of minting a new id on every Save. Gate:
   `e2e/formula_save_inplace_check.mjs`.
