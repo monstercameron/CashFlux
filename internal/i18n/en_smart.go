@@ -26,6 +26,15 @@ var smartKeys = Catalog{
 	"smart.tierAI":        "AI",
 	"smart.perUse":        "/use",
 	"smart.needsProvider": "needs a provider",
+
+	// AI feature controls.
+	"smart.aiTitle":         "Ask & analyze",
+	"smart.aiNeedsProvider": "These AI features need an inference provider. Add an OpenAI key (or connect the hosted backend) in Settings to use them.",
+	"smart.aiCostPrefix":    "about",
+	"smart.askTitle":        "Ask about your accounts",
+	"smart.askPlaceholder":  "e.g. Which account grew the most this year?",
+	"smart.ask":             "Ask",
+	"smart.asking":          "Asking…",
 }
 
 func init() {

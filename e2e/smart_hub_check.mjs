@@ -114,6 +114,27 @@ async function gotoSmart(page) {
       "dismissing removes the insight card",
     );
 
+    // --- 6. AI feature: honest cost badge + provider gating --------------
+    // The A5 (account Q&A) row is an AI feature: its badge must show the AI tier,
+    // a per-use cost, and — with no provider configured in this fresh context —
+    // a "needs a provider" hint. This is the cost-transparency promise for AI.
+    const a5Row = page.locator('[data-testid="smart-feature-SMART-A5"]');
+    ok(await a5Row.count() > 0, "SMART-A5 (AI) toggle row present");
+    const a5Text = await a5Row.innerText();
+    ok(/\bAI\b/.test(a5Text), "A5 row shows the AI tier badge");
+    ok(/\/use/.test(a5Text), "A5 row shows a per-use cost");
+    ok(/needs a provider/i.test(a5Text), "A5 row warns it needs a provider (none configured)");
+
+    // Enabling an AI feature with no provider surfaces the gated AI section
+    // (a hint to configure a provider), never a dead control.
+    const a5Toggle = a5Row.locator('button, input, [role="switch"]').first();
+    await a5Toggle.click();
+    await page.waitForTimeout(1000);
+    await dismissOverlay(page);
+    ok(await page.locator('[data-testid="smart-ai"]').count() > 0, "enabling an AI feature shows the AI section");
+    const aiText = await page.locator('[data-testid="smart-ai"]').innerText();
+    ok(/provider/i.test(aiText), "AI section explains a provider is required (honest gating, no dead control)");
+
     const releasedFnOnly = consoleErrors.every((e) => /released function/i.test(e));
     if (consoleErrors.length && !releasedFnOnly) {
       console.log("  console errors (non-gating):", consoleErrors.slice(0, 5));

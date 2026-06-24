@@ -7,6 +7,7 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartai"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -33,39 +34,46 @@ func SmartHub() ui.Node {
 	weekStart := pr.WeekStartWeekday()
 	backendAI := pr.Normalize().BackendActive()
 	hasProvider := aiProviderConfigured(app, backendAI)
+	conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 
 	settings := uistate.LoadSmartSettings()
 	insights := runSmart(app, weekStart, settings)
 
-	// Only surface features that actually do something today (have a Free engine),
-	// so no toggle is a dead end.
-	var enabledCount int
+	// Count what's enabled, split by tier, to choose the right empty states.
+	var freeEnabled, aiEnabled int
 	for _, code := range settings.EnabledCodes() {
 		if smartengine.HasEngine(code) {
-			enabledCount++
+			freeEnabled++
+		} else if smartai.Implemented(code) {
+			aiEnabled++
 		}
 	}
 
 	return Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap4)),
 		Attr("data-testid", "smart-hub"),
 
-		// Insights section — the glanceable payoff.
-		smartInsightsSection(insights, enabledCount),
+		// Insights section — the glanceable payoff from the Free engines.
+		smartInsightsSection(insights, freeEnabled, freeEnabled+aiEnabled > 0),
+
+		// Interactive AI features (e.g. account Q&A), gated on a configured provider.
+		smartAISection(settings, conn, hasProvider),
 
 		// Manage section — the opt-in catalog with honest cost labels.
 		smartManageSection(settings, hasProvider),
 	)
 }
 
-// smartInsightsSection renders the active insights, or a calm empty/onboarding
-// state when none are present.
-func smartInsightsSection(insights []smart.Insight, enabledCount int) ui.Node {
+// smartInsightsSection renders the active Free-engine insights, or a calm
+// empty/onboarding state. anyEnabled covers AI features too, so the onboarding
+// copy only shows when nothing at all is on; when only AI features are enabled
+// the section steps aside (the AI section carries the value).
+func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled bool) ui.Node {
 	var body ui.Node
 	switch {
-	case enabledCount == 0:
-		body = Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap2)),
-			P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.onboard")),
-		)
+	case !anyEnabled:
+		body = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.onboard"))
+	case freeEnabled == 0:
+		return Fragment() // only AI features on — nothing to show here
 	case len(insights) == 0:
 		body = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.allClear"))
 	default:
@@ -83,7 +91,7 @@ func smartInsightsSection(insights []smart.Insight, enabledCount int) ui.Node {
 func implementedFeaturesForPage(p smart.Page) []smart.Feature {
 	var out []smart.Feature
 	for _, f := range smart.FeaturesForPage(p) {
-		if smartengine.HasEngine(f.Code) {
+		if smartengine.HasEngine(f.Code) || smartai.Implemented(f.Code) {
 			out = append(out, f)
 		}
 	}
