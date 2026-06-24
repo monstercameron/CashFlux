@@ -24,6 +24,7 @@ func init() {
 	register("SMART-BL4", bl4Autopay)
 	register("SMART-BL5", bl5OptimalPayDate)
 	register("SMART-BL8", bl8PaycheckGrouping)
+	register("SMART-BL10", bl10PayAllDue)
 	register("SMART-BL15", bl15GracePeriod)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
@@ -101,6 +102,36 @@ func bl1PredictVariable(in Input) []smart.Insight {
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
 	}
 	return out
+}
+
+const bl10DueWindow = 5 // "due soon" window for the pay-all nudge
+
+// SMART-BL10 — One-tap pay-all-due. When several bills fall due within a short
+// window, surfaces them together so they can be handled in one pass.
+func bl10PayAllDue(in Input) []smart.Insight {
+	var n int
+	var total int64
+	for _, b := range bills.UpcomingAll(in.Accounts, in.Recurring, in.Now) {
+		if b.DaysUntil < 0 || b.DaysUntil > bl10DueWindow {
+			continue
+		}
+		n++
+		total += in.toBaseMinor(b.Amount.Amount, b.Amount.Currency)
+	}
+	if n < 2 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-BL10",
+		Page:    smart.PageBills,
+		Key:     "SMART-BL10:" + in.Now.Format("2006-01-02"),
+		Title:   plural(int64(n), "bill") + " due in the next few days",
+		Detail: plural(int64(n), "bill") + " totaling about " + in.baseMoney(total).Format(2) +
+			" are due within " + plural(int64(bl10DueWindow), "day") + ". Review and clear them together.",
+		Severity: smart.SeverityWarn,
+	}.WithAmount(in.baseMoney(total)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+	return []smart.Insight{ins}
 }
 
 // SMART-BL5 — Optimal pay-date suggestion. When bills cluster before the next

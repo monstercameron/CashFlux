@@ -572,6 +572,49 @@ func TestG17AutoContribute(t *testing.T) {
 	}
 }
 
+func TestSU9RenewalReminders(t *testing.T) {
+	in := baseInput() // now June 15
+	// Charges on the 20th → last May 20 → next renewal June 20 (5 days out).
+	var txns []domain.Transaction
+	for _, m := range []time.Month{time.March, time.April, time.May} {
+		txns = append(txns, domain.Transaction{ID: "n" + m.String(), AccountID: "x",
+			Date: time.Date(2026, m, 20, 0, 0, 0, 0, time.UTC), Amount: usd(-1599), Desc: "Netflix"})
+	}
+	in.Transactions = txns
+	got := su9RenewalReminders(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 renewal reminder, got %d: %+v", len(got), got)
+	}
+	if got[0].Action == nil || got[0].Action.Kind != smart.ActionCreateTask {
+		t.Errorf("expected a create-task action")
+	}
+}
+
+func TestBL10PayAllDue(t *testing.T) {
+	in := baseInput() // now June 15
+	in.Recurring = []domain.Recurring{
+		{ID: "r1", Label: "Phone", Amount: usd(-8000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC)},
+		{ID: "r2", Label: "Internet", Amount: usd(-6000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 18, 0, 0, 0, 0, time.UTC)},
+	}
+	got := bl10PayAllDue(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 pay-all insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 14000 {
+		t.Errorf("total = %d, want 14000", got[0].Amount.Amount)
+	}
+}
+
+func TestBL10SingleBillNoNudge(t *testing.T) {
+	in := baseInput()
+	in.Recurring = []domain.Recurring{
+		{ID: "r1", Label: "Phone", Amount: usd(-8000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 17, 0, 0, 0, 0, time.UTC)},
+	}
+	if got := bl10PayAllDue(in); len(got) != 0 {
+		t.Errorf("one bill — want 0, got %d", len(got))
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

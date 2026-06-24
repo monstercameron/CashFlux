@@ -17,8 +17,40 @@ func init() {
 	register("SMART-SU4", su4AnnualSavings)
 	register("SMART-SU6", su6CostCreep)
 	register("SMART-SU8", su8Forgotten)
+	register("SMART-SU9", su9RenewalReminders)
 	register("SMART-SU11", su11Zombie)
 	register("SMART-SU14", su14CancellationTally)
+}
+
+const su9RenewalWindow = 7 // remind this many days before a renewal
+
+// SMART-SU9 — Renewal-timed reminder automation. For a subscription renewing
+// soon, offers a one-tap "should I keep this?" to-do a few days ahead.
+func su9RenewalReminders(in Input) []smart.Insight {
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, s := range subs {
+		days := int(s.NextRenewal.Sub(in.Now).Hours() / 24)
+		if days < 0 || days > su9RenewalWindow {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU9",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU9:" + strings.ToLower(s.Name) + ":" + s.NextRenewal.Format("2006-01-02"),
+			Title:   s.Name + " renews " + s.NextRenewal.Format("Jan 2"),
+			Detail: s.Name + " (" + mny(s.Amount, s.Currency).Format(2) + ") renews on " + s.NextRenewal.Format("Jan 2") +
+				". Decide whether to keep it before it charges again.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
+				TaskTitle: "Keep " + s.Name + "? Renews " + s.NextRenewal.Format("Jan 2"),
+				TaskNotes: s.Name + " renews " + s.NextRenewal.Format("Jan 2") + " for " + mny(s.Amount, s.Currency).Format(2) + "."}))
+	}
+	return out
 }
 
 // SMART-SU6 — Per-subscription cost-creep history. Surfaces how much a

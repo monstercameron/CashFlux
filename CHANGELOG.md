@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engines SU9 + BL10 (2026-06-24):** **SU9** renewal-timed reminders (offers a one-tap "keep this?" to-do a few days before a subscription renews); **BL10** one-tap pay-all-due (surfaces several bills due within a few days together). 57 Free engines + 17 AI = 74 SMART items. Table-driven tests.
+
 - **SMART series — Free engines B7 + G17 (2026-06-24):** **B7** seasonal-budget adjustment (detects categories whose monthly spend swings widely and suggests month-specific budgets); **G17** recurring auto-contribution nudge (for a deadline goal + detected payday, suggests automating an on-payday contribution). 55 Free engines + 17 AI = 72 SMART items. Table-driven tests.
 
 - **SMART series — T10 (AI import-mapping) + BL5/BL15 Free engines (2026-06-24):** **T10** (AI) maps pasted CSV columns to date/amount/merchant/category via the input control. **BL5** suggests timing flexible payments to just after payday when bills cluster pre-paycheck. **BL15** learns each liability's real payment timing from history and shows the typical days-after-due (the effective last-safe-pay date). 53 Free engines + 17 AI features. Tests.
