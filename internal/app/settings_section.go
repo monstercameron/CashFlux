@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -82,6 +84,8 @@ type settingsRightProps struct {
 	OnAiToggle    func(bool)
 	AiKey         string
 	OnKey         uic.Handler // UseEvent
+	KeySet        bool        // a cloud AI key is stored server-side (§7.11)
+	OnRemoveKey   uic.Handler // UseEvent — clears the server-side key
 	OnRememberKey func(bool)
 	OnModel       uic.Handler // UseEvent
 	CurModel      string
@@ -219,6 +223,13 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey")),
 			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
+		// Cloud AI-key status: "Key set" + Remove, shown once a key has been uploaded (§7.11).
+		If(p.KeySet, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
+			Span(css.Class(tw.Text12, tw.TextDim), uistate.T("settings.serverKeySet")),
+			Button(css.Class("btn", "btn-sm", "btn-del"), Type("button"), OnClick(p.OnRemoveKey), uistate.T("settings.removeKey")),
+		)),
+		// Signed-in devices list + per-device revoke (§7.11) — shown once authenticated.
+		If(strings.TrimSpace(p.ServerToken) != "", uic.CreateElement(DevicesList)),
 		If(p.CloudSelected, Fragment(
 			H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),

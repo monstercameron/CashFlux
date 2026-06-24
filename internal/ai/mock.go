@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package ai — mock provider (L8).
 //
 // MockProvider is a deterministic, zero-network AI backend that returns canned

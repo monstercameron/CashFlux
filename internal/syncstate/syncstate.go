@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package syncstate holds pure helpers for client/backend sync decisions.
 package syncstate
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -17,6 +19,9 @@ type ChartProps struct {
 	Height string // CSS height of the chart box, default "160px"
 	Class  string // extra classes on the container
 	Label  string // accessible description (the chart is role="img")
+	// CurrencySymbol is the base-currency symbol used to render any axis whose
+	// chartspec format is "money" (e.g. "$"/"€"/"£"). Empty defaults to "$".
+	CurrencySymbol string
 }
 
 // Chart renders a chartspec.Spec with D3. The Go side owns a managed container
@@ -52,7 +57,7 @@ func chartD3(props ChartProps) uic.Node {
 			return nil
 		}
 		if fn := js.Global().Get("cashfluxRenderChart"); fn.Type() == js.TypeFunction {
-			fn.Invoke(el, specJSON)
+			fn.Invoke(el, specJSON, props.CurrencySymbol)
 		}
 		return func() {
 			if !el.IsNull() && !el.IsUndefined() {
@@ -63,7 +68,7 @@ func chartD3(props ChartProps) uic.Node {
 				}
 			}
 		}
-	}, specJSON)
+	}, specJSON+"|"+props.CurrencySymbol)
 
 	cls := "cf-chart"
 	if props.Class != "" {

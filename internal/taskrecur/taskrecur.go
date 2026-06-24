@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package taskrecur contains the pure logic for recurring task auto-spawning.
 // It has no syscall/js dependency and is safe to unit-test on native Go.
 package taskrecur

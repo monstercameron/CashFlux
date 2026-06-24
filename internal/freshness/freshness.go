@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package freshness decides when an account balance is likely stale and worth a
 // friendly nudge to update. Balances that drift on their own — credit cards,
 // loans, lines of credit — go stale sooner than slow-moving savings. Recurring

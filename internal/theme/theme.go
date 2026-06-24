@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package theme is the pure, typed design-token model behind CashFlux's
 // appearance engine. A Theme is a set of named tokens — colors, corner radius,
 // fonts, a font-size scale, and density — that the UI layer turns into CSS

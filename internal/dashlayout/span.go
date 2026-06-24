@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package dashlayout
 
 // ClampSpan keeps a grid span within [1, max]: values below 1 collapse to 1 and

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package theme
 
 import "github.com/monstercameron/CashFlux/internal/contrast"

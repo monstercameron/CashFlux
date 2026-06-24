@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package ai holds the OpenAI client used for CashFlux's Phase 2 intelligence
 // features. The request/response shapes and their JSON codec live here as pure
 // Go (unit-tested via round-trips, no network); the browser fetch transport that

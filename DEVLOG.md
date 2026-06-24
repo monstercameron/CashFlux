@@ -98,6 +98,16 @@ Pushed the doable-now backlog further (90% → 91% of TODOS cleared), all green:
   the top of the dense two-column settings panel; clicking a section scrolls its heading into view (located
   by heading text, so the contested column components need no edits). Verified via `e2e/verify_setnav.mjs`
   (12 buttons; Languages jumps 2151px → 420px).
+- **playwrightgo `gwc` (23676)** — built `.tools/gwc-pw.exe` (`-tags playwrightgo`) in a throwaway module
+  (`go get …/tools/gwc` + `go build`) so the app go.sum stays clean. Verified: `gwc-pw dom … aside.rail`
+  drives Chromium, returns the rail DOM (`ok:true`).
+- **Seg sliding pill (§6.16 / 24555)** — prior attempt used a CSS custom property (`--seg-idx`) the html
+  `Style()` helper drops. Fix: measure the active segment's `offsetLeft`/`offsetWidth` in a `UseEffect` and
+  write a *standard* `transform`/`width` via `js` `setProperty`; `.seg-btn.active` goes transparent so the
+  `.seg-pill` shows through and transitions the slide. Verified (`e2e/verify_segpill.mjs`): slides
+  Dark@253 → System@361, stays aligned. **Nav pill (24557) left honest** — same technique, but the
+  sectioned/scrollable/collapsible rail makes a single vertical indicator jank-prone; it's `[L]`/"consider,"
+  so declined rather than shipped janky (a structure call, not a framework block).
 
 **Still honestly unchecked** (each individually examined, not lazily skipped): the playwrightgo-tagged
 `gwc` (building it from the app module would pollute go.sum with TUI/playwright deps; the *capability* —

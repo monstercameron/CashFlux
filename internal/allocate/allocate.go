@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package allocate ranks candidate destinations for new capital (savings,
 // investments, high-interest debt) by scoring each on returns, stability,
 // liquidity, and debt reduction, then combining those by a user's weight

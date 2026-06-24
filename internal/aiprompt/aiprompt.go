@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package aiprompt assembles the Insights agent's system prompt (the MCP "prompts"
 // half of C89): it stitches the house rules, the bounded financial-context block
 // (from internal/aicontext), and a manifest of the available tools (from the C82

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package extract turns an AI vision model's free-form JSON reply into tidy,
 // reviewable transaction rows. Models are inconsistent — a top-level array or an
 // object wrapper, amounts as numbers or strings, varied field names, sometimes

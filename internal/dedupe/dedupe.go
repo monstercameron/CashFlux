@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package dedupe finds likely-duplicate transactions — the same charge imported
 // or entered twice, a common mess after a CSV import. It is a pure read over the
 // transactions (no store, no syscall/js) and is unit-tested on native Go; the UI

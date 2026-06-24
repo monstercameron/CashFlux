@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package payoff
 
 // Progress measures debt-payoff progress against a baseline snapshot of what was

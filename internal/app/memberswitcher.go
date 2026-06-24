@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package app contains the application shell: Chrome, routing, and global

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package cashflow projects an account's running balance forward day by day from
 // known upcoming events (bills due, paychecks arriving) and flags the first day it
 // would dip below a buffer — the "you'll overdraft on Jul 2" safety net for living

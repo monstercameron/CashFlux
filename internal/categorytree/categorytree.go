@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package categorytree organizes a flat category list into a parent/child
 // hierarchy for display and grouping. It is defensive about bad data — an orphan
 // (parent not present) is treated as a root, and cycles can never loop — so the

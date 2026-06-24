@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package spendsummary turns a set of extracted document rows into a per-month
 // spend summary — how much went out and came in each calendar month — so the
 // Documents screen can show "what does this statement say I spent?" before any

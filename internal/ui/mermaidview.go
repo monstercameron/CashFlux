@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -14,6 +16,10 @@ type MermaidProps struct {
 	Source string // Mermaid diagram source (from internal/mermaid generators)
 	Class  string // extra classes on the container
 	Label  string // accessible description (the diagram is role="img")
+	// ValuePrefix is prepended to Sankey flow values (e.g. the base-currency
+	// symbol "$"/"€"/"£") so the diagram reads "Income $4068", not a bare number.
+	// Empty for diagrams without monetary values (flowcharts, precedence chains).
+	ValuePrefix string
 }
 
 // Mermaid renders Mermaid source to inline SVG. Like Chart, the Go side owns a
@@ -38,7 +44,7 @@ func mermaidView(props MermaidProps) uic.Node {
 			return nil
 		}
 		if fn := js.Global().Get("cashfluxRenderMermaid"); fn.Type() == js.TypeFunction {
-			fn.Invoke(el, src)
+			fn.Invoke(el, src, props.ValuePrefix)
 		}
 		return func() {
 			if !el.IsNull() && !el.IsUndefined() {

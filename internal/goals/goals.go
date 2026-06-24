@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package goals computes savings-goal progress: how much remains, percent
 // complete, whether the goal is met, and a read-only projected completion date
 // given an assumed monthly contribution.

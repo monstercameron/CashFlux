@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package lockquotes holds the curated, rotating lines shown on the lock screen.
 // Rotation is deterministic (caller passes a day/index) — no randomness, so it's
 // safe in logic packages (Math.random is banned) and stable for tests. No network.

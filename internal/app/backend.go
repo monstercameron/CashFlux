@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -115,6 +117,38 @@ func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onErro
 		}
 		if err == nil {
 			onError("Backend rejected the key upload.")
+			return
+		}
+		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
+			onError(st.Message())
+			return
+		}
+		onError(err.Error())
+	}()
+}
+
+// removeOpenAIKeyFromBackend deletes the server-stored OpenAI key by sending an
+// empty key to AISetKey — the server treats that as a remove (§7.11). onDone fires
+// when the key is cleared (out.Stored == false).
+func removeOpenAIKeyFromBackend(endpoint, token string, onDone func(), onError func(string)) {
+	endpoint = normalizedBackendEndpoint(endpoint)
+	token = strings.TrimSpace(token)
+	if token == "" {
+		onError("Sign in before removing the cloud key.")
+		return
+	}
+	go func() {
+		ctx := context.Background()
+		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
+		if err != nil {
+			onError("Couldn't reach the backend server.")
+			return
+		}
+		defer conn.Close()
+		var out backendrpc.SetKeyResponse
+		err = conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{Provider: "openai", Key: ""}, &out, backendrpc.JSONCallOptions()...)
+		if err == nil {
+			onDone()
 			return
 		}
 		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package auditview is a shared bridge between the app and screens packages
 // (C78 phase 4). It holds the session-scoped audit feed and the undo-action
 // callback slots so that internal/app can write to them and internal/screens can

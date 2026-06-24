@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -50,12 +52,29 @@ func QuickAddHost() uic.Node {
 	}
 
 	accounts := app.Accounts()
+	// Active member drives the per-member default-account preselect (§1.19); read at
+	// a stable hook position so the conditional fallback below never reorders hooks.
+	activeMember := uistate.UseActiveMember().Get()
 	today := dateutil.FormatDate(time.Now())
 	// Effective values: fall back to the first account and today when the user
 	// hasn't touched those fields, so the form works without a pre-render Set.
 	effAcct := acctID.Get()
-	if effAcct == "" && len(accounts) > 0 {
-		effAcct = accounts[0].ID
+	if effAcct == "" {
+		// Prefer the active member's per-member default account (§1.19) when they've
+		// set one and it still exists, otherwise the first account.
+		if am := activeMember; am != "" {
+			for _, mb := range app.Members() {
+				if mb.ID == am && mb.Prefs.DefaultAccountID != "" {
+					if _, ok := accountByID(accounts, mb.Prefs.DefaultAccountID); ok {
+						effAcct = mb.Prefs.DefaultAccountID
+					}
+					break
+				}
+			}
+		}
+		if effAcct == "" && len(accounts) > 0 {
+			effAcct = accounts[0].ID
+		}
 	}
 	effDate := date.Get()
 	if effDate == "" {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package store persists CashFlux data. This file defines the pure, platform-
 // independent core: the Dataset aggregate, Settings, and schema-versioned JSON
 // export/import (with migration). The IndexedDB-backed implementation lives in a

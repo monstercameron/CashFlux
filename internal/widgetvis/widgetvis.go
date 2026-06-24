@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package widgetvis tracks which dashboard widget instances are hidden. It is a
 // tiny pure value type (no syscall/js) so visibility is unit-testable and shared
 // between the dashboard (which skips hidden tiles and reflows around them) and the

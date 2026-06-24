@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package dashlayout models the dashboard bento layout: where each widget sits
 // in the grid (column/row and spans) and the operations the reconfigure UI needs
 // — swapping two widgets and resizing spans. Pure Go, no platform or rendering

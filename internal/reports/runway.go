@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package reports
 
 // Runway estimates how long a cash balance would last at a steady monthly burn —

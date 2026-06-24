@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package screens holds the CashFlux screen registry and the (currently stub)

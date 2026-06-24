@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package tasktree arranges flat to-do tasks into their parent/child hierarchy
 // for display (C72). It is pure (no syscall/js) and table-tested: it flattens the
 // tree into a depth-tagged render order and computes a task's descendants for

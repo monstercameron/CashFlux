@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package app — boot/persist wiring for dataset-at-rest encryption (C45).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package currency provides a currency registry and multi-currency conversion
 // for CashFlux. Accounts each hold their own currency; aggregate views convert
 // to a user-chosen base currency using a manually maintained rate table.

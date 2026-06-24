@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package widgetstyle turns a widget's saved styling config (colors, font, weight,
 // shape, border, shadow) into the inline CSS that overrides the global theme for
 // that tile. It is pure (no syscall/js) so the resolution is unit-testable and

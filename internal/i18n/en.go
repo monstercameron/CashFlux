@@ -1385,6 +1385,9 @@ var english = Catalog{
 
 	// Members screen
 	"members.add":                "Add member",
+	"members.prefDateStyle":      "Date style (personal)",
+	"members.prefDefaultAccount":  "Default account (personal)",
+	"members.prefInherit":         "Inherit household default",
 	"members.name":               "Name",
 	"members.color":              "Member color",
 	"members.nameRequired":       "Enter a member name.",

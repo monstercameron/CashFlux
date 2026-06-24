@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package reports is the pure, client-side reporting core for CashFlux (B21).
 // Each report is a deterministic function over the domain data (transactions,
 // rates) that returns plain result rows — no syscall/js, no charting, no I/O —

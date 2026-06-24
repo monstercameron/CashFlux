@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package syncbridge builds the browser-to-backend gRPC tunnel transport.
 package syncbridge
 

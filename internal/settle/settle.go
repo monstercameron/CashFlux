@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package settle turns a set of shared expenses (who paid, and each member's
 // share) plus any recorded settlements into each member's net balance and a
 // minimal set of "X pays Y $Z" transfers that zero everyone out — the classic

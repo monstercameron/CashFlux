@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package forecast projects a balance (or net worth) forward over a horizon from
 // recurring monthly cash flows plus one-time events. Amounts are integer minor
 // units (inflows positive, outflows negative). Pure Go, no platform dependencies;

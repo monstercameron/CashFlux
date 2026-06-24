@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -191,10 +193,9 @@ func Activity() ui.Node {
 
 	entries := buildActivityFeed(app)
 
-	// Apply entity-type filter when one is selected.
-	if selectedFilter != "" {
-		entries = actFilterByEntityType(entries, selectedFilter)
-	}
+	// Apply entity-type filter when one is selected. The filter logic lives in the
+	// pure, unit-tested auditlog package (§1.9 — no logic leaks into view code).
+	entries = auditlog.FilterByEntityType(entries, selectedFilter)
 
 	navTitle := uistate.T("nav.activity")
 	if navTitle == "nav.activity" {
@@ -306,20 +307,6 @@ func buildActivityFeed(app *appstate.App) []auditlog.Entry {
 	return entries
 }
 
-// ─── filtering ───────────────────────────────────────────────────────────────
-
-// actFilterByEntityType returns only the entries whose EntityType matches the
-// given type string (case-insensitive match against the stored value). It does
-// not modify the input slice.
-func actFilterByEntityType(entries []auditlog.Entry, entityType string) []auditlog.Entry {
-	out := make([]auditlog.Entry, 0, len(entries))
-	for _, e := range entries {
-		if e.EntityType == entityType {
-			out = append(out, e)
-		}
-	}
-	return out
-}
 
 // ─── small helpers (prefixed act* to avoid clashing with other screens) ───────
 

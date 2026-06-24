@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package chartspec is a pure, declarative description of a chart — the typed Go
 // side of CashFlux's charting, independent of how it's drawn. A Spec names a
 // chart kind, its data series, axes, and display options; helpers validate it and

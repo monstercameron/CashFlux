@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package domain
 
 // AccountByID returns the account with the given id and whether it was found. A

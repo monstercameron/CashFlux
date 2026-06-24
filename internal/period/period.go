@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package period models the dashboard's time-resolution control: a Resolution
 // (week, month, or quarter) plus anchor math to step, label, and turn a
 // from/to anchor pair into a concrete half-open date range for reporting.

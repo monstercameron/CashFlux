@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package undosnap converts between CashFlux's export-JSON wire format and the
 // history.Snapshot type used by the diff/undo engine.
 //

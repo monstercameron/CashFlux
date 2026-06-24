@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package workflow is the pure automation engine: the model for a user's
 // workflow (a trigger, an optional condition, and ordered actions) plus the
 // deterministic, side-effect-free planning that turns a workflow into a list of

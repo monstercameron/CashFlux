@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -60,11 +62,21 @@ func inlineEditForm(props InlineEditFormProps) uic.Node {
 		if doc.IsNull() || doc.IsUndefined() {
 			return nil
 		}
+		// Remember what had focus (the row's Edit button that opened this editor) so
+		// focus returns there when the form closes on save/cancel (§6.7 focus-restore).
+		prev := doc.Get("activeElement")
 		el := doc.Call("querySelector", ".row-edit input:not([type=hidden]), .row-edit select, .row-edit textarea")
 		if !el.IsNull() && !el.IsUndefined() {
 			el.Call("focus")
 		}
-		return nil
+		return func() {
+			if prev.IsNull() || prev.IsUndefined() {
+				return
+			}
+			if prev.Get("focus").Type() == js.TypeFunction {
+				prev.Call("focus")
+			}
+		}
 	}, []any{})
 
 	saveLabel := props.SaveLabel

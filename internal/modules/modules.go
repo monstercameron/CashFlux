@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package modules models which app screens (modules) are visible. Users can hide
 // screens they don't use, but a few core screens are locked and can never be
 // hidden. The logic is pure Go so it unit-tests on native Go; the wasm layer adds

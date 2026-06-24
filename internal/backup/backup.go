@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package backup decides when to remind someone to back up (export) their
 // CashFlux data, so a local-first install doesn't quietly drift far from its
 // last safe copy. It is pure Go with no platform dependencies and is unit-tested

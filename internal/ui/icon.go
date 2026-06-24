@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package ui holds reusable, props-driven view primitives shared across every

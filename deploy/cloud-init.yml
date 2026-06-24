@@ -1,0 +1,24 @@
+#cloud-config
+# CashFlux self-host — cloud-init / user-data for a fresh VPS (DigitalOcean,
+# Hetzner, EC2, any cloud-init host). Installs Docker + git, fetches the repo,
+# generates token material, and brings up the self-host compose stack on first
+# boot. Host-agnostic; no vendor lock-in. Edit CASHFLUX_DOMAIN/TLS email after
+# boot in /opt/cashflux/deploy/cashflux-server.env, then `docker compose ... up -d`.
+#
+# Usage (DigitalOcean): paste this into the droplet's "User data" field at create
+# time. Or: `doctl compute droplet create cashflux --user-data-file deploy/cloud-init.yml ...`
+
+package_update: true
+packages:
+  - git
+  - curl
+  - ca-certificates
+
+runcmd:
+  # get.docker.com installs Docker Engine + the compose plugin.
+  - [ sh, -c, "curl -fsSL https://get.docker.com | sh" ]
+  - [ git, clone, --depth, "1", "https://github.com/monstercameron/CashFlux.git", /opt/cashflux ]
+  # Run the same installer the curl|sh path uses, so the two stay in lockstep.
+  - [ sh, -c, "CASHFLUX_INSTALL_DIR=/opt/cashflux sh /opt/cashflux/deploy/install.sh | tee /var/log/cashflux-install.log" ]
+
+final_message: "CashFlux self-host stack is up. Token + next steps logged to /var/log/cashflux-install.log."

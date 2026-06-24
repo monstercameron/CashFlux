@@ -19,23 +19,32 @@
     return t === "light" ? "default" : "dark";
   }
 
-  function ensureInit() {
+  var lastPrefix = null;
+
+  function ensureInit(valuePrefix) {
     if (!window.mermaid) return false;
     var theme = mermaidTheme();
-    if (theme !== lastTheme) {
+    var prefix = valuePrefix || "";
+    // Re-initialise when EITHER the theme OR the Sankey value prefix changes. The
+    // Go side passes the base-currency symbol ("$"/"€"/"£") so the money-flow
+    // Sankey reads "Income $4068" rather than a bare number; it's per-render config
+    // (not hardcoded) so non-USD households get the correct symbol.
+    if (theme !== lastTheme || prefix !== lastPrefix) {
       window.mermaid.initialize({
         startOnLoad: false,
         securityLevel: "strict",
         theme: theme,
         flowchart: { useMaxWidth: true, htmlLabels: false },
+        sankey: { useMaxWidth: true, prefix: prefix, showValues: true },
       });
       lastTheme = theme;
+      lastPrefix = prefix;
     }
     return true;
   }
 
-  window.cashfluxRenderMermaid = function (el, source) {
-    if (!el || !source || !ensureInit()) return;
+  window.cashfluxRenderMermaid = function (el, source, valuePrefix) {
+    if (!el || !source || !ensureInit(valuePrefix)) return;
     var id = "cf-mmd-" + seq++;
     try {
       // Mermaid 11 render is async and returns { svg }.

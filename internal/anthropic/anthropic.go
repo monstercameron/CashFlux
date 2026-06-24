@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package anthropic shapes requests and responses for Anthropic's Messages API —
 // the one wire dialect that isn't OpenAI-compatible (C81 phase 3). It only builds
 // the request body and parses the response; it does no I/O, so it's pure and

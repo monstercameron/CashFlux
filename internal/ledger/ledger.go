@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package ledger derives balances and totals from accounts and transactions:
 // account balances, running balances, period income/expense, net worth, and
 // per-owner rollups. Cross-currency aggregates convert to the base currency of

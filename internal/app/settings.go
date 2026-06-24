@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -28,6 +30,21 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
+// backendHost extracts the lowercased host[:port] from a server URL, ignoring
+// scheme, path, query, and fragment. Two URLs that differ only in path/query
+// share a host, so editing the path of the same server doesn't drop the session;
+// pointing at a different host does (§3.4 switch-server flow).
+func backendHost(raw string) string {
+	s := strings.TrimSpace(raw)
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	return strings.ToLower(s)
+}
+
 // SettingsHost mounts at the shell root and renders the active settings panel
 // (per-widget or global) as a FlipPanel overlay, driven by the shared settings
 // atom. It renders nothing when no panel is open.
@@ -42,12 +59,15 @@ func SettingsHost() uic.Node {
 	switch target.Kind {
 	case "global":
 		return ui.FlipPanel(ui.FlipPanelProps{
-			Title:   uistate.T("settings.panelTitle"),
-			Width:   "760px",
-			Height:  "min(90vh, 900px)",
-			Back:    uic.CreateElement(globalSettingsForm),
-			OnSave:  func() { uistate.PostNotice(uistate.T("settings.saved"), false) },
-			OnClose: closePanel,
+			Title:  uistate.T("settings.panelTitle"),
+			Width:  "760px",
+			Height: "min(90vh, 900px)",
+			Back:   uic.CreateElement(globalSettingsForm),
+			// Every setting in this panel applies live on change (currency, FX, screens,
+			// freshness, prefs, etc.), so a Save/Cancel footer is misleading — use a
+			// single Close button instead (§6.17).
+			CloseOnly: true,
+			OnClose:   closePanel,
 		})
 	default: // "widget"
 		return ui.FlipPanel(ui.FlipPanelProps{
@@ -532,10 +552,29 @@ func globalSettingsForm() uic.Node {
 		p.ServerMode = prefs.ServerMode(v)
 		savePrefs(p)
 	}
+	// keySet tracks whether a cloud AI key is stored server-side, so the panel can
+	// show "Key set" + a Remove action (§7.11). Persisted locally; set on a
+	// successful upload, cleared on remove or on switching servers.
+	keySet := uic.UseState(lsGet("cashflux:cloud-ai-key-set") != "")
 	onServerURL := uic.UseEvent(func(v string) {
 		serverURL.Set(v)
 		p := prefsAtom.Get()
-		p.ServerURL = strings.TrimSpace(v)
+		next := strings.TrimSpace(v)
+		// Switch-server flow (§3.4): pointing at a different server signs out of the
+		// old one — a token/session issued by one server is meaningless to another —
+		// and re-points sync at the new URL. Local data is untouched; only the cloud
+		// session is cleared. We compare hosts so editing the path/query of the same
+		// server doesn't needlessly drop the session.
+		if backendHost(next) != backendHost(p.ServerURL) && p.ServerToken != "" {
+			p.ServerToken = ""
+			p.ServerCSRF = ""
+			serverToken.Set("")
+			lsSet("cashflux:cloud-ai-key-set", "")
+			keySet.Set(false)
+			setSyncStatus(syncStatus{State: "offline"})
+			notify(uistate.T("settings.serverSwitched"), false)
+		}
+		p.ServerURL = next
 		savePrefs(p)
 	})
 	onServerToken := uic.UseEvent(func(v string) {
@@ -559,7 +598,18 @@ func globalSettingsForm() uic.Node {
 	showGitHubOAuth := containsString(oauthProviders, "github")
 	uploadKey := uic.UseEvent(func() {
 		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
+			lsSet("cashflux:cloud-ai-key-set", "1")
+			keySet.Set(true)
 			notify(uistate.T("settings.serverKeyStored"), false)
+		}, func(msg string) {
+			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
+		})
+	})
+	removeKey := uic.UseEvent(func() {
+		removeOpenAIKeyFromBackend(serverURL.Get(), serverToken.Get(), func() {
+			lsSet("cashflux:cloud-ai-key-set", "")
+			keySet.Set(false)
+			notify(uistate.T("settings.serverKeyRemoved"), false)
 		}, func(msg string) {
 			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
 		})
@@ -710,6 +760,8 @@ func globalSettingsForm() uic.Node {
 		OnTestBackend:     testBackend,
 		OnSyncNow:         syncNow,
 		OnUploadKey:       uploadKey,
+		KeySet:            keySet.Get(),
+		OnRemoveKey:       removeKey,
 		BillingInterval:   billingInterval.Get(),
 		OnBillingInterval: func(v string) { billingInterval.Set(v) },
 		CloudPrice:        cloudPrice,
@@ -768,6 +820,7 @@ func globalSettingsForm() uic.Node {
 	)
 
 	return Div(
+		settingsSectionNav(),
 		Div(css.Class(tw.Grid, tw.GridCols2, tw.GapX7, tw.ContentStart), left, right),
 		debugLog,
 		about,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package money provides a precise monetary value type for CashFlux.
 //
 // Money is represented as an integer count of a currency's minor units (for

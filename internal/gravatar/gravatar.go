@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package gravatar builds Gravatar avatar URLs from a member's email — the pure
 // half of member avatars (C88). A Gravatar URL is the MD5 hash of the trimmed,
 // lowercased email, with an identicon fallback so an address without a Gravatar

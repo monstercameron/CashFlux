@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package logging provides CashFlux's structured logging on top of log/slog.
 // A single Handler writes human-readable lines to an io.Writer (the browser
 // console in the wasm app, stderr natively) and also records entries in a

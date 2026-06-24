@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package dashlayout
 
 // This file holds the ordered-sequence + bin-packing model that drives the

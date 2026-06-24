@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package auditlog is the pure, in-memory audit-log model for CashFlux (C78 phase 4).
 // It stores human-readable entries derived from the diff-based change history and
 // provides convenient query methods. The package has no syscall/js dependency and
@@ -95,6 +97,23 @@ func (l *Log) ByEntity(entityType, entityID string) []Entry {
 	for i := len(l.entries) - 1; i >= 0; i-- {
 		e := l.entries[i]
 		if e.EntityType == entityType && e.EntityID == entityID {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// FilterByEntityType returns the entries whose EntityType matches the given type,
+// preserving order. An empty entityType returns the input unchanged (no filter).
+// This is a pure helper extracted from the activity screen so the filtering logic
+// is unit-tested on native Go rather than leaking into view code (§1.9).
+func FilterByEntityType(entries []Entry, entityType string) []Entry {
+	if entityType == "" {
+		return entries
+	}
+	out := make([]Entry, 0, len(entries))
+	for _, e := range entries {
+		if e.EntityType == entityType {
 			out = append(out, e)
 		}
 	}

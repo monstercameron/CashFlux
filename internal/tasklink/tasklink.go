@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package tasklink provides pure helpers for resolving a domain.Task's
 // RelatedType + RelatedID pair into a display name and navigation route.
 // It has no syscall/js dependency and is fully unit-testable on native Go.

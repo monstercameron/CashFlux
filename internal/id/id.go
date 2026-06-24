@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package id generates stable, collision-resistant identifiers for CashFlux
 // entities. IDs are random 128-bit values rendered as hex, optionally prefixed
 // (e.g. "acc_1a2b…") for readability.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package translate is the pure resolver behind CashFlux's AI-assisted UI
 // translation. English (from the i18n catalog) is always the source of truth;
 // other locales are filled by an AI translator and cached. This package holds

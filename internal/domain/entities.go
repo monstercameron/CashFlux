@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package domain
 
 import (
@@ -19,7 +21,25 @@ type Member struct {
 	Name      string         `json:"name"`
 	Color     string         `json:"color,omitempty"`
 	IsDefault bool           `json:"isDefault,omitempty"`
+	Prefs     MemberPrefs    `json:"prefs,omitempty"`
 	Custom    map[string]any `json:"custom,omitempty"`
+}
+
+// MemberPrefs holds a member's personal overrides layered over the household
+// defaults (§1.19). Every field is optional ("" / zero = inherit the household
+// value); resolution is in internal/memberprefs. Kept as plain strings so the
+// domain stays dependency-light. DateStyle mirrors prefs.DateStyle values
+// ("iso"/"us"/"eu"/"long"); DefaultAccountID / DefaultMemberID seed the quick-add
+// for this member.
+type MemberPrefs struct {
+	DateStyle        string `json:"dateStyle,omitempty"`
+	DefaultAccountID string `json:"defaultAccountId,omitempty"`
+	DefaultMemberID  string `json:"defaultMemberId,omitempty"`
+}
+
+// IsZero reports whether no per-member preference is set (all inherit).
+func (p MemberPrefs) IsZero() bool {
+	return p.DateStyle == "" && p.DefaultAccountID == "" && p.DefaultMemberID == ""
 }
 
 // Account is anything you own (asset) or owe (liability). Optional fields apply

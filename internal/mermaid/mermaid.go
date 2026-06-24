@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package mermaid turns tested domain models into Mermaid diagram source text. It
 // is pure Go (no syscall/js): the wasm layer's ui.Mermaid component renders the
 // returned source to SVG. Generating diagrams from the model (not free text) keeps

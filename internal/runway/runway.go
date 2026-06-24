@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package runway bridges the household's recurring cash flows into the pure
 // cashflow projection engine: it expands each domain.Recurring into the concrete
 // dated events that fall within a horizon, then (optionally) runs the daily

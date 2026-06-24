@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package appstate — goal-specific orchestration methods.
 //
 // This file holds operations that span goal + transaction state (e.g. the

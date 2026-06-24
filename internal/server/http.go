@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package server
 
 import (
@@ -72,6 +74,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 				"/v1/account/export",
 				"/v1/billing/checkout",
 				"/v1/billing/portal",
+				"/v1/billing/status",
 				"/v1/billing/stripe/webhook",
 				"/legal/privacy",
 				"/legal/terms",
@@ -123,6 +126,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("POST /v1/billing/checkout", handleBillingCheckout(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/billing/portal", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/billing/portal", handleBillingPortal(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/billing/status", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/billing/status", handleBillingStatus(cfg, store))
 	mux.HandleFunc("POST /v1/billing/stripe/webhook", handleStripeWebhook(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {

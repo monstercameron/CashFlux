@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package widgetspec is the pure model for custom-page widgets: the catalog of
 // widget types a user can place, the data sources a list/table widget can read,
 // and the deterministic evaluation + formatting a KPI widget needs. Rendering

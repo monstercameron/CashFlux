@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -231,6 +233,15 @@ type customPageRowProps struct {
 func customPageRow(props customPageRowProps) uic.Node {
 	nav := router.UseNavigate()
 	open := uic.UseState(false)
+	menuID := uic.UseId()
+	// WAI-ARIA dismissal for the per-page ⋯ menu: Escape (refocus trigger) + outside
+	// pointerdown. This menu had NO dismissal at all (not even a backdrop), so it
+	// stayed open until an item was picked. See ui.DismissPopover.
+	ui.DismissPopover(open.Get(), menuID, func() { open.Set(false) })
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
+	}
 	p := props.Page
 	path := uistate.RoutePath("/p/" + p.Slug)
 
@@ -276,19 +287,20 @@ func customPageRow(props customPageRowProps) uic.Node {
 	var menu uic.Node = Fragment()
 	if open.Get() {
 		menu = Div(css.Class(tw.Absolute, tw.Right1, tw.TopFull, tw.Mt1, tw.Z30, tw.MinW150, tw.Rounded4, tw.Border, tw.BorderLine, tw.BgBase, tw.P1, tw.Text13, tw.ShadowLg, tw.Flex, tw.FlexCol, tw.Gap05),
-			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"),
+			Attr("role", "menu"),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), Attr("role", "menuitem"),
 				OnClick(func() { open.Set(false); props.OnRename() }), uistate.T("pages.rename")),
-			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), Attr("role", "menuitem"),
 				OnClick(func() { open.Set(false); props.OnHide() }), hideLabel),
-			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover, tw.TextDown), Type("button"),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover, tw.TextDown), Type("button"), Attr("role", "menuitem"),
 				OnClick(func() { open.Set(false); props.OnDelete() }), uistate.T("pages.delete")),
 		)
 	}
 
-	return Div(css.Class(tw.Relative, tw.Flex, tw.ItemsCenter),
+	return Div(css.Class(tw.Relative, tw.Flex, tw.ItemsCenter), Attr("id", menuID),
 		link,
 		Button(css.Class("rail-section", tw.ShrinkO, tw.Px15, tw.Py1, tw.TextFaint, tw.HoverTextFg), Type("button"),
-			Title(uistate.T("pages.menu")),
+			Title(uistate.T("pages.menu")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
 			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		menu,
 	)

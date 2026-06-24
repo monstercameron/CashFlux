@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package artifactstore_test
 
 import (

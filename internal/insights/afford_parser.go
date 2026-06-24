@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package insights — afford_parser.go
 // ParseAffordQuery extracts a structured affordability question from free text.
 // Pure Go; no syscall/js — safe to test on native Go and call from any layer.

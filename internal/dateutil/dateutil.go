@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package dateutil provides date and period helpers for CashFlux: parsing the
 // canonical date format, month/week/fiscal-month ranges, and day math. These
 // drive budget periods, forecasts, and reporting.

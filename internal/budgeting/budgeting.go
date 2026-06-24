@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package budgeting computes spending against budgets: how much has been spent
 // in a budget's category over a period (scope-aware), how much remains, and
 // whether the budget is on track, near its limit, or over.

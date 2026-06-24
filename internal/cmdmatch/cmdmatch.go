@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package cmdmatch ranks command-palette commands against a fuzzy query. A power
 // user thinks in verbs ("add", "export"), so each command carries optional
 // keywords/aliases matched alongside its noun title — typing "add" can surface

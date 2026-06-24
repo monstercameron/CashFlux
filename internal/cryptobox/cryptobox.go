@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package cryptobox defines the on-disk envelope format for CashFlux's optional
 // dataset encryption (backlog item C45). Encryption is derived from the user's
 // passcode via PBKDF2 → AES-GCM; the key is never stored. The envelope is a

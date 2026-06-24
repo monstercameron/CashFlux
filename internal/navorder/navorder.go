@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package navorder is the pure ordering model for the user-customizable sidebar:
 // a saved sequence of nav ids (paths) plus the operations to reorder it and to
 // apply it to the live nav list. It has no platform dependencies, so it unit-

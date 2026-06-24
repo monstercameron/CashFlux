@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package txnfilter holds the transaction list's filter/sort criteria and the
 // pure logic that applies them. Keeping it platform-free means the filtering and
 // sorting — a core behavior — are unit-tested on native Go, while the wasm screen

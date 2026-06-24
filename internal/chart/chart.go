@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package chart turns a series of values into SVG path data for the dashboard's
 // sparkline/area charts. It is pure geometry — no platform or rendering
 // dependencies — so it unit-tests on native Go; the view layer (internal/ui)

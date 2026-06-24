@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
 
 import (
+	"fmt"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -93,7 +96,41 @@ func segmented(props SegmentedProps) uic.Node {
 		onSelect(options[next].Value)
 		focusRadioAt(groupID, next)
 	}
-	args := []any{ID(groupID), css.Class("seg"), Attr("role", "radiogroup"), OnKeyDown(func(e uic.KeyboardEvent) {
+	// Sliding pill (§6.16): a single absolutely-positioned indicator slides under
+	// the active segment, so switching animates instead of snapping a per-button
+	// background between elements. Segments are content-sized (variable width), so
+	// the pill is positioned by measuring the active button's offset at render time
+	// and writing a STANDARD transform/width (not a CSS custom property — the html
+	// Style() helper drops `--` keys; setProperty via js does not). The CSS keeps
+	// `.seg-btn.active` background transparent so the pill shows through; this is a
+	// wasm app, so the effect always runs and the indicator is never missing.
+	uic.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		grp := doc.Call("getElementById", groupID)
+		if !grp.Truthy() {
+			return nil
+		}
+		pill := grp.Call("querySelector", ".seg-pill")
+		if !pill.Truthy() {
+			return nil
+		}
+		active := grp.Call("querySelector", ".seg-btn.active")
+		st := pill.Get("style")
+		if !active.Truthy() {
+			st.Call("setProperty", "opacity", "0")
+			return nil
+		}
+		left := active.Get("offsetLeft").Float()
+		width := active.Get("offsetWidth").Float()
+		st.Call("setProperty", "opacity", "1")
+		st.Call("setProperty", "transform", fmt.Sprintf("translateX(%gpx)", left))
+		st.Call("setProperty", "width", fmt.Sprintf("%gpx", width))
+		return nil
+	}, selected, len(options))
+
+	args := []any{ID(groupID), css.Class("seg"), Attr("role", "radiogroup"),
+		Div(css.Class("seg-pill"), Attr("aria-hidden", "true")),
+		OnKeyDown(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowLeft", "ArrowUp":
 			e.PreventDefault()

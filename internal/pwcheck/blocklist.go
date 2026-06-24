@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package pwcheck
 
 // This file bundles a small, offline screening list of the most commonly used

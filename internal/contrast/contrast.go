@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package contrast computes WCAG 2.x color-contrast metrics: the relative
 // luminance of an sRGB color and the contrast ratio between two colors, plus the
 // AA/AAA pass thresholds. It lets CashFlux check that text and UI colors — and

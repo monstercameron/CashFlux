@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package history
 
 // Stack is a bounded undo/redo stack of change sets. Entries before the cursor are

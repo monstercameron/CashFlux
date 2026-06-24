@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package notifyfeed bridges CashFlux's domain data to notification candidates
 // for the notify catch-up engine (B19). Each generator turns one event's data
 // into notify.Candidates, keeping the notify package itself free of any domain

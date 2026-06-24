@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package applock models CashFlux's optional passcode lock: a soft gate that
 // keeps the app's screens behind a passcode and can auto-lock after a period of
 // inactivity. It is a deterrent, not encryption — the data still lives in the

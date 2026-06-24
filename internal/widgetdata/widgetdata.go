@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package widgetdata is the pure data logic behind custom-page widgets: turning a
 // widget's binding + the dataset into the rows a List shows, the formatted text a
 // KPI shows, and the month window a Chart plots. It has no platform or UI

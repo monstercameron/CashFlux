@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package pages is the pure logic for user-authored custom pages: turning a page
 // name into a stable URL slug, keeping slugs unique, ordering pages for the rail,
 // filtering hidden ones, reordering by drag, and validating a page. It has no

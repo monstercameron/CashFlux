@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package aicontext is the pure, MCP-shaped context builder for the Insights agent
 // (C89 phase 1): it assembles a bounded, structured snapshot of the user's finances
 // — including every enabled Formula evaluated to its current value — and serializes

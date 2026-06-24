@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package pdftext provides a minimal pure-Go text extractor for simple PDFs.
 // It handles:
 //   - Uncompressed content streams

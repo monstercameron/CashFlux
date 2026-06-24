@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package afford answers "can we afford $X by a target date?" deterministically,
 // so an affordability question is backed by the user's own projected cash flow
 // (the determinism/explainability rule) rather than an LLM guess. The inputs are a

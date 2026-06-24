@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package rules is the auto-categorization engine: user-defined rules that match
 // a transaction's payee/description and assign a category (and tags). Matching is
 // pure and deterministic — first matching rule wins — and unit-tested on native

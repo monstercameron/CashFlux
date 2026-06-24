@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package aitools defines the Insights agent's tools on the C82 agent.Registry
 // (C89 phase 2). It starts with the read tools — the safe, run-freely queries that
 // let the model pull detail beyond the injected summary (the MCP "tools" half): how

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package pdftext_test
 
 import (

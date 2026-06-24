@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package notify is the pure, client-side notification core for CashFlux
 // (B19 Phase A). It defines notification and rule types and the deterministic
 // logic that decides when a rule may fire — quiet hours, channel selection, and

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package insights
 
 // QuestionContext supplies the user's data hooks for tailoring starter questions

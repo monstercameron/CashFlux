@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package ui provides shared UI components for the CashFlux wasm frontend.
 // This file contains pure (non-wasm) class-name utilities that can be tested
 // on native Go without a browser.

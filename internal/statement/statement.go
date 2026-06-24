@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package statement parses a delimited bank/card statement (CSV, semicolon, tab, or
 // pipe) into normalized transaction rows — the pure extraction + column-mapping core
 // of the import engine (C74). It detects the delimiter, maps header columns to roles

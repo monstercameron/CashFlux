@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package icon is the pure, type-safe icon registry for CashFlux: a curated set
 // of named line icons (Lucide-format, 24×24, stroked, inheriting currentColor)
 // exposed as compile-checked Name constants rather than stringly-typed lookups.

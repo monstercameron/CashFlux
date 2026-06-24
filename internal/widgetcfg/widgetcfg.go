@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package widgetcfg is the per-widget settings API that connects a dashboard
 // widget's flip-panel settings to its content. Each widget registers a Schema
 // (a list of typed Fields with defaults); the settings panel renders the schema

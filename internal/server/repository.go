@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package server
 
 import (
@@ -1068,6 +1070,19 @@ VALUES(?, ?, ?, ?)
 ON CONFLICT(user_id, provider) DO UPDATE SET ciphertext = excluded.ciphertext, nonce = excluded.nonce`,
 		userID, provider, ciphertext, nonce); err != nil {
 		return fmt.Errorf("server store: put ai key: %w", err)
+	}
+	return nil
+}
+
+// DeleteAIKey removes a user's stored provider key — the Cloud AI-key "remove"
+// action (§7.11). No-op-safe if the key doesn't exist.
+func (s *Store) DeleteAIKey(userID, provider string) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(provider) == "" {
+		return fmt.Errorf("server store: user id and provider are required")
+	}
+	defer s.observeDB("DeleteAIKey", time.Now())
+	if _, err := s.db.Exec(`DELETE FROM ai_keys WHERE user_id = ? AND provider = ?`, userID, provider); err != nil {
+		return fmt.Errorf("server store: delete ai key: %w", err)
 	}
 	return nil
 }

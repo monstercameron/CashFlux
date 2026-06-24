@@ -6,7 +6,23 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Per-member preferences (§1.19):** members now carry an optional personal date style + default account (`domain.MemberPrefs`), edited inline on the Members screen; resolution layers member over household via the new pure, tested `internal/memberprefs` package (built on `configlayer`). Quick-add preselects the active member's default account when set. Verified via `e2e/verify_memberprefs*.mjs` (fields render + save round-trips).
+- **Segmented-control sliding pill (§6.16):** a `.seg-pill` slides under the active segment (measured offset → standard `transform`/`width`), animating selection instead of snapping.
+- **playwrightgo `gwc`** built (`.tools/gwc-pw.exe`) for automated DOM verification driving Chromium.
+
 ### Fixed
+- **Reports donut charts now have a legend.** The category-split and income-by-source donuts were bare
+  coloured rings — no way to tell which slice was which. `renderDonut` (`web/chart.js`) now draws the ring on
+  the left and a legend (swatch · category · share%) on the right, falling back to just the ring when the box
+  is too narrow. Verified in both themes (`e2e/donut_legend_verify.mjs`, 2/2): 6 swatches + labels + matching
+  percentages (53%/13%/…), no overlaps.
+- **Reports bar-chart axes now show money, not bare numbers.** The D3 ranked-bar charts (category / payees /
+  biggest expenses) drew their value axis as "0 / 500 / 1,000 / 1,500" while the rest of the page formats money.
+  Added a `"money"` axis format (`chartspec.Axis`) resolved in `web/chart.js` to compact currency ("$1.5k") via
+  the base-currency symbol — a new `ui.ChartProps.CurrencySymbol` passed live (`currency.Symbol(base)`), so it's
+  correct for EUR/GBP/JPY bases, not a hardcoded `$`. Verified in both themes (`e2e/chart_money_axis_verify.mjs`,
+  6/6): Y ticks now "$0/$500/$1k/$1.5k/$2k"; category labels and donut/area charts unchanged.
 - **i18n a11y:** routed hardcoded `aria-label` and `Title()` strings through `uistate.T()` in datatable pagination ("Previous page" / "Next page"), workflows staged-action remove button and condition-variable insert buttons, and split-screen "Save split" / "Record settled" buttons; added catalog keys `ui.table.prevPage`, `ui.table.nextPage`, `workflows.removeAction`, `workflows.insertCondVar` (%s verb for token name), `split.saveSplitTitle`, `split.recordSettledTitle` to `internal/i18n/en.go`.
 
 ### Added

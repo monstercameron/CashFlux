@@ -757,7 +757,8 @@
       [data-theme="light"] .nav:hover { background: #efede8; color: #1c1c1e; }
       [data-theme="light"] .seg, [data-theme="light"] .rpill { background: #efede8; border-color: #e4e2dd; }
       [data-theme="light"] .seg-btn, [data-theme="light"] .rstep { color: #56565c; }
-      [data-theme="light"] .seg-btn.active { background: #ffffff; color: #1c1c1e; }
+      [data-theme="light"] .seg-btn.active { background: transparent; color: #1c1c1e; }
+      [data-theme="light"] .seg-pill { background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
       [data-theme="light"] .gear-inline, [data-theme="light"] .gear-abs, [data-theme="light"] .menu-btn, [data-theme="light"] .set-close { color: #6a6a72; }
       /* Flip panel + settings controls */
       [data-theme="light"] .flip-face, [data-theme="light"] .set-face { background: #ffffff; border-color: #e4e2dd; }
@@ -985,8 +986,21 @@
       .data-pager .data-pager-label { margin-left: auto; }
       .data-pager .field { width: auto; min-width: 4.5rem; }
       .data-pager .btn[disabled] { opacity: 0.45; cursor: default; }
-      /* Narrow screens (C10/C19): stack each row as a card. */
-      @media (max-width: 760px) {
+      /* Narrow screens (C10/C19): stack each row as a card. Breakpoint raised
+         760→900 (2026-06-24): the 8-column .txn-table has a ~949px intrinsic
+         min-width, so on tablet widths (768/800/810/820/880 — and worst at
+         769-900 where the rail is expanded and shrinks the content column) the
+         wide table clipped its right-hand columns (Account/Tags/Cleared/Actions)
+         with no way to reach them. The card layout has no clip and hides the
+         thead, so it sidesteps the sticky-header issue a horizontal-scroll wrapper
+         would cause. (Residual: 901-~1185px laptop widths still clip the table —
+         tracked separately; needs a product call on cards-vs-column-hiding.) */
+      /* Transactions table → card layout. Breakpoint is 1200px (not 900): with the
+         ~240px rail, the full column set needs ~1185px of viewport to fit, so a real
+         table below that always clipped a column (the 901–1185px "RESIDUAL clip"
+         band). Product call: show the stacked card layout up to 1200px and only paint
+         the real table at ≥1201px, where every column fits — no clip at any width. */
+      @media (max-width: 1200px) {
         .txn-table, .txn-table tbody, .txn-table tr, .txn-table td { display: block; width: 100%; }
         .txn-table thead { display: none; }
         .txn-table tbody tr.row { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.5rem; padding: 0.3rem 0.5rem; }
@@ -1053,8 +1067,12 @@
       .cat-child-row { background: rgba(255,255,255,0.02); }
       [data-theme="light"] .cat-child-row { background: rgba(0,0,0,0.02); }
       /* cat-zero-usage: dim rows with no transactions so safe-to-delete categories
-         are spottable at a glance without hiding them entirely. */
-      .cat-zero-usage { opacity: 0.55; }
+         are spottable at a glance without hiding them entirely. !important is
+         required: these rows carry the wonder-row-enter entrance animation
+         (fill-mode:both, final keyframe opacity:1), and a filled animation's value
+         outranks every non-important author rule regardless of specificity — so
+         without it the dim never applies once the entrance settles. */
+      .cat-zero-usage { opacity: 0.55 !important; }
       /* GX3-F3/F10: unified button-scale tokens so page buttons, modal buttons, and inputs
          all hit the 44px touch-target floor and share the same height. Previously .btn
          measured 35.8px (below WCAG 2.5.8) while inputs and modal buttons were 40–44px.
@@ -1299,12 +1317,23 @@
          Every transform scales by --wonder-on, which resolves to 0 under
          [data-wonder="off"] and prefers-reduced-motion, so these stay
          identity (no movement) in those modes — no extra off-guard needed. */
-      html .card:hover,
-      html .w:not(.drag):hover {
+      html .card:hover {
         transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on)));
         box-shadow: var(--wonder-shadow);
       }
-      /* !important is required here (and only here): list rows carry the
+      /* W-3 tile hover-lift needs !important: unlike .card (whose clobber is the
+         plain .wonder-reveal.in-view{transform:none} rule, beaten by specificity),
+         bento tiles carry the wonder-bento-enter entrance animation (fill-mode:both,
+         final keyframe `transform: none`), and a filled animation outranks every
+         non-important author rule regardless of specificity. box-shadow stays
+         non-important (no animation touches it). The :not(.drag) exclusion is kept
+         so a tile being dragged never gets the hover transform fighting the drag
+         translate. Off-safe — translateY scales by --wonder-on → 0. */
+      html .w:not(.drag):hover {
+        transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on))) !important;
+        box-shadow: var(--wonder-shadow);
+      }
+      /* !important is likewise required for list rows: they carry the
          wonder-row-enter entrance animation with fill-mode:both, whose final
          keyframe is `transform: none`. A filled animation's value outranks every
          non-important author rule regardless of specificity, so the hover nudge
@@ -1392,7 +1421,12 @@
       .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
       .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .12s ease; will-change: transform; } /* GX8-F2 */
       .w:hover { border-color:#44444c; }
-      .w.drag { opacity:.35; pointer-events:none; cursor:grabbing; }
+      /* opacity is !important: .bento .w carries the wonder-bento-enter entrance
+         animation (fill-mode:both, final keyframe opacity:1), whose filled value
+         would otherwise clobber this drag-ghost cue. This is a functional drag
+         affordance (not a motion flourish), so it should always apply while
+         dragging regardless of the WONDER setting. */
+      .w.drag { opacity:.35 !important; pointer-events:none; cursor:grabbing; }
       [data-bento-dragging] .bento { cursor:grabbing; }
       [data-bento-dragging] .bento .w:not(.drag) { transition: border-color .15s ease, box-shadow .15s ease; }
 
@@ -1410,10 +1444,14 @@
       .gear-inline, .gear-abs { transition: color .12s ease, transform var(--wonder-dur-fast) var(--wonder-ease); }
 
       /* time resolution + range controls */
-      .seg { display:inline-flex; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:2px; }
-      .seg-btn { padding:.32rem .72rem; border-radius:3px; font-size:.85rem; color:#a6a6ac; background:transparent; border:0; cursor:pointer; }
+      .seg { display:inline-flex; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:2px; position:relative; }
+      /* Sliding pill indicator (§6.16): positioned by JS (measures the active
+         segment) via a standard transform/width, animated by these transitions. */
+      .seg-pill { position:absolute; top:2px; bottom:2px; left:0; width:0; background:#2a2a30; border-radius:3px; opacity:0; pointer-events:none; z-index:0; transition: transform .18s ease, width .18s ease, opacity .12s ease; }
+      .seg-btn { padding:.32rem .72rem; border-radius:3px; font-size:.85rem; color:#a6a6ac; background:transparent; border:0; cursor:pointer; position:relative; z-index:1; }
       .seg-btn:hover { color:#f4f4f5; }
-      .seg-btn.active { background:#2a2a30; color:#f4f4f5; }
+      .seg-btn.active { background:transparent; color:#f4f4f5; }
+      @media (prefers-reduced-motion: reduce) { .seg-pill { transition:none; } }
       .rcap { font-size:.66rem; text-transform:uppercase; letter-spacing:.12em; color:#6c6c72; }
       .rpill { display:inline-flex; align-items:center; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:.2rem .25rem; }
       .rstep { background:transparent; border:0; color:#a6a6ac; cursor:pointer; padding:0 .3rem; font-size:1rem; line-height:1; }
@@ -1598,9 +1636,17 @@
          actions. Always in the DOM; .hidden-menu toggles visibility so the
          framework's On* hooks stay at stable positions. */
       .add-wrap { position:relative; }
-      .add-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:50; min-width:210px;
+      /* Open direction is decided at open-time in addmenu.go (syscall/js measures the
+         button's gap to the viewport's right edge): the +Add button reflows between
+         the left of the content area (≤24px from the rail) and the right edge across
+         widths, so neither a fixed left:0 nor right:0 nor a breakpoint is robust —
+         right:0 overlaps the rail when the button is left, left:0 overflows when it's
+         right. Default opens RIGHTward (left:0); `.open-left` flips to right:0 when
+         there isn't ~224px of room on the right. */
+      .add-menu { position:absolute; left:0; right:auto; top:calc(100% + 6px); z-index:50; min-width:210px;
         background:var(--bg-elev); border:1px solid var(--border); border-radius:8px; padding:4px;
         box-shadow:0 8px 24px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:2px; }
+      .add-menu.open-left { left:auto; right:0; }
       .add-item { text-align:left; padding:.5rem .7rem; border-radius:5px; background:transparent;
         border:0; color:var(--text); cursor:pointer; font:inherit; font-size:13px; }
       .add-item:hover, .add-item:focus-visible { background:var(--hover); }
@@ -1710,6 +1756,11 @@
       .wm .card + .card { margin-top:14px; }
       .wm-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
       .wm-sep { width:1px; align-self:stretch; min-height:20px; background:var(--line,#e5e7eb); margin:0 .2rem; }
+      /* Scope: only the Widget Manager table. On phones the 4-col wm-table
+         (~404px min-width) clipped its "Order" column; this wrapper lets it scroll
+         sideways instead. wm-table has no sticky thead, so making this an overflow
+         container is safe (the .txn-table sticky-header issue does not apply). */
+      .wm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .wm-table { width:100%; max-width:780px; }
       .wm-table th, .wm-table td { vertical-align:middle; padding-top:.45rem; padding-bottom:.45rem; }
       /* Keep the controls compact and grouped on the right; the name takes the slack. */
@@ -1828,7 +1879,10 @@
       .rule-grip { display:inline-flex; align-items:center; color:var(--faint,#9ca3af); cursor:grab; flex:none; margin-right:.25rem; }
       /* GX8-F4: add subtle visual press state to draggable rows — bg tint signals the
          row is being picked up, complementing the cursor:grabbing already in place. */
-      .row[draggable="true"]:active { cursor:grabbing; background:var(--bg-elev); opacity:.85; }
+      /* opacity is !important: list rows carry the wonder-row-enter entrance
+         animation (fill-mode:both, final keyframe opacity:1), which would clobber
+         this drag-grab cue. Functional affordance — always applies while grabbing. */
+      .row[draggable="true"]:active { cursor:grabbing; background:var(--bg-elev); opacity:.85 !important; }
 
       /* ============================================================
          RESPONSIVE / MOBILE — L11, L32, L33, L36 (2026-06-23)
@@ -2171,6 +2225,8 @@
         #cf-applock-input.cf-applock-shake { animation: cf-applock-shake .35s ease; }
         /* §6.18 item 5: setup overlay (backdrop + card) fades in instead of popping */
         #cf-applock-setup { animation: cf-applock-fade .25s ease both; }
+        /* §6.19: the lock gate also fades in on show instead of popping (display:grid). */
+        #cf-applock-gate { animation: cf-applock-fade .25s ease both; }
       }
       @keyframes cf-applock-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -2204,6 +2260,13 @@
       .upsheet-benefits { margin: 0 0 0.6rem; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.2rem; }
       .upsheet-price { margin: 0.2rem 0; }
       .upsheet-trust { margin: 0 0 0.2rem; }
+      /* §7.11 Account/subscription state banner (trial / past-due / canceled) */
+      .sub-banner { display: block; padding: 0.45rem 1rem; font-size: 0.8rem; font-weight: 500;
+        border: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+      .sub-trial    { background: var(--accent-dim, #e4f3ea); color: var(--accent, #2e8b57); }
+      .sub-pastdue  { background: #5a3a1a; color: #fcd9a8; }
+      .sub-canceled { background: var(--bg-elev); color: var(--text-dim); }
+      [data-theme="light"] .sub-pastdue { background: #fff4e5; color: #92510a; }
       @media (prefers-reduced-motion: no-preference) {
         .upsheet { animation: cf-applock-fade .2s ease both; }
       }

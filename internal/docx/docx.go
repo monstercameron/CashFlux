@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package docx provides a minimal pure-Go reader for .docx files (Office Open XML
 // WordprocessingML). It opens the zip archive, reads word/document.xml, and
 // extracts all tables (<w:tbl>) as a flat slice of rows, each row being a slice

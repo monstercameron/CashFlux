@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package engineenv builds the "app engine variable surface": the named numeric
 // figures a sandboxed formula can reference (net worth, income, counts, …). It is
 // the single source of truth for what variables a custom KPI widget or a workflow

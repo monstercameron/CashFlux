@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package rules
 
 // MatchCount returns how many of texts the rule would match — the "matches N

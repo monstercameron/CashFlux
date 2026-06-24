@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package subscriptions detects recurring charges from transaction history — the
 // "what am I paying for every month" view (B25). It is a focused, pure read over
 // the existing transactions (no new store): it groups identical repeated charges,

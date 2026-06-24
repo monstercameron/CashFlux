@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package currency
 
 import "github.com/monstercameron/CashFlux/internal/money"

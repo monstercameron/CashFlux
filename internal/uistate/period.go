@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package uistate holds small pieces of shared, cross-screen UI state backed by

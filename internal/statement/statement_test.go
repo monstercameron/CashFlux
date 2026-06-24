@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package statement
 
 import "testing"

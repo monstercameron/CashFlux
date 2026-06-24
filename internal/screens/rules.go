@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -211,6 +213,14 @@ func Rules() ui.Node {
 				),
 			),
 			Body: Fragment(
+				// GI1: an on-page add-rule row at the top of "Your rules" — match +
+				// category + tags + Add, inline — so a rule can be created without
+				// opening the modal. Reuses the same RuleAddForm (with its live
+				// match-count preview + validation) the modal uses.
+				Div(css.Class(tw.Mb2),
+					H3(css.Class("set-label"), uistate.T("rules.quickAddTitle")),
+					RuleAddForm(RuleAddFormProps{OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
+				),
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 				If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 				list,

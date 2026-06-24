@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package notify
 
 // defaultBillLeadDays is how many days before a bill's due date the default

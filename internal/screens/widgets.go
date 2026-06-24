@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -265,19 +267,25 @@ func WidgetManager() ui.Node {
 		}),
 		uiw.Card(uiw.CardProps{
 			Header: H3(css.Class("card-title"), uistate.T("widgetManager.widgetsTitle")),
-			Body: uiw.DataTable(uiw.DataTableProps{
-				Class: "wm-table",
-				Columns: []uiw.Column{
-					{Label: uistate.T("widgetManager.colWidget"), SortKey: "name"},
-					{Label: uistate.T("widgetManager.visible"), SortKey: "visible", Class: "wm-col-vis"},
-					{Label: uistate.T("widgetManager.colSize"), SortKey: "size", Class: "wm-col-size"},
-					{Label: uistate.T("widgetManager.colOrder"), SortKey: "order", Class: "wm-col-order"},
-				},
-				Body:   rows,
-				Sort:   sk,
-				Dir:    dir,
-				OnSort: onSort,
-			}),
+			// Scroll wrapper (scoped to this table only — not the shared DataTable):
+			// the 4-column wm-table has a ~404px min-width and clipped its "Order"
+			// column on phones. wm-table has no sticky header, so a horizontal-scroll
+			// container is safe here (unlike .txn-table). See web/index.html .wm-table-wrap.
+			Body: Div(css.Class("wm-table-wrap"),
+				uiw.DataTable(uiw.DataTableProps{
+					Class: "wm-table",
+					Columns: []uiw.Column{
+						{Label: uistate.T("widgetManager.colWidget"), SortKey: "name"},
+						{Label: uistate.T("widgetManager.visible"), SortKey: "visible", Class: "wm-col-vis"},
+						{Label: uistate.T("widgetManager.colSize"), SortKey: "size", Class: "wm-col-size"},
+						{Label: uistate.T("widgetManager.colOrder"), SortKey: "order", Class: "wm-col-order"},
+					},
+					Body:   rows,
+					Sort:   sk,
+					Dir:    dir,
+					OnSort: onSort,
+				}),
+			),
 		}),
 		uiw.Card(uiw.CardProps{
 			Header: H3(css.Class("card-title"), uistate.T("widgetManager.styleTitle")),

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package prefs models user display preferences that persist locally across
 // reloads (week start and date format), independent of the dataset. The display
 // logic lives here as pure Go so it is unit-tested on native Go; the wasm layer

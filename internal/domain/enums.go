@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package domain defines the core CashFlux entity types and their enumerations.
 // It is pure Go (no platform dependencies, no build tags) so it can be reused by
 // the WebAssembly UI and exercised by native tests.

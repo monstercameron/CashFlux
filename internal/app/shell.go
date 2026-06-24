@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -175,6 +177,7 @@ func Shell(props ShellProps) uic.Node {
 		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			uic.CreateElement(SampleDataBanner),
+			uic.CreateElement(SubscriptionBanner),
 			Div(css.Class(tw.P10px), Attr("id", "cf-page-view"), uic.CreateElement(props.View)),
 		),
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
@@ -184,6 +187,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(QuickAddHost),
 		uic.CreateElement(AddHost),
 		uic.CreateElement(DialogHost),
+		uic.CreateElement(UpgradeSheet),
 		uic.CreateElement(Toast),
 	)
 }
@@ -445,6 +449,9 @@ func Sidebar(props sidebarProps) uic.Node {
 			Span(css.Class("brand-name", tw.FontDisplay, tw.TextLg, tw.FontSemibold, tw.TrackingTight), uistate.T("app.name")),
 		),
 		uic.CreateElement(WorkspaceSwitcher),
+		// Cloud-sync status chip by the workspace switcher (§7.11) — invisible until
+		// Cloud sync is in use; shows synced/syncing/offline/conflict/error + queue.
+		uic.CreateElement(SyncChip),
 		Nav(css.Class(tw.Flex1, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
@@ -476,6 +483,8 @@ func Sidebar(props sidebarProps) uic.Node {
 			// The user's custom pages ("My pages"): listing, create, and reorder.
 			uic.CreateElement(CustomPagesNav),
 		),
+		// One-time, calm Cloud mention (§7.11) — self-hides once dismissed or syncing.
+		uic.CreateElement(CloudMention),
 		// The household card is the single Settings entry point (opens the global panel).
 		uic.CreateElement(HouseholdCard),
 	)

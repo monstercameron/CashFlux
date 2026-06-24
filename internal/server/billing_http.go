@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package server
 
 import (
@@ -241,6 +243,57 @@ func authorizedBillingRequest(w http.ResponseWriter, r *http.Request, cfg Config
 	}
 	SetLogScope(r.Context(), LogScope{UserID: user.ID})
 	return user, true
+}
+
+// billingStatusResponse is the client-facing subscription snapshot returned by
+// GET /v1/billing/status so the app can render trial/past-due/canceled banners and
+// the graceful downgrade-to-local state (§7.11). Status is one of:
+// disabled (self-host, billing off → always-on) | none | trialing | active |
+// past_due | canceled.
+type billingStatusResponse struct {
+	Status           string `json:"status"`
+	Plan             string `json:"plan,omitempty"`
+	CurrentPeriodEnd string `json:"currentPeriodEnd,omitempty"`
+	TrialEnd         string `json:"trialEnd,omitempty"`
+}
+
+// handleBillingStatus reports the authenticated user's subscription state. Unlike
+// checkout/portal it does NOT require Stripe to be configured: a billing-disabled
+// self-host returns "disabled" (always-on), and a user with no subscription
+// returns "none" — so the client can branch its Cloud UI without a Stripe key.
+func handleBillingStatus(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+			return
+		}
+		if !cfg.Billing || store == nil {
+			writeJSON(w, billingStatusResponse{Status: "disabled"})
+			return
+		}
+		sub, found, err := store.GetSubscription(user.ID)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
+			return
+		}
+		if !found {
+			writeJSON(w, billingStatusResponse{Status: "none"})
+			return
+		}
+		resp := billingStatusResponse{Status: sub.Status, Plan: sub.Plan}
+		if !sub.CurrentPeriodEnd.IsZero() {
+			resp.CurrentPeriodEnd = sub.CurrentPeriodEnd.UTC().Format(time.RFC3339)
+		}
+		if !sub.TrialEnd.IsZero() {
+			resp.TrialEnd = sub.TrialEnd.UTC().Format(time.RFC3339)
+		}
+		writeJSON(w, resp)
+	}
 }
 
 func stripePriceForInterval(w http.ResponseWriter, cfg Config, interval string) (string, string, bool) {

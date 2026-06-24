@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -56,6 +58,10 @@ func OverflowMenu(props OverflowMenuProps) uic.Node {
 
 func overflowMenu(props OverflowMenuProps) uic.Node {
 	open := uic.UseState(false)
+	// Stable per-instance id on the wrapper so the document-level dismissal
+	// listeners can tell clicks inside THIS menu from clicks in another instance
+	// (many overflow menus can be on a page at once).
+	id := uic.UseId()
 
 	triggerLabel := props.TriggerLabel
 	if triggerLabel == "" {
@@ -64,9 +70,22 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	toggleOpen := uic.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	closeMenu := uic.UseEvent(Prevent(func() { open.Set(false) }))
 
+	// Keyboard + outside-click dismissal (WAI-ARIA menu button). Registered only
+	// while open, torn down on close/unmount (mirrors addmenu.go):
+	//   • Escape closes and returns focus to the ⋯ trigger;
+	//   • pointerdown outside this instance's wrapper closes it — robust regardless
+	//     of the `.add-backdrop` stacking (the fixed backdrop doesn't paint over
+	//     page content, so it can't be relied on for outside-clicks).
+	DismissPopover(open.Get(), id, func() { open.Set(false) })
+
 	menuHidden := ""
 	if !open.Get() {
 		menuHidden = " hidden"
+	}
+	// aria-expanded reflects the popover state for assistive tech.
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
 	}
 
 	triggerArgs := []any{
@@ -75,6 +94,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		Attr("title", triggerLabel),
 		Attr("aria-label", triggerLabel),
 		Attr("aria-haspopup", "menu"),
+		Attr("aria-expanded", expanded),
 		OnClick(toggleOpen),
 		Icon(icon.MoreH, css.Class(tw.W4, tw.H4)),
 	}
@@ -96,7 +116,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		}))
 	}
 
-	return Div(css.Class("add-wrap"),
+	return Div(css.Class("add-wrap"), Attr("id", id),
 		Button(triggerArgs...),
 		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 		Div(menuArgs...),

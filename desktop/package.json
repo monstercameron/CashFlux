@@ -1,0 +1,51 @@
+{
+  "name": "cashflux-desktop",
+  "productName": "CashFlux",
+  "version": "0.1.0",
+  "description": "CashFlux — local-first household budgeting, as a native desktop app (Electron shell over the web/ WASM build).",
+  "license": "MIT",
+  "main": "main.js",
+  "author": "CashFlux",
+  "scripts": {
+    "build:wasm": "cd .. && GOOS=js GOARCH=wasm go build -o ./web/bin/main.wasm .",
+    "start": "npm run build:wasm && electron .",
+    "dist": "npm run build:wasm && electron-builder",
+    "dist:win": "npm run build:wasm && electron-builder --win",
+    "dist:mac": "npm run build:wasm && electron-builder --mac",
+    "dist:linux": "npm run build:wasm && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "app.cashflux.desktop",
+    "productName": "CashFlux",
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../web",
+        "to": "web",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.finance",
+      "icon": "icon.png"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "icon": "icon.png"
+    }
+  }
+}

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package ui — pure (non-wasm) tree / indent helpers.
 // This file has no build tag so it compiles on all platforms and can be
 // unit-tested with plain "go test ./internal/ui/..." on native Go.

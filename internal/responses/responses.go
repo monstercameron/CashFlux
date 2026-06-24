@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package responses shapes requests and parses replies for OpenAI's Responses API —
 // the app's preferred endpoint for the reasoning models (gpt-5.5) and streaming
 // (C81). It only builds the request body and reads the response; it does no I/O, so

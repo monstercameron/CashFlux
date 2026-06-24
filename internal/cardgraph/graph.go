@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package cardgraph is the pure model + evaluator for the Widget Builder's visual
 // programming system: a directed acyclic graph of typed nodes (sources, transforms,
 // logic, visualizations) that evaluates to a renderable dashboard card. It has no

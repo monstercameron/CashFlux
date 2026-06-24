@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package allocate — income helpers.
 //
 // PeriodIncome computes the unallocated income pool from a slice of transactions

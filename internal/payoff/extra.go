@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package payoff
 
 // SuggestedExtra proposes a starting monthly extra to throw at the debts so the

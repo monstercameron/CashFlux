@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -49,6 +51,10 @@ func reportsBarSpec(pairs []struct {
 		Series: []chartspec.Series{
 			{Name: "Amount", Color: "#4f8ef7", Points: points},
 		},
+		// "money" Y ticks → currency-aware compact axis ("$1.5k") matching the
+		// rest of the app instead of bare numbers (the symbol is passed live via
+		// ChartProps.CurrencySymbol so non-USD bases render the right glyph).
+		Y:      chartspec.Axis{Format: "money"},
 		Legend: false,
 	}
 }
@@ -191,6 +197,11 @@ func Reports() ui.Node {
 	for i, f := range flows {
 		netSeries[i] = float64(f.Net())
 	}
+	// R-4: x-axis period captions for the trend chart, one per bucket (from bounds).
+	trendLabels := make([]string, 0, len(netSeries))
+	for i := 0; i < len(netSeries) && i < len(bounds); i++ {
+		trendLabels = append(trendLabels, bounds[i].Format("Jan"))
+	}
 
 	// Net-worth trend: net worth as of each period boundary (cumulative, so it
 	// reads the running total rather than per-period flow).
@@ -290,7 +301,7 @@ func Reports() ui.Node {
 		}
 	}
 	var rowNodes []ui.Node
-	for _, r := range rows {
+	for i, r := range rows {
 		if r.Amount == 0 && r.Prior == 0 {
 			continue
 		}
@@ -302,6 +313,7 @@ func Reports() ui.Node {
 			HasDelta:   r.HasDelta,
 			DeltaPct:   r.DeltaPct,
 			MaxCat:     maxCat,
+			CatIdx:     i,
 			FmtMinor:   fmtMinor,
 			ShareBar:   shareBar,
 			OnDrill:    func(id string) { viewCategoryTransactions(id) },
@@ -337,7 +349,7 @@ func Reports() ui.Node {
 		}
 		if len(barPairs) > 0 {
 			spec := reportsBarSpec(barPairs, decimals)
-			catBarNodes = append(catBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top spending categories ranked by amount"}))
+			catBarNodes = append(catBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top spending categories ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 		// Donut: top 5 + "Other" bucket.
 		var donutPairs []struct {
@@ -523,7 +535,7 @@ func Reports() ui.Node {
 		}
 		if len(barPairs) > 0 {
 			spec := reportsBarSpec(barPairs, decimals)
-			payeeBarNodes = append(payeeBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top payees ranked by amount"}))
+			payeeBarNodes = append(payeeBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top payees ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
 	var expenseBarNodes []ui.Node
@@ -544,7 +556,7 @@ func Reports() ui.Node {
 		}
 		if len(barPairs) > 0 {
 			spec := reportsBarSpec(barPairs, decimals)
-			expenseBarNodes = append(expenseBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Biggest individual expenses ranked by amount"}))
+			expenseBarNodes = append(expenseBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Biggest individual expenses ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
 
@@ -559,15 +571,24 @@ func Reports() ui.Node {
 	net := money.New(flow.Net(), base)
 
 	// Money-flow Sankey (C70): income fans out to each spending category, with the
-	// leftover going to Savings. Values are minor units — only relative widths matter.
+	// leftover going to Savings. Mermaid renders the flow value as the node label
+	// (with a "$" prefix from the sankey config), so the value must be a human-scale
+	// MAJOR-unit amount — not raw minor units, which read as "Income 406800" instead
+	// of "Income $4,068". Round minor→major (whole currency units) here; relative
+	// widths are preserved and sub-unit flows round to 0 and are skipped downstream.
+	sankeyFactor := int64(1)
+	for i := 0; i < decimals; i++ {
+		sankeyFactor *= 10
+	}
+	toMajor := func(minor int64) int64 { return (minor + sankeyFactor/2) / sankeyFactor }
 	var moneyFlows []mermaid.SankeyFlow
 	for _, r := range rows {
 		if v := absI64(r.Amount); v > 0 {
-			moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: nameOf(r.CategoryID), Value: v})
+			moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: nameOf(r.CategoryID), Value: toMajor(v)})
 		}
 	}
 	if sav := flow.Net(); sav > 0 {
-		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: "Savings", Value: sav})
+		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: "Savings", Value: toMajor(sav)})
 	}
 
 	// G9.1: Advanced disclosure toggle state (wraps custom field + deductible cards).
@@ -576,6 +597,12 @@ func Reports() ui.Node {
 	advancedCaret := uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	if showAdvanced.Get() {
 		advancedCaret = uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
+	}
+
+	// R-8: with no income and no spend in the window there's nothing to report — show
+	// a single empty-state CTA instead of a page of all-zero figures and charts.
+	if flow.Income == 0 && flow.Expense == 0 {
+		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
 	}
 
 	return Div(
@@ -615,6 +642,50 @@ func Reports() ui.Node {
 			),
 		),
 		If(spendTrend != "", P(css.Class("muted"), spendTrend)),
+		// R-7: one page-level Export control with labeled options, replacing the six
+		// per-card download buttons that previously cluttered each card footer.
+		func() ui.Node {
+			csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+			taxYear := w.From.Year()
+			if w.Res != period.Year {
+				taxYear = time.Now().Year()
+			}
+			ys := time.Date(taxYear, time.January, 1, 0, 0, 0, 0, time.UTC)
+			ye := time.Date(taxYear+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+			memberNm := func(id string) string {
+				if n := memberName[id]; n != "" {
+					return n
+				}
+				return uistate.T("reports.noMember")
+			}
+			opt := func(label string, on func()) ui.Node {
+				return Button(css.Class("btn", tw.WFull, tw.TextLeft), Type("button"), OnClick(on), label)
+			}
+			return Details(css.Class("reports-export", tw.Mt2),
+				Summary(css.Class("btn", "btn-sm"), Style(map[string]string{"cursor": "pointer", "width": "fit-content"}), uistate.T("reports.export")),
+				Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mt1), Style(map[string]string{"max-width": "320px"}),
+					opt(uistate.T("reports.byCategory"), func() {
+						downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
+					}),
+					opt(uistate.T("reports.incomeBySource"), func() {
+						downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+					}),
+					opt(uistate.T("reports.topPayees"), func() {
+						downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
+					}),
+					opt(uistate.T("reports.biggestExpenses"), func() {
+						downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
+					}),
+					opt(uistate.T("reports.byMember"), func() {
+						downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, memberNm, csvAmount))
+					}),
+					opt(uistate.T("reports.taxSummary"), func() {
+						summary, _ := reports.YearTax(txns, taxYear, ys, ye, rates)
+						downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
+					}),
+				),
+			)
+		}(),
 		If(spendStats.Count > 0, P(css.Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
 		// G9.1 Item 3 — Heads-up anomaly card gets .card-alert urgency border.
 		If(len(anomalyNodes) > 0, uiw.Card(uiw.CardProps{
@@ -664,7 +735,7 @@ func Reports() ui.Node {
 		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
 		If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: "Money flow",
-			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow"}),
+			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
 		})),
 		If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.topPayees"),
@@ -700,7 +771,10 @@ func Reports() ui.Node {
 				),
 			),
 		})),
-		H3(css.Class("section-divider"), uistate.T("reports.sectionIncome")),
+		// R-9: only render the Income divider when at least one income/member section
+		// below it has content, so it never floats alone.
+		If(len(bigIncomeNodes) > 0 || len(incomeNodes) > 0 || (len(app.Members()) >= 2 && len(memberSpend) >= 1),
+			H3(css.Class("section-divider"), uistate.T("reports.sectionIncome"))),
 		If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.biggestDeposits"),
 			Rows:  bigIncomeNodes,
@@ -740,26 +814,30 @@ func Reports() ui.Node {
 				),
 			),
 		})),
-		H3(css.Class("section-divider"), uistate.T("reports.sectionTrends")),
+		// R-9: only render the Trends divider when a trend/net-worth section follows.
+		If(len(netSeries) >= 2 || len(accounts) > 0,
+			H3(css.Class("section-divider"), uistate.T("reports.sectionTrends"))),
 		If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.cashFlow"),
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow")}),
+				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels}),
 			),
 		})),
+		// R-11: net-worth composition (stat-grid) and the NW trend chart are one
+		// trajectory story — merge them into a single card (figures on top, trend
+		// below) instead of two cards with a rhythm break between them.
 		If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.netWorth"),
-			Body: Div(css.Class("stat-grid"),
-				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
-				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
-				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
-				If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
+			Body: Fragment(
+				Div(css.Class("stat-grid"),
+					stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
+					stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
+					stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
+					If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
+				),
+				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels})),
 			),
-		})),
-		If(len(nw) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("dashboard.netWorthTrend"),
-			Body:  uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend")}),
 		})),
 		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.savingsTrend"),
@@ -898,6 +976,7 @@ type reportsCatRowProps struct {
 	HasDelta   bool
 	DeltaPct   int64
 	MaxCat     int64
+	CatIdx     int // R-10: rank index → distinct share-bar hue
 	FmtMinor   func(int64) string
 	ShareBar   func(amount, max int64) ui.Node
 	OnDrill    func(id string)
@@ -935,11 +1014,35 @@ func reportsCatRow(props reportsCatRowProps) ui.Node {
 				OnClick(drill),
 				props.Name,
 			),
-			props.ShareBar(props.Amount, props.MaxCat),
+			reportsCatShareBar(props.Amount, props.MaxCat, props.CatIdx),
 		),
 		delta,
 		Span(css.Class("budget-amount"), props.FmtMinor(props.Amount)),
 	)
+}
+
+// reportsCatShareBar is the category-row proportion bar (R-10): like the generic
+// shareBar but each rank gets a distinct hue derived from its index via an inline
+// --cat-idx var, so the ranked categories read as a color-coded set rather than a
+// wall of identical accent bars. 47° steps spread the wheel without close repeats.
+func reportsCatShareBar(amount, max int64, idx int) ui.Node {
+	if max <= 0 {
+		return Fragment()
+	}
+	if amount < 0 {
+		amount = -amount
+	}
+	pct := int(amount * 100 / max)
+	if pct > 100 {
+		pct = 100
+	}
+	// Distinct hue per rank, computed in Go (the framework's Style() drops CSS custom
+	// properties, so a --cat-idx var won't apply). 47deg steps spread the wheel.
+	hue := (idx * 47) % 360
+	return Div(css.Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "100%",
+		"margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct),
+			"background": fmt.Sprintf("hsl(%ddeg 55%% 52%%)", hue), "border-radius": "999px"})))
 }
 
 // rollupLabelKey is the i18n key for the by-category roll-up toggle's label,

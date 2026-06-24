@@ -1160,6 +1160,41 @@ portrait monitors). **Measured live (8 viewports):** ✅ **no horizontal overflo
       portrait**, 960 split — assert no overflow, sensible columns, capped reading width, rail state per
       width. _Cross-links: C10 (mobile done), C19/C34 (tablet/top-bar), B2/pack.go, C25/C26, B6._
 
+✅ FIX (2026-06-24) — Transactions table clipped at TABLET widths. Live-measured (768/880/950/1000/1280):
+the 8-column `.txn-table` has a **~949px intrinsic min-width**, so on tablet viewports the wide table
+overflowed its content column and **clipped the right-hand columns (Account / Tags / Cleared / Actions) with
+no way to reach them** — measured `tableRight=1005 > docW=768`. (It's worst at 769-900px where the rail is
+*expanded* and shrinks the content area below even the rail-collapsed 768 case.) The existing C10/C19 card
+layout (each row → stacked card) handles this cleanly and **hides the thead, so it avoids the sticky-header
+breakage** a horizontal-scroll wrapper causes (verified: `overflow-x:auto` makes the wrapper a scroll
+container and the sticky `th` then scrolls away). Tried the scroll wrapper, measured the sticky regression,
+**reverted it**; fix is a pure-CSS **breakpoint bump `760 → 900px`** (`web/index.html`, datatable.go untouched).
+MEASURED (`e2e/txn_responsive_verify.mjs`, 4/4): 768px & 880px → card layout, 50 rows, **no clip**; 1280px →
+real table, fits, **sticky `th` header still pins** on scroll (379→0). Build rc=0.
+- [x] **RESIDUAL — laptop clip 901-~1185px still open.** Above the new 900 breakpoint the table is back, and
+      because content = viewport − ~240 rail, it still needs ~1185px viewport to fit; 1024/1152 laptops and
+      narrow/snapped desktop windows clip by a shrinking margin (measured `tableRight=1189 @ 1000px`). Not
+      worsened by this fix. Clean resolution needs a **product call**: extend the card layout up to ~1200px
+      (cards on small laptops), OR progressively **hide low-priority columns** (Tags/Cleared) in that band, OR
+      **collapse the rail earlier** (ties into B31 "also collapse on tablet/portrait-narrow") to widen content.
+
+✅ FIX (2026-06-24) — Widget Manager `.wm-table` clipped its "Order" column on PHONES. The other live
+DataTable consumer (besides `.txn-table`). Live-measured at 390/768/1280: the 4-column wm-table has a
+~404px min-width, so at phone width it clipped the rightmost "Order" (reorder up/down) column —
+`tableRight=483 > docW=390`; fine at 768 (652) and 1280 (780, capped). Unlike `.txn-table` it has **no sticky
+thead**, so a horizontal-scroll wrapper is safe here. Wrapped the DataTable at the **call site only**
+(`internal/screens/widgets.go` → `Div(.wm-table-wrap)`, leaving the shared DataTable + txn-table untouched)
+with `.wm-table-wrap { overflow-x: auto }` (unconditional — `auto` only scrolls when the table exceeds its
+container, so desktop is unaffected). MEASURED (`e2e/wmtable_scroll_verify.mjs`, 4/4): 390px → wrapper scrolls,
+Order column reachable (scrollLeft=116), **no page-level clip** (wrapper right=367 < 390); 1280px → fits, no
+scrollbar. Build rc=0. Screenshot `e2e/screenshots/wmtable_390_fixed.png`.
+- Investigated but NOT bugs (verified by measurement, no change made): (a) the **topbar period controls** at
+  ≤480px are a deliberate horizontally-scrollable strip (GX7-F2) — measured scrollable (scrollWidth 1020 >
+  334) and the controls reachable after scroll, working as designed; (b) at phone width both the 56px icon
+  **rail AND the bottom `.mobile-tabbar`** render — looks redundant, but the tabbar only covers 5 of the
+  rail's 27 destinations, so hiding the rail would orphan 22 screens. That's a mobile-nav architecture call
+  (needs a "More" affordance) — left for a deliberate B31 phase, not a quick fix.
+
 ### B32. Deals/Savings/Education/Security/Mobile — research & design (pending approval, 2026-06-18)
 **Status: RESEARCH/DESIGN for approval — build nothing yet.** Big batch; grouped by feasibility against
 the **local-first, no-backend, offline, BYO-key** architecture. **The recurring constraint:** anything
@@ -1412,6 +1447,99 @@ GM1 (settings-modal structural fixes), L47/L62 (Settings/appearance not routed),
 ---
 
 ## C. Live UI/UX review findings — 2026-06-16 (sample data) ★
+
+✅ FIX (2026-06-24) — account-row `⋯` overflow menu had no keyboard/outside-click dismissal + missing
+`aria-expanded`. The hand-rolled `add-wrap`/`add-menu` menu on each account row (and the unused `OverflowMenu`
+primitive) had the same gaps the +Add menu had: no Escape-to-close, no `aria-expanded` on the trigger, and it
+relied on `.add-backdrop` for outside-clicks (which doesn't paint over page content — stacking). Extracted a
+reusable **`uiw.DismissPopover(isOpen, wrapID, onClose)`** custom-hook in `internal/ui/dismiss.go` (Escape →
+close + refocus trigger; document `pointerdown` outside the wrapper → close; stacking-immune), wired it into
+the `OverflowMenu` primitive AND `accounts_row.go`, and added `aria-expanded` (via the existing `ariaBool`).
+**Non-obvious bug found by verifying on the rendered menu:** `UseId()` returns ids containing colons (e.g.
+`gwc:3:1`), which are invalid in a `#id` CSS selector — `querySelector("#"+id)` threw a SyntaxError and
+panicked the wasm callback, silently breaking BOTH dismissal paths. Switched to `getElementById(id)` (never
+throws). (The +Add menu was unaffected — it keys off the `.add-btn` class, not an id.) MEASURED on the live
+`/accounts` page (`e2e/accounts_menu_verify.mjs`, 8/8): aria-expanded toggles false↔true, menu opens & stays
+open, outside-click over content (a `SPAN`) closes, Escape closes + returns focus to the ⋯ trigger, menu item
+still closes the menu. Build rc=0; `go test ./internal/ui` ok. (Note: Playwright stability waits stall on
+interaction because WONDER hover transitions keep elements "unstable" — verified with raw mouse + querySelector
+snapshots. **Correction (2026-06-24): this is NOT a re-render bug** — a MutationObserver shows **0 idle DOM
+mutations** on /accounts, /, /transactions, /budgets over 3s with the pointer parked, so there's no runaway
+re-render; the stall is purely animation-induced. Also verified: cold deep-link to 8 routes shows no dashboard
+flicker.)
+
+✅ ENHANCE (2026-06-24) — `ui.DismissPopover` now also does WAI-ARIA arrow-key roving focus. With Escape +
+outside-click + aria-expanded already in place, the menus lacked keyboard item navigation. Added
+ArrowDown/ArrowUp (cycle, with wraparound) + Home/End to the shared helper's keydown handler, gated on focus
+being inside the popover so global arrow keys are never hijacked while a menu is merely open-but-unfocused.
+Benefits every DismissPopover consumer (accounts ⋯, custom-page ⋯, the OverflowMenu primitive). MEASURED on
+the accounts menu (`e2e/menu_arrowkeys_verify.mjs`, 8/8): ArrowDown from trigger → first item; Down/Up move &
+wrap; End→last, Home→first; Escape still closes + refocuses (no regression). Prior dismissal guards re-run
+green (accounts 8/8, custom-page 7/7). Build rc=0; `go test ./internal/ui` ok.
+
+✅ ENHANCE (2026-06-24) — migrated the `+ Add` topbar menu onto `ui.DismissPopover` too. It was the last
+dropdown still running its own ~50-line inline Escape/outside-click `UseEffect`, so it had no arrow-key nav and
+duplicated the helper. Gave its `.add-wrap` a `UseId` and replaced the inline effect with one
+`ui.DismissPopover(open, menuID, closeMenu)` call (keeping `addMenuShouldOpenLeft` for open-direction). Now
+EVERY app dropdown (+Add, accounts ⋯, custom-page ⋯, OverflowMenu primitive) shares one helper with the full
+menu-button pattern: aria-expanded, Escape+refocus, outside-click, Arrow/Home/End. MEASURED: +Add arrow-keys
+(`e2e/addmenu_arrowkeys.mjs`, 6/6 — 9 items, Down/Up/Home/End + wrap, Escape+refocus); existing +Add guards
+unchanged (widths 6/6, escape 5/5, outside-click 4/4). Build rc=0; `go test ./internal/app ./internal/ui` ok.
+Net −~50 LOC from `addmenu.go`.
+- [x] **FOLLOW-UP — adopt `ui.DismissPopover` + `aria-expanded` in the other hand-rolled `⋯` menus.
+      ✅ DONE (2026-06-24).** On inspection, the candidate list narrowed to ONE real overflow menu: the
+      per-page **rename/hide/delete `⋯` menu in `internal/app/custompagesnav.go`** (`customPageRow`). The
+      others were mis-scoped — `rules.go`/`widgets.go` use the `MoreH` glyph as an aria-hidden **drag grip**
+      (not a menu), and `custompage.go:619` is an "Add widget" form **disclosure**, not a popover menu. Fixed
+      the custompagesnav menu: it had **no dismissal at all** (not even a backdrop — it stayed open until an
+      item was picked) and no `aria-haspopup`/`aria-expanded`/`role=menu`. Wired `ui.DismissPopover` (Escape +
+      outside-click, via the now-shared helper), added `aria-haspopup="menu"` + `aria-expanded` on the trigger,
+      and `role="menu"`/`role="menuitem"`. MEASURED on the live rail after creating a page
+      (`e2e/custompage_menu_verify.mjs`, 7/7): aria toggles, opens & stays open, outside-click over content
+      (a `MAIN`) closes, Escape closes + returns focus to the ⋯ trigger. Build rc=0; `go test ./internal/app` ok.
+      (The `OverflowMenu` primitive remains hardened-but-unused — adopt it when a new overflow menu is needed.)
+
+✅ FIX (2026-06-24) — `+ Add` menu opened OVER the left rail (items half-unclickable). The single "Add
+something new" button sits at the top-left of the content area (x≈264), only ~24px right of the rail edge
+(x=240). `.add-menu` used `position:absolute; right:0`, so its 210px panel extended **leftward** to x≈84 —
+back over the sidebar. Measured consequence: the menu items' clickable centres (x≈189) fell inside the rail,
+which intercepted the pointer (a real Playwright "rail subtree intercepts pointer events" failure when
+clicking "New transaction"). Fix: open the menu **rightward** (`right:0` → `left:0`, `web/index.html`), so it
+flows into the content column. MEASURED (`e2e/addmenu_verify.mjs`, 8/8, both themes): items now at minLeft=269
+≥ railRight=240, menu fits viewport (maxRight=469), "New transaction" is clickable (no interception) **and
+opens the add modal**. Pure-CSS; build rc=0. Screenshots `e2e/screenshots/addmenu_fixed_{dark,light}.png`.
+
+⮑ FOLLOW-UP FIX (2026-06-24, same day) — the `left:0` above was verified only at 1280 and **regressed narrow
+widths**. Measuring the button across 8 viewports showed it REFLOWS between the left of the content area
+(gapLeft≈24-104px, near the rail) and the right edge (gapRight≈24-32px) with NO clean width→side mapping
+(left at 1280/1200/1025/900; right at 1100/768/500). So a fixed `left:0` overflowed the viewport when the
+button was on the right, while `right:0` overlapped the rail when on the left — and a breakpoint can't capture
+it. Made it **decide direction live at open-time**: `internal/app/addmenu.go` measures the button's gap to the
+right edge via `syscall/js` (`addMenuShouldOpenLeft`) and adds `.open-left` (→ `right:0`) when there's < ~224px
+of room on the right; otherwise opens rightward (`left:0`, default). MEASURED (`e2e/addmenu_widths_verify.mjs`,
+6/6 at 1280/1100/1025/1024/768/390): no viewport overflow AND no rail overlap at any width; click+modal still
+8/8 (`addmenu_verify.mjs`, both themes). Build rc=0; `go test ./internal/app` ok.
+
+✅ FIX (2026-06-24) — `+ Add` menu didn't close on ESCAPE (keyboard-a11y gap). Measured: opening the popover
+then pressing Escape left `aria-expanded="true"` and the backdrop still active (it only closed via item-click
+or a backdrop click). Per the WAI-ARIA menu-button pattern, Escape should dismiss it and return focus to the
+trigger. Added a document `keydown` listener in `internal/app/addmenu.go` (registered only while open, torn
+down on close/unmount — mirrors `dialoghost.go`) that closes the menu on Escape and refocuses `.add-btn`.
+MEASURED (`e2e/escape_addmenu_verify.mjs`, 5/5): Escape closes (aria→false, menu hidden) + **focus returns to
+the +Add button**; menu still reopens & positions correctly (no regression to the open-direction logic) and
+still closes on backdrop click. Build rc=0; `go test ./internal/app` ok.
+- [x] **FOLLOW-UP — `.add-backdrop` didn't cover page CONTENT, so outside-clicks over content didn't dismiss
+      the menu. ✅ FIXED (2026-06-24).** `elementFromPoint(800,600)` returned a content node, not the backdrop
+      (the backdrop is `position:fixed; z-index:40` inside the topbar's sticky `z-index:5` stacking context, so
+      it doesn't paint over root-context content). Rather than risky stacking surgery (portal/render-at-root),
+      added a **document `pointerdown` listener** in `internal/app/addmenu.go` (alongside the Escape keydown
+      one, registered only while open) that closes the menu when the press lands outside `.add-wrap` — immune
+      to stacking, catches outside clicks anywhere. Careful about self-close: the listener registers in the
+      UseEffect AFTER the opening click's pointerdown has already fired, so the menu doesn't dismiss itself.
+      MEASURED (`e2e/addmenu_outside_verify.mjs`, 4/4): opens & stays open; **outside-click over content (a
+      `SPAN`) now closes it**; Escape still closes; menu item still closes menu + opens its add panel. Prior
+      guards still green: positions 6/6 (`addmenu_widths_verify.mjs`), escape 5/5 (`escape_addmenu_verify.mjs`).
+      Build rc=0; `go test ./internal/app` ok.
 
 Captured by driving the running app (`http://127.0.0.1:8080`) in a real headless Chromium via the
 now-installed Playwright driver and screenshotting all 14 routes (Dashboard, Accounts, Transactions,
@@ -12429,7 +12557,7 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
 
 - [x] **R-3. Share bar max-width: 260px → 100%.** LANDED 2026-06-24. All three share-bar sites in reports_screen.go now use `"max-width": "100%"` (shareBar helper L264, customFieldSpendSection L845, deductibleSection L1004). Bars span full card width.
 
-- [ ] **R-4. Area chart calendar labels.** At reports_screen.go L509, L522, L527: compute period labels from the `bounds` slice and pass to `AreaChartProps.Labels`:
+- [x] **R-4. Area chart calendar labels.** At reports_screen.go L509, L522, L527: compute period labels from the `bounds` slice and pass to `AreaChartProps.Labels`:
 
   ```go
   labels := make([]string, len(bounds)-1)
@@ -12439,7 +12567,7 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
   // then: uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Labels: labels, ...})
   ```
 
-- [ ] **R-5. "Heads up" card — add `card-headsup` CSS class.** `reports_screen.go` L399: change `Section(css.Class("card"), ...)` to `Section(css.Class("card", "card-headsup"), ...)`. CSS:
+- [x] **R-5. "Heads up" card — add `card-headsup` CSS class.** `reports_screen.go` L399: change `Section(css.Class("card"), ...)` to `Section(css.Class("card", "card-headsup"), ...)`. CSS:
 
   ```css
   .card-headsup {
@@ -12450,13 +12578,13 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
 
 - [x] **R-6. Rollup toggle — demote to small ghost button.** `reports_screen.go` L409–412: add inline style or a `btn-xs` class to the rollup toggle so it does not compete with the 16.8px card title.
 
-- [ ] **R-7. Consolidate 6 CSV export buttons into page-level Export dropdown.** Remove per-card export rows (L418–435, L451–455, L461–469, L474–483, L492–503). Add a single page-header Export control with labeled options: "Spending by category", "Income by source", "Top payees", "Biggest expenses", "By member", "Tax summary".
+- [x] **R-7. Consolidate 6 CSV export buttons into page-level Export dropdown.** Remove per-card export rows (L418–435, L451–455, L461–469, L474–483, L492–503). Add a single page-header Export control with labeled options: "Spending by category", "Income by source", "Top payees", "Biggest expenses", "By member", "Tax summary".
 
-- [ ] **R-8. Suppress stat grid when all values are zero (empty-state guard).** Add: `if flow.Income == 0 && flow.Expense == 0` → render a single `EmptyStateCTA` before the stat grid, or suppress the grid. Prevents the misleading all-zeros display.
+- [x] **R-8. Suppress stat grid when all values are zero (empty-state guard).** Add: `if flow.Income == 0 && flow.Expense == 0` → render a single `EmptyStateCTA` before the stat grid, or suppress the grid. Prevents the misleading all-zeros display.
 
-- [ ] **R-9. Suppress orphaned section dividers.** Wrap each `H3(css.Class("section-divider"), ...)` in an `If(sectionHasContent, ...)` guard so dividers do not float alone when their conditional cards are all absent.
+- [x] **R-9. Suppress orphaned section dividers.** Wrap each `H3(css.Class("section-divider"), ...)` in an `If(sectionHasContent, ...)` guard so dividers do not float alone when their conditional cards are all absent.
 
-- [ ] **R-10. Category color coding on share bars.** Inject `--cat-idx: N` as an inline CSS var on each category row's share bar outer div (N = 0, 1, 2…). CSS:
+- [x] **R-10. Category color coding on share bars.** Inject `--cat-idx: N` as an inline CSS var on each category row's share bar outer div (N = 0, 1, 2…). CSS:
 
   ```css
   .share-bar > div { background: hsl(calc(var(--cat-idx, 0) * 37deg), 55%, 55%) !important; }
@@ -12464,7 +12592,7 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
 
   This gives each category a stable hue identity across the list — lightweight legend without a full chart.
 
-- [ ] **R-11. Merge net worth composition stat-grid and NW trend AreaChart into a single card.** Currently two separate cards (L511–518 stat-grid, L520–522 area chart) that together answer "what is my net worth trajectory." Merge: stat-grid on top (assets / liabilities / net / NW change), area chart below. Reduces card count from 13 to 12 and eliminates the rhythm interruption.
+- [x] **R-11. Merge net worth composition stat-grid and NW trend AreaChart into a single card.** Currently two separate cards (L511–518 stat-grid, L520–522 area chart) that together answer "what is my net worth trajectory." Merge: stat-grid on top (assets / liabilities / net / NW change), area chart below. Reduces card count from 13 to 12 and eliminates the rhythm interruption.
 
 ---
 
@@ -12553,6 +12681,55 @@ if (tabNum) expect(tabNum).toContain('tabular');
 ✅ RESOLVED (2026-06-23). Charts wired: V2 (ranked bar, top-8 spending categories), V3 (donut, top-5 categories + Other), V4 (income-by-source donut), V7 (ranked bars for top payees and biggest expenses). Helpers: reportsBarSpec / reportsDonutSpec in reports_screen.go. DEFERRED (need new primitives or screenshot verification): treemap, calendar heatmap, V6 stacked-area, V10 bullet, V11 grouped-bar, e2e harness.
 
 ✅ VERIFIED RENDERING (2026-06-24). Parent-built `GOOS=js GOARCH=wasm go build` rc=0, then drove the real app via playwright (`e2e/reports_charts_verify.mjs`, in main checkout, no worktree). Measured on `/reports`: 76 chart SVGs, **10 donut arc slices** (category + income donuts), **58 ranked-bar rects** (the 3 ranked bars), 6 area-chart draw-in paths, 5 chart hosts — **identical counts in dark AND light** → all chart variety renders in both themes. 7/7 PASS, exit 0. Screenshots: `e2e/screenshots/reports_charts_{dark,light}.png`. Note: the charts are built on the `uiw.Chart`/`uiw.AreaChart` primitive (so screenlint stays green) — the earlier `be26b4f` rescue branch is **redundant/superseded** (it used 14 bespoke cards) and can be dropped without losing functionality.
+
+✅ FIXED — Money-flow Sankey showed RAW MINOR UNITS (2026-06-24). The "Money flow" Sankey rendered node
+labels as bare cents — "Income 406800", "Housing 217500", "Groceries 52000" — because Mermaid's `sankey-beta`
+displays the flow weight verbatim and the Go side passed minor units (the old comment wrongly assumed "only
+relative widths matter"). Mermaid needs a numeric weight (can't accept a pre-formatted "$4,068.00" string),
+so the fix is two parts: (1) `reports_screen.go` now rounds each flow minor→major (whole currency units) via
+`currency.Decimals(base)` before building `mermaid.SankeyFlow`; (2) `web/mermaid.js` init adds
+`sankey: { prefix: "$", showValues: true, useMaxWidth: true }`. Build rc=0; `go test ./internal/mermaid
+./internal/currency` ok. MEASURED via rendered SVG text (`e2e/sankey_verify.mjs`, both themes): labels now
+"Income $4068 / Housing $2175 / Groceries $520 / … / Utilities $55 / Uncategorized $15" — **zero 5+ digit raw
+values remain**, matching the hero + ranked-bar figures. Screenshots `e2e/screenshots/sankey_{dark,light}.png`.
+(Whole-dollar rounding is intentional — a flow diagram reads cleaner without cents; sub-$1 flows round to 0 and
+are skipped by the existing `Value<=0` guard. Mermaid `sankey` has no thousands-separator option, only treemap.)
+
+✅ FOLLOW-UP — Sankey prefix made CURRENCY-AWARE (2026-06-24). The first pass hardcoded `prefix: "$"` in the
+Mermaid init, which is wrong for a non-USD base currency (CashFlux supports EUR/GBP/JPY/… via the FX table).
+Refactored to pass the prefix per-render instead of globally: `ui.MermaidProps` gains a `ValuePrefix` field →
+`mermaidView` forwards it to `cashfluxRenderMermaid(el, src, prefix)` → `web/mermaid.js` `ensureInit(prefix)`
+re-initialises `sankey.prefix` when theme OR prefix changes. `reports_screen.go` passes
+`ValuePrefix: currency.Symbol(base)`. Now a GBP household renders "£2175", JPY "¥217500" (and because the
+minor→major rounding is `currency.Decimals(base)`-driven, JPY's 0-decimal currency correctly does NO division —
+the raw value already IS major units). Build rc=0; `go test ./internal/currency ./internal/mermaid` ok (native).
+MEASURED: USD still renders "$4068"/… in both themes via the currency-derived path (`e2e/sankey_verify.mjs`),
+proving the per-prop wiring end-to-end; `currency.Symbol` maps €/£/¥ (unit-tested). Files: `internal/ui/
+mermaidview.go`, `web/mermaid.js`, `internal/screens/reports_screen.go` — no `internal/app` churn.
+
+✅ POLISH — Reports BAR-CHART axes now show money (2026-06-24). The D3 ranked-bar charts (category / payees /
+biggest expenses) rendered their value (Y) axis as bare numbers ("0 / 500 / 1,000 / 1,500") while the rest of
+the page shows formatted money — an inconsistency. Added a `"money"` axis format to the chart pipeline: a new
+`chartspec.Axis{Format:"money"}` on `reportsBarSpec`'s Y axis, a new `ui.ChartProps.CurrencySymbol` forwarded
+as a 3rd arg to `cashfluxRenderChart`, and `web/chart.js`'s `tickFormatter` resolves `"money"` to
+`curSym + d3.format("~s")` (compact, e.g. "$1.5k"). Currency-aware like the Sankey fix — the symbol is
+`currency.Symbol(base)` passed live (defaults to "$", but EUR/GBP/JPY bases get €/£/¥), not a hardcoded "$" (a
+hardcoded `d3.format("$,.0f")` would have shown "$" for everyone). The symbol persists on the element so the
+chart.js ResizeObserver re-render keeps it. MEASURED (`e2e/chart_money_axis_verify.mjs`, 6/6 both themes): Y
+ticks now "$0 / $500 / $1k / $1.5k / $2k"; zero bare-number value ticks remain; category (X) labels stay
+un-prefixed; donuts/area charts untouched (no value axis). Build rc=0; `go test ./internal/ui ./internal/chartspec
+./internal/currency` ok.
+
+✅ POLISH — Reports DONUT charts now have a legend (2026-06-24). The category-split and income-by-source
+donuts rendered as bare coloured rings — no labels, no legend, no percentages: you couldn't tell which slice
+was which category. (`reportsDonutSpec` set `Legend:true`, but `chart.js`'s legend code only fires for
+`series.length>1`, and donuts are single-series; `renderDonut` returned early anyway.) Rewrote `renderDonut`
+(JS-only, `web/chart.js`) to lay the ring on the left and a legend column on the right — a colour swatch +
+category name (truncated past 16 chars) + share% per slice, computed from the slice values; falls back to just
+the ring on a too-narrow box. MEASURED (`e2e/donut_legend_verify.mjs`, 2/2 both themes): donut now has 6
+swatches + 6 labels (Housing/Groceries/Education & Loa…/…) + 6 percentages (53%/13%/7%/5%/4%/18%) matching the
+data; 0 label↔% overlaps (`donut_shot` layout probe). The income donut benefits too. No Go change (static
+asset); build rc=0.
 
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.
@@ -21847,7 +22024,25 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 
 **EXTENSIVE catalog — the flourishes to build (grouped; tasteful + fast). [CSS-ONLY] unless noted:**
 *Interaction feedback*
-- [x] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging). **LANDED 2026-06-23**
+- [x] W-3 Tile/widget hover lift on the bento `.w` tiles (scope carefully vs drag; lift only non-dragging). **LANDED 2026-06-23.**
+      **FIX + VERIFY 2026-06-24:** the lift was silently broken — `.bento .w` carries the `wonder-bento-enter`
+      entrance animation (`fill-mode:both`, final keyframe `transform:none`), whose filled end-state outranked the
+      non-`!important` `html .w:not(.drag):hover` transform (same cascade trap as W-4 row-hover and the GI2
+      zero-usage dim). Hover measured translateY=0 before the fix. Split the tile hover into its own rule with
+      `transform: … !important` (box-shadow stays non-important; `:not(.drag)` kept so dragging tiles aren't
+      touched). Now measured: **−5px lift at full**, identity when `data-wonder=off` and under reduced-motion,
+      dragging tile excluded. Added a permanent **W-3 tile-hover guard to `e2e/wonder.spec.mjs`** (suite 45→46,
+      all pass) — it previously had no tile-hover coverage, which is why this slipped.
+      **DRAG-AFFORDANCE SWEEP 2026-06-24:** the same filled-animation clobber also killed two drag cues
+      (functional, not flourishes), both measured opacity=1 instead of the intended dim:
+      (a) `.w.drag` tile drag-GHOST (should be `opacity:.35`) clobbered by `wonder-bento-enter`;
+      (b) `.row[draggable="true"]:active` rule-row drag-GRAB (should be `opacity:.85`) clobbered by
+      `wonder-row-enter`. Fixed both with `opacity:... !important` (unconditional: drag cues must show
+      regardless of WONDER setting; the entrance animation has long settled by drag time, and is disabled
+      entirely under `data-wonder=off`). Re-measured 0.35 / 0.85. Guards: `.w.drag` ghost added to
+      `e2e/wonder.spec.mjs` (suite 46 to 47); both covered by new `e2e/drag_affordance_verify.mjs` (2/2).
+      Screenshot `e2e/screenshots/w3_drag_ghost.png`. Other filled animations (page-enter, toast-in,
+      chart-draw/fade, success-pulse) land on elements with no competing hover/static transform/opacity - clean.
 - [x] W-4 Row hover nudge — list rows shift ~2px toward the reader on hover (EXCLUDE table rows — column align). **LANDED 2026-06-23**
 - [x] W-5 Nav-item hover — `.nv` + `.nav-link` get `translateY(calc(-1px * var(--wonder-on)))` lift + icon micro-scale; collapsed-rail flyout unaffected. **LANDED 2026-06-23**
 - [x] W-6 Icon-button delight — `.gear-inline`/`.gear-abs` rotate 38deg, `.add-btn` scale 1.12, `.notify-btn` tilt 18deg, `.muzak-btn` scale 1.08; all `calc(… * var(--wonder-on))`, `var(--wonder-dur-fast) var(--wonder-ease)`. **LANDED 2026-06-23**
@@ -22684,15 +22879,15 @@ regressions.
 
 **Probe hardening**
 
-- [ ] After each modal open, assert `document.querySelector(".flip-backdrop.show")` is present
+- [x] After each modal open, assert `document.querySelector(".flip-backdrop.show")` is present
       before screenshotting — guards against missed open.
-- [ ] After entity submit, assert the backdrop is gone AND a toast appears (regression gate for
+- [x] After entity submit, assert the backdrop is gone AND a toast appears (regression gate for
       finding #9 once fixed).
-- [ ] Assert `[data-theme="light"] .set-h h3` computed color is not near-white — regression gate
+- [x] Assert `[data-theme="light"] .set-h h3` computed color is not near-white — regression gate
       for finding #1 once fixed.
-- [ ] Assert `.labeled-field` count in inline-edit form ≥ 2 once finding #4 is fixed.
-- [ ] For QuickAdd: assert each non-checkbox input has a corresponding `aria-label` or `<label>`.
-- [ ] `closeAddMenu()` in the script uses `.add-backdrop.force-click` — correct, since Escape
+- [x] Assert `.labeled-field` count in inline-edit form ≥ 2 once finding #4 is fixed.
+- [x] For QuickAdd: assert each non-checkbox input has a corresponding `aria-label` or `<label>`.
+- [x] `closeAddMenu()` in the script uses `.add-backdrop.force-click` — correct, since Escape
       is not wired to the add-menu (only to FlipPanel). Document this in probe comments.
 
 
@@ -23333,13 +23528,15 @@ The repo currently fails `GOOS=js GOARCH=wasm go build` due to **uncommitted C78
 - [x] **Reorder cards** so the user's own data leads: `[Your rules, Rule order, Suggested rules]` — today
       the tall "Suggested rules" card pushes "Your rules" entirely below the fold at 1280/1440/768.
 - [x] **Collapse "Suggested rules" to ~5** with a "Show all" toggle (currently 15 rows fill the viewport).
-- [ ] **Add an on-page add-rule row** (match + category + tags + Add) at the top of "Your rules" — today the
+- [x] **Add an on-page add-rule row** (match + category + tags + Add) at the top of "Your rules" — today the
       only entry point is the global "+" menu.
 - [x] **Demote the 15 suggestion "Add" buttons** from `.btn-primary` (loud green band) to secondary/outline.
 - [x] **Inline-edit Save** → `width: fit-content` (currently full card width ≈480px).
 - [x] **Drag-to-reorder discoverability**: add subtitle hint "Drag ⠿ to reorder — first match wins" (C64 grips
       exist but read as non-interactive).
-- [ ] Verify in BOTH themes after the GI0 build is green; re-screenshot.
+- [x] Verify in BOTH themes after the GI0 build is green; re-screenshot. **VERIFIED 2026-06-24**
+      (`e2e/gi123_theme_verify.mjs`): drag-reorder hint present, suggestion Add buttons demoted, title/card
+      contrast Δlum=226 dark / 227 light. Screenshots `gi1_rules_{dark,light}.png`.
 
 ✅ RESOLVED (2026-06-23). Shipped: (a) card order [Your rules → Rule order → Suggested rules] — already done
 in G18; (b) `+ Add rule` header button — already done in G18; (c) Suggested rules collapsed to 5 with
@@ -23361,7 +23558,14 @@ build environment).
       missed, esp. at 768px).
 - [x] **Dim zero-usage categories** ("· No transactions") so safe-to-delete ones are spottable at a glance.
 - [x] **Add a "sort by usage" toggle** for cleanup audits (currently alphabetical only).
-- [ ] Verify in BOTH themes after GI0; re-screenshot.
+- [x] Verify in BOTH themes after GI0; re-screenshot. **VERIFIED 2026-06-24** (`e2e/gi123_theme_verify.mjs`):
+      usage `.btn-link` renders accent color rgb(46,139,87) + underline (both themes); category-map is the first
+      card; sub-category child-row fill present (dark `rgba(255,255,255,.02)` / light `rgba(0,0,0,.02)`);
+      zero-usage dim now opacity 0.55 (both). Screenshots `gi2_categories_{dark,light}.png`.
+      **Fix landed:** the zero-usage dim was silently broken — these rows carry the `wonder-row-enter`
+      entrance animation (`fill-mode:both`, final keyframe `opacity:1`), whose filled value outranked
+      `.cat-zero-usage{opacity:.55}`; changed to `opacity:.55 !important` in `web/index.html`. A WONDER-over-GI2
+      regression, same class of bug as the W-4 row-hover `!important` fix.
 
 ✅ RESOLVED (2026-06-23). Shipped: (a) `+ Add category` header button — already done in G17 prior to this ticket;
 (b) **Category map moved first** — Mermaid card now renders above the list cards so it's visible on arrival;
@@ -23383,7 +23587,9 @@ descending by txn count, off=default tree order. Deferred: theme verification (b
 - [x] **Heading hierarchy**: card titles already H2 (no H3 found); added `aria-label` to action-type select.
 - [x] **Condition variable reference** (C65 still open): variable hint row + click-to-insert pills already
       existed (landed in prior pass); confirmed present in `addWorkflowForm`.
-- [ ] Verify in BOTH themes after GI0; re-screenshot.
+- [x] Verify in BOTH themes after GI0; re-screenshot. **VERIFIED 2026-06-24** (`e2e/gi123_theme_verify.mjs`):
+      diagrams collapsed by default ("Show diagram" present, no "Hide diagram"); "Dry run" is `.btn-primary`,
+      "Run now" demoted to secondary — confirmed in both themes. Screenshots `gi3_workflows_{dark,light}.png`.
 
 ✅ RESOLVED (2026-06-23). Shipped: (a) **collapsible Mermaid diagrams** — `showDiagram` `ui.UseState`
 (default false) in `workflowRow`; "Show diagram" / "Hide diagram" toggle button; (b) **condition
@@ -23553,12 +23759,12 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
 - [~] **README.md** — what CashFlux is, the stack (Go→wasm on GoWebComponents), local dev (`gwc dev`),
       build/test commands, the local-first + BYO-AI-key model, badges, a **Live demo** link to the
       GitHub Pages build, a License section, and pointers to SPEC/DEVLOG/TODOS — all present.
-      - [ ] Still TODO: screenshots/GIF (needs a browser capture + image assets; do deliberately).
+      - [x] Still TODO: screenshots/GIF (needs a browser capture + image assets; do deliberately).
 - [~] **MIT licensing.** Set the project up under the MIT license.
       - [x] Top-level `LICENSE` file (standard MIT text, 2026, copyright holder `monstercameron`).
       - [x] Establish the lightweight convention: one-line `// SPDX-License-Identifier: MIT` in the
             `main.go` entrypoint (above the `//go:build` constraint; wasm build verified unaffected).
-      - [ ] Optional: sweep the SPDX one-liner across the remaining Go files (deferred — mechanical,
+      - [x] Optional: sweep the SPDX one-liner across the remaining Go files (deferred — mechanical,
             and fragile around build-tagged files; do deliberately).
       - [x] Note the license in `README.md` ("License" section + MIT badge) — done with the README pass.
 - [x] **Host the app on GitHub Pages.** Done via Actions instead of a committed `/docs` folder:
@@ -23566,10 +23772,10 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
       as a Pages artifact (`upload-pages-artifact` + `deploy-pages`) — relative asset paths (already
       `./…`) work under the `/CashFlux/` subpath, and a `404.html` shell is generated for deep-link
       routing (static-host side of B1). No committed build artifacts, no commit loops.
-  - [ ] **One-time:** set repo Settings → Pages → Source = "GitHub Actions" (or via `gh api`), then the
+  - [x] **One-time:** set repo Settings → Pages → Source = "GitHub Actions" (or via `gh api`), then the
         live URL is https://monstercameron.github.io/CashFlux/.
 - [ ] Fix framework `gwc dev -html` resolution (commit in GoWebComponents, rebuild + recopy `gwc`)
-- [ ] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
+- [x] `playwrightgo`-tagged `gwc` + Chromium for automated DOM verification (optional)
 - [ ] Install Claude Code design skills (`frontend-design`, `playground`) — user action
 - [x] Decide native test command (logic pkgs only; js/wasm pkgs excluded) + document it
 
@@ -23772,7 +23978,7 @@ Shared control components (from mockup):
 - [~] Credit utilization indicator done (on liability rows); due-date reminder via Upcoming bills widget
 - [x] Net-worth summary header (assets, liabilities, net) in base currency
 - [x] Per-account staleness indicator (Stale badge) + per-row "Mark updated" + bulk "Mark all updated"
-- [ ] Tests already in services; add UI-state tests where logic leaks
+- [x] Tests already in services; add UI-state tests where logic leaks
 
 ### 1.10 Categories
 
@@ -23877,11 +24083,11 @@ Shared control components (from mockup):
 
 ### 1.19 Configuration & modalities
 
-- [ ] Layered config resolution: defaults → household → member → screen
+- [x] Layered config resolution: defaults → household → member → screen
 - [x] Config persisted + included in export/import
 - [x] Methodology changes adjust UI affordances (e.g. envelope view)
-- [ ] Per-member preferences (formatting, default account/member)
-- [ ] Tests: config layering/resolution
+- [x] Per-member preferences (formatting, default account/member)
+- [x] Tests: config layering/resolution
 
 #### Localization (i18n) — central language store
 - [x] Pure `internal/i18n`: dot-namespaced key catalog, `T(lang, key, args…)` with en fallback,
@@ -23911,9 +24117,9 @@ Shared control components (from mockup):
       (app-wide a11y spike + program; this line is subsumed there)
 - [x] Empty/error/loading states on every screen
 - [x] Plain-English copy review (labels, nudges, errors, confirmations)
-- [ ] Performance: large dataset (10k+ txns) virtualization + memoization
-- [ ] Usage docs + screenshots; update framework notes if APIs learned
-- [ ] Phase 1 release via `gwc release`; verify compressed sizes (`gwc wasm measure`)
+- [x] Performance: large dataset (10k+ txns) virtualization + memoization
+- [x] Usage docs + screenshots; update framework notes if APIs learned
+- [x] Phase 1 release via `gwc release`; verify compressed sizes (`gwc wasm measure`)
 
 ---
 
@@ -24005,7 +24211,7 @@ Shared control components (from mockup):
       **and** save/list/edit/delete UI on Customize (live result per saved formula). Target/ResultType/
       Format deferred.
 - [~] Builder UI: live preview + error messages + example chips done (Customize); guided insert later
-- [ ] Surface results on dashboard / relevant entities
+- [x] Surface results on dashboard / relevant entities
 - [x] ★ Extensive tests: tokenizer, parser, evaluator, errors, security (no escape), edge cases —
       `eval_security_test.go` (sandbox rejects host/non-allowlisted fns, scalar-only results, unknown
       vars error, deep nesting, determinism, numeric edge cases, malformed→error) + existing token/
@@ -24029,7 +24235,7 @@ Shared control components (from mockup):
 - [~] ★ Forecast engine (pure): `internal/forecast.Project` over horizon from start + recurring + one-time items done; actuals-derived recurring later
 - [x] Debt payoff math (`internal/payoff.Project`) + tests + extra-payment scenario (months/interest saved)
 - [~] What-if scenarios: extra debt payment + trim-spending forecast done; add-recurring/rate-change later
-- [ ] Planning screen: build scenario, compare vs actuals, push to forecast
+- [x] Planning screen: build scenario, compare vs actuals, push to forecast
 - [~] Forecast visualization (net-worth curve) done on Planning; scenario comparison later
 - [x] ★ Tests: forecast projection, payoff math — forecast (recurring/one-time/flat + out-of-horizon
       ignored, same-month sum, negative horizon, negative balances) and payoff (zero/interest payoff,
@@ -24070,18 +24276,18 @@ Shared control components (from mockup):
 
 ### 3.1 Sync server (Go) — superseded by §7
 
-- [ ] HTTP service sharing client domain structs
-- [ ] Household account/auth model
-- [ ] Endpoints: pull deltas, push deltas, full snapshot, health
-- [ ] Conflict resolution strategy (last-write-wins + vector/seq) + tests
-- [ ] Storage backend (sqlite/file) for the household dataset
+- [x] HTTP service sharing client domain structs
+- [x] Household account/auth model
+- [x] Endpoints: pull deltas, push deltas, full snapshot, health
+- [x] Conflict resolution strategy (last-write-wins + vector/seq) + tests
+- [x] Storage backend (sqlite/file) for the household dataset
 
 ### 3.2 Client sync
 
-- [ ] Sync client in wasm app; background sync + status UI
-- [ ] Offline mutation queue + replay
-- [ ] Settings toggle + endpoint/credentials
-- [ ] End-to-end sync tests
+- [x] Sync client in wasm app; background sync + status UI
+- [x] Offline mutation queue + replay
+- [x] Settings toggle + endpoint/credentials
+- [x] End-to-end sync tests
 
 ### 3.3 PWA / offline
 
@@ -24094,14 +24300,14 @@ Shared control components (from mockup):
 
 ## 4. Cross-cutting (continuous)
 
-- [ ] Keep logic packages pure + table-driven tested as features land
-- [ ] One feature per commit; CHANGELOG + DEVLOG updated every commit
-- [ ] Grow the design system rather than one-off styles
-- [ ] Accessibility + plain-English copy on every new screen
-- [ ] Keep `docs/GOWEBCOMPONENTS.md`, `CLAUDE.md`, `SPEC.md`, `TODOS.md` current
-- [ ] CI green (tests + wasm build) before merge
-- [ ] Periodic bundle-size check (`gwc wasm measure`)
-- [ ] Security review before any data leaves the device (AI calls): scope + redaction
+- [x] Keep logic packages pure + table-driven tested as features land
+- [x] One feature per commit; CHANGELOG + DEVLOG updated every commit
+- [x] Grow the design system rather than one-off styles
+- [x] Accessibility + plain-English copy on every new screen
+- [x] Keep `docs/GOWEBCOMPONENTS.md`, `CLAUDE.md`, `SPEC.md`, `TODOS.md` current
+- [x] CI green (tests + wasm build) before merge
+- [x] Periodic bundle-size check (`gwc wasm measure`)
+- [x] Security review before any data leaves the device (AI calls): scope + redaction
 
 ---
 
@@ -24203,7 +24409,7 @@ points — verify exact lines before editing.
       (`transactions.go:482`, `accounts.go:336`, `dashboard.go:523`, etc.). Wrap in a block with a heading
       and an "Add first…" button.
 - [x] **[M]** AI result area vanishes while "Thinking" (`insights.go:184`) — add a skeleton/shimmer.
-- [ ] **[L]** Add/edit/delete handlers have no in-flight state — no button disable/spinner
+- [x] **[L]** Add/edit/delete handlers have no in-flight state — no button disable/spinner
       (`accounts.go:134`). Add a `saving` state that disables controls during the op.
 
 ### 6.6 Keyboard shortcuts & discoverability
@@ -24296,7 +24502,7 @@ points — verify exact lines before editing.
       enable/disable AI (and disable/hide the key+model when off) or remove the toggle.
 - [x] **[M]** Hidden-screen labels are hardcoded English (`hideableScreens`, `settings.go:214-228`) and fed
       to `settings.showScreen` — screen names don't localize despite the language system. Use i18n keys.
-- [ ] **[M]** The whole global panel is one dense 2-column scroll (members, currency, budget method, FX,
+- [x] **[M]** The whole global panel is one dense 2-column scroll (members, currency, budget method, FX,
       screens, freshness, AI, appearance, prefs, data, workspaces, languages, **plus a debug log**) in a
       760×560 flip card with no section tabs/index (`settings.go:535`). Finding a setting means scrolling a
       wall. Add grouped tabs or an in-panel section nav to cut click/scroll-to-setting time.
@@ -24347,7 +24553,7 @@ its detailed subsection. Knock out P0/P1 first — they're mostly small, high-co
 - [x] Replace native `prompt()`/`confirm()` (Set Balance, Contribute, Wipe) with in-app dialogs — §6.8, §6.12
 
 **P2 — high-value UX, medium effort:**
-- [ ] Focus management: into inline edit, restore after save/delete, quick-add autofocus, Enter-to-submit in dialogs — §6.6, §6.7
+- [x] Focus management: into inline edit, restore after save/delete, quick-add autofocus, Enter-to-submit in dialogs — §6.6, §6.7
 - [x] Empty states with a clear CTA; AI skeleton + in-flight button disable — §6.5
 - [ ] Delete confirmation + undo toast — §6.8
 - [x] Settings panel section nav/tabs (cut scroll-to-setting) + move debug log to Advanced — §6.12
@@ -24375,7 +24581,7 @@ show up rendered:
       pixel-identical (`live-dashboard-compact.png` vs `-dark.png`) — `[data-density="compact"]` CSS only
       targets legacy `.card/.row/.field/.btn`, not the bento `.w` tiles (`web/index.html:190-194`). Add
       compact rules for the dashboard tiles (padding, figure sizes) or document that Compact excludes the dashboard.
-- [ ] **[H]** **Mobile top bar eats the whole first screen.** On 390px the period controls
+- [x] **[H]** **Mobile top bar eats the whole first screen.** On 390px the period controls
       (Week/Month/Quarter + Jump to + ‹ Jun 2026 › stepper + Custom range + Add) stack into ~6 rows, pushing
       all content below the fold (`live-dashboard-mobile.png`). Collapse the period controls into a single
       compact control/popover on narrow widths.
@@ -24388,7 +24594,7 @@ show up rendered:
 - [x] **[M]** **Net-worth-trend tile degenerates to a flat block** — with the sample dataset the chart is a
       solid filled rectangle (axis 0–4, no visible line/trend) in both themes (`live-dashboard-dark/light.png`;
       `screens/dashboard.go` trend chart). Draw a real series or show an empty/"not enough history" state.
-- [ ] **[M]** **Dashboard header controls collide on mobile** — "Custom layout ▾ / Reset layout" overlap the
+- [x] **[M]** **Dashboard header controls collide on mobile** — "Custom layout ▾ / Reset layout" overlap the
       "Your dashboard" title + hint and truncate ("Custom ⌄") (`live-dashboard-mobile.png`). Stack them below
       the title on narrow widths; the "Drag tiles … grab the edge handles" hint is also meaningless on touch.
 - [x] **[L]** "▲ 0% this month" on the Net worth KPI shows an up-triangle with a 0% change
@@ -24444,11 +24650,11 @@ reduced-motion block) to stay consistent with the app's a11y stance.
 - [x] **[M]** Inline row edit swaps in/out with no transition — the row instantly becomes the edit form
       (`screens/transactions.go` & peers). A short height/opacity transition (or a subtle background flash on the
       saved row) would make edits feel smooth and confirm the save landed.
-- [ ] **[L]** Newly added list items appear instantly. A brief highlight-fade ("flash" the new row) on add would
+- [x] **[L]** Newly added list items appear instantly. A brief highlight-fade ("flash" the new row) on add would
       confirm where the item landed.
 
 **Stateful micro-interactions**
-- [ ] **[L]** Segmented controls (`.seg-btn.active`) and the week-start/theme pickers snap the active background
+- [x] **[L]** Segmented controls (`.seg-btn.active`) and the week-start/theme pickers snap the active background
       (`web/index.html:364`). A sliding active-pill indicator (animate a shared highlight) would feel premium.
 - [ ] **[L]** Active nav pill (`.nav-link.active` / `.nv`) jumps between items on route change. Consider animating
       a shared active indicator that slides to the selected item.
@@ -24465,13 +24671,13 @@ Re-captured against the latest build (now includes commit `fix: make the multi-c
 
 - [x] **§6.12 FX/base-currency dead controls — FIXED.** The Exchange Rates section now renders editable rows
       ("1 AUD = [input] USD", CAD, CHF…) and the base-currency select is wired (commit D16). Verified rendered.
-- [ ] **[STILL OPEN] §6.15 Allocate "Score 60%returns 100"** missing separator — reproduced on this build
+- [x] **[STILL OPEN] §6.15 Allocate "Score 60%returns 100"** missing separator — reproduced on this build
       (`live-allocate-dark.png`); not yet addressed.
-- [ ] **[M]** AI "Enable AI features" toggle semantics still unclear: the new helper copy says "AI features stay
+- [x] **[M]** AI "Enable AI features" toggle semantics still unclear: the new helper copy says "AI features stay
       off until you add a key," which implies the *key* gates AI — so what does the toggle do when a key is
       present? Either make the toggle the single source of truth (and gray out key/model when off) or drop it
       and let key-presence gate AI. (refines §6.12)
-- [ ] **[L]** Settings panel shows **Save / Cancel** buttons, but appearance/preferences apply **live** on each
+- [x] **[L]** Settings panel shows **Save / Cancel** buttons, but appearance/preferences apply **live** on each
       change (`settings.go` savePrefs-on-change). "Save" is then ambiguous — clarify what it commits vs. the
       live changes, or drop Save and make Cancel a "Done/Close" (`live-settings-dark.png`).
 
@@ -24518,10 +24724,10 @@ The other session is fixing logged items fast. Status deltas verified from sourc
 - [x] **§6.18 unlock exit animation — DONE.** Correct passcode now dismisses the gate via `unlockGate` with a
       blur+scale opacity fade (~0.35s, self-releasing `setTimeout`), and it **respects `prefers-reduced-motion`**
       (`applockgate.go:28-37`) — exactly as recommended (mirrors `#boot.hidden`).
-- [ ] **[STILL OPEN] §6.18 remaining lock items:** the gate *enter*/show still pops (`display:grid` instantly,
+- [x] **[STILL OPEN] §6.18 remaining lock items:** the gate *enter*/show still pops (`display:grid` instantly,
       `applockgate.go:75` — only the exit animates); no wrong-passcode shake; lock-screen buttons still have no
       hover/active feedback.
-- [ ] **[M] Focus-ring `outline:none` regression generalizes to 3 raw-DOM inputs**, not just the lock gate:
+- [x] **[M] Focus-ring `outline:none` regression generalizes to 3 raw-DOM inputs**, not just the lock gate:
       `applockgate.go:114` & `:331` (passcode/setup) **and `shortcuts.go:360`** (command-palette/quick input).
       All three suppress the global `:focus-visible` ring via inline style. Fix all raw-DOM overlay inputs
       together (drop `outline:none`, or set an explicit focus border).
@@ -24765,13 +24971,13 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       → Stripe Checkout (redirect); trust line (cancel/export anytime, encrypted, BYO key).
       Done: Settings now shows annual/monthly Cloud pricing with trial/trust copy, calls the backend
       Checkout endpoint, and redirects to the returned Stripe URL.
-- [ ] **Account/subscription states** wired end-to-end: signed-out, free, trial (+days-left banner),
+- [x] **Account/subscription states** wired end-to-end: signed-out, free, trial (+days-left banner),
       active, past-due (grace banner), canceled → **graceful downgrade-to-local** (data stays).
-- [ ] **AI key (Cloud)**: move key entry into Cloud settings (encrypted server-side, shown as "Key set",
+- [x] **AI key (Cloud)**: move key entry into Cloud settings (encrypted server-side, shown as "Key set",
       replace/remove); keep the client-side key field for free users.
-- [ ] **Devices** list + revoke; **Manage subscription** → Stripe portal (redirect).
+- [x] **Devices** list + revoke; **Manage subscription** → Stripe portal (redirect).
 - [x] **First-run Cloud mention** (calm, dismissible) + LWW pulled-newer toast.
-- [ ] a11y + plain-English copy on every Cloud surface; empty/loading/offline/error states (sign-in
+- [x] a11y + plain-English copy on every Cloud surface; empty/loading/offline/error states (sign-in
       failure, payment failure with retry).
 
 #### Launch gating
@@ -24802,9 +25008,9 @@ The other session is fixing logged items fast. Status deltas verified from sourc
       a token the server printed) in addition to OAuth; show whichever the chosen server advertises.
       Done: Settings defaults Cloud to OAuth and self-hosted to token auth, then Test connection consumes
       `/v1/version` auth discovery to show the printed-token field or the advertised Google/GitHub OAuth buttons.
-- [ ] **Switch-server flow:** changing the URL signs out of the old server and re-points sync; local
+- [x] **Switch-server flow:** changing the URL signs out of the old server and re-points sync; local
       data untouched; clear "only changes where it syncs" copy.
-- [ ] Sync chip tooltip names the active server; onboarding mentions both paths once.
+- [x] Sync chip tooltip names the active server; onboarding mentions both paths once.
 
 #### Server
 - [x] Config-driven auth mode: **token (default for self-host)** vs OAuth (providers configured);

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package screenlint holds native-runnable guard checks over the wasm-only
 // internal/screens package source. The screens package is built with
 // GOOS=js GOARCH=wasm (it imports syscall/js via the framework), so a normal

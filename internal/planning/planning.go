@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package planning projects a saved Plan (a named what-if scenario) into a
 // balance curve by composing the pure domain Plan/PlanItem types with the
 // forecast engine. It is the thin logic layer between the data model and the

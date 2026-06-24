@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package artifacts is the pure logic for user-stored assets (uploaded images and
 // imported CSV/JSON datasets): the kinds, parsing a CSV into columns + rows,
 // building a data URL for an image, byte-size accounting, and validation. It has

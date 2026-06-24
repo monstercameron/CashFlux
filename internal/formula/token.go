@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package formula implements a small, sandboxed expression language for
 // user-defined calculations: a tokenizer, parser, and allow-list evaluator over
 // numbers, strings, arithmetic, comparisons, and a fixed set of functions. No

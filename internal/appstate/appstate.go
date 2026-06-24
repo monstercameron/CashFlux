@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package appstate is the seam between the UI and the persistence/logic layers.
 // It owns the in-memory SQLite store and a slog logger, validates writes, and
 // exposes typed read/write accessors plus JSON import/export.

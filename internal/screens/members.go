@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -6,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -104,7 +107,7 @@ func Members() ui.Node {
 		bump()
 	}
 
-	saveMember := func(id, newName, newColor string) {
+	saveMember := func(id, newName, newColor, dateStyle, defAccountID string) {
 		for _, m := range app.Members() {
 			if m.ID != id {
 				continue
@@ -113,6 +116,9 @@ func Members() ui.Node {
 				m.Name = n
 			}
 			m.Color = strings.TrimSpace(newColor)
+			// Per-member preferences (§1.19): empty = inherit the household default.
+			m.Prefs.DateStyle = strings.TrimSpace(dateStyle)
+			m.Prefs.DefaultAccountID = strings.TrimSpace(defAccountID)
 			if err := app.PutMember(m); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -249,11 +255,35 @@ func memberAvatar(name, color string) ui.Node {
 	)
 }
 
+// memberDateStyleOptions are the per-member date-style choices: a leading
+// "Inherit" (empty value = use the household default) then the concrete styles.
+func memberDateStyleOptions() []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: "", Label: uistate.T("members.prefInherit")},
+		{Value: string(prefs.DateISO), Label: "2006-01-02"},
+		{Value: string(prefs.DateUS), Label: "01/02/2006"},
+		{Value: string(prefs.DateEU), Label: "02/01/2006"},
+		{Value: string(prefs.DateLong), Label: "Jan 2, 2006"},
+	}
+}
+
+// memberDefaultAccountOptions lists "Inherit" (no per-member default) then every
+// account by name, for the per-member default-account preference.
+func memberDefaultAccountOptions() []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("members.prefInherit")}}
+	if app := appstate.Default; app != nil {
+		for _, a := range app.Accounts() {
+			opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
+		}
+	}
+	return opts
+}
+
 type memberRowProps struct {
 	Member       domain.Member
 	OnDelete     func(string)
 	OnSetDefault func(string)
-	OnSave       func(id, name, color string)
+	OnSave       func(id, name, color, dateStyle, defAccountID string)
 	OnView       func(string)
 }
 
@@ -272,16 +302,20 @@ func MemberRow(props memberRowProps) ui.Node {
 	editing := ui.UseState(false)
 	nameS := ui.UseState(m.Name)
 	colorS := ui.UseState(color)
+	dateStyleS := ui.UseState(m.Prefs.DateStyle)
+	defAcctS := ui.UseState(m.Prefs.DefaultAccountID)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(m.Name)
 		colorS.Set(color)
+		dateStyleS.Set(m.Prefs.DateStyle)
+		defAcctS.Set(m.Prefs.DefaultAccountID)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(m.ID, nameS.Get(), colorS.Get())
+		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get())
 		editing.Set(false)
 	}))
 
@@ -304,6 +338,23 @@ func MemberRow(props memberRowProps) ui.Node {
 					Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("members.color"),
 					Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor))),
+				// Per-member preferences (§1.19): an optional personal date style and a
+				// default account that seeds this member's quick-add. "Inherit" = use the
+				// household default.
+				labeledField(uistate.T("members.prefDateStyle"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   memberDateStyleOptions(),
+						Selected:  dateStyleS.Get(),
+						OnChange:  func(v string) { dateStyleS.Set(v) },
+						AriaLabel: uistate.T("members.prefDateStyle"),
+					})),
+				labeledField(uistate.T("members.prefDefaultAccount"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   memberDefaultAccountOptions(),
+						Selected:  defAcctS.Get(),
+						OnChange:  func(v string) { defAcctS.Set(v) },
+						AriaLabel: uistate.T("members.prefDefaultAccount"),
+					})),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

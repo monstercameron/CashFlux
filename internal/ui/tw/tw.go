@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package tw is CashFlux's typed, Tailwind-compatible utility vocabulary, built on
 // the GoWebComponents css engine (Layer-1 css + the css/u utilities). It exists to
 // retire the runtime Tailwind CDN (C91): every utility class the app used as a

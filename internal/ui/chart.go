@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -20,6 +22,10 @@ type AreaChartProps struct {
 	Width      float64 // viewBox width, default 180
 	Height     float64 // viewBox height, default 90
 	Label      string  // accessible description (the SVG is role="img"); default "Trend chart"
+	// Labels are optional x-axis period captions (e.g. month names) rendered as an
+	// HTML row beneath the chart. They live outside the SVG because the chart uses
+	// preserveAspectRatio="none" (non-uniform scaling) which would distort SVG text.
+	Labels []string
 }
 
 // AreaChart renders a filled area sparkline from a value series using the pure
@@ -50,7 +56,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 	area := chart.AreaPath(pts, h)
 	line := chart.LinePath(pts)
 
-	return Svg(
+	svg := Svg(
 		css.Class(tw.WFull, tw.MtAuto),
 		Attr("role", "img"),
 		Attr("aria-label", label),
@@ -67,4 +73,14 @@ func AreaChart(props AreaChartProps) uic.Node {
 		Path(Attr("d", area), Attr("fill", "url(#"+gid+")"), css.Class("wonder-chart-area")),
 		Path(Attr("d", line), Attr("fill", "none"), Attr("stroke", stroke), Attr("stroke-width", "2"), Attr("pathLength", "1"), css.Class("wonder-chart-line")),
 	)
+	if len(props.Labels) == 0 {
+		return svg
+	}
+	// R-4: render calendar/period captions as an evenly-spaced HTML row under the chart.
+	spans := make([]any, 0, len(props.Labels)+1)
+	spans = append(spans, css.Class("area-labels", tw.Flex, tw.JustifyBetween, tw.Text11, tw.TextFaint, tw.Mt1))
+	for _, lbl := range props.Labels {
+		spans = append(spans, Span(lbl))
+	}
+	return Div(css.Class(tw.Flex, tw.FlexCol), svg, Div(spans...))
 }

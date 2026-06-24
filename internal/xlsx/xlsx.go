@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package xlsx provides a minimal pure-Go reader for .xlsx files (Office Open XML
 // SpreadsheetML). It opens the zip archive, reads the shared-strings table and the
 // first worksheet, and returns all rows as [][]string.

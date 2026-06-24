@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package pwcheck validates and scores the secret that guards a CashFlux app
 // lock — a numeric PIN, a password, or a passphrase. It is pure Go (no
 // syscall/js), so the rules are table-tested on native Go and reused unchanged

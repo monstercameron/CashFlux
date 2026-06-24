@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package reconcile provides pure logic for statement reconciliation: computing
 // the difference between an account's cleared balance and a user-supplied
 // statement balance, and reporting whether the two agree.

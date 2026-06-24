@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package i18n is CashFlux's central language store: every user-facing string is
 // looked up by a stable dot-namespaced key (e.g. "nav.accounts") in a per-language
 // Catalog. English is the source language and the fallback; other languages are

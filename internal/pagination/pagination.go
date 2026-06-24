@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package pagination is the pure window math for paged lists: total pages, page
 // clamping, slice bounds, and the human "from-to of total" label. Keeping it
 // platform-free means the transactions table (and any other paged view) computes

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package budgeting
 
 // Methodology is the budgeting approach a household uses. It shapes the Budgets

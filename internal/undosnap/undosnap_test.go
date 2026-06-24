@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package undosnap_test
 
 import (

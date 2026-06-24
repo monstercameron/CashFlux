@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package backendrpc defines the browser/server RPC contract used over the
 // GoGRPCBridge websocket tunnel.
 package backendrpc

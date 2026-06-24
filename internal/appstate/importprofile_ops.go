@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package appstate — import-profile CRUD (session-only).
 //
 // Saved import profiles are stored in a package-level slice rather than the

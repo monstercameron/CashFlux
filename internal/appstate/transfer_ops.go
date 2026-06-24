@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package appstate — transfer orchestration helpers.
 //
 // This file holds CreateTransferPair, which records the two transaction legs

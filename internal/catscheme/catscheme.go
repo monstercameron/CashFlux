@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package catscheme provides the starter category scheme for a new household —
 // a sensible default set of income and expense categories (with a few
 // sub-categories) used for onboarding and the "reset categories" action. Pure

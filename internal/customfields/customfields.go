@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package customfields models user-defined custom fields and validates entity
 // custom{} value maps against their definitions. It is the typed-extensibility
 // layer: core entities stay strongly typed, while users add validated fields.

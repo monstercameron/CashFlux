@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package artifactstore defines the interface for storing binary artifact blobs
 // (uploaded images and other binary data) separately from the main dataset JSON.
 // The concrete implementation uses IndexedDB in the browser; this pure package

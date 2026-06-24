@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package insights — afford_answer.go
 // AffordAnswer produces a deterministic, explainable affordability result from
 // the user's real figures. Pure Go; no syscall/js.

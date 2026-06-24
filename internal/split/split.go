@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package split is the pure core for splitting shared expenses between household
 // members and settling up (B24). It computes each member's share of a cost,
 // nets out who paid versus who owes across many shared expenses, and proposes a

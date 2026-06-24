@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package app
@@ -166,6 +168,9 @@ func flushBackendSyncQueue() {
 			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 			if !resp.Accepted {
 				setSyncStatus(syncStatus{State: "conflict", Pending: len(loadSyncQueue()), Message: "newer server snapshot available"})
+				// LWW resolution: server holds a newer snapshot, so this push was dropped.
+				// Tell the user plainly via a toast (§7.11) instead of failing silently.
+				uistate.PostNotice(uistate.T("sync.pulledNewer"), false)
 				if app := appstate.Default; app != nil {
 					app.Log().Warn("backend sync push rejected; newer server snapshot available", "workspace", item.WorkspaceID)
 				}

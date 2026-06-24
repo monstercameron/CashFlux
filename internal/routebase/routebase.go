@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package routebase is the pure core for serving the SPA under a URL sub-path
 // (e.g. GitHub Pages project sites at https://user.github.io/CashFlux/). The
 // history router matches and pushes raw pathnames, so when the app lives under a

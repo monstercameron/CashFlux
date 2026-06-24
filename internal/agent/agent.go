@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package agent is the pure, in-house tool-calling loop behind CashFlux's agentic
 // AI (C82): a typed tool registry and a bounded model→tool-calls→execute→repeat
 // loop with step and token-budget caps, cancellation, and a recorded transcript.

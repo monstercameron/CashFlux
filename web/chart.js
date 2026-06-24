@@ -19,7 +19,7 @@
     }
   }
 
-  window.cashfluxRenderChart = function (el, specJSON) {
+  window.cashfluxRenderChart = function (el, specJSON, currencySymbol) {
     if (!el || typeof d3 === "undefined") return;
     var spec;
     try {
@@ -28,6 +28,10 @@
       return;
     }
     el.__cfChartSpecJSON = specJSON;
+    // Base-currency symbol for the "money" axis format. Persisted on the element so
+    // the ResizeObserver re-render (which calls without the arg) keeps using it.
+    if (currencySymbol != null && currencySymbol !== "") el.__cfCurSym = currencySymbol;
+    var curSym = el.__cfCurSym || "$";
     if (!el.__cfChartResizeObserver && typeof ResizeObserver !== "undefined") {
       var resizeFrame = 0;
       el.__cfChartResizeObserver = new ResizeObserver(function () {
@@ -106,6 +110,13 @@
     // numbers that overflow the narrow margin. Invalid specs fall back silently.
     function tickFormatter(axisSpec) {
       if (axisSpec && axisSpec.format) {
+        // "money" = currency-aware compact ticks ("$1.5k") using the base-currency
+        // symbol, so chart axes match the rest of the app's money formatting without
+        // hardcoding "$" (which would be wrong for a EUR/GBP/JPY base).
+        if (axisSpec.format === "money") {
+          var f = d3.format("~s");
+          return function (d) { return curSym + f(d); };
+        }
         try { return d3.format(axisSpec.format); } catch (e) { return null; }
       }
       return null;
@@ -203,13 +214,43 @@
   function renderDonut(svg, s, W, H, defColor) {
     var pts = (s && s.points) || [];
     if (!pts.length) return;
-    var r = Math.min(W, H) / 2;
-    var g = svg.append("g").attr("transform", "translate(" + (W / 2) + "," + (H / 2) + ")");
-    var pie = d3.pie().value(function (p) { return Math.abs(p.y); })(pts);
-    var arc = d3.arc().innerRadius(r * 0.6).outerRadius(Math.max(0, r - 2));
     var palette = d3.scaleOrdinal(d3.schemeTableau10 || [defColor]);
+    var colorOf = function (p, i) { return (p && p.color) || palette(i); };
+    var total = 0;
+    pts.forEach(function (p) { total += Math.abs(p.y); });
+
+    // Lay the ring on the left and a legend (swatch · label · share%) on the right
+    // when there's room, so the slices are actually identifiable — a bare ring of
+    // colours is unreadable. On a narrow box, fall back to just the ring (the
+    // adjacent named breakdown carries the detail there).
+    var legendW = 160;
+    var hasRoom = W > 200 + legendW;
+    var r = Math.min(hasRoom ? (W - legendW) : W, H) / 2;
+    var cx = hasRoom ? (r + 6) : (W / 2);
+    var g = svg.append("g").attr("transform", "translate(" + cx + "," + (H / 2) + ")");
+    var pie = d3.pie().value(function (p) { return Math.abs(p.y); }).sort(null)(pts);
+    var arc = d3.arc().innerRadius(r * 0.6).outerRadius(Math.max(0, r - 2));
     g.selectAll("path").data(pie).enter().append("path")
       .attr("d", arc)
-      .attr("fill", function (d, i) { return d.data.color || palette(i); });
+      .attr("fill", function (d, i) { return colorOf(d.data, i); });
+    if (!hasRoom) return;
+
+    var fg = cssVar("--text", "#e6e6e9");
+    var dim = cssVar("--text-dim", "#9a9aa2");
+    var rowH = Math.min(18, Math.max(12, (H - 8) / pts.length));
+    var lx = 2 * r + 18;
+    var startY = (H - rowH * pts.length) / 2 + rowH / 2;
+    var lg = svg.append("g");
+    pts.forEach(function (p, i) {
+      var y = startY + i * rowH;
+      var pct = total > 0 ? Math.round((Math.abs(p.y) / total) * 100) : 0;
+      var label = p.label || "—";
+      if (label.length > 16) label = label.slice(0, 15) + "…";
+      lg.append("rect").attr("x", lx).attr("y", y - 5).attr("width", 9).attr("height", 9).attr("rx", 2).attr("fill", colorOf(p, i));
+      lg.append("text").attr("x", lx + 14).attr("y", y + 3).attr("font-size", "11px").attr("fill", fg).text(label);
+      // Right-align the share% within the legend column (not the far SVG edge) so
+      // each "label … NN%" pair reads as one compact row, not split across the card.
+      lg.append("text").attr("x", lx + legendW - 10).attr("y", y + 3).attr("font-size", "11px").attr("text-anchor", "end").attr("fill", dim).text(pct + "%");
+    });
   }
 })();

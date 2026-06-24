@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package payoff computes debt-payoff projections: given a balance owed, an
 // annual interest rate, and a fixed monthly payment, it simulates the month-by-
 // month paydown and reports how long it takes and how much interest accrues.

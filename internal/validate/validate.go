@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package validate checks CashFlux domain entities for structural correctness:
 // required fields, valid enum values, positive amounts, consistent currencies,
 // and sane references. It returns all problems at once as Issues so forms can

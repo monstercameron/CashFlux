@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package widgetcfg
 
 // Built-in widget settings schemas. Each dashboard widget that exposes settings

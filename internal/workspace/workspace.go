@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package workspace models CashFlux's named, independent contexts. A workspace is
 // a self-contained household — its own dataset and UI state — that the user can
 // create, switch between, duplicate, and delete (e.g. "real money" vs. an

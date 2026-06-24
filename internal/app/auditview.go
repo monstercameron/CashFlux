@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // Package app — auditbridge.go wires the session-scoped audit feed (C78 phase 4)

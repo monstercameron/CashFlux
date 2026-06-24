@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package version is the single source of truth for the user-facing product
 // version. It is deliberately tiny and dependency-free so any layer (UI, exports,
 // logs, bug reports) can read one value.

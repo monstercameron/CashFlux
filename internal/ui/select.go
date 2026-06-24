@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 // This file uses a qualified import for html/shorthand (alias "sh") rather than

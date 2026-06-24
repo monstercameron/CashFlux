@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package aiprovider
 
 // registry is the curated set of supported providers. Six speak the OpenAI dialect

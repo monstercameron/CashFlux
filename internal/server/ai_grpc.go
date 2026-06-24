@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package server
 
 import (
@@ -63,6 +65,15 @@ func (s *AIService) SetKey(ctx context.Context, req backendrpc.SetKeyRequest) (b
 	key := strings.TrimSpace(req.Key)
 	if len(key) > maxAIKeyLength {
 		return backendrpc.SetKeyResponse{}, status.Error(codes.InvalidArgument, "openai key is too long")
+	}
+	// An empty key is the "remove" action — delete any stored key for this provider
+	// (§7.11 Cloud AI-key replace/remove) without needing a separate RPC method.
+	if key == "" {
+		if err := s.store.DeleteAIKey(user.ID, provider); err != nil {
+			return backendrpc.SetKeyResponse{}, err
+		}
+		auditFromContext(ctx, s.store, "ai_key.remove", "provider", provider)
+		return backendrpc.SetKeyResponse{Stored: false, Provider: provider}, nil
 	}
 	if provider != "openai" || !strings.HasPrefix(key, "sk-") {
 		return backendrpc.SetKeyResponse{}, status.Error(codes.InvalidArgument, "invalid openai key")

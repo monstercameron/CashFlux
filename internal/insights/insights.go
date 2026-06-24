@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package insights derives spending trend and anomaly highlights from per-category
 // spend histories: it compares a category's current-period spend against the
 // trailing average of its prior periods and flags material deviations. The result

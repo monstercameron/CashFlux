@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package tasksort orders and filters to-do tasks for display. It is the pure,
 // table-tested home of the list rules that previously lived inline in the js-only
 // to-do screen: open tasks first, then soonest due (dated before undated), then

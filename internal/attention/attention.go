@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package attention ranks the urgent, act-now signals on the dashboard into a
 // single ordered digest: bills due soon, near/over budgets, stale account
 // balances, overdue or high-priority to-dos, and the biggest spending spike.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package aiprovider
 
 // This file pins the app's preferred request shape for AI calls (a product

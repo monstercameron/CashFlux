@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package appstate — audit_ops.go exposes the audit-log persistence seam (C78).
 //
 // RecordAudit writes a single auditlog.Entry through to the SQLite audit_log

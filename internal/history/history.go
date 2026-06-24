@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package history is the pure, diff-based change-history core behind CashFlux's
 // audit log and undo/redo (C78 phase 1). It snapshots the dataset before and after
 // a mutation, diffs the two into a minimal id-keyed ChangeSet (forward + inverse),

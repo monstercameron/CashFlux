@@ -935,6 +935,53 @@ async function testW1112Entrances(browser) {
     }
   }
 
+  // W-3: bento TILE hover-lift. Regression guard — tiles carry the
+  // wonder-bento-enter entrance animation (fill-mode:both, final keyframe
+  // transform:none); without an !important hover rule the lift is silently
+  // clobbered by the filled animation's end-state (the bug this section was
+  // added to catch). Hover the first tile and assert a non-identity translateY.
+  const tileEl = await page.$(".bento .w:not(.drag)");
+  if (!tileEl) {
+    info("W-3: no .bento .w tile found — skipping tile hover-lift check");
+  } else {
+    await tileEl.scrollIntoViewIfNeeded();
+    await tileEl.hover();
+    await page.waitForTimeout(220);
+    const tileTy = await page.evaluate(() => {
+      const el = document.querySelector(".bento .w:not(.drag)");
+      const m = getComputedStyle(el).transform.match(/matrix\(([^)]+)\)/);
+      return m ? Number(m[1].split(",")[5]) : 0;
+    });
+    info(`W-3: tile hover translateY=${tileTy.toFixed(2)}px`);
+    if (Math.abs(tileTy) >= 4) {
+      pass("W-3: bento tile hover-lift is perceptible (>=4px, beats wonder-bento-enter fill)", `translateY=${tileTy.toFixed(2)}px`);
+    } else {
+      fail("W-3: bento tile hover-lift missing/too subtle", `translateY=${tileTy.toFixed(2)}px — filled wonder-bento-enter likely clobbering the hover transform`);
+    }
+    // Move the pointer away so it doesn't bleed into later sections.
+    await page.mouse.move(2, 2);
+
+    // W-3 drag-ghost: a tile being dragged (.w.drag) must dim to opacity .35 as a
+    // functional grab cue. Regression guard — same filled-animation clobber as the
+    // hover-lift: wonder-bento-enter (fill-mode:both, opacity:1 end-state) would
+    // override the non-important .35 without the !important fix.
+    const dragGhost = await page.evaluate(() => {
+      const t = document.querySelector(".bento .w");
+      if (!t) return null;
+      t.classList.add("drag");
+      const o = getComputedStyle(t).opacity;
+      t.classList.remove("drag");
+      return o;
+    });
+    if (dragGhost === null) {
+      info("W-3 drag-ghost: no tile found");
+    } else if (Math.abs(parseFloat(dragGhost) - 0.35) < 0.05) {
+      pass("W-3 drag-ghost: dragging tile dims to .35 (beats wonder-bento-enter fill)", `opacity=${dragGhost}`);
+    } else {
+      fail("W-3 drag-ghost: dragging tile not dimmed", `opacity=${dragGhost} — filled wonder-bento-enter likely clobbering .w.drag opacity`);
+    }
+  }
+
   // W-11: row stagger on accounts/budgets list
   await spaNav(page, "/accounts");
   await page.waitForTimeout(500); // catch early

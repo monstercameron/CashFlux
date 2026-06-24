@@ -39,3 +39,6 @@ e2e/screenshots/
 .gwc_*.txt
 e2e/*_output.txt
 /wonder_w*.png
+
+# Stray root-level wasm build output (build to web/bin/ instead)
+/CashFlux

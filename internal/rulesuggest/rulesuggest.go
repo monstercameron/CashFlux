@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package rulesuggest proposes auto-categorization rules from how a household has
 // already categorized its transactions. It's a deterministic, explainable
 // heuristic (no AI): group transactions by their payee/description key, and where

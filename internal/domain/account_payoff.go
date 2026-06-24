@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package domain
 
 // IncludedInPayoff reports whether this account participates in the debt-payoff

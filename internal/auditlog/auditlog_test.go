@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 package auditlog_test
 
 import (
@@ -176,5 +178,37 @@ func TestLog_concurrentAppend(t *testing.T) {
 	}
 	if l.Len() != 50 {
 		t.Errorf("expected 50 entries after concurrent appends, got %d", l.Len())
+	}
+}
+
+func TestFilterByEntityType(t *testing.T) {
+	entries := []auditlog.Entry{
+		{EntityType: "transaction", EntityID: "t1"},
+		{EntityType: "account", EntityID: "a1"},
+		{EntityType: "transaction", EntityID: "t2"},
+		{EntityType: "budget", EntityID: "b1"},
+	}
+	cases := []struct {
+		name       string
+		entityType string
+		wantIDs    []string
+	}{
+		{"transactions only", "transaction", []string{"t1", "t2"}},
+		{"single account", "account", []string{"a1"}},
+		{"no match", "goal", []string{}},
+		{"empty type returns all", "", []string{"t1", "a1", "t2", "b1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := auditlog.FilterByEntityType(entries, tc.entityType)
+			if len(got) != len(tc.wantIDs) {
+				t.Fatalf("len = %d, want %d", len(got), len(tc.wantIDs))
+			}
+			for i, id := range tc.wantIDs {
+				if got[i].EntityID != id {
+					t.Errorf("[%d] = %q, want %q", i, got[i].EntityID, id)
+				}
+			}
+		})
 	}
 }

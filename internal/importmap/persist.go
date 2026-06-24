@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package importmap — saved-profile registry.
 //
 // SavedProfile wraps a Profile with a human-readable name so users can recall

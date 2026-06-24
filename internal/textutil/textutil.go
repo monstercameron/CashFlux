@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package textutil holds small, pure string helpers shared across CashFlux —
 // kept out of the view layer so they can be unit-tested on native Go.
 package textutil

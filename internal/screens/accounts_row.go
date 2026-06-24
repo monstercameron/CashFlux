@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -78,8 +80,13 @@ func AccountRow(props accountRowProps) ui.Node {
 	// Secondary actions live in a "⋯" overflow menu so each row stays uncluttered
 	// (primary: Transactions / Edit / ✕); selecting one closes the menu (C9).
 	menuOpen := ui.UseState(false)
+	menuID := ui.UseId()
 	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
 	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
+	// WAI-ARIA dismissal for the ⋯ actions menu: Escape (refocus trigger) + outside
+	// pointerdown. The `.add-backdrop` can't be relied on (fixed inside the topbar's
+	// sticky stacking context, so it doesn't paint over page content). See uiw.DismissPopover.
+	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
@@ -507,8 +514,8 @@ func AccountRow(props accountRowProps) ui.Node {
 		// Primary actions inline; everything else in the ⋯ menu.
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Div(css.Class("add-wrap"),
-			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+		Div(css.Class("add-wrap"), Attr("id", menuID),
+			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),

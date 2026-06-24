@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package bills derives upcoming bills from the user's accounts and recurring
 // cash flows (B22). It is a pure, derived read: each liability account that has a
 // statement due-day and a minimum payment becomes a recurring monthly bill, and

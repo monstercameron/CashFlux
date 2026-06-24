@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Package aiprovider is the pure, typed model of the AI inference providers
 // CashFlux can talk to (C81 phase 1): who they are, which wire dialect they speak,
 // their default endpoints, and the per-model capabilities and indicative pricing.
