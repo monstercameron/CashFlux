@@ -298,6 +298,43 @@
       [data-wonder="off"] #cf-page-view.page-enter { animation: none; }
       @media (prefers-reduced-motion: reduce) { #cf-page-view.page-enter { animation: none; } }
 
+      /* W-10 · Route cross-fade via View Transitions API (progressive enhancement).
+         Sets a named view-transition on #cf-page-view so the browser can snapshot
+         old → new content when startViewTransition() is called. The Go side
+         (pageenter.go) wraps the W-9 class-toggle in startViewTransition when the
+         API is available and motion is on, giving the browser control of the
+         cross-fade animation machinery.
+         NOTE: because GWC's virtual-DOM render swap fires before the UseEffect hook,
+         the outgoing page snapshot is already replaced when triggerPageEnter runs.
+         The practical effect is that the View Transitions API handles the new-page
+         appearance (the W-9 fade-rise) rather than a true old→new cross-fade. A true
+         cross-fade would require a pre-render hook in the framework. This scaffold is
+         progressive enhancement: browsers without the API degrade silently to W-9. */
+      #cf-page-view {
+        view-transition-name: cf-page;
+      }
+      @keyframes wonder-xfade-out {
+        from { opacity: 1; }
+        to   { opacity: 0; }
+      }
+      @keyframes wonder-xfade-in {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      ::view-transition-old(cf-page) {
+        animation: wonder-xfade-out var(--wonder-dur, 160ms) var(--wonder-ease, ease) both;
+      }
+      ::view-transition-new(cf-page) {
+        animation: wonder-xfade-in var(--wonder-dur, 160ms) var(--wonder-ease, ease) both;
+      }
+      /* Kill view transitions when wonder is off or reduced-motion. */
+      [data-wonder="off"] #cf-page-view { view-transition-name: none; }
+      @media (prefers-reduced-motion: reduce) {
+        #cf-page-view { view-transition-name: none; }
+        ::view-transition-old(cf-page),
+        ::view-transition-new(cf-page) { animation: none; }
+      }
+
       /* W-7 · Click ripple — a radial-gradient overlay scales from 0→2.2× on
          :active and fades back out on release; driven purely by CSS :active.
          scale(calc(2.2 * var(--wonder-on))) → 0 when off/reduced-motion.

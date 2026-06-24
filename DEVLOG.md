@@ -2,6 +2,33 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — feat: WONDER W-10 route cross-fade — View Transitions API progressive enhancement
+
+**What shipped:** CSS scaffold (`view-transition-name: cf-page`, `::view-transition-old/new`
+keyframes `wonder-xfade-out/in`), `cashfluxWonder.crossFade(applyFn)` in wonder.js, and Go-side
+wiring in `triggerPageEnter` (pageenter.go) that delegates the W-9 class-toggle through crossFade
+when the API is present.
+
+**Framework constraint (key trade-off):** GWC's virtual-DOM render swap fires synchronously
+before the UseEffect hook runs. This means by the time `triggerPageEnter` is called, the outgoing
+page content is already replaced in the DOM — the browser has no "old" snapshot to cross-fade
+from. A true old→new cross-fade would require calling `startViewTransition(() => routeChange())`
+*before* the render, i.e., hooking into the framework's router at the pre-render point. That
+would be a framework internals hack and was explicitly out of scope. This implementation is
+intentionally honest about the constraint.
+
+**What the API actually does here:** wrapping the `.page-enter` class-toggle in
+`startViewTransition` means the browser uses its transition machinery for the new-page appearance
+step (the W-9 fade-rise). The `::view-transition-new(cf-page)` keyframe applies, giving the API
+ownership of the animation timing. The practical visual result is the same as W-9, but it runs
+through the browser's compositor-level transition layer rather than a raw rAF.
+
+**Fail-safe chain:** no wonder.js → raw double-rAF fallback. wonder.js present but API absent →
+crossFade calls applyFn() directly (same result as before W-10). data-wonder="off" or
+prefers-reduced-motion → crossFade skips startViewTransition. All paths produce readable content.
+
+**sw.js:** Bumped cache to `cashflux-v250` to evict stale assets.
+
 ## 2026-06-23 — feat: WONDER W-15 count-up + W-18 chart draw-in (fail-safe, reduced-motion safe)
 
 **W-15 (count-up):** A standalone `web/countup.js` shim exposes `window.cashfluxCountUpScan()`. On

@@ -16,6 +16,7 @@ and every commit updates this file under `Unreleased`.
 - C74 e2e: `e2e/c74_ai_extract_check.mjs` asserts Extract-with-AI + Suggest-categories buttons render and are operable
 
 ### Changed
+- **WONDER (W-10):** route cross-fade via the View Transitions API (progressive enhancement, fail-safe to the W-9 page-enter, reduced-motion safe).
 - **WONDER (W-15, W-18):** KPI number count-up on change + chart draw-in (line/area path stroke-dashoffset draw-in, area fade-in) — fail-safe to final value, reduced-motion safe. WONDER catalog complete.
 - **WONDER (W-9, W-21):** page-enter transition on route change + scroll-reveal for long pages (IntersectionObserver, fail-safe visible, reduced-motion safe).
 - **WONDER theme integration:** `prefs.Motion` (off/subtle/full) drives `data-wonder` on `<html>` via `ApplyPrefs`; a Motion segment control in appearance settings (Off / Subtle / Full) persists the choice and live-updates flourish intensity; OS prefers-reduced-motion remains a hard CSS override regardless.

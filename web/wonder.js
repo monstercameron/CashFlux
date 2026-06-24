@@ -80,5 +80,30 @@
     }
   }
 
-  window.cashfluxWonder = { observe: observe };
+  /**
+   * crossFade(applyFn) — W-10 View Transitions API helper.
+   *
+   * Wraps applyFn in document.startViewTransition() when:
+   *   • the API is available (Chrome 111+, Safari 18+)
+   *   • [data-wonder] is not "off"
+   *   • prefers-reduced-motion: reduce is not set
+   *
+   * Falls back to calling applyFn() directly when any condition is not met,
+   * so callers never need to feature-detect the API themselves.
+   *
+   * The Go side (pageenter.go) uses this to wrap the W-9 class-toggle so the
+   * browser can optionally manage the animation via its view-transition machinery.
+   */
+  function crossFade(applyFn) {
+    var off = document.documentElement.getAttribute("data-wonder") === "off";
+    var reduced = typeof matchMedia === "function" &&
+        matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!off && !reduced && typeof document.startViewTransition === "function") {
+      document.startViewTransition(applyFn);
+    } else {
+      applyFn();
+    }
+  }
+
+  window.cashfluxWonder = { observe: observe, crossFade: crossFade };
 })();
