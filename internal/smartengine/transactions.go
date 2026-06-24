@@ -58,9 +58,10 @@ func t4BulkEdit(in Input) []smart.Insight {
 			Feature: "SMART-T4",
 			Page:    smart.PageTransactions,
 			Key:     "SMART-T4:" + key,
-			Title:   labels[key] + " transactions use different categories",
-			Detail: plural(int64(counts[key]), "entry") + " from " + labels[key] + " are split across " +
-				plural(int64(len(cats)), "category") + ". Unifying them keeps your reports consistent.",
+			Title:   labels[key] + " is split across " + plural(int64(len(cats)), "category"),
+			Detail: labels[key] + " appears in " + plural(int64(len(cats)), "category") + " across " +
+				plural(int64(counts[key]), "transaction") +
+				". Standardizing the category will make reports more accurate.",
 			Severity: smart.SeverityNudge,
 		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review transactions", Route: "/transactions"}))
 	}
@@ -93,7 +94,7 @@ func t11Timeline(in Input) []smart.Insight {
 		Feature:  "SMART-T11",
 		Page:     smart.PageTransactions,
 		Key:      "SMART-T11:big:" + curStart.Format("2006-01") + ":" + big.ID,
-		Title:    "Biggest expense this month: " + mny(bigMag, in.Base).Format(2),
+		Title:    "Biggest expense this month: " + hmoneyc(bigMag, in.Base),
 		Detail:   txnLabel(big) + " on " + big.Date.Format("Jan 2") + " is your largest single expense so far this month.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(mny(bigMag, in.Base)).
@@ -126,7 +127,7 @@ func t2Duplicates(in Input) []smart.Insight {
 			Key:     "SMART-T2:" + g.Date + ":" + strings.ToLower(g.Description) + ":" + itoa64(g.Amount),
 			Title:   plural(int64(extra), "possible duplicate") + " of " + g.Description,
 			Detail: itoa64(int64(len(g.IDs))) + " identical entries on " + g.Date + " for " +
-				mny(abs64(g.Amount), g.Currency).Format(2) + " — merge or remove the extras.",
+				hmoneyc(abs64(g.Amount), g.Currency) + " — merge or remove the extras.",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(mny(abs64(g.Amount), g.Currency)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review transactions", Route: "/transactions"}))
@@ -173,10 +174,10 @@ func t6SpendingSpike(in Input) []smart.Insight {
 			Feature: "SMART-T6",
 			Page:    smart.PageTransactions,
 			Key:     "SMART-T6:" + t.ID,
-			Title:   mny(mag, in.Base).Format(2) + " in " + cat + " is unusually large",
+			Title:   hmoneyc(mag, in.Base) + " in " + cat + " is unusually large",
 			Detail: txnLabel(t) + " on " + t.Date.Format("Jan 2") + " is about " +
 				itoa64(mag/maxInt64(mean, 1)) + "× the typical " + cat + " charge (" +
-				mny(mean, in.Base).Format(2) + ").",
+				hmoneyc(mean, in.Base) + ").",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(mny(mag, in.Base)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transaction",
@@ -204,7 +205,7 @@ func t7MissingTxn(in Input) []smart.Insight {
 			Page:    smart.PageTransactions,
 			Key:     "SMART-T7:" + strings.ToLower(s.Name) + ":" + expected.Format("2006-01"),
 			Title:   s.Name + " hasn't posted yet",
-			Detail: s.Name + " usually charges about " + mny(s.Amount, s.Currency).Format(2) +
+			Detail: s.Name + " usually charges about " + hmoneyc(s.Amount, s.Currency) +
 				" by " + expected.Format("Jan 2") + ", but no charge is recorded — check for a forgotten entry or a failed payment.",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(mny(s.Amount, s.Currency)).
@@ -232,7 +233,7 @@ func t13RefundMatch(in Input) []smart.Insight {
 			Feature: "SMART-T13",
 			Page:    smart.PageTransactions,
 			Key:     "SMART-T13:" + r.ID,
-			Title:   "Refund of " + r.Amount.Format(2) + " from " + txnLabel(r),
+			Title:   "Refund of " + hm(r.Amount) + " from " + txnLabel(r),
 			Detail: "This " + r.Date.Format("Jan 2") + " credit looks like a refund of your " +
 				charge.Date.Format("Jan 2") + " charge — they net out, so it won't distort category totals.",
 			Severity: smart.SeverityInfo,

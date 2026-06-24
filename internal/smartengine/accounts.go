@@ -86,7 +86,7 @@ func a2DormantAccount(in Input) []smart.Insight {
 			idle := pctOf(baseBal, idleBenchmarkAPR-a.ExpectedReturnAPR)
 			ins.Detail = "No activity in " + plural(months, "month") + ". At a typical " +
 				fmtPct(idleBenchmarkAPR) + " savings rate this balance could earn about " +
-				in.baseMoney(idle).Format(2) + "/yr — consider moving or consolidating it."
+				in.hmoney(idle) + "/yr — consider moving or consolidating it."
 		} else {
 			ins.Detail = "No activity in " + plural(months, "month") + " — review whether it's still needed."
 		}
@@ -140,9 +140,9 @@ func a4CashPositioning(in Input) []smart.Insight {
 			Page:    smart.PageAccounts,
 			Key:     "SMART-A4:" + a.ID,
 			Title:   "Move idle cash from " + a.Name + " to earn more",
-			Detail: bal.Format(2) + " sits at " + fmtPct(a.ExpectedReturnAPR) + " in " + a.Name +
+			Detail: hm(bal) + " sits at " + fmtPct(a.ExpectedReturnAPR) + " in " + a.Name +
 				". Moving it to " + best.Name + " (" + fmtPct(bestAPR) + ") would earn about " +
-				in.baseMoney(gain).Format(2) + "/yr.",
+				in.hmoney(gain) + "/yr.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(in.baseMoney(gain)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open accounts",
@@ -185,9 +185,9 @@ func a1BalanceAnomaly(in Input) []smart.Insight {
 			Feature: "SMART-A1",
 			Page:    smart.PageAccounts,
 			Key:     "SMART-A1:" + a.ID + ":" + curStart.Format("2006-01"),
-			Title:   a.Name + " is spending faster than usual",
-			Detail: "This month's spending of " + in.baseMoney(cur).Format(2) + " is about " +
-				itoa64(ratio) + "× the recent monthly average (" + in.baseMoney(mean).Format(2) + ").",
+			Title:   "Spending from " + a.Name + " is higher than usual",
+			Detail: "This month's spending of " + in.hmoney(cur) + " is about " +
+				itoa64(ratio) + "× its recent monthly average of " + in.hmoney(mean) + ".",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(cur)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transactions",
@@ -218,7 +218,7 @@ func a7RecurringCharges(in Input) []smart.Insight {
 			Page:    smart.PageAccounts,
 			Key:     "SMART-A7:" + a.ID,
 			Title:   plural(int64(len(subs)), "recurring charge") + " on " + a.Name,
-			Detail: "About " + in.baseMoney(monthly).Format(2) + "/mo in recurring debits run through " +
+			Detail: "About " + in.hmoney(monthly) + "/mo in recurring debits run through " +
 				a.Name + ". Open Subscriptions to review them.",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(monthly)).
@@ -253,8 +253,8 @@ func a8OverdraftForecast(in Input) []smart.Insight {
 			Key:     "SMART-A8:" + a.ID,
 			Title:   a.Name + " may dip below zero around " + when.Format("Jan 2"),
 			Detail: "Projecting known recurring flows, " + a.Name + " reaches about " +
-				in.baseMoney(proj.MinBalance).Format(2) + " on " + when.Format("Jan 2") +
-				" — short by " + in.baseMoney(proj.BreachShortfall).Format(2) + ".",
+				in.hmoney(proj.MinBalance) + " on " + when.Format("Jan 2") +
+				" — short by " + in.hmoney(proj.BreachShortfall) + ".",
 			Severity: smart.SeverityAlert,
 		}.WithAmount(in.baseMoney(proj.BreachShortfall)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning",

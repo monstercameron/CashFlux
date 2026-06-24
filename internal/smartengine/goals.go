@@ -57,7 +57,7 @@ func g2Forecast(in Input) []smart.Insight {
 			Page:    smart.PageGoals,
 			Key:     "SMART-G2:" + g.ID,
 			Title:   g.Name + " is likely to finish late",
-			Detail: "Even putting your full ~" + in.baseMoney(surplus).Format(2) + "/mo surplus toward " + g.Name +
+			Detail: "Even putting your full " + in.hmoney(surplus) + "/mo surplus toward " + g.Name +
 				", it lands around " + finish.Format("Jan 2006") + " — later than the planned " + g.TargetDate.Format("Jan 2006") + ".",
 			Severity: smart.SeverityWarn,
 		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
@@ -93,8 +93,8 @@ func g10WhatIf(in Input) []smart.Insight {
 			Feature: "SMART-G10",
 			Page:    smart.PageGoals,
 			Key:     "SMART-G10:" + g.ID,
-			Title:   "Add " + mny(g10ExtraStep, in.Base).Format(2) + "/mo to finish " + g.Name + " sooner",
-			Detail: "Contributing " + mny(g10ExtraStep, in.Base).Format(2) + "/mo beyond the planned pace brings " +
+			Title:   "Add " + hmoneyc(g10ExtraStep, in.Base) + "/mo to finish " + g.Name + " sooner",
+			Detail: "Contributing " + hmoneyc(g10ExtraStep, in.Base) + "/mo beyond the planned pace brings " +
 				g.Name + " in about " + plural(months, "month") + " sooner.",
 			Severity: smart.SeverityInfo,
 		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
@@ -150,8 +150,8 @@ func g17AutoContribute(in Input) []smart.Insight {
 			Feature: "SMART-G17",
 			Page:    smart.PageGoals,
 			Key:     "SMART-G17:" + g.ID,
-			Title:   "Automate " + g.Name + ": " + needed.Format(2) + " each payday",
-			Detail: "Setting a standing rule to move " + needed.Format(2) + " to " + g.Name + " on each payday (around the " +
+			Title:   "Automate " + g.Name + ": " + hm(needed) + " each payday",
+			Detail: "Setting a standing rule to move " + hm(needed) + " to " + g.Name + " on each payday (around the " +
 				ordinalDay(payday) + ") keeps it on track without remembering it every month.",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(needed).
@@ -193,9 +193,9 @@ func g19BorrowWarning(in Input) []smart.Insight {
 			Page:    smart.PageGoals,
 			Key:     "SMART-G19:" + g.ID,
 			Title:   g.Name + "'s linked account is below its saved amount",
-			Detail: g.Name + " shows " + g.CurrentAmount.Format(2) + " saved, but its linked account holds only " +
-				in.baseMoney(bal).Format(2) + " — if you borrowed from it, the goal is set back by " +
-				in.baseMoney(cur-bal).Format(2) + ".",
+			Detail: g.Name + " shows " + hm(g.CurrentAmount) + " saved, but its linked account holds only " +
+				in.hmoney(bal) + " — if you borrowed from it, the goal is set back by " +
+				in.hmoney(cur-bal) + ".",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(cur-bal)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
@@ -262,8 +262,8 @@ func g3AllocateSurplus(in Input) []smart.Insight {
 		Feature: "SMART-G3",
 		Page:    smart.PageGoals,
 		Key:     "SMART-G3:" + in.Now.Format("2006-01"),
-		Title:   "You're freeing up about " + in.baseMoney(surplus).Format(2) + "/mo",
-		Detail: "After income and spending you have roughly " + in.baseMoney(surplus).Format(2) +
+		Title:   "You're freeing up about " + in.hmoney(surplus) + "/mo",
+		Detail: "After income and spending you have roughly " + in.hmoney(surplus) +
 			"/mo left over. Routing it across your " + plural(int64(n), "active goal") + " would reach them sooner.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(surplus)).
@@ -294,9 +294,9 @@ func g15DebtStrategy(in Input) []smart.Insight {
 		Feature: "SMART-G15",
 		Page:    smart.PageGoals,
 		Key:     "SMART-G15:" + in.Now.Format("2006-01"),
-		Title:   "Avalanche could save " + in.baseMoney(saved).Format(2) + " in interest",
+		Title:   "Avalanche could save " + in.hmoney(saved) + " in interest",
 		Detail: "Paying your highest-interest debt (" + target + ") first instead of the smallest balance " +
-			"saves about " + in.baseMoney(saved).Format(2) + " in interest over the payoff.",
+			"saves about " + in.hmoney(saved) + " in interest over the payoff.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(saved)).
 		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
@@ -355,8 +355,8 @@ func g8GoalImpact(in Input) []smart.Insight {
 		Feature: "SMART-G8",
 		Page:    smart.PageGoals,
 		Key:     "SMART-G8:" + big.ID,
-		Title:   "That " + in.baseMoney(bigMag).Format(2) + " is " + plural(weeks, "week") + " of " + refGoal.Name,
-		Detail: txnLabel(big) + " on " + big.Date.Format("Jan 2") + " (" + in.baseMoney(bigMag).Format(2) +
+		Title:   "That " + in.hmoney(bigMag) + " is " + plural(weeks, "week") + " of " + refGoal.Name,
+		Detail: txnLabel(big) + " on " + big.Date.Format("Jan 2") + " (" + in.hmoney(bigMag) +
 			") equals about " + plural(weeks, "week") + " of your " + refGoal.Name + " saving pace.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(bigMag)).
@@ -383,8 +383,8 @@ func g12SuggestGoals(in Input) []smart.Insight {
 		Key:     "SMART-G12:emergency",
 		Title:   "Consider starting an emergency fund",
 		Detail: "You don't have an emergency fund yet. A common starting target is " +
-			in.baseMoney(target).Format(2) + " — about " + itoa64(emergencyStartMonths) +
-			" months of your roughly " + in.baseMoney(essentials).Format(2) + "/mo essentials.",
+			in.hmoney(target) + " — about " + itoa64(emergencyStartMonths) +
+			" months of your roughly " + in.hmoney(essentials) + "/mo essentials.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(target)).
 		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Create a goal", Route: "/goals"})
@@ -428,8 +428,8 @@ func g18Feasibility(in Input) []smart.Insight {
 			Page:    smart.PageGoals,
 			Key:     "SMART-G18:" + d.g.ID,
 			Title:   d.g.Name + "'s deadline looks tight",
-			Detail: d.g.Name + " needs " + in.baseMoney(d.needed).Format(2) + "/mo to hit " +
-				d.g.TargetDate.Format("Jan 2006") + ", but only about " + in.baseMoney(fair).Format(2) +
+			Detail: d.g.Name + " needs " + in.hmoney(d.needed) + "/mo to hit " +
+				d.g.TargetDate.Format("Jan 2006") + ", but only about " + in.hmoney(fair) +
 				"/mo is realistically free for it — consider extending the date or trimming elsewhere.",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(d.needed)).
@@ -473,8 +473,8 @@ func g13Windfall(in Input) []smart.Insight {
 		Feature: "SMART-G13",
 		Page:    smart.PageGoals,
 		Key:     "SMART-G13:" + best.ID,
-		Title:   "You received a large deposit of " + in.baseMoney(bestBase).Format(2),
-		Detail: "A " + in.baseMoney(bestBase).Format(2) + " deposit on " + best.Date.Format("Jan 2") +
+		Title:   "You received a large deposit of " + in.hmoney(bestBase),
+		Detail: "A " + in.hmoney(bestBase) + " deposit on " + best.Date.Format("Jan 2") +
 			" stands out from your usual income. Routing some of it to a goal or to debt now keeps it from drifting into spending.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(bestBase)).
@@ -503,19 +503,19 @@ func g1SuggestedContribution(in Input) []smart.Insight {
 			continue
 		}
 		neededBase := in.toBaseMinor(needed.Amount, needed.Currency)
-		detail := "Saving " + needed.Format(2) + "/mo reaches " + g.Name + " by " + g.TargetDate.Format("Jan 2006") + "."
+		detail := "Saving " + hm(needed) + "/mo reaches " + g.Name + " by " + g.TargetDate.Format("Jan 2006") + "."
 		if surplus > 0 {
 			if neededBase <= surplus {
-				detail += " That fits within your roughly " + in.baseMoney(surplus).Format(2) + "/mo of slack."
+				detail += " That fits within your roughly " + in.hmoney(surplus) + "/mo of slack."
 			} else {
-				detail += " That's above your roughly " + in.baseMoney(surplus).Format(2) + "/mo of slack — consider a later date."
+				detail += " That's above your roughly " + in.hmoney(surplus) + "/mo of slack — consider a later date."
 			}
 		}
 		out = append(out, smart.Insight{
 			Feature:  "SMART-G1",
 			Page:     smart.PageGoals,
 			Key:      "SMART-G1:" + g.ID,
-			Title:    "Save " + needed.Format(2) + "/mo for " + g.Name,
+			Title:    "Save " + hm(needed) + "/mo for " + g.Name,
 			Detail:   detail,
 			Severity: smart.SeverityNudge,
 		}.WithAmount(needed).
@@ -553,10 +553,10 @@ func g5GoalConflict(in Input) []smart.Insight {
 		Feature: "SMART-G5",
 		Page:    smart.PageGoals,
 		Key:     "SMART-G5:" + in.Now.Format("2006-01"),
-		Title:   "Your goals need more than you free up each month",
-		Detail: plural(int64(n), "active goal") + " together need about " + in.baseMoney(totalNeeded).Format(2) +
-			"/mo, but you free up roughly " + in.baseMoney(surplus).Format(2) + "/mo. Extend a deadline or trim about " +
-			in.baseMoney(shortfall).Format(2) + "/mo.",
+		Title:   "Your goals are overcommitted by " + in.hmoney(shortfall) + "/mo",
+		Detail: "You have about " + in.hmoney(surplus) + "/mo of slack, but your " +
+			plural(int64(n), "active goal") + " require " + in.hmoney(totalNeeded) +
+			"/mo. Extend a deadline or trim a goal to close the gap.",
 		Severity: smart.SeverityWarn,
 	}.WithAmount(in.baseMoney(shortfall)).
 		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review goals", Route: "/goals"})
@@ -582,7 +582,7 @@ func g6MilestoneNudge(in Input) []smart.Insight {
 				Page:     smart.PageGoals,
 				Key:      "SMART-G6:done:" + g.ID,
 				Title:    "You reached " + g.Name + "! 🎉",
-				Detail:   g.Name + " is fully funded at " + g.TargetAmount.Format(2) + ". Time to set the next one.",
+				Detail:   g.Name + " is fully funded at " + hm(g.TargetAmount) + ". Time to set the next one.",
 				Severity: smart.SeverityInfo,
 			}.WithAmount(g.TargetAmount).
 				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
@@ -598,7 +598,7 @@ func g6MilestoneNudge(in Input) []smart.Insight {
 				Page:     smart.PageGoals,
 				Key:      "SMART-G6:near:" + g.ID,
 				Title:    g.Name + " is " + itoa64(int64(pct)) + "% there",
-				Detail:   "Just " + rem.Format(2) + " left on " + g.Name + " — the finish line is close.",
+				Detail:   "Just " + hm(rem) + " left on " + g.Name + " — the finish line is close.",
 				Severity: smart.SeverityInfo,
 			}.WithAmount(rem).
 				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
@@ -629,9 +629,9 @@ func g11EmergencyFund(in Input) []smart.Insight {
 		Page:    smart.PageGoals,
 		Key:     "SMART-G11:" + g.ID,
 		Title:   "Emergency fund covers " + fmtMonths(covered) + " of essentials",
-		Detail: g.Name + " holds " + in.baseMoney(current).Format(2) + " against about " +
-			in.baseMoney(essentials).Format(2) + "/mo of essentials. Most aim for " + itoa64(emergencyTargetMos) +
-			" months — another " + in.baseMoney(gap).Format(2) + " gets there.",
+		Detail: g.Name + " holds " + in.hmoney(current) + " against about " +
+			in.hmoney(essentials) + "/mo of essentials. Most aim for " + itoa64(emergencyTargetMos) +
+			" months — another " + in.hmoney(gap) + " gets there.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(gap)).
 		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID})

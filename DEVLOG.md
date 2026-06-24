@@ -3,6 +3,39 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART insight copy: from generated to product-ready
+
+Owner feedback: "a lot of alerts sound generated, not product-ready." Three concrete examples — a
+budget alert reading "…projected to finish about 519.37 over its USD limit" (no symbol, no rounding,
+robotic), a goal-conflict title that was a vague clause, and a category alert with an actual grammar
+bug ("97 entrys … 2 categorys"). The follow-up was emphatic: **refine all of it**, not just the three.
+
+Diagnosed the systemic tells rather than hand-editing 60 strings blind. Three root causes, all
+shared across the 66 engines:
+
+1. **Money rendered raw.** Every insight used `Money.Format(2)`, which the `money` package defines as
+   symbol-less, ungrouped `"%d.%0*d"` — so amounts read "519.37" and the copy bolted on the currency
+   *code* ("over its USD limit"). Fixed at the source: added `hmoneyc(minor, cur)` (+ `in.hmoney` and
+   `hm(money.Money)` wrappers) in `format.go` — currency symbol, thousands grouping, and whole-unit
+   rounding for amounts ≥ 100 units (people don't say "$519.37 over budget"), cents preserved below.
+   Swept all **107** `Money.Format(2)` call-sites with a balanced-paren perl pass (`in.baseMoney(X).Format(2)`
+   → `in.hmoney(X)`, `mny(A,B).Format(2)` → `hmoneyc(A,B)`, and the remaining money-typed `X.Format(2)`
+   → `hm(X)`). One change, every alert improves.
+2. **Naive pluralizer.** `plural()` just appended "s" → "entrys"/"categorys". Rewrote it with real
+   rules (consonant+y→-ies, vowel+y→+s so "days" not "daies", sibilant→-es) and made it pluralize the
+   *last* word of a phrase ("2 active goals", "2 household members"). Fixes every `plural()` caller at once.
+3. **Tone.** Rewrote the three flagged alerts to the owner's exact target copy, stripped tildes from
+   prose, collapsed stacked hedges ("full ~$X" → "full $X"), and turned several colon-fragment titles
+   into full sentences.
+
+Locked it in with table-driven `format_test.go` (pluralizer incl. the irregulars that bit us, money
+humanizer rounding/grouping/negatives, thousands grouping). `go test` + wasm build green. The engine
+tests assert on `Insight.Amount` (the money value), not the rendered Detail string, so the copy
+changes didn't break them — formatting stays a presentation concern.
+
+Next: the four placement waves (row badges, section actions/tooltips, form field-assists, entity
+overlays + dashboard widgets) and a continued per-string editorial pass tracked as a todo.
+
 ## 2026-06-24 — SMART layer, deepened: interspersed, branded, schedulable, mutable, runnable
 
 Owner feedback after the 84/84 completion: the hub was nice but the layer felt "half baked" — the

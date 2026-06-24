@@ -76,7 +76,7 @@ func b7Seasonal(in Input) []smart.Insight {
 			Page:    smart.PageBudgets,
 			Key:     "SMART-B7:" + cat,
 			Title:   name + " spending is seasonal",
-			Detail: name + " ranged from " + mny(lo, in.Base).Format(2) + " to " + mny(hi, in.Base).Format(2) +
+			Detail: name + " ranged from " + hmoneyc(lo, in.Base) + " to " + hmoneyc(hi, in.Base) +
 				"/mo across recent months. A month-specific budget fits it better than a flat number.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(mny(hi-lo, in.Base)).
@@ -103,16 +103,16 @@ func b8SafeToSpend(in Input) []smart.Insight {
 		return nil // nothing meaningful to report on an empty wallet
 	}
 	sev := smart.SeverityInfo
-	title := mny(safe, in.Base).Format(2) + " is safe to spend"
-	detail := "After the bills still due this month (" + mny(billsLeft, in.Base).Format(2) +
-		") and your goal contributions (" + mny(goalNeeds, in.Base).Format(2) +
-		"), about " + mny(safe, in.Base).Format(2) + " of your " + mny(liquid, in.Base).Format(2) +
+	title := hmoneyc(safe, in.Base) + " is safe to spend"
+	detail := "After the bills still due this month (" + hmoneyc(billsLeft, in.Base) +
+		") and your goal contributions (" + hmoneyc(goalNeeds, in.Base) +
+		"), about " + hmoneyc(safe, in.Base) + " of your " + hmoneyc(liquid, in.Base) +
 		" liquid cash is genuinely free."
 	if safe < 0 {
 		sev = smart.SeverityWarn
 		title = "Spending is tight this month"
 		detail = "Your bills and goal contributions this month exceed liquid cash by " +
-			mny(-safe, in.Base).Format(2) + " — hold off on discretionary spending."
+			hmoneyc(-safe, in.Base) + " — hold off on discretionary spending."
 	}
 	ins := smart.Insight{
 		Feature:  "SMART-B8",
@@ -140,13 +140,14 @@ func b9PacingNudge(in Input) []smart.Insight {
 			continue
 		}
 		name := budgetName(b)
+		over := hmoneyc(pace.OverBy.Amount, pace.OverBy.Currency)
 		out = append(out, smart.Insight{
 			Feature: "SMART-B9",
 			Page:    smart.PageBudgets,
 			Key:     "SMART-B9:" + b.ID + ":" + start.Format("2006-01-02"),
-			Title:   name + " is on pace to go over",
-			Detail: "At the current rate " + name + " is projected to finish about " +
-				pace.OverBy.Format(2) + " over its " + st.Spent.Currency + " limit. Easing off now keeps it in budget.",
+			Title:   name + " is on pace to exceed its budget",
+			Detail: name + " is projected to exceed budget by " + over +
+				" this period. Slowing spending now would keep it closer to plan.",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(pace.OverBy).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open budgets",
@@ -175,7 +176,7 @@ func b10UncoveredSpending(in Input) []smart.Insight {
 			Page:    smart.PageBudgets,
 			Key:     "SMART-B10:" + catID,
 			Title:   name + " has no budget yet",
-			Detail: "You spend about " + mny(monthly, in.Base).Format(2) + "/mo on " + name +
+			Detail: "You spend about " + hmoneyc(monthly, in.Base) + "/mo on " + name +
 				" with no budget covering it — adding one keeps it from slipping through.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(mny(monthly, in.Base)).

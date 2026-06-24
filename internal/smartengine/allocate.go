@@ -37,7 +37,7 @@ func al5OutcomePreview(in Input) []smart.Insight {
 		Page:    smart.PageAllocate,
 		Key:     "SMART-AL5:" + in.Now.Format("2006-01"),
 		Title:   "Allocating your surplus clears debt in " + plural(int64(plan.Months), "month"),
-		Detail: "Putting your ~" + in.baseMoney(surplus).Format(2) + "/mo surplus toward " + target +
+		Detail: "Putting your " + in.hmoney(surplus) + "/mo surplus toward " + target +
 			" (highest-interest first) clears your debt in about " + plural(int64(plan.Months), "month") + ".",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(surplus)).
@@ -81,9 +81,9 @@ func al3SmartReserve(in Input) []smart.Insight {
 		Feature: "SMART-AL3",
 		Page:    smart.PageAllocate,
 		Key:     "SMART-AL3:" + in.Now.Format("2006-01"),
-		Title:   "Suggested reserve: " + in.baseMoney(reserve).Format(2),
-		Detail: "Holding back about " + in.baseMoney(reserve).Format(2) + " (" + itoa64(emergencyTargetMos) +
-			" months of your roughly " + in.baseMoney(essentials).Format(2) +
+		Title:   "Suggested reserve: " + in.hmoney(reserve),
+		Detail: "Holding back about " + in.hmoney(reserve) + " (" + itoa64(emergencyTargetMos) +
+			" months of your roughly " + in.hmoney(essentials) +
 			"/mo essentials) keeps a real buffer before allocating the rest.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(reserve)).

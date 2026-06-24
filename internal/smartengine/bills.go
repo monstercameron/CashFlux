@@ -95,9 +95,9 @@ func bl1PredictVariable(in Input) []smart.Insight {
 			Feature: "SMART-BL1",
 			Page:    smart.PageBills,
 			Key:     "SMART-BL1:" + key,
-			Title:   labels[key] + ": about " + in.baseMoney(pred).Format(2) + " expected",
+			Title:   labels[key] + ": about " + in.hmoney(pred) + " expected",
 			Detail: labels[key] + " varies; its last " + plural(int64(len(last3)), "charge") + " averaged " +
-				in.baseMoney(pred).Format(2) + " (range " + in.baseMoney(min).Format(2) + "–" + in.baseMoney(mx).Format(2) + ").",
+				in.hmoney(pred) + " (range " + in.hmoney(min) + "–" + in.hmoney(mx) + ").",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(pred)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
@@ -155,8 +155,8 @@ func bl14SeasonalBill(in Input) []smart.Insight {
 			Feature: "SMART-BL14",
 			Page:    smart.PageBills,
 			Key:     "SMART-BL14:" + key,
-			Title:   m.label + " swings seasonally up to " + in.baseMoney(hi).Format(2),
-			Detail: m.label + " has ranged from " + in.baseMoney(lo).Format(2) + " to " + in.baseMoney(hi).Format(2) +
+			Title:   m.label + " swings seasonally up to " + in.hmoney(hi),
+			Detail: m.label + " has ranged from " + in.hmoney(lo) + " to " + in.hmoney(hi) +
 				" across the year. Budget for the high end in peak months rather than the average.",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(hi)).
@@ -187,7 +187,7 @@ func bl10PayAllDue(in Input) []smart.Insight {
 		Page:    smart.PageBills,
 		Key:     "SMART-BL10:" + in.Now.Format("2006-01-02"),
 		Title:   plural(int64(n), "bill") + " due in the next few days",
-		Detail: plural(int64(n), "bill") + " totaling about " + in.baseMoney(total).Format(2) +
+		Detail: plural(int64(n), "bill") + " totaling about " + in.hmoney(total) +
 			" are due within " + plural(int64(bl10DueWindow), "day") + ". Review and clear them together.",
 		Severity: smart.SeverityWarn,
 	}.WithAmount(in.baseMoney(total)).
@@ -221,7 +221,7 @@ func bl5OptimalPayDate(in Input) []smart.Insight {
 		Page:    smart.PageBills,
 		Key:     "SMART-BL5:" + nextPay.Format("2006-01-02"),
 		Title:   "Time flexible payments to just after payday",
-		Detail: plural(int64(beforeN), "bill") + " (about " + in.baseMoney(beforeTotal).Format(2) +
+		Detail: plural(int64(beforeN), "bill") + " (about " + in.hmoney(beforeTotal) +
 			") land before your next paycheck around " + nextPay.Format("Jan 2") +
 			". Where a biller allows it, shifting payment to just after payday smooths the month.",
 		Severity: smart.SeverityInfo,
@@ -329,7 +329,7 @@ func bl8PaycheckGrouping(in Input) []smart.Insight {
 		Page:    smart.PageBills,
 		Key:     "SMART-BL8:" + nextPay.Format("2006-01-02"),
 		Title:   plural(int64(n), "bill") + " due before your next paycheck",
-		Detail: plural(int64(n), "bill") + " totaling about " + in.baseMoney(total).Format(2) +
+		Detail: plural(int64(n), "bill") + " totaling about " + in.hmoney(total) +
 			" fall before your next paycheck around " + nextPay.Format("Jan 2") + " — make sure they're covered.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(total)).
@@ -414,10 +414,10 @@ func bl13StatementClarity(in Input) []smart.Insight {
 			Feature: "SMART-BL13",
 			Page:    smart.PageBills,
 			Key:     "SMART-BL13:" + a.ID + ":" + in.Now.Format("2006-01"),
-			Title:   a.Name + ": paying only the minimum costs you",
-			Detail: a.Name + " owes " + in.baseMoney(owed).Format(2) + " at " + fmtPct(a.InterestRateAPR) +
-				" APR. Paying just the " + in.baseMoney(minPay).Format(2) + " minimum leaves roughly " +
-				in.baseMoney(monthlyInterest).Format(2) + "/mo in interest — paying more saves it.",
+			Title:   "Paying only the minimum on " + a.Name + " is costing you",
+			Detail: a.Name + " owes " + in.hmoney(owed) + " at " + fmtPct(a.InterestRateAPR) +
+				" APR. The " + in.hmoney(minPay) + " minimum payment leaves about " +
+				in.hmoney(monthlyInterest) + "/mo in interest — paying more would cut that down.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(in.baseMoney(monthlyInterest)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
@@ -464,7 +464,7 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 			Key:     "SMART-BL6:" + a.ID + ":" + due.Format("2006-01"),
 			Title:   a.Name + " is due " + due.Format("Jan 2") + " — paying late adds up",
 			Detail: "At " + fmtPct(a.InterestRateAPR) + " APR, slipping a week past the " +
-				due.Format("Jan 2") + " due date costs roughly " + in.baseMoney(weekInterest).Format(2) +
+				due.Format("Jan 2") + " due date costs roughly " + in.hmoney(weekInterest) +
 				" in interest (plus any late fee).",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(weekInterest)).
@@ -495,10 +495,10 @@ func bl2CanCover(in Input) []smart.Insight {
 	}
 	when := in.Now.AddDate(0, 0, proj.BreachDay)
 	detail := "Projecting your recurring bills against liquid cash, the balance dips to about " +
-		in.baseMoney(proj.MinBalance).Format(2) + " around " + when.Format("Jan 2") + "."
+		in.hmoney(proj.MinBalance) + " around " + when.Format("Jan 2") + "."
 	if up := bills.UpcomingAll(in.Accounts, in.Recurring, in.Now); len(up) > 0 {
 		soon := up[0]
-		detail += " " + soon.Name + " (" + soon.Amount.Format(2) + ") is due " + soon.DueDate.Format("Jan 2") + "."
+		detail += " " + soon.Name + " (" + hm(soon.Amount) + ") is due " + soon.DueDate.Format("Jan 2") + "."
 	}
 	ins := smart.Insight{
 		Feature:  "SMART-BL2",
@@ -564,8 +564,8 @@ func bl7BillIncrease(in Input) []smart.Insight {
 			Page:    smart.PageBills,
 			Key:     "SMART-BL7:" + c.Name + ":" + c.ChangedAt.Format("2006-01"),
 			Title:   c.Name + " went up " + itoa64(int64(c.PercentChange)) + "%",
-			Detail: c.Name + " rose from " + in.baseMoney(c.OldAmount).Format(2) + " to " +
-				in.baseMoney(c.NewAmount).Format(2) + " as of " + c.ChangedAt.Format("Jan 2") + ".",
+			Detail: c.Name + " rose from " + in.hmoney(c.OldAmount) + " to " +
+				in.hmoney(c.NewAmount) + " as of " + c.ChangedAt.Format("Jan 2") + ".",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(c.Delta)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
@@ -598,14 +598,14 @@ func bl9SinkingFund(in Input) []smart.Insight {
 			Page:    smart.PageBills,
 			Key:     "SMART-BL9:" + r.ID,
 			Title:   "Set aside for " + r.Label,
-			Detail: r.Label + " is about " + in.baseMoney(abs64(annual)).Format(2) + "/yr, due " +
-				due.Format("Jan 2") + ". Putting aside ~" + in.baseMoney(monthly).Format(2) +
+			Detail: r.Label + " is about " + in.hmoney(abs64(annual)) + "/yr, due " +
+				due.Format("Jan 2") + ". Putting aside " + in.hmoney(monthly) +
 				"/mo now avoids the lump-sum shock.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(in.baseMoney(monthly)).
 			WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
-				TaskTitle: "Set aside " + in.baseMoney(monthly).Format(2) + "/mo for " + r.Label,
-				TaskNotes: "Sinking fund for " + r.Label + " (~" + in.baseMoney(abs64(annual)).Format(2) + "/yr, due " + due.Format("Jan 2") + ")."}))
+				TaskTitle: "Set aside " + in.hmoney(monthly) + "/mo for " + r.Label,
+				TaskNotes: "Sinking fund for " + r.Label + " (" + in.hmoney(abs64(annual)) + "/yr, due " + due.Format("Jan 2") + ")."}))
 	}
 	return out
 }
