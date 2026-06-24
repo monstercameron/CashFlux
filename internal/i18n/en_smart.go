@@ -49,6 +49,23 @@ var smartKeys = Catalog{
 	"smart.overlapBtn":          "Check for overlaps",
 	"smart.todoTitle":           "Add a to-do in plain English",
 	"smart.todoPlaceholder":     "e.g. move $200 to savings next Friday",
+
+	"smart.cleanupTitle":          "Clean up an account name",
+	"smart.cleanupPlaceholder":    "e.g. PLAID-CHK-8842",
+	"smart.categorizeTitle":       "Categorize a transaction",
+	"smart.categorizePlaceholder": "e.g. SQ *BLUE BOTTLE 8829 SF, $4.50",
+	"smart.searchTitle":           "Search in plain English",
+	"smart.searchPlaceholder":     "e.g. coffee over $10 last month",
+	"smart.merchantTitle":         "Clean up a merchant name",
+	"smart.merchantPlaceholder":   "e.g. SQ *BLUE BOTTLE 8829 SF",
+	"smart.taxTitle":              "Find tax-relevant transactions",
+	"smart.taxBtn":                "Scan for deductions",
+	"smart.priorityTitle":         "Which goal to fund first",
+	"smart.priorityBtn":           "Recommend an order",
+	"smart.benchmarkTitle":        "Is this subscription priced fairly?",
+	"smart.benchmarkPlaceholder":  "e.g. Spotify $11/mo",
+	"smart.bundleTitle":           "Find bundle opportunities",
+	"smart.bundleBtn":             "Check for bundles",
 }
 
 func init() {

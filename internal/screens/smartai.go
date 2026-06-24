@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -129,6 +130,64 @@ func subsContextString(app *appstate.App) string {
 	return b.String()
 }
 
+// categoriesContextString lists the user's category names for auto-categorization.
+func categoriesContextString(app *appstate.App) string {
+	var b strings.Builder
+	for _, c := range app.Categories() {
+		b.WriteString("- " + c.Name + "\n")
+	}
+	if b.Len() == 0 {
+		return "(no categories yet)"
+	}
+	return b.String()
+}
+
+// txnContextString lists recent transactions for the tax-relevant scan.
+func txnContextString(app *appstate.App) string {
+	txns := app.Transactions()
+	var b strings.Builder
+	n := 0
+	for i := len(txns) - 1; i >= 0 && n < 40; i-- {
+		t := txns[i]
+		if t.IsTransfer() {
+			continue
+		}
+		b.WriteString("- " + t.Date.Format("Jan 2") + " " + txnLabelOf(t) + ": " + fmtMoney(t.Amount) + "\n")
+		n++
+	}
+	if n == 0 {
+		return "(no transactions yet)"
+	}
+	return b.String()
+}
+
+// goalsContextString lists the user's goals with progress for prioritization.
+func goalsContextString(app *appstate.App) string {
+	var b strings.Builder
+	for _, g := range app.Goals() {
+		if g.Archived {
+			continue
+		}
+		line := "- " + g.Name + ": " + fmtMoney(g.CurrentAmount) + " of " + fmtMoney(g.TargetAmount)
+		if !g.TargetDate.IsZero() {
+			line += " by " + g.TargetDate.Format("Jan 2006")
+		}
+		b.WriteString(line + "\n")
+	}
+	if b.Len() == 0 {
+		return "(no goals yet)"
+	}
+	return b.String()
+}
+
+// txnLabelOf is the display label for a transaction (payee, else description).
+func txnLabelOf(t domain.Transaction) string {
+	if s := strings.TrimSpace(t.Payee); s != "" {
+		return s
+	}
+	return strings.TrimSpace(t.Desc)
+}
+
 // --- generic AI feature spec + controls -----------------------------------
 
 // aiFeatureSpec describes how to render and build a request for one AI feature.
@@ -182,6 +241,34 @@ func aiSpec(code string) (aiFeatureSpec, bool) {
 	case "SMART-D4":
 		return aiFeatureSpec{input: true, title: uistate.T("smart.todoTitle"), placeholder: uistate.T("smart.todoPlaceholder"),
 			build: func(_ *appstate.App, q string) smartai.Request { return smartai.TodoParse(q) }}, true
+	case "SMART-A3":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.cleanupTitle"), placeholder: uistate.T("smart.cleanupPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.AccountCleanup(q) }}, true
+	case "SMART-T1":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.categorizeTitle"), placeholder: uistate.T("smart.categorizePlaceholder"),
+			build: func(app *appstate.App, q string) smartai.Request {
+				return smartai.Categorize(q, categoriesContextString(app))
+			}}, true
+	case "SMART-T3":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.searchTitle"), placeholder: uistate.T("smart.searchPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.SearchParse(q) }}, true
+	case "SMART-T5":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.merchantTitle"), placeholder: uistate.T("smart.merchantPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.MerchantCleanup(q) }}, true
+	case "SMART-T12":
+		return aiFeatureSpec{title: uistate.T("smart.taxTitle"), btnLabel: uistate.T("smart.taxBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request { return smartai.TaxRelevant(txnContextString(app)) }}, true
+	case "SMART-G9":
+		return aiFeatureSpec{title: uistate.T("smart.priorityTitle"), btnLabel: uistate.T("smart.priorityBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request {
+				return smartai.GoalPriority(goalsContextString(app))
+			}}, true
+	case "SMART-SU10":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.benchmarkTitle"), placeholder: uistate.T("smart.benchmarkPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.SubBenchmark(q) }}, true
+	case "SMART-SU13":
+		return aiFeatureSpec{title: uistate.T("smart.bundleTitle"), btnLabel: uistate.T("smart.bundleBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request { return smartai.BundleFinder(subsContextString(app)) }}, true
 	}
 	return aiFeatureSpec{}, false
 }

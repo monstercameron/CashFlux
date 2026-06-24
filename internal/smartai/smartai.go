@@ -22,14 +22,22 @@ type Request struct {
 // /smart catalog only offers a toggle for AI features that actually do something
 // (mirroring the Free-engine HasEngine gate). It grows as features ship.
 var implemented = map[string]bool{
-	"SMART-A5":  true, // natural-language account Q&A
-	"SMART-A10": true, // account health explanation
-	"SMART-G4":  true, // goal drafting from a wish
-	"SMART-P2":  true, // plain-language scenario draft
-	"SMART-P3":  true, // narrated forecast/outlook summary
-	"SMART-AL4": true, // plain-language allocation intent
-	"SMART-SU2": true, // overlapping-service detection
-	"SMART-D4":  true, // natural-language to-do quick-add
+	"SMART-A3":   true, // account name/type cleanup
+	"SMART-A5":   true, // natural-language account Q&A
+	"SMART-A10":  true, // account health explanation
+	"SMART-T1":   true, // auto-categorization
+	"SMART-T3":   true, // natural-language search
+	"SMART-T5":   true, // merchant name cleanup
+	"SMART-T12":  true, // tax-relevant tagging
+	"SMART-G4":   true, // goal drafting from a wish
+	"SMART-G9":   true, // goal-priority suggestion
+	"SMART-P2":   true, // plain-language scenario draft
+	"SMART-P3":   true, // narrated forecast/outlook summary
+	"SMART-AL4":  true, // plain-language allocation intent
+	"SMART-SU2":  true, // overlapping-service detection
+	"SMART-SU10": true, // category-benchmark context
+	"SMART-SU13": true, // bundle-opportunity finder
+	"SMART-D4":   true, // natural-language to-do quick-add
 }
 
 // Implemented reports whether the AI feature has a shipped UI.
@@ -157,4 +165,82 @@ const todoSystem = "You turn a sentence into a single concise financial to-do. R
 // TodoParse builds the SMART-D4 request from the user's sentence.
 func TodoParse(sentence string) Request {
 	return Request{System: todoSystem, User: strings.TrimSpace(sentence)}
+}
+
+// cleanupSystem frames SMART-A3: clean up an account name + infer its type.
+const cleanupSystem = "You clean up account names. Given a raw account label, infer the account type " +
+	"(checking/savings/credit card/loan/brokerage) and propose a clean display name, e.g. " +
+	"\"PLAID-CHK-8842\" -> \"Chase Checking ••8842\". Reply with just the suggested name and type. One line."
+
+// AccountCleanup builds the SMART-A3 request from a raw account label.
+func AccountCleanup(rawName string) Request {
+	return Request{System: cleanupSystem, User: "Raw account name: " + strings.TrimSpace(rawName)}
+}
+
+// categorizeSystem frames SMART-T1: pick a category for a transaction.
+const categorizeSystem = "You categorize transactions. Given a transaction description and the list of available " +
+	"categories, reply with the single best-fitting category name from the list (exact text). If none fit, reply " +
+	"\"Uncategorized\". Reply with just the category name."
+
+// Categorize builds the SMART-T1 request from a description and the category list.
+func Categorize(description, categories string) Request {
+	return Request{System: categorizeSystem,
+		User: "Categories:\n" + strings.TrimSpace(categories) + "\n\nTransaction: " + strings.TrimSpace(description)}
+}
+
+// searchSystem frames SMART-T3: parse a query into structured filter terms.
+const searchSystem = "You translate a plain-English transaction query into concrete filter terms: any merchant/text, " +
+	"amount comparison, category, and date range. Reply with a short plain-English restatement of the exact filter, " +
+	"e.g. \"merchant contains 'coffee', amount > $10, last month\". One or two lines."
+
+// SearchParse builds the SMART-T3 request from the user's query.
+func SearchParse(query string) Request {
+	return Request{System: searchSystem, User: strings.TrimSpace(query)}
+}
+
+// merchantSystem frames SMART-T5: normalize a raw merchant string.
+const merchantSystem = "You normalize messy merchant strings from bank imports into clean names, e.g. " +
+	"\"SQ *BLUE BOTTLE 8829 SF\" -> \"Blue Bottle Coffee\". Reply with just the clean merchant name. One line."
+
+// MerchantCleanup builds the SMART-T5 request from a raw merchant string.
+func MerchantCleanup(raw string) Request {
+	return Request{System: merchantSystem, User: "Raw merchant: " + strings.TrimSpace(raw)}
+}
+
+// taxSystem frames SMART-T12: flag potentially deductible transactions.
+const taxSystem = "You flag potentially tax-relevant transactions (charity, medical, home-office, business). " +
+	"Given the list, name the ones worth reviewing for a deduction and why, briefly. If none, say so. " +
+	"Two or three sentences, plain English."
+
+// TaxRelevant builds the SMART-T12 request from a transaction list snapshot.
+func TaxRelevant(transactionContext string) Request {
+	return Request{System: taxSystem, User: "Transactions:\n" + strings.TrimSpace(transactionContext)}
+}
+
+// goalPrioritySystem frames SMART-G9: recommend which goal to fund first.
+const goalPrioritySystem = "You advise which savings goal to fund first, weighing deadline urgency, interest cost " +
+	"(paying high-interest debt beats low-yield saving), and emergency-fund adequacy. Given the goals, recommend an " +
+	"order and explain briefly. Two or three sentences, plain English."
+
+// GoalPriority builds the SMART-G9 request from a goals snapshot.
+func GoalPriority(goalsContext string) Request {
+	return Request{System: goalPrioritySystem, User: "Goals:\n" + strings.TrimSpace(goalsContext)}
+}
+
+// benchmarkSystem frames SMART-SU10: add price context for a subscription.
+const benchmarkSystem = "You add light pricing context to a subscription, e.g. \"$22/mo is on the higher end for " +
+	"music streaming\". Given the service and its monthly price, give one sentence of context. No disclaimers."
+
+// SubBenchmark builds the SMART-SU10 request from a subscription description.
+func SubBenchmark(subscription string) Request {
+	return Request{System: benchmarkSystem, User: "Subscription: " + strings.TrimSpace(subscription)}
+}
+
+// bundleSystem frames SMART-SU13: spot subscriptions cheaper bundled.
+const bundleSystem = "You spot subscriptions that are usually cheaper bundled (e.g. Disney+/Hulu/ESPN, phone + " +
+	"streaming perks). Given the list, suggest any bundle opportunities. If none apply, say so. Two or three sentences."
+
+// BundleFinder builds the SMART-SU13 request from a subscription list snapshot.
+func BundleFinder(subscriptionContext string) Request {
+	return Request{System: bundleSystem, User: "Subscriptions:\n" + strings.TrimSpace(subscriptionContext)}
 }
