@@ -448,6 +448,54 @@ func TestBL8NoIncomeNoInsight(t *testing.T) {
 	}
 }
 
+func TestG19BorrowWarning(t *testing.T) {
+	in := baseInput()
+	in.Accounts = []domain.Account{acct("sav", "Savings", domain.TypeSavings, 100000, ref)} // account holds $1000
+	g := goal("g", "Vacation", 500000, 300000, time.Time{})                                  // goal says $3000 saved
+	g.AccountID = "sav"
+	in.Goals = []domain.Goal{g}
+	got := g19BorrowWarning(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 borrow warning, got %d: %+v", len(got), got)
+	}
+	// Shortfall = $3000 - $1000 = $2000.
+	if got[0].Amount.Amount != 200000 {
+		t.Errorf("shortfall = %d, want 200000", got[0].Amount.Amount)
+	}
+}
+
+func TestG19NoWarningWhenCovered(t *testing.T) {
+	in := baseInput()
+	in.Accounts = []domain.Account{acct("sav", "Savings", domain.TypeSavings, 400000, ref)} // account holds $4000
+	g := goal("g", "Vacation", 500000, 300000, time.Time{})
+	g.AccountID = "sav"
+	in.Goals = []domain.Goal{g}
+	if got := g19BorrowWarning(in); len(got) != 0 {
+		t.Errorf("account covers the goal — want 0, got %d", len(got))
+	}
+}
+
+func TestG14LinkAccount(t *testing.T) {
+	in := baseInput()
+	in.Accounts = []domain.Account{acct("sav", "Savings", domain.TypeSavings, 100000, ref)}
+	in.Goals = []domain.Goal{goal("g", "Vacation", 500000, 100000, time.Time{})} // no AccountID
+	got := g14LinkAccount(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 link suggestion, got %d: %+v", len(got), got)
+	}
+}
+
+func TestG14SkipsLinkedGoal(t *testing.T) {
+	in := baseInput()
+	in.Accounts = []domain.Account{acct("sav", "Savings", domain.TypeSavings, 100000, ref)}
+	g := goal("g", "Vacation", 500000, 100000, time.Time{})
+	g.AccountID = "sav"
+	in.Goals = []domain.Goal{g}
+	if got := g14LinkAccount(in); len(got) != 0 {
+		t.Errorf("already linked — want 0, got %d", len(got))
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

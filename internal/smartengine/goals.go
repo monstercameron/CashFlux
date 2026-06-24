@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
@@ -21,8 +22,87 @@ func init() {
 	register("SMART-G8", g8GoalImpact)
 	register("SMART-G3", g3AllocateSurplus)
 	register("SMART-G13", g13Windfall)
+	register("SMART-G14", g14LinkAccount)
 	register("SMART-G15", g15DebtStrategy)
 	register("SMART-G18", g18Feasibility)
+	register("SMART-G19", g19BorrowWarning)
+}
+
+const g19MinShortfall = 50_00 // ignore small differences between goal and balance
+
+// SMART-G19 — Borrow-from-goal warning. For a goal linked to an account, warns
+// when the account's balance has fallen below the goal's recorded progress — a
+// sign funds were pulled out, setting the goal back.
+func g19BorrowWarning(in Input) []smart.Insight {
+	balByAccount := map[string]int64{}
+	for _, a := range in.Accounts {
+		if a.Archived {
+			continue
+		}
+		if bal, err := ledger.Balance(a, in.Transactions); err == nil {
+			balByAccount[a.ID] = in.toBaseMinor(bal.Amount, a.Currency)
+		}
+	}
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived || g.AccountID == "" {
+			continue
+		}
+		bal, ok := balByAccount[g.AccountID]
+		if !ok {
+			continue
+		}
+		cur := in.toBaseMinor(g.CurrentAmount.Amount, g.CurrentAmount.Currency)
+		if cur-bal < g19MinShortfall {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G19",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G19:" + g.ID,
+			Title:   g.Name + "'s linked account is below its saved amount",
+			Detail: g.Name + " shows " + g.CurrentAmount.Format(2) + " saved, but its linked account holds only " +
+				in.baseMoney(bal).Format(2) + " — if you borrowed from it, the goal is set back by " +
+				in.baseMoney(cur-bal).Format(2) + ".",
+			Severity: smart.SeverityWarn,
+		}.WithAmount(in.baseMoney(cur-bal)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
+}
+
+// SMART-G14 — Goal-linked account binding. Suggests linking a goal to an account
+// so its progress tracks the real balance automatically instead of by hand.
+func g14LinkAccount(in Input) []smart.Insight {
+	hasAsset := false
+	for _, a := range in.Accounts {
+		if !a.Archived && a.Class == domain.ClassAsset {
+			hasAsset = true
+			break
+		}
+	}
+	if !hasAsset {
+		return nil
+	}
+	var out []smart.Insight
+	for _, g := range in.Goals {
+		if g.Archived || g.AccountID != "" {
+			continue
+		}
+		if c, err := goals.IsComplete(g); err == nil && c {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-G14",
+			Page:    smart.PageGoals,
+			Key:     "SMART-G14:" + g.ID,
+			Title:   "Link " + g.Name + " to an account",
+			Detail: "Linking " + g.Name + " to a savings account lets its progress track the real balance " +
+				"automatically, instead of updating it by hand.",
+			Severity: smart.SeverityInfo,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+	}
+	return out
 }
 
 const g3MinSurplus = 50_00 // only nudge to allocate a meaningful leftover

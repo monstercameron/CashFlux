@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engines G14 + G19 (2026-06-24):** **G14** suggests linking an unlinked goal to an account so its progress tracks the real balance automatically; **G19** borrow-from-goal warning compares a goal-linked account's balance to the goal's recorded progress and warns when funds appear to have been pulled out (setback amount shown). 51 Free engines total. Table-driven tests.
+
 - **SMART series — Free engine BL8 (paycheck-aligned grouping) (2026-06-24):** infers the user's payday from recent income and flags how many upcoming bills (and their total) fall before the next paycheck, surfacing a between-paycheck cash crunch. 49 Free engines total. Table-driven tests.
 
 - **SMART series — Free engines D1, P5, BL1 (2026-06-24):** **D1** auto-generated to-dos (turns a backlog of recent uncategorized transactions into a one-tap to-do); **P5** goal-aware forecast overlay (how much the active goals consume monthly and the net left after); **BL1** predicted amount for variable bills (averages a varying biller's recent charges to estimate the next one). 48 Free engines total. Table-driven tests.
