@@ -22,6 +22,7 @@ func init() {
 	register("SMART-BL6", bl6LateFeeRisk)
 	register("SMART-BL1", bl1PredictVariable)
 	register("SMART-BL4", bl4Autopay)
+	register("SMART-BL8", bl8PaycheckGrouping)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
 	register("SMART-BL13", bl13StatementClarity)
@@ -98,6 +99,57 @@ func bl1PredictVariable(in Input) []smart.Insight {
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
 	}
 	return out
+}
+
+// SMART-BL8 — Paycheck-aligned grouping. Detects the user's payday from recent
+// income and flags how many upcoming bills fall before the next paycheck, so a
+// cash crunch between paychecks is visible.
+func bl8PaycheckGrouping(in Input) []smart.Insight {
+	payday, ok := recentPayday(in)
+	if !ok {
+		return nil
+	}
+	nextPay := dateutil.NextMonthlyDue(in.Now, payday)
+	var n int
+	var total int64
+	for _, b := range bills.UpcomingAll(in.Accounts, in.Recurring, in.Now) {
+		if b.DueDate.Before(in.Now) || !b.DueDate.Before(nextPay) {
+			continue
+		}
+		n++
+		total += in.toBaseMinor(b.Amount.Amount, b.Amount.Currency)
+	}
+	if n == 0 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-BL8",
+		Page:    smart.PageBills,
+		Key:     "SMART-BL8:" + nextPay.Format("2006-01-02"),
+		Title:   plural(int64(n), "bill") + " due before your next paycheck",
+		Detail: plural(int64(n), "bill") + " totaling about " + in.baseMoney(total).Format(2) +
+			" fall before your next paycheck around " + nextPay.Format("Jan 2") + " — make sure they're covered.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(total)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+	return []smart.Insight{ins}
+}
+
+// recentPayday infers the user's payday (day of month) from the most recent
+// income transaction in the trailing 90 days.
+func recentPayday(in Input) (int, bool) {
+	cut := in.Now.AddDate(0, 0, -90)
+	var last time.Time
+	day := 0
+	for _, t := range in.Transactions {
+		if !t.IsIncome() || t.Date.Before(cut) || t.Date.After(in.Now) {
+			continue
+		}
+		if day == 0 || t.Date.After(last) {
+			last, day = t.Date, t.Date.Day()
+		}
+	}
+	return day, day > 0
 }
 
 // SMART-BL4 — Autopay reconciliation. When a liability's most recent due date has

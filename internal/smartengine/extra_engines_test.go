@@ -421,6 +421,33 @@ func TestBL1SkipsFixedBill(t *testing.T) {
 	}
 }
 
+func TestBL8PaycheckGrouping(t *testing.T) {
+	in := baseInput() // now June 15
+	in.Transactions = []domain.Transaction{
+		{ID: "pay", AccountID: "x", Date: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Amount: usd(300000), Desc: "Salary"}, // payday = 1st
+	}
+	in.Recurring = []domain.Recurring{
+		{ID: "r", Label: "Phone", Amount: usd(-8000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)},
+	}
+	got := bl8PaycheckGrouping(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 paycheck-grouping insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 8000 {
+		t.Errorf("total = %d, want 8000", got[0].Amount.Amount)
+	}
+}
+
+func TestBL8NoIncomeNoInsight(t *testing.T) {
+	in := baseInput()
+	in.Recurring = []domain.Recurring{
+		{ID: "r", Label: "Phone", Amount: usd(-8000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)},
+	}
+	if got := bl8PaycheckGrouping(in); len(got) != 0 {
+		t.Errorf("no income — want 0, got %d", len(got))
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

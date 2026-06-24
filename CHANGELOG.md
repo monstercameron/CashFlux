@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — Free engine BL8 (paycheck-aligned grouping) (2026-06-24):** infers the user's payday from recent income and flags how many upcoming bills (and their total) fall before the next paycheck, surfacing a between-paycheck cash crunch. 49 Free engines total. Table-driven tests.
+
 - **SMART series — Free engines D1, P5, BL1 (2026-06-24):** **D1** auto-generated to-dos (turns a backlog of recent uncategorized transactions into a one-tap to-do); **P5** goal-aware forecast overlay (how much the active goals consume monthly and the net left after); **BL1** predicted amount for variable bills (averages a varying biller's recent charges to estimate the next one). 48 Free engines total. Table-driven tests.
 
 - **SMART series — 6 more Free engines: G3, P6, P9, SU6, SU8, BL4 (2026-06-24):** **G3** auto-allocate surplus to goals; **P6** forecast confidence band (±swing from trailing monthly-net range); **P9** break-even spending threshold; **SU6** per-subscription cost-creep history; **SU8** forgotten-since (stale subscription) surfacing; **BL4** autopay reconciliation (a payment near the due date marks a bill auto-paid). 45 Free engines total. Table-driven tests.
