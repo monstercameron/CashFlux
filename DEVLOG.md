@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — World-class operator-console landing redesign
+
+**Why.** The first landing was functional but generic — flat dark cards, weak hierarchy, emoji-in-a-box — the kind of page a visitor bounces off. Rebuilt it to a modern SaaS-landing bar (Linear/Stripe/Vercel reference).
+
+**Design system (inline `<style>` in `web/admin/index.html`).** Layered near-black canvas (`#07090a`) with two animated radial gradient glows (`body::before/::after`, emerald + teal, `drift1/drift2` keyframes) and a masked dot-grid (`.bg-grid`). Brand gradient emerald→teal (`--grad`) and a lighter mint→cyan text gradient (`--grad-text`) for headlines/wordmark. Glassmorphic surfaces (`--surface`/blur), `--border` tiers, focus-visible rings, tabular-nums for figures, Inter via Google Fonts with a system fallback, and a `prefers-reduced-motion` block that kills the glow + entrance animations.
+
+**Structure (`homeView` in `cmd/cashflux-admin/main.go`).** Sticky blurred nav (gradient wordmark + Sign in) → hero (eyebrow pill with pulsing dot, `clamp()` gradient-text headline, sub, primary "Sign in to console" + secondary "Explore features" anchor, check-marked trust row) → bordered stats band (1px-gap grid trick) → features section (glass cards with `translateY` hover-lift, pointer-tracked radial glow `::after`, staggered `fadeUp` via `:nth-child` delays) → CTA band (radial-tinted panel) → footer (API/Status/Privacy). Added small render helpers `brandMark`/`trustItem`/`statPill`; the login card and console header now carry the gradient brand tile.
+
+**Decisions / notes.** Avoided a `<b>` dependency for the wordmark gradient (applied the clip-text directly to `.brand-name`) since I wasn't sure the shorthand DSL exported `B`. Kept emoji glyphs but seated them in gradient-tinted tiles — the polish comes from type/layout/motion, not the icons. The console dir is served from disk (`CASHFLUX_SERVER_CONSOLE_DIR=web/admin`), so shipping the redesign was just rebuilding `admin.wasm` + the new `index.html` — no server restart required (the running backend picked it up). Pure presentation: zero changes to auth, API calls, or the state machine. `GOOS=js GOARCH=wasm` build rc=0.
+
+**Next.** Optional: replace emoji with inline SVG glyphs; add a subtle product screenshot/mock in the hero.
+
 ## 2026-06-24 — Console landing + login flow with dev-only credential prefill
 
 **What changed.** The operator console SPA previously dropped the user directly into a token-login form with no context about what they were signing into. Restructured it into a proper three-screen flow: Home → Login → Console.

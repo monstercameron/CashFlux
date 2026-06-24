@@ -238,48 +238,173 @@ func lsRemove() {
 // Sub-views (pure render functions — no hooks, receive plain values + callbacks)
 // ---------------------------------------------------------------------------
 
-// homeView renders the landing / hero screen.
-// hasToken controls whether the "Open console" button is shown.
+// brandMark renders the gradient CashFlux wordmark. A non-empty tag appends a
+// muted descriptor (e.g. "Operator Console") beside the name.
+func brandMark(tag string) ui.Node {
+	return Div(
+		css.Class("brand"),
+		Div(css.Class("brand-mark"), Text("C")),
+		Span(css.Class("brand-name"), Text("CashFlux")),
+		If(tag != "", Span(css.Class("brand-tag"), Text(tag))),
+	)
+}
+
+// trustItem renders one check-marked reassurance line under the hero CTA.
+func trustItem(label string) ui.Node {
+	return Span(
+		css.Class("trust-item"),
+		Span(css.Class("chk"), Text("✓")),
+		Text(label),
+	)
+}
+
+// statPill renders one cell of the hero stats band.
+func statPill(num, caption string) ui.Node {
+	return Div(
+		css.Class("stat-pill"),
+		Div(css.Class("num"), Text(num)),
+		Div(css.Class("cap"), Text(caption)),
+	)
+}
+
+// homeView renders the marketing landing screen: a sticky nav, a gradient hero,
+// a stats band, the feature grid, a closing call-to-action, and a footer.
+// hasToken controls whether the "Open console" shortcut is offered (a valid
+// token is already stored from a previous session).
 func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 	return Div(
-		css.Class("home-page"),
+		// Sticky top navigation.
 		Div(
-			css.Class("home-hero"),
-			H1(css.Class("home-title"), Text("CashFlux — Operator Console")),
-			P(css.Class("home-tagline"), Text("Manage your CashFlux backend: users, subscriptions, usage, and encrypted sync — from one secure interface.")),
+			css.Class("nav"),
 			Div(
-				css.Class("home-actions"),
-				Button(
-					Type("button"),
-					css.Class("btn btn-primary"),
-					Attr("aria-label", "Sign in to the operator console"),
-					OnClick(onSignIn),
-					Text("Sign in"),
-				),
-				If(hasToken,
+				css.Class("nav-inner"),
+				brandMark("Operator Console"),
+				Div(
+					css.Class("nav-actions"),
+					If(hasToken,
+						Button(
+							Type("button"),
+							css.Class("btn btn-ghost btn-sm"),
+							Attr("aria-label", "Open the console using the stored token"),
+							OnClick(onOpenConsole),
+							Text("Open console"),
+						),
+					),
 					Button(
 						Type("button"),
-						css.Class("btn btn-secondary"),
-						Attr("aria-label", "Open the console using the stored token"),
-						OnClick(onOpenConsole),
-						Text("Open console"),
+						css.Class("btn btn-primary btn-sm"),
+						Attr("aria-label", "Sign in to the operator console"),
+						OnClick(onSignIn),
+						Text("Sign in"),
 					),
 				),
 			),
 		),
+		// Hero.
 		Div(
-			css.Class("feature-grid"),
-			Map(featureCards, func(f featureCard) ui.Node {
-				return Div(
-					css.Class("feature-card"),
-					Div(css.Class("feature-icon"), Text(f.icon)),
-					Div(
-						css.Class("feature-card-body"),
-						Div(css.Class("feature-card-title"), Text(f.title)),
-						Div(css.Class("feature-card-desc"), Text(f.body)),
+			css.Class("wrap"),
+			Div(
+				css.Class("hero"),
+				Span(
+					css.Class("eyebrow fade d1"),
+					Span(css.Class("dot")),
+					Text("CashFlux backend · self-hosted or cloud"),
+				),
+				H1(css.Class("hero-title fade d2"), Text("Run your money backend with total control.")),
+				P(
+					css.Class("hero-sub fade d3"),
+					Text("Users, subscriptions, revenue, usage, and zero-knowledge encrypted sync — observed and managed from one fast, secure console. Ship the single Go binary anywhere."),
+				),
+				Div(
+					css.Class("hero-actions fade d4"),
+					Button(
+						Type("button"),
+						css.Class("btn btn-primary btn-lg"),
+						Attr("aria-label", "Sign in to the operator console"),
+						OnClick(onSignIn),
+						Text("Sign in to console"),
 					),
-				)
-			}),
+					A(Attr("href", "#features"), css.Class("btn btn-secondary btn-lg"), Text("Explore features")),
+				),
+				Div(
+					css.Class("hero-trust fade d5"),
+					trustItem("Zero-knowledge encryption"),
+					trustItem("Single-binary deploy"),
+					trustItem("100% Go · no lock-in"),
+				),
+			),
+		),
+		// Stats band.
+		Div(
+			css.Class("wrap"),
+			Div(
+				css.Class("stats-band fade d3"),
+				statPill("100%", "Go + WebAssembly"),
+				statPill("AES-GCM", "Encrypted at rest & in sync"),
+				statPill("1 binary", "To self-host"),
+				statPill("Zero", "Vendor lock-in"),
+			),
+		),
+		// Features.
+		Div(
+			css.Class("wrap"),
+			Div(
+				ID("features"),
+				css.Class("section"),
+				Div(
+					css.Class("section-head"),
+					Div(css.Class("section-eyebrow"), Text("Everything in one place")),
+					H2(css.Class("section-title"), Text("Operate the whole backend")),
+					P(
+						css.Class("section-desc"),
+						Text("Read-only where it should be, actionable where it counts — every surface is tenant-isolated and audited."),
+					),
+				),
+				Div(
+					css.Class("feature-grid"),
+					Map(featureCards, func(f featureCard) ui.Node {
+						return Div(
+							css.Class("feature-card fade"),
+							Div(css.Class("feature-icon"), Text(f.icon)),
+							Div(css.Class("feature-card-title"), Text(f.title)),
+							P(css.Class("feature-card-desc"), Text(f.body)),
+						)
+					}),
+				),
+			),
+		),
+		// Closing call-to-action.
+		Div(
+			css.Class("wrap"),
+			Div(
+				css.Class("cta-band"),
+				H2(Text("Ready to take the wheel?")),
+				P(Text("Sign in with your operator token to view users, revenue, usage, and audit activity in real time.")),
+				Button(
+					Type("button"),
+					css.Class("btn btn-primary btn-lg"),
+					Attr("aria-label", "Sign in to the operator console"),
+					OnClick(onSignIn),
+					Text("Sign in"),
+				),
+			),
+		),
+		// Footer.
+		Div(
+			css.Class("wrap"),
+			Div(
+				css.Class("footer"),
+				Div(
+					css.Class("footer-inner"),
+					Span(Attr("style", "color:var(--text-faint);font-size:13px;"), Text("© 2026 CashFlux · Operator Console")),
+					Div(
+						css.Class("footer-links"),
+						A(Attr("href", "/v1/version"), Text("API")),
+						A(Attr("href", "/status"), Text("Status")),
+						A(Attr("href", "/legal/privacy"), Text("Privacy")),
+					),
+				),
+			),
 		),
 	)
 }
@@ -292,6 +417,7 @@ func loginView(tokenVal, devToken string, onInput, onSignIn, onBack, onPrefill u
 		css.Class("login-page"),
 		Div(
 			css.Class("login-card"),
+			Div(css.Class("login-brand"), brandMark("")),
 			H1(css.Class("login-title"), Text("Sign in")),
 			P(css.Class("login-sub"), Text("Enter the admin token to access the operator console.")),
 			If(devToken != "",
@@ -396,7 +522,11 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 		// Header bar
 		Div(
 			css.Class("console-header"),
-			H1(css.Class("console-title"), Text("CashFlux — Operator Console")),
+			H1(
+				css.Class("console-title"),
+				Div(css.Class("brand-mark"), Text("C")),
+				Text("Operator Console"),
+			),
 			Div(
 				css.Class("header-actions"),
 				Button(
