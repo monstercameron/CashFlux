@@ -11139,6 +11139,169 @@ actual integrity** (Budgets ↔ Transactions ↔ Reports). Drive script `e2e/loo
 
 ---
 
+### L97. Story — "The Glanceable Read" (Renu) — 2026-06-24 ★
+
+**The ritual.** Renu glances at her SMART strips every morning — the layer only earns its place if it
+reads like a person wrote it. Theme = **insight copy quality** (the end-to-end guard for the humanized-
+copy work: the `hmoneyc` money formatter + real-English `plural()`). Drive script
+`e2e/loopstory_97_glanceable_read.mjs` turns the **whole** layer on (Enable all), then reads **every**
+rendered insight across the hub + the Budgets/Goals/Transactions/Bills inline strips (**204 cards,
+~38 K chars**) and holds the copy to a product-ready bar. Result **6 PASS · 0 FAIL · 0 ABSENT** — **no
+defects.** Screenshot `L97_01_hub.png`, corpus dump `L97_corpus.txt`.
+- ✓ **C-1** Enable all surfaced a live insight corpus (204 cards).
+- ✓ **C-2** Money is **symbolized** — a `$` is present and **zero** symbol-less 2-decimal amounts
+  (no leftover `Money.Format(2)` like "519.37 over its limit"). Confirms the 107-site humanize sweep held.
+- ✓ **C-3** No bare currency **code** used as a word in prose (no "…over its USD limit", no "12 USD").
+- ✓ **C-4** No grammar artifacts (`entrys`/`categorys`/`daies`) and no template tells (tilde-before-number,
+  `/mo/mo`, `//`, double-space-before-money). Confirms the real-English `plural()`.
+- ✓ **C-5** Zero runtime JS errors across the ritual.
+- **Test-regex note (no app impact):** first pass FAILED C-2 with 37 "leaks" — all FALSE POSITIVES: the
+  regex matched the `480.00` tail of a properly-symbolized grouped chip `$1,480.00` because the thousands
+  comma defeated the look-behind. Hardened the matcher to anchor on the whole amount and capture the
+  leading symbol; re-run clean. **The humanized-copy work (commit dd0fe67c) is verified end-to-end in the
+  live app.**
+
+---
+
+### L96. Story — "The Bulk Editor" (Marcus) — 2026-06-24 ★
+
+**The ritual.** Power users select many transactions and act in one shot — mark cleared, recategorize,
+delete. Theme = **bulk-operation integrity + safety** (the safety-critical case is bulk delete). Drive
+script `e2e/loopstory_96_bulk_editor.mjs` (narrows to a tiny set via search first, for safety). Result
+**6 PASS · 0 FAIL · 1 ABSENT** — **no defects** (the ABSENT was the 0-results empty-state regex; delete
+confirmed working separately). Screenshot `L96_01_bulk_toolbar.png`.
+- ✓ **B-1** Selecting rows reveals the bulk toolbar (Mark cleared / Apply category / Delete selected /
+  Clear selection).
+- ✓ **B-2** Bulk "Mark cleared" flips the selection's cleared state (uncleared 2 → 0).
+- ✓ **B-3** **Bulk delete is GUARDED** — confirm dialog "Delete 144 transactions? This can't be undone."
+  with Cancel/Confirm; the 144 rows are NOT destroyed before confirming. (Resolves the old L80
+  "bulk-delete-no-confirm" concern — it now confirms.)
+- ✓ **B-5** Cancelling the bulk delete kept all 144 rows.
+- ✓ **B-4** Confirming deleted exactly the selection — total transactions **2189 → 2045** (−144), verified
+  separately (the in-story ABSENT was only because the 0-results empty state has no "N shown" text).
+- ✓ Zero JS errors.
+- **→ The "destructive action needs a guard" theme is now fully closed across the app:** single deletes
+  (transactions/budgets/goals/to-do = confirm; accounts = undo; categories = reassign) AND bulk delete = confirm.
+
+### L95. Story — "The Combined Filter" (Priya) — 2026-06-24 ★
+
+**The ritual.** "Find the right data fast" = stacking filters (my + groceries transactions) and trusting
+the result. Theme = **filter-composition integrity** on Transactions (member × search). Drive script
+`e2e/loopstory_95_combined_filter.mjs`. Result **6 PASS · 0 FAIL · 1 ABSENT** — **no app defect**; the
+ABSENT + erratic stress were a test-harness race (see below). Screenshot `L95_01_combined.png`.
+- ✓ **F-2** member + search is a true **intersection**: groceries(96) × Marcus(1729) = **48** ≤ both.
+- ✓ **F-3** **Order-independent**: search-then-member == member-then-search (both → 48).
+- ✓ **F-4** Clearing peels back cleanly: clear search → member-only (1729); clear member → baseline (2189).
+- ✓ Search accuracy re-verified clean (long settle): "coffee"→96, "groceries"→96, "mortgage"→48, and
+  **all sampled rows contain the term** (no lag, no stale results). "coffee"==96=="groceries" is a sample-data
+  coincidence, not a bug.
+- ✓ Zero JS errors.
+- **F-1 / F-5 ABSENT = test-harness race, not an app bug.** When the script set member and search
+  back-to-back with no settle between them, the member-change re-render raced the search-input set → a stale
+  count (search-only read 2189; stress counts ignored the second filter). With proper waits between each
+  filter change, every read is correct (verified). **Guard-script note:** add a settle wait between
+  consecutive member/search changes in this story next pass.
+
+### L94. Story — "The Careful Curator" (delete-guard audit) — 2026-06-24 ★
+
+**The ritual.** An enterprise app must not lose data to a single misclick. Audited every per-row delete:
+does it confirm, reassign, offer undo, or destroy instantly? Drive script
+`e2e/loopstory_94_careful_curator.mjs` (+ measured each precisely by polling for dialog/toast/reassign).
+Result: **2 guarded, 2 UNGUARDED data-loss defects found** (logged as dev tickets below). Theme =
+**destructive-delete guards**.
+- ✓ **Account** delete → **undo toast** ("Account deleted. Undo") — guarded (soft delete, recoverable).
+- ✓ **Category** delete → **reassign-on-delete panel** ("Move and delete") — guarded.
+- ✓ Baselines confirmed guarded: **Transactions** (ConfirmModal), **Budgets** (ConfirmModal — fixed GD-16).
+- **✓ RESOLVED (2026-06-24) — Goal delete now guarded.** Wrapped `goals.go` deleteGoal in
+  `uistate.ConfirmModal` (looks up the goal name; added `goals.deleteConfirm` + `goals.thisGoal` i18n).
+  MEASURED (`e2e/goal_todo_delete_confirm_verify.mjs`, 4/4): the "×" opens a confirm ("Delete the \"Baby
+  fund (due Dec 2026)\" goal? This can't be undone."); not deleted before confirming; Cancel keeps it (5);
+  Confirm deletes (5→4). Build rc=0; `go test ./internal/i18n` ok.
+- **✓ RESOLVED (2026-06-24) — To-do task delete now guarded.** Wrapped `todo.go` deleteTask in
+  `uistate.ConfirmModal` (the confirm wording notes the sub-task cascade; added `todo.deleteConfirm` +
+  `todo.thisTask`). MEASURED (4/4): confirm ("Delete \"Pay the credit card before the 22nd\" and any
+  sub-tasks?"); not deleted before confirming; Cancel keeps (25); Confirm deletes (25→24).
+  **→ Every per-row delete in the app is now guarded** (Transactions/Budgets/Goals/To-do = ConfirmModal;
+  Accounts = undo toast; Categories = reassign panel). The "destructive action needs a guard" theme is
+  CLOSED.
+- **Pattern note for the dev:** the app already has `uistate.ConfirmModal(message, destructive, onResult)`
+  (internal/uistate/dialog.go) — used by Transactions & Budgets. Goals/To-do are the remaining outliers; once
+  guarded, every destructive per-row delete in the app is either confirm-gated, reassign-gated, or undoable.
+
+### L93. Story — "The Transfer" (Marcus) — 2026-06-24 ★
+
+**The ritual.** Moving money between your own accounts is a daily op that must obey double-entry: it's not
+income/expense, so **net worth must not change**. Theme = **transfer / double-entry integrity** (Accounts ↔
+Transactions). Drive script `e2e/loopstory_93_the_transfer.mjs`. Result **7 PASS · 0 FAIL · 0 ABSENT** —
+**no defects; verified solid.** Screenshots `L93_01_accounts.png`, `L93_02_after_transfer.png`.
+- ✓ **X-1** 14 accounts expose a per-account "Transfer…" action (from→to form).
+- ✓ **X-2** A $500 transfer left **net worth UNCHANGED** (12039.64 → 12039.64) — correctly not treated as
+  income/expense.
+- ✓ **X-3** The transfer posted a **pair** of ledger entries (2189 → 2191, +2 = debit + credit) — true
+  double-entry, visible cross-screen in Transactions.
+- ✓ **X-4** A transfer with **no destination** moved no money (net worth steady) — guarded against silent
+  self/empty transfers.
+- ✓ **X-5 STRESS** Two more transfers kept net worth pinned and the ledger climbing (→2195), no crash.
+- ✓ Zero JS errors across the ritual.
+
+### L92. Story — "Whose Money Is It" (the Hartleys) — 2026-06-24 ★
+
+**The ritual.** A multi-member household needs "show me just my money" to work — and to work the SAME
+everywhere. Theme = **member-filter integrity** ("View as member" across Transactions ↔ Reports ↔ Budgets).
+Drive script `e2e/loopstory_92_whose_money.mjs`. Result **7 PASS · 0 FAIL · 0 ABSENT** — **no defects;
+verified solid.** Screenshot `L92_01_everyone.png`.
+- ✓ **M-1** Switcher offers Everyone + Marcus Hartley + Priya Hartley.
+- ✓ **M-2** Switching member changes the data (Everyone 2189 → Marcus 1729 → Priya 460 transactions).
+- ✓ **M-3** The selected member **carries across screens** — picking Marcus on Transactions shows `m-marcus`
+  on Reports AND Budgets too.
+- ✓ **M-4** Each member's count ≤ Everyone's; in fact **Marcus 1729 + Priya 460 = 2189 = Everyone** exactly —
+  every transaction is cleanly partitioned to exactly one member (no double-count, no orphans).
+- ✓ **M-5 STRESS** Rapid member switching (m→p→all→p→m→all) gave consistent counts and returned to the
+  Everyone baseline (2189) — no drift, no crash.
+- ✓ Zero JS errors across the ritual.
+
+### L91. Story — "The Bill Run" (Dana) — 2026-06-24 ★
+
+**The ritual.** The weekly household chore: see what's due and pay it. Theme = **bills / recurring-payment
+integrity** (Bills ↔ Transactions). Drive script `e2e/loopstory_91_the_bill_run.mjs`. Result **5 PASS · 0
+FAIL · 2 ABSENT** — **no hard defect** (the ABSENTs are correct recurring-bill behavior, see below); ONE
+UX/dev note logged. Screenshots `L91_01_bills.png`, `L91_02_after_paid.png`.
+- ✓ **R-1** Bills shows a "Total due soon $8,810.00 · Upcoming bills 16 · Next due 2026-07-01" summary + 16
+  bill rows with amount + due date.
+- ✓ **R-2** Upcoming bills are ordered by due date, soonest first (2026-07-01 ×3 → 07-03 → 07-05…).
+- ✓ **R-4** Marking a bill paid **posts a transaction** (count 2189 → 2191) — leaves a financial trace.
+- ✓ **Core mark-paid works (characterized):** marking HOA dues paid correctly **advanced the recurring bill**
+  2026-07-01 ("due in 7 days") → 2026-08-01 ("due in 38 days") AND posted the transaction.
+- ✓ Zero JS errors.
+- **R-3 / R-5 ABSENT = correct behavior, not a bug:** the "Upcoming bills" count stayed 16 after paying
+  because the bill is *recurring* — paying advances it to next month, which is still inside the ~90-day bills
+  horizon, so it remains an upcoming bill. The count legitimately doesn't drop.
+- **✎ CORRECTION (verified 2026-06-24) — feedback DOES exist; earlier "no feedback" note was wrong.**
+  Re-checked the source + drove it: `bills_screen.go` markPaid already fires a toast
+  (`bills.paidLogged` = "Logged a payment for %s.") — MEASURED on mark-paid: the toast **"Logged a payment
+  for HOA dues."** appears (screenshot `e2e/screenshots/bills_paid_toast.png`). My L91 e2e simply didn't poll
+  for the auto-dismissing toast. So paying a bill correctly: advances the recurring due date (7d→38d), posts
+  a transaction, AND shows a confirmation toast. **No defect.**
+- **Optional (minor) enhancement, not a bug:** the "Total due soon" 90-day-horizon total legitimately stays
+  put when a recurring bill advances within the horizon. A *separate* "due this week" sub-total could give a
+  near-term number that visibly drops on payment — nice-to-have polish, low priority.
+
+### L90. Story — "The Detective" (Marcus) — 2026-06-24 ★
+
+**The ritual.** The most frequent everyday task: find a transaction and fix it. Theme = **search / filter /
+edit integrity** on Transactions. Drive script `e2e/loopstory_90_the_detective.mjs`. Result **6 PASS · 0
+FAIL · 1 ABSENT** — **no defects** (the ABSENT is a test-harness artifact, not an app bug). Screenshots
+`L90_01_txns.png`, `L90_02_search.png`.
+- ✓ **D-1** Search "groceries" narrowed the count 2189 → 96 (summary updates live).
+- ✓ **D-2** All 30 sampled visible rows actually contain the term — no false matches.
+- ✓ **D-3** Clearing search restored the full 2189 — reversible.
+- ✓ **D-4** Inline-editing a transaction's amount persisted ($10.50 → $13.37 shown in the row immediately).
+- ✓ Zero JS errors across the ritual.
+- **D-5 ABSENT (test artifact, not a bug):** rapid-search stress worked (counts 1450/5/72/96/2189 for
+  a/ab/x/rent/cleared) — the ABSENT is because my summary regex returns null on the **0-results empty-state**
+  text ("abc"/"salary" matched nothing), so those samples read blank. App behavior was correct; the guard's
+  regex should also match the no-results summary next pass.
+
 ### L89. Story — "Putting Money to Work" (Priya) — 2026-06-24 ★
 
 **The ritual.** When a paycheck lands the everyday question is "where should this money go?" The Allocate

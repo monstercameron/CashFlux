@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — L97 "The Glanceable Read": proving the copy work in the live app
+
+QA-loop ritual after the copy refinement. Rather than another feature journey, I pointed this story at
+the thing I'd just changed: insight copy quality. The script enables the entire SMART layer and scrapes
+every rendered card (204 of them, ~38 K chars of copy) across the hub and the inline strips, then asserts
+the product-ready bar — symbolized money, no symbol-less `Money.Format(2)` leftovers, no currency code in
+prose, no `entrys`/`categorys`, no template tells, zero JS errors.
+
+First run "failed" C-2 with 37 symbol-less amounts — but every one was a false positive: the regex matched
+the `480.00` tail of a correctly-symbolized, grouped chip `$1,480.00` because the thousands **comma**
+defeated the look-behind that was supposed to exclude mid-number positions. Fixed the matcher to anchor on
+the whole amount (`(?<![\d,.])([$€£¥]?)\d[\d,]*\.\d{2}`) and treat "no captured symbol" as the leak signal.
+Re-run: **6 PASS · 0 FAIL · 0 ABSENT.** Good outcome — the humanize sweep (commit dd0fe67c) holds end-to-end,
+and the chips that legitimately keep cents ($1,480.00) are distinguished from a bare 519.37. Honest note:
+the failure was in my test, not the app; recorded as such in L97.
+
 ## 2026-06-24 — SMART insight copy: from generated to product-ready
 
 Owner feedback: "a lot of alerts sound generated, not product-ready." Three concrete examples — a
