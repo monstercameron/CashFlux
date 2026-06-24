@@ -77,6 +77,7 @@ const (
 	screenAuthErr               // 401/403 from the API
 	screenNetErr                // network / other error
 	screenReady                 // data loaded, console visible
+	screenManage                // managing a single user (detail + actions)
 )
 
 // ---------------------------------------------------------------------------
@@ -567,7 +568,7 @@ func statCard(label, value string) ui.Node {
 	)
 }
 
-func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.Handler) ui.Node {
+func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.Handler, onOpenUser func(string)) ui.Node {
 	return Div(
 		css.Class("console-page"),
 		// Header bar
@@ -609,46 +610,9 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 			statCard("Today's requests", fmt.Sprintf("%d", ov.TodayRequests)),
 			statCard("Today's tokens", fmt.Sprintf("%d", ov.TodayTokens)),
 		),
-		// Users table — rows have no interactive elements so Map is safe.
-		Div(
-			css.Class("table-section"),
-			H2(css.Class("table-title"), Text("Users")),
-			Table(
-				css.Class("users-table"),
-				Thead(
-					Tr(
-						Th(Text("Email")),
-						Th(Text("Provider")),
-						Th(Text("Plan")),
-						Th(Text("Status")),
-						Th(Text("Created")),
-					),
-				),
-				Tbody(
-					Map(users, func(u adminUserRow) ui.Node {
-						created := u.CreatedAt
-						if len(created) >= 10 {
-							created = created[:10]
-						}
-						plan := u.SubscriptionPlan
-						if plan == "" {
-							plan = "—"
-						}
-						status := u.SubscriptionStatus
-						if status == "" {
-							status = "—"
-						}
-						return Tr(
-							Td(Text(u.Email)),
-							Td(Text(u.Provider)),
-							Td(Text(plan)),
-							Td(Text(status)),
-							Td(Text(created)),
-						)
-					}),
-				),
-			),
-		),
+		// Clickable users table → opens the per-user management view (usersTable lives
+		// in manage.go; rows are their own components so each can own an OnClick hook).
+		usersTable(users, onOpenUser),
 	)
 }
 
@@ -666,6 +630,7 @@ func App() ui.Node {
 	overview := ui.UseState[*adminOverview](nil)
 	users := ui.UseState[[]adminUserRow](nil)
 	netErrMsg := ui.UseState("")
+	manageUserID := ui.UseState("") // target of the user-management view
 
 	// handleTokenInput captures the typed value from the password input.
 	handleTokenInput := ui.UseEvent(func(v string) {
@@ -781,6 +746,38 @@ func App() ui.Node {
 		}()
 	})
 
+	// handleOpenUser opens the management view for one user.
+	handleOpenUser := func(id string) {
+		manageUserID.Set(id)
+		view.Set(screenManage)
+	}
+	// handleCloseUser leaves the management view and refreshes the console so any
+	// change (deleted account, new plan) is reflected in the list.
+	handleCloseUser := func() {
+		manageUserID.Set("")
+		tok := lsGet()
+		if tok == "" {
+			view.Set(screenHome)
+			return
+		}
+		view.Set(screenLoading)
+		go func() {
+			ov, us, isAuthErr, err := fetchAdminData(tok)
+			if isAuthErr {
+				view.Set(screenAuthErr)
+				return
+			}
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			overview.Set(ov)
+			users.Set(us)
+			view.Set(screenReady)
+		}()
+	}
+
 	// Auto-load any stored token on mount. The constant deps key makes this run
 	// exactly once (mount) instead of on every render — without it the effect
 	// re-fired each render, re-fetching admin data ~continuously and replaying
@@ -821,13 +818,15 @@ func App() ui.Node {
 		return authErrView(handleSignOut)
 	case screenNetErr:
 		return netErrView(netErrMsg.Get(), handleSignOut)
+	case screenManage:
+		return ui.CreateElement(manageView, manageProps{token: lsGet(), userID: manageUserID.Get(), onClose: handleCloseUser})
 	case screenReady:
 		ov := overview.Get()
 		us := users.Get()
 		if ov == nil {
 			return loadingView()
 		}
-		return readyView(ov, us, handleSignOut, handleRefresh)
+		return readyView(ov, us, handleSignOut, handleRefresh, handleOpenUser)
 	case screenLogin:
 		return loginView(tokenInput.Get(), devToken.Get(), handleTokenInput, handleSignIn, handleBack, handlePrefill)
 	default: // screenHome
