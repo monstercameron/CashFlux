@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — EC5: operator console SPA at /console/
+
+Shipped a standalone Go→WebAssembly operator console separate from the main CashFlux app bundle.
+Rationale: the admin UI should load without the full 2 MB+ app wasm; a separate binary keeps the
+security surface clean (admin token lives only in this context) and avoids polluting the main app
+bundle with operator-only code.
+
+**Architecture decisions:**
+
+- Single-file SPA (`cmd/cashflux-admin/main.go`) with a `//go:build js && wasm` tag. No
+  dependency on any CashFlux-internal packages — it talks to the server API directly via
+  `net/http` and renders with GoWebComponents shorthand. This keeps it fully decoupled and
+  independently buildable.
+- All state via multiple `ui.UseState` calls (one per concern) rather than a single struct state,
+  which avoids needing pointer-equality tricks to trigger re-renders.
+- Event handlers (`handleSignIn`, `handleSignOut`, `handleRefresh`, `handleTokenInput`) are all
+  registered at stable top-level positions in `App()`. The users table rows have NO interactive
+  elements so `Map` over them is safe (no `On*` hooks in the loop).
+- `ui.UseEffect` with no deps fires once on mount to auto-load any stored token.
+- `consoleHandler` uses a file-exists check before falling through to `http.FileServer`; missing
+  paths get `index.html` (SPA routing). The handler is registered OUTSIDE the middleware chain
+  concern — it goes through `securityHeadersMiddleware` like everything else, which is correct
+  because COEP `require-corp` on same-origin resources is not a problem (wasm and wasm_exec.js are
+  both served same-origin).
+- `GET /` now inspects the `Accept` header: browsers get a 302 to `/console/`; API clients
+  (curl, SDKs) still get the JSON discovery response. This preserves the existing
+  `TestRootEndpointAdvertisesBackend` test (no Accept header → JSON 200).
+- `Config.ConsoleDir` defaults to `web/admin` so the server works out of the box when run from
+  the repo root with the wasm pre-built.
+
+**What's next:** wire the console wasm build into the GitHub Actions CI deploy step.
+
 ## 2026-06-24 — Widget Builder: visual node-graph card designer (1:1 dashboard clones)
 
 Shipped the Widget Builder — an n8n-style visual-scripting screen for composing dashboard

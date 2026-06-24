@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/console/" />
+    <title>CashFlux — Operator Console</title>
+    <style>
+      /* Dark operator theme */
+      :root {
+        --bg: #0f0f10;
+        --bg-card: #1a1a1d;
+        --border: #2a2a2e;
+        --text: #f0f0f2;
+        --text-dim: #a0a0aa;
+        --accent: #2e8b57;
+        --danger: #c45c5c;
+        --radius: 8px;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+      #app { min-height: 100vh; }
+
+      /* Login page */
+      .login-page {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .login-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 40px 32px;
+        width: 100%;
+        max-width: 440px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .login-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+      .login-sub {
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: -8px;
+      }
+      .login-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-dim);
+      }
+      .login-input {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .login-input:focus {
+        border-color: var(--accent);
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        border-radius: var(--radius);
+        border: none;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: opacity 0.15s;
+        white-space: nowrap;
+      }
+      .btn:hover { opacity: 0.85; }
+      .btn:active { opacity: 0.7; }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-secondary {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .btn-danger {
+        background: var(--danger);
+        color: #fff;
+      }
+
+      /* Loading skeletons */
+      .loading-page {
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .skeleton {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .skeleton-title {
+        height: 32px;
+        width: 320px;
+        max-width: 100%;
+      }
+      .skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      .skeleton-card {
+        height: 80px;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 0.7; }
+      }
+
+      /* Error page */
+      .error-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        gap: 16px;
+        padding: 24px;
+        text-align: center;
+      }
+      .error-msg {
+        color: var(--danger);
+        font-size: 15px;
+        max-width: 420px;
+      }
+
+      /* Console page */
+      .console-page {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        padding: 28px 32px;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .console-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+      .console-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .header-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      /* Stat cards */
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+      }
+      .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stat-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+      }
+      .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Users table */
+      .table-section {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .table-title {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .users-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .users-table th,
+      .users-table td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      .users-table th {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        background: var(--bg-card);
+      }
+      .users-table tr:hover td {
+        background: var(--bg-card);
+      }
+      .users-table td {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="./wasm_exec.js"></script>
+    <script>
+      const go = new Go();
+      WebAssembly.instantiateStreaming(fetch("./admin.wasm"), go.importObject)
+        .then(result => go.run(result.instance))
+        .catch(err => {
+          document.getElementById("app").textContent = "Failed to load console: " + err;
+        });
+    </script>
+  </body>
+</html>

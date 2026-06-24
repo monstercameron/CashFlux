@@ -60,7 +60,11 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	}
 	mux := http.NewServeMux()
 	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.Redirect(w, r, "/console/", http.StatusFound)
+			return
+		}
 		writeJSON(w, RootResponse{
 			Service: "cashflux-server",
 			Status:  "ok",
@@ -170,6 +174,12 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("PUT /v1/blobs/{hash}", handlePutBlob(cfg, store))
 	mux.HandleFunc("GET /v1/blobs/{hash}", handleGetBlob(cfg, store))
 	mux.HandleFunc("HEAD /v1/blobs/{hash}", handleHeadBlob(cfg, store))
+	// Operator console SPA: /console/ serves the web/admin static assets.
+	// /console (no trailing slash) redirects to /console/ for clean URLs.
+	mux.HandleFunc("GET /console", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	})
+	mux.Handle("GET /console/", consoleHandler(cfg))
 	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
 }
 

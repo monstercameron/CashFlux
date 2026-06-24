@@ -2,6 +2,7 @@
 # static/bin and root bin/ are local-only build artifacts (not served).
 /web/bin/
 /web/wasm_exec.js
+/web/admin/admin.wasm
 **/static/bin/
 /static/wasm_exec.js
 /bin/

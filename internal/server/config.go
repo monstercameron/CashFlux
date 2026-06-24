@@ -43,6 +43,7 @@ type Config struct {
 	StripeSuccessURL                  string
 	StripeCancelURL                   string
 	StripePortalReturnURL             string
+	ConsoleDir                        string
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIProxyDisabled                   bool
@@ -113,6 +114,7 @@ func FromEnv() (Config, error) {
 	cfg.StripeSuccessURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SUCCESS_URL"))
 	cfg.StripeCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_CANCEL_URL"))
 	cfg.StripePortalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL"))
+	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIProxyDisabled = !envBool("CASHFLUX_SERVER_AI_PROXY_ENABLED", true)
