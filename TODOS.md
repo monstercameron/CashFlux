@@ -21860,8 +21860,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 - [x] W-15 Number count-up — KPI/stat values tween from old→new on change (net worth, totals). **LANDED 2026-06-23** — `web/countup.js` shim (`cashfluxCountUpScan`) uses rAF ease-out tween; `data-countup` attr on KPI `fig` divs in `dashboard.go`; `UseEffect` keyed on KPI amounts triggers scan on mount/value-change; gated by `--wonder-on` + `prefers-reduced-motion`; final text always restored exactly; `data-countup-last` prevents re-animation on same value.
 - [x] W-16 Progress-bar fill ease — verified: all bar variants (`.near`/`.over`/`.done`/`.final`/`.overdue`/`.soon`/`.storage-bar-fill`) share `.bar-fill` which already carries `width 0.45s cubic-bezier(.2,.75,.2,1)` under `no-preference`; no additional rules needed. **LANDED 2026-06-23** (pass-through verification)
 - [x] W-17 Success pulse — **LANDED 2026-06-23** `@keyframes wonder-success-pulse` (scale .6→1.15→1) on `.toast:not(.toast-err)::before`; duration `calc(--wonder-dur-slow * --wonder-on)` → instant/static when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`.
-- [ ] W-18 Chart draw-in — area/line charts animate their path on first render; donut sweeps; bars grow.
-      [GO-STRUCTURAL: the D3/chartspec renderer must animate; pairs with G9.1a.]
+- [x] W-18 Chart draw-in — **LANDED 2026-06-23** CSS stroke-dashoffset draw-in on SVG `AreaChart` line path (`pathLength="1"` + `.wonder-chart-line`); area fill fades via `.wonder-chart-area`; both gated by `[data-wonder="off"]` + `prefers-reduced-motion: reduce`; D3 bars/donut deferred (GO-STRUCTURAL).
 *Polish*
 - [x] W-19 Skeleton shimmer — `.skeleton` + `.shimmer` classes added: `@keyframes wonder-shimmer` sweeps a gradient left-to-right at `4 * --wonder-dur-slow`; under off+reduce → static `--bg-elev` block, no sweep. **LANDED 2026-06-23**
 - [x] W-20 Focus ring ease — `:focus-visible` ring now transitions `outline-offset` + `box-shadow` over 100ms `var(--wonder-ease)`; ring remains fully visible (a11y preserved), onset only is eased; reduced-motion neutralises via universal 0.001ms rule. **LANDED 2026-06-23**
@@ -23312,11 +23311,12 @@ The repo currently fails `GOOS=js GOARCH=wasm go build` due to **uncommitted C78
 `internal/auditlog/`, `internal/screens/activity.go`, `internal/app/auditview.go`,
 `internal/appstate/subscription_ops.go`.
 - [x] Fixed: `internal/screens/documents.go` `recordDocument` closure called before declaration (moved up).
-- [ ] **Resolve the cycle**: relocate the undo/audit accessors (`UndoEntries`/`UndoNow`/`CanUndoNow`) from
+- [x] **Resolve the cycle**: relocate the undo/audit accessors (`UndoEntries`/`UndoNow`/`CanUndoNow`) from
       `internal/app` into a shared lower package (`internal/appstate` or `internal/auditlog`) that both
       `app` and `screens` may import — OR pass the audit feed into the Activity screen via props instead of
-      importing `app`. (Architecture decision on the half-built C78 feature.)
-- [ ] Until then, screen-structure changes (GI1–GI3) cannot be rebuilt/verified with screenshots.
+      importing `app`. (Architecture decision on the half-built C78 feature.) — DONE: `internal/auditlog/`
+      is the shared lower package; tree builds clean (verified 2026-06-23).
+- [x] Until then, screen-structure changes (GI1–GI3) cannot be rebuilt/verified with screenshots. — obsolete: build green.
 - [x] DONE (already landed): global light-mode token fixes in `web/index.html` (G23 Tier-1) — `.fig`
       foreground pinning, light app/body background `#f7f6f3` (kills black inter-card bands), `.btn-primary`
       white label in light, `--text-dim` bumped to `#4b4b52` for AA. Served statically; live now.

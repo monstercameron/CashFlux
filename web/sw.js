@@ -1,11 +1,11 @@
-// CashFlux service worker: a network-first cache so the app stays fresh online
+﻿// CashFlux service worker: a network-first cache so the app stays fresh online
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v248";
+const CACHE = "cashflux-v249";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
-  "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./mermaid.min.js", "./mermaid.js",
+  "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
   "./marked.min.js", "./purify.min.js", "./d3.min.js",
 ];
 
@@ -38,7 +38,7 @@ self.addEventListener("fetch", (event) => {
 
   // SPA navigations (e.g. hard-refresh at /accounts): client-side routes don't
   // exist as files, so a static host or offline returns 404 / fails. Serve the
-  // cached app shell instead — it boots and the router resolves the path. This
+  // cached app shell instead â€” it boots and the router resolves the path. This
   // is the SW side of deep-link refresh (the static 404.html covers first load).
   if (req.mode === "navigate") {
     event.respondWith(

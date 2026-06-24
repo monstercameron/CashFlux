@@ -64,7 +64,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 				Tag("stop", Attr("offset", "1"), Attr("stop-color", stroke), Attr("stop-opacity", "0")),
 			),
 		),
-		Path(Attr("d", area), Attr("fill", "url(#"+gid+")")),
-		Path(Attr("d", line), Attr("fill", "none"), Attr("stroke", stroke), Attr("stroke-width", "2")),
+		Path(Attr("d", area), Attr("fill", "url(#"+gid+")"), css.Class("wonder-chart-area")),
+		Path(Attr("d", line), Attr("fill", "none"), Attr("stroke", stroke), Attr("stroke-width", "2"), Attr("pathLength", "1"), css.Class("wonder-chart-line")),
 	)
 }

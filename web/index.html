@@ -501,6 +501,32 @@
         }
       }
 
+      /* W-18 · Chart draw-in — line path strokes in left-to-right (stroke-dashoffset),
+         area fill fades up. pathLength="1" on the SVG <path> normalises the dash
+         geometry so the animation works regardless of actual path length.
+         Under [data-wonder="off"] and prefers-reduced-motion: charts appear instantly. */
+      @keyframes wonder-chart-draw {
+        from { stroke-dashoffset: 1; }
+        to   { stroke-dashoffset: 0; }
+      }
+      @keyframes wonder-chart-fade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      .wonder-chart-line {
+        stroke-dasharray: 1;
+        animation: wonder-chart-draw var(--wonder-dur-slow) var(--wonder-ease-out) both;
+      }
+      .wonder-chart-area {
+        animation: wonder-chart-fade var(--wonder-dur-slow) var(--wonder-ease-out) both;
+      }
+      [data-wonder="off"] .wonder-chart-line,
+      [data-wonder="off"] .wonder-chart-area { animation: none; }
+      @media (prefers-reduced-motion: reduce) {
+        .wonder-chart-line,
+        .wonder-chart-area { animation: none; }
+      }
+
       /* ========================== /WONDER ============================ */
 
       #boot-error {
