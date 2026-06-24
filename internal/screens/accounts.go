@@ -55,11 +55,14 @@ func Accounts() ui.Node {
 				return
 			}
 		}
+		// Restore focus to the next account row after the re-render (§6.7).
+		restoreFocus := captureRowFocus(".rows", ".row")
 		if err := app.DeleteAccount(accountID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
+		restoreFocus()
 	}
 
 	archiveAccount := func(ac domain.Account) {

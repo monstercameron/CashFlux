@@ -41,7 +41,14 @@ func (s *SQLiteStore) PutSettings(st Settings) error {
 		"INSERT INTO settings(id, data) VALUES('app', ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
 		string(data),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	// Settings carry the base currency + FX table, which derived values (net worth,
+	// totals) depend on, so a settings write must advance the mutation revision too
+	// — otherwise a memo keyed on it would show a stale figure after an FX edit (§1.6).
+	mutationRev.Add(1)
+	return nil
 }
 
 // Wipe removes all data from the store (used by "wipe all data"). It is atomic.
@@ -56,5 +63,9 @@ func (s *SQLiteStore) Wipe() error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	mutationRev.Add(1) // a wipe changes everything; advance the memo key (§1.6)
+	return nil
 }

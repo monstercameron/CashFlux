@@ -603,3 +603,446 @@ Confirmed present and good: `Class`, `Value`, `Placeholder`, `Type`, `Title`, `S
 `OnClick`/`OnInput`/`OnChange`/`OnKeyDown`/`OnDragStart`/`OnDragOver`/`OnDrop`, `Prevent(fn)`,
 `Text`/`Textf`, control-flow `If`/`IfElse`/`Map`/`MapKeyed`/`Fragment`, and the SVG element nodes
 `Svg`/`Path`/`Circle`/`Rect`. The U-series is about *filling out* this set, not replacing it.
+
+---
+
+## Addendum 4 — `css` typed-CSS gaps (CSS1–CSS6)
+
+**Context.** CashFlux ships ~2,000 lines of CSS as two inline `<style>` blocks in `web/index.html`
+(the bento shell, the WONDER animation suite, legacy component styles, the `:root` token palette,
+and the `[data-theme="light"]` override layer). The C91 work already migrated the Tailwind *utility*
+layer to the typed `css` package (`internal/ui/tw` over `css`/`css/u`), and per-component styling via
+`css.New(...)` works well (`internal/ui/meter.go:63`, `internal/ui/progress.go:64`). The open question
+was whether the *remaining inline stylesheet* can also move into the `css` package. The
+component-scoped, animation, and responsive parts port cleanly. The items below are the parts that
+**do not** have a first-class path today — they're the framework gaps to close before the global
+stylesheet can leave `index.html`.
+
+> Evidence cites the inline CSS in `web/index.html` and the `css` package API (module
+> `github.com/monstercameron/GoWebComponents v1.1.1-0.20260621010857-935d73b0cd3a`, package `css`:
+> `css.go`, `rule.go`, `selector.go`, `variant.go`, `theme.go`, `dynamic.go`).
+
+| ID   | Area                  | Severity | One-line gap |
+|------|-----------------------|----------|--------------|
+| CSS1 | Global/element rules  | high     | `New` only emits one **hashed class** scoped under `&`; no way to author top-level global rules (`*`, `body`, bare `.semantic-class`, `:root`) |
+| CSS2 | `:root` tokens / theme| high     | `css.Theme`/`UseTheme` resolves scales at class-gen time; no API emits a `:root{--…}` custom-property palette or drives utilities off **live** CSS variables |
+| CSS3 | Ancestor-state variant| med      | Variants cover self pseudo-states (`Hover`/`Focus`) + `Media`, but there's no `[data-theme=…] &` / `[data-density=…] &` ancestor-attribute variant (the whole light-theme override model) |
+| CSS4 | Cascade / ordering    | med      | Hashed classes emit in registration order; no layer/specificity control to make overrides reliably beat runtime-injected styles (`MarkImportant` is the only lever) |
+| CSS5 | Base/reset layer      | low      | No managed preflight/reset; the app hand-maintains a "minimal Tailwind-preflight equivalent" inline |
+| CSS6 | SSR critical-CSS seam | low      | The native buffer sink + `Seed` exist, but there's no documented build-time pipeline to extract a Go-authored sheet into `index.html` and hydrate it |
+
+### CSS1 — `css.New` only emits a hashed class scoped under `&`; no global/element/semantic-class rules
+- **Area:** global stylesheet authoring · **Severity:** high
+- **Symptom:** `css.New(rules...)` folds its rules into a single **content-hashed** class, and every
+  combinator/variant nests under that generated class (`&`). There is no way to emit an un-prefixed
+  top-level rule — an element selector (`body`, `h3`), the universal selector (`*`, the preflight),
+  `:root`, or a stable semantic class (`.nav-link`, `.btn`, `.bento`, `.w`) that other markup or the
+  runtime theme engine targets by name. `selector.El`/`ClassSel`/`Sel` exist only as the *target* of a
+  combinator (`Child`/`Descendant`/…), producing `& <target>`, so they still require the hashed-class
+  prefix. The escape hatch — author rules with literal selectors and call `New` once at boot, throwing
+  away the returned hash — leans entirely on `Sel(...)` and defeats the type-safety the package exists
+  to provide.
+- **Evidence:** Hashed-class model — `css.go:33-41` (`New` "folds a rule-set into a single
+  content-hashed class"); combinators fold under `&` — `selector.go:48-81` (`Child`/`Descendant`/etc.
+  scope "& <combinator> <target>"). The inline CSS that has no home: global element rules + preflight
+  `web/index.html:58-101` (the `:root` block + "minimal Tailwind-preflight equivalent"), and the large
+  body of semantic-class rules (`.nav-link`, `.bento`, `.w`, `.btn`, `.row-desc`, …) throughout both
+  `<style>` blocks (e.g. `web/index.html:1293-2135`).
+- **Impact:** ~91% of `index.html` is exactly this kind of global/semantic CSS, so the bulk of the
+  stylesheet cannot move without either an unidiomatic escape-hatch convention or a full re-architecture
+  to component-attached hashed classes (which also means deleting the semantic class names the theme
+  engine and e2e selectors rely on).
+- **Proposed direction:** A global-rule emission API — e.g. `css.Global(selector, rules...)` /
+  `css.Root(rules...)` (un-prefixed, emitted into the same sink), so element/`:root`/semantic-class
+  rules can be authored in typed Go and still produce ordinary global CSS.
+
+### CSS2 — No API to emit a `:root` token palette or drive utilities off live CSS variables
+- **Area:** theming / design tokens · **Severity:** high
+- **Symptom:** `css.Theme` + `UseTheme` is the typed analog of `tailwind.config` and resolves named
+  scales (spacing/color/type/radius) **at class-generation time** — it does not emit a `:root { --… }`
+  custom-property block, and the utility layer resolves to literal values, not `var(--token)`. CashFlux
+  instead themes at *runtime*: `internal/uistate/theme.go:56-65` writes every token via
+  `style.setProperty("--…", …)` on `:root` and toggles a `data-theme` attribute, and the inline
+  stylesheet's `:root` block is the default palette those vars override. There's no bridge: you can't
+  ask `css` to (a) emit the canonical `:root` palette, or (b) make utilities/components reference live
+  CSS variables so a runtime token change repaints them. `Dynamic` (`dynamic.go:20-46`) binds *one*
+  property to a var per hashed class, but isn't a global token system.
+- **Evidence:** `theme.go:5-24,91-99` (Theme/UseTheme swap scales; no var emission);
+  `dynamic.go:20-46` (per-class single-var binding only); runtime token engine
+  `internal/uistate/theme.go:50-88`; default palette inline at `web/index.html:59-101`.
+- **Impact:** Two parallel theming mechanisms with no integration. Moving the `:root` tokens into `css`
+  today means either keeping them as raw global rules (blocked by CSS1) or rewiring `theme.go` onto a
+  mechanism `css` doesn't expose. This is the crux that keeps the token layer inline.
+- **Proposed direction:** A token API that (a) emits a `:root`/`[data-theme]` custom-property palette
+  from a typed `Theme`, and (b) lets the utility/`tw` layer resolve tokens to `var(--token)` so a
+  runtime `setProperty` reskins without regenerating classes — unifying `css.Theme` with live-variable
+  theming.
+
+### CSS3 — No ancestor-attribute-state variant (`[data-theme="light"] &`, `[data-density="compact"] &`)
+- **Area:** variants · **Severity:** med
+- **Symptom:** The variant set scopes to the element's *own* state (`Hover`, `Focus`, `Active`,
+  `WhenDisabled`, structural pseudo-classes) or to an at-rule (`Media`, `Dark`). There is no variant
+  for "when an **ancestor** carries attribute X" — i.e. `[data-theme="light"] &` or
+  `html[data-density="compact"] &` — which is the entire mechanism behind the light-theme override
+  layer and the density system. `DefineVariant(selectorTemplate)` can express it manually, but it's an
+  untyped escape hatch the author must hand-write per attribute/value.
+- **Evidence:** Variant coverage — `variant.go:9-69` (self pseudo-states + `Media`/`Dark`, no ancestor
+  form); manual escape hatch — `variant.go:73-83` (`DefineVariant`). The override layer that needs it:
+  the `[data-theme="light"] …` rules at `web/index.html:~581-690+` (legacy-component re-skins) and the
+  `data-density` compact rules (referenced from `theme.go:66`).
+- **Impact:** The largest *accreted* part of the stylesheet (the GX*/W* light-theme override patches)
+  is exactly ancestor-state styling; without a typed variant it can only be ported via repeated
+  `DefineVariant` strings, which carries the same typo/specificity risk as raw CSS.
+- **Proposed direction:** A typed `Within(selector, rules...)` / `AttrAncestor(name, value, rules...)`
+  variant (and a `Theme("light", …)` / `Density(…)` convenience) that emits `<ancestor> &`.
+
+### CSS4 — No cascade-layer / specificity control; override order is registration order only
+- **Area:** cascade / ordering · **Severity:** med
+- **Symptom:** Emitted classes carry single-class specificity and land in the sink in **registration
+  order**; there's no `@layer` support or specificity/ordering primitive. Several inline overrides only
+  work because they out-order or out-specify *runtime-injected* rules (the theme engine's
+  `setProperty`-backed surfaces), and the only available lever is `MarkImportant` (`rule.go:54`).
+  Reproducing the current cascade — where `[data-theme="light"]` shell rules must beat engine-injected
+  backgrounds — is fragile when those classes are hash-named and order-dependent.
+- **Evidence:** Emission/dedup model — `css.go:33-41`, `registry.go:9-24` ("Sink never sees the same
+  class twice", ordered emission); only lever — `rule.go:51-55` (`MarkImportant`). Cascade fights are
+  called out in the inline comments, e.g. `web/index.html:~672` ("the theme engine emits runtime
+  backgrounds that outrank these shell …").
+- **Impact:** Porting the override layer risks subtle visual regressions (light-on-dark bleed) that are
+  hard to predict from Go, because the author can't declare "these win" except by sprinkling
+  `!important`.
+- **Proposed direction:** `@layer` support (named, ordered layers — e.g. `base`/`tokens`/
+  `components`/`overrides`) or an explicit layer/priority argument to `New`, so override precedence is
+  declared, not order-accidental.
+
+### CSS5 — No managed base/reset (preflight) layer
+- **Area:** base styles · **Severity:** low
+- **Symptom:** With the Tailwind CDN removed (C91), the app hand-maintains a "minimal Tailwind-preflight
+  equivalent" inline. `css` has no opt-in normalize/reset, so the base layer is app-owned and (per
+  CSS1) can't even be expressed as global rules in the package.
+- **Evidence:** `web/index.html:~98-101` (comment + inline preflight shim); no reset/normalize export
+  in the `css` package surface.
+- **Impact:** Minor, but the base layer stays inline and unversioned-with-the-framework; every app
+  re-pastes a preflight.
+- **Proposed direction:** An optional `css.Preflight()` / normalize layer (emitted into a `base`
+  cascade layer per CSS4), toggleable so apps that don't want it opt out.
+
+### CSS6 — No documented build-time critical-CSS extraction pipeline
+- **Area:** SSR / build tooling · **Severity:** low
+- **Symptom:** The pieces for "author in Go, ship inline" exist — the native buffer sink collects
+  emissions for SSR and `Seed` suppresses re-injection on hydration — but there's no documented
+  build-time path to (a) run a wasm/Go app's render to populate the sink, (b) serialize it into
+  `index.html`, and (c) auto-`Seed` at boot. Without it, a migrated sheet either injects at runtime
+  (FOUC risk on a render-blocking-critical app shell) or is hand-copied.
+- **Evidence:** Sink/seed seam — `registry.go:39-52` (`Seed`/`Reset`), `doc.go:44-46` ("serialize it
+  into the page"), wasm-seed tests (`css_wasm_test.go`). No extractor tool is referenced in the
+  project or `gwc` runner usage.
+- **Impact:** Blocks a clean "lean scaffold + Go-authored critical CSS" end state; the inline block
+  stays hand-managed.
+- **Proposed direction:** A `gwc`-runner command (or documented harness) that renders the app under the
+  native sink, emits a critical `<style>` into the HTML template, and wires `Seed` — closing the loop
+  on CSS1–CSS5.
+
+### Cross-cutting (CSS series)
+
+The component, animation, and responsive layers of the inline stylesheet port to `css` cleanly today.
+What blocks the *global* stylesheet from leaving `index.html` reduces to two structural gaps —
+**global/`:root` rule emission (CSS1, CSS2)** and **ancestor-state + cascade-layer control
+(CSS3, CSS4)** — with the base-layer and SSR-extraction items (CSS5, CSS6) as the finishing pieces.
+Until CSS1/CSS2 land, migrating the token palette and semantic-class shell means escape hatches or a
+full re-architecture, so the recommended sequencing is: close these gaps in the framework first, then
+port CashFlux's shell CSS.
+
+---
+
+## Addendum 5 — third raw-interop sweep across all 119 GWC-dependent UI files (G26–G35)
+
+A third, exhaustive pass over every UI-layer Go file that imports the framework (119 files across
+`internal/ui`, `internal/screens`, `internal/app`, `internal/uistate`) — searching specifically for
+patterns the first two passes missed: layout/geometry reads, async browser-API promise chains,
+router lifecycle, id-generation friction, dynamic style/script injection, and the modern Web API
+surface (crypto, IndexedDB, Notifications, network status, View Transitions). All evidence below was
+opened and confirmed at `path:line`.
+
+| ID  | Area                    | Severity | One-line gap |
+|-----|-------------------------|----------|--------------|
+| G26 | Layout geometry reads   | med      | No layout-read hook → `offsetLeft`/`offsetWidth`/`getBoundingClientRect` read raw in effects for animated/geometry-aware components (and `Style()` silently drops `--` custom-property keys) |
+| G27 | Animation/rAF lifecycle | med      | No `requestAnimationFrame` / View Transitions hook → page-enter restart uses raw double-rAF + `document.startViewTransition` |
+| G28 | Router lifecycle        | med      | No per-navigation callbacks → scroll-reset (`scrollTop=0`) and `document.title` set raw on every route change |
+| G29 | `UseId()` CSS-unsafe     | med      | `UseId()` emits colon ids (`gwc:3:1`) that throw `SyntaxError` in `querySelector("#id")` → must use `getElementById`; latent wasm panic |
+| G30 | Dynamic CSS injection   | med      | No managed `<style>` injection → `@font-face` (custom fonts) and feature stylesheets hand-built with `createElement("style")` + `textContent` |
+| G31 | Web Crypto / Promises   | med      | `crypto.subtle` (AES-GCM/PBKDF2) hand-rolled via `js.FuncOf` promise chains; no Promise→Go bridge |
+| G32 | Network status          | low      | No connectivity hook → `navigator.onLine` + `window online/offline` wired by hand, listeners leaked |
+| G33 | Notifications API       | low      | Browser `Notification` + `requestPermission` wired raw in `syscall/js` |
+| G34 | IndexedDB               | med      | No async/blob storage abstraction (G21 stops at localStorage) → full hand-rolled IDB driver (~250 lines) |
+| G35 | Imperative canvas/pointer| med     | No pointer/wheel hooks → widget-builder drag/pan/zoom is a ~90-line **JS string literal `eval`'d** from Go |
+
+### Confirmations — documented gaps with notable new evidence
+- **G1** — `internal/app/settingssectionnav.go:42`: another explicit per-item component split ("the framework forbids On* inside a variable-length loop") — the settings jump-nav.
+- **G2 / G22** — `internal/ui/controls.go:109-128`: `UseId()` + `getElementById` + `querySelector(".seg-pill")` + `offsetLeft`/`offsetWidth` to position the Segmented pill — the strongest missing-DOM-ref instance, in a *reused framework-style UI component* (not just a screen).
+- **G3 / G24** — `internal/uistate/fonts.go:83-106` (`createElement("style")` + `textContent` for `@font-face`) and `internal/screens/widget_builder.go:155-177` — two more raw-DOM style/markup bypasses.
+- **G9 / G13** — `internal/ui/dismiss.go:107-125`: a reusable popover-dismiss helper over `document.addEventListener("keydown","pointerdown")` + manual `js.Func` release — the missing global-event hook, now wrapped into a shared library.
+- **G12** — `internal/ui/controls.go:129`: the single-dep effect workaround used even in a shipped UI component (pill depends on `selected` + `len(options)`).
+- **G18** — partially mitigated: `internal/app/dialoghost.go` now implements in-app `ConfirmModal`/`PromptModal`, but native `alert` remains (`internal/app/wsswitcher.go:249`). Gap stands; app-level mitigation exists. (`dialoghost.go:132` also uses raw `setTimeout` → confirms G19.)
+
+### G26 — No layout-geometry read hook; `Style()` also drops `--` custom-property keys
+- **Area:** DOM geometry / layout · **Severity:** med
+- **Symptom:** Animated/geometry-aware UI reads element layout (`offsetLeft`, `offsetWidth`,
+  `getBoundingClientRect`) in a `UseEffect` and writes styles via raw `setProperty`, because (a) there
+  is no reactive layout-read primitive and (b) the shorthand `Style(map[string]string)` **silently
+  drops keys beginning with `--`**, so even ordinary animated styles must go through `js` `setProperty`.
+- **Evidence:** `internal/ui/controls.go:103-128` (Segmented pill: comment "the html `Style()` helper
+  drops `--` keys; setProperty via js does not", then `offsetLeft`/`offsetWidth` reads +
+  `setProperty`); `internal/app/addmenu.go:30-43` (`getBoundingClientRect` + `innerWidth` to choose
+  popover direction).
+- **Impact:** Every sliding indicator, auto-placed popover, or measure-then-position UI drops to raw
+  DOM. The `--`-key drop is a more severe sub-case of G11 than first noted — it forces `setProperty`
+  for *standard* properties too, not just SVG var() cases.
+- **Proposed direction:** A `UseElementGeometry(ref)`/`UseLayout(ref)` hook returning measured box
+  metrics post-render; and fix/ document `Style()` so custom properties are preserved (or add a typed
+  `SetVar` path).
+
+### G27 — No `requestAnimationFrame` / View Transitions hook; page-enter uses raw double-rAF
+- **Area:** animation lifecycle · **Severity:** med
+- **Symptom:** Restarting a keyframe animation on navigation needs the browser double-rAF idiom
+  (remove class → rAF → rAF → re-add), and the app uses the View Transitions API
+  (`document.startViewTransition`) — both via raw `syscall/js` with inline `js.FuncOf`s, plus an
+  external `IntersectionObserver` living in `wonder.js` that Go cannot see.
+- **Evidence:** `internal/app/pageenter.go:11-25` (pattern comment), `:57-82` (`startViewTransition`
+  invoke + double-`requestAnimationFrame` fallback, each `FuncOf` created/released inline), `:85-98`
+  (`window.cashfluxWonder.observe()` driving a JS-side IntersectionObserver).
+- **Impact:** Every SPA route-change animation is raw interop + ephemeral `js.Func` allocation; the
+  View Transitions API and observers are entirely outside the framework.
+- **Proposed direction:** `UseAnimationRestart(ref, class)` (implements double-rAF) and
+  `UseViewTransition(fn)` with graceful fallback and managed `js.Func` lifetime; consider a
+  `UseIntersection(ref)` hook to bring scroll-reveal into Go.
+
+### G28 — No router lifecycle callbacks; scroll-reset + `document.title` are raw on every navigation
+- **Area:** router / navigation lifecycle · **Severity:** med
+- **Symptom:** On route change the app must reset the scroll container (`scrollTop=0`) and set
+  `document.title` (tab + SR announcement). Neither is a framework primitive; both run as raw `js` in a
+  `UseEffect` keyed on the threaded route prop (and so also inherit G6's non-reactive-route plumbing).
+- **Evidence:** `internal/app/focusmain.go:13-42` (`el.Set("scrollTop",0)`, `doc.Set("title",title)`,
+  with rationale comment); wired from the route effect in `internal/app/shell.go`.
+- **Impact:** Every app re-implements SPA scroll/title hygiene; pairs with G6 — a reactive route + a
+  lifecycle hook would absorb both.
+- **Proposed direction:** Router lifecycle callbacks (`OnNavigate(fn)` / `useRouteEffect(fn)`) firing
+  post-navigation with the new path, plus first-class `title` and scroll-reset options on route config.
+
+### G29 — `UseId()` generates colon ids that crash `querySelector("#id")`
+- **Area:** id generation / DSL correctness · **Severity:** med
+- **Symptom:** `UseId()` returns ids like `gwc:3:1`. `querySelector("#gwc:3:1")` throws a CSS
+  `SyntaxError` (`:` is a pseudo-class separator) and **panics the wasm callback**. All `UseId()`
+  lookups must therefore use `getElementById` (raw string, never throws) and must never feed the id to
+  any CSS-selector API — a framework-generated footgun.
+- **Evidence:** `internal/ui/dismiss.go:45-47` (explicit comment documenting the trap); the
+  `getElementById`-not-`querySelector` workaround recurs at `chartd3.go:45`, `mermaidview.go:40`,
+  `flippanel.go:55`, `focus.go:14`.
+- **Impact:** Silent panic source for any contributor who naturally writes `querySelector("#"+id)`;
+  mitigation is pure author discipline.
+- **Proposed direction:** Emit CSS-safe ids (e.g. hyphenated `gwc-3-1`), or provide a selector-safe
+  escaping helper; document prominently in framework gotchas.
+
+### G30 — No managed `<style>` injection; `@font-face` and feature stylesheets are raw DOM
+- **Area:** dynamic CSS injection · **Severity:** med
+- **Symptom:** Features needing globally-scoped CSS at runtime (`@font-face` for user-uploaded fonts; a
+  widget-builder canvas stylesheet) build a `<style>` element by hand (`createElement` + `textContent`
+  + `appendChild`), each with its own id-guard. Distinct from CSS1 (the `css` package's scoping model):
+  this is about injecting arbitrary CSS *strings* at runtime, which `css` also cannot do.
+- **Evidence:** `internal/uistate/fonts.go:83-106` (`ApplyFonts`, `@font-face`); `internal/screens/widget_builder.go:167-177` (`vbStyleCSS`, guarded by `getElementById("vb-style")`).
+- **Impact:** Each such feature re-invents the managed-style-element idiom in raw DOM.
+- **Proposed direction:** A `css.Inject(id, cssText)` (idempotent by id) managing the `<style>` element
+  lifecycle, so app code never touches the DOM for runtime CSS.
+
+### G31 — Web Crypto (`crypto.subtle`) hand-rolled via `js.FuncOf` promise chains
+- **Area:** crypto / async Web APIs · **Severity:** med
+- **Symptom:** Dataset encryption (AES-GCM-256 / PBKDF2) calls `crypto.subtle` import/derive/
+  encrypt/decrypt as raw Promise chains, each leg a `js.FuncOf` `then`/`catch` pair released by hand.
+  No Promise→Go bridge exists, so this is the site where wasm's lack of `async/await` hurts most.
+- **Evidence:** `internal/app/datasetcrypto.go:30+` (`subtle` accessor, `getRandomValues`,
+  `importKey`→`deriveKey`→`encrypt`/`decrypt`, multiple `js.FuncOf` pairs with `Release()`); envelope
+  format in `internal/cryptobox`.
+- **Impact:** ~250 lines of pure interop for one feature; any future crypto/signing/hashing repeats it.
+- **Proposed direction:** A `wasm/promise` helper wrapping a `js.Value` Promise into a Go channel/
+  callback with managed `js.Func` lifetime (eliminates `then`/`catch` boilerplate), plus an optional
+  thin `wasm/crypto` wrapper for `getRandomValues`/`subtle`.
+
+### G32 — No network-status hook; `navigator.onLine` + online/offline wired by hand
+- **Area:** network / connectivity · **Severity:** low
+- **Symptom:** The offline indicator seeds from `navigator.onLine` and stays live via
+  `window.addEventListener("online"/"offline")`, with two intentionally-leaked `js.Func`s.
+- **Evidence:** `internal/app/onlinestatus.go:17-28`.
+- **Impact:** Low (boot-time wiring) but the same G9/G13 pattern.
+- **Proposed direction:** `UseNetworkStatus()` → reactive `bool` (builds on G9's `UseWindowEvent`).
+
+### G33 — Browser Notifications API wired raw in `syscall/js`
+- **Area:** browser notifications · **Severity:** low
+- **Symptom:** Posting notifications checks `window.Notification`, calls `requestPermission().then(…)`
+  via a `js.FuncOf`, and constructs `new Notification(...)` — no framework abstraction.
+- **Evidence:** `internal/app/notifyrun.go:91-119`; permission flow also at `internal/app/settings.go:107-109`.
+- **Impact:** Low individually; part of the "every browser capability = full raw interop" pattern
+  (with G31/G32/G34).
+- **Proposed direction:** `PostNotification(title, body)` + a general `UsePermission(name)` hook.
+
+### G34 — IndexedDB entirely hand-rolled; no async/blob storage abstraction
+- **Area:** async storage / IndexedDB · **Severity:** med
+- **Symptom:** The artifact blob store implements a full Go/wasm IDB driver — `indexedDB.open`,
+  `onupgradeneeded`/`onsuccess`/`onerror` as `js.FuncOf` callbacks feeding a channel,
+  transaction-per-op, plus `navigator.storage.estimate()` for quota — because the framework's storage
+  abstraction stops at `localStorage` atoms (G21).
+- **Evidence:** `internal/artifactstore/idb.go:28-80` (open/upgrade/success/error), transaction
+  pattern throughout; `:199` (`navigator.storage.estimate()`). (`idb_native.go` is the native stub.)
+- **Impact:** Any feature needing persistent binary/larger-than-localStorage storage rolls its own IDB
+  driver — the largest single browser-API raw-interop module by line count.
+- **Proposed direction:** A `wasm/idb` (or `wasm/storage`) typed key-value blob store (open/get/put/
+  delete/usage) hiding the callback machinery behind channels, or a first-class `BlobAtom`.
+
+### G35 — Imperative canvas interaction injected as a JS string literal and `eval`'d
+- **Area:** canvas / complex pointer interactions · **Severity:** med
+- **Symptom:** The widget-builder canvas (node drag, pan, zoom, wiring) is a ~90-line **JavaScript
+  string literal** (`vbDragShimJS`) executed via `js.Global().Call("eval", …)`, because Go/wasm has no
+  idiomatic way to attach the `mousedown/mousemove/mouseup/wheel/click` document handlers (and capture)
+  the interaction needs. The shim also reads `getBoundingClientRect`, writes `style.left/top/transform`,
+  and touches `localStorage` directly — all invisible to Go.
+- **Evidence:** `internal/screens/widget_builder.go:43-133` (`vbDragShimJS` verbatim JS, incl. the five
+  `document.addEventListener` handlers); `:167` (`js.Global().Call("eval", vbDragShimJS)` in a
+  `UseEffect`).
+- **Impact:** An entire feature's interaction model lives in a JS blob — untestable in Go, un-debuggable
+  with Go tooling, and undermining the pure-Go-frontend story. The most extreme raw-interop instance in
+  the codebase.
+- **Proposed direction:** `UsePointerEvents`/`UseDocumentPointerEvents` (pointermove/down/up with
+  capture) and `UseWheel` hooks so drag/zoom canvases are authorable in Go; combines with G2 (ref) and
+  G30 (managed injection) to retire the `eval` path.
+
+### Cross-cutting (third pass)
+
+Two themes dominate the new findings and both reduce to a single missing capability each:
+
+1. **No Promise → Go bridge.** `requestAnimationFrame` (G27), `crypto.subtle` (G31),
+   `Notification.requestPermission` (G33), and IndexedDB (G34) all repeat the same ~50–250-line idiom:
+   manual `js.FuncOf` `then`/`catch` chains with hand `Release()`. A single `wasm/promise` primitive
+   (Promise→channel, managed lifetime) would collapse the boilerplate across every modern async
+   browser API and is the highest-leverage new fix.
+2. **No path back to the rendered DOM's layout/behavior.** Layout reads (G26), router lifecycle
+   side-effects (G28), and rich pointer/canvas interaction (G35) all exist because the framework renders
+   *out* but offers no measured-geometry / lifecycle / pointer hooks back *in* — the same root as G2
+   (DOM ref). Plus a discrete correctness bug: `UseId()` emits CSS-unsafe ids (G29).
+
+Net: **10 new gaps (G26–G35)**, mostly `med`. With Addenda 1–5, the framework's missing-primitive set
+now spans: DOM ref + autofocus + geometry (G2/G22/G26), portal + raw-HTML + dialog + injection
+(G3/G4/G18/G24/G30), effect-scoped lifecycle for timers/events/media/animation (G9/G13/G19/G20/G25/G27),
+router reactivity + lifecycle (G6/G28), a Promise/async-API bridge for crypto/IDB/notifications
+(G31/G33/G34), persisted atoms (G21), and the `css` typed-CSS gaps (CSS1–CSS6).
+
+---
+
+## Addendum 6 — behavioral / correctness gaps (G36–G39)
+
+Where Addenda 1–5 cataloged *missing capabilities* (raw-interop escapes, absent APIs), this pass
+targeted a different class: **framework behaviors the app must defensively work around** — render/
+paint timing, reconciler ownership of the DOM, and state-lifecycle correctness. Found by sweeping the
+UI dirs for comment signals (`workaround`/`defensive`/`stale`/`flush`/`deferred`/`re-render`/"the
+framework …") and reading the surrounding code. All evidence opened and confirmed at `path:line`.
+
+| ID  | Area                       | Severity | One-line gap |
+|-----|----------------------------|----------|--------------|
+| G36 | Effect timing (pre-paint)  | high     | `UseEffect` fires before paint → post-render DOM work (focus, scroll, highlight) needs magic `setTimeout`/`rAF` delays; no `UseLayoutEffect` |
+| G37 | Reconciler vs `innerHTML`  | high     | The vdom clears imperatively-set `innerHTML` on any self-re-render → components must fold every local state into the effect key to re-inject |
+| G38 | Mount-only effect          | low      | No `UseMount`; "run once on mount" is the undocumented `UseEffect(fn, true)` constant-dep idiom |
+| G39 | Atom access outside render | med      | `UseAtom` is hook-only → external writers need a render-phase "capture" var + guard; pre-render writes silently drop |
+
+### G36 — `UseEffect` fires before the browser paints; post-render DOM work needs magic delays
+- **Area:** effect / lifecycle timing · **Severity:** high
+- **Symptom:** Effects run synchronously with render, before the new DOM is painted/laid out. Any work
+  that must observe or touch the freshly rendered tree — focusing a just-opened dialog input, scrolling
+  a thread to the bottom after content fills, jumping to a highlighted element, restoring focus after a
+  list re-renders — cannot run directly in a `UseEffect`. Multiple sites defer via `setTimeout` with
+  empirically-tuned delays (30/80/400 ms) or `requestAnimationFrame`.
+- **Evidence:** `internal/app/dialoghost.go:121-132` (focus-into-dialog via `setTimeout(30)` in an
+  effect — and this is the app's *in-framework* dialog, the G18 mitigation, so it tests the framework's
+  own timing); `internal/screens/insights.go:1132-1145` (`scrollChatToEnd` `setTimeout(80)`, comment:
+  "deferred … so it runs AFTER the bubbles' Markdown innerHTML has been filled … otherwise … scroll a
+  still-empty container and land at the top"); `:1179-1196` (`scrollToID` `setTimeout(400)`);
+  `internal/screens/focus.go:58-99` (`focusRowAfterDelete` wraps focus in `requestAnimationFrame` —
+  "waits one animation frame so the re-render has repainted the list"), `:109-170` (`captureRowFocus`
+  restore, same).
+- **Impact:** The most common timing-fragility class in the codebase: dialogs, scroll, focus, and any
+  imperative DOM interaction triggered by a state change guess a delay — too short and the element
+  isn't there yet, too long and the UI lags.
+- **Proposed direction:** A `UseLayoutEffect` hook that fires after DOM mutation but before paint
+  (React `useLayoutEffect` / the browser "before paint" slot), so post-render imperative work runs at
+  the right moment without magic numbers.
+
+### G37 — The reconciler clobbers `innerHTML` written in an effect; state must be folded into the effect key
+- **Area:** reconciler / vdom correctness · **Severity:** high
+- **Symptom:** When a component sets a node's `innerHTML` imperatively in a `UseEffect` (e.g. injected
+  sanitized Markdown), the next re-render of that component — even from an *unrelated* local state
+  change — has the vdom reconciler clear/overwrite that node's children, discarding the injected
+  content. The workaround is to fold every local state that can trigger a self-re-render into the
+  effect's dependency signature, so the effect re-fires and re-injects after each such render.
+- **Evidence:** `internal/screens/insights.go:1044-1058` (`AssistantBubble`: builds `sig := p.Text`
+  then appends `|p`/`|c` for `pinned`/`copied` — comment: "folds in the local action toggles so the
+  effect re-fills the innerHTML after a self re-render (pin/copy) that the vdom would otherwise
+  clear"); `:1224-1230` (`PinnedInsightRow` folds `expanded` for the same reason); `:1431`
+  (`UserBubble`, `p.HTML` as key).
+- **Impact:** Any component mixing vdom children with imperative-DOM content (innerHTML, canvas,
+  third-party libraries) is exposed: a contributor who adds a new local state to such a component
+  without knowing this silently breaks the content render. Compounds G3 (no raw-HTML node) — all
+  Markdown is forced through this fragile pattern.
+- **Proposed direction:** The reconciler should treat a node whose `innerHTML` was set outside its own
+  render as opaque (skip patching its children when the app returned none for it); or a first-class
+  `RawHTML`/`dangerouslySetInnerHTML` (G3) so the framework owns the write and won't clobber it.
+
+### G38 — No mount-only effect; `UseEffect(fn, true)` is the undocumented "run once" idiom
+- **Area:** effect ergonomics / API clarity · **Severity:** low
+- **Symptom:** There's no `UseMount(fn)` / `useEffect(fn, [])` equivalent. To run an effect once after
+  mount, code passes the constant `true` as the dependency (a constant never changes, so it never
+  re-fires). It works but is semantically misleading and undocumented — and silently changes behavior
+  if the framework's dep-equality or the dep value is ever altered in a refactor.
+- **Evidence:** `internal/ui/flippanel.go:45-50` (`UseEffect(func() func(){ shown.Set(true); return nil }, true)` to trigger the open transition once post-mount) — sole instance, but in a reusable
+  framework-style component, and the flip-panel open animation breaks silently if the dep changes.
+- **Impact:** Low (one site) but non-obvious and library-level.
+- **Proposed direction:** A self-documenting `UseMount(fn func() func())` (run once post-mount, cleanup
+  on unmount), or document a canonical mount-only dep form.
+
+### G39 — `UseAtom` is hook-only; external writers need a render-phase "capture" var, and pre-render writes silently drop
+- **Area:** state / atom lifecycle · **Severity:** med
+- **Symptom:** `state.UseAtom` may only be called during render, so code that drives reactive state from
+  *outside* a render (global key shortcuts, undo/redo, post-decrypt hydration, network events) can't
+  call it. The pattern: during render, write the hook's atom into a package-level `captured*` variable
+  guarded by a `*Captured` bool; external callers use that variable. Writes made **before the first
+  render that captures** are silent no-ops.
+- **Evidence:** The capture triad recurs across 6+ `uistate` atoms — `internal/uistate/notice.go:28-48`
+  (`UseNotice` sets `capturedNotice`/`noticeCaptured`; `PostNotice` "is a no-op until the toast surface
+  has rendered once"), `internal/uistate/settings.go:46-69` (`UseDataRevision`/`BumpDataRevision`,
+  same), plus `dialog.go:51`, `addtarget.go`, `quickadd.go`, `rail.go`. External callers:
+  `internal/app/shortcuts.go`, `internal/app/undo.go:67,80`.
+- **Impact:** Three pieces of ceremony per externally-writable atom; "forgot to capture" and "wrote
+  before first paint" are real bug classes, and the pre-render silent-drop (a global event firing at
+  boot loses its write with no error) is the dangerous one.
+- **Proposed direction:** A first-class `state.GlobalAtom(key, default)` / `state.Store` with stable
+  identity, readable/writable from any goroutine or callback without a render-phase capture —
+  retiring all 6+ capture patterns and the silent-drop risk.
+
+### Confirmations (existing gaps, new evidence)
+- **G5** — the `_ = atom.Get()` subscribe-to-force-rerender idiom is more pervasive than Addendum 1
+  noted: `internal/app/settings.go:787`, `internal/screens/{artifacts.go:39, workflows.go:37,
+  activity.go:188, todo.go:41, reports_screen.go:113, dashboard.go:47}` — 8+ screens.
+- **G2 / G22** — `internal/screens/focus.go` (`focusRowAfterDelete`, `captureRowFocus`) are two shared
+  utilities encoding the missing-DOM-ref/focus workaround.
+- **G12** — `internal/screens/insights.go:1051-1058` folds two local states into one string dep
+  because effects take a single dep.
+- **G18 / G19 / G22** — even the *new* in-framework dialog host can't escape the older patterns:
+  `internal/app/dialoghost.go:132` uses raw `setTimeout`, and native `alert` still remains at
+  `internal/app/wsswitcher.go:249`.
+
+### Cross-cutting (behavioral pass)
+
+The dominant theme is **render/paint timing and DOM ownership**. G36 (effects fire pre-paint) and G37
+(reconciler clears imperative `innerHTML`) are both `high` and share a root: the framework runs effects
+before paint and treats all node children as exclusively vdom-owned — so any component bridging the
+framework and the live DOM (dialogs, Markdown bubbles, focus, third-party libraries) must compensate
+with delayed callbacks and redundant effect keys. A single `UseLayoutEffect` (G36) plus
+opaque-innerHTML/raw-HTML handling (G37/G3) would remove most of it. G39 is a structural state gap
+(hook-only atoms can't be driven from global code without a footgun), and G38 is a low-severity
+ergonomics item. Net: **4 new gaps (G36–G39)**, two of them `high`.

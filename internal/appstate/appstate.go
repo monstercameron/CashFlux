@@ -293,6 +293,12 @@ func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("t
 // Rules returns every auto-categorization rule.
 func (a *App) Rules() []rules.Rule { v, err := a.store.ListRules(); a.logErr("rules", err); return v }
 
+// Rev returns the store's monotonic mutation revision — an O(1) value that
+// advances on every entity write or delete. It is the correct cache key for
+// render-time memoization of derived values (net worth, totals, budget health),
+// since it changes exactly when the underlying data does (§1.6).
+func (a *App) Rev() uint64 { return a.store.Rev() }
+
 // Documents returns every imported-document record.
 func (a *App) Documents() []domain.Document {
 	v, err := a.store.ListDocuments()

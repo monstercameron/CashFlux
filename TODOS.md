@@ -12731,6 +12731,16 @@ swatches + 6 labels (Housing/Groceries/Education & Loa…/…) + 6 percentages (
 data; 0 label↔% overlaps (`donut_shot` layout probe). The income donut benefits too. No Go change (static
 asset); build rc=0.
 
+✅ POLISH — Reports DONUT center now shows the TOTAL (2026-06-24). The ring's hole was dead space; now it
+carries the summed value as a focal figure ("$4,068") + a small "total" caption — the elegant donut pattern.
+Currency-aware (matches the Sankey/bar-axis fixes): `renderDonut` takes `curSym`, threaded
+`reportsDonut ChartProps.CurrencySymbol → cashfluxRenderChart → renderDonut`. Exact with separators when it
+fits the inner circle, compact ("$1.2M") for big figures so it never overflows. MEASURED
+(`e2e/donut_center_verify.mjs`, 6/6 both themes): center reads "$4,068" + "total" caption, legend intact
+(53%/13%/…), no overlap. Build rc=0. (NB: this change was reverted twice by the concurrent Cloud-sync git
+`reset`/`clean` cycles before it could verify durably — re-verified once the churn settled; env also wiped
+`node_modules`/`web/bin/main.wasm`, both restored this pass: `npm install` + rebuild.)
+
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.
 The app already ships a far richer toolkit that Reports under-uses — so most of this is *wiring existing primitives*,
@@ -23868,7 +23878,7 @@ Tag: [CSS-ONLY] — deferred, non-blocking.
 - [x] Boot hydration: `appstate.Init` loads sample data on boot (wired into `app.Run`)
 - [x] Single persist path: every write goes through validated `appstate.Put*` → store (+ slog)
 - [x] Reactive refresh per screen (`state.UseAtom` revision bumped after `appstate.Put*`) — Accounts add form
-- [ ] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed` — with screens
+- [x] Derived/computed selectors (net worth, totals, budget health) via `state.UseComputed` — with screens
 - [x] Error/toast surface for failed persistence — `uistate.Notice` atom + `app.Toast` (auto-dismiss);
       all screen write sites routed (ledger bulk + paired-transfer delete, Accounts mark-all-updated,
       dashboard nudge reminder)
@@ -24441,7 +24451,7 @@ points — verify exact lines before editing.
 
 - [x] **[M]** Entering inline edit doesn't move focus into the edit form
       (`transactions.go:598`, and the other entity screens). Focus the first field on edit.
-- [ ] **[M]** After save/delete, focus isn't restored predictably (`transactions.go:606`, `accounts.go:572`,
+- [x] **[M]** After save/delete, focus isn't restored predictably (`transactions.go:606`, `accounts.go:572`,
       and peers). Return focus to the row/Edit button on save; to the next/prev row on delete.
 - [x] **[M]** Quick-add form has no autofocus (`quickadd.go:118`). Autofocus the first meaningful field.
 - [ ] **[L]** Dashboard exposes every widget as its own tab stop (`ui/widget.go:121`); with 12+ tiles the

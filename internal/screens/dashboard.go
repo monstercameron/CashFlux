@@ -90,12 +90,16 @@ func Dashboard() ui.Node {
 		kpiTxns = filtered
 	}
 
-	nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
+	// Memoized via state.UseComputed keyed on app.Rev() — recomputes only when the
+	// dataset/FX actually changes, not on every re-render (§1.6).
+	nw := useNetWorth(app, accounts, txns, rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 	w := uistate.UsePeriod().Get()
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
-	income, expense, _ := ledger.PeriodTotals(kpiTxns, start, end, rates)
+	// Memoized (§1.6): keyed on app.Rev() + the period + the active-member filter,
+	// so it recomputes only when one of those changes.
+	income, expense := usePeriodTotals(app, kpiTxns, start, end, rates, activeMemberID)
 
 	// W-15: trigger count-up animation on the KPI hero figures whenever the
 	// underlying values change. The sig is keyed on the four headline amounts so

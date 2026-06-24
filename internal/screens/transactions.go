@@ -241,11 +241,16 @@ func Transactions() ui.Node {
 	}
 
 	deleteTxn := func(txnID string) {
+		// Capture where focus is (the row being deleted) before it's removed, so we
+		// can land focus on the next row after the re-render instead of dropping it
+		// to <body> (§6.7).
+		focusIdx := consumeRowDeleteFocus()
 		if err := app.DeleteTransactionWithTransferPair(txnID); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		bump()
+		focusRowAfterDelete(".txn-table tbody", "tr.row", focusIdx)
 	}
 
 	toggleSelect := func(txnID string) {

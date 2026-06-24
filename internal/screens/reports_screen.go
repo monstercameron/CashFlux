@@ -378,7 +378,7 @@ func Reports() ui.Node {
 		}
 		if len(donutPairs) > 0 {
 			spec := reportsDonutSpec(donutPairs, decimals)
-			catDonutNodes = append(catDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Spending share by category"}))
+			catDonutNodes = append(catDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Spending share by category", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
 
@@ -512,7 +512,7 @@ func Reports() ui.Node {
 		}
 		if len(donutPairs) > 0 {
 			spec := reportsDonutSpec(donutPairs, decimals)
-			incomeDonutNodes = append(incomeDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Income share by source"}))
+			incomeDonutNodes = append(incomeDonutNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Income share by source", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
 

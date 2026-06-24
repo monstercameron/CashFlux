@@ -68,7 +68,7 @@
       .attr("width", W).attr("height", H).attr("role", "img");
 
     if (spec.kind === "donut") {
-      renderDonut(svg, series[0], W, H, defColor);
+      renderDonut(svg, series[0], W, H, defColor, curSym);
       return;
     }
 
@@ -211,9 +211,10 @@
     el.innerHTML = "";
   };
 
-  function renderDonut(svg, s, W, H, defColor) {
+  function renderDonut(svg, s, W, H, defColor, curSym) {
     var pts = (s && s.points) || [];
     if (!pts.length) return;
+    var sym = curSym || "$";
     var palette = d3.scaleOrdinal(d3.schemeTableau10 || [defColor]);
     var colorOf = function (p, i) { return (p && p.color) || palette(i); };
     var total = 0;
@@ -233,10 +234,25 @@
     g.selectAll("path").data(pie).enter().append("path")
       .attr("d", arc)
       .attr("fill", function (d, i) { return colorOf(d.data, i); });
-    if (!hasRoom) return;
 
     var fg = cssVar("--text", "#e6e6e9");
     var dim = cssVar("--text-dim", "#9a9aa2");
+    // Center total — the ring's hole is dead space; show the summed value there as
+    // a focal figure (compact currency, e.g. "$4.1k"). Caption only when there's room.
+    // Exact total with thousands separators ("$4,068") when it fits the hole;
+    // fall back to compact ("$1.2M") for big figures so it never overflows the ring.
+    var full = sym + d3.format(",.0f")(total);
+    var centerText = full.length <= 8 ? full : sym + d3.format(".2~s")(total);
+    var valFs = Math.max(11, Math.min(18, r * 0.3));
+    g.append("text").attr("text-anchor", "middle").attr("y", r > 46 ? -1 : 4)
+      .attr("font-size", valFs + "px").attr("font-weight", "700").attr("fill", fg)
+      .text(centerText);
+    if (r > 46) {
+      g.append("text").attr("text-anchor", "middle").attr("y", 13)
+        .attr("font-size", "9px").attr("letter-spacing", "0.04em").attr("fill", dim).text("total");
+    }
+    if (!hasRoom) return;
+
     var rowH = Math.min(18, Math.max(12, (H - 8) / pts.length));
     var lx = 2 * r + 18;
     var startY = (H - rowH * pts.length) / 2 + rowH / 2;

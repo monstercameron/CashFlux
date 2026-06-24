@@ -53,6 +53,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	dateISO := dateutil.FormatDate(t.Date)
 
 	del := ui.UseEvent(Prevent(func() {
+		// Capture which row holds focus now, before the confirm modal opens, so focus
+		// can be restored to the next row after the delete (§6.7).
+		captureRowDeleteFocus(".txn-table tbody", "tr.row")
 		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", t.Desc), true, func(ok bool) {
 			if ok {
 				props.OnDelete(t.ID)

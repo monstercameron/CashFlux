@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/auditlog"
@@ -19,6 +20,21 @@ import (
 )
 
 // --- generic helpers ---
+
+// mutationRev is a process-wide monotonic counter bumped on every successful
+// write (putJSON) or delete (deleteRow). Because all entity mutations funnel
+// through these two helpers, it is an O(1), always-correct cache key for
+// render-time memoization (§1.6): any change to any entity advances it, so a
+// memoized derived value (net worth, totals, budget health) recomputes exactly
+// when — and only when — the underlying data actually changed. Atomic because
+// native tests may touch a store from multiple goroutines.
+var mutationRev atomic.Uint64
+
+// MutationRev returns the current global mutation revision (see mutationRev).
+func MutationRev() uint64 { return mutationRev.Load() }
+
+// Rev returns the current mutation revision, for callers holding a *SQLiteStore.
+func (s *SQLiteStore) Rev() uint64 { return mutationRev.Load() }
 
 func putJSON[T any](db *sql.DB, table, id string, item T) error {
 	if id == "" {
@@ -35,6 +51,7 @@ func putJSON[T any](db *sql.DB, table, id string, item T) error {
 	if err != nil {
 		return fmt.Errorf("store: put %s: %w", table, err)
 	}
+	mutationRev.Add(1)
 	return nil
 }
 
@@ -61,6 +78,9 @@ func deleteRow(db *sql.DB, table, id string) (bool, error) {
 		return false, err
 	}
 	n, err := res.RowsAffected()
+	if n > 0 {
+		mutationRev.Add(1)
+	}
 	return n > 0, err
 }
 
