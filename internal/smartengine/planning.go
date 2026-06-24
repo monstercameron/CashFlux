@@ -5,6 +5,7 @@ package smartengine
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/payoff"
@@ -15,8 +16,98 @@ import (
 func init() {
 	register("SMART-P1", p1DiscoverRecurring)
 	register("SMART-P4", p4Affordability)
+	register("SMART-P6", p6ConfidenceBand)
 	register("SMART-P8", p8ExtraDebt)
+	register("SMART-P9", p9BreakEven)
 	register("SMART-P10", p10BillShock)
+}
+
+const (
+	confidenceMonths   = 6     // months of net history for the variance band
+	confidenceMinSwing = 10_00 // ignore a trivially flat band
+)
+
+// SMART-P6 — Forecast confidence band. Measures how much monthly net swings
+// (good months vs lean) so the user plans with a margin rather than a single line.
+func p6ConfidenceBand(in Input) []smart.Insight {
+	nets := monthlyNets(in, confidenceMonths)
+	if len(nets) < 3 {
+		return nil
+	}
+	lo, hi := nets[0], nets[0]
+	for _, v := range nets {
+		if v < lo {
+			lo = v
+		}
+		if v > hi {
+			hi = v
+		}
+	}
+	swing := (hi - lo) / 2
+	if swing < confidenceMinSwing {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-P6",
+		Page:    smart.PagePlanning,
+		Key:     "SMART-P6:" + in.Now.Format("2006-01"),
+		Title:   "Your monthly net swings about ±" + in.baseMoney(swing).Format(2),
+		Detail: "Over the last " + plural(int64(len(nets)), "month") + " your monthly net ranged from " +
+			in.baseMoney(lo).Format(2) + " to " + in.baseMoney(hi).Format(2) + ". Plan with that margin, not a single line.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(swing)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
+}
+
+// SMART-P9 — Break-even finder. Surfaces the spending threshold that keeps cash
+// flow positive, given typical income.
+func p9BreakEven(in Input) []smart.Insight {
+	income, expense := in.trailingMonthly()
+	if income <= 0 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-P9",
+		Page:    smart.PagePlanning,
+		Key:     "SMART-P9:" + in.Now.Format("2006-01"),
+		Title:   "Break-even spending: " + in.baseMoney(income).Format(2) + "/mo",
+		Detail: "You stay cash-positive as long as monthly spending stays under about " +
+			in.baseMoney(income).Format(2) + " (your typical income). You're running near " +
+			in.baseMoney(expense).Format(2) + "/mo.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(income)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	return []smart.Insight{ins}
+}
+
+// monthlyNets returns the net (income − expense, base minor) for each of the
+// prior `months` whole months that had any activity, most-recent first.
+func monthlyNets(in Input, months int) []int64 {
+	curStart := dateutil.MonthStart(in.Now)
+	var out []int64
+	for k := 1; k <= months; k++ {
+		s := dateutil.AddMonths(curStart, -k)
+		e := dateutil.AddMonths(curStart, -k+1)
+		var inc, exp int64
+		any := false
+		for _, t := range in.Transactions {
+			if t.IsTransfer() || t.Date.Before(s) || !t.Date.Before(e) {
+				continue
+			}
+			any = true
+			base := in.toBaseMinor(t.Amount.Amount, t.Amount.Currency)
+			if t.Amount.IsPositive() {
+				inc += base
+			} else {
+				exp += -base
+			}
+		}
+		if any {
+			out = append(out, inc-exp)
+		}
+	}
+	return out
 }
 
 const p4MinEssentials = 50_00 // need this much essential spend to suggest a buffer

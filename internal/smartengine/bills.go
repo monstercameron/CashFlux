@@ -18,9 +18,44 @@ func init() {
 	register("SMART-BL2", bl2CanCover)
 	register("SMART-BL3", bl3MissedBill)
 	register("SMART-BL6", bl6LateFeeRisk)
+	register("SMART-BL4", bl4Autopay)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
 	register("SMART-BL13", bl13StatementClarity)
+}
+
+// SMART-BL4 — Autopay reconciliation. When a liability's most recent due date has
+// a matching payment near it, notes that it looks auto-paid (so the user isn't
+// nagged to pay something already handled).
+func bl4Autopay(in Input) []smart.Insight {
+	var out []smart.Insight
+	for _, a := range in.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability || a.DueDayOfMonth <= 0 || a.MinPayment.Amount == 0 {
+			continue
+		}
+		prevDue := dateutil.AddMonths(bills.NextDue(a.DueDayOfMonth, in.Now), -1)
+		days := dateutil.DaysBetween(prevDue, in.Now)
+		if days < 0 || days > missedWindowDays {
+			continue
+		}
+		// A payment within a few days either side of the due date looks like autopay.
+		from := prevDue.AddDate(0, 0, -3)
+		to := prevDue.AddDate(0, 0, 5)
+		if !paymentInWindow(in.Transactions, a.ID, from, to) {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-BL4",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL4:" + a.ID + ":" + prevDue.Format("2006-01"),
+			Title:   a.Name + " looks auto-paid",
+			Detail: "A payment posted around the " + prevDue.Format("Jan 2") + " due date, so " + a.Name +
+				" appears to be on autopay — no action needed.",
+			Severity: smart.SeverityInfo,
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+	}
+	return out
 }
 
 // SMART-BL13 — Statement-vs-minimum clarity. For a revolving liability, shows the

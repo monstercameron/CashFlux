@@ -15,8 +15,62 @@ func init() {
 	register("SMART-SU1", su1CancelCandidates)
 	register("SMART-SU3", su3TrialConversion)
 	register("SMART-SU4", su4AnnualSavings)
+	register("SMART-SU6", su6CostCreep)
+	register("SMART-SU8", su8Forgotten)
 	register("SMART-SU11", su11Zombie)
 	register("SMART-SU14", su14CancellationTally)
+}
+
+// SMART-SU6 — Per-subscription cost-creep history. Surfaces how much a
+// subscription's price has crept up over time, making silent walk-ups visible.
+func su6CostCreep(in Input) []smart.Insight {
+	changes, err := subscriptions.DetectPriceChanges(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, c := range changes {
+		if !c.Increased() || c.PercentChange < priceMinIncrease {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU6",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU6:" + strings.ToLower(strings.TrimSpace(c.Name)),
+			Title:   c.Name + " costs " + itoa64(int64(c.PercentChange)) + "% more than before",
+			Detail: c.Name + " has crept from " + mny(c.OldAmount, in.Base).Format(2) + " to " +
+				mny(c.NewAmount, in.Base).Format(2) + " — a silent price walk-up worth noticing.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(c.Delta, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
+}
+
+// SMART-SU8 — "Forgotten since" surfacing. Ranks subscriptions whose last charge
+// is overdue past their cadence, surfacing the truly out-of-mind ones.
+func su8Forgotten(in Input) []smart.Insight {
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil
+	}
+	var out []smart.Insight
+	for _, s := range subs {
+		if !subscriptions.NeedsReview(s, in.Now) {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-SU8",
+			Page:    smart.PageSubscriptions,
+			Key:     "SMART-SU8:" + strings.ToLower(s.Name),
+			Title:   s.Name + " — no charge since " + s.Last.Format("Jan 2"),
+			Detail: s.Name + " hasn't charged in a while. If it lapsed that's fine; if it's still active, " +
+				"it's an easy one to forget you're paying for.",
+			Severity: smart.SeverityInfo,
+		}.WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+	}
+	return out
 }
 
 const (

@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — 6 more Free engines: G3, P6, P9, SU6, SU8, BL4 (2026-06-24):** **G3** auto-allocate surplus to goals; **P6** forecast confidence band (±swing from trailing monthly-net range); **P9** break-even spending threshold; **SU6** per-subscription cost-creep history; **SU8** forgotten-since (stale subscription) surfacing; **BL4** autopay reconciliation (a payment near the due date marks a bill auto-paid). 45 Free engines total. Table-driven tests.
+
 - **SMART series — Free engines G15 + SU11 (2026-06-24):** **G15 Debt-payoff optimizer** reuses payoff.BuildPlan to compare avalanche vs snowball total interest and surfaces the interest saved by paying the highest-APR debt first. **SU11 Zombie-charge detection** flags small ($226410/mo), long-running (6+ periods) recurring charges that are easy to forget. 39 Free engines total. Table-driven tests.
 
 - **SMART series — 8 more AI features (16 total) (2026-06-24):** added **A3** (clean up an account name + infer type), **T1** (auto-categorize a transaction against the user's category list), **T3** (parse a plain-English transaction search into filter terms), **T5** (normalize a messy merchant string), **T12** (scan recent transactions for tax-relevant/deductible items), **G9** (recommend which goal to fund first), **SU10** (price-benchmark context for a subscription), and **SU13** (find bundle opportunities) — each as a `smartai` prompt builder + an `aiSpec` row, with new hook-free context builders (categories, recent transactions, goals). All 16 AI features share the gpt-5.4-mini→5.5 routing, show their per-use cost, and are gated behind a configured provider. Pure builders unit-tested.

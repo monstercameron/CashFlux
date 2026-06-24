@@ -264,6 +264,95 @@ func TestSU11SkipsLargeOrShort(t *testing.T) {
 	}
 }
 
+func TestG3AllocateSurplus(t *testing.T) {
+	in := baseInput().withBaseline(500000, 300000) // $2000/mo surplus
+	in.Goals = []domain.Goal{goal("g", "Vacation", 100000, 0, time.Time{})}
+	got := g3AllocateSurplus(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 surplus nudge, got %d: %+v", len(got), got)
+	}
+	if got[0].Amount.Amount != 200000 {
+		t.Errorf("surplus = %d, want 200000", got[0].Amount.Amount)
+	}
+}
+
+func TestG3NoSurplusNoNudge(t *testing.T) {
+	in := baseInput().withBaseline(300000, 500000) // negative surplus
+	in.Goals = []domain.Goal{goal("g", "Vacation", 100000, 0, time.Time{})}
+	if got := g3AllocateSurplus(in); len(got) != 0 {
+		t.Errorf("negative surplus — want 0, got %d", len(got))
+	}
+}
+
+func TestP6ConfidenceBand(t *testing.T) {
+	in := baseInput()
+	monthStart := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	in.Transactions = []domain.Transaction{
+		{ID: "m1", AccountID: "x", Date: monthStart.AddDate(0, -1, 9), Amount: usd(300000), Desc: "Pay"},
+		{ID: "m2", AccountID: "x", Date: monthStart.AddDate(0, -2, 9), Amount: usd(100000), Desc: "Pay"},
+		{ID: "m3", AccountID: "x", Date: monthStart.AddDate(0, -3, 9), Amount: usd(500000), Desc: "Pay"},
+	}
+	got := p6ConfidenceBand(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 confidence band, got %d: %+v", len(got), got)
+	}
+	// Range $1000–$5000 → swing $2000.
+	if got[0].Amount.Amount != 200000 {
+		t.Errorf("swing = %d, want 200000", got[0].Amount.Amount)
+	}
+}
+
+func TestP9BreakEven(t *testing.T) {
+	in := baseInput().withBaseline(500000, 300000)
+	got := p9BreakEven(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 break-even insight, got %d", len(got))
+	}
+	if got[0].Amount.Amount != 500000 {
+		t.Errorf("break-even = %d, want 500000", got[0].Amount.Amount)
+	}
+}
+
+func TestSU6CostCreep(t *testing.T) {
+	in := baseInput()
+	var txns []domain.Transaction
+	for i := range 6 {
+		d := time.Date(2026, time.Month(1+i), 8, 0, 0, 0, 0, time.UTC)
+		amt := int64(-5000)
+		if i >= 3 {
+			amt = -6000
+		}
+		txns = append(txns, domain.Transaction{ID: "x" + itoa64(int64(i)), AccountID: "a", Date: d, Amount: usd(amt), Desc: "Internet"})
+	}
+	in.Transactions = txns
+	if got := su6CostCreep(in); len(got) != 1 {
+		t.Fatalf("want 1 cost-creep insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestSU8Forgotten(t *testing.T) {
+	in := baseInput() // now June 15
+	in.Transactions = monthlyCharges("OldGym", -3000, time.February, 4) // last charge Feb → stale
+	if got := su8Forgotten(in); len(got) != 1 {
+		t.Fatalf("want 1 forgotten insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestBL4Autopay(t *testing.T) {
+	in := baseInput() // now June 15, prev due June 5
+	in.Accounts = []domain.Account{liabilityCard("c", "Visa", 5, 5000)}
+	in.Transactions = []domain.Transaction{
+		txn("p", "c", time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC), 5000), // payment near due date
+	}
+	got := bl4Autopay(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 autopay insight, got %d: %+v", len(got), got)
+	}
+	if got[0].Severity != smart.SeverityInfo {
+		t.Errorf("autopay should be info, got %v", got[0].Severity)
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

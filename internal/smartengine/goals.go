@@ -19,9 +19,44 @@ func init() {
 	register("SMART-G11", g11EmergencyFund)
 	register("SMART-G12", g12SuggestGoals)
 	register("SMART-G8", g8GoalImpact)
+	register("SMART-G3", g3AllocateSurplus)
 	register("SMART-G13", g13Windfall)
 	register("SMART-G15", g15DebtStrategy)
 	register("SMART-G18", g18Feasibility)
+}
+
+const g3MinSurplus = 50_00 // only nudge to allocate a meaningful leftover
+
+// SMART-G3 — Auto-allocate surplus. When there's a recurring monthly surplus and
+// active goals, nudges the user to route the leftover into their goals.
+func g3AllocateSurplus(in Input) []smart.Insight {
+	surplus := in.monthlySurplusBase()
+	if surplus < g3MinSurplus {
+		return nil
+	}
+	var n int
+	for _, g := range in.Goals {
+		if g.Archived {
+			continue
+		}
+		if c, err := goals.IsComplete(g); err == nil && !c {
+			n++
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-G3",
+		Page:    smart.PageGoals,
+		Key:     "SMART-G3:" + in.Now.Format("2006-01"),
+		Title:   "You're freeing up about " + in.baseMoney(surplus).Format(2) + "/mo",
+		Detail: "After income and spending you have roughly " + in.baseMoney(surplus).Format(2) +
+			"/mo left over. Routing it across your " + plural(int64(n), "active goal") + " would reach them sooner.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(surplus)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goals", Route: "/goals"})
+	return []smart.Insight{ins}
 }
 
 // SMART-G15 — Debt-payoff strategy optimizer. Compares avalanche (highest APR
