@@ -21851,7 +21851,12 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 
 *Entrance / reveal*
 - [x] W-9 Page-enter transition — on route change the page content fades + rises quickly. **LANDED 2026-06-23** — Approach A: `triggerPageEnter()` (pageenter.go, js+wasm build tag) does a double-rAF class toggle on `#cf-page-view`; `@keyframes wonder-page-enter` in index.html uses `--wonder-dur-slow`/`--wonder-ease-out`/`--wonder-on`; gated off under `[data-wonder="off"]` and `prefers-reduced-motion`; cold-boot excluded via existing firstRender guard in shell.go UseEffect.
-- [ ] W-10 Route cross-fade — outgoing/incoming pages cross-fade (advanced; GO-STRUCTURAL + view-transition API).
+- [~] W-10 Route cross-fade — outgoing/incoming pages cross-fade (advanced; GO-STRUCTURAL + view-transition API).
+      DEFERRED (2026-06-23, deliberate): overlaps the shipped W-9 page-enter (which already gives a fast
+      fade-rise on route change); a true cross-fade needs `document.startViewTransition()` wrapped around
+      the GoWebComponents virtual-DOM render swap (the framework owns that swap), which is high-risk for
+      marginal gain over W-9 and has uneven browser support. Revisit if the framework exposes a render-swap
+      hook. The rest of the WONDER catalog (W-1..W-9, W-11..W-21 + theme-engine Motion integration) is complete.
 - [x] W-11 List stagger — `.rows .row` / `.list-rows .row` fade-rise cascade on first paint via `@keyframes wonder-row-enter` + `animation-delay` by `:nth-child(1..8)` (cap 210ms); nth-child > 8 enter together; delays scale by `--wonder-on` → 0ms when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`. **LANDED 2026-06-23**
 - [x] W-12 Card/bento entrance — `.bento .w` tiles scale-in (`1 - 0.02 * --wonder-on` → 1) + fade via `@keyframes wonder-bento-enter` (`--wonder-dur-slow`); scale uses `--wonder-on`; `animation:none` under off+reduce. **LANDED 2026-06-23**
 - [x] W-13 Modal/flip backdrop blur-in — `.flip-backdrop` now transitions `backdrop-filter` (`blur(0)` → `blur(3px * --wonder-on)`) over `--wonder-dur-slow` in addition to existing opacity; existing `transition:none` in reduce block covers it. **LANDED 2026-06-23**
