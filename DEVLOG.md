@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART series: the UX surface + persistence + e2e (Free tier is now usable)
+
+Completed the bottom-up climb for the Free tier: **persistence → state → UI → e2e**, all additive so
+none of the concurrent screen/uistate work was touched beyond a one-line route registration.
+
+- *Persistence* (`uistate/smartsettings.go`): `smart.Settings` as JSON in the PRESERVED settings KV
+  (survives a wipe, like theme/prefs), via the concurrent agent's `SettingKVGet/Set` bridge. Saving
+  bumps the store mutation revision, which is how a toggle live-updates the hub with no manual reload.
+- *Adapter* (`screens/smart_adapter.go`): builds the pure `smartengine.Input` from `appstate`
+  accessors (no hooks, safe anywhere in render) and runs only enabled engines.
+- *UI* (`screens/smart_card.go`, `screens/smart.go`): a `/smart` hub with (1) glanceable insight
+  cards — severity dot + title, toned headline amount, plain reason, one-tap action (navigate or
+  add-a-to-do) + dismiss; each its own component (the On*-hooks-in-loops rule), `MapKeyed` on the
+  stable insight Key; and (2) the **Manage** catalog grouped by page, each row a switch with a
+  **Free/AI cost badge** (AI shows the per-call estimate + a "needs a provider" hint). Only shipped
+  features are listed, so no toggle is a dead end — honest UX over an aspirational catalog.
+- *e2e* (`e2e/smart_hub_check.mjs`): the real wasm app, 10/10 assertions — opt-out default, enabling
+  SMART-B8 surfaces a live card (proving adapter→engine→card), persists across reload, dismiss works.
+
+Gotchas worth recording: (1) the GWC shorthand `Div(class, slice...)` spread of `[]ui.Node` doesn't
+compile (`...any` mismatch) — use `MapKeyed(items, keyFn, render)` which flattens; (2) `WithKey` is
+the dot-imported shorthand helper, not `ui.WithKey`; (3) you can't call a method on an elided
+`[]T{{...}}` composite literal — build the value in a var first (hit this repeatedly in the engines
+too); (4) the cross-reload e2e assertion needed a ~3s wait for the dataset autosave to flush the
+preserved settingskv to IndexedDB before reloading.
+
+**Next.** The ~20 `[AI]` features wired to the gpt-5.4-mini→5.5 routing (structured output +
+escalation + a cost-preview-before-run gated on a configured provider), the remaining deferred Free
+rule engines, then check off `TODOS.md`.
+
 ## 2026-06-24 — SMART series: Accounts rule engines (the first Free features)
 
 Built `internal/smartengine` — the deterministic engine layer — and the five Accounts rule engines.
