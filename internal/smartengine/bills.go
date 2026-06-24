@@ -17,8 +17,57 @@ import (
 func init() {
 	register("SMART-BL2", bl2CanCover)
 	register("SMART-BL3", bl3MissedBill)
+	register("SMART-BL6", bl6LateFeeRisk)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
+}
+
+const (
+	lateFeeWindowDays = 5    // warn when a liability bill is due within this many days
+	lateFeeMinAPR     = 1.0  // skip interest-cost math below this APR
+	lateFeeMinCost    = 1_00 // only surface when a week's delay costs at least $1
+)
+
+// SMART-BL6 — Late-fee / interest risk. For a liability bill due very soon,
+// estimates the interest cost of paying a week late so the trade-off is visible.
+func bl6LateFeeRisk(in Input) []smart.Insight {
+	var out []smart.Insight
+	for _, a := range in.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability || a.DueDayOfMonth <= 0 {
+			continue
+		}
+		if a.InterestRateAPR < lateFeeMinAPR {
+			continue
+		}
+		due := bills.NextDue(a.DueDayOfMonth, in.Now)
+		days := dateutil.DaysBetween(in.Now, due)
+		if days < 0 || days > lateFeeWindowDays {
+			continue
+		}
+		bal, err := ledger.Balance(a, in.Transactions)
+		if err != nil {
+			continue
+		}
+		owed := abs64(in.toBaseMinor(bal.Amount, a.Currency))
+		// A week of interest at the card's APR ≈ balance × APR/52.
+		weekInterest := pctOf(owed, a.InterestRateAPR) / 52
+		if weekInterest < lateFeeMinCost {
+			continue
+		}
+		out = append(out, smart.Insight{
+			Feature: "SMART-BL6",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL6:" + a.ID + ":" + due.Format("2006-01"),
+			Title:   a.Name + " is due " + due.Format("Jan 2") + " — paying late adds up",
+			Detail: "At " + fmtPct(a.InterestRateAPR) + " APR, slipping a week past the " +
+				due.Format("Jan 2") + " due date costs roughly " + in.baseMoney(weekInterest).Format(2) +
+				" in interest (plus any late fee).",
+			Severity: smart.SeverityWarn,
+		}.WithAmount(in.baseMoney(weekInterest)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+	}
+	return out
 }
 
 const (

@@ -16,6 +16,51 @@ func init() {
 	register("SMART-G5", g5GoalConflict)
 	register("SMART-G6", g6MilestoneNudge)
 	register("SMART-G11", g11EmergencyFund)
+	register("SMART-G13", g13Windfall)
+}
+
+const (
+	windfallFactor  = 1.5    // a deposit this many× average monthly income is a windfall
+	windfallRecent  = 35     // only flag windfalls in this recent window (days)
+	windfallMinBase = 200_00 // ignore small "windfalls" under $200
+)
+
+// SMART-G13 — Windfall routing. Detects an unusually large recent income deposit
+// (a bonus, tax refund) and suggests routing it to goals or debt rather than
+// letting it drift into spending.
+func g13Windfall(in Input) []smart.Insight {
+	avgIncome, _ := in.trailingMonthly()
+	cut := in.Now.AddDate(0, 0, -windfallRecent)
+	var best domain.Transaction
+	var bestBase int64
+	for _, t := range in.Transactions {
+		if !t.IsIncome() || t.Date.Before(cut) || t.Date.After(in.Now) {
+			continue
+		}
+		base := in.toBaseMinor(t.Amount.Amount, t.Amount.Currency)
+		if base > bestBase {
+			best, bestBase = t, base
+		}
+	}
+	if bestBase < windfallMinBase {
+		return nil
+	}
+	// A windfall is large relative to the usual monthly income (or simply large
+	// when there's no income history to compare against).
+	if avgIncome > 0 && float64(bestBase) < float64(avgIncome)*windfallFactor {
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-G13",
+		Page:    smart.PageGoals,
+		Key:     "SMART-G13:" + best.ID,
+		Title:   "You received a large deposit of " + in.baseMoney(bestBase).Format(2),
+		Detail: "A " + in.baseMoney(bestBase).Format(2) + " deposit on " + best.Date.Format("Jan 2") +
+			" stands out from your usual income. Routing some of it to a goal or to debt now keeps it from drifting into spending.",
+		Severity: smart.SeverityNudge,
+	}.WithAmount(in.baseMoney(bestBase)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goals", Route: "/goals"})
+	return []smart.Insight{ins}
 }
 
 const (
