@@ -19,7 +19,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -453,7 +455,7 @@ func VisualBuilder() ui.Node {
 	})
 
 	// Evaluate against live data.
-	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Datasets: vbDatasets()})
+	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Strs: vbStringSurface(), Datasets: vbDatasets()})
 	issues := cardgraph.Validate(g)
 
 	// Apply dragged positions onto the nodes for rendering.
@@ -520,6 +522,43 @@ func vbVariableSurface() map[string]float64 {
 	})
 }
 
+// vbStringSurface exposes named string values a source.scalar (text) node can bind —
+// currently the net-worth month-over-month subline, computed exactly the way the
+// dashboard's assets KPI does so a clone reads identically.
+func vbStringSurface() map[string]string {
+	out := map[string]string{}
+	app := appstate.Default
+	if app == nil {
+		return out
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	accounts, txns := app.Accounts(), app.Transactions()
+	net, _, _, err := ledger.NetWorth(accounts, txns, rates)
+	if err != nil {
+		return out
+	}
+	sub := "No change this month"
+	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
+		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
+			delta := money.New(net.Amount-prev[0].Amount, net.Currency)
+			switch {
+			case d < 0:
+				sub = fmt.Sprintf("▼ %d%% (%s) this month", -d, fmtMoney(delta))
+			case d > 0:
+				sub = fmt.Sprintf("▲ %d%% (+%s) this month", d, fmtMoney(delta))
+			case delta.Amount != 0:
+				sub = fmt.Sprintf("%s this month", fmtMoney(delta))
+			}
+		}
+	}
+	out["net_worth_sub"] = sub
+	return out
+}
+
 // vbDatasets builds the app collections a source.dataset node can read.
 func vbDatasets() map[string]cardgraph.Collection {
 	out := map[string]cardgraph.Collection{}
@@ -541,25 +580,43 @@ func vbDatasets() map[string]cardgraph.Collection {
 	txCols := []cardgraph.Column{
 		{Name: "category", Type: cardgraph.TypeText}, {Name: "payee", Type: cardgraph.TypeText},
 		{Name: "amount", Type: cardgraph.TypeNumber}, {Name: "type", Type: cardgraph.TypeText},
-		{Name: "month", Type: cardgraph.TypeText},
+		{Name: "month", Type: cardgraph.TypeText}, {Name: "date", Type: cardgraph.TypeText},
+		{Name: "desc", Type: cardgraph.TypeText}, {Name: "signed", Type: cardgraph.TypeNumber},
+	}
+	// signedMajor preserves the sign (negative for expenses) so a recent-transactions
+	// list can tone outflows red the way the dashboard ledger does.
+	signedMajor := func(m money.Money) float64 {
+		div := 1.0
+		for i := 0; i < currency.Decimals(m.Currency); i++ {
+			div *= 10
+		}
+		return float64(m.Amount) / div
 	}
 	var txRows []cardgraph.Row
 	for _, t := range app.Transactions() {
 		kind := "transfer"
+		signed := signedMajor(t.Amount)
 		switch {
 		case t.IsIncome():
 			kind = "income"
 		case t.IsExpense():
 			kind = "expense"
+			signed = -math.Abs(signed)
 		}
 		cat := catName[t.CategoryID]
 		if strings.TrimSpace(cat) == "" {
 			cat = "Uncategorized"
 		}
+		desc := strings.TrimSpace(t.Payee)
+		if desc == "" {
+			desc = cat
+		}
 		txRows = append(txRows, cardgraph.Row{
 			"category": cardgraph.Text(cat), "payee": cardgraph.Text(t.Payee),
 			"amount": cardgraph.Num(major(t.Amount)), "type": cardgraph.Text(kind),
 			"month": cardgraph.Text(t.Date.Format("2006-01")),
+			"date":  cardgraph.Text(t.Date.Format("Jan 2")), "desc": cardgraph.Text(desc),
+			"signed": cardgraph.Num(signed),
 		})
 	}
 	out["transactions"] = cardgraph.Collection{Cols: txCols, Rows: txRows}
@@ -646,7 +703,7 @@ func vbPublishedWidget(name string) ui.Node {
 	if !ok {
 		return nil
 	}
-	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Datasets: vbDatasets()})
+	res := cardgraph.Eval(g, cardgraph.Context{Vars: vbVariableSurface(), Strs: vbStringSurface(), Datasets: vbDatasets()})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: vbCardPrefix + name, Title: name, Draggable: true, Resizable: true,
 		Body: vbRenderTile(res, g),
@@ -785,6 +842,7 @@ func vbCatalog() []vbCatItem {
 		{cardgraph.KindVizText, "Text", "Display"},
 		{cardgraph.KindVizStack, "Stack (compose)", "Display"},
 		{cardgraph.KindUIButton, "Button", "Interact"},
+		{cardgraph.KindUIToggle, "Toggle", "Interact"},
 	}
 }
 
@@ -839,6 +897,8 @@ func vbDefaultProps(kind string) map[string]string {
 		return map[string]string{"title": "Card"}
 	case cardgraph.KindUIButton:
 		return map[string]string{"label": "Apply rules", "action": "applyRules"}
+	case cardgraph.KindUIToggle:
+		return map[string]string{"label": "Mark all updated", "action": "postRecurring"}
 	}
 	return map[string]string{}
 }
@@ -867,6 +927,9 @@ func vbParamSchema(kind string) []vbParam {
 		for _, n := range engineenv.SortedNames() {
 			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
 		}
+		// Named text surfaces (e.g. the net-worth month-over-month subline) so a KPI's
+		// "sub" line can clone the dashboard's assets tile verbatim.
+		opts = append(opts, [2]string{"net_worth_sub", "net worth subline"})
 		return []vbParam{{"name", "Figure", "select", opts}}
 	case cardgraph.KindSourceDataset:
 		return []vbParam{{"which", "Dataset", "select", [][2]string{{"transactions", "Transactions"}, {"accounts", "Accounts"}, {"budgets", "Budgets"}, {"goals", "Goals"}, {"tasks", "Tasks"}, {"bills", "Bills"}}}}
@@ -876,7 +939,7 @@ func vbParamSchema(kind string) []vbParam {
 		return []vbParam{{"textcol", "Text column", "text", nil}, {"any", "Keywords (any)", "text", nil}, {"amountcol", "Amount column", "text", nil}, {"min", "Min amount", "number", nil}, {"max", "Max amount", "number", nil}}
 	case cardgraph.KindVizStack:
 		return []vbParam{{"title", "Title", "text", nil}}
-	case cardgraph.KindUIButton:
+	case cardgraph.KindUIButton, cardgraph.KindUIToggle:
 		return []vbParam{{"label", "Label", "text", nil}, {"action", "Action", "select", [][2]string{{"applyRules", "Apply rules"}, {"postRecurring", "Post recurring"}, {"addTask", "Add task"}}}}
 	case cardgraph.KindLiteralNumber:
 		return []vbParam{{"value", "Value", "number", nil}}
@@ -899,9 +962,9 @@ func vbParamSchema(kind string) []vbParam {
 	case cardgraph.KindVizStat:
 		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}}
 	case cardgraph.KindVizChart:
-		return []vbParam{{"title", "Title", "text", nil}, {"chart", "Chart", "select", [][2]string{{"bar", "Bar"}, {"line", "Line"}, {"donut", "Donut"}}}}
+		return []vbParam{{"title", "Title", "text", nil}, {"chart", "Chart", "select", [][2]string{{"bar", "Bar"}, {"line", "Line"}, {"area", "Area"}, {"donut", "Donut"}, {"segbar", "Segmented bar"}}}, {"xlabel", "X-axis label", "text", nil}}
 	case cardgraph.KindVizList:
-		return []vbParam{{"title", "Title", "text", nil}, {"limit", "Max rows", "number", nil}}
+		return []vbParam{{"title", "Title", "text", nil}, {"limit", "Max rows", "number", nil}, {"cols", "Columns (comma-sep)", "text", nil}}
 	case cardgraph.KindVizProgress:
 		return []vbParam{{"title", "Title", "text", nil}, {"format", "Format", "select", vbFormatOpts()}}
 	case cardgraph.KindVizBadge:
@@ -949,7 +1012,7 @@ func vbPresets() map[string]cardgraph.Graph {
 	p["recent"] = cardgraph.Graph{
 		Nodes: []cardgraph.Node{
 			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "transactions"}, Pos: cardgraph.Point{X: 40, Y: 40}},
-			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Recent transactions", "limit": "6"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Recent transactions", "limit": "6", "cols": "date,desc,signed"}, Pos: cardgraph.Point{X: 340, Y: 40}},
 		},
 		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
 		Root:  "n2",
@@ -1495,6 +1558,8 @@ func vbRenderViz(v *cardgraph.VizBlock, format string) ui.Node {
 		return Div(css.Class("vb-stack"), blocks)
 	case "button":
 		return ui.CreateElement(vbActionButton, vbActionButtonProps{Label: v.Text, Action: v.Action})
+	case "toggle":
+		return ui.CreateElement(vbToggle, vbActionButtonProps{Label: v.Text, Action: v.Action})
 	default: // kpi — render through the dashboard's own KPI body so a clone matches 1:1.
 		figTone := ""
 		if v.Tone == "up" {
@@ -1517,6 +1582,9 @@ func vbChart(v *cardgraph.VizBlock) ui.Node {
 	if len(v.Series) == 0 {
 		return P(css.Class("t-caption", tw.TextDim), "No data to chart.")
 	}
+	if v.Chart == "segbar" {
+		return vbSegBar(v)
+	}
 	kind := chartspec.Bar
 	switch v.Chart {
 	case "line":
@@ -1538,12 +1606,39 @@ func vbChart(v *cardgraph.VizBlock) ui.Node {
 	spec := chartspec.Spec{
 		Kind:   kind,
 		Series: []chartspec.Series{{Color: v.Accent, Points: pts}},
+		X:      chartspec.Axis{Label: v.XLabel},
 		Y:      chartspec.Axis{Format: yFmt},
 	}
 	if kind == chartspec.Donut {
 		spec.Legend = true
 	}
 	return uiw.Chart(uiw.ChartProps{Spec: spec, Height: "100%", Class: "vb-chart", CurrencySymbol: sym})
+}
+
+// vbSegBar renders a percentage-segmented horizontal bar + legend (the breakdown tile).
+func vbSegBar(v *cardgraph.VizBlock) ui.Node {
+	total := 0.0
+	for _, p := range v.Series {
+		total += p.Value
+	}
+	if total == 0 {
+		total = 1
+	}
+	tones := []string{"var(--accent,#3b82f6)", "var(--up,#16a34a)", "var(--warn,#f59e0b)", "var(--down,#dc2626)", "#8b5cf6", "#06b6d4"}
+	segs := make([]ui.Node, 0, len(v.Series))
+	legend := make([]ui.Node, 0, len(v.Series))
+	for i, p := range v.Series {
+		c := tones[i%len(tones)]
+		w := strconv.FormatFloat(p.Value/total*100, 'f', 2, 64) + "%"
+		segs = append(segs, Div(Style(map[string]string{"width": w, "background": c, "height": "100%"})))
+		legend = append(legend, Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.35rem", "font-size": "12px"}),
+			Span(Style(map[string]string{"width": "10px", "height": "10px", "border-radius": "3px", "background": c})),
+			Span(css.Class("t-caption", tw.TextDim), p.Label)))
+	}
+	return Div(css.Class("vb-chart vb-segbar"),
+		Div(Style(map[string]string{"display": "flex", "width": "100%", "height": "14px", "border-radius": "999px", "overflow": "hidden", "margin-bottom": "0.6rem"}), segs),
+		Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}), legend),
+	)
 }
 
 // vbActionButtonProps configures an interactive button node.
@@ -1560,7 +1655,32 @@ func vbActionButton(p vbActionButtonProps) ui.Node {
 	return Button(css.Class("data-btn"), Type("button"), Attr("data-vb-action", action), OnClick(on), p.Label)
 }
 
-// vbRunAction applies a builder button's action to app state.
+func vbBoolAttr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// vbToggle renders the ui.toggle node: a stateful checkbox that runs its action on
+// change (the To-do tile's interactivity class — a checkbox, not just a button).
+func vbToggle(p vbActionButtonProps) ui.Node {
+	checked := ui.UseState(false)
+	action := p.Action
+	on := ui.UseEvent(func() {
+		checked.Set(!checked.Get())
+		vbRunAction(action)
+	})
+	box := "☐"
+	if checked.Get() {
+		box = "☑"
+	}
+	return Button(css.Class("data-btn"), Type("button"), Attr("role", "switch"), Attr("aria-checked", vbBoolAttr(checked.Get())),
+		Attr("data-vb-action", action), OnClick(on), box+" "+p.Label)
+}
+
+// vbRunAction applies a builder button/toggle action to app state, then bumps the data
+// revision so the result shows immediately (like the To-do tile).
 func vbRunAction(action string) {
 	app := appstate.Default
 	if app == nil {
@@ -1573,7 +1693,10 @@ func vbRunAction(action string) {
 		_, _ = app.ApplyRules()
 	case "addTask":
 		_, _ = app.CreateFreshnessReminderTask("From a custom widget")
+	default:
+		return
 	}
+	uistate.BumpDataRevision()
 }
 
 func vbList(v *cardgraph.VizBlock) ui.Node {
@@ -1582,21 +1705,57 @@ func vbList(v *cardgraph.VizBlock) ui.Node {
 	}
 	header := make([]ui.Node, 0, len(v.Cols))
 	for _, c := range v.Cols {
-		header = append(header, Th(Style(map[string]string{"text-align": "left", "font-size": "11px", "color": "var(--faint,#9ca3af)", "padding": "0.2rem 0.4rem", "text-transform": "uppercase"}), c.Name))
+		align := tw.TextLeft
+		if c.Type == cardgraph.TypeNumber {
+			align = tw.TextRight
+		}
+		header = append(header, Th(css.Class(tw.Py15, tw.TextDim, align), Style(map[string]string{"font-size": "11px", "font-weight": "600"}), c.Name))
 	}
 	rows := make([]ui.Node, 0, len(v.Rows))
 	for _, r := range v.Rows {
 		cells := make([]ui.Node, 0, len(v.Cols))
 		for _, c := range v.Cols {
 			cell := r[c.Name]
-			txt := cell.Str
-			if cell.Type == cardgraph.TypeNumber {
-				txt = strconv.FormatFloat(cell.Num, 'f', -1, 64)
+			if c.Type == cardgraph.TypeNumber {
+				tone := ""
+				if cell.Num > 0 {
+					tone = " text-up"
+				} else if cell.Num < 0 {
+					tone = " text-down"
+				}
+				cells = append(cells, Td(ClassStr("fig"+tone+" "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), vbGroupThousands(cell.Num)))
+			} else {
+				cells = append(cells, Td(css.Class(tw.Py25), cell.Str))
 			}
-			cells = append(cells, Td(Style(map[string]string{"padding": "0.2rem 0.4rem", "font-size": "13px", "white-space": "nowrap"}), txt))
 		}
-		rows = append(rows, Tr(cells))
+		rows = append(rows, Tr(css.Class(tw.BorderB, tw.BorderLine70), cells))
 	}
-	return Table(css.Class("vb-table"), Style(map[string]string{"width": "100%", "border-collapse": "collapse"}),
-		Thead(Tr(header)), Tbody(rows))
+	return Table(css.Class("vb-table t-body", tw.WFull),
+		Thead(Tr(css.Class(tw.BorderB, tw.BorderLine70), header)), Tbody(rows))
+}
+
+// vbGroupThousands formats a number with thousands separators (no currency symbol).
+func vbGroupThousands(n float64) string {
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	whole := int64(n)
+	frac := n - float64(whole)
+	s := strconv.FormatInt(whole, 10)
+	var out []byte
+	for i, ch := range []byte(s) {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, ch)
+	}
+	res := string(out)
+	if frac > 0.0001 {
+		res += strings.TrimPrefix(strconv.FormatFloat(frac, 'f', 2, 64), "0")
+	}
+	if neg {
+		res = "-" + res
+	}
+	return res
 }
