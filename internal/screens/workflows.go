@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -533,7 +535,7 @@ type stagedActionRowProps struct {
 func stagedActionRow(props stagedActionRowProps) ui.Node {
 	return Div(css.Class("row"),
 		Span(css.Class("row-desc"), props.Label),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", "Remove action"), Title("Remove action"),
+		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("workflows.removeAction")), Title(uistate.T("workflows.removeAction")),
 			OnClick(func() { props.OnRemove(props.Index) }), "✕"),
 	)
 }
@@ -553,6 +555,6 @@ func condVarButton(props condVarButtonProps) ui.Node {
 	return Button(css.Class("data-btn"), Type("button"),
 		Attr("data-testid", "cond-var-"+props.Token),
 		Title(props.Desc),
-		Attr("aria-label", "Insert "+props.Token+" into condition"),
+		Attr("aria-label", uistate.T("workflows.insertCondVar", props.Token)),
 		OnClick(ins), props.Token)
 }

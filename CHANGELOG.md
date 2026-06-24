@@ -6,7 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **i18n a11y:** routed hardcoded `aria-label` and `Title()` strings through `uistate.T()` in datatable pagination ("Previous page" / "Next page"), workflows staged-action remove button and condition-variable insert buttons, and split-screen "Save split" / "Record settled" buttons; added catalog keys `ui.table.prevPage`, `ui.table.nextPage`, `workflows.removeAction`, `workflows.insertCondVar` (%s verb for token name), `split.saveSplitTitle`, `split.recordSettledTitle` to `internal/i18n/en.go`.
+
 ### Added
+- **§3.4 Switch-server flow:** editing the server URL to a different host now signs out of the old server (clears token/CSRF + cloud-AI-key flag), resets sync to offline, and notifies — while keeping local data. Host-compared via a new `backendHost()` helper so same-server path/query edits don't drop the session.
+- Sync chip tooltip now names the active server (`Server: <host>`); the Cloud upgrade sheet now mentions the self-host path alongside managed cloud (onboarding names both once).
+- `docs/SECURITY_REVIEW_AI.md` — security review of all off-device AI egress: scope (the opt-in `aicontext` privacy tiers + top-N/recent-N caps), redaction controls present today, and residual risks/recommendations.
+- SPDX `MIT` license headers swept across all 667 first-party Go files.
+- `e2e/capture_product.mjs` — refreshes the deliberate product screenshots in `docs/screenshots/` against the current UI.
+- Settings global panel switched to a single **Close** button (`CloseOnly`); its Save/Cancel footer was misleading because every setting applies live on change (§6.17).
 - **B34 — Appearance page (`/appearance`):** the theming engine (theme mode, accent, density, Motion, full theme editor) moved out of the crowded Settings panel into its own routed, deep-linkable page reachable from the left rail + a Settings "Appearance & theme →" link. New `internal/browser` package (file pick/download) so the theme editor could move `internal/app` → `internal/screens` without an import cycle; Settings de-crowded to a single link + the dead `internal/app/theme_editor.go` removed.
 - `internal/ui` primitives: `Skeleton` (WONDER-gated shimmer placeholder for loading content) and `MeterBar` (proportion meter).
 - `e2e/wonder.spec.mjs` — WONDER flourish regression suite (45 checks) with a **perceptibility guard** that fails if the page-enter rise / hover-lift fall below a visible threshold (guards against "tasteful" tweaks silently making flourishes invisible).
@@ -288,6 +297,97 @@ and every commit updates this file under `Unreleased`.
   member reassign panel moves focus to its select.
 
 ### Fixed
+- **`+ Add` menu opened over the left rail, leaving its items half-unclickable.** The single +Add button sits
+  ~24px right of the rail, and `.add-menu { right:0 }` made its 210px panel extend leftward back over the
+  sidebar — the items' clickable centres fell inside the rail, which intercepted the clicks. Changed it to open
+  rightward (`left:0`) into the content column. Verified in both themes (`e2e/addmenu_verify.mjs`, 8/8): items
+  clear the rail (minLeft=269 ≥ railRight=240), menu fits the viewport, and "New transaction" is now clickable
+  and opens the add modal. The open direction is now chosen **live at open-time** (`internal/app/addmenu.go`
+  measures the button's gap to the viewport's right edge via `syscall/js`): the +Add button reflows between the
+  left and right of the topbar across widths, so a fixed side or breakpoint isn't robust — it opens rightward
+  by default and flips left (`.open-left`) when there's < ~224px on the right. Verified at 6 widths
+  (1280/1100/1025/1024/768/390): no overflow and no rail overlap anywhere (`e2e/addmenu_widths_verify.mjs`).
+- **`+ Add` menu now closes on Escape (keyboard-a11y).** It previously only dismissed via item-click or a
+  backdrop click; pressing Escape left it open (`aria-expanded="true"`). Added a document `keydown` listener
+  (registered only while open, mirroring `dialoghost.go`) that closes the menu on Escape and returns focus to
+  the +Add button per the WAI-ARIA menu-button pattern. Verified `e2e/escape_addmenu_verify.mjs` (5/5): closes
+  + refocuses, still reopens/positions/backdrop-closes.
+- **`+ Add` menu now dismisses on outside-click over page content.** The `.add-backdrop` is `position:fixed`
+  inside the topbar's sticky (`z-index:5`) stacking context, so it doesn't paint over the page content — clicks
+  there fell through without closing the menu. Added a document `pointerdown` listener (alongside the Escape
+  one, only while open) that closes the menu when the press lands outside `.add-wrap` — immune to stacking.
+  Verified `e2e/addmenu_outside_verify.mjs` (4/4): opens & stays open (no self-close), outside-click over
+  content closes, Escape + item flows intact.
+- **Account-row `⋯` overflow menu: Escape/outside-click dismissal + `aria-expanded`.** The hand-rolled menu
+  on each account row (and the shared `OverflowMenu` primitive) lacked Escape-to-close, `aria-expanded` on the
+  trigger, and relied on the non-covering `.add-backdrop` for outside-clicks. Added a reusable
+  `ui.DismissPopover` custom-hook (`internal/ui/dismiss.go`) wiring Escape (close + refocus trigger) and
+  outside-`pointerdown` dismissal, plus `aria-expanded`; used it in `OverflowMenu` and `accounts_row.go`. Fixed
+  a latent bug surfaced by verification: `UseId()` ids contain colons (`gwc:3:1`) — invalid in a `#id` selector,
+  so `querySelector` threw and panicked the callback; switched to `getElementById`. Verified on `/accounts`
+  (`e2e/accounts_menu_verify.mjs`, 8/8).
+- **Custom-page `⋯` menu (rail rename/hide/delete): dismissal + `aria-expanded`.** This per-page menu had no
+  dismissal at all (not even a backdrop — it stayed open until an item was picked) and no
+  `aria-haspopup`/`aria-expanded`/`role=menu`. Wired `ui.DismissPopover` (Escape + outside-click) and added the
+  ARIA roles/state in `internal/app/custompagesnav.go`. Verified on the live rail after creating a page
+  (`e2e/custompage_menu_verify.mjs`, 7/7). (Completes the hand-rolled `⋯`-menu sweep — `rules.go`/`widgets.go`
+  use `MoreH` only as a drag grip, not a menu.)
+- **Overflow menus: WAI-ARIA arrow-key navigation.** `ui.DismissPopover` now roves focus among `[role=menuitem]`
+  entries with ArrowDown/ArrowUp (wraparound) + Home/End, gated on focus being inside the popover so global
+  arrow keys aren't hijacked. Completes the menu-button keyboard pattern (alongside Escape, outside-click,
+  `aria-expanded`) for every consumer — accounts `⋯`, custom-page `⋯`, and the `OverflowMenu` primitive.
+  Verified on the accounts menu (`e2e/menu_arrowkeys_verify.mjs`, 8/8); prior dismissal guards still green.
+- **`+ Add` menu unified onto the shared dismissal helper.** It was the last dropdown running its own ~50-line
+  inline Escape/outside-click effect (no arrow-key nav, duplicated logic). Migrated it to `ui.DismissPopover`
+  (keeping its live open-direction logic), so now *every* app dropdown shares one helper with the full
+  menu-button keyboard pattern. Verified `+ Add` arrow-keys (`e2e/addmenu_arrowkeys.mjs`, 6/6) and that its
+  existing positioning/escape/outside-click guards are unchanged; net ~50 fewer lines in `addmenu.go`.
+- **Widget Manager table clipped its "Order" column on phones.** The 4-column `.wm-table` (~404px min-width)
+  overflowed and clipped the reorder controls at phone width (`tableRight=483 > docW=390`). Since it has no
+  sticky header (unlike `.txn-table`), wrapped it at the call site (`internal/screens/widgets.go` →
+  `.wm-table-wrap { overflow-x: auto }`, scoped — the shared DataTable and txn-table are untouched) so it
+  scrolls sideways on phones and is unaffected on desktop. Verified at 390 (scrolls, Order reachable, no
+  page clip) and 1280 (fits, no scrollbar) via `e2e/wmtable_scroll_verify.mjs`.
+- **Transactions table clipped its right-hand columns at tablet widths.** The 8-column `.txn-table` has a
+  ~949px intrinsic min-width, so on tablet viewports (768–900px) the wide table overflowed the content column
+  and clipped Account/Tags/Cleared/Actions with no way to reach them. Raised the existing C10/C19 card-layout
+  breakpoint `760 → 900px` (`web/index.html`) so tablets get the stacked-card view — which also avoids the
+  sticky-header breakage a horizontal-scroll wrapper would cause (an `overflow-x:auto` wrapper turns into a
+  scroll container and the sticky `th` scrolls away; measured and reverted). Verified at 768/880 (cards, no
+  clip) and 1280 (table fits, sticky header intact) via `e2e/txn_responsive_verify.mjs`. (Residual 901–1185px
+  laptop clip is tracked under B31 — needs a product call.)
+- **Reports "Money flow" Sankey showed raw minor units (cents) as node labels.** It rendered "Income 406800",
+  "Housing 217500", "Groceries 52000" because Mermaid `sankey-beta` displays the flow weight verbatim and the
+  Go side passed minor units. Mermaid requires a numeric weight (can't take a formatted money string), so:
+  `internal/screens/reports_screen.go` now rounds each flow minor→major (whole currency units via
+  `currency.Decimals`), and `web/mermaid.js` adds `sankey: { prefix: "$", showValues: true }`. Labels now read
+  "Income $4068 / Housing $2175 / Groceries $520 …", matching the hero + ranked-bar figures (verified via
+  rendered SVG text in both themes, `e2e/sankey_verify.mjs`). The currency prefix is now **per-render and
+  base-currency-aware** (a new `ui.MermaidProps.ValuePrefix` carrying `currency.Symbol(base)`), so a GBP/JPY
+  household gets "£"/"¥" instead of a hardcoded "$"; JPY's 0-decimal currency correctly skips the minor→major
+  division. (Supersedes the initial hardcoded `prefix:"$"` in the Mermaid init.)
+- **Drag affordances clobbered by WONDER entrance animations (filled-animation sweep).** Two functional drag
+  cues measured `opacity: 1` instead of their intended dim: the dashboard tile drag-**ghost** (`.w.drag`,
+  should be `.35`, clobbered by `wonder-bento-enter`) and the rule-row drag-**grab** (`.row[draggable]:active`,
+  should be `.85`, clobbered by `wonder-row-enter`). A filled animation (`fill-mode: both`) outranks every
+  non-`!important` author rule, and its `opacity: 1` end-state had been silently overriding both. Fixed with
+  `opacity: … !important` (unconditional — drag cues must show regardless of the WONDER setting). Re-measured
+  0.35 / 0.85; guarded by `e2e/drag_affordance_verify.mjs` (2/2) + a `.w.drag` ghost check folded into
+  `e2e/wonder.spec.mjs` (46→47). Audited the remaining filled animations (page-enter, toast-in,
+  chart-draw/fade, success-pulse) — none land on elements with a competing hover/static transform/opacity.
+- **W-3 bento tile hover-lift was silently broken (filled-animation clobber).** Dashboard `.bento .w` tiles
+  measured `translateY: 0` on hover — the `wonder-bento-enter` entrance animation (`fill-mode: both`, final
+  keyframe `transform: none`) outranked the non-`!important` `html .w:not(.drag):hover` transform (same cascade
+  trap as the W-4 row-hover and GI2 zero-usage fixes). Split the tile hover into its own rule with `transform:
+  … !important` (box-shadow stays non-important; `:not(.drag)` kept so a tile being dragged is never touched).
+  Now: −5px lift at full, identity when off/reduced-motion, drag-excluded. Added a permanent **W-3 tile-hover
+  guard to `e2e/wonder.spec.mjs`** (the suite had no tile-hover coverage — 45→46 checks, all pass).
+- **GI2 zero-usage category dim was silently broken (WONDER-over-GI2 regression).** `.cat-zero-usage`
+  rows never dimmed (computed `opacity: 1`, not 0.55) because they carry the `wonder-row-enter` entrance
+  animation (`fill-mode: both`, final keyframe `opacity: 1`), and a filled animation's value outranks every
+  non-`!important` author rule — same class of bug as the W-4 row-hover fix. Changed to `opacity: .55
+  !important` in `web/index.html`. Caught by the GI1/GI2/GI3 both-theme verification pass
+  (`e2e/gi123_theme_verify.mjs`, now 18/18); fix re-verified at 0.55 in both themes.
 - **WONDER amplification fixes actually landed in `main` (W-1/W-2/W-4/W-11).** The earlier "lift 5px /
   hover + row + off-suppression" fixes were made in a worktree that was removed before committing, so
   `main` still shipped the imperceptible values and `e2e/wonder.spec.mjs` ran 40/45. Re-derived and

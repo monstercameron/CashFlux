@@ -29,6 +29,86 @@ prefers-reduced-motion → crossFade skips startViewTransition. All paths produc
 
 **sw.js:** Bumped cache to `cashflux-v250` to evict stale assets.
 
+## 2026-06-24 — i18n: route hardcoded a11y labels through T() (datatable, workflows, split)
+
+Six hardcoded English strings in `aria-label` / `Title()` attributes were not going through the i18n catalog, breaking screen-reader UX for non-English locales. Fixed by routing each through `uistate.T()` and adding the corresponding keys to `internal/i18n/en.go`:
+
+- `internal/ui/datatable.go`: pagination "Previous page" / "Next page" aria-labels → `ui.table.prevPage` / `ui.table.nextPage`; added `uistate` import.
+- `internal/screens/workflows.go`: staged-action row "Remove action" aria-label + Title → `workflows.removeAction`; condition-variable button "Insert X into condition" → `workflows.insertCondVar` (uses `%s` verb for the token name, matching the catalog's printf-style formatting).
+- `internal/screens/split_screen.go`: "Save this split to the settle-up ledger below" → `split.saveSplitTitle`; "Record this payment as settled" → `split.recordSettledTitle`.
+
+Both screens already imported `uistate`; only datatable needed the new import. Build (`GOOS=js GOARCH=wasm go build .`) passes clean. The `internal/server` grpcbridge error is pre-existing and unrelated to this change.
+
+## 2026-06-24 (latest) — Backlog sweep: switch-server flow, settings Close-only, sync-chip server name
+
+Closed four more TODOs from the doable-now backlog, all building green (wasm + native):
+
+- **§3.4 Switch-server flow** (`internal/app/settings.go`). Editing the server URL to a *different host*
+  now signs out of the old server (clears `ServerToken`/`ServerCSRF` + the cloud-AI-key flag), resets
+  sync to `offline`, and notifies — a session issued by one server is meaningless to another. Local data
+  is untouched. Host comparison via a new `backendHost()` helper, so editing the path/query of the *same*
+  server doesn't needlessly drop the session.
+- **Sync-chip names the active server** (`internal/app/syncchip.go`). The chip tooltip now appends
+  `Server: <host>` so a multi-server user can see which backend this household syncs with at a glance.
+- **Onboarding mentions both paths once** (`internal/app/upgradesheet.go`). The Cloud upgrade sheet now
+  carries a one-line self-host mention ("Run your own CashFlux server — same app, your data, no lock-in"),
+  so onboarding names the managed-cloud *and* self-host paths once.
+- **§6.17 Settings panel Save/Cancel → Close-only** (`internal/app/settings.go`). Every setting in the
+  global panel applies live on change, so a Save/Cancel footer was misleading; switched the panel to
+  `CloseOnly` (single Close button).
+- **§2.6 Planning verified** — build-scenario / compare-vs-actuals / push-to-forecast confirmed already
+  implemented (trim + saved-plan overlays on a 12-month forecast grounded in trailing-3-month actuals).
+
+**Honestly left unchecked (not faked):** §1.6 derived selectors via `state.UseComputed` — the app has no
+per-mutation revision counter, so memoizing net worth on the available `data:revision` (bulk-replace-only)
+would show *stale* values after an inline edit; shipping that to tick a box would introduce a real bug.
+GX14's GO-side `ApplyTheme` light-derivation — explicitly deferred in TODOS with a sound trade-off (light
+mode already works via verified CSS pins; the refactor only helps a contradictory custom-dark-theme-in-light
+edge case and risks the whole theme engine). The remaining backlog is dominated by external/perpetual items
+(Stripe/DO/analytics/repo-Pages/screenshots, the §4 continuous policies) and framework-blocked polish
+(sliding pills — `Style()` drops CSS custom properties).
+
+## 2026-06-24 (latest 2) — Backlog sweep continued: SPDX, screenshots, security review, §4 verifications, GI1, 1.9
+
+Pushed the doable-now backlog further (90% → 91% of TODOS cleared), all green:
+
+- **SPDX `MIT` headers** swept across all 667 first-party Go files (build constraints + doc comments
+  preserved; both builds green; gofmt's flags are the known CRLF false-positive).
+- **Fresh product screenshots** captured via `e2e/capture_product.mjs` (8 screens) into
+  `docs/screenshots/`, which the README already embeds.
+- **`docs/SECURITY_REVIEW_AI.md`** — honest review of off-device AI egress: the `aicontext` opt-in
+  privacy tiers (conservative default = aggregates only) + top-N/recent-N caps are the redaction
+  mechanism; residual risks (verbatim payees at the transaction tier, third-party retention, vision
+  upload) documented with recommendations. No path ships the raw ledger or keys off-device.
+- **§4 verifications** (state checked, not assumed): full `go test ./...` green (0 fail); `gwc wasm
+  measure` (60.7 MB raw / 13.0 MB gzip / 8.83 MB brotli) and `gwc release` (brotli 8.64 MB) run;
+  logic packages confirmed pure (the one `syscall/js` file, `ai/transport.go`, is the intentional thin
+  network seam); design-system tokenisation 1962 `css.Class`/`tw.` vs 110 inline `Style(map)`; a11y
+  337 aria-labels across screens; GitHub Pages confirmed `build_type: workflow` via `gh api`.
+- **§1.9** — extracted the leaked entity-type filter out of `activity.go` into a pure, table-tested
+  `auditlog.FilterByEntityType` (new test passes natively); view code no longer holds the logic.
+- **GI1** — inline "Quick add a rule" row at the top of /rules (reuses `RuleAddForm` with its live
+  match-count preview), so a rule can be created without the modal. Verified via `e2e/verify_gi1.mjs`
+  (4/4).
+
+- **RESIDUAL table-clip (1174)** — product call: bumped the transactions table→card breakpoint 900→1200px
+  so a clipping table never paints (it needs ~1185px viewport with the rail). Verified via
+  `e2e/verify_clip.mjs` (1000/1150px → cards, 1300px → fitted table, right edge 1265 ≤ 1300).
+- **Settings section-nav (24403 / §6.12)** — added an additive `settingsSectionNav()` jump-link bar across
+  the top of the dense two-column settings panel; clicking a section scrolls its heading into view (located
+  by heading text, so the contested column components need no edits). Verified via `e2e/verify_setnav.mjs`
+  (12 buttons; Languages jumps 2151px → 420px).
+
+**Still honestly unchecked** (each individually examined, not lazily skipped): the playwrightgo-tagged
+`gwc` (building it from the app module would pollute go.sum with TUI/playwright deps; the *capability* —
+automated DOM verification — is already in place via node+playwright+Chromium); the dashboard
+widget tab-stop (a genuine APG grid-with-grab-mode design problem — arrow-drag from an auto mode
+auto-switches to custom, so naive roving-tabindex regresses keyboard/mouse parity); §1.6 `UseComputed`
+(stale-value risk without a per-mutation revision counter); GX14 `ApplyTheme` (deferred in TODOS with a
+sound trade-off). The rest need external accounts (Stripe/DO/analytics), product decisions (the 901–1185px
+table-clip band, the settings 2-column restructure), or a running GUI (native Electron launch verify), or
+are framework-blocked (sliding pills — `Style()` drops CSS custom properties).
+
 ## 2026-06-24 (later) — WONDER fixes truly landed (45/45); W-10 rejected; Reports charts verified
 
 **The "lift 5px" fix never reached main.** `e2e/wonder.spec.mjs` was committed but ran **40/45** — the W-1

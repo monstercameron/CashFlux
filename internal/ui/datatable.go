@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package ui
@@ -8,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -133,12 +136,12 @@ func dtPager(props dtPagerProps) ui.Node {
 	}
 	sizeOpts = append(sizeOpts, Option(Value(strconv.Itoa(AllPageSize)), SelectedIf(props.PageSize < 0), "All"))
 
-	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", "Previous page"), OnClick(onPrev)}
+	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.prevPage")), OnClick(onPrev)}
 	if props.Page <= 1 {
 		prevArgs = append(prevArgs, Attr("disabled", "disabled"))
 	}
 	prevArgs = append(prevArgs, "Prev")
-	nextArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", "Next page"), OnClick(onNext)}
+	nextArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.nextPage")), OnClick(onNext)}
 	if props.Page >= totalPages {
 		nextArgs = append(nextArgs, Attr("disabled", "disabled"))
 	}

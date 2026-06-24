@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 
 package screens
@@ -300,7 +302,7 @@ func Split() ui.Node {
 					Class: tw.Fold(tw.Mt2),
 				}),
 				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn btn-primary"), Type("button"), Title("Save this split to the settle-up ledger below"), OnClick(saveSplit), "Save split"),
+					Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("split.saveSplitTitle")), OnClick(saveSplit), "Save split"),
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
 						nm := func(id string) string { return nameByID[id] }
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
@@ -351,7 +353,7 @@ func settleTransferRow(props settleTransferRowProps) ui.Node {
 	return Div(css.Class("row"),
 		Span(css.Class("row-desc"), props.FromName+" pays "+props.ToName),
 		Span(css.Class("budget-amount"), props.Amount),
-		Button(css.Class("btn"), Type("button"), Title("Record this payment as settled"), OnClick(onRec), btnLabel),
+		Button(css.Class("btn"), Type("button"), Title(uistate.T("split.recordSettledTitle")), OnClick(onRec), btnLabel),
 	)
 }
 
