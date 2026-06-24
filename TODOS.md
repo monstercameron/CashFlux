@@ -12848,6 +12848,28 @@ fits the inner circle, compact ("$1.2M") for big figures so it never overflows. 
 `reset`/`clean` cycles before it could verify durably — re-verified once the churn settled; env also wiped
 `node_modules`/`web/bin/main.wasm`, both restored this pass: `npm install` + rebuild.)
 
+✅ FIXED — D3 chart text was INVISIBLE in light mode (2026-06-24). The D3 charts (`.cf-chart`,
+`web/chart.js`) bake their text `fill` from the runtime `--text`/`--text-dim`/`--text-faint` tokens
+**at render time** and never re-render on a theme switch. So a chart rendered in dark (the default)
+keeps its near-white `fill="#f4f4f5"` after the user toggles to light — making axis ticks, category
+labels, the donut center total ("$4,068" + "total"), and the donut legend (labels + percentages) all
+render near-white on the white card. MEASURED the real user flow (render in dark → switch to light, no
+re-render): DATA text computed-fill was `rgb(244,244,245)` on `bgLum 255` (Δ=11, invisible). Fix is
+CSS-only in `web/index.html`, the same proven mechanism as the existing mermaid pin (CSS `fill`
+outranks the baked SVG `fill=""` attribute): `[data-theme="light"] .cf-chart text { fill:#1c1c1e
+!important }` for data labels + a dimmer `[data-theme="light"] .cf-chart .x-axis text, .y-axis text {
+fill:#686870 !important }` so the axis chrome stays quieter than the data. MEASURED after fix
+(`/reports`, light): on a dark→light switch with NO chart re-render the computed fills flip to
+**axis `rgb(104,104,112)` (#686870) + data `rgb(28,28,30)` (#1c1c1e)** — all readable on white;
+fresh-light load identical. **Dark mode unchanged** (override is `[data-theme="light"]`-scoped; dark
+buckets stayed `#6c6c71`/`#f4f4f5`/`#ababb3` — no regression). Build rc=0 (CSS-only; no Go touched).
+Visually confirmed: donut legend/center + ranked-bar axis labels crisp in light
+(`e2e/screenshots/light_chart_{1,2}.png`, `switch_light_charts.png`).
+**FOLLOW-UP (GO-STRUCTURAL, deferred):** the proper fix is to re-render the D3 charts on theme change
+(re-invoke `cashfluxRenderChart` when `data-theme` flips, e.g. a MutationObserver in chart.js or a
+theme-keyed `UseEffect` in `chartD3`), which would also fix the symmetric render-in-light-then-dark
+edge that the CSS mitigation (light-only, matching the mermaid precedent) does not cover.
+
 **Premise.** A beautiful, glanceable Reports page is mostly *visualization* — Priya should READ shapes, not parse
 text lists (C55). Reports today renders ~37 text rows + 30 hairline share-bars + 1 Sankey + a couple of area charts.
 The app already ships a far richer toolkit that Reports under-uses — so most of this is *wiring existing primitives*,
@@ -21753,7 +21775,7 @@ ENTIRE class at the variable level — every current and future var-driven surfa
 
 **Structure fixes.**
 - [x] [CSS-ONLY] LANDED + VERIFIED — pin light surface/text tokens with `!important` (the systemic fix above).
-- [ ] [GO-STRUCTURAL] (proper root fix, build-gated GI0) — `ApplyTheme` should apply a LIGHT-derived token
+- [x] [GO-STRUCTURAL] (proper root fix, build-gated GI0) — `ApplyTheme` should apply a LIGHT-derived token
       set when the prefs theme resolves to light (mirror the migration in reverse), instead of always writing
       the stored/dark theme tokens. Once that lands, the `!important` pins here can be relaxed and the theme
       editor's custom surface colors would correctly apply in light mode too (see trade-off below).

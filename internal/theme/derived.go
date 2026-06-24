@@ -47,11 +47,22 @@ func (t Theme) bgElev() string { return mixHex(t.BgCard, t.Text, 0.06) }
 // tokens, so any theme — built-in or custom — gets sensible values with no
 // migration. CSSVars emits these alongside the stored tokens.
 func (t Theme) derivedVars() map[string]string {
-	return map[string]string{
+	m := map[string]string{
 		"--bg-elev":    t.bgElev(),
 		"--text-faint": mixHex(t.TextDim, t.BgBase, 0.40),
 		"--accent-dim": mixHex(t.Accent, t.BgBase, 0.45),
 		"--warn":       warnToken,
 		"--danger":     t.Down,
 	}
+	// --muted and --hover are light-mode surface tokens the stylesheet used to pin
+	// with !important because the engine never emitted them (GX14). Emit them here
+	// for LIGHT themes only, so ApplyTheme writes a COMPLETE light-derived token set
+	// and the !important pins can be relaxed (letting a custom light theme's own
+	// surfaces apply). Dark themes keep their prior fallback behavior (unset), so
+	// dark mode is unchanged.
+	if t.IsLight() {
+		m["--muted"] = t.TextDim
+		m["--hover"] = mixHex(t.bgElev(), t.Text, 0.05)
+	}
+	return m
 }

@@ -52,6 +52,27 @@ try {
   // Starter graph = net worth KPI → preview shows a currency figure.
   if ((await page.locator(".wb-tile .fig").count()) === 0) fail("starter KPI did not render a figure");
 
+  // DRAG-TO-WIRE: each node shows real input ports; dragging from a node's output port
+  // onto another node's input port creates the connection (no inspector dropdown).
+  await page.locator('.vb-pal-btn[data-kind="literal.number"]').click();
+  await page.waitForTimeout(300);
+  const numId = await page.locator('.wb-node[data-kind="literal.number"]').first().getAttribute("data-step");
+  const kpiId = await page.locator('.wb-node[data-kind="viz.kpi"]').first().getAttribute("data-step");
+  if ((await page.locator('.wb-node[data-kind="viz.kpi"] .wb-port-in[data-port="value"]').count()) === 0) fail("KPI node has no labeled 'value' input port");
+  if ((await page.locator('.wb-node[data-kind="literal.number"] .wb-port-out').count()) === 0) fail("literal node has no output port");
+  await page.locator('.wb-node[data-kind="literal.number"] .wb-port-out').first()
+    .dragTo(page.locator('.wb-node[data-kind="viz.kpi"] .wb-port-in[data-port="value"]').first());
+  await page.waitForTimeout(400);
+  const wireFrom = await page.locator(`path.wb-wire[data-to="${kpiId}"][data-toport="value"]`).first().getAttribute("data-from");
+  if (wireFrom !== numId) fail(`drag-to-wire did not connect number→KPI: wire data-from=${wireFrom}, want ${numId}`);
+
+  // Disconnect: clicking the wire removes it (dispatch directly — a wire can sit under
+  // a node, which would intercept a hit-tested click; the feature listens for the click
+  // on the path itself).
+  await page.locator(`path.wb-wire[data-to="${kpiId}"][data-toport="value"]`).first().dispatchEvent("click");
+  await page.waitForTimeout(400);
+  if ((await page.locator(`path.wb-wire[data-to="${kpiId}"][data-toport="value"]`).count()) !== 0) fail("clicking a wire did not disconnect it");
+
   // 1) Add a node from the palette → node count on the canvas grows.
   const before = await page.locator(".wb-canvas .wb-node").count();
   await page.locator('.vb-pal-btn[data-kind="viz.badge"]').click();

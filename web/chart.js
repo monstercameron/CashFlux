@@ -201,6 +201,34 @@
     });
   };
 
+  // Re-render every live chart when the app theme flips (data-theme on <html>).
+  // The D3 charts bake their text `fill`, grid `stroke`, and default colors from the
+  // CSS theme tokens AT RENDER TIME, so a chart drawn in one theme otherwise keeps the
+  // other theme's colors after a switch (e.g. dark near-white axis/donut text staying on
+  // a white card after toggling to light). The CSS pin in index.html only covers the
+  // light direction and only text; re-rendering fixes BOTH directions and grid/line too.
+  // Theme changes are rare so a one-shot re-render is cheap, and the existing
+  // `data-cf-drawn` guard stops the draw-in animation from replaying on a theme switch.
+  if (typeof MutationObserver !== "undefined" && !window.__cfChartThemeObserver) {
+    window.__cfChartThemeObserver = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].attributeName === "data-theme") {
+          var els = document.querySelectorAll(".cf-chart");
+          for (var j = 0; j < els.length; j++) {
+            var el = els[j];
+            if (el.isConnected && el.__cfChartSpecJSON) {
+              window.cashfluxRenderChart(el, el.__cfChartSpecJSON);
+            }
+          }
+          break;
+        }
+      }
+    });
+    window.__cfChartThemeObserver.observe(document.documentElement, {
+      attributes: true, attributeFilter: ["data-theme"],
+    });
+  }
+
   window.cashfluxDisposeChart = function (el) {
     if (!el) return;
     if (el.__cfChartResizeObserver) {

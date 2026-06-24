@@ -49,59 +49,78 @@ const vbDragShimJS = `
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
   var POS_KEY = "cashflux:wb-canvas-pos", VIEW_KEY = "cashflux:wb-canvas-view";
-  var NODE_W = 168, NODE_H = 64;
   function load(k){ try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch(e){ return {}; } }
   function save(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
   function getView(){ var v = load(VIEW_KEY); return { tx: v.tx||0, ty: v.ty||0, s: v.s||1 }; }
   function applyView(world, v){ world.style.transformOrigin="0 0"; world.style.transform="translate("+v.tx+"px,"+v.ty+"px) scale("+v.s+")"; }
   function clampS(s){ return Math.max(0.3, Math.min(2.5, s)); }
+  function esc(x){ try { return CSS.escape(x); } catch(e){ return x; } }
+  function worldOf(world, cx, cy){ var r=world.getBoundingClientRect(); var s=getView().s; return { x:(cx-r.left)/s, y:(cy-r.top)/s }; }
+  // World-space center of a port dot, found by querying the live element (robust to
+  // any node layout + zoom level).
+  function portCenter(world, nodeId, port, dir){
+    var sel = '.wb-node[data-step="'+esc(nodeId)+'"] .wb-port-'+dir;
+    if(dir==="in" && port) sel += '[data-port="'+esc(port)+'"]';
+    var el = world.querySelector(sel); if(!el) return null;
+    var r = el.getBoundingClientRect(), wr = world.getBoundingClientRect(), s = getView().s;
+    return { x:(r.left+r.width/2-wr.left)/s, y:(r.top+r.height/2-wr.top)/s };
+  }
+  function bez(x1,y1,x2,y2){ var dx=(x2-x1)/2; if(dx<40) dx=40; return "M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2; }
   function reroute(world){
-    var ports = {};
-    world.querySelectorAll(".wb-node").forEach(function(n){
-      var id = n.getAttribute("data-step");
-      var x = parseFloat(n.style.left) || 0, y = parseFloat(n.style.top) || 0;
-      ports[id] = { inX:x, inY:y+NODE_H/2, outX:x+NODE_W, outY:y+NODE_H/2 };
-    });
     world.querySelectorAll("path.wb-wire").forEach(function(p){
-      var f = ports[p.getAttribute("data-from")], t = ports[p.getAttribute("data-to")];
-      if(!f || !t) return;
-      var x1=f.outX,y1=f.outY,x2=t.inX,y2=t.inY,dx=(x2-x1)/2; if(dx<40) dx=40;
-      p.setAttribute("d","M "+x1+" "+y1+" C "+(x1+dx)+" "+y1+", "+(x2-dx)+" "+y2+", "+x2+" "+y2);
+      var f = portCenter(world, p.getAttribute("data-from"), "out", "out");
+      var t = portCenter(world, p.getAttribute("data-to"), p.getAttribute("data-toport"), "in");
+      if(f && t) p.setAttribute("d", bez(f.x,f.y,t.x,t.y));
     });
   }
-  var node=null, pan=null;
+  var node=null, pan=null, wire=null, moved=false;
   document.addEventListener("mousedown", function(e){
+    var outPort = e.target.closest ? e.target.closest(".wb-port-out") : null;
+    if(outPort){  // start a connection drag from an output port
+      var world = outPort.closest(".wb-canvas"); if(!world) return;
+      var svg = world.querySelector("svg.wb-wires");
+      var temp = document.createElementNS("http://www.w3.org/2000/svg","path");
+      temp.setAttribute("class","wb-wire-temp"); temp.setAttribute("fill","none");
+      temp.setAttribute("stroke","var(--accent,#3b82f6)"); temp.setAttribute("stroke-width","2.5");
+      temp.style.pointerEvents="none";
+      if(svg) svg.appendChild(temp);
+      wire = { from: outPort.getAttribute("data-node"), world: world, temp: temp };
+      moved=false; e.preventDefault(); e.stopPropagation(); return;
+    }
+    if(e.target.closest && e.target.closest(".wb-port")){ e.preventDefault(); e.stopPropagation(); return; }
     var nodeEl = e.target.closest ? e.target.closest(".wb-node") : null;
     if(nodeEl){
-      var world = nodeEl.closest(".wb-canvas"); if(!world) return;
-      var v = getView();
-      node = { id:nodeEl.getAttribute("data-step"), el:nodeEl, world:world,
+      var w = nodeEl.closest(".wb-canvas"); if(!w) return; var v = getView();
+      node = { id:nodeEl.getAttribute("data-step"), el:nodeEl, world:w,
         startL:parseFloat(nodeEl.style.left)||0, startT:parseFloat(nodeEl.style.top)||0,
-        mx:e.clientX, my:e.clientY, s:v.s, moved:false };
-      e.preventDefault();
-      return;
+        mx:e.clientX, my:e.clientY, s:v.s };
+      moved=false; e.preventDefault(); return;
     }
-    var bg = e.target.closest ? e.target.closest(".wb-canvas") : null;  // pan on empty world
-    if(bg){
-      var vv = getView();
-      pan = { world:bg, startTX:vv.tx, startTY:vv.ty, mx:e.clientX, my:e.clientY };
-      var vp = bg.parentElement; if(vp) vp.style.cursor="grabbing";
-      e.preventDefault();
-    }
+    var bg = e.target.closest ? e.target.closest(".wb-canvas") : null;
+    if(bg){ var vv = getView(); pan = { world:bg, startTX:vv.tx, startTY:vv.ty, mx:e.clientX, my:e.clientY };
+      var vp = bg.parentElement; if(vp) vp.style.cursor="grabbing"; moved=false; e.preventDefault(); }
   });
   document.addEventListener("mousemove", function(e){
-    if(node){
-      var nx = node.startL + (e.clientX-node.mx)/node.s, ny = node.startT + (e.clientY-node.my)/node.s;
-      if(nx<0) nx=0; if(ny<0) ny=0;
-      node.el.style.left = nx+"px"; node.el.style.top = ny+"px"; node.moved = true;
-      reroute(node.world);
-    } else if(pan){
-      var v = getView(); v.tx = pan.startTX + (e.clientX-pan.mx); v.ty = pan.startTY + (e.clientY-pan.my);
-      applyView(pan.world, v); save(VIEW_KEY, v);
-    }
+    if(wire){ var f = portCenter(wire.world, wire.from, "out", "out"); var c = worldOf(wire.world, e.clientX, e.clientY);
+      if(f) wire.temp.setAttribute("d", bez(f.x,f.y,c.x,c.y)); moved=true; return; }
+    if(node){ var nx = node.startL + (e.clientX-node.mx)/node.s, ny = node.startT + (e.clientY-node.my)/node.s;
+      if(nx<0) nx=0; if(ny<0) ny=0; node.el.style.left=nx+"px"; node.el.style.top=ny+"px"; moved=true; reroute(node.world); return; }
+    if(pan){ var v = getView(); v.tx = pan.startTX + (e.clientX-pan.mx); v.ty = pan.startTY + (e.clientY-pan.my);
+      applyView(pan.world, v); save(VIEW_KEY, v); moved=true; }
   });
-  document.addEventListener("mouseup", function(){
-    if(node){ if(node.moved){ var p = load(POS_KEY); p[node.id] = { x:parseFloat(node.el.style.left)||0, y:parseFloat(node.el.style.top)||0 }; save(POS_KEY, p); } node=null; }
+  document.addEventListener("mouseup", function(e){
+    if(wire){
+      var tgt = document.elementFromPoint(e.clientX, e.clientY);
+      var toNode=null, toPort=null;
+      var inPort = tgt && tgt.closest ? tgt.closest(".wb-port-in") : null;
+      if(inPort){ toNode=inPort.getAttribute("data-node"); toPort=inPort.getAttribute("data-port"); }
+      else { var nd = tgt && tgt.closest ? tgt.closest(".wb-node") : null;
+        if(nd){ var fp = nd.querySelector(".wb-port-in"); if(fp){ toNode=fp.getAttribute("data-node"); toPort=fp.getAttribute("data-port"); } } }
+      if(wire.temp && wire.temp.parentNode) wire.temp.parentNode.removeChild(wire.temp);
+      if(toNode && toPort && toNode!==wire.from && window.__wbConnect){ window.__wbConnect(wire.from, toNode, toPort); }
+      wire=null; return;
+    }
+    if(node){ if(moved){ var p = load(POS_KEY); p[node.id] = { x:parseFloat(node.el.style.left)||0, y:parseFloat(node.el.style.top)||0 }; save(POS_KEY, p); } node=null; }
     if(pan){ var vp = pan.world.parentElement; if(vp) vp.style.cursor=""; pan=null; }
   });
   document.addEventListener("wheel", function(e){
@@ -116,19 +135,31 @@ const vbDragShimJS = `
     applyView(world, v); save(VIEW_KEY, v);
   }, {passive:false});
   document.addEventListener("click", function(e){
+    if(moved){ moved=false; return; }  // a drag ended, not a click
+    var w = e.target.closest ? e.target.closest("path.wb-wire") : null;
+    if(w && window.__wbDisconnect){ window.__wbDisconnect(w.getAttribute("data-to"), w.getAttribute("data-toport")); return; }
     var btn = e.target.closest ? e.target.closest("[data-zoom]") : null; if(!btn) return;
     var vp = btn.closest(".vb-canvas-scroll"); if(!vp) return;
     var world = vp.querySelector(".wb-canvas"); if(!world) return;
     var v = getView(); var r = vp.getBoundingClientRect();
     var dir = btn.getAttribute("data-zoom");
     if(dir==="reset"){ v = {tx:0,ty:0,s:1}; }
-    else {
-      var cx=r.width/2, cy=r.height/2, wx=(cx-v.tx)/v.s, wy=(cy-v.ty)/v.s;
-      var s2 = clampS(v.s * (dir==="in" ? 1.2 : 1/1.2));
-      v.tx = cx-wx*s2; v.ty = cy-wy*s2; v.s = s2;
-    }
+    else { var cx=r.width/2, cy=r.height/2, wx=(cx-v.tx)/v.s, wy=(cy-v.ty)/v.s;
+      var s2 = clampS(v.s * (dir==="in" ? 1.2 : 1/1.2)); v.tx = cx-wx*s2; v.ty = cy-wy*s2; v.s = s2; }
     applyView(world, v); save(VIEW_KEY, v);
   });
+  // Snap wires to their actual ports after Go re-renders the canvas (nodes/edges
+  // change). Debounced via rAF; ignores 'd' changes so it doesn't self-trigger.
+  var ro=null;
+  function observe(){
+    var world = document.querySelector(".wb-canvas");
+    if(!world){ setTimeout(observe, 200); return; }
+    reroute(world);
+    if(ro) ro.disconnect();
+    ro = new MutationObserver(function(){ requestAnimationFrame(function(){ var w=document.querySelector(".wb-canvas"); if(w) reroute(w); }); });
+    ro.observe(world, { childList:true, subtree:true, attributes:true, attributeFilter:["style","data-from","data-to","data-toport"] });
+  }
+  observe();
 })();
 `
 
@@ -152,6 +183,13 @@ const vbStyleCSS = `
 .wb-zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:5px;z-index:5}
 .wb-zoom-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line,#2a2a2d);background:var(--bg-elev,#1a1a1d);color:inherit;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .wb-zoom-btn:hover{border-color:var(--accent,#3b82f6)}
+.wb-port{transition:transform .1s ease, border-color .1s ease, box-shadow .1s ease; z-index:2}
+.wb-port-out{cursor:crosshair}
+.wb-port:hover{border-color:var(--accent,#3b82f6)!important; box-shadow:0 0 0 4px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent)}
+.wb-node:hover{border-color:color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--line,#3a3a3d))}
+.wb-wire{transition:stroke .1s ease}
+.wb-wire:hover{stroke:var(--accent,#3b82f6)!important; stroke-width:3.5!important}
+.wb-port-row:hover{color:var(--fg,#e5e7eb)!important}
 .vb-inspector{width:250px;flex:0 0 250px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
 .vb-insp-section{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.4rem}
 .vb-insp-actions{display:flex;gap:.4rem;margin-top:.5rem}
@@ -915,16 +953,26 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 		}
 		d := fmt.Sprintf("M %.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f", x1, y1, x1+dx, y1, x2-dx, y2, x2, y2)
 		wires = append(wires, Path(css.Class("wb-wire"), Attr("d", d), Attr("fill", "none"),
-			Attr("stroke", "var(--dim,#6b7280)"), Attr("stroke-width", "2"),
-			Attr("data-from", string(e.From.Node)), Attr("data-to", string(e.To.Node))))
+			Attr("stroke", "var(--dim,#6b7280)"), Attr("stroke-width", "2.5"), Attr("stroke-linecap", "round"),
+			Attr("data-from", string(e.From.Node)), Attr("data-to", string(e.To.Node)), Attr("data-toport", e.To.Port),
+			Style(map[string]string{"pointer-events": "stroke", "cursor": "pointer"})))
 	}
 	children := []ui.Node{
 		Svg(css.Class("wb-wires"), Style(map[string]string{"position": "absolute", "left": "0", "top": "0", "overflow": "visible", "pointer-events": "none"}),
 			Attr("width", "2600"), Attr("height", "1600"), wires),
 	}
 	for _, n := range g.Nodes {
+		var inPorts []string
+		hasOut := false
+		if spec, ok := cardgraph.Lookup(n.Kind); ok {
+			for _, p := range spec.Inputs {
+				inPorts = append(inPorts, p.Name)
+			}
+			hasOut = spec.Out != ""
+		}
 		children = append(children, ui.CreateElement(vbNodeBox, vbNodeBoxProps{
 			ID: n.ID, Kind: n.Kind, Var: n.Var, X: n.Pos.X, Y: n.Pos.Y,
+			InPorts: inPorts, HasOut: hasOut,
 			Selected: n.ID == selected, IsRoot: n.ID == g.Root, OnSelect: onSelect,
 		}))
 	}
@@ -945,6 +993,39 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 		Div(css.Class("wb-zoom"),
 			zoomBtn("out", "−"), zoomBtn("reset", "⤢"), zoomBtn("in", "+")),
 	)
+}
+
+// vbWireEdge returns g with a single edge from fromID's output into (toID, port),
+// replacing any existing wire into that input (one source per input port).
+func vbWireEdge(g cardgraph.Graph, fromID, toID, port string) cardgraph.Graph {
+	ng := vbCloneGraph(g)
+	edges := ng.Edges[:0:0]
+	for _, e := range ng.Edges {
+		if !(e.To.Node == cardgraph.NodeID(toID) && e.To.Port == port) {
+			edges = append(edges, e)
+		}
+	}
+	if fromID != "" && fromID != toID {
+		edges = append(edges, cardgraph.Edge{
+			From: cardgraph.PortRef{Node: cardgraph.NodeID(fromID), Port: cardgraph.OutPort},
+			To:   cardgraph.PortRef{Node: cardgraph.NodeID(toID), Port: port},
+		})
+	}
+	ng.Edges = edges
+	return ng
+}
+
+// vbUnwire returns g with any edge into (toID, port) removed.
+func vbUnwire(g cardgraph.Graph, toID, port string) cardgraph.Graph {
+	ng := vbCloneGraph(g)
+	edges := ng.Edges[:0:0]
+	for _, e := range ng.Edges {
+		if !(e.To.Node == cardgraph.NodeID(toID) && e.To.Port == port) {
+			edges = append(edges, e)
+		}
+	}
+	ng.Edges = edges
+	return ng
 }
 
 // vbView is the canvas pan/zoom state: a translate (tx,ty in screen px) and a scale.
@@ -975,6 +1056,8 @@ type vbNodeBoxProps struct {
 	ID               cardgraph.NodeID
 	Kind, Var        string
 	X, Y             float64
+	InPorts          []string // input port names (one draggable target each)
+	HasOut           bool     // whether this kind has an output port
 	Selected, IsRoot bool
 	OnSelect         func(cardgraph.NodeID)
 }
@@ -988,20 +1071,13 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 	})
 	style := map[string]string{
 		"left": strconv.FormatFloat(p.X, 'f', 0, 64) + "px", "top": strconv.FormatFloat(p.Y, 'f', 0, 64) + "px",
-		"position": "absolute", "width": "168px", "min-height": "64px", "box-sizing": "border-box",
-		"display": "flex", "flex-direction": "column", "gap": "0.1rem", "padding": "0.5rem 0.6rem",
+		"position": "absolute", "width": "176px", "box-sizing": "border-box",
 		"border-radius": "10px", "cursor": "grab", "background": "var(--bg-elev,#1a1a1d)",
 		"border": "1.5px solid var(--line,#3a3a3d)",
 	}
 	if p.Selected {
 		style["border-color"] = "var(--accent,#3b82f6)"
 		style["box-shadow"] = "0 0 0 3px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent)"
-	}
-	port := func(side string) ui.Node {
-		s := map[string]string{"position": "absolute", "top": "50%", "width": "11px", "height": "11px", "border-radius": "999px",
-			"background": "var(--bg,#0e0e10)", "border": "2px solid var(--dim,#6b7280)", "transform": "translateY(-50%)"}
-		s[side] = "-6px"
-		return Span(Style(s), Attr("aria-hidden", "true"))
 	}
 	head := vbKindLabel(p.Kind)
 	if p.IsRoot {
@@ -1011,13 +1087,35 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 	if sub == "" {
 		sub = "—"
 	}
-	return Div(ClassStr("wb-node"), Style(style), Attr("data-step", string(p.ID)), Attr("data-kind", p.Kind),
-		Attr("role", "listitem"), OnClick(on),
-		port("left"),
-		Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "11px", "text-transform": "uppercase", "letter-spacing": "0.05em", "color": "var(--faint,#9ca3af)"}), head),
-		Span(css.Class("wb-node-val"), Style(map[string]string{"font-size": "13px", "font-weight": "600", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis"}), sub),
-		port("right"),
+
+	// Header: kind label + variable name.
+	header := Div(css.Class("wb-node-head"), Style(map[string]string{"padding": "0.4rem 0.6rem", "border-bottom": "1px solid var(--line,#2a2a2d)"}),
+		Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "10px", "text-transform": "uppercase", "letter-spacing": "0.05em", "color": "var(--faint,#9ca3af)", "display": "block"}), head),
+		Span(css.Class("wb-node-val"), Style(map[string]string{"font-size": "13px", "font-weight": "600", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis", "display": "block"}), sub),
 	)
+
+	// One row per input port: a port dot on the left edge + its label. Each dot is a
+	// drag target identified by data-node/data-port (the shim wires on drop).
+	rows := []any{header}
+	for _, pn := range p.InPorts {
+		dot := Span(css.Class("wb-port wb-port-in"), Attr("data-node", string(p.ID)), Attr("data-port", pn), Attr("data-dir", "in"), Attr("aria-hidden", "true"),
+			Style(map[string]string{"position": "absolute", "left": "-7px", "top": "50%", "transform": "translateY(-50%)",
+				"width": "13px", "height": "13px", "border-radius": "999px", "background": "var(--bg,#0e0e10)", "border": "2px solid var(--dim,#6b7280)"}))
+		rows = append(rows, Div(css.Class("wb-port-row"), Style(map[string]string{"position": "relative", "padding": "0.25rem 0.6rem", "font-size": "11px", "color": "var(--dim,#9ca3af)"}),
+			dot, Span(pn)))
+	}
+	// Output port: a dot on the right edge, vertically centered. It is the wire SOURCE
+	// (the shim starts a connection drag from here).
+	args := []any{ClassStr("wb-node"), Style(style), Attr("data-step", string(p.ID)), Attr("data-kind", p.Kind), Attr("role", "listitem"), OnClick(on)}
+	for _, r := range rows {
+		args = append(args, r)
+	}
+	if p.HasOut {
+		args = append(args, Span(css.Class("wb-port wb-port-out"), Attr("data-node", string(p.ID)), Attr("data-port", "out"), Attr("data-dir", "out"), Attr("aria-hidden", "true"),
+			Style(map[string]string{"position": "absolute", "right": "-7px", "top": "50%", "transform": "translateY(-50%)",
+				"width": "13px", "height": "13px", "border-radius": "999px", "background": "var(--accent,#3b82f6)", "border": "2px solid var(--accent,#3b82f6)", "cursor": "crosshair"})))
+	}
+	return Div(args...)
 }
 
 func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgraph.Issue,

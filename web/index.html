@@ -650,11 +650,16 @@
          gated behind GI0; this is the landable mitigation. Trade-off: a user's CUSTOM theme
          surface colors won't apply in LIGHT mode while this is active (acceptable — light was
          broken before). --accent / --danger / --warn are intentionally NOT pinned. */
+      /* GX14: these are now relaxed from !important. The theme engine emits a
+         COMPLETE light-derived token set inline via ApplyTheme (CSSVars + the
+         light-only --muted/--hover in derivedVars), so these serve only as the
+         pre-wasm default that prevents a dark flash on first paint — and a custom
+         light theme's own inline surfaces correctly win over them. */
       [data-theme="light"] {
-        --bg: #f7f6f3 !important; --bg-base: #f7f6f3 !important; --bg-elev: #efede8 !important; --bg-card: #ffffff !important;
-        --border: #e4e2dd !important; --text: #1c1c1e !important; --text-dim: #56565c !important; --text-faint: #686870 !important;
-        --muted: #56565c !important; --accent-dim: #e4f3ea !important;
-        --hover: #e8e6e1 !important;
+        --bg: #f7f6f3; --bg-base: #f7f6f3; --bg-elev: #efede8; --bg-card: #ffffff;
+        --border: #e4e2dd; --text: #1c1c1e; --text-dim: #56565c; --text-faint: #686870;
+        --muted: #56565c; --accent-dim: #e4f3ea;
+        --hover: #e8e6e1;
       }
       [data-theme="light"] .bg-base { background-color: #f7f6f3; }
       [data-theme="light"] .bg-tile { background-color: #ffffff; }
@@ -687,6 +692,18 @@
       [data-theme="light"] .hero-stat-value { color: #1c1c1e !important; }
       [data-theme="light"] .reports-hero { background: #ffffff !important; border-color: #e4e2dd; }
       [data-theme="light"] svg[id^="cf-mmd"] text, [data-theme="light"] .mermaid text { fill: #1c1c1e !important; }
+      /* D3 charts (.cf-chart, web/chart.js) bake their text `fill` from the runtime
+         --text/--text-dim/--text-faint tokens AT RENDER TIME and do not re-render on a
+         theme switch — so axis ticks, category labels, the donut center total + its
+         legend (labels/percentages) keep the dark near-white value and vanish on the
+         white card in light mode (measured rgb(244,244,245) on bgLum 255, Δ=11). CSS
+         `fill` outranks the baked SVG `fill=""` attribute (same mechanism as the mermaid
+         pin above), so pin chart text dark in light mode; keep axis ticks a dimmer tone
+         so the chrome stays quieter than the data labels. Proper fix is GO-side
+         (re-render charts on theme change) — tracked as a G9.1a follow-up. */
+      [data-theme="light"] .cf-chart text { fill: #1c1c1e !important; }
+      [data-theme="light"] .cf-chart .x-axis text,
+      [data-theme="light"] .cf-chart .y-axis text { fill: #686870 !important; }
       /* GX13-F5: budget row separators (.budget border-top) used var(--border) which resolved dark in light. */
       [data-theme="light"] .budget { border-color: #e4e2dd; }
       [data-theme="light"] .muted, [data-theme="light"] .row-meta,
