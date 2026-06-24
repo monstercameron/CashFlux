@@ -55,6 +55,7 @@ type Config struct {
 	AIAlertRequestsPerDay             int64
 	AIAlertTokensPerDay               int64
 	AIBlockedUserIDs                  []string
+	AdminUserIDs                      []string
 	BlobMaxBytes                      int64
 	BlobIOTimeout                     time.Duration
 	StorageMaxBytes                   int64
@@ -124,6 +125,7 @@ func FromEnv() (Config, error) {
 	cfg.AIAlertRequestsPerDay = envInt64("CASHFLUX_SERVER_AI_ALERT_REQUESTS_PER_DAY", 0)
 	cfg.AIAlertTokensPerDay = envInt64("CASHFLUX_SERVER_AI_ALERT_TOKENS_PER_DAY", 0)
 	cfg.AIBlockedUserIDs = envCSV("CASHFLUX_SERVER_AI_BLOCKED_USER_IDS")
+	cfg.AdminUserIDs = envCSV("CASHFLUX_SERVER_ADMIN_USER_IDS")
 	cfg.BlobMaxBytes = envInt64("CASHFLUX_SERVER_BLOB_MAX_BYTES", 32<<20)
 	cfg.BlobIOTimeout = envDuration("CASHFLUX_SERVER_BLOB_IO_TIMEOUT", 10*time.Second)
 	cfg.StorageMaxBytes = envInt64("CASHFLUX_SERVER_STORAGE_MAX_BYTES", 0)
@@ -255,6 +257,23 @@ func (c Config) OAuthProviderNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// IsAdmin reports whether userID is an operator-designated admin. An empty
+// AdminUserIDs list means nobody is an admin (deny by default). The check
+// iterates the list rather than building a map so the allocation cost is
+// incurred only on admin requests, keeping the hot path allocation-free.
+func (c Config) IsAdmin(userID string) bool {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || len(c.AdminUserIDs) == 0 {
+		return false
+	}
+	for _, id := range c.AdminUserIDs {
+		if id == userID {
+			return true
+		}
+	}
+	return false
 }
 
 func validAESKeyLength(n int) bool { return n == 16 || n == 24 || n == 32 }

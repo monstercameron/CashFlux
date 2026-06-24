@@ -2,6 +2,28 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — feat(server): admin role + tenant-safe admin overview/users API (F1)
+
+Implemented the F1 admin API as specified in `docs/ENTERPRISE_COMPLETION_PLAN.md`.
+
+**What shipped:**
+
+- `Config.AdminUserIDs []string` parsed from env `CASHFLUX_SERVER_ADMIN_USER_IDS` (comma-separated, trimmed, empties dropped) via the existing `envCSV` helper. `Config.IsAdmin(userID)` iterates the list; empty list means nobody is admin (deny-by-default).
+- `Store.ListUsers(limit, offset int)` — LEFT JOIN users+subscriptions, returns `AdminUserRow` (id, provider, email, createdAt, subscriptionPlan, subscriptionStatus). Parameterized queries only. Default limit 50, max 200.
+- `Store.AdminOverview(today time.Time)` — user count, subscription status scan + MRR in Go, total blob bytes, today's usage sum. `planMonthlyCents` mapping: monthly=999c, annual=825c (dollar-99/yr divided by 12, rounded), unknown=0.
+- `GET /v1/admin/overview` and `GET /v1/admin/users` in `internal/server/admin.go`, wired next to existing admin route in http.go. Both endpoints: CORS check, bearer auth, IsAdmin gate, execute, audit success/denied.
+- Audit entries: denied attempts log `admin.overview.denied` / `admin.users.denied`; reads log `.read` variants.
+
+**Design decisions:**
+- Subscription counts and MRR are accumulated in Go from a cursor rather than a GROUP BY, keeping `planMonthlyCents` testable in isolation.
+- Total blob bytes counts all blobs (not per-user): cross-tenant aggregate is the correct overview shape.
+- Admin list is config-time (env var), not a DB role. Matches the self-host operator model; no migration needed.
+- Non-admin HTTP tests use the valid token but `AdminUserIDs: nil` — auth passes, IsAdmin denies, 403 returned. Sending a different token in token-mode would produce 401 not 403, which is correct but doesn't test the authz branch.
+
+**Tests (admin_test.go, 16 cases):** `Config.IsAdmin` table, `FromEnv` CSV loading, `planMonthlyCents` table, aggregate correctness + empty DB, `ListUsers` pagination/cap/status/no-sub, cross-tenant secret exclusion, HTTP authz (admin/non-admin/unauthenticated) for both endpoints, limit cap via HTTP.
+
+`go vet`, `go build ./...`, `go test ./internal/server/...` all pass (rc=0).
+
 ## 2026-06-24 — a11y: Goals page — T() routing, aria-label gaps, focus-restore on delete
 
 Audited `goals.go`, `goals_row.go`, and `goaladdform.go` against the established patterns in `budgets_row.go`, `focus.go`, and `aria.go`. Found and fixed five gaps:

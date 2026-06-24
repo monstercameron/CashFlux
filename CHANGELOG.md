@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **F1 — Admin role + tenant-safe admin API (2026-06-24):** `Config.AdminUserIDs` (env `CASHFLUX_SERVER_ADMIN_USER_IDS`, comma-separated) and `Config.IsAdmin(userID)` (deny-by-default; empty list → nobody is admin). Two new bearer-authenticated, audited endpoints: `GET /v1/admin/overview` (cross-tenant aggregates: total users, subscription counts by status, estimated MRR cents, total blob bytes, today's requests/tokens) and `GET /v1/admin/users?limit=&offset=` (paginated user list with subscription status/plan; no secrets, no AI ciphertext, no blob bytes). Non-admin bearer → 403 + audit entry; unauthenticated → 401. New repository methods `ListUsers` and `AdminOverview` (parameterized queries only). `planMonthlyCents` table: monthly=$9.99/mo (999¢), annual=$99/yr→$8.25/mo (825¢), unknown=$0. Table-driven tests: aggregate correctness, pagination, limit cap (200), cross-tenant secret exclusion, admin/non-admin/unauthenticated authz.
+
 ### Changed
 - **a11y/i18n — Goals page (2026-06-24):** routed all remaining hardcoded English strings through `uistate.T()` (`goals.noLink` in account-option list, `" to go"` sub-line suffix, `"Funded %d%% — %s"` over-fund note, `"Show/Hide advanced fields"` toggle); added `aria-label` to Contribute and Edit row buttons (Title was present but aria-label was missing); wired focus-restore on goal delete using `captureRowDeleteFocus` / `focusRowAfterDelete` + `.goal-list` sentinel class so keyboard focus never drops to `<body>` after a delete; added four new catalog keys (`goals.remaining`, `goals.overfundFmt`, `goals.showAdvanced`, `goals.hideAdvanced`).
 

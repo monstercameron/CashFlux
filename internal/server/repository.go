@@ -1557,6 +1557,145 @@ func scanBlob(row blobScanner) (Blob, error) {
 	return blob, nil
 }
 
+// AdminUserRow is a tenant-safe user record returned by the admin users list.
+// It never exposes AI ciphertext, blob bytes, or other secrets.
+type AdminUserRow struct {
+	ID                 string `json:"id"`
+	Provider           string `json:"provider"`
+	Email              string `json:"email"`
+	CreatedAt          string `json:"createdAt"`
+	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
+	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
+}
+
+// ListUsers returns a page of user rows joined with their current subscription
+// status and plan. No secrets, AI ciphertext, or blob bytes are included.
+func (s *Store) ListUsers(limit, offset int) ([]AdminUserRow, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	defer s.observeDB("ListUsers", time.Now())
+	rows, err := s.db.Query(`
+SELECT u.id, u.provider, u.email, u.created_at,
+       COALESCE(sub.plan, ''), COALESCE(sub.status, '')
+FROM users u
+LEFT JOIN subscriptions sub ON sub.user_id = u.id
+ORDER BY u.created_at DESC, u.id
+LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("server store: list users: %w", err)
+	}
+	defer rows.Close()
+	var out []AdminUserRow
+	for rows.Next() {
+		var row AdminUserRow
+		var createdAt string
+		if err := rows.Scan(&row.ID, &row.Provider, &row.Email, &createdAt, &row.SubscriptionPlan, &row.SubscriptionStatus); err != nil {
+			return nil, fmt.Errorf("server store: scan list users: %w", err)
+		}
+		t, err := parseTime(createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("server store: parse list users created_at: %w", err)
+		}
+		row.CreatedAt = formatTime(t)
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: list users rows: %w", err)
+	}
+	return out, nil
+}
+
+// AdminOverviewStats holds cross-tenant aggregate counts for the admin overview endpoint.
+type AdminOverviewStats struct {
+	TotalUsers        int64 `json:"totalUsers"`
+	SubsActive        int64 `json:"subsActive"`
+	SubsTrialing      int64 `json:"subsTrialing"`
+	SubsPastDue       int64 `json:"subsPastDue"`
+	SubsCanceled      int64 `json:"subsCanceled"`
+	EstimatedMRRCents int64 `json:"estimatedMrrCents"`
+	TotalBlobBytes    int64 `json:"totalBlobBytes"`
+	TodayRequests     int64 `json:"todayRequests"`
+	TodayTokens       int64 `json:"todayTokens"`
+}
+
+// planMonthlyCents maps known Stripe plan slugs to their monthly-equivalent
+// price in cents (USD). Definitions are documented here so operators know
+// exactly what feeds the MRR estimate.
+//
+//	"monthly"  — $9.99 / month
+//	"annual"   — $99.00 / year  →  $8.25 / month (÷12, rounded)
+//
+// Unknown plan names contribute $0 to avoid silently inflating MRR.
+func planMonthlyCents(plan string) int64 {
+	switch strings.ToLower(strings.TrimSpace(plan)) {
+	case "monthly":
+		return 999
+	case "annual":
+		return 825
+	default:
+		return 0
+	}
+}
+
+// AdminOverview returns cross-tenant aggregate statistics. Blob bytes uses a
+// DISTINCT count so shared blobs are not double-counted.
+func (s *Store) AdminOverview(today time.Time) (AdminOverviewStats, error) {
+	defer s.observeDB("AdminOverview", time.Now())
+	var stats AdminOverviewStats
+
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&stats.TotalUsers); err != nil {
+		return AdminOverviewStats{}, fmt.Errorf("server store: admin overview user count: %w", err)
+	}
+
+	subRows, err := s.db.Query(`SELECT status, plan FROM subscriptions`)
+	if err != nil {
+		return AdminOverviewStats{}, fmt.Errorf("server store: admin overview subscriptions: %w", err)
+	}
+	defer subRows.Close()
+	for subRows.Next() {
+		var status, plan string
+		if err := subRows.Scan(&status, &plan); err != nil {
+			return AdminOverviewStats{}, fmt.Errorf("server store: admin overview scan subscription: %w", err)
+		}
+		switch strings.ToLower(strings.TrimSpace(status)) {
+		case "active":
+			stats.SubsActive++
+			stats.EstimatedMRRCents += planMonthlyCents(plan)
+		case "trialing":
+			stats.SubsTrialing++
+			stats.EstimatedMRRCents += planMonthlyCents(plan)
+		case "past_due":
+			stats.SubsPastDue++
+		case "canceled":
+			stats.SubsCanceled++
+		}
+	}
+	if err := subRows.Err(); err != nil {
+		return AdminOverviewStats{}, fmt.Errorf("server store: admin overview subscription rows: %w", err)
+	}
+
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(size), 0) FROM blobs`).Scan(&stats.TotalBlobBytes); err != nil {
+		return AdminOverviewStats{}, fmt.Errorf("server store: admin overview blob bytes: %w", err)
+	}
+
+	dayKey := usageDay(today)
+	if err := s.db.QueryRow(`
+SELECT COALESCE(SUM(requests), 0), COALESCE(SUM(tokens), 0)
+FROM usage
+WHERE day = ?`, dayKey).Scan(&stats.TodayRequests, &stats.TodayTokens); err != nil {
+		return AdminOverviewStats{}, fmt.Errorf("server store: admin overview today usage: %w", err)
+	}
+
+	return stats, nil
+}
+
 func blobPath(root, hash string) (string, error) {
 	if !validBlobHash(hash) {
 		return "", fmt.Errorf("server store: invalid blob hash")
