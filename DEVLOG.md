@@ -3,6 +3,44 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Widget Builder: styling + layout tools, persistent card sizes
+
+Cam's feedback after the first Widget Builder pass: "I don't see any styling and layout based
+tools and they don't seem to respect the multiple widget sizes." Two real gaps, both fixed.
+
+**Styling/layout tools.** The palette had no Style or Layout grouping and the only styling
+primitive (`literal.color`) was buried under Data and only reached chart/stat. Added a **Style**
+group and a **Layout** group, and two composable engine transforms:
+- `style.accent` (viz + color → viz): recolors *any* visualization. To make that real I added an
+  `accent` input port to `viz.kpi`/`viz.progress`/`viz.badge` (chart/stat already had one) and
+  render it — accent wins only when there's no semantic ± tone (red/green carry meaning a
+  decorative accent shouldn't stomp).
+- `style.tone` (viz → viz): forces ±coloring regardless of the value's sign.
+- `viz.stack` gained a `Dir` (row | column) so it's a real layout node (side-by-side vs stacked).
+Two showcase presets — `styled-kpi` (accent KPI) and `dual-kpi` (two KPIs in a row stack).
+
+**Sizes.** The mechanism was subtler than expected: `uiw.Widget` runs `dashlayout.Pack` and
+*overrides* a tile's grid placement from the layout item's `ColSpan`/`RowSpan` whenever the id is
+in the packed layout — so the GridColumn/GridRow a widget passes is only a fallback. The real bugs
+were that (a) the card library stored only the graph, not its size, so reloading a saved card reset
+the W/H steppers to 2×2 and a republish silently shrank it; and (b) re-publishing an existing tile
+never updated its span. Fixes: added `Graph.Cols/Rows` (UI-only, JSON, ignored by eval — same
+precedent as `Node.Pos`); the steppers now persist size onto the working draft and restore from a
+loaded card/preset; publish stamps size into the library entry and updates an existing layout
+item's span in place; and `vbPublishedWidget` passes the span as a fallback for out-of-layout
+renders. Confirmed `ui.UseState`'s setter writes synchronously (reads via `Get` in the same handler
+see the new value), so the "set col/row, then setGraph reads them" ordering is sound.
+
+**Verification.** The e2e was tightened to prove it: a published 4×1 card carries
+`data-col-span=4`/`data-row-span=1`, renders visibly wider than a 1-wide tile, keeps its width
+across a reload, and restores W=4/H=1 in the builder when reloaded; the styled KPI renders in
+`rgb(139,92,246)`; the dual-KPI stack lays out as a flex row. Engine tests cover the style
+transforms and the size round-trip. Drove a critic subagent on the prior round to 100; re-running
+it on this round next.
+
+**Next.** A true paired-bar cash-flow (needs a grouped series kind in chartspec); per-widget font/
+weight controls; a palette search box as the node set grows.
+
 ## 2026-06-24 — EC5: operator console SPA at /console/
 
 Shipped a standalone Go→WebAssembly operator console separate from the main CashFlux app bundle.
