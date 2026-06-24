@@ -2,6 +2,35 @@
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
+## 2026-06-24 — feat(app): zero-knowledge encrypted artifact blobs (EC2)
+
+Implemented client-side AES-GCM encryption for backend artifact blob uploads.
+
+**What shipped:**
+
+- `internal/app/artifactcrypto.go` (new, `//go:build js && wasm`): four functions — `artifactSalt`, `cachedArtifactKey`, `encryptArtifactSync`, `decryptArtifactSync` — plus `clearArtifactKeyCache` for passcode-rotation hygiene.
+- `internal/app/backend.go` — `uploadBackendArtifactBlob` and `downloadBackendArtifactBlob` patched with encrypt-on-upload and decrypt-on-download logic gated by `datasetEncryptionActive()` / `cryptobox.IsEnvelope`.
+
+**Key design decisions:**
+
+*Deterministic IV.* Dataset encryption (C45) intentionally uses a random IV for each save so that identical plaintexts produce different ciphertexts (forward-secrecy aesthetics). Artifact blobs are content-addressed on the backend: the server routes PUT/GET by `sha256(payload)`. If the IV were random, re-uploading the same image from the same device would land on a different hash, breaking dedup and hitting the 409/conflict path unnecessarily. Solution: `IV = sha256(plaintext)[:12]`. Two different plaintexts → different sha256 digests → different IVs (collision probability ~2^{-96}, negligible). Identical plaintext → same IV → same ciphertext → same hash. Security argument for IV reuse: IV reuse under AES-GCM is catastrophic when the *plaintext* differs (key-stream XOR leaks). Here identical IV ↔ identical plaintext by construction; there is no key-stream reuse across distinct messages. This is the standard deduplication pattern used by encrypted cloud storage systems (e.g. Backblaze B2 + Cryptomator).
+
+*Stable per-install salt.* The key is `PBKDF2(passcode, salt, 600k)`. For the deterministic-IV property to hold across sessions, the key must be stable across sessions for the same install. A fresh random salt each time would produce a different key, hence different ciphertext, breaking the dedup. The salt is not secret (it is embedded in the envelope); its purpose is uniqueness, not secrecy. Storing it in `localStorage["cf.artifactSalt"]` is appropriate: same-origin, survives reloads, scoped to the install.
+
+*Key cache.* 600 000 PBKDF2 iterations cost ~200 ms in crypto.subtle. A dataset with 50 images would spend 10 s deriving keys if we re-derived per artifact. The `artifactKeyCache` map (saltB64 → js.Value CryptoKey) amortises this: at most one derivation per unique salt per session. For uploads this is always one derivation (stable salt); for downloads from a different device it's one derivation per unique foreign salt.
+
+*Sync-bridge (async → sync).* `encryptArtifactSync` and `decryptArtifactSync` call into `crypto.subtle`, which returns Promises. The callers (`uploadBackendArtifactBlob`, `downloadBackendArtifactBlob`) run inside goroutines and need synchronous results. Bridge: register a `js.FuncOf` callback, send the result through a `chan` of size 1, block the goroutine with `<-ch`. The WASM runtime parks the goroutine when blocked and the JS event loop continues to run, resolving the Promise and firing the callback. This is the same pattern the standard-library `net/http` uses internally for WASM fetch. No busy-wait, no risk of deadlock (the channel receives exactly once because JS callbacks fire exactly once for `.then`/`.catch`). All `js.Func` handles are `Release()`d inside the callback before sending to the channel.
+
+*Backward compat.* Legacy plaintext blobs (uploaded before EC2) have first bytes `0x00cf1\x00` absent → `cryptobox.IsEnvelope` returns false → bytes pass through as-is. No migration, no data loss.
+
+*No plaintext leak on encrypt error.* `uploadBackendArtifactBlob` returns the error when `encryptArtifactSync` fails and does NOT fall through to uploading plaintext. Fail-closed.
+
+*MIME confidentiality.* When uploading an encrypted blob, `Content-Type: application/octet-stream` is sent so the server cannot infer file type from the content-type header. The real MIME is kept in `BlobRef.MIME` (in the dataset, which is itself encrypted at rest by C45) and is used by the client for rendering.
+
+**Build:** `GOOS=js GOARCH=wasm go build` exits 0. `go vet ./internal/app/...` (WASM) exits 0.
+
+**Next:** EC3 (audit-log viewer) or EC4 (SSO).
+
 ## 2026-06-24 — feat(server): admin role + tenant-safe admin overview/users API (F1)
 
 Implemented the F1 admin API as specified in `docs/ENTERPRISE_COMPLETION_PLAN.md`.

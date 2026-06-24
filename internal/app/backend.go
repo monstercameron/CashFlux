@@ -19,6 +19,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
@@ -314,19 +315,34 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 }
 
 func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID string, art domain.Artifact) (domain.BlobRef, error) {
-	sum := sha256.Sum256(art.Bytes)
+	// When encryption is active the server stores ciphertext — it never sees the
+	// plaintext bytes. The payload is the encrypted envelope; Content-Type is set
+	// to application/octet-stream so the real MIME is not leaked. The artifact's
+	// MIME is preserved in the dataset record (which is itself encrypted at rest),
+	// so the client can still render the blob correctly after decryption.
+	payload := art.Bytes
+	contentType := strings.TrimSpace(art.MIME)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if datasetEncryptionActive() {
+		enc, err := encryptArtifactSync(art.Bytes)
+		if err != nil {
+			return domain.BlobRef{}, fmt.Errorf("blob upload: encrypt artifact: %w", err)
+		}
+		payload = enc
+		contentType = "application/octet-stream"
+	}
+
+	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])
 	blobURL := normalizedBackendEndpoint(endpoint) + "/v1/blobs/" + hash + "?workspaceId=" + url.QueryEscape(workspaceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, blobURL, bytes.NewReader(art.Bytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, blobURL, bytes.NewReader(payload))
 	if err != nil {
 		return domain.BlobRef{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
-	mime := strings.TrimSpace(art.MIME)
-	if mime == "" {
-		mime = "application/octet-stream"
-	}
-	req.Header.Set("Content-Type", mime)
+	req.Header.Set("Content-Type", contentType)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return domain.BlobRef{}, err
@@ -335,7 +351,10 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return domain.BlobRef{}, fmt.Errorf("blob upload returned HTTP %d", resp.StatusCode)
 	}
-	return domain.BlobRef{Hash: hash, MIME: mime, Size: len(art.Bytes)}, nil
+	// Store the real MIME in BlobRef so the client can render the artifact. Size
+	// reflects the on-wire payload (ciphertext) for storage accounting; the
+	// artifact domain record carries the unencrypted Size separately.
+	return domain.BlobRef{Hash: hash, MIME: art.MIME, Size: len(payload)}, nil
 }
 
 func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID, hash string) ([]byte, error) {
@@ -353,5 +372,19 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("blob download returned HTTP %d", resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	// Transparent decryption: if the server stored an encrypted envelope (EC2),
+	// decrypt it now. Legacy plaintext blobs (IsEnvelope → false) pass through
+	// unchanged, so old blobs uploaded before encryption was enabled still work.
+	if cryptobox.IsEnvelope(raw) {
+		plain, err := decryptArtifactSync(raw)
+		if err != nil {
+			return nil, fmt.Errorf("blob download: decrypt artifact: %w", err)
+		}
+		return plain, nil
+	}
+	return raw, nil
 }
