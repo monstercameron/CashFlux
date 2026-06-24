@@ -6,6 +6,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -73,6 +74,11 @@ func widgetIcon(id string) icon.Name {
 		return icon.Todo
 	case "highlight":
 		return icon.Insights
+	}
+	// User-built Widget Builder cards (namespaced "wb:") get a generic glyph so they're
+	// visually consistent with the built-in tiles instead of icon-less.
+	if strings.HasPrefix(id, "wb:") {
+		return icon.Sparkles
 	}
 	return ""
 }

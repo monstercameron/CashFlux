@@ -83,7 +83,7 @@ try {
   // Undo reverts the add; fit-to-view + the expanded palette (rule/color/stack/button)
   // exist. These close the canvas-polish + node-breadth gaps.
   if ((await page.locator(".wb-zoom [data-zoom='fit']").count()) === 0) fail("no fit-to-view control");
-  for (const k of ["data.rule", "literal.color", "viz.stack", "ui.button"]) {
+  for (const k of ["data.rule", "literal.color", "viz.stack", "ui.button", "ui.toggle"]) {
     if ((await page.locator(`.vb-pal-btn[data-kind="${k}"]`).count()) === 0) fail(`palette missing node: ${k}`);
   }
   await page.locator('[data-testid="vb-undo"]').click();

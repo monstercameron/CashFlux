@@ -114,7 +114,8 @@ type VizBlock struct {
 	Cols   []Column      // columns for "list"
 	Rows   []Row         // rows for "list"
 	Hero   bool          // KPI hero variant (larger figure, matches kpiBodyHero)
-	Action string        // workflow action kind, for "button"
+	Action string        // workflow action kind, for "button"/"toggle"
+	XLabel string        // x-axis label, for "chart"
 	Blocks []VizBlock    // child blocks, for "stack" (composite multi-block tiles)
 }
 

@@ -87,6 +87,7 @@ const (
 	KindLiteralColor  = "literal.color"
 	KindVizStack      = "viz.stack"
 	KindUIButton      = "ui.button"
+	KindUIToggle      = "ui.toggle"
 )
 
 func init() {
@@ -498,7 +499,7 @@ func init() {
 			if chart == "" {
 				chart = "line"
 			}
-			return Viz(VizBlock{Kind: "chart", Title: props["title"], Chart: chart, Series: s, Accent: inputs["accent"].Str}), nil
+			return Viz(VizBlock{Kind: "chart", Title: props["title"], Chart: chart, Series: s, Accent: inputs["accent"].Str, XLabel: props["xlabel"]}), nil
 		},
 	})
 
@@ -515,7 +516,25 @@ func init() {
 			if lim, err := strconv.Atoi(strings.TrimSpace(props["limit"])); err == nil && lim > 0 && lim < len(rows) {
 				rows = rows[:lim]
 			}
-			return Viz(VizBlock{Kind: "list", Title: props["title"], Cols: in.Coll.Cols, Rows: rows}), nil
+			// Optional column selection (props["cols"] = comma list) so a list clone can
+			// show just the columns it needs (e.g. date,desc,amount), like the dashboard.
+			cols := in.Coll.Cols
+			if sel := strings.TrimSpace(props["cols"]); sel != "" {
+				byName := map[string]Column{}
+				for _, c := range in.Coll.Cols {
+					byName[c.Name] = c
+				}
+				var picked []Column
+				for name := range strings.SplitSeq(sel, ",") {
+					if c, ok := byName[strings.TrimSpace(name)]; ok {
+						picked = append(picked, c)
+					}
+				}
+				if len(picked) > 0 {
+					cols = picked
+				}
+			}
+			return Viz(VizBlock{Kind: "list", Title: props["title"], Cols: cols, Rows: rows}), nil
 		},
 	})
 
@@ -576,7 +595,7 @@ func init() {
 			textCol := strings.TrimSpace(props["textcol"])
 			amountCol := strings.TrimSpace(props["amountcol"])
 			var any []string
-			for _, k := range strings.Split(props["any"], ",") {
+			for k := range strings.SplitSeq(props["any"], ",") {
 				if s := strings.TrimSpace(k); s != "" {
 					any = append(any, s)
 				}
@@ -607,6 +626,19 @@ func init() {
 				label = "Run"
 			}
 			return Viz(VizBlock{Kind: "button", Text: label, Action: props["action"]}), nil
+		},
+	})
+
+	// ui.toggle — an interactive checkbox that runs a workflow action when toggled (the
+	// stateful-control class of interactivity, like the To-do tile's complete checkbox).
+	register(Spec{
+		Kind: KindUIToggle, Out: TypeViz,
+		Eval: func(_ map[string]Value, props map[string]string, _ Context) (Value, error) {
+			label := props["label"]
+			if strings.TrimSpace(label) == "" {
+				label = "Done"
+			}
+			return Viz(VizBlock{Kind: "toggle", Text: label, Action: props["action"]}), nil
 		},
 	})
 
