@@ -3,6 +3,34 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART series COMPLETE (84/84)
+
+The full ~84-item per-page Smart/AI backlog is shipped, tested, and pushed: **66 deterministic Free
+rule engines** (`internal/smartengine`, every page) + **18 AI features** (`internal/smartai` builders
++ a generic spec-table control + the T8 vision card). The whole layer is opt-in, cost-transparent
+(Free $0 vs AI per-use, provider-gated), and surfaced through the glanceable `/smart` hub, with unit
++ integration + e2e coverage (`e2e/smart_hub_check.mjs`, 16/16).
+
+**What made 84 features tractable.** (1) *Catalog-as-data + a registry per layer.* A Free feature is
+`register("CODE", fn)`; an AI feature is a `smartai` prompt builder + an `Implemented` flag + an
+`aiSpec` row. Adding one is a function + a line, not new plumbing — so the back half of the series
+went fast. (2) *Reuse over re-derivation.* Every Free engine calls an existing tested engine
+(`ledger`/`runway`/`bills`/`payoff`/`goals`/`budgeting`/`subscriptions`/`dedupe`) — the SMART layer
+adds judgment and a sentence, never new arithmetic. (3) *Honest gating.* The manage catalog only
+lists shipped features (`HasEngine || smartai.Implemented`), so no toggle is a dead end; AI features
+show their per-use cost and a "needs a provider" hint when none is set.
+
+**Honest scope notes on the hard tail.** A handful of items are advisory/degraded versions of an
+ideal interactive feature, by necessity: G10 (what-if) is a canned "+$100/mo" illustration rather
+than a live slider; AL5 (allocation preview) previews the surplus→debt outcome rather than an
+in-flight allocation; T4 (bulk-edit) surfaces inconsistent-category merchants as a nudge rather than
+a post-edit hook; G2/G17/G19/G20/SU12 lean on the data we *do* have (surplus as a contribution proxy,
+transaction MemberID for attribution) since per-goal contribution history and per-member goal
+contributions aren't modeled. All are real, useful, opt-in insights; the fuller interactive UX would
+be follow-on work. The model-routing nuance (gpt-5.4-mini→5.5) is modeled and the escalation is
+wired via `smartai.Acceptable`; "5.5 low-effort" maps to the stronger model on the chat-completions
+path (reasoning_effort isn't exposed through `ai.SendChat`).
+
 ## 2026-06-24 — SMART series: the UX surface + persistence + e2e (Free tier is now usable)
 
 Completed the bottom-up climb for the Free tier: **persistence → state → UI → e2e**, all additive so
