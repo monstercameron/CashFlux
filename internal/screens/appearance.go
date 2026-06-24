@@ -31,24 +31,30 @@ func Appearance() uic.Node {
 	}
 
 	return Div(css.Class("page-content"),
-		// Theme mode — Dark / Light / System
-		H4(css.Class("set-label"), uistate.T("settings.appearance")),
-		ui.Segmented(ui.SegmentedProps{
-			Options: []ui.SegOption{
-				{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")},
-				{Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")},
-				{Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")},
-			},
-			Selected: string(pr.Theme),
-			OnSelect: func(v string) {
-				p := prefsAtom.Get()
-				p.Theme = prefs.Theme(v)
-				savePrefs(p)
-			},
-		}),
+		// Theme mode — Dark / Light / System.
+		// role="group" + aria-label programmatically associates the H4 heading text
+		// with the Segmented control so screen readers announce the group name when
+		// the control receives focus (WCAG 1.3.1 / 4.1.2).
+		Div(Attr("role", "group"), Attr("aria-label", uistate.T("settings.appearance")),
+			H4(css.Class("set-label"), uistate.T("settings.appearance")),
+			ui.Segmented(ui.SegmentedProps{
+				Options: []ui.SegOption{
+					{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")},
+					{Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")},
+					{Value: string(prefs.ThemeSystem), Label: uistate.T("settings.themeSystem")},
+				},
+				Selected: string(pr.Theme),
+				OnSelect: func(v string) {
+					p := prefsAtom.Get()
+					p.Theme = prefs.Theme(v)
+					savePrefs(p)
+				},
+			}),
+		),
 
-		// Motion / WONDER
-		Div(css.Class("toggle-row", tw.Mt2),
+		// Motion / WONDER — existing toggle-row div gains role="group" + aria-label
+		// so the visible "Motion" label is associated with the Segmented control.
+		Div(css.Class("toggle-row", tw.Mt2), Attr("role", "group"), Attr("aria-label", uistate.T("settings.motion")),
 			Span(uistate.T("settings.motion")),
 			ui.Segmented(ui.SegmentedProps{
 				Options: []ui.SegOption{
@@ -66,8 +72,9 @@ func Appearance() uic.Node {
 		),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.motionHint")),
 
-		// Accent color swatch picker
-		Div(css.Class("toggle-row", tw.Mt2),
+		// Accent color swatch picker — existing toggle-row div gains role="group" +
+		// aria-label so the visible "Accent" label is associated with the SwatchPicker.
+		Div(css.Class("toggle-row", tw.Mt2), Attr("role", "group"), Attr("aria-label", uistate.T("settings.accent")),
 			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
 				Colors:   []string{"#2e8b57", "#cfa14e", "#7c83ff", "#d8716f"},

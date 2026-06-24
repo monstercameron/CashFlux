@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — a11y: name Appearance control groups for screen readers (+ notifications list semantics)
+
+Accessibility / i18n sweep targeting the Appearance screen and the Notification Center.
+
+**What shipped:**
+
+- `internal/screens/appearance.go`: three control groups now carry programmatic accessible names:
+  - **Theme mode:** wrapped the existing `H4` + `ui.Segmented` in a new `Div(Attr("role","group"), Attr("aria-label", uistate.T("settings.appearance")))`. A screen reader will announce "Appearance group" before the Dark/Light/System choices.
+  - **Motion:** added `Attr("role","group")` + `Attr("aria-label", uistate.T("settings.motion"))` directly to the existing `.toggle-row` div. No extra wrapping needed — the visible `Span` and the `Segmented` are already siblings inside it.
+  - **Accent:** same pattern — `role="group"` + `aria-label=T("settings.accent")` on the existing `.toggle-row` div.
+  - ThemeEditor section is unchanged (it owns its own labelling internally).
+- `internal/screens/notifications.go`: two changes:
+  - **List semantics:** rows are built into `[]any{css.Class("rows"), Attr("role","list"), …items…}` via an append loop and passed as `Body:` instead of `Rows:`. This avoids touching `EntityListSection` (off-limits) while giving the rows container `role="list"` and each row `Attr("role","listitem")`.
+  - **Clear-all aria-label:** `Button` gets `Attr("aria-label", uistate.T("notifications.clearAllAria"))` alongside its visible text label.
+- `internal/i18n/en_a11y.go` (new): one key — `notifications.clearAllAria = "Clear all notifications"` — registered via the standard `init()` loop into `english`. The file follows the `en_enterprise.go`/`en_home.go` isolation pattern so `en.go` (user WIP) is untouched.
+
+**Key decisions:**
+
+*Why `aria-label` on the group div rather than `aria-labelledby` referencing the visible label's id?* Both are correct. `aria-label` is simpler here because (a) the Appearance H4 and the motion/accent Span are purely presentational labels with no other referencing need, and (b) adding ids to those elements would require verifying uniqueness if the component is ever repeated. `aria-label` sourced from `uistate.T` is the lighter, more maintainable choice.
+
+*Why `Body:` not `Rows:` in notifications?* `Rows:` feeds into `EntityListSection`'s internal `Div(css.Class("rows"), …)` builder, which adds no ARIA. Switching to `Body:` lets the screen own the container structure — same DOM shape (`.rows` class preserved), just with `role="list"` added. `EntityListSection` stays untouched.
+
+**Build verification:** WASM build clean (`go build -o web/bin/main.wasm .`, rc=0); no errors in changed files. i18n tests: pass (`go test ./internal/i18n/...`). `gofmt -l` on all changed files: no reformatting needed.
+
 ## 2026-06-24 — feat: strong dashboard homescreen hero (EC4)
 
 Implemented the EC4 "home band" — a glanceable, enterprise-grade greeting strip above the bento grid.

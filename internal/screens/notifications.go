@@ -51,10 +51,10 @@ func NotificationCenter() ui.Node {
 	}
 
 	pr := uistate.UsePrefs().Get()
-	rows := make([]ui.Node, 0, len(feed))
+	items := make([]ui.Node, 0, len(feed))
 	for _, it := range feed {
 		when := time.Unix(it.At, 0)
-		rows = append(rows, Div(css.Class("row"),
+		items = append(items, Div(css.Class("row"), Attr("role", "listitem"),
 			Div(css.Class("row-main"),
 				Span(css.Class("row-desc"), it.Title),
 				If(it.Body != "", Span(css.Class("row-meta"), it.Body)),
@@ -63,11 +63,23 @@ func NotificationCenter() ui.Node {
 		))
 	}
 
+	// Build the list body manually (role="list" + role="listitem" semantics) and
+	// pass it via Body rather than Rows so we never touch EntityListSection itself
+	// (it is off-limits as part of the ui-refactor churn). Append items into an
+	// []any so the variadic Div call receives a single flat argument list.
+	listArgs := []any{css.Class("rows"), Attr("role", "list")}
+	for _, item := range items {
+		listArgs = append(listArgs, item)
+	}
+	listBody := Div(listArgs...)
+
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Header: Div(css.Class("budget-head"),
 			H2(css.Class("card-title"), uistate.T("nav.notifications")),
-			Button(css.Class("btn"), Type("button"), OnClick(clearAll), uistate.T("notifications.clearAll")),
+			Button(css.Class("btn"), Type("button"), OnClick(clearAll),
+				Attr("aria-label", uistate.T("notifications.clearAllAria")),
+				uistate.T("notifications.clearAll")),
 		),
-		Rows: rows,
+		Body: listBody,
 	})
 }
