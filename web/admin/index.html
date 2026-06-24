@@ -189,13 +189,35 @@
       }
       .feature-card:hover { transform: translateY(-5px); border-color: var(--border-strong); background: var(--surface-2); box-shadow: 0 24px 50px -28px rgba(0,0,0,.8); }
       .feature-card:hover::after { opacity: 1; }
-      .feature-icon {
-        width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; font-size: 22px;
-        background: linear-gradient(140deg, rgba(62,224,143,0.18), rgba(40,199,192,0.12));
-        border: 1px solid rgba(62,224,143,0.28); margin-bottom: 18px;
+      .feat-num {
+        font-size: 13px; font-weight: 800; letter-spacing: .08em; margin-bottom: 14px;
+        background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
       }
       .feature-card-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
       .feature-card-desc { margin-top: 8px; font-size: 14.5px; line-height: 1.6; color: var(--text-dim); }
+
+      /* --- Browser-framed product screenshots ----------------------------- */
+      .frame {
+        border: 1px solid var(--border-strong); border-radius: 16px; overflow: hidden;
+        background: var(--bg-elev); box-shadow: 0 40px 90px -40px rgba(0,0,0,.85);
+      }
+      .frame-bar {
+        display: flex; align-items: center; gap: 7px; padding: 11px 14px;
+        background: rgba(255,255,255,0.04); border-bottom: 1px solid var(--border);
+      }
+      .frame-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+      .frame-dot:nth-child(1){ background:#f0726f; } .frame-dot:nth-child(2){ background:#e6b860; } .frame-dot:nth-child(3){ background:#3ee08f; }
+      .frame-url { margin-left: 10px; font-size: 12px; color: var(--text-faint); font-weight: 500; }
+      .frame img { display: block; width: 100%; height: auto; }
+      .shot-hero {
+        margin: 46px auto 0; max-width: 940px; position: relative;
+        -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+        mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+      }
+      .shots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 22px; }
+      .shot-cap { margin-top: 14px; }
+      .shot-cap h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+      .shot-cap p { margin-top: 5px; font-size: 14px; color: var(--text-dim); line-height: 1.55; }
 
       /* --- Stats band ----------------------------------------------------- */
       .stats-band {

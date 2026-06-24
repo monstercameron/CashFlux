@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — Landing copy that sells + real product screenshots
+
+**Why.** The redesigned landing still *read* like infra docs ("tenant-safe admin API", "zero-knowledge AES-GCM blob store") — accurate, but nobody buys on jargon, and a money product with no picture of itself doesn't convert. Rewrote it to sell outcomes and show the actual app.
+
+**Copy.** Hero → "Finally know where your money goes." with a plain-English promise (one calm dashboard for accounts/budgets/goals/bills; no bank logins, no ads, no account). Feature cards reframed from mechanisms to benefits. Stats band reframed to what a person cares about ($0 to start, 100% on-device, zero trackers, 1-click export). CTA → "Take control of your money today."
+
+**Screenshots.** Added a `shotFrame` helper that wraps an image in browser chrome (traffic-light dots + faux URL). Hero gets a framed dashboard shot with a bottom fade mask so it bleeds into the page; a new "See it in action" section frames the reports + transactions screens with captions. Reused the existing real shots from `docs/screenshots/` (dashboard/reports/transactions) copied into `web/admin/img/` — the console serves its own dir, so assets must live under `web/admin`. Light-theme screenshots on the dark landing actually pop.
+
+**Styling.** Dropped the emoji feature icons (read as cheap) for gradient `01–06` numerals. Verified visually by Playwright-screenshotting the live page at three scroll positions (`e2e/_shot_landing.mjs`, scratch) — hero, feature grid, and the screenshots+CTA band all render correctly.
+
+**Notes.** Confirmed the DSL exports `Img` and `H3` (build rc=0). Still served from disk, so shipping was just rebuilding `admin.wasm`. Pure presentation — auth/state untouched.
+
 ## 2026-06-24 — World-class operator-console landing redesign
 
 **Why.** The first landing was functional but generic — flat dark cards, weak hierarchy, emoji-in-a-box — the kind of page a visitor bounces off. Rebuilt it to a modern SaaS-landing bar (Linear/Stripe/Vercel reference).

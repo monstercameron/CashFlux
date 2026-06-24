@@ -84,18 +84,18 @@ const (
 // ---------------------------------------------------------------------------
 
 type featureCard struct {
-	icon  string
+	num   string
 	title string
 	body  string
 }
 
 var featureCards = []featureCard{
-	{icon: "🔐", title: "Tenant-safe admin API", body: "Bearer-authenticated endpoints with per-user rate limits and full audit trail."},
-	{icon: "☁️", title: "Encrypted artifact sync", body: "Zero-knowledge AES-GCM blob store — the server never sees plaintext client data."},
-	{icon: "📈", title: "Subscriptions & MRR at a glance", body: "Active, trialing, past-due and canceled counts with estimated monthly recurring revenue."},
-	{icon: "🔢", title: "Per-user usage metering", body: "Daily request and token counters per account, with configurable alert thresholds."},
-	{icon: "📋", title: "Audit log", body: "Every sensitive admin action is recorded with actor, resource, and timestamp."},
-	{icon: "🖥️", title: "Self-host or cloud", body: "Run locally with a single binary, or deploy to any server. No vendor lock-in."},
+	{num: "01", title: "See your whole money picture", body: "Net worth, cash flow, budgets and goals on one calm dashboard — so you always know what you have and what's coming."},
+	{num: "02", title: "Budget the way you think", body: "Give every dollar a job, or carry envelopes forward. Weekly, monthly or quarterly — with a gentle nudge before you overspend."},
+	{num: "03", title: "Plan ahead with confidence", body: "Forecast your cash flow, pay down debt with snowball or avalanche, and watch every savings goal get closer."},
+	{num: "04", title: "Private by default", body: "Your money stays on your device, encrypted. No account to create, nothing sold, and it never phones home."},
+	{num: "05", title: "Every number, explained", body: "Tap any figure — a budget, a forecast, a balance — and see the exact transactions behind it. No black boxes."},
+	{num: "06", title: "Yours to keep, forever", body: "Export everything to CSV or JSON in one click. No lock-in, no proprietary trap — leave any time with all your data."},
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +267,22 @@ func statPill(num, caption string) ui.Node {
 	)
 }
 
+// shotFrame wraps a product screenshot in a browser-style chrome (traffic-light
+// dots + a faux URL) so the landing demonstrates the real app.
+func shotFrame(urlLabel, src, alt string) ui.Node {
+	return Div(
+		css.Class("frame"),
+		Div(
+			css.Class("frame-bar"),
+			Span(css.Class("frame-dot")),
+			Span(css.Class("frame-dot")),
+			Span(css.Class("frame-dot")),
+			Span(css.Class("frame-url"), Text(urlLabel)),
+		),
+		Img(Attr("src", src), Attr("alt", alt), Attr("loading", "lazy")),
+	)
+}
+
 // homeView renders the marketing landing screen: a sticky nav, a gradient hero,
 // a stats band, the feature grid, a closing call-to-action, and a footer.
 // hasToken controls whether the "Open console" shortcut is offered (a valid
@@ -308,30 +324,34 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 				Span(
 					css.Class("eyebrow fade d1"),
 					Span(css.Class("dot")),
-					Text("CashFlux backend · self-hosted or cloud"),
+					Text("Private money management · yours, on your device"),
 				),
-				H1(css.Class("hero-title fade d2"), Text("Run your money backend with total control.")),
+				H1(css.Class("hero-title fade d2"), Text("Finally know where your money goes.")),
 				P(
 					css.Class("hero-sub fade d3"),
-					Text("Users, subscriptions, revenue, usage, and zero-knowledge encrypted sync — observed and managed from one fast, secure console. Ship the single Go binary anywhere."),
+					Text("CashFlux brings your accounts, budgets, goals and bills into one calm dashboard — so you always know what you have, what's coming, and where it went. No bank logins. No ads. No account required."),
 				),
 				Div(
 					css.Class("hero-actions fade d4"),
 					Button(
 						Type("button"),
 						css.Class("btn btn-primary btn-lg"),
-						Attr("aria-label", "Sign in to the operator console"),
+						Attr("aria-label", "Get started with CashFlux"),
 						OnClick(onSignIn),
-						Text("Sign in to console"),
+						Text("Get started — free"),
 					),
-					A(Attr("href", "#features"), css.Class("btn btn-secondary btn-lg"), Text("Explore features")),
+					A(Attr("href", "#features"), css.Class("btn btn-secondary btn-lg"), Text("See how it works")),
 				),
 				Div(
 					css.Class("hero-trust fade d5"),
-					trustItem("Zero-knowledge encryption"),
-					trustItem("Single-binary deploy"),
-					trustItem("100% Go · no lock-in"),
+					trustItem("No bank logins, ever"),
+					trustItem("No ads or trackers"),
+					trustItem("Export anytime"),
 				),
+			),
+			Div(
+				css.Class("shot-hero fade d5"),
+				shotFrame("cashflux · your dashboard", "img/dashboard.png", "The CashFlux dashboard: net worth, income, spending, budgets and a net-worth trend chart"),
 			),
 		),
 		// Stats band.
@@ -339,10 +359,10 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 			css.Class("wrap"),
 			Div(
 				css.Class("stats-band fade d3"),
-				statPill("100%", "Go + WebAssembly"),
-				statPill("AES-GCM", "Encrypted at rest & in sync"),
-				statPill("1 binary", "To self-host"),
-				statPill("Zero", "Vendor lock-in"),
+				statPill("$0", "To get started"),
+				statPill("100%", "On your device"),
+				statPill("Zero", "Ads · trackers · resold data"),
+				statPill("1-click", "Export all your data"),
 			),
 		),
 		// Features.
@@ -353,11 +373,11 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 				css.Class("section"),
 				Div(
 					css.Class("section-head"),
-					Div(css.Class("section-eyebrow"), Text("Everything in one place")),
-					H2(css.Class("section-title"), Text("Operate the whole backend")),
+					Div(css.Class("section-eyebrow"), Text("Why CashFlux")),
+					H2(css.Class("section-title"), Text("Everything your money needs. Nothing it doesn't.")),
 					P(
 						css.Class("section-desc"),
-						Text("Read-only where it should be, actionable where it counts — every surface is tenant-isolated and audited."),
+						Text("A complete picture of your finances — accounts, budgets, goals, bills and forecasts — that stays private, stays simple, and always shows its work."),
 					),
 				),
 				Div(
@@ -365,11 +385,42 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 					Map(featureCards, func(f featureCard) ui.Node {
 						return Div(
 							css.Class("feature-card fade"),
-							Div(css.Class("feature-icon"), Text(f.icon)),
+							Div(css.Class("feat-num"), Text(f.num)),
 							Div(css.Class("feature-card-title"), Text(f.title)),
 							P(css.Class("feature-card-desc"), Text(f.body)),
 						)
 					}),
+				),
+			),
+		),
+		// Product screenshots.
+		Div(
+			css.Class("wrap"),
+			Div(
+				css.Class("section"),
+				Div(
+					css.Class("section-head"),
+					Div(css.Class("section-eyebrow"), Text("See it in action")),
+					H2(css.Class("section-title"), Text("Clarity at a glance")),
+				),
+				Div(
+					css.Class("shots-grid"),
+					Div(
+						shotFrame("cashflux · reports", "img/reports.png", "CashFlux reports: net, income, spending, savings rate and spending by category"),
+						Div(
+							css.Class("shot-cap"),
+							H3(Text("Reports that actually explain")),
+							P(Text("Net, income, savings rate and cash runway — plus plain-English insights like “Transit is 200% above its usual.”")),
+						),
+					),
+					Div(
+						shotFrame("cashflux · transactions", "img/transactions.png", "CashFlux transactions ledger with categories, accounts and tags"),
+						Div(
+							css.Class("shot-cap"),
+							H3(Text("Every transaction, organized")),
+							P(Text("Search, filter, tag and auto-categorize. Reconcile against your statement, then export whenever you like.")),
+						),
+					),
 				),
 			),
 		),
@@ -378,14 +429,14 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 			css.Class("wrap"),
 			Div(
 				css.Class("cta-band"),
-				H2(Text("Ready to take the wheel?")),
-				P(Text("Sign in with your operator token to view users, revenue, usage, and audit activity in real time.")),
+				H2(Text("Take control of your money today.")),
+				P(Text("It's free, private, and yours to keep. Pick up right where you left off.")),
 				Button(
 					Type("button"),
 					css.Class("btn btn-primary btn-lg"),
-					Attr("aria-label", "Sign in to the operator console"),
+					Attr("aria-label", "Get started with CashFlux"),
 					OnClick(onSignIn),
-					Text("Sign in"),
+					Text("Get started"),
 				),
 			),
 		),
