@@ -269,6 +269,9 @@ func aiSpec(code string) (aiFeatureSpec, bool) {
 	case "SMART-SU13":
 		return aiFeatureSpec{title: uistate.T("smart.bundleTitle"), btnLabel: uistate.T("smart.bundleBtn"),
 			build: func(app *appstate.App, _ string) smartai.Request { return smartai.BundleFinder(subsContextString(app)) }}, true
+	case "SMART-T10":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.importTitle"), placeholder: uistate.T("smart.importPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.ImportMapping(q) }}, true
 	}
 	return aiFeatureSpec{}, false
 }

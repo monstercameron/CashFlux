@@ -66,6 +66,8 @@ var smartKeys = Catalog{
 	"smart.benchmarkPlaceholder":  "e.g. Spotify $11/mo",
 	"smart.bundleTitle":           "Find bundle opportunities",
 	"smart.bundleBtn":             "Check for bundles",
+	"smart.importTitle":           "Map CSV columns for import",
+	"smart.importPlaceholder":     "paste your CSV header row (e.g. Date,Description,Amount)",
 }
 
 func init() {

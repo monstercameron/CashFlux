@@ -22,7 +22,9 @@ func init() {
 	register("SMART-BL6", bl6LateFeeRisk)
 	register("SMART-BL1", bl1PredictVariable)
 	register("SMART-BL4", bl4Autopay)
+	register("SMART-BL5", bl5OptimalPayDate)
 	register("SMART-BL8", bl8PaycheckGrouping)
+	register("SMART-BL15", bl15GracePeriod)
 	register("SMART-BL7", bl7BillIncrease)
 	register("SMART-BL9", bl9SinkingFund)
 	register("SMART-BL13", bl13StatementClarity)
@@ -99,6 +101,114 @@ func bl1PredictVariable(in Input) []smart.Insight {
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
 	}
 	return out
+}
+
+// SMART-BL5 — Optimal pay-date suggestion. When bills cluster before the next
+// paycheck, suggests timing flexible payments to just after payday to smooth the
+// month's cash flow.
+func bl5OptimalPayDate(in Input) []smart.Insight {
+	payday, ok := recentPayday(in)
+	if !ok {
+		return nil
+	}
+	nextPay := dateutil.NextMonthlyDue(in.Now, payday)
+	var beforeN int
+	var beforeTotal int64
+	for _, b := range bills.UpcomingAll(in.Accounts, in.Recurring, in.Now) {
+		if b.DueDate.Before(in.Now) || !b.DueDate.Before(nextPay) {
+			continue
+		}
+		beforeN++
+		beforeTotal += in.toBaseMinor(b.Amount.Amount, b.Amount.Currency)
+	}
+	if beforeN < 2 { // only worth smoothing when several cluster pre-payday
+		return nil
+	}
+	ins := smart.Insight{
+		Feature: "SMART-BL5",
+		Page:    smart.PageBills,
+		Key:     "SMART-BL5:" + nextPay.Format("2006-01-02"),
+		Title:   "Time flexible payments to just after payday",
+		Detail: plural(int64(beforeN), "bill") + " (about " + in.baseMoney(beforeTotal).Format(2) +
+			") land before your next paycheck around " + nextPay.Format("Jan 2") +
+			". Where a biller allows it, shifting payment to just after payday smooths the month.",
+		Severity: smart.SeverityInfo,
+	}.WithAmount(in.baseMoney(beforeTotal)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+	return []smart.Insight{ins}
+}
+
+// SMART-BL15 — Grace-period & due-date confidence. Learns a liability's real
+// payment timing from history and shows the typical days-after-due it's actually
+// paid, so the effective last-safe-pay date is clear.
+func bl15GracePeriod(in Input) []smart.Insight {
+	var out []smart.Insight
+	for _, a := range in.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability || a.DueDayOfMonth <= 0 {
+			continue
+		}
+		// Average the observed offset between each recent due date and the nearest
+		// payment that follows it within the cycle.
+		var sumDays, n int
+		for k := 1; k <= 4; k++ {
+			due := dateutil.AddMonths(bills.NextDue(a.DueDayOfMonth, in.Now), -k)
+			if pd, ok := firstPaymentOnOrAfter(in.Transactions, a.ID, due, due.AddDate(0, 0, 25)); ok {
+				sumDays += dateutil.DaysBetween(due, pd)
+				n++
+			}
+		}
+		if n < 2 {
+			continue // not enough history to characterize the pattern
+		}
+		avg := sumDays / n
+		ins := smart.Insight{
+			Feature: "SMART-BL15",
+			Page:    smart.PageBills,
+			Key:     "SMART-BL15:" + a.ID,
+			Title:   a.Name + " is typically paid " + plural(int64(avg), "day") + " after the due date",
+			Detail: "Across recent cycles " + a.Name + " was paid about " + plural(int64(avg), "day") +
+				" after the " + ordinalDay(a.DueDayOfMonth) + " — your effective last-safe-pay date, not just the nominal due date.",
+			Severity: smart.SeverityInfo,
+		}
+		out = append(out, ins.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+	}
+	return out
+}
+
+// firstPaymentOnOrAfter returns the date of the first transaction touching the
+// account within [from, to], and whether one was found.
+func firstPaymentOnOrAfter(txns []domain.Transaction, accountID string, from, to time.Time) (time.Time, bool) {
+	var best time.Time
+	found := false
+	for _, t := range txns {
+		if t.AccountID != accountID && t.TransferAccountID != accountID {
+			continue
+		}
+		if t.Date.Before(from) || t.Date.After(to) {
+			continue
+		}
+		if !found || t.Date.Before(best) {
+			best, found = t.Date, true
+		}
+	}
+	return best, found
+}
+
+// ordinalDay renders a day-of-month with its ordinal suffix ("5th", "1st").
+func ordinalDay(d int) string {
+	suffix := "th"
+	switch {
+	case d%100 >= 11 && d%100 <= 13:
+		suffix = "th"
+	case d%10 == 1:
+		suffix = "st"
+	case d%10 == 2:
+		suffix = "nd"
+	case d%10 == 3:
+		suffix = "rd"
+	}
+	return itoa64(int64(d)) + suffix
 }
 
 // SMART-BL8 — Paycheck-aligned grouping. Detects the user's payday from recent

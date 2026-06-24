@@ -496,6 +496,34 @@ func TestG14SkipsLinkedGoal(t *testing.T) {
 	}
 }
 
+func TestBL5OptimalPayDate(t *testing.T) {
+	in := baseInput() // now June 15
+	in.Transactions = []domain.Transaction{
+		{ID: "pay", AccountID: "x", Date: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Amount: usd(300000), Desc: "Salary"},
+	}
+	in.Recurring = []domain.Recurring{
+		{ID: "r1", Label: "Phone", Amount: usd(-8000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)},
+		{ID: "r2", Label: "Internet", Amount: usd(-6000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC)},
+	}
+	got := bl5OptimalPayDate(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 pay-date insight, got %d: %+v", len(got), got)
+	}
+}
+
+func TestBL15GracePeriod(t *testing.T) {
+	in := baseInput() // now June 15; due day 5 → recent dues June 5, May 5, ...
+	in.Accounts = []domain.Account{liabilityCard("c", "Visa", 5, 5000)}
+	in.Transactions = []domain.Transaction{
+		txn("p1", "c", time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC), 5000), // 3 days after June 5
+		txn("p2", "c", time.Date(2026, 5, 7, 0, 0, 0, 0, time.UTC), 5000), // 2 days after May 5
+	}
+	got := bl15GracePeriod(in)
+	if len(got) != 1 {
+		t.Fatalf("want 1 grace-period insight, got %d: %+v", len(got), got)
+	}
+}
+
 func TestP4Affordability(t *testing.T) {
 	in := baseInput().withBaseline(0, 250000) // $2500/mo essentials
 	got := p4Affordability(in)

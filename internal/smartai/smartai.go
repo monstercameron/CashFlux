@@ -37,6 +37,7 @@ var implemented = map[string]bool{
 	"SMART-SU2":  true, // overlapping-service detection
 	"SMART-SU10": true, // category-benchmark context
 	"SMART-SU13": true, // bundle-opportunity finder
+	"SMART-T10":  true, // smart import field-mapping
 	"SMART-D4":   true, // natural-language to-do quick-add
 }
 
@@ -243,4 +244,15 @@ const bundleSystem = "You spot subscriptions that are usually cheaper bundled (e
 // BundleFinder builds the SMART-SU13 request from a subscription list snapshot.
 func BundleFinder(subscriptionContext string) Request {
 	return Request{System: bundleSystem, User: "Subscriptions:\n" + strings.TrimSpace(subscriptionContext)}
+}
+
+// importSystem frames SMART-T10: map CSV columns for a bank import.
+const importSystem = "You map CSV columns for a bank-statement import. Given the header row (and any sample line), " +
+	"say which column is the date, which is the amount, which is the merchant/description, and which is the category " +
+	"if present. Reply concisely as \"date: <col>, amount: <col>, merchant: <col>, category: <col-or-none>\"."
+
+// ImportMapping builds the SMART-T10 request from a pasted CSV header (and
+// optionally a sample line).
+func ImportMapping(header string) Request {
+	return Request{System: importSystem, User: "CSV header (and optional sample):\n" + strings.TrimSpace(header)}
 }

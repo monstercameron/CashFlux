@@ -43,6 +43,7 @@ func TestNewBuilders(t *testing.T) {
 		{"alloc", AllocationIntent("pay the card, keep $1k liquid", "Visa $5,000"), "keep $1k liquid"},
 		{"scenario", ScenarioDraft("what if I get a $500 raise", "net $42k"), "$500 raise"},
 		{"todo", TodoParse("move $200 to savings next Friday"), "move $200 to savings"},
+		{"import", ImportMapping("Date,Description,Amount"), "Date,Description,Amount"},
 	}
 	for _, c := range cases {
 		if c.r.System == "" {

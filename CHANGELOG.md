@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — T10 (AI import-mapping) + BL5/BL15 Free engines (2026-06-24):** **T10** (AI) maps pasted CSV columns to date/amount/merchant/category via the input control. **BL5** suggests timing flexible payments to just after payday when bills cluster pre-paycheck. **BL15** learns each liability's real payment timing from history and shows the typical days-after-due (the effective last-safe-pay date). 53 Free engines + 17 AI features. Tests.
+
 - **SMART series — Free engines G14 + G19 (2026-06-24):** **G14** suggests linking an unlinked goal to an account so its progress tracks the real balance automatically; **G19** borrow-from-goal warning compares a goal-linked account's balance to the goal's recorded progress and warns when funds appear to have been pulled out (setback amount shown). 51 Free engines total. Table-driven tests.
 
 - **SMART series — Free engine BL8 (paycheck-aligned grouping) (2026-06-24):** infers the user's payday from recent income and flags how many upcoming bills (and their total) fall before the next paycheck, surfacing a between-paycheck cash crunch. 49 Free engines total. Table-driven tests.
