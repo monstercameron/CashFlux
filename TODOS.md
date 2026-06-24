@@ -24,7 +24,7 @@ packages have no `syscall/js` and ship with table-driven tests.
       before blob upload; decrypt on download; legacy plaintext still readable; no-passcode = unchanged.
 - [x] **EC3. Admin console screen (GWC)** — `/admin` overview cards + users table from EC1; admin-gated;
       a11y + i18n + keyboard.
-- [ ] **EC4. Strong homescreen** — signed-out value/CTA + signed-in glanceable summary above the bento.
+- [x] **EC4. Strong homescreen** — signed-out value/CTA + signed-in glanceable summary above the bento.
 - [ ] **EC5. Verification + docs** — encrypted dataset+artifacts end-to-end; admin gating; README/SPEC note.
 
 ---
