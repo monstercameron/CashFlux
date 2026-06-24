@@ -6,14 +6,18 @@ package screens
 
 import (
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartai"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -24,8 +28,8 @@ import (
 
 // smartAIConn is the resolved transport for a smart AI call: either the hosted
 // backend proxy or the user's own OpenAI key. The hub reads prefs/settings at a
-// stable render position and passes this down, so the call helpers stay free of
-// hooks.
+// stable render position and passes this down, so the call helpers stay
+// hook-free.
 type smartAIConn struct {
 	Backend     bool
 	ServerURL   string
@@ -35,12 +39,7 @@ type smartAIConn struct {
 
 // resolveAIConn builds the transport config from the app's settings + prefs.
 func resolveAIConn(app *appstate.App, backendActive bool, serverURL, serverToken string) smartAIConn {
-	return smartAIConn{
-		Backend:     backendActive,
-		ServerURL:   serverURL,
-		ServerToken: serverToken,
-		Key:         app.Settings().OpenAIKey,
-	}
+	return smartAIConn{Backend: backendActive, ServerURL: serverURL, ServerToken: serverToken, Key: app.Settings().OpenAIKey}
 }
 
 // sendSmartAIOn places one call on a specific model via the resolved transport.
@@ -54,25 +53,31 @@ func sendSmartAIOn(c smartAIConn, model string, req smartai.Request, onResult fu
 	ai.SendChat(c.Key, ai.DefaultBaseURL, model, msgs, 0, onR, onError)
 }
 
-// runSmartAI runs a request under the product's routing policy: the cheap, fast
-// gpt-5.4-mini first, escalating ONCE to gpt-5.5 when the mini answer isn't good
-// enough (smartai.Acceptable is false). The escalation buys capability without
-// paying for full-effort reasoning (see aiprovider.SmartEscalationProfile).
+// runSmartAI runs a request under the product routing policy: gpt-5.4-mini first,
+// escalating ONCE to gpt-5.5 when the mini answer isn't good enough.
 func runSmartAI(c smartAIConn, req smartai.Request, onResult func(string), onError func(string)) {
 	sendSmartAIOn(c, aiprovider.SmartModelID, req, func(text string) {
 		if smartai.Acceptable(text) {
 			onResult(text)
 			return
 		}
-		// Not good enough — escalate to the stronger model.
 		sendSmartAIOn(c, aiprovider.SmartEscalationModelID, req, onResult, onError)
 	}, onError)
 }
 
-// accountContextString builds a compact, plain-text snapshot of the user's
-// non-archived accounts and balances for grounding an AI answer. It is capped so
-// a large household doesn't blow the prompt budget.
-func accountContextString(app *appstate.App, rates currency.Rates) string {
+// ratesOf builds the household rate table from the app's settings (no hooks).
+func ratesOf(app *appstate.App) currency.Rates {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return currency.Rates{Base: base, Rates: app.Settings().FXRates}
+}
+
+// --- context builders (all hook-free; safe to call at click time) ---------
+
+// accountContextString is a compact snapshot of non-archived accounts + balances.
+func accountContextString(app *appstate.App) string {
 	var b strings.Builder
 	n := 0
 	for _, a := range app.Accounts() {
@@ -83,13 +88,7 @@ func accountContextString(app *appstate.App, rates currency.Rates) string {
 		if err != nil {
 			continue
 		}
-		b.WriteString("- ")
-		b.WriteString(a.Name)
-		b.WriteString(" (")
-		b.WriteString(string(a.Type))
-		b.WriteString("): ")
-		b.WriteString(fmtMoney(bal))
-		b.WriteByte('\n')
+		b.WriteString("- " + a.Name + " (" + string(a.Type) + "): " + fmtMoney(bal) + "\n")
 		if n++; n >= 25 {
 			break
 		}
@@ -100,16 +99,104 @@ func accountContextString(app *appstate.App, rates currency.Rates) string {
 	return b.String()
 }
 
-// smartAskBarProps carries everything the A5 ask bar needs without hooks.
-type smartAskBarProps struct {
-	Conn smartAIConn
-	Cost string // pre-formatted per-question cost estimate
+// financialContextString summarizes net worth and this-month flows.
+func financialContextString(app *appstate.App) string {
+	rates := ratesOf(app)
+	accounts, txns := app.Accounts(), app.Transactions()
+	net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
+	var b strings.Builder
+	b.WriteString("Net worth: " + fmtMoney(net) + " (assets " + fmtMoney(assets) + ", debts " + fmtMoney(liab) + ")\n")
+	start, end := dateutil.MonthRange(time.Now())
+	if income, expense, err := ledger.PeriodTotals(txns, start, end, rates); err == nil {
+		b.WriteString("This month — income " + fmtMoney(income) + ", spending " + fmtMoney(expense) + "\n")
+	}
+	return b.String()
 }
 
-// smartAskBar is the SMART-A5 natural-language account Q&A control: an input, an
-// Ask button with a visible per-question cost, and the answer. Its own component
-// so its state hooks sit at stable positions.
-func smartAskBar(props smartAskBarProps) ui.Node {
+// subsContextString lists the detected subscriptions for the overlap check.
+func subsContextString(app *appstate.App) string {
+	subs, err := subscriptions.Detect(app.Transactions(), ratesOf(app), 3)
+	if err != nil || len(subs) == 0 {
+		return "(no subscriptions detected)"
+	}
+	var b strings.Builder
+	for i, s := range subs {
+		if i >= 30 {
+			break
+		}
+		b.WriteString("- " + s.Name + ": " + fmtMoney(money.New(s.Amount, s.Currency)) + "/" + string(s.Cadence) + "\n")
+	}
+	return b.String()
+}
+
+// --- generic AI feature spec + controls -----------------------------------
+
+// aiFeatureSpec describes how to render and build a request for one AI feature.
+// Input features show an entry field; the rest show a single action button. The
+// build closure runs at click time with the live app, so it always sees current
+// data and never calls a hook.
+type aiFeatureSpec struct {
+	input       bool
+	title       string
+	placeholder string
+	btnLabel    string
+	build       func(app *appstate.App, question string) smartai.Request
+}
+
+// aiSpec returns the render spec for an implemented AI feature.
+func aiSpec(code string) (aiFeatureSpec, bool) {
+	switch code {
+	case "SMART-A5":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.askTitle"), placeholder: uistate.T("smart.askPlaceholder"),
+			build: func(app *appstate.App, q string) smartai.Request {
+				return smartai.AccountQA(q, accountContextString(app))
+			}}, true
+	case "SMART-A10":
+		return aiFeatureSpec{title: uistate.T("smart.healthTitle"), btnLabel: uistate.T("smart.healthBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request {
+				return smartai.AccountHealth(accountContextString(app))
+			}}, true
+	case "SMART-G4":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.goalTitle"), placeholder: uistate.T("smart.goalPlaceholder"),
+			build: func(app *appstate.App, q string) smartai.Request {
+				return smartai.GoalDraft(q, financialContextString(app))
+			}}, true
+	case "SMART-P2":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.scenarioTitle"), placeholder: uistate.T("smart.scenarioPlaceholder"),
+			build: func(app *appstate.App, q string) smartai.Request {
+				return smartai.ScenarioDraft(q, financialContextString(app))
+			}}, true
+	case "SMART-P3":
+		return aiFeatureSpec{title: uistate.T("smart.outlookTitle"), btnLabel: uistate.T("smart.outlookBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request { return smartai.Outlook(financialContextString(app)) }}, true
+	case "SMART-AL4":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.allocTitle"), placeholder: uistate.T("smart.allocPlaceholder"),
+			build: func(app *appstate.App, q string) smartai.Request {
+				return smartai.AllocationIntent(q, financialContextString(app))
+			}}, true
+	case "SMART-SU2":
+		return aiFeatureSpec{title: uistate.T("smart.overlapTitle"), btnLabel: uistate.T("smart.overlapBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request {
+				return smartai.OverlapDetect(subsContextString(app))
+			}}, true
+	case "SMART-D4":
+		return aiFeatureSpec{input: true, title: uistate.T("smart.todoTitle"), placeholder: uistate.T("smart.todoPlaceholder"),
+			build: func(_ *appstate.App, q string) smartai.Request { return smartai.TodoParse(q) }}, true
+	}
+	return aiFeatureSpec{}, false
+}
+
+// smartAIControlProps carries one feature's spec + transport + cost label.
+type smartAIControlProps struct {
+	Code string
+	Spec aiFeatureSpec
+	Conn smartAIConn
+	Cost string
+}
+
+// smartAIControl renders one AI feature: an input bar or an action button, plus
+// the answer area. Its own component so the state hooks sit at stable positions.
+func smartAIControl(props smartAIControlProps) ui.Node {
 	question := ui.UseState("")
 	answer := ui.UseState("")
 	loading := ui.UseState(false)
@@ -117,22 +204,19 @@ func smartAskBar(props smartAskBarProps) ui.Node {
 
 	onInput := ui.UseEvent(func(v string) { question.Set(v) })
 
-	ask := ui.UseEvent(func() {
+	run := ui.UseEvent(func() {
+		if loading.Get() {
+			return
+		}
 		q := strings.TrimSpace(question.Get())
-		if q == "" || loading.Get() {
+		if props.Spec.input && q == "" {
 			return
 		}
 		app := appstate.Default
 		if app == nil {
 			return
 		}
-		base := app.Settings().BaseCurrency
-		if base == "" {
-			base = "USD"
-		}
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		req := smartai.AccountQA(q, accountContextString(app, rates))
-
+		req := props.Spec.build(app, q)
 		loading.Set(true)
 		errMsg.Set("")
 		answer.Set("")
@@ -142,48 +226,54 @@ func smartAskBar(props smartAskBarProps) ui.Node {
 		)
 	})
 
-	// Result area: error, answer, or nothing.
 	var result ui.Node = Fragment()
 	if errMsg.Get() != "" {
 		result = P(ClassStr(tw.Fold(tw.Text13, tw.TextDown, tw.Mt2)), errMsg.Get())
 	} else if answer.Get() != "" {
-		result = P(ClassStr(tw.Fold(tw.Text14, tw.Mt2)), Attr("data-testid", "smart-ai-answer"), answer.Get())
+		result = P(ClassStr(tw.Fold(tw.Text14, tw.Mt2)), Attr("data-testid", "smart-ai-answer-"+props.Code), answer.Get())
 	}
 
-	btnLabel := uistate.T("smart.ask")
+	btnLabel := props.Spec.btnLabel
+	if props.Spec.input {
+		btnLabel = uistate.T("smart.ask")
+	}
 	if loading.Get() {
 		btnLabel = uistate.T("smart.asking")
 	}
 
-	return Div(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap2, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
-		Attr("data-testid", "smart-ask-A5"),
-		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)),
-			Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), uistate.T("smart.askTitle")),
-			Span(ClassStr(tw.Fold(tw.Text11, tw.TextFaint)), props.Cost),
-		),
-		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
-			Input(Attr("id", "smart-ask-input"), css.Class("field field-wide"), Type("text"),
-				Attr("data-testid", "smart-ask-input"),
-				Attr("aria-label", uistate.T("smart.askPlaceholder")),
-				Placeholder(uistate.T("smart.askPlaceholder")),
+	var control ui.Node
+	if props.Spec.input {
+		control = Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
+			Input(css.Class("field field-wide"), Type("text"),
+				Attr("data-testid", "smart-ai-input-"+props.Code),
+				Attr("aria-label", props.Spec.placeholder), Placeholder(props.Spec.placeholder),
 				Value(question.Get()), OnInput(onInput),
 			),
 			Button(css.Class("btn btn-primary"), Type("button"),
-				Attr("data-testid", "smart-ask-btn"),
-				OnClick(ask),
-				btnLabel,
+				Attr("data-testid", "smart-ai-btn-"+props.Code), OnClick(run), btnLabel,
 			),
+		)
+	} else {
+		control = Button(ClassStr("btn btn-primary "+tw.Fold(tw.SelfStart)), Type("button"),
+			Attr("data-testid", "smart-ai-btn-"+props.Code), OnClick(run), btnLabel,
+		)
+	}
+
+	return Div(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap2, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
+		Attr("data-testid", "smart-ai-feature-"+props.Code),
+		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)),
+			Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), props.Spec.title),
+			Span(ClassStr(tw.Fold(tw.Text11, tw.TextFaint)), props.Cost),
 		),
+		control,
 		result,
 	)
 }
 
-// smartAISection renders the interactive AI features the user has enabled and
-// that have a shipped UI. It is only shown when an inference provider is
-// configured (the AI cost is real, so the gate is honest); otherwise it shows a
-// short "configure a provider" hint instead of dead controls.
+// smartAISection renders the enabled, implemented AI features. It is shown only
+// when an inference provider is configured (the AI cost is real, so the gate is
+// honest); otherwise it shows a "configure a provider" hint, never dead controls.
 func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool) ui.Node {
-	// Which implemented AI features are enabled?
 	var enabled []smart.Feature
 	for _, f := range smart.Catalog() {
 		if f.Tier == smart.TierAI && smartai.Implemented(f.Code) && settings.IsEnabled(f.Code) {
@@ -194,111 +284,22 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 		return Fragment()
 	}
 	if !hasProvider {
-		return uiw.Card(uiw.CardProps{
-			Title:  uistate.T("smart.aiTitle"),
-			TestID: "smart-ai",
-			Body:   P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.aiNeedsProvider")),
-		})
+		return uiw.Card(uiw.CardProps{Title: uistate.T("smart.aiTitle"), TestID: "smart-ai",
+			Body: P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.aiNeedsProvider"))})
 	}
-	return uiw.Card(uiw.CardProps{
-		Title:  uistate.T("smart.aiTitle"),
-		TestID: "smart-ai",
+	return uiw.Card(uiw.CardProps{Title: uistate.T("smart.aiTitle"), TestID: "smart-ai",
 		Body: Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap3)),
 			MapKeyed(enabled,
 				func(f smart.Feature) any { return f.Code },
-				func(f smart.Feature) ui.Node { return smartAIControl(f, conn) },
+				func(f smart.Feature) ui.Node {
+					spec, ok := aiSpec(f.Code)
+					if !ok {
+						return Fragment()
+					}
+					cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
+					return ui.CreateElement(smartAIControl, smartAIControlProps{Code: f.Code, Spec: spec, Conn: conn, Cost: cost})
+				},
 			),
 		),
 	})
-}
-
-// smartAIControl renders the interactive control for one implemented AI feature.
-func smartAIControl(f smart.Feature, conn smartAIConn) ui.Node {
-	cost := uistate.T("smart.aiCostPrefix") + " " + smart.FormatCents(f.EstimateCost(false).Cents) + uistate.T("smart.perUse")
-	switch f.Code {
-	case "SMART-A5":
-		return ui.CreateElement(smartAskBar, smartAskBarProps{Conn: conn, Cost: cost})
-	case "SMART-P3":
-		return ui.CreateElement(smartOutlookCard, smartOutlookProps{Conn: conn, Cost: cost})
-	default:
-		return Fragment()
-	}
-}
-
-// outlookContextString builds a compact snapshot of the household's position for
-// the P3 narration: net worth, this-month income/expense/net, and liquid cash.
-func outlookContextString(app *appstate.App, rates currency.Rates) string {
-	accounts := app.Accounts()
-	txns := app.Transactions()
-	net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
-	var b strings.Builder
-	b.WriteString("Net worth: " + fmtMoney(net) + " (assets " + fmtMoney(assets) + ", debts " + fmtMoney(liab) + ")\n")
-	w := uistate.UsePeriod().Get()
-	start, end := w.Range()
-	income, expense, err := ledger.PeriodTotals(txns, start, end, rates)
-	if err == nil {
-		b.WriteString("This period — income " + fmtMoney(income) + ", spending " + fmtMoney(expense) + "\n")
-	}
-	return b.String()
-}
-
-// smartOutlookProps carries the P3 narration control's config.
-type smartOutlookProps struct {
-	Conn smartAIConn
-	Cost string
-}
-
-// smartOutlookCard is the SMART-P3 control: a "Summarize my outlook" button that
-// narrates the live figures into one plain-English paragraph. Its own component
-// for stable state hooks.
-func smartOutlookCard(props smartOutlookProps) ui.Node {
-	answer := ui.UseState("")
-	loading := ui.UseState(false)
-	errMsg := ui.UseState("")
-
-	run := ui.UseEvent(func() {
-		if loading.Get() {
-			return
-		}
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		base := app.Settings().BaseCurrency
-		if base == "" {
-			base = "USD"
-		}
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		req := smartai.Outlook(outlookContextString(app, rates))
-		loading.Set(true)
-		errMsg.Set("")
-		answer.Set("")
-		runSmartAI(props.Conn, req,
-			func(text string) { loading.Set(false); answer.Set(strings.TrimSpace(text)) },
-			func(e string) { loading.Set(false); errMsg.Set(e) },
-		)
-	})
-
-	var result ui.Node = Fragment()
-	if errMsg.Get() != "" {
-		result = P(ClassStr(tw.Fold(tw.Text13, tw.TextDown, tw.Mt2)), errMsg.Get())
-	} else if answer.Get() != "" {
-		result = P(ClassStr(tw.Fold(tw.Text14, tw.Mt2)), Attr("data-testid", "smart-outlook-answer"), answer.Get())
-	}
-	btnLabel := uistate.T("smart.outlookBtn")
-	if loading.Get() {
-		btnLabel = uistate.T("smart.asking")
-	}
-
-	return Div(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap2, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
-		Attr("data-testid", "smart-outlook-P3"),
-		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2)),
-			Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), uistate.T("smart.outlookTitle")),
-			Span(ClassStr(tw.Fold(tw.Text11, tw.TextFaint)), props.Cost),
-		),
-		Button(ClassStr("btn btn-primary "+tw.Fold(tw.SelfStart)), Type("button"),
-			Attr("data-testid", "smart-outlook-btn"), OnClick(run), btnLabel,
-		),
-		result,
-	)
 }

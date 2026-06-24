@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **SMART series — 6 more AI features via a generic, data-driven control (2026-06-24):** generalized the AI hub into one `smartAIControl` driven by an `aiSpec(code)` table, so adding an AI feature is a prompt builder + an `Implemented` flag + a spec row. Added **A10** (explain account health), **G4** (draft a goal from a plain-English wish), **P2** (plain-language what-if scenario), **AL4** (allocate in plain English), **SU2** (find overlapping subscriptions), and **D4** (add a to-do in plain English) — 8 AI features total alongside A5/P3. Each reuses the gpt-5.4-mini→5.5 routing, shows its per-use cost, and is gated behind a configured provider. Context builders are hook-free (safe at click time; fixed the outlook builder to use `dateutil.MonthRange` instead of the period hook). Pure `smartai` builders unit-tested; e2e still 16/16.
 - **SMART series — Free engine P4 (suggested affordability inputs) (2026-06-24):** derives a sensible cash buffer from real essential monthly spend so the runway floor and the "Can I afford it?" reserve are grounded in actual spending, not a guess. 37 Free engines total. Table-driven tests.
 
 - **SMART series — Free engine P1 (auto-discovered recurring) (2026-06-24):** scans transaction history (reusing subscriptions.Detect) for recurring charges not yet in the Planning recurring set and nudges the user to add them (with the estimated monthly total) for a sharper forecast and runway. 36 Free engines total. Table-driven tests.

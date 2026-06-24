@@ -22,8 +22,14 @@ type Request struct {
 // /smart catalog only offers a toggle for AI features that actually do something
 // (mirroring the Free-engine HasEngine gate). It grows as features ship.
 var implemented = map[string]bool{
-	"SMART-A5": true, // natural-language account Q&A
-	"SMART-P3": true, // narrated forecast/outlook summary
+	"SMART-A5":  true, // natural-language account Q&A
+	"SMART-A10": true, // account health explanation
+	"SMART-G4":  true, // goal drafting from a wish
+	"SMART-P2":  true, // plain-language scenario draft
+	"SMART-P3":  true, // narrated forecast/outlook summary
+	"SMART-AL4": true, // plain-language allocation intent
+	"SMART-SU2": true, // overlapping-service detection
+	"SMART-D4":  true, // natural-language to-do quick-add
 }
 
 // Implemented reports whether the AI feature has a shipped UI.
@@ -88,4 +94,67 @@ const OutlookSystem = "You are a calm personal-finance assistant. Given the figu
 // household's position (net worth, this-month flows, runway, upcoming bills).
 func Outlook(context string) Request {
 	return Request{System: OutlookSystem, User: "Figures:\n" + strings.TrimSpace(context)}
+}
+
+// goalDraftSystem frames SMART-G4: turn a plain-English wish into a concrete plan.
+const goalDraftSystem = "You help set savings goals. From the user's wish, draft a concrete goal: a target amount, " +
+	"a sensible deadline, and the monthly contribution it implies. If they gave an amount or date, use it; otherwise " +
+	"propose reasonable ones and say they're estimates. Two or three short sentences, plain English, no lists."
+
+// GoalDraft builds the SMART-G4 request from the user's plain-language wish and a
+// short snapshot of what they can afford (e.g. typical monthly surplus).
+func GoalDraft(wish, financialContext string) Request {
+	return Request{System: goalDraftSystem,
+		User: "Your situation:\n" + strings.TrimSpace(financialContext) + "\n\nWish: " + strings.TrimSpace(wish)}
+}
+
+// healthSystem frames SMART-A10: explain account health in plain language.
+const healthSystem = "You are a finance assistant. Given the accounts and balances, give a brief plain-English read " +
+	"of the person's account health — what looks healthy, what to watch (idle cash, high utilization, thin buffers). " +
+	"Two or three sentences, specific numbers, no lists, no disclaimers."
+
+// AccountHealth builds the SMART-A10 request from an account/balance snapshot.
+func AccountHealth(accountContext string) Request {
+	return Request{System: healthSystem, User: "Accounts:\n" + strings.TrimSpace(accountContext)}
+}
+
+// overlapSystem frames SMART-SU2: spot redundant subscriptions.
+const overlapSystem = "You review subscriptions for redundancy. Given the list, name any that overlap in purpose " +
+	"(e.g. two music services, several streaming, overlapping cloud storage) and suggest keeping one. If none overlap, " +
+	"say so. Two or three sentences, plain English, no lists."
+
+// OverlapDetect builds the SMART-SU2 request from a subscription list snapshot.
+func OverlapDetect(subscriptionContext string) Request {
+	return Request{System: overlapSystem, User: "Subscriptions:\n" + strings.TrimSpace(subscriptionContext)}
+}
+
+// allocationSystem frames SMART-AL4: turn intent into allocation settings.
+const allocationSystem = "You help allocate spare cash. From the user's plain-English intent, recommend an allocation " +
+	"approach: which profile (debt, safety, goals, balanced), how much to hold in reserve, and any per-destination cap. " +
+	"Two or three short sentences, plain English, no lists."
+
+// AllocationIntent builds the SMART-AL4 request from intent + a money snapshot.
+func AllocationIntent(intent, financialContext string) Request {
+	return Request{System: allocationSystem,
+		User: "Your situation:\n" + strings.TrimSpace(financialContext) + "\n\nIntent: " + strings.TrimSpace(intent)}
+}
+
+// scenarioSystem frames SMART-P2: draft a what-if scenario in plain English.
+const scenarioSystem = "You help plan what-if scenarios. From the user's sentence, describe the scenario as a concrete " +
+	"plan: the recurring changes (raises, extra payments) and any one-time items, and a one-line read of the likely effect. " +
+	"Two or three short sentences, plain English, no lists."
+
+// ScenarioDraft builds the SMART-P2 request from the sentence + a money snapshot.
+func ScenarioDraft(sentence, financialContext string) Request {
+	return Request{System: scenarioSystem,
+		User: "Your situation:\n" + strings.TrimSpace(financialContext) + "\n\nScenario: " + strings.TrimSpace(sentence)}
+}
+
+// todoSystem frames SMART-D4: parse a sentence into a clean to-do.
+const todoSystem = "You turn a sentence into a single concise financial to-do. Reply with just the to-do text " +
+	"(imperative, includes any amount and date the user gave). One line, no quotes, no preamble."
+
+// TodoParse builds the SMART-D4 request from the user's sentence.
+func TodoParse(sentence string) Request {
+	return Request{System: todoSystem, User: strings.TrimSpace(sentence)}
 }
