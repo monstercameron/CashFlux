@@ -124,11 +124,45 @@ try {
   if ((await page.locator(".wb-tile .vb-chart").count()) === 0) fail("spend-trend did not render a chart");
   if ((await page.locator(".wb-tile .vb-chart svg path").count()) === 0) fail("line trend has no D3 svg path");
 
+  // 4d) Net-worth trend: the 6-month end-of-month series → area chart (dataset →
+  // group-by-month keep-order → area) renders an SVG with a filled area path.
+  await page.locator('.vb-toolbar select').first().selectOption("networth-trend");
+  await page.waitForTimeout(600);
+  if ((await page.locator(".wb-tile .vb-chart svg").count()) === 0) fail("networth-trend did not render a D3 svg");
+
+  // 4e) Cash flow: income − spending via a formula node → a stat figure (the dashboard's
+  // surplus/deficit number). Confirms scalar→formula→viz wiring produces a money figure.
+  await page.locator('.vb-toolbar select').first().selectOption("cashflow");
+  await page.waitForTimeout(500);
+  {
+    const figTxt = (await page.locator(".wb-tile .fig.t-figure").first().textContent()) || "";
+    if (!/[0-9]/.test(figTxt)) fail(`cashflow stat figure is not numeric: "${figTxt}"`);
+  }
+
+  // 4f) Assets KPI with month-over-month subline — the 1:1 clone of the dashboard assets
+  // tile: a KPI figure PLUS a subline string fed from the net-worth string surface.
+  await page.locator('.vb-toolbar select').first().selectOption("assets-card");
+  await page.waitForTimeout(500);
+  if ((await page.locator(".wb-tile .fig.t-figure").count()) === 0) fail("assets-card did not render a KPI figure");
+  {
+    // The subline is the dashboard's exact text ("▲ x% (+$…) this month", "… this month",
+    // or "No change this month"); assert a non-empty caption is present under the figure.
+    const subTxt = (await page.locator(".wb-tile .wbody p, .wb-tile .wbody .t-caption").last().textContent()) || "";
+    if (subTxt.trim().length === 0) fail("assets-card KPI is missing its month-over-month subline");
+  }
+
   // 5) Another preset: recent transactions → a list/table renders.
   await page.locator('.vb-toolbar select').first().selectOption("recent");
   await page.waitForTimeout(500);
   if ((await page.locator(".wb-tile .vb-table").count()) === 0) fail("recent preset did not render a list/table");
   if ((await page.locator(".wb-tile .vb-table tbody tr").count()) === 0) fail("list/table has no rows");
+  // The recent clone matches the dashboard tile: headerless table, and the amount column
+  // is accounting money (a currency symbol), not a bare number.
+  if ((await page.locator(".wb-tile .vb-table thead").count()) !== 0) fail("recent list should be headerless like the dashboard tile");
+  {
+    const moneyCells = await page.locator(".wb-tile .vb-table tbody tr td.fig").allTextContents();
+    if (!moneyCells.some((t) => /[$€£¥]/.test(t))) fail(`recent list amount column is not currency-formatted: ${JSON.stringify(moneyCells.slice(0, 4))}`);
+  }
 
   // 6) Wiring via the inspector: on the recent-list graph, select the dataset node and
   // confirm an input-source dropdown drives connections (the list node has an "in"
