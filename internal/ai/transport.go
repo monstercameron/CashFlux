@@ -88,6 +88,127 @@ func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, im
 	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
 }
 
+// SendResponsesWebSearch posts a Responses API request (POST /responses) with the
+// hosted web_search tool enabled. It is the wasm-only transport counterpart to
+// BuildResponsesWebSearchRequest + ParseResponsesText (which live in the pure
+// responses.go file so they can be tested natively).
+//
+// Same async contract as SendChat: exactly one of onResult / onError fires;
+// the returned func() aborts the in-flight request. Retries follow the same
+// IsRetryable / RetryDelayMS policy as postCompletions.
+func SendResponsesWebSearch(apiKey, baseURL, model, input string, onResult func(text string, u Usage), onError func(string)) func() {
+	body, err := BuildResponsesWebSearchRequest(model, input)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	return postResponses(apiKey, baseURL, body, func(data []byte) {
+		text, usage, err := ParseResponsesText(data)
+		if err != nil {
+			onError(err.Error())
+			return
+		}
+		onResult(text, usage)
+	}, onError)
+}
+
+// postResponses is the low-level fetch helper for the Responses API endpoint
+// (POST /responses). It mirrors postCompletions in structure — AbortController,
+// retry-on-transient, js.Func lifecycle — but targets /responses instead of
+// /chat/completions.
+func postResponses(apiKey, baseURL string, body []byte, onSuccess func([]byte), onError func(string)) func() {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+
+	controller := js.Global().Get("AbortController").New()
+	opts := map[string]any{
+		"method": "POST",
+		"headers": map[string]any{
+			"Authorization": "Bearer " + apiKey,
+			"Content-Type":  "application/json",
+		},
+		"body":   string(body),
+		"signal": controller.Get("signal"),
+	}
+
+	cancelled := false
+	var pendingTimer js.Value
+	timerSet := false
+	cancel := func() {
+		if cancelled {
+			return
+		}
+		cancelled = true
+		controller.Call("abort")
+		if timerSet {
+			js.Global().Call("clearTimeout", pendingTimer)
+			timerSet = false
+		}
+	}
+
+	var attempt func(n int)
+	attempt = func(n int) {
+		if cancelled {
+			return
+		}
+		var onText, onResp, onCatch js.Func
+		release := func() { onText.Release(); onResp.Release(); onCatch.Release() }
+
+		retryOrFail := func(status int, msg string) {
+			ms, ok := RetryDelayMS(n)
+			if !IsRetryable(status) || !ok {
+				onError(msg)
+				return
+			}
+			var timer js.Func
+			timer = js.FuncOf(func(js.Value, []js.Value) any {
+				timer.Release()
+				timerSet = false
+				attempt(n + 1)
+				return nil
+			})
+			pendingTimer = js.Global().Call("setTimeout", timer, ms)
+			timerSet = true
+		}
+
+		status := 0
+		onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			status = args[0].Get("status").Int()
+			return args[0].Call("text")
+		})
+		onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			data := []byte(args[0].String())
+			release()
+			if cancelled {
+				return nil
+			}
+			switch {
+			case status >= 400:
+				retryOrFail(status, ErrorMessage(status, data))
+			default:
+				onSuccess(data)
+			}
+			return nil
+		})
+		onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			release()
+			if cancelled {
+				return nil
+			}
+			retryOrFail(0, "Couldn't reach OpenAI. Check your internet connection and try again.")
+			return nil
+		})
+
+		js.Global().Call("fetch", baseURL+"/responses", opts).
+			Call("then", onResp).
+			Call("then", onText).
+			Call("catch", onCatch)
+	}
+	attempt(0)
+	return cancel
+}
+
 // postCompletions sends a prebuilt request body to the chat-completions endpoint
 // and routes the parsed result (or a plain-English error) to the callbacks. It
 // owns the fetch promise chain, releases its js.Funcs per attempt, and retries

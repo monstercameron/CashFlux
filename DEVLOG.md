@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — FX AI fetch (Responses API + review-before-apply)
+
+Added "Fetch live rates with AI" to the Settings FX-rates editor. Uses OpenAI Responses API (gpt-5.5 + hosted web_search tool) to fetch today's mid-market rates. Rates are shown as proposed values (current → proposed, asOf date, AI-sourced warning, cost estimate); user applies per-row or all at once via the existing setRate path. Button is gated on a configured OpenAI key. New files: internal/ai/responses.go + responses_test.go, internal/currency/fxai.go + fxai_test.go.
+
 ## 2026-06-24 — SMART proactive digest via the notification feed
 
 The SMART layer was previously pull-only — the user had to open the hub or a page strip to see

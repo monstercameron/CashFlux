@@ -28,6 +28,7 @@ type settingsLeftProps struct {
 	OnMethod      uic.Handler // UseEvent(func(e uic.Event){…})
 	CurMethod     budgeting.Methodology
 	FXRows        []uic.Node
+	FXAIFetch     uic.Node // AI live-rate fetch panel (nil when no key configured)
 	ScreenToggles []uic.Node
 	FreshnessRows []uic.Node
 }
@@ -58,6 +59,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		H4(css.Class("set-label"), uistate.T("settings.exchangeRates")),
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
+		p.FXAIFetch,
 		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
@@ -76,7 +78,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 type settingsRightProps struct {
 	// Appearance
 	Pr               prefs.Prefs
-	OnAppearanceLink func() // closes panel + navigates to /appearance
+	OnAppearanceLink func()      // closes panel + navigates to /appearance
 	OnDateStyle      uic.Handler // UseEvent
 	OnWeekStart      func(string)
 	// AI

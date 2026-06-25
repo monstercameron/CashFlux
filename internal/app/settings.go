@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
@@ -476,16 +477,20 @@ func globalSettingsForm() uic.Node {
 	var members []domain.Member
 	base := "USD"
 	var fxRows []uic.Node
+	var fxNonBaseCodes []string
+	var fxCurrentRates map[string]float64
 	if app := appstate.Default; app != nil {
 		members = app.Members()
 		s := app.Settings()
 		if s.BaseCurrency != "" {
 			base = s.BaseCurrency
 		}
+		fxCurrentRates = s.FXRates
 		for _, code := range currency.Codes() {
 			if code == base {
 				continue
 			}
+			fxNonBaseCodes = append(fxNonBaseCodes, code)
 			stale := false
 			if s.FXUpdatedAt != nil {
 				stale = currency.RateStale(s.FXUpdatedAt[code], time.Now(), currency.DefaultRateMaxAge)
@@ -694,6 +699,23 @@ func globalSettingsForm() uic.Node {
 		}))
 	}
 
+	// fxAIFetchNode is the live-rate fetch panel; it owns its async hooks so it
+	// must be created via CreateElement (not inlined). Pass the resolved API key
+	// and base URL directly so the component never reads appstate inside a hook.
+	fxAIFetchAPIKey := ""
+	fxAIFetchBaseURL := ai.DefaultBaseURL
+	if a := appstate.Default; a != nil {
+		fxAIFetchAPIKey = a.Settings().OpenAIKey
+	}
+	fxAIFetchNode := uic.CreateElement(fxAIFetch, fxAIFetchProps{
+		APIKey:       fxAIFetchAPIKey,
+		BaseURL:      fxAIFetchBaseURL,
+		Base:         base,
+		Codes:        fxNonBaseCodes,
+		CurrentRates: fxCurrentRates,
+		OnSet:        setRate,
+	})
+
 	left := settingsLeftColumn(settingsLeftProps{
 		MemberChips:   memberChips,
 		OnBase:        onBase,
@@ -701,6 +723,7 @@ func globalSettingsForm() uic.Node {
 		OnMethod:      onMethod,
 		CurMethod:     curMethod,
 		FXRows:        fxRows,
+		FXAIFetch:     fxAIFetchNode,
 		ScreenToggles: screenToggles,
 		FreshnessRows: freshnessRows,
 	})
@@ -898,6 +921,190 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
 		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "#cfa14e", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
+	)
+}
+
+// fxAIFetchProps configures the AI-powered exchange rate fetcher panel.
+type fxAIFetchProps struct {
+	// APIKey is the user's OpenAI key; empty means no key is configured.
+	APIKey string
+	// BaseURL is the OpenAI API base URL (for proxy compatibility).
+	BaseURL string
+	// Base is the base currency code (e.g. "USD").
+	Base string
+	// Codes is the list of non-base currency codes to fetch rates for.
+	Codes []string
+	// CurrentRates holds the rates already stored (code → current rate).
+	CurrentRates map[string]float64
+	// OnSet applies a rate; mirrors the outer setRate signature.
+	OnSet func(code string, rate float64)
+}
+
+// proposedRate holds one AI-proposed rate and its per-row apply state.
+type proposedRate struct {
+	Code     string
+	Proposed float64
+}
+
+// fxAIFetch is the "Fetch live rates with AI" panel inside the Settings FX
+// editor. It owns all state for the async request cycle (loading, error,
+// proposed rates) so its hooks sit at stable positions and never appear in
+// a loop. The button is gated on a configured OpenAI key — when no key is set
+// the panel shows a friendly hint instead.
+func fxAIFetch(props fxAIFetchProps) uic.Node {
+	loading := uic.UseState(false)
+	errMsg := uic.UseState("")
+	// proposed holds the AI's suggested rates, keyed and ordered for stable render.
+	proposed := uic.UseState[[]proposedRate](nil)
+	asOf := uic.UseState("")
+	costStr := uic.UseState("")
+
+	// cancelRef holds the in-flight abort func; replaced on each new request.
+	cancelRef := uic.UseState[func()](nil)
+
+	onFetch := uic.UseEvent(func() {
+		// Abort any previous in-flight request.
+		if c := cancelRef.Get(); c != nil {
+			c()
+		}
+		loading.Set(true)
+		errMsg.Set("")
+		proposed.Set(nil)
+		asOf.Set("")
+		costStr.Set("")
+
+		prompt := currency.BuildFXPrompt(props.Base, props.Codes)
+		model := "gpt-5.5"
+		cancel := ai.SendResponsesWebSearch(
+			props.APIKey,
+			props.BaseURL,
+			model,
+			prompt,
+			func(text string, u ai.Usage) {
+				loading.Set(false)
+				rates, date, err := currency.ParseFXReply(text, props.Base)
+				if err != nil {
+					errMsg.Set(uistate.T("settings.fxAIError", err.Error()))
+					return
+				}
+				result := make([]proposedRate, 0, len(rates))
+				for _, code := range props.Codes {
+					if r, ok := rates[code]; ok {
+						result = append(result, proposedRate{Code: code, Proposed: r})
+					}
+				}
+				proposed.Set(result)
+				asOf.Set(date)
+				if cost, ok := ai.EstimateCostUSD(model, u); ok {
+					costStr.Set(uistate.T("settings.fxAICost", ai.FormatCostUSD(cost)))
+				}
+			},
+			func(msg string) {
+				loading.Set(false)
+				errMsg.Set(uistate.T("settings.fxAIError", msg))
+			},
+		)
+		cancelRef.Set(cancel)
+	})
+
+	// Key is not configured — show a friendly hint, no button.
+	if props.APIKey == "" {
+		return P(css.Class(tw.TextFaint, tw.Text12, tw.Mt2), uistate.T("settings.fxAINoKey"))
+	}
+
+	rows := proposed.Get()
+	onApplyAll := uic.UseEvent(func() {
+		for _, r := range proposed.Get() {
+			props.OnSet(r.Code, r.Proposed)
+		}
+		proposed.Set(nil)
+	})
+
+	return Div(css.Class(tw.Mt2),
+		// Fetch button
+		Button(
+			css.Class("data-btn"),
+			Type("button"),
+			Attr("data-testid", "fx-ai-fetch"),
+			Attr("aria-label", uistate.T("settings.fxAIFetch")),
+			OnClick(onFetch),
+			IfElse(loading.Get(), Text(uistate.T("settings.fxAIFetching")), Text(uistate.T("settings.fxAIFetch"))),
+		),
+
+		// Error display
+		If(errMsg.Get() != "",
+			P(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--color-danger, #e05252)", "margin-top": "0.4rem"}), errMsg.Get()),
+		),
+
+		// Review panel — only shown when we have proposed rates
+		If(len(rows) > 0,
+			Div(
+				Attr("data-testid", "fx-ai-review"),
+				css.Class(tw.Mt3),
+				P(css.Class(tw.Text12, tw.TextFaint), uistate.T("settings.fxAIReviewTitle")),
+				If(asOf.Get() != "", P(css.Class(tw.Text12, tw.TextFaint), uistate.T("settings.fxAIAsOf", asOf.Get()))),
+				If(costStr.Get() != "", P(css.Class(tw.Text12, tw.TextFaint), costStr.Get())),
+				Div(css.Class(tw.Mt2),
+					Map(rows, func(r proposedRate) uic.Node {
+						return uic.CreateElement(fxAIProposedRow, fxAIProposedRowProps{
+							Code:     r.Code,
+							Base:     props.Base,
+							Current:  props.CurrentRates[r.Code],
+							Proposed: r.Proposed,
+							OnApply: func() {
+								props.OnSet(r.Code, r.Proposed)
+								// Remove the row from proposed after applying.
+								next := make([]proposedRate, 0, len(proposed.Get()))
+								for _, p2 := range proposed.Get() {
+									if p2.Code != r.Code {
+										next = append(next, p2)
+									}
+								}
+								proposed.Set(next)
+							},
+						})
+					}),
+				),
+				Button(
+					css.Class("data-btn"),
+					Type("button"),
+					Attr("data-testid", "fx-ai-apply-all"),
+					OnClick(onApplyAll),
+					uistate.T("settings.fxAIApplyAll"),
+				),
+			),
+		),
+	)
+}
+
+// fxAIProposedRowProps carries the display data for one proposed-rate review row.
+type fxAIProposedRowProps struct {
+	Code     string
+	Base     string
+	Current  float64
+	Proposed float64
+	OnApply  func()
+}
+
+// fxAIProposedRow renders one proposed FX rate with the current rate for
+// comparison and an individual Apply button. Its own component so the click
+// hook sits at a stable position outside the Map loop.
+func fxAIProposedRow(props fxAIProposedRowProps) uic.Node {
+	onApply := uic.UseEvent(func() {
+		if props.OnApply != nil {
+			props.OnApply()
+		}
+	})
+	curStr := "—"
+	if props.Current > 0 {
+		curStr = strconv.FormatFloat(props.Current, 'f', -1, 64)
+	}
+	propStr := strconv.FormatFloat(props.Proposed, 'f', -1, 64)
+	return Div(css.Class("rate-row", tw.Mt1),
+		Span(Style(map[string]string{"width": "40px"}), props.Code),
+		Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.fxAICurrent")+": "+curStr),
+		Span(css.Class(tw.Text12), " → "+propStr+" "+props.Base),
+		Button(css.Class("data-btn"), Type("button"), OnClick(onApply), uistate.T("settings.fxAIApply")),
 	)
 }
 
