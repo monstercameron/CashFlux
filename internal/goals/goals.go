@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -201,6 +202,31 @@ func OverallProgress(goals []domain.Goal, includeArchived bool) (int, error) {
 		return 0, nil
 	}
 	return pct, nil
+}
+
+// Totals sums the saved (current) and target amounts across goals, converting
+// each to the base currency via rates. A missing/zero rate falls back to the raw
+// minor amount so a partially configured FX table still yields a usable headline
+// rather than dropping a goal silently. Archived goals are skipped unless
+// includeArchived is set. Both results are denominated in base.
+func Totals(goals []domain.Goal, rates currency.Rates, base string, includeArchived bool) (saved, target money.Money) {
+	var s, t int64
+	for _, g := range goals {
+		if !includeArchived && g.Archived {
+			continue
+		}
+		if c, err := rates.Convert(g.CurrentAmount, base); err == nil {
+			s += c.Amount
+		} else {
+			s += g.CurrentAmount.Amount
+		}
+		if c, err := rates.Convert(g.TargetAmount, base); err == nil {
+			t += c.Amount
+		} else {
+			t += g.TargetAmount.Amount
+		}
+	}
+	return money.New(s, base), money.New(t, base)
 }
 
 // MilestoneCrossed reports whether a contribution that moved the goal's progress

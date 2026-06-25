@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -78,6 +79,32 @@ func TestMonthlyNeededContributionProjectsToTargetDate(t *testing.T) {
 
 func goal(target, current int64) domain.Goal {
 	return domain.Goal{TargetAmount: usd(target), CurrentAmount: usd(current)}
+}
+
+func TestTotals(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
+	g1 := goal(100000, 30000)
+	g2 := goal(50000, 50000)
+	g3 := goal(20000, 10000)
+	g3.Archived = true
+
+	// Default: archived excluded.
+	saved, target := Totals([]domain.Goal{g1, g2, g3}, rates, "USD", false)
+	if saved.Amount != 80000 {
+		t.Errorf("saved = %d, want 80000 (30000+50000, archived excluded)", saved.Amount)
+	}
+	if target.Amount != 150000 {
+		t.Errorf("target = %d, want 150000 (100000+50000)", target.Amount)
+	}
+	if saved.Currency != "USD" {
+		t.Errorf("saved currency = %q, want USD", saved.Currency)
+	}
+
+	// includeArchived folds in g3.
+	saved2, target2 := Totals([]domain.Goal{g1, g2, g3}, rates, "USD", true)
+	if saved2.Amount != 90000 || target2.Amount != 170000 {
+		t.Errorf("with archived: saved=%d target=%d, want 90000/170000", saved2.Amount, target2.Amount)
+	}
 }
 
 func TestRemaining(t *testing.T) {

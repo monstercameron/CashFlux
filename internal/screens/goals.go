@@ -204,19 +204,7 @@ func Goals() ui.Node {
 	// don't dilute the headline figure). Each goal is converted to the base currency
 	// via the FX table; a missing rate falls back to raw minor units.
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	var savedTotal, targetTotal int64
-	for _, g := range activeGoals {
-		if c, err := rates.Convert(g.CurrentAmount, base); err == nil {
-			savedTotal += c.Amount
-		} else {
-			savedTotal += g.CurrentAmount.Amount
-		}
-		if c, err := rates.Convert(g.TargetAmount, base); err == nil {
-			targetTotal += c.Amount
-		} else {
-			targetTotal += g.TargetAmount.Amount
-		}
-	}
+	savedTotalM, targetTotalM := goalsvc.Totals(activeGoals, rates, base, false)
 	overallPct, _ := goalsvc.OverallProgress(activeGoals, false)
 
 	members := app.Members()
@@ -273,8 +261,8 @@ func Goals() ui.Node {
 
 	return Div(
 		If(len(allGoals) > 0, Div(css.Class("stat-grid"),
-			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
-			stat(uistate.T("goals.totalTarget"), fmtMoney(money.New(targetTotal, base)), ""),
+			stat(uistate.T("goals.savedSoFar"), fmtMoney(savedTotalM), "pos"),
+			stat(uistate.T("goals.totalTarget"), fmtMoney(targetTotalM), ""),
 			// Overall progress is the key goals figure — annotated with a smart explainer
 			// tooltip so users understand what the combined percentage represents.
 			Div(css.Class("stat"),
