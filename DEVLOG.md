@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Per-alert-type enable/disable in Notifications settings (C263)
+
+Goal: let users silence individual alert categories (bill-due, digest, etc.) without disabling all notifications.
+
+**Architecture decision — pure model in `internal/notify`:** `RuleConfig` is `map[string]bool` with absent-key-defaults-to-enabled semantics. This means new rules added to `DefaultRules()` automatically appear as enabled for existing users without any migration. `MarshalRuleConfig`/`UnmarshalRuleConfig` are the serialization boundary; the UI and run layers never deal with raw JSON.
+
+**Persistence — `SettingKVSet` not `KVSet`:** Rule config is a user preference that should survive data wipes (the same as theme, language, prefs). Used `SettingKVSet`/`SettingKVGet` via the `settingskv` SQLite partition. The key is exported from the notify package so callers don't need string constants.
+
+**UI — `alertRow` as its own component:** GoWebComponents prohibits `On*` hooks inside variable-length loops. Each alert row is a `uic.CreateElement(alertRow, ...)` call so the toggle's `UseState` and `OnChange` hook are registered at a stable position. The row also reads-back-then-writes the full config on each toggle, so two rows toggled quickly compose correctly (no lost writes).
+
+**E2E persistence timing:** The autosave tick fires every 4 seconds; `pagehide` fires synchronously on reload. After toggling, the test waits 5s before reload to guarantee at least one autosave tick lands before the page unloads, making persistence verification deterministic.
+
+**What's next:** C264 adds user-settable thresholds per alert type — the `Rule.Threshold` field is already the right seam.
+
 ## 2026-06-25 — Single-device disclosure note on Members screen (C274)
 
 Design ticket: surface the local-first / single-dataset limitation near where roles are displayed so users aren't confused about what Owner/Admin/Viewer actually controls.

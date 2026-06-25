@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
+	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -91,11 +92,27 @@ type widgetSettingsFormProps struct {
 // widget's registered widgetcfg.Schema generically (toggle/number/select),
 // bound to the persisted WidgetConfigs atom so changes survive reloads. Widgets
 // with no schema yet show a friendly placeholder.
-// notifySettings is the Settings-modal toggle for OS/browser notifications (C75):
-// flipping it on records the opt-in and requests permission; the catch-up runner
-// then posts browser notifications in addition to the in-app feed.
+// notifySettings is the Settings-modal section for notifications (C75, C263):
+//   - A browser-notification opt-in toggle.
+//   - A "Manage alerts" group with one on/off row per alert type (C263), so the
+//     user can silence specific event types without affecting others.
 func notifySettings() uic.Node {
 	on := uic.UseState(uistate.BrowserNotifyEnabled())
+	// Load the persisted rule config once at render time; each alertRow
+	// re-reads it on toggle so concurrent changes compose correctly.
+	cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+	rules := notify.DefaultRules()
+	rows := make([]any, 0, len(rules))
+	for _, r := range rules {
+		rows = append(rows, uic.CreateElement(alertRow, alertRowProps{
+			RuleID:  r.ID,
+			Label:   uistate.T(alertLabelKey(r.ID)),
+			Enabled: cfg.IsEnabled(r.ID),
+		}))
+	}
+	alertChildren := make([]any, 0, len(rules)+1)
+	alertChildren = append(alertChildren, Attr("data-testid", "settings-manage-alerts"))
+	alertChildren = append(alertChildren, rows...)
 	return Div(Attr("data-testid", "settings-notifications"),
 		H4(css.Class("set-label"), uistate.T("settings.notifyTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{
@@ -111,7 +128,60 @@ func notifySettings() uic.Node {
 				}
 			},
 		}),
+		H4(css.Class("set-label"), uistate.T("settings.manageAlerts")),
+		Div(alertChildren...),
 	)
+}
+
+// alertLabelKey maps a notify rule ID to its i18n key. Unknown IDs fall back to
+// the raw ID so a newly added rule is still labelled rather than blank.
+func alertLabelKey(ruleID string) string {
+	switch ruleID {
+	case "default-bill-due":
+		return "settings.alert.billDue"
+	case "default-budget":
+		return "settings.alert.budgetThreshold"
+	case "default-stale":
+		return "settings.alert.staleBalance"
+	case "default-digest":
+		return "settings.alert.digest"
+	case "default-backup":
+		return "settings.alert.backupDue"
+	case "default-large":
+		return "settings.alert.largeTransaction"
+	case "default-low-balance":
+		return "settings.alert.lowBalance"
+	case "default-paycheck":
+		return "settings.alert.paycheckLanded"
+	default:
+		return ruleID
+	}
+}
+
+type alertRowProps struct {
+	RuleID  string
+	Label   string
+	Enabled bool
+}
+
+// alertRow is a single per-alert-type toggle row. It is its own component so
+// the OnChange hook is registered at a stable position — not inside a loop (the
+// GoWebComponents On*-in-loop rule). A local state atom drives the toggle so
+// the switch reflects changes immediately without waiting for a parent re-render.
+func alertRow(props alertRowProps) uic.Node {
+	enabled := uic.UseState(props.Enabled)
+	return ui.ToggleRow(ui.ToggleRowProps{
+		Label: props.Label,
+		On:    enabled.Get(),
+		OnChange: func(v bool) {
+			enabled.Set(v)
+			// Re-read, mutate, and write back so concurrent toggles compose
+			// (each row owns exactly one key).
+			cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+			cfg[props.RuleID] = v
+			uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
+		},
+	})
 }
 
 // musicSettings is the Settings-modal control group for the background music: an

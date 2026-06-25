@@ -75,7 +75,8 @@ func runNotifyCatchUp() {
 	cands = append(cands, paycheckLandedCandidates(app, now)...)
 
 	log := loadDeliveredLog()
-	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
+	ruleCfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
 	saveDeliveredLog(log)
 	if len(out) == 0 {
 		return
