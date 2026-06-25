@@ -78,9 +78,18 @@ func Subscriptions() ui.Node {
 	}
 
 	// Partition detected subscriptions into active (not ignored) and ignored.
+	// C161/C151: drop entries that are really liability payments (loan/credit-card
+	// debits, lender-named charges) — they recur like subscriptions but aren't ones,
+	// and counting them inflated both the list and the annual total. IsLiabilityPayment
+	// checks the debiting account's class/type and lender-phrase labels.
+	allTxns := app.Transactions()
+	allAccts := app.Accounts()
 	var subs []subscriptions.Subscription
 	var ignoredSubs []subscriptions.Subscription
 	for _, s := range rawSubs {
+		if subscriptions.IsLiabilityPayment(s, allTxns, allAccts) {
+			continue
+		}
 		if ignoreMap[strings.ToLower(strings.TrimSpace(s.Name))] {
 			ignoredSubs = append(ignoredSubs, s)
 		} else {

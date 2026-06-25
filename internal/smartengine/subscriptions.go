@@ -11,6 +11,25 @@ import (
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 )
 
+// realSubs detects recurring charges and drops liability payments (loan/credit-card
+// debits, lender-named charges) so subscription insights never treat a mortgage or
+// card payment as a cancellable subscription (C161/C151). Mirrors the filter the
+// /subscriptions screen applies to its list + total.
+func realSubs(in Input) ([]subscriptions.Subscription, error) {
+	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	if err != nil {
+		return nil, err
+	}
+	out := subs[:0:0]
+	for _, s := range subs {
+		if subscriptions.IsLiabilityPayment(s, in.Transactions, in.Accounts) {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
 func init() {
 	register("SMART-SU1", su1CancelCandidates)
 	register("SMART-SU3", su3TrialConversion)
@@ -100,7 +119,7 @@ func su7UsageVsCost(in Input) []smart.Insight {
 		catCount[t.CategoryID]++
 	}
 	names := categoryNames(in.Categories)
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
@@ -139,7 +158,7 @@ func su12Attribution(in Input) []smart.Insight {
 	if len(in.Members) < 2 {
 		return nil // only relevant for multi-member households
 	}
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
@@ -196,7 +215,7 @@ const su9RenewalWindow = 7 // remind this many days before a renewal
 // SMART-SU9 — Renewal-timed reminder automation. For a subscription renewing
 // soon, offers a one-tap "should I keep this?" to-do a few days ahead.
 func su9RenewalReminders(in Input) []smart.Insight {
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
@@ -251,7 +270,7 @@ func su6CostCreep(in Input) []smart.Insight {
 // SMART-SU8 — "Forgotten since" surfacing. Ranks subscriptions whose last charge
 // is overdue past their cadence, surfacing the truly out-of-mind ones.
 func su8Forgotten(in Input) []smart.Insight {
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
@@ -282,7 +301,7 @@ const (
 // SMART-SU11 — Zombie-charge detection. Flags small, long-running recurring
 // charges that are easy to forget and worth a periodic "still using it?" check.
 func su11Zombie(in Input) []smart.Insight {
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
@@ -391,7 +410,7 @@ const (
 // rises, and a high share of recurring spend into a ranked "consider cutting"
 // shortlist with the yearly saving.
 func su1CancelCandidates(in Input) []smart.Insight {
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil || len(subs) == 0 {
 		return nil
 	}
@@ -433,7 +452,7 @@ func su1CancelCandidates(in Input) []smart.Insight {
 // SMART-SU4 — Annual-vs-monthly savings finder. For monthly subscriptions, flags
 // the typical saving of switching to an annual plan.
 func su4AnnualSavings(in Input) []smart.Insight {
-	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
+	subs, err := realSubs(in)
 	if err != nil {
 		return nil
 	}
