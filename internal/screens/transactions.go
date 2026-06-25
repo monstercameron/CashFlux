@@ -805,6 +805,12 @@ func Transactions() ui.Node {
 					OnSearch:      onFilterText,
 					FiltersLabel:  uistate.T("transactions.filters"),
 					FiltersTitle:  uistate.T("transactions.filtersTitle"),
+					ActiveAriaLabel: func(n int) string { // C57
+						if n == 0 {
+							return uistate.T("transactions.filters")
+						}
+						return uistate.T("transactions.filtersActiveAria", plural(n, "filter"))
+					},
 					FilterFields:  filtersBody,
 					Chips:         chips,
 					OnRemoveChip:  func(key string) { removeFilter(txnfilter.FilterField(key)) },

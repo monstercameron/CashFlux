@@ -32,6 +32,11 @@ type FilterToolbarProps struct {
 	FiltersLabel string   // trigger button text, e.g. "Filters"
 	FiltersTitle string   // popover title + trigger tooltip
 	FilterFields uic.Node // popover body: the labelled field controls
+	// ActiveAriaLabel builds the trigger's accessible name from the active-filter
+	// count (C57): the visible badge is aria-hidden, so without this a screen reader
+	// hears only "Filters" and never the count. Caller supplies a translated string
+	// (e.g. "Filters — 3 active"). Falls back to FiltersLabel when nil.
+	ActiveAriaLabel func(n int) string
 
 	Chips         []Chip           // active-filter chips (empty hides the row + badge)
 	OnRemoveChip  func(key string) // a chip's ✕
@@ -57,8 +62,13 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onSearch := uic.UseEvent(props.OnSearch)
 	n := len(props.Chips)
 
+	// C57: accessible name conveys the active count (the badge is aria-hidden).
+	ariaLabel := props.FiltersLabel
+	if props.ActiveAriaLabel != nil {
+		ariaLabel = props.ActiveAriaLabel(n)
+	}
 	trigger := Button(css.Class("btn filters-trigger"), Type("button"),
-		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle),
+		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle), Attr("aria-label", ariaLabel),
 		OnClick(func() { open.Set(true) }),
 		props.FiltersLabel,
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),

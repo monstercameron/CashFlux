@@ -1204,6 +1204,7 @@ var english = Catalog{
 	"transactions.clearSelection":      "Clear selection",
 	"transactions.summary":             "%s shown · net %s",
 	"transactions.filters":             "Filters",
+	"transactions.filtersActiveAria":   "Filters — %s active",
 	"transactions.filtersTitle":        "Filter transactions",
 	"transactions.removeFilter":        "Remove this filter",
 	"transactions.clearAllFilters":     "Clear all filters",
