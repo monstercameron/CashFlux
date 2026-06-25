@@ -71,6 +71,7 @@ func runNotifyCatchUp() {
 	cands = append(cands, weeklyDigestCandidates(app, now)...)
 	cands = append(cands, largeTransactionCandidates(app, now)...)
 	cands = append(cands, backupReminderCandidates(app, now)...)
+	cands = append(cands, lowBalanceCandidates(app, now)...)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
@@ -105,8 +106,8 @@ func runNotifyCatchUp() {
 	if len(out) > 1 {
 		msg = uistate.T("notify.summary", len(out))
 	}
-	notice := uistate.UseNotice()
-	notice.Set(notice.Get().With(msg, false))
+	// PostNotice (not the UseNotice hook) — boot context, see CurrentPrefs note above.
+	uistate.PostNotice(msg, false)
 }
 
 // postBrowserNotifications posts OS/browser notifications for the emitted items
@@ -152,7 +153,10 @@ func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	// CurrentPrefs (not the UsePrefs hook) — runNotifyCatchUp runs at boot, outside
+	// any component render, where calling a hook panics with "GoUseAtom called
+	// outside component context" (caught by recover, but it silently kills catch-up).
+	weekStart := uistate.CurrentPrefs().WeekStartWeekday()
 	prev := period.NewWindow(period.Week, now, weekStart).Shift(-1)
 	ps, pe := prev.Range()
 	flow, err := reports.IncomeVsExpense(app.Transactions(), ps, pe, rates)
@@ -277,6 +281,33 @@ func fmtBaseMoney(v int64, base string) string {
 	return money.FormatAccounting(v, currency.Decimals(base), currency.Symbol(base))
 }
 
+// lowBalanceCandidates flags asset accounts whose current balance is below the
+// default-low-balance rule's floor. A zero/absent threshold disables the alert.
+func lowBalanceCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+	var floor int64
+	for _, r := range notify.DefaultRules() {
+		if r.ID == "default-low-balance" {
+			floor = int64(r.Threshold)
+		}
+	}
+	if floor <= 0 {
+		return nil
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	out, err := notifyfeed.LowBalanceCandidates("default-low-balance", app.Accounts(), app.Transactions(), floor, now,
+		func(name string, balMinor int64) (title, body string) {
+			return uistate.T("notify.lowBalTitle", name),
+				uistate.T("notify.lowBalBody", fmtBaseMoney(balMinor, base))
+		})
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
 // currentBudgetStatuses evaluates every budget over its own current period (as
 // of now), mirroring the Budgets screen, so the budget-threshold notifications
 // reflect the same near/over state the user sees. Parent budgets roll up their
@@ -292,7 +323,10 @@ func currentBudgetStatuses(app *appstate.App, now time.Time) []budgeting.Status 
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	// CurrentPrefs (not the UsePrefs hook) — runNotifyCatchUp runs at boot, outside
+	// any component render, where calling a hook panics with "GoUseAtom called
+	// outside component context" (caught by recover, but it silently kills catch-up).
+	weekStart := uistate.CurrentPrefs().WeekStartWeekday()
 	cats := app.Categories()
 
 	out := make([]budgeting.Status, 0, len(budgets))

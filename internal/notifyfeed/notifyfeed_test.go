@@ -266,6 +266,146 @@ func TestDigestCandidates(t *testing.T) {
 	}
 }
 
+func TestLowBalanceCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 25, 9, 0, 0, 0, time.UTC)
+	text := func(name string, bal int64) (string, string) {
+		return name + " low", fmt.Sprintf("%d", bal)
+	}
+
+	mkAsset := func(id string, opening int64) domain.Account {
+		return domain.Account{
+			ID:             id,
+			Name:           id,
+			Type:           domain.TypeChecking,
+			Currency:       "USD",
+			OpeningBalance: money.New(opening, "USD"),
+		}
+	}
+	mkLiab := func(id string, opening int64) domain.Account {
+		return domain.Account{
+			ID:             id,
+			Name:           id,
+			Type:           domain.TypeCreditCard,
+			Currency:       "USD",
+			OpeningBalance: money.New(opening, "USD"),
+		}
+	}
+
+	t.Run("below floor fires", func(t *testing.T) {
+		accounts := []domain.Account{mkAsset("chk", 5000)} // $50 < $100 floor
+		got, err := LowBalanceCandidates("r", accounts, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("got %d, want 1", len(got))
+		}
+		c := got[0]
+		if c.Event != notify.EventLowBalance {
+			t.Errorf("Event = %q, want low-balance", c.Event)
+		}
+		if c.Severity != notify.SeverityWarning {
+			t.Errorf("Severity = %v, want warning", c.Severity)
+		}
+		wantKey := "lowbal:chk@" + notify.WeekKey(now)
+		if c.OccurrenceKey != wantKey {
+			t.Errorf("OccurrenceKey = %q, want %q", c.OccurrenceKey, wantKey)
+		}
+		if c.Title != "chk low" {
+			t.Errorf("Title = %q", c.Title)
+		}
+	})
+
+	t.Run("at floor does not fire", func(t *testing.T) {
+		accounts := []domain.Account{mkAsset("sav", 10000)} // exactly at floor
+		got, err := LowBalanceCandidates("r", accounts, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("at-floor: got %d, want 0", len(got))
+		}
+	})
+
+	t.Run("above floor does not fire", func(t *testing.T) {
+		accounts := []domain.Account{mkAsset("sav", 50000)}
+		got, err := LowBalanceCandidates("r", accounts, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("above-floor: got %d, want 0", len(got))
+		}
+	})
+
+	t.Run("zero floor disables", func(t *testing.T) {
+		accounts := []domain.Account{mkAsset("chk", 0)}
+		got, err := LowBalanceCandidates("r", accounts, nil, 0, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("zero floor should yield nothing, got %+v", got)
+		}
+	})
+
+	t.Run("liability excluded", func(t *testing.T) {
+		accounts := []domain.Account{mkLiab("cc", 500)} // balance below floor but it's a liability
+		got, err := LowBalanceCandidates("r", accounts, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("liability: got %d, want 0", len(got))
+		}
+	})
+
+	t.Run("archived excluded", func(t *testing.T) {
+		a := mkAsset("old", 500)
+		a.Archived = true
+		got, err := LowBalanceCandidates("r", []domain.Account{a}, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("archived: got %d, want 0", len(got))
+		}
+	})
+
+	t.Run("transactions applied to balance", func(t *testing.T) {
+		accounts := []domain.Account{mkAsset("chk", 20000)} // $200 opening
+		// A $150 expense brings it to $50, below $100 floor
+		txns := []domain.Transaction{
+			{ID: "t1", AccountID: "chk", Amount: money.New(-15000, "USD"), Date: now},
+		}
+		got, err := LowBalanceCandidates("r", accounts, txns, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("post-txn balance below floor: got %d, want 1", len(got))
+		}
+		if got[0].Body != "5000" {
+			t.Errorf("Body = %q, want 5000 (balance in minor units)", got[0].Body)
+		}
+	})
+
+	t.Run("multiple accounts each fire once", func(t *testing.T) {
+		accounts := []domain.Account{
+			mkAsset("a", 5000),  // below
+			mkAsset("b", 20000), // above
+			mkAsset("c", 3000),  // below
+		}
+		got, err := LowBalanceCandidates("r", accounts, nil, 10000, now, text)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("two below-floor accounts: got %d, want 2", len(got))
+		}
+	})
+}
+
 func TestStaleBalanceCandidatesNoneStale(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
 	accounts := []domain.Account{

@@ -9,6 +9,7 @@
 package notifyfeed
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backup"
@@ -183,6 +184,69 @@ func BudgetCandidates(
 		})
 	}
 	return out
+}
+
+// LowBalanceCandidates produces a notify.Candidate for each asset account whose
+// current balance (opening balance plus all transactions) falls strictly below
+// floor (minor units). Liability accounts are never checked — their balances
+// represent money owed, not a safety buffer. A non-positive floor disables the
+// alert entirely, matching the zero-disables convention of LargeTransactionCandidates.
+// Each occurrence is keyed per account per ISO-week so the nudge fires at most
+// once per week regardless of how often the app is reopened. text renders the
+// localized title and body from the account name and its current balance.
+// Candidates are tagged with ruleID.
+func LowBalanceCandidates(
+	ruleID string,
+	accounts []domain.Account,
+	txns []domain.Transaction,
+	floor int64,
+	now time.Time,
+	text func(name string, balanceMinor int64) (title, body string),
+) ([]notify.Candidate, error) {
+	if floor <= 0 {
+		return nil, nil
+	}
+	var out []notify.Candidate
+	for _, a := range accounts {
+		if a.Archived || a.Type.IsLiability() {
+			continue
+		}
+		bal, err := balance(a, txns)
+		if err != nil {
+			return nil, err
+		}
+		if bal >= floor {
+			continue
+		}
+		title, body := text(a.Name, bal)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventLowBalance,
+			OccurrenceKey: "lowbal:" + a.ID + "@" + notify.WeekKey(now),
+			At:            now,
+			Title:         title,
+			Body:          body,
+			Severity:      notify.SeverityWarning,
+		})
+	}
+	return out, nil
+}
+
+// balance returns the net balance of account a in minor units (sum of opening
+// balance plus all transactions belonging to a). It is a thin helper so
+// LowBalanceCandidates does not import the full ledger package.
+func balance(a domain.Account, txns []domain.Transaction) (int64, error) {
+	total := a.OpeningBalance.Amount
+	for _, t := range txns {
+		if t.AccountID != a.ID {
+			continue
+		}
+		if t.Amount.Currency != "" && a.Currency != "" && t.Amount.Currency != a.Currency {
+			return 0, fmt.Errorf("notifyfeed: account %s currency mismatch: txn %s", a.ID, t.ID)
+		}
+		total += t.Amount.Amount
+	}
+	return total, nil
 }
 
 // LargeTransactionCandidates produces a notify.Candidate for each expense whose

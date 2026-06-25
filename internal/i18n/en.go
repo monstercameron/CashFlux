@@ -108,6 +108,8 @@ var english = Catalog{
 	"notify.backupBody":                  "It's been %d days since your last export. A quick backup keeps your data safe.",
 	"notify.backupBodyNever":             "You haven't exported a backup yet. A quick export keeps your data safe.",
 	"notify.summary":                     "You have %d reminders waiting.",
+	"notify.lowBalTitle":                 "%s balance is low",
+	"notify.lowBalBody":                  "Current balance is %s — below your alert floor.",
 	"nav.bills":                          "Bills",
 	"nav.split":                          "Split",
 	"split.hint":                         "Enter an amount, pick who's sharing it, and (optionally) who paid.",

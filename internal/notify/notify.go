@@ -40,6 +40,7 @@ const (
 	EventLargeTransaction Event = "large-transaction" // a transaction exceeded an amount
 	EventDigest           Event = "digest"            // a periodic (weekly/monthly) summary
 	EventBackupDue        Event = "backup-due"        // a periodic data-backup reminder is due
+	EventLowBalance       Event = "low-balance"       // an asset account's balance dropped below a floor
 )
 
 // Severity ranks a notification for ordering and styling in the center.

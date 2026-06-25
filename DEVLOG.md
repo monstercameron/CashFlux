@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Low-balance alert type (C266)
+
+Added `EventLowBalance` to the notification engine. The implementation mirrors the `EventLargeTransaction` pattern exactly: a constant default threshold (`defaultLowBalanceMinor = 10000`, i.e. $100.00), a new rule in `DefaultRules()` (the 7th rule, id `default-low-balance`), a zero-threshold-disables convention, and a pure candidate generator in `notifyfeed`. The generator computes the per-account balance as opening balance + all transactions for that account — a deliberate choice not to import the full `ledger` package (which adds complexity), since `notifyfeed` only needs a minor-units integer, not a `money.Money`. Liability accounts are excluded because a low "balance" on a credit card is a good sign, not an alert; archived accounts are also excluded. Occurrence key is `lowbal:<accountID>@<weekKey>` so the alert fires at most once per ISO-week per account. Wired in `notifyrun.go` via a new `lowBalanceCandidates` helper following the exact same lookup-rule-threshold → call-generator pattern as `largeTransactionCandidates`. Eight table-driven sub-tests cover all the expected edge cases. WASM build and both native packages (`notify`, `notifyfeed`) pass clean. Per-account custom floors are deferred to C264.
+
 ## 2026-06-25 — Fix ledger search to include Payee (C50/C55)
 
 Working the C-series backlog from the 50-feature review pass (alongside a parallel agent that's

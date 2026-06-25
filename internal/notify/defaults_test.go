@@ -6,8 +6,8 @@ import "testing"
 
 func TestDefaultRules(t *testing.T) {
 	rules := DefaultRules()
-	if len(rules) != 6 {
-		t.Fatalf("got %d default rules, want 6", len(rules))
+	if len(rules) != 7 {
+		t.Fatalf("got %d default rules, want 7", len(rules))
 	}
 
 	seenID := map[string]bool{}
@@ -36,7 +36,7 @@ func TestDefaultRules(t *testing.T) {
 	}
 
 	// One rule per recommended event, and bill-due carries its lead-time threshold.
-	for _, e := range []Event{EventBillDue, EventBudgetThreshold, EventStaleBalance, EventDigest, EventBackupDue, EventLargeTransaction} {
+	for _, e := range []Event{EventBillDue, EventBudgetThreshold, EventStaleBalance, EventDigest, EventBackupDue, EventLargeTransaction, EventLowBalance} {
 		if !seenEvent[e] {
 			t.Errorf("missing default rule for event %q", e)
 		}
@@ -47,6 +47,9 @@ func TestDefaultRules(t *testing.T) {
 		}
 		if r.Event == EventLargeTransaction && r.Threshold != defaultLargeTxnMinor {
 			t.Errorf("large-transaction threshold = %d, want %d", r.Threshold, defaultLargeTxnMinor)
+		}
+		if r.Event == EventLowBalance && r.Threshold != defaultLowBalanceMinor {
+			t.Errorf("low-balance threshold = %d, want %d", r.Threshold, defaultLowBalanceMinor)
 		}
 	}
 }
