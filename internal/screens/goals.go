@@ -37,6 +37,10 @@ func Goals() ui.Node {
 
 	rev := state.UseAtom("rev:goals", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+	// Re-render on a global data-revision bump too, so a goal added via the AddHost
+	// modal (a sibling component that can't touch rev:goals) appears immediately
+	// without a reload (C177/R2).
+	_ = uistate.UseDataRevision().Get()
 
 	// Drill from a goal's linked account to that account's transactions (mirrors
 	// Accounts→Transactions and the budget drill, C30/C50).

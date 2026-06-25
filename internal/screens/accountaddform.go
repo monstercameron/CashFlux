@@ -176,6 +176,11 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		stability.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
+		// The add modal lives in AddHost (a sibling of the Accounts screen), so
+		// closing it only re-renders AddHost. Bump the shared data revision so the
+		// Accounts list (which subscribes via UseDataRevision) shows the new account
+		// immediately instead of only after a reload (C223/C71/R2).
+		uistate.BumpDataRevision()
 		if props.OnDone != nil {
 			props.OnDone()
 		}

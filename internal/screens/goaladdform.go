@@ -125,6 +125,10 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		uistate.PostNotice(uistate.T("goals.addedToast"), false)
+		// The add modal is a sibling (AddHost), so bump the shared data revision to
+		// re-render the Goals list immediately rather than only after a reload
+		// (C177/R2). Goals() subscribes to UseDataRevision for this.
+		uistate.BumpDataRevision()
 		if props.OnDone != nil {
 			props.OnDone()
 		}

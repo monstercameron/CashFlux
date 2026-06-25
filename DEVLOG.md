@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Fix silent add-form failure (C223/C71/C177 via R2)
+
+The review pass flagged "add silently fails" three times — credit card (F9), goal (F23), other-asset
+(F31). A read-only diagnostic subagent (R2) root-caused it with high confidence: the Add forms live in
+`AddHost`, a sibling of the Accounts/Goals screens. On success they `PutAccount`/`PutGoal` (which DO
+write to SQLite) then call `OnDone` → `SetAddTarget("")`, which only re-renders `AddHost`. `Accounts()`
+subscribes to `UseDataRevision` but the add handler never bumped it; `Goals()` didn't subscribe at all.
+So the entity persists but the list doesn't re-render until a manual reload — not the SelectInput timing
+bug first suspected.
+
+Fix: `BumpDataRevision()` after a successful `PutAccount`/`PutGoal` (accountaddform.go, goaladdform.go)
+plus a `UseDataRevision` subscription in goals.go. `GOOS=js GOARCH=wasm` build green. The live
+modal-driving e2e was flaky against the currently-churning app (a concurrent agent's in-flight
+smart/health refactor + the C305 dashboard panic), so verification rests on the R2 diagnosis + build +
+consistency with the existing accounts.go subscription. Committed only the three files I exclusively
+touched. (gopls was showing stale false "undefined" errors throughout; `go build` is the ground truth.)
+
+Next: C305 — the dashboard panic from the newly-added health widget — is the urgent live regression,
+owned by the concurrent agent's fresh code.
+
 ## 2026-06-25 — Free smart insights enabled by default (C254)
 
 The SMART series launched as strictly opt-in — every feature was off until the user visited `/smart` and enabled it. That meant the ~60 Free (deterministic, no-cost) features produced zero value for the overwhelming majority of users who never visit the settings hub. The UX asymmetry was inverted: zero friction to opt in to AI-spend features had to be traded away, but the right trade is the opposite.
