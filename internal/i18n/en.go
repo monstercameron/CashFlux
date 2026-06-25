@@ -110,6 +110,8 @@ var english = Catalog{
 	"notify.summary":                     "You have %d reminders waiting.",
 	"notify.lowBalTitle":                 "%s balance is low",
 	"notify.lowBalBody":                  "Current balance is %s — below your alert floor.",
+	"notify.paycheckTitle":               "Your paycheck landed — %s",
+	"notify.paycheckBody":                "%s just arrived in your account.",
 	"nav.bills":                          "Bills",
 	"nav.split":                          "Split",
 	"split.hint":                         "Enter an amount, pick who's sharing it, and (optionally) who paid.",

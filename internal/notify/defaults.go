@@ -15,6 +15,11 @@ const defaultLargeTxnMinor = 50000
 // so a user can silence it without deleting the rule.
 const defaultLowBalanceMinor = 10000
 
+// defaultPaycheckMinor is the minimum income amount (minor units) that counts
+// as a paycheck landing (e.g. 50000 = $500.00). Amounts below this are treated
+// as incidental income rather than a paycheck. A zero Threshold disables the alert.
+const defaultPaycheckMinor = 50000
+
 // DefaultRules returns the recommended Phase-A notification rules — one per
 // supported event — all enabled and delivered in-app, with no quiet hours and no
 // frequency cap (the per-event occurrence keys already bound how often each can
@@ -34,5 +39,6 @@ func DefaultRules() []Rule {
 		{ID: "default-backup", Event: EventBackupDue, Enabled: true, Channels: inApp},
 		{ID: "default-large", Event: EventLargeTransaction, Enabled: true, Channels: inApp, Threshold: defaultLargeTxnMinor},
 		{ID: "default-low-balance", Event: EventLowBalance, Enabled: true, Channels: inApp, Threshold: defaultLowBalanceMinor},
+		{ID: "default-paycheck", Event: EventPaycheckLanded, Enabled: true, Channels: inApp, Threshold: defaultPaycheckMinor},
 	}
 }

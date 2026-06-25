@@ -72,6 +72,7 @@ func runNotifyCatchUp() {
 	cands = append(cands, largeTransactionCandidates(app, now)...)
 	cands = append(cands, backupReminderCandidates(app, now)...)
 	cands = append(cands, lowBalanceCandidates(app, now)...)
+	cands = append(cands, paycheckLandedCandidates(app, now)...)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.DefaultRules(), cands, now, log)
@@ -305,6 +306,36 @@ func lowBalanceCandidates(app *appstate.App, now time.Time) []notify.Candidate {
 	if err != nil {
 		return nil
 	}
+	return out
+}
+
+// paycheckLandedCandidates flags income transactions that look like a paycheck
+// arriving in the last 3 days (the short recent window where a paycheck is "fresh
+// news"). The threshold comes from the default-paycheck rule; a zero/absent
+// threshold disables the alert.
+func paycheckLandedCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+	var threshold int64
+	for _, r := range notify.DefaultRules() {
+		if r.ID == "default-paycheck" {
+			threshold = int64(r.Threshold)
+		}
+	}
+	if threshold <= 0 {
+		return nil
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	out := notifyfeed.PaycheckLandedCandidates("default-paycheck", app.Transactions(), threshold, 3, now,
+		func(desc string, amount int64) (title, body string) {
+			label := desc
+			if label == "" {
+				label = uistate.T("notify.largeNoDesc")
+			}
+			return uistate.T("notify.paycheckTitle", fmtBaseMoney(amount, base)),
+				uistate.T("notify.paycheckBody", label)
+		})
 	return out
 }
 

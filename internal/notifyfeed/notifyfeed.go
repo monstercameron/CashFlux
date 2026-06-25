@@ -249,6 +249,53 @@ func balance(a domain.Account, txns []domain.Transaction) (int64, error) {
 	return total, nil
 }
 
+// PaycheckLandedCandidates produces a notify.Candidate for each income transaction
+// that looks like a paycheck: a positive (inflow) non-transfer transaction at or
+// above threshold (minor units) whose date falls within the recent window ending at
+// now (e.g. the last 3 days). Each is keyed by transaction id so a given paycheck
+// fires exactly once. A non-positive threshold disables the alert entirely.
+// text renders the localized title and body from the payee/description and amount.
+// Candidates are tagged with ruleID and carry SeverityInfo — a paycheck is good news.
+func PaycheckLandedCandidates(
+	ruleID string,
+	txns []domain.Transaction,
+	threshold int64,
+	windowDays int,
+	now time.Time,
+	text func(desc string, amount int64) (title, body string),
+) []notify.Candidate {
+	if threshold <= 0 {
+		return nil
+	}
+	if windowDays <= 0 {
+		windowDays = 3
+	}
+	cutoff := now.AddDate(0, 0, -windowDays)
+	var out []notify.Candidate
+	for _, t := range txns {
+		if !t.IsIncome() {
+			continue
+		}
+		if !t.Date.After(cutoff) || t.Date.After(now) {
+			continue
+		}
+		if t.Amount.Amount < threshold {
+			continue
+		}
+		title, body := text(t.Desc, t.Amount.Amount)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventPaycheckLanded,
+			OccurrenceKey: "paycheck:" + t.ID,
+			At:            t.Date,
+			Title:         title,
+			Body:          body,
+			Severity:      notify.SeverityInfo,
+		})
+	}
+	return out
+}
+
 // LargeTransactionCandidates produces a notify.Candidate for each expense whose
 // base-currency magnitude meets or exceeds threshold (minor units) — the "a big
 // charge just hit your account" alert. Only expenses on or after since are

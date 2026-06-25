@@ -417,3 +417,114 @@ func TestStaleBalanceCandidatesNoneStale(t *testing.T) {
 		t.Errorf("got %d, want 0 (nothing stale)", len(got))
 	}
 }
+
+func TestPaycheckLandedCandidates(t *testing.T) {
+	now := time.Date(2026, time.June, 25, 10, 0, 0, 0, time.UTC)
+	text := func(desc string, amount int64) (string, string) {
+		return "Paycheck: " + desc, fmt.Sprintf("%d", amount)
+	}
+	const threshold int64 = 50000 // $500.00
+	const window = 3              // last 3 days
+
+	inWindow := now.AddDate(0, 0, -1)                 // yesterday — within window
+	onCutoff := now.AddDate(0, 0, -window)            // exactly at cutoff boundary (excluded: Before)
+	outsideWindow := now.AddDate(0, 0, -(window + 1)) // 4 days ago — outside window
+
+	t.Run("income within window at threshold fires", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p1", Desc: "Employer", Amount: money.New(threshold, "USD"), Date: inWindow},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 1 {
+			t.Fatalf("got %d, want 1: %+v", len(got), got)
+		}
+		c := got[0]
+		if c.Event != notify.EventPaycheckLanded {
+			t.Errorf("Event = %q, want paycheck-landed", c.Event)
+		}
+		if c.Severity != notify.SeverityInfo {
+			t.Errorf("Severity = %v, want info", c.Severity)
+		}
+		if c.OccurrenceKey != "paycheck:p1" {
+			t.Errorf("OccurrenceKey = %q, want paycheck:p1", c.OccurrenceKey)
+		}
+		if c.RuleID != "rule-paycheck" {
+			t.Errorf("RuleID = %q", c.RuleID)
+		}
+	})
+
+	t.Run("income below threshold suppressed", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p2", Desc: "Tip", Amount: money.New(threshold-1, "USD"), Date: inWindow},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 0 {
+			t.Errorf("got %d candidates, want 0 (below threshold)", len(got))
+		}
+	})
+
+	t.Run("expense excluded", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p3", Desc: "Rent", Amount: money.New(-threshold, "USD"), Date: inWindow},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 0 {
+			t.Errorf("got %d candidates, want 0 (expense excluded)", len(got))
+		}
+	})
+
+	t.Run("transfer excluded", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p4", Desc: "Transfer in", Amount: money.New(threshold, "USD"), Date: inWindow, TransferAccountID: "acc-other"},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 0 {
+			t.Errorf("got %d candidates, want 0 (transfer excluded)", len(got))
+		}
+	})
+
+	t.Run("income outside recent window excluded", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p5", Desc: "OldPaycheck", Amount: money.New(threshold, "USD"), Date: outsideWindow},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 0 {
+			t.Errorf("got %d candidates, want 0 (outside window)", len(got))
+		}
+	})
+
+	t.Run("income exactly at cutoff boundary excluded", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p6", Desc: "OldPaycheck", Amount: money.New(threshold, "USD"), Date: onCutoff},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 0 {
+			t.Errorf("got %d candidates, want 0 (at cutoff is excluded)", len(got))
+		}
+	})
+
+	t.Run("multiple paychecks each emit once", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "q1", Desc: "Employer A", Amount: money.New(threshold, "USD"), Date: inWindow},
+			{ID: "q2", Desc: "Employer B", Amount: money.New(threshold+10000, "USD"), Date: now.AddDate(0, 0, -2)},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, threshold, window, now, text)
+		if len(got) != 2 {
+			t.Fatalf("got %d, want 2: %+v", len(got), got)
+		}
+		keys := map[string]bool{got[0].OccurrenceKey: true, got[1].OccurrenceKey: true}
+		if !keys["paycheck:q1"] || !keys["paycheck:q2"] {
+			t.Errorf("unexpected keys: %+v", keys)
+		}
+	})
+
+	t.Run("zero threshold disables", func(t *testing.T) {
+		txns := []domain.Transaction{
+			{ID: "p7", Desc: "Salary", Amount: money.New(999999, "USD"), Date: inWindow},
+		}
+		got := PaycheckLandedCandidates("rule-paycheck", txns, 0, window, now, text)
+		if got != nil {
+			t.Errorf("zero threshold should yield nil, got %+v", got)
+		}
+	})
+}
