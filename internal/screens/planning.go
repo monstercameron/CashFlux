@@ -85,6 +85,7 @@ func Planning() ui.Node {
 	rAccount := ui.UseState("")
 	rCategory := ui.UseState("")
 	rAutopost := ui.UseState(false)
+	rAutopay := ui.UseState(false) // C157
 	rErr := ui.UseState("")
 	postMsg := ui.UseState("")
 	onRLabel := ui.UseEvent(func(v string) { rLabel.Set(v) })
@@ -109,7 +110,7 @@ func Planning() ui.Node {
 		r := domain.Recurring{
 			ID: id.New(), Label: label, Amount: money.New(amt, base),
 			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: time.Now(),
-			AccountID: rAccount.Get(), CategoryID: rCategory.Get(), Autopost: rAutopost.Get(),
+			AccountID: rAccount.Get(), CategoryID: rCategory.Get(), Autopost: rAutopost.Get(), Autopay: rAutopay.Get(),
 		}
 		if err := app.PutRecurring(r); err != nil {
 			rErr.Set(err.Error())
@@ -117,6 +118,8 @@ func Planning() ui.Node {
 		}
 		rLabel.Set("")
 		rAmount.Set("")
+		rAutopost.Set(false)
+		rAutopay.Set(false)
 		rErr.Set("")
 		rev.Set(rev.Get() + 1)
 	}))
@@ -589,6 +592,7 @@ func Planning() ui.Node {
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
+					uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: rAutopay.Get(), OnChange: func(v bool) { rAutopay.Set(v) }}), // C157
 				errText("refi-err", rErr.Get()),
 				totalNote,
 				list,
@@ -861,6 +865,9 @@ func RecurringRow(props recurringRowProps) ui.Node {
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), r.Label),
 			Span(css.Class("row-meta"), meta),
+			// C157: surface autopay so the user knows the biller charges this
+			// automatically (no manual payment needed — just keep funds available).
+			If(r.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "recurring-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
 		),
 		Span(ClassStr(amountClass(r.Amount)), fmtMoney(r.Amount)),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("recurring.deleteTitle")), Title(uistate.T("recurring.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),

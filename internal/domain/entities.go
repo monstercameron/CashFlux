@@ -245,6 +245,11 @@ type Recurring struct {
 	AccountID  string           `json:"accountId,omitempty"`
 	CategoryID string           `json:"categoryId,omitempty"`
 	Autopost   bool             `json:"autopost,omitempty"`
+	// Autopay marks a bill the biller charges automatically (the user doesn't pay it
+	// by hand). Distinct from Autopost (which posts the due occurrence into the
+	// ledger): Autopay is informational — it relaxes "you need to pay this" framing
+	// and lets reminders read "Autopay — make sure funds are available" (C157).
+	Autopay bool `json:"autopay,omitempty"`
 }
 
 // Advance returns a copy with NextDue moved one cadence forward — used after a
