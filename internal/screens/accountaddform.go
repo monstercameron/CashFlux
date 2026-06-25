@@ -210,13 +210,16 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				OnChange:  func(v string) { accType.Set(v) },
 				AriaLabel: uistate.T("accounts.typeLabel"),
 			})),
-		labeledField(uistate.T("common.owner"),
+		// C30: the owner picker only offers "Everyone/Group" until members exist, so in
+		// a 0-member household it's noise that defaults to a meaningless group. Hide it
+		// (owner stays GroupOwnerID = shared) until at least one member is added.
+		If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   ownerOptions,
 				Selected:  owner.Get(),
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("common.owner"),
-			})),
+			}))),
 		If(!singleCurrency || revealCurr.Get(), labeledField(uistate.T("accounts.currency"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   currencyOptions(app, curr.Get()),

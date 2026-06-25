@@ -149,13 +149,15 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				OnChange:  func(v string) { catID.Set(v) },
 				AriaLabel: uistate.T("budgets.categoryLabel"),
 			})),
-		labeledField(uistate.T("common.owner"),
+		// C30: hide the owner picker until members exist (it only offers "Everyone"
+		// otherwise — meaningless in a 0-member household; owner stays shared).
+		If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   ownerOptions,
 				Selected:  owner.Get(),
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("common.owner"),
-			})),
+			}))),
 		labeledField(uistate.T("budgets.period"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   periodOptions(period.Get()),
