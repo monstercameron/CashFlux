@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **C257 — Split /smart hub into Insights + Manage tabs (2026-06-25):** `SmartHub` now renders a two-tab layout: "Insights" (default) shows `smartInsightsSection` + `smartAISection` + `SmartDigestSection`; "Manage" shows `smartManageSection` (the opt-in catalog). Tab state is held in `ui.UseState("insights")`; two stable `ui.UseEvent` handlers switch it. The tab bar uses `role="tablist"` + `aria-selected` for accessibility. Active tab button uses `btn btn-sm`; inactive uses `btn btn-sm btn-ghost`. Two new i18n keys: `smart.tabInsights` / `smart.tabManage`. E2E guard `e2e/c257_smart_tabs.mjs`.
+
 ### Added
 - **C255 — Smart enabled-state persistence audit + round-trip regression test (2026-06-25):** Audited the full `smart.Settings` persistence path (C255). **Verdict: verified-correct — no real gap.** `Settings` serializes via `json.Marshal` with proper `omitempty` tags on every field; `uistate.SaveSmartSettings`/`LoadSmartSettings` call `SettingKVSet`/`SettingKVGet` (the SQLite-backed PRESERVED settings KV that survives dataset wipes); and `SettingKVSet` routes through `app.SetSettingKV` → `store.SetSettingKV` (SQLite) once `appstate.Default` is non-nil, with a `browserstore` fallback on early boot that migrates into SQLite on first read. Added `TestSettingsJSONRoundTrip` to `internal/smart/smart_test.go` as a regression guard: builds a `Settings` with mixed `Enabled`/`ExplicitOff` entries, a dismissed insight, a cadence override, a muted feature, a `LastRun` timestamp, a cached AI result, and a non-default density; marshals to JSON, unmarshals, then asserts `reflect.DeepEqual` on the full struct and spot-checks individual semantics (IsEnabled, IsMuted, IsDismissed, CadenceFor, LastRunAt, ResultFor, DensityOrDefault). A zero-Settings round-trip is also covered. 9/9 sub-tests pass.
 

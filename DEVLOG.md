@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Split /smart into Insights + Manage tabs (C257)
+
+The `/smart` hub was a single long scroll with four stacked sections. As the SMART feature count grows, the insights (the payoff) and the manage catalog (the plumbing) compete for attention on the same page. This ticket separates them into two focused tabs.
+
+**Implementation:** `SmartHub` gains `activeTab := ui.UseState("insights")` as the sole source of truth. Two `ui.UseEvent` closures — `onInsightsTab` and `onManageTab` — handle switching; they live at stable (non-loop) positions inside `SmartHub` so the hooks rule is satisfied without needing a wrapper component. The tab bar is a plain `Div` with `role="tablist"`, two `Button`s carrying `role="tab"` and `aria-selected` attrs, and a border-bottom separator (`tw.BorderB`, `tw.BorderLine`, `tw.Pb2`, `tw.Mb2`). Active-tab styling is `btn btn-sm`; inactive is `btn btn-sm btn-ghost`.
+
+The render branch is a simple `if tab == "manage"` guard:
+- Manage: `smartManageSection` only.
+- Insights (default): `smartInsightsSection` + `smartAISection` + `SmartDigestSection`.
+
+**Decision — no new component for the tab bar:** the two buttons are at fixed positions, not in a loop, so hooks can live in `SmartHub` directly. A wrapper component would add indirection with no hook-safety benefit.
+
+**Decision — "insights" as the default tab:** the payoff (live insights) is what most users want after onboarding. The manage catalog is a configuration view, not a landing view.
+
+**i18n:** two new keys — `smart.tabInsights` ("Insights") and `smart.tabManage` ("Manage") — added to `en_smart.go` inside the `smartKeys` catalog. No other files touched.
+
+**Build:** `GOOS=js GOARCH=wasm go build` clean; `go vet` clean; `go test ./internal/smartengine/... ./internal/smart/...` green.
+
+**E2E:** `e2e/c257_smart_tabs.mjs` — navigates to `/smart`, asserts both tab buttons exist, Insights tab is `aria-selected=true` by default, the insights section is visible and manage section is absent; clicks Manage tab, asserts the manage section appears and insights section disappears, and counts feature rows (at least one must exist).
+
 ## 2026-06-25 — Fix SMART-SU1 no-op nav + SMART-SU9 toast (C258)
 
 Two small but visible affordance bugs in the SMART subscription layer.

@@ -17,12 +17,12 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// SmartHub is the Smart screen (/smart): a single glanceable home for the
-// optional per-page intelligence layer. It shows the active insights from every
-// enabled Free feature, plus a "Manage" catalog of opt-in toggles that is honest
-// about cost — each feature is tagged Free (on-device, $0) or AI (needs an
-// inference provider, billed per call). Everything is opt-in; nothing here runs
-// or costs anything until the user turns it on.
+// SmartHub is the Smart screen (/smart): a tabbed home for the optional
+// per-page intelligence layer. The "Insights" tab (default) shows the active
+// insights from every enabled Free feature, the AI feature panel, and the
+// digest controls. The "Manage" tab shows the full opt-in catalog with honest
+// cost labels — Free (on-device, $0) or AI (billed per call). Everything is
+// opt-in; nothing runs or costs anything until the user turns it on.
 func SmartHub() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -49,20 +49,56 @@ func SmartHub() ui.Node {
 		}
 	}
 
+	activeTab := ui.UseState("insights")
+
+	onInsightsTab := ui.UseEvent(func() { activeTab.Set("insights") })
+	onManageTab := ui.UseEvent(func() { activeTab.Set("manage") })
+
+	tab := activeTab.Get()
+
+	insightsBtnCls := "btn btn-sm btn-ghost"
+	manageBtnCls := "btn btn-sm btn-ghost"
+	if tab == "insights" {
+		insightsBtnCls = "btn btn-sm"
+	} else {
+		manageBtnCls = "btn btn-sm"
+	}
+
+	tabBar := Div(ClassStr(tw.Fold(tw.Flex, tw.Gap2, tw.BorderB, tw.BorderLine, tw.Pb2, tw.Mb2)),
+		Attr("role", "tablist"),
+		Button(css.Class(insightsBtnCls), Type("button"),
+			Attr("role", "tab"),
+			Attr("aria-selected", boolAttrStr(tab == "insights")),
+			Attr("data-testid", "smart-tab-insights"),
+			OnClick(onInsightsTab),
+			uistate.T("smart.tabInsights"),
+		),
+		Button(css.Class(manageBtnCls), Type("button"),
+			Attr("role", "tab"),
+			Attr("aria-selected", boolAttrStr(tab == "manage")),
+			Attr("data-testid", "smart-tab-manage"),
+			OnClick(onManageTab),
+			uistate.T("smart.tabManage"),
+		),
+	)
+
+	var tabContent ui.Node
+	if tab == "manage" {
+		tabContent = Fragment(
+			smartManageSection(settings, hasProvider),
+		)
+	} else {
+		tabContent = Fragment(
+			smartInsightsSection(insights, freeEnabled, freeEnabled+aiEnabled > 0),
+			smartAISection(settings, conn, hasProvider),
+			SmartDigestSection(settings),
+		)
+	}
+
 	return Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap4)),
 		Attr("data-testid", "smart-hub"),
-
-		// Insights section — the glanceable payoff from the Free engines.
-		smartInsightsSection(insights, freeEnabled, freeEnabled+aiEnabled > 0),
-
-		// Interactive AI features (e.g. account Q&A), gated on a configured provider.
-		smartAISection(settings, conn, hasProvider),
-
-		// Digest section — opt-in cadence-driven summary to the notification feed.
-		SmartDigestSection(settings),
-
-		// Manage section — the opt-in catalog with honest cost labels.
-		smartManageSection(settings, hasProvider),
+		tabBar,
+		tabContent,
 	)
 }
 

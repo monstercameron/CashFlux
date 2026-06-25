@@ -49,6 +49,10 @@ var smartKeys = Catalog{
 	"smart.tipBillsDue":         "The total amount owed across all upcoming bills within the current view window, converted to your base currency.",
 	"smart.tipSubsMonthly":      "The normalized monthly cost of all active detected subscriptions — what recurring charges add up to each month.",
 
+	// Tab bar.
+	"smart.tabInsights": "Insights",
+	"smart.tabManage":   "Manage",
+
 	// Insights section.
 	"smart.insightsTitle": "Your insights",
 	"smart.onboard":       "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
