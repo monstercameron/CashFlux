@@ -7,7 +7,6 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/url"
 	"sort"
 	"strings"
@@ -232,7 +231,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if err := json.Unmarshal(raw, &a); err != nil {
 					return "Could not read the amount."
 				}
-				amount := int64(math.Round(a.Amount * 100))
+				amount := currency.MinorFromMajor(a.Amount, base)
 				_, assets, _, _ := ledger.NetWorth(accounts, txns, rates)
 				income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 				res := afford.CanAfford(amount, assets.Amount, income.Amount-expense.Amount, a.Months, 0)
@@ -608,7 +607,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					Payee   string  `json:"payee"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Record %s in %s%s", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), a.Account, ifStr(a.Payee != "", " — "+a.Payee, ""))
+				return fmt.Sprintf("Record %s in %s%s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.Account, ifStr(a.Payee != "", " — "+a.Payee, ""))
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -639,7 +638,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						desc = "Expense"
 					}
 				}
-				amt := money.New(majorToMinor(a.Amount, acc.Currency), acc.Currency)
+				amt := money.New(currency.MinorFromMajor(a.Amount, acc.Currency), acc.Currency)
 				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: amt, Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now}
 				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
 					t.Date = d
@@ -674,7 +673,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					Amount float64 `json:"amount"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Add %s toward the “%s” goal", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), a.Goal)
+				return fmt.Sprintf("Add %s toward the “%s” goal", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.Goal)
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -687,11 +686,11 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				q := strings.ToLower(strings.TrimSpace(a.Goal))
 				for _, g := range app.Goals() {
 					if strings.Contains(strings.ToLower(g.Name), q) {
-						g.CurrentAmount = money.New(g.CurrentAmount.Amount+int64(math.Round(a.Amount*100)), g.CurrentAmount.Currency)
+						g.CurrentAmount = money.New(g.CurrentAmount.Amount+currency.MinorFromMajor(a.Amount, g.CurrentAmount.Currency), g.CurrentAmount.Currency)
 						if err := app.PutGoal(g); err != nil {
 							return "Couldn't update the goal: " + err.Error()
 						}
-						return fmt.Sprintf("Added %s to “%s” — now %s of %s.%s", fmtMoney(money.New(int64(math.Round(a.Amount*100)), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), openLink("/goals", g.ID))
+						return fmt.Sprintf("Added %s to “%s” — now %s of %s.%s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), openLink("/goals", g.ID))
 					}
 				}
 				return "No goal matching “" + a.Goal + "”."
@@ -709,7 +708,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					Balance float64 `json:"balance"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Create a %s account “%s”%s", a.Class, strings.TrimSpace(a.Name), ifStr(a.Balance != 0, " ("+fmtMoney(money.New(majorToMinor(a.Balance, base), base))+")", ""))
+				return fmt.Sprintf("Create a %s account “%s”%s", a.Class, strings.TrimSpace(a.Name), ifStr(a.Balance != 0, " ("+fmtMoney(money.New(currency.MinorFromMajor(a.Balance, base), base))+")", ""))
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -741,7 +740,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					}
 				}
 				cls := acType.Class() // keep class consistent with the resolved type
-				minor := majorToMinor(a.Balance, base)
+				minor := currency.MinorFromMajor(a.Balance, base)
 				if cls == domain.ClassLiability && minor > 0 {
 					minor = -minor // an owed amount is stored negative
 				}
@@ -754,10 +753,10 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 						acc.InterestRateAPR = a.APR
 					}
 					if a.CreditLimit > 0 {
-						acc.CreditLimit = money.New(majorToMinor(a.CreditLimit, base), base)
+						acc.CreditLimit = money.New(currency.MinorFromMajor(a.CreditLimit, base), base)
 					}
 					if a.MinPayment > 0 {
-						acc.MinPayment = money.New(majorToMinor(a.MinPayment, base), base)
+						acc.MinPayment = money.New(currency.MinorFromMajor(a.MinPayment, base), base)
 					}
 				}
 				if err := app.PutAccount(acc); err != nil {
@@ -778,7 +777,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					Amount float64 `json:"amount"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Transfer %s from %s to %s", fmtMoney(money.New(majorToMinor(a.Amount, base), base)), a.From, a.To)
+				return fmt.Sprintf("Transfer %s from %s to %s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.From, a.To)
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -805,9 +804,9 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
 					when = d
 				}
-				fromMinor := majorToMinor(a.Amount, from.Currency)
+				fromMinor := currency.MinorFromMajor(a.Amount, from.Currency)
 				fromMoney := money.New(fromMinor, from.Currency)
-				toMoney := money.New(majorToMinor(a.Amount, to.Currency), to.Currency)
+				toMoney := money.New(currency.MinorFromMajor(a.Amount, to.Currency), to.Currency)
 				if conv, err := rates.Convert(fromMoney.Abs(), to.Currency); err == nil {
 					toMoney = conv // honor FX across currencies
 				}
@@ -833,7 +832,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					Balance float64 `json:"balance"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Set %s balance to %s", a.Account, fmtMoney(money.New(majorToMinor(a.Balance, base), base)))
+				return fmt.Sprintf("Set %s balance to %s", a.Account, fmtMoney(money.New(currency.MinorFromMajor(a.Balance, base), base)))
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -847,7 +846,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if !ok {
 					return "No account matching “" + a.Account + "”."
 				}
-				target := majorToMinor(a.Balance, acc.Currency)
+				target := currency.MinorFromMajor(a.Balance, acc.Currency)
 				if acc.Class == domain.ClassLiability && target > 0 {
 					target = -target
 				}
@@ -865,12 +864,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 			},
 		},
 	}
-}
-
-// majorToMinor converts a major-unit amount (e.g. dollars) to minor units for a
-// currency, honoring its decimal places.
-func majorToMinor(major float64, cur string) int64 {
-	return int64(math.Round(major * math.Pow10(currency.Decimals(cur))))
 }
 
 // openLink returns a Markdown deep link to an entity's screen, anchored to its id so

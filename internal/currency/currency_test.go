@@ -9,6 +9,27 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+func TestMinorFromMajor(t *testing.T) {
+	tests := []struct {
+		major float64
+		code  string
+		want  int64
+	}{
+		{12.34, "USD", 1234},
+		{0.005, "USD", 1},     // rounds to nearest cent (math.Round, half away from zero)
+		{12.344, "USD", 1234}, // rounds down
+		{1000, "JPY", 1000},   // 0 decimals -> whole units, not *100
+		{1.5, "JPY", 2},       // 0 decimals -> rounds to nearest whole
+		{-4.20, "USD", -420},  // negative
+		{5, "ZZZ", 500},       // unknown code defaults to 2 decimals
+	}
+	for _, tt := range tests {
+		if got := MinorFromMajor(tt.major, tt.code); got != tt.want {
+			t.Errorf("MinorFromMajor(%v, %q) = %d, want %d", tt.major, tt.code, got, tt.want)
+		}
+	}
+}
+
 func TestCodesSortedAndRegistered(t *testing.T) {
 	codes := Codes()
 	if len(codes) < 5 {

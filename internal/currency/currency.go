@@ -91,6 +91,15 @@ func Decimals(code string) int {
 	return defaultDecimals
 }
 
+// MinorFromMajor converts a major-unit amount (e.g. 12.34 dollars) to integer
+// minor units (e.g. 1234 cents) for the given currency code, rounding to the
+// nearest minor unit using the code's own decimal precision (so JPY's 0 decimals
+// yield whole units, not hundredths). Use this instead of a hardcoded *100 at any
+// boundary that ingests a floating major amount (AI tool args, parsed input).
+func MinorFromMajor(major float64, code string) int64 {
+	return int64(math.Round(major * math.Pow10(Decimals(code))))
+}
+
 // Symbol returns the display symbol for a code, defaulting to the code itself.
 func Symbol(code string) string {
 	if c, ok := registry[normalize(code)]; ok {
