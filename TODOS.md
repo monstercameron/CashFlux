@@ -2910,3 +2910,13 @@ Pure-package health check: fingerprint/credithealth/payoff/scope/savings/learnta
 
 ## New gap found by audit (filed as todo)
 - [ ] [C265/C266 e2e][MINOR] Alert logic for paycheck-landed + low-balance is shipped + unit-tested, but `e2e/c265_*.mjs` / `e2e/c266_*.mjs` are MISSING — add e2e coverage to match the other alert stories (c263/c264/c267/c268/c269 exist).
+
+## Verification round 2 (audit, 2026-06-25) — 12 more shipped C-items closed
+Verified CONFIRMED (file:line + go test green) and marked completed:
+- Planning: C170 (forecast dip-below-zero warning, planning.go:303), C171 (runway uses ledger.LiquidBalance, planning.go:504), C173 (low-point line toned negative, planning.go:1068).
+- Filters/nav/categorize: C36 (AutoCategorize on quick-add, quickadd.go:150), C56 (filter 'f' shortcut, filtertoolbar.go:68), C57 (count-aware Filters aria-label, filtertoolbar.go:103), C66 (nav.split -> "Split a bill", en.go:140).
+- Forms/currency: C29 (budgets empty-state, budgets.go:299), C30 (owner picker hidden until members exist, accountaddform.go:216), C78 (currency picker revealed for single-currency, accountaddform.go:223), C80 (FX per-rate as-of date, settings.go:1125), C85 (CNY symbol "CN¥" distinct from JPY, currency.go:42).
+
+### Still OPEN — shipped but fell short of acceptance criteria (re-open for implementer):
+- [ ] [C174][MINOR] Runway empty-state uses a muted `<p>` nudge — ticket asks for the canonical `EmptyStateCTA` component (with CTA to add recurring). planning.go ~476.
+- [ ] [C37][MINOR] Create-rule button got aria-label/title but is still icon-only — ticket asks for a VISIBLE text label ("Always categorize like this"). transactions_row.go:251.
