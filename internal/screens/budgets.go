@@ -38,6 +38,10 @@ func Budgets() ui.Node {
 
 	rev := state.UseAtom("rev:budgets", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+	// C120: also re-render when the global dataset changes (a transaction added via
+	// Quick-Add anywhere bumps this), so the budget bars/spent figures update live
+	// instead of only on budget CRUD or a reload.
+	_ = uistate.UseDataRevision().Get()
 
 	// Drill from a budget to its spending: open Transactions filtered to the
 	// budget's category (mirrors Accounts→Transactions and the dashboard
