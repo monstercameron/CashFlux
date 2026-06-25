@@ -15,6 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -88,6 +90,16 @@ func Bills() ui.Node {
 		notice.Set(notice.Get().With(uistate.T("bills.reminderAdded", b.Name), false))
 	}
 	rev := uistate.UseDataRevision()
+
+	// Compute page-level smart insights once (not per row) so each BillRow can call
+	// smartBadgeFor with its AccountID. Bills use account IDs as the related entity
+	// (PageBills engines set RelatedID = account.ID for each liability account).
+	// Pure computation — no hooks needed; re-renders whenever rev changes above.
+	billSmartSettings := uistate.LoadSmartSettings()
+	billSmartIn := buildSmartInput(app, pr.WeekStartWeekday())
+	billInsights := smartengine.RunPage(billSmartIn, billSmartSettings, smart.PageBills)
+	billByEntity := insightsByEntity(billInsights)
+
 	markPaid := func(b bills.Bill) {
 		app := appstate.Default
 		if app == nil {
@@ -131,7 +143,11 @@ func Bills() ui.Node {
 			return r.Bill.AccountID + "|" + r.Bill.DueDate.Format("2006-01-02") + "|" + r.Bill.Name
 		},
 		func(r billRowData) ui.Node {
-			return ui.CreateElement(BillRow, billRowProps{Data: r, OnRemind: remind, OnMarkPaid: markPaid})
+			return ui.CreateElement(BillRow, billRowProps{
+				Data: r, OnRemind: remind, OnMarkPaid: markPaid,
+				SmartSettings: billSmartSettings,
+				SmartByEntity: billByEntity,
+			})
 		},
 	)
 
@@ -243,6 +259,10 @@ type billRowProps struct {
 	Data       billRowData
 	OnRemind   func(b bills.Bill, shown money.Money, dueLabel string)
 	OnMarkPaid func(b bills.Bill)
+	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
+	// Bills are liability accounts; the badge key is Bill.AccountID.
+	SmartSettings smart.Settings
+	SmartByEntity map[string][]smart.Insight
 }
 
 // BillRow renders one upcoming bill with action buttons in a fixed trailing group
@@ -266,7 +286,9 @@ func BillRow(props billRowProps) ui.Node {
 	}
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), d.Bill.Name),
+			Span(css.Class("row-desc"), d.Bill.Name,
+				smartBadgeFor(props.SmartSettings, props.SmartByEntity, d.Bill.AccountID),
+			),
 			Span(ClassStr(metaCls), meta),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),

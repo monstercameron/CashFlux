@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -20,6 +20,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -396,6 +398,17 @@ func Transactions() ui.Node {
 		selected.Set(nm)
 	}))
 
+	// Compute page-level smart insights once (not per row) so each TransactionRow can
+	// call smartBadgeFor with its own ID. Transaction engines (SMART-T2, T4, T6, T7,
+	// T11, T13) set RelatedID to the transaction ID.
+	// UsePrefs hook is at this stable trailing position — added together with the
+	// smart block so the atom-index position never shifts.
+	txnPr := uistate.UsePrefs().Get()
+	txnSmartSettings := uistate.LoadSmartSettings()
+	txnSmartIn := buildSmartInput(app, txnPr.WeekStartWeekday())
+	txnInsights := smartengine.RunPage(txnSmartIn, txnSmartSettings, smart.PageTransactions)
+	txnByEntity := insightsByEntity(txnInsights)
+
 	txns := app.Transactions()
 	shown := txnfilter.ApplyWithLabels(txns, f, txnfilter.Labels{Account: accName, Category: catName})
 
@@ -480,6 +493,8 @@ func Transactions() ui.Node {
 					ShowTags: anyTags,
 					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared, OnCreateRule: createRuleFromTxn,
 					OnAttach: attachReceipt, OnViewReceipt: viewReceipt,
+					SmartSettings: txnSmartSettings,
+					SmartByEntity: txnByEntity,
 				})
 			},
 		)

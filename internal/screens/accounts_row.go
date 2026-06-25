@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
+	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -44,6 +45,10 @@ type accountRowProps struct {
 	// to attach to the adjustment transaction (empty = uncategorized).
 	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID string)
 	OnTransfer   func(fromID, toID string, amountStr string, dateStr string, desc string)
+	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
+	// When SmartSettings is zero-value the badge simply renders nothing (safe default).
+	SmartSettings smart.Settings
+	SmartByEntity map[string][]smart.Insight
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -503,6 +508,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), a.Name,
 				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
+				smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 			),
 			Span(css.Class("row-meta"), meta),
 		),

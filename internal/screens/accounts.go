@@ -19,6 +19,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -261,6 +263,17 @@ func Accounts() ui.Node {
 		}
 	}
 	categories := app.Categories()
+
+	// Compute page-level smart insights once (not per row) so each AccountRow can
+	// cheaply call smartBadgeFor with its own ID. Re-renders when data/settings
+	// change via the existing rev atom above.
+	_ = uistate.UseDataRevision().Get() // smart re-render hook (idempotent with rev above)
+	pr := uistate.UsePrefs().Get()
+	smartSettings := uistate.LoadSmartSettings()
+	smartIn := buildSmartInput(app, pr.WeekStartWeekday())
+	accountInsights := smartengine.RunPage(smartIn, smartSettings, smart.PageAccounts)
+	accountByEntity := insightsByEntity(accountInsights)
+
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
@@ -269,7 +282,9 @@ func Accounts() ui.Node {
 			Members: app.Members(), Accounts: accounts, Categories: categories,
 			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount,
 			OnSave: saveAccount, OnView: viewTransactions, OnSetBalance: setBalance,
-			OnTransfer: doTransfer,
+			OnTransfer:    doTransfer,
+			SmartSettings: smartSettings,
+			SmartByEntity: accountByEntity,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }

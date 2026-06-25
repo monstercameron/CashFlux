@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -42,6 +43,10 @@ type transactionRowProps struct {
 	// opens a preview of an attached receipt (L29).
 	OnAttach      func(domain.Transaction)
 	OnViewReceipt func(domain.AttachmentRef)
+	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
+	// The badge key is the transaction ID (Action.RelatedID set by transaction engines).
+	SmartSettings smart.Settings
+	SmartByEntity map[string][]smart.Insight
 }
 
 // TransactionRow is a per-transaction row. Income/expense rows can be edited
@@ -218,7 +223,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		Td(css.Class("td-select"), Button(css.Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
 		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags),
+		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags, smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID)),
 		Td(css.Class("td-cat"), cat),
 		Td(css.Class("td-acct"), props.Account),
 		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),

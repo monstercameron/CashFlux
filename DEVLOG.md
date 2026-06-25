@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART Wave 1: row-level smart badges
+
+Wired the `smartBadgeFor` toolkit into all four list pages. The core challenge was hook ordering:
+GoWebComponents' `UseAtom` is positional (uses `atomIndex`), so adding new hook calls mid-function
+shifts every subsequent atom subscription and breaks the component. Resolved by placing all smart
+computation (which is pure — no hooks) AFTER the last existing hook in each page function. The only
+new hook needed was `UsePrefs()` in `transactions.go` (to get `WeekStartWeekday` for `buildSmartInput`).
+For subscriptions, I also moved the `rows := MapKeyed(...)` call to AFTER the smart variables were
+declared, since Go evaluates MapKeyed lambdas immediately (not lazily).
+
+Key insight on which engines fire: Account-targeting engines (SMART-A2/A4/A7/A8) set
+`Action.RelatedID = account.ID`, so they're the most reliable for row badges. SMART-A7
+(recurring-charge detection, fires when an account has 2+ recurring debits) reliably produces
+2 badges on the Hartley sample data. Transaction engines set `RelatedID = txn.ID`. Bill engines
+set `RelatedID = account.ID` (liability accounts). Subscription engines currently don't set
+RelatedID — wired forward-compatibly.
+
+The e2e test (3/3 PASS) enables SMART-A7, navigates to /accounts, asserts badges appear, then
+sets density Off and asserts they disappear. The toggle is a `div[role="switch"]`, not an
+`input[type="checkbox"]` — caught by the first test run, fixed by querying the switch role.
+
 ## 2026-06-24 — L97 "The Glanceable Read": proving the copy work in the live app
 
 QA-loop ritual after the copy refinement. Rather than another feature journey, I pointed this story at

@@ -17,6 +17,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -263,6 +265,31 @@ func Subscriptions() ui.Node {
 	monthlyTotal := subscriptions.MonthlyTotal(subs)
 
 	now := time.Now()
+	// Select-all / Clear affordance (G10 §7): makes multi-select cancel
+	// discoverable — a user who misses the individual checkboxes sees this
+	// prompt and understands the pattern immediately.
+	allSelected := selectedCount == len(subs) && len(subs) > 0
+	selectAllToggle := ui.UseEvent(Prevent(func() {
+		if allSelected {
+			selectedState.Set(map[string]bool{})
+		} else {
+			next := make(map[string]bool, len(subs))
+			for _, s := range subs {
+				next[s.Name] = true
+			}
+			selectedState.Set(next)
+		}
+	}))
+
+	// Compute page-level smart insights once (not per row). Current subscription
+	// engines do not set RelatedID (they use subscription names), so byEntity is
+	// empty and badges are silent today — the wiring is forward-compatible with
+	// future engines that do set RelatedID = subscription.Name or a real ID.
+	subSmartSettings := uistate.LoadSmartSettings()
+	subSmartIn := buildSmartInput(app, pr.WeekStartWeekday())
+	subInsights := smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageSubscriptions)
+	subByEntity := insightsByEntity(subInsights)
+
 	rows := MapKeyed(subs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
@@ -286,25 +313,11 @@ func Subscriptions() ui.Node {
 				OnUncancel:     doUncancel,
 				OnToggleSelect: toggle,
 				OnIgnore:       doIgnore,
+				SmartSettings:  subSmartSettings,
+				SmartByEntity:  subByEntity,
 			})
 		},
 	)
-
-	// Select-all / Clear affordance (G10 §7): makes multi-select cancel
-	// discoverable — a user who misses the individual checkboxes sees this
-	// prompt and understands the pattern immediately.
-	allSelected := selectedCount == len(subs) && len(subs) > 0
-	selectAllToggle := ui.UseEvent(Prevent(func() {
-		if allSelected {
-			selectedState.Set(map[string]bool{})
-		} else {
-			next := make(map[string]bool, len(subs))
-			for _, s := range subs {
-				next[s.Name] = true
-			}
-			selectedState.Set(next)
-		}
-	}))
 
 	var body ui.Node
 	if len(subs) == 0 {
@@ -471,6 +484,8 @@ func Subscriptions() ui.Node {
 						OnUncancel:     doUncancel,
 						OnToggleSelect: toggle,
 						OnIgnore:       doIgnore,
+						SmartSettings:  subSmartSettings,
+						SmartByEntity:  subByEntity,
 					})
 				},
 			),
@@ -510,6 +525,12 @@ type subscriptionRowProps struct {
 	OnUncancel     func(name string)
 	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
 	OnIgnore       func(name string) // mark as "not a subscription"; nil = action not available (ignored rows)
+	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
+	// Current subscription engines do not set RelatedID (they use subscription names
+	// as keys), so byEntity will be empty and badges won't appear until future engines
+	// add RelatedID support. The wiring is forward-compatible.
+	SmartSettings smart.Settings
+	SmartByEntity map[string][]smart.Insight
 }
 
 // SubscriptionRow renders one detected subscription with cancel/uncancel and
@@ -664,7 +685,9 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		Div(css.Class("row-main"),
 			Button(css.Class("row-desc sub-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "font-weight": "600", "color": "var(--text)", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
-				s.Name),
+				s.Name,
+				smartBadgeFor(props.SmartSettings, props.SmartByEntity, s.Name),
+			),
 			Span(css.Class("row-meta"), meta),
 			statusArea,
 			reviewBadge,
