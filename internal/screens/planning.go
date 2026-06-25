@@ -480,7 +480,10 @@ func Planning() ui.Node {
 	if app != nil {
 		recs := app.Recurring()
 		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		_, assets, _, _ := ledger.NetWorth(app.Accounts(), app.Transactions(), rates)
+		// C171: cash runway must start from LIQUID cash (checking/savings/cash), not
+		// total assets — projecting against a 401(k)/home balance wildly overstates how
+		// long money lasts against day-to-day bills.
+		liquid, _ := ledger.LiquidBalance(app.Accounts(), app.Transactions(), rates)
 		buffer, _ := money.ParseMinor(strings.TrimSpace(rwBuffer.Get()), currency.Decimals(base))
 		if buffer < 0 {
 			buffer = 0
@@ -489,7 +492,7 @@ func Planning() ui.Node {
 
 		var rwBody ui.Node = P(css.Class("muted"), uistate.T("planning.runwayEmpty"))
 		if len(recs) > 0 {
-			if proj, perr := runway.Project(assets.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
+			if proj, perr := runway.Project(liquid.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
 				lowTone := ""
 				if proj.MinBalance < 0 {
 					lowTone = "neg"
@@ -535,7 +538,7 @@ func Planning() ui.Node {
 				}
 				rwBody = Div(
 					Div(css.Class("stat-grid"),
-						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(assets.Amount, base)), ""),
+						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
 					),
 					verdict,
