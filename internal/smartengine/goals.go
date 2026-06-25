@@ -132,6 +132,11 @@ func g20Shared(in Input) []smart.Insight {
 // SMART-G17 — Recurring auto-contribution scheduling. For a goal with a deadline
 // and a detected payday, nudges the user to automate a standing "on payday, move
 // $X" contribution rather than remembering it each month.
+//
+// NOTE: The ideal action here is "automate-goal" (auto-contribute money to a goal
+// on each payday). That requires the money-movement engine being built in
+// TODO(C186). Until C186 lands this insight degrades to ActionNavigate → /goals,
+// letting the user set up the contribution manually.
 func g17AutoContribute(in Input) []smart.Insight {
 	payday, ok := recentPayday(in)
 	if !ok {
@@ -387,7 +392,13 @@ func g12SuggestGoals(in Input) []smart.Insight {
 			" months of your roughly " + in.hmoney(essentials) + "/mo essentials.",
 		Severity: smart.SeverityNudge,
 	}.WithAmount(in.baseMoney(target)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Create a goal", Route: "/goals"})
+		WithAction(smart.Action{
+			Kind:         smart.ActionCreateGoal,
+			Label:        "Create goal",
+			GoalName:     "Emergency Fund",
+			GoalTarget:   target,
+			GoalCurrency: in.Base,
+		})
 	return []smart.Insight{ins}
 }
 

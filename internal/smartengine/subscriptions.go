@@ -421,7 +421,11 @@ func su1CancelCandidates(in Input) []smart.Insight {
 			Detail:   s.Name + " stands out because " + joinReasons(reasons) + ".",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(mny(annual, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+			WithAction(smart.Action{
+				Kind:             smart.ActionCancelSubscription,
+				Label:            "Cancel " + s.Name,
+				SubscriptionName: s.Name,
+			}))
 	}
 	return out
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -132,6 +133,59 @@ func smartInsightCard(props smartCardProps) ui.Node {
 			// SMART-SU9 fix: confirm the to-do was added with a toast notice.
 			uistate.PostNotice(uistate.T("smart.taskAdded"), false)
 			rev.Set(rev.Get() + 1)
+
+		case smart.ActionCreateGoal:
+			app := appstate.Default
+			if app == nil {
+				return
+			}
+			cur := smartCurrencyOr(ins.Action.GoalCurrency, app.Settings().BaseCurrency)
+			g := domain.Goal{
+				ID:           id.New(),
+				Name:         ins.Action.GoalName,
+				Scope:        domain.ScopeIndividual,
+				TargetAmount: money.Money{Amount: ins.Action.GoalTarget, Currency: cur},
+			}
+			if err := app.PutGoal(g); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("smart.goalCreated"), false)
+			rev.Set(rev.Get() + 1)
+			nav.Navigate(uistate.RoutePath("/goals"))
+
+		case smart.ActionCreateRecurring:
+			app := appstate.Default
+			if app == nil {
+				return
+			}
+			cur := smartCurrencyOr(ins.Action.RecurringCurrency, app.Settings().BaseCurrency)
+			r := domain.Recurring{
+				ID:      id.New(),
+				Label:   ins.Action.RecurringLabel,
+				Amount:  money.Money{Amount: ins.Action.RecurringAmount, Currency: cur},
+				Cadence: domain.RecurringCadence(ins.Action.RecurringCadence),
+			}
+			if err := app.PutRecurring(r); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("smart.recurringCreated"), false)
+			rev.Set(rev.Get() + 1)
+			nav.Navigate(uistate.RoutePath("/planning"))
+
+		case smart.ActionCancelSubscription:
+			app := appstate.Default
+			if app == nil {
+				return
+			}
+			if err := app.MarkSubscriptionCancelled(ins.Action.SubscriptionName, time.Now()); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("smart.subscriptionCancelled"), false)
+			rev.Set(rev.Get() + 1)
+			nav.Navigate(uistate.RoutePath("/subscriptions"))
 		}
 	})
 
@@ -183,6 +237,16 @@ func smartInsightCard(props smartCardProps) ui.Node {
 			),
 		),
 	)
+}
+
+// smartCurrencyOr returns preferred when non-empty, otherwise fallback. It is
+// used to resolve the currency for a create-goal or create-recurring action
+// where the engine may or may not supply an explicit currency.
+func smartCurrencyOr(preferred, fallback string) string {
+	if preferred != "" {
+		return preferred
+	}
+	return fallback
 }
 
 // smartInsightList renders a list of insight cards, each keyed by its stable

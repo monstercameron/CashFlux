@@ -60,11 +60,14 @@ var smartKeys = Catalog{
 	"smart.tabManage":   "Manage",
 
 	// Insights section.
-	"smart.insightsTitle": "Your insights",
-	"smart.onboard":       "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
-	"smart.allClear":      "All clear — no insights need your attention right now.",
-	"smart.dismiss":       "Dismiss",
-	"smart.taskAdded":     "Added to your to-dos.",
+	"smart.insightsTitle":         "Your insights",
+	"smart.onboard":               "Turn on a smart feature below to start seeing optional, on-device insights here. Everything is off until you choose it, and nothing leaves your device unless you enable an AI feature.",
+	"smart.allClear":              "All clear — no insights need your attention right now.",
+	"smart.dismiss":               "Dismiss",
+	"smart.taskAdded":             "Added to your to-dos.",
+	"smart.goalCreated":           "Goal created.",
+	"smart.recurringCreated":      "Added to your plan.",
+	"smart.subscriptionCancelled": "Subscription marked as cancelled.",
 
 	// Manage / opt-in catalog.
 	"smart.manageTitle":   "Manage smart features",

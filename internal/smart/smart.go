@@ -140,6 +140,17 @@ const (
 	ActionCreateTask ActionKind = "create_task"
 	// ActionNavigate points the user at the relevant screen/entity.
 	ActionNavigate ActionKind = "navigate"
+	// ActionCreateGoal creates a new goal directly from the insight, using the
+	// payload fields GoalName, GoalTarget, and GoalCurrency. On success the app
+	// navigates to /goals and shows a confirmation toast.
+	ActionCreateGoal ActionKind = "create_goal"
+	// ActionCreateRecurring creates a new recurring cash-flow entry from the
+	// insight, using RecurringLabel, RecurringAmount, RecurringCurrency, and
+	// RecurringCadence. On success the app navigates to /planning.
+	ActionCreateRecurring ActionKind = "create_recurring"
+	// ActionCancelSubscription marks the named subscription cancelled today,
+	// using SubscriptionName. On success the app navigates to /subscriptions.
+	ActionCancelSubscription ActionKind = "cancel_subscription"
 )
 
 // Action is an optional, single-tap follow-up attached to an Insight. It is
@@ -155,6 +166,23 @@ type Action struct {
 
 	// ActionNavigate payload.
 	Route string // app route, e.g. "/subscriptions"
+
+	// ActionCreateGoal payload. GoalCurrency defaults to the app base currency
+	// when empty; GoalTarget is in minor units of GoalCurrency.
+	GoalName     string
+	GoalTarget   int64
+	GoalCurrency string
+
+	// ActionCreateRecurring payload. RecurringAmount is in minor units of
+	// RecurringCurrency; RecurringCadence must be a valid domain.RecurringCadence
+	// value ("weekly", "monthly", "quarterly", "yearly").
+	RecurringLabel    string
+	RecurringAmount   int64
+	RecurringCurrency string
+	RecurringCadence  string
+
+	// ActionCancelSubscription payload.
+	SubscriptionName string
 
 	// Optional link back to the subject entity, for either kind.
 	RelatedType string // e.g. "account", "transaction", "goal", "bill"

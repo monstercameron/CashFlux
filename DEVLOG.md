@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C256: Executable smart recommendation actions
+
+**What was done.** Added three new `ActionKind` constants (`ActionCreateGoal`, `ActionCreateRecurring`, `ActionCancelSubscription`) to the pure `internal/smart` package. The `Action` struct gained payload fields for each. The `smart_card.go` `onAction` dispatcher grew matching `case` branches calling `app.PutGoal`, `app.PutRecurring`, and `app.MarkSubscriptionCancelled` respectively — the same validated write path used by the Goals, Planning, and Subscriptions screens. Each action shows a confirmation toast (`uistate.PostNotice`) and navigates to the affected screen. Helper `smartCurrencyOr` avoids inline conditionals.
+
+**Which engines were upgraded.** SMART-G12 ("Consider starting an emergency fund") now emits `ActionCreateGoal` instead of `ActionNavigate` — it has all the data needed (computed target amount, base currency) to create the entity without any additional user input. SMART-SU1 ("Consider cutting X — save Y/yr") now emits `ActionCancelSubscription` with the detected subscription name — appropriate because SU1 already scored the subscription as a strong cancel candidate.
+
+**What was deferred (C186).** SMART-G17 ("Automate goal contribution each payday") retains `ActionNavigate` to `/goals`. The ideal action here — auto-contribute money to a goal on each payday — requires a money-movement / recurring-transfer engine being built in C186. A `// TODO(C186)` comment marks the exact location. No fake action was added; the navigate is the correct degraded behavior.
+
+**Testing.** `internal/smartengine/c256_executable_actions_test.go` has three table-driven cases: (1) G12 emits `ActionCreateGoal` with non-empty name + positive target; (2) G12 fires no insight when an emergency goal already exists (G11 gate); (3) SU1 emits `ActionCancelSubscription` with non-empty `SubscriptionName`. All pass on `go test ./internal/smart/... ./internal/smartengine/...`. WASM build and `go vet` clean.
+
+**E2E note.** The e2e test (`e2e/c256_executable_actions.mjs`) seeds fresh data and enables free features, but consistently observes that the app is backed by IndexedDB (not localStorage) for dataset persistence, so direct localStorage injection is ignored on reload. The SMART-G12 card therefore doesn't appear in the E2E session (sample data or IndexedDB state persists). The E2E currently passes as an infrastructure smoke test (app loads, SMART page renders, no crash). The unit tests are the authoritative proof of the action-dispatch logic.
+
 ## 2026-06-25 — C264: User-settable alert thresholds
 
 The main structural decision: `RuleConfig` was a bare `map[string]bool`. Extending it to carry thresholds meant converting it to a struct — a breaking change to every call site that used the map syntax (`cfg[ruleID] = v`, `notify.RuleConfig{"id": false}`, etc.). The migration was done in one pass: the struct gets `Enabled map[string]bool` and `Thresholds map[string]int64`; `UnmarshalRuleConfig` now detects legacy payloads (those where `Enabled` is nil after unmarshalling — i.e. the old bare bool-map) and promotes them transparently, preserving user settings across the schema change.
