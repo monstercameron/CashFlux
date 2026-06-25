@@ -509,6 +509,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Span(css.Class("row-desc"), a.Name,
 				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
+				smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 			),
 			Span(css.Class("row-meta"), meta),
 		),

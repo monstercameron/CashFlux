@@ -7,6 +7,7 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -221,4 +222,116 @@ func SmartFieldAssist(settings smart.Settings, id, suggestion string, onApply fu
 // kept for use within the screens package.
 func smartFieldAssist(settings smart.Settings, id, suggestion string, onApply func()) ui.Node {
 	return SmartFieldAssist(settings, id, suggestion, onApply)
+}
+
+// --- SmartEmptyState: "set this up with help" helper in an empty section ----
+
+// smartEmptyStateProps carries the parameters for an empty-state smart helper.
+type smartEmptyStateProps struct {
+	// Insights is the capped list of insights to surface (caller already caps to 1).
+	Insights []smart.Insight
+	// Page is used to form the data-testid.
+	Page smart.Page
+}
+
+// smartEmptyStateInner renders the branded empty-state insight list.
+// Its own component so any hook inside smartInsightList sits at stable positions.
+func smartEmptyStateInner(props smartEmptyStateProps) ui.Node {
+	if len(props.Insights) == 0 {
+		return Fragment()
+	}
+	return Div(ClassStr("smart-emptystate "+tw.Fold(tw.FlexCol, tw.Gap2, tw.Mt2)),
+		Attr("data-testid", "smart-emptystate-"+string(props.Page)),
+		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Text13, tw.TextDim)),
+			smartGlyph(false, tw.Fold(tw.W3, tw.H3, tw.ShrinkO)),
+			Span(uistate.T("smart.emptyHint")),
+		),
+		smartInsightList(props.Insights),
+	)
+}
+
+// smartEmptyStateFor returns a smart helper block for an empty section when:
+// (a) the density permits AffordanceEmptyState, (b) the given page has at least
+// one enabled + active insight. Capped to 1 insight so it stays lightweight.
+// Returns nothing when the gate fails or there are no insights.
+func smartEmptyStateFor(settings smart.Settings, page smart.Page, in smartengine.Input) ui.Node {
+	if !settings.DensityOrDefault().Shows(smart.AffordanceEmptyState) {
+		return Fragment()
+	}
+	insights := smartengine.RunPage(in, settings, page)
+	if len(insights) == 0 {
+		return Fragment()
+	}
+	if len(insights) > 1 {
+		insights = insights[:1]
+	}
+	return ui.CreateElement(smartEmptyStateInner, smartEmptyStateProps{Insights: insights, Page: page})
+}
+
+// --- SmartOverlay: deep entity coach/insights popover (Everywhere density) --
+
+// smartOverlayProps carries the data for one entity's insight overlay.
+type smartOverlayProps struct {
+	// ID is the entity's stable identifier, used for data-testid and popover wrap id.
+	ID string
+	// Insights is the list of insights targeting this entity.
+	Insights []smart.Insight
+}
+
+// smartOverlay renders a toggleable popover that surfaces all insights for one
+// entity. It opens via a sparkle trigger button and closes via DismissPopover
+// (Escape / outside click). Its own component so UseState + UseEvent hooks sit
+// at a stable position — never inside a variable-length loop.
+func smartOverlay(props smartOverlayProps) ui.Node {
+	open := ui.UseState(false)
+	wrapID := "smart-overlay-wrap-" + props.ID
+	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
+	toggle := ui.UseEvent(func() { open.Set(!open.Get()) })
+
+	var pop ui.Node = Fragment()
+	if open.Get() {
+		pop = Div(ClassStr("smart-overlay-pop "+tw.Fold(tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
+			Attr("role", "dialog"),
+			Attr("aria-modal", "true"),
+			Attr("data-testid", "smart-overlay-"+props.ID),
+			Div(ClassStr(tw.Fold(tw.FontSemibold, tw.Text13, tw.Mb2)),
+				smartGlyph(false, tw.Fold(tw.W3, tw.H3, tw.ShrinkO)),
+				Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("smart.overlayTitle")),
+			),
+			smartInsightList(props.Insights),
+		)
+	}
+	return Span(ClassStr("smart-overlay-wrap "+tw.Fold(tw.InlineFlex, tw.ItemsCenter)),
+		Attr("id", wrapID),
+		Button(ClassStr("btn-icon-bare "+tw.Fold(tw.InlineFlex, tw.ItemsCenter)),
+			Type("button"),
+			Attr("data-testid", "smart-overlay-trigger-"+props.ID),
+			Attr("aria-label", uistate.T("smart.overlayLabel")),
+			Attr("title", uistate.T("smart.overlayLabel")),
+			OnClick(toggle),
+			smartGlyph(false, tw.Fold(tw.W4, tw.H4)),
+		),
+		pop,
+	)
+}
+
+// smartOverlayFor returns an entity coach overlay when:
+// (a) density permits AffordanceOverlay (Everywhere only), (b) byEntity has
+// at least one insight for the given relatedID, (c) every insight passes the
+// ShowsAffordance gate (enabled + not muted). Returns nothing when any gate fails.
+func smartOverlayFor(settings smart.Settings, byEntity map[string][]smart.Insight, relatedID string) ui.Node {
+	if !settings.DensityOrDefault().Shows(smart.AffordanceOverlay) {
+		return Fragment()
+	}
+	raw := byEntity[relatedID]
+	var qualifying []smart.Insight
+	for _, ins := range raw {
+		if settings.ShowsAffordance(ins.Feature, smart.AffordanceOverlay) {
+			qualifying = append(qualifying, ins)
+		}
+	}
+	if len(qualifying) == 0 {
+		return Fragment()
+	}
+	return ui.CreateElement(smartOverlay, smartOverlayProps{ID: relatedID, Insights: qualifying})
 }

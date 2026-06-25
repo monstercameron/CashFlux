@@ -26,6 +26,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -245,7 +247,8 @@ func Dashboard() ui.Node {
 		"freshness": func() ui.Node {
 			return freshnessWidget(accounts, app.FreshnessWindows(), freshnessDismissals.Get(), remindToUpdate, dismissFreshness)
 		},
-		"highlight": func() ui.Node { return topHighlightWidget(txns, app.Categories(), rates) },
+		"highlight":    func() ui.Node { return topHighlightWidget(txns, app.Categories(), rates) },
+		"smart-digest": func() ui.Node { return smartDigestWidget(app) },
 	}
 
 	hidden := uistate.UseHiddenWidgets().Get()
@@ -1269,6 +1272,52 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// digestCap is the most cross-page insights the digest widget shows inline.
+// Kept small so the widget is glanceable, not a wall — the full set lives on /smart.
+const digestCap = 3
+
+// smartDigestWidget is the "Smart digest" dashboard widget: a compact, cross-page
+// glance at the top active insights from all enabled Free engines. Gated by
+// AffordanceWidget (Standard density), so it only appears when the user's density
+// dial permits dashboard widgets. Strictly additive: if no features are enabled or
+// no insights are active, it renders the neutral empty hint rather than nothing,
+// so the tile still makes sense in the widget manager. Returns a full bento tile.
+func smartDigestWidget(app *appstate.App) ui.Node {
+	pr := uistate.UsePrefs().Get()
+	settings := uistate.LoadSmartSettings()
+
+	const widgetID = "smart-digest"
+
+	if !settings.DensityOrDefault().Shows(smart.AffordanceWidget) {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: widgetID, Title: uistate.T("smart.digestTitle"), Draggable: true, Resizable: true,
+			GridColumn: "1 / span 2", GridRow: "10",
+			Body: P(css.Class("empty t-body", tw.TextDim), uistate.T("smart.digestEmpty")),
+		})
+	}
+
+	in := buildSmartInput(app, pr.WeekStartWeekday())
+	all := smartengine.Run(in, settings)
+	if len(all) > digestCap {
+		all = all[:digestCap]
+	}
+
+	var body ui.Node
+	if len(all) == 0 {
+		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("smart.digestEmpty"))
+	} else {
+		body = Div(css.Class("t-body", tw.Flex, tw.FlexCol, tw.Gap2),
+			Attr("data-testid", "smart-digest-list"),
+			smartInsightList(all),
+		)
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: widgetID, Title: uistate.T("smart.digestTitle"), Draggable: true, Resizable: true,
+		GridColumn: "1 / span 2", GridRow: "10",
+		Body: body,
+	})
 }
 
 // attentionRowProps configures one attention digest row.

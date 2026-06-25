@@ -16,6 +16,17 @@ var smartKeys = Catalog{
 	"smart.stripTitle": "Smart",
 	"smart.viewAll":    "View all",
 
+	// Empty-state helper (AffordanceEmptyState).
+	"smart.emptyHint": "Smart has a tip for this section:",
+
+	// Entity overlay (AffordanceOverlay).
+	"smart.overlayTitle": "Smart insights",
+	"smart.overlayLabel": "Show Smart insights for this item",
+
+	// Dashboard digest widget.
+	"smart.digestTitle": "Smart digest",
+	"smart.digestEmpty": "Enable Smart features on the Smart page to see cross-page insights here.",
+
 	// Per-feature run controls.
 	"smart.schedule": "Schedule (when it runs)",
 	"smart.mute":     "Mute",

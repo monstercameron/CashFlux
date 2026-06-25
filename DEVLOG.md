@@ -3,6 +3,43 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART Wave 4: entity overlay, digest widget, empty-state helpers
+
+Wave 4 fills in the three remaining density tiers that hadn't been wired yet:
+`AffordanceEmptyState` (Minimal+), `AffordanceWidget` (Standard+), and `AffordanceOverlay`
+(Everywhere). All three follow the same architectural pattern established in Waves 1–3.
+
+**Architecture decisions:**
+
+1. **Empty-state helper in `smartEmptyStateFor`.** Added to `smart_affordances.go` alongside the
+   other per-affordance factory functions. It runs `smartengine.RunPage` at the call site (not
+   per-row), caps to 1 insight, and renders the list inside its own `smartEmptyStateInner`
+   component so any hook inside `smartInsightList` stays stable. Wired into Goals: the `listBody`
+   block was restructured — both the CTA and the smart hint are composed inside a `Fragment` when
+   `len(activeGoals) == 0`. Added `smart` import to `goals.go` and `buildSmartInput` call.
+
+2. **Entity overlay in `smartOverlayFor`.** Gate is `AffordanceOverlay` (Everywhere only — the most
+   invasive affordance). The `smartOverlay` component holds `UseState` (open/close) + `DismissPopover`
+   at stable positions; the trigger is a sparkle icon button directly on each account row next to
+   the existing badge. Pattern mirrors `smartTooltip` but uses `role="dialog"` / `aria-modal` instead
+   of `role="tooltip"` since it shows multiple full insight cards. Wired in `accounts_row.go` as
+   a one-liner beside `smartBadgeFor`.
+
+3. **Dashboard digest widget.** `smartDigestWidget(app)` added at the bottom of `dashboard.go`.
+   It reads `UsePrefs` + `LoadSmartSettings` like any other widget, runs `smartengine.Run` for the
+   cross-page digest, caps to 3, and renders `smartInsightList`. Gate: when density is below Standard
+   the widget renders an empty-hint tile so it still has a sensible presence in the widget manager.
+   Registered as `"smart-digest"` in the `renderers` map. Added to `DefaultItems()` as 2×1 after
+   `"highlight"`. The dashlayout pack test (`TestPackDefaultReproducesArrangement`) was updated to
+   include the new tile position.
+
+4. **No new hooks at page level.** All hooks live inside the named component (`smartEmptyStateInner`,
+   `smartOverlay`). No `On*` calls outside stable render positions.
+
+**E2E result:** 8/8 PASS — Everywhere density reveals 4 overlay triggers on Accounts + opens the
+overlay panel; digest-list confirmed on Dashboard at Standard/Everywhere; density Off removes it;
+Goals empty-state wired and absent-at-Off confirmed. Zero JS errors.
+
 ## 2026-06-24 — SMART Wave 3: in-form field assist chips
 
 Wave 3 adds opt-in suggestion chips inside add/edit forms — the `AffordanceFieldAssist` density

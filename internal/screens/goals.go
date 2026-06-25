@@ -17,6 +17,7 @@ import (
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -220,19 +221,6 @@ func Goals() ui.Node {
 
 	members := app.Members()
 
-	var listBody ui.Node
-	if len(activeGoals) == 0 {
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals})
-	} else {
-		rows := MapKeyed(activeGoals,
-			func(g domain.Goal) any { return g.ID },
-			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
-			},
-		)
-		listBody = Div(css.Class("goal-list"), rows)
-	}
-
 	achievedOpen := ui.UseState(true)
 	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
 
@@ -264,6 +252,25 @@ func Goals() ui.Node {
 	}
 
 	goalSmartSettings := uistate.LoadSmartSettings()
+	goalSmartPr := uistate.UsePrefs().Get()
+	goalSmartIn := buildSmartInput(app, goalSmartPr.WeekStartWeekday())
+
+	var listBody ui.Node
+	if len(activeGoals) == 0 {
+		listBody = Fragment(
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals}),
+			smartEmptyStateFor(goalSmartSettings, smart.PageGoals, goalSmartIn),
+		)
+	} else {
+		rows := MapKeyed(activeGoals,
+			func(g domain.Goal) any { return g.ID },
+			func(g domain.Goal) ui.Node {
+				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
+			},
+		)
+		listBody = Div(css.Class("goal-list"), rows)
+	}
+
 	return Div(
 		If(len(allGoals) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
