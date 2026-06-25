@@ -299,7 +299,21 @@ func Subscriptions() ui.Node {
 	subInsights := smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageSubscriptions)
 	subByEntity := insightsByEntity(subInsights)
 
-	rows := MapKeyed(subs,
+	// C162: the "Renewing soon" section reuses the same SubscriptionRow, so any sub
+	// renewing within 7 days otherwise appeared twice. Render the main list as the
+	// subs NOT shown in that section (totals/CSV/savings still use the full `subs`).
+	soonSet := make(map[string]bool, len(soon))
+	for _, s := range soon {
+		soonSet[s.Name+"|"+fmt.Sprint(s.Amount)] = true
+	}
+	mainSubs := subs[:0:0]
+	for _, s := range subs {
+		if !soonSet[s.Name+"|"+fmt.Sprint(s.Amount)] {
+			mainSubs = append(mainSubs, s)
+		}
+	}
+
+	rows := MapKeyed(mainSubs,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
 			cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
