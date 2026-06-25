@@ -67,6 +67,10 @@ func Transactions() ui.Node {
 	// click handler which fires post-render).
 	lastSelID := ui.UseState("")
 	var visibleOrder []string
+	// C90: the duplicate notice/count + "select duplicates" operate over the active
+	// FILTERED result set (assigned from `shown` below), so the count matches what the
+	// user is looking at instead of silently scanning the whole ledger.
+	var dupScope []domain.Transaction
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
 	// lastBulk holds a one-level undo snapshot for the most recent destructive bulk
@@ -343,12 +347,19 @@ func Transactions() ui.Node {
 	// existing bulk-delete can clean them up in one go.
 	selectDuplicates := ui.UseEvent(Prevent(func() {
 		nm := map[string]bool{}
-		for _, g := range dedupe.FindDuplicates(app.Transactions()) {
+		for _, g := range dedupe.FindDuplicates(dupScope) { // C90: within the filtered view
 			for _, dupID := range g.IDs[1:] {
 				nm[dupID] = true
 			}
 		}
 		selected.Set(nm)
+		// C91: confirm the action — without feedback a click that selected rows below
+		// the fold looked like nothing happened. Report the count (or "none found").
+		if n := len(nm); n > 0 {
+			uistate.PostNotice(uistate.T("transactions.dupSelected", plural(n, "duplicate")), false)
+		} else {
+			uistate.PostNotice(uistate.T("transactions.dupNoneSelected"), false)
+		}
 	}))
 	bulkDelete := ui.UseEvent(Prevent(func() {
 		sel := selected.Get()
@@ -476,9 +487,11 @@ func Transactions() ui.Node {
 
 	txns := app.Transactions()
 	shown := txnfilter.ApplyWithLabels(txns, f, txnfilter.Labels{Account: accName, Category: catName})
+	dupScope = shown // C90: duplicate detection scoped to the filtered view
 
-	// Heads-up for likely double entries (same date, amount, and description).
-	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
+	// Heads-up for likely double entries (same date, amount, and description),
+	// within the active filter so the count matches the visible rows (C90).
+	dupCount := dedupe.Count(dedupe.FindDuplicates(shown))
 
 	// Summary of the shown set: count + net total converted to the base currency.
 	base := app.Settings().BaseCurrency

@@ -148,6 +148,8 @@ var english = Catalog{
 	"split.owes":                         "%s owes %s",
 	"transactions.dupNotice":             "Heads up: %s — same date, amount, and description. Check for double entries.",
 	"transactions.selectDuplicates":      "Select duplicates",
+	"transactions.dupSelected":           "Selected %s for review.",
+	"transactions.dupNoneSelected":       "No duplicates found in the current view.",
 	"transactions.selectDuplicatesTitle": "Select the extra copy in each duplicate group so you can delete them",
 	"split.byWeight":                     "Split by weight (shares or income)",
 	"split.weight":                       "Weight",
