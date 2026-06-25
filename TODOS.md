@@ -2896,3 +2896,17 @@ ALREADY DONE: C77 JPY rate fixed (sample.go:853 = 0.0066); C92 txn_payee/txn_abs
 - [ ] [C145][MINOR] "Needs attention" safe-to-spend anchor: `KindSafeToSpend` + Inputs.SafeToSpend/HasSafeToSpend + Config toggle + Rank() branch (attention.go:46,80,91,104) + widget schema (widgetcfg/builtins.go:76) + dashboard wires it — GATED on R15-foundation (safespend) wiring.
 
 <!-- DECOMPOSITION COMPLETE: all C1-C329 now have atomic sub-todos or an ALREADY-SHIPPED flag with evidence. -->
+
+<!-- ===== VERIFICATION PASS (audit batch-19, 2026-06-25) ===== -->
+## Verified SHIPPED & marked completed (file:line + go test evidence)
+26 C-items confirmed done by read-only audit and closed in the task list:
+- PWA: C306 (manifest icons + apple-touch + meta), C307 (#installBtn beforeinstallprompt lifecycle).
+- Sync F49: C320 (loadSyncStatus backend-gate), C321 (data-testid=sync-chip), C322 (backoff.Delay+Jitter; `go test ./internal/backoff` PASS), C323 (offline listener), C324 (sync:rev reactive atom).
+- Alerts F38: C263 (notifySettings/alertRow), C264 (thresholds via notify.RuleConfigKey), C265 (EventPaycheckLanded), C266 (EventLowBalance), C267 (notifySeverityPill), C268 (read/dismiss/snooze), C269 (settings jump-nav); `go test ./internal/notify` PASS.
+- Roles F40: C275 (role field add+edit forms), C276 (role badge); `go test ./internal/memberrole` PASS (9 tests).
+- Bills/subs F20/F21: C157 (Autopay flag+badge), C158 (14-day horizon), C161 (IsLiabilityPayment), C162 (renewing-soon dedup), C163 (cancel-guidance link), C164 (sample rename), C165 (Netflix group-by-name); `go test ./internal/subscriptions ./internal/bills` PASS.
+- Misc: C77 (JPY 0.0066), C92 (txn_payee/txn_abs vars + test), C314 (wasm gzip/brotli serve).
+Pure-package health check: fingerprint/credithealth/payoff/scope/savings/learntally/setup/budgeting/safespend/localqa/ledger/reports/currency — all `go test` GREEN.
+
+## New gap found by audit (filed as todo)
+- [ ] [C265/C266 e2e][MINOR] Alert logic for paycheck-landed + low-balance is shipped + unit-tested, but `e2e/c265_*.mjs` / `e2e/c266_*.mjs` are MISSING — add e2e coverage to match the other alert stories (c263/c264/c267/c268/c269 exist).
