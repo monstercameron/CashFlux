@@ -3,6 +3,43 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART Wave 3: in-form field assist chips
+
+Wave 3 adds opt-in suggestion chips inside add/edit forms — the `AffordanceFieldAssist` density
+tier. All chips are Free (deterministic, $0), gated at Standard density.
+
+**Architecture decisions:**
+
+1. **Pure logic first.** `internal/smarttext` has zero `syscall/js`, unit-tests on native Go.
+   `CleanMerchant` strips POS prefixes (SQ *, TST*, PP*, POS, DEBIT, ACH) and trailing store
+   numbers, then title-cases with a short 2-char acronym whitelist + a 3-char known-list (ATM,
+   ACH, etc.) — solving the "GAS" / "THE" false-acronym problem. `ParseWish` finds the first
+   amount token, strips leading verbs ("save ", "i want to ") and connecting keywords ("for a ",
+   "toward "), and picks the longer non-empty fragment as the name. 23 table-driven test cases.
+
+2. **`SmartFieldAssist` exported from screens package.** The `app` package imports `screens`
+   (confirmed via `addhost.go`), so exporting `SmartFieldAssist` (uppercase) lets `quickadd.go`
+   use it without duplicating the chip component. A private `smartFieldAssist` shim in the same
+   file keeps the internal API consistent.
+
+3. **Hook safety.** `SmartFieldAssist` calls `ui.CreateElement(smartFieldAssistInner, props)`.
+   All hooks (`UseEvent`) live inside `smartFieldAssistInner` — a named component that renders at
+   a stable position. The caller never calls hooks inside a loop.
+
+4. **Why QuickAdd, not a separate transaction add form.** The inline transaction form was removed
+   (C73/C79); QuickAdd is now the sole manual-add path. The two assists (clean-merchant, auto-
+   category) sit at stable positions in the form body after the early-return guard.
+
+5. **Auto-category assist rationale.** Auto-categorization already runs on save (`AutoCategorizeTransaction`).
+   The chip surfaces the matched category *before* save, giving the user visibility and the chance
+   to override. It only shows when the user hasn't already chosen a category (catID == "").
+
+6. **Wish→goal assist rationale.** The goal name field doubles as a natural-language entry point:
+   typing "save $2,000 for a new laptop" is a common user mental model. The chip fills both Name
+   and Target Amount in one click, reducing the two-field friction for common goal creation.
+
+**What's next:** Wave 4 — entity overlays, dashboard smart widgets, empty-state helpers.
+
 ## 2026-06-24 — SMART Wave 2: key-figure tooltips + section quick-actions
 
 Spread the two reusable smart affordances — `smartTooltipFor` and `smartSectionAction` — across every

@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smarttext"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -132,9 +133,30 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
 
+	// Wish→goal assist: if the typed name parses as a free-text savings wish,
+	// offer a chip that fills both the name and the target amount in one click.
+	goalSmartSettings := uistate.LoadSmartSettings()
+	decimals := currency.Decimals(base)
+	var wishSuggestion string
+	var wishMinor int64
+	if wn, wamt, wok := smarttext.ParseWish(name.Get()); wok {
+		// Only show when the parsed name differs from what was typed (real suggestion).
+		if wn != strings.TrimSpace(name.Get()) || target.Get() == "" || target.Get() == "0" {
+			wishSuggestion = wn
+			wishMinor = wamt
+		}
+	}
+	wishAssist := smartFieldAssist(goalSmartSettings, "goal-wish", wishSuggestion, func() {
+		name.Set(wishSuggestion)
+		if wishMinor > 0 {
+			target.Set(money.FormatMinor(wishMinor, decimals))
+		}
+	})
+
 	return Form(css.Class("form-grid"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
 		labeledField(uistate.T("common.name"),
 			Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
+		wishAssist,
 		labeledField(uistate.T("goals.targetLabel"),
 			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget))),
 		labeledField(uistate.T("goals.dateLabel"),

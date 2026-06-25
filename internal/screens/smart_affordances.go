@@ -155,3 +155,70 @@ func smartSectionActionBtn(_ struct{}) ui.Node {
 		Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("smart.stripTitle")),
 	)
 }
+
+// --- SmartFieldAssist: inline suggestion chip inside a form field ----------
+
+// SmartFieldAssistProps configures a field-assist chip.
+type SmartFieldAssistProps struct {
+	// Settings is the current SMART settings (for density gate).
+	Settings smart.Settings
+	// ID is a stable string used to build data-testid attributes. Must be unique
+	// per form/field combination on the page (e.g. "qa-desc", "goal-wish").
+	ID string
+	// Suggestion is the cleaned/computed value to offer. An empty suggestion means
+	// nothing to suggest; the chip renders nothing.
+	Suggestion string
+	// OnApply is called when the user clicks the chip to accept the suggestion.
+	OnApply func()
+}
+
+// smartFieldAssistInner is the inner component that holds the click hook.  It
+// must be its own component (not inlined) so UseEvent is called at a stable
+// render position — never inside a variable-length loop.
+func smartFieldAssistInner(props SmartFieldAssistProps) ui.Node {
+	apply := ui.UseEvent(func() {
+		if props.OnApply != nil {
+			props.OnApply()
+		}
+	})
+	return Span(ClassStr("smart-assist-wrap "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.Mt1)),
+		Attr("data-testid", "smart-assist-"+props.ID),
+		smartGlyph(false, tw.Fold(tw.W3, tw.H3, tw.ShrinkO)),
+		Button(ClassStr("btn-link "+tw.Fold(tw.Text12, tw.TextDim)),
+			Type("button"),
+			Attr("data-testid", "smart-assist-"+props.ID+"-apply"),
+			Attr("aria-label", "Use suggestion: "+props.Suggestion),
+			OnClick(apply),
+			Text(`Use "`+props.Suggestion+`"`),
+		),
+	)
+}
+
+// SmartFieldAssist renders a compact inline suggestion chip ("✦ Use "…"") below
+// a form field. Clicking the chip calls OnApply so the caller can fill the field.
+//
+// Renders nothing (Fragment) when:
+//   - The density setting does not permit AffordanceFieldAssist, OR
+//   - Suggestion is empty.
+//
+// The chip is its own component so its UseEvent hook is always at a stable position.
+func SmartFieldAssist(settings smart.Settings, id, suggestion string, onApply func()) ui.Node {
+	if suggestion == "" {
+		return Fragment()
+	}
+	if !settings.DensityOrDefault().Shows(smart.AffordanceFieldAssist) {
+		return Fragment()
+	}
+	return ui.CreateElement(smartFieldAssistInner, SmartFieldAssistProps{
+		Settings:   settings,
+		ID:         id,
+		Suggestion: suggestion,
+		OnApply:    onApply,
+	})
+}
+
+// smartFieldAssist is the package-internal shorthand for SmartFieldAssist,
+// kept for use within the screens package.
+func smartFieldAssist(settings smart.Settings, id, suggestion string, onApply func()) ui.Node {
+	return SmartFieldAssist(settings, id, suggestion, onApply)
+}

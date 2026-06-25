@@ -14,6 +14,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/smarttext"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -167,6 +170,41 @@ func QuickAddHost() uic.Node {
 		reviewedArgs = append(reviewedArgs, Attr("checked", ""))
 	}
 
+	// SMART field assists (Wave 3 / Free):
+	//  (a) Clean-merchant: suggests a normalised merchant name when the raw
+	//      description looks like a bank POS string (prefix, store numbers, etc.).
+	//  (b) Auto-category: when a user rule matches the description, shows the
+	//      rule's category so it can be applied in one click — giving visibility
+	//      into the auto-categorization that already runs on save.
+	qaSmartSettings := uistate.LoadSmartSettings()
+
+	// (a) Clean-merchant assist.
+	rawDesc := desc.Get()
+	cleanedDesc := smarttext.CleanMerchant(rawDesc)
+	var descSuggestion string
+	if cleanedDesc != strings.TrimSpace(rawDesc) && cleanedDesc != "" {
+		descSuggestion = cleanedDesc
+	}
+	descAssist := screens.SmartFieldAssist(qaSmartSettings, "qa-desc", descSuggestion, func() {
+		desc.Set(cleanedDesc)
+	})
+
+	// (b) Auto-category assist: resolve the matched category ID to a human name
+	//     so the chip reads "Use 'Groceries'" rather than an opaque ID.
+	suggestedCatID := rules.Category(app.Rules(), "", strings.TrimSpace(rawDesc))
+	var catSuggestion string
+	if suggestedCatID != "" && catID.Get() == "" {
+		for _, c := range app.Categories() {
+			if c.ID == suggestedCatID {
+				catSuggestion = c.Name
+				break
+			}
+		}
+	}
+	catAssist := screens.SmartFieldAssist(qaSmartSettings, "qa-cat", catSuggestion, func() {
+		catID.Set(suggestedCatID)
+	})
+
 	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
 	// Wrap each in ui.FormField so they render a visible caption above the control,
 	// matching the .labeled-field pattern used by all entity add modals.
@@ -186,8 +224,10 @@ func QuickAddHost() uic.Node {
 			Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		ui.FormField(uistate.T("quickAdd.description"),
 			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
+		descAssist,
 		ui.FormField(uistate.T("quickAdd.category"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
+		catAssist,
 		ui.FormField(uistate.T("quickAdd.date"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
 		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
@@ -211,10 +251,10 @@ func QuickAddHost() uic.Node {
 		// Shorter than the default so the compact add-a-transaction form doesn't
 		// float in a tall, mostly-empty panel (C13). The body scrolls if it ever
 		// overflows.
-		Height:  "420px",
+		Height:       "420px",
 		OnSave:       save,
 		SaveDisabled: !formValid,
-		OnClose: closePanel,
+		OnClose:      closePanel,
 	})
 }
 
