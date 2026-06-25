@@ -1100,11 +1100,22 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 	if props.Rate > 0 {
 		val = strconv.FormatFloat(props.Rate, 'f', -1, 64)
 	}
+	// C81/C82: when a rate is set, disclose the inverse direction so the user can
+	// confirm they entered it the right way round and see the conversion at a glance
+	// — e.g. "1 USD = 0.92 EUR" (the row) ⇒ "1 EUR = 1.0870 USD" (this hint).
+	var inverseHint uic.Node = Fragment()
+	if props.Rate > 0 {
+		inv := strconv.FormatFloat(1/props.Rate, 'f', 4, 64)
+		inverseHint = Span(css.Class(tw.TextXs, tw.TextFaint), Attr("data-testid", "fx-inverse"),
+			Style(map[string]string{"margin-left": "0.5rem"}),
+			uistate.T("settings.fxInverse", props.Base, inv, props.Code))
+	}
 	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "40px"}), props.Code),
 		Span(css.Class(tw.TextFaint), uistate.T("settings.fxRateLabel", props.Code)),
 		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Attr("aria-label", uistate.T("settings.fxRateAria", props.Code, props.Base)), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
+		inverseHint,
 		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "var(--color-warn)", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)
 }
