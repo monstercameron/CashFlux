@@ -6,13 +6,15 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
+	"runtime/debug"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -34,7 +36,14 @@ const notifyDeliveredKey = "cashflux:notify:delivered"
 // fires at most once per its natural period), and shows a single summary toast.
 // It is wrapped in a recover so a notification hiccup can never break app boot.
 func runNotifyCatchUp() {
-	defer func() { _ = recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("runNotifyCatchUp panicked; boot continues",
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
+		}
+	}()
 
 	app := appstate.Default
 	if app == nil {

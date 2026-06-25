@@ -38,6 +38,27 @@ permissions without a schema migration.
 
 **Tests:** `go test ./internal/domain/... ./internal/memberrole/... ./internal/store/...` → all
 three packages green. WASM build clean (rc=0).
+## 2026-06-25 — Fix: Log swallowed panics in runNotifyCatchUp (C272)
+
+**Change:** The `defer func() { _ = recover() }()` in `runNotifyCatchUp` (`internal/app/notifyrun.go`) silently discarded any panic with no trace. Replaced with a conditional log: if `recover()` returns non-nil, `slog.Error` is called with the panic value and `string(debug.Stack())`, then execution returns normally. Boot is still protected; the panic is now visible in the structured log and browser console. Imports added: `log/slog`, `runtime/debug`.
+
+**Zero-candidates diagnosis (investigation only — not fixed here):**
+
+After reading the candidate-generating code, the most likely causes for zero notification candidates on date 2026-06-25 with sample data, in order of probability:
+
+1. **Delivered-log suppression (most likely for stale/bill/budget/digest).** `notify.CatchUp` checks `log.Has(key)` before emitting. The occurrence keys are stable (account ID + ISO-week, budget ID + state + month-key, etc.). If `runNotifyCatchUp` has run successfully even once — including on the first load after C270 was fixed — every fresh candidate from that run is marked delivered and will be suppressed on all subsequent opens within the same ISO-week or calendar-month. The Notification Center then shows the items from that first run, but catch-up produces nothing new. To confirm: clear `cashflux:notify:delivered` from localStorage/KV and reload.
+
+2. **Sample account `UpdatedAt` / `FreshnessWindows` are too recent.** `StaleBalanceCandidates` delegates to `freshness.StaleAccounts`, which compares `account.UpdatedAt` + the configured freshness window to `now`. If the sample data was seeded or imported recently (within the window), no account is stale. On 2026-06-25 sample data last updated in mid-June would still be within a 30-day window.
+
+3. **No recurring bills within 7-day window.** `BillDueCandidates` filters to `b.DaysUntil >= 0 && b.DaysUntil <= 7`. If sample recurring events don't happen to fall within 7 days of 2026-06-25, this generator produces nothing. The sample set may not have been designed for this date.
+
+4. **Budget states are `StateOK` or `StateUnder` for all sample budgets.** `BudgetCandidates` only emits for `StateNear` or `StateOver`. If sample transactions don't push any budget over the `DefaultNearThreshold`, no budget candidates are generated.
+
+5. **No transactions ≥ $500 in the last 30 days.** `largeTransactionCandidates` uses a $500 threshold (`defaultLargeTxnMinor = 50000` minor units) and a 30-day lookback. Sample data may not include any qualifying expense.
+
+6. **Backup cadence not due.** `BackupCandidates` returns nil if `backup.Due(cadence, lastBackupAt, now)` is false. A fresh install with no prior export and `DefaultCadence` (monthly) would be due — but if `lastBackupKey` was set at some point this month, the monthly cadence gates it out.
+
+**Recommended follow-up ticket:** add a debug log (or a dev-tools panel entry) that logs how many candidates each generator produced before the delivered-log filter, so production silence is diagnosable without a code change.
 
 ## 2026-06-25 — Fix: Notification Center stays empty (C270, closes C121/C158/C159)
 
