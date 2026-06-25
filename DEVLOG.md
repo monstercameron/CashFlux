@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Smart enabled-state persistence audit (C255)
+
+**Verdict: verified-correct. No real gap existed.**
+
+The ticket asked: does `smart.Settings` actually persist across a fresh session, or is it only in-memory? Full trace of the path:
+
+1. `smart.Settings` — all fields carry `json:"...,omitempty"` tags. The struct is a plain value type with no unexported fields that would silently drop. Maps are lazily allocated, and `omitempty` means nil maps round-trip as nil (not `null`), which Go deserializes back to nil — correct and safe.
+
+2. `uistate.SaveSmartSettings` / `LoadSmartSettings` — calls `SettingKVSet(smartSettingsKey, ...)` / `SettingKVGet(smartSettingsKey)`, where `smartSettingsKey = "cashflux:smart-settings"`.
+
+3. `SettingKVSet` in `kvbridge.go` — when `appstate.Default != nil`, calls `app.SetSettingKV(key, val)` → `store.SetSettingKV` (SQLite INSERT OR REPLACE into the `settings_kv` table). Before the store is ready (very early boot), falls back to `browserstore.Set` (IndexedDB); first-read migrates that value into SQLite. The `settings_kv` table is the **PRESERVED** bucket — it is not cleared on dataset wipe, so enabled-state survives dataset resets as well as plain reloads.
+
+4. Every mutation entry-point (`SetSmartFeatureEnabled`, `EnableAllSmart`, `DisableAllSmart`, `SetSmartDensity`, `DismissSmartInsight`, etc.) reads → mutates → saves via `SaveSmartSettings`. No code path mutates in-memory without persisting.
+
+**What was missing:** a test that actually proves the JSON round-trip is lossless. Previous tests covered `IsEnabled` / `SetEnabled` logic but never exercised the full marshal→unmarshal cycle. Added `TestSettingsJSONRoundTrip` to `internal/smart/smart_test.go`: constructs a `Settings` with mixed `Enabled`/`ExplicitOff`, dismissed insight, cadence override, muted feature, `LastRun` timestamp, cached AI result, and `DensityEverywhere`; marshals to JSON, unmarshals, asserts `reflect.DeepEqual` on the whole struct, then spot-checks 7 semantic cases + cadence/timestamp/result/density. Also covers the zero-Settings (fresh-install) round-trip. 9/9 sub-tests pass. `go test ./internal/smart/...` green. WASM build clean.
+
 ## 2026-06-25 — Fix silent add-form failure (C223/C71/C177 via R2)
 
 The review pass flagged "add silently fails" three times — credit card (F9), goal (F23), other-asset
