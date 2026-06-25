@@ -318,8 +318,13 @@ func AbsAmount(t domain.Transaction) int64 {
 }
 
 // matchText reports whether the (already-lowercased) query appears in a
-// transaction's description or any of its tags.
+// transaction's payee, description, or any of its tags. Payee is a first-class
+// field used by the rules engine and the activity screen, so a payee that differs
+// from the description (e.g. a cleaned-up merchant name) must still be findable.
 func matchText(t domain.Transaction, q string) bool {
+	if strings.Contains(strings.ToLower(t.Payee), q) {
+		return true
+	}
 	if strings.Contains(strings.ToLower(t.Desc), q) {
 		return true
 	}

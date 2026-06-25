@@ -1104,7 +1104,7 @@ var english = Catalog{
 	"transactions.noMatch":             "No matching transactions.",
 	"transactions.showMore":            "Show more (%d hidden)",
 	"transactions.listTitle":           "All transactions",
-	"transactions.searchPlaceholder":   "Search description or tag",
+	"transactions.searchPlaceholder":   "Search description, payee, or tag",
 	"transactions.member":              "Member",
 	"transactions.kindLabel":           "Type",
 	"transactions.categoryLabel":       "Category",

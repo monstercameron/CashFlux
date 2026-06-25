@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Fix ledger search to include Payee (C50/C55)
+
+Working the C-series backlog from the 50-feature review pass (alongside a parallel agent that's
+landing the notification + member-role fixes). F6/C50: `internal/txnfilter.matchText` searched only
+`Desc` + `Tags`, so a payee that differs from the raw description — exactly the cleaned-up merchant
+names the rules engine and activity screen rely on — could not be found by the transactions search.
+Added `Payee` to the match (pure logic, native table test `TestApplyTextMatchesPayee`) and updated
+the search placeholder to name payee (C55). Chose a cold pure-logic package deliberately to avoid
+colliding with the parallel agent's hot files; committed only the three files I exclusively touched.
+
 ## 2026-06-25 — C268 Per-item read/dismiss/snooze in the Notification Center
 
 **What:** Added per-row controls to the Notification Center: a read/unread toggle, a snooze-1-day

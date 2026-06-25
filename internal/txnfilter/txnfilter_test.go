@@ -216,6 +216,24 @@ func TestApplyFilters(t *testing.T) {
 	}
 }
 
+// TestApplyTextMatchesPayee guards C50: search must match the Payee field, not
+// just Desc/Tags, so a cleaned-up merchant name that differs from the raw
+// description is still findable.
+func TestApplyTextMatchesPayee(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "p", Desc: "card purchase 0123", Payee: "Starbucks", Amount: money.New(-500, "USD"), Date: d("2026-06-01")},
+	}
+	if got := Apply(txns, Criteria{Text: "starbucks"}); ids(got) != "p" {
+		t.Errorf("payee search = %q, want p", ids(got))
+	}
+	if got := Apply(txns, Criteria{Text: "card"}); ids(got) != "p" {
+		t.Errorf("desc search = %q, want p", ids(got))
+	}
+	if got := Apply(txns, Criteria{Text: "nomatch"}); ids(got) != "" {
+		t.Errorf("no-match search = %q, want empty", ids(got))
+	}
+}
+
 func TestApplyDateRange(t *testing.T) {
 	got := Apply(sample(), Criteria{From: "2026-06-02", To: "2026-06-03"})
 	if ids(got) != "bc" {
