@@ -51,9 +51,11 @@ func TestTriggerFiresOnNewNotEdit(t *testing.T) {
 	}
 }
 
-// M2 + bulk: importing many rows fires the trigger ONCE (not per row), and a
-// createTask action doesn't pile up duplicate open tasks.
-func TestBulkImportFiresOnceNoDuplicateTasks(t *testing.T) {
+// M2 + bulk (C92): importing rows fires the txn-added trigger PER imported row so
+// txn_*-conditioned workflows (routing by payee, flagging by amount) see each
+// transaction's context — but a createTask action stays idempotent, so an
+// unconditioned createTask still yields a single open task, not one per row.
+func TestBulkImportFiresPerRowTaskIdempotent(t *testing.T) {
 	a := newApp(t, false)
 	seedAccount(t, a, 0)
 	_ = a.PutWorkflow(workflow.Workflow{
@@ -69,11 +71,33 @@ func TestBulkImportFiresOnceNoDuplicateTasks(t *testing.T) {
 	if n != 3 {
 		t.Fatalf("imported %d rows, want 3", n)
 	}
-	if runs := len(a.WorkflowRuns()); runs != 1 {
-		t.Errorf("bulk import should fire once, got %d runs", runs)
+	if runs := len(a.WorkflowRuns()); runs != 3 {
+		t.Errorf("bulk import should fire per imported row, got %d runs, want 3", runs)
 	}
 	if got := openTasksWithTitle(a, "Imported batch"); got != 1 {
 		t.Errorf("createTask should be idempotent, got %d tasks", got)
+	}
+}
+
+// C86: re-importing the same CSV must NOT double the transactions — rows already
+// present (same account + date + amount + description) are skipped.
+func TestReimportCSVDeduplicates(t *testing.T) {
+	a := newApp(t, false)
+	seedAccount(t, a, 0)
+	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n2026-06-11,Checking,Lunch,-20\n"
+	if n, _, err := a.ImportTransactionsCSV([]byte(csv), ""); err != nil || n != 2 {
+		t.Fatalf("first import: n=%d err=%v, want 2", n, err)
+	}
+	// Same file again: every row is a duplicate, so nothing new is written.
+	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
+	if err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("re-import added %d rows, want 0 (all duplicates)", n)
+	}
+	if total := len(a.Transactions()); total != 2 {
+		t.Errorf("after re-import have %d transactions, want 2 (no doubling)", total)
 	}
 }
 

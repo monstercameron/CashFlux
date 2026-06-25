@@ -55,6 +55,20 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	tags := ui.UseState("")
 	errMsg := ui.UseState("")
 
+	// Consume any pending "Always categorize like this" prefill once on mount:
+	// seed match/category from the draft set by the transaction row, then clear
+	// it so a later blank visit starts empty. The atom is captured by the dialog
+	// host (dialoghost.go); reading it here is a stable hook position.
+	draft := uistate.UseRuleDraft()
+	ui.UseEffect(func() func() {
+		if d := draft.Get(); d != nil {
+			match.Set(d.Match)
+			categoryID.Set(d.CategoryID)
+			uistate.ClearRuleDraft()
+		}
+		return nil
+	}, "rule-draft-consume")
+
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
 	// onCategory hook slot kept for stable hook ordering; SelectInput owns the event.
 	ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })

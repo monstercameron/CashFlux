@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Implementation-ready backlog fixes: C86, C92, C32, C132
+
+Knocked out four diagnosed IMPL-ready items from the research backlog in one session (split into
+three commits, one logical fix each).
+
+**C86 + C92 — CSV import correctness.** Same function (`ImportTransactionsCSV`), so they ship
+together. C86: re-importing a CSV silently doubled every row (the importer had no dedupe, unlike the
+document-import path). Added a pure `dedupe.Signature(t)` — extracted from `FindDuplicates` so there's
+one source of truth — and the importer builds a per-account `<accountID>|<signature>` seen-set from
+existing transactions and skips matches. C92: the old code wrapped the bulk write in
+`WithoutTriggers`, which fires a single aggregate `TriggerTxnAdded` with a **nil** transaction — so
+`txn_*`-conditioned workflows (route-by-payee, flag-by-amount) never saw imported rows. Replaced it
+with manual `triggersSuspended` bracketing, then fire `RunTriggered(TriggerTxnAdded, &importedTxns[i])`
+per imported row with full context.
+
+*Contract change.* This flipped `TestBulkImportFiresOnceNoDuplicateTasks` (which asserted fire-once —
+the very behavior breaking import routing). Rewrote it to `TestBulkImportFiresPerRowTaskIdempotent`:
+per-row firing (3 rows → 3 runs) while createTask stays idempotent (1 task). Added
+`TestReimportCSVDeduplicates` for C86.
+
+**C32 — rule prefill.** `ruleaddform.go` never read the `RuleDraft` atom, so "Always categorize like
+this" opened a blank form. Added a once-on-mount `UseEffect` that seeds match/category then clears.
+
+**C132 — budget rollover.** Rollover was decorative: a carry badge drawn, but budgets evaluated
+against the raw limit (`Carryover()` never called). The loop now evaluates against a budget copy with
+`effectiveLimit = Carryover(prev.Remaining, b.Limit)`. Badge value unchanged.
+
+**Verification.** `go test ./internal/appstate ./internal/dedupe ./internal/budgeting` green; native
+appstate build + full wasm app build rc=0. Pre-existing failures in `internal/ui/tw` and
+`internal/server` confirmed (stash-verified) to fail on the clean tree — unrelated.
+
 ## 2026-06-25 — C256/C187: Executable automate-goal (pay-yourself-first workflow)
 
 **What was added.** This completes the automate-goal leg of C256 (and resolves C187, the pay-yourself-first sub-item of C185). Three coordinated changes:

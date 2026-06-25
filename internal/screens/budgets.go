@@ -195,7 +195,23 @@ func Budgets() ui.Node {
 	rollNeg := map[string]bool{}     // budgetID → whether the previous-period carry is negative
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, anchor, weekStart)
-		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		// Rollover (C132): carry the previous period's remaining (negative when it
+		// was overspent) into this period's effective limit so Remaining/Percent/
+		// State/bar reflect the carry. Carryover() was never applied before, leaving
+		// rollover purely decorative. The badge shows the carried amount, which is
+		// exactly effectiveLimit − limit = prev.Remaining.
+		eval := b
+		if b.Rollover {
+			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
+			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); perr == nil {
+				if eff, cerr := budgeting.Carryover(prev.Remaining, b.Limit); cerr == nil {
+					eval.Limit = eff
+				}
+				rollCarry[b.ID] = fmtMoney(prev.Remaining)
+				rollNeg[b.ID] = prev.Remaining.IsNegative()
+			}
+		}
+		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
 		if err != nil {
 			continue
 		}
@@ -205,13 +221,6 @@ func Budgets() ui.Node {
 		// finished period or an already-over budget doesn't double up the message.
 		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
 			paceOver[b.ID] = fmtMoney(p.OverBy)
-		}
-		if b.Rollover {
-			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
-			if prev, err := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
-				rollCarry[b.ID] = fmtMoney(prev.Remaining)
-				rollNeg[b.ID] = prev.Remaining.IsNegative()
-			}
 		}
 	}
 
