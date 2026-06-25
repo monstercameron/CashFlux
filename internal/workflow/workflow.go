@@ -46,6 +46,12 @@ type Trigger struct {
 // ActionKind is one effect a workflow can perform. The set is write-safe (no
 // action creates transactions, so a txn-added workflow can't loop). SetCategory,
 // AddTag, and FlagReview act on the transaction that triggered the workflow.
+//
+// ActionTransfer is a sanctioned exception: it does create transactions, but is
+// loop-safe because (1) it is only valid on TriggerScheduled (not TriggerTxnAdded),
+// enforced by ValidateTransferAction; and (2) it carries a DedupeKey so the same
+// scheduled period transfers at most once even if RunTriggeredScheduled fires
+// multiple times.
 type ActionKind string
 
 const (
@@ -65,6 +71,10 @@ const (
 	ActionPostRecurring ActionKind = "postRecurring"
 	// ActionFlagBudgetOver creates tasks for every budget currently over its limit.
 	ActionFlagBudgetOver ActionKind = "flagBudgetOver"
+	// ActionTransfer moves money from one account to another via CreateTransferPair.
+	// Loop-safe: only valid on TriggerScheduled; DedupeKey prevents double-execution
+	// within the same period.
+	ActionTransfer ActionKind = "transfer"
 )
 
 // ReviewTag is the tag ActionFlagReview adds.
@@ -72,7 +82,8 @@ const ReviewTag = "needs-review"
 
 // Action is one step in a workflow. Fields are interpreted per Kind: CreateTask
 // uses Title/Notes, Notify uses Message, SetCategory uses CategoryID, AddTag uses
-// Tag; ApplyRules and FlagReview use none.
+// Tag; ApplyRules and FlagReview use none. Transfer uses TransferFromAccountID,
+// TransferToAccountID, TransferAmount (minor units), and DedupeKey.
 type Action struct {
 	Kind       ActionKind `json:"kind"`
 	Title      string     `json:"title,omitempty"`
@@ -80,6 +91,15 @@ type Action struct {
 	Message    string     `json:"message,omitempty"`
 	CategoryID string     `json:"categoryId,omitempty"`
 	Tag        string     `json:"tag,omitempty"`
+	// Transfer fields — only used when Kind == ActionTransfer.
+	TransferFromAccountID string `json:"transferFromAccountId,omitempty"`
+	TransferToAccountID   string `json:"transferToAccountId,omitempty"`
+	// TransferAmount is the transfer amount in the source account's minor units (must be > 0).
+	TransferAmount int64 `json:"transferAmount,omitempty"`
+	// DedupeKey is an opaque string that scopes the transfer to at most one execution
+	// per period (e.g. "pyf:wf-abc:2026-06"). The apply layer skips the transfer if
+	// a prior run for the same workflow already carried this key.
+	DedupeKey string `json:"dedupeKey,omitempty"`
 }
 
 // Context is what a workflow is evaluated against: numeric variables (the engine
@@ -109,6 +129,7 @@ type Workflow struct {
 // Effect is the planned result of one action: a human-readable summary (for the
 // dry-run preview and the run log) plus the typed fields the apply layer needs.
 // TxnID is the transaction a transaction-mutating effect targets (empty otherwise).
+// Transfer fields are populated when Kind == ActionTransfer.
 type Effect struct {
 	Kind       ActionKind `json:"kind"`
 	Summary    string     `json:"summary"`
@@ -118,6 +139,11 @@ type Effect struct {
 	TxnID      string     `json:"txnId,omitempty"`
 	CategoryID string     `json:"categoryId,omitempty"`
 	Tag        string     `json:"tag,omitempty"`
+	// Transfer fields — only populated when Kind == ActionTransfer.
+	TransferFromAccountID string `json:"transferFromAccountId,omitempty"`
+	TransferToAccountID   string `json:"transferToAccountId,omitempty"`
+	TransferAmount        int64  `json:"transferAmount,omitempty"`
+	DedupeKey             string `json:"dedupeKey,omitempty"`
 }
 
 // Run is the audit record of one workflow execution: what it did (or would do, if
@@ -200,6 +226,13 @@ func planAction(a Action, ctx Context) Effect {
 		e.Summary = "Post all due autopost recurring transactions"
 	case ActionFlagBudgetOver:
 		e.Summary = "Create tasks for budgets over their limit"
+	case ActionTransfer:
+		e.TransferFromAccountID = a.TransferFromAccountID
+		e.TransferToAccountID = a.TransferToAccountID
+		e.TransferAmount = a.TransferAmount
+		e.DedupeKey = a.DedupeKey
+		e.Summary = fmt.Sprintf("Transfer %d minor units from %s to %s",
+			a.TransferAmount, a.TransferFromAccountID, a.TransferToAccountID)
 	default:
 		e.Summary = "Unknown action: " + string(a.Kind)
 	}
@@ -226,6 +259,29 @@ func AdvanceScheduledNextRun(w *Workflow, now time.Time) {
 	for guard := 0; !w.Trigger.NextRun.After(now) && guard < 600; guard++ {
 		w.Trigger.NextRun = w.Trigger.Cadence.Next(w.Trigger.NextRun)
 	}
+}
+
+// ValidateTransferAction checks that a is a well-formed ActionTransfer and that
+// it is safe to execute given triggerKind. It returns a non-nil error if:
+//   - TransferFromAccountID is empty
+//   - TransferToAccountID is empty
+//   - TransferAmount is zero or negative
+//   - triggerKind is TriggerTxnAdded (would cause a recursion loop because the
+//     transfer legs are themselves transactions)
+func ValidateTransferAction(a Action, triggerKind TriggerKind) error {
+	if a.TransferFromAccountID == "" {
+		return fmt.Errorf("workflow: transfer action requires a source account (TransferFromAccountID)")
+	}
+	if a.TransferToAccountID == "" {
+		return fmt.Errorf("workflow: transfer action requires a destination account (TransferToAccountID)")
+	}
+	if a.TransferAmount <= 0 {
+		return fmt.Errorf("workflow: transfer amount must be positive, got %d", a.TransferAmount)
+	}
+	if triggerKind == TriggerTxnAdded {
+		return fmt.Errorf("workflow: ActionTransfer is not permitted on TriggerTxnAdded (would loop — transfer legs are transactions)")
+	}
+	return nil
 }
 
 func fallback(s, def string) string {

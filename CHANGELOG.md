@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- C186: ActionTransfer primitive in workflow engine — loop-safe scheduled money-movement via CreateTransferPair with DedupeKey guard
+
 ### Changed
 - **Frontend-design polish pass on C254–C276 components (2026-06-25):** Applied the frontend-design skill methodology, reconciled with CashFlux's calm/refined design language. CSS-only changes to `web/index.html` — no Go logic touched. Additions: (1) Severity pills (C267) — refined font metrics, box-shadow depth, dark-mode text tokens for better contrast; (2) Per-item notification controls (C268) — new `.notif-ctrl-btn` / `.notif-ctrl-dismiss` ghost-button style with hover/focus affordances and `focus-visible` outline; (3) Single-device note (C274) — calm left-rule helper text treatment; (4) Member role badge + default chip (C276) — `.badge` / `.badge-muted` semantic variants with WCAG-AA contrast in both themes; (5) Ghost button variant `.btn-ghost` for Smart tab bar (C257/C259), with active-tab underline indicator; (6) Smart insight card `.smart-card` — layered surface, severity-toned left border, hover depth; (7) Catch-up banner (C271) — warm accent-dim surface + staggered `animation-delay` reveal for label/count (guarded by `prefers-reduced-motion`); (8) Dashboard catch-up card — slide-up entrance animation. All colors use existing CSS vars; no hardcoded hex introduced. WCAG AA verified for all new color combinations.
 

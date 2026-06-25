@@ -1170,8 +1170,11 @@ func (a *App) runWorkflow(w workflow.Workflow, ctx workflow.Context, dryRun bool
 	return run, nil
 }
 
-// applyEffect performs one planned effect. Effects are deliberately write-safe and
-// never create transactions, so a txn-added workflow can't trigger itself.
+// applyEffect performs one planned effect. Most effects are write-safe and never
+// create transactions. ActionTransfer is a sanctioned exception: it is loop-safe
+// because the apply path runs inside triggersSuspended=true (so the legs don't
+// re-fire RunTriggered) and ValidateTransferAction prevents its use on
+// TriggerTxnAdded at save time.
 func (a *App) applyEffect(e workflow.Effect) {
 	switch e.Kind {
 	case workflow.ActionCreateTask:
@@ -1214,6 +1217,30 @@ func (a *App) applyEffect(e workflow.Effect) {
 		}
 	case workflow.ActionFlagBudgetOver:
 		a.applyFlagBudgetOver()
+	case workflow.ActionTransfer:
+		// DedupeKey guard: if a prior run already carried this DedupeKey for any
+		// effect, the period transfer has already executed — skip to prevent double
+		// movement. An empty DedupeKey means the caller didn't set one; allow it
+		// (manual / one-shot workflows may omit it intentionally).
+		if e.DedupeKey != "" {
+			for _, run := range a.WorkflowRuns() {
+				for _, prior := range run.Effects {
+					if prior.Kind == workflow.ActionTransfer && prior.DedupeKey == e.DedupeKey {
+						a.log.Info("workflow transfer skipped (already executed this period)", "dedupeKey", e.DedupeKey)
+						return
+					}
+				}
+			}
+		}
+		_, _, err := a.CreateTransferPair(TransferParams{
+			FromAccountID: e.TransferFromAccountID,
+			ToAccountID:   e.TransferToAccountID,
+			AmountMinor:   e.TransferAmount,
+			Desc:          "Automated transfer",
+		})
+		if err != nil {
+			a.logErr("workflowTransfer", err)
+		}
 	}
 }
 

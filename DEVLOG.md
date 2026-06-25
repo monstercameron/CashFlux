@@ -3,6 +3,43 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C186: ActionTransfer primitive in the workflow engine
+
+**What was added.** `ActionTransfer ActionKind = "transfer"` added to `internal/workflow/workflow.go`.
+The `Action` struct gained four new fields: `TransferFromAccountID`, `TransferToAccountID`,
+`TransferAmount` (int64 minor units), and `DedupeKey`. The `Effect` struct gained matching fields
+so the apply layer receives everything it needs without re-reading the workflow. `planAction` handles
+the new case and produces a plain-English summary. `ValidateTransferAction(a Action, triggerKind
+TriggerKind) error` is a new pure validation function that rejects: missing source/dest account IDs,
+non-positive amounts, or a `TriggerTxnAdded` trigger (would create an infinite loop because the
+transfer legs are themselves transactions).
+
+**How loop safety is guaranteed.** Two complementary guards:
+1. `ValidateTransferAction` makes `TriggerTxnAdded + ActionTransfer` an explicit error at save
+   time, so the combination never reaches the apply layer.
+2. `RunWorkflow` already wraps `applyEffect` calls inside `triggersSuspended = true`, so any
+   transactions written by `CreateTransferPair` cannot re-fire `RunTriggered`, regardless of what
+   other workflows are enabled. This was the existing guard for all other write-safe actions;
+   ActionTransfer inherits it for free.
+
+**How dedupe works.** `applyEffect` for `ActionTransfer` scans `WorkflowRuns()` before calling
+`CreateTransferPair`. If any prior run's effects contain an `ActionTransfer` effect with the same
+`DedupeKey`, the transfer is logged and skipped. The key is typically `"prefix:workflowID:periodKey"`
+(e.g. `"pyf:wf-abc:2026-06"`), ensuring a given scheduled period transfers at most once even if the
+scheduler fires the workflow multiple times. An empty `DedupeKey` bypasses the check (manual /
+one-shot workflows).
+
+**Execution path.** `applyEffect` → dedupe scan → `a.CreateTransferPair(TransferParams{...})` from
+`internal/appstate/transfer_ops.go`. All existing FX-conversion and two-leg atomicity guarantees
+from `CreateTransferPair` apply unchanged.
+
+**Tests.** `internal/workflow/workflow_transfer_test.go`: 6 table-driven cases for
+`ValidateTransferAction` (valid scheduled, valid manual, missing from/to, zero amount, negative
+amount, txn-added loop guard) + `TestPlanActionTransfer` (effect fields propagated correctly).
+`internal/appstate/transfer_workflow_test.go`: `TestActionTransferProducesTwoLegs` (RunWorkflow
+creates out-leg and in-leg), `TestActionTransferDedupePreventsDuplication` (second run with same
+DedupeKey produces no additional legs). All pass; `gofmt -l` clean; `go vet` clean; WASM build exit 0.
+
 ## 2026-06-25 — Frontend-design polish pass (C254–C276)
 
 **Methodology.** Applied the frontend-design skill methodology, reconciled with CashFlux's calm/minimalist design language. The guiding principle: every change should read as a more polished version of what was already there — no new fonts, no wild colors, no visual language breaks. All additions are CSS-only in `web/index.html`; no Go source files were modified.
