@@ -44,8 +44,18 @@ func PersistNotifyFeed(items []FeedItem) {
 	}
 }
 
-// PrependNotifyFeed adds new items to the front of the feed (newest first) and
-// persists, dropping ids already present so re-runs don't duplicate.
+// PrependNotifyFeed adds new items to the front of the feed (newest first),
+// persists them, and immediately pushes the new feed into the live atom so
+// every subscriber (Notification Center screen, rail badge) sees the update
+// regardless of component mount order.
+//
+// C270 / closes C121 C158 C159: without the atom push, runNotifyCatchUp fires
+// before the Notification Center screen mounts. UseAtom only uses its default
+// value the first time the atom is created, so any atom that was already
+// created (e.g. for the rail unread badge) holds a stale empty feed — the KV
+// write from PersistNotifyFeed is invisible to it. The fix mirrors the
+// existing pattern in runNotifyCatchUp where UseNotice().Set(...) is called
+// from non-render boot code; UseNotifyFeed().Set(...) is equally safe there.
 func PrependNotifyFeed(items []FeedItem) {
 	if len(items) == 0 {
 		return
@@ -62,7 +72,14 @@ func PrependNotifyFeed(items []FeedItem) {
 			out = append(out, it)
 		}
 	}
+	// Cap before persisting so KV and atom hold exactly the same slice.
+	if len(out) > notifyFeedCap {
+		out = out[:notifyFeedCap]
+	}
 	PersistNotifyFeed(out)
+	// Push into the live atom so all current subscribers update immediately,
+	// even if they were created before this call (mount-order hazard, C270).
+	UseNotifyFeed().Set(out)
 }
 
 func loadNotifyFeed() []FeedItem {

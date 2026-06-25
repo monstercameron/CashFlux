@@ -3,6 +3,45 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Fix: Notification Center stays empty (C270, closes C121/C158/C159)
+
+**Bug:** The Notification Center screen and the rail unread badge both subscribe to the
+`app:notify-feed` atom (`UseNotifyFeed()`). At app boot, `runNotifyCatchUp()` fires early —
+before the Notification Center screen has mounted. By that point the atom may already have
+been created (by the rail badge or any other early subscriber) via `UseAtom(notifyFeedAtomID,
+loadNotifyFeed())`. `UseAtom` only applies its default value the first time the atom is
+created; subsequent calls with a different default are ignored. So the atom's value stays
+whatever it was when it was first created (typically an empty or stale feed read from KV).
+
+`runNotifyCatchUp` calls `PrependNotifyFeed(feed)`, which calls `PersistNotifyFeed` → `kvSet`.
+That write updates the SQLite KV correctly, but the live atom is never touched. Every
+subscriber therefore sees the stale empty slice. Worse, `runNotifyCatchUp` also marks the
+generated notifications in the delivered log, so on the next reload the same notifications
+are suppressed and the center remains empty permanently.
+
+**Root cause in one line:** `PrependNotifyFeed` persisted to KV but never called `UseNotifyFeed().Set(...)`.
+
+**Fix (surgical — one function, ~10 lines):** At the end of `PrependNotifyFeed`, after capping
+the feed and persisting it, call `UseNotifyFeed().Set(out)`. This pushes the identical capped
+slice into the live atom so all current subscribers (screen, badge) see the update
+immediately. This is exactly the same pattern used two lines below the call site in
+`runNotifyCatchUp`: `notice := uistate.UseNotice(); notice.Set(...)` — calling `UseXxx().Set`
+from non-render boot code is established and safe.
+
+**Implementation notes:**
+- The cap (`notifyFeedCap = 50`) is applied once before both `PersistNotifyFeed` and `.Set()`,
+  so KV and the atom always hold the same slice.
+- `PersistNotifyFeed` was left unchanged (it still caps internally for safety when called
+  directly), but `PrependNotifyFeed` now caps first so the same slice goes to both sinks.
+- No tests added: the file is `//go:build js && wasm` and cannot be unit-tested on native Go
+  (as noted in the ticket). Correctness verified via wasm build + e2e.
+
+**E2E:** Built the wasm, served `web/` via the deep-link-aware server, used Settings → Load
+sample to seed realistic data, reloaded so catch-up fires, opened the Notification Center,
+and confirmed at least one feed item renders. Screenshot captured at
+`e2e/c270_notification_center_pass.png`.
+
+
 ## 2026-06-25 — L104 "The Density Dial": proving the SMART affordances honor one governor
 
 QA-loop ritual after the Wave 1–6 placement work + the FX AI feature. The fresh story this fire: do all
