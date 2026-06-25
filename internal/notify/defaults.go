@@ -3,8 +3,10 @@
 package notify
 
 // defaultBillLeadDays is how many days before a bill's due date the default
-// bill-due rule starts notifying.
-const defaultBillLeadDays = 7
+// bill-due rule starts notifying. C158: 7 days was too short to act before a pay
+// cycle on a large bill (rent/mortgage/insurance) — two weeks gives time to move
+// money or adjust. Still user-tunable per rule (Threshold).
+const defaultBillLeadDays = 14
 
 // defaultLargeTxnMinor is the default "large transaction" threshold in base-
 // currency minor units (e.g. 50000 = $500.00). Users tune it per their budget.
