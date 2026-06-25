@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Notifications jump-to tab in Settings (C269)
+
+Small additive design ticket. The `notifySettings` component (browser-notifications toggle) already existed and was already rendered in the left column of the settings panel, sitting between Freshness and Music. It had no entry in the `settingsNavKeys` list, so it was reachable only by scrolling — the jump-to nav skipped over it.
+
+**Change:** Added `"settings.notifyTitle"` to `settingsNavKeys` in `settingssectionnav.go` between `"settings.freshnessTitle"` and `"settings.appearance"`. The jump mechanism works by matching `H4.set-label` text at click time, and `notifySettings` already renders that `H4` — so no structural change to the left column was needed. Added `data-testid="settings-notifications"` to the outer wrapper in `notifySettings` for reliable E2E targeting.
+
+**No new i18n keys:** `settings.notifyTitle` ("Notifications") and `settings.notifyBrowser` ("Browser notifications") both already existed in `internal/i18n/en.go`.
+
+**Extensibility:** the section is a logical home for per-alert controls (C263/C264); when those land they slot here without any nav rework.
+
+**Decision — placement:** after Freshness, before Appearance — matching the visual rendering order in the left column. Keeps the nav-key ordering in document order so keyboard navigation is predictable.
+
+**E2E:** `e2e/c269_notifications_settings_tab.mjs` opens Settings, asserts the "Notifications" jump-to button exists in the nav, clicks it, confirms the section and browser-notifications toggle are present, and toggles the switch verifying state changes. Screenshot saved as evidence.
+
 ## 2026-06-25 — Cap-per-rule + paginate insights + free-only bulk enable (C259)
 
 Three focused UX improvements to the Insights tab and Manage tab of the Smart hub.

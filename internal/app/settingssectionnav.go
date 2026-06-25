@@ -26,6 +26,7 @@ var settingsNavKeys = []string{
 	"settings.budgetMethod",
 	"settings.exchangeRates",
 	"settings.freshnessTitle",
+	"settings.notifyTitle",
 	"settings.appearance",
 	"settings.preferences",
 	"settings.aiTitle",

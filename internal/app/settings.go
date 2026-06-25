@@ -96,7 +96,7 @@ type widgetSettingsFormProps struct {
 // then posts browser notifications in addition to the in-app feed.
 func notifySettings() uic.Node {
 	on := uic.UseState(uistate.BrowserNotifyEnabled())
-	return Div(
+	return Div(Attr("data-testid", "settings-notifications"),
 		H4(css.Class("set-label"), uistate.T("settings.notifyTitle")),
 		ui.ToggleRow(ui.ToggleRowProps{
 			Label: uistate.T("settings.notifyBrowser"),
