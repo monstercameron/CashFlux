@@ -95,7 +95,7 @@ func TestRetiree_NoIncome_DropsSavingsAndDebt(t *testing.T) {
 	if r.ApplicableCount != 3 {
 		t.Errorf("applicable=%d, want 3", r.ApplicableCount)
 	}
-	// emergency .25 + budget .15 + utilization .15 = .55 applicable weight; all perfect → 100.
+	// emergency .25 + budget .10 + utilization .10 = .45 applicable weight; all perfect → 100.
 	if r.Score != 100 {
 		t.Errorf("score=%d, want 100 (all applicable factors perfect)", r.Score)
 	}
@@ -174,7 +174,7 @@ func TestReNormalization_EveryPermutation(t *testing.T) {
 	base.BudgetAdherencePct = 80 // 80
 	base.AggUtilizationPct = 30  // 70
 	scores := map[string]float64{"savings": 50, "emergency": 60, "debt": 50, "budget": 80, "utilization": 70}
-	weights := map[string]float64{"savings": .25, "emergency": .25, "debt": .20, "budget": .15, "utilization": .15}
+	weights := map[string]float64{"savings": .25, "emergency": .25, "debt": .20, "budget": .10, "utilization": .10}
 
 	drop := []struct {
 		key   string
@@ -288,6 +288,186 @@ func TestClampingOutOfRange(t *testing.T) {
 	for _, f := range r.Factors {
 		if f.Score < 0 || f.Score > 100 {
 			t.Errorf("factor %s score out of range: %d", f.Key, f.Score)
+		}
+	}
+}
+
+// ---- NW-trend factor tests ----
+
+func TestNWTrendScoreCurve(t *testing.T) {
+	cases := []struct {
+		label string
+		pct   float64
+		want  int
+	}{
+		// Breakpoint anchors
+		{"at floor (-10%)", -10.0, 0},
+		{"below floor (-20%)", -20.0, 0},
+		{"at flat (2%)", 2.0, 40},
+		{"at good (5%)", 5.0, 80},
+		{"at great (10%)", 10.0, 100},
+		{"above great (15%)", 15.0, 100},
+		// Interior interpolation
+		// (-10,0)→(2,40): pct=-4 → ((-4-(-10))/(2-(-10)))*40 = (6/12)*40 = 20
+		{"midpoint floor→flat (-4%)", -4.0, 20},
+		// (2,40)→(5,80): pct=3.5 → 40+(3.5-2)/(5-2)*40 = 40+20 = 60
+		{"midpoint flat→good (3.5%)", 3.5, 60},
+		// (5,80)→(10,100): pct=7.5 → 80+(7.5-5)/(10-5)*20 = 80+10 = 90
+		{"midpoint good→great (7.5%)", 7.5, 90},
+	}
+	for _, c := range cases {
+		if got := nwTrendScore(c.pct); got != c.want {
+			t.Errorf("nwTrendScore(%.1f) [%s]: got %d, want %d", c.pct, c.label, got, c.want)
+		}
+	}
+}
+
+// TestNWTrend_Applicable verifies that the nw-trend factor is included in the score
+// when HasNWTrend=true, affects ContributionPct, and generates a step for a declining trend.
+func TestNWTrend_Applicable(t *testing.T) {
+	t.Run("declining trend generates improvement step", func(t *testing.T) {
+		in := full()
+		in.NWTrendPct = -15.0 // well below floor → score 0
+		in.HasNWTrend = true
+		r := Evaluate(in)
+		if r.ApplicableCount != 6 {
+			t.Errorf("applicable=%d, want 6 (nw-trend included)", r.ApplicableCount)
+		}
+		// Composite: all other factors perfect (score 100), nw-trend = 0.
+		// Applicable weights: .25+.25+.20+.10+.10+.10 = 1.0 (full set).
+		// Expected score = 100*0.90 + 0*0.10 = 90.
+		if r.Score != 90 {
+			t.Errorf("score=%d, want 90 (5 perfect factors + 1 zero-scored nw-trend)", r.Score)
+		}
+		var gotStep bool
+		for _, s := range r.Steps {
+			if s.Factor == "Net-worth trend" {
+				gotStep = true
+			}
+		}
+		if !gotStep {
+			t.Error("declining nw-trend should generate an improvement step")
+		}
+	})
+
+	t.Run("flat trend scores ~40", func(t *testing.T) {
+		in := Inputs{
+			NWTrendPct: 2.0, HasNWTrend: true,
+			EmergencyMonths: 6, HasLiquidData: true,
+		}
+		r := Evaluate(in)
+		var nwtFactor Factor
+		for _, f := range r.Factors {
+			if f.Key == "nw-trend" {
+				nwtFactor = f
+			}
+		}
+		if !nwtFactor.Applicable {
+			t.Fatal("nw-trend should be applicable")
+		}
+		if nwtFactor.Score != 40 {
+			t.Errorf("flat nw-trend score=%d, want 40", nwtFactor.Score)
+		}
+	})
+
+	t.Run("growing trend scores 100", func(t *testing.T) {
+		in := full()
+		in.NWTrendPct = 12.0 // above great → 100
+		in.HasNWTrend = true
+		r := Evaluate(in)
+		var nwtFactor Factor
+		for _, f := range r.Factors {
+			if f.Key == "nw-trend" {
+				nwtFactor = f
+			}
+		}
+		if nwtFactor.Score != 100 {
+			t.Errorf("growing nw-trend score=%d, want 100", nwtFactor.Score)
+		}
+		// All six factors perfect → composite = 100.
+		if r.Score != 100 {
+			t.Errorf("all-perfect-with-nwtrend: score=%d, want 100", r.Score)
+		}
+	})
+}
+
+// TestNWTrend_Inapplicable verifies that HasNWTrend=false drops the factor and the
+// composite score is identical to the same inputs without the NW-trend fields.
+func TestNWTrend_Inapplicable(t *testing.T) {
+	base := full()
+	withoutNW := Evaluate(base)
+
+	withNW := base
+	withNW.NWTrendPct = -99.0 // extreme value — must not affect score when inapplicable
+	withNW.HasNWTrend = false
+	withoutNWExplicit := Evaluate(withNW)
+
+	if withoutNW.Score != withoutNWExplicit.Score {
+		t.Errorf("HasNWTrend=false: score changed (%d vs %d); inapplicable factor must not affect composite",
+			withoutNW.Score, withoutNWExplicit.Score)
+	}
+	if withoutNW.ApplicableCount != withoutNWExplicit.ApplicableCount {
+		t.Errorf("HasNWTrend=false: applicable count changed (%d vs %d)",
+			withoutNW.ApplicableCount, withoutNWExplicit.ApplicableCount)
+	}
+	for _, f := range withoutNWExplicit.Factors {
+		if f.Key == "nw-trend" && f.Applicable {
+			t.Error("HasNWTrend=false: nw-trend factor must be inapplicable")
+		}
+	}
+}
+
+// TestWeightReNormalization_NWTrend checks that applicable-factor weights always sum
+// to ~1.0 (verified via ContributionPct ≈ 100) across key applicability combinations.
+func TestWeightReNormalization_NWTrend(t *testing.T) {
+	combos := []struct {
+		label string
+		in    Inputs
+	}{
+		{
+			"all 6 factors",
+			Inputs{
+				SavingsRatePct: 20, HasIncome: true,
+				EmergencyMonths: 6, HasLiquidData: true,
+				ObligationRatioPct: 10, HasLiabilities: true,
+				BudgetAdherencePct: 100, HasBudgets: true,
+				AggUtilizationPct: 5, HasCredit: true,
+				NWTrendPct: 10.0, HasNWTrend: true,
+			},
+		},
+		{
+			"5 factors (nw-trend absent)",
+			Inputs{
+				SavingsRatePct: 20, HasIncome: true,
+				EmergencyMonths: 6, HasLiquidData: true,
+				ObligationRatioPct: 10, HasLiabilities: true,
+				BudgetAdherencePct: 100, HasBudgets: true,
+				AggUtilizationPct: 5, HasCredit: true,
+				HasNWTrend: false,
+			},
+		},
+		{
+			"nw-trend + emergency only (2 factors)",
+			Inputs{
+				EmergencyMonths: 6, HasLiquidData: true,
+				NWTrendPct: 5.0, HasNWTrend: true,
+			},
+		},
+	}
+	for _, c := range combos {
+		r := Evaluate(c.in)
+		if r.Band == BandNoData {
+			t.Errorf("[%s] got NoData unexpectedly", c.label)
+			continue
+		}
+		var contrib int
+		for _, f := range r.Factors {
+			if f.Applicable {
+				contrib += f.ContributionPct
+			}
+		}
+		if contrib < 98 || contrib > 102 {
+			t.Errorf("[%s] contribution sum=%d, want ~100 (re-normalization broken)", c.label, contrib)
 		}
 	}
 }

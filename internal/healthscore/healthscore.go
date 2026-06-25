@@ -2,7 +2,8 @@
 
 // Package healthscore computes a deterministic, explainable 0–100 financial-health
 // score for a household from a handful of already-derived signals (savings rate,
-// emergency-fund months, debt-payment burden, budget adherence, credit utilization).
+// emergency-fund months, debt-payment burden, budget adherence, credit utilization,
+// and net-worth trend).
 //
 // It is pure (no syscall/js, no I/O) so it unit-tests on native Go and runs the same
 // in the wasm build. The UI layer assembles Inputs from the ledger/reports/budgeting
@@ -64,6 +65,14 @@ type Inputs struct {
 	// limit), as a whole percent. Applies iff HasCredit.
 	AggUtilizationPct int
 	HasCredit         bool
+
+	// NWTrendPct is the trailing net-worth change expressed as a percentage
+	// (e.g. +5.0 = up 5%, -10.0 = down 10%). Applies iff HasNWTrend is true;
+	// when false the factor is excluded from the weighted score and its weight
+	// redistributed proportionally across the remaining applicable factors.
+	// The UI layer derives this from ledger.NetWorthSeries.
+	NWTrendPct float64
+	HasNWTrend bool
 }
 
 // Factor is one scored dimension, with everything the UI needs to explain it: the
@@ -109,6 +118,21 @@ type factorDef struct {
 	value              string
 }
 
+// Weight allocation (must sum to 1.0 when all factors are applicable):
+//
+//	savings      0.25  — primary wealth-building signal
+//	emergency    0.25  — resilience; most immediately actionable
+//	debt         0.20  — obligation burden; structural risk
+//	budget       0.10  — (reduced from 0.15) tactical adherence
+//	utilization  0.10  — (reduced from 0.15) credit-health proxy
+//	nw-trend     0.10  — trajectory signal: is the household moving forward?
+//
+// Budget and utilization were each trimmed 0.05 to make room for the net-worth-trend
+// factor. They are high-frequency tactical signals; the trend factor adds a longer-
+// horizon strategic view that rounds out the picture without duplicating existing
+// dimensions. Re-normalization over applicable factors still distributes weight
+// correctly whenever any factor is absent.
+
 // Evaluate runs the deterministic model. The overall score is the weighted average
 // of applicable factor scores, with inapplicable factors dropped and their weight
 // redistributed proportionally across the rest (so the weights of applicable factors
@@ -131,14 +155,19 @@ func Evaluate(in Inputs) Result {
 			value: obligationValue(in.ObligationRatioPct, in.HasLiabilities),
 		},
 		{
-			key: "budget", label: "Budget adherence", target: "100% on track", weight: 0.15,
+			key: "budget", label: "Budget adherence", target: "100% on track", weight: 0.10,
 			applicable: in.HasBudgets, rawScore: clampPct(in.BudgetAdherencePct),
 			value: fmt.Sprintf("%d%%", clampPct(in.BudgetAdherencePct)),
 		},
 		{
-			key: "utilization", label: "Credit utilization", target: "under 30%", weight: 0.15,
+			key: "utilization", label: "Credit utilization", target: "under 30%", weight: 0.10,
 			applicable: in.HasCredit, rawScore: utilizationScore(in.AggUtilizationPct),
 			value: fmt.Sprintf("%d%%", clampPct(in.AggUtilizationPct)),
+		},
+		{
+			key: "nw-trend", label: "Net-worth trend", target: "growing 5% or more", weight: 0.10,
+			applicable: in.HasNWTrend, rawScore: nwTrendScore(in.NWTrendPct),
+			value: fmt.Sprintf("%.1f%%", in.NWTrendPct),
 		},
 	}
 
@@ -240,6 +269,8 @@ func stepAction(key string) string {
 		return "Bring over-budget categories back under their limits"
 	case "utilization":
 		return "Pay down card balances to lower your credit utilization"
+	case "nw-trend":
+		return "Your net worth has been declining — focus on reducing debt or growing savings"
 	default:
 		return "Review this area"
 	}
@@ -323,4 +354,39 @@ func clampPct(v int) int {
 		return 100
 	}
 	return v
+}
+
+// Net-worth trend scoring breakpoints. All values are percentages.
+//
+//	nwTrendFloor  (-10%) — at or below this, the score is 0 (wealth is shrinking fast)
+//	nwTrendFlat   ( ±2%) — negligible change maps to ~40 (not growing, but not collapsing)
+//	nwTrendGood   ( +5%) — healthy upward momentum maps to ~80
+//	nwTrendGreat  (+10%) — strong growth saturates at 100
+//
+// Linear segments connect each breakpoint pair, giving a smooth and intuitive curve.
+const (
+	nwTrendFloor = -10.0 // pct → score 0
+	nwTrendFlat  = 2.0   // pct → score 40
+	nwTrendGood  = 5.0   // pct → score 80
+	nwTrendGreat = 10.0  // pct → score 100
+)
+
+// nwTrendScore maps a net-worth change percentage to a 0–100 factor score via
+// piecewise-linear interpolation across four named breakpoints.
+func nwTrendScore(pct float64) int {
+	switch {
+	case pct <= nwTrendFloor:
+		return 0
+	case pct < nwTrendFlat:
+		// linear: (-10,0) → (2,40)
+		return clampPct(int(math.Round((pct - nwTrendFloor) / (nwTrendFlat - nwTrendFloor) * 40)))
+	case pct < nwTrendGood:
+		// linear: (2,40) → (5,80)
+		return clampPct(int(math.Round(40 + (pct-nwTrendFlat)/(nwTrendGood-nwTrendFlat)*40)))
+	case pct < nwTrendGreat:
+		// linear: (5,80) → (10,100)
+		return clampPct(int(math.Round(80 + (pct-nwTrendGood)/(nwTrendGreat-nwTrendGood)*20)))
+	default:
+		return 100
+	}
 }
