@@ -795,7 +795,10 @@ func OfflineIndicator() uic.Node {
 // /notifications (which marks everything read).
 func NotifyBell() uic.Node {
 	feed := uistate.UseNotifyFeed().Get()
-	unread := uistate.UnreadNotifyCount(feed)
+	// C159: count unread over the VISIBLE feed (snoozed items are hidden in the
+	// Notification Center), so the badge matches what the user actually sees when
+	// they open it — previously a snoozed-but-unread item inflated the badge.
+	unread := uistate.UnreadNotifyCount(uistate.VisibleFeed(feed, time.Now().Unix()))
 	nav := router.UseNavigate()
 	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/notifications")) })
 	badge := Fragment()
