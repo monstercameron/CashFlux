@@ -92,7 +92,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### Review F18 — Safe-to-spend (3/10)
 - [ ] **C139 [MAJOR]** No glanceable safe-to-spend on dashboard. **C140 [MAJOR]** Coupled to Smart/AI pipeline. **C141 [MAJOR]** Planning "Free to spend" query-gated + wrong formula. **C142 [MAJOR]** Inconsistent terminology/formulas. **C143 [MAJOR]** No per-category prorated s2s. **C144 [MAJOR]** "LEFT" negative parens no context.
-- [ ] **C145 [MINOR]** Needs-attention no forward anchor. **C146 [MINOR]** $1 floor suppresses on sparse accounts.
+- [ ] **C145 [MINOR]** ~~Needs-attention no forward anchor~~ **— DONE (verified 2026-06-25):** each "Needs attention" item is a button that navigates to the relevant screen (`it.Route`) and scrolls to the item's anchor (`it.AnchorID` via `scrollToID`), with a "tap to open" title. MEASURED live: 5 attention items render as buttons; clicking the first navigates away from the dashboard to its target; 0 errors. **C146 [MINOR]** $1 floor suppresses on sparse accounts.
 
 ### Review F19 — Recurring detection + bill calendar (5/10)
 - [ ] **C147 [MAJOR]** Auto-detection (SMART-P1) never surfaces + no add-to-plan CTA. **C148 [MAJOR]** Calendar current-month-only (no nav). **C149 [MAJOR]** Recurring form has no next-due field. **C150 [MAJOR]** Calendar dots carry no amount/urgency.
