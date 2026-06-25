@@ -39,7 +39,7 @@ var registry = map[string]Currency{
 	"CAD": {"CAD", "CA$", 2, "Canadian Dollar"},
 	"AUD": {"AUD", "A$", 2, "Australian Dollar"},
 	"CHF": {"CHF", "CHF", 2, "Swiss Franc"},
-	"CNY": {"CNY", "¥", 2, "Chinese Yuan"},
+	"CNY": {"CNY", "CN¥", 2, "Chinese Yuan"}, // C85: distinct from JPY "¥"
 	"INR": {"INR", "₹", 2, "Indian Rupee"},
 	"MXN": {"MXN", "MX$", 2, "Mexican Peso"},
 }
