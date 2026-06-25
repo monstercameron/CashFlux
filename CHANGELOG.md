@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **C256 — ActionCreateGoal now sets OwnerID + ScopeShared (2026-06-25):** The `ActionCreateGoal` branch in `smart_card.go` created a `domain.Goal` with `Scope: ScopeIndividual` but no `OwnerID`, causing every "Create goal" action to fail with the validation error "ownerid is required". Fixed by setting `OwnerID: domain.GroupOwnerID` and `Scope: domain.ScopeShared` — an emergency fund is a household-level goal, so a shared scope is the correct default. E2E test `e2e/c256_executable_actions.mjs` hardened to use the IDB injection pattern (matching c267/c268/c270) so it exercises the real end-to-end path: inject a clean dataset (no goals, 3 months of expenses) into IDB, reload, navigate to /smart Insights, click the SMART-G12 "Create goal" button, assert toast contains "goal", assert /goals shows "Emergency Fund".
+
+### Changed
+- **e2e/c264 — Threshold persistence fix: wait for autosave before reload (2026-06-25):** The original test filled the threshold input with "1000" and reloaded 200 ms later — faster than the 4 s autosave ticker, so the change was lost. Switched to `pressSequentially` + `Tab` (blur triggers the native `change` event reliably) and added a 5 s wait to let the autosave flush before reloading. Test now PASSes end-to-end.
+
+### Fixed
+- **Design-system consistency (2026-06-25):** Three minor violations in `internal/app/settings.go`:
+  - Widget importance `Select` was missing an `aria-label` (accessible name was only the sibling `Span`); added `Attr("aria-label", uistate.T("widget.importance"))`.
+  - FX-rate stale indicator used hardcoded hex `#cfa14e`; replaced with `var(--color-warn)` so it respects the active theme.
+  - FX-AI error paragraph used `var(--color-danger, #e05252)` with a hardcoded fallback; removed the fallback (the CSS variable is always defined by the theme).
+
 ### Added
 - **C256 — Executable smart recommendation actions (2026-06-25):** Three new `ActionKind` constants added to `internal/smart/smart.go`: `ActionCreateGoal`, `ActionCreateRecurring`, `ActionCancelSubscription`. The `Action` struct gains corresponding payload fields (`GoalName`/`GoalTarget`/`GoalCurrency`; `RecurringLabel`/`RecurringAmount`/`RecurringCurrency`/`RecurringCadence`; `SubscriptionName`). `smart_card.go` (`onAction` handler) gains three new `case` branches that execute each action through the validated appstate write path — `app.PutGoal`, `app.PutRecurring`, `app.MarkSubscriptionCancelled` — then post a confirmation toast and navigate to the affected screen. Helper `smartCurrencyOr` added. SMART-G12 ("Consider starting an emergency fund") upgraded from `ActionNavigate` to `ActionCreateGoal` (creates "Emergency Fund" goal with the computed target). SMART-SU1 ("Consider cutting X") upgraded from `ActionNavigate` to `ActionCancelSubscription`. SMART-G17 ("Automate goal contribution") retains `ActionNavigate` with an explicit `// TODO(C186)` — the automate-goal action requires the money-movement engine from C186 (not yet implemented). Three i18n keys added: `smart.goalCreated`, `smart.recurringCreated`, `smart.subscriptionCancelled`. Unit tests in `internal/smartengine/c256_executable_actions_test.go` verify SMART-G12 emits `ActionCreateGoal` with non-empty `GoalName`/`GoalTarget` and SMART-SU1 emits `ActionCancelSubscription` with `SubscriptionName`. E2E guard `e2e/c256_executable_actions.mjs`.
 

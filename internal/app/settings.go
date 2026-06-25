@@ -393,7 +393,7 @@ func importanceRow(props importanceRowProps) uic.Node {
 		itemsAtom.Set(next)
 		uistate.PersistItems(next)
 	})
-	opts := []any{css.Class("set-input"), Title(uistate.T("widget.importance")), OnChange(on)}
+	opts := []any{css.Class("set-input"), Title(uistate.T("widget.importance")), Attr("aria-label", uistate.T("widget.importance")), OnChange(on)}
 	for _, lvl := range importanceLevels {
 		opts = append(opts, Option(Value(strconv.Itoa(lvl.Value)), SelectedIf(cur == lvl.Value), uistate.T(lvl.Label)))
 	}
@@ -1068,7 +1068,7 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 		Span(css.Class(tw.TextFaint), uistate.T("settings.fxRateLabel", props.Code)),
 		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Attr("aria-label", uistate.T("settings.fxRateAria", props.Code, props.Base)), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
-		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "#cfa14e", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
+		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "var(--color-warn)", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)
 }
 
@@ -1181,7 +1181,7 @@ func fxAIFetch(props fxAIFetchProps) uic.Node {
 
 		// Error display
 		If(errMsg.Get() != "",
-			P(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--color-danger, #e05252)", "margin-top": "0.4rem"}), errMsg.Get()),
+			P(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--color-danger)", "margin-top": "0.4rem"}), errMsg.Get()),
 		),
 
 		// Review panel — only shown when we have proposed rates

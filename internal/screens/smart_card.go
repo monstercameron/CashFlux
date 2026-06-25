@@ -143,7 +143,8 @@ func smartInsightCard(props smartCardProps) ui.Node {
 			g := domain.Goal{
 				ID:           id.New(),
 				Name:         ins.Action.GoalName,
-				Scope:        domain.ScopeIndividual,
+				OwnerID:      domain.GroupOwnerID, // household-level goal; passes OwnerID validation
+				Scope:        domain.ScopeShared,
 				TargetAmount: money.Money{Amount: ins.Action.GoalTarget, Currency: cur},
 			}
 			if err := app.PutGoal(g); err != nil {

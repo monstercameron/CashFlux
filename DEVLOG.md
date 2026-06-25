@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — E2E hardening + design-system consistency pass
+
+**Context.** After shipping C254–C276 (SMART features, notifications, member roles), ran the full e2e battery and found two failing tests and several design-system inconsistencies.
+
+**c256 — full end-to-end fix.** The original e2e test injected into `localStorage` but the app stores the dataset in IndexedDB (`cashflux-kv` / `cashflux:dataset`). So the injected test data was silently ignored and the real sample data (with emergency-fund goal already existing) was loaded instead — meaning SMART-G12 never fired. Fixed by switching to the IDB injection pattern established in c267/c268/c270: boot app, wait 6 s for the initial autosave to write to IDB, then replace `cashflux:dataset` in IDB with a clean dataset (no goals, 3 months of expense history). Also fixed a real bug uncovered by the test: `ActionCreateGoal` created a `domain.Goal` with no `OwnerID`, failing the store's validation ("ownerid is required"). Fixed by setting `OwnerID: domain.GroupOwnerID` + `Scope: ScopeShared` — the natural default for a household emergency fund. E2E now runs the full path: IDB seed → reload → /smart Insights → click → toast → /goals → Emergency Fund visible.
+
+**c264 — threshold persistence race.** The test set a threshold input and reloaded 200 ms later — before the 4 s autosave ticker. Changed to `pressSequentially` + `Tab` (blur triggers native `change` event that the wasm handler is listening for) + 5 s wait. Now passes.
+
+**Design consistency.** Three contained violations in `settings.go`: (1) widget importance `Select` had no accessible name — added `aria-label`; (2) FX stale indicator used hardcoded `#cfa14e` — replaced with `var(--color-warn)`; (3) error paragraph used `var(--color-danger, #e05252)` with a hardcoded fallback — removed the fallback since the variable is always defined.
+
+**E2E results after fixes.** All tested scripts now PASS: c256 (6/6), c257 (1/1), c258 (2/2), c259 (1/1), c263 (1/1), c264 (1/1), c267 (6/6), c268 (7/7), c269 (1/1), c270 (4/4), c271 (5/5), c274 (1/1), c275 (4/4), c276 (7/7). Zero failures.
+
 ## 2026-06-25 — C256: Executable smart recommendation actions
 
 **What was done.** Added three new `ActionKind` constants (`ActionCreateGoal`, `ActionCreateRecurring`, `ActionCancelSubscription`) to the pure `internal/smart` package. The `Action` struct gained payload fields for each. The `smart_card.go` `onAction` dispatcher grew matching `case` branches calling `app.PutGoal`, `app.PutRecurring`, and `app.MarkSubscriptionCancelled` respectively — the same validated write path used by the Goals, Planning, and Subscriptions screens. Each action shows a confirmation toast (`uistate.PostNotice`) and navigates to the affected screen. Helper `smartCurrencyOr` avoids inline conditionals.

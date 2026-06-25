@@ -43,14 +43,21 @@ try {
     fail("large-transaction threshold input not found in Manage alerts section");
   } else {
     // Set the threshold to $1000.
-    await threshInput.triple_click && await threshInput.click({ clickCount: 3 });
-    await threshInput.fill("1000");
-    await threshInput.dispatchEvent("change");
-    await page.waitForTimeout(300);
+    // Triple-click to select all, then type the new value.  Using
+    // pressSequentially + Tab (blur) reliably triggers the wasm-registered
+    // "change" event listener; a bare fill() + dispatchEvent() may race the
+    // wasm goroutine and arrive before the handler is live.
+    await threshInput.click({ clickCount: 3 });
+    await threshInput.pressSequentially("1000", { delay: 30 });
+    await threshInput.press("Tab");   // blur → fires native change event
+    // Give the wasm change-handler time to write the new value into the
+    // in-memory SQLite settingskv table, then wait for the 4 s autosave
+    // ticker to flush the updated dataset to IDB before reloading.
+    await page.waitForTimeout(5000);
 
     // Close settings and reload.
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(300);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForSelector('button[title*="Settings"]', { timeout: 30000 });
 
