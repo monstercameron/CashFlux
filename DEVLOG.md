@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — L104 "The Density Dial": proving the SMART affordances honor one governor
+
+QA-loop ritual after the Wave 1–6 placement work + the FX AI feature. The fresh story this fire: do all
+those inline affordances (row badges, key-figure tooltips, entity overlays, the dashboard digest) really
+obey ONE density dial, or did the placement waves drift? The script enables the whole layer, then walks
+the dial top→bottom and counts affordances by tier on Accounts + the Dashboard. Result: clean monotonic
+gating — Everywhere(badges 4 / overlays 4 / tips 1) → Standard(overlays→0) → Minimal(tips→0) → Off(all 0),
+badge count non-increasing, zero JS errors. **7 PASS · 0 FAIL · 0 ABSENT.** The density taxonomy
+(`Density.Shows`/`affordanceMinRank`) is a true global governor — no affordance leaks past its rank.
+
+Infra friction worth recording for next time: ran the ritual against a clean `origin/main` build because
+the main working tree was full of other agents' uncommitted WIP. Two gotchas: (1) a fresh `git worktree`
+checkout's `web/` is missing the GITIGNORED runtime glue (`wasm_exec.js` + vendored JS), so the app
+wouldn't hydrate until I copied `wasm_exec.js` from the main repo's `web/` into the worktree; (2) the
+Write tool's `/tmp` and bash's `/tmp` mapped to different roots, so I ran the ritual from the main repo
+(which has `.tools/node_modules`) and committed from a clean Windows-path worktree off `origin/main`.
+Served the clean build on a fresh port (8123) to dodge the zombie server on 8099.
+
 ## 2026-06-24 — FX AI fetch (Responses API + review-before-apply)
 
 Added "Fetch live rates with AI" to the Settings FX-rates editor. Uses OpenAI Responses API (gpt-5.5 + hosted web_search tool) to fetch today's mid-market rates. Rates are shown as proposed values (current → proposed, asOf date, AI-sourced warning, cost estimate); user applies per-row or all at once via the existing setRate path. Button is gated on a configured OpenAI key. New files: internal/ai/responses.go + responses_test.go, internal/currency/fxai.go + fxai_test.go.

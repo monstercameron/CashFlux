@@ -11139,6 +11139,29 @@ actual integrity** (Budgets ↔ Transactions ↔ Reports). Drive script `e2e/loo
 
 ---
 
+### L104. Story — "The Density Dial" (Renu) — 2026-06-25 ★
+
+**The ritual.** The SMART layer earns its place only if the user controls how much of it weaves into
+the app. Theme = **affordance gating integrity** — the end-to-end guard for the Wave 1–6 placement
+work (row badges, key-figure tooltips, entity overlays, dashboard digest) all honoring ONE density
+dial. The taxonomy is monotonic by rank: Off(0)→nothing · Minimal(1)→badges · Standard(2)→+tooltips ·
+Everywhere(3)→+overlays. Drive script `e2e/loopstory_104_the_density_dial.mjs` turns the whole layer
+on (Enable all), then walks the dial top→bottom (Everywhere→Standard→Minimal→Off), measuring badges +
+overlay-triggers on Accounts and tooltips on the Dashboard at each step. Result **7 PASS · 0 FAIL · 0
+ABSENT** — **no defects.** Screenshot `L104_01_dial.png`. Verified against a clean `origin/main`
+(`f28001bf`) build in an isolated worktree (the main tree was busy with concurrent agents' WIP).
+- ✓ **D-1** Everywhere shows entity-overlay triggers (4) — the rank-3 top of the dial (badges 4, tips 1).
+- ✓ **D-2** Standard hides overlays (0) but keeps badges (4) and tooltips (1).
+- ✓ **D-3** Minimal hides tooltips (0) and overlays (0) but keeps badges (4).
+- ✓ **D-4** Off removes every smart affordance (badges/tooltips/overlays all 0).
+- ✓ **D-5** Badge count is monotonic non-increasing across the dial [4 → 4 → 4 → 0].
+- ✓ **D-6** Zero runtime JS errors across the whole dial walk.
+- **→ The density dial is a true global governor:** every inline affordance built across Waves 1–6
+  checks `Settings.ShowsAffordance`/`Density.Shows`, so "riddle the app with smart" is always the
+  user's dial, never forced.
+
+---
+
 ### L97. Story — "The Glanceable Read" (Renu) — 2026-06-24 ★
 
 **The ritual.** Renu glances at her SMART strips every morning — the layer only earns its place if it
