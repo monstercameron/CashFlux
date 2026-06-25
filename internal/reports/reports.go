@@ -40,6 +40,19 @@ func categoryTotals(txns []domain.Transaction, start, end time.Time, rates curre
 		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
+		// Split transactions (C58) attribute each line's amount to its own
+		// category instead of the whole-transaction category, so per-category
+		// spend is correct (and receipt-imported splits stop being invisible).
+		if t.HasSplits() {
+			for _, s := range t.Splits {
+				conv, err := rates.Convert(s.Amount, rates.Base)
+				if err != nil {
+					return nil, err
+				}
+				out[s.CategoryID] += conv.Abs().Amount
+			}
+			continue
+		}
 		conv, err := rates.Convert(t.Amount, rates.Base)
 		if err != nil {
 			return nil, err

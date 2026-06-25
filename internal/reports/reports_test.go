@@ -54,6 +54,43 @@ func TestSpendingByCategorySortedAndExcludes(t *testing.T) {
 	}
 }
 
+// C58: a split transaction attributes each line to its own category, not the
+// whole-transaction category — and a receipt-imported split with an empty
+// transaction category is no longer invisible.
+func TestSpendingByCategorySplits(t *testing.T) {
+	start, end := dt(2026, time.June, 1), dt(2026, time.July, 1)
+	// One $100 grocery charge, split $60 produce / $40 household. The
+	// transaction's own CategoryID is empty (the receipt-import case).
+	split := domain.Transaction{
+		CategoryID: "", Amount: money.New(-10000, "USD"), Date: dt(2026, time.June, 5),
+		Splits: []domain.CategorySplit{
+			{CategoryID: "produce", Amount: money.New(-6000, "USD")},
+			{CategoryID: "household", Amount: money.New(-4000, "USD")},
+		},
+	}
+	got, err := SpendingByCategory([]domain.Transaction{split, expense("rent", 900, dt(2026, time.June, 1))}, start, end, false, time.Time{}, time.Time{}, usdRates())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	byCat := map[string]int64{}
+	for _, c := range got {
+		byCat[c.CategoryID] = c.Amount
+	}
+	if byCat["produce"] != 6000 {
+		t.Errorf("produce = %d, want 6000", byCat["produce"])
+	}
+	if byCat["household"] != 4000 {
+		t.Errorf("household = %d, want 4000", byCat["household"])
+	}
+	if _, ok := byCat[""]; ok {
+		t.Errorf("empty whole-transaction category must not appear: %+v", got)
+	}
+	// Total is unchanged: $100 split + $900 rent = $1000, no double count.
+	if Total(got) != 100000 {
+		t.Errorf("Total = %d, want 100000 (no double count)", Total(got))
+	}
+}
+
 func TestSpendingByCategoryComparison(t *testing.T) {
 	curStart, curEnd := dt(2026, time.June, 1), dt(2026, time.July, 1)
 	priStart, priEnd := dt(2026, time.May, 1), dt(2026, time.June, 1)

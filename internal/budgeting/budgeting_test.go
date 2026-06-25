@@ -118,6 +118,40 @@ func TestSpentIgnoresTransfers(t *testing.T) {
 	}
 }
 
+// C58: a split transaction counts only the split lines whose category the budget
+// covers, attributed per line — never the whole transaction — so a grocery
+// receipt split into food/household lands the food portion in the food budget.
+func TestSpentSplitTransactionAttributesPerCategory(t *testing.T) {
+	start, end := june()
+	rates := currency.Rates{Base: "USD"}
+	foodBudget := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: usd(50000)}
+	householdBudget := domain.Budget{CategoryID: "household", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: usd(50000)}
+	// $100 charge, whole-transaction category empty, split $70 food / $30 household.
+	split := domain.Transaction{
+		CategoryID: "", Amount: usd(-10000), Date: mustDate("2026-06-05"),
+		Splits: []domain.CategorySplit{
+			{CategoryID: "food", Amount: usd(-7000)},
+			{CategoryID: "household", Amount: usd(-3000)},
+		},
+	}
+	all := []domain.Transaction{split, expense(2000, "USD", "food", "", "2026-06-06")}
+
+	foodSpent, err := Spent(foodBudget, all, start, end, rates)
+	if err != nil {
+		t.Fatalf("Spent(food): %v", err)
+	}
+	if !foodSpent.Equal(usd(9000)) { // 7000 split line + 2000 plain food
+		t.Errorf("food spent = %v, want 9000 USD", foodSpent)
+	}
+	hhSpent, err := Spent(householdBudget, all, start, end, rates)
+	if err != nil {
+		t.Fatalf("Spent(household): %v", err)
+	}
+	if !hhSpent.Equal(usd(3000)) {
+		t.Errorf("household spent = %v, want 3000 USD", hhSpent)
+	}
+}
+
 func TestSpentScopeAggregationMixedMembers(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}

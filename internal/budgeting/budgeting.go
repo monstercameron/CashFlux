@@ -48,12 +48,13 @@ func normalizedLimit(budget domain.Budget, rates currency.Rates) money.Money {
 	return limit
 }
 
-// matchesCovered reports whether a transaction counts toward the budget: it must
-// be an expense within [start, end) whose category passes covers, and for an
-// individual budget it must belong to the owning member. The covers predicate
-// lets a parent-category budget also count its descendant categories (D5).
-func matchesCovered(budget domain.Budget, t domain.Transaction, start, end time.Time, covers func(string) bool) bool {
-	if !t.IsExpense() || !covers(t.CategoryID) {
+// matchesScope reports whether a transaction is in scope for the budget
+// independent of its category: it must be an expense within [start, end), and for
+// an individual budget it must belong to the owning member. The per-category test
+// is applied separately (on the transaction's category, or per split line for a
+// split transaction) by spentCovered.
+func matchesScope(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
+	if !t.IsExpense() {
 		return false
 	}
 	if !dateutil.InRange(t.Date, start, end) {
@@ -66,19 +67,41 @@ func matchesCovered(budget domain.Budget, t domain.Transaction, start, end time.
 }
 
 // spentCovered sums spend against the budget for transactions whose category
-// passes covers, in the budget's limit currency.
+// passes covers, in the budget's limit currency. For a split transaction (C58)
+// each split line is attributed to its own category — only the lines whose
+// category passes covers count, and never the whole-transaction category — so a
+// grocery receipt split into produce/household lands in the right budgets without
+// double-counting.
 func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	total := money.Zero(limit.Currency)
+	add := func(amt money.Money) error {
+		conv, err := rates.Convert(amt.Abs(), limit.Currency)
+		if err != nil {
+			return err
+		}
+		total, err = total.Add(conv)
+		return err
+	}
 	for _, t := range all {
-		if !matchesCovered(budget, t, start, end, covers) {
+		if !matchesScope(budget, t, start, end) {
 			continue
 		}
-		conv, err := rates.Convert(t.Amount.Abs(), limit.Currency)
-		if err != nil {
-			return money.Money{}, err
+		if t.HasSplits() {
+			for _, s := range t.Splits {
+				if !covers(s.CategoryID) {
+					continue
+				}
+				if err := add(s.Amount); err != nil {
+					return money.Money{}, err
+				}
+			}
+			continue
 		}
-		if total, err = total.Add(conv); err != nil {
+		if !covers(t.CategoryID) {
+			continue
+		}
+		if err := add(t.Amount); err != nil {
 			return money.Money{}, err
 		}
 	}
