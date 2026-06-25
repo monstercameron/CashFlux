@@ -230,6 +230,8 @@ var english = Catalog{
 	"subs.priceDown":                     "Down %s (%s) since %s",
 	"subs.cancel":                        "Mark as cancelled",
 	"subs.cancelTitle":                   "Record that you have cancelled this subscription",
+	"subs.howToCancel":                   "How to cancel",
+	"subs.howToCancelTitle":              "Open a web search for how to cancel",
 	"subs.cancelledState":                "Cancelled %s",
 	"subs.cancelledLabel":                "Cancelled on %s",
 	"subs.uncancel":                      "Undo cancel",

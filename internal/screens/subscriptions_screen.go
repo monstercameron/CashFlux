@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -653,6 +654,19 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 				Attr("aria-label", uistate.T("subs.cancelTitle")+" "+s.Name),
 				OnClick(cancel),
 				uistate.T("subs.cancel"),
+			),
+			// C163: "Cancel" only records the cancellation in CashFlux — it can't cancel
+			// with the provider. Offer real guidance: a link that opens a web search for
+			// this merchant's cancellation steps (local-first — nothing leaves until the
+			// user clicks it). Opens in a new tab.
+			A(
+				css.Class("btn btn-sm"),
+				Attr("href", "https://duckduckgo.com/?q="+url.QueryEscape("how to cancel "+s.Name+" subscription")),
+				Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+				Attr("data-testid", "sub-howto-cancel-"+slug),
+				Title(uistate.T("subs.howToCancelTitle")),
+				Attr("aria-label", uistate.T("subs.howToCancelTitle")+" "+s.Name),
+				uistate.T("subs.howToCancel"),
 			),
 			If(props.OnIgnore != nil, Button(
 				css.Class("btn btn-sm"),
