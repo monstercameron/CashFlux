@@ -6,6 +6,7 @@ package ui
 
 import (
 	"strconv"
+	"syscall/js"
 
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -62,13 +63,48 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onSearch := uic.UseEvent(props.OnSearch)
 	n := len(props.Chips)
 
+	// C56: press "f" to open the filter panel (ignored while typing in a field or
+	// with a modifier held). Document listener added on mount, removed on unmount.
+	uic.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		if !doc.Truthy() {
+			return nil
+		}
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) == 0 {
+				return nil
+			}
+			e := args[0]
+			if e.Get("key").String() != "f" || e.Get("metaKey").Bool() || e.Get("ctrlKey").Bool() || e.Get("altKey").Bool() {
+				return nil
+			}
+			if ae := doc.Get("activeElement"); ae.Truthy() {
+				switch ae.Get("tagName").String() {
+				case "INPUT", "TEXTAREA", "SELECT":
+					return nil
+				}
+				if ae.Get("isContentEditable").Bool() {
+					return nil
+				}
+			}
+			e.Call("preventDefault")
+			open.Set(true)
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		return func() {
+			doc.Call("removeEventListener", "keydown", cb)
+			cb.Release()
+		}
+	}, "filter-shortcut")
+
 	// C57: accessible name conveys the active count (the badge is aria-hidden).
 	ariaLabel := props.FiltersLabel
 	if props.ActiveAriaLabel != nil {
 		ariaLabel = props.ActiveAriaLabel(n)
 	}
 	trigger := Button(css.Class("btn filters-trigger"), Type("button"),
-		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle), Attr("aria-label", ariaLabel),
+		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle+" (f)"), Attr("aria-label", ariaLabel),
 		OnClick(func() { open.Set(true) }),
 		props.FiltersLabel,
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
