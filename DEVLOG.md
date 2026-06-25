@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Feature: Role selector in add/edit member forms (C275)
+
+**What:** Added a labelled Role `<select>` (owner / admin / viewer) to both the add-member modal
+(`internal/screens/memberaddform.go`) and the inline edit form inside `MemberRow`
+(`internal/screens/members.go`). Also introduced the supporting `internal/domain.MemberRole` type
+constants and the `internal/memberrole` pure package (no `syscall/js`).
+
+**Why the dependency order matters:** C273 added the model in a branch that was never merged. Rather
+than cherry-picking a diverged commit, the model (`MemberRole`, `RoleOwner`/`RoleAdmin`/`RoleViewer`,
+`Member.Role` field) and the `memberrole` package were re-applied cleanly on the current branch.
+
+**Design decisions:**
+- `memberRoleOptions()` lives in `members.go` alongside the other option helpers and uses
+  `memberrole.Label()` for display names — no new i18n keys needed.
+- Field label is the short literal `"Role"`, matching surrounding form style.
+- Default for new members is `memberrole.DefaultRole(false)` → `RoleAdmin`; the edit form seeds
+  from `memberrole.Resolve(m)` so legacy rows with `Role==""` show the correct resolved default.
+- The role selector in `MemberRow`'s edit form is a `SelectInput` component (safe hook position
+  because `MemberRow` itself is wrapped in `ui.CreateElement` — the no-hooks-in-loop rule holds).
+- `saveMember` now accepts a sixth `newRole string` argument; `ParseRole` validates it; an invalid
+  string is silently discarded (the previous role is preserved).
+
+**Build/quality:** wasm build exits 0; `gofmt -l` clean; `go vet` clean.
+
 ## 2026-06-25 — Feature: Member role/permission model (C273)
 
 **What:** Bottom-up implementation of the member role model — domain types, pure logic package,
