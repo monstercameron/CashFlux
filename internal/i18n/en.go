@@ -137,7 +137,7 @@ var english = Catalog{
 	"settings.alert.paycheckLanded":     "Paycheck landed",
 	"settings.alert.threshold":          "Alert threshold (%s):",
 	"nav.bills":                          "Bills",
-	"nav.split":                          "Split",
+	"nav.split":                          "Split a bill", // C66: distinguish from category split-transactions
 	"split.hint":                         "Enter an amount, pick who's sharing it, and (optionally) who paid.",
 	"split.amount":                       "Amount to split",
 	"split.payer":                        "Who paid?",
