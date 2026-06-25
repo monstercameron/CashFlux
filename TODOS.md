@@ -220,7 +220,7 @@ packages have no `syscall/js` and ship with table-driven tests.
   - **What exists (assessed):** (a) **App-lock gate** — `internal/applock` (`Config`, `HashPasscode`, `Verify`, auto-lock idle window, hint that can't leak the passcode) + the unlock-gate UI (`app/applockgate.go`, `applocksettings.go`). (b) **Data-at-rest encryption** — `app/datasetcrypto.go` derives an **AES-GCM-256** key from the passcode via **PBKDF2-SHA-256 @ 600,000 iterations** (`cryptobox.PBKDF2Iterations`, OWASP-tuned), encrypting the dataset + artifacts (`artifactcrypto.go`); the derived key never leaves the JS runtime.
   - **Key finding / framing:** the **real** confidentiality boundary is the dataset crypto, and it's *already strong* (PBKDF2-600k → AES-GCM-256). The **gate** `HashPasscode` is plain **SHA-256(salt+passcode)** — a *fast* hash — but it only guards the UI gate, not the ciphertext, so it's a UX lock, not the security boundary. MFA is largely **N/A for a local single-device app** (it's a server-auth concept) — relevant only to the hosted sync tier (cross-ref R32).
   - **Recommended remediation (phased):** **P1 (low-risk, high-value):** passcode **strength meter + min-length** on set (`applocksettings.go` + an `applock.PasscodeStrength(s)` pure helper: length/charset/entropy bands; reject trivial 0000-style) — additive, no migration. **P2:** strengthen the **gate KDF** — verify the passcode through the same PBKDF2-600k path (or Argon2id via a wasm lib) instead of SHA-256, with a one-time migration of stored hashes on next successful unlock (keep SHA-256 verify as a fallback during migration). **P3 (optional):** **passkey/WebAuthn** unlock via `navigator.credentials` + the **PRF extension** to wrap/unwrap the AES data key (so a passkey can unlock the *data*, not just the gate) — platform-gated, falls back to passcode. **P4:** MFA only as part of the hosted sync tier (R32), not the local build.
-  - **Suggested tickets:** R30-strength (meter+min-length+tests), R30-gatekdf (PBKDF2/Argon2id gate + hash migration), R30-passkey (WebAuthn-PRF data-key wrap), R30-sync-mfa (defer to R32). The strong part (dataset AES-GCM/PBKDF2-600k) needs no change.
+  - **Suggested tickets:** ~~R30-strength (meter+min-length+tests)~~ **✅ SHIPPED 2026-06-25** — pure `applock.PasscodeStrength` (TooShort/Weak/Fair/Strong by length + char-variety; demotes trivial all-same/sequential like "1234"/"4321") + `MinPasscodeLength=4`, 13 table-driven tests (all pass); wired into the set-passcode submit (`applockgate.go`) to reject `StrengthTooShort` with new i18n `applock.tooShort`; build rc=0, app health 0 real errors. (Live raw-JS modal drive was harness-limited; behavior is unit-tested + build-verified.) Remaining: R30-gatekdf (PBKDF2/Argon2id gate + hash migration), R30-passkey (WebAuthn-PRF data-key wrap), R30-sync-mfa (defer to R32). The strong part (dataset AES-GCM/PBKDF2-600k) needs no change.
 
 ### Review F43 — Privacy stance / local-first (3/10)
 - [x] **C289 [MAJOR]** ~~No user-facing privacy/local-first trust statement~~ **— DONE (verified 2026-06-25, R34-trust):** added an always-visible **rail-footer trust line** — "Private — your data stays on this device." (`shell.go` rail footer, new i18n `trust.localFooter`) — surfacing the core differentiator outside the admin console. MEASURED live both themes: renders + AA-clean (dark `#ababb3`/#0e0e0f = **8.46:1**, light `#56565c`/#f1f1f2 = **6.46:1**), build rc=0, 0 JS errors. (Hero + sample-banner placements remain optional follow-ons; the always-visible footer covers the differentiator app-wide.)
@@ -312,7 +312,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [~] **R34 [RESEARCH]** Help/support/trust surface — **SPEC delivered 2026-06-25.**
   - **What exists (assessed + verified 2026-06-25 — more than expected):** ✅ **discoverable shortcuts** — `?` opens a `#cf-help-overlay` cheatsheet (MEASURED: visible, 9 rows "Jump to a section Alt+1–9 / Add a transaction Alt+N / Command palette Ctrl/⌘K…"); ✅ **command palette** — Cmd/Ctrl+K opens it (MEASURED: opens); ✅ **trust line** — shipped this session (C289, rail footer); the logging package keeps an in-app ring buffer (usable for a bug report). **Still missing:** `/help` topic center, feedback/bug-report form, what's-new/roadmap, onboarding tour.
   - **Recommended plan (all local-first, no backend needed):** (1) **Help center** — a `/help` route (Group System): short plain-English topics (getting started, importing CSV, budgets, the SMART layer, your-data-stays-local) sourced from static content; reuse the card/section chrome. (2) **Discoverable shortcuts** — a `?`-triggered shortcuts cheatsheet modal listing what `shortcuts.go` already binds (single source of truth: render from the shortcut registry). (3) **Bug report / feedback** — a form that bundles the in-app log ring buffer + app version + (opt-in) a redacted state summary into a copy-to-clipboard / mailto payload (no server: respects local-first; the user sends it). (4) **What's-new** — surface `CHANGELOG.md`'s Unreleased/last-release section in a dismissible "What's new" sheet keyed on version. (5) **Trust line** (C289) — a visible "Your data stays on this device — nothing is uploaded" line on the dashboard/sidebar footer + sample banner (the core differentiator, currently invisible outside admin). (6) **Onboarding** — a light first-run checklist (add account → add income → set base currency), cross-ref C21/C31.
-  - **Suggested tickets:** R34-help (/help route + topics), ~~R34-shortcuts (`?` cheatsheet)~~ **✅ DONE (verified)**, ~~command palette~~ **✅ DONE (Ctrl/⌘K)**, R34-feedback (log-bundling report form), R34-whatsnew (changelog sheet), ~~R34-trust (C289 trust line)~~ **✅ SHIPPED 2026-06-25** (rail-footer "Private — your data stays on this device.", AA both themes), R34-onboard (first-run checklist, C21/C31). All local-first; none require the hosted backend.
+  - **Suggested tickets:** ~~R34-help (/help route + topics)~~ **✅ SHIPPED 2026-06-25** — `/help` route in the System nav (`screens/help.go`, i18n `nav.help`/`screen.helpSub`), 6 plain-English topic cards (Getting started · Bringing in your data · Budgets/goals/reports · The Smart layer · Keyboard shortcuts · Your privacy); MEASURED live: in nav, navigates to /help, all 6 cards render, 0 JS errors, build rc=0. ~~R34-shortcuts (`?` cheatsheet)~~ **✅ DONE (verified)**, ~~command palette~~ **✅ DONE (Ctrl/⌘K)**, ~~R34-feedback~~ **✅ SHIPPED 2026-06-25** — "Copy bug report" button (Settings → Debug log) bundles app version + the in-app log ring to the clipboard, local-first (`settings.go` `copyBugReport`); MEASURED live: copied "CashFlux v0.1.0 / 3 log entries…" + toast, 0 errors. R34-whatsnew (Settings already links CHANGELOG), ~~R34-trust (C289 trust line)~~ **✅ SHIPPED** (rail-footer privacy line, AA both themes), R34-onboard (first-run checklist, C21/C31). **Remaining: what's-new sheet + onboarding** (help/shortcuts/palette/trust/feedback all done). All local-first; none require the hosted backend.
 
 ### ★ Implementation-ready fixes (from research diagnoses, 2026-06-25)
 > Precise, ready-to-build edits surfaced by the R-series root-cause diagnoses. Each is a concrete change.
@@ -357,7 +357,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ### ★ IMPL plan — R15 canonical safe-to-spend (C139-C146, from R15 design)
 > ONE pure formula, NO Smart/AI gate. Canonical: `SafeToSpend = LiquidCash − BillsDueBeforeNextPayday − GoalContributions(prorated) − CommittedBudgets(default 0)`. Reuse ledger.LiquidBalance + budgeting.PeriodRange + bills/goals (do NOT reimplement — smartengine/bills.go:617 inline dup is the anti-pattern). Today 6 divergent formulas live across smart/planning/budgets/insights/aitools, none reliably surfaced.
-1. [ ] **R15-pkg** — NEW `internal/safespend/safespend.go` (pure, stdlib only): `Breakdown{LiquidCash,BillsDue,GoalContributions,CommittedBudgets,SafeToSpend,IsNegative,Currency}`; `Compute(...int64,currency)→Breakdown`; `ComputeCategory(remaining,daysLeft,daysInPeriod)→int64` (floor, guard /0). + safespend_test.go (positive/zero/negative/prorate/div0).
+1. [x] **R15-pkg** — **DONE 2026-06-25:** NEW pure `internal/safespend/safespend.go` (stdlib only, integer minor units): `Breakdown{LiquidCash,BillsDue,GoalContributions,CommittedBudgets,SafeToSpend,IsNegative,Currency}`; `Compute(liquid,bills,goals,budgets,currency)→Breakdown` (nets liquid − the 3 commitment buckets; clamps negative buckets to 0; liquid may be negative; SafeToSpend may go negative→IsNegative); `ComputeCategory(remaining,daysLeft,daysInPeriod)→int64` (even-pace = remaining×daysLeft÷daysInPeriod, floored, guards daysInPeriod≤0 / daysLeft≤0 / remaining≤0, clamps daysLeft≤period). + `safespend_test.go` (positive/zero/negative/overdrawn/bucket-clamp/prorate/div0/floor — all pass). `go test ./internal/safespend` ok; build rc=0. **Next:** R15-inputs (derive the buckets) then the dashboard/planning/budgets wiring (R15-dashboard … R15-i18n).
 2. [ ] **R15-inputs** — NEW `internal/safespend/inputs.go`: `BillsDueBefore(bills,now,horizon,toBase)` (reuse smartengine/budgets.go:232-242 pattern; horizon = period-END from PeriodRange, NOT hardcoded month-end); `GoalContributionsProrated(goals,now,periodStart,periodEnd,toBase)` (budgets.go:244-258, prorated). time.Time injectable → testable.
 3. [ ] **R15-dashboard** — `screens/dashboard.go`: glanceable "Safe to spend" stat tile near cash-flow KPIs via Compute; red "−$X over" when IsNegative; NO smart import (also fixes C145 anchor).
 4. [ ] **R15-planning** — `screens/planning.go:404-459`: pass `safespend.Compute(...).SafeToSpend` (liquid-based) into afford.CanAfford instead of net.Amount (net-worth basis = wrong, C141); rename planning.affordAvailable "Free to spend"→"Safe to spend" (C142).
@@ -678,6 +678,76 @@ packages have no `syscall/js` and ship with table-driven tests.
 7. [ ] **R29-inform-disclosure (C276)** — memberaddform.go + members.go edit: helper text under role SelectInput "Roles organize your view + set smart defaults; NOT access controls — all data shared on this device" (i18n memberrole.softDisclosure); point-of-use (don't dup main C274 note).
 8. [ ] **R29-e2e** — extend e2e/c274_single_device_note.mjs to assert the in-form disclosure if new data-testid.
 > Risks: role-as-enforcement temptation (soft-hide MUST tooltip "anyone can switch member"; real enforcement = per-user auth = OOS); migration (Role==""→RoleAdmin; multi-member w/o Owner → heuristic "Everyone"; prompt to designate Owner); compose-not-conflict MIA (defaults on CREATION only, NOT filter existing); Viewer soft-hide needs restore tooltip or reads as bug; scope gap = C277/C278 (don't conflate); C274 shipped (don't dup); AllRoles() single-source.
+
+### ★ IMPL plan — R31 pricing/plan UX (C300-C304, from R31 design)
+> HONEST-SCOPE CORRECTION: billing is REAL, not hypothetical — Stripe $34.99/yr + $3.99/mo + 14-day trial (i18n en.go:933-988), UpgradeSheet (upgradesheet.go), SubscriptionBanner (trial/past-due/canceled), "Manage subscription"→Stripe portal (settings_section.go:248). Problem = INVISIBLE + ONE-SHOT, not dishonest. C300/C301: UpgradeSheet only reachable via CloudMention; CloudMention (cloudmention.go:32/36) BOTH buttons write permanent dismiss "cashflux:cloud-mention-dismissed"=1 (read render :24) → after first tap UpgradeSheet permanently unreachable, NO reset. C304: Cloud&server tab (settings_section.go:191-251) = raw infra; plan/billing subsection (232-251) DOUBLE-GATED behind If(p.CloudSelected) → free/local users NEVER see pricing. C303: prices+trial in i18n but NO "Free" tier label, NO comparison, NO plain-language boundary; NO /plans route; billingStatus.Plan received but never rendered. Free = everything local forever, no account.
+> NOTE for Cam: confirm if the hosted backend is publicly DEPLOYED → affects "Start free trial" (live) vs "Join waitlist" CTA framing (runtime backend-availability check, not a code decision).
+1. [ ] **R31-i18n** — en.go: plans.pageTitle/freeTitle/freeBody/cloudTitle/cloudBody/startTrial/manageSub/doNotRemind/setupLink; REUSE settings.cloudPriceAnnual/Monthly/cloudTrialNote/cloud.upgradeTrust (REAL values).
+2. [ ] **R31-plans-screen (C300/C303)** — NEW screens/plans/plans.go + register /plans (screens.All() auto-wires nav): plain-language Free (everything on device, no account/expiry) vs Cloud (sync+backup+bundled AI, $3.99/mo or $34.99/yr, 14-day trial, cancel anytime) w/ REAL prices; [Start free trial]→Settings→Cloud; [Manage subscription]→OnOpenPortal. NO dark patterns (show BOTH prices, no urgency). Canonical disclosure surface.
+3. [ ] **R31-reengageable (C301)** — cloudmention.go:15/24/32/36: permanent dismiss → snooze (timestamp "cashflux:cloud-mention-snoozed", re-surface ~30d); treat legacy "1" as snoozed-long-ago (graceful) OR honor as explicit opt-out; "Learn more"→nav /plans (not ShowUpgradeSheet direct); explicit "Don't remind me" on Plans (user-chosen permanent).
+4. [ ] **R31-ungate-billing (C304)** — settings_section.go:232: remove/relax If(p.CloudSelected) so plan heading+price+trial show when backend on (or always read-only); KEEP on/off+mode at TOP, plan info BELOW connection config (don't disrupt self-host users).
+5. [ ] **R31-reframe-link (C304)** — retitle "Cloud & server" → "Cloud sync setup (advanced)"; Plans [Start free trial]→Settings→Cloud scroll-to-subscribe. Plans = DISCOVER pricing, Cloud tab = SET UP after deciding.
+6. [ ] **R31-plan-name (low-pri)** — subscriptionbanner.go:21-25: render billingStatus.Plan (Annual/Monthly) on Plans for subscribed users (1-2 lines).
+> Risks: HONESTY — billing is REAL (no fake coming-soon/waitlist unless backend genuinely undeployed — confirm w/ Cam); legacy permanent-dismiss re-surface on snooze change (treat "1" gracefully or keep old key); trial claim consistent Plans↔Settings; Cloud&server reframe (toggle/mode top, plan below — don't disrupt self-host); R32 sync same "multi-device sync" language; R34 nav placement; no dark patterns (both prices, easy opt-out, C45); ShowUpgradeSheet may orphan (keep utility, R32 may reuse).
+
+### ★ IMPL plan — R32 cross-platform + sync (C306-C310, from R32 design)
+> C306 PWA install + C307 install button = ALREADY DONE by parallel agent (VERIFIED): manifest.webmanifest has favicon.svg+icon-192+icon-512 (any+maskable), all icons present, index.html:67-75 apple-touch-icon + apple-mobile-web-app-capable + theme-color + manifest; sw.js (cashflux-v271) caches icons + navigate-fallback; #installBtn (index.html:2827-2855) captures beforeinstallprompt + prompts + hides on appinstalled. C306/C307 tickets STALE → close. C309 REAL DATA-LOSS BUG: syncstate.go ShouldApplyRemote = pure LWW (remote.After(local)); sync_client.go:~168-178 removeQueuedSyncMutation called BEFORE the !resp.Accepted check → server-rejected push silently DEQUEUES + drops local data, no signal. C310: proto device_id (cashflux.proto:15,69) + session-revocation endpoints (CHANGELOG:1875) but NO client pairing/add-device UI. C308 native: NONE.
+1. [ ] **R32-c306-c307-close** — close C306+C307 (DONE; do NOT touch manifest/icons/installBtn — clobbering breaks PWA). Visual-check maskable safe-zone.
+2. [ ] **R32-ios-hint (C307, client-only)** — index.html after installBtn IIFE (~2855): iOS-Safari branch (/iP(hone|ad|od)/i && !navigator.standalone) → dismissible "tap Share → Add to Home Screen" banner. iOS never fires beforeinstallprompt — static hint only. Additive.
+3. [ ] **R32-c309-dequeue-fix (DATA LOSS, client-only)** — sync_client.go:~168-178: move removeQueuedSyncMutation INSIDE resp.Accepted==true; on !Accepted keep queued + retry counter; after 3 fails → syncStatus "conflict". HIGH severity, low-complexity, no backend dep + test.
+4. [ ] **R32-conflict-ui (C309)** — syncchip.go: render "conflict" state (amber + ! "tap to resolve") → modal "Keep local (re-push force)" / "Discard local + pull server". Discard + shell = client-only; force-push needs proto force flag (backend).
+5. [ ] **R32-server-conflict-meta (C309, backend)** — internal/server/sync.go: on Accepted:false include server UpdatedAt+Version (proto field add) so client shows "server X min newer". Coordinate cmd/cashflux-server. After #3.
+6. [ ] **R32-connected-devices (C310, backend-coupled)** — NEW app/devices.go: GET /v1/auth/sessions list + Revoke (endpoint exists CHANGELOG:1875, verify shape). Visibility+revocation FIRST.
+7. [ ] **R32-add-device-pairing (C310, backend-coupled)** — follow-on #6: backend short-lived pairing token; client "Pair new device" displays token; new device enters on first launch. New backend endpoint. Coordinate R31. SEQUENCE LAST (don't add devices before C309 fixed).
+8. [ ] **R32-c308-native-note** — TODOS C308: "separate major initiative — PWA install (done) is the pragmatic path; native = Capacitor (untested w/ Go-WASM, WKWebView memory/large-binary risks) or rewrite (months). Out of scope this pass."
+> Risks: parallel-agent web/ overlap (C306/C307 DONE — do NOT touch manifest/icons/installBtn); no iOS beforeinstallprompt (manual A2HS); maskable safe-zone clip; C309 silent data-loss HIGH (dequeue fix client-only — prioritize); CRDT deferred (detect-don't-drop); backend coupling C309-force/C310; SW stale-cache may mask conflicts (network-first mitigates; F47); native cost honest; ORDER fix-C309-before-C310.
+
+### ★ FEATURE-REVIEW IMPL — F5 fast manual entry / Quick-Add (C39-C47, parallel research)
+> quickadd.go. C41 default acct = "first non-investment asset" (78-85), indeterminate; Prefs.DefaultAccountID (70-73) only if configured. C43 NO autofocus; FlipPanel UseEffect (flippanel.go:94-96) focuses Account <select> (213). C42 date <input type=date> (232) widget swallows Tab; FlipPanel trap (flippanel.go:128-144) lacks {capture:true}. C40 NO save-and-add-another. C39 NO recent-payee autocomplete (ui.Combobox inputs.go:112-136 EXISTS unused; reports.TopPayees uses Desc not Payee). C44 two-click mouse (Alt+N shortcuts.go:95-97). C45 dropdown = a.Name only (158-161), incl archived, no type cues. C46 NO Payee field — form sets only Desc, never domain Transaction.Payee (entities.go:121); rules match payee+desc (rules.go:72). C47 reviewed checkbox works (label clarity only). R7 OVERLAP: R7-selflearn touches rawDesc→catAssist (182-206).
+1. [ ] **F5-autofocus (C43)** — quickadd.go: UseEffect when open → querySelector [data-testid=txn-add-amount].focus() (nil-check; setTimeout for wasm paint race).
+2. [ ] **F5-tab (C42)** — quickadd.go:232 date → type=text pattern \d{4}-\d{2}-\d{2}, OR flippanel.go keydown {capture:true}.
+3. [ ] **F5-default-acct (C41, pure)** — NEW internal/accountselect/accountselect.go DefaultID(accounts,txns,memberDefault) (memberDefault→most-used-90d non-archived non-investment→first checking/debit/savings→first non-investment) +test; wire quickadd.go 64-91.
+4. [ ] **F5-dropdown-cues (C45)** — quickadd.go:158-161 filter !Archived + " · "+humanizeType (move to internal/ui/format.go or inline — screens cycle).
+5. [ ] **F5-reviewed (C47)** — quickadd.go:233-235 move checkbox below save, muted; i18n "Skip auto-review flag".
+6. [ ] **F5-fewer-clicks (C44)** — addmenu.go:104-108 + button title "(Alt+N)"; palette alias "t"→quick-add.
+7. [ ] **F5-payee (C39/C46)** — NEW internal/quickpayee/quickpayee.go RecentPayees(txns,n) (distinct Payee, fallback Desc, dedup, ≤20) +test; quickadd.go payee UseState+onPayee (stable pos), reset, set Transaction.Payee (138), ui.Combobox datalist, validation desc OR payee, update rules.Category call (194). COORDINATE R7.
+8. [ ] **F5-save-add-another (C40)** — quickadd.go: keepOpen UseState (stable pos); extract doSave(); "Save + Add Another" btn in body (not FlipPanel footer) → doSave+reset+focus amount.
+> Risks: hook stability (payee/keepOpen unconditional before open guard); autofocus wasm paint race; date Tab Chrome-specific (capture:true or type=text loses mobile picker); humanizeType circular import; payee validation (desc OR payee); R7 overlap (sequence/same commit); default-acct cap 90d/200txns.
+
+### ★ FEATURE-REVIEW IMPL — F9 account types + net-worth clarity (C72-C75, parallel research)
+> AccountType enum (enums.go:34-46) = 11 types, NO retirement/crypto, NO AccountSubType (deferred TODOS:356); Class() default→ClassAsset. C75 single TypeInvestment undifferentiated. C72 dashboard (dashboard.go:207-234): net-worth tile=nw.Net (208), liabilities tile (228); ASSETS (nw.Assets, selectors.go:29-35) COMPUTED but NEVER rendered (=C212) → can't reconstruct Net=Assets−Liab (C72 root; count-up C214 cosmetic). ledger.NetWorthExplained (networth_explained.go:31-71) clean. C74 LockUntil (entities.go:97) asset-only, gated behind advOpen (accountaddform.go:242-243). R23 (Holding/AccountSubType/portfolio) pending.
+1. [ ] **F9-enum (pure)** — enums.go:34-46 add TypeRetirement+TypeCrypto consts+AllAccountTypes (Class() default already→Asset) +enums_test. Migration-free. LEAVE AccountSubType for R23.
+2. [ ] **F9-labels** — type→label map: "Retirement"/"Crypto".
+3. [ ] **F9-networth-clarity (C72)** — dashboard.go:207-233 render nw.Assets+Liabilities as labeled sub-components under Net ("Total Assets"/"Total Liabilities") — PREFER over a 5th tile; add nw.Assets to count-up key. Render-only (already computed).
+4. [ ] **F9-exclusion-notice** — dashboard.go: when MissingCurrencies show nw.ExcludedAccounts count (partial net worth clarity).
+5. [ ] **F9-lockuntil-surface (C74)** — accountaddform.go:234-243 lift LockUntil out of advOpen for TypeRetirement (+low-liquidity); label "Penalty-free date (optional)".
+6. [ ] **F9-type-cues (C75)** — accounts_row.go badge "Tax-advantaged"(retirement)/"Volatile"(crypto); crypto StabilityScore hint (0-15). Cosmetic, R23-additive.
+> Risks: enum migration-free; tax-advantaged = LABELS ONLY (Roth-vs-trad = R23 AccountSubType, don't bloat); sub-component < 5th-tile (layout); C72 root = display omission NOT formula (don't conflate count-up C214); R23 boundary (TypeRetirement now, subtype/AssetClass in R23); crypto manual valuation (badge + tooltip, live feed deferred); NetWorthExplained holdings = R23.
+
+### ★ FEATURE-REVIEW IMPL — F33 reports + export (C236-C243, parallel research)
+> reports pkg (17 logic+17 test). C237 NO YoY toggle (always w.Shift(-1), reports_screen.go:191). C238 ledger.PercentChange (ledger.go:298-306) ok=false when prev==0 → badge SUPPRESSED (1047); rollup.go:38-41 reimplements inline a.Prior>0 (diverges neg baseline). C239 web/chart.js bar height Math.abs (148-178) can't go neg BUT flat/single-bar → .nice() [0,0] → degenerate scale → NaN → SVG error (root=degenerate domain). C240 8 export surfaces (1 dropdown 700-742 + 7 per-card 768-1194). C241 "Covering" ISO ALREADY FIXED (666 pr.FormatDate) — SKIP. C242 custom-field/deductible hidden behind showAdvanced (904-919). C243 NO report-type selector. C236 NO PDF/print.
+1. [ ] **F33-delta (C238, pure)** — ledger.go:298-306: DeltaKind + Delta(curr,prev)→{Pct,Kind} (new/gone/zero/pct; handle prev<0 magnitude) +test.
+2. [ ] **F33-rollup-fix (C238)** — rollup.go:38-41 inline a.Prior>0 → ledger.Delta (neg-baseline fix).
+3. [ ] **F33-categoryspend (C238)** — reports.go:27-33/106 HasDelta/DeltaPct → Delta DeltaResult; update CSV/rollup consumers.
+4. [ ] **F33-yoy (C237, pure)** — NEW reports/yoy.go YoYPrior(w) 12-mo shift +test; reports_screen.go ~188 yoyMode + "MoM/YoY" toggle (disable <13mo).
+5. [ ] **F33-svg-fix (C239)** — web/chart.js ~89: yMin==yMax → expand domain ([0,1]/±spread or hide Y single-bar). No Go.
+6. [ ] **F33-delta-badge (C238)** — reports_screen.go:1043-1076 render Kind text ("New"/"Gone"/"–") not suppress; CSV emits strings.
+7. [ ] **F33-report-selector (C242/C243)** — reports_screen.go top: reportType tabs (Overview/Custom Fields/Deductibles/Tax Summary); retire showAdvanced; preserve filter/period/sort on tab change.
+8. [ ] **F33-csv-consolidate (C240)** — remove 7 per-card buttons (768-1194); expand the one dropdown (700-742)+custom-field/deductible (conditional); ExportFilename tab-scoped.
+9. [ ] **F33-pdf (C236)** — NEW web/print.css (@media print hide nav/buttons, page-break, svg width:100% height:auto) + "Print / Save as PDF" dropdown → window.print() via JS shim. (jsPDF ruled out.)
+> Risks: prior-zero "New" not "∞%"/"−100%"; rollup neg-baseline magnitude+sign; SVG [0,0] expand looks odd for currency (use [0,1]/hide axis); YoY needs 13+mo (disable+tooltip); selector preserves period/search/sort; window.print() browser-dependent (Firefox SVG clip — svg width:100%); C241 skip; ExportFilename tab-scoped.
+
+### ★ FEATURE-REVIEW IMPL — F44 data ownership / backup (C294-C299, parallel research)
+> C294 Export-JSON (settings.go:1287)→ExportJSON plain MarshalIndent (dataset.go:105-112); Artifact.Bytes (entities.go:475) stripped nil on upload (artifact_ops.go:49-58, blobs→IndexedDB); ExportJSONWithBlobs/RedactedWithBlobs + rehydrateArtifactBytes EXIST (artifact_ops.go:83-129) but button + backupEverything (backupall.go:55) DON'T call them → blobs OMITTED. C295 importJSON (settings.go:1336-1353)→ImportJSON immediately, NO confirm (restoreFromBackup backupall.go:91-106 DOES — copy pattern). C296 TransactionsToCSV (csv.go:21-58) = 12 txn cols, "Export CSV" unlabeled-partial (en.go:1040). C297 backupEverything palette-only (shortcuts.go:331), absent Settings→Data (settings_section.go:255-261). C298 Data jump-nav SHIPPED (settingssectionnav.go:34); wipe confirm generic "Confirm" (settings.go:1371). C299 NO last-backed-up surfaced (recordBackupNow settings.go:1293 stores nothing user-facing).
+1. [ ] **F44-roundtrip-test (pure, FIRST)** — NEW internal/store/export_test.go: Dataset w/ Artifact{Bytes:"sentinel"} → MarshalIndent → unmarshal → assert round-trips (lossless rule). Pure.
+2. [ ] **F44-import-rehydrate (C294)** — artifact_ops.go: rehydrateArtifactBytesOnImport(dataset) → StoreBlobForArtifact per non-nil Bytes then clear; verify rehydrate covers all artifact types.
+3. [ ] **F44-export-blobs (C294)** — settings.go:1287 ExportJSON→ExportJSONWithBlobs; backupall.go:55 RedactedWithBlobs. 2-line.
+4. [ ] **F44-import-confirm (C295)** — settings.go:1336-1353 wrap ImportJSON in confirmModal (copy backupall.go:91-106); i18n "Replace all your data… can't be undone" + destructive "Replace data" (optional pre-parse count).
+5. [ ] **F44-csv-label (C296)** — en.go:1040 "Export CSV"→"Export transactions (CSV)" + hint "Transactions only — use Export JSON for a full backup".
+6. [ ] **F44-backup-btn (C297)** — settings_section.go:255-261 primary "Back up everything" (top of Data) → backupEverything() (reuse cmd.backupEverything label).
+7. [ ] **F44-wipe-label (C298)** — en.go + settings.go:1371 "settings.wipeConfirmBtn"="Erase all data" destructive (jump-nav already shipped — don't re-add).
+8. [ ] **F44-last-backed-up (C299)** — SettingsKV "lastBackedUpAt"; recordBackupNow() writes RFC3339 (verify called from ALL backup paths); settings_section.go Data "Last backed up: <date>"/"Never backed up".
+> Risks: base64 blob bloat ~33% (size estimate/toggle/tooltip); lossless relies on IDB populated (test serialization separately); import-overwrite destructive (red, confirmModal destructive prop?); recordBackupNow coverage (all paths or misleads); R8 dedup-import same code (coordinate); MIA SettingsKV namespace; C293/R34 settings_section.go layout; Data jump-nav shipped.
 
 <!-- END-REVIEW-FINDINGS -->
 
@@ -2160,3 +2230,65 @@ reduced-motion block) to stay consistent with the app's a11y stance.
       unverified email claims. Remaining: optional CAPTCHA-on-burst policy only.
       policy and broader email/OAuth verification review.
 ---
+
+### UI business-logic leak sweep (R-LEAK) — extract computation out of the wasm UI layer (started 2026-06-25)
+
+**Goal:** enforce hard-rule #2 ("logic is platform-independent; never put computation in view code")
+across the three UI packages — `internal/ui` (widget library), `internal/screens` (pages), and
+`internal/uistate` (UI state). For each file: identify business logic (money/FX math, percentages,
+domain aggregation, date-boundary logic, sorting/scoring rules) computed inline in the view, and move
+it into the appropriate pure (no `syscall/js`), table-tested package; verify native tests + `GOOS=js
+GOARCH=wasm` build + `screenlint`; commit one isolated change at a time (explicit paths only — the
+tree is shared with concurrent sessions, never `git add -A`).
+
+**Method per file:** grep for computation signals (`time.*`/`sort.*`/`math.*`/`*100`/`/100`/`.Amount`
+arithmetic/aggregation loops) → deep-read suspects → confirm whether a domain helper exists (reuse) or
+must be added → extract + test → rebuild/retest → commit + push. Display-only sorting, intrinsic widget
+geometry (meter/progress %), and bar-chart max-normalization are **legitimately** left in the view.
+
+**DONE (committed + pushed to origin/main):**
+- [x] **internal/ui (all 24 files) — audited clean.** Purely presentational; delegates all computation
+      to pure packages (`chart`, `chartspec`, `currency` edge-formatting, `pagination`, `dashlayout`).
+      No changes needed. Only in-file math (meter/progress percent-fill) is intrinsic widget geometry.
+- [x] **goal funding % -> `goals.RawPercent`** (commit 17d51993). `goals_row.go` + `chat_agent.go` computed
+      un-clamped `current*100/target` inline (duplicating `goalsvc.Percent` minus its `[0,100]` clamp).
+      Added pure `goals.RawPercent` + `TestRawPercent`; both call sites routed through it.
+- [x] **major->minor money conversion -> `currency.MinorFromMajor`** (commit 17d51993). `chat_agent.go`
+      re-derived float-major->int-minor in 11 places, **5 hardcoding `*100`** (a real bug for non-2-decimal
+      currencies, e.g. JPY). Added pure helper (rounds via `Decimals`) + `TestMinorFromMajor`; routed all
+      sites; deleted the file-local `majorToMinor`. **Fixed the JPY bug.**
+- [x] **FX-aware goal totals -> `goals.Totals`** (commit 1d20640a). `goals.go` inlined a per-goal
+      FX-convert-and-sum loop (raw-amount fallback) for the saved/target headline. Extracted to pure
+      `goals.Totals(goals, rates, base, includeArchived)` + `TestTotals`.
+- [x] **minor->major float conversion -> `currency.MajorFromMinor`** (commit 5e3e852b). `chat_agent.go`
+      calculator var-map (6 vars, `/100`) and **two** `pow10` divisor loops (`divf`) in `planning.go`
+      chart scaling. Added symmetric helper + `TestMajorFromMinor` (round-trip); removed both `divf` loops.
+
+**TODO — remaining screens (next):**
+- [ ] **allocate.go** — `allocate.go:303` reinvents `goalsvc.Remaining` (`max(0, target-current)`); swap
+      to `goalsvc.Remaining(g).Amount` (clean, helper already exists + tested). *Identified, not yet applied.*
+- [ ] **insights.go** — `topCat`/`topAmt` argmax over per-category FX-converted spend (L~85-95) is an
+      analytical "top spending category" computation; consider moving to `spendsummary`/`insights`.
+      Confirm whether an existing helper covers it before adding one. Large file — scan for other localized calcs.
+- [ ] **budgets.go** — `totalSpent/totalLimit` summary loop over `budgeting.EvaluateRollup` statuses
+      (L~244), incl. `limit = spent + remaining` re-derivation. LOW value (core rollup already in domain);
+      optional `budgeting.SummarizeRollup` if a status `Limit` field is warranted instead of re-deriving.
+- [ ] **accounts.go** — `monthStart` reinvents `dateutil.MonthStart` (L~161); trivial swap. Net-worth delta
+      already via `ledger.NetWorthSeries`; `convBal` sort delegates to `ledger.Balance`/`Convert` (fine).
+- [ ] Scan not-yet-deep-read screens for genuine computation (vs. display sums/sorts): **transactions.go,
+      members.go, rules.go, categories.go, documents*.go, dashboard.go, smart*.go, activity.go,
+      reports_screen.go**. NOTE: `reports_screen.go`, `dashboard.go`, `chartspec.go`, `health.go`/`healthscore`
+      were under active edit by other sessions — re-check ownership before touching.
+
+**TODO — internal/uistate (#95-128, not started):** sweep all 34 files. Expected low leak risk (mostly
+atom/KV state plumbing), but check for any persisted-value computation or domain rules that belong in a
+pure package.
+
+**Residuals / notes:**
+- `chat_agent.go:196` savings-rate `%` (`netFlow/income*100`) and `subscriptions_screen.go` FX-naive annual
+  sum (`s.AnnualAmount()` summed without FX conversion) are lower-severity; log if revisited.
+- Tracking task list (this session): tasks #1-128 mirror the file list; #1-24, #44, #64, #65, #71 are done.
+- **Concurrency hazard:** an earlier in-flight rebase by another session once wiped an uncommitted edit;
+  always verify `git status` is clean of a rebase/merge before editing, commit only own files by explicit
+  path, and never revert/clobber another session's dirty files (e.g. TODOS.md/DEVLOG.md/CHANGELOG.md are
+  frequently mid-edit).
