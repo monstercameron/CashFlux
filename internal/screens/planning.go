@@ -441,7 +441,11 @@ func Planning() ui.Node {
 		accounts := app.Accounts()
 		txns := app.Transactions()
 		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
+		// C175: a purchase is paid from LIQUID cash, not net worth — base the
+		// affordability check on the same liquid balance the cash runway uses (C171),
+		// so the two features give consistent answers (net worth incl. 401k/home would
+		// say "yes" on money you can't actually spend).
+		liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
 		mStart, mEnd := dateutil.MonthRange(time.Now())
 		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 		monthlyNet := income.Amount - expense.Amount
@@ -453,7 +457,7 @@ func Planning() ui.Node {
 			if reserved < 0 {
 				reserved = 0
 			}
-			res := afford.CanAfford(amt, net.Amount, monthlyNet, months, reserved)
+			res := afford.CanAfford(amt, liquid.Amount, monthlyNet, months, reserved)
 			var verdict ui.Node
 			if res.Affordable {
 				verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.affordYes"))
