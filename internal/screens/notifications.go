@@ -31,34 +31,126 @@ func notifySeverityPill(sev string) ui.Node {
 	}
 }
 
+// notifyRowProps are the props passed to each notification row component (C268).
+// Using a dedicated component (not inline closures) keeps On* hooks at a stable
+// call-site depth — required by the framework (CLAUDE.md "CRITICAL gotchas").
+type notifyRowProps struct {
+	Item      uistate.FeedItem
+	DateStr   string
+	OnRead    func()
+	OnDismiss func()
+	OnSnooze  func()
+}
+
+// notifyRow is a self-contained component for one Notification Center row. It
+// owns its own event hooks (mark-read, dismiss, snooze) which are passed down
+// as plain func callbacks from the parent. Wrapping the props callbacks in
+// ui.UseEvent here — not in the parent loop — is the correct pattern: the
+// framework requires On* hooks to be registered at a stable component depth,
+// never inside a variable-length loop (CLAUDE.md "CRITICAL gotchas").
+func notifyRow(props notifyRowProps) ui.Node {
+	readLabel := "Mark as read"
+	readIcon := "○"
+	if props.Item.Read {
+		readLabel = "Mark as unread"
+		readIcon = "●"
+	}
+
+	onRead := ui.UseEvent(func() {
+		if props.OnRead != nil {
+			props.OnRead()
+		}
+	})
+	onDismiss := ui.UseEvent(func() {
+		if props.OnDismiss != nil {
+			props.OnDismiss()
+		}
+	})
+	onSnooze := ui.UseEvent(func() {
+		if props.OnSnooze != nil {
+			props.OnSnooze()
+		}
+	})
+
+	return Div(css.Class("row"), Attr("role", "listitem"),
+		// Left: title + optional body.
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), props.Item.Title),
+			If(props.Item.Body != "", Span(css.Class("row-meta"), props.Item.Body)),
+		),
+		// Right: severity pill + date + per-item controls.
+		Div(css.Class("row-meta", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			notifySeverityPill(props.Item.Severity),
+			Span(css.Class(tw.TextFaint), props.DateStr),
+			// Mark read/unread toggle.
+			Button(
+				css.Class("notif-ctrl-btn"),
+				Type("button"),
+				Attr("aria-label", readLabel),
+				Attr("title", readLabel),
+				OnClick(onRead),
+				readIcon,
+			),
+			// Snooze 1 day.
+			Button(
+				css.Class("notif-ctrl-btn"),
+				Type("button"),
+				Attr("aria-label", "Snooze for 1 day"),
+				Attr("title", "Snooze for 1 day"),
+				OnClick(onSnooze),
+				"⏱",
+			),
+			// Dismiss (remove).
+			Button(
+				css.Class("notif-ctrl-btn", "notif-ctrl-dismiss"),
+				Type("button"),
+				Attr("aria-label", "Dismiss notification"),
+				Attr("title", "Dismiss"),
+				OnClick(onDismiss),
+				"✕",
+			),
+		),
+	)
+}
+
 // NotificationCenter lists the notifications surfaced by the catch-up engine (bill
 // due, budget thresholds, stale balances, digests, …) — the persisted feed (C75).
-// Opening it marks everything read; "Clear all" empties it.
+// Opening it marks everything read; "Clear all" empties it. Per-item controls
+// (mark-read/unread, dismiss, snooze 1 day) are available on each row (C268).
 func NotificationCenter() ui.Node {
 	feedAtom := uistate.UseNotifyFeed()
 	feed := feedAtom.Get()
 
-	// Mark all read when the center is open (so the rail badge clears).
+	// Apply the snooze filter: hide items snoozed until a future time.
+	now := time.Now().Unix()
+	visible := uistate.VisibleFeed(feed, now)
+
+	// Mark all visible items read when the center is open (so the rail badge clears).
 	ui.UseEffect(func() func() {
-		if uistate.UnreadNotifyCount(feed) == 0 {
+		if uistate.UnreadNotifyCount(visible) == 0 {
 			return nil
 		}
 		next := make([]uistate.FeedItem, len(feed))
-		for i, it := range feed {
-			it.Read = true
-			next[i] = it
+		copy(next, feed)
+		for i, it := range next {
+			for _, v := range visible {
+				if it.ID == v.ID {
+					next[i].Read = true
+					break
+				}
+			}
 		}
 		feedAtom.Set(next)
 		uistate.PersistNotifyFeed(next)
 		return nil
-	}, fmt.Sprintf("notif-read:%d", len(feed)))
+	}, fmt.Sprintf("notif-read:%d", len(visible)))
 
 	clearAll := ui.UseEvent(func() {
 		feedAtom.Set(nil)
 		uistate.PersistNotifyFeed(nil)
 	})
 
-	if len(feed) == 0 {
+	if len(visible) == 0 {
 		return uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.notifications"),
 			Body:  P(css.Class("empty"), uistate.T("notifications.empty")),
@@ -66,19 +158,46 @@ func NotificationCenter() ui.Node {
 	}
 
 	pr := uistate.UsePrefs().Get()
-	items := make([]ui.Node, 0, len(feed))
-	for _, it := range feed {
+
+	// Build one component per visible item. Callbacks are plain func values
+	// closed over the item's ID (a stable string), not On* hooks — the row
+	// component owns the On* hook registration at its own stable depth.
+	type rowEntry struct {
+		item      uistate.FeedItem
+		dateStr   string
+		onRead    func()
+		onDismiss func()
+		onSnooze  func()
+	}
+	rows := make([]rowEntry, len(visible))
+	for i, it := range visible {
+		id := it.ID
 		when := time.Unix(it.At, 0)
-		items = append(items, Div(css.Class("row"), Attr("role", "listitem"),
-			Div(css.Class("row-main"),
-				Span(css.Class("row-desc"), it.Title),
-				If(it.Body != "", Span(css.Class("row-meta"), it.Body)),
-			),
-			Div(css.Class("row-meta", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				notifySeverityPill(it.Severity),
-				Span(css.Class(tw.TextFaint), pr.FormatDate(when)),
-			),
-		))
+		isRead := it.Read
+		rows[i] = rowEntry{
+			item:    it,
+			dateStr: pr.FormatDate(when),
+			onRead: func() {
+				uistate.MarkFeedItemRead(id, !isRead)
+			},
+			onDismiss: func() {
+				uistate.DismissFeedItem(id)
+			},
+			onSnooze: func() {
+				uistate.SnoozeFeedItem(id, time.Now().Unix()+86400)
+			},
+		}
+	}
+
+	items := make([]ui.Node, 0, len(rows))
+	for _, r := range rows {
+		items = append(items, ui.CreateElement(notifyRow, notifyRowProps{
+			Item:      r.item,
+			DateStr:   r.dateStr,
+			OnRead:    r.onRead,
+			OnDismiss: r.onDismiss,
+			OnSnooze:  r.onSnooze,
+		}))
 	}
 
 	// Build the list body manually (role="list" + role="listitem" semantics) and

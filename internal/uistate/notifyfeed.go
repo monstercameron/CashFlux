@@ -18,24 +18,33 @@ const (
 	notifyBrowserKey  = "cashflux:notify:browser" // "1" when browser notifications are enabled
 )
 
-// FeedItem is one entry in the Notification Center (C75): the title/body of an
-// emitted notification, when it fired, whether the user has read it, and the
-// severity level for visual differentiation (C267). Severity is one of "info",
-// "warning", or "critical". Legacy items with no Severity value render at the
-// info level — no migration needed.
-type FeedItem struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Body     string `json:"body,omitempty"`
-	At       int64  `json:"at"` // unix seconds
-	Read     bool   `json:"read,omitempty"`
-	Severity string `json:"severity,omitempty"` // "info" | "warning" | "critical"; empty = info
-}
+// capturedNotifyFeed holds the live feed atom captured during render, so boot
+// catch-up and event-handler mutators can push updates WITHOUT calling the
+// UseNotifyFeed hook outside a component (which panics). Mirrors notice.go.
+var (
+	capturedNotifyFeed state.Atom[[]FeedItem]
+	notifyFeedCaptured bool
+)
 
 // UseNotifyFeed returns the shared, persisted Notification Center feed (newest
-// first). The catch-up runner appends to it; the center screen renders it.
+// first). The catch-up runner appends to it; the center screen renders it. It also
+// captures the atom so out-of-render code can update it via setNotifyFeed.
 func UseNotifyFeed() state.Atom[[]FeedItem] {
-	return state.UseAtom(notifyFeedAtomID, loadNotifyFeed())
+	a := state.UseAtom(notifyFeedAtomID, loadNotifyFeed())
+	capturedNotifyFeed = a
+	notifyFeedCaptured = true
+	return a
+}
+
+// setNotifyFeed pushes a new feed into the live atom from non-render code (the
+// boot-time catch-up runner, event-handler mutators) via the captured reference.
+// Calling the UseNotifyFeed hook there panics ("GoUseAtom called outside component
+// context"); before the first render the captured atom is nil and the KV write
+// (done by callers) is the durable source, so a no-op here is safe.
+func setNotifyFeed(items []FeedItem) {
+	if notifyFeedCaptured {
+		capturedNotifyFeed.Set(items)
+	}
 }
 
 // PersistNotifyFeed saves the feed (capped at notifyFeedCap, newest kept).
@@ -59,7 +68,7 @@ func PersistNotifyFeed(items []FeedItem) {
 // created (e.g. for the rail unread badge) holds a stale empty feed — the KV
 // write from PersistNotifyFeed is invisible to it. The fix mirrors the
 // existing pattern in runNotifyCatchUp where UseNotice().Set(...) is called
-// from non-render boot code; UseNotifyFeed().Set(...) is equally safe there.
+// from non-render boot code; setNotifyFeed(...) is equally safe there.
 func PrependNotifyFeed(items []FeedItem) {
 	if len(items) == 0 {
 		return
@@ -83,7 +92,67 @@ func PrependNotifyFeed(items []FeedItem) {
 	PersistNotifyFeed(out)
 	// Push into the live atom so all current subscribers update immediately,
 	// even if they were created before this call (mount-order hazard, C270).
-	UseNotifyFeed().Set(out)
+	setNotifyFeed(out)
+}
+
+// MarkFeedItemRead sets the Read flag on the item with the given id, persists
+// the updated feed, and pushes the new slice into the live atom (C268).
+// If the id is not found, the call is a no-op.
+func MarkFeedItemRead(id string, read bool) {
+	cur := loadNotifyFeed()
+	changed := false
+	for i, it := range cur {
+		if it.ID == id && it.Read != read {
+			cur[i].Read = read
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return
+	}
+	PersistNotifyFeed(cur)
+	setNotifyFeed(cur)
+}
+
+// DismissFeedItem removes the item with the given id from the feed, persists
+// the result, and pushes the new slice into the live atom (C268).
+func DismissFeedItem(id string) {
+	cur := loadNotifyFeed()
+	out := make([]FeedItem, 0, len(cur))
+	found := false
+	for _, it := range cur {
+		if it.ID == id {
+			found = true
+			continue
+		}
+		out = append(out, it)
+	}
+	if !found {
+		return
+	}
+	PersistNotifyFeed(out)
+	setNotifyFeed(out)
+}
+
+// SnoozeFeedItem sets SnoozedUntil on the item with the given id to the
+// provided unix-second timestamp, persists, and pushes the live atom (C268).
+// Pass until=0 to clear a snooze.
+func SnoozeFeedItem(id string, until int64) {
+	cur := loadNotifyFeed()
+	changed := false
+	for i, it := range cur {
+		if it.ID == id && it.SnoozedUntil != until {
+			cur[i].SnoozedUntil = until
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return
+	}
+	PersistNotifyFeed(cur)
+	setNotifyFeed(cur)
 }
 
 func loadNotifyFeed() []FeedItem {

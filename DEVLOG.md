@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C268 Per-item read/dismiss/snooze in the Notification Center
+
+**What:** Added per-row controls to the Notification Center: a read/unread toggle, a snooze-1-day
+button, and a dismiss button. Previously the only mutation available was the global "Clear all".
+
+**Key decisions:**
+
+- `SnoozedUntil int64` added to `FeedItem` with `omitempty` — zero-value is "not snoozed", so all
+  existing items in production IDB silently pass through the filter unchanged. No migration needed.
+
+- `VisibleFeed(items, now)` extracted to `notifyfeed_filter.go` with **no build tag** so it
+  compiles natively and is covered by `go test`. The js+wasm `notifyfeed.go` holds the wasm-only
+  persistence helpers (`MarkFeedItemRead`, `DismissFeedItem`, `SnoozeFeedItem`). `FeedItem` itself
+  also moved to the no-tag file since the struct is pure data.
+
+- Each mutation helper: (1) reads the current feed from KV, (2) applies the change, (3) persists
+  via `PersistNotifyFeed`, (4) pushes the live atom via `UseNotifyFeed().Set(...)`. This is exactly
+  the C270 pattern — KV and atom stay identical, avoiding stale-read UI bugs.
+
+- Row components follow the CLAUDE.md framework rule: `notifyRow` is a dedicated component that
+  receives `OnRead/OnDismiss/OnSnooze` as plain `func` props. The parent constructs closures over
+  the item ID in a regular `for` loop, then passes them into `ui.CreateElement(notifyRow, props)`.
+  The `On*` hooks are registered inside `notifyRow` at a stable component depth, never inside a
+  variable-length loop.
+
+- The "mark-all-read on open" effect was updated to operate over the visible (non-snoozed) slice
+  only, but to write back the full feed slice (so snoozed items retain their read state).
+
+**Native test result:** `TestVisibleFeed` — 4/4 PASS.
+
+**Build:** `GOOS=js GOARCH=wasm go build` — exit 0. `gofmt` + `go vet` clean.
+
 ## 2026-06-25 — C267 Severity pills in the Notification Center
 
 **What:** Added visual severity differentiation to every row in the Notification Center — a small
