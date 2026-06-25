@@ -298,6 +298,23 @@ func Planning() ui.Node {
 		series := forecast.Project(net.Amount, []forecast.Recurring{{Label: "net cash flow", Monthly: monthlyNet}}, nil, 12)
 		endVal := money.New(series[len(series)-1], base)
 
+		// C170: warn if the projection dips below zero at any point in the horizon —
+		// an end value alone hides a mid-horizon shortfall. Find the first month the
+		// balance crosses negative (month 0 = now).
+		dipMonth, dipsBelowZero := -1, false
+		for i, v := range series {
+			if v < 0 {
+				dipMonth, dipsBelowZero = i, true
+				break
+			}
+		}
+		var dipWarning ui.Node = Fragment()
+		if dipsBelowZero {
+			when := time.Now().AddDate(0, dipMonth, 0).Format("Jan 2006")
+			dipWarning = P(ClassStr("t-body "+tw.ColorClass("text-down")), Attr("data-testid", "forecast-dip-warning"),
+				uistate.T("planning.forecastDip", when))
+		}
+
 		// Plot in major units (dollars) with a compact-currency axis (C16), and
 		// overlay the trimmed scenario beside the baseline when a trim is set, so
 		// the two net-worth curves can be compared directly (D10).
@@ -395,6 +412,7 @@ func Planning() ui.Node {
 					),
 					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
 				),
+				dipWarning,
 				P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),

@@ -649,6 +649,7 @@ var english = Catalog{
 	"planning.runwayBreach":             "Dips below your buffer on %s — short %s.",
 	"planning.runwaySafe":               "Your balance holds for the next %d days.",
 	"planning.runwayLow":                "Low point %s around %s.",
+	"planning.forecastDip":              "Heads up: at this pace your projected balance goes negative around %s.",
 	"planning.runwaySuggest":            "Move %s from %s to cover the shortfall.",
 	"planning.runwaySuggestPartial":     "Move %s from %s — partially covers the shortfall.",
 	"planning.runwaySuggestNone":        "No liquid account has enough to cover this — consider delaying a bill or adding income.",
