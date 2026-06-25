@@ -47,6 +47,35 @@ func TestDetectMonthly(t *testing.T) {
 	}
 }
 
+// TestDetectMergesPriceChange guards C165: a merchant whose price changed mid-run
+// must collapse to ONE subscription (grouped by name, not name+amount), using the
+// most-recent charge as the current price, with the count spanning all charges.
+func TestDetectMergesPriceChange(t *testing.T) {
+	txns := []domain.Transaction{
+		charge("Netflix", 1549, d(2026, time.February, 1)),
+		charge("Netflix", 1549, d(2026, time.March, 1)),
+		charge("Netflix", 1799, d(2026, time.April, 1)), // price went up
+		charge("Netflix", 1799, d(2026, time.May, 1)),
+	}
+	subs, err := Detect(txns, usd(), 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(subs) != 1 {
+		t.Fatalf("got %d subs, want 1 (price change must not double-detect): %+v", len(subs), subs)
+	}
+	s := subs[0]
+	if s.Name != "Netflix" || s.Cadence != CadenceMonthly {
+		t.Errorf("sub = %+v, want Netflix monthly", s)
+	}
+	if s.Amount != 1799 { // current price = most recent charge
+		t.Errorf("amount = %d, want 1799 (latest price)", s.Amount)
+	}
+	if s.Count != 4 { // all charges counted
+		t.Errorf("count = %d, want 4", s.Count)
+	}
+}
+
 func TestDetectYearlyAndWeekly(t *testing.T) {
 	txns := []domain.Transaction{
 		charge("Domain", 1200, d(2024, time.June, 10)),

@@ -12,7 +12,6 @@ package subscriptions
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -77,10 +76,18 @@ func Detect(txns []domain.Transaction, rates currency.Rates, minCount int) ([]Su
 		minCount = 2
 	}
 
+	// C165: group by MERCHANT (normalized name) only — not name+amount. Keying on
+	// the amount split a merchant whose price changed (e.g. Netflix $15.49 → $17.99)
+	// into two separate "subscriptions". Now all of a merchant's charges form one
+	// group; the representative amount is the most-recent charge (the current price),
+	// and cadence is computed over every charge date.
+	type charge struct {
+		date time.Time
+		amt  int64
+	}
 	type group struct {
-		name  string
-		dates []time.Time
-		amt   int64
+		name    string
+		charges []charge
 	}
 	groups := map[string]*group{}
 	for _, t := range txns {
@@ -93,38 +100,38 @@ func Detect(txns []domain.Transaction, rates currency.Rates, minCount int) ([]Su
 		}
 		amt := conv.Abs().Amount
 		name := strings.TrimSpace(t.Desc)
-		key := strings.ToLower(name) + "|" + strconv.FormatInt(amt, 10)
+		key := strings.ToLower(name)
 		g := groups[key]
 		if g == nil {
-			g = &group{name: name, amt: amt}
+			g = &group{name: name}
 			groups[key] = g
 		}
-		g.dates = append(g.dates, t.Date)
+		g.charges = append(g.charges, charge{date: t.Date, amt: amt})
 	}
 
 	var out []Subscription
 	for _, g := range groups {
-		if len(g.dates) < minCount {
+		if len(g.charges) < minCount {
 			continue
 		}
-		sort.Slice(g.dates, func(i, j int) bool { return g.dates[i].Before(g.dates[j]) })
-		gaps := make([]int, 0, len(g.dates)-1)
-		for i := 1; i < len(g.dates); i++ {
-			gaps = append(gaps, int(g.dates[i].Sub(g.dates[i-1]).Hours()/24+0.5))
+		sort.Slice(g.charges, func(i, j int) bool { return g.charges[i].date.Before(g.charges[j].date) })
+		gaps := make([]int, 0, len(g.charges)-1)
+		for i := 1; i < len(g.charges); i++ {
+			gaps = append(gaps, int(g.charges[i].date.Sub(g.charges[i-1].date).Hours()/24+0.5))
 		}
 		cad, ok := classify(medianInt(gaps))
 		if !ok {
 			continue
 		}
-		last := g.dates[len(g.dates)-1]
+		last := g.charges[len(g.charges)-1]
 		out = append(out, Subscription{
 			Name:        g.name,
 			Cadence:     cad,
-			Amount:      g.amt,
+			Amount:      last.amt, // current price = most recent charge
 			Currency:    rates.Base,
-			Count:       len(g.dates),
-			Last:        last,
-			NextRenewal: advance(last, cad),
+			Count:       len(g.charges),
+			Last:        last.date,
+			NextRenewal: advance(last.date, cad),
 		})
 	}
 
