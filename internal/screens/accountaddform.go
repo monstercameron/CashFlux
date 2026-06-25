@@ -80,6 +80,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	advOpen := ui.UseState(false)
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
+	// C78: single-currency households hide the currency picker (L37), which otherwise
+	// makes the first foreign account impossible (chicken-egg: no rate → no picker →
+	// no foreign account → no reason to add a rate). A "Use a different currency" link
+	// reveals the full picker on demand so going multi-currency is always possible.
+	revealCurr := ui.UseState(false)
+	onRevealCurr := ui.UseEvent(Prevent(func() { revealCurr.Set(true) }))
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	// onCurr/onType/onOwner hooks kept for stable hook ordering; SelectInput owns the
@@ -211,7 +217,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("common.owner"),
 			})),
-		If(!singleCurrency, labeledField(uistate.T("accounts.currency"),
+		If(!singleCurrency || revealCurr.Get(), labeledField(uistate.T("accounts.currency"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   currencyOptions(app, curr.Get()),
 				Selected:  curr.Get(),
@@ -219,6 +225,10 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				AriaLabel: uistate.T("accounts.currency"),
 				TestID:    "account-currency-select",
 			}))),
+		// C78: reveal the currency picker on demand for single-currency households.
+		If(singleCurrency && !revealCurr.Get(),
+			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
+				OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))),
 		labeledField(uistate.T("accounts.openingBalance"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),

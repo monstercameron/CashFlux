@@ -1244,6 +1244,7 @@ var english = Catalog{
 	// Accounts screen
 	"accounts.addTitle":           "Add account",
 	"accounts.currency":           "Currency",
+	"accounts.useOtherCurrency":   "Use a different currency",
 	"accounts.openingBalance":     "Opening balance",
 	"accounts.creditLimit":        "Credit limit",
 	"accounts.apr":                "Interest APR %",
