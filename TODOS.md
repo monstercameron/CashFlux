@@ -2787,3 +2787,67 @@ ALREADY DONE: per-bubble token+cost ("Used N tokens ~$X", insights.go:1074-1081)
 - [ ] [C250][HIGH] Active model badge near composer (resolved model incl silent default fix l49) + running session-total cost (sum Usage, ai.EstimateCostUSD, compute outside MapKeyed).
 - [ ] [C251][HIGH] Gate "Edit prompt" on !noAI (insights.go:824) + "Conversations saved automatically" cue (l476) + de-emphasize vs New Chat.
 - [ ] [C249][MED] aria-hidden on Sparkles send icon (insights.go:789) + distinct input aria-label key (not placeholder).
+
+<!-- ===== GRANULAR DECOMPOSITION (batch 17 — final clusters, appended 2026-06-25) ===== -->
+
+# Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
+
+## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]
+ALREADY DONE: `internal/scope/scope.go` (ReportScope/IsAll/ResolveScope w/ institutionOf accessor/ApplyScopeToTxns/ApplyScopeToAccounts) committed+tested.
+- [ ] [443][BLOCKER] `Account.Institution string` on domain (entities.go after Custom map) — additive JSON; unlocks everything. Update scope_test stub to real field; add `domain.DistinctInstitutions(accounts)` + `domain.InstitutionOf` accessor.
+- [ ] [443] `UseActiveScope` uistate atom (new activescope.go, mirror activemember.go; localStorage "cashflux:active-scope"; default IsAll); `domain.SavedView` type + Dataset/SQLite persistence + CRUD; seed sample accounts with Institution (2+ distinct).
+- [ ] [444][BLOCKER] Wire scope into reports: `reports_screen.go` after accounts() — ResolveScope + ApplyScopeToTxns/Accounts before all reports.* calls; short-circuit when IsAll.
+- [ ] [444] `ScopeBanner` (new scopebanner.go, mirror samplebanner; "Viewing: <label>" + Clear; render when !IsAll) mounted in shell banner stack — ONE shared banner w/ R29-C276 + F41-C281.
+- [ ] [444] `ScopeSelector` UI (institutions/owners/types multiselect pills — each pill own component, no On* in loop) on /reports + SavedView save/load.
+- [ ] [445] Extend scope to dashboard (AND with member filter), insights, net-worth; `Account.Institution` field + datalist in add/edit account form (445-D); institution column in accounts list.
+- Gotchas: no On* in loops; reuse scope pkg; ONE shared scope/member/role banner; i18n keys; js&wasm build tags on UI/uistate only.
+
+## F1 sample/empty-states (-> atomic)
+ALREADY DONE: C5 sync-chip backend-gated invisible (sync_client.go:498-524); C6 meta description present (index.html:49).
+- [ ] [C2][CRIT] Data-loss race: gate initial save with `browserstore.SetThen(...)` before ready (persist.go ~280) — mirror wipeFinancialLocalState.
+- [ ] [C1][HIGH] `SetSampleActive(true)` after LoadSample in accounts.go (~91) + settings.go (~1383) load paths (only hero path sets it).
+- [ ] [C4][MED] Sample banner prominence: bg contrast + real button styling for "Start fresh" + icon + font-size (web/index.html .sample-banner ~2203; samplebanner.go:27).
+- [ ] [C3][MED] First-run "viewing sample data" hint (firstRun prop from hydrateDataset → samplebanner.go).
+- [ ] [C7][MED] First-run add-account framing via `SetAddContext("first-run")` (dashboard_hero.go:209) + welcome header in modal; clear on close.
+- [ ] [C8][MED] Empty dashboard: gate kpi tiles to empty-state placeholders when len(accounts)==0 (dashboard.go) + de-emphasize bento below onboard card; ensure onboard card first in tab order.
+
+## F2 CSV/import UX (-> atomic)
+ALREADY DONE: C15 wizard pre-pop from detected columns (documents.go:239-244,1157); C17 per-row "Already imported" badge (partial, documents.go:963 — within-batch dup = R8 overlap); C18 cadence feedback fires (misplaced — see C18-a).
+- [ ] [C10/C11][MAJOR] Root fix: `recordDocument` called with accountID="" + rows=nil for CSV (documents.go:157,185) — pass `importAcct.Get()` + real rows/RowCount; then summary "Imported N into <acct>" (i18n documents.importedCsvInto); add `RowCount int` to domain.Document.
+- [ ] [C12][MAJOR] Draft-review: move footer (account select + Import button) above the rows list, or duplicate a condensed selector on top (documents_draft_review.go:168-192).
+- [ ] [C13][MAJOR] Reorder Documents(): CSV/statement (no-AI) first, AI image import last + section separator (documents.go:705-852).
+- [ ] [C14][MAJOR] Import entry from empty states: "Import" link (Href /documents) on transactions.go:528 + accounts.go:328 empty CTAs.
+- [ ] [C16][MINOR] "Skipped N rows" detail: render skipped[].Line/.Reason (top 3 + "N more") in an err P (documents.go:160,188; store.CSVRowError).
+- [ ] [C18][MINOR] Cadence reminder confirmation node placed next to the button (separate cadenceMsg state) (documents.go:736-741).
+- [ ] [C9/C19][DESIGN] "Why no bank sync" + "How to export CSV from your bank" help text in CsvImportCard + link to /help (documents_csv_import.go:31).
+- [ ] [C20][DESIGN] Richer no-key image explainer (cost/link/privacy) + "try manual entry" escape (overlaps R10 #441).
+
+## F13 rules engine (-> atomic)
+ALREADY DONE: C107 dup id fixed in Go (ruleaddform.go:121, data-testid="rule-add-form") — BUT 7 e2e files still query #rule-add (migrate selectors). NOTE: `internal/rules/conditions.go` Condition (AllKeywords/AnyKeywords/AccountID/Min/MaxAmount) fully built+tested but UNWIRED (dead code).
+- [ ] [C105][MAJOR] Wire `rules.Condition` into Rule struct + matches()/FirstMatch() + pass AccountID/Amount at call sites (appstate.go:739,758,1495) + SQLite round-trip + advanced-conditions form panel. (the big one; gates C111)
+- [ ] [C102][MAJOR] `SetPayee` rule action: Rule field + apply in AutoCategorize/ApplyRules + form/edit inputs + tests.
+- [ ] [C103][MAJOR] `ApplyRulesResult{Total, ByRuleID}` per-rule counts + UI breakdown (appstate.go:1485; rules.go:82).
+- [ ] [C104][MAJOR] Fix tag-skip: merge tags instead of no-op when txn already has any tag (appstate.go:1500).
+- [ ] [C108][MAJOR] `ApplyRulesForce` (re-categorize already-categorized) + "Re-apply" button + correction auto-propagate hook.
+- [ ] [C110][MED] Rule delete confirm/undo (pendingDelete inline or timed-undo notice) (rules.go:307-390).
+- [ ] [C109][P3] Wrap match input in uiw.FormField w/ visible label + order (ruleaddform.go:125).
+- [ ] [C111][P3] Rule OwnerID + filter /rules by active member (depends C105).
+
+## F29 net worth (-> atomic)
+- [ ] [C212][MAJOR] kpi-assets bento tile (nw.Assets computed ~dashboard.go:98) + default layout + kpiSig — OVERLAPS F9 #467.
+- [ ] [C216][BUG] Reports NW AreaChart plots raw cents (reports_screen.go:245) — divide by nwDiv like dashboard (dashboard.go:708); keep raw for hover labels.
+- [ ] [C213][MAJOR] Interactive hover tooltips on both NW charts (dashboard.go:744; reports_screen.go:920) — add Tooltip to ChartProps → chart.js.
+- [ ] [C217][DESIGN] Decouple Reports NW trend from cash-flow period selector — separate always-monthly nwBounds (reports_screen.go:222-244).
+- [ ] [C218][DESIGN] `/net-worth` route + NetWorthScreen (new networth.go) — extract shared NW render from reports.
+- [ ] [C214][MINOR] Remove duplicate data-countup (hero vs kpi tile) so one figure animates (dashboard_hero.go:151).
+- [ ] [C215][MINOR] Drop unlabeled partial current-month point from dashboard NW trend (dashboard.go:673 `i-(months-1)`).
+
+## F50 help/support + F37 health (-> atomic)
+ALREADY DONE: F50 — C326 whatsnew toast+card (whatsnew.go, help.go:60); C327 palette help + "?" button (shortcuts.go:288, shell.go:765); C328 /help route + 7 topic cards + help.faq.Items/Filter; C325 copy-bug-report in settings; C329 onboard card. F37 — C260/C262 healthscore.Evaluate (6-factor incl NW-trend) + /health screen + dashboard widget + UseHealthTrend all SHIPPED; C261 SMART-A10 correctly separate.
+- [ ] [C328][HIGH] Wire help.Items()+Filter() into HelpScreen as searchable FAQ accordion (help.go after :91; query-state own component).
+- [ ] [C260][HIGH] Wire NWTrendPct/HasNWTrend into `buildHealthInputs` (health.go ~147) via `ledger.NetWorthSeries(accounts,txns,[now-3mo,now],rates)` — factor loop already renders it. (R27 #452 — the only remaining health wiring)
+- [ ] [C325][MED] "Report a bug / request feature" GitHub-issues link inside HelpScreen (i18n help.reportBug).
+- [ ] [C329][MED] Per-screen feature-discovery tip line on accounts/budgets/goals empty CTAs (emptystate.go optional Tip field).
+- [ ] [C326][LOW] Parse CHANGELOG.md (//go:embed via new internal/changelog) for whatsNewCard instead of static bullets.
+- [ ] [C327][LOW] "Press ? for shortcuts" hint on HelpButton (shell.go:765).
+- [ ] [C262/C261][LOW] data-testid on health-widget/health-screen + annotate SMART-A10 catalog (per-account vs free household).
