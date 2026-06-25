@@ -3,7 +3,10 @@
 package smart
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -320,5 +323,99 @@ func TestSortInsights(t *testing.T) {
 	}
 	if in[1].Feature != "SMART-A1" || in[2].Feature != "SMART-A2" {
 		t.Errorf("ties should sort by feature code: %+v", in)
+	}
+}
+
+// TestSettingsJSONRoundTrip is the C255 regression guard: a Settings value with
+// mixed Enabled and ExplicitOff entries must survive a JSON marshal→unmarshal
+// cycle losslessly — i.e., the loaded value is equal to the saved value in every
+// field. This mirrors exactly the path that uistate.SaveSmartSettings /
+// LoadSmartSettings uses (json.Marshal → SettingKVSet → SettingKVGet →
+// json.Unmarshal).
+func TestSettingsJSONRoundTrip(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0).UTC()
+
+	// Build a Settings that exercises every field: mixed Enabled + ExplicitOff,
+	// a dismissed insight, a cadence override, a muted feature, a last-run stamp,
+	// a cached AI result, and a non-default density.
+	orig := Settings{}.
+		SetEnabled("SMART-A1", true).
+		SetEnabled("SMART-A2", false). // lands in ExplicitOff
+		SetEnabled("SMART-T1", true).
+		Dismiss("insight-key-42").
+		SetCadence("SMART-T1", CadenceWeekly).
+		SetMuted("SMART-A1", true).
+		MarkRun("SMART-T1", now).
+		SetResult("SMART-T1", "Your spending looks healthy.").
+		SetDensity(DensityEverywhere)
+
+	// --- marshal ---
+	b, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("json.Marshal(Settings) error: %v", err)
+	}
+
+	// --- unmarshal ---
+	var got Settings
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("json.Unmarshal(Settings) error: %v", err)
+	}
+
+	// Deep equality: every exported field must match.
+	if !reflect.DeepEqual(orig, got) {
+		t.Errorf("Settings round-trip mismatch\n  orig: %+v\n   got: %+v", orig, got)
+	}
+
+	// Spot-check individual semantics survive the round-trip:
+	cases := []struct {
+		name string
+		got  bool
+		want bool
+	}{
+		{"SMART-A1 enabled (explicit on)", got.IsEnabled("SMART-A1"), true},
+		{"SMART-A2 disabled (explicit off)", got.IsEnabled("SMART-A2"), false},
+		{"SMART-T1 enabled (AI explicit on)", got.IsEnabled("SMART-T1"), true},
+		{"SMART-A1 muted", got.IsMuted("SMART-A1"), true},
+		{"SMART-A2 not muted", got.IsMuted("SMART-A2"), false},
+		{"insight-key-42 dismissed", got.IsDismissed("insight-key-42"), true},
+		{"unknown insight not dismissed", got.IsDismissed("no-such-key"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Errorf("got %v, want %v", tc.got, tc.want)
+			}
+		})
+	}
+
+	// Cadence override must survive.
+	if c := got.CadenceFor("SMART-T1"); c != CadenceWeekly {
+		t.Errorf("cadence after round-trip = %v, want %v", c, CadenceWeekly)
+	}
+
+	// LastRun timestamp must survive (to the second).
+	if rt := got.LastRunAt("SMART-T1"); !rt.Equal(now) {
+		t.Errorf("LastRunAt after round-trip = %v, want %v", rt, now)
+	}
+
+	// Cached AI result must survive.
+	if r := got.ResultFor("SMART-T1"); r != "Your spending looks healthy." {
+		t.Errorf("ResultFor after round-trip = %q", r)
+	}
+
+	// Density must survive.
+	if got.DensityOrDefault() != DensityEverywhere {
+		t.Errorf("Density after round-trip = %v, want %v", got.DensityOrDefault(), DensityEverywhere)
+	}
+
+	// Zero Settings must also round-trip without error (the "fresh install" path).
+	var zero Settings
+	zb, _ := json.Marshal(zero)
+	var zgot Settings
+	if err := json.Unmarshal(zb, &zgot); err != nil {
+		t.Fatalf("zero Settings round-trip error: %v", err)
+	}
+	if !reflect.DeepEqual(zero, zgot) {
+		t.Errorf("zero Settings round-trip mismatch: %+v", zgot)
 	}
 }
