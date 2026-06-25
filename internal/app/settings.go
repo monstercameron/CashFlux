@@ -640,11 +640,15 @@ func globalSettingsForm() uic.Node {
 			}
 			fxNonBaseCodes = append(fxNonBaseCodes, code)
 			stale := false
+			asOf := ""
 			if s.FXUpdatedAt != nil {
-				stale = currency.RateStale(s.FXUpdatedAt[code], time.Now(), currency.DefaultRateMaxAge)
+				if t, ok := s.FXUpdatedAt[code]; ok && !t.IsZero() {
+					stale = currency.RateStale(t, time.Now(), currency.DefaultRateMaxAge)
+					asOf = uistate.LoadPrefs().FormatDate(t) // C80: respect the user's date format
+				}
 			}
 			fxRows = append(fxRows, uic.CreateElement(fxRateRow, fxRateRowProps{
-				Code: code, Base: base, Rate: s.FXRates[code], OnSet: setRate, Stale: stale,
+				Code: code, Base: base, Rate: s.FXRates[code], OnSet: setRate, Stale: stale, AsOf: asOf,
 			}))
 		}
 	}
@@ -1084,7 +1088,8 @@ type fxRateRowProps struct {
 	Code, Base string
 	Rate       float64
 	OnSet      func(code string, rate float64)
-	Stale      bool // the rate hasn't been refreshed in a while (L4)
+	Stale      bool   // the rate hasn't been refreshed in a while (L4)
+	AsOf       string // C80: formatted date the rate was last set (empty if never)
 }
 
 // fxRateRow is one editable FX rate (1 <code> = <rate> <base>). Its own component
@@ -1116,6 +1121,8 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Attr("aria-label", uistate.T("settings.fxRateAria", props.Code, props.Base)), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
 		inverseHint,
+		// C80: show when this rate was last set so the user can judge its freshness.
+		If(props.AsOf != "", Span(css.Class(tw.TextXs, tw.TextFaint), Attr("data-testid", "fx-asof"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("settings.fxAsOf", props.AsOf))),
 		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "var(--color-warn)", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)
 }

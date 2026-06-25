@@ -1081,6 +1081,7 @@ var english = Catalog{
 	"settings.freshNever":      "days · 0 means never",
 	"settings.fxRateLabel":     "1 %s =",
 	"settings.fxInverse":       "1 %s = %s %s",
+	"settings.fxAsOf":          "as of %s",
 	"settings.fxStale":         "Stale",
 	"settings.fxStaleTitle":    "This exchange rate hasn't been updated in over a month — refresh it so multi-currency totals stay accurate.",
 	"settings.fxAIFetch":       "Fetch live rates with AI",
