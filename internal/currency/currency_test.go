@@ -30,6 +30,30 @@ func TestMinorFromMajor(t *testing.T) {
 	}
 }
 
+func TestMajorFromMinor(t *testing.T) {
+	tests := []struct {
+		want float64
+		code string
+		in   int64
+	}{
+		{want: 12.34, code: "USD", in: 1234},
+		{want: 1000, code: "JPY", in: 1000}, // 0 decimals -> not /100
+		{want: -4.20, code: "USD", in: -420},
+		{want: 5, code: "ZZZ", in: 500}, // unknown -> 2 decimals
+		{want: 0, code: "USD", in: 0},
+	}
+	for _, tt := range tests {
+		got := MajorFromMinor(tt.in, tt.code)
+		if d := got - tt.want; d > 1e-9 || d < -1e-9 {
+			t.Errorf("MajorFromMinor(%d, %q) = %v, want %v", tt.in, tt.code, got, tt.want)
+		}
+	}
+	// Round-trip with MinorFromMajor.
+	if got := MinorFromMajor(MajorFromMinor(1234, "USD"), "USD"); got != 1234 {
+		t.Errorf("round-trip USD = %d, want 1234", got)
+	}
+}
+
 func TestCodesSortedAndRegistered(t *testing.T) {
 	codes := Codes()
 	if len(codes) < 5 {

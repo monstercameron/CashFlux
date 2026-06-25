@@ -100,6 +100,15 @@ func MinorFromMajor(major float64, code string) int64 {
 	return int64(math.Round(major * math.Pow10(Decimals(code))))
 }
 
+// MajorFromMinor converts integer minor units (e.g. 1234 cents) to a major-unit
+// float (e.g. 12.34) for the given currency code, using its own decimal precision
+// (JPY's 0 decimals yield whole units). Inverse of MinorFromMajor. Intended for
+// display/charting boundaries that need a float; domain math should stay in
+// integer minor units.
+func MajorFromMinor(minor int64, code string) float64 {
+	return float64(minor) / math.Pow10(Decimals(code))
+}
+
 // Symbol returns the display symbol for a code, defaulting to the code itself.
 func Symbol(code string) string {
 	if c, ok := registry[normalize(code)]; ok {

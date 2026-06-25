@@ -287,14 +287,10 @@ func Planning() ui.Node {
 		// Plot in major units (dollars) with a compact-currency axis (C16), and
 		// overlay the trimmed scenario beside the baseline when a trim is set, so
 		// the two net-worth curves can be compared directly (D10).
-		divf := 1.0
-		for i := 0; i < currency.Decimals(base); i++ {
-			divf *= 10
-		}
 		toPoints := func(vals []int64) []chartspec.Point {
 			pts := make([]chartspec.Point, len(vals))
 			for i, v := range vals {
-				pts[i] = chartspec.Point{X: float64(i), Y: float64(v) / divf}
+				pts[i] = chartspec.Point{X: float64(i), Y: currency.MajorFromMinor(v, base)}
 			}
 			return pts
 		}
@@ -762,18 +758,14 @@ func Planning() ui.Node {
 				// zero, from the full starting balance through the avalanche schedule.
 				burnChart := Fragment()
 				if len(aval.Schedule) > 0 {
-					divf := 1.0
-					for k := 0; k < currency.Decimals(base); k++ {
-						divf *= 10
-					}
 					var startTotal int64
 					for _, d := range debts {
 						startTotal += d.Balance
 					}
 					burnPts := make([]chartspec.Point, 0, len(aval.Schedule)+1)
-					burnPts = append(burnPts, chartspec.Point{X: 0, Y: float64(startTotal) / divf})
+					burnPts = append(burnPts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base)})
 					for i, b := range aval.Schedule {
-						burnPts = append(burnPts, chartspec.Point{X: float64(i + 1), Y: float64(b) / divf})
+						burnPts = append(burnPts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base)})
 					}
 					yFmt := ".3~s"
 					if currency.Symbol(base) == "$" {

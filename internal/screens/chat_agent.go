@@ -258,12 +258,12 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
 				income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 				env := formula.Env{Vars: map[string]float64{
-					"net_worth":    float64(net.Amount) / 100,
-					"assets":       float64(assets.Amount) / 100,
-					"liabilities":  float64(liab.Amount) / 100,
-					"income":       float64(income.Amount) / 100,
-					"spending":     float64(expense.Amount) / 100,
-					"net_cashflow": float64(income.Amount-expense.Amount) / 100,
+					"net_worth":    currency.MajorFromMinor(net.Amount, base),
+					"assets":       currency.MajorFromMinor(assets.Amount, base),
+					"liabilities":  currency.MajorFromMinor(liab.Amount, base),
+					"income":       currency.MajorFromMinor(income.Amount, base),
+					"spending":     currency.MajorFromMinor(expense.Amount, base),
+					"net_cashflow": currency.MajorFromMinor(income.Amount-expense.Amount, base),
 				}}
 				v, err := formula.Eval(a.Expression, env)
 				if err != nil {
