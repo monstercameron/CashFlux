@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C276 Real role labels on member rows
+
+**What:** The member list was showing cosmetic "Default" or "Member" strings in the `row-meta`
+span — these came from i18n keys `members.roleDefault` / `members.roleMember` and were completely
+divorced from the member's actual stored/resolved role. Replaced with a call to
+`memberrole.Label(memberrole.Resolve(m))` so each row shows the canonical "Owner", "Admin", or
+"Viewer" badge. The "default" quick-add-seed chip (`IsDefault=true`) is preserved as a separate,
+visually distinct chip (`badge badge-muted`) alongside the role badge, so the two concepts — role
+and default-seed — are no longer conflated.
+
+**Two badges, two meanings:**
+- Role badge (`.badge`): always present, shows the real role.
+- Default chip (`.badge.badge-muted`): only on the `IsDefault` member, labeled via the existing
+  `members.defaultBadge` i18n key; reinforces that this is the quick-add seed, not the role.
+- The existing `IfElse(m.IsDefault, Span(badge badge-soon…), Button…)` below the main area is
+  untouched — it's the "set as default" action, not a label.
+
+**Build/quality:** wasm build exits 0; `gofmt -l` clean; `go vet` clean. E2E confirms role
+badges appear and the default chip is distinct.
+
 ## 2026-06-25 — Feature: Role selector in add/edit member forms (C275)
 
 **What:** Added a labelled Role `<select>` (owner / admin / viewer) to both the add-member modal

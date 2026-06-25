@@ -422,17 +422,22 @@ func MemberRow(props memberRowProps) ui.Node {
 		)
 	}
 
-	meta := uistate.T("members.roleMember")
-	if m.IsDefault {
-		meta = uistate.T("members.roleDefault")
-	}
+	// C276: show the member's real role (Owner/Admin/Viewer) as the row-meta
+	// badge, replacing the generic "Default"/"Member" cosmetic labels. The
+	// "default" quick-add-seed chip is kept separately and visually distinct.
+	roleLabel := memberrole.Label(memberrole.Resolve(m))
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"),
 				memberAvatar(m.Name, color),
 				m.Name,
 			),
-			Span(css.Class("row-meta"), meta),
+			Span(css.Class("row-meta"),
+				Span(css.Class("badge"), Attr("data-testid", "member-role-badge-"+m.ID), roleLabel),
+				If(m.IsDefault,
+					Span(css.Class("badge badge-muted"), Attr("data-testid", "member-default-chip-"+m.ID), uistate.T("members.defaultBadge")),
+				),
+			),
 		),
 		IfElse(m.IsDefault,
 			Span(css.Class("badge badge-soon"), uistate.T("members.defaultBadge")),
