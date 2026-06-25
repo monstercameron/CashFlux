@@ -155,7 +155,9 @@
         var bars = g.selectAll(".bar-" + si).data(s.points || []).enter().append("rect")
           .attr("x", function (p) { return x(p.x) - (bw * series.length) / 2 + si * bw; })
           .attr("width", bw)
-          .attr("fill", color);
+          // Per-bar color override (p.color) lets a ranked category chart share its
+          // sibling donut's palette; empty falls back to the series color.
+          .attr("fill", function (p) { return (p && p.color) || color; });
         // Per-bar native tooltip so each bar is identifiable on hover ("Mortgage — $1,480.00").
         // The bars otherwise carry no label/legend, so without this you can't tell which category
         // a bar is or its exact value. curSym + d3 give app-consistent money formatting.

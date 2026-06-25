@@ -31,6 +31,22 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// tableau10Palette mirrors d3.schemeTableau10 (the palette the donut renderer
+// uses by slice index), so a bar colored tableau10(i) matches the donut's i-th
+// slice exactly. Indices past the end cycle, matching d3.scaleOrdinal.
+var tableau10Palette = []string{
+	"#4e79a7", "#f28e2c", "#e15759", "#76b7b2", "#59a14f",
+	"#edc949", "#af7aa1", "#ff9da7", "#9c755f", "#bab0ab",
+}
+
+// tableau10 returns the i-th Tableau10 color (cycling), matching the donut palette.
+func tableau10(i int) string {
+	if i < 0 {
+		i = 0
+	}
+	return tableau10Palette[i%len(tableau10Palette)]
+}
+
 // reportsBarSpec builds a horizontal Bar chart spec from label+amount pairs.
 // amounts are in minor currency units; pass decimals (e.g. 2) to convert to major units.
 func reportsBarSpec(pairs []struct {
@@ -379,6 +395,14 @@ func Reports() ui.Node {
 		}
 		if len(barPairs) > 0 {
 			spec := reportsBarSpec(barPairs, decimals)
+			// Color each bar with the same Tableau10 palette (by rank) the sibling
+			// donut uses, so bar #1 and the donut's biggest slice share a hue and the
+			// two charts in this card read as one picture (G9.1a cohesion).
+			if len(spec.Series) > 0 {
+				for i := range spec.Series[0].Points {
+					spec.Series[0].Points[i].Color = tableau10(i)
+				}
+			}
 			catBarNodes = append(catBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top spending categories ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 		// Donut: top 5 + "Other" bucket.
@@ -1066,13 +1090,13 @@ func reportsCatShareBar(amount, max int64, idx int) ui.Node {
 	if pct > 100 {
 		pct = 100
 	}
-	// Distinct hue per rank, computed in Go (the framework's Style() drops CSS custom
-	// properties, so a --cat-idx var won't apply). 47deg steps spread the wheel.
-	hue := (idx * 47) % 360
+	// Color each row by its rank with the SAME Tableau10 palette the sibling bar
+	// chart and donut use, so a category reads as one hue across all three views in
+	// the card (e.g. Mortgage is blue everywhere) instead of three palettes (G9.1a).
 	return Div(css.Class("share-bar"), Style(map[string]string{"height": "8px", "max-width": "100%",
 		"margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 		Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct),
-			"background": fmt.Sprintf("hsl(%ddeg 55%% 52%%)", hue), "border-radius": "999px"})))
+			"background": tableau10(idx), "border-radius": "999px"})))
 }
 
 // rollupLabelKey is the i18n key for the by-category roll-up toggle's label,

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Single-device disclosure note on Members screen (C274)
+
+Design ticket: surface the local-first / single-dataset limitation near where roles are displayed so users aren't confused about what Owner/Admin/Viewer actually controls.
+
+**Decision — placement:** directly under the existing `members.desc` orientation paragraph inside the "Household members" card, before the member list rows. This is the most natural reading order: orientation → caveat → list. No new component was needed — the existing `P(css.Class("muted"), …)` pattern (used in accounts, allocate, and elsewhere) is exactly the right low-key informational style.
+
+**Tone:** calm and factual. The note acknowledges roles exist, explains they are labels only, and sets expectations about future sync without being alarming or apologetic.
+
+**i18n:** new key `members.singleDeviceNote` in `internal/i18n/en.go`. All other i18n keys for the members screen already existed.
+
+**E2E:** `e2e/c274_single_device_note.mjs` confirms the note is present (by `data-testid`), contains the key phrases, and is rendered as a `<p>` element.
+
 ## 2026-06-25 — "While you were away" catch-up digest (C271)
 
 The ticket asks for a "since last visit" section in the Notification Center plus a dismissible dashboard card.

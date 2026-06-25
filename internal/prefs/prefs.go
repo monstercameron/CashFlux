@@ -124,10 +124,13 @@ func (p Prefs) BackendActive() bool {
 		strings.TrimSpace(p.ServerToken) != ""
 }
 
-// Default returns the out-of-the-box preferences (Sunday week start, ISO dates,
-// dark theme, green accent, comfortable density, 100% scale, full motion).
+// Default returns the out-of-the-box preferences (Sunday week start, friendly
+// long dates, dark theme, green accent, comfortable density, 100% scale, full
+// motion). Dates default to the human "Jan 2, 2006" style rather than raw ISO so
+// the app reads friendly out of the box (C155); users who want ISO/US/EU can
+// switch in Appearance.
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateISO, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateLong, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -141,7 +144,7 @@ func (p Prefs) Normalize() Prefs {
 	switch p.DateStyle {
 	case DateISO, DateUS, DateEU, DateLong:
 	default:
-		p.DateStyle = DateISO
+		p.DateStyle = DateLong // friendly default (matches Default()); see C155
 	}
 	switch p.Theme {
 	case ThemeDark, ThemeLight, ThemeSystem:

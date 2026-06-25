@@ -25,10 +25,23 @@ type HealthSnapshot struct {
 	Band  string `json:"band"`
 }
 
+// capturedHealthTrend holds the live trend atom captured during render, so
+// RecordHealthSnapshot can push updates from a UseEffect / boot code WITHOUT
+// calling the UseAtom hook outside a component (which panics). Mirrors the
+// captured-atom pattern in notice.go / notifyfeed.go.
+var (
+	capturedHealthTrend state.Atom[[]HealthSnapshot]
+	healthTrendCaptured bool
+)
+
 // UseHealthTrend returns the shared, persisted list of monthly health snapshots
 // (oldest first). The dashboard widget records into it; the /health page renders it.
+// It also captures the atom so out-of-render code can update it safely.
 func UseHealthTrend() state.Atom[[]HealthSnapshot] {
-	return state.UseAtom(healthTrendAtomID, loadHealthTrend())
+	a := state.UseAtom(healthTrendAtomID, loadHealthTrend())
+	capturedHealthTrend = a
+	healthTrendCaptured = true
+	return a
 }
 
 func loadHealthTrend() []HealthSnapshot {
@@ -71,7 +84,13 @@ func RecordHealthSnapshot(month string, score int, band string) []HealthSnapshot
 	if data, err := json.Marshal(out); err == nil {
 		kvSet(healthTrendStoreID, string(data))
 	}
-	UseHealthTrend().Set(out)
+	// Push into the live atom via the captured reference (never UseHealthTrend()
+	// here — this runs from a UseEffect, where calling a hook panics with
+	// "GoUseAtom called outside component context"). Safe because the widget /page
+	// always render (capturing the atom) before this effect fires.
+	if healthTrendCaptured {
+		capturedHealthTrend.Set(out)
+	}
 	return out
 }
 

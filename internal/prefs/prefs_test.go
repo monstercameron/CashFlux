@@ -17,7 +17,7 @@ func TestFormatDate(t *testing.T) {
 		{DateUS, "06/05/2026"},
 		{DateEU, "05/06/2026"},
 		{DateLong, "Jun 5, 2026"},
-		{DateStyle("bogus"), "2026-06-05"}, // falls back to ISO
+		{DateStyle("bogus"), "Jun 5, 2026"}, // falls back to the friendly default (DateLong; C155)
 	}
 	for _, tt := range tests {
 		p := Prefs{DateStyle: tt.style}

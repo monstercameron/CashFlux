@@ -28,6 +28,14 @@ func Appearance() uic.Node {
 		uistate.ApplyPrefs(p)
 		uistate.PersistPrefs(p)
 		prefsAtom.Set(p)
+		// Re-derive + apply the theme so the engine's INLINE CSS vars (--text-dim,
+		// --text-faint, surfaces…) track the new light/dark mode — exactly as boot
+		// does (app.go: ApplyTheme(LoadTheme())). Without this, toggling to Light
+		// only flipped data-theme while boot's dark --text-dim (#ababb3) stayed inline
+		// and beat the [data-theme="light"] stylesheet, so dim text rendered at ~2.3:1
+		// on white (WCAG-AA fail). LoadTheme returns a saved custom theme unchanged, or
+		// re-derives DefaultTheme from the just-persisted prefs.
+		uistate.ApplyTheme(uistate.LoadTheme())
 	}
 
 	return Div(css.Class("page-content"),

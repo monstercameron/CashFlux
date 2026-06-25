@@ -48,8 +48,11 @@ func (t Theme) bgElev() string { return mixHex(t.BgCard, t.Text, 0.06) }
 // migration. CSSVars emits these alongside the stored tokens.
 func (t Theme) derivedVars() map[string]string {
 	m := map[string]string{
-		"--bg-elev":    t.bgElev(),
-		"--text-faint": mixHex(t.TextDim, t.BgBase, 0.40),
+		"--bg-elev": t.bgElev(),
+		// Dark default: mix 0.28 toward the (dark) bg — at 0.40 the faint tone landed
+		// ~3.66:1 on near-black (fails AA); 0.28 keeps it ~4.6:1 while still reading
+		// fainter than --text-dim. Light themes override this below (different math).
+		"--text-faint": mixHex(t.TextDim, t.BgBase, 0.28),
 		"--accent-dim": mixHex(t.Accent, t.BgBase, 0.45),
 		"--warn":       warnToken,
 		"--danger":     t.Down,
@@ -63,6 +66,11 @@ func (t Theme) derivedVars() map[string]string {
 	if t.IsLight() {
 		m["--muted"] = t.TextDim
 		m["--hover"] = mixHex(t.bgElev(), t.Text, 0.05)
+		// On a light background a larger mix washes the faint tone toward the bg
+		// (~2.8:1 on white — AA fail for sub-labels/legends). Mix only 0.15 toward the
+		// (light) background so faint text stays legible (~5.1:1) while still reading
+		// fainter than --text-dim.
+		m["--text-faint"] = mixHex(t.TextDim, t.BgBase, 0.15)
 	}
 	return m
 }

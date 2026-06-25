@@ -40,6 +40,11 @@ type Point struct {
 	X     float64 `json:"x"`
 	Y     float64 `json:"y"`
 	Label string  `json:"label,omitempty"`
+	// Color is an optional per-datum hex override. The donut renderer already
+	// honors it per slice; the bar renderer honors it per bar (empty falls back
+	// to the series color). Used to give a ranked bar chart the same categorical
+	// palette as its sibling donut so the two read as one picture.
+	Color string `json:"color,omitempty"`
 }
 
 // Series is a named, colored set of points (one line/area/bar group, or the

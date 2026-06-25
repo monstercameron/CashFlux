@@ -11,6 +11,156 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ---
 
+> Note: C-IDs are unique and continuous (C1–C329); R1–R34 = research/spec. Full evidence + fix
+> detail for each is in the Claude Code task list; these are the durable one-line backlog entries.
+
+### Review F1 — Frictionless signup / first-run (6/10)
+- [ ] **C1 [MAJOR]** Sample banner permanently cleared after first reload (persist.go hydrateImport SetSampleActive(false)).
+- [ ] **C2 [MAJOR]** Data-loss race: hero "Load sample data" + reload &lt;1s loses the sample (homehero.go; needs forced persist).
+- [ ] **C3 [MINOR]** First-run auto-seed hides the "Load sample data" CTA (communicate demo mode via banner).
+- [ ] **C4 [MINOR]** Sample-data banner low prominence. **C5 [MINOR]** "Synced" pill on an empty workspace. **C6 [MINOR]** Missing &lt;meta name=description&gt;.
+- [ ] **C7 [MINOR]** Add-account modal lacks first-run framing. **C8 [MINOR]** Empty dashboard renders full bento at $0, no hierarchy.
+
+### Review F2 — Aggregation / import (4/10)
+- [ ] **C9 [DESIGN]** No bank aggregation (local-first) — make the trade-off explicit.
+- [ ] **C10 [MAJOR]** CSV confirm omits account. **C11 [MAJOR]** CSV history row lacks count+account. **C12 [MAJOR]** Draft account selector/Import below fold.
+- [ ] **C13 [MAJOR]** Documents leads with AI-key-gated image import; key-less paths buried. **C14 [MAJOR]** No import entry from empty account/txn states.
+- [ ] **C15 [MINOR]** Mapping wizard not pre-populated. **C16 [MINOR]** "Skipped N rows" no detail. **C17 [MINOR]** Dupes not per-row. **C18 [MINOR]** Remind-monthly no confirm.
+- [ ] **C19 [DESIGN]** No "how to get your bank CSV" guidance. **C20 [DESIGN]** Vision import hard-gated behind user OpenAI key.
+
+### Review F3 — Guided setup wizard (3/10)
+- [ ] **C21 [MAJOR]** No guided setup wizard at all. **C22 [MAJOR]** Income setup absent from first-run. **C23 [MAJOR]** Base currency/week-start buried, no first-run visibility.
+- [ ] **C24 [MAJOR]** No date-format preference. **C25 [MAJOR]** Settings modal renders raw CSS token strings as text (divider bug). **C26 [MAJOR]** Empty /accounts leads with "Load sample data"; add form only via unlabeled "+".
+- [ ] **C27 [MAJOR]** Add-account modal no context/opening-balance help. **C28 [MAJOR]** Household-member setup not discoverable.
+- [ ] **C29 [MINOR]** /budget renders dashboard on empty store. **C30 [MINOR]** Owner defaults "Group" with 0 members. **C31 [DESIGN]** No setup checklist.
+
+### Review F4 — Self-learning auto-categorization (5/10)
+- [ ] **C32 [BLOCKER]** "Always categorize like this" prefill broken (RuleDraft atom never read). **C33 [MAJOR]** No self-learning from corrections. **C34 [MAJOR]** No live category suggestion while typing.
+- [ ] **C35 [MAJOR]** rulesuggest threshold hardcoded 3. **C36 [MINOR]** Keyword categorizer only on CSV import. **C37 [MINOR]** "Always categorize" is an unlabeled funnel icon. **C38 [DESIGN]** Suggestions below the fold.
+
+### Review F5 — Fast manual entry (6/10)
+- [ ] **C39 [MAJOR]** No recent-payee autocomplete. **C40 [MAJOR]** No "Save and add another". **C41 [MAJOR]** Quick-Add defaults to a business checking account.
+- [ ] **C42 [MINOR]** Tab traps on the date input. **C43 [MINOR]** Amount not auto-focused. **C44 [MINOR]** Desktop quick-add is two clicks. **C45 [MINOR]** Account dropdown truncated, no type cues.
+- [ ] **C46 [DESIGN]** No separate Payee field. **C47 [DESIGN]** "don't flag it" checkbox is confusing noise.
+
+### Review F6 — Transaction ledger (6/10)
+- [ ] **C48 [MAJOR]** No tags in inline edit. **C49 [MAJOR]** No tag filter (txnfilter.FieldTags unwired). **C50 [MAJOR]** Search misses Payee. **C51 [MAJOR]** "Clear filters" always visible. **C52 [MAJOR]** Filter modal occludes the table.
+- [ ] **C53 [MINOR]** No amount filter. **C54 [MINOR]** Tags column emptiness judged per-page. **C55 [MINOR]** Placeholder omits payee. **C56 [DESIGN]** Filter panel no keyboard shortcut. **C57 [DESIGN]** Filters badge no aria-label.
+
+### Review F7 — Inline + bulk edit + split (5/10)
+- [ ] **C58 [BLOCKER]** No split-transaction UI (domain CategorySplit exists). **C59 [MAJOR]** Amount=0 commits in inline edit. **C60 [MAJOR]** No Payee in inline edit. **C61 [MAJOR]** Escape doesn't cancel edit.
+- [ ] **C62 [MAJOR]** No range/shift-click selection. **C63 [MAJOR]** Bulk export ignores selection. **C64 [MAJOR]** "Mark uncleared" missing from bulk toolbar. **C65 [MINOR]** Inline/select a11y labels. **C66 [DESIGN]** "/split" name collides with split-transaction.
+
+### Review F8 — Transfer handling (8/10, correct)
+- [ ] **C67 [DESIGN]** Transfer creation buried in overflow menu. **C68 [MINOR]** Transfer legs auto-tagged #needs-review. **C69 [MINOR]** No "From account" selector. **C70 [DESIGN]** Delete confirm doesn't warn both legs.
+
+### Review F9 — Account types (6/10)
+- [ ] **C71 [MAJOR]** Credit-card add appears to silently fail (see C223/R2). **C72 [MAJOR]** Dashboard shows multiple differing money figures (see C214). **C73 [MAJOR]** No Retirement/Crypto types.
+- [ ] **C74 [MINOR]** Lock-until buried. **C75 [DESIGN]** Single "investment" bucket. **C76 [MAJOR]** App-wide "call to released function" per navigation.
+
+### Review F10 — Multi-currency + FX (5/10)
+- [ ] **C77 [MAJOR]** JPY sample rate inverted (151 vs ~0.0066). **C78 [MAJOR]** Currency picker hidden until a rate exists (chicken-egg). **C79 [MAJOR]** Unrated foreign account silently excluded from net worth.
+- [ ] **C80 [MINOR]** No per-rate date. **C81 [MINOR]** No rate-direction hint. **C82 [MINOR]** No conversion disclosure. **C83 [MINOR]** Add-menu "New account" hits skip-link. **C84 [DESIGN]** FX table buried, no /settings route. **C85 [DESIGN]** CAD/AUD/MXN ambiguous "$".
+
+### Review F11 — Duplicate detection & merge (5/10)
+- [ ] **C86 [BLOCKER]** CSV re-import silently doubles data (no dedupe in ImportTransactionsCSV). **C87 [MAJOR]** No merge (delete-only). **C88 [MAJOR]** CSV path no pre-import dup warning. **C89 [MAJOR]** No /duplicates screen.
+- [ ] **C90 [MINOR]** Dedupe count ignores active filter. **C91 [MINOR]** "Select duplicates" no feedback. **C92 [MAJOR]** Workflow-trigger formula unknown vars (txn_payee/txn_abs).
+
+### Review F12 — Receipt OCR (3/10)
+- [ ] **C93 [BLOCKER]** No local OCR / no-key fallback. **C94 [MAJOR]** No camera-capture button. **C95 [MAJOR]** Key check before image check. **C96 [MAJOR]** No bad-image handling. **C97 [MAJOR]** No image size/format validation.
+- [ ] **C98 [MINOR]** Settings nav loses chosen image. **C99 [MINOR]** No cost indication. **C100 [DESIGN]** No OpenAI-key explanation.
+
+### Review F13 — Rules engine (5/10)
+- [ ] **C101 [BLOCKER]** Rules never fire on manual Quick-Add. **C102 [MAJOR]** No rename-payee action. **C103 [MAJOR]** "Apply to existing" count is global. **C104 [MAJOR]** Apply skips already-tagged txns. **C105 [MAJOR]** Single global substring match (no field/amount/account).
+- [ ] **C106 [MAJOR]** Add-rule modal leaves a stuck flip-backdrop blocking nav. **C107 [MAJOR]** Duplicate id="rule-add". **C108 [MAJOR]** Backfill skips already-categorized. **C109 [MINOR]** Form order inverted. **C110 [MINOR]** Delete no confirm/undo. **C111 [DESIGN]** Member filter no-op.
+
+### Review F14 — Flexible budgeting methods (6/10)
+- [ ] **C112 [MAJOR]** Zero-based inaccessible from /budgets. **C113 [MAJOR]** Envelope is a no-op. **C114 [MAJOR]** No 50/30/20 template.
+- [ ] **C115 [MINOR]** /budgets deep-link 404 (dev-server fallback; verify prod). **C116 [MINOR]** Period select scoping. **C117 [MINOR]** Rollover label detaches. **C118 [DESIGN]** No per-budget method. **C119 [DESIGN]** No income awareness in simple mode.
+
+### Review F15 — Real-time budget vs actual + alerts (4/10)
+- [ ] **C120 [MAJOR]** Budget bars don't update live after Quick-Add. **C121 [MAJOR]** Over-budget alerts never reach the Notification Center. **C122 [MAJOR]** Overspend alerting is boot-only. **C123 [MAJOR]** Quick-Add Save button clipped.
+- [ ] **C124 [MINOR]** Over-budget uses accounting parens. **C125 [MINOR]** No salient over-budget banner.
+
+### Review F16 — Pay-cycle-aware periods (4/10)
+- [ ] **C126 [MAJOR]** No biweekly period. **C127 [MAJOR]** No semi-monthly period. **C128 [MAJOR]** No pay-cycle/payday config or alignment. **C129 [MAJOR]** Year cadence missing from budget select.
+- [ ] **C130 [MINOR]** Custom range conflates view vs budget period. **C131 [MINOR]** Week-start Sun/Mon only.
+
+### Review F17 — Budget carryover/rollover (3/10)
+- [ ] **C132 [BLOCKER]** Rollover math never applied (Carryover() never called) — decorative only. **C133 [MAJOR]** Badge shows raw prior remaining. **C134 [MAJOR]** Carry badge error-red conflates with overspend. **C135 [MAJOR]** Rollover checkbox unexplained.
+- [ ] **C136 [MINOR]** No effective-cap indication. **C137 [MINOR]** Carry accounting parens. **C138 [DESIGN]** No rollover explanation/example.
+
+### Review F18 — Safe-to-spend (3/10)
+- [ ] **C139 [MAJOR]** No glanceable safe-to-spend on dashboard. **C140 [MAJOR]** Coupled to Smart/AI pipeline. **C141 [MAJOR]** Planning "Free to spend" query-gated + wrong formula. **C142 [MAJOR]** Inconsistent terminology/formulas. **C143 [MAJOR]** No per-category prorated s2s. **C144 [MAJOR]** "LEFT" negative parens no context.
+- [ ] **C145 [MINOR]** Needs-attention no forward anchor. **C146 [MINOR]** $1 floor suppresses on sparse accounts.
+
+### Review F19 — Recurring detection + bill calendar (5/10)
+- [ ] **C147 [MAJOR]** Auto-detection (SMART-P1) never surfaces + no add-to-plan CTA. **C148 [MAJOR]** Calendar current-month-only (no nav). **C149 [MAJOR]** Recurring form has no next-due field. **C150 [MAJOR]** Calendar dots carry no amount/urgency.
+- [ ] **C151 [MINOR]** Subs misclassify liabilities. **C152 [MINOR]** No biweekly/semi cadence. **C153 [MINOR]** No inline edit recurring. **C154 [MINOR]** No paid/autopay status. **C155 [DESIGN]** ~~Next-due raw ISO~~ **— FIXED 2026-06-25: the default date style is now `DateLong` ("Jan 2, 2006") instead of `DateISO`, so dates read friendly app-wide out of the box (e.g. "Jul 1, 2026" on Bills/Subscriptions/Transactions) — users can still pick ISO/US/EU in Appearance. Changed `prefs.Default()` + the `Normalize()` invalid-fallback (both → `DateLong` so they stay consistent; `TestNormalize`/`TestFormatDate` updated). MEASURED: Bills renders "Jul 1, 2026" with zero ISO leftovers; `go test ./internal/prefs` ok; build rc=0; screenshot `e2e/screenshots/bills_friendly_dates.png`.** **C156 [DESIGN]** Recurring buried in /planning.
+
+### Review F20 — Bill reminders + autopay (4/10)
+- [ ] **C157 [MAJOR]** No autopay toggle/flag in UI. **C158 [MAJOR]** Bill-due reminder 7-day horizon too short. **C159 [MAJOR]** Notification badge desynced from feed. **C160 [DESIGN]** Autopay inference-only.
+
+### Review F21 — Subscription finder (5/10)
+- [ ] **C161 [MAJOR]** Liabilities mis-detected as subscriptions → inflated total. **C162 [MAJOR]** "Renewing soon" dupes main list. **C163 [MAJOR]** No cancel guidance.
+- [ ] **C164 [MINOR]** "Subscriptions"-named entry (seed leak). **C165 [MINOR]** Netflix double-detected on price change. **C166 [DESIGN]** No detection prefs. **C167 [DESIGN]** Cancel CTA too heavy.
+
+### Review F22 — Cash-flow forecast to payday (5/10)
+- [ ] **C168 [MAJOR]** Headline is 12-mo net worth, not near-term. **C169 [MAJOR]** No payday anchor. **C170 [MAJOR]** No dip-below-0 warning. **C171 [MAJOR]** Runway computed on total assets not liquid. **C172 [MAJOR]** Per-day cash-flow unrendered.
+- [ ] **C173 [MINOR]** Low-point a muted footnote. **C174 [MINOR]** Runway gated, no empty-state. **C175 [DESIGN]** Afford vs runway inconsistent data.
+
+### Review F23 — Savings goals + pace (7/10)
+- [ ] **C176 [MAJOR]** Owner/linked-account hidden behind advanced. **C177 [MAJOR]** Goal add-form save not reflected (add-form pattern, R2). **C178 [MAJOR]** Pace not contribution-rate aware. **C179 [MAJOR]** "by date" raw ISO.
+- [ ] **C180 [MAJOR]** Inline edit/contribute hides actions + no progress context. **C181 [MINOR]** Delete button pointer-events. **C182 [DESIGN]** Overall-progress no tooltip.
+
+### Review F24 — Automated savings (2/10)
+- [ ] **C183 [MAJOR]** No round-ups. **C184 [MAJOR]** No surplus sweep. **C185 [MAJOR]** Pay-yourself-first is single-leg Autopost. **C186 [MAJOR]** Workflow engine has no money-movement action. **C187 [MAJOR]** SMART-G17 "automate" not executable. **C188 [DESIGN]** Auto-save unframed.
+
+### Review F25 — Sinking funds (4/10)
+- [ ] **C189 [MAJOR]** No sinking-fund type. **C190 [MAJOR]** Monthly set-aside not in budgets (SinkingFund* unwired). **C191 [MAJOR]** No auto-accrual. **C192 [MAJOR]** No goal↔category link. **C193 [MAJOR]** SMART-BL9 nudge never surfaces. **C194 [DESIGN]** No sinking-fund grouping.
+
+### Review F26 — Debt payoff (snowball/avalanche) (7/10)
+- [ ] **C195 [MAJOR]** EUR debt mixed into USD plan (no FX). **C196 [MAJOR]** No per-debt table. **C197 [MAJOR]** No "time saved". **C198 [MAJOR]** Stale progress baseline (Jul 2022).
+- [ ] **C199 [MINOR]** Burndown avalanche-only. **C200 [MINOR]** No debt route/anchor. **C201 [MINOR]** APR not editable from card. **C202 [DESIGN]** Strategies tie at $0 extra. **C203 [DESIGN]** Burndown bare x-axis.
+
+### Review F27 — Loan/mortgage amortization (1/10)
+- [ ] **C204 [MAJOR]** No amortization at all (engine + term fields + detail view). **C205 [MAJOR]** No per-loan extra-payment sim. **C206 [MAJOR]** Sample loans don't amortize (payments as expenses). **C207 [DESIGN]** No revolving-vs-installment UI distinction.
+
+### Review F28 — Credit-score monitoring (2/10)
+- [ ] **C208 [DESIGN]** No credit score (build local "credit health" proxy). **C209 [MAJOR]** Utilization buried + unactionable. **C210 [MAJOR]** No utilization history. **C211 [MAJOR]** Credit limit not editable inline.
+
+### Review F29 — Net worth over time (4/10)
+- [ ] **C212 [MAJOR]** No Assets figure on dashboard. **C213 [MAJOR]** No interactive chart tooltips. **C214 [MINOR]** Count-up animation transient dual figure (root of C72). **C215 [MINOR]** Unlabeled partial month.
+- [ ] **C216 [MINOR]** Reports NW cents vs dashboard dollars. **C217 [DESIGN]** NW rebucketed by cash-flow period. **C218 [DESIGN]** No /net-worth route.
+
+### Review F30 — Investments (1/10)
+- [ ] **C219 [MAJOR]** No holdings model/UI. **C220 [MAJOR]** No performance (gain/loss). **C221 [MAJOR]** No allocation breakdown (/allocate mislabeled). **C222 [MINOR]** Investment accounts flagged STALE.
+
+### Review F31 — Other-asset valuation (4/10)
+- [ ] **C223 [MAJOR]** Add-account silently fails to persist — CONFIRMED 3× (F9/F23/F31). **C224 [MAJOR]** No Property/Vehicle types. **C225 [MAJOR]** No valuation history.
+- [ ] **C226 [MINOR]** Banking terms + 30-day STALE for illiquid assets. **C227 [DESIGN]** No API valuation (note trade-off).
+
+### Review F32 — Spending trends + plain-English (6/10)
+- [ ] **C228 [MAJOR]** Highlights no drill-through. **C229 [MAJOR]** No merchant-level trends. **C230 [MAJOR]** No time-series chart on /insights. **C231 [MAJOR]** Starter chips suppressed when history exists.
+- [ ] **C232 [MINOR]** "down 100%" mid-month false positive. **C233 [MINOR]** % without $ delta. **C234 [DESIGN]** Ask entry below fold. **C235 [DESIGN]** Pinned insights lack attribution.
+
+### Review F33 — Custom reports + export (7/10)
+- [ ] **C236 [MAJOR]** No PDF export. **C237 [MAJOR]** No explicit YoY toggle. **C238 [MAJOR]** Delta hidden when prior=0.
+- [ ] **C239 [MINOR]** Bar-chart SVG negative-height error. **C240 [MINOR]** Redundant dual export surfaces. **C241 [MINOR]** "Covering" ISO date. **C242 [DESIGN]** Advanced report types hidden. **C243 [DESIGN]** No report-type selector.
+
+### Review F34 — AI assistant (5/10)
+- [ ] **C244 [MAJOR]** No no-key fallback for core questions. **C245 [MAJOR]** Afford fast-path leaks stale key-error. **C246 [MAJOR]** No Send button on no-key path. **C247 [MAJOR]** Key gate lacks cost/where-to-get. **C248 [MAJOR]** No example conversations for keyless users.
+- [ ] **C249 [MINOR]** Chat aria-labels. **C250 [MINOR]** Model/token not surfaced. **C251 [DESIGN]** System-prompt editor surfaced to all.
+
+### Review F35 — Anomaly detection (4/10)
+- [ ] **C252 [MAJOR]** Four anomaly types never reach /insights or dashboard (only gated /smart + /subscriptions). **C253 [DESIGN]** Anomaly surface fragmented across 3 screens.
+
+### Research / spec backlog (R1–R34)
+- [ ] **R1** root-cause app-wide "call to released function". **R2** repro+diagnose silent add-form persist failure. **R3** Settings CSS-divider token-render bug. **R4** multi-currency/FX UX. **R5** onboarding/setup wizard. **R6** split-transaction UX. **R7** self-learning categorization.
+- [ ] **R8** dedupe+merge UX. **R9** workflow-trigger formula vars. **R10** local OCR fallback. **R11** FLIP backdrop cleanup. **R12** budgeting-methods spec. **R13** live recompute + overspend alerting. **R14** pay-cycle periods. **R15** safe-to-spend formula. **R16** recurring/bills IA + paid/autopay. **R17** near-term cash-flow forecast.
+- [ ] **R18** systemic ISO date default. **R19** automated-savings spec. **R20** sinking-fund model. **R21** loan amortization model. **R22** local credit-health proxy. **R23** investment portfolio model. **R24** no-key AI fallback. **R25** unified anomaly hub.
+- [ ] **R26** recommendation engine. **R27** financial-health score. **R28** alerts system. **R29** household roles/permissions. **R30** security hardening. **R31** pricing/plan UX. **R32** cross-platform + sync. **R33** WCAG-AA a11y audit. **R34** help/support/trust surface.
+
 ### Review F36 — Personalized recommendations (4/10)
 - [ ] **C254 [MAJOR]** Free smart insights are OFF by default — no recommendation surfaces for any user until a manual /smart enable trip → enable TierFree deterministic rules by default; keep AI-tier opt-in.
 - [ ] **C255 [MAJOR]** Smart enabled-state may not persist across a fresh session (SmartSettings hydration on boot) → audit appstate hydration reads/writes SmartSettings from SQLite every load. *(verify)*
@@ -21,7 +171,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] **R26 [RESEARCH]** Recommendation system: default-on free deterministic insights, ranked hub + dashboard surfacing, executable actions. → spec.
 
 ### Review F37 — Financial-health score (1/10)
-- [ ] **C260 [MAJOR]** No composite financial-health score/breakdown/steps → deterministic `internal/healthscore` (savings rate + emergency months + DTI + budget adherence + utilization → 0–100) + dashboard widget + top-3 steps.
+- [x] **C260 [MAJOR] — DONE (R27, 2026-06-25).** Composite financial-health score shipped: deterministic pure `internal/healthscore` (savings rate + emergency months + min-debt-payments÷income + budget adherence + aggregate utilization → 0–100, with proportional re-normalization of inapplicable factors + 5 bands) + dashboard widget (SVG score ring) + `/health` page (per-factor breakdown + prioritized steps) + monthly-snapshot trend. (Runtime-panic regression from the effect-body hook call was C305, now fixed.)
 - [ ] **C261 [MAJOR]** Only SMART-A10 exists (per-account, AI-gated); inputs already exist → aggregate as a free deterministic rule; cap score &lt;50 on negative savings rate.
 ### Review F38 — Smart configurable alerts (2/10)
 - [ ] **C263 [MAJOR]** No per-alert-type settings UI (notify.Rule config unexposed; only "Browser notifications" toggle; 6 types hardcoded) → "Manage alerts" per-rule rows.
@@ -34,7 +184,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] **R28 [RESEARCH]** Alerts system (rules UI + thresholds + new events + live firing + unified badge + severity). Consolidates C121/C122/C158/C159.
 
 ### Review F39 — "While you were away" digest (3/10, broken)
-- [ ] **C270 [MAJOR] ★ ROOT CAUSE of empty Notification Center** (fixes C121/C158/C159): `runNotifyCatchUp` writes the feed to SQLite KV but never `.Set`s the live atom (runs pre-mount; delivered-log then suppresses re-fire) → `feedAtom.Set` after `PrependNotifyFeed`, or init the feed atom after catch-up.
+- [x] **C270 [MAJOR] ★ ROOT CAUSE of empty Notification Center — FIXED 2026-06-25** (fixes C121/C158/C159). The earlier "fix" (calling `UseNotifyFeed().Set` inside `PrependNotifyFeed`) actually made it worse: `runNotifyCatchUp` runs at boot (outside any component render), so every hook it touched — `UsePrefs()` (notifyrun.go:155,295), `UseNotice()` (notifyrun.go:108), and `UseNotifyFeed()` (via `PrependNotifyFeed` + the feed mutators) — panicked "GoUseAtom called outside component context", aborting catch-up before it wrote anything (the recover() at notifyrun.go:43 hid it; C272). Fix: route every boot-/handler-context atom write through the captured-atom pattern — `uistate.CurrentPrefs()` for week-start, `uistate.PostNotice()` for the summary toast, and a new `setNotifyFeed()` helper (captured `app:notify-feed` atom) replacing all four `UseNotifyFeed().Set(...)` calls in `notifyfeed.go` (PrependNotifyFeed + MarkFeedItemRead/DismissFeedItem/SnoozeFeedItem, which also run from non-render event handlers). MEASURED: cold boot WITH sample data (14 accounts / 2189 txns) → **0 "GoUseAtom outside component" panics**, 0 "runNotifyCatchUp panicked" logs, 0 console errors; health widget renders; build rc=0.
 - [ ] **C271 [MAJOR]** No consolidated "while you were away" digest card/modal + no "since last visit" framing → dismissible dashboard catch-up card + labeled center section.
 - [ ] **C272 [MINOR]** `runNotifyCatchUp` `recover()` swallows panics silently → add slog.
 
@@ -89,7 +239,7 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] **R31 [RESEARCH]** Pricing/plan UX (visible Plans, free-vs-paid clarity, re-engageable upgrade, manage/cancel surface). ("Synced" pill on a local session = C5.)
 
 ### Review F46 — Cross-platform native + web sync (3/10)
-- [ ] **C305 [BLOCKER] ★ LIVE REGRESSION** Dashboard panics on load — GWC-RUNTIME-PANIC "GoUseAtom called outside component context" at uistate/healthtrend.go:31 → screens/health.go:306 (a just-added health widget calls a hook in an effect body); a full-screen panic modal is the first thing the user sees → move the UseHealthTrend hook into the component render, not an effect body.
+- [x] **C305 [BLOCKER] ★ LIVE REGRESSION — FIXED 2026-06-25.** Dashboard panicked on load — GWC-RUNTIME-PANIC "GoUseAtom called outside component context" at uistate/healthtrend.go:31 → screens/health.go:306: the health widget's snapshot-recording `UseEffect` called `RecordHealthSnapshot`, which called the `UseHealthTrend()` hook inside the effect body. Fix: applied the captured-atom pattern (mirrors `notice.go`/`notifyfeed.go`) — `UseHealthTrend()` now captures the atom into a package var during render, and `RecordHealthSnapshot` pushes via that captured reference (`capturedHealthTrend.Set`) instead of re-calling the hook. MEASURED: dashboard loads with the health widget (score "30"), `/health` round-trip works, **0 page errors · 0 console errors · 0 GWC hook/panic errors** (`e2e/screenshots/health_panic_fixed.png`); build rc=0.
 - [ ] **C306 [MAJOR]** PWA not installable — manifest.webmanifest has `icons:[]` (no 192/512 maskable) + no apple-touch-icon / apple-mobile-web-app-capable / splash → add an icon set + iOS meta tags.
 - [ ] **C307 [MAJOR]** Install prompt captured (beforeinstallprompt) but never exposed — no Install button; window._installPromptCaptured undefined → wire the deferred prompt to a visible "Install app" affordance + iOS fallback.
 - [ ] **C308 [MAJOR]** No native iOS/Android app (web/WASM only) → acknowledge the trade-off; consider a Capacitor shell.
@@ -102,6 +252,58 @@ packages have no `syscall/js` and ship with table-driven tests.
 - [ ] **C312 [MAJOR]** Wasm never cached by the SW — install `c.add(u).catch(()=>{})` silently swallows the 60 MB wasm fetch failure → offline /bin/main.wasm returns false → make the failure visible; retry / dedicated large-asset cache.
 - [ ] **C313 [MAJOR]** SW active but not controlling the page on first load (clients.claim loses the race vs window.load) → controls only on 2nd load → register earlier or handle the first-load case.
 - [ ] **C314 [MINOR]** 60 MB uncompressed wasm, no gzip/brotli at serve (serve.go sets no Content-Encoding; ~48s cold load @10Mbps vs ~12s compressed) → compress wasm + add a load progress bar. *(Panic C305, PWA icons/install C306/C307 reconfirmed here.)*
+
+### Review F48 — Exceptional accessible UX (5/10)
+- [ ] **C315 [MAJOR]** a11y missing/incorrect accessible names: icon-only sidebar buttons (.rail-section, .menu-btn) use `title` only (no aria-label); a bare `<span aria-label>` without a role (aria-prohibited-attr); dashboard SVG chart has role=img but no `<title>` → add aria-labels mirroring titles, role="img" on the span (or convert to SVG `<title>`), and a `<title>` on the chart SVG.
+- [ ] **C316 [MAJOR]** Contrast: banner text fails WCAG AA (3.91:1 — #ababb3 on #205337 @13.76px) → darken fg / lighten bg to ≥4.5:1.
+- [ ] **C317 [MAJOR]** No discoverable theme toggle — app boots `data-theme="dark"` with no light/dark control found on dashboard/settings → verify the Appearance control surfaces it; add a labeled theme toggle in topbar/Appearance.
+- [ ] **C318 [MINOR]** Segment control (Week/Month/Quarter/Year) role=radio buttons have no enclosing role="radiogroup" + label → wrap in `<div role="radiogroup" aria-label="Time period">`.
+- [ ] **C319 [DESIGN]** Dashboard bento customize/reorder affordance not reachable via keyboard/visible controls → surface a visible "Customize" entry if reconfigurability is in scope.
+- [ ] **R33 [RESEARCH]** Full WCAG-AA a11y audit + remediation (accessible names, contrast, radiogroup, focus, SVG titles) — recurs across C56/C57/C65/C66/C249. *(8 GWC-RUNTIME-PANIC-EFFECT on load = C305/C76.)*
+
+### Review F49 — Connection/sync reliability (5/10)
+> Works: offline-indicator pill (hidden online, shows offline, clears on reconnect); 5-state machine; LWW queue persisted; backend-active guard; watch/reconnect restart.
+- [ ] **C320 [MAJOR]** False "Synced" chip when no backend was ever configured — loadSyncStatus() defaults state="synced" when the queue is empty (sync_client.go:406-413) → return ""/invisible when !BackendActive(). (Supersedes C5.)
+- [ ] **C321 [MAJOR]** SyncChip has no data-testid (syncchip.go:72-84) — untestable by the e2e suite → add Attr("data-testid","sync-chip").
+- [ ] **C322 [MINOR]** No exponential backoff — fixed 10s dial / 3s stream sleeps (sync_client.go:196-214) hammer the backend on a flapping network → backoff + jitter (2s→120s cap).
+- [ ] **C323 [MINOR]** No `offline` event handler — only `online` is wired (sync_client.go:78-81); status stays null offline → add an offline listener setting State="offline".
+- [ ] **C324 [MINOR]** Sync status not reactive — SyncChip reads loadSyncStatus() per render (syncchip.go:44), not an atom; goroutine updates only show on next re-render → promote to a state.Atom. *(Conflict silent-loss reconfirmed = C309, sync_client.go:168-178 dequeues before the conflict branch; onboarding = C310; panics = C305/C76.)*
+
+### Review F50 — Support + in-app help + roadmap (2/10)
+> Works: keyboard-shortcut overlay ("?") + command palette (Ctrl+K) exist and function.
+- [ ] **C325 [MAJOR]** No in-app support contact / bug-report / feedback path (palette "support"/"contact"/"feedback"/"bug" → 0 results; no email/Issues/form) → add a "Send feedback / report a bug" palette command + settings About row (mailto: or GitHub Issues).
+- [ ] **C326 [MAJOR]** No in-app roadmap / what's-new / changelog — only a buried external GitHub CHANGELOG blob link (settings.go:843-845) → add a /changelog or /whatsnew route with rendered version history + a "What's new since vX" boot toast.
+- [ ] **C327 [MAJOR]** Shortcut help undiscoverable + palette "help" returns nothing — the "?" overlay works but has no visible button/hint; typing "help" yields 0 despite the "Keyboard shortcuts" cmd keywords incl. "help" (shortcuts.go:286; palette likely built empty on first open) → add a "?" topbar button calling toggleHelpOverlay(); ensure cmdPaletteCmds isn't empty on first open.
+- [ ] **C328 [MAJOR]** No help center / docs / FAQ / contextual help — no docs URL; tooltips sparse + Smart-gated (smartTooltipFor only when Smart on) → add a docs link + a persistent "Help & docs" palette entry; decouple key stat tooltips (Left/Net/Safe-to-spend) from the Smart gate.
+- [ ] **C329 [DESIGN]** No onboarding tips / feature-discovery (no tour, no "did you know", no first-run callouts) → dismissible first-use tip cards per major screen (ties to the C21 setup wizard). *(Settings-not-routeable = C84.)*
+- [ ] **R34 [RESEARCH]** Help/support/trust surface (in-app help center + bug-report/feedback + roadmap/what's-new + discoverable shortcuts + onboarding).
+
+### ★ Implementation-ready fixes (from research diagnoses, 2026-06-25)
+> Precise, ready-to-build edits surfaced by the R-series root-cause diagnoses. Each is a concrete change.
+> (R2→C223 and R3→C25 are already implemented+committed; C101/C305/C311/C121/C159/C270/C59/C76/C106 verified resolved in the current build.)
+- [ ] **IMPL C92 (from R9)** — `internal/appstate/appstate.go`: stop calling `RunTriggered(workflow.TriggerTxnAdded, nil)` inside `WithoutTriggers` (it strips the txn context). In `ImportTransactionsCSV` (~:204) and `ImportReviewedDocumentRows` (~:781), after the bulk write, loop the imported txns and call `a.RunTriggered(workflow.TriggerTxnAdded, &t)` so conditioned workflows fire with full `txnContext`. Fixes: imported transactions currently SILENTLY skip all `txn_*`-conditioned workflow triggers.
+- [ ] **IMPL C32** — `internal/screens/ruleaddform.go`: read `uistate.UseRuleDraft()` on first render, seed `match`/`categoryID` state from it, then `uistate.ClearRuleDraft()`. The atom is already captured (dialoghost.go:48-49) and set from transactions.go:202; the form just never reads it. Unblocks the "Always categorize like this" correction→rule shortcut. (~1-line read + seed.)
+- [ ] **IMPL C86** — `internal/appstate/appstate.go` `ImportTransactionsCSV` (~:170-216): build a seen-signature set for the target account (mirror the dedup in `ImportReviewedDocumentRows`:769-776) and skip already-present rows, so re-importing the same CSV no longer doubles every transaction.
+- [ ] **IMPL C132** — `internal/screens/budgets.go` (~:209-214): when `b.Rollover`, compute `effectiveLimit = budgeting.Carryover(prev.Remaining, b.Limit)` and pass `effectiveLimit` into `EvaluateRollup` (currently the raw `b.Limit` is used) so Remaining/Percent/State/bar reflect the carry; derive the badge from `effectiveLimit - b.Limit`. (`Carryover()` exists in rollover.go:22 but is never called — rollover is decorative.)
+- [ ] **IMPL C106-hardening (from R11)** — `web/index.html`:1750: add `pointer-events:none` to base `.flip-backdrop` and `pointer-events:auto` to `.flip-backdrop.show`. Defense-in-depth so an orphaned backdrop can never block clicks even if the unmount path regresses.
+
+### ★ IMPL plan — C58 split-transaction (from R6 design)
+> R6 also found a CURRENT correctness bug: receipt-imported splits have `CategoryID==""`, and neither budgets (`budgeting.go:55-86`) nor reports (`reports.go:37-49`) walk `t.Splits` — so split transactions are **silently invisible** to both today. Steps 1-2 fix that independent of the manual UI. Domain `CategorySplit` + `Transaction.Splits` + helpers (HasSplits/SplitsReconcile/SplitsTotal, category_split.go) and store JSON round-trip already exist — skip.
+1. [ ] **C58-logic** — `reports.go:37-49` categoryTotals + `budgeting.go:55-86` matchesCovered/accumulate: when `t.HasSplits()`, attribute each split's Amount to its own CategoryID (if/else — never also via t.CategoryID, to avoid double-count) + table tests. ALSO fixes the current receipt-split invisibility. Pure logic, native-testable, cold packages.
+2. [ ] **C58-appstate** — new `appstate/splits.go`: validate `domain.SplitsReconcile(amount, splits)`, set/clear `Splits` and recompute `singleCategory()` before `PutTransaction` (mutually exclusive single-cat vs split paths).
+3. [ ] **C58-editor** — new `internal/screens/split_editor.go`: per-line `[category select][amount][× remove]` + running remainder (via SplitsReconcile, green/red) + "+ Add line". AVOID `On*` handlers inside the line loop (pre-index/delegate — GWC rule).
+4. [ ] **C58-wire** — `transactions_row.go`: "Split across categories" toggle in inline edit (hide the single-category select in split mode); auto-open split mode when `HasSplits()`; disable for transfers; block Save until remainder==0 and every line has a category; add a ledger "Split (N)" badge in the category cell.
+5. [ ] **C58-test** — integration: manual split round-trip + reports/budgets attribution across categories.
+
+### ★ IMPL plan — R21 loan amortization (C204-C207, from R21 design)
+> All additive; engine is pure + native-testable; Account JSON fields round-trip with no migration; existing payoff BuildPlan untouched. Engine + tests FIRST.
+1. [ ] **R21-enum** — `domain/enums.go`: add `IsInstallment()`/`IsRevolving()` on AccountType (loan/personal_loan/mortgage = installment) + test.
+2. [ ] **R21-fields** — `domain/entities.go`: add `LoanTermMonths int`, `OriginalBalance money.Money`, `LoanStartDate time.Time` (json omitempty, liability-only); store round-trips automatically.
+3. [ ] **R21-engine** — NEW `internal/payoff/amortization.go` (pure, native-test FIRST): `Row{PaymentNo,Date,Payment,Principal,Interest,Balance}`; `AmortizeFixed(balance,aprPct,termMonths)`; `AmortizeWithExtra(...,extraPerMonth)` (clamp final payment to balance, cf payoff.go:79); `Summary(rows)→(totalInterest,totalPaid,payoffDate)`; fallback = simulate from MinPayment when term==0. + amortization_test.go.
+4. [ ] **R21-forms** — `accountaddform.go` + `accounts_row.go`: term fields in the liability sub-form/inline edit, shown only when `isLiab && type.IsInstallment()` (append hooks at the END of the fixed hook sequence; never conditional).
+5. [ ] **R21-panel** — `accounts_row.go`: expandable loan-detail panel (overflow toggle, gated installment && LoanTermMonths>0): summary strip (payoff date / total interest / principal remaining), extra-payment input → AmortizeWithExtra recompute, balance-curve sparkline, first-12 schedule rows (+ Show all). Label schedule "from original terms"; show live ledger balance separately.
+6. [ ] **R21-sample** — `store/sample.go`: add term fields to the 4 loans (mortgage 360/$230k/Jul'22; Marcus car 72/$38k/Jan'25; Priya car 60/$26k/Sep'25; student 120/$34k/Jul'22).
+7. [ ] **R21-sample-transfers (C206, separate commit)** — convert the 4 loans' monthly payments from categorized expenses to checking→liability transfers (mirror the credit-card addTransfer) so balances actually amortize; re-check budget/chart history.
 
 <!-- END-REVIEW-FINDINGS -->
 
@@ -591,6 +793,15 @@ a red tree before it could build: `internal/screens/homehero.go` (untracked, a h
 `dashboard.go` + `widget_builder.go` to HEAD and renamed `homehero.go` → `homehero.go.churn-disabled`
 (preserved, excluded from the build) — no other churn files touched. The HomeHero feature is
 incomplete/uncompilable and needs a real finish-or-revert by a dev.
+  - **RESOLVED 2026-06-25 (keep-tidy dead-code removal).** A compiling-but-unused `homehero.go` had
+    reappeared in the tree (225 lines: `HomeHero`, `homeHeroFull`, `homeHeroEmpty`, `heroStatBlock`,
+    `homeHeroFullProps`). It was never wired in — the live dashboard hero is `dashboard_hero.go`
+    (`dashboard.go:281` renders `dashboardHero`), and a grep confirmed **0 external references** to any
+    homehero symbol (and no test refs). Deleted the whole file to kill the duplicate-hero footgun that
+    has broken the build across multiple passes. MEASURED: build rc=0 after deletion; dashboard renders
+    the live hero ("Good morning." greeting + net-worth $11,954.04 + stat strip), 0 JS/console errors
+    (`e2e/screenshots/dashboard_after_deadcode.png`). (C2's stale `homehero.go` reference now points at
+    `dashboard_hero.go`, the live hero — the sample-data persist race itself is unchanged here.)
 
 ---
 
@@ -720,6 +931,35 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   (AA normal), dark **3.58:1** unchanged (pin is light-scoped — no regression). Screenshot
   `e2e/screenshots/calhead_light.png`. Scoped to `.cal-head` only — deliberately does NOT touch the
   systemic `--text-faint` token, whose too-pale light derivation is separate GX14/Go work.
+  - **✅ GX14 RESOLVED at the source (2026-06-25, keep-tidy GLAMOR re-check).** Two root-cause Go fixes
+    for light-mode dim/faint text:
+    1. **Theme-mode toggle didn't re-apply the engine's inline CSS vars.** `appearance.go`'s `savePrefs`
+       called `ApplyPrefs`+`PersistPrefs` but **not** `ApplyTheme`, so toggling to Light only flipped
+       `data-theme` while boot's dark `--text-dim:#ababb3` stayed inline on `:root` and beat the
+       `[data-theme="light"]` stylesheet — every `var(--text-dim)` consumer rendered ~**2.28:1** on white
+       (WCAG-AA fail). Fix: `savePrefs` now also calls `uistate.ApplyTheme(uistate.LoadTheme())`, exactly
+       mirroring boot, so the inline vars track the new mode. → `--text-dim` now `#56565c` = **7.29:1**.
+    2. **Derived `--text-faint` washed out on light backgrounds.** `theme/derived.go` derived it as
+       `mixHex(TextDim, BgBase, 0.40)`, which on a white bg gave `#969698` (~**2.85:1**). Added a
+       light-only derivation (`IsLight()` branch, dark unchanged) mixing just `0.15` toward bg →
+       `#6e6e73` = **5.07:1**. MEASURED on Planning in true light mode (toggle via Appearance + SPA nav):
+       `--text-dim` 7.29, `--text-faint` 5.07, **0 pale (>130) text elements remain** (was the
+       `.t-caption`/`<p>` insight copy at 2.28), 0 JS errors; `go test ./internal/theme ./internal/prefs`
+       ok; build rc=0; screenshot `e2e/screenshots/planning_light_contrast_fixed.png`. The `.cal-head` /
+       "Custom range" light pins above are now redundant safety nets (left in place; harmless).
+    3. **`tw.TextFaint` was the last text token NOT following the theme + dark faint was too pale
+       (2026-06-25, follow-up sweep).** An app-wide light grey-text sweep (14 screens) found one
+       remaining systemic fail: the rail "N members · USD base" line at **4.08:1** on white. Cause:
+       `tw.TextFaint` (`internal/ui/tw/tw.go`) hardcoded `cFaint` (#7d7d85) instead of
+       `var(--text-faint, …)` — the one text token the "follow-the-theme" migration (TextFg/TextDim)
+       missed. Switched it to `var(--text-faint, #7d7d85)`. That alone would regress DARK (engine's dark
+       `--text-faint` was `#6c6c71` ≈ **3.66:1** on near-black, fainter than the old hardcode), so also
+       bumped the dark derivation `mixHex(TextDim, BgBase, 0.40 → 0.28)` in `theme/derived.go` (light
+       branch unchanged at 0.15). MEASURED on the "members" line: **dark #7f7f85 = 4.85:1** (was 3.66 for
+       var consumers), **light #6e6e73 = 5.07:1** (was 4.08); app-wide re-sweep → **0 failing grey-text
+       elements** on all 14 screens (only white-on-accent button labels remain, a pre-existing brand-button
+       concern in both themes, out of scope); `go test ./internal/theme ./internal/prefs` ok; build rc=0;
+       0 JS errors. tw.TextFaint now tracks the live theme like TextFg/TextDim — GX14 fully closed.
 - **✅ "Custom range" period-bar control contrast (2026-06-24).** The "Custom range" toggle in the
   resolution bar (`shell.go`) used `tw.TextFaint` (#7d7d85 → **1.87:1** on the light page bg — fails
   AA for a clickable control), while its immediate sibling "This period" button already used the
@@ -741,6 +981,18 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   MEASURED (`e2e/negamount_contrast_verify.mjs`, 2/2): light **6.15:1** (was 1.82), dark **5.80:1**
   unchanged. Full light audit now **1** finding total (only the intentional done-task dim remains).
   Screenshot `e2e/screenshots/negamount_light.png`.
+  - **✅ FOLLOW-UP: the LITERAL `.text-up`/`.text-down`/`.text-warn` CSS classes (2026-06-25).** The
+    above fixed the `tw.TextUp`/`TextDown` *inline* helpers, but `tw.ColorClass("text-up"/"text-down")`
+    emits the **marker classes** (used by `dashboard.go` net-worth deltas, `bills_screen.go` urgency,
+    etc.), which hit the hardcoded `.text-up{color:#54b884}` / `.text-down{color:#d8716f}` / `.text-warn
+    {color:#cfa14e}` rule (web/index.html:1500) with **no light override** — so "Up $396.25" measured
+    **2.23:1** on white. Fixes: (a) up/down literals now `var(--up,#54b884)` / `var(--down,#d8716f)` so
+    they follow the engine in both modes (dark byte-identical); (b) added `[data-theme="light"] .text-warn
+    { color:#8a6a16 }` (the bright `--warn` amber is ~2.2:1 on white — readable amber-brown for TEXT,
+    bright amber kept for `bg-warn` fills). MEASURED both themes: LIGHT up **4.04** (was 2.23; = the
+    theme's chosen brand green `#1f8a52`, AA-large; consistent with all other green text), down **6.15**
+    (was ~2.2), warn **5.06** (was ~2.2); DARK up 7.87 / down 5.98 / warn 7.90 (unchanged). build rc=0;
+    0 JS errors; screenshot `e2e/screenshots/dashboard_light_semantic.png`.
 - **✅ Sample-data banner "Start fresh"/"Dismiss" legible in DARK mode (2026-06-24).** First DARK-mode
   contrast sweep (`e2e/dark_contrast_audit.mjs`) flagged ONE issue on **every screen**: the sample-data
   banner's CTA `.sample-banner-btn` used `color: var(--accent)` (#2e8b57 green) on the banner's
@@ -922,6 +1174,17 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   shows white "Save" on bright green. Both clear AA-large/UI (3:1) on the 600-weight label; brand accent kept.
   **Remaining for a dev (full AA-normal 4.5):** (b) darken the default `--accent` slightly so white clears 4.5,
   or (c) formally accept ~4.25 as AA-large for the bold label — a brand/design call, not done unilaterally.
+  - **✅ RESOLVED 2026-06-25 (full AA-normal, via the button only — brand accent untouched).** Took a
+    cleaner path than (b): rather than darken the global `--accent` (which would shift the whole app),
+    darkened just the **`.btn-primary` gradient's top stop** in `web/index.html` —
+    `linear-gradient(180deg, color-mix(--accent 90%, #000 10%), color-mix(--accent 78%, #000 22%))`
+    (was raw `--accent` → `--accent 85%`). White text now clears AA-normal across the entire gradient:
+    **top 5.07:1, bottom 6.32:1** (was 4.25 at the raw-accent top), MEASURED by resolving the `color-mix`
+    stops to sRGB in-browser. This is one shared rule, so every primary CTA app-wide is fixed —
+    confirmed `Add transaction` (dashboard), `Mark paid` (`bills_screen.go:306`), `Choose image`
+    (`documents_image_import.go`) all use `btn btn-primary`. Brand green + 180° gloss preserved
+    (screenshots `e2e/screenshots/btn_primary.png`, `dashboard_btn_aa.png`); build rc=0; 0 JS errors.
+    (Supersedes the deferred white-on-accent note at the GX14 sweep above.)
 - **✓ RESOLVED (2026-06-24, CSS-only) — `.rank-badge` dark-mode text unified to white (sibling of the
   btn-primary fix).** The Allocate ranked-suggestion ordinals (#1..#N) used the SAME accent chip with
   `color:#052e13` (dark green) in dark mode = MEASURED **3.52:1** on the accent — the weaker outlier vs
@@ -1069,6 +1332,16 @@ re-run `node e2e/glamor_11_bills.mjs` and confirm: (a) card titles readable in a
 screenshots, (b) amounts and due-date labels readable in light mode, (c) date no longer
 hyphenates at 768px, (d) calendar visible within the fold at 1280/1440, (e) all 8 screenshots
 captured cleanly.
+
+- [x] **D1–D5 RE-VERIFIED RESOLVED (2026-06-25, keep-tidy GLAMOR re-check).** Drove Bills in TRUE light
+  mode (toggled via the Appearance theme control + in-app SPA nav, so the SQLite-backed pref actually
+  applied — a hard `goto` reload reverts to dark, which masked this in earlier runs). MEASURED
+  `getComputedStyle`: **D1** card-title `rgb(28,28,30)` on white (~15:1, AA pass); **D2** `.budget-amount`
+  `rgb(28,28,30)` (strong); **D3** `.row-meta` `rgb(60,60,67)` (~8.6:1, AA pass) — all fixed by the
+  systemic light-mode `--fg` token work. **D4** "Next due" ISO date `2026-07-01` renders on one line at
+  768px (no hyphen break) — does not reproduce. **D5** calendar is side-by-side with the list at ≥1024px
+  via the `bills-layout` two-column rule (`bills_screen.go:174`). D6 has a light-mode `.stat` background
+  rule (`web/index.html:793`). 0 JS/console errors. The Bills GLAMOR review is clean.
 
 **Probe hardening**
 - Drive script uses in-app navigation (click "Bills" nav link from `/`) rather than direct
@@ -1240,6 +1513,7 @@ Per-widget settings (gear → flip):
 
 Widget catalog (each backed by tested logic; see mockup):
 - [~] Reusable SVG chart helpers — area/sparkline (`chart` + `ui.AreaChart`) done; bars are div-based; donut later
+- [x] **Reports chart palette cohesion (G9.1a polish, 2026-06-25):** the "Spending by category" card showed THREE palettes — the ranked bar chart (uniform blue `#4f8ef7`), the donut (Tableau10 by slice), and the ranked share-bar list (rainbow HSL by rank) — so a category was a different color in each view. Unified them: added an optional per-point `Color` to `chartspec.Point`, taught `web/chart.js` bars to honor `p.color` (empty → series color, backward compatible), and colored both the category bars and the row share-bars with a new `tableau10(i)` helper that mirrors `d3.schemeTableau10` (the donut's own palette) by rank. Now Mortgage is blue, Auto loans orange, Dining red, etc. across the bar chart, donut, and list — the card reads as one picture. MEASURED: bar fills + row-bar fills = `#4e79a7,#f28e2c,#e15759,#76b7b2,#59a14f,#edc949,#af7aa1,#ff9da7`, exactly matching the donut's first-5 slice colors; build rc=0, `go test ./internal/chartspec` ok, 0 JS errors (screenshots `e2e/screenshots/reports_category_card_cohesive.png`). Pure color, no motion (reduced-motion unaffected).
 
 Global settings (household card → large flip panel):
 Shared control components (from mockup):

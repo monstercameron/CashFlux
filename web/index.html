@@ -767,6 +767,10 @@
       [data-theme="light"] .text-fg { color: #1c1c1e; }
       [data-theme="light"] .text-dim { color: #56565c; }
       [data-theme="light"] .text-faint { color: #686870; }
+      /* The bright --warn amber (#cfa14e/#e0a93b) is ~2.2:1 on white. Warning TEXT in
+         light mode uses a darker amber-brown so it clears AA; the bright amber stays
+         for fills/icons (bg-warn) where contrast isn't a text concern. */
+      [data-theme="light"] .text-warn { color: #8a6a16; }
       /* Bills calendar weekday headers (.cal-head) read var(--text-faint); in light the
          theme engine's runtime --text-faint resolves to a too-pale #969698 (≈1.6:1 on
          the white card — fails AA). Pin to the palette's intended faint tone #686870
@@ -1283,8 +1287,12 @@
          dimensional, premium feel (design pass GD-3). The gradient TOP stays exactly var(--accent)
          and only darkens downward, so the white-label contrast floor (4.25:1, measured) is preserved —
          it can only improve toward the bottom. */
-      .btn-primary { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 85%, #000 15%));
-        color: #ffffff; border-color: color-mix(in srgb, var(--accent) 82%, #000 18%); font-weight: 600;
+      /* White-on-accent fails AA: white over the raw --accent (#2e8b57) top of the
+         gradient measured 4.25:1 (< 4.5 for this 14.5px label). Darken the top stop
+         ~10% so the whole primary CTA clears AA in both themes while keeping the
+         green brand + 180deg gloss. */
+      .btn-primary { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, #000 10%), color-mix(in srgb, var(--accent) 78%, #000 22%));
+        color: #ffffff; border-color: color-mix(in srgb, var(--accent) 78%, #000 22%); font-weight: 600;
         box-shadow: 0 1px 2px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16); }
       .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0.25rem 0.4rem; }
       .btn-del:hover { color: var(--danger); }
@@ -1493,7 +1501,10 @@
          Named so they style every usage path — both literal class strings and the
          markers tw.ColorClass emits — now that the Tailwind CDN that used to generate
          text-up/bg-down/etc. is gone. Exact palette hex (kept in sync with internal/ui/tw). */
-      .text-up { color: #54b884; } .text-down { color: #d8716f; } .text-warn { color: #cfa14e; }
+      /* up/down follow the live theme (var --up/--down) so gain/loss indicators stay
+         legible in light mode — the literal dark values (#54b884/#d8716f) measure
+         ~2.2:1 on white. Dark is byte-identical (engine sets --up/--down to these). */
+      .text-up { color: var(--up, #54b884); } .text-down { color: var(--down, #d8716f); } .text-warn { color: #cfa14e; }
       .text-dim { color: #ababb3; } .text-faint { color: #7d7d85; } .text-fg { color: #f4f4f5; }
       .bg-up { background-color: #54b884; } .bg-down { background-color: #d8716f; }
       .bg-warn { background-color: #cfa14e; } .bg-dim { background-color: #ababb3; }

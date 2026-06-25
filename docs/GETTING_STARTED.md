@@ -112,6 +112,45 @@ MapKeyed(items,
 
 `MapKeyed` results flatten into children automatically, so `Div(Class("rows"), MapKeyed(...))` just works.
 
+### ⚠️ The other hook trap: never call a `Use*` hook outside a component render
+
+Hooks (`ui.UseState`, `ui.UseEffect`, `state.UseAtom`, and any `uistate.Use…()` wrapper around them) may
+**only** run while the framework is rendering a component through `ui.CreateElement(...)`. Call one from
+anywhere else and the runtime panics:
+
+```
+GoUseAtom called outside component context
+[GWC-RUNTIME-HOOK-OUTSIDE-COMPONENT] framework misuse in GoUseAtom
+```
+
+The three places this sneaks in:
+
+1. **Boot / `app.Run()` code** — catch-up jobs, seeders, anything that runs before the first mount.
+2. **Inside a `ui.UseEffect` closure** — the effect body runs *after* render, so it's already outside the
+   render context. Read atoms at render top-level; only *write* them from the effect.
+3. **Plain helpers** (route factories, formatters) that aren't themselves rendered components.
+
+**The pattern:** call the hook once at a component's render top-level to *capture* the atom into a package
+var, then expose non-hook `Get`/`Set` accessors for everything else. CashFlux already does this — copy it:
+
+```go
+// uistate/prefs.go — the hook captures; CurrentPrefs reads without a hook.
+func UsePrefs() state.Atom[prefs.Prefs] {        // call ONLY from a rendering component
+    a := state.UseAtom(prefsAtomID, loadPrefs())
+    capturedPrefs, prefsCaptured = a, true
+    return a
+}
+
+func CurrentPrefs() prefs.Prefs {                // safe from boot code / effects / helpers
+    if prefsCaptured { return capturedPrefs.Get() }
+    return loadPrefs()                           // sane fallback before first render
+}
+```
+
+So in boot or effect code use `uistate.CurrentPrefs()` (read) / `uistate.SetPrefs(...)` (write) — **never**
+`uistate.UsePrefs()`. Same shape for `UseHealthTrend`→`capturedHealthTrend`, `UseNotifyFeed`, etc. If you
+add a new shared atom, ship both the `Use…()` hook *and* a non-hook accessor in the same file.
+
 ---
 
 ## 2. Reading & writing data (the `appstate` seam)

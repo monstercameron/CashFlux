@@ -243,7 +243,7 @@ var (
 	// (an intentional inverted surface) keeps the literal hex.
 	TextFg    = css.TextColor(css.Color("var(--text, " + cFg + ")"))
 	TextDim   = css.TextColor(css.Color("var(--text-dim, " + cDim + ")"))
-	TextFaint = css.TextColor(css.Color(cFaint))
+	TextFaint = css.TextColor(css.Color("var(--text-faint, " + cFaint + ")"))
 	// Semantic up/down TEXT follows the live theme so amounts stay legible in light
 	// mode: the literal dark-mode reds/greens (#d8716f/#54b884) measure ~1.8:1 on a
 	// white card (a negative "−$1,718.00" is barely readable). The theme engine emits

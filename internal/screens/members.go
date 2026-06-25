@@ -225,6 +225,10 @@ func Members() ui.Node {
 			// member can own accounts, budgets, and goals."
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("members.desc")),
+				// C274: single-device disclosure — clarifies that roles are labels on a
+				// shared local dataset, not per-member logins. Placed directly under the
+				// orientation description so it appears before the member list.
+				P(css.Class("muted"), Attr("data-testid", "members-single-device-note"), uistate.T("members.singleDeviceNote")),
 				IfElse(len(members) == 0,
 					ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
 					Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow)),
