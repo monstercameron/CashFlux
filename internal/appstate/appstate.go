@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
@@ -201,17 +202,42 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 		txns[i] = a.AutoCategorizeTransaction(txns[i])
 	}
 
+	// Skip rows already present so re-importing the same CSV doesn't double every
+	// transaction (mirrors the dedupe in ImportReviewedDocumentRows). The signature
+	// is per-account: the same charge against a different account is not a dup.
+	seen := map[string]bool{}
+	for _, t := range a.Transactions() {
+		seen[t.AccountID+"|"+dedupe.Signature(t)] = true
+	}
+
 	n := 0
-	// Suspend per-row trigger firing during the bulk import; WithoutTriggers fires
-	// the txn-added trigger once afterward instead of once per imported row.
-	a.WithoutTriggers(func() {
-		for _, t := range txns {
-			if putErr := a.PutTransaction(t); putErr == nil {
-				n++
-			}
+	dupes := 0
+	importedTxns := make([]domain.Transaction, 0, len(txns))
+	// Suspend automatic per-row firing while writing, then fire conditioned
+	// workflows once per imported row (below) so txn_*-conditioned rules see each
+	// transaction's full context — instead of the single aggregate nil event
+	// WithoutTriggers emits, which left imported rows unrouted/unflagged (C92).
+	prevSuspended := a.triggersSuspended
+	a.triggersSuspended = true
+	for _, t := range txns {
+		sig := t.AccountID + "|" + dedupe.Signature(t)
+		if seen[sig] {
+			dupes++
+			continue
 		}
-	})
-	a.log.Info("imported transactions from CSV", "imported", n, "parsed", len(txns), "skipped", len(skipped))
+		if putErr := a.PutTransaction(t); putErr == nil {
+			seen[sig] = true
+			importedTxns = append(importedTxns, t)
+			n++
+		}
+	}
+	a.triggersSuspended = prevSuspended
+	if !a.triggersSuspended {
+		for i := range importedTxns {
+			a.RunTriggered(workflow.TriggerTxnAdded, &importedTxns[i])
+		}
+	}
+	a.log.Info("imported transactions from CSV", "imported", n, "parsed", len(txns), "duplicatesSkipped", dupes, "skipped", len(skipped))
 	return n, skipped, nil
 }
 

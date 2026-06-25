@@ -416,6 +416,10 @@ func buildAppLockSetup(doc js.Value) {
 		case pass == "":
 			errEl.Set("textContent", uistate.T("applock.needPasscode"))
 			return
+		case applock.PasscodeStrength(pass) == applock.StrengthTooShort:
+			// R30: don't let a too-short passcode be set (the meter's hard floor).
+			errEl.Set("textContent", uistate.T("applock.tooShort"))
+			return
 		case pass != conf:
 			errEl.Set("textContent", uistate.T("applock.mismatch"))
 			return

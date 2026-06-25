@@ -25,6 +25,17 @@ type Group struct {
 	IDs         []string // the duplicate transactions' ids (2 or more), sorted
 }
 
+// Signature is the duplicate-detection key for a transaction: its calendar date,
+// signed amount + currency, and case-insensitively-trimmed description. Two
+// transactions with the same signature are accidental double entries. It is the
+// single source of truth used both by FindDuplicates (to group after the fact)
+// and by the CSV importer (to skip rows already present before writing).
+func Signature(t domain.Transaction) string {
+	day := t.Date.Format("2006-01-02")
+	norm := strings.ToLower(strings.TrimSpace(t.Desc))
+	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + t.Amount.Currency + "|" + norm
+}
+
 // FindDuplicates groups transactions that share the same calendar date, signed
 // amount + currency, and case-insensitively-trimmed description — the signature
 // of an accidental double entry. Transfers are excluded (their paired legs are
@@ -42,8 +53,7 @@ func FindDuplicates(txns []domain.Transaction) []Group {
 			continue
 		}
 		day := t.Date.Format("2006-01-02")
-		norm := strings.ToLower(strings.TrimSpace(t.Desc))
-		key := day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + t.Amount.Currency + "|" + norm
+		key := Signature(t)
 		b := buckets[key]
 		if b == nil {
 			b = &bucket{date: day, desc: strings.TrimSpace(t.Desc), cur: t.Amount.Currency, amount: t.Amount.Amount}

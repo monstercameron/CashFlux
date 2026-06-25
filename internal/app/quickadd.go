@@ -108,21 +108,24 @@ func QuickAddHost() uic.Node {
 		reset()
 		open.Set(false)
 	}
-	save := func() {
+	// saveCore validates + persists the transaction, returning true on success. It is
+	// shared by the panel's Save (which then closes) and "Save & add another" (C40),
+	// which keeps the panel open and resets the form for the next entry.
+	saveCore := func() bool {
 		acc, ok := accountByID(accounts, effAcct)
 		if !ok {
 			post(uistate.T("quickAdd.needAccount"), true)
-			return
+			return false
 		}
 		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency))
 		if err != nil || amt == 0 {
 			post(uistate.T("quickAdd.needAmount"), true)
-			return
+			return false
 		}
 		if strings.TrimSpace(desc.Get()) == "" {
 			// Plain-English, not the generic validator's "desc is required" (L78-T1c).
 			post(uistate.T("quickAdd.needDesc"), true)
-			return
+			return false
 		}
 		if kind.Get() == "Expense" {
 			amt = -amt
@@ -147,17 +150,34 @@ func QuickAddHost() uic.Node {
 		t = app.AutoCategorizeTransaction(t)
 		if err := app.PutTransaction(t); err != nil {
 			post(err.Error(), true)
-			return
+			return false
 		}
 		// PutTransaction now fires the "transaction added" workflow trigger itself
 		// (for every add path), so no explicit RunTriggered call here.
 		dataRev.Update(func(v int) int { return v + 1 })
 		post(uistate.T("quickAdd.added"), false)
+		return true
+	}
+	save := func() { saveCore() } // panel's Save: persist then the FlipPanel closes
+	// C40: "Save & add another" — persist, then keep the panel open and clear the
+	// inputs for rapid back-to-back entry (the amount field is re-focused). The
+	// account/kind are also reset by reset(); a power user can re-pick once.
+	saveAndAnother := func() {
+		if saveCore() {
+			reset()
+		}
 	}
 
 	acctOpts := make([]uic.Node, 0, len(accounts))
 	for _, a := range accounts {
-		acctOpts = append(acctOpts, Option(Value(a.ID), SelectedIf(effAcct == a.ID), a.Name))
+		// C45: append a type cue ("Everyday · Checking") so two similarly-named
+		// accounts (e.g. business vs personal checking) are distinguishable in the
+		// dropdown instead of being truncated to identical names.
+		label := a.Name
+		if cue := quickAddTypeCue(a.Type); cue != "" {
+			label = a.Name + " · " + cue
+		}
+		acctOpts = append(acctOpts, Option(Value(a.ID), SelectedIf(effAcct == a.ID), label))
 	}
 	catOpts := []uic.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("quickAdd.noCategory"))}
 	for _, c := range app.Categories() {
@@ -205,6 +225,18 @@ func QuickAddHost() uic.Node {
 		catID.Set(suggestedCatID)
 	})
 
+	// Form validity (L78-T1): Save is disabled until Description and a non-zero
+	// Amount are present, so an invalid submit can't close the panel or lose input.
+	// Computed before the body so "Save & add another" (C40) shares the same gate.
+	formValid := strings.TrimSpace(desc.Get()) != ""
+	if acc, ok := accountByID(accounts, effAcct); ok {
+		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr != nil || v == 0 {
+			formValid = false
+		}
+	} else {
+		formValid = false
+	}
+
 	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
 	// Wrap each in ui.FormField so they render a visible caption above the control,
 	// matching the .labeled-field pattern used by all entity add modals.
@@ -221,7 +253,7 @@ func QuickAddHost() uic.Node {
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			Input(css.Class("field"), Type("number"), Attr("data-testid", "txn-add-amount"), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+			Input(css.Class("field"), Type("number"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		ui.FormField(uistate.T("quickAdd.description"),
 			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
 		descAssist,
@@ -233,18 +265,12 @@ func QuickAddHost() uic.Node {
 		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 			Input(reviewedArgs...),
 			uistate.T("quickAdd.reviewed")),
+		// C40: keep-open rapid entry. Disabled with the same validity gate as Save so
+		// it can't persist an invalid row. Lives in the body (the panel's footer Save
+		// closes the panel; this one deliberately keeps it open).
+		quickAddAnotherBtn(formValid, saveAndAnother),
 	)
 
-	// Form validity (L78-T1): Save is disabled until Description and a non-zero
-	// Amount are present, so an invalid submit can't close the panel or lose input.
-	formValid := strings.TrimSpace(desc.Get()) != ""
-	if acc, ok := accountByID(accounts, effAcct); ok {
-		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr != nil || v == 0 {
-			formValid = false
-		}
-	} else {
-		formValid = false
-	}
 	return ui.FlipPanel(ui.FlipPanelProps{
 		Title: uistate.T("quickAdd.title"),
 		Back:  body,
@@ -266,4 +292,29 @@ func accountByID(accounts []domain.Account, id string) (domain.Account, bool) {
 		}
 	}
 	return domain.Account{}, false
+}
+
+// quickAddTypeCue returns a short human label for an account type to disambiguate
+// the quick-add account dropdown (C45), e.g. "checking" → "Checking". Empty for an
+// unset type (no cue rather than a stray separator).
+func quickAddTypeCue(t domain.AccountType) string {
+	s := strings.ReplaceAll(string(t), "_", " ")
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// quickAddAnotherBtn renders the "Save & add another" button (C40), disabled with
+// the same validity gate as the panel's Save so it can never persist an invalid row.
+// Its own helper so the conditional disabled attr stays a stable render position.
+func quickAddAnotherBtn(valid bool, onClick func()) uic.Node {
+	args := []any{
+		css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-another"),
+		OnClick(onClick), uistate.T("quickAdd.saveAndAnother"),
+	}
+	if !valid {
+		args = append(args, Attr("disabled", ""))
+	}
+	return Button(args...)
 }

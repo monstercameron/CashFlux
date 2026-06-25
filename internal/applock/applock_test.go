@@ -160,3 +160,39 @@ func TestShouldAutoLock(t *testing.T) {
 		t.Error("disabled lock should never auto-lock")
 	}
 }
+
+func TestPasscodeStrength(t *testing.T) {
+	cases := []struct {
+		pass string
+		want Strength
+	}{
+		{"", StrengthTooShort},
+		{"12", StrengthTooShort},
+		{"abc", StrengthTooShort},  // 3 < min 4
+		{"1111", StrengthWeak},     // all-same
+		{"1234", StrengthWeak},     // ascending run
+		{"4321", StrengthWeak},     // descending run
+		{"abcd", StrengthWeak},     // ascending letters
+		{"7392", StrengthWeak},     // 4 digits, one class, not trivial → weak
+		{"a1b2c3", StrengthFair},   // 6 chars, 2 classes
+		{"hunter2x", StrengthStrong}, // 8 chars, 2 classes (letters+digits)
+		{"correcthorse", StrengthFair}, // 12 chars but 1 class → fair (len>=8)
+		{"Tr0ub4dour&3", StrengthStrong}, // 12 chars, 4 classes
+		{"Aa1!Bb2@", StrengthStrong},     // 8 chars, 4 classes
+	}
+	for _, c := range cases {
+		if got := PasscodeStrength(c.pass); got != c.want {
+			t.Errorf("PasscodeStrength(%q) = %v, want %v", c.pass, got, c.want)
+		}
+	}
+}
+
+func TestStrengthString(t *testing.T) {
+	for s, want := range map[Strength]string{
+		StrengthTooShort: "too-short", StrengthWeak: "weak", StrengthFair: "fair", StrengthStrong: "strong",
+	} {
+		if got := s.String(); got != want {
+			t.Errorf("Strength(%d).String() = %q, want %q", s, got, want)
+		}
+	}
+}

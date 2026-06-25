@@ -811,6 +811,19 @@ func globalSettingsForm() uic.Node {
 		requestBackendSyncNow()
 		notify(uistate.T("settings.syncRequested"), false)
 	})
+	// C309: restore / discard a local edit that lost an LWW conflict.
+	activeWsID := loadRegistry().ActiveID
+	restoreConflict := uic.UseEvent(func() {
+		if restoreConflictBackup(activeWsID) {
+			notify(uistate.T("sync.conflictRestored"), false)
+		}
+		bump()
+	})
+	discardConflict := uic.UseEvent(func() {
+		clearConflictBackup(activeWsID)
+		notify(uistate.T("sync.conflictDiscarded"), false)
+		bump()
+	})
 
 	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
 	setFreshness := func(typeKey string, days int) {
@@ -930,6 +943,9 @@ func globalSettingsForm() uic.Node {
 		OnSignOut:         signOut,
 		OnTestBackend:     testBackend,
 		OnSyncNow:         syncNow,
+		HasConflictBackup: hasConflictBackup(activeWsID),
+		OnRestoreConflict: restoreConflict,
+		OnDiscardConflict: discardConflict,
 		OnUploadKey:       uploadKey,
 		KeySet:            keySet.Get(),
 		OnRemoveKey:       removeKey,
@@ -976,9 +992,30 @@ func globalSettingsForm() uic.Node {
 	}
 	// Developer debug log behind a collapsed <details> disclosure so it doesn't
 	// clutter the user-facing settings panel (§6.12) — power users expand it on demand.
+	// Copy a bug report (R34-feedback): bundle the app version + the in-app log ring
+	// into the clipboard so the user can paste it into a message. Local-first — it
+	// copies to the clipboard, nothing is uploaded.
+	copyBugReport := func() {
+		var sb strings.Builder
+		sb.WriteString("CashFlux " + version.Label() + "\n")
+		if a := appstate.Default; a != nil {
+			es := a.LogRing().Entries()
+			sb.WriteString(strconv.Itoa(len(es)) + " log entries (oldest first):\n")
+			for _, e := range es {
+				sb.WriteString("[" + e.Level.String() + "] " + e.Message + "\n")
+			}
+		}
+		if nv := js.Global().Get("navigator"); nv.Truthy() {
+			if cb := nv.Get("clipboard"); cb.Truthy() {
+				cb.Call("writeText", sb.String())
+			}
+		}
+		notify(uistate.T("settings.bugReportCopied"), false)
+	}
 	debugLog := Details(css.Class(tw.Mt5),
 		Summary(css.Class("set-label"), Style(map[string]string{"cursor": "pointer"}), uistate.T("settings.debugLog")),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Mt2), Style(map[string]string{"justify-content": "flex-end"}),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2), Style(map[string]string{"justify-content": "flex-end"}),
+			dataBtn(uistate.T("settings.copyReport"), false, copyBugReport),
 			dataBtn(uistate.T("settings.refresh"), false, refreshLog),
 		),
 		logBody,

@@ -9,9 +9,11 @@ package txnfilter
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
@@ -65,6 +67,9 @@ type Criteria struct {
 	Account  string `json:"account,omitempty"`
 	Category string `json:"category,omitempty"`
 	Member   string `json:"member,omitempty"`
+	// Tag filters to transactions carrying this exact tag (C49). Empty = no tag
+	// filter. Matched case-insensitively against each of a transaction's Tags.
+	Tag      string `json:"tag,omitempty"`
 	From     string `json:"from,omitempty"`
 	To       string `json:"to,omitempty"`
 	Sort     string `json:"sort,omitempty"`
@@ -75,6 +80,12 @@ type Criteria struct {
 	// = no custom-field filter.
 	CustomKey string `json:"customKey,omitempty"`
 	CustomVal string `json:"customVal,omitempty"`
+	// AmountMin/AmountMax filter by the transaction's ABSOLUTE amount in major
+	// units (C53), e.g. "10" and "100" keep charges/income of $10–$100 regardless
+	// of sign. Either bound may be empty (open-ended). Unparseable bounds are
+	// ignored (treated as unset) so a half-typed number never hides everything.
+	AmountMin string `json:"amountMin,omitempty"`
+	AmountMax string `json:"amountMax,omitempty"`
 	// Pagination (persisted with the rest). Page is 1-based; PageSize 0 means the
 	// default, PageSizeAll (negative) means "show all".
 	Page     int `json:"page,omitempty"`
@@ -131,9 +142,12 @@ const (
 	FieldAccount  FilterField = "account"
 	FieldCategory FilterField = "category"
 	FieldMember   FilterField = "member"
+	FieldTag      FilterField = "tag"
 	FieldFrom     FilterField = "from"
 	FieldTo       FilterField = "to"
 	FieldCleared  FilterField = "cleared"
+	FieldAmountMin FilterField = "amountMin"
+	FieldAmountMax FilterField = "amountMax"
 	FieldCustom   FilterField = "custom"
 )
 
@@ -160,8 +174,11 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	add(FieldAccount, c.Account)
 	add(FieldCategory, c.Category)
 	add(FieldMember, c.Member)
+	add(FieldTag, c.Tag)
 	add(FieldFrom, c.From)
 	add(FieldTo, c.To)
+	add(FieldAmountMin, c.AmountMin)
+	add(FieldAmountMax, c.AmountMax)
 	if c.Cleared == "yes" || c.Cleared == "no" {
 		out = append(out, ActiveFilter{Field: FieldCleared, Value: c.Cleared})
 	}
@@ -188,10 +205,16 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.Category = ""
 	case FieldMember:
 		c.Member = ""
+	case FieldTag:
+		c.Tag = ""
 	case FieldFrom:
 		c.From = ""
 	case FieldTo:
 		c.To = ""
+	case FieldAmountMin:
+		c.AmountMin = ""
+	case FieldAmountMax:
+		c.AmountMax = ""
 	case FieldCleared:
 		c.Cleared = ""
 	case FieldCustom:
@@ -234,6 +257,9 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 	c = c.Normalize()
 
 	ft := strings.ToLower(strings.TrimSpace(c.Text))
+	tagF := strings.ToLower(strings.TrimSpace(c.Tag))
+	minMajor, hasMin := parseAmountBound(c.AmountMin)
+	maxMajor, hasMax := parseAmountBound(c.AmountMax)
 	var fromT, toT time.Time
 	if s := strings.TrimSpace(c.From); s != "" {
 		if d, err := dateutil.ParseDate(s); err == nil {
@@ -252,6 +278,9 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case c.Account != "" && t.AccountID != c.Account:
 		case c.Category != "" && t.CategoryID != c.Category:
 		case c.Member != "" && t.MemberID != c.Member:
+		case tagF != "" && !hasTag(t, tagF):
+		case hasMin && AbsAmount(t) < currency.MinorFromMajor(minMajor, t.Amount.Currency):
+		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
 		case !fromT.IsZero() && t.Date.Before(fromT):
 		case !toT.IsZero() && t.Date.After(toT):
 		case ft != "" && !matchText(t, ft):
@@ -330,6 +359,38 @@ func matchText(t domain.Transaction, q string) bool {
 	}
 	for _, tag := range t.Tags {
 		if strings.Contains(strings.ToLower(tag), q) {
+			return true
+		}
+	}
+	return false
+}
+
+// parseAmountBound parses an amount filter bound (major units, e.g. "12.50") to a
+// float and whether it is usable. A blank or unparseable bound returns ok=false so
+// it's treated as unset — a half-typed number never hides every row. A negative
+// bound is clamped to 0 (the filter compares absolute amounts). (C53)
+func parseAmountBound(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	if v < 0 {
+		v = -v
+	}
+	return v, true
+}
+
+// hasTag reports whether a transaction carries the given (already-lowercased) tag,
+// matched exactly (case-insensitively) against each of its Tags. Exact match — not
+// substring — so the tag filter is a precise facet, distinct from free-text search
+// which already does substring matching across payee/desc/tags (C49).
+func hasTag(t domain.Transaction, tag string) bool {
+	for _, tg := range t.Tags {
+		if strings.ToLower(tg) == tag {
 			return true
 		}
 	}

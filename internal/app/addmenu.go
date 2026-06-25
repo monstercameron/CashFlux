@@ -100,14 +100,25 @@ func AddMenu() uic.Node {
 	if open.Get() {
 		expanded = "true"
 	}
-	return Div(css.Class("add-wrap"), Attr("id", menuID),
+	return Div(css.Class("add-wrap", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
+		// C44: the primary "+" is now a one-click "Add transaction" (the overwhelmingly
+		// most common action), instead of merely opening a menu that then needs a
+		// second click. A small caret beside it opens the full add-anything menu.
 		Button(css.Class("add-btn"),
+			Attr("title", uistate.T("addmenu.transaction")),
+			Attr("aria-label", uistate.T("addmenu.transaction")),
+			Attr("data-testid", "add-transaction-btn"),
+			OnClick(func() { closeMenu(); quickAdd.Set(true) }),
+			ui.Icon(icon.Plus, css.Class(tw.W18px, tw.H18px)),
+		),
+		Button(css.Class("add-caret"),
 			Attr("title", uistate.T("topbar.add")),
-			Attr("aria-label", uistate.T("topbar.add")),
+			Attr("aria-label", uistate.T("addmenu.more")),
 			Attr("aria-haspopup", "menu"),
 			Attr("aria-expanded", expanded),
+			Attr("data-testid", "add-menu-caret"),
 			OnClick(toggleMenu),
-			ui.Icon(icon.Plus, css.Class(tw.W18px, tw.H18px)),
+			ui.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4)),
 		),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden+menuDir), Attr("role", "menu"),

@@ -110,3 +110,113 @@ func (c Config) Verify(passcode string) bool {
 func (c Config) ShouldAutoLock(idleMinutes int) bool {
 	return c.Active() && c.AutoLockMinutes > 0 && idleMinutes >= c.AutoLockMinutes
 }
+
+// MinPasscodeLength is the shortest passcode the lock should accept on set. Below
+// this, PasscodeStrength returns StrengthTooShort so the UI can reject it.
+const MinPasscodeLength = 4
+
+// Strength ranks a passcode for the strength meter shown when the user sets one
+// (R30). It is a UX guide — the lock is a deterrent, not encryption (see the
+// package doc) — so callers use it to label/encourage, and reject only
+// StrengthTooShort. Higher is stronger.
+type Strength int
+
+const (
+	// StrengthTooShort is below MinPasscodeLength — reject it.
+	StrengthTooShort Strength = iota
+	// StrengthWeak meets the minimum but is trivial or low-variety.
+	StrengthWeak
+	// StrengthFair is a reasonable everyday passcode.
+	StrengthFair
+	// StrengthStrong is long and/or varied.
+	StrengthStrong
+)
+
+// String returns the stable lowercase token for the strength level.
+func (s Strength) String() string {
+	switch s {
+	case StrengthTooShort:
+		return "too-short"
+	case StrengthWeak:
+		return "weak"
+	case StrengthFair:
+		return "fair"
+	case StrengthStrong:
+		return "strong"
+	default:
+		return "weak"
+	}
+}
+
+// PasscodeStrength scores a passcode by length and character variety, demoting
+// trivial patterns (all-same character or a simple ascending/descending run like
+// "1234"/"4321"). Pure and deterministic — no randomness, no clock.
+func PasscodeStrength(passcode string) Strength {
+	r := []rune(passcode)
+	n := len(r)
+	if n < MinPasscodeLength {
+		return StrengthTooShort
+	}
+	if isTrivialPasscode(r) {
+		return StrengthWeak
+	}
+	classes := charClasses(r)
+	switch {
+	case n >= 12 && classes >= 3:
+		return StrengthStrong
+	case n >= 8 && classes >= 2:
+		return StrengthStrong
+	case n >= 6 && classes >= 2:
+		return StrengthFair
+	case n >= 8:
+		return StrengthFair
+	default:
+		return StrengthWeak
+	}
+}
+
+// charClasses counts how many of {lowercase, uppercase, digit, other} appear.
+func charClasses(r []rune) int {
+	var lower, upper, digit, other bool
+	for _, c := range r {
+		switch {
+		case c >= 'a' && c <= 'z':
+			lower = true
+		case c >= 'A' && c <= 'Z':
+			upper = true
+		case c >= '0' && c <= '9':
+			digit = true
+		default:
+			other = true
+		}
+	}
+	n := 0
+	for _, present := range []bool{lower, upper, digit, other} {
+		if present {
+			n++
+		}
+	}
+	return n
+}
+
+// isTrivialPasscode reports whether the passcode is all the same character or a
+// strictly ascending/descending run of consecutive code points (e.g. "1111",
+// "1234", "4321", "abcd") — patterns a brute-forcer tries first.
+func isTrivialPasscode(r []rune) bool {
+	if len(r) < 2 {
+		return true
+	}
+	allSame, asc, desc := true, true, true
+	for i := 1; i < len(r); i++ {
+		if r[i] != r[0] {
+			allSame = false
+		}
+		if r[i] != r[i-1]+1 {
+			asc = false
+		}
+		if r[i] != r[i-1]-1 {
+			desc = false
+		}
+	}
+	return allSame || asc || desc
+}

@@ -234,6 +234,72 @@ func TestApplyTextMatchesPayee(t *testing.T) {
 	}
 }
 
+// TestApplyTagFilter guards C49: the Tag facet matches a transaction's Tags
+// exactly (case-insensitively), independent of free-text search, and is a
+// removable active filter.
+func TestApplyTagFilter(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "a", Payee: "Grocer", Tags: []string{"food", "weekly"}, Amount: money.New(-500, "USD"), Date: d("2026-06-01")},
+		{ID: "b", Payee: "Gas", Tags: []string{"Car"}, Amount: money.New(-3000, "USD"), Date: d("2026-06-02")},
+		{ID: "c", Payee: "Movie", Amount: money.New(-1500, "USD"), Date: d("2026-06-03")},
+	}
+	if got := Apply(txns, Criteria{Tag: "food"}); ids(got) != "a" {
+		t.Errorf("tag=food => %q, want a", ids(got))
+	}
+	// Case-insensitive exact match.
+	if got := Apply(txns, Criteria{Tag: "car"}); ids(got) != "b" {
+		t.Errorf("tag=car (case-insensitive) => %q, want b", ids(got))
+	}
+	// Exact, not substring: "foo" must NOT match "food".
+	if got := Apply(txns, Criteria{Tag: "foo"}); ids(got) != "" {
+		t.Errorf("tag=foo (substring) => %q, want empty", ids(got))
+	}
+	// Active filter + removable.
+	c := Criteria{Tag: "food"}
+	af := c.ActiveFilters()
+	if len(af) != 1 || af[0].Field != FieldTag || af[0].Value != "food" {
+		t.Errorf("ActiveFilters = %+v, want one FieldTag=food", af)
+	}
+	if c.Without(FieldTag).Tag != "" {
+		t.Errorf("Without(FieldTag) did not clear Tag")
+	}
+}
+
+// TestApplyAmountRange guards C53: the amount facet filters by ABSOLUTE major-unit
+// amount (sign-agnostic), with open-ended bounds and unparseable-bound tolerance.
+func TestApplyAmountRange(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "a", Payee: "Coffee", Amount: money.New(-450, "USD"), Date: d("2026-06-01")},   // $4.50 expense
+		{ID: "b", Payee: "Rent", Amount: money.New(-120000, "USD"), Date: d("2026-06-02")},  // $1200 expense
+		{ID: "c", Payee: "Payday", Amount: money.New(250000, "USD"), Date: d("2026-06-03")}, // $2500 income
+	}
+	// Min only: ≥ $1000 keeps rent + payday (abs), drops coffee. Default sort is
+	// date-descending, so payday(06-03) precedes rent(06-02): "cb".
+	if got := Apply(txns, Criteria{AmountMin: "1000"}); ids(got) != "cb" {
+		t.Errorf("min=1000 => %q, want cb", ids(got))
+	}
+	// Max only: ≤ $100 keeps coffee.
+	if got := Apply(txns, Criteria{AmountMax: "100"}); ids(got) != "a" {
+		t.Errorf("max=100 => %q, want a", ids(got))
+	}
+	// Range: $1000–$2000 keeps rent only (payday is $2500).
+	if got := Apply(txns, Criteria{AmountMin: "1000", AmountMax: "2000"}); ids(got) != "b" {
+		t.Errorf("range 1000-2000 => %q, want b", ids(got))
+	}
+	// Unparseable bound is ignored (not "hide everything"); all three, date-desc.
+	if got := Apply(txns, Criteria{AmountMin: "abc"}); ids(got) != "cba" {
+		t.Errorf("garbage min => %q, want all (cba)", ids(got))
+	}
+	// Active + removable.
+	c := Criteria{AmountMin: "10", AmountMax: "99"}
+	if c.ActiveCount() != 2 {
+		t.Errorf("ActiveCount = %d, want 2", c.ActiveCount())
+	}
+	if c.Without(FieldAmountMin).AmountMin != "" || c.Without(FieldAmountMax).AmountMax != "" {
+		t.Errorf("Without did not clear amount bounds")
+	}
+}
+
 func TestApplyDateRange(t *testing.T) {
 	got := Apply(sample(), Criteria{From: "2026-06-02", To: "2026-06-03"})
 	if ids(got) != "bc" {

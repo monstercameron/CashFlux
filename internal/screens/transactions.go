@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -60,6 +62,11 @@ func Transactions() ui.Node {
 		accName[a.ID] = a.Name
 	}
 	selected := ui.UseState(map[string]bool{})
+	// C62: anchor for shift-click range selection (the last row toggled on) +
+	// the in-order visible IDs (populated after pagination each render, read by the
+	// click handler which fires post-render).
+	lastSelID := ui.UseState("")
+	var visibleOrder []string
 	bulkCat := ui.UseState("")
 	errMsg := ui.UseState("")
 	// lastBulk holds a one-level undo snapshot for the most recent destructive bulk
@@ -115,6 +122,9 @@ func Transactions() ui.Node {
 		})
 	}
 	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
+	onFilterTag := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Tag = e.GetValue() }) }) // C49
+	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) }) // C53
+	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) }) // C53
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 	onFilterCleared := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Cleared = e.GetValue() }) })
@@ -155,6 +165,30 @@ func Transactions() ui.Node {
 			return
 		}
 		downloadBytes("transactions.csv", "text/csv", data)
+	}))
+	// C63: export only the selected rows (the toolbar "Export CSV" exports the whole
+	// filtered set; when a selection exists, users expect to export just that).
+	exportSelected := ui.UseEvent(Prevent(func() {
+		sel := selected.Get()
+		if len(sel) == 0 {
+			return
+		}
+		rows := make([]domain.Transaction, 0, len(sel))
+		for _, t := range txnfilter.Apply(app.Transactions(), filterAtom.Get()) {
+			if sel[t.ID] {
+				rows = append(rows, t)
+			}
+		}
+		if len(rows) == 0 {
+			errMsg.Set(uistate.T("transactions.noExport"))
+			return
+		}
+		data, err := app.TransactionsCSV(rows)
+		if err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		downloadBytes("transactions-selected.csv", "text/csv", data)
 	}))
 
 	// Receipt attachments (L29): the preview holds the currently-open attachment
@@ -213,7 +247,7 @@ func Transactions() ui.Node {
 		bump()
 	}
 
-	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr, memberID string) {
+	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr, memberID, tagsStr string) {
 		acc := accByID[orig.AccountID]
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
 		if err != nil || amt <= 0 {
@@ -235,6 +269,7 @@ func Transactions() ui.Node {
 		if memberID != "" {
 			orig.MemberID = memberID
 		}
+		orig.Tags = textutil.CommaFields(tagsStr) // C48: parse comma-separated tags (empty clears)
 		if err := app.PutTransaction(orig); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -262,12 +297,37 @@ func Transactions() ui.Node {
 		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
 	}
 
-	toggleSelect := func(txnID string) {
+	toggleSelect := func(txnID string, shift bool) {
 		m := selected.Get()
 		nm := make(map[string]bool, len(m)+1)
 		for k, v := range m {
 			if v {
 				nm[k] = v
+			}
+		}
+		// C62: shift-click selects the contiguous range between the anchor (last
+		// toggled row) and this row in visible order, all set to selected — the
+		// familiar spreadsheet/file-list gesture for grabbing many rows at once.
+		if shift && lastSelID.Get() != "" && lastSelID.Get() != txnID {
+			ai, bi := -1, -1
+			for i, id := range visibleOrder {
+				if id == lastSelID.Get() {
+					ai = i
+				}
+				if id == txnID {
+					bi = i
+				}
+			}
+			if ai >= 0 && bi >= 0 {
+				if ai > bi {
+					ai, bi = bi, ai
+				}
+				for _, id := range visibleOrder[ai : bi+1] {
+					nm[id] = true
+				}
+				selected.Set(nm)
+				lastSelID.Set(txnID)
+				return
 			}
 		}
 		if nm[txnID] {
@@ -276,6 +336,7 @@ func Transactions() ui.Node {
 			nm[txnID] = true
 		}
 		selected.Set(nm)
+		lastSelID.Set(txnID)
 	}
 	clearSelection := ui.UseEvent(Prevent(func() { selected.Set(map[string]bool{}) }))
 	// Select the extra copies in each duplicate group (all but the first), so the
@@ -477,10 +538,19 @@ func Transactions() ui.Node {
 			}
 		}
 		page := pagination.Slice(shown, curPage, sliceSize)
-		// Hide the Tags column when nothing on this page is tagged (G2 §6): tags are
-		// sparse, so an always-on empty column just wastes scan width.
+		// C62: record visible row order so shift-click range selection (handled in
+		// toggleSelect, which runs post-render) can resolve the anchor→target span.
+		visibleOrder = make([]string, len(page))
+		for i, t := range page {
+			visibleOrder[i] = t.ID
+		}
+		// Hide the Tags column when nothing in the FILTERED set is tagged (G2 §6):
+		// tags are sparse, so an always-on empty column wastes scan width. C54: judge
+		// over the whole filtered result (`shown`), not just the current page slice —
+		// otherwise the column flickers in/out as you paginate (a tagged row on page 2
+		// wouldn't show the column on page 1, and vice-versa).
 		anyTags := false
-		for _, t := range page {
+		for _, t := range shown {
 			if len(t.Tags) > 0 {
 				anyTags = true
 				break
@@ -548,6 +618,25 @@ func Transactions() ui.Node {
 	for _, m := range app.Members() {
 		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(f.Member == m.ID), m.Name))
 	}
+	// C49: distinct tags across all transactions, alphabetically, for the tag facet.
+	tagSet := map[string]struct{}{}
+	for _, t := range txns {
+		for _, tg := range t.Tags {
+			if s := strings.TrimSpace(tg); s != "" {
+				tagSet[s] = struct{}{}
+			}
+		}
+	}
+	tagList := make([]string, 0, len(tagSet))
+	for tg := range tagSet {
+		tagList = append(tagList, tg)
+	}
+	sort.Strings(tagList)
+	filterTagOptions := []ui.Node{Option(Value(""), SelectedIf(f.Tag == ""), uistate.T("transactions.allTags"))}
+	for _, tg := range tagList {
+		filterTagOptions = append(filterTagOptions, Option(Value(tg), SelectedIf(f.Tag == tg), tg))
+	}
+
 	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCat.Get() == ""), uistate.T("transactions.bulkNoCategory"))}
 	for _, c := range categories {
 		bulkCatOptions = append(bulkCatOptions, Option(Value(c.ID), SelectedIf(bulkCat.Get() == c.ID), c.Name))
@@ -569,6 +658,12 @@ func Transactions() ui.Node {
 			return uistate.T("transactions.chipCategory", catName[af.Value])
 		case txnfilter.FieldMember:
 			return uistate.T("transactions.chipMember", memberName[af.Value])
+		case txnfilter.FieldTag:
+			return uistate.T("transactions.chipTag", af.Value)
+		case txnfilter.FieldAmountMin:
+			return uistate.T("transactions.chipAmountMin", af.Value)
+		case txnfilter.FieldAmountMax:
+			return uistate.T("transactions.chipAmountMax", af.Value)
 		case txnfilter.FieldFrom:
 			return uistate.T("transactions.chipFrom", af.Value)
 		case txnfilter.FieldTo:
@@ -635,10 +730,18 @@ func Transactions() ui.Node {
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCategory")), OnChange(onFilterCat), filterCatOptions)),
 		Label(css.Class("field-label"), uistate.T("transactions.member"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.member")), OnChange(onFilterMember), filterMemberOptions)),
+		// C49: tag facet — only shown when at least one transaction is tagged.
+		If(len(tagList) > 0, Label(css.Class("field-label"), uistate.T("transactions.filterTag"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterTag")), Attr("data-testid", "txn-filter-tag"), OnChange(onFilterTag), filterTagOptions))),
 		Label(css.Class("field-label"), uistate.T("transactions.fromDate"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), Value(f.From), OnInput(onFilterFrom))),
 		Label(css.Class("field-label"), uistate.T("transactions.toDate"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), Value(f.To), OnInput(onFilterTo))),
+		// C53: absolute-amount range (major units). Either bound optional.
+		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMin"),
+			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMin")), Attr("data-testid", "txn-filter-amount-min"), Placeholder(uistate.T("transactions.filterAmountMinPh")), Value(f.AmountMin), OnInput(onFilterAmountMin))),
+		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMax"),
+			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMax")), Attr("data-testid", "txn-filter-amount-max"), Placeholder(uistate.T("transactions.filterAmountMaxPh")), Value(f.AmountMax), OnInput(onFilterAmountMax))),
 		Label(css.Class("field-label"), uistate.T("transactions.clearedStatus"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
 				Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),
@@ -696,7 +799,9 @@ func Transactions() ui.Node {
 					ClearAllLabel: uistate.T("transactions.clearAllFilters"),
 					RemoveLabel:   uistate.T("transactions.removeFilter"),
 					Actions: []ui.Node{
-						Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear")),
+						// C51: only show "Clear" when at least one filter is active — an
+						// always-visible clear-with-nothing-to-clear is dead UI noise.
+						If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
 						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 					},
 				}),
@@ -706,6 +811,7 @@ func Transactions() ui.Node {
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
+					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportSelectedTitle")), Attr("data-testid", "bulk-export-selected"), OnClick(exportSelected), uistate.T("transactions.exportSelected")),
 					Button(css.Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
 					Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 				)),

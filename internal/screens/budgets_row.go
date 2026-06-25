@@ -307,7 +307,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// Sub-line split (G4 §8): the primary line carries the at-a-glance signal —
 		// health status + money left; the period and percent drop to a dimmer
 		// secondary line so they read as low-signal context, not equal weight.
-		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, fmtMoney(s.Remaining))),
+		// C124: budgetRemainPhrase yields "$50.00 left" or "$50.00 over" (no accounting
+		// parens), so the rowPrimary template carries only the label + the phrase.
+		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))),
 		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
 		ownerLine,
 		paceLine,

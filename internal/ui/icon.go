@@ -29,6 +29,12 @@ func Icon(name icon.Name, extra ...PropOption) ui.Node {
 		Attr("viewBox", "0 0 24 24"),
 		Attr("fill", "none"),
 		Attr("stroke", "currentColor"),
+		// Icons are decorative by default — the accessible name comes from the
+		// labelled control they sit in (IconButton/nav link aria-label), so hide the
+		// SVG from screen readers to avoid an unlabelled-graphic announcement (R33,
+		// WCAG 1.1.1). A caller that needs a meaningful standalone icon can override
+		// by passing Attr("aria-hidden","false") + a label in `extra` (last wins).
+		Attr("aria-hidden", "true"),
 		// Line weight follows the theme's --icon-stroke token (default 1.6). An
 		// inline style is used rather than the stroke-width presentation attribute
 		// because SVG attributes don't accept var(), while the CSS property does —

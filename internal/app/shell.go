@@ -697,6 +697,11 @@ func HouseholdCard() uic.Node {
 				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 			),
 		),
+		// Local-first trust line (C289 / R34-trust): the privacy differentiator was
+		// only in the admin console; surface it where every user sees it. Muted so it
+		// reassures without shouting.
+		Span(css.Class(tw.TextDim, tw.Text11, tw.Block, tw.TextCenter, tw.Px3, tw.Pb1, tw.LeadingTight),
+			uistate.T("trust.localFooter")),
 		Span(css.Class("app-version", tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb2),
 			Attr("title", "CashFlux "+version.Label()), version.Label()),
 	)
@@ -746,9 +751,24 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			uic.CreateElement(NotifyBell),
+			uic.CreateElement(HelpButton),
 			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(AddMenu),
 		),
+	)
+}
+
+// HelpButton is the top-bar "?" that opens the help center (C327/C328): help was
+// previously only reachable via the keyboard `?` overlay or the nav list, with no
+// visible affordance. Routes to /help (topics, what's-new, setup checklist, and the
+// bug-report path), keeping support one obvious click away on every screen.
+func HelpButton() uic.Node {
+	nav := router.UseNavigate()
+	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/help")) })
+	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Type("button"), Attr("title", uistate.T("nav.help")), Attr("aria-label", uistate.T("nav.help")),
+		Attr("data-testid", "help-button"), OnClick(open),
+		ui.Icon(icon.HelpCircle, css.Class(tw.W5, tw.H5)),
 	)
 }
 

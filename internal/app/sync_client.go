@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/backoff"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -28,6 +30,12 @@ const syncMetaPrefix = "cashflux:sync-meta:"
 const syncDeviceIDKey = "cashflux:sync-device-id"
 const syncQueueKey = "cashflux:sync-queue"
 const syncStatusKey = "cashflux:sync-status"
+
+// syncConflictPrefix stores the LAST local dataset that lost an LWW conflict (the
+// server held a newer snapshot), keyed by workspace. C309: this is the recoverable
+// backup so a rejected local edit is never silently lost — the user can restore it
+// from Settings → Cloud sync. One slot per workspace (the latest loser).
+const syncConflictPrefix = "cashflux:sync-conflict:"
 
 type syncMeta struct {
 	UpdatedAt string `json:"updatedAt,omitempty"`
@@ -77,6 +85,16 @@ func startBackendSync() {
 	js.Global().Call("addEventListener", "focus", cb)
 	js.Global().Call("addEventListener", "online", js.FuncOf(func(js.Value, []js.Value) any {
 		flushBackendSyncQueue()
+		return nil
+	}))
+	// C323: reflect going offline immediately. Without this only "online" was wired,
+	// so a dropped connection left the chip on its last (often "synced") state until
+	// the next failed dial. Mark any pending work as queued/offline right away.
+	js.Global().Call("addEventListener", "offline", js.FuncOf(func(js.Value, []js.Value) any {
+		st := loadSyncStatus()
+		st.State = "offline"
+		st.Pending = len(loadSyncQueue())
+		setSyncStatus(st)
 		return nil
 	}))
 }
@@ -165,17 +183,24 @@ func flushBackendSyncQueue() {
 				logSyncError("backend sync push failed", err)
 				return
 			}
-			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 			if !resp.Accepted {
+				// LWW resolution: the server holds a newer snapshot, so this push lost.
+				// C309: do NOT silently drop the local edit. Before removing it from the
+				// active queue (which must happen, or it would re-push and re-lose every
+				// cycle — an infinite conflict loop), stash the rejected local dataset to
+				// a recoverable per-workspace backup so the user can restore it. Then tell
+				// them plainly (§7.11) and pull the newer server copy so the UI is current.
+				saveConflictBackup(item)
+				removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 				setSyncStatus(syncStatus{State: "conflict", Pending: len(loadSyncQueue()), Message: "newer server snapshot available"})
-				// LWW resolution: server holds a newer snapshot, so this push was dropped.
-				// Tell the user plainly via a toast (§7.11) instead of failing silently.
-				uistate.PostNotice(uistate.T("sync.pulledNewer"), false)
+				uistate.PostNotice(uistate.T("sync.conflictBackedUp"), false)
 				if app := appstate.Default; app != nil {
-					app.Log().Warn("backend sync push rejected; newer server snapshot available", "workspace", item.WorkspaceID)
+					app.Log().Warn("backend sync push rejected; local edit backed up, newer server snapshot pulled", "workspace", item.WorkspaceID)
 				}
 				continue
 			}
+			// Accepted: only now is it safe to drop the local mutation from the queue.
+			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
 		}
 		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
@@ -188,12 +213,23 @@ func startBackendWatch() {
 		return
 	}
 	go func() {
+		// C322: exponential backoff + jitter (2s→120s cap) instead of fixed
+		// 10s/3s sleeps, so a flapping network doesn't hammer the backend and many
+		// clients don't reconnect in lockstep. attempt resets to 0 whenever a watch
+		// stream is established (a healthy connection), so a brief blip recovers fast.
+		const baseDelay, capDelay, jitterFrac = 2 * time.Second, 120 * time.Second, 0.3
+		attempt := 0
+		sleepBackoff := func() {
+			d := backoff.Jitter(backoff.Delay(attempt, baseDelay, capDelay), jitterFrac, rand.Float64())
+			time.Sleep(d)
+			attempt++
+		}
 		for {
 			ctx := context.Background()
 			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
 			if err != nil {
 				logSyncError("backend sync watch dial failed", err)
-				time.Sleep(10 * time.Second)
+				sleepBackoff()
 				continue
 			}
 			stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
@@ -204,12 +240,13 @@ func startBackendWatch() {
 				err = stream.CloseSend()
 			}
 			if err == nil {
+				attempt = 0 // healthy connection — reset the backoff window
 				readBackendWatch(stream)
 			} else {
 				logSyncError("backend sync watch failed", err)
 			}
 			_ = conn.Close()
-			time.Sleep(3 * time.Second)
+			sleepBackoff()
 		}
 	}()
 }
@@ -343,6 +380,59 @@ func saveSyncQueue(queue []queuedSyncMutation) {
 	}
 }
 
+// saveConflictBackup stores a rejected local mutation as the recoverable backup for
+// its workspace (C309). One slot per workspace — the latest conflict overwrites the
+// previous, since the user's most recent local edit is the one worth recovering.
+func saveConflictBackup(item queuedSyncMutation) {
+	if data, err := json.Marshal(item); err == nil {
+		lsSet(syncConflictPrefix+item.WorkspaceID, string(data))
+	}
+}
+
+// loadConflictBackup returns the recoverable local mutation that last lost an LWW
+// conflict for a workspace, and whether one exists.
+func loadConflictBackup(workspaceID string) (queuedSyncMutation, bool) {
+	raw := lsGet(syncConflictPrefix + workspaceID)
+	if raw == "" {
+		return queuedSyncMutation{}, false
+	}
+	var item queuedSyncMutation
+	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		return queuedSyncMutation{}, false
+	}
+	return item, true
+}
+
+// clearConflictBackup discards the recoverable backup once the user restores or
+// dismisses it.
+func clearConflictBackup(workspaceID string) {
+	lsRemove(syncConflictPrefix + workspaceID)
+}
+
+// restoreConflictBackup re-applies a backed-up local mutation that previously lost an
+// LWW conflict: it re-stamps the client timestamp to now (so it wins the next LWW
+// round against the snapshot that beat it), re-enqueues it, clears the backup, and
+// kicks a flush. Returns false if there is no backup for the workspace. (C309)
+func restoreConflictBackup(workspaceID string) bool {
+	item, ok := loadConflictBackup(workspaceID)
+	if !ok {
+		return false
+	}
+	item.ClientUpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	item.LastAttemptError = ""
+	enqueueSyncMutation(item)
+	clearConflictBackup(workspaceID)
+	flushBackendSyncQueue()
+	return true
+}
+
+// hasConflictBackup reports whether a recoverable conflict backup exists for the
+// active workspace (drives the Settings restore affordance).
+func hasConflictBackup(workspaceID string) bool {
+	_, ok := loadConflictBackup(workspaceID)
+	return ok
+}
+
 func enqueueSyncMutation(item queuedSyncMutation) {
 	upsertQueuedSyncMutation(item)
 	setSyncStatus(syncStatus{State: "syncing", Pending: len(loadSyncQueue())})
@@ -391,10 +481,17 @@ func removeQueuedSyncMutation(workspaceID, hash string) {
 
 func setSyncStatus(status syncStatus) {
 	if status.State == "" {
-		status.State = "synced"
+		status.State = "local" // C5: unset = local-only, not "synced"
 	}
 	if data, err := json.Marshal(status); err == nil {
 		lsSet(syncStatusKey, string(data))
+	}
+	// C324: make the chip reactive. setSyncStatus is called from background
+	// goroutines (watch/flush/pull); bumping the captured revision atom triggers a
+	// re-render so the chip reflects the new state without waiting for an unrelated
+	// render. Captured during SyncChip's render; no-op until the chip has mounted.
+	if syncStatusCaptured {
+		capturedSyncRev.Set(capturedSyncRev.Get() + 1)
 	}
 }
 
@@ -403,12 +500,25 @@ func loadSyncStatus() syncStatus {
 	if raw := lsGet(syncStatusKey); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &status)
 	}
+	// C320 (supersedes C5): the chip reflects CLOUD sync. If no backend is configured
+	// (the default local-first session, OR a backend that was configured then turned
+	// off), there is nothing to report — force an empty state so SyncChip stays
+	// invisible. This also discards a stale "synced" left in localStorage from a
+	// previously-active backend, which would otherwise read as a false "Synced".
+	if !uistate.LoadPrefs().Normalize().BackendActive() {
+		status.State = ""
+		return status
+	}
 	if status.State == "" {
 		if pending := len(loadSyncQueue()); pending > 0 {
 			status.State = "offline"
 			status.Pending = pending
 		} else {
-			status.State = "synced"
+			// C5: a session that never cloud-synced is LOCAL, not "synced" — defaulting
+			// to "synced" rendered a misleading "Synced" chip on a local-first session
+			// (and defeated SyncChip's "invisible until cloud sync is in use" intent).
+			// Real cloud syncs set State="synced" explicitly (see setSyncStatus callers).
+			status.State = "local"
 		}
 	}
 	return status
@@ -428,6 +538,9 @@ func syncStatusLabel() string {
 		return "Sync error"
 	case "conflict":
 		return "Newer server copy available"
+	case "local", "":
+		// C320: local-first / no backend configured — no cloud "Synced" claim.
+		return "Saved on this device"
 	default:
 		if status.Pending > 0 {
 			return strconv.Itoa(status.Pending) + " queued"

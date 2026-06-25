@@ -44,21 +44,26 @@
 
     <title>CashFlux — Local-first household budgeting</title>
 
-    <!-- SEO + link-share previews (C6). Copy mirrors manifest.webmanifest. No og:image
-         yet — app icons aren't generated (C306); a broken image would be worse than none. -->
+    <!-- SEO + link-share previews (C6). Copy mirrors manifest.webmanifest. og:image is the
+         512px brand PNG (rasterized from favicon.svg) — social scrapers need a raster image. -->
     <meta name="description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights. Your data stays on your device." />
     <meta property="og:title" content="CashFlux" />
     <meta property="og:description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="CashFlux" />
+    <meta property="og:image" content="./icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="CashFlux" />
     <meta name="twitter:description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights." />
+    <meta name="twitter:image" content="./icon-512.png" />
 
-    <!-- Brand favicon (was none → generic tab icon). On-brand green "C" mark mirroring
-         .brand-mark; SVG = crisp at every size, no PNG generation. (apple-touch-icon /
-         og:image still need a PNG — app icons aren't generated yet, C306.) -->
+    <!-- Brand icons (on-brand green "C" mirroring .brand-mark). SVG for crisp tabs; PNGs
+         (rasterized from the SVG) for iOS home-screen + maskable PWA install (C306). -->
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="mask-icon" href="./favicon.svg" color="#2e8b57" />
 
     <!-- PWA: installable, standalone, dark theme -->
@@ -968,6 +973,10 @@
       .hero-net { font-size: 2.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.025em; }
       .hero-net.pos { color: var(--accent); }
       .hero-net.neg { color: var(--danger); }
+      /* G9.1: period-over-period Net delta chip under the headline figure. */
+      .hero-net-delta { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.2rem; font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .hero-net-delta.pos { color: var(--accent); }
+      .hero-net-delta.neg { color: var(--danger); }
       .hero-flankers { display: flex; gap: 1.25rem; align-items: baseline; flex-wrap: wrap; }
       .hero-flanker { display: flex; flex-direction: column; gap: 0.1rem; }
       .hero-flanker-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
@@ -2117,7 +2126,14 @@
       /* "+ Add" popover menu (C23): a button that opens a small list of add
          actions. Always in the DOM; .hidden-menu toggles visibility so the
          framework's On* hooks stay at stable positions. */
-      .add-wrap { position:relative; }
+      .add-wrap { position:relative; display:inline-flex; align-items:center; gap:1px; }
+      /* C44: split-button caret — opens the full add-anything menu; narrower than the
+         primary + button so the pair reads as one control. */
+      .add-caret { display:inline-flex; align-items:center; justify-content:center; width:20px; height:30px;
+        background:transparent; border:none; color:var(--text-dim); cursor:pointer; border-radius:6px;
+        transition: background .12s ease, color .12s ease; }
+      .add-caret:hover { color:var(--text); background:var(--bg-elev); }
+      [data-theme="light"] .add-caret { border:1px solid var(--border); }
       /* Open direction is decided at open-time in addmenu.go (syscall/js measures the
          button's gap to the viewport's right edge): the +Add button reflows between
          the left of the content area (≤24px from the rail) and the right edge across

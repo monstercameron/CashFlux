@@ -33,8 +33,8 @@ type transactionRowProps struct {
 	ShowTags        bool // whether the Tags column is present this render (G2 §6)
 	OnDelete        func(string)
 	OnDuplicate     func(domain.Transaction)
-	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID string)
-	OnToggleSelect  func(string)
+	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID, tags string)
+	OnToggleSelect  func(id string, shift bool)
 	OnToggleCleared func(domain.Transaction)
 	// OnCreateRule navigates to the Rules screen with the add-form prefilled from
 	// this transaction's payee/description and category.
@@ -68,7 +68,10 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		})
 	}))
 	dup := ui.UseEvent(Prevent(func() { props.OnDuplicate(t) }))
-	sel := ui.UseEvent(Prevent(func() { props.OnToggleSelect(t.ID) }))
+	sel := ui.UseEvent(func(e ui.Event) { // C62: pass shift for range selection
+		shift := e.JSValue().Get("shiftKey").Bool()
+		props.OnToggleSelect(t.ID, shift)
+	})
 	clr := ui.UseEvent(Prevent(func() { props.OnToggleCleared(t) }))
 	createRule := ui.UseEvent(Prevent(func() {
 		if props.OnCreateRule != nil {
@@ -95,8 +98,10 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	catS := ui.UseState(t.CategoryID)
 	dateS := ui.UseState(dateISO)
 	memberS := ui.UseState(defaultRowMember)
+	tagsS := ui.UseState(strings.Join(t.Tags, ", ")) // C48: editable tags (comma-separated)
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
+	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
 	// onCat and onMember hooks are preserved as anonymous stubs so the hook slot
 	// order is stable; the actual onChange is wired through uiw.SelectInput below.
 	ui.UseEvent(func(e ui.Event) {})
@@ -108,11 +113,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		catS.Set(t.CategoryID)
 		dateS.Set(dateISO)
 		memberS.Set(defaultRowMember)
+		tagsS.Set(strings.Join(t.Tags, ", "))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get())
+		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get(), tagsS.Get())
 		editing.Set(false)
 	}))
 
@@ -166,6 +172,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 							OnChange:  func(v string) { catS.Set(v) },
 						})),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
+					// C48: edit tags inline (comma-separated), matching the add/edit forms elsewhere.
+					labeledField(uistate.T("transactions.tagsLabel"),
+						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Attr("data-testid", "txn-edit-tags"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags))),
 					If(len(props.Members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
 						uiw.SelectInput(uiw.SelectInputProps{
 							Options:   memberOpts,
@@ -220,7 +229,15 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		descTags = Span(css.Class("td-tags-inline"), " "+tagsText)
 	}
 	return Tr(ClassStr(rowClass), Attr("data-id", props.Txn.ID),
-		Td(css.Class("td-select"), Button(css.Class("check"), Type("button"), Title(uistate.T("transactions.selectTitle")), OnClick(sel), selectGlyph)),
+		// C65: the row-select control was a bare glyph button — no accessible name, no
+		// pressed state, no row context. Give it an aria-label naming the row and an
+		// aria-pressed reflecting selection so screen-reader users know what they're
+		// toggling and its current state. The glyph itself is decorative.
+		Td(css.Class("td-select"), Button(css.Class("check"), Type("button"),
+			Title(uistate.T("transactions.selectTitle")),
+			Attr("aria-label", uistate.T("transactions.selectRow", rowSelectName(props.Txn))),
+			Attr("aria-pressed", ariaBool(props.Selected)),
+			OnClick(sel), Span(Attr("aria-hidden", "true"), selectGlyph))),
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
 		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
 		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags, smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID)),
@@ -246,4 +263,17 @@ func receiptCountLabel(n int) string {
 		return uistate.T("transactions.receiptAttached", n)
 	}
 	return uistate.T("transactions.receiptsAttached", n)
+}
+
+// rowSelectName builds a concise human label for a transaction's select control
+// (C65): prefer the payee, fall back to the description, then the amount, so the
+// accessible name names the actual row instead of an opaque glyph.
+func rowSelectName(t domain.Transaction) string {
+	if s := strings.TrimSpace(t.Payee); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(t.Desc); s != "" {
+		return s
+	}
+	return fmtMoney(t.Amount)
 }

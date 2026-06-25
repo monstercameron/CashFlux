@@ -55,6 +55,20 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	tags := ui.UseState("")
 	errMsg := ui.UseState("")
 
+	// Consume any pending "Always categorize like this" prefill once on mount:
+	// seed match/category from the draft set by the transaction row, then clear
+	// it so a later blank visit starts empty. The atom is captured by the dialog
+	// host (dialoghost.go); reading it here is a stable hook position.
+	draft := uistate.UseRuleDraft()
+	ui.UseEffect(func() func() {
+		if d := draft.Get(); d != nil {
+			match.Set(d.Match)
+			categoryID.Set(d.CategoryID)
+			uistate.ClearRuleDraft()
+		}
+		return nil
+	}, "rule-draft-consume")
+
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
 	// onCategory hook slot kept for stable hook ordering; SelectInput owns the event.
 	ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
@@ -104,7 +118,11 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	catOpts := categorySelectOptions(cats, categoryID.Get())
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
-		Input(append([]any{css.Class("field"), Attr("id", "rule-add"), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+		// No static id (C107): RuleAddForm renders both inline on /rules and inside the
+		// AddHost modal, so a hardcoded id="rule-add" produced a duplicate id when the
+		// modal opened over the screen. Nothing references the id (the aria-label is the
+		// accessible name, data-testid is the test hook), so it's dropped.
+		Input(append([]any{css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   catOpts,

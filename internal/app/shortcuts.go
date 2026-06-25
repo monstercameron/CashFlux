@@ -283,7 +283,11 @@ func buildPaletteCommands() []paletteCmd {
 		paletteCmd{label: uistate.T("addmenu.transaction"), group: uistate.T("palette.groupActions"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
 		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
-		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"help", "keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
+		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
+		// C325/C327/C328: make the help center findable under the words people actually
+		// type when they're stuck — help/support/feedback/bug/contact/docs/faq — instead
+		// of returning nothing. Routes to /help (topics, what's-new, bug-report path).
+		paletteCmd{label: uistate.T("nav.help"), keywords: []string{"help", "support", "feedback", "bug", "report", "contact", "docs", "documentation", "faq", "guide"}, run: func() { router.Navigate(uistate.RoutePath("/help")) }},
 		paletteCmd{label: uistate.T("cmd.undo"), keywords: []string{"undo", "revert", "back"}, run: func() {
 			if undoLastChange() {
 				paletteNotify(uistate.T("cmd.undone"), false)

@@ -112,6 +112,9 @@ type settingsRightProps struct {
 	OnSignOut         uic.Handler // UseEvent
 	OnTestBackend     uic.Handler // UseEvent
 	OnSyncNow         uic.Handler // UseEvent
+	HasConflictBackup bool        // C309: a local edit lost an LWW conflict and is recoverable
+	OnRestoreConflict uic.Handler // UseEvent
+	OnDiscardConflict uic.Handler // UseEvent
 	OnUploadKey       uic.Handler // UseEvent
 	BillingInterval   string
 	OnBillingInterval func(string)
@@ -222,6 +225,17 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey")),
 			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
+		// C309: recoverable conflict backup — when a local edit lost an LWW conflict
+		// (server had newer changes), offer to restore the saved local copy or discard
+		// the backup, so the change is never silently lost.
+		If(p.HasConflictBackup, Div(css.Class("conflict-restore", tw.Flex, tw.FlexCol, tw.Gap1, tw.Mt2, tw.Px3, tw.Py2, tw.Rounded4, tw.BorderL),
+			Attr("role", "status"), Attr("data-testid", "sync-conflict-restore"),
+			P(css.Class(tw.Text12, tw.TextDim), uistate.T("sync.restoreConflictHint")),
+			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
+				Button(css.Class("btn", "btn-sm", "btn-primary"), Type("button"), OnClick(p.OnRestoreConflict), uistate.T("sync.restoreConflict")),
+				Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(p.OnDiscardConflict), uistate.T("sync.discardConflict")),
+			),
+		)),
 		// Cloud AI-key status: "Key set" + Remove, shown once a key has been uploaded (§7.11).
 		If(p.KeySet, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 			Span(css.Class(tw.Text12, tw.TextDim), uistate.T("settings.serverKeySet")),

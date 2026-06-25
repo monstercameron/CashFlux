@@ -279,6 +279,9 @@ func Dashboard() ui.Node {
 		// Home band (EC4): glanceable greeting + net-worth hero + this-month stats
 		// + quick actions. Sits above the bento; data comes from the §1.6 selectors.
 		ui.CreateElement(dashboardHero),
+		// C329: first-run onboarding callout — a dismissible setup checklist with a
+		// link to the help center. Self-hides once setup is complete or dismissed.
+		ui.CreateElement(dashOnboardCard),
 		// C271: "While you were away" catch-up card — shown when new notifications
 		// have arrived since the last time the user opened the Notification Center.
 		// Dismissed per session (the atom resets on reload). Only shown when

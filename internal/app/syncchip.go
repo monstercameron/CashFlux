@@ -11,7 +11,18 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/state"
 	uic "github.com/monstercameron/GoWebComponents/ui"
+)
+
+// syncRevAtomID backs C324's reactivity: a revision counter bumped by setSyncStatus
+// (from background goroutines) that SyncChip subscribes to so it re-renders on every
+// status change rather than only when some unrelated render happens to occur.
+const syncRevAtomID = "sync:rev"
+
+var (
+	capturedSyncRev    state.Atom[int]
+	syncStatusCaptured bool
 )
 
 // syncChipFace maps a sync-status state to its label key + chip class. Unknown or
@@ -41,6 +52,11 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 // component so the click + atom hooks stay at a stable render position.
 func SyncChip() uic.Node {
 	settings := uistate.UseSettings()
+	// C324: subscribe to the revision atom so background setSyncStatus calls re-render
+	// this chip; capture it for those out-of-render callers.
+	rev := state.UseAtom(syncRevAtomID, 0)
+	capturedSyncRev = rev
+	syncStatusCaptured = true
 	st := loadSyncStatus()
 	labelKey, cls, ok := syncChipFace(st.State)
 	if !ok {
@@ -72,6 +88,8 @@ func SyncChip() uic.Node {
 	args := []any{
 		ClassStr(cls + " " + tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
 		Type("button"),
+		Attr("data-testid", "sync-chip"), // C321: stable e2e hook
+		Attr("data-sync-state", st.State),
 		Attr("title", tip),
 		Attr("aria-label", tip),
 		OnClick(onClick),

@@ -103,8 +103,9 @@ func seedAdminFixture(t *testing.T, store *Store) {
 			t.Fatalf("PutSubscription %s: %v", sub.UserID, err)
 		}
 	}
-	// usage for today
-	today := time.Date(2026, 6, 24, 0, 0, 0, 0, time.UTC)
+	// usage for today — use time.Now() so the handler's time.Now()-based query matches
+	// on any calendar day (a hardcoded date would only match on the day it was written).
+	today := time.Now().UTC().Truncate(24 * time.Hour)
 	if _, err := store.AddUsage("ua", today, 5, 100); err != nil {
 		t.Fatalf("AddUsage ua: %v", err)
 	}
@@ -116,7 +117,7 @@ func seedAdminFixture(t *testing.T, store *Store) {
 func TestAdminOverviewAggregates(t *testing.T) {
 	store := openTestStore(t)
 	seedAdminFixture(t, store)
-	today := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	today := time.Now().UTC() // must match the day seeded by seedAdminFixture
 	stats, err := store.AdminOverview(today)
 	if err != nil {
 		t.Fatalf("AdminOverview: %v", err)

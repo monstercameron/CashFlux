@@ -89,10 +89,19 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			return out
 		}
 
-		// Move focus into the dialog (its first focusable) so keyboard/SR users
-		// start inside the modal rather than behind it.
+		// Move focus into the dialog so keyboard/SR users start inside the modal
+		// rather than behind it. C43: prefer an element explicitly marked [autofocus]
+		// (e.g. quick-add's Amount field) over the first focusable, so a form can land
+		// the cursor on the field the user actually fills first; fall back to fs[0].
 		if fs := focusables(); len(fs) > 0 {
-			fs[0].Call("focus")
+			target := fs[0]
+			for _, el := range fs {
+				if el.Call("hasAttribute", "autofocus").Bool() {
+					target = el
+					break
+				}
+			}
+			target.Call("focus")
 		}
 
 		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {

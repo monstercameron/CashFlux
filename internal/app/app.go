@@ -186,5 +186,8 @@ func Run() {
 	// once on load, deduped via the persisted delivered log (B19). Boot-safe.
 	runNotifyCatchUp()
 
+	// Greet once after a version upgrade with a "what's new" pointer (C326).
+	whatsNewToastOnBoot()
+
 	utils.WaitForever()
 }

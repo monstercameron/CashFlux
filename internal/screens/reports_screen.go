@@ -197,10 +197,15 @@ func Reports() ui.Node {
 	noSpendDays := reports.NoSpendDays(txns, cs, ce, time.Now())
 	spendStats, _ := reports.SpendingStats(txns, cs, ce, rates)
 
+	// Previous comparable period flow, computed once for both the headline spending
+	// trend and the hero Net delta chip (G9.1: period-over-period context).
+	prevFlow, prevFlowErr := reports.IncomeVsExpense(txns, ps, pe, rates)
+	prevFlowOK := prevFlowErr == nil
+
 	// Headline spending trend vs the previous comparable period (up = worse).
 	spendTrend := ""
-	if pf, err := reports.IncomeVsExpense(txns, ps, pe, rates); err == nil {
-		if pct, ok := ledger.PercentChange(flow.Expense, pf.Expense); ok {
+	if prevFlowOK {
+		if pct, ok := ledger.PercentChange(flow.Expense, prevFlow.Expense); ok {
 			mag := pct
 			if mag < 0 {
 				mag = -mag
@@ -624,6 +629,27 @@ func Reports() ui.Node {
 
 	net := money.New(flow.Net(), base)
 
+	// G9.1 hero delta: signed change in Net vs the previous comparable period, shown
+	// as a small chip beside the headline so the figure has context ("vs last period")
+	// rather than standing alone. Up in Net is good (pos tone), down is neg.
+	var netDeltaChip ui.Node = Fragment()
+	if prevFlowOK {
+		delta := flow.Net() - prevFlow.Net()
+		if delta != 0 {
+			arrow, tone := "▲", "pos"
+			if delta < 0 {
+				arrow, tone = "▼", "neg"
+			}
+			mag := delta
+			if mag < 0 {
+				mag = -mag
+			}
+			netDeltaChip = Span(ClassStr("hero-net-delta "+tone),
+				Attr("title", uistate.T("reports.vsPrevPeriod")),
+				arrow+" "+fmtMoney(money.New(mag, base))+" "+uistate.T("reports.vsPrev"))
+		}
+	}
+
 	// Money-flow Sankey (C70): income fans out to each spending category, with the
 	// leftover going to Savings. Mermaid renders the flow value as the node label
 	// (with a "$" prefix from the sankey config), so the value must be a human-scale
@@ -668,6 +694,7 @@ func Reports() ui.Node {
 				Div(
 					P(css.Class("hero-flanker-label"), uistate.T("reports.net")),
 					P(ClassStr("hero-net "+accentFor(net)), fmtMoney(net)),
+					netDeltaChip,
 				),
 				Div(css.Class("hero-flankers"),
 					Div(css.Class("hero-flanker"),
