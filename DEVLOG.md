@@ -3,6 +3,45 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART proactive digest via the notification feed
+
+The SMART layer was previously pull-only — the user had to open the hub or a page strip to see
+insights. This change adds the first proactive surface: a cadence-driven digest that posts a brief
+"here are your top things to look at" summary to the notification feed without any manual trigger.
+
+**Architecture decisions:**
+
+- **Pure package first.** `internal/smartdigest` is pure Go (no `syscall/js`), so it unit-tests on
+  native Go. It owns the selection logic (`Build`), period-keying (`PeriodKey`), and dedup via a
+  caller-owned `notify.DeliveredLog`. The wasm driver is a thin shell on top.
+
+- **`SMART-DIGEST` catalog entry, not a special path.** Adding it to the catalog means
+  `Settings.SetEnabled/CadenceFor/MarkRun/LastRunAt` all work for free — zero schema change. It
+  lives on `PageHub` (a new virtual page for cross-app meta-features) kept out of `Pages()` so it
+  doesn't clutter the per-page manage groups.
+
+- **Headless driver mounted once in Shell.** `SmartDigestDriver` is alongside `Toast`/`SettingsHost`
+  — always at a constant hook depth, never inside a loop (On*-hooks-in-loops rule satisfied). The
+  effect key embeds `LastRun` so it can't re-enter within the same cadence window. Stamp BEFORE
+  build to ensure at most one paid interaction per period.
+
+- **Three-layer dedup:** (1) `cadence.Due(lastRun, now)` — skips if not due; (2) `DeliveredLog`
+  keyed by period string — persisted in PRESERVED KV so it survives reloads; (3)
+  `PrependNotifyFeed`'s ID-based dedup — second line of defence against race conditions.
+
+- **Density Off suppression.** The driver returns early if density is Off — consistent with all
+  other SMART affordances.
+
+- **Cadence picker restricted to interval cadences.** Live/Manual excluded from the UI picker
+  because Live would post on every render (spam) and Manual defeats the proactive purpose.
+
+- **Default clamped to Weekly.** A Free feature's tier default is Live, which isn't appropriate for
+  a notification digest. The hub UI clamps to Weekly on first show so the picker is already sensible.
+
+**Test coverage:** 11 table-driven tests in `internal/smartdigest/digest_test.go` — selection order,
+cap-at-N, empty→false, dedupe same-period, dedupe next-period, severity tie-break, stable ID,
+title label, timestamp, period key variants. All pass on native Go.
+
 ## 2026-06-24 — SMART insight copy audit + golden snapshot test
 
 A second editorial pass over all nine `internal/smartengine/*.go` engine files to verify

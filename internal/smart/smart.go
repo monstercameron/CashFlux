@@ -38,6 +38,9 @@ const (
 	PageAllocate      Page = "allocate"
 	PageSubscriptions Page = "subscriptions"
 	PageBills         Page = "bills"
+	// PageHub holds cross-app meta-features (e.g. the proactive digest) that do
+	// not belong to one data page. The hub renders them in their own section.
+	PageHub Page = "hub"
 )
 
 // pageLabels is the human label for each page, used in catalog/settings UI.
@@ -51,6 +54,7 @@ var pageLabels = map[Page]string{
 	PageAllocate:      "Allocate",
 	PageSubscriptions: "Subscriptions",
 	PageBills:         "Bills",
+	PageHub:           "Smart hub",
 }
 
 // Valid reports whether p is one of the known pages.

@@ -160,6 +160,9 @@ var catalog = []Feature{
 	rule("SMART-BL13", PageBills, "Statement-vs-minimum clarity", "Show statement balance, minimum, and the interest cost side by side."),
 	rule("SMART-BL14", PageBills, "Seasonal bill forecast", "Project seasonal swings for variable bills into upcoming amounts."),
 	rule("SMART-BL15", PageBills, "Grace-period confidence", "Learn each biller's real posting pattern and show the last-safe-pay date."),
+
+	// ── Hub (cross-app) ───────────────────────────────────────────────────────
+	rule("SMART-DIGEST", PageHub, "Proactive money digest", "Post a brief summary of your top active insights to the notification feed on a chosen cadence."),
 }
 
 // byCode indexes the catalog for O(1) lookups, built once at init.

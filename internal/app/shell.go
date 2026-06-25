@@ -203,6 +203,10 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(DialogHost),
 		uic.CreateElement(UpgradeSheet),
 		uic.CreateElement(Toast),
+		// Headless SMART proactive digest driver: fires on cadence when opted in,
+		// posting a brief insight summary to the notification feed. Mounted once
+		// here (not in a loop) so its hook depth is always constant.
+		uic.CreateElement(screens.SmartDigestDriver),
 	)
 }
 

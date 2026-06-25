@@ -58,6 +58,9 @@ func SmartHub() ui.Node {
 		// Interactive AI features (e.g. account Q&A), gated on a configured provider.
 		smartAISection(settings, conn, hasProvider),
 
+		// Digest section — opt-in cadence-driven summary to the notification feed.
+		SmartDigestSection(settings),
+
 		// Manage section — the opt-in catalog with honest cost labels.
 		smartManageSection(settings, hasProvider),
 	)
