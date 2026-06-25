@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Fix SMART-SU1 no-op nav + SMART-SU9 toast (C258)
+
+Two small but visible affordance bugs in the SMART subscription layer.
+
+**SMART-SU1 root cause:** `smart_card.go`'s `ActionNavigate` handler called `nav.Navigate(target)` unconditionally. Since the SU1 insights are page-scoped to `/subscriptions` and the smart strip appears on that same page, clicking "Review subscriptions" while already there issued a no-op navigation and did nothing visible. Fixed by checking `router.GetCurrentPath() == target && route == "/subscriptions"` and, when true, scrolling the named row into view and briefly highlighting it. The subscription name comes from the insight key (`SMART-SU1:netflix` → slug `netflix`) which maps to the existing `data-testid="sub-cancel-select-netflix"` checkbox; we call `closest(".sub-row")` to get the wider row container, then `scrollIntoView(smooth/center)` + a transient `.smart-highlight-row` CSS outline (removed after 1.5 s via a released `js.FuncOf` timer). Added the CSS rule to `web/index.html`.
+
+**SMART-SU9 root cause:** the `PostNotice(uistate.T("smart.taskAdded"), false)` call in the `ActionCreateTask` handler was always there and correct, but `PostNotice` requires the package-level `capturedNotice` atom to be set first by a prior `UseNotice()` hook call. The shell's `Toast()` component always calls `UseNotice()` and was the guaranteed capture point. However, to make `smartInsightCard` truly self-contained (and robust to any future refactor that moves the toast), added `_ = uistate.UseNotice()` directly inside `smartInsightCard`'s render path — a stable hook call that ensures the atom is captured at the point of component mount regardless of what other components are in the tree.
+
+**Tests:** new `e2e/c258_smart_su_fixes.mjs` seeds subscription data with renewal dates that fall within the 7-day SU9 window and a dominant-share SU1 candidate, then tests both flows. The test is date-relative so it stays valid indefinitely.
+
 ## 2026-06-25 — Fix Settings raw-CSS-token garbage (C25 via R3)
 
 R3 (a read-only diagnostic subagent) pinned the `{[{border-top-width…}]}` text in the Settings modal

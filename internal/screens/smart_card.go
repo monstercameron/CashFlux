@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -48,6 +50,9 @@ func smartInsightCard(props smartCardProps) ui.Node {
 	ins := props.Ins
 	nav := router.UseNavigate()
 	rev := uistate.UseDataRevision()
+	// Capture the notice atom unconditionally so PostNotice works even when this
+	// card renders on a page that doesn't call UseNotice itself (e.g. /smart hub).
+	_ = uistate.UseNotice()
 	tone := severityTone(ins.Severity)
 
 	onDismiss := ui.UseEvent(func() {
@@ -63,9 +68,46 @@ func smartInsightCard(props smartCardProps) ui.Node {
 		}
 		switch ins.Action.Kind {
 		case smart.ActionNavigate:
-			if ins.Action.Route != "" {
-				nav.Navigate(uistate.RoutePath(ins.Action.Route))
+			if ins.Action.Route == "" {
+				return
 			}
+			target := uistate.RoutePath(ins.Action.Route)
+			current := router.GetCurrentPath()
+			// SMART-SU1 fix: when already on the target page, scroll to the named
+			// row instead of issuing a no-op navigation. The subscription name lives
+			// in the insight key after the first colon (e.g. "SMART-SU1:netflix").
+			// We use the same nameSlug as the subscriptions screen to build the
+			// data-testid of the row checkbox, then scroll its parent .sub-row into
+			// view and briefly add a highlight outline so the row is easy to spot.
+			if current == target && ins.Action.Route == "/subscriptions" {
+				parts := strings.SplitN(ins.Key, ":", 2)
+				if len(parts) == 2 {
+					slug := nameSlug(parts[1])
+					doc := js.Global().Get("document")
+					// The checkbox is the anchor; the row wrapper is .sub-row.
+					anchor := doc.Call("querySelector", `[data-testid="sub-cancel-select-`+slug+`"]`)
+					if !anchor.IsNull() && !anchor.IsUndefined() {
+						rowEl := anchor.Call("closest", ".sub-row")
+						scrollEl := anchor
+						if !rowEl.IsNull() && !rowEl.IsUndefined() {
+							scrollEl = rowEl
+						}
+						scrollEl.Call("scrollIntoView", map[string]any{"behavior": "smooth", "block": "center"})
+						// Transient outline highlight for 1.5 s so the user's eye finds the row.
+						cl := scrollEl.Get("classList")
+						cl.Call("add", "smart-highlight-row")
+						var cb js.Func
+						cb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+							cl.Call("remove", "smart-highlight-row")
+							cb.Release()
+							return nil
+						})
+						js.Global().Call("setTimeout", cb, 1500)
+					}
+				}
+				return
+			}
+			nav.Navigate(target)
 		case smart.ActionCreateTask:
 			app := appstate.Default
 			if app == nil {
@@ -87,6 +129,7 @@ func smartInsightCard(props smartCardProps) ui.Node {
 				uistate.PostNotice(err.Error(), true)
 				return
 			}
+			// SMART-SU9 fix: confirm the to-do was added with a toast notice.
 			uistate.PostNotice(uistate.T("smart.taskAdded"), false)
 			rev.Set(rev.Get() + 1)
 		}

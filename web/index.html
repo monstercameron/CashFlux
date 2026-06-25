@@ -47,6 +47,7 @@
     <!-- PWA: installable, standalone, dark theme -->
     <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="theme-color" content="#0e0e0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -1026,6 +1027,12 @@
       .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
       .stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
       .stat-label { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      /* An inline info-tooltip must not inflate a .stat-label's line box: a full .btn
+         trigger (16px icon + padding) made the first stat's label 44px tall vs siblings'
+         ~18px, dropping that stat's value 26px below the row baseline. Collapse the
+         trigger to the label's text size so every stat value shares one baseline. */
+      .stat-label .smart-tip-wrap button.btn { padding: 0; border: 0; min-height: 0; height: 1em; line-height: 1; }
+      .stat-label .smart-tip-wrap svg { width: 0.95em; height: 0.95em; }
       /* Keep stat figures on one line (G11): a "Next due" ISO date was hyphenating to
          "2026-07-" / "01" in the narrow single-column 768px stat card. */
       .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; letter-spacing: -0.015em; }
@@ -1405,6 +1412,9 @@
          subscription name always reads — it's what Marcus is auditing. */
       .sub-row .row-main { min-width: 9rem; flex: 1 1 auto; }
       .sub-actions { flex: none; display: inline-flex; align-items: center; gap: 0.4rem; }
+      /* SMART-SU1 in-place highlight: briefly outlines the target subscription row
+         when the user clicks "Review subscriptions" while already on the page. */
+      .smart-highlight-row { outline: 2px solid var(--accent); border-radius: 6px; transition: outline 0.3s ease; }
       .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.82rem; min-height: 0; }
       /* Ghost-danger: a low-weight destructive action so a per-row "Cancel" doesn't
          out-shout the data (G10) — danger tone on hover, not a solid red block. */
