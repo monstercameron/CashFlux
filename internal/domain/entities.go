@@ -40,16 +40,16 @@ const (
 // Member is a person in the household/group. Members are owners of individual
 // pools and are labels within the single local dataset (no auth).
 type Member struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Color     string         `json:"color,omitempty"`
-	IsDefault bool           `json:"isDefault,omitempty"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color,omitempty"`
+	IsDefault bool   `json:"isDefault,omitempty"`
 	// Role is the member's permission tier. The zero value is treated as
 	// RoleAdmin by the memberrole package for backwards-compatibility with
 	// datasets created before this field existed.
-	Role      MemberRole     `json:"role,omitempty"`
-	Prefs     MemberPrefs    `json:"prefs,omitempty"`
-	Custom    map[string]any `json:"custom,omitempty"`
+	Role   MemberRole     `json:"role,omitempty"`
+	Prefs  MemberPrefs    `json:"prefs,omitempty"`
+	Custom map[string]any `json:"custom,omitempty"`
 }
 
 // MemberPrefs holds a member's personal overrides layered over the household

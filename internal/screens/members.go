@@ -10,12 +10,13 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -109,7 +110,7 @@ func Members() ui.Node {
 		bump()
 	}
 
-	saveMember := func(id, newName, newColor, dateStyle, defAccountID string) {
+	saveMember := func(id, newName, newColor, dateStyle, defAccountID, newRole string) {
 		for _, m := range app.Members() {
 			if m.ID != id {
 				continue
@@ -121,6 +122,10 @@ func Members() ui.Node {
 			// Per-member preferences (§1.19): empty = inherit the household default.
 			m.Prefs.DateStyle = strings.TrimSpace(dateStyle)
 			m.Prefs.DefaultAccountID = strings.TrimSpace(defAccountID)
+			// Role: accept the form value; fall back to the resolved role if invalid.
+			if r, err := memberrole.ParseRole(strings.TrimSpace(newRole)); err == nil {
+				m.Role = r
+			}
 			if err := app.PutMember(m); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -303,6 +308,16 @@ func memberDateStyleOptions() []uiw.SelectOption {
 	}
 }
 
+// memberRoleOptions returns the three role choices — owner / admin / viewer —
+// labelled via memberrole.Label so the select matches the canonical display names.
+func memberRoleOptions() []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: string(domain.RoleOwner), Label: memberrole.Label(domain.RoleOwner)},
+		{Value: string(domain.RoleAdmin), Label: memberrole.Label(domain.RoleAdmin)},
+		{Value: string(domain.RoleViewer), Label: memberrole.Label(domain.RoleViewer)},
+	}
+}
+
 // memberDefaultAccountOptions lists "Inherit" (no per-member default) then every
 // account by name, for the per-member default-account preference.
 func memberDefaultAccountOptions() []uiw.SelectOption {
@@ -319,7 +334,7 @@ type memberRowProps struct {
 	Member       domain.Member
 	OnDelete     func(string)
 	OnSetDefault func(string)
-	OnSave       func(id, name, color, dateStyle, defAccountID string)
+	OnSave       func(id, name, color, dateStyle, defAccountID, role string)
 	OnView       func(string)
 }
 
@@ -340,6 +355,7 @@ func MemberRow(props memberRowProps) ui.Node {
 	colorS := ui.UseState(color)
 	dateStyleS := ui.UseState(m.Prefs.DateStyle)
 	defAcctS := ui.UseState(m.Prefs.DefaultAccountID)
+	roleS := ui.UseState(string(memberrole.Resolve(m)))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	startEdit := ui.UseEvent(Prevent(func() {
@@ -347,11 +363,12 @@ func MemberRow(props memberRowProps) ui.Node {
 		colorS.Set(color)
 		dateStyleS.Set(m.Prefs.DateStyle)
 		defAcctS.Set(m.Prefs.DefaultAccountID)
+		roleS.Set(string(memberrole.Resolve(m)))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get())
+		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get(), roleS.Get())
 		editing.Set(false)
 	}))
 
@@ -390,6 +407,14 @@ func MemberRow(props memberRowProps) ui.Node {
 						Selected:  defAcctS.Get(),
 						OnChange:  func(v string) { defAcctS.Set(v) },
 						AriaLabel: uistate.T("members.prefDefaultAccount"),
+					})),
+				labeledField("Role",
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   memberRoleOptions(),
+						Selected:  roleS.Get(),
+						OnChange:  func(v string) { roleS.Set(v) },
+						AriaLabel: "Role",
+						TestID:    "member-edit-role-" + m.ID,
 					})),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
