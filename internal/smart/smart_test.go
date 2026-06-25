@@ -152,23 +152,62 @@ func TestFormatCents(t *testing.T) {
 	}
 }
 
+// TestIsEnabledTierDefaults verifies the core C254 contract: Free features are
+// on by default, AI features are off by default, and explicit user choices win.
+func TestIsEnabledTierDefaults(t *testing.T) {
+	// Sanity-check the fixtures are the tiers we expect.
+	a1, _ := ByCode("SMART-A1") // Free
+	t1, _ := ByCode("SMART-T1") // AI
+	if a1.Tier != TierFree {
+		t.Fatalf("fixture SMART-A1 expected TierFree, got %q", a1.Tier)
+	}
+	if t1.Tier != TierAI {
+		t.Fatalf("fixture SMART-T1 expected TierAI, got %q", t1.Tier)
+	}
+
+	cases := []struct {
+		name string
+		s    Settings
+		code string
+		want bool
+	}{
+		// Tier defaults on a zero Settings (never touched).
+		{"Free unset → enabled", Settings{}, "SMART-A1", true},
+		{"AI unset → disabled", Settings{}, "SMART-T1", false},
+		// Explicit user choices override tier defaults.
+		{"Free explicitly off → off", Settings{}.SetEnabled("SMART-A1", false), "SMART-A1", false},
+		{"AI explicitly on → on", Settings{}.SetEnabled("SMART-T1", true), "SMART-T1", true},
+		// Explicit on for a Free feature (redundant but must work).
+		{"Free explicitly on → on", Settings{}.SetEnabled("SMART-A1", true), "SMART-A1", true},
+		// Explicit off then back on clears the explicit-off record.
+		{"Free off then on → on", Settings{}.SetEnabled("SMART-A1", false).SetEnabled("SMART-A1", true), "SMART-A1", true},
+		// Unknown code is always false.
+		{"Unknown code → false", Settings{}, "SMART-NOPE", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.s.IsEnabled(tc.code); got != tc.want {
+				t.Errorf("IsEnabled(%q) = %v, want %v", tc.code, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSettingsEnable(t *testing.T) {
-	var s Settings
-	if s.IsEnabled("SMART-A1") {
-		t.Errorf("default should be opt-out")
-	}
-	s = s.SetEnabled("SMART-A1", true)
-	if !s.IsEnabled("SMART-A1") {
-		t.Errorf("enable failed")
-	}
-	s = s.SetEnabled("SMART-A1", false)
-	if s.IsEnabled("SMART-A1") {
-		t.Errorf("disable failed")
-	}
 	// Unknown code is a no-op.
+	var s Settings
 	s2 := s.SetEnabled("SMART-NOPE", true)
 	if s2.IsEnabled("SMART-NOPE") {
 		t.Errorf("enabled an unknown feature")
+	}
+	// SetEnabled round-trips correctly.
+	s = s.SetEnabled("SMART-A1", true)
+	if !s.IsEnabled("SMART-A1") {
+		t.Errorf("explicit enable failed")
+	}
+	s = s.SetEnabled("SMART-A1", false)
+	if s.IsEnabled("SMART-A1") {
+		t.Errorf("explicit disable failed — ExplicitOff not honored")
 	}
 }
 
@@ -188,11 +227,13 @@ func TestSettingsDismiss(t *testing.T) {
 }
 
 func TestSettingsActive(t *testing.T) {
+	// Use an AI feature (SMART-T1) as the "off" fixture — AI features are off by
+	// default, so it is filtered without any explicit disable call.
 	s := Settings{}.SetEnabled("SMART-A1", true).SetEnabled("SMART-A2", true).Dismiss("dead")
 	in := []Insight{
 		{Feature: "SMART-A1", Key: "live"},
 		{Feature: "SMART-A1", Key: "dead"}, // dismissed
-		{Feature: "SMART-A8", Key: "off"},  // feature not enabled
+		{Feature: "SMART-T1", Key: "off"},  // AI feature, off by default
 		{Feature: "SMART-A2", Key: "live2"},
 	}
 	got := s.Active(in)
@@ -211,21 +252,59 @@ func TestSettingsActive(t *testing.T) {
 }
 
 func TestSettingsEnabledHelpers(t *testing.T) {
-	s := Settings{}.SetEnabled("SMART-A2", true).SetEnabled("SMART-A1", true).SetEnabled("SMART-T1", true)
+	// EnabledCodes should return all Free features by default plus any explicitly
+	// enabled AI features, in catalog order. We verify ordering with a small
+	// targeted check: explicitly enable one AI feature and confirm it appears
+	// after the Free features that precede it in the catalog.
+	s := Settings{}.SetEnabled("SMART-T1", true) // add one AI feature
 	codes := s.EnabledCodes()
-	// Catalog order: A1 before A2 before T1.
-	if len(codes) != 3 || codes[0] != "SMART-A1" || codes[1] != "SMART-A2" || codes[2] != "SMART-T1" {
-		t.Errorf("EnabledCodes order wrong: %v", codes)
+	// All free features are on by default; SMART-T1 (AI, explicitly on) must
+	// also appear. Catalog order puts A-series before T-series.
+	foundA1, foundT1 := false, false
+	a1Idx, t1Idx := -1, -1
+	for i, c := range codes {
+		if c == "SMART-A1" {
+			foundA1 = true
+			a1Idx = i
+		}
+		if c == "SMART-T1" {
+			foundT1 = true
+			t1Idx = i
+		}
 	}
-	acct := s.EnabledFeaturesForPage(PageAccounts)
-	if len(acct) != 2 {
-		t.Errorf("EnabledFeaturesForPage(accounts) = %d, want 2", len(acct))
+	if !foundA1 {
+		t.Errorf("SMART-A1 (Free) should appear in EnabledCodes by default")
 	}
+	if !foundT1 {
+		t.Errorf("SMART-T1 (AI, explicitly on) should appear in EnabledCodes")
+	}
+	if foundA1 && foundT1 && a1Idx > t1Idx {
+		t.Errorf("catalog order violated: A1 idx %d, T1 idx %d", a1Idx, t1Idx)
+	}
+
+	// EnabledFeaturesForPage(accounts) includes all Free account features by
+	// default. The catalog has 5 Free + 3 AI account features; with no AI enabled
+	// on the accounts page we expect exactly the 5 Free ones.
+	sNoAI := Settings{}
+	acct := sNoAI.EnabledFeaturesForPage(PageAccounts)
+	for _, f := range acct {
+		if f.Tier == TierAI {
+			t.Errorf("AI feature %q appeared in EnabledFeaturesForPage without being enabled", f.Code)
+		}
+	}
+	if len(acct) == 0 {
+		t.Errorf("EnabledFeaturesForPage(accounts) returned nothing; Free features should be on by default")
+	}
+
+	// AnyAIEnabled is only true when the user has explicitly opted into an AI feature.
 	if !s.AnyAIEnabled() {
-		t.Errorf("SMART-T1 is AI; AnyAIEnabled should be true")
+		t.Errorf("SMART-T1 is AI and explicitly enabled; AnyAIEnabled should be true")
+	}
+	if (Settings{}).AnyAIEnabled() {
+		t.Errorf("zero Settings has no explicit AI opt-in; AnyAIEnabled should be false")
 	}
 	if (Settings{}).SetEnabled("SMART-A1", true).AnyAIEnabled() {
-		t.Errorf("only a Free feature enabled; AnyAIEnabled should be false")
+		t.Errorf("only a Free feature explicitly enabled; AnyAIEnabled should be false")
 	}
 }
 

@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Free smart insights enabled by default (C254)
+
+The SMART series launched as strictly opt-in — every feature was off until the user visited `/smart` and enabled it. That meant the ~60 Free (deterministic, no-cost) features produced zero value for the overwhelming majority of users who never visit the settings hub. The UX asymmetry was inverted: zero friction to opt in to AI-spend features had to be traded away, but the right trade is the opposite.
+
+**Where the default was decided:** `Settings.IsEnabled(code)` in `internal/smart/settings.go` returned `s.Enabled[code]` — a map lookup that returns the zero value (`false`) for missing keys, so "never touched" and "explicitly turned off" were indistinguishable. That's the single function all gates (`Active`, `EnabledFeaturesForPage`, `ShowsAffordance`, etc.) funneled through.
+
+**The fix:** Added `ExplicitOff map[string]bool` to `Settings`. `IsEnabled` now checks: explicit-on (in `Enabled`) → true; explicit-off (in `ExplicitOff`) → false; neither → `f.Tier == TierFree`. `SetEnabled(code, true)` sets `Enabled[code]` and clears `ExplicitOff[code]`. `SetEnabled(code, false)` clears `Enabled[code]` and sets `ExplicitOff[code]`. `DisableAll` nil-s `Enabled` and populates `ExplicitOff` for every catalog feature so the bulk-off survives. `EnableAll` clears `ExplicitOff` and sets every feature in `Enabled`.
+
+**What didn't change:** AI features are still off by default (no AI spend without explicit opt-in). `AnyAIEnabled` is still correct — it only returns true when at least one AI feature is in `Enabled`. The JSON field is `omitempty` so existing serialized settings with no `explicitOff` key are migration-safe (missing = empty map = no explicit-off = tier default applies, which is correct for existing users).
+
+**Test updates:** `TestIsEnabledTierDefaults` (new, table-driven, 7 cases) covers every combination. `TestSettingsEnable` updated. `TestSettingsActive`, `TestSettingsEnabledHelpers`, `TestShowsAffordance` in density_test.go, and `TestRunDispatchAndGating` in smartengine all updated to use explicit disable or AI fixtures where the test intent was "this is off" rather than "this is a Free feature by default."
+
 ## 2026-06-25 — Paycheck-landed alert type (C265)
 
 Added `EventPaycheckLanded` to the notification engine as the first positive/good-news alert type (all prior alerts are warnings or critical). The detection model is intentionally simple and conservative: an income transaction (`IsIncome()` — positive, non-transfer) at or above `defaultPaycheckMinor` ($500.00) that landed strictly within the last 3 days of `now`. The 3-day recent window keeps the alert timely without replaying old pay cycles; the threshold filters out incidental income (cashback, refunds). Occurrence key is `paycheck:<txnID>` — per-transaction, not per-week — so two separate paychecks in the same week each surface independently, and a single paycheck never fires twice. Severity is `SeverityInfo` throughout; paychecks are good news, not alarms. The boundary condition (exactly `windowDays` days old) is excluded via `!t.Date.After(cutoff)` — a one-line fix after the first test run caught it. DefaultRules grows to 8 rules; defaults_test updated. WASM build and both native packages pass clean.

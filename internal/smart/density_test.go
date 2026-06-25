@@ -79,9 +79,14 @@ func TestShowsAffordance(t *testing.T) {
 	if sm.ShowsAffordance("SMART-A1", AffordanceBadge) {
 		t.Errorf("muted feature should show no affordance")
 	}
-	// Disabled → nothing.
-	if (Settings{}).ShowsAffordance("SMART-A1", AffordanceBadge) {
-		t.Errorf("disabled feature should show no affordance")
+	// Explicitly disabled Free feature → nothing (ExplicitOff overrides default).
+	disabled := Settings{}.SetEnabled("SMART-A1", false)
+	if disabled.ShowsAffordance("SMART-A1", AffordanceBadge) {
+		t.Errorf("explicitly disabled Free feature should show no affordance")
+	}
+	// AI feature with no explicit opt-in → nothing (off by tier default).
+	if (Settings{}).ShowsAffordance("SMART-T1", AffordanceBadge) {
+		t.Errorf("AI feature without explicit opt-in should show no affordance")
 	}
 	// Density Off → nothing even if enabled.
 	off := s.SetDensity(DensityOff)

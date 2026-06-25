@@ -211,19 +211,19 @@ func TestRunDispatchAndGating(t *testing.T) {
 	old := ref.AddDate(0, -10, 0)
 	in.Accounts = []domain.Account{acct("a1", "Old Savings", domain.TypeSavings, 200000, old)}
 
-	// Nothing enabled → no insights, even though the data would trigger A2.
-	if got := Run(in, smart.Settings{}); len(got) != 0 {
-		t.Errorf("opt-out default should yield nothing, got %d", len(got))
+	// All features explicitly disabled → no insights, even though the data would trigger A2.
+	if got := Run(in, smart.Settings{}.DisableAll()); len(got) != 0 {
+		t.Errorf("DisableAll should yield nothing, got %d", len(got))
 	}
 	// Enable A2 → the dormant insight surfaces.
 	got := Run(in, enable("SMART-A2"))
 	if _, ok := findInsight(got, "SMART-A2"); !ok {
 		t.Errorf("A2 enabled but not surfaced: %+v", got)
 	}
-	// Dismissing it hides it on the next run.
+	// Dismissing it hides it on the next run (other Free features may still fire).
 	s := enable("SMART-A2").Dismiss("SMART-A2:a1")
-	if got := Run(in, s); len(got) != 0 {
-		t.Errorf("dismissed insight still shown: %+v", got)
+	if _, ok := findInsight(Run(in, s), "SMART-A2"); ok {
+		t.Errorf("dismissed SMART-A2 insight still shown")
 	}
 }
 

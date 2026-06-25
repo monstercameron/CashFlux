@@ -4,21 +4,29 @@ package smart
 
 import "time"
 
-// Settings is the user's opt-in state for the SMART series. The series is
-// strictly opt-in: every feature is OFF until the user enables it, so nothing in
-// here can block, gate, or slow a core flow until the user has asked for it.
+// Settings is the user's preference state for the SMART series. Free
+// (deterministic, on-device) features are enabled by default so users get value
+// immediately; AI features stay opt-in so no spend happens without consent.
+//
+// An explicit user choice — toggling a feature on or off — always wins and is
+// preserved across reloads. The default only applies when the user has never
+// touched a feature's toggle.
 //
 // Settings holds two independent sets:
-//   - Enabled features (by Code). A feature does nothing — no compute, no
-//     insights, no AI calls — unless enabled.
-//   - Dismissed insight keys. A dismissed insight stays hidden across recomputes
+//   - Enabled tracks features the user has explicitly turned ON (any tier).
+//   - ExplicitOff tracks features the user has explicitly turned OFF. The
+//     combination of the two is what distinguishes "never touched" (tier default
+//     applies) from "user said no" (honor it).
+//   - Dismissed insight keys: a dismissed insight stays hidden across recomputes
 //     and reloads until its underlying condition changes enough to mint a new Key.
 //
 // Settings is a plain value type so it serializes to the dataset/KV and unit-
-// tests trivially. The zero value is valid: nothing enabled, nothing dismissed.
+// tests trivially. The zero value is valid: Free features on by tier default, AI
+// features off by tier default, nothing dismissed.
 type Settings struct {
-	Enabled   map[string]bool `json:"enabled,omitempty"`
-	Dismissed map[string]bool `json:"dismissed,omitempty"`
+	Enabled     map[string]bool `json:"enabled,omitempty"`
+	ExplicitOff map[string]bool `json:"explicitOff,omitempty"`
+	Dismissed   map[string]bool `json:"dismissed,omitempty"`
 
 	// Schedules is the per-feature run cadence (when it runs). A missing entry
 	// uses the tier default (Free→Live, AI→Manual). See schedule.go.
@@ -37,25 +45,54 @@ type Settings struct {
 	Density Density `json:"density,omitempty"`
 }
 
-// IsEnabled reports whether the feature code is opted in. Unknown codes are off.
+// IsEnabled reports whether a feature is effectively on, applying the tier-based
+// default for features the user has never explicitly toggled:
+//
+//   - TierFree  → on by default (deterministic, no cost, no network).
+//   - TierAI    → off by default (requires a configured provider and spends money).
+//
+// An explicit user choice recorded via SetEnabled always wins over the default:
+// a Free feature turned off stays off; an AI feature turned on stays on.
+// Unknown codes always return false.
 func (s Settings) IsEnabled(code string) bool {
-	return s.Enabled[code]
+	f, ok := byCode[code]
+	if !ok {
+		return false
+	}
+	if s.Enabled[code] {
+		return true
+	}
+	if s.ExplicitOff[code] {
+		return false
+	}
+	// No explicit choice: apply the tier default.
+	return f.Tier == TierFree
 }
 
-// SetEnabled turns a feature on or off. It is a no-op for unknown codes so a
-// stale UI cannot enable a removed feature. Returns the updated Settings (maps
-// are lazily allocated, so callers should use the returned value).
+// SetEnabled records an explicit user choice to turn a feature on or off. It is
+// a no-op for unknown codes so a stale UI cannot enable a removed feature.
+// Returns the updated Settings (maps are lazily allocated, so callers must use
+// the returned value).
+//
+// Turning a feature on clears any prior explicit-off record and sets it in
+// Enabled. Turning a feature off clears Enabled and records an explicit-off so
+// that IsEnabled knows "user said no" rather than "never asked".
 func (s Settings) SetEnabled(code string, on bool) Settings {
 	if _, ok := byCode[code]; !ok {
 		return s
 	}
-	if s.Enabled == nil {
-		s.Enabled = map[string]bool{}
-	}
 	if on {
+		if s.Enabled == nil {
+			s.Enabled = map[string]bool{}
+		}
 		s.Enabled[code] = true
+		delete(s.ExplicitOff, code)
 	} else {
 		delete(s.Enabled, code)
+		if s.ExplicitOff == nil {
+			s.ExplicitOff = map[string]bool{}
+		}
+		s.ExplicitOff[code] = true
 	}
 	return s
 }
@@ -83,25 +120,25 @@ func (s Settings) IsDismissed(key string) bool {
 	return s.Dismissed[key]
 }
 
-// EnabledCodes returns the enabled feature codes that still exist in the
-// catalog, in catalog order (stable for display), dropping any stale codes.
+// EnabledCodes returns the effectively-enabled feature codes that still exist in
+// the catalog, in catalog order (stable for display), dropping any stale codes.
 func (s Settings) EnabledCodes() []string {
 	var out []string
 	for _, f := range catalog {
-		if s.Enabled[f.Code] {
+		if s.IsEnabled(f.Code) {
 			out = append(out, f.Code)
 		}
 	}
 	return out
 }
 
-// EnabledFeaturesForPage returns the catalog features on a page that are enabled,
-// in catalog order. Engines use this to skip work for features the user hasn't
-// turned on.
+// EnabledFeaturesForPage returns the catalog features on a page that are
+// effectively enabled, in catalog order. Engines use this to skip work for
+// features that are off.
 func (s Settings) EnabledFeaturesForPage(p Page) []Feature {
 	var out []Feature
 	for _, f := range catalog {
-		if f.Page == p && s.Enabled[f.Code] {
+		if f.Page == p && s.IsEnabled(f.Code) {
 			out = append(out, f)
 		}
 	}
@@ -110,6 +147,8 @@ func (s Settings) EnabledFeaturesForPage(p Page) []Feature {
 
 // AnyAIEnabled reports whether the user has opted into at least one AI feature —
 // the signal the UI uses to decide whether to nudge about configuring a provider.
+// AI features are off by default, so this is true only when the user has
+// explicitly enabled at least one.
 func (s Settings) AnyAIEnabled() bool {
 	for code := range s.Enabled {
 		if f, ok := byCode[code]; ok && f.Tier == TierAI {
@@ -120,13 +159,13 @@ func (s Settings) AnyAIEnabled() bool {
 }
 
 // Active filters a fresh batch of insights to the ones that should be shown:
-// their feature is enabled, not muted, and the insight is not dismissed. It does
-// not mutate the input. The result keeps the input order (engines sort before
-// display).
+// their feature is effectively enabled, not muted, and the insight is not
+// dismissed. It does not mutate the input. The result keeps the input order
+// (engines sort before display).
 func (s Settings) Active(in []Insight) []Insight {
 	out := in[:0:0] // new backing array; never alias the caller's slice
 	for _, ins := range in {
-		if !s.Enabled[ins.Feature] || s.Muted[ins.Feature] {
+		if !s.IsEnabled(ins.Feature) || s.Muted[ins.Feature] {
 			continue
 		}
 		if s.Dismissed[ins.Key] {
@@ -225,12 +264,12 @@ func (s Settings) SetResult(code, text string) Settings {
 	return s
 }
 
-// ActiveCodes returns the enabled, non-muted feature codes in catalog order —
-// the set the engine actually runs (an off OR muted feature costs nothing).
+// ActiveCodes returns the effectively-enabled, non-muted feature codes in catalog
+// order — the set the engine actually runs (an off OR muted feature costs nothing).
 func (s Settings) ActiveCodes() []string {
 	var out []string
 	for _, f := range catalog {
-		if s.Enabled[f.Code] && !s.Muted[f.Code] {
+		if s.IsEnabled(f.Code) && !s.Muted[f.Code] {
 			out = append(out, f.Code)
 		}
 	}
@@ -258,19 +297,21 @@ func (s Settings) SetDensity(d Density) Settings {
 }
 
 // ShowsAffordance reports whether a feature's affordance of the given kind should
-// render right now: the feature is enabled and not muted, AND the global density
-// permits that affordance kind. This is the single gate every inline smart
-// surface checks.
+// render right now: the feature is effectively enabled and not muted, AND the
+// global density permits that affordance kind. This is the single gate every
+// inline smart surface checks.
 func (s Settings) ShowsAffordance(code string, a Affordance) bool {
-	if !s.Enabled[code] || s.Muted[code] {
+	if !s.IsEnabled(code) || s.Muted[code] {
 		return false
 	}
 	return s.DensityOrDefault().Shows(a)
 }
 
 // EnableAll opts into every catalog feature at once (the hub "Enable all"). It
-// leaves schedules/mutes/dismissals untouched.
+// clears all explicit-off records and marks every feature in Enabled, so all
+// features are on regardless of tier. Schedules/mutes/dismissals are untouched.
 func (s Settings) EnableAll() Settings {
+	s.ExplicitOff = nil
 	if s.Enabled == nil {
 		s.Enabled = map[string]bool{}
 	}
@@ -280,19 +321,27 @@ func (s Settings) EnableAll() Settings {
 	return s
 }
 
-// DisableAll opts out of every feature at once (the hub "Disable all"), clearing
-// the enabled set. Schedules/mutes are kept so re-enabling restores intent.
+// DisableAll opts out of every feature at once (the hub "Disable all"). It
+// clears Enabled and records every feature as explicitly off, so the Free-tier
+// default does not re-enable them. Schedules/mutes are kept so re-enabling
+// restores the prior intent.
 func (s Settings) DisableAll() Settings {
 	s.Enabled = nil
+	if s.ExplicitOff == nil {
+		s.ExplicitOff = map[string]bool{}
+	}
+	for _, f := range catalog {
+		s.ExplicitOff[f.Code] = true
+	}
 	return s
 }
 
-// EnabledCount returns how many catalog features are currently enabled — used by
-// the hub to label/disable the bulk buttons.
+// EnabledCount returns how many catalog features are currently effectively
+// enabled — used by the hub to label/disable the bulk buttons.
 func (s Settings) EnabledCount() int {
 	n := 0
 	for _, f := range catalog {
-		if s.Enabled[f.Code] {
+		if s.IsEnabled(f.Code) {
 			n++
 		}
 	}
