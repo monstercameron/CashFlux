@@ -210,10 +210,12 @@ type Plan struct {
 type RecurringCadence string
 
 const (
-	CadenceWeekly    RecurringCadence = "weekly"
-	CadenceMonthly   RecurringCadence = "monthly"
-	CadenceQuarterly RecurringCadence = "quarterly"
-	CadenceYearly    RecurringCadence = "yearly"
+	CadenceWeekly      RecurringCadence = "weekly"
+	CadenceBiweekly    RecurringCadence = "biweekly"    // every 14 days (C152) — common payday/bill cycle
+	CadenceMonthly     RecurringCadence = "monthly"
+	CadenceSemimonthly RecurringCadence = "semimonthly" // twice a month, ~1st & 15th (C152)
+	CadenceQuarterly   RecurringCadence = "quarterly"
+	CadenceYearly      RecurringCadence = "yearly"
 )
 
 // Next returns the date one cadence step after from. Month-based cadences use
@@ -223,6 +225,16 @@ func (c RecurringCadence) Next(from time.Time) time.Time {
 	switch c {
 	case CadenceWeekly:
 		return from.AddDate(0, 0, 7)
+	case CadenceBiweekly:
+		return from.AddDate(0, 0, 14)
+	case CadenceSemimonthly:
+		// Twice a month on a 1st/15th rhythm: before the 15th → the 15th of the same
+		// month; on/after the 15th → the 1st of the next month.
+		if from.Day() < 15 {
+			return time.Date(from.Year(), from.Month(), 15, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), from.Location())
+		}
+		next := dateutil.AddMonths(from, 1)
+		return time.Date(next.Year(), next.Month(), 1, next.Hour(), next.Minute(), next.Second(), next.Nanosecond(), next.Location())
 	case CadenceQuarterly:
 		return dateutil.AddMonths(from, 3)
 	case CadenceYearly:
@@ -267,6 +279,10 @@ func (r Recurring) MonthlyEquivalent() int64 {
 	switch r.Cadence {
 	case CadenceWeekly:
 		return a * 52 / 12
+	case CadenceBiweekly:
+		return a * 26 / 12 // 26 biweekly periods a year
+	case CadenceSemimonthly:
+		return a * 2 // twice a month
 	case CadenceQuarterly:
 		return a / 3
 	case CadenceYearly:

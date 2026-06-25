@@ -706,8 +706,10 @@ var english = Catalog{
 	"recurring.amountRequired":    "Enter a non-zero amount.",
 	"recurring.deleteTitle":       "Delete recurring",
 	"recurring.nextDue":           "next %s",
-	"recurring.cadenceWeekly":     "Weekly",
-	"recurring.cadenceMonthly":    "Monthly",
+	"recurring.cadenceWeekly":      "Weekly",
+	"recurring.cadenceBiweekly":    "Every 2 weeks",
+	"recurring.cadenceMonthly":     "Monthly",
+	"recurring.cadenceSemimonthly": "Twice a month",
 	"recurring.cadenceQuarterly":  "Quarterly",
 	"recurring.cadenceYearly":     "Yearly",
 

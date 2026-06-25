@@ -549,7 +549,9 @@ func Planning() ui.Node {
 	if app != nil {
 		cadenceOpts := []ui.Node{
 			Option(Value(string(domain.CadenceWeekly)), SelectedIf(rCadence.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
+			Option(Value(string(domain.CadenceBiweekly)), SelectedIf(rCadence.Get() == string(domain.CadenceBiweekly)), uistate.T("recurring.cadenceBiweekly")),
 			Option(Value(string(domain.CadenceMonthly)), SelectedIf(rCadence.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
+			Option(Value(string(domain.CadenceSemimonthly)), SelectedIf(rCadence.Get() == string(domain.CadenceSemimonthly)), uistate.T("recurring.cadenceSemimonthly")),
 			Option(Value(string(domain.CadenceQuarterly)), SelectedIf(rCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
 			Option(Value(string(domain.CadenceYearly)), SelectedIf(rCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
 		}
@@ -946,6 +948,10 @@ func cadenceLabel(c domain.RecurringCadence) string {
 	switch c {
 	case domain.CadenceWeekly:
 		return uistate.T("recurring.cadenceWeekly")
+	case domain.CadenceBiweekly:
+		return uistate.T("recurring.cadenceBiweekly")
+	case domain.CadenceSemimonthly:
+		return uistate.T("recurring.cadenceSemimonthly")
 	case domain.CadenceQuarterly:
 		return uistate.T("recurring.cadenceQuarterly")
 	case domain.CadenceYearly:

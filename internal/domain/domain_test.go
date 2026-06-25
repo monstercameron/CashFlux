@@ -99,10 +99,12 @@ func TestTransactionClassification(t *testing.T) {
 func TestRecurringCadenceNext(t *testing.T) {
 	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
 	cases := map[RecurringCadence]time.Time{
-		CadenceWeekly:    time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC),
-		CadenceMonthly:   time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
-		CadenceQuarterly: time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
-		CadenceYearly:    time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC),
+		CadenceWeekly:      time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC),
+		CadenceBiweekly:    time.Date(2026, 1, 29, 0, 0, 0, 0, time.UTC), // +14d
+		CadenceMonthly:     time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
+		CadenceSemimonthly: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), // day 15 → 1st of next month
+		CadenceQuarterly:   time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC),
+		CadenceYearly:      time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC),
 	}
 	for cad, want := range cases {
 		if got := cad.Next(base); !got.Equal(want) {
@@ -112,6 +114,11 @@ func TestRecurringCadenceNext(t *testing.T) {
 	// Unknown cadence falls back to monthly.
 	if got := RecurringCadence("nope").Next(base); !got.Equal(cases[CadenceMonthly]) {
 		t.Errorf("unknown cadence Next = %s, want monthly", got.Format("2006-01-02"))
+	}
+	// Semimonthly before the 15th advances to the 15th of the same month.
+	early := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	if got := CadenceSemimonthly.Next(early); !got.Equal(time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("semimonthly before-15 Next = %s, want 2026-03-15", got.Format("2006-01-02"))
 	}
 }
 
@@ -146,7 +153,9 @@ func TestRecurringMonthlyEquivalent(t *testing.T) {
 		{mk(10000, CadenceMonthly), 10000},
 		{mk(12000, CadenceQuarterly), 4000}, // /3
 		{mk(120000, CadenceYearly), 10000},  // /12
-		{mk(12000, CadenceWeekly), 52000},   // *52/12 = 4.333× → 52000
+		{mk(12000, CadenceWeekly), 52000},        // *52/12 = 4.333× → 52000
+		{mk(12000, CadenceBiweekly), 26000},      // *26/12
+		{mk(12000, CadenceSemimonthly), 24000},   // *2
 		{mk(-150000, CadenceMonthly), -150000},
 	}
 	for _, tc := range cases {
