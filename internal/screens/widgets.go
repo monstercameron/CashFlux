@@ -585,6 +585,7 @@ var widgetManagerTitleKeys = map[string]string{
 	"trend":           "dashboard.netWorthTrend",
 	"cashflow":        "dashboard.cashFlow",
 	"savings":         "dashboard.savingsRate",
+	"health":          "dashboard.healthScore",
 	"breakdown":       "dashboard.breakdown",
 	"bills":           "dashboard.upcomingBills",
 	"freshness":       "dashboard.freshness",

@@ -11,6 +11,111 @@ packages have no `syscall/js` and ship with table-driven tests.
 
 ---
 
+### ★ Critical Feature-Review Findings (consumer-advocate e2e pass, 2026-06-25)
+> Granular findings from the 50-target-feature review. `C##` = fix/gap, `R##` = research/spec.
+> Severity: **[BLOCKER]** broken/unusable · **[MAJOR]** missing core / real bug · **[MINOR]** polish ·
+> **[DESIGN]** intentional gap vs. local-first. Each cites the feature (F#), evidence, and a fix.
+> Mirrored in the Claude Code task list. New features appended above the END anchor.
+
+### Review F36 — Personalized recommendations (4/10)
+- [ ] **C254 [MAJOR]** Free smart insights are OFF by default — no recommendation surfaces for any user until a manual /smart enable trip → enable TierFree deterministic rules by default; keep AI-tier opt-in.
+- [ ] **C255 [MAJOR]** Smart enabled-state may not persist across a fresh session (SmartSettings hydration on boot) → audit appstate hydration reads/writes SmartSettings from SQLite every load. *(verify)*
+- [ ] **C256 [MAJOR]** 190/191 recommendation actions are navigate-only — cancel-sub / automate-goal / create-goal don't execute → add executable ActionKinds; depends on C186 (money-movement) + ActionCreateGoal/Recurring/CancelSubscription.
+- [ ] **C257 [MAJOR]** /smart is a settings catalog, not a ranked insight hub, and the dashboard surfaces no recommendations → split into Insights (severity-sorted) + Manage-features tabs; show top-3 in a dashboard card.
+- [ ] **C258 [MINOR]** SMART-SU1 "Review subscriptions" navigates to /subscriptions when already there (no-op); SMART-SU9 "Add a to-do" shows no confirmation toast → highlight the named row; confirm PostNotice reaches the toast renderer.
+- [ ] **C259 [DESIGN]** No "Enable free features only" bulk; 193 insights render unranked/uncapped (15 of one rule) → free-only bulk enable; cap per-rule ~3, sort by severity, paginate.
+- [ ] **R26 [RESEARCH]** Recommendation system: default-on free deterministic insights, ranked hub + dashboard surfacing, executable actions. → spec.
+
+### Review F37 — Financial-health score (1/10)
+- [ ] **C260 [MAJOR]** No composite financial-health score/breakdown/steps → deterministic `internal/healthscore` (savings rate + emergency months + DTI + budget adherence + utilization → 0–100) + dashboard widget + top-3 steps.
+- [ ] **C261 [MAJOR]** Only SMART-A10 exists (per-account, AI-gated); inputs already exist → aggregate as a free deterministic rule; cap score &lt;50 on negative savings rate.
+- [x] **C262 [DESIGN]** No /health route or dashboard health widget → add a 2×1 widget. **DONE 2026-06-25:** 2×1 "Financial health" bento tile (SVG score ring, continuous HSL hue, band, delta, weakest-factor) + full `/health` page (per-factor breakdown + steps + privacy note).
+- [x] **R27 [RESEARCH]** Health-score model (factors/weights/steps, deterministic). **DONE 2026-06-25:** implemented as pure `internal/healthscore` (5 factors, applicability + proportional re-normalization, 5 bands, deterministic next-steps) with full table-driven tests; builder + widget + page + monthly-snapshot trend. Critic-approved before build; `e2e/verify_health.mjs` 10/10. (Supersedes/addresses C261's aggregate-score intent at the household level; SMART-A10 remains the per-account AI variant.)
+
+### Review F38 — Smart configurable alerts (2/10)
+- [ ] **C263 [MAJOR]** No per-alert-type settings UI (notify.Rule config unexposed; only "Browser notifications" toggle; 6 types hardcoded) → "Manage alerts" per-rule rows.
+- [ ] **C264 [MAJOR]** No user-settable thresholds (large-txn $500, bill-lead 7d hardcoded) → persist rule slice + threshold inputs.
+- [ ] **C265 [MAJOR]** No "paycheck landed" alert type → EventPaycheckLanded + income-landing detector.
+- [ ] **C266 [MAJOR]** No "low balance" alert type → EventLowBalance + per-account floor.
+- [ ] **C267 [MINOR]** No severity differentiation in center (Severity field unused) → severity pill/icon.
+- [ ] **C268 [MINOR]** No per-item read/dismiss/snooze (only Clear all) → per-item controls.
+- [ ] **C269 [DESIGN]** "Notifications" missing from Settings jump-to tabs → add tab.
+- [ ] **R28 [RESEARCH]** Alerts system (rules UI + thresholds + new events + live firing + unified badge + severity). Consolidates C121/C122/C158/C159.
+
+### Review F39 — "While you were away" digest (3/10, broken)
+- [ ] **C270 [MAJOR] ★ ROOT CAUSE of empty Notification Center** (fixes C121/C158/C159): `runNotifyCatchUp` writes the feed to SQLite KV but never `.Set`s the live atom (runs pre-mount; delivered-log then suppresses re-fire) → `feedAtom.Set` after `PrependNotifyFeed`, or init the feed atom after catch-up.
+- [ ] **C271 [MAJOR]** No consolidated "while you were away" digest card/modal + no "since last visit" framing → dismissible dashboard catch-up card + labeled center section.
+- [ ] **C272 [MINOR]** `runNotifyCatchUp` `recover()` swallows panics silently → add slog.
+
+### Review F40 — Shared household access + roles (2/10)
+- [ ] **C273 [MAJOR]** No role/permission model at any layer — domain.Member is {ID,Name,Color,IsDefault,Prefs}; IsDefault is a quick-add seed, not a role → add MemberRole (owner/admin/viewer) + enforce in entity access paths.
+- [ ] **C274 [DESIGN]** No per-member login / access control / device user-switching (local-first single dataset) → add a local profile/PIN switch or explicitly surface the single-device limitation so users aren't misled.
+- [ ] **C275 [MAJOR]** Add/Edit member forms have no role field → add a role selector to both.
+- [ ] **C276 [MINOR]** Cosmetic "Default/Member" labels imply non-existent roles; member filter is display-only (no read-visibility enforcement) → remove misleading labels until roles exist; gate reads by role when implemented.
+- [ ] **R29 [RESEARCH]** Household roles/permissions + local multi-user (profile/PIN switch) model vs. the local-first constraint. → spec.
+
+### Review F41 — Per-member views/allocations/privacy (5/10)
+- [ ] **C277 [MAJOR]** Member views not visibly scoped — txns summary shows household total ("1725 shown") regardless of member; dashboard KPIs identical Everyone vs Marcus with no indicator → recompute summary from filtered subset (transactions.go:82-84); add "Showing X's activity" label.
+- [ ] **C278 [MAJOR]** Accounts/budgets/goals/allocate don't scope by active member (UseActiveMember only in txns/dashboard/split/quickadd) → filter or badge by OwnerID across these screens (accounts.go, allocate.go).
+- [ ] **C279 [MAJOR]** No income-allocation / fractional account ownership (binary Owner only) → optional AllocationShares sub-form (e.g. Marcus 60% / Priya 40%) feeding ledger.NetByOwner.
+- [ ] **C280 [MINOR]** /members shows balance-sheet attribution only; reports.SpendingByMember exists but unwired → add a per-member "this month" income/spend row.
+- [ ] **C281 [DESIGN]** No "Viewing as &lt;member&gt;" banner/framing → persistent scope badge when a non-Everyone member is active. (Privacy is display-only, no enforcement — see C274/R29.)
+
+### Review F42 — Bank-grade security (5/10)
+> Verified working: PBKDF2-600k→AES-GCM-256 full-dataset at-rest encryption, passcode lock gate (wrong rejected / right unlocks), manual + inactivity auto-lock, honest "forgot passcode" wipe.
+- [ ] **C282 [MAJOR]** No biometric/WebAuthn unlock (B17.5 designed, unbuilt) → navigator.credentials.create() + PRF as a second unlock.
+- [ ] **C283 [MAJOR]** No MFA for cloud/backend auth → surface MFA enrollment at the cloud layer; passkey = local 2nd factor.
+- [ ] **C284 [MAJOR] ★security** Passcode gate hash is SHA-256 (applock/applock.go:58), not a memory-hard KDF → brute-forceable offline if localStorage is extracted; use the same PBKDF2-SHA256/Argon2id as the dataset key.
+- [ ] **C285 [MAJOR]** App-lock section absent from settings jump-nav → add `applock.section` to settingsNavKeys (settingssectionnav.go).
+- [ ] **C286 [MINOR]** Lock gate text low-contrast/invisible in dark mode (card text color falls through to white on a white surface) → scope card text color for dark.
+- [ ] **C287 [MINOR]** No passcode-strength check — setup accepts "000000"; pwcheck exists but unwired → wire pwcheck.Validate(PIN); also show auto-lock timeout in the status line.
+- [ ] **C288 [DESIGN]** No "Security" section heading/route → rename "App lock" to Security; consider /security.
+- [ ] **R30 [RESEARCH]** Security hardening (passkey unlock, MFA, memory-hard gate KDF, passcode strength).
+
+### Review F43 — Privacy stance / local-first (3/10)
+- [ ] **C289 [MAJOR]** No privacy/local-first trust statement anywhere user-facing (dashboard, first-run, sample banner) — the core differentiator is invisible; CLOUD_UX.md:40 spec'd "Your data stays on this device" but it was never built (copy exists only in the admin console) → add a trust line to the hero/sidebar footer + sample banner.
+- [ ] **C290 [MAJOR]** No About/Privacy page/route or footer link (/privacy loads the dashboard; no &lt;footer&gt;) → add /about or /privacy (server-rendered or router) from docs/LEGAL_COMPLIANCE.md; link from the settings footer.
+- [ ] **C291 [MAJOR]** Cloud sync section discloses nothing about what data leaves on sync → one-line disclosure under the backend toggle ("syncs encrypted snapshots; nothing leaves without this toggle").
+- [ ] **C292 [MINOR]** AI-key disclosure + cloud trust line buried/conditionally hidden (cloud trust line only renders when CloudSelected) → surface at the Insights gate + Documents header; make the cloud trust line always visible.
+- [ ] **C293 [DESIGN]** About surface is just version + changelog → expand: "Local-first · data stays on device · no account · export anytime".
+
+### Review F44 — Data ownership: export/delete (8/10)
+> Verified: Export JSON + CSV downloads fire; import round-trips losslessly; palette "Back up everything" + restore; wipe modal with Cancel. Read-only bank connections = N/A by design.
+- [ ] **C294 [MAJOR]** Manual Export JSON calls `ExportJSON()` not `ExportJSONWithBlobs()` (settings.go:914) — receipt/document images excluded, so a "backup" can't self-restore images on a fresh device → switch to ExportJSONWithBlobs() (or warn).
+- [ ] **C295 [MAJOR]** Import dataset overwrites all data with NO confirmation (importJSON settings.go:965-980 lacks confirmModal, unlike restore) → add a "this replaces your current data — continue?" modal.
+- [ ] **C296 [MINOR]** CSV export is transactions-only but unlabeled, implying a backup → label "Export transactions (CSV)" + note JSON is the complete backup.
+- [ ] **C297 [MINOR]** "Back up everything" (lossless multi-workspace) is palette-only, absent from Settings → Data → add a button/hint.
+- [ ] **C298 [MINOR]** Settings "Data" not in jump-nav (buried below AI/Cloud); wipe confirm button labeled generic "Confirm" → add Data jump-link; relabel to "Wipe data".
+- [ ] **C299 [DESIGN]** No "last backed up" timestamp shown (recordBackupNow stamps it but the UI never surfaces) → show "Last backed up: &lt;date&gt;" beside Export.
+
+### Review F45 — Honest pricing / free tier / no dark patterns (6/10)
+> Positives: free tier is genuinely generous (all core budgeting is local + ungated); UpgradeSheet is calm (no fake urgency, "Maybe later").
+- [ ] **C300 [MAJOR]** No pricing page / price disclosure outside the one-shot UpgradeSheet (price strings en.go:951-953 render only in the sheet; no Plans tab) → add a "Plans" surface / "Cloud · $34.99/yr" in Settings; show price on every prompt.
+- [ ] **C301 [MAJOR]** Upgrade path is one-shot — cloudmention.go writes `cloud-mention-dismissed` on BOTH buttons; the UpgradeSheet (sole caller cloudmention.go:38) is then permanently unreachable → add a persistent "View plans / Add Cloud" CTA in Settings → Cloud.
+- [ ] **C302 [MAJOR]** No discoverable manage/cancel/downgrade surface — cancel routes via Stripe portal (billing_http.go:131 needs StripeCustomer); subscription banner only renders trialing/past_due/canceled → add a "Manage subscription" link in Settings → Cloud visible even to non-subscribers.
+- [ ] **C303 [MINOR]** Free-vs-paid boundary + 14-day trial never stated in plain language in-app (cloud.benefit*/cloudTrialNote locked behind the unreachable sheet) → add "Free forever: budgeting/goals/reports · Cloud $34.99/yr: sync/backup/AI · 14-day trial" to the Cloud tab.
+- [ ] **C304 [DESIGN]** Cloud & server tab is raw infra config (URL/token/test/deploy), not a billing surface → lead with plan status (tier/price/trial); collapse URL/token under Advanced.
+- [ ] **R31 [RESEARCH]** Pricing/plan UX (visible Plans, free-vs-paid clarity, re-engageable upgrade, manage/cancel surface). ("Synced" pill on a local session = C5.)
+
+### Review F46 — Cross-platform native + web sync (3/10)
+- [ ] **C305 [BLOCKER] ★ LIVE REGRESSION** Dashboard panics on load — GWC-RUNTIME-PANIC "GoUseAtom called outside component context" at uistate/healthtrend.go:31 → screens/health.go:306 (a just-added health widget calls a hook in an effect body); a full-screen panic modal is the first thing the user sees → move the UseHealthTrend hook into the component render, not an effect body.
+- [ ] **C306 [MAJOR]** PWA not installable — manifest.webmanifest has `icons:[]` (no 192/512 maskable) + no apple-touch-icon / apple-mobile-web-app-capable / splash → add an icon set + iOS meta tags.
+- [ ] **C307 [MAJOR]** Install prompt captured (beforeinstallprompt) but never exposed — no Install button; window._installPromptCaptured undefined → wire the deferred prompt to a visible "Install app" affordance + iOS fallback.
+- [ ] **C308 [MAJOR]** No native iOS/Android app (web/WASM only) → acknowledge the trade-off; consider a Capacitor shell.
+- [ ] **C309 [MAJOR]** Sync conflict resolution is last-write-wins at full-snapshot level (syncstate.ShouldApplyRemote on timestamp; sync_client.go:170-175 silently drops rejected local pushes with only a toast) → field-level merge or a conflict-resolution UI; never silently discard local writes.
+- [ ] **C310 [DESIGN]** Real-time sync requires a self-hosted backend (no hosted tier); no multi-device onboarding / "add a device" flow → hosted option or explicit no-backend state + add-device wizard. ("Synced" with no backend = C5.)
+- [ ] **R32 [RESEARCH]** Cross-platform + sync (native shell, hosted sync tier, field-level conflict resolution, PWA installability).
+
+### Review F47 — Offline / PWA + performance (3/10, offline broken)
+- [ ] **C311 [MAJOR]** Offline reload returns a BLANK page — offline boot broken: SW handleNavigate uses `{cache:"no-store"}` (throws offline), then appShell()'s `./index.html` cache lookup also misses → empty 504 → audit SW install/precache; test offline end-to-end before shipping.
+- [ ] **C312 [MAJOR]** Wasm never cached by the SW — install `c.add(u).catch(()=>{})` silently swallows the 60 MB wasm fetch failure → offline /bin/main.wasm returns false → make the failure visible; retry / dedicated large-asset cache.
+- [ ] **C313 [MAJOR]** SW active but not controlling the page on first load (clients.claim loses the race vs window.load) → controls only on 2nd load → register earlier or handle the first-load case.
+- [ ] **C314 [MINOR]** 60 MB uncompressed wasm, no gzip/brotli at serve (serve.go sets no Content-Encoding; ~48s cold load @10Mbps vs ~12s compressed) → compress wasm + add a load progress bar. *(Panic C305, PWA icons/install C306/C307 reconfirmed here.)*
+
+<!-- END-REVIEW-FINDINGS -->
+
+---
+
 ### EC. Enterprise completion — admin/user interfaces, auth, encrypted storage, homescreen ★ (goal, 2026-06-24)
 > "Complete the picture": user + admin interfaces, login auth, commercial features, a strong
 > homescreen, end-to-end encrypted artifact + client-dataset storage. Bottom-up, one feature/commit.
@@ -11251,6 +11356,99 @@ R-3/R-4), but inconsistent with the rest of the app's feedback language and belo
 
 ---
 
+### L108. Story — "Closing an Account" (Marcus) — 2026-06-25 ★ PASS (5/0/0) — no findings
+
+**Ritual (account archive integrity, Accounts ↔ Dashboard):** archive a closed account and verify it
+leaves the active list and net worth excludes it by exactly its balance. e2e:
+`e2e/loopstory_108_closing_an_account.mjs` (5/0/0).
+
+- ✓ **A-1** Roth IRA shows $8,100.00; net worth readable ($11,954.04).
+- ✓ **A-2** Archiving via the row's ⋯ menu moved Roth IRA to the **Archived** section (now offers
+  "Restore") — out of the active list.
+- ✓ **A-3** Net worth dropped by **EXACTLY $8,100** ($11,954.04 → $3,854.04) — archived accounts are
+  correctly excluded from net worth (ledger.go).
+- ✓ **A-4** Zero JS errors.
+
+**Verdict: account archive is enterprise-grade, no findings.** Archiving cleanly removes the account from
+active/net-worth without deleting it (Restore available). Screenshot `e2e/screenshots/L108_archived.png`.
+
+---
+
+### L107. Story — "The Cleanup" (Priya) — 2026-06-25 ★ PASS (5/0/0) — no findings
+
+**Ritual (category reassign-on-delete data integrity):** tidy categories by deleting an in-use one and
+reassigning its transactions — money must not vanish. e2e: `e2e/loopstory_107_the_cleanup.mjs` (5/0/0).
+
+- ✓ **C-1** Deleting an IN-USE category ("Education & Loans", 48 txns) opened the "Reassign before
+  deleting" panel instead of orphaning/deleting.
+- ✓ **C-2** Choosing a target ("Guilty pleasures") + "Move and delete" removed the source category.
+- ✓ **C-3** Reports **total spending UNCHANGED** ($8,222.67 = $8,222.67) — the 48 transactions were
+  relabeled to the target, conserving every cent (expense→expense reassign loses no money).
+- ✓ **C-4** Zero JS errors.
+
+**Verdict: reassign-on-delete is enterprise-grade, no findings.** The destructive category delete is
+correctly guarded by the reassign panel, and the bulk move preserves spend exactly. Screenshot
+`e2e/screenshots/L107_cleanup.png`.
+
+---
+
+### L106. Story — "The Budget Breach" (Marcus) — 2026-06-25 ★ PASS (7/0/0) — no bug (L106-T1 retracted)
+
+**Ritual:** push an under-budget category over by adding an expense and verify it flips to "Over budget"
++ the over-count rises. e2e: `e2e/loopstory_106_the_budget_breach.mjs` (7 PASS · 0 FAIL).
+
+- ✓ **B-1** Transportation started UNDER budget ($1,250.00 / $1,300.00, "Near limit").
+- ✓ **B-2** A $60 Transportation expense raised spent by EXACTLY $60 ($1,250 → $1,310).
+- ✓ **B-3** Transportation flipped to **OVER BUDGET** ($1,310 > $1,300, "Over budget · ($10.00) left").
+- ✓ **B-4** The over-budget category count rose by EXACTLY 1 (6 → 7).
+- ✓ **B-5** Zero JS errors.
+
+**Verdict: budget-breach alerting is correct, no bug.** The under→over transition flips the row and the
+over-count consistently.
+
+**✅ L106-T1 RETRACTED (2026-06-25, keep-tidy) — the "weekly budget doesn't count spend" was a FALSE
+ALARM (test error, not an app bug).** Root-caused by instrumenting the live Budgets evaluation: the
+original test pushed **Entertainment**, which is an **individual-scope budget owned by Marcus**
+(`bud-fun`, Scope: Individual, OwnerID: marcus). My added expense defaulted to **Priya's** Business
+Checking → `MemberID = m-priya`, and `matchesCovered` CORRECTLY excludes it (`budget.Scope ==
+Individual && t.MemberID != budget.OwnerID`). The weekly `PeriodRange`/anchor were verified correct at
+runtime (`anchor=2026-06-25, range=[2026-06-21,2026-06-28)` — contained the txn). So the exclusion is
+**by design** (a member's individual budget only counts their own spend). Fixed the test to use a
+**shared** budget (Transportation, `GroupOwnerID`) where any member's spend counts → 7/0/0 PASS. No code
+change needed; the budgeting logic (period + scope) is sound. (Lesson for future budget e2e: pick a
+shared budget, or set the expense's member to the budget owner.)
+
+**✅ UX FOLLOW-UP (2026-06-25, keep-tidy) — Budgets rows now show whose budget an INDIVIDUAL one is.**
+The confusion above (a shared expense not moving an individual budget) was invisible because an
+individual budget looked identical to a shared/household one. Added a dim third sub-line on each
+**individual** budget row: "<Member>'s spending only" (`internal/screens/budgets_row.go` + i18n
+`budgets.individualOwner`). Detected without a new import — when `OwnerID` matches a real member in
+`props.Members` it's that member's budget; shared/household budgets (group owner) stay UNLABELED to keep
+rows clean. MEASURED (`/budgets`, sample data): exactly the 2 individual budgets (Shopping, Entertainment,
+both owner=marcus) read "Marcus Hartley's spending only"; the 6 shared budgets (Dining, Groceries,
+Transportation, Baby & Childcare, Subscriptions, Travel) show no tag. build rc=0, i18n test ok.
+Screenshot `e2e/screenshots/budget_owner_tag.png`.
+
+---
+
+### L105. Story — "The Paycheck" (Priya) — 2026-06-25 ★ PASS (7/0/0) — no findings
+
+**Ritual (INCOME path + income/expense separation):** most prior add-stories used expenses; this records
+INCOME and checks it raises income + net but never touches spending. Now testable thanks to the L104-T1
+add-modal testids. e2e: `e2e/loopstory_105_the_paycheck.mjs` (7 PASS · 0 FAIL).
+
+- ✓ **P-1** Reports KPIs readable (Income $6,982.00, Spending $8,222.67, Net −$1,240.67).
+- ✓ **P-2** A $5,000 income (Income mode) raised Reports Income by **EXACTLY $5,000** ($6,982 → $11,982).
+- ✓ **P-3** Spending **UNCHANGED** ($8,222.67) — income is NOT miscounted as an expense (clean separation).
+- ✓ **P-4** Net rose by **EXACTLY $5,000** (−$1,240.67 → $3,759.33) — income flows to net 1:1.
+- ✓ **P-5** Zero JS errors.
+
+**Verdict: income path enterprise-grade, no findings.** Income/expense are cleanly separated across the
+Reports KPIs, and the add-transaction modal (newly e2e-drivable) works correctly in Income mode too.
+Screenshot `e2e/screenshots/L105_after_income.png`.
+
+---
+
 ### L104. Story — "The Rapid Logger" (Marcus) — 2026-06-25 ★ PASS (7/0/0) — no app bug; testability fixed
 
 **Ritual (STRESS):** rapidly add 6 × $10 Dining expenses via +Add → New transaction and verify
@@ -12733,7 +12931,29 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   themes): **4.25:1 white-on-accent, consistent** (dark 3.52 → 4.25). Screenshot
   `e2e/screenshots/rankbadge_dark.png` shows white "#1" on the green chip. Same remaining dev option as
   btn-primary for full AA-normal 4.5 (a brand `--accent` call).
-- **Mobile responsive GLAMOR re-check (2026-06-24) — no new defects; existing analysis re-confirmed.** Swept
+- **a11y — every Settings control now has an accessible name (2026-06-25, keep-tidy, WCAG 4.1.2).** A
+  sweep for controls with no accessible name (no text/aria-label/title/label-for/wrapping-label) found
+  the top-level screens + add-transaction modal already clean (0), but **Settings had 4 unnamed control
+  types** a screen reader would announce with no context: the FX rate inputs (`fxRateRow`), the
+  freshness-threshold day inputs (`freshnessRow`), the widget-config number+select (`widgetCfgField`),
+  and the workspace-switcher startup select (`wsswitcher.go`). Added `aria-label`s mirroring each visible
+  label (new i18n keys `settings.fxRateAria`, `settings.freshnessAria`; widget/ws reuse existing labels).
+  MEASURED: Settings now has **0 unnamed controls** (29/29 named); FX inputs read "Exchange rate: 1 AUD
+  in USD" etc. build rc=0, i18n test ok. (FlipPanel already had role=dialog/aria-modal/aria-label.)
+- **Desktop GLAMOR re-check (2026-06-25, keep-tidy) — all main screens clean, no defects, 0 console
+  errors.** Swept 10 screens at 1440px (Dashboard, Transactions, Accounts, Budgets, Reports, Goals,
+  Planning, Insights, Subscriptions, Bills): each has a polished hero/stat strip, well-structured rows, and
+  proper actions; screenshots `e2e/screenshots/glamor_{goals,planning,insights,subscriptions,bills}.png`.
+  Verified two "looks off" suspicions were actually correct: (a) Goals' "by 2026-12-01" sub-line uses
+  `pr.FormatDate` (respects the date-style pref, not hardcoded); (b) individual-budget owner tags render as
+  designed. **No change warranted — did not manufacture one** (the app is in good shape after the recent
+  fires). Worktree note: the prune from the prior fire held (only `main` remains; the lingering
+  `LoadSmartSettings undefined` LSP error is stale gopls cache — the symbol exists, build rc=0).
+  - [ ] **(OPTIONAL, product call — NOT a bug) date-style default is `DateISO` (2006-01-02).** Every date
+    across the app renders ISO by default (deliberate — `prefs.Default()` sets `DateStyle: DateISO`, and it's
+    user-changeable to US `01/02/2006` or Long `Jan 2, 2026`). For an everyday US-household audience, a
+    friendlier default (Long/US) might read better, but ISO is a defensible unambiguous/sortable choice — so
+    flagging for Cam's decision rather than changing a deliberate default unilaterally.
   6 screens at 390px: **zero horizontal page overflow** anywhere. Re-measured the two known mobile-nav items
   (already logged under B31, lines ~1236-1241) and confirmed them unchanged: (a) the topbar period controls at
   ≤480px are a *deliberate* horizontally-scrollable strip (GX7-F2, scrollWidth 969 > 334) — the prev/next

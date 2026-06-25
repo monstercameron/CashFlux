@@ -112,6 +112,25 @@ func TestPercent(t *testing.T) {
 	}
 }
 
+func TestRawPercent(t *testing.T) {
+	tests := []struct {
+		target, current int64
+		want            int
+	}{
+		{100000, 30000, 30},
+		{100000, 0, 0},
+		{100000, 120000, 120}, // unclamped (overfunded)
+		{100000, 100000, 100},
+		{0, 5000, 0}, // non-positive target -> 0
+		{0, 0, 0},
+	}
+	for _, tt := range tests {
+		if got := RawPercent(goal(tt.target, tt.current)); got != tt.want {
+			t.Errorf("RawPercent(%d,%d) = %d, want %d", tt.target, tt.current, got, tt.want)
+		}
+	}
+}
+
 func TestIsComplete(t *testing.T) {
 	if c, _ := IsComplete(goal(100000, 100000)); !c {
 		t.Error("exactly met should be complete")

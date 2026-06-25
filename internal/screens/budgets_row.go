@@ -189,6 +189,18 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Show "name · category" only when they add information (see budgetTitle).
 	title := budgetTitle(s.Budget.Name, props.Category)
 
+	// Owner tag (L106 learning): an INDIVIDUAL budget only counts its owner's spending, so a household
+	// can't otherwise tell why a shared expense didn't move it. Flag whose it is — but only for
+	// individual budgets (OwnerID matches a real member); shared/household budgets (the common default,
+	// OwnerID = group) stay unlabeled to keep rows clean.
+	var ownerLine ui.Node = Fragment()
+	for _, m := range props.Members {
+		if m.ID == s.Budget.OwnerID {
+			ownerLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.individualOwner", m.Name))
+			break
+		}
+	}
+
 	// Envelope methodology: show the carried-forward balance under the period row.
 	var envLine ui.Node = Fragment()
 	if props.Envelope != "" {
@@ -297,6 +309,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// secondary line so they read as low-signal context, not equal weight.
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, fmtMoney(s.Remaining))),
 		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
+		ownerLine,
 		paceLine,
 		rolloverLine,
 		envLine,

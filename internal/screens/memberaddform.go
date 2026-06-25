@@ -11,6 +11,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/memberrole"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -40,6 +42,7 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 
 	name := ui.UseState("")
 	color := ui.UseState("#7c83ff")
+	roleS := ui.UseState(string(memberrole.DefaultRole(false)))
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
@@ -63,8 +66,15 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("members.nameRequired"))
 			return
 		}
+		role, err := memberrole.ParseRole(roleS.Get())
+		if err != nil {
+			role = memberrole.DefaultRole(false)
+		}
 		m := domain.Member{
-			ID: id.New(), Name: n, Color: strings.TrimSpace(color.Get()),
+			ID:     id.New(),
+			Name:   n,
+			Color:  strings.TrimSpace(color.Get()),
+			Role:   role,
 			Custom: customValuesToMap(memberDefs, customVals.Get()),
 		}
 		if err := app.PutMember(m); err != nil {
@@ -74,6 +84,7 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 		// Reset fields.
 		name.Set("")
 		color.Set("#7c83ff")
+		roleS.Set(string(memberrole.DefaultRole(false)))
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		if props.OnDone != nil {
@@ -87,6 +98,14 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 				Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("members.color"),
 				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor))),
+			labeledField("Role",
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   memberRoleOptions(),
+					Selected:  roleS.Get(),
+					OnChange:  func(v string) { roleS.Set(v) },
+					AriaLabel: "Role",
+					TestID:    "member-add-role",
+				})),
 			MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),

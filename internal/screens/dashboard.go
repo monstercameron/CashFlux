@@ -240,6 +240,7 @@ func Dashboard() ui.Node {
 		"trend":    func() ui.Node { return netWorthTrendWidget(accounts, txns, rates, net, widgetCfgs.For("trend")) },
 		"cashflow": func() ui.Node { return cashFlowWidget(txns, rates) },
 		"savings":  func() ui.Node { return savingsRateWidget(income, expense, widgetCfgs.For("savings")) },
+		"health":   func() ui.Node { return ui.CreateElement(healthWidgetNode, struct{}{}) },
 		"breakdown": func() ui.Node {
 			return spendingBreakdownWidget(app, txns, rates, start, end, widgetCfgs.For("breakdown"))
 		},

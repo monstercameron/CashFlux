@@ -38,6 +38,40 @@ permissions without a schema migration.
 
 **Tests:** `go test ./internal/domain/... ./internal/memberrole/... ./internal/store/...` → all
 three packages green. WASM build clean (rc=0).
+## 2026-06-25 — Feature: Financial-health score (R27)
+
+**What:** Built the financial-health score end-to-end, bottom-up. New pure package `internal/healthscore`
+(model + table-driven tests) → `internal/screens/health.go` builder + dashboard widget + `/health` page →
+`internal/uistate/healthtrend.go` monthly-snapshot persistence → registrations (dashlayout default,
+screens route, dashboard renderer, widget title/route/icon, i18n keys).
+
+**Design decisions (critic-approved before coding):**
+- **Re-normalize, don't zero-fill.** Inapplicable factors (no income, no cards, no budgets) are dropped
+  and their weight redistributed proportionally, so the score answers "how healthy is *this* household"
+  rather than punishing people for products they don't hold. Zero debt is APPLICABLE and scores 100 (good),
+  not dropped — only "no liabilities at all with income" maps to a perfect debt factor.
+- **Honest labels.** Only `MinPayment` is stored, so the debt factor is "minimum debt payments ÷ income",
+  never "DTI". Emergency fund is explicitly "based on your total monthly spending."
+- **No hard cap for overspending.** `NegativeCashFlow` is a surfaced warning; the savings factor already
+  scores 0 when overspending, and a separate cap would double-penalize and distort the weighted average.
+  A test asserts that four perfect factors + negative savings still scores ≥70.
+- **Continuous hue, categorical band.** The ring stroke is an HSL hue interpolated by score (analog cue);
+  the band label carries the discrete meaning. Avoids a misleading snap at band edges.
+- **Widget is a component.** Registered via `ui.CreateElement(healthWidgetNode, …)` so its hooks
+  (snapshot recording in `UseEffect`, trend atom read) sit at stable positions even though it's invoked
+  from the dashboard's widget map — respecting the no-hooks-in-loops rule.
+
+**Verification:** `go test ./internal/healthscore` green (all edge cases incl. every re-normalization
+permutation); wasm build rc=0; `e2e/verify_health.mjs` 10/10 PASS with zero JS errors; screenshots confirm
+the widget and page match the dark theme. Sample data scores 30 / "Needs work" with a sensible factor
+breakdown (savings 2%, emergency 4.2mo, debt 43%, adherence 25%, utilization 56%).
+
+**Note:** an unrelated pre-existing failure in `internal/server` (`TestAdminUserDetail`, admin usage
+tracking) is concurrent-agent work, untouched by this change.
+
+**Next (autonomous goal):** R26 (recommendations), R28 (alerts), R29 (household roles) — research → plan →
+critic loop → implement, each in turn.
+
 ## 2026-06-25 — Fix: Log swallowed panics in runNotifyCatchUp (C272)
 
 **Change:** The `defer func() { _ = recover() }()` in `runNotifyCatchUp` (`internal/app/notifyrun.go`) silently discarded any panic with no trace. Replaced with a conditional log: if `recover()` returns non-nil, `slog.Error` is called with the panic value and `string(debug.Stack())`, then execution returns normally. Boot is still protected; the panic is now visible in the structured log and browser console. Imports added: `log/slog`, `runtime/debug`.

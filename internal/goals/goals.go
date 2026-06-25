@@ -70,6 +70,18 @@ func Percent(goal domain.Goal) int {
 	}
 }
 
+// RawPercent is like Percent but without the [0, 100] clamp, so an overfunded
+// goal reads e.g. 120 ("Funded 120%") rather than a flat 100. It returns 0 when
+// the target is non-positive (callers guard the overfund/display copy on a
+// positive target, so there is no meaningful percentage otherwise).
+func RawPercent(goal domain.Goal) int {
+	target := goal.TargetAmount.Amount
+	if target <= 0 {
+		return 0
+	}
+	return int(goal.CurrentAmount.Amount * 100 / target)
+}
+
 // Project estimates the completion date assuming a fixed monthly contribution,
 // counting whole months from `from`. It returns ok=false when no projection is
 // possible (non-positive contribution). A goal that is already complete projects

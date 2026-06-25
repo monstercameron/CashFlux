@@ -42,6 +42,7 @@ func DefaultItems() []Item {
 		{ID: "cashflow", ColSpan: 2, RowSpan: 1},
 		{ID: "bills", ColSpan: 2, RowSpan: 1},
 		{ID: "savings", ColSpan: 2, RowSpan: 1},
+		{ID: "health", ColSpan: 2, RowSpan: 1},
 		{ID: "breakdown", ColSpan: 2, RowSpan: 1},
 		{ID: "freshness", ColSpan: 2, RowSpan: 1},
 		{ID: "highlight", ColSpan: 2, RowSpan: 1},

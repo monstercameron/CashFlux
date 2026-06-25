@@ -295,6 +295,6 @@ func wsStartupSelect(props wsStartupSelectProps) uic.Node {
 	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py1),
 		Span(css.Class(tw.TextXs, tw.TextFaint), uistate.T("ws.startupLabel")),
-		Select(css.Class("set-input"), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("ws.startupLabel")), Title(uistate.T("ws.startupLabel")), OnChange(onSel), opts),
 	)
 }

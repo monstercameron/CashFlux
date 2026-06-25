@@ -46,7 +46,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		H4(css.Class("set-label"), uistate.T("settings.screens")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
 		Div(p.ScreenToggles),
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.baseCurrency")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(p.OnBase), baseCurrencyOptions(p.Base)),
 		H4(css.Class("set-label"), uistate.T("settings.budgetMethod")),
@@ -152,7 +152,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		)),
 
 		// 2 · Preferences — date/week-start sit naturally after appearance.
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.preferences")),
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
@@ -170,7 +170,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		),
 
 		// 3 · AI — setup-once; key + model select in one logical cluster.
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		// AI is enabled by the presence of an API key (the no-key hint below is the
 		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
@@ -189,7 +189,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
 
 		// 4 · Cloud & server — power-user sync config after AI.
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
@@ -251,7 +251,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		)),
 
 		// 5 · Data — export/import/wipe actions.
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.data")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, p.OnExportJSON),
@@ -269,7 +269,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		),
 
 		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("ws.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(p.Bump),

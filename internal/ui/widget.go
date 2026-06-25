@@ -37,6 +37,8 @@ func widgetRoute(id string) string {
 		return "/todo"
 	case "highlight":
 		return "/insights"
+	case "health":
+		return "/health"
 	}
 	return ""
 }
@@ -66,6 +68,8 @@ func widgetIcon(id string) icon.Name {
 		return icon.Receipt
 	case "savings":
 		return icon.Reports
+	case "health":
+		return icon.Insights
 	case "breakdown", "budgets":
 		return icon.Budgets
 	case "goals":

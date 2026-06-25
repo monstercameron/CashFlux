@@ -40,10 +40,11 @@ func TestPackDefaultReproducesArrangement(t *testing.T) {
 		"recent": {1, 3}, "budgets": {3, 3}, "trend": {4, 3},
 		"goals": {1, 5}, "todo": {2, 5}, "accounts": {3, 5},
 		"cashflow": {1, 6}, "bills": {3, 6},
-		"savings": {1, 7}, "breakdown": {3, 7},
-		"freshness":    {1, 8},
-		"highlight":    {3, 8},
-		"smart-digest": {1, 9},
+		"savings": {1, 7}, "health": {3, 7},
+		"breakdown":    {1, 8},
+		"freshness":    {3, 8},
+		"highlight":    {1, 9},
+		"smart-digest": {3, 9},
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

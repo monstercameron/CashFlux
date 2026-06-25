@@ -211,10 +211,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	// reads "Funded 120% — $X over" rather than a bare surplus dollar amount (L59).
 	var overfundNote ui.Node = Fragment()
 	if overfund.IsPositive() {
-		realPct := 0
-		if g.TargetAmount.Amount > 0 {
-			realPct = int(g.CurrentAmount.Amount * 100 / g.TargetAmount.Amount)
-		}
+		realPct := goalsvc.RawPercent(g)
 		overfundNote = Span(
 			css.Class("budget-sub"),
 			Attr("data-testid", "goal-overfund-"+g.ID),

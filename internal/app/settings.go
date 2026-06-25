@@ -280,13 +280,15 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		}
 		return Div(css.Class("toggle-row"),
 			Span(label),
-			Input(css.Class("rate-in"), Type("number"), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
+			// aria-label mirrors the visible Span so the number field has an accessible name (WCAG 4.1.2).
+			Input(css.Class("rate-in"), Type("number"), Attr("aria-label", label), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
 		)
 	case widgetcfg.Select:
 		on := uic.UseEvent(func(e uic.Event) { props.OnSet(f.Key, e.GetValue()) })
 		cur := f.Str(props.Cfg)
 		opts := make([]any, 0, len(f.Options)+2)
-		opts = append(opts, css.Class("set-input"), OnChange(on))
+		// aria-label mirrors the visible Span(f.Label) so the select has an accessible name (WCAG 4.1.2).
+		opts = append(opts, css.Class("set-input"), Attr("aria-label", f.Label), OnChange(on))
 		for _, o := range f.Options {
 			opts = append(opts, Option(Value(o.Value), SelectedIf(cur == o.Value), o.Label))
 		}
@@ -326,7 +328,8 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 	})
 	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "110px"}), props.Label),
-		Input(css.Class("rate-in"), Type("number"), Value(strconv.Itoa(props.Days)), OnInput(on)),
+		// aria-label mirrors the row's type label so the staleness-window field has an accessible name.
+		Input(css.Class("rate-in"), Type("number"), Attr("aria-label", uistate.T("settings.freshnessAria", props.Label)), Value(strconv.Itoa(props.Days)), OnInput(on)),
 		Span(css.Class(tw.TextFaint), uistate.T("settings.freshNever")),
 	)
 }
@@ -918,7 +921,7 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "40px"}), props.Code),
 		Span(css.Class(tw.TextFaint), uistate.T("settings.fxRateLabel", props.Code)),
-		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Value(val), OnChange(on)),
+		Input(css.Class("rate-in"), Type("number"), Attr("step", "any"), Attr("min", "0"), Attr("placeholder", "—"), Attr("aria-label", uistate.T("settings.fxRateAria", props.Code, props.Base)), Value(val), OnChange(on)),
 		Span(css.Class(tw.TextFaint), props.Base),
 		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "#cfa14e", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)

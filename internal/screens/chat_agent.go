@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
+	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -432,10 +433,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				}
 				var b strings.Builder
 				for _, g := range gs {
-					pct := 0
-					if g.TargetAmount.Amount > 0 {
-						pct = int(float64(g.CurrentAmount.Amount) / float64(g.TargetAmount.Amount) * 100)
-					}
+					pct := goalsvc.RawPercent(g)
 					line := fmt.Sprintf("%s — %s of %s (%d%%)", g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), pct)
 					if !g.TargetDate.IsZero() {
 						line += ", by " + g.TargetDate.Format("Jan 2, 2006")

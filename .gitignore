@@ -6,6 +6,8 @@
 **/static/bin/
 /static/wasm_exec.js
 /bin/
+# Locally-built Go binaries (e.g. cashflux-server.exe from `go build`); rebuilt fresh, never committed.
+*.exe
 
 # Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
 /.tools/
@@ -25,6 +27,9 @@
 /e2e/.artifacts/
 /e2e/serve-bin
 /e2e/serve-bin.exe
+# Scratch e2e probes: an underscore prefix marks throwaway one-off debug scripts
+# (kept tests use descriptive names like loopstory_*.mjs / *_verify.mjs / *_check.mjs).
+/e2e/_*.mjs
 
 # Local runtime data & scratch (never commit): the self-host backend's SQLite
 # database (+ WAL/SHM) and temporary logs/scratch files written during dev.

@@ -90,6 +90,17 @@ func FormField(label string, control uic.Node) uic.Node {
 	)
 }
 
+// Divider renders a thin top-border section divider (a styled <hr>). Use this
+// instead of hand-writing the <hr>: the border utilities MUST be wrapped in
+// css.Class — passing tw.* css.Rule values as direct Hr children dumps them into
+// the DOM as literal text ("{[{border-top-width 1px}] { []} []}…"), a footgun
+// that bit the settings + appearance panels twice. Centralizing it here means the
+// correct form is the only form callers can reach.
+func Divider() uic.Node {
+	return Hr(css.Class(tw.BorderT, tw.BorderLine),
+		Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"}))
+}
+
 // ---------------------------------------------------------------------------
 // IconButton
 // ---------------------------------------------------------------------------
