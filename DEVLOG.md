@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C256/C187: Executable automate-goal (pay-yourself-first workflow)
+
+**What was added.** This completes the automate-goal leg of C256 (and resolves C187, the pay-yourself-first sub-item of C185). Three coordinated changes:
+
+1. **`internal/smart/smart.go`** — new `ActionAutomateGoal` kind with `GoalID` and `GoalMonthlyAmount` payload fields. Kept next to `ActionCancelSubscription` in the constants block.
+
+2. **`internal/appstate/savings_ops.go`** (new file) — `CreateWorkflowFromGoal(goalID string, monthlyAmount int64) (workflow.Workflow, error)`. Key design decisions:
+   - *Funding account selection*: two-pass — first prefer checking/debit accounts (most liquid), then accept any non-archived asset account that isn't the goal's own destination account. Deterministic (stable store order) and predictable.
+   - *DedupeKey format*: `"pyf:<wfID>:<YYYY-MM>"` — the month suffix prevents double-execution in the same period; the wfID prefix scopes it per-workflow so two goals with simultaneous workflows don't share a key space.
+   - *NextRun*: first of next calendar month, ensuring the workflow doesn't fire immediately on creation.
+   - Calls `workflow.ValidateTransferAction` before `PutWorkflow` to ensure structural validity.
+   - Returns a clear, descriptive error (not a generic one) for each failure mode (goal not found, no linked account, no funding account, zero amount).
+
+3. **`internal/smartengine/goals.go`** — `g17AutoContribute` now emits `ActionAutomateGoal` when `goal.AccountID != ""`, falling back to `ActionNavigate` when the goal has no linked account (the user needs to link one first, SMART-G14 handles that nudge). The old `// TODO(C186)` comment is removed.
+
+4. **`internal/screens/smart_card.go`** — new `case smart.ActionAutomateGoal` in `onAction`: calls `CreateWorkflowFromGoal`, posts `smart.automateGoalCreated` toast, navigates to `/planning`. Pattern mirrors `ActionCancelSubscription`.
+
+**Tests.** 7 unit tests in `savings_ops_test.go`: happy path, no-linked-account, no-funding-account, zero-amount, checking preference, goal-account exclusion, liability exclusion.
+
+**E2E.** `e2e/c256_automate_goal.mjs` is a smoke check (app boots, /smart + /goals + /planning navigate without JS errors). The SMART-G17 card requires a goal with AccountID + TargetDate + detectable payday, which is not reliably seedable without fixture injection; the unit tests are the authoritative coverage.
+
 ## 2026-06-25 — C186: ActionTransfer primitive in the workflow engine
 
 **What was added.** `ActionTransfer ActionKind = "transfer"` added to `internal/workflow/workflow.go`.

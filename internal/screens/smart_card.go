@@ -187,6 +187,19 @@ func smartInsightCard(props smartCardProps) ui.Node {
 			uistate.PostNotice(uistate.T("smart.subscriptionCancelled"), false)
 			rev.Set(rev.Get() + 1)
 			nav.Navigate(uistate.RoutePath("/subscriptions"))
+
+		case smart.ActionAutomateGoal:
+			app := appstate.Default
+			if app == nil {
+				return
+			}
+			if _, err := app.CreateWorkflowFromGoal(ins.Action.GoalID, ins.Action.GoalMonthlyAmount); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("smart.automateGoalCreated"), false)
+			rev.Set(rev.Get() + 1)
+			nav.Navigate(uistate.RoutePath("/planning"))
 		}
 	})
 

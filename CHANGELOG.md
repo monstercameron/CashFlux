@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C256/C187 — Executable automate-goal action (pay-yourself-first workflow) (2026-06-25):** `ActionAutomateGoal` added to `internal/smart/smart.go` with payload fields `GoalID` and `GoalMonthlyAmount`. New `internal/appstate/savings_ops.go` provides `CreateWorkflowFromGoal(goalID, monthlyAmount)` — builds and persists a scheduled monthly `ActionTransfer` workflow from a deterministically chosen funding account (first non-archived asset account that is not the goal's own account, preferring checking/debit for liquidity) to the goal's linked account, with a `"pyf:<wfID>:<YYYY-MM>"` DedupeKey. `smart_card.go` handles `ActionAutomateGoal` by calling `CreateWorkflowFromGoal`, posting a confirmation toast ("Automatic monthly contribution set up"), and navigating to `/planning`. SMART-G17 (`g17AutoContribute`) now emits `ActionAutomateGoal` (with goal ID + `MonthlyNeeded`) when the goal has a linked account, and falls back to `ActionNavigate → /goals` when it does not. The `// TODO(C186)` comment in goals.go is removed. i18n key `smart.automateGoalCreated` added. 7 unit tests in `internal/appstate/savings_ops_test.go` cover the happy path, no-linked-account error, no-funding-account error, zero-amount error, checking preference, goal-account exclusion, and liability exclusion. Resolves C187 and the pay-yourself-first leg of C185.
+
 - C186: ActionTransfer primitive in workflow engine — loop-safe scheduled money-movement via CreateTransferPair with DedupeKey guard
 
 ### Changed

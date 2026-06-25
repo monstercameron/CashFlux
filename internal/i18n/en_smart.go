@@ -68,6 +68,7 @@ var smartKeys = Catalog{
 	"smart.goalCreated":           "Goal created.",
 	"smart.recurringCreated":      "Added to your plan.",
 	"smart.subscriptionCancelled": "Subscription marked as cancelled.",
+	"smart.automateGoalCreated":   "Automatic monthly contribution set up.",
 
 	// Manage / opt-in catalog.
 	"smart.manageTitle":   "Manage smart features",

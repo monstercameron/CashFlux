@@ -130,13 +130,13 @@ func g20Shared(in Input) []smart.Insight {
 }
 
 // SMART-G17 — Recurring auto-contribution scheduling. For a goal with a deadline
-// and a detected payday, nudges the user to automate a standing "on payday, move
-// $X" contribution rather than remembering it each month.
+// and a detected payday, nudges the user to automate a standing monthly
+// contribution via a pay-yourself-first workflow.
 //
-// NOTE: The ideal action here is "automate-goal" (auto-contribute money to a goal
-// on each payday). That requires the money-movement engine being built in
-// TODO(C186). Until C186 lands this insight degrades to ActionNavigate → /goals,
-// letting the user set up the contribution manually.
+// When the goal has a linked destination account (goal.AccountID is set), the
+// action is ActionAutomateGoal, which creates a real scheduled transfer workflow
+// in the app (C186 / C256). When the goal has no linked account yet, the action
+// degrades to ActionNavigate → /goals so the user can link one first.
 func g17AutoContribute(in Input) []smart.Insight {
 	payday, ok := recentPayday(in)
 	if !ok {
@@ -151,6 +151,23 @@ func g17AutoContribute(in Input) []smart.Insight {
 		if err != nil || !ok {
 			continue
 		}
+
+		var action smart.Action
+		if g.AccountID != "" {
+			// Goal has a destination account: offer the one-tap automate action.
+			action = smart.Action{
+				Kind:              smart.ActionAutomateGoal,
+				Label:             "Set up automatic transfer",
+				GoalID:            g.ID,
+				GoalMonthlyAmount: needed.Amount,
+				RelatedType:       "goal",
+				RelatedID:         g.ID,
+			}
+		} else {
+			// No linked account yet: navigate so the user can link one first.
+			action = smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}
+		}
+
 		out = append(out, smart.Insight{
 			Feature: "SMART-G17",
 			Page:    smart.PageGoals,
@@ -159,8 +176,7 @@ func g17AutoContribute(in Input) []smart.Insight {
 			Detail: "Setting a standing rule to move " + hm(needed) + " to " + g.Name + " on each payday (around the " +
 				ordinalDay(payday) + ") keeps it on track without remembering it every month.",
 			Severity: smart.SeverityInfo,
-		}.WithAmount(needed).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.WithAmount(needed).WithAction(action))
 	}
 	return out
 }

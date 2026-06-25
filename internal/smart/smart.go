@@ -151,6 +151,12 @@ const (
 	// ActionCancelSubscription marks the named subscription cancelled today,
 	// using SubscriptionName. On success the app navigates to /subscriptions.
 	ActionCancelSubscription ActionKind = "cancel_subscription"
+	// ActionAutomateGoal creates a pay-yourself-first scheduled workflow that
+	// transfers GoalMonthlyAmount from a funding account to the goal's linked
+	// account each month. On success the app shows a confirmation toast and
+	// navigates to /planning. GoalID must be set; GoalMonthlyAmount is the
+	// monthly contribution in the goal's currency minor units.
+	ActionAutomateGoal ActionKind = "automate_goal"
 )
 
 // Action is an optional, single-tap follow-up attached to an Insight. It is
@@ -183,6 +189,11 @@ type Action struct {
 
 	// ActionCancelSubscription payload.
 	SubscriptionName string
+
+	// ActionAutomateGoal payload. GoalID identifies the goal; GoalMonthlyAmount
+	// is the recommended monthly contribution in the goal's currency minor units.
+	GoalID            string
+	GoalMonthlyAmount int64
 
 	// Optional link back to the subject entity, for either kind.
 	RelatedType string // e.g. "account", "transaction", "goal", "bill"
