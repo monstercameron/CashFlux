@@ -2731,3 +2731,59 @@ ALREADY DONE: `PasscodeStrength`/`isTrivialPasscode`/strength enum (`applock.go:
 - [ ] [C286][MINOR] Dark-mode gate card: bg `var(--surface,#fff)` undefined in dark → change to `var(--bg-card,#121214)` + explicit text color — `applockgate.go:125`.
 - [ ] [C287][MINOR] Reject `StrengthWeak` (e.g. "000000") in setup `submit()` (`applockgate.go:419`) + i18n `applock.tooWeak` + live strength meter.
 - [ ] [C288][DESIGN] Rename "App lock" heading → "Security" (`i18n en.go:357`) (+ optional `/security` route).
+
+<!-- ===== GRANULAR DECOMPOSITION (batch 16, appended 2026-06-25) ===== -->
+
+# Granular todo decomposition — batch 16 (research, 2026-06-25)
+
+## R14 pay-cycle periods (#423/#424 -> atomic)
+Reuse: dateutil.FiscalMonthRange (anchor math exists), runway.NextPaydayHorizon. Coordinate Settings.PayCycleDay with R17 #430.
+- [ ] [C126][MAJOR] PeriodBiweekly const (enums.go:130-136) + 14-day bucket range in budgeting.PeriodRange (UTC-midnight, DST-safe) + tests.
+- [ ] [C127][MAJOR] PeriodSemiMonthly const + 1st/15th range (dateutil.MonthStart/AddMonths) + tests.
+- [ ] [C129][MAJOR] PeriodYearly const + year range; UI auto-wires via AllPeriods (budgets.go:427).
+- [ ] [C128][MAJOR] PayCycleDay int on store.Settings + appstate accessor + PeriodPayCycle const + pure PayCycleRange(ref,day) + NEW PeriodRangeAnchored(p,ref,weekStart,payCycleDay) wrapper (keep 3-arg PeriodRange); thread payCycleDay at call sites (appstate.go:1418/1437, notifyrun.go:381, smartengine/budgets.go:133, budgets.go, health.go:102, envelope.go, rollover.go); pay-cycle settings card (settings_section.go) + handler; guard PeriodPayCycle option off when day==0.
+- [ ] [C131][MINOR] Add 5 missing weekday consts + Normalize + WeekStartWeekday (prefs.go:18-21,138,235); thread week-start through hardcoded time.Monday (appstate.go:1418); settings 2-option Segmented -> 7-option SelectInput.
+- [ ] [C130][MINOR] Helper text under period select clarifying "tracking period is not the dashboard view window" (budgetaddform.go:159).
+
+## R32 sync/PWA (#464/#465 -> atomic)
+ALREADY DONE: C306 PWA icons+iOS meta (manifest.webmanifest:12-16, index.html:66-74); C307 install button (index.html:2843-2872); C309 conflict backup/restore/discard cycle (sync_client.go:186-204,383-434 + settings UI); F49 C320-324.
+- [ ] [C307][MINOR] iOS "Add to Home Screen" hint banner (no beforeinstallprompt on iOS) - index.html after install IIFE; gate on iOS+!standalone; localStorage dismiss.
+- [ ] [C309][MAJOR] Force-push on restore: add Force bool to queuedSyncMutation, set in restoreConflictBackup (sync_client.go:416), pass as PutWorkspaceRequest{Force} (l168) - server already accepts force (proto field 4); without it the re-stamped item re-loses LWW.
+- [ ] [C309][MAJOR] Store server UpdatedAt/Version from conflict response (already returned, ignored at sync_client.go:186) + show "server copy is X newer" in restore card (settings_section.go:233).
+- [ ] [C309][MAJOR] Conflict chip -> open Settings on Cloud section directly (syncchip.go, conflict state) instead of generic global.
+- [ ] [C310][MAJOR] Connected-devices list: DevicesList component (endpoint GET /v1/auth/sessions exists) - verify if stubbed at settings_section.go:245; row=own component (revoke button); DELETE /v1/auth/sessions/{family}.
+- [ ] [C310][DESIGN] "Pair new device" flow: pairing_tokens table + POST /v1/auth/pair + redeem + new-device first-run prompt (sequence after devices list).
+- [ ] [C308][DESIGN] Native app OUT OF SCOPE - doc note only (PWA is the path; Capacitor+60MB wasm is months).
+
+## F32 trends/insights (#471 -> atomic)
+Reuse: reports.PayeeTrends, reports.CategoryTrends (DeltaPct/HasDelta), ui.AreaChart, insights.Anomaly.Delta (computed, unrendered). COORD R25 #454 + R24 #455 (same file/shared detectSpendingAnomalies/highlightText).
+- [ ] [C230][HIGH] categoryTrendChart() via reports.CategoryTrends (top 3) multi-line sparklines + delta badge - insights.go; place first.
+- [ ] [C232][HIGH] Mid-month-zero guard: Options.MinDaysElapsed (default 7) in insights.Detect - skip current bucket when Current==0 and <7 days elapsed (or prorate). Shared w/ R25-C232.
+- [ ] [C228][MED] Drill-through: add CategoryID to insights.Anomaly (l44) + populate in Detect; anomaly row = own component w/ OnClick -> set txFilter + nav /transactions (mirror reports_screen.go:145). (no On* in loop)
+- [ ] [C229][MED] merchantTrendsCard() via reports.PayeeTrends(txns,bounds,rates,5) sparklines - insights.go.
+- [ ] [C233][LOW-MED] Render dollar delta: pass a.Delta+rates to highlightText (l1352) + i18n with (+/-$X).
+- [ ] [C231][MED] Starter chips: change guard to len(turns.Get())==0 (auto-resume makes convo non-empty) - insights.go:804; reset turns on New Chat.
+- [ ] [C234][MED] "Ask AI" above the fold: anchor button or reorder composer above thread + placeholder.
+- [ ] [C235][LOW] Source string on domain.SavedInsight (set "AI" in pinText l178) + render "via AI" in PinnedInsightRow (l1245).
+
+## F6 ledger filters (#473 -> atomic) - MOSTLY SHIPPED
+ALREADY DONE: C48 tags in inline edit (transactions_row.go:101,176); C49 tag filter end-to-end (txnfilter.go:281,391); C51 conditional Clear (transactions.go:817); C53 amount min/max filter (txnfilter.go:86,372); C54 tags-empty over full shown set (transactions.go:563-570).
+- [ ] [C52][MED] Filter panel occludes table: compose a non-backdrop inline/drawer panel at filtertoolbar.go:93-99 (add Inline prop; do NOT alter shared FlipPanel internals).
+- [ ] [C56][MED] Keyboard shortcut (Alt+F) to open filter panel via UseEffect keydown (filtertoolbar.go:55-101) + aria-keyshortcuts.
+- [ ] [C57][LOW] SR count: add tw.SrOnly span ("N active filters") sibling to the aria-hidden badge (filtertoolbar.go:60-65).
+
+## C58/F7 split transactions + bulk (#415/#416 -> atomic)
+ALREADY DONE: C62 range/shift-select (transactions.go:304-344); C63 bulk export uses selection (transactions.go:175-196); C64 mark-uncleared bulk (transactions.go:394-426); C58 split ATTRIBUTION logic in budgets+reports (budgeting.go:90-99, reports.go:46-55) - logic layer done, UI missing.
+- [ ] [C58][BLOCKER] Split editor UI: "Split (N)" badge (transactions_row.go:193); OnOpenSplitEditor prop; NEW transactions_split_editor.go with SplitEditorRow (own component - hooks in loop), "Add split", running total vs txn total, domain.SplitsReconcile guard; editTxnSplits->PutTransaction; splitEditorTxn state in screen.
+- [ ] [C60][MAJOR] Payee field in inline edit: payeeS+onPayee hooks, seed in startEdit, Input after Description, extend OnSave signature + editTxn to apply orig.Payee (transactions_row.go + transactions.go:254,581) + i18n.
+- [ ] [C61][MAJOR] Escape cancels inline edit: escEdit UseEvent (key==Escape -> editing.Set(false)) on the edit Form OnKeyDown (transactions_row.go:162).
+- [ ] [C65][MINOR] aria-labels on inline desc/amount/payee inputs (transactions_row.go:163-167).
+- [ ] [C66][DESIGN] Rename settle-up nav string nav.split value -> "Settle up" (i18n en.go:140) + subtitle; keep route/key.
+
+## R24 chat UX (#456 -> atomic)
+ALREADY DONE: per-bubble token+cost ("Used N tokens ~$X", insights.go:1074-1081); input has aria-label (placeholder-based); privacy line in key hint (en.go:1434); sample conversations seeded; auto-persistence (insights.go:476).
+- [ ] [C247][HIGH] Key gate: "where to get key" link (aiprovider.KeyURL) + ballpark cost line + elevated privacy badge (insights.go:133-137) -> extract shared KeyExplainer(provider,showCost) (reuse F43 #475 + R10 #441).
+- [ ] [C248][HIGH] Example canned Q&A for no-key + no-convos + no-sample state (insights.go:858) + 2 i18n example exchanges; gate noAI && len(convs)==0.
+- [ ] [C250][HIGH] Active model badge near composer (resolved model incl silent default fix l49) + running session-total cost (sum Usage, ai.EstimateCostUSD, compute outside MapKeyed).
+- [ ] [C251][HIGH] Gate "Edit prompt" on !noAI (insights.go:824) + "Conversations saved automatically" cue (l476) + de-emphasize vs New Chat.
+- [ ] [C249][MED] aria-hidden on Sparkles send icon (insights.go:789) + distinct input aria-label key (not placeholder).
