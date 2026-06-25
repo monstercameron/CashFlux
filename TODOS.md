@@ -2851,3 +2851,48 @@ ALREADY DONE: F50 — C326 whatsnew toast+card (whatsnew.go, help.go:60); C327 p
 - [ ] [C326][LOW] Parse CHANGELOG.md (//go:embed via new internal/changelog) for whatsNewCard instead of static bullets.
 - [ ] [C327][LOW] "Press ? for shortcuts" hint on HelpButton (shell.go:765).
 - [ ] [C262/C261][LOW] data-testid on health-widget/health-screen + annotate SMART-A10 catalog (per-account vs free household).
+
+<!-- ===== GRANULAR DECOMPOSITION (batch 18 — stragglers, decomposition COMPLETE 2026-06-25) ===== -->
+
+# Granular todo decomposition — batch 18 (research, 2026-06-25) — stragglers / FINAL
+
+## R18 date-display sweep (#442 -> atomic)
+ALREADY DONE: C179 goal date (goals_row.go:184 pr.FormatDate); C241 reports Covering (reports_screen.go:692).
+Remaining raw-date sites to route through `pr.FormatDate` / `pr.FormatMonthYear` (add `pr := uistate.UsePrefs().Get()` at each component top):
+- [ ] [C155][MINOR] RecurringRow next-due — planning.go:865 (`r.NextDue.Format`).
+- [ ] [MINOR] Reconcile txn row — accounts_row.go:568.
+- [ ] [MINOR] Dashboard goals widget "by <date>" — dashboard.go:1043; recent-txns date col — dashboard.go:1158.
+- [ ] [MINOR] Planning low-balance/breach/since dates — planning.go:486,489,694.
+- [ ] [MINOR] Artifacts upload date — artifacts.go:302; DocHistoryRow upload — documents.go:990; documents cadence toast — documents.go:373; pinned insight date — insights.go:1245.
+- [ ] [MINOR] FormatMonthYear: planning "debt free by" 263 + burn-down x-axis 311 + snow/aval month labels 753/754/758.
+- [ ] [LOW] AI-context date strings (chat_agent.go:331,438,456,472; smartai.go:156,174) — consistency only.
+- NOT bugs (machine ISO): <input type=date> seeds, dedupe/fingerprint/notify keys, extract.Row.Date storage.
+
+## F23 goals remainder (-> atomic)
+- [ ] [C180][MAJOR] Contribute/edit replace the WHOLE row (hiding name+actions) — goals_row.go:114-165 — render form as inline panel AFTER budget-head (like txn inline edit), not an early-return full replacement.
+- [ ] [C181][MINOR] Delete button unreachable on touch (hover-only `.btn-del-hover` opacity:0+pointer-events:none, web/index.html:1407) — drop `btn-del-hover` on goal rows OR `@media (pointer:coarse)` always-show; add `:focus-visible` fallback.
+- [ ] [C182][DESIGN] "Overall Progress" tooltip is Smart-gated (invisible when Smart off) — goals.go:272 — add plain `Attr("title", uistate.T("smart.tipGoalProgress"))` (key exists) unconditionally.
+
+## F31 other-asset (-> atomic)
+- [ ] [C224][MAJOR] `TypeProperty`/`TypeVehicle` consts + AllAccountTypes/Valid/Class (enums.go:49-67) + icons (accounts.go:430) + freshnessTypes (settings.go:448) — coordinate w/ F9 #467 (Retirement/Crypto) in ONE domain commit + sample property/vehicle.
+- [ ] [C225][MAJOR] `ValuationEntry{date,value,note}` (domain) + separate SQLite table + Put/List + round-trip test; wire setBalance (accounts.go:200) + Mark-updated (accounts.go:82) to append; valuation-history panel (ValuationRow component) on account detail.
+- [ ] [C226][MINOR] Type-aware stale copy ("Estimate due"/"Update estimated value") for property/vehicle (i18n accounts.staleIlliquid) + freshness window 365 for property/vehicle, raise investment 60->90 (freshness.go:30-43).
+- [ ] [C227][DESIGN] Local-first disclosure note in the property/vehicle value form ("enter from Zillow/KBB; we don't fetch live") — accounts_row.go ~300; i18n accounts.valuationLocalNote.
+
+## F20 bills + F21 subscriptions remainder (-> atomic)
+ALREADY DONE: C157 autopay flag+badge (entities.go:264, bills.go:79, bills_screen.go:303, planning.go:597); C158 horizon 7->14 (notify/defaults.go:9); C161 IsLiabilityPayment (classify.go:51, subscriptions_screen.go:91); C162 renewing-soon dedup (subscriptions_screen.go:305); C163 cancel-guidance link (subscriptions_screen.go:662); C164 sample rename; C165 Netflix group-by-name (subscriptions.go:84).
+- [ ] [C160][DESIGN] Autopay badge for liability-account-derived bills (not just Recurring): add `Account.Autopay bool` + toggle in liability sub-form + set in bills.Upcoming (bills.go:45-56).
+- [ ] [C166][DESIGN] Detection preferences: `DetectOpts{ExcludedCategoryIDs, ExcludedAccountTypes}` into subscriptions.Detect (subscriptions.go:74) + prefs card in subscriptions_screen.
+- [ ] [C167][DESIGN] Collapse Cancel + How-to-cancel into an overflow `…` menu (keep Remind primary) OR show Cancel only when row checkbox checked — subscriptions_screen.go:648-679.
+
+## R30 webauthn (#461) + flip-backdrop (#414) (-> atomic)
+- [ ] [#414][MINOR] `.flip-backdrop{pointer-events:none}` base + `.flip-backdrop.show{pointer-events:auto}` (web/index.html:1992-1993) + extend e2e probe_hardening.mjs assertion.
+- [ ] [C283][CLOSE] MFA — deferred (no server = theater); leave a one-line comment in settings_section.go cloud block. Close.
+- [ ] [C282][MAJOR, optional] Passkey unlock: new `internal/webauthn/webauthn.go` (js&wasm: IsAvailable w/ HTTPS+PRF feature-detect, Register, Authenticate→32B PRF) + `DecryptDatasetWithPRF` in datasetcrypto.go (dual-envelope: PRF-wrapped key alongside passcode-wrapped) + persist credentialID (browserstore) + "Unlock with passkey" button (applockgate.go:91) + enroll in setup (applockgate.go:196) + remove-passkey in settings. Caveats: PRF needs Chrome116+/Safari17+/FF119+; false on file://.
+
+## Misc loose C-items (-> atomic)
+ALREADY DONE: C77 JPY rate fixed (sample.go:853 = 0.0066); C92 txn_payee/txn_abs vars registered (appstate.go:1129-1156 + triggers_test); C158 horizon 14 (notify/defaults.go:9); C314 wasm gzip/brotli at serve (e2e/serve.go:24 + deploy workflow).
+- [ ] [C72][MAJOR] Dashboard net-worth ambiguity: net-worth tile sub-label -> formula disclosure "assets X · debts Y" (dashboard.go:172, i18n) + aria-description on liabilities tile + verify kpiSig stable (dashboard.go:109-118). Overlaps F9/F29 kpi-assets tile.
+- [ ] [C145][MINOR] "Needs attention" safe-to-spend anchor: `KindSafeToSpend` + Inputs.SafeToSpend/HasSafeToSpend + Config toggle + Rank() branch (attention.go:46,80,91,104) + widget schema (widgetcfg/builtins.go:76) + dashboard wires it — GATED on R15-foundation (safespend) wiring.
+
+<!-- DECOMPOSITION COMPLETE: all C1-C329 now have atomic sub-todos or an ALREADY-SHIPPED flag with evidence. -->
