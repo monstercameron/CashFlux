@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C264: User-settable alert thresholds
+
+The main structural decision: `RuleConfig` was a bare `map[string]bool`. Extending it to carry thresholds meant converting it to a struct — a breaking change to every call site that used the map syntax (`cfg[ruleID] = v`, `notify.RuleConfig{"id": false}`, etc.). The migration was done in one pass: the struct gets `Enabled map[string]bool` and `Thresholds map[string]int64`; `UnmarshalRuleConfig` now detects legacy payloads (those where `Enabled` is nil after unmarshalling — i.e. the old bare bool-map) and promotes them transparently, preserving user settings across the schema change.
+
+`EffectiveThreshold(ruleID, cfg, ruleDefault)` is the single resolution point: override when positive, default otherwise. The three money-rule candidate functions (`largeTransactionCandidates`, `lowBalanceCandidates`, `paycheckLandedCandidates`) were refactored to accept `cfg notify.RuleConfig` and call `EffectiveThreshold`; the bill-due lead days is resolved the same way in `runNotifyCatchUp` before the candidate slice is built.
+
+UI: the `alertRowProps` struct grew `ThresholdLabel`, `ThresholdValue`, and `ThresholdIsMoney`. The `alertRow` component gained a second `uic.UseEvent` for the threshold input (needed because the toggle and the number input each need a stable hook position). Money inputs display in whole dollars and multiply by 100 on store — consistent with every other money input in the app. The `settings.alert.threshold` i18n key uses `%s` for the unit label, keeping the pattern generic. `Fragment(toggle, threshInput)` is returned when a threshold input is present; just `toggle` otherwise — avoids extra DOM wrappers.
+
+All tests pass; `go test ./internal/notify/...` green; WASM build clean. The pre-existing `TestExactTailwindValues/TextFaint` failure in `internal/ui/tw` is unrelated to this change (CSS variable format mismatch, existed before C264).
+
 ## 2026-06-25 — Per-alert-type enable/disable in Notifications settings (C263)
 
 Goal: let users silence individual alert categories (bill-due, digest, etc.) without disabling all notifications.

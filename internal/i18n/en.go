@@ -130,6 +130,7 @@ var english = Catalog{
 	"settings.alert.backupDue":          "Data backup reminder",
 	"settings.alert.lowBalance":         "Account balance low",
 	"settings.alert.paycheckLanded":     "Paycheck landed",
+	"settings.alert.threshold":          "Alert threshold (%s):",
 	"nav.bills":                          "Bills",
 	"nav.split":                          "Split",
 	"split.hint":                         "Enter an amount, pick who's sharing it, and (optionally) who paid.",

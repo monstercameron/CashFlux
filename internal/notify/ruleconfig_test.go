@@ -17,8 +17,15 @@ func TestDefaultRuleConfig_AllEnabled(t *testing.T) {
 	}
 }
 
+func TestDefaultRuleConfig_ThresholdsNotNil(t *testing.T) {
+	cfg := notify.DefaultRuleConfig()
+	if cfg.Thresholds == nil {
+		t.Error("DefaultRuleConfig: Thresholds map should be non-nil")
+	}
+}
+
 func TestRuleConfig_IsEnabled_MissingDefaultsOn(t *testing.T) {
-	cfg := notify.RuleConfig{"default-bill-due": false}
+	cfg := notify.RuleConfig{Enabled: map[string]bool{"default-bill-due": false}}
 	// absent key should default to true
 	if !cfg.IsEnabled("some-future-rule") {
 		t.Error("IsEnabled: absent rule should default to true")
@@ -37,7 +44,7 @@ func TestEnabledRules_FilterDisabled(t *testing.T) {
 	// disable the first rule
 	disabledID := all[0].ID
 	cfg := notify.DefaultRuleConfig()
-	cfg[disabledID] = false
+	cfg.Enabled[disabledID] = false
 
 	filtered := notify.EnabledRules(all, cfg)
 	if len(filtered) != len(all)-1 {
@@ -71,16 +78,16 @@ func TestEnabledRules_EmptyConfig(t *testing.T) {
 
 func TestMarshalUnmarshalRuleConfig_RoundTrip(t *testing.T) {
 	orig := notify.DefaultRuleConfig()
-	orig["default-stale"] = false
+	orig.Enabled["default-stale"] = false
 
 	raw := notify.MarshalRuleConfig(orig)
 	if raw == "" {
 		t.Fatal("MarshalRuleConfig returned empty string")
 	}
 	got := notify.UnmarshalRuleConfig(raw)
-	for id, want := range orig {
-		if got[id] != want {
-			t.Errorf("round-trip: rule %q: want %v, got %v", id, want, got[id])
+	for id, want := range orig.Enabled {
+		if got.IsEnabled(id) != want {
+			t.Errorf("round-trip: rule %q: want enabled=%v, got enabled=%v", id, want, got.IsEnabled(id))
 		}
 	}
 }
@@ -100,5 +107,82 @@ func TestUnmarshalRuleConfig_Garbage_ReturnsDefault(t *testing.T) {
 		if !cfg.IsEnabled(r.ID) {
 			t.Errorf("UnmarshalRuleConfig garbage: rule %q should be enabled", r.ID)
 		}
+	}
+}
+
+// TestUnmarshalRuleConfig_LegacyBoolMap verifies that a legacy bare map[string]bool
+// payload (written before the struct migration) is promoted correctly.
+func TestUnmarshalRuleConfig_LegacyBoolMap(t *testing.T) {
+	legacy := `{"default-bill-due":false,"default-stale":true}`
+	cfg := notify.UnmarshalRuleConfig(legacy)
+	if cfg.IsEnabled("default-bill-due") {
+		t.Error("legacy promotion: default-bill-due should be disabled")
+	}
+	if !cfg.IsEnabled("default-stale") {
+		t.Error("legacy promotion: default-stale should be enabled")
+	}
+	if cfg.Thresholds == nil {
+		t.Error("legacy promotion: Thresholds should be non-nil")
+	}
+}
+
+// TestEffectiveThreshold covers the five key cases.
+func TestEffectiveThreshold(t *testing.T) {
+	tests := []struct {
+		name        string
+		ruleID      string
+		cfg         notify.RuleConfig
+		ruleDefault int64
+		want        int64
+	}{
+		{
+			name:   "override present and positive returns override",
+			ruleID: "default-large",
+			cfg: notify.RuleConfig{
+				Thresholds: map[string]int64{"default-large": 100000},
+			},
+			ruleDefault: 50000,
+			want:        100000,
+		},
+		{
+			name:        "rule absent from map returns default",
+			ruleID:      "default-large",
+			cfg:         notify.RuleConfig{Thresholds: map[string]int64{}},
+			ruleDefault: 50000,
+			want:        50000,
+		},
+		{
+			name:   "override is zero returns default",
+			ruleID: "default-large",
+			cfg: notify.RuleConfig{
+				Thresholds: map[string]int64{"default-large": 0},
+			},
+			ruleDefault: 50000,
+			want:        50000,
+		},
+		{
+			name:   "override is negative returns default",
+			ruleID: "default-large",
+			cfg: notify.RuleConfig{
+				Thresholds: map[string]int64{"default-large": -1},
+			},
+			ruleDefault: 50000,
+			want:        50000,
+		},
+		{
+			name:        "Thresholds map is nil returns default",
+			ruleID:      "default-large",
+			cfg:         notify.RuleConfig{},
+			ruleDefault: 50000,
+			want:        50000,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := notify.EffectiveThreshold(tt.ruleID, tt.cfg, tt.ruleDefault)
+			if got != tt.want {
+				t.Errorf("EffectiveThreshold(%q, cfg, %d) = %d, want %d", tt.ruleID, tt.ruleDefault, got, tt.want)
+			}
+		})
 	}
 }

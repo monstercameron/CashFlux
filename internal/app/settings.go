@@ -104,11 +104,37 @@ func notifySettings() uic.Node {
 	rules := notify.DefaultRules()
 	rows := make([]any, 0, len(rules))
 	for _, r := range rules {
-		rows = append(rows, uic.CreateElement(alertRow, alertRowProps{
+		props := alertRowProps{
 			RuleID:  r.ID,
 			Label:   uistate.T(alertLabelKey(r.ID)),
 			Enabled: cfg.IsEnabled(r.ID),
-		}))
+		}
+		// Attach threshold controls for rules that expose a user-tunable threshold.
+		switch r.ID {
+		case "default-large", "default-low-balance", "default-paycheck":
+			// Money rule: display in dollars (major units); store in cents (minor units).
+			defaultDollars := int(r.Threshold) / 100
+			overrideMinor := cfg.Thresholds[r.ID]
+			displayVal := defaultDollars
+			if overrideMinor > 0 {
+				displayVal = int(overrideMinor / 100)
+			}
+			props.ThresholdLabel = "$"
+			props.ThresholdValue = displayVal
+			props.ThresholdIsMoney = true
+		case "default-bill-due":
+			// Days rule: display and store directly as integer days.
+			defaultDays := int(r.Threshold)
+			overrideDays := cfg.Thresholds[r.ID]
+			displayVal := defaultDays
+			if overrideDays > 0 {
+				displayVal = int(overrideDays)
+			}
+			props.ThresholdLabel = "days"
+			props.ThresholdValue = displayVal
+			props.ThresholdIsMoney = false
+		}
+		rows = append(rows, uic.CreateElement(alertRow, props))
 	}
 	alertChildren := make([]any, 0, len(rules)+1)
 	alertChildren = append(alertChildren, Attr("data-testid", "settings-manage-alerts"))
@@ -159,29 +185,78 @@ func alertLabelKey(ruleID string) string {
 }
 
 type alertRowProps struct {
-	RuleID  string
-	Label   string
+	RuleID string
+	Label  string
+	// Enabled is the initial enabled state read from the persisted config.
 	Enabled bool
+	// ThresholdLabel is the unit label shown next to the threshold input
+	// ("$" for money rules, "days" for bill-due). Empty means no threshold input.
+	ThresholdLabel string
+	// ThresholdValue is the currently persisted threshold in display units
+	// (dollars for money rules, days for bill-due).
+	ThresholdValue int
+	// ThresholdIsMoney indicates the input is in dollars and should be stored
+	// as minor units (cents = dollars × 100).
+	ThresholdIsMoney bool
 }
 
-// alertRow is a single per-alert-type toggle row. It is its own component so
-// the OnChange hook is registered at a stable position — not inside a loop (the
-// GoWebComponents On*-in-loop rule). A local state atom drives the toggle so
-// the switch reflects changes immediately without waiting for a parent re-render.
+// alertRow is a single per-alert-type toggle row, optionally followed by a
+// threshold input for rules that expose one. It is its own component so the
+// OnChange and OnInput hooks are registered at stable positions — not inside a
+// loop (the GoWebComponents On*-in-loop rule). Local state atoms drive the
+// toggle and threshold input so changes reflect immediately.
 func alertRow(props alertRowProps) uic.Node {
 	enabled := uic.UseState(props.Enabled)
-	return ui.ToggleRow(ui.ToggleRowProps{
-		Label: props.Label,
-		On:    enabled.Get(),
-		OnChange: func(v bool) {
-			enabled.Set(v)
-			// Re-read, mutate, and write back so concurrent toggles compose
-			// (each row owns exactly one key).
-			cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
-			cfg[props.RuleID] = v
-			uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
-		},
+	thresh := uic.UseState(props.ThresholdValue)
+
+	onToggle := func(v bool) {
+		enabled.Set(v)
+		// Re-read, mutate, and write back so concurrent toggles compose
+		// (each row owns exactly one key).
+		cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		if cfg.Enabled == nil {
+			cfg.Enabled = map[string]bool{}
+		}
+		cfg.Enabled[props.RuleID] = v
+		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
+	}
+	onThresh := uic.UseEvent(func(v string) {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n < 0 {
+			return
+		}
+		thresh.Set(n)
+		cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		if cfg.Thresholds == nil {
+			cfg.Thresholds = map[string]int64{}
+		}
+		var stored int64
+		if props.ThresholdIsMoney {
+			stored = int64(n) * 100 // dollars → cents
+		} else {
+			stored = int64(n)
+		}
+		cfg.Thresholds[props.RuleID] = stored
+		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
 	})
+
+	toggle := ui.ToggleRow(ui.ToggleRowProps{
+		Label:    props.Label,
+		On:       enabled.Get(),
+		OnChange: onToggle,
+	})
+	if props.ThresholdLabel == "" {
+		return toggle
+	}
+	ariaLabel := props.Label + " threshold (" + props.ThresholdLabel + ")"
+	threshInput := Div(css.Class("toggle-row"),
+		Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.alert.threshold", props.ThresholdLabel)),
+		Input(css.Class("rate-in"), Type("number"), Attr("min", "0"), Attr("step", "1"),
+			Attr("aria-label", ariaLabel),
+			Value(strconv.Itoa(thresh.Get())),
+			OnChange(onThresh)),
+	)
+	return Fragment(toggle, threshInput)
 }
 
 // musicSettings is the Settings-modal control group for the background music: an

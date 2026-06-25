@@ -4,32 +4,56 @@ package notify
 
 import "encoding/json"
 
-// RuleConfig is a per-ruleID enabled flag, persisted as a JSON object so new
-// rules added to DefaultRules() are automatically treated as enabled until the
-// user explicitly disables them.
-type RuleConfig map[string]bool
+// RuleConfig holds per-ruleID user preferences: an enabled/disabled flag for
+// each rule and optional threshold overrides. It is persisted as a JSON object
+// so new rules added to DefaultRules() are automatically treated as enabled
+// until the user explicitly disables them.
+type RuleConfig struct {
+	// Enabled maps ruleID → user-set on/off. Absent keys are treated as enabled.
+	Enabled map[string]bool `json:"enabled"`
+	// Thresholds maps ruleID → user-set threshold override in the same units the
+	// rule's default uses (minor currency units for money rules; days for bill-due).
+	// A zero or negative value means "use the rule default".
+	Thresholds map[string]int64 `json:"thresholds"`
+}
 
-// DefaultRuleConfig returns a config with every default rule enabled.
+// DefaultRuleConfig returns a config with every default rule enabled and no
+// threshold overrides (rules use their built-in defaults).
 func DefaultRuleConfig() RuleConfig {
-	cfg := make(RuleConfig, len(DefaultRules()))
-	for _, r := range DefaultRules() {
-		cfg[r.ID] = true
+	rules := DefaultRules()
+	enabled := make(map[string]bool, len(rules))
+	for _, r := range rules {
+		enabled[r.ID] = true
 	}
-	return cfg
+	return RuleConfig{
+		Enabled:    enabled,
+		Thresholds: map[string]int64{},
+	}
 }
 
 // IsEnabled reports whether ruleID is enabled in the config. Rules absent from
 // the map (e.g. newly added rules not yet in a persisted config) are treated as
 // enabled by default.
 func (c RuleConfig) IsEnabled(ruleID string) bool {
-	if c == nil {
+	if c.Enabled == nil {
 		return true
 	}
-	v, ok := c[ruleID]
+	v, ok := c.Enabled[ruleID]
 	if !ok {
 		return true // new rules default on
 	}
 	return v
+}
+
+// EffectiveThreshold returns the override threshold from cfg for ruleID if set
+// and valid (positive), otherwise returns ruleDefault.
+func EffectiveThreshold(ruleID string, cfg RuleConfig, ruleDefault int64) int64 {
+	if cfg.Thresholds != nil {
+		if v, ok := cfg.Thresholds[ruleID]; ok && v > 0 {
+			return v
+		}
+	}
+	return ruleDefault
 }
 
 // EnabledRules filters allRules to only those whose ID is enabled in config.
@@ -45,9 +69,9 @@ func EnabledRules(allRules []Rule, config RuleConfig) []Rule {
 }
 
 // ruleConfigKV is the KV key used to persist the rule config. The value is a
-// JSON-encoded RuleConfig (map[string]bool). It is a package-level constant so
-// both the persistence helpers and callers can reference it without coupling to
-// the uistate package (which has js build constraints).
+// JSON-encoded RuleConfig. It is a package-level constant so both the
+// persistence helpers and callers can reference it without coupling to the
+// uistate package (which has js build constraints).
 const ruleConfigKV = "cashflux:notify:ruleconfig"
 
 // RuleConfigKey returns the KV store key for the rule config — exported so the
@@ -67,14 +91,32 @@ func MarshalRuleConfig(cfg RuleConfig) string {
 
 // UnmarshalRuleConfig deserialises a JSON string produced by MarshalRuleConfig.
 // An empty or malformed string returns DefaultRuleConfig() so the app degrades
-// gracefully.
+// gracefully. Legacy payloads that were stored as a bare map[string]bool (before
+// the struct migration) are detected and promoted: the bool map becomes the
+// Enabled field and Thresholds starts empty.
 func UnmarshalRuleConfig(raw string) RuleConfig {
 	if raw == "" {
 		return DefaultRuleConfig()
 	}
-	cfg := make(RuleConfig)
+	// Attempt to unmarshal as the current struct shape.
+	var cfg RuleConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
 		return DefaultRuleConfig()
+	}
+	// If Enabled is nil the payload was either empty or a legacy bare bool-map.
+	// Try the legacy path: unmarshal as map[string]bool.
+	if cfg.Enabled == nil {
+		var legacy map[string]bool
+		if err := json.Unmarshal([]byte(raw), &legacy); err == nil && len(legacy) > 0 {
+			return RuleConfig{
+				Enabled:    legacy,
+				Thresholds: map[string]int64{},
+			}
+		}
+		return DefaultRuleConfig()
+	}
+	if cfg.Thresholds == nil {
+		cfg.Thresholds = map[string]int64{}
 	}
 	return cfg
 }

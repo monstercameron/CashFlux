@@ -52,12 +52,22 @@ func runNotifyCatchUp() {
 	now := time.Now()
 	accounts := app.Accounts()
 
+	ruleCfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+
+	// Resolve bill-due lead days: user override or rule default.
+	var billLeadDays int
+	for _, r := range notify.DefaultRules() {
+		if r.ID == "default-bill-due" {
+			billLeadDays = int(notify.EffectiveThreshold("default-bill-due", ruleCfg, int64(r.Threshold)))
+		}
+	}
+
 	var cands []notify.Candidate
 	cands = append(cands, notifyfeed.StaleBalanceCandidates("default-stale", accounts, app.FreshnessWindows(), now,
 		func(name string, days int) (title, body string) {
 			return uistate.T("notify.staleTitle", name), uistate.T("notify.staleBody", days)
 		})...)
-	cands = append(cands, notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), 7, now,
+	cands = append(cands, notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), billLeadDays, now,
 		func(name string, days int) (title, body string) {
 			return uistate.T("notify.billTitle", name), uistate.T("notify.billBody", days)
 		})...)
@@ -69,13 +79,12 @@ func runNotifyCatchUp() {
 			return uistate.T("notify.budgetNearTitle", name), uistate.T("notify.budgetNearBody")
 		})...)
 	cands = append(cands, weeklyDigestCandidates(app, now)...)
-	cands = append(cands, largeTransactionCandidates(app, now)...)
+	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
 	cands = append(cands, backupReminderCandidates(app, now)...)
-	cands = append(cands, lowBalanceCandidates(app, now)...)
-	cands = append(cands, paycheckLandedCandidates(app, now)...)
+	cands = append(cands, lowBalanceCandidates(app, now, ruleCfg)...)
+	cands = append(cands, paycheckLandedCandidates(app, now, ruleCfg)...)
 
 	log := loadDeliveredLog()
-	ruleCfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
 	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
 	saveDeliveredLog(log)
 	if len(out) == 0 {
@@ -173,14 +182,16 @@ func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate
 // largeTransactionCandidates flags recent unusually large expenses (B19), over
 // the last 30 days so the first open doesn't replay the whole history; each is
 // keyed by transaction id so a given charge surfaces once. The threshold comes
-// from the default-large rule; a zero/absent threshold disables it.
-func largeTransactionCandidates(app *appstate.App, now time.Time) []notify.Candidate {
-	var threshold int64
+// from the user's override in cfg (if set and positive), otherwise the default-large
+// rule's built-in value; a zero/absent threshold disables the alert.
+func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-large" {
-			threshold = int64(r.Threshold)
+			ruleDefault = int64(r.Threshold)
 		}
 	}
+	threshold := notify.EffectiveThreshold("default-large", cfg, ruleDefault)
 	if threshold <= 0 {
 		return nil
 	}
@@ -284,14 +295,16 @@ func fmtBaseMoney(v int64, base string) string {
 }
 
 // lowBalanceCandidates flags asset accounts whose current balance is below the
-// default-low-balance rule's floor. A zero/absent threshold disables the alert.
-func lowBalanceCandidates(app *appstate.App, now time.Time) []notify.Candidate {
-	var floor int64
+// user-configured floor (or the default-low-balance rule's built-in value when
+// no override is set). A zero/absent threshold disables the alert.
+func lowBalanceCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-low-balance" {
-			floor = int64(r.Threshold)
+			ruleDefault = int64(r.Threshold)
 		}
 	}
+	floor := notify.EffectiveThreshold("default-low-balance", cfg, ruleDefault)
 	if floor <= 0 {
 		return nil
 	}
@@ -312,15 +325,17 @@ func lowBalanceCandidates(app *appstate.App, now time.Time) []notify.Candidate {
 
 // paycheckLandedCandidates flags income transactions that look like a paycheck
 // arriving in the last 3 days (the short recent window where a paycheck is "fresh
-// news"). The threshold comes from the default-paycheck rule; a zero/absent
+// news"). The threshold comes from the user's override in cfg (if set and
+// positive), otherwise the default-paycheck rule's built-in value; a zero/absent
 // threshold disables the alert.
-func paycheckLandedCandidates(app *appstate.App, now time.Time) []notify.Candidate {
-	var threshold int64
+func paycheckLandedCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-paycheck" {
-			threshold = int64(r.Threshold)
+			ruleDefault = int64(r.Threshold)
 		}
 	}
+	threshold := notify.EffectiveThreshold("default-paycheck", cfg, ruleDefault)
 	if threshold <= 0 {
 		return nil
 	}
