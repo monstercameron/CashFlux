@@ -279,12 +279,70 @@ func Dashboard() ui.Node {
 		// Home band (EC4): glanceable greeting + net-worth hero + this-month stats
 		// + quick actions. Sits above the bento; data comes from the §1.6 selectors.
 		ui.CreateElement(dashboardHero),
+		// C271: "While you were away" catch-up card — shown when new notifications
+		// have arrived since the last time the user opened the Notification Center.
+		// Dismissed per session (the atom resets on reload). Only shown when
+		// lastSeen > 0 (not the very first open) and newCount > 0.
+		ui.CreateElement(dashCatchUpCard),
 		Div(tiles...),
 		// L43: Quick Transfer shortcut — a persistent affordance on the dashboard so
 		// users can initiate a transfer without hunting for the Transactions screen.
 		// Accounts is the natural home for transfer creation (the full form lives
 		// there); we navigate to /transactions which also hosts the add-transfer flow.
 		ui.CreateElement(dashTransferFAB),
+	)
+}
+
+// dashCatchUpCard is a dismissible "While you were away" bento-adjacent card
+// (C271). It appears above the bento grid when new notifications have arrived
+// since the last time the user opened the Notification Center, giving a
+// glanceable count with a direct link to the center. Dismissed per session
+// (the dismissed state resets on reload); lastSeen is read from the KV store
+// so the count is exactly what the Notification Center would show as "new".
+func dashCatchUpCard() ui.Node {
+	dismissedAtom := ui.UseState(false)
+	nav := router.UseNavigate()
+
+	feed := uistate.UseNotifyFeed().Get()
+	now := time.Now().Unix()
+	visible := uistate.VisibleFeed(feed, now)
+	lastSeen := loadLastSeen()
+	newCount := len(uistate.NewSinceLastSeen(visible, lastSeen))
+
+	// Hide when: dismissed this session; first-ever open (lastSeen==0); no new items.
+	if dismissedAtom.Get() || lastSeen == 0 || newCount == 0 {
+		return nil
+	}
+
+	body := uistate.T("dashboard.catchUpBodyOne")
+	if newCount > 1 {
+		body = uistate.T("dashboard.catchUpBody", newCount)
+	}
+
+	onView := ui.UseEvent(func() {
+		nav.Navigate(uistate.RoutePath("/notifications"))
+	})
+	onDismiss := ui.UseEvent(func() {
+		dismissedAtom.Set(true)
+	})
+
+	return Div(
+		css.Class("catchup-card"),
+		Attr("role", "complementary"),
+		Attr("aria-label", uistate.T("dashboard.catchUpTitle")),
+		Div(css.Class("catchup-card-body"),
+			Span(css.Class("catchup-card-icon"), "🔔"),
+			Div(css.Class("catchup-card-text"),
+				Strong(uistate.T("dashboard.catchUpTitle")),
+				P(body),
+			),
+		),
+		Div(css.Class("catchup-card-actions"),
+			Button(css.Class("btn", "btn-primary"), Type("button"), OnClick(onView),
+				uistate.T("dashboard.catchUpLink")),
+			Button(css.Class("btn"), Type("button"), OnClick(onDismiss),
+				uistate.T("notifications.catchUpDismiss")),
+		),
 	)
 }
 

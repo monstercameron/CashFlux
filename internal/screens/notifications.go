@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -15,6 +16,10 @@ import (
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
+
+// notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second
+// timestamp of the last time the user viewed the Notification Center (C271).
+const notifyLastSeenKey = "cashflux:notify:lastSeen"
 
 // notifySeverityPill returns a compact labelled pill for the given severity
 // string (C267). It uses a text label — not color alone — so the meaning is
@@ -113,10 +118,33 @@ func notifyRow(props notifyRowProps) ui.Node {
 	)
 }
 
+// loadLastSeen reads the persisted last-seen timestamp from the SQLite-backed
+// KV store (C271). Returns 0 (treat all items as potentially new, but suppress
+// the banner on first open) when absent or unparseable.
+func loadLastSeen() int64 {
+	raw := uistate.KVGet(notifyLastSeenKey)
+	if raw == "" {
+		return 0
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+// saveLastSeen persists the current unix-second timestamp as the last time the
+// user viewed the Notification Center (C271).
+func saveLastSeen(ts int64) {
+	uistate.KVSet(notifyLastSeenKey, strconv.FormatInt(ts, 10))
+}
+
 // NotificationCenter lists the notifications surfaced by the catch-up engine (bill
 // due, budget thresholds, stale balances, digests, …) — the persisted feed (C75).
 // Opening it marks everything read; "Clear all" empties it. Per-item controls
 // (mark-read/unread, dismiss, snooze 1 day) are available on each row (C268).
+// A "Since your last visit" banner groups items newer than the persisted
+// last-seen timestamp so users get a clear catch-up digest on re-open (C271).
 func NotificationCenter() ui.Node {
 	feedAtom := uistate.UseNotifyFeed()
 	feed := feedAtom.Get()
@@ -125,8 +153,17 @@ func NotificationCenter() ui.Node {
 	now := time.Now().Unix()
 	visible := uistate.VisibleFeed(feed, now)
 
+	// C271: read lastSeen before the mark-read effect mutates state, so the
+	// catch-up count reflects what arrived since the prior open, not zero.
+	lastSeen := loadLastSeen()
+	newSince := uistate.NewSinceLastSeen(visible, lastSeen)
+	newCount := len(newSince)
+
 	// Mark all visible items read when the center is open (so the rail badge clears).
+	// Also stamp lastSeen = now so the next open has the correct baseline (C271).
 	ui.UseEffect(func() func() {
+		saveLastSeen(now)
+
 		if uistate.UnreadNotifyCount(visible) == 0 {
 			return nil
 		}
@@ -210,6 +247,25 @@ func NotificationCenter() ui.Node {
 	}
 	listBody := Div(listArgs...)
 
+	// C271: "Since your last visit" catch-up banner. Shown only when:
+	//   • lastSeen > 0 (not the user's very first open — suppress on first open)
+	//   • newCount > 0 (there are genuinely new items since last visit)
+	// The banner is informational only; the items appear in the main list below.
+	var catchUpBanner ui.Node
+	if newCount > 0 && lastSeen > 0 {
+		label := uistate.T("notifications.sinceLastVisitOne")
+		if newCount > 1 {
+			label = uistate.T("notifications.sinceLastVisit", newCount)
+		}
+		catchUpBanner = Div(
+			css.Class("notif-catchup-banner"),
+			Attr("role", "status"),
+			Attr("aria-live", "polite"),
+			Span(css.Class("notif-catchup-label"), uistate.T("notifications.catchUpHeader")),
+			Span(css.Class("notif-catchup-count"), label),
+		)
+	}
+
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Header: Div(css.Class("budget-head"),
 			H2(css.Class("card-title"), uistate.T("nav.notifications")),
@@ -217,6 +273,9 @@ func NotificationCenter() ui.Node {
 				Attr("aria-label", uistate.T("notifications.clearAllAria")),
 				uistate.T("notifications.clearAll")),
 		),
-		Body: listBody,
+		Body: Div(
+			If(catchUpBanner != nil, catchUpBanner),
+			listBody,
+		),
 	})
 }

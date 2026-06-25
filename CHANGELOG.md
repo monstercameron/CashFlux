@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C271 — "While you were away" catch-up digest (2026-06-25):** Persists the unix-second timestamp of the last Notification Center open to the SQLite-backed KV (`cashflux:notify:lastSeen`). On re-open, a "Since your last visit" banner shows the count of items with `At > lastSeen`. Pure helper `NewSinceLastSeen(items []FeedItem, lastSeen int64) []FeedItem` added to `internal/uistate/notifyfeed_filter.go` (no build tags — natively testable). Table-driven tests cover newer/older/boundary/empty cases. Dashboard gets a dismissible `dashCatchUpCard` component (per-session dismiss via `ui.UseState`) that links to /notifications. i18n keys: `notifications.sinceLastVisit`, `notifications.sinceLastVisitOne`, `notifications.catchUpHeader`, `notifications.catchUpDismiss`, `dashboard.catchUpTitle`, `dashboard.catchUpBody`, `dashboard.catchUpBodyOne`, `dashboard.catchUpLink`. E2E guard: `e2e/c271_catchup_digest.mjs`.
+
+### Added
 - **C269 — Notifications jump-to tab in Settings (2026-06-25):** Added `"settings.notifyTitle"` to `settingsNavKeys` in `settingssectionnav.go`, inserting a "Notifications" tab between Freshness and Appearance in the Settings section nav. The existing `notifySettings` component (which already renders an `H4.set-label` matching the key and the browser-notifications toggle) gained a `data-testid="settings-notifications"` attribute for reliable E2E targeting. No new i18n keys needed — `settings.notifyTitle` and `settings.notifyBrowser` already existed. The section remains extensible for per-alert controls (C263/C264). E2E guard `e2e/c269_notifications_settings_tab.mjs`.
 
 ### Added

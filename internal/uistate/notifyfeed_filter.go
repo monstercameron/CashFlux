@@ -22,6 +22,22 @@ type FeedItem struct {
 	SnoozedUntil int64  `json:"snoozedUntil,omitempty"` // unix seconds; zero = not snoozed (C268)
 }
 
+// NewSinceLastSeen returns the subset of items whose At timestamp is strictly
+// greater than lastSeen (C271). Items with At == lastSeen are excluded: the
+// boundary semantics treat lastSeen as the instant the center was last viewed,
+// so an item present at that exact moment is not "new". An empty or nil items
+// slice returns nil. The returned slice shares backing storage with items;
+// callers must not mutate its elements.
+func NewSinceLastSeen(items []FeedItem, lastSeen int64) []FeedItem {
+	out := make([]FeedItem, 0, len(items))
+	for _, it := range items {
+		if it.At > lastSeen {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
 // VisibleFeed returns only the items that should be shown in the Notification
 // Center at the given unix-second timestamp now. An item is hidden when it has
 // a SnoozedUntil value that is strictly greater than now (i.e. still snoozed).

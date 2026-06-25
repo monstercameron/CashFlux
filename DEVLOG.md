@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — "While you were away" catch-up digest (C271)
+
+The ticket asks for a "since last visit" section in the Notification Center plus a dismissible dashboard card.
+
+**Pure helper:** Added `NewSinceLastSeen(items []FeedItem, lastSeen int64) []FeedItem` to `notifyfeed_filter.go` (no build tags). Boundary semantics: `At == lastSeen` is excluded (strictly greater), matching the spirit — items present at the moment you last viewed the center are not "new". Table-driven tests cover older/newer/boundary/empty cases and the `lastSeen=0` edge (everything is "new" but the banner is suppressed).
+
+**Persistence:** Added `notifyLastSeenKey = "cashflux:notify:lastSeen"` KV key. `loadLastSeen`/`saveLastSeen` in `notifications.go` are pure wrappers around `uistate.KVGet`/`KVSet`. The `UseEffect` in `NotificationCenter` now also calls `saveLastSeen(now)` before marking items read — this ordering matters so `newCount` is computed with the *prior* timestamp, not the one we're about to write.
+
+**First-open suppression:** `lastSeen == 0` suppresses both the banner and the dashboard card. This avoids showing "N new since your last visit" on a brand-new install where "last visit" is undefined. The banner only fires on a genuine return visit.
+
+**Dashboard card:** `dashCatchUpCard` is a standalone component (owns `ui.UseState(false)` for dismiss). It reads `loadLastSeen()` and `uistate.NewSinceLastSeen` at render time — no extra atom. Per-session dismiss: `dismissedAtom.Set(true)` — resets on page reload, which is the right UX (re-appear if new stuff arrived since the last open). The card is inserted between `dashboardHero` and the bento grid via `ui.CreateElement(dashCatchUpCard)`.
+
+**i18n:** 8 new keys in `en.go` under the notifications/dashboard namespaces. Singular/plural variants for both the banner and the dashboard card body.
+
+**Build/test:** `go test ./internal/uistate/...` passes; `GOOS=js GOARCH=wasm go build` exits 0; `go vet ./...` clean; `gofmt -l` empty on changed files.
+
+**E2E:** `e2e/c271_catchup_digest.mjs` — seeds 3 feed items (1 old, 2 new) and a `lastSeen` timestamp into IDB, reloads, checks dashboard for `.catchup-card`, then navigates to /notifications and asserts `.notif-catchup-banner` with "new since your last visit" text.
+
 ## 2026-06-25 — Notifications jump-to tab in Settings (C269)
 
 Small additive design ticket. The `notifySettings` component (browser-notifications toggle) already existed and was already rendered in the left column of the settings panel, sitting between Freshness and Music. It had no entry in the `settingsNavKeys` list, so it was reachable only by scrolling — the jump-to nav skipped over it.

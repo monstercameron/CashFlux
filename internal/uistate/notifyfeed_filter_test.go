@@ -74,6 +74,72 @@ func TestVisibleFeed(t *testing.T) {
 	}
 }
 
+func TestNewSinceLastSeen(t *testing.T) {
+	base := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC).Unix()
+
+	items := []uistate.FeedItem{
+		{ID: "old1", Title: "Old item 1", At: base - 7200}, // 2 h before base
+		{ID: "old2", Title: "Old item 2", At: base - 3600}, // 1 h before base
+		{ID: "exact", Title: "Exactly at lastSeen", At: base},
+		{ID: "new1", Title: "New item 1", At: base + 60},   // 1 min after
+		{ID: "new2", Title: "New item 2", At: base + 3600}, // 1 h after
+	}
+
+	tests := []struct {
+		name     string
+		lastSeen int64
+		input    []uistate.FeedItem
+		wantIDs  []string
+	}{
+		{
+			name:     "newer items included, older and equal excluded",
+			lastSeen: base,
+			input:    items,
+			wantIDs:  []string{"new1", "new2"},
+		},
+		{
+			name:     "at==lastSeen boundary excluded (strictly greater required)",
+			lastSeen: base,
+			input:    []uistate.FeedItem{{ID: "exact", At: base}},
+			wantIDs:  nil,
+		},
+		{
+			name:     "all items older than lastSeen — none returned",
+			lastSeen: base + 7200,
+			input:    items,
+			wantIDs:  nil,
+		},
+		{
+			name:     "lastSeen=0 — everything after epoch is new",
+			lastSeen: 0,
+			input:    items,
+			wantIDs:  []string{"old1", "old2", "exact", "new1", "new2"},
+		},
+		{
+			name:     "empty input slice returns nil",
+			lastSeen: base,
+			input:    nil,
+			wantIDs:  nil,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := uistate.NewSinceLastSeen(tc.input, tc.lastSeen)
+			if len(got) != len(tc.wantIDs) {
+				t.Fatalf("NewSinceLastSeen returned %d items, want %d: got IDs %v",
+					len(got), len(tc.wantIDs), ids(got))
+			}
+			for i, want := range tc.wantIDs {
+				if got[i].ID != want {
+					t.Errorf("item[%d]: got ID %q, want %q", i, got[i].ID, want)
+				}
+			}
+		})
+	}
+}
+
 func ids(items []uistate.FeedItem) []string {
 	out := make([]string, len(items))
 	for i, it := range items {
