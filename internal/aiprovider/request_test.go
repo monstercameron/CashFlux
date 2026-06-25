@@ -23,7 +23,9 @@ func TestProfileFor(t *testing.T) {
 	}
 
 	// A non-reasoning OpenAI model drops the effort but keeps Responses/websocket.
-	mini, _ := openai.Model("gpt-4o-mini")
+	// (All catalogued OpenAI models are reasoning models now, so use a synthetic
+	// non-reasoning model to exercise the effort-dropping path directly.)
+	mini := Model{ID: "openai-nonreasoning", Caps: Capabilities{Streaming: true, ToolUse: true}}
 	gm := openai.For(mini, DefaultProfile())
 	if gm.Effort != "" || gm.API != APIResponses {
 		t.Errorf("non-reasoning model profile = %+v, want no effort but Responses kept", gm)

@@ -11,7 +11,7 @@ import (
 func TestBuildToolRequest(t *testing.T) {
 	params := json.RawMessage(`{"type":"object","properties":{"category":{"type":"string"}}}`)
 	tools := []Tool{FunctionTool("spend_by_category", "Spend for a category", params)}
-	body, err := BuildToolRequest("gpt-4o-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0.4, tools)
+	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0.4, tools)
 	if err != nil {
 		t.Fatalf("BuildToolRequest: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestBuildToolRequest(t *testing.T) {
 }
 
 func TestBuildToolRequestNoTools(t *testing.T) {
-	body, err := BuildToolRequest("gpt-4o-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0, nil)
+	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0, nil)
 	if err != nil {
 		t.Fatalf("BuildToolRequest: %v", err)
 	}

@@ -6,6 +6,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/allocate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -33,7 +34,10 @@ func SuggestionList(p suggestionListProps) ui.Node {
 	case len(ranked) == 0 && p.HiddenZero:
 		listBody = P(css.Class("empty"), uistate.T("allocate.setAttributes"))
 	case len(ranked) == 0 && len(p.ExcludedRows) == 0:
-		listBody = P(css.Class("empty"), uistate.T("allocate.emptyNoCandidates"))
+		// First-run dead-end: no candidate accounts at all. Give the guided EmptyStateCTA (icon +
+		// "Add accounts" → /accounts) instead of a bare line, matching Bills' Href pattern — the
+		// guidance previously named the action but offered no way to take it.
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("allocate.emptyNoCandidates"), CTALabel: uistate.T("allocate.emptyCta"), Href: "/accounts", Icon: icon.Accounts})
 	case len(ranked) == 0:
 		listBody = P(css.Class("empty"), uistate.T("allocate.allExcluded"))
 	default:

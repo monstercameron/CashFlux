@@ -210,7 +210,7 @@ func QuickAddHost() uic.Node {
 	// matching the .labeled-field pattern used by all entity add modals.
 	body := Div(css.Class("form-grid"),
 		ui.FormField(uistate.T("quickAdd.account"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
+			Select(css.Class("field"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
 		ui.Segmented(ui.SegmentedProps{
 			Label: uistate.T("quickAdd.kind"),
 			Options: []ui.SegOption{
@@ -221,15 +221,15 @@ func QuickAddHost() uic.Node {
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+			Input(css.Class("field"), Type("number"), Attr("data-testid", "txn-add-amount"), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
 		ui.FormField(uistate.T("quickAdd.description"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
 		descAssist,
 		ui.FormField(uistate.T("quickAdd.category"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
+			Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
 		catAssist,
 		ui.FormField(uistate.T("quickAdd.date"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
+			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
 		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 			Input(reviewedArgs...),
 			uistate.T("quickAdd.reviewed")),

@@ -26,6 +26,11 @@ type AreaChartProps struct {
 	// HTML row beneath the chart. They live outside the SVG because the chart uses
 	// preserveAspectRatio="none" (non-uniform scaling) which would distort SVG text.
 	Labels []string
+	// ValueLabels are optional pre-formatted per-point values (e.g. "$1,480.00", "17%"),
+	// parallel to Values. When supplied, an invisible hover target is drawn at each point
+	// with a <title> of "<period>: <value>" so the trend's exact value is readable on hover
+	// (the caller formats so units stay correct — money vs percent). No visible change.
+	ValueLabels []string
 }
 
 // AreaChart renders a filled area sparkline from a value series using the pure
@@ -56,7 +61,7 @@ func AreaChart(props AreaChartProps) uic.Node {
 	area := chart.AreaPath(pts, h)
 	line := chart.LinePath(pts)
 
-	svg := Svg(
+	svgArgs := []any{
 		css.Class(tw.WFull, tw.MtAuto),
 		Attr("role", "img"),
 		Attr("aria-label", label),
@@ -72,7 +77,24 @@ func AreaChart(props AreaChartProps) uic.Node {
 		),
 		Path(Attr("d", area), Attr("fill", "url(#"+gid+")"), css.Class("wonder-chart-area")),
 		Path(Attr("d", line), Attr("fill", "none"), Attr("stroke", stroke), Attr("stroke-width", "2"), Attr("pathLength", "1"), css.Class("wonder-chart-line")),
-	)
+	}
+	// Optional invisible per-point hover targets (transparent so there's no visible change; under
+	// preserveAspectRatio="none" they stretch into ellipses but still receive the pointer + show the
+	// <title>). Each reads "<period>: <value>" so the trend's exact value is identifiable on hover.
+	if n := len(pts); n > 0 && len(props.ValueLabels) == n {
+		for i, p := range pts {
+			tip := props.ValueLabels[i]
+			if i < len(props.Labels) && props.Labels[i] != "" {
+				tip = props.Labels[i] + ": " + tip
+			}
+			svgArgs = append(svgArgs, Tag("circle",
+				Attr("cx", fmt.Sprintf("%g", p.X)), Attr("cy", fmt.Sprintf("%g", p.Y)),
+				Attr("r", "7"), Attr("fill", "transparent"),
+				Tag("title", Text(tip)),
+			))
+		}
+	}
+	svg := Svg(svgArgs...)
 	if len(props.Labels) == 0 {
 		return svg
 	}

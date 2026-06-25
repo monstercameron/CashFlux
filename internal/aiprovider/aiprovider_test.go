@@ -76,8 +76,8 @@ func TestGetAndModelLookup(t *testing.T) {
 	if !ok {
 		t.Fatal("Get(openai) should be found")
 	}
-	if m, ok := p.Model("gpt-4o"); !ok || !m.Caps.Vision || m.Caps.Structured != StructuredJSONSchema {
-		t.Errorf("openai/gpt-4o lookup wrong: %+v ok=%v", m, ok)
+	if m, ok := p.Model("gpt-5.5"); !ok || !m.Caps.Vision || m.Caps.Structured != StructuredJSONSchema {
+		t.Errorf("openai/gpt-5.5 lookup wrong: %+v ok=%v", m, ok)
 	}
 	if _, ok := p.Model("ghost"); ok {
 		t.Error("unknown model should report not found")

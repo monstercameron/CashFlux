@@ -32,7 +32,7 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode upstream body: %v", err)
 		}
-		if body.Model != "gpt-4o-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello grpc" {
+		if body.Model != "gpt-5.4-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello grpc" {
 			t.Fatalf("upstream body = %+v", body)
 		}
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"grpc says hi"}}],"usage":{"total_tokens":13}}`))
@@ -45,7 +45,7 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 		Token:           "dev-token",
 		MasterKey:       "0123456789abcdef0123456789abcdef",
 		OpenAIBaseURL:   upstream.URL,
-		AIAllowedModels: []string{"gpt-4.1-mini", "gpt-4o-mini"},
+		AIAllowedModels: []string{"gpt-5.4-mini", "gpt-5.5"},
 		AppOrigin:       "*",
 	}
 	bridge := httptest.NewServer(NewMux(cfg, store))
@@ -71,13 +71,13 @@ func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	if err := conn.Invoke(ctx, backendrpc.MethodAIListModels, backendrpc.ListModelsRequest{}, &models, backendrpc.JSONCallOptions()...); err != nil {
 		t.Fatalf("ListModels invoke: %v", err)
 	}
-	if len(models.Models) != 2 || models.Models[0] != "gpt-4.1-mini" || models.Models[1] != "gpt-4o-mini" {
+	if len(models.Models) != 2 || models.Models[0] != "gpt-5.4-mini" || models.Models[1] != "gpt-5.5" {
 		t.Fatalf("ListModels response = %+v", models)
 	}
 
 	var chatResp backendrpc.Completion
 	err = conn.Invoke(ctx, backendrpc.MethodAIChat, backendrpc.ChatRequest{
-		Model:       "gpt-4o-mini",
+		Model:       "gpt-5.4-mini",
 		Messages:    []backendrpc.Message{{Role: ai.RoleUser, Content: "hello grpc"}},
 		Temperature: 0.2,
 	}, &chatResp, backendrpc.JSONCallOptions()...)
@@ -126,7 +126,7 @@ func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
 		t.Fatalf("ChatStream stream: %v", err)
 	}
 	if err := stream.SendMsg(&backendrpc.ChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []backendrpc.Message{{Role: ai.RoleUser, Content: "hello stream"}},
 	}); err != nil {
 		t.Fatalf("ChatStream send: %v", err)

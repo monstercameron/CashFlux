@@ -73,7 +73,7 @@
       .attr("width", W).attr("height", H).attr("role", "img");
 
     if (spec.kind === "donut") {
-      renderDonut(svg, series[0], W, H, defColor, curSym);
+      renderDonut(svg, series[0], W, H, defColor, curSym, animate);
       return;
     }
 
@@ -156,6 +156,14 @@
           .attr("x", function (p) { return x(p.x) - (bw * series.length) / 2 + si * bw; })
           .attr("width", bw)
           .attr("fill", color);
+        // Per-bar native tooltip so each bar is identifiable on hover ("Mortgage — $1,480.00").
+        // The bars otherwise carry no label/legend, so without this you can't tell which category
+        // a bar is or its exact value. curSym + d3 give app-consistent money formatting.
+        bars.append("title").text(function (p) {
+          var v = curSym + d3.format(",.2f")(Math.abs(p.y));
+          var amt = (p.y < 0) ? "(" + v + ")" : v;
+          return (p.label ? p.label + " — " : "") + amt;
+        });
         if (animate) {
           // Grow each bar up from the baseline on first paint.
           bars.attr("y", y(0)).attr("height", 0)
@@ -180,6 +188,14 @@
       });
     }
 
+    // Full-precision, unit-aware value formatter for per-point hover tooltips (the axis tickFormatter
+    // is compact — "$1.5k" — which is wrong for an exact hover read). Money → "$1,480.00"; an explicit
+    // d3 format (e.g. percent) is honored; otherwise a plain thousands-separated number.
+    function valFmt(v) {
+      if (spec.y && spec.y.format === "money") return curSym + d3.format(",.2f")(v);
+      if (spec.y && spec.y.format) { try { return d3.format(spec.y.format)(v); } catch (e) { } }
+      return d3.format(",")(v);
+    }
     // line / area
     series.forEach(function (s) {
       var color = s.color || defColor;
@@ -203,6 +219,17 @@
         path.attr("stroke-dasharray", total + " " + total).attr("stroke-dashoffset", total)
           .transition().duration(600).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
       }
+      // Invisible per-point hover targets so each datum shows its period + exact value on hover
+      // ("Mar: $1,480.00"). transparent (not "none") so the fill still receives the pointer; purely
+      // additive — no visible change to the line/area. Multi-series charts get a target per series.
+      g.selectAll(null).data(pts).enter().append("circle")
+        .attr("cx", function (p) { return x(p.x); })
+        .attr("cy", function (p) { return y(p.y); })
+        .attr("r", 7).attr("fill", "transparent")
+        .append("title").text(function (p) {
+          var lbl = labelsByX[Math.round(p.x)] || p.label || "";
+          return (lbl ? lbl + ": " : "") + valFmt(p.y);
+        });
     });
   };
 
@@ -244,7 +271,7 @@
     el.innerHTML = "";
   };
 
-  function renderDonut(svg, s, W, H, defColor, curSym) {
+  function renderDonut(svg, s, W, H, defColor, curSym, animate) {
     var pts = (s && s.points) || [];
     if (!pts.length) return;
     var sym = curSym || "$";
@@ -264,9 +291,30 @@
     var g = svg.append("g").attr("transform", "translate(" + cx + "," + (H / 2) + ")");
     var pie = d3.pie().value(function (p) { return Math.abs(p.y); }).sort(null)(pts);
     var arc = d3.arc().innerRadius(r * 0.6).outerRadius(Math.max(0, r - 2));
-    g.selectAll("path").data(pie).enter().append("path")
-      .attr("d", arc)
+    var slices = g.selectAll("path").data(pie).enter().append("path")
       .attr("fill", function (d, i) { return colorOf(d.data, i); });
+    // Per-slice native tooltip ("Mortgage — $1,480.00 (18%)") so slices are identifiable on hover —
+    // essential on narrow boxes where the legend is dropped (`if(!hasRoom) return` below), leaving an
+    // otherwise unlabeled ring. Mirrors the category-bar tooltips for consistency.
+    slices.append("title").text(function (d) {
+      var p = d.data;
+      var v = sym + d3.format(",.2f")(Math.abs(p.y));
+      var pct = total > 0 ? Math.round((Math.abs(p.y) / total) * 100) : 0;
+      return (p.label ? p.label + " — " : "") + v + " (" + pct + "%)";
+    });
+    if (animate) {
+      // W-18 donut draw-in: each wedge sweeps open from its own start angle on first paint
+      // (gated by the same `animate` flag as the bar/line draw-ins — off under reduced-motion
+      // and data-wonder=off). Only the arcs animate; the center total + legend render normally.
+      slices.attr("d", function (d) { return arc({ startAngle: d.startAngle, endAngle: d.startAngle }); })
+        .transition().duration(600).ease(d3.easeCubicOut)
+        .attrTween("d", function (d) {
+          var i = d3.interpolate({ startAngle: d.startAngle, endAngle: d.startAngle }, { startAngle: d.startAngle, endAngle: d.endAngle });
+          return function (t) { return arc(i(t)); };
+        });
+    } else {
+      slices.attr("d", arc);
+    }
 
     var fg = cssVar("--text", "#e6e6e9");
     var dim = cssVar("--text-dim", "#9a9aa2");

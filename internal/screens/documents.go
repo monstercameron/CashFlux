@@ -387,8 +387,8 @@ func Documents() ui.Node {
 	pr := uistate.UsePrefs().Get().Normalize()
 	useBackendAI := pr.BackendActive()
 	aiModel := settings.OpenAIModel
-	if aiModel == "" || aiModel == "gpt-4o-mini" {
-		aiModel = "gpt-4o" // vision needs a vision-capable model
+	if aiModel == "" || aiModel == "gpt-5.4-mini" {
+		aiModel = "gpt-5.5" // vision/receipt extraction: use the flagship vision model
 	}
 	readAI := ui.UseEvent(func() {
 		if settings.OpenAIKey == "" && !useBackendAI {
@@ -445,7 +445,7 @@ func Documents() ui.Node {
 		needsKey.Set(false)
 		model := settings.OpenAIModel
 		if model == "" {
-			model = "gpt-4o-mini"
+			model = "gpt-5.4-mini"
 		}
 		msgs := []ai.Message{
 			{Role: ai.RoleSystem, Content: textExtractionSystemPrompt},
@@ -535,7 +535,7 @@ func Documents() ui.Node {
 		}
 		model := settings.OpenAIModel
 		if model == "" {
-			model = "gpt-4o-mini"
+			model = "gpt-5.4-mini"
 		}
 		msgs := []ai.Message{
 			{Role: ai.RoleSystem, Content: "You are a household finance assistant. Categorize transaction descriptions."},

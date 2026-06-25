@@ -2,7 +2,7 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v258";
+const CACHE = "cashflux-v266";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",

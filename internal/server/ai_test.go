@@ -39,7 +39,7 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode upstream body: %v", err)
 		}
-		if body.Model != "gpt-4o-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello" {
+		if body.Model != "gpt-5.4-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello" {
 			t.Fatalf("upstream body = %+v", body)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -55,7 +55,7 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 		Now:       func() time.Time { return time.Date(2026, time.June, 18, 18, 20, 0, 0, time.UTC) },
 	})
 	got, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:       "gpt-4o-mini",
+		Model:       "gpt-5.4-mini",
 		Messages:    []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 		Temperature: 0.2,
 	})
@@ -107,7 +107,7 @@ func TestAIServiceVisionBuildsStructuredRequest(t *testing.T) {
 
 	svc := NewAIService(store, AIServiceConfig{MasterKey: master, BaseURL: upstream.URL})
 	got, err := svc.Vision(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIVisionRequest{
-		Model:        "gpt-4o",
+		Model:        "gpt-5.5",
 		SystemPrompt: "read receipts",
 		UserText:     "extract",
 		ImageURL:     "data:image/png;base64,AAAA",
@@ -126,7 +126,7 @@ func TestAIServiceMissingKey(t *testing.T) {
 	store := openTestStore(t)
 	svc := NewAIService(store, AIServiceConfig{MasterKey: []byte("0123456789abcdef0123456789abcdef")})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "openai key is not configured") {
@@ -138,10 +138,10 @@ func TestAIServiceRejectsDisallowedModel(t *testing.T) {
 	store := openTestStore(t)
 	svc := NewAIService(store, AIServiceConfig{
 		MasterKey:     []byte("0123456789abcdef0123456789abcdef"),
-		AllowedModels: []string{"gpt-4o-mini"},
+		AllowedModels: []string{"gpt-5.4-mini"},
 	})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o",
+		Model:    "gpt-5.5",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "model is not allowed") {
@@ -165,12 +165,12 @@ func TestAIServiceRejectsMalformedChatBeforeKeyLoad(t *testing.T) {
 		name string
 		req  AIChatRequest
 	}{
-		{name: "missing messages", req: AIChatRequest{Model: "gpt-4o-mini"}},
-		{name: "too many messages", req: AIChatRequest{Model: "gpt-4o-mini", Messages: repeatAIMessages(maxAIChatMessages + 1)}},
-		{name: "invalid role", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: "developer", Content: "hello"}}}},
-		{name: "empty content", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: " "}}}},
-		{name: "content too large", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: strings.Repeat("x", maxAIMessageContentBytes+1)}}}},
-		{name: "temperature too high", req: AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}, Temperature: 3}},
+		{name: "missing messages", req: AIChatRequest{Model: "gpt-5.4-mini"}},
+		{name: "too many messages", req: AIChatRequest{Model: "gpt-5.4-mini", Messages: repeatAIMessages(maxAIChatMessages + 1)}},
+		{name: "invalid role", req: AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: "developer", Content: "hello"}}}},
+		{name: "empty content", req: AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: " "}}}},
+		{name: "content too large", req: AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: strings.Repeat("x", maxAIMessageContentBytes+1)}}}},
+		{name: "temperature too high", req: AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}, Temperature: 3}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := svc.Chat(ctx, tc.req)
@@ -195,7 +195,7 @@ func TestAIServiceRejectsOversizedRequestBeforeKeyLoad(t *testing.T) {
 	}
 	svc := NewAIService(store, AIServiceConfig{MasterKey: master, RequestMaxBytes: 64})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: strings.Repeat("x", 200)}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "ai request is too large") {
@@ -215,7 +215,7 @@ func TestAIServiceRejectsMalformedVisionBeforeKeyLoad(t *testing.T) {
 	})
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
 	valid := AIVisionRequest{
-		Model:        "gpt-4o-mini",
+		Model:        "gpt-5.4-mini",
 		SystemPrompt: "read receipts",
 		UserText:     "extract",
 		ImageURL:     "data:image/png;base64,AAAA",
@@ -278,7 +278,7 @@ func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
 		Now:            func() time.Time { return day },
 	})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "daily ai request limit reached") {
@@ -292,7 +292,7 @@ func TestAIServiceEnforcesDailyUsageLimits(t *testing.T) {
 		Now:            func() time.Time { return day },
 	})
 	_, err = svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "daily ai token limit reached") {
@@ -319,7 +319,7 @@ func TestAIServiceBlocksUserBeforeKeyLoadOrUpstream(t *testing.T) {
 		}),
 	})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u-blocked"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if status.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "disabled for this user") {
@@ -356,7 +356,7 @@ func TestAIServiceAuditsUsageAlertsWhenThresholdsCross(t *testing.T) {
 		}),
 	})
 	if _, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u-alert"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	}); err != nil {
 		t.Fatalf("Chat: %v", err)
@@ -419,7 +419,7 @@ func TestAIServiceCancellationPropagatesToUpstream(t *testing.T) {
 	errc := make(chan error, 1)
 	go func() {
 		_, err := svc.Chat(ctx, AIChatRequest{
-			Model:    "gpt-4o-mini",
+			Model:    "gpt-5.4-mini",
 			Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 		})
 		errc <- err
@@ -481,7 +481,7 @@ func TestAIServiceRetriesTransientUpstreamStatus(t *testing.T) {
 	}}
 	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: client, UpstreamRetries: 1})
 	got, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err != nil {
@@ -512,7 +512,7 @@ func TestAIServiceOpensCircuitAfterConsecutiveUpstreamFailures(t *testing.T) {
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
 	for i := 0; i < aiCircuitFailureThreshold; i++ {
 		_, err := svc.Chat(ctx, AIChatRequest{
-			Model:    "gpt-4o-mini",
+			Model:    "gpt-5.4-mini",
 			Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 		})
 		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "openai request failed") {
@@ -523,7 +523,7 @@ func TestAIServiceOpensCircuitAfterConsecutiveUpstreamFailures(t *testing.T) {
 		t.Fatalf("client calls after failures = %d", client.calls)
 	}
 	_, err := svc.Chat(ctx, AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "circuit is open") {
@@ -558,19 +558,19 @@ func TestAIServiceCircuitResetsAfterCooldownAndSuccess(t *testing.T) {
 	})
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
 	for i := 0; i < aiCircuitFailureThreshold; i++ {
-		if _, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}}); status.Code(err) != codes.Unavailable {
+		if _, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}}); status.Code(err) != codes.Unavailable {
 			t.Fatalf("failure %d did not return unavailable: %v", i, err)
 		}
 	}
 	now = now.Add(aiCircuitCooldown + time.Second)
-	got, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	got, err := svc.Chat(ctx, AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
 	if err != nil {
 		t.Fatalf("Chat after cooldown: %v", err)
 	}
 	if got.Content != "reset ok" || client.calls != aiCircuitFailureThreshold+1 {
 		t.Fatalf("after cooldown response/calls = %+v/%d", got, client.calls)
 	}
-	_, err = svc.Chat(ctx, AIChatRequest{Model: "gpt-4o-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	_, err = svc.Chat(ctx, AIChatRequest{Model: "gpt-5.4-mini", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
 	if err != nil {
 		t.Fatalf("Chat after reset: %v", err)
 	}
@@ -605,7 +605,7 @@ func TestAIServiceUpstreamTimeoutMapsDeadlineExceeded(t *testing.T) {
 		UpstreamTimeout: 10 * time.Millisecond,
 	})
 	_, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
-		Model:    "gpt-4o-mini",
+		Model:    "gpt-5.4-mini",
 		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}},
 	})
 	if err == nil || status.Code(err) != codes.DeadlineExceeded {

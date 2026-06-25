@@ -75,6 +75,7 @@ var (
 
 	// tinted backgrounds / borders
 	BgSky15        = css.Bg(css.Color("rgb(14 165 233 / 0.15)"))
+	BgUp15         = css.Bg(css.Color("rgb(84 184 132 / 0.15)")) // faint green tint for "Free" pills (pairs with TextUp; solid BgUp made green-on-green text invisible)
 	BorderSky40    = raw("border-color", "rgb(14 165 233 / 0.4)")
 	BorderBlack10  = raw("border-color", "rgb(0 0 0 / 0.1)")
 	HoverBgBlack03 = css.Hover(css.Bg(css.Color("rgb(0 0 0 / 0.03)")))

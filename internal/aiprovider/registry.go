@@ -16,17 +16,13 @@ var registry = []Provider{
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Reasoning: true, Structured: StructuredJSONSchema}},
 			{ID: "gpt-5.4-mini", Label: "GPT-5.4 mini", InputCentsPerMTok: 25, OutputCentsPerMTok: 200,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Reasoning: true, Structured: StructuredJSONSchema}},
-			{ID: "gpt-4o", Label: "GPT-4o", InputCentsPerMTok: 250, OutputCentsPerMTok: 1000,
-				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONSchema}},
-			{ID: "gpt-4o-mini", Label: "GPT-4o mini", InputCentsPerMTok: 15, OutputCentsPerMTok: 60,
-				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONSchema}},
 		},
 	},
 	{
 		ID: "openrouter", Label: "OpenRouter", Dialect: DialectOpenAI, Auth: AuthBearer, FreeText: true,
 		BaseURL: "https://openrouter.ai/api/v1", KeyURL: "https://openrouter.ai/keys",
 		Models: []Model{
-			{ID: "openai/gpt-4o-mini", Label: "GPT-4o mini (via OpenRouter)", InputCentsPerMTok: 15, OutputCentsPerMTok: 60,
+			{ID: "openai/gpt-5.4-mini", Label: "GPT-5.4 mini (via OpenRouter)", InputCentsPerMTok: 25, OutputCentsPerMTok: 200,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONObject}},
 			{ID: "anthropic/claude-3.5-sonnet", Label: "Claude 3.5 Sonnet (via OpenRouter)", InputCentsPerMTok: 300, OutputCentsPerMTok: 1500,
 				Caps: Capabilities{Vision: true, Streaming: true, ToolUse: true, Structured: StructuredJSONObject}},

@@ -513,7 +513,14 @@ func AccountRow(props accountRowProps) ui.Node {
 			),
 			Span(css.Class("row-meta"), meta),
 		),
-		Span(ClassStr(amountClass(props.Balance)), fmtMoney(props.Balance)),
+		// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
+		// render parenthesized for liabilities, so give the current balance an explicit accessible name
+		// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
+		// and screen-reader users without cluttering the row with a visible label.
+		Span(ClassStr(amountClass(props.Balance)),
+			Title(uistate.T("accounts.balanceTitle")),
+			Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(props.Balance))),
+			fmtMoney(props.Balance)),
 		// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
 		// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
 		// account is flagged.

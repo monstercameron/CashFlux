@@ -15,7 +15,7 @@ func TestMockProviderChatReturnsCannedReply(t *testing.T) {
 	msgs := []Message{{Role: RoleUser, Content: "Explain my spending this month."}}
 	var got string
 	var usage Usage
-	m.Chat("", "", "gpt-4o", msgs, 0.7, func(s string, u Usage) { got = s; usage = u }, func(e string) { t.Fatalf("unexpected error: %s", e) })
+	m.Chat("", "", "gpt-5.5", msgs, 0.7, func(s string, u Usage) { got = s; usage = u }, func(e string) { t.Fatalf("unexpected error: %s", e) })
 	if got == "" {
 		t.Error("Chat: expected a non-empty reply")
 	}

@@ -1910,6 +1910,31 @@ is high and buttons aren't oversized. The problem is **information architecture 
       field and the percent/months/currency meaning is visible.
 - [x] **Recurring & Plans use bare `P(empty)` instead of the EmptyStateCTA pattern** the other screens use —
       give them guided empty states with an add affordance for consistency (cross-link **C23**).
+- [x] **Accounts (assets) used a bare `P(empty)` too — FIXED 2026-06-24 (keep-tidy).** An empty-state audit
+      (after a real "Start fresh", since IndexedDB persists sample data across loads) found the **Accounts**
+      assets card was the lone hold-out: a bare "No asset accounts yet." line with **no glyph and no add CTA**,
+      while Transactions/Budgets/Goals/Reports all use the `EmptyStateCTA` (icon + "Add your first X" button).
+      Swapped the assets empty body to `ui.CreateElement(EmptyStateCTA, {Message: noAssets, CTALabel:
+      "Add your first account", AddTarget: "account", Icon: icon.Accounts})` (`accounts.go:326`); i18n key
+      `accounts.addFirst` already existed. The **liabilities** card is intentionally left as the bare
+      celebratory "No liabilities — nice." line (no CTA — never nudge a new user to add debt). MEASURED on a
+      genuinely empty page (rows=0): assets empty-cta has icon + "Add your first account", and clicking it opens
+      the Add-account modal; liabilities line unchanged. build rc=0. Screenshot `e2e/screenshots/acct_empty_cta.png`.
+- [x] **Allocate first-run empty was a bare dead-end too — FIXED 2026-06-24 (keep-tidy).** A full
+      empty-state audit across ALL 24 nav screens (after a real "Start fresh") found **Allocate** as the next
+      genuine dead-end: the no-candidates state showed "Add asset accounts (with expected return, stability,
+      and liquidity)…" as a bare line — it named the action but gave **no way to take it**. Upgraded the
+      `emptyNoCandidates` case (`allocate_suggestion_list.go:36`) to `EmptyStateCTA{Message: …, CTALabel:
+      "Add accounts", Href: "/accounts", Icon: icon.Accounts}`, mirroring Bills' Href pattern (new i18n key
+      `allocate.emptyCta`). MEASURED on an empty page: the Allocate empty now has an icon + "Add accounts"
+      button, and clicking it **navigates to /accounts** (verified url + breadcrumb). build rc=0, i18n test ok.
+      Screenshot `e2e/screenshots/alloc_empty_cta.png`.
+      **Audit conclusion (the rest are intentionally bare — NOT fixed):** Documents ("…import above…") and
+      Workflows ("…create one above…") point at controls directly above them; Notifications ("No notifications
+      yet.") is transient; Customize per-entity "No custom fields…" sub-sections and Planning/Allocate
+      `setAttributes`/`allExcluded` are nuanced sub-states with their affordances elsewhere on-page. Accounts +
+      Allocate were the only true first-run dead-ends; both now guided. Empty-state-as-onboarding is consistent
+      across all primary entity screens.
 - [x] **Verify** after changes: the page has a clear entry point / sub-nav; payoff inputs and result read as
       one unit and are easy to find; every field is labelled with sensible constraints; empty states are guided.
 
@@ -10961,8 +10986,12 @@ milestone toasts `goals.milestone25` = `"25%% of the way there — keep going!"`
 via `uistate.T(key)` with **no `Sprintf`** (goals.go:155), so the `%%` is NOT collapsed and the UI
 shows "25%%"/"75%%". (The `%d%%` strings like `goals.progressFmt` are fine — those ARE `Sprintf`'d.)
 MEASURED: contribute toast rendered `"25%% of the way there — keep going!"` in `.toast-msg`.
-- [ ] **L82-T2 — fix the doubled percent:** change `goals.milestone25`→`"25% of the way there…"` and
-  `goals.milestone75`→`"75% funded…"` (single `%`, since these static strings are not `Sprintf`'d).
+- [x] **L82-T2 — fix the doubled percent (DONE 2026-06-24):** changed `goals.milestone25`→`"25% of the
+  way there — keep going!"` and `goals.milestone75`→`"75% funded — almost there!"` (single `%`) in
+  `internal/i18n/en.go`. Confirmed `bundle.T` only `Sprintf`s when `len(args)>0` (i18n.go:61), and
+  goals.go calls `T(key)` with no args, so the literal `%` is now correct. VERIFIED live via the L98
+  e2e: contribute toast now renders `"25% of the way there — keep going!"` (single `%`). Reproduced
+  first as part of the L98 run, then fixed + re-verified in the same fire. build rc=0, i18n test ok.
 
 **Semantic note (for design):** the "post ledger" checkbox reads *"Also debit <linked account> (move
 money from this account)"*, yet goals display as *"linked to <account>"* (the savings destination).
@@ -11159,6 +11188,218 @@ ABSENT** — **no defects.** Screenshot `L104_01_dial.png`. Verified against a c
 - **→ The density dial is a true global governor:** every inline affordance built across Waves 1–6
   checks `Settings.ShowsAffordance`/`Density.Shows`, so "riddle the app with smart" is always the
   user's dial, never forced.
+### L98. Story — "Reaching the Goal" (Aaliyah) — 2026-06-24 ★ PASS (7/0/0)
+
+**Ritual:** open Goals, pick the "Baby" goal, make a small contribution, then contribute the full
+remaining gap to drive it to 100% and watch the lifecycle (progress → milestone → completion).
+e2e: `e2e/loopstory_98_reaching_the_goal.mjs` (7 PASS · 0 FAIL · 0 ABSENT).
+
+- ✓ **G-1** Goal shows per-goal progress (saved/target + %): 2,800 / 12,000 (23%).
+- ✓ **G-2** A +$100 contribution raised that SAME goal's saved by EXACTLY $100 (2,800 → 2,900) and
+  posted the confirmation toast "Added $100.00 to goal."
+- ✓ **G-3** Contributing the remaining $9,100 gap drove the goal to its target (12,000 / 12,000).
+- ✓ **G-4** Reaching the target fired the completion toast "Goal funded! Move it to Achieved when
+  you're ready." (the 25%/50%/75% milestone toasts also fire on threshold crossings.)
+- ✓ Zero JS errors across the full lifecycle.
+
+**Harness notes (for future goal e2e):** (a) the goal list **re-sorts** ("most actionable" first)
+after each contribution, so reads/actions must PIN to a stable goal — but (b) opening the inline
+Contribute form **re-renders the row and drops its `data-testid`**, so the amount input must be
+queried GLOBALLY (visible `input[type=number]` with "Amount" placeholder), not via the row, and (c)
+submit reliably via `input.closest('form').requestSubmit()` — a button-click races the re-render.
+
+**Bug found + FIXED this fire:** the 25%/75% milestone toasts showed a doubled percent ("25%%") —
+this was the open **L82-T2** ticket, reproduced live and fixed in the same fire (see L82-T2 above,
+now [x]). No new open tickets from L98 — the goal contribution/completion lifecycle is solid.
+
+---
+
+### L99. Story — "The Reconciliation" (Marcus) — 2026-06-24 ★ PASS (7/0/0)
+
+**Ritual (cross-screen data integrity):** Dining is over budget; the household spots a transaction
+that really belongs under Shopping and recategorizes it from the Transactions edit form, then checks
+that the fix propagates to the Budgets page with no reload. e2e:
+`e2e/loopstory_99_the_reconciliation.mjs` (7 PASS · 0 FAIL · 0 ABSENT). This is the core "why am I
+over budget — let me fix a miscategorization" loop and the strongest money-conservation check so far.
+
+- ✓ **R-1** Budgets shows per-category spent (Dining $655.00 / $300.00, Shopping $325.00 / $200.00).
+- ✓ **R-2** A single-transaction recategorize (Dining → Shopping, a $165 expense) submits via the edit
+  form's Category `<select>` + `form.requestSubmit()`.
+- ✓ **R-3** Dining's budget spent DROPPED by exactly $165 (655 → 490), **live, no reload**.
+- ✓ **R-4** Shopping's budget spent ROSE by exactly $165 (325 → 490).
+- ✓ **R-5** Total spending across the two budgets CONSERVED ($980.00 = $980.00) — money moved
+  category, none invented or lost. (Enterprise-grade ledger integrity across screens.)
+- ✓ **R-6** Zero JS errors across the flow.
+
+**MEASURED:** Dining 655→490, Shopping 325→490, sum 980→980. Screenshots
+`e2e/screenshots/L99_0{1,2}_budgets_{before,after}.png`. Verdict: the Transactions→Budgets data flow
+is solid and reactive — recategorization is immediately reflected with no stale numbers.
+
+**⚠ FINDING (dev ticket, LOW) — L99-T1: single-transaction edit posts NO confirmation toast.**
+Recategorizing/saving a single transaction via the row "Edit" form gives no toast (R-2 measured
+`toast=null`), whereas the **bulk** recategorize/clear/delete ops (L96) all post one. The only feedback
+that an inline edit "took" is the form closing + the row's category text updating — easy to miss when
+the edited row scrolls out of view or the change is subtle. Not broken (the edit works, verified by
+R-3/R-4), but inconsistent with the rest of the app's feedback language and below the enterprise bar.
+- [x] **L99-T1 — add a confirmation toast on single-transaction edit-save (DONE 2026-06-24, keep-tidy).**
+  Added `uistate.PostNotice(uistate.T("toast.txnUpdated"), false)` after the successful `bump()` in
+  `editTxn` (`internal/screens/transactions.go:243`), plus the new i18n key `toast.txnUpdated` =
+  "Transaction updated." (`internal/i18n/en.go`). Non-undo (form supports re-edit), matching the bulk-op
+  feedback language. VERIFIED live: opened a transaction's edit form, changed its category + submitted →
+  toast **"Transaction updated."** fired (measured `.toast` text). build rc=0, i18n test ok. Screenshot
+  `e2e/screenshots/edit_toast_verify.png`. Closes the only finding from L99.
+
+---
+
+### L104. Story — "The Rapid Logger" (Marcus) — 2026-06-25 ★ PASS (7/0/0) — no app bug; testability fixed
+
+**Ritual (STRESS):** rapidly add 6 × $10 Dining expenses via +Add → New transaction and verify
+cross-screen integrity. e2e: `e2e/loopstory_104_rapid_logger.mjs` (7 PASS · 0 FAIL).
+
+- ✓ **ST-1** Baseline readable (Dining $655, 40 purchases).
+- ✓ **ST-2** 6 rapid adds raised Dining budget spent by **EXACTLY $60** ($655 → $715).
+- ✓ **ST-3** Reports purchase count rose by **EXACTLY 6** (40 → 46) — every write landed once, **no lost
+  or duplicated writes** under burst entry.
+- ✓ **ST-4** Zero JS errors; app stayed navigable (no crash).
+
+**Verdict: the rapid-add path is rock-solid — no app bug.** The first L104 attempt (logged below as
+BLOCKED) couldn't persist writes because of a HARNESS error on my side: Save is correctly disabled until
+BOTH a description and a non-zero amount are present (L78-T1 validity guard), and my isolated probes
+omitted the description. With the description set, all 6 burst writes persist exactly. Screenshot
+`e2e/screenshots/L104_after_burst.png`.
+
+- [x] **L104-T1 — make the add-transaction modal e2e-drivable (DONE 2026-06-25, keep-tidy).** Root cause
+  of the earlier "can't drive it" wasn't a commit bug — the inputs DO commit on `OnInput`/`OnChange`; Save
+  is just disabled until description + amount are valid (correct behaviour). The real gap was missing test
+  hooks. Added stable `data-testid`s to the QuickAdd modal (`internal/app/quickadd.go`): `txn-add-account`,
+  `txn-add-amount`, `txn-add-desc`, `txn-add-category`, `txn-add-date`; and a reusable `flip-save` on the
+  shared FlipPanel Save button (`internal/ui/flippanel.go` — only one flip panel is open at a time, so it
+  covers every add modal: account/budget/goal/etc.). The add-transaction modal is now fully e2e-drivable,
+  proven by the green L104 above. build rc=0.
+
+**Original BLOCKED note (kept for the record):** the flip-card modal looked undrivable because a single
+isolated add created 0 transactions while a burst created 3 — but that 0-vs-3-vs-6 swing was my probe
+omitting the required description (Save disabled), not the app. Correctly did NOT file a "lost writes"
+bug; the app conserves every write.
+
+---
+
+### L103. Story — "Splitting the Dinner" (the Hartleys) — 2026-06-24 ★ PASS (7/0/0) — no findings
+
+**Ritual (shared-expense split + settle-up, Split screen):** the household splits a shared cost and
+tracks who owes whom. Split math must be exact (even shares AND no penny lost/created on odd amounts),
+the settle-up must net correctly, and recording a settlement must clear the balance. e2e:
+`e2e/loopstory_103_splitting_the_dinner.mjs` (7 PASS · 0 FAIL).
+
+- ✓ **S-1** Even split: $100.00 between 2 members → $50.00 each.
+- ✓ **S-2** ROUNDING INTEGRITY: $100.01 between 2 → $50.01 + $50.00 = **exactly $100.01** (no penny lost
+  or invented) with a fair 1¢ spread. This is the penny-conservation guarantee a finance app must hold.
+- ✓ **S-3** Settle-up ledger nets correctly: "Marcus owes $32" ⇒ suggestion "Marcus pays Priya $32" (the
+  pays amount equals the owed amount).
+- ✓ **S-3b** Recording that settlement **CLEARED** the outstanding balance (the "X pays Y" suggestion
+  disappeared — settle-up now settled).
+- ✓ **S-4** Zero JS errors.
+
+**Verdict: enterprise-grade split + settle-up, no findings.** Even and odd splits are exact (money is
+conserved to the cent via the pure `internal/split` core), the net settle-up suggestion is correct, and
+settlements persist + clear. Screenshot `e2e/screenshots/L103_split.png`.
+
+---
+
+### L102. Story — "Two Currencies, One Household" (Priya) — 2026-06-24 ★ PASS (7/0/0) — no findings
+
+**Ritual (multi-currency / FX integrity, Settings → Accounts/Dashboard):** the Hartleys hold a EUR
+Travel Card alongside USD accounts. Honest base-currency aggregation must convert the €535 card via
+the FX table — never add it as a naive $535. Priya edits the EUR→USD rate and watches net worth
+re-aggregate. e2e: `e2e/loopstory_102_two_currencies.mjs` (7 PASS · 0 FAIL).
+
+- ✓ **X-1** EUR account displays in its own currency (€535.00), not coerced to USD.
+- ✓ **X-2** Net worth shown in USD base **already includes** the EUR account — no "missing exchange rate" warning (sample data carries a EUR rate).
+- ✓ **X-3** Settings exposes an editable EUR→USD rate (current 0.92).
+- ✓ **X-4** Raising the rate 0.92 → 1.42 (Δ0.50) LOWERED net worth by **EXACTLY $267.50 = €535 × 0.50**
+  (12,039.64 → 11,772.14) — correct direction (the €535 card is a liability, costlier in USD) and exact
+  magnitude. This is real FX aggregation, not same-number addition.
+- ✓ **X-5** The EUR account still displays €535.00 after the rate change — display currency is independent of the base aggregation.
+- ✓ **X-6** Zero JS errors.
+
+**Verdict: enterprise-grade multi-currency, no findings.** Conversion is exact and directionally
+correct, display vs base currency are cleanly separated, and the missing-rate guardrail exists (not hit
+here since sample data has a rate). Screenshot `e2e/screenshots/L102_fx_after.png`.
+
+**↳ FOLLOW-UP FIX (2026-06-24, keep-tidy) — the L102 "sample-data nit" was actually a real seed bug,
+now fixed.** On closer look the seeded FX table was inverted: `internal/store/sample.go:846` used
+`{"EUR":0.92,"GBP":0.79,"CAD":1.36,"JPY":151.0}` (foreign-per-USD), but the currency package's
+documented convention (currency.go:106) and the live conversion (`baseMajor = amount × Rates[code]`,
+proven in L102's X-4) are **USD-per-foreign** — so the app read "1 EUR = $0.92" (≈$0.16 low on the €535
+card) and, egregiously, "1 JPY = $151" (a ~22,000× over-valuation of any yen amount). Corrected the
+seed to USD-per-foreign realistic values `{"EUR":1.08,"GBP":1.27,"CAD":0.74,"JPY":0.0066}`. VERIFIED:
+Settings now reads EUR 1.08 / GBP 1.27 / CAD 0.74 / JPY 0.0066. build rc=0; `go test ./internal/store
+./internal/currency` ok. (Only affects sample/demo data — no schema or logic change.)
+
+---
+
+### L101. Story — "Staying Current" (Dana) — 2026-06-24 ★ PASS (8/0/0) — no findings
+
+**Ritual (freshness lifecycle, Accounts ↔ Dashboard):** a finance-aware home needs to trust its
+balances are current. Dana sees stale accounts, marks one fresh, then "Mark all updated", and checks
+the flags + dashboard stay honest. e2e: `e2e/loopstory_101_staying_current.mjs` (8 PASS · 0 FAIL).
+
+- ✓ **F-1** Stale accounts flagged: 14 per-row "Stale" badges + bulk "Mark all updated (14 accounts stale)".
+- ✓ **F-2** Marking ONE account fresh (⋯ → "Mark updated") cleared exactly one: 14 → 13 stale, and the
+  bulk count followed (14 → 13).
+- ✓ **F-3** "Mark all updated" cleared ALL remaining stale flags (13 → 0) and the bulk control retired.
+- ✓ **F-4** Dashboard reflects the now-fresh state live (no reload) — cross-screen consistent.
+- ✓ **F-5** Zero JS errors.
+
+**Verdict: enterprise-grade, no findings.** The freshness system is well-built AND well-surfaced: the
+dashboard **Freshness** widget shows *"14 balances could use a refresh"* + a per-account staleness list
+("Marcus's 401(k) · 1455d", …) — a strong glanceable nudge — and it empties correctly once accounts are
+updated. Accounts page badges + bulk control stay in lockstep. Screenshots
+`e2e/screenshots/L101_0{1,2}_{stale,fresh}.png`. (Sample staleness ages read very high, e.g. 1455d, only
+because sample data uses fixed historical dates vs today — not a bug.)
+
+---
+
+### L100. Story — "The Debt Paydown" (Marcus) — 2026-06-24 ★ PASS (7/0/0)
+
+**Ritual (double-entry integrity — LIABILITY direction):** Marcus pays $500 off the Rewards Credit
+Card from Joint Checking and checks the books stay honest. L93 proved transfers between *assets* are
+net-worth-neutral; this isolates the **liability direction** (transfer INTO a credit-card account) —
+that paying debt reduces the card balance AND the cash, and creates/destroys no net worth. e2e:
+`e2e/loopstory_100_the_debt_paydown.mjs` (7 PASS · 0 FAIL · 0 ABSENT).
+
+- ✓ **D-1** Card shows its debt ($7,968.16 actual), checking its balance ($1,576), net worth $12,039.64.
+- ✓ **D-2** A $500 transfer checking → Rewards Credit Card submits.
+- ✓ **D-3** Card DEBT dropped by exactly $500 (7,968.16 → 7,468.16) — "% of limit used" 66% → 62%.
+- ✓ **D-4** Checking dropped by exactly $500 (1,576 → 1,076).
+- ✓ **D-5** NET WORTH UNCHANGED ($12,039.64 = $12,039.64) — paying debt moves wealth, doesn't create
+  or destroy it. Correct double-entry behaviour across Accounts → Dashboard.
+- ✓ **D-6** Zero JS errors.
+
+**MEASURED:** card 7,968.16→7,468.16, checking 1,576→1,076, net worth flat. Screenshots
+`e2e/screenshots/L100_0{1,2}_accounts_{before,after}.png`. Verdict: liability paydown is modelled
+correctly — no app bug. (My first run "failed" D-3 on a parser bug — the card row shows BOTH the
+cleared and the actual balance parenthesized; net worth uses the *actual* one. Fixed the probe to read
+the last/actual figure.)
+
+**⚠ FINDING (dev ticket, LOW) — L100-T1: liability rows show two adjacent UNLABELED parenthesized
+balances.** A credit-card/loan row renders `… cleared ($6,918.76)($7,468.16)` — the cleared balance and
+the actual balance sit side by side, both parenthesized, with no label distinguishing them. At a glance
+it reads as one number or a typo, and it's genuinely ambiguous which figure is "what I owe right now."
+Asset rows have the same cleared/actual pair but it's less confusing there. Net worth correctly uses the
+actual (second) figure, so this is presentation-only, not a math bug.
+- [x] **L100-T1 — disambiguate the cleared vs actual balance on account rows (DONE 2026-06-24, keep-tidy).**
+  First MEASURED the real layout/visual (not the flattened textContent that raised the flag): the headline
+  balance is a prominent red span and the "cleared (…)" figure is dim metadata at the end of the meta line
+  — only 12px apart but visually distinct by colour/weight, so the row is **already largely clear** (the
+  finding was overstated). The one genuine gap was that the headline balance had **no accessible label**, so
+  "which number is what I owe now" relied on colour/position alone. Fix (Go, `accounts_row.go:516`): gave the
+  headline balance span `Title("Current balance")` + `aria-label="Current balance <amt>"` (new i18n keys
+  `accounts.balanceTitle`/`accounts.balanceAria`). Additive, no visible clutter, no layout/colour change.
+  VERIFIED live: all **14** account rows' balance now carry the label; card shows `title="Current balance"`,
+  `aria-label="Current balance ($7,968.16)"`, colour unchanged (rgb 216,113,111). build rc=0, i18n test ok.
+  A visible relabel/restructure of the cleared figure was judged unnecessary (would add row clutter for a
+  low-severity, presentation-only ambiguity); the tooltip/aria is the right-sized fix.
 
 ---
 
@@ -11185,6 +11426,29 @@ defects.** Screenshot `L97_01_hub.png`, corpus dump `L97_corpus.txt`.
   live app.**
 
 ---
+
+### L97. Story — "The Import" (Priya) — 2026-06-24 ★
+
+**The ritual.** Getting bank data in via CSV is a core onboarding/everyday flow. Theme = **CSV-import
+integrity** (Documents → Transactions). Drive script `e2e/loopstory_97_the_import.mjs`. Result **5 PASS · 1
+FAIL** — import works, but **re-import has no dedup (data-integrity risk)**. Screenshot `L97_01_after_import.png`.
+- ✓ **I-1** The "Import transactions from CSV" textarea accepts pasted rows + an "Import into account" target.
+- ✓ **I-2** Importing a 3-row CSV (single Import click — it commits directly, no review step) added exactly
+  **+3** transactions (2189 → 2192).
+- ✓ **I-3** The imported rows post to the chosen account and are findable by description (ALPHA=1, BETA=1).
+- ✓ Zero JS errors.
+- **✎ CORRECTION — CSV import not-deduping is INTENTIONAL (test-encoded), not a bug.** Re-import does
+  double-post (MEASURED: 2192 → 2195, "ALPHA" 1× → 2×), BUT this is a deliberate design: `ImportTransactionsCSV`
+  (appstate.go:170) `PutTransaction`s every parsed row with no dedup, and **`appstate_more_test.go:232`
+  explicitly re-imports the same transaction and asserts it imports AGAIN (`n=1`)** — i.e. "CSV import trusts
+  the file" is the tested contract. (Its `skipped` return is *parse errors*, not duplicates. The dedup-aware
+  path is the reviewed/document import, `ImportReviewedDocumentRows`, which skips same-date/amount dupes.) So
+  adding dedup to the CSV path would break that test + override intent — NOT done.
+  - **Optional UX enhancement (product call, not a bug):** the everyday "re-imported my bank statement by
+    accident" case would still benefit from a *non-breaking* duplicate-warning **review step** in the
+    Documents CSV UI (count likely dupes by date+amount+payee, show "N look like duplicates — import
+    anyway?") — leaving `ImportTransactionsCSV` (and its test) untouched. Low priority; deliberate-design, not
+    a defect.
 
 ### L96. Story — "The Bulk Editor" (Marcus) — 2026-06-24 ★
 
@@ -11361,6 +11625,213 @@ Emergency fund at #3 (34%).
 ---
 
 ## G. GLAMOR — per-page UX/visual structure review (world-class, enterprise, glanceable) ★
+
+### GD. DESIGN/FLAIR PASS — page-by-page beautification (2026-06-24, ongoing) ★
+Goal: lift the visual design/flair (not UX) across every page + modal, per the frontend-design skill
+(refined/luxury direction — depth, layering, premium surfaces). CSS-only in `web/index.html` where possible.
+- [x] **GD-1. Refined card elevation.** Cards were flat fills with hairline borders ("spreadsheet" feel).
+  Added a resting elevation to `.card` (soft ambient shadow + hairline top highlight), theme-aware (airy
+  grey on light, deeper + faint white top edge on dark); WONDER hover still lifts further via
+  `--wonder-shadow`. **Bento `.w` tiles excluded** — the drag/pack engine sets an inline `box-shadow: none`
+  on them (beats author CSS), so resting depth there belongs in the engine, not CSS (follow-up). MEASURED:
+  `.card` box-shadow present in both themes on Reports (`rgba(0,0,0,.2) 0 1px 1px, …` dark / `rgba(17,24,39,
+  .05) …` light); build rc=0 (CSS-only). Screenshots `e2e/screenshots/design_reports_{dark,light}.png`.
+- [x] **GD-2. Bento dashboard tile elevation.** Matched GD-1 depth on the dashboard `.w` tiles. The
+  drag/pack engine writes an inline `box-shadow:none` on every tile (which also silently killed the WONDER
+  hover shadow), so this needed an author `!important` rule scoped to `html .w:not(.drag)` (drag ghost left
+  to the engine) + a `html[data-theme="light"]` variant; also promoted the existing hover `box-shadow` to
+  `!important` so tiles deepen on hover. MEASURED: `.w` resting box-shadow present in both themes on the
+  dashboard; screenshots `e2e/screenshots/design_dashboard_{dark,light}.png`. Dashboard now reads as the
+  same layered/premium surface as the card pages.
+- [x] **GD-3. Glossy primary buttons + card-title tracking (global).** `.btn-primary` got a subtle
+  top-lit gradient (top stays exactly `var(--accent)` so the measured 4.25:1 white-label contrast floor is
+  preserved — only darkens downward), a glossy 1px top highlight, and a soft drop shadow → dimensional,
+  premium CTAs everywhere (incl. the modal "Save"). `.card-title` got `letter-spacing:-0.01em` for an
+  editorial feel. CSS-only.
+- [x] **GD audit sweep.** Drove all 15 primary pages + opened the Add-transaction modal: **0 JS errors**,
+  every page renders with the new depth, modal Save shows the glossy gradient, white text intact.
+  Screenshots `e2e/screenshots/audit_*.png` + `audit_modal_addtxn.png`. Build rc=0.
+- [x] **GD-4. Hero/KPI figure tracking (global).** The big bold figures already had tabular-nums but no
+  optical tracking, so they read slightly loose. Added negative `letter-spacing` to the large numerals —
+  `.hero-net` & `.t-figure-lg`/hero net worth (-0.025em), `.hero-flanker-value` & `.stat-value` (-0.015em) —
+  for a tighter, premium numeric feel. CSS-only. MEASURED: hero net worth $12,039.64 = `-0.85px`, Reports
+  `.hero-net` = `-1px`. Screenshots `e2e/screenshots/design_fig_{dashboard,reports}.png`. Build rc=0.
+- [x] **GD-5. Wide-screen balance (ultra-wide fix).** On screens wider than the content cap the `.cf-shell`
+  flex row stayed full-width while only `main` was capped+centered — so the rail was orphaned at the far-left
+  edge and the content floated with a large empty void on the right (MEASURED at 3440px: rail at left:0,
+  main centered at 1120–2560 with 880px gutters either side, rail detached from content). Fix: cap the WHOLE
+  shell (rail 240 + content 1440 = 1680) and center it at `@media (min-width:1681px)` so ultra-wide gets one
+  cohesive, centered app block with balanced gutters. CSS-only. MEASURED after (1920/2560/3440): shell width
+  1680, centered (railLeft 880 at 3440), rail+content flush (main margins 0). Smooth transition (below 1681
+  content fills naturally, no void). Screenshots `e2e/screenshots/wide_{1920,2560,3440}_{dashboard,reports}.png`.
+  Build rc=0. (Partially addresses B31 ultra-wide row — content no longer "stretched edge-to-edge with vast
+  whitespace"; a denser 4–6 col bento at ultra-wide is still the bigger B31 item.)
+  - **⚠ SUPERSEDED by GD-9** — centering the whole shell pushed the (inner) content scrollbar even further
+    from the window edge; the proper fix moved the cap to main's children instead. See GD-9.
+- [x] **GD-9. Fix the "broken" scrollbar on large screens.** User report: the scrollbar looked broken on
+  large pages. Root cause (pre-existing GX7-F1, worsened by GD-5): `main` itself was the capped (1440) scroll
+  container, so its scrollbar parked at the **content's right edge**, floating ~120px (1920) to ~880px (3440)
+  in from the window edge — and GD-5's shell-centering pushed it further in. Fix: keep `main` FULL-WIDTH (so
+  it's the scroll container with its scrollbar at the window's right edge — the conventional fixed-sidebar
+  layout) and move the cap to main's CHILDREN: `@media (min-width:1441px){ main.cf-scroll > * { max-width:
+  1440px; margin-inline:auto } }`; reverted the `.cf-shell` cap. Topbar + page share the same 1440 column so
+  the gutters stay empty (nothing shows through under the sticky bar). CSS-only. MEASURED (1440/1920/2560/3440):
+  `main` right edge == viewport width at every width (1440→1440, 1920→1920, 2560→2560, 3440→3440) so the
+  scrollbar is at the window edge; content (topbar + page) capped 1440 and centered + aligned (e.g. 1120–2560
+  at 3440). Screenshot `e2e/screenshots/scroll_fixed_3440.png`. Build rc=0 (parent-verified; a transient red
+  in a concurrent agent's `smart.go` cleared on re-build — not my change, CSS-only).
+- [x] **GD-6. Soft accent focus glow on inputs/selects (global).** Form fields focused with only a flat
+  border tint. Added a subtle accent halo `box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%,
+  transparent)` on `.field:focus` and bare `select:focus` (+ a gentle `.12s` transition); the a11y
+  `:focus-visible` outline is preserved (additive, not a replacement). Polishes every form + modal. CSS-only.
+  MEASURED (modal/Transactions, after the transition settles): focused `.field` box-shadow =
+  `color(srgb 0.18 0.545 0.34 / 0.18) 3px` = accent at 18%. Screenshot `e2e/screenshots/design_focus_glow.png`.
+  Build rc=0.
+- [x] **GD-7. Glossy progress bars (global).** Progress fills (`.bar-fill` on Budgets/Goals/Allocate +
+  `.storage-bar-fill`) were flat solid colors. Added an inset top highlight + faint bottom shade
+  (`inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 1px rgba(0,0,0,.14)`) for a subtle cylindrical sheen.
+  Applied on the base `.bar-fill` only, so every state variant (.near/.over/.done/.final/.overdue/.soon)
+  inherits the gloss while keeping its semantic color. CSS-only. MEASURED (Budgets): `.bar-fill` box-shadow =
+  the inset gloss, bg = `rgb(216,113,111)` (over-budget red preserved). Screenshot `design_bar_gloss.png`.
+  Build rc=0.
+- [x] **GD-10. Raised active-segment pill (global).** The segmented controls (Week/Month/Quarter/Year,
+  Expense/Income, etc.) had a raised `box-shadow` on the active `.seg-pill` only in light mode; the dark pill
+  was flat. Added a matching subtle elevation + hairline top highlight (`0 1px 2px rgba(0,0,0,.3), inset 0 1px
+  0 rgba(255,255,255,.05)`) so the selected segment reads as a lifted chip in both themes. CSS-only. MEASURED:
+  `.seg-pill` box-shadow now present in dark, bg `rgb(42,42,48)` preserved. Screenshot `design_seg_pill.png`.
+  Build rc=0.
+- [x] **GD-11. Calendar "today" cell now reads at a glance (Bills month calendar).** Today's cell had only
+  a thin accent border — easy to miss in the grid. Added a faint accent wash (`color-mix(in srgb,
+  var(--accent) 12%, transparent)`) + a bold accent day number, so the current day pops. Theme-adaptive,
+  CSS-only. MEASURED (Bills, today=24): cell bg = accent@12%, border accent, `.cal-day` color accent +
+  weight 700. Screenshot `e2e/screenshots/design_cal_today.png`.
+- [x] **GD-12. Empty-state icon as an accent badge (global, all `EmptyStateCTA` screens).** The first-run
+  empty-state glyph (Budgets/Goals/Transactions/Categories/Bills/…) was a bare muted-grey icon. Swapped its
+  class from `tw.TextFaint` to a new `empty-icon` (`emptystate.go`, all 3 CTA branches) and styled it as a
+  soft circular accent badge: accent-colored glyph in a `color-mix(in srgb, var(--accent) 12%, transparent)`
+  circle (`web/index.html`). Warmer, more intentional first-run illustration; theme-adaptive. MEASURED (both
+  themes, fresh/empty Budgets): `.empty-icon` color = accent `rgb(46,139,87)`, bg = accent@12%, radius 999px.
+  Screenshot `e2e/screenshots/design_empty_icon.png`. Build rc=0 (`go test ./internal/screens` "setup
+  failed" is the known js/wasm constraint — the wasm build is the compile check; not a regression).
+- **Audited (no change needed):** empty states are consistent across screens (icon + message + glossy CTA via
+  `EmptyStateCTA`); all recent GD flair (GD-6 focus glow, GD-7 bar gloss, GD-10 seg pill, GD-11 calendar
+  today) verified rendering correctly in BOTH themes — color-mix is theme-adaptive, no regressions.
+- [x] **GD-13 / a11y bug — Smart page "Free" badge was invisible (green-on-green).** GLAMOR re-check of the
+  new Smart page found the "Free" tier pill rendered as a blank green rect: `smart.go` tierBadge paired
+  `tw.TextUp` (green text) with solid `tw.BgUp` (green bg) — MEASURED **1.00:1 in dark** (text == bg, fully
+  invisible), 1.78:1 light. Fix: added `tw.BgUp15` (faint 15% green tint, mirroring the AI badge's `BgSky15`
+  pattern) in `internal/ui/tw/extra.go` and swapped the Free badge to `tw.BgUp15`; green text now sits on a
+  near-dark green-tinted pill (composited ≈ rgb(28,43,37) → ~6:1, readable — the bare measurement still reads
+  1.00 only because the probe doesn't composite the 0.15 alpha). Build rc=0; `go test ./internal/ui/tw` ok.
+  Screenshot `e2e/screenshots/smart_free_badge_fixed.png` shows a legible "Free" pill. (Parent-verified: LSP
+  flagged unrelated `uistate.*Smart*`/`aiprovider.Smart*`/`CardProps.TestID` errors — a concurrent agent's
+  in-progress smart subsystem; on-disk `go build` is clean. I touched only the badge tint + the new token.)
+- [x] **GD-14 / brand bug — the rail header logo was INVISIBLE (white "C" on white square).** The
+  app's primary logo mark rendered as a blank white square. Root cause (`shell.go:490`): the span used
+  `tw.BgFg` (white fill) + `tw.TextBase` for the "C" — but **`tw.TextBase` is a font-SIZE token, not a color**
+  (`tw.go:199` = `FontSize(1rem)`), so the "C" inherited white `--text` on the white square → MEASURED
+  **1.00:1, fully invisible.** Fix: added a `tw.BgAccent` token (`var(--accent)` fill) and changed the mark to
+  `tw.BgAccent` + `tw.TextFg` → an accent-green square with a "C" (white in dark, near-black in light, both
+  legible). MEASURED: dark **3.86:1** (white on accent), light **4.01:1** (dark on accent) — visible + branded
+  in both, vs 1.00 invisible before. Build rc=0; `go test ./internal/ui/tw` ok. Screenshot
+  `e2e/screenshots/logo_real_crop.png` shows a green "C" badge + "CashFlux". (Parent-verified: LSP flagged
+  unrelated `uistate.*AdminConsole*`/`Route.AdminOnly` errors — a concurrent agent's admin-console work;
+  on-disk `go build` is clean. I touched only the logo span + the new token.) NB: an orphaned `.brand-mark`
+  CSS rule in `web/index.html` (accent bg + `#052e13`) is now unused — a dev could drop it.
+- [x] **GD-15. Accent "you are here" bar on the active nav item.** Added a 3px accent left-bar via inset
+  box-shadow (no layout shift) to the active rail item, complementing the existing tinted bg. Dark applies
+  via a base `aside.rail .nv.active` rule; light needed the box-shadow appended to its higher-specificity
+  `[data-theme="light"] …` active rule (the base rule lost the cascade there). CSS-only. MEASURED (both
+  themes, active=Budgets): box-shadow = `inset 3px 0 0 rgb(46,139,87)`. Screenshot `nav_accent_bar.png`.
+  Build rc=0.
+- **Audited (no change needed):** alpha-composited contrast scan across ~15 screens in BOTH themes found
+  **zero real low-contrast text** — recent fixes (Free badge, logo) hold. The only flags were false
+  positives: `.btn-primary` uses a gradient (background-*image*) the probe can't read, so it reported
+  white-on-"white" in light; confirmed the buttons render white-on-green correctly (`btn_light_check.png`).
+- [x] **GD-16 / SAFETY bug — budget delete had NO confirm and NO undo (data loss on misclick).** A GLAMOR
+  re-check of destructive actions found the budget-row "×" (aria-label "Delete budget") **deleted instantly**
+  — MEASURED 8→7 budgets, no `.cf-dialog`, no undo toast — while the sibling **transactions** delete already
+  guards with `uistate.ConfirmModal` (transactions_row.go:59). Budgets was the outlier (this is the
+  long-standing "destructive action needs a guard" theme — L50/L80). Fix: wrapped `budgets.go` `deleteBudget`
+  in `uistate.ConfirmModal(...)` (looks up the budget's category name for the message), added i18n
+  `budgets.deleteConfirm` + `budgets.thisBudget`. MEASURED (`e2e/budget_delete_confirm_verify.mjs`, 4/4):
+  the "×" now opens a confirm ("Delete the \"Subscriptions\" budget? This can't be undone." with Cancel +
+  Confirm); the budget is NOT removed before confirming; Cancel keeps it; Confirm deletes exactly one (8→7).
+  Build rc=0; `go test ./internal/i18n` ok. (Parent-verified: LSP flagged transient `GoalRow`/`accountRowProps`
+  redeclared + `uiw.EntityListSection` errors from a concurrent agent's in-progress files; on-disk `go build`
+  is clean. I touched only `deleteBudget` + 2 i18n keys.) **Follow-up for a dev:** audit the OTHER per-row
+  deletes (goals, accounts, categories, members, rules, subscriptions) for the same missing guard.
+- [x] **GD-17 / regression fix — mobile tab-bar items were UNSTYLED (CSS/markup class mismatch).** `shell.go`'s
+  `MobileTabBar` was rebuilt to emit `.mobile-tab-item` / `.mobile-tab-label` (+ a `+Add` button), but the CSS
+  still targeted the old `.mobile-tabbar .tab-item` / `.tab-icon` — so at phone width the bar's items rendered
+  as default blocks: MEASURED `display:block`, `min-height:auto`, label `14.5px` (should be flex-column, 44px
+  touch target, 0.65rem). Fix: renamed the CSS selectors to `.mobile-tab-item`/`.mobile-tab-item.active`/
+  `:hover` and added `.mobile-tab-label { font-size:0.65rem }` (dropped the dead `.tab-icon` icon-font rule —
+  the icon is now an SVG sized via tw W5/H5). CSS-only. MEASURED after (390px): items `display:flex`,
+  `flex-direction:column`, `min-height:44px`, label `10.4px` (0.65rem); 5 items render correctly with the
+  active item accent-green. Screenshot `e2e/screenshots/mtab_check.png`. Build rc=0.
+- [x] **GD-18 / a11y bug — member avatar initials illegible on light colors.** `memberAvatar` hard-coded
+  white text on the member's chosen disc color, so on light fills the initial nearly vanished — MEASURED
+  white-on-green-400 "M" = **1.74:1**, white-on-pink-400 "P" = **2.65:1**. Fix: added `readableTextOn(hex)`
+  (WCAG relative-luminance threshold ~0.179 → dark `#1c1c1e` on light fills, white on dark) and applied it to
+  the avatar text; no-color members now get a branded `var(--accent)` disc (white always passes). Pure helper,
+  reusable for any colored badge. MEASURED after: "M" dark-on-green = **9.76:1**, "P" dark-on-pink = **6.42:1**
+  (both AAA). Screenshot `e2e/screenshots/member_avatars.png` shows a legible dark "M". Build rc=0.
+  (Parent-verified: LSP flagged transient `m.Prefs`/`uistate.LoadSmartSettings`/`uiw.EntityListSection`/
+  `CardProps.*` errors from a concurrent agent's in-progress work; on-disk `go build` is clean — I touched only
+  `memberAvatar` + the new helper + 2 imports.) NB: member colors also tint category swatches elsewhere; a dev
+  could reuse `readableTextOn` anywhere a member/category color backs text.
+- [x] **GD-19. Accent-swatch hover affordance (Appearance).** Unselected accent swatches had only a
+  transparent border (no hover cue); added `.swatch:hover { border-color: var(--text-faint) }` + a transition
+  so they read as interactive. `.swatch.sel` stays more specific, so the selected swatch keeps its white ring.
+  CSS-only. MEASURED: unselected swatch border transparent → `rgb(108,108,113)` on hover; selected swatch
+  border still `rgb(244,244,245)`. Build rc=0.
+- **GLAMOR audit (no defects this fire):** Appearance page renders at full opacity after settle (the dimmed
+  look in a prior screenshot was the page-enter fade caught mid-animation; `#cf-page-view` opacity=1, no
+  `.page-enter`). The **Motion control wires correctly** to the WONDER system — MEASURED Off→`data-wonder=off`
+  /`--wonder-on:0`, Subtle→`subtle`/`.55`, Full→default/`1` (the user gateway to all WONDER + the chart-anim
+  gating works). Accent swatches already have a clear selected state (`.swatch.sel` white ring + aria-checked).
+  Confirmed the GD-18 avatar fix was the ONLY color-backed-text instance (dashboard member-chip is a neutral
+  dark chip; category swatch is a textless dot; no owner-color badges).
+- [x] **GD-20. Glossy destructive button (consistency with GD-3).** `.btn-danger` (the confirm-dialog
+  Delete button, now used everywhere after the delete-guard work) was a flat solid red while `.btn-primary`
+  had the GD-3 dimensional gloss. Gave it the matching treatment: top-lit gradient (top stays #c0392b so the
+  white-label contrast is preserved, darkens downward) + glossy top edge + soft shadow. CSS-only. MEASURED:
+  `.btn-danger` bgImage = `linear-gradient(rgb(192,57,43), …)`, box-shadow present, white text. Screenshot
+  `e2e/screenshots/danger_gloss.png`. Build rc=0.
+- **Audited (no defect):** the destructive confirm dialog is well-built — backdrop blur, red `.btn-danger`
+  Confirm (was already correctly danger-styled, not affirmative green), Cancel focused as the safe default.
+- [x] **GD-21. GLAMOR + a11y re-check (verification pass — all clean, no change needed).** Measured-verified
+  three enterprise-grade concerns after the recent concurrent churn:
+  - **Reports regression-clean:** 84 SVGs, 5 `.cf-chart`s, 15 donut slices, 33 bars, hero strip present, 14
+    sections — AND already grouped under 3 `.section-divider`s (Spending / Income / Trends). The priority-2
+    Reports redesign (hero strip + chart variety + section grouping) is complete; no missing extension.
+  - **Keyboard focus rings present in BOTH themes:** tabbed 40 interactive elements on Transactions in dark
+    AND light → **0 elements without a visible focus indicator** (a11y solid).
+  - **Confirm dialog correct:** red `.btn-danger` Confirm (not affirmative green), backdrop blur, Cancel
+    focused as the safe default. `.set-btn.save`'s quieter dark-green style (~9:1) is intentional for the
+    settings context — left as-is.
+  No defect found; deliberately made no forced cosmetic change to correctly-built/intentional UI.
+- [x] **GD-22. Active-tab indicator on the mobile bottom nav.** The active `.mobile-tab-item` only changed
+  text color; added a 2px accent indicator bar at the top via inset box-shadow (no layout shift) — the classic
+  bottom-nav "you are here" cue, mirroring the desktop nav accent bar (GD-15). CSS-only. MEASURED (390px,
+  active=Dashboard): accent color + `inset 0 2px 0 rgb(46,139,87)`. Screenshot `e2e/screenshots/mtab_active.png`.
+  Build rc=0.
+- **Investigated (no code change — both candidates correctly no-go):** (a) the L97 CSV "no-dedup" was
+  reclassified as INTENTIONAL (test-encoded in `appstate_more_test.go:232` — re-importing the same row is
+  expected to import again; a dedup would break it) — corrected the ticket, left `ImportTransactionsCSV`
+  untouched (import tests still green). (b) Mobile rail+tabbar both render at 390px (rail 56px + tabbar) — the
+  known B31 redundancy needing a phone drawer-rail, dev-sized; not newly fixable.
+- [x] **GD-23. Print polish — hide action controls from printed statements.** A print-media audit (Reports
+  via `emulateMedia('print')`) confirmed the layout already prints clean (rail/topbar/banner hidden, white bg,
+  dark text, all 5 charts + donut render). One blemish: action controls still printed as clutter — the
+  "Export CSV" `<details>` dropdown and per-card action `<button>`s (Roll up sub-categories, Mark paid, Edit…).
+  Added to the `@media print` hide list: `button:not(.btn-link)` (hides action buttons but KEEPS `.btn-link`
+  data labels — the category/account drill names) + `.reports-export` (the Export CSV details dropdown, which
+  is a `<summary>`, not a button). CSS-only. MEASURED (print media, Reports): Export CSV hidden, Roll-up
+  hidden, **21 `.btn-link` data labels preserved** (Mortgage/Auto loans/Dining/…). Screenshots
+  `e2e/screenshots/print_reports{,_clean}.png`. Build rc=0.
+- [ ] GD-24+ optional polish (lower priority): per-page accent micro-touches.
 
 ### G13. Insights — "The Money Question" (Renu) — 2026-06-23 ★
 
@@ -12083,6 +12554,28 @@ sort, visible names — all confirmed by the audit). Remaining fixes shipped:
   unchanged). Hover affordance is now a theme-agnostic underline-thickness bump (no contrast loss).
   MEASURED (`e2e/samplebanner_contrast_verify.mjs`, 2/2): dark **8.12:1** (was 1.55), light **3.93:1**
   (unchanged). Dark-mode audit now **0** findings (was 7). Screenshot `e2e/screenshots/samplebanner_dark.png`.
+- **✅ DARK contrast re-check round 2 (2026-06-24, keep-tidy, CSS-only) — 3 more AA misses fixed.** A
+  fresh WCAG sweep (alpha-compositing probe, gradient-skip) across 7 screens in dark caught three real
+  sub-4.5 labels the earlier passes missed:
+  1. **Sample-banner "Dismiss" 3.91:1** — the CTA was fixed last round but `.sample-banner-dismiss` kept
+     its own `color: var(--text-dim)` override on the dark `--accent-dim` banner. Removed the override so
+     Dismiss inherits `.sample-banner-btn` (dark `--text`, light `--accent`). → **8.12:1**.
+  2. **`.hero-stat-label` 3.58:1** (Reports/dashboard/home hero eyebrows) — was `var(--text-faint)`
+     (#888890); bumped to `var(--text-dim)` (#ababb3). → **8.2:1**.
+  3. **`.section-divider` 3.69:1** (uppercase section eyebrows app-wide) — same `--text-faint`→`--text-dim`
+     bump (light keeps its #686870 override). → **8.46:1**.
+  MEASURED via alpha-compositing probe; all three now ≥4.5 (8.1–8.5:1). build rc=0; sw cache v260→v261.
+  **Probe-methodology note (important for future contrast sweeps):** toggling `data-theme` via JS does
+  NOT switch the palette — Go applies `theme.CSSVars()` as INLINE STYLE on documentElement (wins over
+  the `[data-theme="light"]` stylesheet block at L756), so the LIGHT pass must switch via the Appearance
+  "Light" seg-btn (and even that needs the Go re-emit to fire). A JS attribute flip yields a Frankenstein
+  dark-tokens+light-element-rules state with false 1.05:1 readings (brand-name, font "Default"). Trust
+  only the DARK pass unless the light palette is switched through the app.
+  **Still open (deferred — palette-wide, not done here):** positive/income amounts (`.amount-income`,
+  `--up` #54b884) and Reports category drill-links (`.row-desc.btn-link`, `--accent`) measure **4.41:1**
+  in dark — just under AA 4.5. Fixing means nudging the semantic green/accent brighter, which touches the
+  whole palette + light theme; left for a dedicated palette-tuning pass to avoid an aesthetic regression
+  in a keep-tidy fire.
 - **✅ Goals "Final stretch" pace badge legible in BOTH themes (2026-06-24).** A badge-contrast sweep
   found `.pace-final` used `background: var(--accent-dim); color: var(--accent)` — accent-green text on
   the accent-dim green pill (#205337 dark / #88bb9d light) → **2.1:1 dark / 1.95:1 light**, washed-out
@@ -13322,6 +13815,13 @@ Target scroll depth: ≤ 4 viewports with all sections showing. Net answer is ab
 4. **Area chart calendar labels** — compute labels from bounds, pass to AreaChartProps (GO-STRUCTURAL)
 5. **Category color coding** — inject `--cat-idx` CSS var per row, use `hsl(calc(var(--cat-idx)*37deg), 55%, 55%)` as bar fill (GO-STRUCTURAL)
 
+**STATUS (2026-06-24, keep-tidy) — all 5 proposals now landed:**
+- [x] **1. Share bar height 4px → 8px** — DONE. Both share-bar sites (generic `shareBar` reports_screen.go:289 + ranked `reportsCatShareBar`:1056) bumped 4px→8px so they read as data bars, not decorative underlines. MEASURED: all 6 `.share-bar` heights = `8px`.
+- [x] **2. Share bar max-width 260px → 100%** — already done (both sites use `max-width:100%`).
+- [x] **3. Move Sankey above category list** — already done (reports_screen.go:749 "G9.1 Item 5 — Sankey moved up").
+- [x] **4. Area chart calendar labels** — done across ALL three trend charts (see R-4 follow-up above; the savings-rate chart was the last gap).
+- [x] **5. Category color coding** — already done (`reportsCatShareBar` uses `hsl(%ddeg 55%% 52%%)` per rank, 47° steps).
+
 ---
 
 ### 6. Spacing and rhythm
@@ -13537,6 +14037,13 @@ Requires changes to `internal/screens/reports_screen.go`. All blocked on GI0 imp
   // then: uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Labels: labels, ...})
   ```
 
+  **FOLLOW-UP (2026-06-24, keep-tidy):** the original R-4 pass added `Labels: trendLabels` to the
+  Cash-flow and Net-worth charts but MISSED the third trend chart (Savings-rate trend,
+  reports_screen.go:860) — its x-axis silently fell back to integer indices 0–5, inconsistent with the
+  other two. Added `Labels: trendLabels` there (srSeries shares the same `bounds`, so the labels are
+  valid). MEASURED: all three `.area-labels` strips now read `Jan…Jun` (Cash flow / Net worth /
+  Savings-rate trend). build rc=0.
+
 - [x] **R-5. "Heads up" card — add `card-headsup` CSS class.** `reports_screen.go` L399: change `Section(css.Class("card"), ...)` to `Section(css.Class("card", "card-headsup"), ...)`. CSS:
 
   ```css
@@ -13651,6 +14158,46 @@ if (tabNum) expect(tabNum).toContain('tabular');
 ✅ RESOLVED (2026-06-23). Charts wired: V2 (ranked bar, top-8 spending categories), V3 (donut, top-5 categories + Other), V4 (income-by-source donut), V7 (ranked bars for top payees and biggest expenses). Helpers: reportsBarSpec / reportsDonutSpec in reports_screen.go. DEFERRED (need new primitives or screenshot verification): treemap, calendar heatmap, V6 stacked-area, V10 bullet, V11 grouped-bar, e2e harness.
 
 ✅ VERIFIED RENDERING (2026-06-24). Parent-built `GOOS=js GOARCH=wasm go build` rc=0, then drove the real app via playwright (`e2e/reports_charts_verify.mjs`, in main checkout, no worktree). Measured on `/reports`: 76 chart SVGs, **10 donut arc slices** (category + income donuts), **58 ranked-bar rects** (the 3 ranked bars), 6 area-chart draw-in paths, 5 chart hosts — **identical counts in dark AND light** → all chart variety renders in both themes. 7/7 PASS, exit 0. Screenshots: `e2e/screenshots/reports_charts_{dark,light}.png`. Note: the charts are built on the `uiw.Chart`/`uiw.AreaChart` primitive (so screenlint stays green) — the earlier `be26b4f` rescue branch is **redundant/superseded** (it used 14 bespoke cards) and can be dropped without losing functionality.
+
+✅ a11y/usability — category BARS now have per-bar hover tooltips (2026-06-24, keep-tidy). Re-verified
+the whole Reports render first (DOM-measured: 36 SVGs, 9–11 donut arcs, 5 chart hosts, 6 area paths,
+hero strip, 3 area-label strips, 42 share-bars, 3 section dividers; **0 console errors**; top screenshot
+polished). The one gap found: the D3 category bar chart (`web/chart.js`) drew bare `<rect>`s with **no
+label, legend, or tooltip** — you couldn't tell which category a bar was or its value on hover. Added a
+`<title>` per bar showing "Label — $amount" using the existing `curSym` + d3 money formatter (e.g.
+"Mortgage — $1,480.00"). JS-only, additive, no layout/colour change. MEASURED (`/reports`): 24 category
+bars now carry tooltips ("Mortgage — $1,480.00", "Dining — $655.00", "Auto loans — $1,100.00", …),
+0 console errors, build rc=0; sw cache v262→v263. (Closes the "a11y" deferred micro-item for bars; the
+donut already labels slices + legend, and area charts already have axis-label strips.)
+
+✅ a11y/usability — DONUT slices now have per-slice hover tooltips too (2026-06-24, keep-tidy). Follow-up
+to the bar tooltips: the donut had a right-side legend (label + %) but the **slices themselves carried no
+`<title>`**, so hovering a wedge showed nothing — and on a narrow box the legend is dropped entirely
+(`if(!hasRoom) return` in `renderDonut`), leaving a bare unlabeled ring. Added a `<title>` per slice
+("Mortgage — $1,480.00 (18%)") with label + money-formatted value + share %. JS-only, additive, no
+layout/colour change. MEASURED (`/reports`): 9 slices now carry tooltips ("Mortgage — $1,480.00 (18%)",
+"Auto loans — $1,100.00 (13%)", "Dining — $655.00 (8%)", …), 0 console errors, build rc=0; sw cache
+v263→v264. (Reports bars + donut — both d3 — are now hover-identifiable; Reports *trend* charts use the
+separate `uiw.AreaChart` Go primitive — see next entry.)
+
+✅ a11y/usability — D3 LINE/AREA charts now have per-point hover tooltips (2026-06-24, keep-tidy).
+Completes the chart-tooltip set for the d3 path (`web/chart.js`): line/area charts drew only the path with
+no per-datum hover read. Added invisible per-point hover circles (r=7, `fill:transparent` so they receive
+the pointer; no visible change) each with a `<title>` = "period: value" via a new full-precision,
+unit-aware `valFmt` (money → "$1,480.00"; explicit d3 format e.g. percent honored; else thousands-sep).
+This covers the **Dashboard cash-flow area chart, Planning forecast line/area, custom-page charts, and
+widget-builder line/area** (dashboard.go:659, planning.go:364/785, custompage.go:538, widget_builder).
+MEASURED (Dashboard): 6 points carry tooltips ("Feb '26: $11.6k", "Mar '26: $12.6k", "Apr '26: $13.4k",
+…), 0 console errors, build rc=0; sw cache v264→v265.
+- [x] **Follow-up: Reports trend charts (`uiw.AreaChart`) per-point tooltips (DONE 2026-06-25, keep-tidy).**
+  Added an optional `ValueLabels []string` to `AreaChartProps` (`internal/ui/chart.go`): when supplied, the
+  chart draws a transparent `<circle>` hover target at each point with a `<title>` of "<period>: <value>"
+  (no visible change — the circles stretch under `preserveAspectRatio="none"` but still receive the pointer
+  + show the title). Wired the 3 reports callers (`reports_screen.go`) with unit-correct formatters:
+  cash-flow + net-worth → `fmtMoney` (values are minor units), savings-rate → `%d%%`. MEASURED (`/reports`,
+  3 trend SVGs, 19/19 circles titled): Cash flow "Jan: $1,890.73", Net worth "Jan: $9,667.06", Savings-rate
+  "Jan: 28%" — correct units per chart. 0 console errors, build rc=0. **Completes the chart-tooltip set: every
+  chart type app-wide (d3 bars, d3 donut, d3 line/area, AND the Go AreaChart trends) is now hover-identifiable.**
 
 ✅ FIXED — Money-flow Sankey showed RAW MINOR UNITS (2026-06-24). The "Money flow" Sankey rendered node
 labels as bare cents — "Income 406800", "Housing 217500", "Groceries 52000" — because Mermaid's `sankey-beta`
@@ -23100,6 +23647,29 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 *Entrance / reveal*
 - [x] W-9 Page-enter transition — on route change the page content fades + rises quickly. **LANDED 2026-06-23** — Approach A: `triggerPageEnter()` (pageenter.go, js+wasm build tag) does a double-rAF class toggle on `#cf-page-view`; `@keyframes wonder-page-enter` in index.html uses `--wonder-dur-slow`/`--wonder-ease-out`/`--wonder-on`; gated off under `[data-wonder="off"]` and `prefers-reduced-motion`; cold-boot excluded via existing firstRender guard in shell.go UseEffect.
 - [~] W-10 — Route cross-fade (View Transitions API) — PARTIAL (2026-06-24): CSS scaffold + view-transition-name + ::view-transition-* keyframes landed; startViewTransition wraps the W-9 class-toggle for progressive enhancement. True old→new cross-fade blocked by GWC framework constraint: UseEffect fires post-render, so the outgoing page snapshot is already replaced when triggerPageEnter runs. Scaffold is ready for a pre-render hook if GWC exposes one.
+  - **✅ BUG FIXED (2026-06-24, keep-tidy) — "call to released function" on EVERY route change.** A
+    console-error health sweep across 9 screens caught one error firing once per navigation. Root cause in
+    `internal/app/pageenter.go`: the W-10 path built a `js.FuncOf` cb and `defer cb.Release()`'d it, on the
+    (wrong) assumption that `crossFade` "invokes cb synchronously in both paths." But `crossFade` →
+    `document.startViewTransition(cb)` runs its update callback **asynchronously** (later microtask), so cb
+    was released BEFORE the browser called it → `call to released function`. In Chromium (View Transitions
+    supported + motion on) this was the default path, so it fired on every route change. Fix: cb now
+    **self-releases after it runs** (correct for both the async view-transition path and the sync
+    direct-applyFn fallback). Also hardened the fallback double-rAF path, which previously leaked 2 js.Funcs
+    per route change (callbacks never released) — both rAF callbacks now self-release too. MEASURED: released-
+    function sweep **9 hits → 0**; page-enter class still applies on **4/4** navigations (W-9 animation intact);
+    console errors **0** across all screens. build rc=0; `go test ./internal/app` ok. No JS/CSS change — Go only.
+  - **✅ BUG FIXED (2026-06-24, keep-tidy) — "AbortError: Transition was skipped" under rapid navigation.**
+    A stress sweep (rapid-fire route switching ×3 + menu open/close) surfaced 11 unhandled-rejection console
+    errors. Cause: `document.startViewTransition` (used by `crossFade` in `web/wonder.js`) returns a
+    ViewTransition whose `.ready`/`.finished` promises REJECT with an AbortError when a subsequent navigation
+    starts a new transition before the current one settles — expected during fast switching, but the
+    rejections bubble up as unhandled-promise console errors. Fix (JS-only, wonder.js): capture the returned
+    transition and attach no-op `.catch()` handlers to its `.ready`/`.finished`/`.updateCallbackDone` promises
+    (the DOM swap in applyFn has already run, so the visual transition being skipped is harmless). MEASURED:
+    stress-sweep console errors **11 → 0**; page-enter still fires **4/4** navigations. build rc=0; sw cache
+    v261→v262. Together with the released-function fix above, the route-change path is now console-clean under
+    both normal and rapid navigation.
 - [x] W-11 List stagger — `.rows .row` / `.list-rows .row` fade-rise cascade on first paint via `@keyframes wonder-row-enter` + `animation-delay` by `:nth-child(1..8)` (cap 210ms); nth-child > 8 enter together; delays scale by `--wonder-on` → 0ms when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`. **LANDED 2026-06-23**
 - [x] W-12 Card/bento entrance — `.bento .w` tiles scale-in (`1 - 0.02 * --wonder-on` → 1) + fade via `@keyframes wonder-bento-enter` (`--wonder-dur-slow`); scale uses `--wonder-on`; `animation:none` under off+reduce. **LANDED 2026-06-23**
 - [x] W-13 Modal/flip backdrop blur-in — `.flip-backdrop` now transitions `backdrop-filter` (`blur(0)` → `blur(3px * --wonder-on)`) over `--wonder-dur-slow` in addition to existing opacity; existing `transition:none` in reduce block covers it. **LANDED 2026-06-23**
@@ -23109,6 +23679,7 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 - [x] W-16 Progress-bar fill ease — verified: all bar variants (`.near`/`.over`/`.done`/`.final`/`.overdue`/`.soon`/`.storage-bar-fill`) share `.bar-fill` which already carries `width 0.45s cubic-bezier(.2,.75,.2,1)` under `no-preference`; no additional rules needed. **LANDED 2026-06-23** (pass-through verification)
 - [x] W-17 Success pulse — **LANDED 2026-06-23** `@keyframes wonder-success-pulse` (scale .6→1.15→1) on `.toast:not(.toast-err)::before`; duration `calc(--wonder-dur-slow * --wonder-on)` → instant/static when off; `animation:none` under `[data-wonder="off"]` and `prefers-reduced-motion`.
 - [x] W-18 Chart draw-in — **LANDED 2026-06-23** CSS stroke-dashoffset draw-in on SVG `AreaChart` line path (`pathLength="1"` + `.wonder-chart-line`); area fill fades via `.wonder-chart-area`; both gated by `[data-wonder="off"]` + `prefers-reduced-motion: reduce`; D3 bars/donut deferred (GO-STRUCTURAL).
+  - **✓ W-18 COMPLETED for D3 charts (2026-06-24).** The D3 (`web/chart.js`) draw-ins are now fully wired to the WONDER `animate` flag: **bars** grow up from the baseline (already present, gated GD-earlier), **line/area** stroke-dashoffset draw, and **NEW — the donut now sweeps in** (`renderDonut` got the `animate` param; each wedge `attrTween`s open from its own start angle over 600ms easeCubicOut). All gated by the same flag (`!data-cf-drawn && !reduced-motion && --wonder-on>0`). JS-only. MEASURED (`e2e/donut_drawin_verify.mjs`, 4/4): WONDER full → donut animates (d3 transition active) + renders 9 arcs; WONDER off → static, no transition, still 9 arcs. Settled donut renders correctly (full ring + center total "$8,223" + legend). Screenshot `e2e/screenshots/donut_drawin.png`. Build rc=0. (The "GO-STRUCTURAL deferred" note is resolved — it was a chart.js param-threading change, no Go needed.)
   - **✓ WONDER-COMPLIANCE FIX (2026-06-24) — D3 chart entrance now honors the WONDER toggle.** The D3
     `cashfluxRenderChart` (web/chart.js) already grew its bars/line/area in on first draw, but its `animate`
     flag only checked `data-cf-drawn` + `prefers-reduced-motion` — it **ignored the WONDER dial**, so the
@@ -25757,8 +26328,22 @@ reduced-motion block) to stay consistent with the app's a11y stance.
 **Stateful micro-interactions**
 - [x] **[L]** Segmented controls (`.seg-btn.active`) and the week-start/theme pickers snap the active background
       (`web/index.html:364`). A sliding active-pill indicator (animate a shared highlight) would feel premium.
-- [ ] **[L]** Active nav pill (`.nav-link.active` / `.nv`) jumps between items on route change. Consider animating
+- [~] **[L]** Active nav pill (`.nav-link.active` / `.nv`) jumps between items on route change. Consider animating
       a shared active indicator that slides to the selected item.
+      **PARTIAL — grow-in landed (2026-06-24, keep-tidy, CSS-only).** The GD-15 "you are here" bar was an
+      inset box-shadow (`aside.rail .nv.active`) that snapped between items. Converted it to an absolutely-
+      positioned `aside.rail .nv.active::before` accent bar (3px, `var(--accent)`, theme-agnostic, no layout
+      shift) that **grows in** via `@keyframes wonder-nav-bar-in` (scaleY + opacity, `--wonder-dur`/
+      `--wonder-ease-out`) each time an item becomes active — so the new item's indicator eases in instead of
+      hard-snapping. Removed the now-redundant light-mode box-shadow bar (index.html ~847) so both themes use
+      the one animated `::before`. WONDER-gated: `[data-wonder="off"]` and `prefers-reduced-motion` → `animation:
+      none` (and the keyframe's `from` collapses to `to` when `--wonder-on=0`), bar stays statically visible.
+      MEASURED (6/6): full → bar present (3px, rgb(46,139,87)) + `animation-name: wonder-nav-bar-in`; off →
+      bar present, `animation: none`; reduced-motion → bar present, `animation: none`. Bar renders accent in
+      BOTH themes. Screenshots `e2e/screenshots/nav_pill_{dark,light}.png`. sw cache v258→v259. build rc=0.
+      **Still open (the true "slide"):** a single shared indicator that physically slides between items needs
+      JS measurement/FLIP — the framework's `Style()` drops CSS custom props, so a var-driven CSS slide isn't
+      feasible; deferred as a larger JS change. The grow-in removes the worst of the "jump" for now.
 - [x] **[L]** Accent swatches (`.swatch.sel`) and the gear/handle reveals pop in instantly — add a quick
       `transform: scale` / opacity transition on selection and on `.rz` handle reveal for refinement.
 
@@ -26508,170 +27093,170 @@ Brainstormed page-by-page. **Guiding principles for the whole SMART series:**
 
 ## SMART-A. Accounts page
 
-- [ ] **SMART-A1. Balance anomaly watch `[rule]`** — flag an account whose balance moved unusually vs.
+- [x] **SMART-A1. Balance anomaly watch `[rule]`** — flag an account whose balance moved unusually vs.
   its own history (e.g. checking draining ~3× faster than its trailing 90-day burn; a card balance
   jumping a large % in a week). Surfaces as a quiet badge on the account tile with a one-line reason.
   Deterministic: rolling mean/std-dev or rate-of-change thresholds on local balance history. Optional, dismissable.
-- [ ] **SMART-A2. Dormant account nudge `[rule]`** — detect accounts with no activity in N months
+- [x] **SMART-A2. Dormant account nudge `[rule]`** — detect accounts with no activity in N months
   (parked savings, a forgotten card still charging an annual fee) and suggest consolidate / close /
   move cash, with the estimated yearly idle cost. Deterministic: last-transaction-date + simple yield/fee math.
-- [ ] **SMART-A3. Smart type & name cleanup `[AI]` (rule fallback)** — on add/import, infer the account
+- [x] **SMART-A3. Smart type & name cleanup `[AI]` (rule fallback)** — on add/import, infer the account
   type (checking/savings/brokerage/loan/crypto) and propose a clean display name
   ("PLAID-CHK-8842" → "Chase Checking ••8842"). Try a deterministic pattern/keyword classifier first;
   fall back to the LLM only when the heuristic is low-confidence. Optional, user confirms before applying.
-- [ ] **SMART-A4. Cash-positioning suggestions `[rule]`** — scan across accounts and recommend
+- [x] **SMART-A4. Cash-positioning suggestions `[rule]`** — scan across accounts and recommend
   rebalancing idle cash ("$14k in 0.01% checking; moving $10k to savings earns ~$X/yr"). Deterministic:
   compare balances against each account's stored APY/rate. Advisory only, one-tap dismiss.
-- [ ] **SMART-A5. Natural-language account Q&A `[AI]`** — small opt-in ask bar:
+- [x] **SMART-A5. Natural-language account Q&A `[AI]`** — small opt-in ask bar:
   "Which account grew the most this year?" / "How much can I access in 2 days?" — answered from local
   account + transaction data. Needs the LLM for free-form language; data stays local unless cloud-AI is enabled.
 
 ### SMART-A (round 2 — kept SMART-A7/A8/A10)
 
-- [ ] **SMART-A7. Recurring-charge detection per account `[rule]`** — spot subscriptions and recurring
+- [x] **SMART-A7. Recurring-charge detection per account `[rule]`** — spot subscriptions and recurring
   debits hitting each account (streaming, gym, insurance), group them into a "recurring" view on the
   tile, and flag price increases or newly-appeared ones. Deterministic: pattern-match on amount +
   cadence + merchant. Optional, dismissable.
-- [ ] **SMART-A8. Low-balance / overdraft forecast `[rule]`** — project each account's balance forward
+- [x] **SMART-A8. Low-balance / overdraft forecast `[rule]`** — project each account's balance forward
   using known recurring in/out flows and warn ("Checking dips below $0 around the 28th before payday").
   Deterministic running-balance projection over detected recurring items. Optional.
-- [ ] **SMART-A10. Account health score `[AI]` (rule core)** — per-account 0–100 score blending
+- [x] **SMART-A10. Account health score `[AI]` (rule core)** — per-account 0–100 score blending
   utilization, idle cash, fee drag, and volatility into one glanceable indicator with a plain-language
   "why." Score is fully deterministic; the LLM is used only to phrase the explanation (and is optional —
   a templated rule-based explanation works without it). Optional, dismissable.
 
 ## SMART-T. Transactions page
 
-- [ ] **SMART-T1. Auto-categorization `[AI]` (rule core)** — assign a category to each transaction from
+- [x] **SMART-T1. Auto-categorization `[AI]` (rule core)** — assign a category to each transaction from
   merchant + amount + history. Deterministic memory first (a previously-categorized merchant always
   maps the same way); LLM only for never-seen merchants. Learns from user corrections. Optional, and
   every suggestion is user-overridable. Highest-leverage transaction feature.
-- [ ] **SMART-T2. Smart duplicate detection `[rule]`** — flag likely duplicate entries (same amount +
+- [x] **SMART-T2. Smart duplicate detection `[rule]`** — flag likely duplicate entries (same amount +
   merchant within a few days, common after a CSV re-import) and offer one-tap merge/dismiss.
   Deterministic heuristic, no model. Optional.
-- [ ] **SMART-T3. Natural-language search & filter `[AI]`** — type "coffee over $10 last month" or
+- [x] **SMART-T3. Natural-language search & filter `[AI]`** — type "coffee over $10 last month" or
   "everything at Amazon this year"; the LLM parses intent into the existing structured filter; results
   computed locally. Optional; data stays local unless cloud-AI enabled.
-- [ ] **SMART-T4. Bulk-edit suggestions `[rule]`** — when one transaction is edited (recategorized,
+- [x] **SMART-T4. Bulk-edit suggestions `[rule]`** — when one transaction is edited (recategorized,
   merchant renamed), spot the other untouched matches and offer "apply to N similar." Deterministic
   similarity match. Optional, user confirms.
-- [ ] **SMART-T5. Merchant name cleanup `[AI]` (rule fallback)** — normalize raw import gibberish
+- [x] **SMART-T5. Merchant name cleanup `[AI]` (rule fallback)** — normalize raw import gibberish
   ("SQ *BLUE BOTTLE 8829 SF" → "Blue Bottle Coffee") and dedupe variants of the same merchant.
   Pattern/dictionary first; LLM for the messy long tail. Optional, user confirms before applying.
 
 ### SMART-T (round 2 — kept SMART-T6/T7/T8/T10)
 
-- [ ] **SMART-T6. Spending-spike alerts `[rule]`** — flag when a transaction is unusually large for its
+- [x] **SMART-T6. Spending-spike alerts `[rule]`** — flag when a transaction is unusually large for its
   category ("$240 at Restaurants — 4× your typical"). Deterministic per-category baseline; quiet inline
   badge. Optional, dismissable.
-- [ ] **SMART-T7. Missing-transaction detection `[rule]`** — notice when an expected recurring charge
+- [x] **SMART-T7. Missing-transaction detection `[rule]`** — notice when an expected recurring charge
   didn't show up ("Rent usually posts by the 3rd — not seen yet"), catching forgotten entries or failed
   payments. Deterministic cadence math over detected recurring items. Optional.
-- [ ] **SMART-T8. Receipt attachment OCR `[AI]`** — snap/drop a receipt image; extract merchant, amount,
+- [x] **SMART-T8. Receipt attachment OCR `[AI]`** — snap/drop a receipt image; extract merchant, amount,
   date, and line items to pre-fill or attach to the transaction. Needs vision model; fully opt-in,
   user confirms extracted values before save.
-- [ ] **SMART-T10. Smart import field-mapping `[AI]` (rule fallback)** — on CSV import, auto-detect which
+- [x] **SMART-T10. Smart import field-mapping `[AI]` (rule fallback)** — on CSV import, auto-detect which
   columns are date/amount/merchant/category regardless of bank format and propose the mapping.
   Header-keyword heuristic first; LLM only for unrecognized layouts. Optional, user confirms mapping.
 
 ### SMART-T (round 3 — kept SMART-T11/T12/T13)
 
-- [ ] **SMART-T11. Cash-flow timeline annotations `[rule]`** — auto-label notable moments in the
+- [x] **SMART-T11. Cash-flow timeline annotations `[rule]`** — auto-label notable moments in the
   transaction stream ("biggest expense this month," "first charge from a new merchant," "income posted")
   as subtle inline markers. Deterministic rules. Optional, dismissable.
-- [ ] **SMART-T12. Tax-relevant tagging `[AI]` (rule core)** — auto-flag potentially deductible /
+- [x] **SMART-T12. Tax-relevant tagging `[AI]` (rule core)** — auto-flag potentially deductible /
   tax-relevant transactions (charity, medical, home-office, business) into a year-end exportable bucket.
   Keyword/category rules first; LLM only for ambiguous merchants. Optional, user-overridable.
-- [ ] **SMART-T13. Refund / reversal matching `[rule]`** — pair a refund with its original charge and
+- [x] **SMART-T13. Refund / reversal matching `[rule]`** — pair a refund with its original charge and
   net them visually so a returned purchase doesn't distort category totals. Deterministic amount/merchant
   match. Optional.
 
 ### SMART-B (round 2 — kept SMART-B7/B8/B9/B10)
 
-- [ ] **SMART-B7. Seasonal budget adjustment `[rule]`** — detect categories with seasonal patterns
+- [x] **SMART-B7. Seasonal budget adjustment `[rule]`** — detect categories with seasonal patterns
   (winter heating, summer travel, December gifts) and suggest month-specific budget amounts instead of a
   flat year-round number. Deterministic month-over-month history. Optional, user confirms.
-- [ ] **SMART-B8. "Safe to spend" indicator `[rule]`** — a single glanceable number: after committed
+- [x] **SMART-B8. "Safe to spend" indicator `[rule]`** — a single glanceable number: after committed
   bills, savings goals, and remaining budgets, how much discretionary cash is genuinely free right now.
   Deterministic running calculation. Optional.
-- [ ] **SMART-B9. Budget goal pacing nudges `[rule]`** — for savings/debt-payoff budgets, show whether
+- [x] **SMART-B9. Budget goal pacing nudges `[rule]`** — for savings/debt-payoff budgets, show whether
   the user is ahead or behind target pace and the adjustment to get back on track ("$45/mo more hits your
   goal by Dec"). Deterministic projection. Optional, dismissable.
-- [ ] **SMART-B10. Uncovered-spending finder `[rule]`** — surface recurring spending with no budget
+- [x] **SMART-B10. Uncovered-spending finder `[rule]`** — surface recurring spending with no budget
   category yet and suggest creating one, so nothing escapes the budget. Heuristic on uncategorized /
   un-budgeted recurring flows. Optional, user confirms.
 
 ## SMART-G. Goals page
 
-- [ ] **SMART-G1. Suggested contribution amount `[rule]`** — given a target and deadline, compute the
+- [x] **SMART-G1. Suggested contribution amount `[rule]`** — given a target and deadline, compute the
   per-month/per-paycheck amount needed and check it against the user's actual surplus ("$320/mo hits it
   by March — within your ~$500 typical slack"). Deterministic math; one-tap accept. Optional.
-- [ ] **SMART-G2. Goal completion forecast `[rule]`** — project the real finish date from actual
+- [x] **SMART-G2. Goal completion forecast `[rule]`** — project the real finish date from actual
   contribution history, not the planned one ("at your current pace, this lands 2 months late").
   Deterministic run-rate. Optional, dismissable.
-- [ ] **SMART-G3. Auto-allocate surplus to goals `[rule]`** — at month-end, detect leftover cash and
+- [x] **SMART-G3. Auto-allocate surplus to goals `[rule]`** — at month-end, detect leftover cash and
   suggest splitting it across active goals by priority ("$240 unspent — $150 to Emergency Fund, $90 to
   Vacation?"). Deterministic; user confirms each move. Optional.
-- [ ] **SMART-G4. Smart goal drafting from a wish `[AI]` (rule core)** — user describes a goal in plain
+- [x] **SMART-G4. Smart goal drafting from a wish `[AI]` (rule core)** — user describes a goal in plain
   language ("save for a $6k Japan trip next spring") and the app drafts target, deadline, and monthly
   plan. LLM parses the wish; rules do the schedule. Opt-in, editable draft.
-- [ ] **SMART-G5. Trade-off / conflict detection `[rule]`** — flag when active goals collectively demand
+- [x] **SMART-G5. Trade-off / conflict detection `[rule]`** — flag when active goals collectively demand
   more than available surplus and show the shortfall + options ("your 3 goals need $780/mo but you free
   up ~$500 — extend one or trim $280"). Deterministic math, advisory. Optional.
 
 ### SMART-G (round 2 — kept SMART-G6/G8/G9/G10)
 
-- [ ] **SMART-G6. Milestone celebration & nudges `[rule]`** — mark 25/50/75/100% milestones with a moment
+- [x] **SMART-G6. Milestone celebration & nudges `[rule]`** — mark 25/50/75/100% milestones with a moment
   of acknowledgment, and gently nudge stalled goals ("no contribution in 6 weeks — still on?").
   Deterministic threshold rules. Optional, dismissable.
-- [ ] **SMART-G8. Goal-impact preview on spending `[rule]`** — when a large discretionary purchase posts,
+- [x] **SMART-G8. Goal-impact preview on spending `[rule]`** — when a large discretionary purchase posts,
   show its cost in goal terms ("this $400 = ~3 weeks of your Vacation pace"). Deterministic math,
   advisory, dismissable. Optional.
-- [ ] **SMART-G9. Priority re-ordering suggestions `[AI]` (rule core)** — recommend which goal to fund
+- [x] **SMART-G9. Priority re-ordering suggestions `[AI]` (rule core)** — recommend which goal to fund
   first based on deadline urgency, interest cost (debt payoff beats low-yield saving), and emergency-fund
   adequacy. Rules score it; LLM optionally explains the ordering. Optional, user-overridable.
-- [ ] **SMART-G10. "What if" goal simulator `[rule]`** — slider to test scenarios ("add $100/mo" or "push
+- [x] **SMART-G10. "What if" goal simulator `[rule]`** — slider to test scenarios ("add $100/mo" or "push
   the deadline 3 months") and instantly see the new finish date / required amount across all goals.
   Deterministic recompute, no model. Optional.
 
 ### SMART-G (round 3 — kept SMART-G11/G12/G13/G14/G15)
 
-- [ ] **SMART-G11. Emergency-fund adequacy check `[rule]`** — measure the emergency fund against actual
+- [x] **SMART-G11. Emergency-fund adequacy check `[rule]`** — measure the emergency fund against actual
   monthly essential spending and flag the gap ("3.2 months covered — most aim for 6; +$4,800 gets there").
   Deterministic from real bills. Optional, dismissable.
-- [ ] **SMART-G12. Auto-create suggested goals `[rule]`** — proactively suggest goals the user likely
+- [x] **SMART-G12. Auto-create suggested goals `[rule]`** — proactively suggest goals the user likely
   needs but hasn't set (emergency fund, sinking funds for annual insurance/taxes) based on data patterns.
   Heuristic, opt-in, user confirms.
-- [ ] **SMART-G13. Windfall routing `[rule]`** — detect an unusually large income deposit (bonus, tax
+- [x] **SMART-G13. Windfall routing `[rule]`** — detect an unusually large income deposit (bonus, tax
   refund) and suggest an allocation across goals/debt rather than letting it drift into spending.
   Deterministic outlier + priority rules. Optional, user confirms.
-- [ ] **SMART-G14. Goal-linked account binding `[rule]`** — link a goal to a specific account/sub-account
+- [x] **SMART-G14. Goal-linked account binding `[rule]`** — link a goal to a specific account/sub-account
   so progress tracks the real balance automatically instead of manual contributions. Pure data wiring,
   no model. Optional.
-- [ ] **SMART-G15. Debt-payoff strategy optimizer `[rule]`** — for debt-type goals, compare avalanche
+- [x] **SMART-G15. Debt-payoff strategy optimizer `[rule]`** — for debt-type goals, compare avalanche
   (highest interest first) vs. snowball (smallest balance first) and show total interest saved + payoff
   date for each. Deterministic amortization math. Optional.
 
 ### SMART-G (round 4 — kept SMART-G17/G18/G19/G20)
 
-- [ ] **SMART-G17. Recurring auto-contribution scheduling `[rule]`** — set up a standing "on payday, move
+- [x] **SMART-G17. Recurring auto-contribution scheduling `[rule]`** — set up a standing "on payday, move
   $X to this goal" rule that auto-logs the contribution. Deterministic, opt-in, pausable. Optional.
-- [ ] **SMART-G18. Goal feasibility traffic-light `[rule]`** — a green/amber/red badge on each goal
+- [x] **SMART-G18. Goal feasibility traffic-light `[rule]`** — a green/amber/red badge on each goal
   showing whether its deadline is realistic given current pace and surplus, at a glance. Pure rule atop
   the G2/G5 math. Optional, dismissable.
-- [ ] **SMART-G19. Borrow-from-goal warning `[rule]`** — if a withdrawal would pull funds from a
+- [x] **SMART-G19. Borrow-from-goal warning `[rule]`** — if a withdrawal would pull funds from a
   goal-linked account, warn about the setback and show the new finish date before the user confirms.
   Deterministic, advisory. Optional.
-- [ ] **SMART-G20. Shared / household goal contributions `[rule]`** — for multi-member households, track
+- [x] **SMART-G20. Shared / household goal contributions `[rule]`** — for multi-member households, track
   who contributed what toward a shared goal and show split progress. Pure aggregation by member, no model.
   Optional.
 
 ## SMART-D. Todos page
 
-- [ ] **SMART-D1. Auto-generated financial todos `[rule]`** — proactively create todos from detected
+- [x] **SMART-D1. Auto-generated financial todos `[rule]`** — proactively create todos from detected
   events ("Review the $240 Dining spike," "Rent didn't post — check," "Cancel the unused $15/mo
   subscription"). Deterministic, sourced from the other SMART engines. Opt-in, user can dismiss.
-- [ ] **SMART-D4. Natural-language quick-add `[AI]`** — type "remind me to move $200 to savings next
+- [x] **SMART-D4. Natural-language quick-add `[AI]`** — type "remind me to move $200 to savings next
   Friday" and parse it into a structured todo with date, amount, and action. LLM parses; everything
   stored locally. Optional; data stays local unless cloud-AI enabled.
 
@@ -26681,37 +27266,37 @@ Brainstormed page-by-page. **Guiding principles for the whole SMART series:**
 60-day cash runway + cover-suggestion, recurring cash flows, what-if plans, snowball/avalanche
 debt strategy. SMART items build on these, never duplicate them.)
 
-- [ ] **SMART-P1. Auto-discovered recurring cash flows `[rule]`** — scan transaction history and propose
+- [x] **SMART-P1. Auto-discovered recurring cash flows `[rule]`** — scan transaction history and propose
   the recurring set (label, amount, cadence, account, category) pre-filled for one-tap accept, instead of
   hand-entering each. Feeds the forecast, runway, and post-due engines. Deterministic cadence/amount
   clustering. Optional, user confirms each.
-- [ ] **SMART-P2. Plain-language scenario builder `[AI]` (rule core)** — type "what if I get a $500/mo
+- [x] **SMART-P2. Plain-language scenario builder `[AI]` (rule core)** — type "what if I get a $500/mo
   raise and pay an extra $200 on my card?" → draft a saved what-if Plan + set the debt-strategy extra.
   LLM parses the sentence into existing Plan/PlanItem + payoff inputs; all projection stays in the pure
   engines. Optional, editable draft.
-- [ ] **SMART-P3. Narrated forecast summary `[AI]` (rule fallback)** — a one-paragraph plain-English read
+- [x] **SMART-P3. Narrated forecast summary `[AI]` (rule fallback)** — a one-paragraph plain-English read
   of the forecast/runway/debt cards ("trending to ~$42k by next June, but runway dips below buffer ~28th;
   cover from Savings to stay safe"). Rules pick the salient facts; LLM phrases it; templated version works
   with no key. Optional.
-- [ ] **SMART-P4. Suggested affordability & runway inputs `[rule]`** — pre-fill the "Can I afford it?"
+- [x] **SMART-P4. Suggested affordability & runway inputs `[rule]`** — pre-fill the "Can I afford it?"
   reserve and the runway buffer from actual essential monthly spend (so the buffer isn't a guess), and
   propose a sensible affordability horizon. Deterministic from real bill data. Optional.
-- [ ] **SMART-P5. Goal-aware forecast overlay `[rule]`** — overlay active Goals' required contributions
+- [x] **SMART-P5. Goal-aware forecast overlay `[rule]`** — overlay active Goals' required contributions
   onto the 12-month forecast, showing the net-worth curve after funding them, so planning and goals
   reconcile in one view. Pure projection reusing the forecast engine + goal math. Optional, toggle.
 
 ### SMART-P (round 2 — kept SMART-P6/P8/P9/P10)
 
-- [ ] **SMART-P6. Confidence band on the forecast `[rule]`** — render a shaded high/low band around the
+- [x] **SMART-P6. Confidence band on the forecast `[rule]`** — render a shaded high/low band around the
   12-month projection from the variance of trailing monthly net (good vs. lean months), instead of a
   single line. Deterministic from historical std-dev; honest about uncertainty. Optional.
-- [ ] **SMART-P8. Auto-suggested extra debt payment `[rule]`** — extend the existing SuggestedExtra to
+- [x] **SMART-P8. Auto-suggested extra debt payment `[rule]`** — extend the existing SuggestedExtra to
   recommend the largest extra payment that keeps the runway above buffer, tying the debt and runway
   engines together. Pure constrained math. Optional, one-tap apply.
-- [ ] **SMART-P9. Sensitivity / break-even finder `[rule]`** — for a what-if plan, compute the threshold
+- [x] **SMART-P9. Sensitivity / break-even finder `[rule]`** — for a what-if plan, compute the threshold
   that flips the outcome ("stay positive as long as monthly spend < $4,180"; "need $260/mo more to hit
   zero debt by Dec"). Deterministic solve. Optional.
-- [ ] **SMART-P10. Bill-shock early warning `[rule]`** — project irregular large recurring charges (annual
+- [x] **SMART-P10. Bill-shock early warning `[rule]`** — project irregular large recurring charges (annual
   insurance, quarterly taxes) onto the runway and warn ahead of the month they land ("$1,400 insurance in
   March — set aside ~$235/mo now"). Deterministic from recurring cadence. Optional, dismissable.
 
@@ -26722,17 +27307,17 @@ profiles (presets + saved), weighted vs fill-to-target modes, reserve/max-per co
 split, apply-with-confirm + undo, income pre-fill nudge, algo "why" summary, optional AI narrative.
 SMART items sharpen the inputs/judgment, never re-rank.)
 
-- [ ] **SMART-AL1. Auto-suggested profile from your situation `[rule]`** — recommend the profile that
+- [x] **SMART-AL1. Auto-suggested profile from your situation `[rule]`** — recommend the profile that
   fits current data instead of defaulting to "balanced" (high-APR debt → "debt"; goals behind pace →
   "goals"; thin emergency fund → "safety") with a one-line why. Deterministic from balances/rates/
   goal-pace; one-tap accept, fully overridable. Optional.
-- [ ] **SMART-AL3. Smart reserve suggestion `[rule]`** — pre-fill the emergency-buffer "reserve" field
+- [x] **SMART-AL3. Smart reserve suggestion `[rule]`** — pre-fill the emergency-buffer "reserve" field
   from actual essential monthly spend × target months, so held-back cash isn't a guess. Deterministic,
   reuses the bill/essential-spend engine. Optional.
-- [ ] **SMART-AL4. Plain-language allocation intent `[AI]` (rule core)** — type "put most toward the
+- [x] **SMART-AL4. Plain-language allocation intent `[AI]` (rule core)** — type "put most toward the
   credit card but keep $1k liquid" → set profile, reserve, and max-per. LLM parses intent into the
   existing weighted inputs; ranking/splitting stays in the pure engine. Optional, editable.
-- [ ] **SMART-AL5. Allocation outcome preview `[rule]`** — before applying, show the projected impact
+- [x] **SMART-AL5. Allocation outcome preview `[rule]`** — before applying, show the projected impact
   ("clears the Visa 3 months sooner; moves Emergency Fund to 4.1 months covered"), tying the split into
   the payoff + goal + runway engines. Deterministic, advisory. Optional.
 
@@ -26743,54 +27328,54 @@ upcoming renewals, monthly/annual burden + share-of-spending, cancel-candidate m
 running savings, bulk cancel, charged-after-cancel alerts, ignore/unignore, "worth reviewing?" stale
 badge, remind-tasks. SMART items add judgment the rules don't.)
 
-- [ ] **SMART-SU1. Cancel-candidate recommendations `[rule]`** — proactively flag the best cuts by
+- [x] **SMART-SU1. Cancel-candidate recommendations `[rule]`** — proactively flag the best cuts by
   combining existing signals (stale/needs-review + recent price hike + high share-of-spend) into a
   ranked "consider cutting — save $X/yr" shortlist that pre-selects them. Deterministic scoring over
   existing detectors. Optional, dismissable.
-- [ ] **SMART-SU2. Duplicate / overlapping service detection `[AI]` (rule core)** — spot redundant
+- [x] **SMART-SU2. Duplicate / overlapping service detection `[AI]` (rule core)** — spot redundant
   subscriptions (two music services, three streaming, overlapping cloud storage) and suggest keeping
   one. Category/keyword grouping first; LLM only to recognize that distinct merchants serve the same
   need. Optional, user decides.
-- [ ] **SMART-SU3. Free-trial → paid conversion watch `[rule]`** — detect a first real charge following
+- [x] **SMART-SU3. Free-trial → paid conversion watch `[rule]`** — detect a first real charge following
   a $0/intro amount and warn at conversion ("Hulu trial just converted to $17.99 — cancel now if
   unused"). Deterministic first-charge pattern. Optional.
-- [ ] **SMART-SU4. Annual-vs-monthly savings finder `[rule]`** — for monthly subs, flag where switching
+- [x] **SMART-SU4. Annual-vs-monthly savings finder `[rule]`** — for monthly subs, flag where switching
   to an annual plan typically saves money and estimate the yearly saving. Deterministic; advisory nudge.
   Optional.
 
 ### SMART-SU (round 2 — kept SMART-SU6/SU7/SU8/SU9/SU10)
 
-- [ ] **SMART-SU6. Per-subscription cost-creep history `[rule]`** — a tiny sparkline + "costs 32% more
+- [x] **SMART-SU6. Per-subscription cost-creep history `[rule]`** — a tiny sparkline + "costs 32% more
   than 2 years ago" on each row, from the full charge history. Deterministic trend; makes silent annual
   price-walks visible. Optional.
-- [ ] **SMART-SU7. Usage-vs-cost flag `[rule]`** — when a subscription's category rarely shows other
+- [x] **SMART-SU7. Usage-vs-cost flag `[rule]`** — when a subscription's category rarely shows other
   engagement (gym membership but no other fitness spend), flag it as "paying but maybe not using."
   Heuristic proxy, clearly advisory. Optional, dismissable.
-- [ ] **SMART-SU8. "Forgotten since" surfacing `[rule]`** — rank subs by how long since the user last
+- [x] **SMART-SU8. "Forgotten since" surfacing `[rule]`** — rank subs by how long since the user last
   interacted with or acknowledged them in-app, surfacing the truly out-of-mind ones. Deterministic
   recency. Optional.
-- [ ] **SMART-SU9. Renewal-timed reminder automation `[rule]`** — auto-create the "should I keep this?"
+- [x] **SMART-SU9. Renewal-timed reminder automation `[rule]`** — auto-create the "should I keep this?"
   todo a few days before each renewal for watched subs, instead of manual per-row reminders.
   Deterministic, opt-in, pausable. Optional. (Marked "very smart".)
-- [ ] **SMART-SU10. Category-benchmark context `[AI]` (rule fallback)** — add light context to a sub's
+- [x] **SMART-SU10. Category-benchmark context `[AI]` (rule fallback)** — add light context to a sub's
   cost ("$22/mo is on the higher end for music streaming"). Rules cover known categories with stored
   typical ranges; LLM only for unrecognized services. Advisory, opt-in.
 
 ### SMART-SU (round 3 — kept SMART-SU11/SU12/SU13/SU14/SU15)
 
-- [ ] **SMART-SU11. Zombie-charge detection `[rule]`** — flag subscriptions still charging for a service
+- [x] **SMART-SU11. Zombie-charge detection `[rule]`** — flag subscriptions still charging for a service
   tied to something clearly stopped (an app for a sold device, a tool for a closed project). Heuristic on
   long-flat low-value recurring charges with no related activity. Optional, dismissable.
-- [ ] **SMART-SU12. Shared/household sub attribution `[rule]`** — for multi-member households, attribute
+- [x] **SMART-SU12. Shared/household sub attribution `[rule]`** — for multi-member households, attribute
   each subscription to who pays/uses it and flag ones nobody's claimed. Pure aggregation by member.
   Optional.
-- [ ] **SMART-SU13. Bundle-opportunity finder `[AI]` (rule core)** — spot subscriptions cheaper bundled
+- [x] **SMART-SU13. Bundle-opportunity finder `[AI]` (rule core)** — spot subscriptions cheaper bundled
   (several Disney/Hulu/ESPN-type services, phone + streaming perks). Rules group by known bundle
   families; LLM for fuzzy cases. Advisory, opt-in.
-- [ ] **SMART-SU14. Cancellation-saved tally `[rule]`** — a running "you've cancelled N subscriptions,
+- [x] **SMART-SU14. Cancellation-saved tally `[rule]`** — a running "you've cancelled N subscriptions,
   saving $X/year so far" scoreboard from cancellation history, for positive reinforcement. Pure sum.
   Optional.
-- [ ] **SMART-SU15. Pause-instead-of-cancel suggestion `[rule]`** — for seasonal subs (used only part of
+- [x] **SMART-SU15. Pause-instead-of-cancel suggestion `[rule]`** — for seasonal subs (used only part of
   the year per charge history), suggest pausing in off-months rather than fully cancelling. Deterministic
   seasonal-usage detection. Optional.
 
@@ -26800,51 +27385,51 @@ badge, remind-tasks. SMART items add judgment the rules don't.)
 and recurring, 90-day horizon + show-all, total/annual/next-due stats, month calendar, mark-paid →
 logs a payment txn, remind-tasks, urgency tones. SMART items add prediction and judgment.)
 
-- [ ] **SMART-BL1. Predicted amount for variable bills `[rule]`** — for non-fixed bills (utilities,
+- [x] **SMART-BL1. Predicted amount for variable bills `[rule]`** — for non-fixed bills (utilities,
   credit-card statement), predict the likely amount from that biller's recent history ("Electric:
   ~$140 expected, last 3 averaged $138") instead of showing only the minimum. Deterministic from charge
   history. Optional.
-- [ ] **SMART-BL2. Can-you-cover-it check `[rule]`** — cross-reference upcoming bills against the 60-day
+- [x] **SMART-BL2. Can-you-cover-it check `[rule]`** — cross-reference upcoming bills against the 60-day
   cash runway and flag any that land before enough cash is available ("Rent on the 1st is $200 short
   until payday on the 3rd"). Ties Bills into the runway engine; deterministic. Optional.
-- [ ] **SMART-BL3. Missed / overdue bill detection `[rule]`** — when an expected bill's due date passes
+- [x] **SMART-BL3. Missed / overdue bill detection `[rule]`** — when an expected bill's due date passes
   with no matching payment logged, flag it as possibly missed ("Car insurance was due the 5th — no
   payment recorded"). Deterministic due-date vs. transaction match. Optional, dismissable.
-- [ ] **SMART-BL4. Autopay reconciliation + failed-payment flag `[rule]`** — auto-detect bills already
+- [x] **SMART-BL4. Autopay reconciliation + failed-payment flag `[rule]`** — auto-detect bills already
   paid by autopay (a matching charge near the due date) and mark them paid, instead of waiting for a
   manual tap; user can undo. ALSO flag failed/declined autopay attempts — an expected autopay charge
   that didn't post by/after its due date — so a silent payment failure surfaces. Deterministic
   amount/date match. Optional.
-- [ ] **SMART-BL5. Optimal pay-date suggestion `[rule]`** — suggest the best day to pay each bill given
+- [x] **SMART-BL5. Optimal pay-date suggestion `[rule]`** — suggest the best day to pay each bill given
   cash inflows and other bills' timing, smoothing the month so nothing clusters into a cash crunch.
   Deterministic scheduling over runway + due dates. Optional, advisory.
 
 ### SMART-BL (round 2 — kept SMART-BL6/BL7/BL8/BL9/BL10)
 
-- [ ] **SMART-BL6. Late-fee risk warning `[rule]`** — for liability bills, estimate the late fee +
+- [x] **SMART-BL6. Late-fee risk warning `[rule]`** — for liability bills, estimate the late fee +
   interest cost of missing a due date and surface it on at-risk bills ("paying 4 days late ≈ $39 fee +
   interest"). Deterministic from stored account terms. Optional.
-- [ ] **SMART-BL7. Bill increase / new-bill detection `[rule]`** — flag when a recurring bill's amount
+- [x] **SMART-BL7. Bill increase / new-bill detection `[rule]`** — flag when a recurring bill's amount
   jumps or a brand-new biller appears in the upcoming list, so surprises don't slip through.
   Deterministic vs. history. Optional, dismissable.
-- [ ] **SMART-BL8. Paycheck-aligned grouping `[rule]`** — group upcoming bills by which paycheck should
+- [x] **SMART-BL8. Paycheck-aligned grouping `[rule]`** — group upcoming bills by which paycheck should
   cover them (detecting income cadence), so the user sees "covered by the 15th paycheck" vs. "needs the
   30th." Deterministic from income timing. Optional.
-- [ ] **SMART-BL9. Annual-bill sinking-fund nudge `[rule]`** — for large irregular bills (insurance,
+- [x] **SMART-BL9. Annual-bill sinking-fund nudge `[rule]`** — for large irregular bills (insurance,
   taxes, domain renewals), suggest setting aside a monthly amount ahead of time and track the buffer.
   Deterministic; ties into Goals/recurring. Optional.
-- [ ] **SMART-BL10. One-tap pay-all-due `[rule]`** — when several bills are due in a window, offer a
+- [x] **SMART-BL10. One-tap pay-all-due `[rule]`** — when several bills are due in a window, offer a
   single confirm to mark them all paid (logging each payment txn), instead of tapping row by row.
   Deterministic batch action with per-bill review. Optional.
 
 ### SMART-BL (round 3 — kept SMART-BL13/BL14/BL15)
 
-- [ ] **SMART-BL13. Statement-due vs. minimum clarity `[rule]`** — for credit-card bills, show full
+- [x] **SMART-BL13. Statement-due vs. minimum clarity `[rule]`** — for credit-card bills, show full
   statement balance, minimum due, and the interest cost of paying only the minimum side by side, so the
   cheaper choice is obvious. Deterministic from account terms. Optional.
-- [ ] **SMART-BL14. Seasonal bill forecast `[rule]`** — project seasonal swings for variable bills
+- [x] **SMART-BL14. Seasonal bill forecast `[rule]`** — project seasonal swings for variable bills
   (higher heating in winter, cooling in summer) into the upcoming amounts instead of a flat average.
   Deterministic month-of-year history. Optional.
-- [ ] **SMART-BL15. Grace-period & due-date confidence `[rule]`** — learn the real posting/grace pattern
+- [x] **SMART-BL15. Grace-period & due-date confidence `[rule]`** — learn the real posting/grace pattern
   for each biller from history and show the effective last-safe-pay date, not just the nominal due date.
   Deterministic from observed payment timing. Optional.

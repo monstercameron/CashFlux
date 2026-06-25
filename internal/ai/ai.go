@@ -163,17 +163,14 @@ type ModelPricing struct {
 // best-effort table for surfacing rough cost (prices change; treat as an
 // estimate). Dated/variant model names fall back to the longest matching prefix.
 var modelPricing = map[string]ModelPricing{
-	"gpt-4o-mini":  {Input: 0.15, Output: 0.60},
-	"gpt-4o":       {Input: 2.50, Output: 10.00},
-	"gpt-4.1-mini": {Input: 0.40, Output: 1.60},
-	"gpt-4.1-nano": {Input: 0.10, Output: 0.40},
-	"gpt-4.1":      {Input: 2.00, Output: 8.00},
+	"gpt-5.5":      {Input: 2.00, Output: 8.00},
+	"gpt-5.4-mini": {Input: 0.25, Output: 2.00},
 	"o4-mini":      {Input: 1.10, Output: 4.40},
 }
 
 // pricingFor returns the pricing for a model, matching exactly first, then by the
-// longest known prefix (so "gpt-4o-mini-2024-07-18" resolves to gpt-4o-mini, not
-// gpt-4o). ok is false when no entry matches.
+// longest known prefix (so "gpt-5.4-mini-2026-xx-xx" resolves to gpt-5.4-mini, not
+// gpt-5.5). ok is false when no entry matches.
 func pricingFor(model string) (ModelPricing, bool) {
 	if p, ok := modelPricing[model]; ok {
 		return p, true

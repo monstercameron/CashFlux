@@ -47,7 +47,7 @@ func Insights() ui.Node {
 	useBackendAI := pr.BackendActive()
 	model := settings.OpenAIModel
 	if model == "" {
-		model = "gpt-4o-mini"
+		model = "gpt-5.4-mini"
 	}
 	// Reasoning models (o-series, gpt-5.x) reject a non-default temperature on
 	// /chat/completions, so omit it (0 is dropped by omitempty) for them; other

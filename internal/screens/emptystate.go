@@ -59,7 +59,7 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 		// AddTarget: open the entity's add modal.
 		if props.AddTarget != "" {
 			return Div(css.Class("empty-cta"),
-				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
+				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, "empty-icon")),
 				P(css.Class("empty"), props.Message),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onAddTarget), props.CTALabel),
 			)
@@ -67,7 +67,7 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 		// Href: navigate to where the data is created.
 		if props.Href != "" {
 			return Div(css.Class("empty-cta"),
-				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
+				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, "empty-icon")),
 				P(css.Class("empty"), props.Message),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onNav), props.CTALabel),
 			)

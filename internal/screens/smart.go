@@ -216,7 +216,7 @@ type smartRowProps struct {
 // cost-transparency promise.
 func tierBadge(f smart.Feature, hasProvider bool) ui.Node {
 	if f.Tier == smart.TierFree {
-		return Span(ClassStr(tw.Fold(tw.Text11, tw.FontMedium, tw.TextUp, tw.BgUp, tw.Px1, tw.Py05, tw.Rounded)),
+		return Span(ClassStr(tw.Fold(tw.Text11, tw.FontMedium, tw.TextUp, tw.BgUp15, tw.Px1, tw.Py05, tw.Rounded)),
 			uistate.T("smart.tierFree"),
 		)
 	}

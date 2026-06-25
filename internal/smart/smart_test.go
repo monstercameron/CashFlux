@@ -191,8 +191,8 @@ func TestSettingsActive(t *testing.T) {
 	s := Settings{}.SetEnabled("SMART-A1", true).SetEnabled("SMART-A2", true).Dismiss("dead")
 	in := []Insight{
 		{Feature: "SMART-A1", Key: "live"},
-		{Feature: "SMART-A1", Key: "dead"},   // dismissed
-		{Feature: "SMART-A8", Key: "off"},    // feature not enabled
+		{Feature: "SMART-A1", Key: "dead"}, // dismissed
+		{Feature: "SMART-A8", Key: "off"},  // feature not enabled
 		{Feature: "SMART-A2", Key: "live2"},
 	}
 	got := s.Active(in)

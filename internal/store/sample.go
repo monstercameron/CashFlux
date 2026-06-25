@@ -843,7 +843,10 @@ func SampleDataset() Dataset {
 		},
 		Settings: Settings{
 			BaseCurrency:       "USD",
-			FXRates:            map[string]float64{"EUR": 0.92, "GBP": 0.79, "CAD": 1.36, "JPY": 151.0},
+			// Rates are USD-per-foreign-unit (currency.Rates convention: Rates["EUR"]=1.08 ⇒ 1 EUR = $1.08).
+			// The earlier seed used the inverse (foreign-per-USD), which mis-valued every non-USD account —
+			// e.g. the €535 card showed $492 instead of ~$578, and 1 JPY read as $151 (a 22,000× error).
+			FXRates:            map[string]float64{"EUR": 1.08, "GBP": 1.27, "CAD": 0.74, "JPY": 0.0066},
 			FreshnessOverrides: map[string]int{checking: 7, k401: 90, roth: 90},
 			PayoffBaseline:     &PayoffBaseline{TotalOwed: 3950000, Currency: "USD", StartedAt: date(2022, time.July, 1)},
 		},

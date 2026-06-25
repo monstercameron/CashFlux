@@ -496,7 +496,10 @@ func Sidebar(props sidebarProps) uic.Node {
 	}
 	return Aside(ClassStr(cls),
 		Div(css.Class("railhead", tw.H14, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px5, tw.BorderB, tw.BorderLine),
-			Span(css.Class(tw.ShrinkO, tw.Grid, tw.PlaceItemsCenter, tw.W7, tw.H7, tw.Rounded, tw.BgFg, tw.TextBase, tw.FontDisplay, tw.FontSemibold, tw.Text13), "C"),
+			// Brand mark: accent-green square with a "C". (Was tw.BgFg + tw.TextBase — but TextBase
+			// is a font-SIZE token, not a color, so the "C" inherited white --text on the white BgFg
+			// square = 1.00:1, invisible. Accent fill + TextFg fixes it.)
+			Span(css.Class(tw.ShrinkO, tw.Grid, tw.PlaceItemsCenter, tw.W7, tw.H7, tw.Rounded, tw.BgAccent, tw.TextFg, tw.FontDisplay, tw.FontSemibold, tw.Text13), "C"),
 			Span(css.Class("brand-name", tw.FontDisplay, tw.TextLg, tw.FontSemibold, tw.TrackingTight), uistate.T("app.name")),
 		),
 		uic.CreateElement(WorkspaceSwitcher),

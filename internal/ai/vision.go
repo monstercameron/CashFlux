@@ -49,7 +49,7 @@ func visionMessages(systemPrompt, userText, imageURL string) []visionMessage {
 // BuildVisionRequest marshals a multimodal chat request: a system prompt, a user
 // text instruction, and one image (as a data: or http: URL). The model's reply is
 // plain text and is read with ParseResponse, exactly like a text chat. Use a
-// vision-capable model (e.g. gpt-4o).
+// vision-capable model (e.g. gpt-5.5).
 func BuildVisionRequest(model, systemPrompt, userText, imageURL string, temperature float64) ([]byte, error) {
 	return json.Marshal(visionRequest{Model: model, Messages: visionMessages(systemPrompt, userText, imageURL), Temperature: temperature})
 }

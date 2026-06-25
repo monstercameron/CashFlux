@@ -218,7 +218,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			Button(css.Class("set-btn close"), Type("button"), OnClick(save), "Close"),
 		)
 	} else {
-		saveArgs := []any{css.Class("set-btn save"), Type("button"), OnClick(save), "Save"}
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), "Save"}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}

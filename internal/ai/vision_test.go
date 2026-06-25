@@ -9,7 +9,7 @@ import (
 
 func TestBuildStructuredVisionRequest(t *testing.T) {
 	schema := []byte(`{"type":"object","properties":{"transactions":{"type":"array"}},"required":["transactions"],"additionalProperties":false}`)
-	raw, err := BuildStructuredVisionRequest("gpt-4o", "sys", "extract", "data:image/png;base64,AAAA", 0.1, "transactions", schema)
+	raw, err := BuildStructuredVisionRequest("gpt-5.5", "sys", "extract", "data:image/png;base64,AAAA", 0.1, "transactions", schema)
 	if err != nil {
 		t.Fatalf("BuildStructuredVisionRequest: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestBuildStructuredVisionRequest(t *testing.T) {
 
 func TestBuildVisionRequest(t *testing.T) {
 	const dataURL = "data:image/png;base64,AAAA"
-	raw, err := BuildVisionRequest("gpt-4o", "You read receipts.", "Extract the transactions.", dataURL, 0.2)
+	raw, err := BuildVisionRequest("gpt-5.5", "You read receipts.", "Extract the transactions.", dataURL, 0.2)
 	if err != nil {
 		t.Fatalf("BuildVisionRequest: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestBuildVisionRequest(t *testing.T) {
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.Model != "gpt-4o" || got.Temperature != 0.2 {
+	if got.Model != "gpt-5.5" || got.Temperature != 0.2 {
 		t.Errorf("model/temp = %q/%g", got.Model, got.Temperature)
 	}
 	if len(got.Messages) != 2 {

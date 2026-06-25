@@ -58,28 +58,39 @@ func triggerPageEnter() {
 	if !wonder.IsNull() && !wonder.IsUndefined() {
 		crossFade := wonder.Get("crossFade")
 		if !crossFade.IsNull() && !crossFade.IsUndefined() {
-			cb := js.FuncOf(func(_ js.Value, _ []js.Value) any {
+			// crossFade may invoke cb ASYNCHRONOUSLY: document.startViewTransition runs its
+			// update callback on a later microtask, not inline. A defer-Release here would free
+			// cb before the browser calls it, producing "call to released function" on every
+			// route change. So cb releases ITSELF after it runs — correct for both the async
+			// view-transition path and the synchronous direct-applyFn fallback (the spec
+			// guarantees the update callback is always invoked exactly once).
+			var cb js.Func
+			cb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 				applyEnter()
+				cb.Release()
 				return nil
 			})
-			// crossFade invokes cb synchronously in both its paths (startViewTransition
-			// and direct), so defer-Release is safe here.
-			defer cb.Release()
 			crossFade.Invoke(cb)
 			return
 		}
 	}
 
-	// Fallback: double-rAF without the View Transitions API.
-	// First frame flushes the class removal; second restarts the keyframe.
+	// Fallback: double-rAF without the View Transitions API. First frame flushes the class
+	// removal; second restarts the keyframe. Each callback releases itself after firing so no
+	// js.Func leaks accumulate across route changes.
 	raf := js.Global().Get("requestAnimationFrame")
-	raf.Invoke(js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		raf.Invoke(js.FuncOf(func(_ js.Value, _ []js.Value) any {
-			applyEnter()
-			return nil
-		}))
+	var first, second js.Func
+	second = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		applyEnter()
+		second.Release()
 		return nil
-	}))
+	})
+	first = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		raf.Invoke(second)
+		first.Release()
+		return nil
+	})
+	raf.Invoke(first)
 }
 
 // triggerScrollReveal calls window.cashfluxWonder.observe() (W-21) to register

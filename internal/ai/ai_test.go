@@ -39,13 +39,13 @@ func TestRetryDelayMS(t *testing.T) {
 }
 
 func TestEstimateCostUSD(t *testing.T) {
-	// gpt-4o-mini: $0.15/1M in, $0.60/1M out. 1,000,000 in + 1,000,000 out = 0.15 + 0.60 = 0.75.
-	if got, ok := EstimateCostUSD("gpt-4o-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 0.75 {
-		t.Errorf("gpt-4o-mini cost = %v (ok=%v), want 0.75", got, ok)
+	// gpt-5.4-mini: $0.25/1M in, $2.00/1M out. 1,000,000 in + 1,000,000 out = 0.25 + 2.00 = 2.25.
+	if got, ok := EstimateCostUSD("gpt-5.4-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 2.25 {
+		t.Errorf("gpt-5.4-mini cost = %v (ok=%v), want 2.25", got, ok)
 	}
-	// Dated variant resolves to the longest prefix (gpt-4o-mini, not gpt-4o).
-	if got, ok := EstimateCostUSD("gpt-4o-mini-2024-07-18", Usage{PromptTokens: 1_000_000}); !ok || got != 0.15 {
-		t.Errorf("dated variant cost = %v (ok=%v), want 0.15 via gpt-4o-mini prefix", got, ok)
+	// Dated variant resolves to the longest prefix (gpt-5.4-mini, not gpt-5.5).
+	if got, ok := EstimateCostUSD("gpt-5.4-mini-2026-01-01", Usage{PromptTokens: 1_000_000}); !ok || got != 0.25 {
+		t.Errorf("dated variant cost = %v (ok=%v), want 0.25 via gpt-5.4-mini prefix", got, ok)
 	}
 	// Unknown model → not ok.
 	if _, ok := EstimateCostUSD("some-future-model", Usage{PromptTokens: 100}); ok {
@@ -143,7 +143,7 @@ func TestFinancialContextLine(t *testing.T) {
 func TestBuildStructuredRequest(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{"total":{"type":"number"}},"required":["total"]}`)
 	msgs := []Message{{Role: RoleUser, Content: "How much did I spend?"}}
-	data, err := BuildStructuredRequest("gpt-4o-mini", msgs, 0, "spend", schema)
+	data, err := BuildStructuredRequest("gpt-5.4-mini", msgs, 0, "spend", schema)
 	if err != nil {
 		t.Fatalf("BuildStructuredRequest: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestBuildStructuredRequest(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.Model != "gpt-4o-mini" || len(got.Messages) != 1 {
+	if got.Model != "gpt-5.4-mini" || len(got.Messages) != 1 {
 		t.Errorf("request body wrong: %+v", got)
 	}
 	rf := got.ResponseFormat

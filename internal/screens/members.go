@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -240,19 +242,53 @@ func memberAvatar(name, color string) ui.Node {
 	if t := strings.TrimSpace(name); t != "" {
 		initial = strings.ToUpper(string([]rune(t)[0]))
 	}
-	bg := color
+	// Pick the initial's color for contrast: white hard-coded on any member color failed on
+	// light fills (white on green-400 = 1.74:1, on pink-400 = 2.65:1). readableTextOn flips to
+	// dark text on light avatars. No-color members get a branded accent disc (white always passes).
+	bg, text := color, "#ffffff"
 	if strings.TrimSpace(bg) == "" {
-		bg = "var(--border)"
+		bg = "var(--accent)"
+	} else if strings.HasPrefix(strings.TrimSpace(bg), "#") {
+		text = readableTextOn(bg)
 	}
 	return Span(css.Class("member-avatar"), Attr("aria-hidden", "true"),
 		Style(map[string]string{
 			"display": "inline-flex", "align-items": "center", "justify-content": "center",
 			"width": "1.5rem", "height": "1.5rem", "border-radius": "50%",
-			"background": bg, "color": "#fff", "font-size": "0.7rem", "font-weight": "700",
+			"background": bg, "color": text, "font-size": "0.7rem", "font-weight": "700",
 			"margin-right": "0.5rem", "vertical-align": "middle", "flex-shrink": "0",
 		}),
 		initial,
 	)
+}
+
+// readableTextOn returns "#1c1c1e" or "#ffffff" — whichever has more contrast against the
+// given hex fill (WCAG relative-luminance threshold ~0.179) — so a colored avatar/badge
+// initial stays legible on any user-chosen color. Unparseable input falls back to white.
+func readableTextOn(hex string) string {
+	h := strings.TrimPrefix(strings.TrimSpace(hex), "#")
+	if len(h) == 3 {
+		h = string([]byte{h[0], h[0], h[1], h[1], h[2], h[2]})
+	}
+	if len(h) != 6 {
+		return "#ffffff"
+	}
+	v, err := strconv.ParseUint(h, 16, 32)
+	if err != nil {
+		return "#ffffff"
+	}
+	chanLin := func(c uint64) float64 {
+		s := float64(c) / 255
+		if s <= 0.03928 {
+			return s / 12.92
+		}
+		return math.Pow((s+0.055)/1.055, 2.4)
+	}
+	lum := 0.2126*chanLin((v>>16)&0xff) + 0.7152*chanLin((v>>8)&0xff) + 0.0722*chanLin(v&0xff)
+	if lum > 0.179 {
+		return "#1c1c1e"
+	}
+	return "#ffffff"
 }
 
 // memberDateStyleOptions are the per-member date-style choices: a leading

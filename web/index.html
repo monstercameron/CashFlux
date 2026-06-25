@@ -163,8 +163,12 @@
            controls (the search box, filter selects) are interactive-only too — the ledger
            data is plain <td> text, not inputs, so hiding controls never drops statement data. */
         aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner,
-        .app-banner, .toast, .reso-control, .home-hero-actions,
+        .app-banner, .toast, .reso-control, .home-hero-actions, .reports-export,
         input, select, textarea,
+        /* Action buttons (Export CSV, Roll up sub-categories, Mark paid, Edit, …) are interactive-only
+           clutter on paper. Hide every <button> EXCEPT .btn-link, which is how data labels (category /
+           account drill names) render — those must stay in the printed statement. */
+        button:not(.btn-link),
         .txn-table .td-actions, .txn-table th.td-actions,
         .txn-table .td-select, .txn-table th.td-select { display: none !important; }
         /* Let the scrolling shell flow naturally across printed pages. */
@@ -314,7 +318,24 @@
       /* W-5 · Nav-item hover — subtle lift + icon micro-scale on .nv / .nav-link.
          Transform scaled by --wonder-on so the intensity dial + reduced-motion both zero it.
          Collapsed-rail flyout span is position:absolute so it is unaffected by translateY. */
-      .nv { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease; }
+      .nv { transition: transform var(--wonder-dur-fast) var(--wonder-ease), background var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease, box-shadow var(--wonder-dur-fast) ease; }
+      /* GD-15 / nav-pill polish: a 3px accent "you are here" bar on the active nav item. Drawn as an
+         absolutely-positioned ::before (no layout shift) so it can GROW IN (scaleY) when an item becomes
+         active, instead of the old box-shadow snapping between items. A true shared-indicator slide needs
+         JS measurement (the framework's Style() drops CSS custom props), so each newly-active item's bar
+         animates in on activation — tasteful, robust, theme-agnostic, and WONDER-gated. */
+      aside.rail .nv { position: relative; }
+      aside.rail .nv.active::before, aside.rail .nv[aria-current="page"]::before {
+        content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+        background: var(--accent); border-radius: 0 2px 2px 0;
+        animation: wonder-nav-bar-in var(--wonder-dur) var(--wonder-ease-out); }
+      @keyframes wonder-nav-bar-in {
+        from { transform: scaleY(calc(1 - 1 * var(--wonder-on))); opacity: calc(1 - 0.6 * var(--wonder-on)); }
+        to   { transform: scaleY(1); opacity: 1; } }
+      [data-wonder="off"] aside.rail .nv.active::before,
+      [data-wonder="off"] aside.rail .nv[aria-current="page"]::before { animation: none; }
+      @media (prefers-reduced-motion: reduce) {
+        aside.rail .nv.active::before, aside.rail .nv[aria-current="page"]::before { animation: none; } }
       .nv:hover { transform: translateY(calc(-1px * var(--wonder-on))); }
       .nav-link { transition: background 0.12s, color 0.12s, transform var(--wonder-dur-fast) var(--wonder-ease); } /* extends GX8-F2 */
       .nav-link:hover { transform: translateY(calc(-1px * var(--wonder-on))); }
@@ -657,10 +678,17 @@
 
       /* Page */
       .page { width: 100%; max-width: 1040px; margin: 0 auto; padding: 1.75rem 1.25rem 4rem; }
-      /* GX7-F1: on ultra-wide displays content sprawled to ~2320px (no cap on main),
-         giving grotesque table column spacing + unreadable line lengths. Cap + center
-         the content area. Gated at min-width:1441px so all common widths are untouched. */
-      @media (min-width: 1441px) { main { max-width: 1440px; margin-inline: auto; } }
+      /* GX7-F1: on ultra-wide displays content sprawled to ~2320px, giving grotesque table column
+         spacing + unreadable line lengths — so the content must be capped + centered. But capping
+         `main` ITSELF made main the (narrow) scroll container, which parked the scrollbar at the
+         content's right edge instead of the window edge — it floated ~120px (1920) to ~880px (3440)
+         in from the right, reading as a "broken" scrollbar on large screens. Fix: keep `main`
+         FULL-WIDTH (so it's the scroll container and its scrollbar sits at the window's right edge,
+         the conventional fixed-sidebar layout) and cap + center main's CHILDREN (topbar, banner, the
+         routed page) instead. Both topbar and page share the same 1440 column, so the gutters beside
+         them stay empty — nothing shows through under the sticky bar. Gated ≥1441px; common widths
+         untouched. (Supersedes the earlier .cf-shell centering, which put the scrollbar even further in.) */
+      @media (min-width: 1441px) { main.cf-scroll > * { max-width: 1440px; margin-inline: auto; } }
       .page-head { margin-bottom: 1.5rem; }
       .page-title { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; }
       .page-sub { margin: 0.25rem 0 0; color: var(--text-dim); }
@@ -670,16 +698,17 @@
         background: var(--bg-card); border: 1px solid var(--border);
         border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem;
       }
-      /* Refined resting elevation (design pass 2026-06-24): give cards + bento tiles real
-         depth instead of flat fills — a soft ambient shadow plus a hairline top highlight so
-         surfaces read as layered, premium panels. WONDER hover still lifts further via
-         --wonder-shadow (these are the resting state). Theme-aware: airy grey shadows on
-         light, deeper shadows + a faint white top edge on dark. */
-      .card, .bento .w {
+      /* Refined resting elevation (design pass 2026-06-24): give cards real depth instead of
+         flat fills — a soft ambient shadow plus a hairline top highlight so surfaces read as
+         layered, premium panels. WONDER hover still lifts further via --wonder-shadow (this is
+         the resting state). Theme-aware: airy grey shadows on light, deeper shadows + a faint
+         white top edge on dark. (Bento .w tiles are excluded — the drag/pack engine sets an
+         inline box-shadow on them, so resting depth there belongs in the engine, not CSS.) */
+      .card {
         box-shadow: 0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),
                     inset 0 1px 0 rgba(255,255,255,0.035);
       }
-      [data-theme="light"] .card, [data-theme="light"] .bento .w {
+      [data-theme="light"] .card {
         box-shadow: 0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),
                     inset 0 1px 0 rgba(255,255,255,0.7);
       }
@@ -693,7 +722,8 @@
          top-to-bottom. An uppercase muted label with a hairline rule. */
       .section-divider { display: flex; align-items: center; gap: 0.6rem; margin: 1.6rem 0 0.6rem;
         font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-        color: var(--text-faint); }
+        /* --text-dim (not --text-faint): the divider eyebrow measured 3.69:1 on --text-faint (fails AA). */
+        color: var(--text-dim); }
       .section-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
       .section-divider:first-child { margin-top: 0; }
       [data-theme="light"] .section-divider { color: #686870; }
@@ -827,7 +857,8 @@
       [data-theme="light"] main { background: var(--bg) !important; }
       /* GX1-F2: active nav chip was dark-on-dark → invisible on the warm-white rail. */
       [data-theme="light"] aside.rail .nv.active, [data-theme="light"] aside.rail .nv[aria-current="page"] {
-        background: var(--accent-dim) !important; color: #1c1c1e !important; }
+        background: var(--accent-dim) !important; color: #1c1c1e !important;
+        /* GD-15 accent bar now drawn by the theme-agnostic .nv::before (grows in) — no box-shadow here. */ }
       [data-theme="light"] aside.rail .nv { color: #3c3c43; }
       [data-theme="light"] aside.rail .nv:hover { background: #efede8 !important; color: #1c1c1e; }
       [data-theme="light"] aside.rail .rail-section { color: #6a6a72; }
@@ -907,23 +938,25 @@
          (dark in the light palette) already, but pin it explicitly so the recurring
          "titles invisible in light mode" audit finding can never recur from a muted
          wrapper or utility class. */
-      .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; color: var(--text); font-weight: 600; }
+      .card-title { margin: 0 0 0.75rem; font-size: 1.05rem; color: var(--text); font-weight: 600; letter-spacing: -0.01em; }
       /* G9.1 Reports hero zone — headline stat strip above the card scroll. */
       .reports-hero { margin-bottom: 1rem; padding: 1.25rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
       .hero-period { font-size: 0.825rem; font-weight: 500; color: var(--text-dim); margin: 0 0 0.6rem; }
       .hero-main { display: flex; align-items: baseline; gap: 1.5rem; flex-wrap: wrap; }
-      .hero-net { font-size: 2.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .hero-net { font-size: 2.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.025em; }
       .hero-net.pos { color: var(--accent); }
       .hero-net.neg { color: var(--danger); }
       .hero-flankers { display: flex; gap: 1.25rem; align-items: baseline; flex-wrap: wrap; }
       .hero-flanker { display: flex; flex-direction: column; gap: 0.1rem; }
       .hero-flanker-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
-      .hero-flanker-value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .hero-flanker-value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.015em; }
       .hero-flanker-value.pos { color: var(--accent); }
       .hero-flanker-value.neg { color: var(--danger); }
       .hero-secondary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
       .hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
-      .hero-stat-label { font-size: 0.73rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+      /* --text-dim (not --text-faint): the uppercase eyebrow label measured only 3.58:1 on --text-faint
+         (fails AA); --text-dim lifts it past 4.5 while staying a quiet label. */
+      .hero-stat-label { font-size: 0.73rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
       .hero-stat-value { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
       /* Semantic tone for the hero-secondary stats (savings rate / runway / no-spend days).
          reports_screen.go already emits .pos/.neg here (toneForSavingsRate, accentForRunway, and
@@ -955,12 +988,19 @@
       /* Empty-state call-to-action block: centered message + "Add first…" button (§6.5). */
       .empty-cta { display:flex; flex-direction:column; align-items:center; gap:.85rem; padding:1.75rem 1rem; text-align:center; }
       .empty-cta .empty { margin:0; }
+      /* GD-12: empty-state glyph as a soft accent badge instead of a bare muted icon — warmer,
+         more intentional first-run illustration. The accent tint + circular wash are theme-adaptive. */
+      .empty-cta .empty-icon { color: var(--accent); padding: 0.7rem; border-radius: 999px; box-sizing: content-box;
+        background: color-mix(in srgb, var(--accent) 12%, transparent); }
       /* Bills month calendar (B22): a 7-column grid of day cells with due-day dots. */
       .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:.5rem; }
       .cal-head { text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); padding:2px 0; }
       .cal-cell { min-height:46px; border:1px solid var(--border); border-radius:6px; padding:4px 5px; position:relative; }
       .cal-cell.out { opacity:.35; }
-      .cal-cell.today { border-color:var(--accent); }
+      /* GD-11: "today" got only an accent border — easy to miss. Add a faint accent wash + bold
+         accent day number so the current day reads at a glance (theme-adaptive via color-mix). */
+      .cal-cell.today { border-color:var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+      .cal-cell.today .cal-day { color: var(--accent); font-weight: 700; }
       .cal-day { font-size:12px; color:var(--text-dim); }
       .cal-dot { position:absolute; bottom:6px; left:6px; width:7px; height:7px; border-radius:50%; background:var(--danger,#d8716f); }
       /* Bills two-column layout (G11 follow-up): at ≥1024 px the bill list sits on the
@@ -988,7 +1028,7 @@
       .stat-label { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
       /* Keep stat figures on one line (G11): a "Next due" ISO date was hyphenating to
          "2026-07-" / "01" in the narrow single-column 768px stat card. */
-      .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; }
+      .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; letter-spacing: -0.015em; }
       .stat-value.pos { color: var(--accent); }
       .stat-value.neg { color: var(--danger); }
       .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
@@ -1165,11 +1205,15 @@
       /* GX4-F1: removed outline:none — was silencing the keyboard focus ring for both mouse and
          keyboard focus. Border-color tint on :focus is a subtle mouse hint; the explicit ring
          on :focus-visible is the keyboard indicator and must not be overridden. */
-      .field:focus { border-color: var(--accent); }
+      /* Soft accent focus glow (design pass GD-6) for a polished, modern field focus on both mouse
+         and keyboard. The explicit :focus-visible outline below is preserved for a11y; this only
+         adds a subtle halo. transition keeps it gentle. */
+      .field { transition: border-color .12s ease, box-shadow .12s ease; }
+      .field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
       /* GX4-F1 (select): bare <select> elements also need field-style tokens and a visible
          keyboard ring. No .set-input / .seg-btn so native caret is preserved. */
-      select:not(.set-input):not(.seg-btn) { min-height: 44px; padding: 0.5rem 0.6rem; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; cursor: pointer; }
-      select:not(.set-input):not(.seg-btn):focus { border-color: var(--accent); }
+      select:not(.set-input):not(.seg-btn) { min-height: 44px; padding: 0.5rem 0.6rem; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font: inherit; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
+      select:not(.set-input):not(.seg-btn):focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
       select:not(.set-input):not(.seg-btn):focus-visible,
       .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       /* Native color picker rendered as a proper swatch (a bare-width text field
@@ -1228,7 +1272,13 @@
          3.52:1 — lower than white's 4.25:1 on the same accent, so it was the weaker outlier.
          Unify to white: dark improves 3.52→4.25 and matches light. (Both clear the bold/large
          3:1 bar; full AA-normal 4.5 would need a deeper accent — a brand call, left to a dev.) */
-      .btn-primary { background: var(--accent); color: #ffffff; border-color: var(--accent); font-weight: 600; }
+      /* Primary button: a subtle top-lit gradient + glossy top edge + soft drop shadow for a
+         dimensional, premium feel (design pass GD-3). The gradient TOP stays exactly var(--accent)
+         and only darkens downward, so the white-label contrast floor (4.25:1, measured) is preserved —
+         it can only improve toward the bottom. */
+      .btn-primary { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 85%, #000 15%));
+        color: #ffffff; border-color: color-mix(in srgb, var(--accent) 82%, #000 18%); font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16); }
       .btn-del { background: transparent; border: 0; color: var(--text-faint); cursor: pointer; font-size: 1rem; padding: 0.25rem 0.4rem; }
       .btn-del:hover { color: var(--danger); }
       /* WCAG 2.5.8 (AA): small icon-only buttons get at least a 24x24 hit area,
@@ -1314,7 +1364,11 @@
       /* Bar track (G4 §6): a touch more contrast than --bg-elev so a 0%/empty bar
          still reads as a track rather than vanishing into the card. */
       .bar { height: 8px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin: 0.45rem 0 0.35rem; }
-      .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+      /* Glossy progress fill (design pass GD-7): a 1px inset top highlight + faint bottom shade
+         give the bar a subtle cylindrical sheen. Applied on .bar-fill only, so every state variant
+         (.near/.over/.done/.final/…) inherits the gloss while keeping its own semantic color. */
+      .bar-fill { height: 100%; background: var(--accent); border-radius: 999px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 1px rgba(0,0,0,0.14); }
       /* Progress/budget bars grow into place on load and update instead of snapping (§6.16). */
       @media (prefers-reduced-motion: no-preference) {
         .bar-fill { transition: width 0.45s cubic-bezier(0.2, 0.75, 0.2, 1); }
@@ -1431,6 +1485,7 @@
       .storage-bar { height: 6px; background: var(--bg-elev); border: 1px solid var(--border);
         border-radius: 999px; overflow: hidden; }
       .storage-bar-fill { height: 100%; background: var(--accent); border-radius: 999px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 1px rgba(0,0,0,0.14);
         transition: width 0.35s ease; }
       .storage-bar-fill.storage-bar-warn { background: #f59e0b; }
       /* CSV inline preview table shown inside an artifact row. */
@@ -1483,7 +1538,20 @@
          translate. Off-safe — translateY scales by --wonder-on → 0. */
       html .w:not(.drag):hover {
         transform: translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on))) !important;
-        box-shadow: var(--wonder-shadow);
+        box-shadow: var(--wonder-shadow) !important;
+      }
+      /* GD-2 resting elevation for bento tiles. The drag/pack engine writes an inline
+         box-shadow:none on every .w (beats non-important author rules — which is also why the
+         hover shadow above needs !important), so resting depth must be !important too. :not(.drag)
+         leaves the dragged ghost entirely to the engine. Matches the .card elevation (GD-1) so
+         the dashboard reads as the same layered, premium surface as every other page. */
+      html .w:not(.drag) {
+        box-shadow: 0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),
+                    inset 0 1px 0 rgba(255,255,255,0.035) !important;
+      }
+      html[data-theme="light"] .w:not(.drag) {
+        box-shadow: 0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),
+                    inset 0 1px 0 rgba(255,255,255,0.7) !important;
       }
       /* !important is likewise required for list rows: they carry the
          wonder-row-enter entrance animation with fill-mode:both, whose final
@@ -1523,7 +1591,7 @@
       .t-caption   { font-size: 0.75rem; }    /* labels, captions, legends, sublines */
       .t-body      { font-size: 0.8125rem; }  /* default tile body text */
       .t-figure    { font-size: 1.5rem; }     /* primary KPI / data figure */
-      .t-figure-lg { font-size: 2.125rem; }   /* hero figure */
+      .t-figure-lg { font-size: 2.125rem; letter-spacing: -0.025em; }   /* hero figure */
       .nav:hover { background:#161617; color:#f4f4f5; }
 
       /* Shape-aware dashboard content: widgets can adapt their internals to the
@@ -1599,7 +1667,10 @@
       .seg { display:inline-flex; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; padding:2px; position:relative; }
       /* Sliding pill indicator (§6.16): positioned by JS (measures the active
          segment) via a standard transform/width, animated by these transitions. */
-      .seg-pill { position:absolute; top:2px; bottom:2px; left:0; width:0; background:#2a2a30; border-radius:3px; opacity:0; pointer-events:none; z-index:0; transition: transform .18s ease, width .18s ease, opacity .12s ease; }
+      /* GD-10: the active-segment pill had a raised box-shadow only in light mode — give the dark
+         pill the same subtle elevation + a hairline top highlight so the selected period/toggle reads
+         as a lifted chip in both themes, consistent with the rest of the design pass. */
+      .seg-pill { position:absolute; top:2px; bottom:2px; left:0; width:0; background:#2a2a30; border-radius:3px; opacity:0; pointer-events:none; z-index:0; transition: transform .18s ease, width .18s ease, opacity .12s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
       .seg-btn { padding:.32rem .72rem; border-radius:3px; font-size:.85rem; color:#a6a6ac; background:transparent; border:0; cursor:pointer; position:relative; z-index:1; }
       .seg-btn:hover { color:#f4f4f5; }
       .seg-btn.active { background:transparent; color:#f4f4f5; }
@@ -1671,7 +1742,10 @@
          already covers ::after, neutralising motion for those users too. */
       .switch::after { transition: left var(--wonder-dur) cubic-bezier(.34,1.56,.64,1), background var(--wonder-dur) var(--wonder-ease-out); }
       .switch.on { background:#3e7f5e; } .switch.on::after { left:19px; background:#e6f3ec; }
-      .swatch { width:24px; height:24px; border-radius:6px; cursor:pointer; border:2px solid transparent; }
+      .swatch { width:24px; height:24px; border-radius:6px; cursor:pointer; border:2px solid transparent; transition: border-color .12s ease; }
+      /* GD-19: faint ring on hover so unselected accent swatches read as interactive. The selected
+         .swatch.sel rule is more specific, so hovering the current swatch keeps its white ring. */
+      .swatch:hover { border-color: var(--text-faint); }
       .swatch.sel { border-color:#f4f4f5; }
       .set-input { width:100%; padding:.5rem .6rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; color:#f4f4f5; font:inherit; }
       .set-foot { padding:.75rem 1rem; border-top:1px solid #2a2a2c; display:flex; gap:.5rem; justify-content:flex-end; }
@@ -1804,6 +1878,17 @@
       .add-item:hover, .add-item:focus-visible { background:var(--hover); }
       .add-backdrop { position:fixed; inset:0; z-index:40; }
       .hidden-menu { display:none; }
+      /* Stacking safety for ⋯ / +Add popovers: while a menu is OPEN, elevate its wrapper AND its host
+         row so the z-index:50 popover always wins over sibling rows/cards — including any that briefly
+         become their own stacking context via a WONDER hover/entrance transform (a `transform` creates
+         a stacking context, which can otherwise trap an overflowing menu beneath a later sibling). The
+         menu is "open" when its class lacks the hidden marker (shared component → `hidden`; bespoke
+         rows → `hidden-menu`). :has gates this entirely to the open state, so it costs nothing when
+         closed and needs no Go/markup change. Stays below toast(60)/dialog(90). */
+      .add-wrap:has(> .add-menu:not(.hidden-menu):not(.hidden)) { z-index:51; }
+      .row:has(.add-menu:not(.hidden-menu):not(.hidden)),
+      .budget:has(.add-menu:not(.hidden-menu):not(.hidden)),
+      li:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden)) { position:relative; z-index:51; }
       .menu-btn:hover { color:#f4f4f5; }
 
       /* global settings panel bits */
@@ -1853,7 +1938,9 @@
       .sample-banner-btn:hover { text-decoration-thickness:2px; }
       [data-theme="light"] .sample-banner-btn { color:var(--accent); }
       [data-theme="light"] .sample-banner-btn:hover { color:var(--text); }
-      .sample-banner-dismiss { color:var(--text-dim); }
+      /* Dismiss inherits the sample-banner-btn color (dark: --text ≈8:1; light: --accent on pale
+         green, passes AA). The old --text-dim override measured only 3.91:1 on the dark --accent-dim
+         banner (fails AA); the underline already de-emphasizes it vs the primary CTA. */
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
 
@@ -2037,7 +2124,11 @@
          white text on it measured only 3.23:1 (fails WCAG AA) on the destructive confirm
          buttons (Delete/Wipe). #c0392b keeps the same red identity with white text at
          ~5.5:1 in both themes; danger shouldn't vary by theme anyway. */
-      .btn-danger { background:#c0392b; border-color:#c0392b; color:#fff; }
+      /* GD-20: match .btn-primary's dimensional gloss (GD-3) on the destructive button so the two
+         CTA styles are consistent. Top stays #c0392b (white-label contrast preserved), darkens downward. */
+      .btn-danger { background: linear-gradient(180deg, #c0392b, color-mix(in srgb, #c0392b 85%, #000 15%));
+        border-color: color-mix(in srgb, #c0392b 82%, #000 18%); color:#fff;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16); }
       .btn-danger:hover { filter:brightness(1.08); }
       .row.subtask { border-left:2px solid var(--line,#e5e7eb); }
       .rule-grip { display:inline-flex; align-items:center; color:var(--faint,#9ca3af); cursor:grab; flex:none; margin-right:.25rem; }
@@ -2150,7 +2241,7 @@
           align-items: stretch;
           justify-content: space-around;
         }
-        .mobile-tabbar .tab-item {
+        .mobile-tabbar .mobile-tab-item {
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -2169,12 +2260,13 @@
           transition: color 0.12s ease;
           padding: 0;
         }
-        .mobile-tabbar .tab-item.active { color: var(--accent, #2e8b57); }
-        .mobile-tabbar .tab-item:hover  { color: var(--text, #f4f4f5); }
-        .mobile-tabbar .tab-icon {
-          font-size: 1.15rem;
-          line-height: 1;
-        }
+        /* GD-22: active mobile-tab gets a 2px accent indicator bar at the top (inset box-shadow, no
+           layout shift) — the classic bottom-nav "you are here" cue, mirroring the desktop nav bar (GD-15). */
+        .mobile-tabbar .mobile-tab-item.active { color: var(--accent, #2e8b57); box-shadow: inset 0 2px 0 var(--accent, #2e8b57); }
+        .mobile-tabbar .mobile-tab-item:hover  { color: var(--text, #f4f4f5); }
+        /* Label sits under the icon; keep it small. (The icon is an SVG sized via tw W5/H5, so the
+           old icon-font font-size rule is no longer needed.) */
+        .mobile-tabbar .mobile-tab-label { font-size: 0.65rem; line-height: 1; }
         /* Push page content above the tab bar */
         .app { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
       }
@@ -2418,6 +2510,13 @@
       .sync-off  { color: var(--text-faint); }
       .sync-warn { color: var(--warn, #f59e0b); }
       .sync-err  { color: var(--danger); }
+      /* Collapsed rail (58px): the sync chip collapses to just its status dot — the "Synced" label and
+         queued-count don't fit and otherwise overflowed/mis-aligned. Centered with a slightly larger dot
+         so the synced/syncing/offline/error state stays legible at a glance; hovering shows the full
+         status via the chip's title. The full label + count return when the rail expands. */
+      aside.rail.collapsed .sync-chip { width:34px; margin:0 auto 0.45rem; padding:0.3rem 0; justify-content:center; gap:0; }
+      aside.rail.collapsed .sync-chip span:not(.sync-dot) { display:none; }
+      aside.rail.collapsed .sync-chip .sync-dot { width:10px; height:10px; }
       @keyframes cf-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
       /* §7.11 First-run Cloud mention (calm, dismissible, in the rail) */

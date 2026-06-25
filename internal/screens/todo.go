@@ -86,15 +86,29 @@ func Todo() ui.Node {
 		bump()
 	}
 	deleteTask := func(taskID string) {
-		// Cascade: deleting a task removes its whole sub-tree (C72).
-		for _, d := range tasktree.Descendants(tasks, taskID) {
-			_ = app.DeleteTask(d)
+		// Guard the destructive delete with a confirm (matches Transactions/Budgets). Deleting a task
+		// also cascades to its whole sub-tree (C72), so an unconfirmed misclick was especially costly.
+		name := uistate.T("todo.thisTask")
+		for _, t := range tasks {
+			if t.ID == taskID && t.Title != "" {
+				name = t.Title
+				break
+			}
 		}
-		if err := app.DeleteTask(taskID); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		bump()
+		uistate.ConfirmModal(uistate.T("todo.deleteConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			// Cascade: deleting a task removes its whole sub-tree (C72).
+			for _, d := range tasktree.Descendants(tasks, taskID) {
+				_ = app.DeleteTask(d)
+			}
+			if err := app.DeleteTask(taskID); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			bump()
+		})
 	}
 	addSub := func(parentID string) {
 		uistate.PromptModal(uistate.T("todo.subtaskPrompt"), "", func(name string) {

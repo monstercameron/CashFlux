@@ -239,6 +239,22 @@ func Reports() ui.Node {
 	for i, v := range srInts {
 		srSeries[i] = float64(v)
 	}
+	// Per-point hover labels for the trend AreaCharts (R-4 follow-up): cash-flow / net-worth are minor
+	// units → money; savings-rate is already a percent. Lets each trend point read its exact value on hover.
+	moneyLabels := func(vals []float64) []string {
+		out := make([]string, len(vals))
+		for i, v := range vals {
+			out[i] = fmtMoney(money.New(int64(v), base))
+		}
+		return out
+	}
+	pctLabels := func(vals []float64) []string {
+		out := make([]string, len(vals))
+		for i, v := range vals {
+			out[i] = fmt.Sprintf("%d%%", int(v))
+		}
+		return out
+	}
 
 	// Cash runway (B21): how long spendable cash would last at the average burn
 	// over the last six *full* months (the current partial month is excluded so it
@@ -286,7 +302,7 @@ func Reports() ui.Node {
 		if pct > 100 {
 			pct = 100
 		}
-		return Div(css.Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
+		return Div(css.Class("share-bar"), Style(map[string]string{"height": "8px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
 	}
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
@@ -835,7 +851,7 @@ func Reports() ui.Node {
 			Title: uistate.T("dashboard.cashFlow"),
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels}),
+				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
 			),
 		})),
 		// R-11: net-worth composition (stat-grid) and the NW trend chart are one
@@ -850,14 +866,14 @@ func Reports() ui.Node {
 					stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 					If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 				),
-				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels})),
+				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels, ValueLabels: moneyLabels(nw)})),
 			),
 		})),
 		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.savingsTrend"),
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend")}),
+				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
 			),
 		})),
 		// G9.1 Item 6 — Advanced collapse: wraps custom field spend and deductible totals.
@@ -1053,7 +1069,7 @@ func reportsCatShareBar(amount, max int64, idx int) ui.Node {
 	// Distinct hue per rank, computed in Go (the framework's Style() drops CSS custom
 	// properties, so a --cat-idx var won't apply). 47deg steps spread the wheel.
 	hue := (idx * 47) % 360
-	return Div(css.Class("share-bar"), Style(map[string]string{"height": "4px", "max-width": "100%",
+	return Div(css.Class("share-bar"), Style(map[string]string{"height": "8px", "max-width": "100%",
 		"margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
 		Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct),
 			"background": fmt.Sprintf("hsl(%ddeg 55%% 52%%)", hue), "border-radius": "999px"})))

@@ -56,7 +56,7 @@ type Capabilities struct {
 // Model is one selectable model on a provider, with indicative pricing in cents per
 // one million tokens (input and output priced separately, as providers do).
 type Model struct {
-	ID                 string // the wire model id, e.g. "gpt-4o"
+	ID                 string // the wire model id, e.g. "gpt-5.5"
 	Label              string // human label
 	Caps               Capabilities
 	InputCentsPerMTok  int64
@@ -108,7 +108,7 @@ func Providers() []Provider {
 
 // Default returns the recommended starting provider and model: OpenAI / gpt-5.5, a
 // reasoning model run at medium effort over the streaming Responses API (see
-// DefaultProfile). gpt-4o-mini remains for cheap, non-reasoning calls.
+// DefaultProfile). gpt-5.4-mini remains for cheap, fast calls.
 func Default() (Provider, Model) {
 	p, _ := Get("openai")
 	m, _ := p.Model("gpt-5.5")

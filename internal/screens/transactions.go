@@ -241,6 +241,10 @@ func Transactions() ui.Node {
 		}
 		errMsg.Set("")
 		bump()
+		// L99-T1: single-transaction edits had no confirmation feedback (the bulk ops all toast),
+		// so an inline edit could "take" silently. Post a non-undo info notice to match the rest of
+		// the app's feedback language.
+		uistate.PostNotice(uistate.T("toast.txnUpdated"), false)
 	}
 
 	deleteTxn := func(txnID string) {

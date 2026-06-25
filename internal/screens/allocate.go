@@ -380,7 +380,7 @@ func Allocate() ui.Node {
 	useBackendAI := pr.BackendActive()
 	aiModel := settings.OpenAIModel
 	if aiModel == "" {
-		aiModel = "gpt-4o-mini"
+		aiModel = "gpt-5.4-mini"
 	}
 	aiResult := ui.UseState("")
 	aiLoading := ui.UseState(false)

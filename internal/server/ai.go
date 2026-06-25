@@ -24,7 +24,7 @@ import (
 
 const defaultOpenAIBaseURL = "https://api.openai.com/v1"
 
-var defaultAIModels = []string{"gpt-4o-mini", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o", "gpt-4.1", "o4-mini"}
+var defaultAIModels = []string{"gpt-5.4-mini", "gpt-5.5", "o4-mini"}
 
 const (
 	maxAIModelLength          = 128

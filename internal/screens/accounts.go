@@ -323,7 +323,11 @@ func Accounts() ui.Node {
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title:        uistate.T("accounts.assets"),
 			HeaderAction: smartSectionAction(smartSettings),
-			Body:         IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+			// Empty assets gets the first-run icon + "Add your first account" CTA (opens the add-account
+			// modal), matching every other entity screen — previously a bare "No asset accounts yet." line
+			// with no glyph and no way to act from the page. The liabilities card stays a plain celebratory
+			// line below (no CTA — never nudge a new user to add debt).
+			Body:         IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.liabilities"),

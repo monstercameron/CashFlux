@@ -99,7 +99,18 @@
     var reduced = typeof matchMedia === "function" &&
         matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!off && !reduced && typeof document.startViewTransition === "function") {
-      document.startViewTransition(applyFn);
+      // startViewTransition returns a ViewTransition whose .ready/.finished promises REJECT with
+      // an AbortError ("Transition was skipped") when a rapid subsequent navigation starts a new
+      // transition before this one finishes. That's expected during fast route-switching, but the
+      // rejections otherwise surface as unhandled-promise console errors. Swallow them — the
+      // applyFn (DOM swap) has already run regardless of whether the visual transition completes.
+      var t = document.startViewTransition(applyFn);
+      if (t) {
+        var hush = function () {};
+        if (t.ready && t.ready.catch) t.ready.catch(hush);
+        if (t.finished && t.finished.catch) t.finished.catch(hush);
+        if (t.updateCallbackDone && t.updateCallbackDone.catch) t.updateCallbackDone.catch(hush);
+      }
     } else {
       applyFn();
     }
