@@ -212,3 +212,66 @@ func TestConvertStableAcrossRepeatedCalls(t *testing.T) {
 		}
 	}
 }
+
+// TestSymbolDisambiguation locks the C85 display-symbol fixes so that CAD, AUD,
+// and MXN are never silently aliased to "$" again.
+func TestSymbolDisambiguation(t *testing.T) {
+	tests := []struct {
+		code string
+		want string
+	}{
+		{"USD", "$"},
+		{"CAD", "CA$"},
+		{"AUD", "A$"},
+		{"MXN", "MX$"},
+	}
+	for _, tt := range tests {
+		if got := Symbol(tt.code); got != tt.want {
+			t.Errorf("Symbol(%q) = %q, want %q", tt.code, got, tt.want)
+		}
+	}
+}
+
+// TestConventionJPYRegressionC77 locks the FX-rate convention so the
+// inverted-JPY bug cannot regress silently.
+//
+// Convention: Rates[code] = (USD per 1 foreign major unit).
+// JPY has 0 decimal places, so 100 JPY = 100 minor units.
+// At ~0.0066 USD/JPY (i.e. 1 JPY ≈ 0.66 US cents), 100 JPY ≈ $0.66 USD.
+//
+// The inverted value (151.0 USD/JPY) would produce a wildly large result,
+// proving the convention is detectable by inspection.
+func TestConventionJPYRegressionC77(t *testing.T) {
+	// JPY has 0 decimal places: 100 JPY is represented as 100 minor units.
+	jpyMinorUnits := int64(100) // 100.00 JPY
+
+	t.Run("correct_rate_yields_small_USD", func(t *testing.T) {
+		// Rates["JPY"] = 0.0066 means 1 JPY = 0.0066 USD.
+		// 100 JPY * 0.0066 = 0.66 USD = 66 cents.
+		r := Rates{Base: "USD", Rates: map[string]float64{"JPY": 0.0066}}
+		got, err := ConvertBetween(jpyMinorUnits, "JPY", "USD", r)
+		if err != nil {
+			t.Fatalf("ConvertBetween error: %v", err)
+		}
+		// Expect 66 cents (±1 cent for rounding).
+		if got < 65 || got > 67 {
+			t.Errorf("JPY→USD (correct rate 0.0066): got %d cents, want ~66", got)
+		}
+	})
+
+	t.Run("inverted_rate_yields_large_USD", func(t *testing.T) {
+		// If someone mistakenly stores the rate as JPY-per-USD (e.g. 151.0),
+		// ConvertBetween would produce a wildly large number — ~15100 cents
+		// ($151.00) for only 100 JPY.  This sub-test documents that failure mode
+		// so reviewers can distinguish it from the correct ~66-cent result above.
+		r := Rates{Base: "USD", Rates: map[string]float64{"JPY": 151.0}}
+		got, err := ConvertBetween(jpyMinorUnits, "JPY", "USD", r)
+		if err != nil {
+			t.Fatalf("ConvertBetween error: %v", err)
+		}
+		// With the inverted rate the result must be orders of magnitude larger.
+		if got < 10000 {
+			t.Errorf("inverted-rate sanity: got %d cents, expected ≥10000 to confirm the bug is detectable", got)
+		}
+	})
+}

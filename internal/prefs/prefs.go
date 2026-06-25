@@ -219,6 +219,18 @@ func (p Prefs) FormatDate(t time.Time) string {
 	return t.Format(dateLayout(p.Normalize().DateStyle))
 }
 
+// FormatMonthYear renders a month+year label honoring the user's DateStyle.
+// For DateISO it returns the compact numeric form ("2006-01"); for all other
+// styles (US, EU, Long, and the normalized default) it returns the
+// human-friendly abbreviated form ("Jan 2006"). This is used by planning and
+// debt-payoff chart labels where a full date would be too wide.
+func (p Prefs) FormatMonthYear(t time.Time) string {
+	if p.Normalize().DateStyle == DateISO {
+		return t.Format("2006-01")
+	}
+	return t.Format("Jan 2006")
+}
+
 // WeekStartWeekday returns the configured first day of the week as a time.Weekday.
 func (p Prefs) WeekStartWeekday() time.Weekday {
 	if p.Normalize().WeekStart == WeekMonday {

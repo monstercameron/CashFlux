@@ -131,6 +131,27 @@ func TestMotionNormalize(t *testing.T) {
 	}
 }
 
+func TestFormatMonthYear(t *testing.T) {
+	// Use a date whose month and year are unambiguous in both layouts.
+	d := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		style DateStyle
+		want  string
+	}{
+		{DateISO, "2025-03"},
+		{DateUS, "Mar 2025"},
+		{DateEU, "Mar 2025"},
+		{DateLong, "Mar 2025"},
+		{DateStyle("bogus"), "Mar 2025"}, // falls back to friendly default (DateLong via Normalize)
+	}
+	for _, tt := range tests {
+		p := Prefs{DateStyle: tt.style}
+		if got := p.FormatMonthYear(d); got != tt.want {
+			t.Errorf("style %q: got %q, want %q", tt.style, got, tt.want)
+		}
+	}
+}
+
 func TestIsHexColor(t *testing.T) {
 	good := []string{"#fff", "#54b884", "#ABCDEF", "#000000"}
 	bad := []string{"", "fff", "#ff", "#12345", "#gggggg", "54b884"}

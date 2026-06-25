@@ -36,12 +36,12 @@ var registry = map[string]Currency{
 	"EUR": {"EUR", "€", 2, "Euro"},
 	"GBP": {"GBP", "£", 2, "British Pound"},
 	"JPY": {"JPY", "¥", 0, "Japanese Yen"},
-	"CAD": {"CAD", "$", 2, "Canadian Dollar"},
-	"AUD": {"AUD", "$", 2, "Australian Dollar"},
+	"CAD": {"CAD", "CA$", 2, "Canadian Dollar"},
+	"AUD": {"AUD", "A$", 2, "Australian Dollar"},
 	"CHF": {"CHF", "CHF", 2, "Swiss Franc"},
 	"CNY": {"CNY", "¥", 2, "Chinese Yuan"},
 	"INR": {"INR", "₹", 2, "Indian Rupee"},
-	"MXN": {"MXN", "$", 2, "Mexican Peso"},
+	"MXN": {"MXN", "MX$", 2, "Mexican Peso"},
 }
 
 const defaultDecimals = 2
