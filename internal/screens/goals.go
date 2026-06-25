@@ -64,13 +64,27 @@ func Goals() ui.Node {
 	errMsg := ui.UseState("")
 
 	deleteGoal := func(goalID string) {
-		focusIdx := consumeRowDeleteFocus()
-		if err := app.DeleteGoal(goalID); err != nil {
-			errMsg.Set(err.Error())
-			return
+		// Guard the destructive delete with a confirm (matches Transactions/Budgets). Previously the
+		// "×" destroyed a goal + its contribution history instantly with no confirm or undo.
+		name := uistate.T("goals.thisGoal")
+		for _, g := range app.Goals() {
+			if g.ID == goalID && g.Name != "" {
+				name = g.Name
+				break
+			}
 		}
-		bump()
-		focusRowAfterDelete(".goal-list", "[data-testid^='goal-row-']", focusIdx)
+		uistate.ConfirmModal(uistate.T("goals.deleteConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			focusIdx := consumeRowDeleteFocus()
+			if err := app.DeleteGoal(goalID); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			bump()
+			focusRowAfterDelete(".goal-list", "[data-testid^='goal-row-']", focusIdx)
+		})
 	}
 
 	archiveGoal := func(goalID string, archive bool) {
@@ -249,19 +263,31 @@ func Goals() ui.Node {
 		})
 	}
 
+	goalSmartSettings := uistate.LoadSmartSettings()
 	return Div(
 		If(len(allGoals) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("goals.savedSoFar"), fmtMoney(money.New(savedTotal, base)), "pos"),
 			stat(uistate.T("goals.totalTarget"), fmtMoney(money.New(targetTotal, base)), ""),
-			stat(uistate.T("goals.overallProgress"), fmt.Sprintf("%d%%", overallPct), ""),
+			// Overall progress is the key goals figure — annotated with a smart explainer
+			// tooltip so users understand what the combined percentage represents.
+			Div(css.Class("stat"),
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("goals.overallProgress"),
+					smartTooltipFor(goalSmartSettings, "goal-progress", uistate.T("goals.overallProgress"), uistate.T("smart.tipGoalProgress")),
+				),
+				Div(css.Class("stat-value"), fmt.Sprintf("%d%%", overallPct)),
+			),
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.goals"),
-			HeaderAction: Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")),
-				OnClick(addGoal),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("goals.addGoal"))),
+			HeaderAction: Fragment(
+				smartSectionAction(goalSmartSettings),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")),
+					OnClick(addGoal),
+					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("goals.addGoal"))),
+			),
 			Body: listBody,
 		}),
 		achievedSection,

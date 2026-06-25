@@ -175,14 +175,22 @@ func Bills() ui.Node {
 	// ≥1024 px via CSS so the calendar is visible alongside the list (G11 follow-up).
 	return Div(
 		If(len(upcoming) > 0, Div(css.Class("stat-grid"),
-			stat(uistate.T("bills.totalDue"), fmtMoney(money.New(total, base)), "neg"),
+			// Total due is the key bills figure — tooltip explains what it covers.
+			Div(css.Class("stat"),
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("bills.totalDue"),
+					smartTooltipFor(billSmartSettings, "bills-due", uistate.T("bills.totalDue"), uistate.T("smart.tipBillsDue")),
+				),
+				Div(css.Class("stat-value "+tw.ColorClass("text-down")), fmtMoney(money.New(total, base))),
+			),
 			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
 			stat(uistate.T("bills.nextDue"), nextDue, ""),
 		)),
 		Div(css.Class("bills-layout"),
 			uiw.EntityListSection(uiw.EntityListSectionProps{
-				Title: uistate.T("nav.bills"),
+				Title:        uistate.T("nav.bills"),
+				HeaderAction: smartSectionAction(billSmartSettings),
 				Body: Fragment(
 					body,
 					Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),

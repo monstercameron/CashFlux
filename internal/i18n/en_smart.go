@@ -29,7 +29,14 @@ var smartKeys = Catalog{
 	"smart.disableAll":   "Disable all",
 
 	// Inline explainer tooltips (Free, templated).
-	"smart.tipNetWorth": "Everything you own (assets) minus everything you owe (debts) — your bottom-line worth.",
+	"smart.tipNetWorth":         "Everything you own (assets) minus everything you owe (debts) — your bottom-line worth.",
+	"smart.tipBudgetSafe":       "How much you can still spend in this category before hitting your budget limit for the period.",
+	"smart.tipGoalProgress":     "Total saved across all active goals divided by the combined target — how far you are toward finishing everything.",
+	"smart.tipAccountsNet":      "All asset balances minus all liability balances, converted to your base currency — your net position across every account.",
+	"smart.tipPlanningForecast": "Where your net worth is projected to land in 12 months if your recent average monthly cash flow continues unchanged.",
+	"smart.tipTxnTotal":         "The net of every transaction matching your current filters — income minus spending — in your base currency.",
+	"smart.tipBillsDue":         "The total amount owed across all upcoming bills within the current view window, converted to your base currency.",
+	"smart.tipSubsMonthly":      "The normalized monthly cost of all active detected subscriptions — what recurring charges add up to each month.",
 
 	// Insights section.
 	"smart.insightsTitle": "Your insights",

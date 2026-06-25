@@ -77,11 +77,28 @@ func Budgets() ui.Node {
 	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
 
 	deleteBudget := func(budgetID string) {
-		if err := app.DeleteBudget(budgetID); err != nil {
-			errMsg.Set(err.Error())
-			return
+		// Guard the destructive delete with a confirm (matches the transactions delete
+		// pattern). Previously the "×" deleted a budget instantly with no confirm or undo —
+		// a single misclick was unrecoverable.
+		name := uistate.T("budgets.thisBudget")
+		for _, b := range app.Budgets() {
+			if b.ID == budgetID {
+				if n := catName[b.CategoryID]; n != "" {
+					name = n
+				}
+				break
+			}
 		}
-		bump()
+		uistate.ConfirmModal(uistate.T("budgets.deleteConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteBudget(budgetID); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			bump()
+		})
 	}
 
 	saveBudget := func(id, newName, limitStr, periodStr, ownerID string, rollover bool) {
@@ -292,18 +309,30 @@ func Budgets() ui.Node {
 		listBody = Div(rows)
 	}
 
+	smartSettings := uistate.LoadSmartSettings()
 	return Div(
 		If(len(statuses) > 0, Div(css.Class("stat-grid"),
 			stat(uistate.T("budgets.spent"), fmtMoney(money.New(totalSpent, base)), "neg"),
 			stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(totalLimit, base)), ""),
-			stat(uistate.T("budgets.left"), fmtMoney(money.New(totalLimit-totalSpent, base)), accentFor(money.New(totalLimit-totalSpent, base))),
+			// "Left" (safe-to-spend) is the key budget figure — annotated with a smart
+			// explainer tooltip so users understand what it means at a glance.
+			Div(css.Class("stat"),
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("budgets.left"),
+					smartTooltipFor(smartSettings, "budget-safe", uistate.T("budgets.left"), uistate.T("smart.tipBudgetSafe")),
+				),
+				Div(ClassStr("stat-value "+accentFor(money.New(totalLimit-totalSpent, base))), fmtMoney(money.New(totalLimit-totalSpent, base))),
+			),
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.budgets"),
-			HeaderAction: If(len(statuses) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("budgets.addBudget")))),
+			HeaderAction: Fragment(
+				smartSectionAction(smartSettings),
+				If(len(statuses) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
+					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("budgets.addBudget")))),
+			),
 			Body: Fragment(
 				assignBanner,
 				If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),

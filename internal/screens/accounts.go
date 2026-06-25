@@ -303,7 +303,11 @@ func Accounts() ui.Node {
 		// as secondary tiles.
 		Div(css.Class("nw-summary"),
 			Div(css.Class("stat stat-hero"),
-				Div(css.Class("stat-label"), uistate.T("dashboard.netWorth")),
+				// Net worth label carries a smart explainer tooltip (key-figure placement).
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("dashboard.netWorth"),
+					smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
+				),
 				Div(ClassStr("stat-value "+accentFor(net)), fmtMoney(net)),
 				netWorthDeltaLine(nwDelta, haveDelta),
 			),
@@ -317,8 +321,9 @@ func Accounts() ui.Node {
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("accounts.assets"),
-			Body:  IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+			Title:        uistate.T("accounts.assets"),
+			HeaderAction: smartSectionAction(smartSettings),
+			Body:         IfElse(len(assetList) == 0, P(css.Class("empty"), uistate.T("accounts.noAssets")), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.liabilities"),

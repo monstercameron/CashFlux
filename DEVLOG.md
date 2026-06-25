@@ -3,6 +3,40 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART Wave 2: key-figure tooltips + section quick-actions
+
+Spread the two reusable smart affordances — `smartTooltipFor` and `smartSectionAction` — across every
+major page in the app. Both are already-built components (Wave 1 / affordances Phase 2 shipped them);
+this wave is purely placement.
+
+Hook-safety was the main design consideration. `LoadSmartSettings()` is a pure load with no hook, so
+calling it at any position in a page function is safe. Each affordance function creates its own component
+internally, so there are no hook-order concerns at the call site either. The only rule was: call
+`LoadSmartSettings()` in a fresh local variable (not reuse the one from Wave 1 badge code where it
+already existed — e.g. `smartSettings` on accounts.go already existed from Wave 1, so the accounts
+tooltip reuses it rather than declaring a second one).
+
+Placement decisions:
+- **Budgets**: tooltip on the stat-grid "Left / safe-to-spend" tile (replaced the plain `stat()` call
+  with an inline Div to host the tooltip beside the label); section action in HeaderAction alongside
+  the existing Add button via `Fragment()`.
+- **Goals**: tooltip on the "overall progress %" stat tile; section action wraps the existing Add button.
+- **Accounts**: tooltip on the net-worth hero label (inside the stat-hero div); section action on the
+  Assets `EntityListSection` header (only one section action needed — it jumps to /smart regardless).
+- **Planning**: tooltip on the projected net-worth stat in the forecast card; section action in the
+  forecast card's HeaderAction. The `planSmartSettings` variable is declared inside the `if app != nil`
+  block because `forecastCard` is only constructed there.
+- **Transactions**: section action in the `EntityListSection` HeaderAction; tooltip on the filter-net
+  summary line (beside the existing count/net `Span`).
+- **Bills**: tooltip on the "Total due" stat tile; section action in the EntityListSection HeaderAction.
+- **Subscriptions**: tooltip on the "Monthly burden" stat tile; section action `Fragment`-wrapped with
+  the existing CSV export button in HeaderAction.
+
+i18n: 7 new `smart.tip*` keys in `en_smart.go`, all plain English, one sentence each. Gofmt ran clean.
+Build: `GOOS=js GOARCH=wasm go build` exited 0 with no errors.
+e2e: new `smart_tooltip_spread_check.mjs` — 4 assertions, all PASS: tooltip at Standard density,
+click reveals popover, density Off removes tooltip, density Off removes section action.
+
 ## 2026-06-24 — SMART Wave 1: row-level smart badges
 
 Wired the `smartBadgeFor` toolkit into all four list pages. The core challenge was hook ordering:

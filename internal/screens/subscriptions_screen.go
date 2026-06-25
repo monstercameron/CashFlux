@@ -424,21 +424,30 @@ func Subscriptions() ui.Node {
 			Div(css.Class("rows"), lateChargeRows),
 		)),
 		If(len(subs) > 0, Div(css.Class("stat-grid"),
-			stat(uistate.T("subs.monthlyBurden"), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base)), "neg"),
+			// Monthly burden is the key subscriptions figure — tooltip explains how it's calculated.
+			Div(css.Class("stat"),
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("subs.monthlyBurden"),
+					smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
+				),
+				Div(css.Class("stat-value "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
+			),
 			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
 			shareStat,
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.subscriptions"),
-			// CSV export moves to the card header (G10 §7): keeps the export path
-			// above the fold so Marcus can export without scrolling past all rows.
-			HeaderAction: If(len(subs) > 0,
-				Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
-					}), uistate.T("subs.downloadCsv")),
+			// CSV export and smart section action share the header (G10 §7).
+			HeaderAction: Fragment(
+				smartSectionAction(subSmartSettings),
+				If(len(subs) > 0,
+					Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")),
+						OnClick(func() {
+							csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+							downloadBytes("subscriptions.csv", "text/csv", subscriptions.CSV(subs, csvAmount))
+						}), uistate.T("subs.downloadCsv")),
+				),
 			),
 			Body: Fragment(
 				body,

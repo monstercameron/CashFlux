@@ -366,14 +366,23 @@ func Planning() ui.Node {
 			Y:      chartspec.Axis{Format: yFmt},
 			Legend: len(chartSeries) > 1,
 		}
+		planSmartSettings := uistate.LoadSmartSettings()
 		forecastCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("planning.forecastTitle"),
+			Title:        uistate.T("planning.forecastTitle"),
+			HeaderAction: smartSectionAction(planSmartSettings),
 			Body: Fragment(
 				// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
 				// display-weight figure so Dev's primary question ("where will I be?") is
 				// answerable at glance-speed, before parsing the chart or the hint sentence.
 				Div(css.Class("stat-grid"),
-					stat(uistate.T("planning.projectedNetWorth"), fmtMoney(endVal), accentFor(endVal)),
+					// Projected net worth is the key planning figure — tooltip explains the methodology.
+					Div(css.Class("stat"),
+						Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+							uistate.T("planning.projectedNetWorth"),
+							smartTooltipFor(planSmartSettings, "planning-forecast", uistate.T("planning.projectedNetWorth"), uistate.T("smart.tipPlanningForecast")),
+						),
+						Div(ClassStr("stat-value "+accentFor(endVal)), fmtMoney(endVal)),
+					),
 					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
 				),
 				P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),

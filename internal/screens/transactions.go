@@ -676,7 +676,8 @@ func Transactions() ui.Node {
 	return Div(
 		previewNode,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("transactions.listTitle"),
+			Title:        uistate.T("transactions.listTitle"),
+			HeaderAction: smartSectionAction(txnSmartSettings),
 			Body: Fragment(
 				uiw.FilterToolbar(uiw.FilterToolbarProps{
 					Search:        f.Text,
@@ -713,6 +714,7 @@ func Transactions() ui.Node {
 				// rides alongside the count/net summary.
 				If(len(shown) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.4rem"}),
 					Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
+					smartTooltipFor(txnSmartSettings, "txn-total", uistate.T("transactions.listTitle"), uistate.T("smart.tipTxnTotal")),
 					If(unclearedCount > 0, Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summaryUncleared", unclearedCount)))),
 					Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
 				)),
