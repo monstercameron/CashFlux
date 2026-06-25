@@ -129,6 +129,17 @@ func Planning() ui.Node {
 			rev.Set(rev.Get() + 1)
 		}
 	}
+	// C153: inline-edit a recurring. The row builds the edited Recurring (preserving
+	// ID/NextDue/Autopost) and hands it here to persist.
+	editRecurring := func(r domain.Recurring) {
+		if app == nil {
+			return
+		}
+		if err := app.PutRecurring(r); err != nil {
+			return
+		}
+		rev.Set(rev.Get() + 1)
+	}
 	postDue := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			return
@@ -577,7 +588,7 @@ func Planning() ui.Node {
 			Div(css.Class("rows"), MapKeyed(recs,
 				func(r domain.Recurring) any { return r.ID },
 				func(r domain.Recurring) ui.Node {
-					return ui.CreateElement(RecurringRow, recurringRowProps{Recurring: r, OnDelete: deleteRecurring})
+					return ui.CreateElement(RecurringRow, recurringRowProps{Recurring: r, Accounts: app.Accounts(), Categories: app.Categories(), Base: base, OnDelete: deleteRecurring, OnSave: editRecurring})
 				},
 			)),
 		)
@@ -853,15 +864,98 @@ func Planning() ui.Node {
 }
 
 type recurringRowProps struct {
-	Recurring domain.Recurring
-	OnDelete  func(string)
+	Recurring  domain.Recurring
+	Accounts   []domain.Account
+	Categories []domain.Category
+	Base       string
+	OnDelete   func(string)
+	OnSave     func(domain.Recurring) // C153: persist an inline edit
 }
 
-// RecurringRow renders one recurring cash flow (amount colored by sign) with a
-// remove button. It owns its own click handler (per the no-hooks-in-loops rule).
+// RecurringRow renders one recurring cash flow (amount colored by sign) with
+// inline edit + remove. It owns its own hooks (per the no-hooks-in-loops rule);
+// all hooks are declared unconditionally so the edit toggle never reorders them.
 func RecurringRow(props recurringRowProps) ui.Node {
 	r := props.Recurring
+	editing := ui.UseState(false)
+	labelS := ui.UseState(r.Label)
+	amountS := ui.UseState(money.FormatMinor(r.Amount.Abs().Amount, currency.Decimals(r.Amount.Currency)))
+	cadenceS := ui.UseState(string(r.Cadence))
+	accountS := ui.UseState(r.AccountID)
+	categoryS := ui.UseState(r.CategoryID)
+	autopayS := ui.UseState(r.Autopay)
+	expenseS := ui.UseState(r.Amount.IsNegative()) // preserve money-out vs money-in
+	onLabel := ui.UseEvent(func(v string) { labelS.Set(v) })
+	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
+	onCadence := ui.UseEvent(func(e ui.Event) { cadenceS.Set(e.GetValue()) })
+	onAccount := ui.UseEvent(func(e ui.Event) { accountS.Set(e.GetValue()) })
+	onCategory := ui.UseEvent(func(e ui.Event) { categoryS.Set(e.GetValue()) })
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
+	startEdit := ui.UseEvent(Prevent(func() {
+		labelS.Set(r.Label)
+		amountS.Set(money.FormatMinor(r.Amount.Abs().Amount, currency.Decimals(r.Amount.Currency)))
+		cadenceS.Set(string(r.Cadence))
+		accountS.Set(r.AccountID)
+		categoryS.Set(r.CategoryID)
+		autopayS.Set(r.Autopay)
+		expenseS.Set(r.Amount.IsNegative())
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	base := props.Base
+	if base == "" {
+		base = r.Amount.Currency
+	}
+	saveEdit := ui.UseEvent(Prevent(func() {
+		amt, err := money.ParseMinor(strings.TrimSpace(amountS.Get()), currency.Decimals(base))
+		if err != nil || amt == 0 {
+			return // invalid amount — keep the editor open
+		}
+		if expenseS.Get() {
+			amt = -amt
+		}
+		props.OnSave(domain.Recurring{
+			ID: r.ID, Label: strings.TrimSpace(labelS.Get()), Amount: money.New(amt, base),
+			Cadence: domain.RecurringCadence(cadenceS.Get()), NextDue: r.NextDue,
+			AccountID: accountS.Get(), CategoryID: categoryS.Get(),
+			Autopost: r.Autopost, Autopay: autopayS.Get(),
+		})
+		editing.Set(false)
+	}))
+
+	if editing.Get() {
+		cadOpts := []ui.Node{
+			Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadenceS.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
+			Option(Value(string(domain.CadenceBiweekly)), SelectedIf(cadenceS.Get() == string(domain.CadenceBiweekly)), uistate.T("recurring.cadenceBiweekly")),
+			Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadenceS.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
+			Option(Value(string(domain.CadenceSemimonthly)), SelectedIf(cadenceS.Get() == string(domain.CadenceSemimonthly)), uistate.T("recurring.cadenceSemimonthly")),
+			Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadenceS.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
+			Option(Value(string(domain.CadenceYearly)), SelectedIf(cadenceS.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
+		}
+		acctOpts := []ui.Node{Option(Value(""), SelectedIf(accountS.Get() == ""), uistate.T("recurring.noAccount"))}
+		for _, a := range props.Accounts {
+			acctOpts = append(acctOpts, Option(Value(a.ID), SelectedIf(accountS.Get() == a.ID), a.Name))
+		}
+		catOpts := []ui.Node{Option(Value(""), SelectedIf(categoryS.Get() == ""), uistate.T("recurring.noCategory"))}
+		for _, c := range props.Categories {
+			catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(categoryS.Get() == c.ID), c.Name))
+		}
+		return Div(css.Class("row row-edit"),
+			Form(css.Class("form-grid"), Attr("data-testid", "recurring-edit-"+r.ID), OnSubmit(saveEdit),
+				labeledField(uistate.T("recurring.labelPlaceholder"),
+					Input(css.Class("field"), Type("text"), Value(labelS.Get()), OnInput(onLabel))),
+				labeledField(uistate.T("recurring.amountPlaceholder", base),
+					Input(css.Class("field"), Type("number"), Step("0.01"), Value(amountS.Get()), OnInput(onAmount))),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), OnChange(onCadence), cadOpts),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), OnChange(onAccount), acctOpts),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), OnChange(onCategory), catOpts),
+				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: autopayS.Get(), OnChange: func(v bool) { autopayS.Set(v) }}),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+			),
+		)
+	}
+
 	meta := cadenceLabel(r.Cadence) + " · " + uistate.T("recurring.nextDue", r.NextDue.Format("Jan 2, 2006"))
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
@@ -872,6 +966,7 @@ func RecurringRow(props recurringRowProps) ui.Node {
 			If(r.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "recurring-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
 		),
 		Span(ClassStr(amountClass(r.Amount)), fmtMoney(r.Amount)),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("recurring.editTitle")), Title(uistate.T("recurring.editTitle")), Attr("data-testid", "recurring-edit-btn"), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("recurring.deleteTitle")), Title(uistate.T("recurring.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
