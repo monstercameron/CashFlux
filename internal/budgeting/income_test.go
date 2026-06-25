@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -18,9 +19,7 @@ func makeRates(extras map[string]float64) currency.Rates {
 		Base:  "USD",
 		Rates: make(map[string]float64),
 	}
-	for code, rate := range extras {
-		r.Rates[code] = rate
-	}
+	maps.Copy(r.Rates, extras)
 	return r
 }
 
@@ -111,8 +110,8 @@ func TestIncomeForBudgets(t *testing.T) {
 			name:            "transfer txns excluded from income",
 			configuredMinor: 0,
 			txns: []domain.Transaction{
-				incomeTxn(5, 400_00, "USD"),    // genuine income
-				transferTxn(6, 250_00, "USD"),  // transfer — IsIncome() returns false, must be excluded
+				incomeTxn(5, 400_00, "USD"),   // genuine income
+				transferTxn(6, 250_00, "USD"), // transfer — IsIncome() returns false, must be excluded
 			},
 			wantMinor: 400_00,
 		},

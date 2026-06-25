@@ -67,7 +67,7 @@ func PayeeTrends(txns []domain.Transaction, bounds []time.Time, rates currency.R
 	// buckets (earliest spelling wins per key, globally).
 	buckets := make([]map[string]int64, n)
 	allNames := map[string]string{} // key → display name (first seen across all buckets)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		totals, names, err := payeeTotals(txns, bounds[i], bounds[i+1], rates)
 		if err != nil {
 			return nil, err

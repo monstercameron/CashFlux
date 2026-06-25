@@ -158,7 +158,7 @@ func TestShouldSuggest_BelowThreshold(t *testing.T) {
 
 func TestShouldSuggest_AtThreshold(t *testing.T) {
 	tally := make(Tally)
-	for i := 0; i < DefaultMinCount; i++ {
+	for range DefaultMinCount {
 		tally.Increment("spotify", "entertainment")
 	}
 	cat, ok := tally.ShouldSuggest("spotify", DefaultMinCount)
@@ -169,7 +169,7 @@ func TestShouldSuggest_AtThreshold(t *testing.T) {
 
 func TestShouldSuggest_AboveThreshold(t *testing.T) {
 	tally := make(Tally)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tally.Increment("hulu", "streaming")
 	}
 	cat, ok := tally.ShouldSuggest("hulu", DefaultMinCount)

@@ -199,7 +199,7 @@ func TestConvertStableAcrossRepeatedCalls(t *testing.T) {
 	r := Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.10, "GBP": 1.25}}
 	in := money.New(5000, "EUR")
 	want := money.New(4400, "GBP")
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		got, err := r.Convert(in, "GBP")
 		if err != nil {
 			t.Fatalf("Convert call %d error: %v", i, err)

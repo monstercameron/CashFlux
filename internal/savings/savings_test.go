@@ -35,7 +35,6 @@ func TestRoundUpDelta(t *testing.T) {
 		{name: "unit_granularity", amount: 999, granularity: 1, want: 0},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := RoundUpDelta(tc.amount, tc.granularity)
@@ -78,7 +77,6 @@ func TestSurplusMinor(t *testing.T) {
 		{name: "cap_negative_uncapped", liquid: 100000, billsDue: 40000, goalContribs: 10000, cap: -1, want: 50000},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := SurplusMinor(tc.liquid, tc.billsDue, tc.goalContribs, tc.cap)
@@ -144,7 +142,6 @@ func TestIsScheduleDue(t *testing.T) {
 		{name: "empty_cadence", lastRun: mustParse("2020-01-01"), cadence: "", now: now, want: false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := IsScheduleDue(tc.lastRun, tc.cadence, tc.now)
@@ -197,7 +194,6 @@ func TestPeriodKey(t *testing.T) {
 		{name: "default_empty", t: ref, period: "", want: "2026-06"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := PeriodKey(tc.t, tc.period)

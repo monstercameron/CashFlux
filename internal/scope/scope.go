@@ -21,6 +21,7 @@
 package scope
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -170,22 +171,12 @@ func anyStringMatch(target string, candidates []string) bool {
 
 // anyStringExact reports whether target exactly equals any value in candidates.
 func anyStringExact(target string, candidates []string) bool {
-	for _, c := range candidates {
-		if c == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(candidates, target)
 }
 
 // anyTypeMatch reports whether t equals any type in candidates.
 func anyTypeMatch(t domain.AccountType, candidates []domain.AccountType) bool {
-	for _, c := range candidates {
-		if c == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(candidates, t)
 }
 
 // ApplyScopeToTxns returns only the transactions whose AccountID is in the
