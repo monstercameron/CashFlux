@@ -250,11 +250,14 @@ func Budgets() ui.Node {
 	})
 
 	overCount, nearCount := 0, 0
-	var totalSpent, totalLimit int64
+	var totalSpent, totalLimit, totalOver int64
 	for _, s := range statuses {
 		switch s.State {
 		case budgeting.StateOver:
 			overCount++
+			if s.Remaining.IsNegative() { // C125: accumulate the overspend across all over budgets
+				totalOver += -s.Remaining.Amount
+			}
 		case budgeting.StateNear:
 			nearCount++
 		}
@@ -344,6 +347,15 @@ func Budgets() ui.Node {
 			),
 			Body: Fragment(
 				assignBanner,
+				// C125: when budgets are over, lead with a salient alert banner stating the
+				// total overspend up front — not just a small count pill — so the problem
+				// is impossible to miss. The count/near pills stay below as detail.
+				If(overCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
+					Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
+					Span(css.Class("budget-over-text"),
+						uistate.T("budgets.overBanner", overCount, fmtMoney(money.New(totalOver, base)))),
+				)),
 				If(overCount > 0 || nearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					If(overCount > 0, Span(css.Class("pill", tw.TextDown), uistate.T("budgets.overBadge", overCount))),
 					If(nearCount > 0, Span(css.Class("pill", tw.TextWarn), uistate.T("budgets.nearBadge", nearCount))),

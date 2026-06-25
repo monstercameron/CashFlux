@@ -1014,6 +1014,11 @@
       .home-hero-welcome-body { max-width: 42rem; }
       /* G9.1 Alert card strip — heads-up anomaly urgency. */
       .card-alert { border-left: 4px solid var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--card-bg)); }
+      /* C125: salient over-budget banner — leads the list when any budget is over. */
+      .budget-over-banner { padding: 0.6rem 0.85rem; border-radius: 8px; margin: 0 0 0.6rem;
+        background: color-mix(in srgb, var(--danger) 10%, var(--bg-elev)); }
+      .budget-over-icon { color: var(--danger); font-size: 1rem; line-height: 1; }
+      .budget-over-text { font-weight: 600; color: var(--text); font-size: 0.9rem; }
       .muted { color: var(--text-dim); margin: 0.25rem 0; }
       .empty { color: var(--text-faint); font-style: italic; }
       /* Empty-state call-to-action block: centered message + "Add first…" button (§6.5). */
