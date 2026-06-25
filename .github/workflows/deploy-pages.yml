@@ -42,6 +42,15 @@ jobs:
           mkdir -p web/bin
           go build -o web/bin/main.wasm .
 
+      - name: Compress WebAssembly (precompressed siblings for C314)
+        run: |
+          # Install brotli CLI if not already present.
+          sudo apt-get install -y brotli
+          # gzip: keep original (-k), maximum compression (-9).
+          gzip -9 -k web/bin/main.wasm
+          # brotli: keep original (-k), maximum quality (-q 9).
+          brotli -k -q 9 web/bin/main.wasm
+
       - name: Copy Go wasm runtime glue
         run: |
           if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then
