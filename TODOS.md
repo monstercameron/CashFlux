@@ -2384,3 +2384,350 @@ pure package.
   always verify `git status` is clean of a rebase/merge before editing, commit only own files by explicit
   path, and never revert/clobber another session's dirty files (e.g. TODOS.md/DEVLOG.md/CHANGELOG.md are
   frequently mid-edit).
+
+
+<!-- ===== GRANULAR DECOMPOSITION (batches 9-15, folded 2026-06-25) ===== -->
+
+# Granular todo decomposition — batch 9 (research, 2026-06-25)
+
+> Produced by read-only research agents. To be folded into `TODOS.md` (before the
+> `<!-- END-REVIEW-FINDINGS -->` anchor) once the in-progress `origin/main` merge is resolved
+> and commits are unblocked. Research-lane output only — no code was written.
+
+## F5 Quick-Add (#466 → atomic)
+
+ALREADY SHIPPED by implementer agents (verify, then close — do NOT redo):
+- **C40** Save & add another — DONE: `quickAddAnotherBtn` in `internal/app/quickadd.go` (data-testid `txn-add-another`) + `saveAndAnother`→`saveCore()`+`reset()`; i18n `quickAdd.saveAndAnother`.
+- **C43** Amount autofocus — DONE: `Attr("autofocus","")` on amount Input; `flippanel.go` focuses the `[autofocus]` el on mount.
+- **C44** One-click Quick-Add — DONE: addmenu/shortcuts/shell all call `quickAdd.Set(true)` directly (no intermediate menu).
+- **C45** Account type cues — DONE: `quickAddTypeCue` appends " · Checking/Savings/…" to each option.
+
+Remaining atomic todos:
+- [ ] **[C41][MAJOR]** Replace inline default-account logic in `QuickAddHost` with `accountselect.DefaultID(accounts, app.Transactions(), activeMember)` — `internal/app/quickadd.go` (~l65-91) — adds the missing frequency-in-90d + checking-first tiers. Pure helper, safe to import.
+- [ ] **[C41][MINOR]** Filter archived accounts out of the dropdown — `quickadd.go` `acctOpts` loop (~l171-181) — add `if a.Archived { continue }`.
+- [ ] **[C42][MINOR]** Tab trapped in the native date picker — `quickadd.go` (~l263) — change `Type("date")`→`Type("text")` + `pattern \d{4}-\d{2}-\d{2}` + placeholder; value already ISO via `dateutil.FormatDate`; FlipPanel keydown then receives Tab cleanly.
+- [ ] **[C39/C46][MAJOR]** Add a Payee field with recent-payee autocomplete — `quickadd.go` — `payee` UseState (BEFORE the open guard) + `FormField "Payee"` with `Input list="qa-payees"` + a `Datalist` populated from `quickpayee.RecentPayees(app.Transactions(),50)`; wire `Payee` into the `domain.Transaction` literal; add i18n `quickAdd.payee`. Pure helper, safe to import.
+- [ ] **[C46][DESIGN]** `reset()` must also clear the new payee state (one-liner follow-on to C39/C46).
+- [ ] **[C47][DESIGN]** Move the "reviewed — don't flag" checkbox below the Save button + mute it (`var --color-text-secondary`) — `quickadd.go` (~l265-271). Render-order + style only.
+- Gotchas: new `UseState/UseEvent` hooks must precede the `if !open.Get()` guard; never use `On*` inside the `acctOpts` loop; confirm a `Datalist` shorthand exists else `El("datalist",…)`; `accountselect`/`quickpayee` are pure (no build constraint) so safe to import from the js/wasm `app` pkg.
+
+## F33 Reports (#468 → atomic)
+
+ALREADY SHIPPED:
+- **C241** "Covering" ISO dates — DONE: `internal/screens/reports_screen.go` already routes cs/ce/ps/pe (and row dates) through `pr.FormatDate`.
+
+Remaining atomic todos:
+- [ ] **[C236][MAJOR]** Add "Print / Save as PDF" to the consolidated Export `<details>` — `reports_screen.go` (~l742-769) — an `opt` that calls `js.Global().Call("print")` (needs `syscall/js`); browser print = PDF, no library.
+- [ ] **[C237][MAJOR]** YoY toggle — `reports_screen.go` (~l186-194) — `useYoY` UseState + `onToggleYoY`; prior window = `useYoY ? reports.YoYPrior(w).Range() : w.Shift(-1).Range()`; render toggle near the hero period label. Helper: `reports.YoYPrior` (already committed).
+- [ ] **[C238][MAJOR]** Prior-zero delta badge — `reports_screen.go` `reportsCatRow` (~l1073-1086) — compute `ledger.Delta(amount,prior)`; show `d.Label()` for New/Gone/Pct, suppress only `DeltaZero`; root cause is `SpendingByCategory`/`ledger.PercentChange` returning `ok=false` when prior==0. Helpers: `ledger.Delta` + `.Label()` (already committed).
+- [ ] **[C239][MINOR]** Bar chart `height="NaN"` on a zero-width domain — `web/chart.js` (~l107) — `var yMax=d3.max(ys); if(yMax===yMin) yMax=yMin+1;` before `scaleLinear().domain([yMin,yMax])`, so all-zero data → `[0,1]` not `[0,0]`.
+- [ ] **[C240][MINOR]** Remove the 6 redundant per-card inline CSV buttons (category/payees/largest/income/members) — `reports_screen.go` (~l794-896) — keep only the consolidated Export panel; confirm every export stays reachable there.
+- [ ] **[C242a][DESIGN]** Show Advanced/deductible even with no custom fields — `reports_screen.go` (~l932) — gate on `len(cfDefs)>0 || hasDeductibleCategories` (or always render; `deductibleSection` already returns `Fragment()` when empty).
+- [ ] **[C242b][DESIGN]** Add custom-field + deductible exports to the consolidated Export panel — `reports_screen.go` (~l742-769) — hoist `cfRows`/`summary` compute so the top-level opts can call `downloadBytes`.
+- [ ] **[C243][DESIGN]** Report-type selector — `reports_screen.go` (~l688) — `selectedReport` UseState ("overview"); segmented/`<select>` Overview/Spending/Income/Trends/Advanced; wrap each section group in `If(selectedReport==…)`; `OnChange` via a stable hook position.
+# Granular todo decomposition — batch 10 (research, 2026-06-25)
+
+> Read-only research output. Fold into `TODOS.md` once the in-progress `origin/main` merge
+> resolves and commits unblock. No code written.
+
+## R10 no-key receipt import (#441 → atomic)
+
+ALREADY SHIPPED:
+- **C94** Camera capture — DONE: `pickImageDataURL` sets `input.capture="environment"` (`internal/screens/documents.go:1086`); browser opens rear camera, no separate button needed.
+- Pure helpers ready: `ai.EstimateCostUSD` + `ai.FormatCostUSD` (`internal/ai/ai.go:192,203`); `ai.Usage` already returned by vision callbacks (only the *display* wiring for C99 is missing).
+
+Remaining atomic todos:
+- [ ] **[C93][BLOCKER]** No-key manual fallback — `internal/screens/documents_image_import.go:32-85` — when `NeedsKey` && image chosen, add an "Enter manually" CTA → `uistate.RoutePath("/transactions")` (Tesseract.js local OCR is ~20MB, out of scope for one commit). New `OnManual ui.Handler` prop declared with `ui.UseEvent` at top of `Documents()` (unconditional), passed down.
+- [ ] **[C95][MAJOR]** Swap key-check/image-check order in `readAI` — `documents.go:393-400` — image-empty guard must fire BEFORE the no-key guard so "Choose an image first" shows instead of the misleading needs-key notice.
+- [ ] **[C96][MAJOR]** Unreadable-image error path — `documents.go:405-417` — distinguish 0-rows-parsed from API error; add i18n `documents.unreadableImage` ("couldn't read any transactions — try a clearer photo").
+- [ ] **[C97][MAJOR]** Image size/format validation in `pickImageDataURL` onLoad — `documents.go:1094-1108` — reject >20MB + non jpeg/png/webp/gif via a new `onErr func(string)` param threaded into `chooseImage` (~l377); add 2 i18n keys.
+- [ ] **[C98][MINOR]** Persist chosen image across the Settings round-trip — `documents.go:95` — `imageURL` is component-local `ui.UseState` (lost on nav); move to a `state.UseAtom("doc:pendingImageURL")` (or browserstore), clear on successful import (~l574/594).
+- [ ] **[C99][MINOR]** Show token count + est. cost after vision call — `documents.go:404-417` — capture the `ai.Usage` (currently `_`), call `ai.EstimateCostUSD(aiModel,u)`+`FormatCostUSD`, set new `aiCostMsg` state, render muted line in `ImageImportCard` (`documents_image_import.go:53-85`); pattern at `insights.go:1077-1078`.
+- [ ] **[C100][DESIGN]** Inline OpenAI-key explainer in `ImageImportCard` NeedsKey block — `documents_image_import.go:73-84` — what/where (platform.openai.com)/cost (~$0.002/receipt)/privacy (image goes browser→OpenAI, never to CashFlux); new i18n `documents.keyExplainer`.
+- Gotchas: declare all new hooks at top of `Documents()` unconditionally; cost-estimation logic in the `onResult` closure (not the card); `onErr` is a pure-Go param (no alert()); use `state.UseAtom`/browserstore not `ui.UseState` for cross-nav persistence.
+
+## F44 data ownership / backup (#469 → atomic)
+
+ALREADY SHIPPED:
+- **C298 (nav part)** Settings→Data jump-nav — DONE: `"settings.data"` in `settingsNavKeys` (`internal/app/settingssectionnav.go:34`).
+- Pure helpers ready: `ExportJSONWithBlobs`/`ExportJSONRedactedWithBlobs`/`ImportJSONWithBlobs` (`internal/appstate/artifact_ops.go:110/122/136`); `recordBackupNow`/`loadLastBackup` (`internal/app/notifyrun.go:243/249`).
+
+Remaining atomic todos:
+- [ ] **[C294a][MAJOR]** `exportJSON()` → `app.ExportJSONWithBlobs()` — `internal/app/settings.go:1303` (callback, IDB-safe).
+- [ ] **[C294b][MAJOR]** `activeDataset()` → `app.ExportJSONRedactedWithBlobs()` — `internal/app/backupall.go:55`.
+- [ ] **[C294c][MAJOR]** `importJSON()` → `app.ImportJSONWithBlobs()` — `internal/app/settings.go:1360`.
+- [ ] **[C295a][MAJOR]** Wrap `importJSON()` body in `confirmModal(...)` gated on ack — `settings.go:1354` — mirror `wipeData()` at l1386.
+- [ ] **[C295b][MAJOR]** i18n `settings.importConfirm` ("Replace all current data with this file? This can't be undone.") — `internal/i18n/en.go` ~l1095.
+- [ ] **[C296a][MINOR]** Add partial-CSV hint under the CSV export button — `internal/app/settings_section.go` ~l272 — muted `P` (pure helper, no hooks).
+- [ ] **[C296b][MINOR]** i18n `settings.exportCSVHint` ("Exports your transactions only — not accounts, budgets, or attachments.") — en.go ~l1060.
+- [ ] **[C297a-d][MINOR]** Surface "Back up everything"/"Restore" in Settings→Data — add `OnBackupEverything`/`OnRestoreBackup` to `settingsRightProps` (`settings_section.go` ~l124), 2 `dataBtn` calls (~l268-283), wire in `globalSettingsForm()` (`settings.go` ~l958-963), + 2 i18n keys.
+- [ ] **[C298a-b][MINOR]** Destructive wipe-confirm label — `settings.go:1386` — add `ConfirmLabel` to the confirm-dialog request (check `internal/uistate` + `dialoghost.go:140`), pass `settings.wipeConfirmLabel` ("Erase data").
+- [ ] **[C299a-d][MAJOR]** "Last backed up" timestamp — call `recordBackupNow()` at end of `backupEverything()` (`backupall.go:85`); add `LastBackupAt time.Time` to `settingsRightProps`; render muted `pr.FormatDate(p.LastBackupAt)` line (`settings_section.go` after l283); wire `LastBackupAt: loadLastBackup()` in `globalSettingsForm()` (`settings.go` ~l900).
+- Gotchas: `*WithBlobs` variants block on IDB — only call from event/callback handlers (all listed sites are); `settingsRightColumn` is hook-free, derive values in `globalSettingsForm()` and pass via props.
+# Granular todo decomposition — batch 11 (research, 2026-06-25)
+
+> Read-only research output. Fold into `TODOS.md` at a checkpoint. No code written.
+
+## F9 account types + net-worth clarity (#467 → atomic)
+
+ALREADY SHIPPED:
+- **C71 / C223** add-account persist — DONE: `accountaddform.go:182-186` calls `app.PutAccount` + `uistate.BumpDataRevision()` + `props.OnDone()`.
+- `humanizeType` (`format.go:55-61`) title-cases any type label generically — new types render without code changes (except `retirement_ira` → "Retirement ira"; see C75).
+
+Remaining atomic todos:
+- [ ] **[C73/C75][MAJOR]** Add `TypeBrokerage`/`TypeRetirement401k`/`TypeRetirementIRA`/`TypeCrypto` consts + append to `AllAccountTypes` — `internal/domain/enums.go:34-52` — all default to `ClassAsset` (no `Class()` switch edit; `Valid()` iterates `AllAccountTypes`).
+- [ ] **[C224][MAJOR]** Add `TypeProperty`/`TypeVehicle` consts likewise (same cluster) — `enums.go:34-52`.
+- [ ] **[C73][MAJOR]** Update `domain_test.go:63,75` count + asset-class assertions for the new types.
+- [ ] **[C73/C75][MAJOR]** `accountTypeIcon` switch — `internal/screens/accounts.go:429-441` — add icon cases for the new types.
+- [ ] **[C73/C75][MAJOR]** Exclude new non-spending types from Quick-Add defaults — `internal/accountselect/accountselect.go:25` (`isSpendAccount`) + `internal/app/quickadd.go:82` — extend the `TypeInvestment` exclusion to the new investment/illiquid types.
+- [ ] **[C73/C75][DESIGN]** `freshness.DefaultWindows` (`internal/freshness/freshness.go:31-43`) + `app/settings.go:448-458` `freshnessTypes` — add longer windows for the illiquid types (crypto ~14d, retirement ~90d, property/vehicle ~180d).
+- [ ] **[C74][MINOR]** Promote lock-until out of Advanced for long-term asset types — `internal/screens/accountaddform.go:234-243` — add `isLongTermAsset(t)` helper; render lock-until when `!isLiab && (isLongTerm || advOpen)`.
+- [ ] **[C72/C212][MAJOR]** Add `"kpi-assets"` bento renderer (uses already-computed `assets`, `dashboard.go:98`) — `internal/screens/dashboard.go:203-253` — + register in the default layout slice (uistate); add `assets.Amount` to `kpiSig` (C214).
+- [ ] **[C75][DESIGN]** Group/label types in the add-form selector — `accountaddform.go:189-193` — add a `typeLabel(t)` lookup map (fixes "Retirement ira").
+- [ ] **[C73][MINOR]** Update sample data to use the new types — `internal/store/sample.go:419-424` (401k/IRA/brokerage).
+- Verify: `internal/ledger/liquid.go`, `runway/suggest.go`, `smartengine/accounts.go` liquid sets correctly EXCLUDE new types via default branch — confirm, do NOT add them.
+- Gotchas: new hooks unconditional at top of form; strong-typed enum (add consts, don't loosen); `domain_test.go` count assertion is the build-time guard.
+
+## F8 transfers (#472 → atomic)
+
+ALREADY SHIPPED:
+- `app.CreateTransferPair(TransferParams{...})` two-leg creation — `internal/appstate/transfer_ops.go:51`.
+- Delete removes both legs — `appstate.go:1616` `DeleteTransactionWithTransferPair` + `isReciprocalTransferLeg`.
+- "To account" selector exists in the row transfer form — `accounts_row.go:406-431`; `t.IsTransfer()` predicate available.
+
+Remaining atomic todos:
+- [ ] **[C67][MAJOR]** "New Transfer" primary action on `/transactions` toolbar opening a standalone `TransferFormModal` (new component, e.g. `internal/screens/transfer_form.go`) wired to `CreateTransferPair`; declare all hooks unconditionally.
+- [ ] **[C68][MAJOR]** Guard `ActionFlagReview` against transfer legs — `internal/appstate/appstate.go` `case workflow.ActionFlagReview:` (~l1226) — add `if t.IsTransfer() { return }` (audit other applyEffect cases for the same).
+- [ ] **[C69][MAJOR]** "From account" `<select>` in the new modal — exclude archived + the selected "To" account (mirror `accounts_row.go:406-431`); block submit if `fromID == toID`.
+- [ ] **[C70][MAJOR]** Branch delete-confirm on `t.IsTransfer()` — `internal/screens/transactions_row.go:~64` — new i18n key `transactions.deleteTransferConfirm` ("Both sides of this transfer will be removed…").
+- Gotchas: `CreateTransferPair` is non-atomic (documented) — surface partial-failure errors, don't swallow; logic stays out of view code; `ConfirmModal(msg, dangerous=true, cb)`.
+# Granular todo decomposition — batch 12 (research, 2026-06-25)
+
+> Read-only research output. Fold into `TODOS.md` at a checkpoint. No code written.
+> Big theme this batch: many clusters are largely ALREADY SHIPPED by the implementer agents.
+
+## R16 recurring & bills (#432 → atomic)
+ALREADY SHIPPED: C155 — `bills_screen.go:163` uses `pr.FormatDate(upcoming[0].DueDate)`.
+- [ ] [C147][MAJOR] Surface SMART-P1 detection card on bills screen + per-sub "Add to recurring" CTA — `bills_screen.go:100` (collect smart.PagePlanning) + `smartengine/planning.go:204` (action → "/recurring"); thread detected subs as structured payload (`planning.go:174`).
+- [ ] [C148][MAJOR] Month prev/next nav — `bills_screen.go` add `calMonth` state + prev/next `UseEvent` (unconditional, ~after l51); pass to `bills.MonthCalendar()` (l215); header chevrons + `pr.FormatMonthYear(calMonth)` (helper at `prefs.go:227`).
+- [ ] [C149][MAJOR] Next-due date field — `planning.go` add `rNextDue` state (~after l89) + `<input type=date>` (l584-590); parse into `NextDue` (replace `time.Now()` at l111); i18n `recurring.nextDuePlaceholder`.
+- [ ] [C150][MAJOR] Enrich + click-through calendar dots — `bills_screen.go:243-249` — urgency tone + amounts in tooltip; extract `CalDotButton` component (hook inside it, NOT in the MapKeyed loop).
+- [ ] [C151][MINOR] Exclude liability payments from subs — `subscriptions_screen.go:81-89` — filter via `subscriptions.IsLiabilityPayment(s, app.Transactions(), app.Accounts())` (`classify.go:51`).
+- [ ] [C152][MINOR] Biweekly + semi-monthly cadence — `domain/entities.go:213-233` add consts + `Next()` cases + `MonthlyEquivalent()` (biweekly a*26/12, semi a*2); `planning.go:547-552` options + `cadenceLabel()` (l938-949); tests `domain_test.go`.
+- [ ] [C153][MINOR] Inline edit recurring — `planning.go` add `editID` state + Edit btn on `RecurringRow` (hooks inside the component); submit via `PutRecurring` with same ID.
+- [ ] [C154][MINOR] Persistent paid/autopay — new `recurring_occurrences` store table + `appstate.MarkOccurrencePaid` (reuse domain `IsPaid`/`MarkPaid` in `occurrence.go`); `Autopay bool` on `domain.Recurring`; paid indicator in `BillRow` (`bills_screen.go:279`).
+- [ ] [C156][DESIGN] `/recurring` route — extract `Recurring()` into `internal/screens/recurring_screen.go`; register in `screens.All()` (`screens.go:74`) + shell nav (`shell.go:236-240`); replace planning card with a summary tile.
+
+## R31 plans/pricing (#463 → atomic)
+ALREADY SHIPPED: "Manage subscription"→Stripe portal (`settings_section.go:262`); trial note (`settings.cloudTrialNote`); annual/monthly price disclosure (Settings); UpgradeSheet trust line; SubscriptionBanner trial countdown; server-side trial-already-used guard (`billing_http.go:75`).
+- [ ] [C301][CRITICAL] Decouple `ShowUpgradeSheet()` from CloudMention (only call site is `cloudmention.go:39`; once dismissed it's unreachable) — add a permanent "Try Cloud →"/Upgrade entry in sidebar (`shell.go`) + queue pending-open if called pre-mount (`upgradesheet.go:19-30`).
+- [ ] [C300][MAJOR] Add `/plans` page (new `internal/app/plans.go`) reusing the Settings billing block + `startCheckout`/`openPortal`; "View plans & pricing" link in sidebar/Help; show both annual+monthly in UpgradeSheet (lift interval toggle from `settings.go:681`).
+- [ ] [C302][MAJOR] Surface Manage/Cancel from `SubscriptionBanner` directly (deep-link to billing section; canceled-banner → checkout) — `subscriptionbanner.go:110-120`; add "canceling returns you to free local mode" copy.
+- [ ] [C303][MAJOR] Plain-English free-vs-paid + trial in UpgradeSheet — add trial line + "Always free vs Cloud" comparison (`upgradesheet.go:37-74`); hint cost in CloudMention body.
+- [ ] [C304][DESIGN] Split "Cloud & server" into "Connection" vs "Plan & billing" sub-sections w/ headings — `settings_section.go:194-265`; hint to switch to Cloud to see pricing when self-hosted.
+- Gotcha: checkout/portal handlers close over endpoint/token (stale-snapshot risk) — pass as args or read fresh; `fetchBillingStatus` goroutine→UseState setter (confirm goroutine-safe).
+
+## R28 alerts (#450 + #451 → atomic)
+ALREADY SHIPPED (close as done): C263 (per-type settings UI `settings.go:95-160`), C264 (thresholds l208-260), C265 (paycheck `notify.go:44`+`notifyrun.go:331`), C266 (low-balance `notify.go:43`+`notifyrun.go:300`), C267 (severity pills `notifications.go:28`), C268 (read/dismiss/snooze `uistate/notifyfeed.go:101-156`), C269 (jump-nav `settingssectionnav.go:29`), C270. All have e2e tests.
+- [ ] [#451][MAJOR] Add shared `OnTxnMutated func(*domain.Transaction)` seam on `App` — `appstate.go:69`; call at end of `PutTransaction` (l1554) guarded by `!triggersSuspended`; also fire on delete. (SHARED with #427 R13-reactivity — one field, two consumers.)
+- [ ] [#451][MAJOR] New wasm-only `internal/app/livenotify.go` — `wireLiveNotify(app)` sets the hook; `runLiveNotifyFor(t)` runs only large/low-balance/paycheck/budget generators (skip time-based), config-gated via `notify.EnabledRules`, persists delivered log, prepends feed; recover() guard.
+- [ ] [C272][MINOR] `runNotifyCatchUp` recover() → also `PostNotice(notify.catchUpError)` (`notifyrun.go:40-45`).
+- [ ] [C271][MAJOR] "While you were away" digest grouping — `notifications.go:209-227` split `newSince` vs older into two `role=list` groups w/ headers (data already split at l159).
+- [ ] [C268/snooze][MINOR] `pruneSnoozedFeed(now)` in `uistate/notifyfeed.go`; call from livenotify + NotificationCenter effect (l164).
+
+## R29 roles (#462 → atomic)
+ALREADY SHIPPED (close as done): C275 (role field in add `memberaddform.go:101-108` + edit `members.go:415-422`), C276 cosmetic badge (`members.go:432-441`), C274 disclosure note (`members.go:231`); full `internal/memberrole` pkg + tests; `domain.Member.Role` (`entities.go:50`); store round-trip; active-member switcher (`memberswitcher.go`).
+- [ ] [C273][MAJOR] New `uistate.ActiveMemberRole()` helper (js&wasm) — resolves active member→role, `RoleOwner` when "Everyone".
+- [ ] [C273][MAJOR] Gate Add/Delete/Make-default in Members on `CanManageMembers(role)` — `members.go:76-111,446-452` (derive once, pass `canManage` prop; no hook in loop).
+- [ ] [C273][MAJOR] Gate write CTAs (Quick-Add/Add-menu/inline edit/delete) when Viewer (`CanViewOnly`) — add `uistate.IsViewerMode()`; wire in quickadd/addmenu/transactions/accounts/budgets/goals (one bool down).
+- [ ] [C276][MINOR] Show role label in member switcher + txn member-filter options (`memberswitcher.go:52`, `transactions.go:745`).
+- [ ] [C276][DESIGN] "Viewing as Viewer — read-only" banner in shell when CanViewOnly (overlaps C281).
+- [ ] [cleanup] Remove orphaned i18n `members.roleMember`/`members.roleDefault`; seed `Role: RoleOwner` explicitly for default member (`sample.go`).
+- Gotcha: local-first single-device → enforcement is SOFT UI only (no server auth).
+
+## R33 a11y (#458 → atomic)
+ALREADY SHIPPED (close as done): C318 radiogroup/role=radio/roving-tabindex (`ui/controls.go:131-190`) + server-mode/billing Segmented labels; most C315 aria-labels (rail-collapse, mobile +Add, NotifyBell, HelpButton, Muzak, offline, skip link, nav, breadcrumb, chart role=img); C317 `toggleTheme()` palette-wired + `/appearance` screen; C319 `DashboardLayoutControls` exists in Settings.
+- [ ] [C315][MAJOR] aria-label on TopBar menu button (`shell.go:734`) + `aria-hidden` on brand "C" span (l502) + aria-label on HouseholdCard settings btn (l688-699).
+- [ ] [C315][MINOR] i18n the chart default label `"Trend chart"` → `a11y.trendChart` (`ui/chart.go:56`).
+- [ ] [C316][MAJOR] Sample-banner + subscription-banner text contrast — add `tw.TextFg` token to the text Span (`samplebanner.go:61`, `subscriptionbanner.go`).
+- [ ] [C317][MAJOR] Visible theme-toggle button in TopBar controls (`shell.go:749-757`) calling `toggleTheme()` w/ Sun/Moon icon + aria-label.
+- [ ] [C318][MINOR] Add `Label:` to remaining unlabeled Segmenteds: ResolutionControl (`shell.go:928`), week-start (`settings_section.go:162`), quickadd (`quickadd.go:246`).
+- [ ] [C319][DESIGN] aria-label on layout-mode Select (`dashboard.go:1201`) + surface a layout/customize entry on the dashboard itself (not only Settings).
+
+## R26 recommendations (#453 → atomic)
+ALREADY SHIPPED (close as done): C256 executable actions (`smart_card.go:70-203`), C258a/b (SU1 same-page scroll, SU9 toast), C259b "enable free only" (`smart.go:277`), C259c per-rule cap (`smart/cap.go`). Settings KV persists across wipe by design.
+- [ ] [C254][MAJOR] Verify `Settings{}.IsEnabled(free) == true` (add test); first-run auto-enable free via KV sentinel `cashflux:smart-first-run` in `SmartHub()` (~l39).
+- [ ] [C255][MAJOR] Pre-init KV race — gate SmartHub/digest on `appstate.Default != nil` (already l28-29); add native tests for `LoadSmartSettings()` nil-app fallback + browser-store→SQLite migration on next get.
+- [ ] [C257][MAJOR] Make /smart a ranked hub: relabel Insights tab "Recommendations" + subtitle; ensure `smart-digest` widget is in the DEFAULT bento layout (`dashboard.go:252` registered — add to default order in widgetcfg); `data-testid` on digest (l1378).
+- [ ] [C259][DESIGN] Total cap (~25) before pagination (`smart.go:209`) + "Sorted by urgency" label.
+- Gotcha: bulk-enable must bump `DataRevision` (SetSettingKV doesn't); digest widget hardcoded `GridRow 10` won't show unless in default layout list.
+# Granular todo decomposition — batch 13 (research, 2026-06-25)
+
+> Read-only research output. Fold into `TODOS.md` at a checkpoint. No code written.
+
+## F49 sync reliability (#477) — ALL SHIPPED ✅ (close C320–C324)
+- C320 backend gate: `sync_client.go:508-511` (`!BackendActive()`→empty) + `syncchip.go:61-63` (Fragment when not ok).
+- C321 `data-testid="sync-chip"`: `syncchip.go:91`.
+- C322 backoff: `sync_client.go:220-226` `backoff.Delay(attempt,2s,120s)`+`Jitter` (pkg `internal/backoff` tested).
+- C323 offline handler: `sync_client.go:93-99` registers `"offline"` listener.
+- C324 reactive: `syncchip.go:55-59` `state.UseAtom("sync:rev")` + `sync_client.go:489-495` bump in `setSyncStatus`.
+→ No remaining todos. (Note: composes safely w/ R32 #464 conflict state — same `"conflict"` literal.)
+
+## F41 per-member (#474 → atomic)
+ALREADY SHIPPED: dashboard KPI member-filter (`dashboard.go:79-93` + `usePeriodTotals` memberSig); active-member infra (`uistate/activemember.go`, `memberswitcher.go`); pure `reports.SpendingByMember` (`internal/reports/members.go:26`, tested) + already called on reports screen (`reports_screen.go:496`); `ledger.NetByOwner` (binary owner) on Members.
+- [ ] [C280][MINOR] Wire `reports.SpendingByMember` "spending this period" card onto /members — `members.go ~238` (use the period range; pure helper exists).
+- [ ] [C277][MAJOR] Show member scope on /transactions count + extend KPI scope cues — `transactions.go:93` already layers `TxFilter.Member`; add a visible "showing <member>" count.
+- [ ] [C278][MAJOR] Scope accounts/budgets/goals/allocate by active member (none call `UseActiveMember` today — `accounts.go`/`budgets.go`/`goals.go`/`allocate.go` confirmed absent) — add the member filter where meaningful (or document why net-worth stays household).
+- [ ] [C279][MAJOR] Fractional ownership (pure first): `domain.Account.AllocationShares []MemberShare{MemberID,Weight}` (`entities.go`); `ledger.NetByOwner` (l240) distributes via `split.ByWeights` when shares set; new `allocate/membersplit.go SplitPeriodIncome` (compose `PeriodIncome`+`split.ByWeights`); then add-form shares sub-form.
+- [ ] [C281][DESIGN] "Viewing as <member>" banner — new shell component reading `UseActiveMember` (OVERLAPS R29 C276 role banner + MIA scope banner — build ONE shared banner).
+
+## F43 privacy/trust (#475 → atomic)
+ALREADY SHIPPED: C289 trust footer (`shell.go:704`, `trust.localFooter`).
+- [ ] [C291][CRITICAL] Fix inaccurate "end-to-end encrypted" copy — `i18n/en.go:966` `cloud.upgradeTrust` says E2E but sync sends raw JSON; change to "encrypted in transit" to match accurate `settings.cloudTrustLine` (en.go:1011). Consumer `upgradesheet.go:64`.
+- [ ] [C291][MAJOR] "What syncs" disclosure under backend toggle (names categories + HTTPS), visible whenever backend on (not gated on CloudSelected) — `settings_section.go:194-216`; i18n `settings.syncDisclosure`.
+- [ ] [C292][MAJOR] Persistent AI-key privacy note (remove empty-key gate `settings_section.go:182`) + show key-storage disclosure regardless of CloudSelected; extract shared `KeyExplainerNote()`.
+- [ ] [C290][MAJOR] `/about` route + `internal/screens/about.go` (version, local-first statement, MIT, links) + footer link in HouseholdCard (`shell.go:697-706`) + jump-nav.
+- [ ] [C293][MEDIUM] Expand the settings `about` div (`settings.go:1024-1028`): privacy line + MIT + /help link; later collapse to "More about CashFlux →".
+
+## R25 anomaly hub (#454 → atomic)
+ALREADY SHIPPED: `insights.Detect` + `detectSpendingAnomalies` (`insights.go:1323`) shared by /insights + dashboard; SMART A1/T6/T7/T2 engines exist+tested; reports anomaly card.
+- [ ] [C252][CRITICAL] Audit: make A1/T6/T7 engine fns callable directly (export or add `smartengine.RunAnomaly(in) []smart.Insight`) — `engine.go:101-128` has no allowlist.
+- [ ] [C252][CRITICAL] NEW `internal/screens/anomaly_helpers.go` `detectAllAnomalies(app,txns,cats,rates)` — union category-anomalies + A1/T6/T7 (converted), category-dedup, mid-month-zero guard, sort by |Δ|, cap 5. Verify no import cycle (smartengine must not import screens) via native `go build` first.
+- [ ] [C252][MAJOR] `smartInsightToAnomaly` converter (read `smart.Insight` fields first).
+- [ ] [C252][MAJOR] Wire `detectAllAnomalies` into `spendingHighlights` (`insights.go:1297`), `topHighlightWidget` (`dashboard.go:585`), `attentionWidget` (`dashboard.go:1250`) — pass `app`.
+- [ ] [C253][MAJOR] Rename card "Spending Highlights"→"Anomalies" (`insights.highlightsTitle`). COORD F32 #471 (same card) + R24 #455 (same file) + mid-month guard shared w/ F32-C232.
+
+## R20 sinking funds UI (#436 → atomic)
+ALREADY SHIPPED (pure math): `goals.DrawDownFund`/`FundSetAsideMinor` (`goals/sinkingfund.go`), `budgeting.SinkingFund*` (`rollover.go:40-88`), SMART-BL9 detector (`smartengine/bills.go:578`).
+- [ ] [C189][CRITICAL] `domain.Goal.IsSinkingFund bool` + `CategoryID string` (omitempty) — `entities.go:391` (no migration); persist through `saveGoal` (`goals.go:103-146`).
+- [ ] [C189/C192][HIGH] IsSinkingFund toggle + (conditional) category selector in add form (`goaladdform.go:85-168`) + inline edit (`goals_row.go:138-165`).
+- [ ] [C190][CRITICAL] Wire `FundSetAsideMinor` onto goal rows ("Set aside $X/mo") + aggregate stat card (`goals.go:207-213`).
+- [ ] [C191][HIGH] Auto-accrual: appstate side-effect on txn save where `CategoryID` matches a fund → `DrawDownFund`+`PutGoal` (one top-level effect, iterate inside); monthly set-aside credit w/ once-per-month guard (`LastAccruedMonth`).
+- [ ] [C193][HIGH] BL9 action → `ActionCreateGoal` prefilled IsSinkingFund (`bills.go:578`) + "Suggested sinking funds" strip on /goals.
+- [ ] [C194][HIGH] 3-way goals partition (funds/active/achieved) + dedicated "Sinking Funds" section + Funds filter tab (`goals.go:184-293`).
+
+## R4 FX UX (#447 → atomic)
+ALREADY SHIPPED: C85 symbols `CA$`/`A$`/`MX$` (`currency.go:39-44`, all sites via `Symbol()`); C81 inverse hint after rate entered (`settings.go:1103`).
+- [ ] [C78][MAJOR] Remove `singleCurrency` gate; always show currency picker (defaults to base) — `accountaddform.go:54-64,214`.
+- [ ] [C78b/C79][MAJOR] Inline "set rate" affordance + add-time rate-missing notice when non-base currency w/ no FX rate — `accountaddform.go:113,221`.
+- [ ] [C80][MINOR] Render `FXUpdatedAt[code]` date beside staleness badge — `settings.go:1083-1120` (map already persisted).
+- [ ] [C81][MINOR] Static convention explainer above FX list (before any rate entered).
+- [ ] [C82][MINOR] Net-worth conversion disclosure line when rates applied — `accounts.go:316` (may need `ConvertedCurrencies` on `NetWorthExplained`).
+- [ ] [C85][DESIGN] Fix `currency.Symbol()=="$"` branch checks (`custompage.go:534`, `dashboard.go:717`, `planning.go:298,771`) — CAD/AUD/MXN miss the prefixed chart format; add `currency.IsDollarVariant`.
+- [ ] [C84][DESIGN] Fix 3 dead `Navigate("/settings")` calls (`allocate.go:169`, `insights.go:136`, `documents_image_import.go:77`) → `settings.Set(uistate.Global())`; + clickable "Settings" link in accounts exclusion notice.
+- [ ] [C83] TRIAGE — investigated, NO fix required (skip-link `.skip-link` vs add-menu `.add-item` are distinct classes; no collision confirmed). Close as not-a-bug.
+# Granular todo decomposition — batch 14 (research, 2026-06-25)
+
+> Read-only research output. Fold into `TODOS.md` at a checkpoint. No code written.
+
+## R17 planning surfacing (#430 → atomic)
+Reuse committed: `runway.ProjectLiquid`/`NextPaydayHorizon`, `cashflow.DipDate`/`PaydayBalance`, `ledger.LiquidBalance` (none called from screen yet).
+- [ ] [C171][MAJOR] Seed runway from `ledger.LiquidBalance` not `assets.Amount` — `planning.go:469,478,524` (use `runway.ProjectLiquid`). (do first)
+- [ ] [C168][MAJOR] Lead /planning with the liquid projection card; demote 12-mo net-worth chart — `planning.go:366-401`.
+- [ ] [C172][MAJOR] Visualize `proj.Daily` as balance-over-time chart (template: forecastCard `toPoints` l290-296) — `planning.go:522-530`.
+- [ ] [C169][MAJOR] Payday anchor tile via `runway.NextPaydayHorizon` — needs `Settings.PayCycleDay int` added (additive, ahead of R14) — `planning.go:465-542`.
+- [ ] [C170][MAJOR] Dip warning + projected-on-payday balance via `cashflow.DipDate`/`PaydayBalance` — `planning.go:476-531`.
+- [ ] [C173][MINOR] Low-balance date → stat tile (not muted footnote) — `planning.go:528`.
+- [ ] [C174][MINOR] Runway empty-state → `EmptyStateCTA` to add recurring — `planning.go:476-477`.
+- [ ] [C175][DESIGN] Add data-basis disclosure notes to afford + runway cards — `planning.go:385/407/465`.
+
+## R12 budgets UI (#426 → atomic)
+ALREADY DONE: `/budgets` route exists (404 is dev-server only = C115); `IncomeForBudgets`/`Generate5030`/`Classify` ready; `EmptyStateCTA` on empty budgets.
+- [ ] [C118][HIGH] Add `Budget.Methodology string` to `entities.go:365-375` (BLOCKING prereq — R12-foundation #425) + methodology select in add form (`budgetaddform.go`) + edit (`budgets_row.go`) + thread `budgetRowProps` (`budgets.go:369`).
+- [ ] [C114][HIGH] "Use 50/30/20 template" button → `Generate5030(IncomeForBudgets,...)` fan-out to CreateBudget — `budgets.go:275-295`.
+- [ ] [C113][HIGH] Implement envelope mode (assign banner action + cover/top-up reach a store write + "available to assign" total) — `budgets.go`/`budgets_row.go`.
+- [ ] [C112][HIGH] Zero-based empty-state CTA + always-visible Add button — `budgets.go:275-320`.
+- [ ] [C119][HIGH] Income context bar (income/budgeted/remaining via `IncomeForBudgets`) + "remaining to budget" hint in add form — `budgets.go`.
+- [ ] [C117][MED] Wrap rollover checkbox+label in flex `Label` (detaches at 1280px) — `budgetaddform.go:169`, `budgets_row.go:155`.
+- [ ] [C115][MED] Dev-server SPA history fallback (mirror `e2e/serve.go:72`) — find dev server entry.
+- [ ] [C116][MED] Audit `periodOptions()` for shared backing array / missing i18n — `budgets.go:428-434`.
+
+## R21 loan amortization UI (#418 → atomic)
+ALREADY DONE: `payoff.Amortize*` engine committed+tested; `domain.Account` has APR/MinPayment/DueDay/Lender/CreditLimit; installment vs revolving distinguished at type level (`enums.go:41-74`).
+- [ ] [C204][MAJOR] Add `TermMonths int` + `OriginationDate time.Time` to `domain.Account` (`entities.go:91`) + `IsInstallment()` helper + `payoff.RemainingMonths()` helper. (BLOCKING prereq)
+- [ ] [C206][MAJOR] Persist new fields (store JSON round-trip + test) + fix sample loans (`sample.go:428-430`: set TermMonths/OriginationDate; mortgage 360).
+- [ ] [C204][MAJOR] Term fields in add form (`accountaddform.go`, gated `isLiab && IsInstallment`) + inline edit (`accounts_row.go`).
+- [ ] [C204/C205][MAJOR] NEW `internal/screens/loan_amort_panel.go` `LoanAmortPanel` — `AmortizeFixed`/`AmortSummary` schedule table (Map, no On* in loop) + extra-payment simulator (`AmortizeWithExtra`) callout; wire into AccountRow read-only branch for installment liabilities. (negate signed ledger balance before AmortizeFixed)
+- [ ] [C207][DESIGN] "Installment"/"Revolving" badge in account meta (`accounts.go:446`) + fix `TypeLineOfCredit` icon→CreditCard (`accounts.go:429`).
+
+## R23 portfolio UI (#420 → atomic) — BLOCKED on foundation
+BLOCKER: R23-foundation (#419) NOT landed — `domain.Holding` type, `holdings` table, store CRUD, dataset round-trip, appstate accessors all MISSING. portfolio calc pkg (PortfolioSummary/Allocation*) IS committed+tested.
+- [ ] [C219][CRITICAL prereq] domain.Holding (`entities.go`) + `holdings` table (`sqlitestore.go:55`) + store CRUD (`crud.go`) + Dataset wiring (`dataset.go:85`) + appstate accessors + sample holdings (2+ asset classes).
+- [ ] [C219][CRITICAL] NEW `internal/screens/investment_holdings.go` `InvestmentHoldingsPanel`+`HoldingRow` (own component, hooks unconditional) — table + add form; wire into AccountRow for TypeInvestment.
+- [ ] [C220][NORMAL] Performance summary via `portfolio.PortfolioSummary`; override displayed balance for investment accts (display-only `PortfolioValueMinor` prop).
+- [ ] [C221][NORMAL] Asset-class breakdown bars via `AllocationByAssetClass` + by-holding toggle. (Note: `/allocate` is NOT mislabeled — it's capital allocation, a different feature; no rename.)
+- [ ] [C222][NORMAL] Suppress STALE nudge for investment accts with holdings (`accounts_row.go:527` add `!HasHoldings`). Freshness window already 60d.
+
+## R5 setup wizard (#449 → atomic)
+ALREADY DONE: C24 date-format (`prefs.DateStyle`+`settings_section.go:168`+`FormatDate`) — close; C29 budget empty-state real (`budgets.go:299`) — dev-server issue not code; `internal/setup` pure logic fully landed.
+- [ ] [C21/C23][MAJOR] Add `WizardShownOnce`/`WizardDismissed`/`SetupCurrencyConfirmed bool` to `store.Settings` (`dataset.go:44`) — BLOCKING (R5-foundation #448 referenced but unread).
+- [ ] [C30][MINOR] Owner default = sole member when 1 member (else group) — `accountaddform.go:70` (compute before UseState).
+- [ ] [C26][MAJOR] Demote "Load sample" to outline; promote "Add first account" primary — `accounts.go:293-299`.
+- [ ] [C27][MINOR] Opening-balance sign-convention hint + i18n `accounts.openingBalanceHint` — `accountaddform.go:~175`.
+- [ ] [C21][MAJOR] NEW `internal/app/wizardhost.go` `WizardHost` (dialog overlay, ESC=skip, Back/Next/Skip/Done, sets WizardShownOnce) + uistate UseWizardOpen/Step atoms; render unconditionally in shell.
+- [ ] [C23/C22/C21/C28][MAJOR] Wizard steps: currency+week-start (extract shared controls to avoid R4/R14 conflict), income (skip-gate until R12 income field), account (embed AccountAddForm), members (embed MemberAddForm, "skip — only me").
+- [ ] [C21][MAJOR] First-run trigger in shell (post-hydrate `setup.IsFirstRun`; do NOT fire if sample auto-seeded).
+- [ ] [C31][DESIGN] Wire `dashboard_onboard.go:51` checklist to `setup.Compute`/`NextIncompleteStep` + "Continue setup" → WizardOpen.
+
+## F26 debt planner (#470 → atomic)
+Reuse committed: `payoff.AggregateDebts` (FX-correct), `payoff.Compare` — NEITHER called from planning today (manual native-currency loop at `planning.go:654-672` = the C195 bug). C202 partial (explain text + Try button exist).
+- [ ] [C195][MAJOR] Replace manual debt loop with `payoff.AggregateDebts(accounts,txns,base,rates)` + surface missingRates warning — `planning.go:654`.
+- [ ] [C196][MAJOR] Per-debt table (Name/Balance-FX/APR/MinPayment) — `planning.go:724` after toggles.
+- [ ] [C197][MAJOR] Call `payoff.Compare(snow,aval)` → "avalanche saves N months · $X interest" — `planning.go:733`.
+- [ ] [C199][MINOR] Snowball overlay series in burn chart + legend — `planning.go:760`.
+- [ ] [C203][DESIGN] Calendar date labels on burn-down points via `payoff.DebtFreeMonth` (mirror forecast l307) — `planning.go:765`.
+- [ ] [C201][MINOR] Editable APR/MinPayment per debt row (own `DebtRow` component, PutAccount on change) — `planning.go`.
+- [ ] [C200][MINOR] `/debt` route extracting the debt card (new `screens.Debt()`) + nav anchor — `screens.go:68`, `shell.go:236`.
+- [ ] [C202][DESIGN] Reorder tie-state: show explain+Try before/instead of tied stat-grid — `planning.go:724`.
+- [ ] [C198][MAJOR] After C195, recompute baseline from FX-correct debts + "reset & re-snapshot" nudge + verify `PayoffProgress` currency passthrough — `planning.go:677-696`.
+# Granular todo decomposition — batch 15 (research, 2026-06-25)
+
+## R15 safe-to-spend surfacing (#422 → atomic)
+ALREADY DONE: `safespend.Compute`/`ComputeCategory` committed+tested (R15-foundation #421 shipped); C124 plain-English "$X over" (`budgets.go:409-414`).
+- [ ] [C139][MAJOR] "Safe to spend" KPI tile on dashboard bento (`dashboard.go:203-253`) via `safespend.Compute(liquid, billsLeft, goalNeeds, committedBudgets, base)` (liquid from `ledger.LiquidBalance`); register tile in dashlayout.
+- [ ] [C140][MAJOR] Render that tile UNCONDITIONALLY (no Smart gate); SMART-B8 stays advisory only.
+- [ ] [C141][MAJOR] Planning "Free to spend" → use `ledger.LiquidBalance` not NetWorth + `safespend.Compute` formula — `planning.go:412,415,424`.
+- [ ] [C142][MAJOR] Normalize terminology to "Safe to spend" (`i18n en.go:638`) + align SMART-B8 3-bucket formula to `safespend.Compute` 4-bucket (`smartengine/budgets.go:101`).
+- [ ] [C143][MAJOR] Per-budget prorated pace sub-line via `safespend.ComputeCategory(remaining, daysLeft, daysInPeriod)` — `budgets_row.go`.
+- [ ] [C144][MAJOR] Negative "Left" tile context sub-line (largest offender) — `budgets.go:329-337`.
+- [ ] [C146][MINOR] $1 floor must not gate the dashboard tile (compute directly, no floor); shares formula-align fix w/ C142.
+
+## R13 budget reactivity + polish (#427/#428 → atomic)
+ALREADY DONE: C124 plain-English over-text (`budgets.go:409-414`); C125 static over-budget banner (`budgets.go:353-358`).
+- [ ] [C120][HIGH] Budgets must subscribe to global `uistate.UseDataRevision()` (currently only `rev:budgets`) — add `_ = uistate.UseDataRevision().Get()` at `budgets.go:39`. (one line)
+- [ ] [C122][HIGH] Add shared `App.OnTxnMutated func()` seam (`appstate.go:~63`), fire in PutTransaction (~l1555, both add+edit) + DeleteTransaction — SHARED with R28 #451 (build once, fan-out if 2 consumers).
+- [ ] [C122][HIGH] NEW pure `internal/app/budgetdiff.go` `NewlyOverBudget(before,after []budgeting.Status) []string` (+ native tests).
+- [ ] [C122][HIGH] NEW `internal/app/livenotify.go` (js&wasm) `wireOnTxnMutated` → snapshot before/after, toast newly-crossed, seed dedupe from delivered log; call from `app.go:~187`.
+- [ ] [C123][MED] Quick-Add dialog clip — `quickadd.go:274` Height 420→520px + `.set-foot{flex-shrink:0}` (`web/index.html:2021`).
+- [ ] [C125][MED] Navigate-in over-budget toast via `ui.UseEffect` keyed `"over:N"` — `budgets.go:~266`.
+
+## R19 savings automations (#434 → atomic)
+ALREADY DONE: C186 `workflow.ActionTransfer` (+ValidateTransferAction, executed via CreateTransferPair); C185 `CreateWorkflowFromGoal` (pay-yourself-first two-leg); C187 SMART-G17 executable (`smart_card.go:191-202`). Reuse `savings.RoundUpDelta`/`SurplusMinor`/`IsScheduleDue`/`PeriodKey`.
+- [ ] [C183][MAJOR] Round-up: txnContext vars (`txn_is_transfer`/`txn_amount_minor_local`) + `RoundUpAccrual` store + `AccumulateRoundUp` on TxnAdded (base-ccy guard) + `CreateWorkflowFromRoundUp` template (DedupeKey `roundup:` resolves live accrual, resets to 0).
+- [ ] [C184][MAJOR] Surplus sweep: `surplus_minor` in engineVars (`savings.SurplusMinor`) + `TransferAmountExpr` field on Action/Effect (formula-eval at apply) + `CreateWorkflowFromSweep` (cap to max).
+- [ ] [C188][DESIGN] NEW `internal/screens/automations.go` `Automations()` (group transfer workflows by DedupeKey prefix, enable toggles, "transferred this period") + `/automations` route (`screens.go`) + i18n.
+- Dep order: C183.1→.2→.3→.4; C184.1→.2→.3; then C188.
+
+## R7 self-learning categorization (#437/#438 → atomic)
+ALREADY DONE: **C32 fixed** (ruleaddform reads `UseRuleDraft` via UseEffect `rule-draft-consume`, `ruleaddform.go:62-70`) — close #437. Reuse `learntally` pkg.
+- [ ] [C33][MAJOR] Self-learning: `App.tally learntally.Tally` field, warm from history on boot + `LoadTally`/`SaveTally` (KV `app:learntally`); `Increment` on PutTransaction (categorized, non-transfer); wire `ShouldSuggest` into `AutoCategorizeTransaction` as 2nd signal.
+- [ ] [C34][MAJOR] Live Quick-Add suggestion: extend `catAssist` (`quickadd.go:214-226`) — after rules lookup, consult `app.TallySuggest(desc)` then `statement.DefaultCategorizer` (3-tier); pure render-time, no hooks.
+- [ ] [C35][MAJOR] Threshold: replace literal `3` (`rules.go:167`) with `app.RuleSuggestMinCount()` (new persisted setting, default `rulesuggest.DefaultMinCount`) + numeric input in settings.
+- [ ] [C36][MINOR] Wire keyword categorizer into `AutoCategorizeTransaction` (name→ID match) — `appstate.go:754` (covers Quick-Add + imports).
+- [ ] [C37][MINOR] Visible label on create-rule funnel button + i18n `transactions.createRuleLabel` "Always categorize like this" — `transactions_row.go:251`.
+- [ ] [C38][DESIGN] Move suggestions above the Mermaid order card + empty-state "keep categorizing…" — `rules.go:199-241`.
+
+## R8 duplicate review/merge UI (#440 → atomic)
+ALREADY DONE: C90 dedupe count filter-scoped (`transactions.go:70-73,490-494`); C91 selection-count toast (`transactions.go:356-362`). Reuse `fingerprint.TxFingerprint`/`GroupDuplicates`/`MergeResolve`.
+- [ ] [C86][BLOCKER] Upgrade CSV-import dedup key from `dedupe.Signature` → `fingerprint.TxFingerprint` (account-scoped + POS-noise) — `appstate.go:208-223` + doc-import path ~l800; regression test (`# STARBUCKS` vs `STARBUCKS` re-import = 0).
+- [ ] [C87][MAJOR] `App.MergeTransactions(keepID, discardIDs)` via `fingerprint.MergeResolve` under triggersSuspended — `appstate.go:~243` (+ test). Hard dep of C88/C89.
+- [ ] [C88][MAJOR] Pre-import dup-warning stage: `PartitionCSV(...)→(fresh,candidates,skipped)` + inline warning card w/ per-row skip/import — `appstate.go:~171`, `documents.go:144-193`.
+- [ ] [C89][MAJOR] `/duplicates` screen (new `duplicates.go` + route): `GroupDuplicates` → side-by-side cards + Keep-first/newest/most-detail → `MergeTransactions`; collect IDs then call once (no On* in loop).
+
+## R30 applock security (#460 → atomic)
+ALREADY DONE: `PasscodeStrength`/`isTrivialPasscode`/strength enum (`applock.go:116-222`); MinPasscodeLength=4 + StrengthTooShort reject; ValidHint guard.
+- [ ] [C284][MAJOR] Replace SHA-256 gate hash with argon2id (`golang.org/x/crypto/argon2`, IDKey 3/64MB/4) + `argon2id$params$salt$hash` format + HashVersion + lazy re-hash migration on SHA-256 verify — `applock.go:58-104`; run in goroutine/promise (CPU-heavy) so unlock doesn't freeze.
+- [ ] [C285][MAJOR] Add `"applock.section"` to `settingsNavKeys` (`settingssectionnav.go:22-36`).
+- [ ] [C286][MINOR] Dark-mode gate card: bg `var(--surface,#fff)` undefined in dark → change to `var(--bg-card,#121214)` + explicit text color — `applockgate.go:125`.
+- [ ] [C287][MINOR] Reject `StrengthWeak` (e.g. "000000") in setup `submit()` (`applockgate.go:419`) + i18n `applock.tooWeak` + live strength meter.
+- [ ] [C288][DESIGN] Rename "App lock" heading → "Security" (`i18n en.go:357`) (+ optional `/security` route).
