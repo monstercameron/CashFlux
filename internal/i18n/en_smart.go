@@ -35,9 +35,15 @@ var smartKeys = Catalog{
 	"smart.running":  "Running…",
 
 	// Global controls (manage header).
-	"smart.densityLabel": "Show smart",
-	"smart.enableAll":    "Enable all",
-	"smart.disableAll":   "Disable all",
+	"smart.densityLabel":   "Show smart",
+	"smart.enableAll":      "Enable all",
+	"smart.enableFreeOnly": "Enable free features only",
+	"smart.disableAll":     "Disable all",
+
+	// Insights pagination.
+	"smart.prevPage": "← Previous",
+	"smart.nextPage": "Next →",
+	"smart.pageOf":   "Page %d of %d",
 
 	// Inline explainer tooltips (Free, templated).
 	"smart.tipNetWorth":         "Everything you own (assets) minus everything you owe (debts) — your bottom-line worth.",

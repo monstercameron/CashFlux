@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Cap-per-rule + paginate insights + free-only bulk enable (C259)
+
+Three focused UX improvements to the Insights tab and Manage tab of the Smart hub.
+
+**Problem:** with many rules enabled, the Insights tab could surface a wall of insights from a single prolific rule (e.g. a subscription rule with many matches), burying findings from other rules. No page cap meant an arbitrarily long list with no way to navigate it. And the only bulk-enable option was "Enable all" (including AI features that require a paid provider key).
+
+**CapPerRule:** pure function in `internal/smart/cap.go`. Takes an already-severity-sorted slice and a cap `n`; iterates once, counting per `Feature` code in a map; emits the first `n` per code (which are the highest-severity because input is sorted). Zero allocation on the hot path for the common case where no rule exceeds the cap. Table-driven tests cover the 4-same→3-kept case, mixed-rules independence, no-op, empty, n=1, and n=0.
+
+**EnableFreeOnly:** `smart.EnableFreeOnly(s Settings) Settings` in the same file. Iterates `catalog`, marks every `TierFree` feature enabled, and clears its `ExplicitOff` record. AI features are deliberately left alone — the function's job is "turn on the cost-free tier", not "configure AI". Wired through `uistate.EnableFreeSmart()`.
+
+**Pagination:** `smartInsightsPager` is a new component (owns its own `ui.UseState` and two `ui.UseEvent`). The pager only renders when `totalPages > 1` (10 insights per page), so a short list is uncluttered. Button-disabled state is expressed via Go if/else (building separate `Button(...)` nodes) rather than `If(cond, Attr(...))`, which the framework type-checks as incompatible.
+
+**Decision — 3 per rule, 10 per page:** 3 is generous enough to surface the most important findings from a busy rule but avoids a single rule monopolizing the list. 10 per page keeps the card list skimmable without scrolling.
+
+**Decision — component for pager:** the pager's `UseState` / `UseEvent` hooks must sit at stable positions. Since `smartInsightsSection` is a plain function (no hooks), the pager is its own component passed via `ui.CreateElement`. This keeps the hooks rule clean without lifting page state into `SmartHub` (which would require threading it through multiple layers).
+
+**Decision — "Enable free features only" placement:** between the density dial and "Enable all" in the manage header controls bar. This left-to-right ordering goes from "subtle" (density) to "progressive enablement" (free-only → all) to "off" (disable all).
+
+**E2E:** `e2e/c259_insights_cap_bulk.mjs` checks cap-per-rule (no feature appears >3 times), pagination control presence, and the "Enable free features only" button click without JS error. Test passes.
+
 ## 2026-06-25 — Split /smart into Insights + Manage tabs (C257)
 
 The `/smart` hub was a single long scroll with four stacked sections. As the SMART feature count grows, the insights (the payoff) and the manage catalog (the plumbing) compete for attention on the same page. This ticket separates them into two focused tabs.

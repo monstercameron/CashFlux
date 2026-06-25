@@ -119,3 +119,12 @@ func DisableAllSmart() smart.Settings {
 	SaveSmartSettings(s)
 	return s
 }
+
+// EnableFreeSmart enables all Free-tier features and persists. AI-tier features
+// are left at their current state (explicitly-on AI features stay on; others
+// stay at the off-by-default tier default).
+func EnableFreeSmart() smart.Settings {
+	s := smart.EnableFreeOnly(LoadSmartSettings())
+	SaveSmartSettings(s)
+	return s
+}

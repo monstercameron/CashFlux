@@ -102,10 +102,99 @@ func SmartHub() ui.Node {
 	)
 }
 
+// insightsPagerProps carries the capped insight list into the pager component.
+type insightsPagerProps struct {
+	Insights []smart.Insight
+}
+
+// insightsPageSize is the number of insights shown per page in the Insights tab.
+const insightsPageSize = 10
+
+// smartInsightsPager renders the paginated insight list. It is its own component
+// so the pagination On* hooks sit at stable positions (no hooks in loops rule).
+func smartInsightsPager(props insightsPagerProps) ui.Node {
+	page := ui.UseState(0) // 0-based current page
+
+	all := props.Insights
+	total := len(all)
+	totalPages := (total + insightsPageSize - 1) / insightsPageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	cur := page.Get()
+	if cur >= totalPages {
+		cur = totalPages - 1
+		page.Set(cur)
+	}
+
+	start := cur * insightsPageSize
+	end := start + insightsPageSize
+	if end > total {
+		end = total
+	}
+	pageInsights := all[start:end]
+
+	onPrev := ui.UseEvent(func() {
+		if p := page.Get(); p > 0 {
+			page.Set(p - 1)
+		}
+	})
+	onNext := ui.UseEvent(func() {
+		if p := page.Get(); p < totalPages-1 {
+			page.Set(p + 1)
+		}
+	})
+
+	var pager ui.Node = Fragment()
+	if totalPages > 1 {
+		prevBtn := Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-insights-prev"),
+			Attr("aria-label", uistate.T("smart.prevPage")),
+			OnClick(onPrev),
+			uistate.T("smart.prevPage"),
+		)
+		if cur == 0 {
+			prevBtn = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+				Attr("data-testid", "smart-insights-prev"),
+				Attr("disabled", "true"),
+				uistate.T("smart.prevPage"),
+			)
+		}
+		nextBtn := Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-insights-next"),
+			Attr("aria-label", uistate.T("smart.nextPage")),
+			OnClick(onNext),
+			uistate.T("smart.nextPage"),
+		)
+		if cur >= totalPages-1 {
+			nextBtn = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+				Attr("data-testid", "smart-insights-next"),
+				Attr("disabled", "true"),
+				uistate.T("smart.nextPage"),
+			)
+		}
+		pager = Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Mt2)),
+			Attr("data-testid", "smart-insights-pager"),
+			prevBtn,
+			Span(ClassStr(tw.Fold(tw.Text12, tw.TextDim)),
+				uistate.T("smart.pageOf", cur+1, totalPages),
+			),
+			nextBtn,
+		)
+	}
+
+	return Fragment(
+		smartInsightList(pageInsights),
+		pager,
+	)
+}
+
 // smartInsightsSection renders the active Free-engine insights, or a calm
 // empty/onboarding state. anyEnabled covers AI features too, so the onboarding
 // copy only shows when nothing at all is on; when only AI features are enabled
-// the section steps aside (the AI section carries the value).
+// the section steps aside (the AI section carries the value). Insights are
+// capped to 3 per rule (highest-severity kept) and then paginated.
 func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled bool) ui.Node {
 	var body ui.Node
 	switch {
@@ -116,7 +205,8 @@ func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled 
 	case len(insights) == 0:
 		body = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.allClear"))
 	default:
-		body = smartInsightList(insights)
+		capped := smart.CapPerRule(insights, 3)
+		body = ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped})
 	}
 	return uiw.Card(uiw.CardProps{
 		Header: smartBrandHeader(uistate.T("smart.insightsTitle"), false, nil),
@@ -184,6 +274,10 @@ func smartManageControls(_ struct{}) ui.Node {
 		uistate.EnableAllSmart()
 		rev.Set(rev.Get() + 1)
 	})
+	onEnableFree := ui.UseEvent(func() {
+		uistate.EnableFreeSmart()
+		rev.Set(rev.Get() + 1)
+	})
 	onDisableAll := ui.UseEvent(func() {
 		uistate.DisableAllSmart()
 		rev.Set(rev.Get() + 1)
@@ -214,6 +308,12 @@ func smartManageControls(_ struct{}) ui.Node {
 					return Option(Value(string(d)), SelectedIf(d == density), d.Label())
 				},
 			),
+		),
+		Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-enable-free"),
+			Attr("aria-label", uistate.T("smart.enableFreeOnly")),
+			OnClick(onEnableFree),
+			uistate.T("smart.enableFreeOnly"),
 		),
 		Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
 			Attr("data-testid", "smart-enable-all"),
