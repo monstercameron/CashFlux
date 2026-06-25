@@ -539,7 +539,10 @@ func Planning() ui.Node {
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
 					),
 					verdict,
-					P(css.Class("muted"), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
+					// C173: the low-point line carries the date; tone it (danger) when the
+					// balance actually dips negative so it reads as a warning, not a muted
+					// footnote. Stays muted when the low-point is comfortably positive.
+					P(ClassStr(runwayLowClass(lowTone)), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
 				)
 			}
 		}
@@ -1039,6 +1042,15 @@ func PlanRow(props planRowProps) ui.Node {
 }
 
 // cadenceLabel localizes a recurring cadence.
+// runwayLowClass styles the runway low-point line: muted when the low-point stays
+// positive, danger + semibold when it dips negative so it reads as a warning (C173).
+func runwayLowClass(tone string) string {
+	if tone == "neg" {
+		return "t-body " + tw.ColorClass("text-down") // danger color = salient vs muted gray
+	}
+	return "muted"
+}
+
 func cadenceLabel(c domain.RecurringCadence) string {
 	switch c {
 	case domain.CadenceWeekly:
