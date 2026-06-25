@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Fix Settings raw-CSS-token garbage (C25 via R3)
+
+R3 (a read-only diagnostic subagent) pinned the `{[{border-top-width…}]}` text in the Settings modal
+to `internal/app/settings_section.go:63`: `Hr(tw.BorderT, tw.BorderLine, Style(...))` passed css.Rule
+values as `Hr` CHILDREN, so the html/shorthand dispatcher (unrecognized arg → child node) serialized
+them with `%v` into a DOM text node instead of applying them as a class. Every other divider in the
+file uses `css.Class(...)`/`ui.Divider()`; `appearance.go` had the identical bug fixed earlier. One-line
+fix: wrap in `css.Class(tw.BorderT, tw.BorderLine)`. Build green; live Settings e2e couldn't reliably
+open the modal in the churning app, so verified by diagnosis + build + pattern-match. (gopls kept
+emitting stale false "undefined" errors throughout this work — `go build` is the ground truth.)
+
 ## 2026-06-25 — Fix silent add-form failure (C223/C71/C177 via R2)
 
 The review pass flagged "add silently fails" three times — credit card (F9), goal (F23), other-asset

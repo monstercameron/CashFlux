@@ -60,7 +60,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
 		p.FXAIFetch,
-		Hr(tw.BorderT, tw.BorderLine, Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+		Hr(css.Class(tw.BorderT, tw.BorderLine), Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
