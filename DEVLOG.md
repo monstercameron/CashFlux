@@ -3,6 +3,43 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-24 — SMART insight copy audit + golden snapshot test
+
+A second editorial pass over all nine `internal/smartengine/*.go` engine files to verify
+Title/Detail strings comply with the style guide established in the previous copy-refinement
+commit. Finding: the copy was already clean — no prose changes were needed. This confirms
+the prior pass covered everything and the golden tests now lock that state in permanently.
+
+**What the golden test adds (`copy_golden_test.go`):**
+
+- `goldenInput()` builds a fully deterministic fixture — fixed `Now=2026-06-15`, known
+  amounts ($3,000/mo income, $2,000/mo expense, Vacation goal, Emergency Fund goal, 5
+  uncategorized misc transactions). No `time.Now()` call anywhere in the file.
+
+- Four exact golden assertions: D1 uncategorized-todo title+detail (locks the count and
+  template), G1 structural check (title starts "Save $…/mo for Vacation", detail mentions
+  "Dec 2026"), G11 gap-math check ($10,000 ± $2,000 from 6-mo target minus $2,000 saved),
+  G3 surplus title (exact: "You're freeing up about $1,000/mo").
+
+- `TestCopyGuard` runs every registered engine over a rich composite fixture (adds a
+  high-APR Visa, a yielding savings account, recurring bills, Netflix subscription series, a
+  Dining budget, and salary income) and scans all produced Title+Detail strings for:
+  (a) symbol-less 2-decimal amounts (a digit run `.XX` not preceded by a currency symbol),
+  (b) bare ISO codes in prose (`USD`, `EUR`, `GBP`, etc.),
+  (c) broken English plurals (`entrys`, `categorys`, `daies`).
+
+**Design decisions:**
+
+- Baseline transactions in `goldenInput` are given a `CategoryID` so they don't
+  accidentally inflate the D1 uncategorized count (D1 counts ALL categoryless transactions
+  in the 60-day window, including income).
+- The guard regex for "symbol-less amounts" anchors on a non-`$€£¥`/non-digit character
+  before the amount, so `$1,234.56` (fine) doesn't match but `1234.56` (bad) does.
+- "months" is specifically NOT in the broken-plural list — that word is correct English
+  used extensively in copy; only the *-ys / *-es misfires are caught.
+
+All 5 new tests pass; full `./internal/smartengine/` suite passes (0 failures).
+
 ## 2026-06-24 — SMART Wave 4: entity overlay, digest widget, empty-state helpers
 
 Wave 4 fills in the three remaining density tiers that hadn't been wired yet:
