@@ -14,6 +14,29 @@ import (
 // GroupOwnerID is the owner identifier used for shared (household-level) entities.
 const GroupOwnerID = "group"
 
+// MemberRole is the permission tier assigned to a household member.
+// It controls what operations the member may perform when role-enforcement
+// is wired (future tickets). The zero value ("") is treated as RoleAdmin
+// by the memberrole package to give existing members full access after
+// a schema migration.
+type MemberRole string
+
+const (
+	// RoleOwner is the primary household owner — full control including
+	// member management. Assigned automatically to the default member
+	// (IsDefault=true) when a dataset is first created.
+	RoleOwner MemberRole = "owner"
+
+	// RoleAdmin is a trusted household member with full access to financial
+	// entities but no member-management permission. This is the default for
+	// all non-default members and for legacy rows that pre-date the role field.
+	RoleAdmin MemberRole = "admin"
+
+	// RoleViewer is a read-only member who can see data but may not create,
+	// edit, or delete any entity.
+	RoleViewer MemberRole = "viewer"
+)
+
 // Member is a person in the household/group. Members are owners of individual
 // pools and are labels within the single local dataset (no auth).
 type Member struct {
@@ -21,6 +44,10 @@ type Member struct {
 	Name      string         `json:"name"`
 	Color     string         `json:"color,omitempty"`
 	IsDefault bool           `json:"isDefault,omitempty"`
+	// Role is the member's permission tier. The zero value is treated as
+	// RoleAdmin by the memberrole package for backwards-compatibility with
+	// datasets created before this field existed.
+	Role      MemberRole     `json:"role,omitempty"`
 	Prefs     MemberPrefs    `json:"prefs,omitempty"`
 	Custom    map[string]any `json:"custom,omitempty"`
 }

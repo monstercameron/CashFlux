@@ -3,6 +3,42 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Feature: Member role/permission model (C273)
+
+**What:** Bottom-up implementation of the member role model — domain types, pure logic package,
+and persistence round-trip tests. No UI wired (that's C275).
+
+**Domain changes:** Added `MemberRole` string type and the three constants (`RoleOwner`,
+`RoleAdmin`, `RoleViewer`) to `internal/domain/entities.go`. Added `Role MemberRole` field to
+`Member` with `json:"role,omitempty"` — the `omitempty` ensures legacy datasets without the field
+marshal/unmarshal cleanly (old exports stay valid; new exports include the field).
+
+**Pure package `internal/memberrole`:** Zero `syscall/js` dependency. Five query functions
+(`CanManageMembers`, `CanEditEntities`, `CanViewOnly`, `Valid`, `ParseRole`) plus `Label`,
+`DefaultRole`, and `Resolve`. The `Resolve` function is the migration bridge: when a stored
+`Member.Role` is `""` (legacy row), it applies `DefaultRole(m.IsDefault)` — the default member
+gets `RoleOwner`, all others get `RoleAdmin`. This means existing datasets have correct effective
+permissions without a schema migration.
+
+**Persistence tests:** Three tests in `internal/store/member_role_persist_test.go`:
+- `TestMemberRoleRoundTrip`: owner/admin/viewer each survive `PutMember → GetMember`.
+- `TestMemberRoleLegacyDefault`: raw JSON without a `role` key is inserted directly into SQLite;
+  `GetMember` returns `Role == ""` (no data corruption); `memberrole.Resolve` applies the default.
+- `TestMemberRoleDatasetRoundTrip`: all three roles survive `Snapshot → Load` (full export-import).
+
+**Decisions:**
+- `omitempty` on `Member.Role`: keeps the JSON footprint minimal for the common owner/admin
+  case AND ensures legacy exports without the field continue to load without error.
+- No enforcement wired yet: this ticket is model + logic only. The permission guard belongs on
+  the action layer (future), not here — wiring it now would couple the model to UI before the
+  shape is stable.
+- `Resolve` over zero-value: chose an explicit migration helper rather than a custom
+  `UnmarshalJSON` override to keep the domain struct dead simple and make the migration intent
+  obvious at call sites.
+
+**Tests:** `go test ./internal/domain/... ./internal/memberrole/... ./internal/store/...` → all
+three packages green. WASM build clean (rc=0).
+
 ## 2026-06-25 — Fix: Notification Center stays empty (C270, closes C121/C158/C159)
 
 **Bug:** The Notification Center screen and the rail unread badge both subscribe to the
