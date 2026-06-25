@@ -25,6 +25,7 @@ type Bill struct {
 	Amount    money.Money // the minimum payment due (positive)
 	DueDate   time.Time   // the next due date on or after the reference time
 	DaysUntil int         // whole days from the reference date to DueDate (0 = due today)
+	Autopay   bool        // C154/C157: biller charges this automatically (recurring-derived bills only)
 }
 
 // Upcoming returns the next bill for each active liability account that has a
@@ -75,6 +76,7 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 			Amount:    r.Amount.Abs(),
 			DueDate:   due,
 			DaysUntil: daysBetween(now, due),
+			Autopay:   r.Autopay,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

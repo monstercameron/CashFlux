@@ -298,6 +298,9 @@ func BillRow(props billRowProps) ui.Node {
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, d.Bill.AccountID),
 			),
 			Span(ClassStr(metaCls), meta),
+			// C154: surface autopay so the user knows this bill is charged automatically
+			// (no manual payment needed — just keep funds available).
+			If(d.Bill.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "bill-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
 		// bill-sub-actions: fixed trailing group so action buttons don't crowd the
