@@ -641,6 +641,7 @@ var english = Catalog{
 	"planning.affordWhen":               "Affordable in about %s at this pace.",
 	"planning.affordNever":              "Your cash flow won't cover this without more income.",
 	"planning.runwayTitle":              "Cash runway",
+	"planning.runwayChartLabel":         "Projected daily liquid balance over the next 60 days",
 	"planning.runwayHint":               "How your balance holds over the next 60 days against your scheduled recurring cash flows.",
 	"planning.runwayBufferPlaceholder":  "Warn me below, optional (%s)",
 	"planning.runwayEmpty":              "Add recurring cash flows above to project your cash runway.",

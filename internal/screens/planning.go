@@ -554,6 +554,21 @@ func Planning() ui.Node {
 				} else {
 					verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.runwaySafe", runwayDays))
 				}
+				// C172: render the per-day balance curve (it was computed but never shown —
+				// only summary stats were). A line over the 60-day horizon, X = day index.
+				dayPts := make([]chartspec.Point, len(proj.Daily))
+				for i, d := range proj.Daily {
+					dayPts[i] = chartspec.Point{X: float64(d.Day), Y: currency.MajorFromMinor(d.Balance, base)}
+				}
+				rwYFmt := ".3~s"
+				if currency.Symbol(base) == "$" {
+					rwYFmt = "$.3~s"
+				}
+				rwSpec := chartspec.Spec{
+					Kind:   chartspec.Line,
+					Series: []chartspec.Series{{Name: uistate.T("planning.runwayTitle"), Points: dayPts}},
+					Y:      chartspec.Axis{Format: rwYFmt},
+				}
 				rwBody = Div(
 					Div(css.Class("stat-grid"),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
@@ -564,6 +579,8 @@ func Planning() ui.Node {
 					// balance actually dips negative so it reads as a warning, not a muted
 					// footnote. Stays muted when the low-point is comfortably positive.
 					P(ClassStr(runwayLowClass(lowTone)), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
+					// C172: the daily balance curve over the horizon.
+					uiw.Chart(uiw.ChartProps{Spec: rwSpec, Height: "160px", Label: uistate.T("planning.runwayChartLabel")}),
 				)
 			}
 		}
