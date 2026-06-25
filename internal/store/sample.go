@@ -226,7 +226,11 @@ func SampleDataset() Dataset {
 		txn("internet", 9, checking, "Fiberline", "Internet", catInternet, -7500)
 		txn("phone", 9, checking, "CellOne", "Phones (two lines)", catUtilities, -9500)
 		txn("gym", 3, checking, "Iron Works Gym", "Gym membership", catHealth, -5000)
-		txn("subs", 5, checking, "Streaming & apps", "Subscriptions", catSubs, -3800)
+		// C164: a real recurring service, not a generic "Subscriptions" lump — the old
+		// desc "Subscriptions" leaked into the detector as a subscription literally named
+		// "Subscriptions" (a category name masquerading as a merchant). Same account/
+		// category/amount, so totals are unchanged; it just reads as a real charge now.
+		txn("subs", 5, checking, "Google", "YouTube Premium", catSubs, -3800)
 		// Named subscriptions — engage the Subscriptions detector, price-change
 		// detection, mixed cadence (monthly + annual), and the stale/cancelled flows.
 		netflix := int64(-1549)
