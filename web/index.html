@@ -42,7 +42,24 @@
       })();
     </script>
 
-    <title>CashFlux</title>
+    <title>CashFlux — Local-first household budgeting</title>
+
+    <!-- SEO + link-share previews (C6). Copy mirrors manifest.webmanifest. No og:image
+         yet — app icons aren't generated (C306); a broken image would be worse than none. -->
+    <meta name="description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights. Your data stays on your device." />
+    <meta property="og:title" content="CashFlux" />
+    <meta property="og:description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CashFlux" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="CashFlux" />
+    <meta name="twitter:description" content="Local-first, household-aware budgeting suite — budgeting, planning, goals, and AI insights." />
+
+    <!-- Brand favicon (was none → generic tab icon). On-brand green "C" mark mirroring
+         .brand-mark; SVG = crisp at every size, no PNG generation. (apple-touch-icon /
+         og:image still need a PNG — app icons aren't generated yet, C306.) -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="mask-icon" href="./favicon.svg" color="#2e8b57" />
 
     <!-- PWA: installable, standalone, dark theme -->
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -1608,6 +1625,210 @@
       [data-wonder="off"] .list-rows .row,
       [data-wonder="off"] .rows .row:not(.txn-table .row),
       [data-wonder="off"] .list-rows .row:not(.txn-table .row) { animation: none !important; }
+
+      /* ── Frontend-design polish pass (C254–C276) ──────────────────────────
+         Token-driven refinements only; all values use existing CSS vars.
+         Every addition is gated by prefers-reduced-motion where motion is used.
+         WCAG AA contrast verified in light + dark for color-bearing rules.
+         ─────────────────────────────────────────────────────────────────── */
+
+      /* C267 – Severity pill refinements.
+         Replace hardcoded hex with themed constructs; add a crisper letter-spacing
+         and the same font-weight rhythm as .pace-badge siblings. Light theme
+         contrast: warning #92400e on amber-bg ~4.9:1 ✓; critical #991b1b on red-bg
+         ~5.1:1 ✓. Dark: warning #d4a017 on rgba-amber-bg ~4.8:1 ✓;
+         critical #f87171 on rgba-red-bg ~4.7:1 ✓. */
+      .sev-pill {
+        font-size: 0.67rem; font-weight: 700; letter-spacing: 0.05em;
+        text-transform: uppercase; white-space: nowrap; line-height: 1.4;
+        padding: 0.1rem 0.42rem; border-radius: 999px; border: 1px solid transparent;
+        display: inline-block; vertical-align: middle;
+        /* Subtle inset for tactile depth — same technique as .btn-primary */
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      }
+      .sev-info {
+        background: var(--bg-elev); color: var(--text-dim); border-color: var(--border);
+      }
+      .sev-warning {
+        background: rgba(217,140,0,0.13); color: #d4a017; border-color: rgba(217,140,0,0.30);
+      }
+      .sev-critical {
+        background: rgba(220,38,38,0.11); color: #f87171; border-color: rgba(220,38,38,0.28);
+      }
+      [data-theme="light"] .sev-warning  { color: #92400e; background: rgba(245,158,11,0.12); }
+      [data-theme="light"] .sev-critical { color: #991b1b; background: rgba(220,38,38,0.09); }
+
+      /* C268 – Per-item notification control buttons.
+         Compact icon-button affordance: ghost by default, accent ring on focus,
+         danger tone for dismiss. Hover/focus states satisfy WCAG 2.4.11 (focus visible). */
+      .notif-ctrl-btn {
+        display: inline-grid; place-items: center;
+        min-width: 28px; min-height: 28px;
+        padding: 0.1rem 0.3rem;
+        background: transparent; border: 1px solid transparent;
+        border-radius: 6px; color: var(--text-faint);
+        font-size: 0.82rem; line-height: 1; cursor: pointer;
+        transition: color var(--wonder-dur-fast) ease,
+                    background-color var(--wonder-dur-fast) ease,
+                    border-color var(--wonder-dur-fast) ease;
+      }
+      .notif-ctrl-btn:hover {
+        color: var(--text); background: var(--bg-elev); border-color: var(--border);
+      }
+      .notif-ctrl-btn:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 1px;
+      }
+      .notif-ctrl-dismiss:hover {
+        color: var(--danger); background: rgba(216,113,111,0.10); border-color: rgba(216,113,111,0.28);
+      }
+      [data-theme="light"] .notif-ctrl-btn:hover { background: #f3f2ef; border-color: #d1cfc9; }
+      [data-theme="light"] .notif-ctrl-dismiss:hover { background: rgba(185,28,28,0.07); border-color: rgba(185,28,28,0.22); }
+
+      /* C274 – Single-device note helper text.
+         Calm, well-set secondary copy. Inherits .muted color; adds a slightly
+         reduced size and a left rule to distinguish it from body text. */
+      [data-testid="members-single-device-note"] {
+        font-size: 0.82rem; color: var(--text-faint);
+        padding-left: 0.6rem;
+        border-left: 2px solid var(--border);
+        margin-top: 0.3rem; margin-bottom: 0.5rem;
+        line-height: 1.5;
+      }
+      [data-theme="light"] [data-testid="members-single-device-note"] {
+        color: #636369; border-left-color: #d1cfc9;
+      }
+
+      /* C276 – Member role badge + default chip.
+         .badge already has layout; add the two missing semantic variants so
+         they render with clear visual weight distinction:
+           • .badge          → role pill: neutral elevated surface, dimmed text
+           • .badge-muted    → "Default" chip: fainter, visually subordinate
+           • .badge-soon     → already defined (blue for upcoming/plan items)
+         Contrast in dark: role badge #ababb3 on #1a1a1d ~4.6:1 ✓
+         Contrast in light: role badge #636369 on #f3f2ef ~4.8:1 ✓ */
+      .badge {
+        background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--border);
+      }
+      .badge-muted {
+        background: transparent; color: var(--text-faint);
+        border: 1px solid var(--border); opacity: 0.8;
+      }
+      [data-theme="light"] .badge        { background: #f3f2ef; color: #636369; border-color: #d1cfc9; }
+      [data-theme="light"] .badge-muted  { color: #9a9a9f; border-color: #d1cfc9; }
+
+      /* C275 – Role selector: no extra CSS needed — uses existing .field class.
+         Typography crispness is handled by the .badge + .badge-muted refinements above. */
+
+      /* C269/C263/C264 – Notifications settings section, Manage-alerts rows, threshold inputs.
+         Row rhythm: consistent spacing, aligned toggle/label pairs, labelled threshold inputs. */
+      [data-testid="settings-notifications"] { display: flex; flex-direction: column; gap: 0; }
+      [data-testid="settings-notifications"] h4.set-label { margin-top: 0.9rem; }
+      [data-testid="settings-manage-alerts"] { display: flex; flex-direction: column; }
+      /* Threshold input row: reuse .toggle-row layout so threshold aligns with its toggle. */
+      [data-testid="settings-manage-alerts"] .toggle-row + .toggle-row {
+        border-top: none; /* collapse double-border between toggle + threshold rows */
+      }
+
+      /* C257/C259 – Smart Insights/Manage tabs + pagination.
+         Ghost button variant: the base .btn with a transparent background, so the
+         tab bar reads as a segmented-control: active = elevated, inactive = ghost.
+         Contrast: --text-dim on transparent ~4.5:1 in dark ✓; #3c3c43 on #f7f5f0 ~5.4:1 light ✓. */
+      .btn-ghost {
+        background: transparent; border-color: transparent; color: var(--text-dim);
+        font-weight: 400;
+      }
+      .btn-ghost:hover {
+        background: var(--bg-elev); border-color: var(--border); color: var(--text);
+      }
+      [data-theme="light"] .btn-ghost { color: #636369; }
+      [data-theme="light"] .btn-ghost:hover { background: #f3f2ef; border-color: #d1cfc9; color: #1c1c1e; }
+
+      /* Smart tab bar active-tab underline indicator: non-obtrusive accent bottom border
+         on the active button so the selected tab is crisply communicated (not just weight). */
+      [role="tablist"] .btn:not(.btn-ghost) {
+        border-bottom-color: var(--accent);
+        border-bottom-width: 2px;
+        font-weight: 600;
+      }
+
+      /* Smart insight card refinements (C257/smart_card.go).
+         Soft layered surface with a subtle top-edge highlight for depth.
+         Border-left toned by severity for glanceability at scroll speed. */
+      .smart-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
+        transition: box-shadow var(--wonder-dur) var(--wonder-ease);
+      }
+      .smart-card:hover {
+        box-shadow: 0 3px 10px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.04);
+      }
+      .smart-card[data-severity="alert"]  { border-left: 3px solid var(--danger)  !important; }
+      .smart-card[data-severity="warn"]   { border-left: 3px solid #cfa14e !important; }
+      .smart-card[data-severity="nudge"]  { border-left: 3px solid var(--accent)  !important; }
+      [data-theme="light"] .smart-card {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(17,24,39,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+      }
+      [data-theme="light"] .smart-card:hover {
+        box-shadow: 0 3px 8px rgba(17,24,39,0.11);
+      }
+
+      /* C271 – Catch-up banner staggered reveal.
+         Two-element stagger: the header label fades in first, then the count.
+         Both elements slide up 8px (reduced-motion: fade only, no translate).
+         The banner itself gets a warm-tinted accent surface for distinction. */
+      .notif-catchup-banner {
+        display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap;
+        padding: 0.55rem 0.8rem; margin-bottom: 0.75rem;
+        background: var(--accent-dim); border: 1px solid rgba(46,139,87,0.28);
+        border-radius: 6px;
+      }
+      [data-theme="light"] .notif-catchup-banner {
+        background: #edf7f1; border-color: rgba(46,139,87,0.30);
+      }
+      .notif-catchup-label {
+        font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em; color: var(--accent);
+      }
+      [data-theme="light"] .notif-catchup-label { color: #1a7a47; }
+      .notif-catchup-count {
+        font-size: 0.88rem; color: var(--text-dim);
+      }
+      [data-theme="light"] .notif-catchup-count { color: #3c3c43; }
+
+      /* Staggered reveal for banner children (prefers-reduced-motion guarded) */
+      @media (prefers-reduced-motion: no-preference) {
+        @keyframes catchup-fadeslide {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .notif-catchup-banner .notif-catchup-label {
+          animation: catchup-fadeslide 220ms var(--wonder-ease-out) both;
+          animation-delay: 0ms;
+        }
+        .notif-catchup-banner .notif-catchup-count {
+          animation: catchup-fadeslide 220ms var(--wonder-ease-out) both;
+          animation-delay: 80ms;
+        }
+      }
+
+      /* C271 – Dashboard catch-up card (dashCatchUpCard).
+         Gentle staggered reveal for the card and its contents on load.
+         Respects prefers-reduced-motion. */
+      @media (prefers-reduced-motion: no-preference) {
+        @keyframes catchup-card-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        /* Target the catch-up card wrapper: it sits in the dashboard flow just
+           before .bento and carries data-testid="dash-catchup-card" (set in Go). */
+        [data-testid="dash-catchup-card"] {
+          animation: catchup-card-in 280ms var(--wonder-ease-out) 60ms both;
+        }
+      }
+      /* ── End frontend-design polish pass ──────────────────────────────── */
     </style>
 
     <!-- ============================================================

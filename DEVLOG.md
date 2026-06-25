@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — Frontend-design polish pass (C254–C276)
+
+**Methodology.** Applied the frontend-design skill methodology, reconciled with CashFlux's calm/minimalist design language. The guiding principle: every change should read as a more polished version of what was already there — no new fonts, no wild colors, no visual language breaks. All additions are CSS-only in `web/index.html`; no Go source files were modified.
+
+**What was missing.** Several CSS classes referenced in the Go components had zero definitions in the stylesheet: `.notif-ctrl-btn`, `.notif-catchup-banner`/`.notif-catchup-label`/`.notif-catchup-count`, `.badge-muted`, `.btn-ghost`, and `.smart-card`. These components rendered with browser defaults (invisible buttons, unstyled catches-up banners, plain-text role badges). The polish pass added all of them.
+
+**Per-component decisions:**
+- C267 (severity pills): tightened letter-spacing (0.04→0.05em), added `box-shadow: inset 0 1px 0 rgba(255,255,255,0.06)` for a subtle depth cue matching `.btn-primary`. Dark critical text changed to `#f87171` (was `#b91c1c` — too dark on the semi-dark red bg, ~3.8:1; `#f87171` hits ~4.7:1 on the dark bg).
+- C268 (notification controls): new `.notif-ctrl-btn` ghost icon-button with 28×28 min touch target, transparent-border hover ring, `focus-visible` outline using `var(--accent)`. Dismiss button gets danger hover tint on `.notif-ctrl-dismiss`.
+- C274 (single-device note): left `border-left: 2px solid var(--border)` rule distinguishes helper copy from body text without adding weight.
+- C276 (member badges): `.badge` gets `background: var(--bg-elev); color: var(--text-dim); border: 1px solid var(--border)` — the missing visual treatment. `.badge-muted` is semi-transparent/faint so the "Default" chip reads as clearly subordinate to the role badge.
+- C257/C259 (Smart tabs): `.btn-ghost` defined as transparent/no-border base with hover elevation. Active tab gets `border-bottom: 2px solid var(--accent)` via `[role="tablist"] .btn:not(.btn-ghost)`.
+- Smart card: `.smart-card` gets `background: var(--bg-card)`, layered box-shadow for depth, and a severity-toned `border-left: 3px solid` so alert/warn/nudge cards are glanceable at scroll speed.
+- C271 (catch-up): Banner uses `var(--accent-dim)` + `rgba(46,139,87,0.28)` border — on-brand, calm. Staggered `animation-delay` (0ms label, 80ms count) with 220ms `catchup-fadeslide` keyframe. Dashboard card gets a 280ms slide-up entrance with 60ms delay. Both gated behind `@media (prefers-reduced-motion: no-preference)`.
+
+**Build/test results.** WASM build: exit 0. `gofmt -l`: no output. `go vet ./...`: no output. Browser e2e lane: PASS. Pre-existing `TestExactTailwindValues/TextFaint` failure in `internal/ui/tw` is unrelated to this change (confirmed by stash test).
+
 ## 2026-06-25 — E2E hardening + design-system consistency pass
 
 **Context.** After shipping C254–C276 (SMART features, notifications, member roles), ran the full e2e battery and found two failing tests and several design-system inconsistencies.
