@@ -80,9 +80,22 @@ func runNotifyCatchUp() {
 	}
 
 	// Record each notification in the persisted Notification Center feed (C75).
+	// Severity is mapped from the notify.Severity int to the canonical string
+	// used by the UI (C267):
+	//   - budget-over / large-txn / bill-due-tomorrow → SeverityCritical → "critical"
+	//   - stale-balance / bill-due-soon / budget-near → SeverityWarning   → "warning"
+	//   - digest / backup / others                    → SeverityInfo       → "info"
+	// The mapping is deterministic — it lives in the notify package's Candidate
+	// producers (notifyfeed.*Candidates) and flows unchanged through CatchUp.
 	feed := make([]uistate.FeedItem, len(out))
 	for i, n := range out {
-		feed[i] = uistate.FeedItem{ID: n.ID, Title: n.Title, Body: n.Body, At: n.At.Unix()}
+		feed[i] = uistate.FeedItem{
+			ID:       n.ID,
+			Title:    n.Title,
+			Body:     n.Body,
+			At:       n.At.Unix(),
+			Severity: severityString(n.Severity),
+		}
 	}
 	uistate.PrependNotifyFeed(feed)
 	postBrowserNotifications(out)
@@ -242,6 +255,20 @@ func backupReminderCandidates(app *appstate.App, now time.Time) []notify.Candida
 			}
 			return uistate.T("notify.backupTitle"), uistate.T("notify.backupBody", daysSince)
 		})
+}
+
+// severityString maps a notify.Severity int to the canonical pill label used by
+// the Notification Center UI (C267). The mapping is the single source of truth:
+// edit here to change how any severity level is labelled.
+func severityString(s notify.Severity) string {
+	switch s {
+	case notify.SeverityWarning:
+		return "warning"
+	case notify.SeverityCritical:
+		return "critical"
+	default:
+		return "info"
+	}
 }
 
 // fmtBaseMoney formats a base-currency minor-units value in the app's accounting

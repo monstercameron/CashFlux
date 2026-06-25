@@ -19,13 +19,17 @@ const (
 )
 
 // FeedItem is one entry in the Notification Center (C75): the title/body of an
-// emitted notification, when it fired, and whether the user has read it.
+// emitted notification, when it fired, whether the user has read it, and the
+// severity level for visual differentiation (C267). Severity is one of "info",
+// "warning", or "critical". Legacy items with no Severity value render at the
+// info level — no migration needed.
 type FeedItem struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Body  string `json:"body,omitempty"`
-	At    int64  `json:"at"` // unix seconds
-	Read  bool   `json:"read,omitempty"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Body     string `json:"body,omitempty"`
+	At       int64  `json:"at"` // unix seconds
+	Read     bool   `json:"read,omitempty"`
+	Severity string `json:"severity,omitempty"` // "info" | "warning" | "critical"; empty = info
 }
 
 // UseNotifyFeed returns the shared, persisted Notification Center feed (newest

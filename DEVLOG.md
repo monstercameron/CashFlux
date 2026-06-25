@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-25 — C267 Severity pills in the Notification Center
+
+**What:** Added visual severity differentiation to every row in the Notification Center — a small
+inline pill labelled "Info", "Warning", or "Critical" — so at-a-glance triage is possible without
+opening each item.
+
+**How the severity is derived (deterministic, no config):**
+- `notify.Severity` (int: `SeverityInfo=0`, `SeverityWarning=1`, `SeverityCritical=2`) was already
+  being produced by the `notifyfeed.*Candidates` functions and propagated through `notify.CatchUp`
+  into `notify.Notification.Severity`. It was just never surfaced in the feed or UI.
+- `internal/uistate.FeedItem` gained a `Severity string` field (`json:"severity,omitempty"`). The
+  empty string is backward-compatible — legacy items silently render as "info".
+- `internal/app.severityString(notify.Severity)` maps the int to the canonical string ("info" /
+  "warning" / "critical") and is called when building the `[]FeedItem` in `runNotifyCatchUp`.
+- The mapping by event type: digest/backup = info; stale-balance/bill-due-soon/budget-near/large-txn
+  = warning; bill-due-tomorrow/budget-over = critical. All wired at the `notifyfeed` layer, not here.
+
+**UI:** `notifySeverityPill(sev string)` helper renders a `<span class="sev-pill sev-{level}">`
+with an `aria-label` matching the text, satisfying WCAG 1.4.1 (not color-only). CSS added to
+`web/index.html` reuses existing palette vars (`--warn`, `--down`, `--border`, `--bg-elev`).
+Pills sit inline in a flex `row-meta` div alongside the date, keeping the existing row layout.
+
+**Trade-offs:** chose string-typed `Severity` on `FeedItem` (not the int) so JSON round-trips
+are self-documenting and the UI/e2e don't need to import the notify package constants.
+
+**E2E:** `e2e/c267_notification_severity.mjs` — seeds three IDB items (one per severity), reloads,
+navigates to /notifications, and asserts labelled pill text + distinct CSS classes. Follows the
+C270 IDB-injection pattern exactly.
+
+**Build/quality:** wasm build exits 0; `gofmt -l` clean; `go vet` clean.
+
 ## 2026-06-25 — C276 Real role labels on member rows
 
 **What:** The member list was showing cosmetic "Default" or "Member" strings in the `row-meta`

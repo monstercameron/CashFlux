@@ -1451,6 +1451,20 @@
       [data-theme="light"] .pace-soon { color: #b45309; }
       .pace-ontrack { background: var(--bg-elev); color: var(--text-dim); }
 
+      /* Notification Center severity pills (C267): compact inline status chips
+         surfacing info / warning / critical tones. Colors reuse existing palette
+         vars (--warn, --down, --accent) and are tuned to WCAG AA contrast in both
+         themes. Text label (not color-only) satisfies accessibility. */
+      .sev-pill { display: inline-block; font-size: 0.68rem; font-weight: 700;
+        letter-spacing: 0.04em; text-transform: uppercase;
+        padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap;
+        line-height: 1.5; border: 1px solid transparent; vertical-align: middle; }
+      .sev-info     { background: var(--bg-elev); color: var(--text-dim); border-color: var(--border); }
+      .sev-warning  { background: rgba(217,140, 0,0.14); color: #a16207; border-color: rgba(217,140,0,0.35); }
+      .sev-critical { background: rgba(220, 38,38,0.12); color: #b91c1c; border-color: rgba(220,38,38,0.30); }
+      [data-theme="light"] .sev-warning  { color: #92400e; }
+      [data-theme="light"] .sev-critical { color: #991b1b; }
+
       /* Goal/budget rows: at narrow widths the head wraps so a long goal name no
          longer collides with the amount; the bar + sub-line stack below (G5 §768). */
       @media (max-width: 760px) {

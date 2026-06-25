@@ -16,6 +16,21 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// notifySeverityPill returns a compact labelled pill for the given severity
+// string (C267). It uses a text label — not color alone — so the meaning is
+// accessible to users who cannot distinguish colors (WCAG 1.4.1). The empty
+// string and "info" both render the neutral info pill (legacy items are info).
+func notifySeverityPill(sev string) ui.Node {
+	switch sev {
+	case "warning":
+		return Span(css.Class("sev-pill", "sev-warning"), Attr("aria-label", "Warning"), "Warning")
+	case "critical":
+		return Span(css.Class("sev-pill", "sev-critical"), Attr("aria-label", "Critical"), "Critical")
+	default:
+		return Span(css.Class("sev-pill", "sev-info"), Attr("aria-label", "Info"), "Info")
+	}
+}
+
 // NotificationCenter lists the notifications surfaced by the catch-up engine (bill
 // due, budget thresholds, stale balances, digests, …) — the persisted feed (C75).
 // Opening it marks everything read; "Clear all" empties it.
@@ -59,7 +74,10 @@ func NotificationCenter() ui.Node {
 				Span(css.Class("row-desc"), it.Title),
 				If(it.Body != "", Span(css.Class("row-meta"), it.Body)),
 			),
-			Span(css.Class("row-meta", tw.TextFaint), pr.FormatDate(when)),
+			Div(css.Class("row-meta", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				notifySeverityPill(it.Severity),
+				Span(css.Class(tw.TextFaint), pr.FormatDate(when)),
+			),
 		))
 	}
 
