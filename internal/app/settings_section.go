@@ -183,6 +183,10 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
 		// to off on every open, so it was removed to avoid a misleading dead control (§6.12).
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(p.AiKey), OnInput(p.OnKey)),
+		// C292: always disclose where the key goes (BYOK, device-local, direct to OpenAI),
+		// not only the conditional no-key hint below — the trust statement shouldn't hide
+		// the moment a key is entered.
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyTrust")),
 		If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),

@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C292 implemented + C109 verified
+
+- **C292** (AI-key trust disclosure conditionally hidden): the settings AI section only showed a
+  key-privacy hint (`settings.aiNoKey`) while the field was empty, so it disappeared exactly when a key
+  was present. Added an always-on `settings.aiKeyTrust` line under the key input stating the key is
+  device-local and calls OpenAI directly (never via CashFlux servers). The cloud half of C292 is already
+  disclosed (C289 privacy statement + C303 upgrade-sheet boundary line).
+- **C109** (rule quick-add form order inverted + match box unlabeled): verified already fixed —
+  `ruleaddform.go` orders match → category → tags → add, and the match input carries
+  `aria-label=rules.matchFieldLabel` (+ aria-required). Closed at the call site.
+
 ## 2026-06-26 — reconcile: C258 + C160 verified already implemented
 
 Two backlog items were already fully implemented in prior work but never flipped to done. Confirmed at
