@@ -1126,6 +1126,7 @@ var english = Catalog{
 	"settings.loadedSample":    "Loaded the sample data.",
 	"settings.loadSampleErr":   "Couldn't load the sample data: %s",
 	"settings.wipeConfirm":     "Erase all CashFlux data on this device? This can't be undone.",
+	"settings.wipeConfirmBtn":  "Erase everything",
 	"settings.wiped":           "Erased all data on this device.",
 	"settings.wipeErr":         "Couldn't erase your data: %s",
 	"settings.saved":           "Settings saved.",

@@ -67,6 +67,23 @@ func ConfirmModal(message string, destructive bool, onResult func(bool)) {
 	})
 }
 
+// ConfirmModalLabeled is ConfirmModal with a custom confirm-button label, so a
+// destructive action can name itself (e.g. "Erase everything") instead of the
+// generic "Confirm" (C298).
+func ConfirmModalLabeled(message, confirmLabel string, destructive bool, onResult func(bool)) {
+	if !dialogReady {
+		return
+	}
+	dialogAtom.Set(&DialogRequest{
+		Kind: DialogConfirm, Message: message, Destructive: destructive, ConfirmLabel: confirmLabel,
+		OnResult: func(ok bool, _ string) {
+			if onResult != nil {
+				onResult(ok)
+			}
+		},
+	})
+}
+
 // PromptModal opens an in-app text-entry dialog; onResult gets the trimmed entry
 // (or "" on cancel/empty).
 func PromptModal(message, def string, onResult func(string)) {

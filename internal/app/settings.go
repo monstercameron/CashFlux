@@ -1402,7 +1402,9 @@ func loadSample(onChange func(), notify func(string, bool)) {
 
 // wipeData clears all data after a confirmation, then refreshes.
 func wipeData(onChange func(), notify func(string, bool)) {
-	confirmModal(uistate.T("settings.wipeConfirm"), true, func(ok bool) {
+	// C298: name the destructive action on its own button ("Erase everything")
+	// rather than a generic "Confirm".
+	uistate.ConfirmModalLabeled(uistate.T("settings.wipeConfirm"), uistate.T("settings.wipeConfirmBtn"), true, func(ok bool) {
 		if !ok {
 			return
 		}

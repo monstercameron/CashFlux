@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C298: named confirm button for the data wipe
+
+The destructive "Wipe data" action confirmed through the shared dialog's generic "Confirm" button — too
+easy to dismiss on something irreversible. The dialog layer already supported a `ConfirmLabel` field but
+the `confirmModal` helper didn't expose it, so I added `uistate.ConfirmModalLabeled(message, confirmLabel,
+destructive, onResult)` and pointed the wipe at it with `settings.wipeConfirmBtn` = "Erase everything".
+(The other half of C298 — Data missing from the settings jump-nav — was already resolved: `settings.data`
+is in `settingsNavKeys`.) Build + i18n green.
+
 ## 2026-06-26 — C296: label the CSV export as transactions-only
 
 Settings → Data showed "Export JSON" (full backup) and "Export CSV" side by side with nothing telling
