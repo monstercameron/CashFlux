@@ -274,6 +274,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			dataBtn(uistate.T("settings.loadSample"), false, p.OnLoadSample),
 			dataBtn(uistate.T("settings.wipe"), true, p.OnWipe),
 		),
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.dataExportHint")),
 		H4(css.Class("set-label"), uistate.T("settings.backupCadence")),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.backupCadenceHint")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.backupCadence")), Title(uistate.T("settings.backupCadence")), OnChange(p.OnBackupCadence),

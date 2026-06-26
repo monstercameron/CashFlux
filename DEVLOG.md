@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C296: label the CSV export as transactions-only
+
+Settings → Data showed "Export JSON" (full backup) and "Export CSV" side by side with nothing telling
+the user CSV is partial. `app.ExportCSV()` only writes transactions, so a user could mistake it for a
+complete backup. Relabelled `settings.exportCSV` → "Export transactions (CSV)" and added a
+`settings.dataExportHint` line under the data buttons spelling out the difference. The label is shared
+with the command palette's export-csv command, so both read consistently. Build + i18n green.
+
 ## 2026-06-26 — C203: calendar months on the burn-down x-axis (F26 complete)
 
 Last F26 item. The burn-down x-axis showed 0,1,2… (month indices). Inspecting the chart JS (web/chart.js)
