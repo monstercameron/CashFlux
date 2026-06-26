@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C199: snowball overlay on the burn-down chart
+
+The burn-down was avalanche-only (a single area series), so there was nothing to compare against —
+the whole point of showing two strategies. Switched the chart to a multi-series `Line` (chartspec
+supports multi-series lines; verified by chartspec_test) and plot both `aval.Schedule` and
+`snow.Schedule`, each anchored at the full starting balance at month 0. Extracted a `mkBurnPts`
+closure so both series build identically. Legend labels come from the existing
+`planning.avalanche`/`planning.snowball` i18n keys. Build green.
+
+Next in F26: dedicated /debt route/anchor (C200), then the DESIGN items (C201–C203).
+
 ## 2026-06-26 — C198: real debt-payoff baseline in the sample
 
 The payoff progress card read "0% since Jul 1, 2022" because the sample hardcoded a $39,500 baseline

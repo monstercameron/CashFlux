@@ -842,17 +842,23 @@ func Planning() ui.Node {
 					}
 				}
 				// Burn-down chart (L5 gap 4): the remaining total balance falling to
-				// zero, from the full starting balance through the avalanche schedule.
+				// zero from the full starting balance. C199: overlay BOTH strategies
+				// as lines so snowball and avalanche can be compared, not just
+				// avalanche shown alone. Each series is anchored at the full starting
+				// balance (month 0) then follows its own schedule down to zero.
 				burnChart := Fragment()
 				if len(aval.Schedule) > 0 {
 					var startTotal int64
 					for _, d := range debts {
 						startTotal += d.Balance
 					}
-					burnPts := make([]chartspec.Point, 0, len(aval.Schedule)+1)
-					burnPts = append(burnPts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base)})
-					for i, b := range aval.Schedule {
-						burnPts = append(burnPts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base)})
+					mkBurnPts := func(schedule []int64) []chartspec.Point {
+						pts := make([]chartspec.Point, 0, len(schedule)+1)
+						pts = append(pts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base)})
+						for i, b := range schedule {
+							pts = append(pts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base)})
+						}
+						return pts
 					}
 					yFmt := ".3~s"
 					if currency.Symbol(base) == "$" {
@@ -861,9 +867,12 @@ func Planning() ui.Node {
 					burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 						P(css.Class("budget-sub"), "Balance burn-down to zero:"),
 						uiw.Chart(uiw.ChartProps{
-							Spec:   chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{{Name: "Remaining balance", Points: burnPts}}, Y: chartspec.Axis{Format: yFmt}},
+							Spec: chartspec.Spec{Kind: chartspec.Line, Series: []chartspec.Series{
+								{Name: uistate.T("planning.avalanche"), Points: mkBurnPts(aval.Schedule)},
+								{Name: uistate.T("planning.snowball"), Points: mkBurnPts(snow.Schedule)},
+							}, Y: chartspec.Axis{Format: yFmt}},
 							Height: "150px",
-							Label:  "Debt balance falling to zero over " + strconv.Itoa(aval.Months) + " months",
+							Label:  "Debt balance falling to zero — avalanche vs snowball over " + strconv.Itoa(aval.Months) + " months",
 						}),
 					)
 				}
