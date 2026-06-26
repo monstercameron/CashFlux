@@ -851,11 +851,43 @@ func Planning() ui.Node {
 						}),
 					)
 				}
+				// C196: a per-debt detail table so the balances, APRs, and minimum
+				// payments feeding the plan are visible — not hidden inside the
+				// totals. Display-only rows (no per-row handlers), so a loop is safe.
+				debtRows := make([]ui.Node, 0, len(debts))
+				for _, d := range debts {
+					apr := "—"
+					if d.AprPercent > 0 {
+						apr = fmt.Sprintf("%.2f%%", d.AprPercent)
+					}
+					minPay := "—"
+					if d.MinPayment > 0 {
+						minPay = fmtMoney(money.New(d.MinPayment, base))
+					}
+					debtRows = append(debtRows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
+						Td(css.Class(tw.Py25), d.Name),
+						Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), fmtMoney(money.New(d.Balance, base))),
+						Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), apr),
+						Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), minPay),
+					))
+				}
+				debtTable := Div(Style(map[string]string{"margin-top": "0.6rem", "overflow-x": "auto"}),
+					Table(css.Class("t-body", tw.WFull),
+						Thead(Tr(css.Class(tw.BorderB, tw.BorderLine70),
+							Th(css.Class(tw.TextLeft, tw.Py25, tw.TextDim), uistate.T("planning.debtColName")),
+							Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColBalance")),
+							Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColApr")),
+							Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColMin")),
+						)),
+						Tbody(debtRows),
+					),
+				)
 				body = Div(
 					Div(css.Class("stat-grid"),
 						stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
 						stat(uistate.T("planning.avalanche"), uistate.T("planning.strategyMonths", aval.Months), ""),
 					),
+					debtTable,
 					P(css.Class("budget-sub", tw.FontDisplay), "Debt-free by "+snowDate+" (snowball) · "+avalDate+" (avalanche)."),
 					P(css.Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
 					P(css.Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),

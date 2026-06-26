@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C196: per-debt detail table on the payoff card
+
+Continuing the F26 debt epic. The payoff card surfaced only the two aggregate strategy outcomes
+(months + interest), so a user couldn't see *which* debts, at what balance/APR/minimum, the plan was
+built from. Added a four-column table (Debt / Balance / APR / Min. payment) fed by the same
+FX-converted `payoff.AggregateDebts` slice C195 introduced — Debt.Name/Balance/AprPercent/MinPayment
+map straight onto the columns. Zero APR or zero minimum render an em-dash rather than "0.00%"/"$0.00".
+Rows are pure display (no `On*` handlers) so building them in a loop is safe per the framework gotcha.
+Build clean (`go build` js/wasm), i18n test green.
+
+Next in F26: snowball-vs-avalanche time-saved comparison (C197), stale progress baseline (C198),
+snowball overlay on the burn-down (C199), dedicated /debt route (C200).
+
 ## 2026-06-26 — C195: FX-convert debts in the payoff plan
 
 The debt-strategy card on `/planning` was summing each liability's balance in its *native* currency
