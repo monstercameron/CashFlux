@@ -124,6 +124,7 @@ type settingsRightProps struct {
 	// Data
 	OnExportJSON    func()
 	OnExportCSV     func()
+	OnBackupAll     func() // C297: full multi-workspace backup, also in the palette
 	OnImportJSON    func()
 	OnLoadSample    func()
 	OnWipe          func()
@@ -270,6 +271,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, p.OnExportJSON),
 			dataBtn(uistate.T("settings.exportCSV"), false, p.OnExportCSV),
+			dataBtn(uistate.T("settings.backupAll"), false, p.OnBackupAll),
 			dataBtn(uistate.T("settings.importDataset"), false, p.OnImportJSON),
 			dataBtn(uistate.T("settings.loadSample"), false, p.OnLoadSample),
 			dataBtn(uistate.T("settings.wipe"), true, p.OnWipe),

@@ -961,6 +961,7 @@ func globalSettingsForm() uic.Node {
 
 		OnExportJSON:    func() { exportJSON(notify) },
 		OnExportCSV:     func() { exportCSV(notify) },
+		OnBackupAll:     backupEverything,
 		OnImportJSON:    func() { importJSON(bump, notify) },
 		OnLoadSample:    func() { loadSample(bump, notify) },
 		OnWipe:          func() { wipeData(bump, notify) },

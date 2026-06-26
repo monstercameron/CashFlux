@@ -1086,6 +1086,7 @@ var english = Catalog{
 	"settings.exportJSON":        "Export JSON",
 	"settings.exportCSV":         "Export transactions (CSV)",
 	"settings.dataExportHint":    "“Export JSON” backs up everything. “Export transactions (CSV)” saves your transactions only — use JSON for a full backup.",
+	"settings.backupAll":         "Back up everything",
 	"settings.import":            "Import…",
 	"settings.importDataset":     "Import dataset…",
 	"settings.loadSample":        "Load sample",

@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C297: surface "Back up everything" in Settings → Data
+
+The whole-install backup (`backupEverything`, all workspaces + KV) lived only in the command palette,
+so a user browsing Settings → Data couldn't find it. Added an `OnBackupAll` prop on the settings-section
+component, a "Back up everything" `dataBtn` beside Export JSON/CSV, and wired the prop straight to the
+existing `backupEverything` (no new logic). i18n `settings.backupAll`. Build + i18n green. With C296/C298
+this rounds out the Settings → Data discoverability cluster (only C294/C295/C299 remain in F44).
+
 ## 2026-06-26 — C298: named confirm button for the data wipe
 
 The destructive "Wipe data" action confirmed through the shared dialog's generic "Confirm" button — too
