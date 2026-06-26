@@ -672,6 +672,7 @@ var english = Catalog{
 	"planning.debtStrategyHint":         "Compares the snowball (smallest balance first) and avalanche (highest APR first) methods across your liability accounts, using their balances, rates, and minimum payments.",
 	"planning.debtStrategyExtra":        "Extra per month, optional (%s)",
 	"planning.debtStrategyEmpty":        "Add liability accounts with a balance, APR, and minimum payment to compare payoff strategies.",
+	"planning.debtMissingRate":          "Left out of this plan (no exchange rate set): %s. Add a rate in Settings to include these debts.",
 	"planning.strategyNotViable":        "With this budget the debts never clear — the minimums can't outpace the interest. Add an extra payment.",
 	"planning.snowball":                 "Snowball",
 	"planning.avalanche":                "Avalanche",

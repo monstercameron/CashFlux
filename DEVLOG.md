@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C195: FX-convert debts in the payoff plan
+
+The debt-strategy card on `/planning` was summing each liability's balance in its *native* currency
+straight into the base-currency plan — a €1,000 card landed as $1,000 of debt. The pure
+`payoff.AggregateDebts(accounts, txns, base, rates)` helper (already shipped + tested) does this
+correctly: per-account `ledger.Balance` → `Abs` → `currency.ConvertBetween` to base, honoring
+`IncludedInPayoff` and skipping currencies with no rate. The screen now calls it instead of the
+hand-rolled native-currency loop, passing `currency.Rates{Base: base, Rates: app.Settings().FXRates}`.
+
+Trade-off on missing rates: rather than silently dropping an unrated debt (which would *understate*
+the total just as the old code *overstated* it), `AggregateDebts` returns the missing currency codes,
+and the card now renders a muted note naming them and pointing at Settings. Excluded-but-visible beats
+included-but-wrong. Build: `GOOS=js GOARCH=wasm go build` clean; `go test ./internal/payoff ./internal/i18n` green.
+
+Next in the F26 debt epic: per-debt detail table (C196), snowball/avalanche time-saved comparison
+(C197), stale progress baseline (C198), and a dedicated /debt route (C200).
+
 ## 2026-06-25 — C58-logic: split-transaction attribution (reports + budgets)
 
 First step of the C58 split-transaction epic (the pure-logic foundation; UI comes later). R6's design

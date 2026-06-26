@@ -713,7 +713,7 @@ func Planning() ui.Node {
 	debtCard := Fragment()
 	if app != nil {
 		txns := app.Transactions()
-		var debts []payoff.Debt
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 		var payoffLiabs []domain.Account // liabilities with a balance, for the include toggles
 		for _, a := range app.Accounts() {
 			if a.Archived || a.Class != domain.ClassLiability {
@@ -723,16 +723,16 @@ func Planning() ui.Node {
 			if err != nil {
 				continue
 			}
-			owed := bal.Abs().Amount
-			if owed <= 0 {
+			if bal.Abs().Amount <= 0 {
 				continue
 			}
 			payoffLiabs = append(payoffLiabs, a)
-			if !a.IncludedInPayoff() { // mortgage is excluded by default (L5)
-				continue
-			}
-			debts = append(debts, payoff.Debt{Name: a.Name, Balance: owed, AprPercent: a.InterestRateAPR, MinPayment: a.MinPayment.Abs().Amount})
 		}
+		// C195: FX-convert each included debt to the base currency. A EUR balance
+		// must not be summed into a USD plan as raw cents. AggregateDebts handles
+		// IncludedInPayoff + Abs + conversion, and reports currencies missing a rate
+		// (those debts are excluded rather than miscounted).
+		debts, missingDebtRates := payoff.AggregateDebts(app.Accounts(), txns, base, rates)
 
 		// Payoff progress vs a stored baseline (L5 gap 5): "paid off $X of $Y".
 		var currentOwed int64
@@ -757,6 +757,15 @@ func Planning() ui.Node {
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.snapshotTitle")),
 					OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), "Start tracking progress"),
 			)
+		}
+
+		// C195: if any liability is in a currency with no FX rate, it can't be summed
+		// into the base-currency plan, so AggregateDebts excluded it. Say so plainly
+		// rather than silently undercounting the debt total.
+		var rateWarn ui.Node = Fragment()
+		if len(missingDebtRates) > 0 {
+			rateWarn = P(css.Class("budget-sub"), Style(map[string]string{"margin-top": "0.6rem"}),
+				uistate.T("planning.debtMissingRate", strings.Join(missingDebtRates, ", ")))
 		}
 
 		// Per-liability include/exclude toggles (each ToggleRow is its own component,
@@ -873,6 +882,7 @@ func Planning() ui.Node {
 					),
 				),
 				body,
+				rateWarn,
 				progressNode,
 				If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
 					P(css.Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
