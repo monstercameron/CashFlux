@@ -1242,7 +1242,8 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 		Div(css.Class("row-main"),
 			Div(Attr("id", mdID), ClassStr(descClass)),
 			If(long, Button(css.Class("btn-link", tw.Text11, tw.Mt1, tw.SelfStart), Type("button"), OnClick(toggle), moreLabel)),
-			Span(css.Class("row-meta"), p.CreatedAt.Format("Jan 2, 2006")),
+			// C235: attribute pinned insights as AI-generated and show a prefs-formatted save date.
+			Span(css.Class("row-meta"), uistate.T("insights.pinnedAttribution", uistate.LoadPrefs().FormatDate(p.CreatedAt))),
 		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("insights.unpinTitle")), Title(uistate.T("insights.unpinTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)

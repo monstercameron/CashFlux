@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C235 (pinned-insight attribution)
+
+Pinned insights are saved AI answers (`pinText` saves a Q&A response), but `PinnedInsightRow` showed
+just a bare `CreatedAt.Format("Jan 2, 2006")` with no provenance. The meta line now reads "AI insight ·
+saved <date>" (`insights.pinnedAttribution`), and the date goes through `uistate.LoadPrefs().FormatDate`
+so it respects the user's date-format preference — also closing the last hard-coded date format on this
+row (R18 family). Build + i18n green.
+
 ## 2026-06-26 — C232 + C233 (anomaly highlight clarity)
 
 Both fixes live in `highlightText` (insights.go), reusing fields the `insights.Anomaly` struct already

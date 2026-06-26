@@ -1490,6 +1490,7 @@ var english = Catalog{
 	"insights.pinTitle":                "Pin this insight to revisit later",
 	"insights.pinnedConfirm":           "Pinned.",
 	"insights.pinnedTitle":             "Pinned insights",
+	"insights.pinnedAttribution":       "AI insight · saved %s",
 	"insights.unpinTitle":              "Remove from pinned",
 	"insights.showMore":                "Show more",
 	"insights.showLess":                "Show less",
