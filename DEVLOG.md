@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C82: net-worth currency-conversion disclosure (loop tick)
+
+The net-worth KPI silently summed FX-converted foreign balances. Added a disclosure: when any
+non-archived account is in a non-base currency (and nothing was excluded for a missing rate), the
+KPI subtext appends "· converted to <base>". Reuses the existing `accounts`/`base`/`nw` in scope —
+one branch added after the MissingCurrencies case. i18n `dashboard.netWorthConverted`. Build + i18n green.
+
 ## 2026-06-26 — batch: C68 implemented + C125/C151/C153/C216 verified
 
 C68 (transfer legs auto-tagged #needs-review): `CreateTransferPair` created both legs without

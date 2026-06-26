@@ -193,6 +193,15 @@ func Dashboard() ui.Node {
 	if len(nw.MissingCurrencies) > 0 {
 		nwTone = "text-down"
 		nwSub = "excludes " + plural(len(nw.ExcludedAccounts), "account") + " — no " + strings.Join(nw.MissingCurrencies, ", ") + " rate"
+	} else {
+		// C82: when the total folds in non-base-currency accounts, disclose that a
+		// conversion happened so the figure isn't read as a raw same-currency sum.
+		for _, ac := range accounts {
+			if !ac.Archived && ac.Currency != "" && ac.Currency != base {
+				nwSub += " · " + uistate.T("dashboard.netWorthConverted", base)
+				break
+			}
+		}
 	}
 
 	attnCol, attnRow := spanOf(layoutItems, "attention")
