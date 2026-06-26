@@ -512,7 +512,7 @@ func Planning() ui.Node {
 		}
 		const runwayDays = 60
 
-		var rwBody ui.Node = P(css.Class("muted"), uistate.T("planning.runwayEmpty"))
+		var rwBody ui.Node = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("planning.runwayEmpty"), CTALabel: uistate.T("recurring.add"), FocusID: "recurring-add"}) // C174: actionable empty-state
 		if len(recs) > 0 {
 			if proj, perr := runway.Project(liquid.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
 				lowTone := ""
