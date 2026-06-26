@@ -806,6 +806,22 @@ func Planning() ui.Node {
 				if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
 					rec = P(css.Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
 				}
+				// C197: surface the *time* difference, not just the interest. The two
+				// strategies pay the same amount each month, but the faster one clears
+				// the whole balance in fewer months — a concrete "X months sooner".
+				if dm := snow.Months - aval.Months; dm != 0 {
+					fasterLabel := uistate.T("planning.avalanche")
+					months := dm
+					if dm < 0 {
+						fasterLabel = uistate.T("planning.snowball")
+						months = -dm
+					}
+					dur := strconv.Itoa(months) + " month"
+					if months != 1 {
+						dur += "s"
+					}
+					rec = Fragment(rec, P(css.Class("muted"), uistate.T("planning.strategyTimeSaved", fasterLabel, dur)))
+				}
 				// When the two strategies are truly identical (typically at $0 extra,
 				// or a single debt) the side-by-side is meaningless — explain why (L5).
 				explain := Fragment()

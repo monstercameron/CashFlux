@@ -677,6 +677,7 @@ var english = Catalog{
 	"planning.debtColBalance":           "Balance",
 	"planning.debtColApr":               "APR",
 	"planning.debtColMin":               "Min. payment",
+	"planning.strategyTimeSaved":        "%s clears your debt %s sooner.",
 	"planning.strategyNotViable":        "With this budget the debts never clear — the minimums can't outpace the interest. Add an extra payment.",
 	"planning.snowball":                 "Snowball",
 	"planning.avalanche":                "Avalanche",

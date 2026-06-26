@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **C197 — snowball-vs-avalanche time-saved comparison (2026-06-26):** The payoff card already showed the interest difference between the two strategies; it now also states the *time* difference in plain English ("Avalanche clears your debt 3 months sooner."). Because both strategies pay the same total each month, the faster one (usually avalanche, which minimises interest) clears the whole balance in fewer months — computed from `snow.Months - aval.Months`, direction-aware, with correct month/months pluralisation. Shown only when the two differ. i18n key `planning.strategyTimeSaved` added.
 - **C196 — per-debt detail table on the payoff card (2026-06-26):** The debt-strategy card on `/planning` showed only aggregate snowball/avalanche totals; the individual balances, APRs, and minimum payments feeding the plan were invisible. It now renders a compact table (Debt / Balance / APR / Min. payment) from the FX-converted `payoff.AggregateDebts` output, so the inputs behind the plan are auditable. APR and minimum payment render an em-dash when zero. Display-only rows (no per-row handlers), so the loop is hook-safe. i18n keys `planning.debtColName/Balance/Apr/Min` added.
 
 ### Fixed

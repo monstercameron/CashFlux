@@ -3,6 +3,17 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C197: snowball-vs-avalanche time-saved line
+
+The card already converted the strategy *interest* difference into a "saves $X" recommendation but
+said nothing about *time*. Added a direction-aware months delta (`snow.Months - aval.Months`): the
+faster strategy's label + a pluralised "N month(s)" run through `planning.strategyTimeSaved`
+("Avalanche clears your debt 3 months sooner."). Appended to the existing `rec` fragment, shown only
+when the two differ (so the matched-strategies case stays clean, handled by the existing `explain`).
+Build + i18n test green.
+
+Next in F26: stale progress baseline (C198), snowball overlay on burn-down (C199), /debt route (C200).
+
 ## 2026-06-26 — C196: per-debt detail table on the payoff card
 
 Continuing the F26 debt epic. The payoff card surfaced only the two aggregate strategy outcomes
