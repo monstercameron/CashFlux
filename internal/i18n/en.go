@@ -1239,7 +1239,7 @@ var english = Catalog{
 	"transactions.duplicateTitle":      "Copy this transaction to today",
 	"transactions.deleteTitle":         "Delete transaction",
 	"transactions.createRule":          "Always categorize like this",
-	"transactions.createRuleTitle":     "Open the Rules screen with this transaction's payee and category prefilled",
+	"transactions.createRuleTitle":     "Always categorize like this — opens Rules with this payee and category prefilled",
 	"transactions.uncategorized":       "Uncategorized",
 	"transactions.clearedMeta":         " · cleared",
 	"transactions.clearedCheck":        "Cleared ✓",
