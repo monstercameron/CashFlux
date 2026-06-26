@@ -50,12 +50,18 @@ func Rules() ui.Node {
 	}
 
 	deleteRule := func(ruleID string) {
-		if err := app.DeleteRule(ruleID); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		errMsg.Set("")
-		bump()
+		// C110: confirm before deleting — rule deletion was immediate with no undo.
+		uistate.ConfirmModal(uistate.T("rules.deleteConfirm"), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteRule(ruleID); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			errMsg.Set("")
+			bump()
+		})
 	}
 	saveRule := func(ruleID, m, cat, tagStr string) {
 		if errKey := validateRuleInput(m, cat); errKey != "" {

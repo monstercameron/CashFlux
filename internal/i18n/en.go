@@ -461,6 +461,7 @@ var english = Catalog{
 	"rules.editTitle":          "Edit rule",
 	"rules.dragTitle":          "Drag to reorder precedence",
 	"rules.deleteTitle":        "Delete rule",
+	"rules.deleteConfirm":      "Delete this rule? Transactions it already changed keep their categories and tags, but the rule won't run again.",
 	"rules.shadowed":           "Never runs — an earlier rule (%q) already matches it.",
 	"rules.noMatch":            "Never runs — no match phrase.",
 	"rules.applyExisting":      "Apply to existing",
@@ -1839,8 +1840,9 @@ var english = Catalog{
 	"widget.sourceBills": "Bills",
 
 	// L-series 6-lane sweep (2026-06-22)
-	"transactions.deleteConfirm":       "Delete \"%s\"? This can't be undone.",
-	"goals.contributePostLedger":       "Also debit %s (move money from this account)",
+	"transactions.deleteConfirm":         "Delete \"%s\"? This can't be undone.",
+	"transactions.deleteTransferConfirm": "Delete the transfer \"%s\"? This removes both sides — the money out and the matching money in. This can't be undone.",
+	"goals.contributePostLedger":         "Also debit %s (move money from this account)",
 	"goals.contributedLedger":          "Transaction posted to linked account.",
 	"goals.completionPrompt":           "Goal funded! Move it to Achieved when you're ready.",
 	"palette.groupNavigate":            "Navigate",

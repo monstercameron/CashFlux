@@ -61,7 +61,13 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		// Capture which row holds focus now, before the confirm modal opens, so focus
 		// can be restored to the next row after the delete (§6.7).
 		captureRowDeleteFocus(".txn-table tbody", "tr.row")
-		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", t.Desc), true, func(ok bool) {
+		// C70: a transfer is two linked legs (money out + money in); deleting one removes
+		// both. Warn explicitly so the user isn't surprised that the paired leg vanished.
+		msg := uistate.T("transactions.deleteConfirm", t.Desc)
+		if t.IsTransfer() {
+			msg = uistate.T("transactions.deleteTransferConfirm", t.Desc)
+		}
+		uistate.ConfirmModal(msg, true, func(ok bool) {
 			if ok {
 				props.OnDelete(t.ID)
 			}

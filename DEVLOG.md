@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — batch: C70 + C110 (destructive-delete confirmation guards)
+
+Two related fixes — both add a confirmation step to a destructive delete that previously fired with no
+guard:
+- **C70** (transfer delete): a transfer is two linked ledger legs; deleting one removes both via
+  `DeleteTransactionWithTransferPair`, but the confirm copy was the generic single-row message. Now the
+  row's `del` handler branches on `t.IsTransfer()` and shows `transactions.deleteTransferConfirm`,
+  which explicitly names both sides.
+- **C110** (rule delete): `deleteRule` called `app.DeleteRule` immediately. Wrapped it in
+  `uistate.ConfirmModal` with `rules.deleteConfirm`, which also reassures that already-applied
+  category/tag changes are kept.
+
+Note on a concurrency artifact: while editing `transactions_row.go`, the LSP surfaced
+`editTxn`/`toggleSelect` signature mismatches in `transactions.go:481` (a parallel agent's in-flight
+tags-field + shift-click work, C48/C62). `git status` confirmed those files weren't modified on disk,
+and the authoritative `GOOS=js GOARCH=wasm` build passed clean — so they were stale diagnostics, left
+untouched (never revert other agents' work). Committed C70+C110 together as one destructive-delete
+safety theme since they share the i18n file and are the same class of fix.
+
 ## 2026-06-26 — batch: C81 implemented + C53/C65/C107/C146 verified
 
 C81 (FX rate convention): the exchange-rates editor in Settings had no direction hint, inviting inverse
