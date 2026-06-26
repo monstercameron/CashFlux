@@ -1001,7 +1001,7 @@ func RecurringRow(props recurringRowProps) ui.Node {
 		)
 	}
 
-	meta := cadenceLabel(r.Cadence) + " · " + uistate.T("recurring.nextDue", r.NextDue.Format("Jan 2, 2006"))
+	meta := cadenceLabel(r.Cadence) + " · " + uistate.T("recurring.nextDue", uistate.LoadPrefs().FormatDate(r.NextDue)) // C155: respect date-format preference
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), r.Label),
