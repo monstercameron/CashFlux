@@ -1960,6 +1960,14 @@ Levels: `[data-wonder="off"]` (zeroes all), `[data-wonder="subtle"]` (~55%), def
 **EXTENSIVE catalog — the flourishes to build (grouped; tasteful + fast). [CSS-ONLY] unless noted:**
 *Interaction feedback*
 > Batch 1 (W-3..W-8) fully landed 2026-06-23 — all CSS, token-driven, reduced-motion safe.
+> **W-3 tile-hover MEASURED-VERIFIED + drag-safe (2026-06-26, keep-tidy):** drove all four WONDER
+> acceptance criteria on the 19 dashboard `.w` tiles via getComputedStyle — (a) hover (full) →
+> `matrix(1,0,0,1,0,-5)` = the `--wonder-lift:5px` rise; (b) tile with `.drag` (the class
+> `internal/ui/widget.go:202` adds while dragging) → identity `matrix(…,0,0)`, so the hover lift never
+> fights the drag ghost (`.w:not(.drag):hover` gate, index.html:335); (c) `[data-wonder=off]` → identity;
+> (d) `prefers-reduced-motion:reduce` → identity (`--wonder-on:0`). build rc=0, 0 console errors
+> (screenshot `e2e/screenshots/w3_tile_hover.png`). No code change — verification pass confirming the
+> landed flourish is correct, tasteful (transform-only, 5px), and drag-conflict-free.
 
 *Entrance / reveal*
 - [~] W-10 — Route cross-fade (View Transitions API) — PARTIAL (2026-06-24): CSS scaffold + view-transition-name + ::view-transition-* keyframes landed; startViewTransition wraps the W-9 class-toggle for progressive enhancement. True old→new cross-fade blocked by GWC framework constraint: UseEffect fires post-render, so the outgoing page snapshot is already replaced when triggerPageEnter runs. Scaffold is ready for a pre-render hook if GWC exposes one.
@@ -2920,3 +2928,12 @@ Verified CONFIRMED (file:line + go test green) and marked completed:
 ### Still OPEN — shipped but fell short of acceptance criteria (re-open for implementer):
 - [ ] [C174][MINOR] Runway empty-state uses a muted `<p>` nudge — ticket asks for the canonical `EmptyStateCTA` component (with CTA to add recurring). planning.go ~476.
 - [ ] [C37][MINOR] Create-rule button got aria-label/title but is still icon-only — ticket asks for a VISIBLE text label ("Always categorize like this"). transactions_row.go:251.
+
+## Verification round 3 (audit, 2026-06-26) — 3 more shipped C-items closed
+Verified CONFIRMED (file:line + go test green) and marked completed:
+- C120 (budget bars re-render live via uistate.UseDataRevision, budgets.go:44).
+- C145 ("Needs attention" items deep-link via Route/AnchorID, attention.go:59 + dashboard.go:1395).
+- C175 (afford check uses ledger.LiquidBalance consistent w/ runway, planning.go:448).
+
+### Still OPEN — shipped but short of AC:
+- [ ] [C123][MINOR] Quick-Add Save reachable via scrolling body, but `.set-foot` (web/index.html:2021) still lacks the explicit `flex-shrink:0` the ticket implied — add it as a defensive guard.
