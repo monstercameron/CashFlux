@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C200: dedicated /debt route + #debt anchor
+
+The payoff planner had no route or anchor — it sat several cards down /planning with no way to deep-link
+or jump to it. Added two things: an `id="debt"` anchor on the debt-strategy `EntityListSection` (via its
+`Attrs` field) so `/planning#debt` is a real target, and a `/debt` route registered under Plan & analyze
+(`nav.debt` = "Debt payoff"). The route's view is a thin `DebtPlanner()` that renders `Planning()` — the
+planner genuinely lives inside Planning, so rather than risk a fragile ~240-line extraction of the
+hook-coupled debt card (it depends on Planning's `dsExtra`/`rev`/`onDsExtra` state), the dedicated route
+reuses the screen and is framed/titled as "Debt payoff". Trade-off noted: /debt and /planning currently
+render the same screen with different framing; a future pass could extract the card into a shared builder
+and make /debt scroll to #debt. registry_test invariants (valid group/subgroup, non-empty label/title,
+unique path) all hold; screens wasm test compiles, full js/wasm build + i18n test green.
+
+This completes the F26 MAJOR/MINOR backlog (C195–C200); remaining F26 items are DESIGN (C201–C203).
+
 ## 2026-06-26 — C199: snowball overlay on the burn-down chart
 
 The burn-down was avalanche-only (a single area series), so there was nothing to compare against —

@@ -33,6 +33,12 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// DebtPlanner is the /debt route — a dedicated, discoverable entry point to the
+// debt-payoff planner (C200). The planner itself lives within the Planning
+// screen, anchored at #debt, so this renders that screen; the dedicated route
+// gives it its own nav item and URL instead of being buried mid-/planning.
+func DebtPlanner() ui.Node { return Planning() }
+
 // Planning hosts the debt-payoff calculator: enter a balance, APR, and monthly
 // payment to see months-to-zero, total interest, and total paid (via the pure
 // internal/payoff engine). The projection updates live as you type.
@@ -925,6 +931,9 @@ func Planning() ui.Node {
 		}
 		debtCard = uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("planning.debtStrategyTitle"),
+			// C200: an HTML id anchor so the debt planner is directly linkable
+			// (/planning#debt) and the dedicated /debt route can scroll to it.
+			Attrs: []any{Attr("id", "debt")},
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("planning.debtStrategyHint")),
 				Form(css.Class("form-grid"),
