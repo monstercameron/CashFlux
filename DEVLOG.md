@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C303 (free-vs-paid + trial plain language)
+
+The UpgradeSheet listed Cloud benefits + an annual price + a trust line, but never plainly stated the
+free-vs-paid boundary or the trial length (a `settings.cloudTrialNote` with "14-day trial" existed but
+was only shown in Settings, not the sheet). Added `cloud.upgradeBoundary` rendered right under the price:
+"Everything you use today is free and stays on your device. Cloud is an optional add-on — free for 14
+days, then <price>. Cancel anytime." Build + i18n green.
+
 ## 2026-06-26 — C235 (pinned-insight attribution)
 
 Pinned insights are saved AI answers (`pinText` saves a Q&A response), but `PinnedInsightRow` showed

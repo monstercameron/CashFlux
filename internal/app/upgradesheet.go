@@ -61,6 +61,9 @@ func UpgradeSheet() uic.Node {
 				Li(uistate.T("cloud.benefitAI")),
 			),
 			P(css.Class("upsheet-price", tw.FontSemibold), price),
+			// C303: spell out the free-vs-paid boundary + the 14-day trial in plain language,
+			// right next to the price, so the pitch isn't ambiguous about what costs money.
+			P(css.Class("upsheet-boundary", tw.Text12, tw.TextDim), uistate.T("cloud.upgradeBoundary", price)),
 			P(css.Class("upsheet-trust", tw.Text12, tw.TextFaint), uistate.T("cloud.upgradeTrust")),
 			// Name the self-host path too, so onboarding mentions both once (§3.4): the
 			// managed Cloud above, or run your own server with the same app — no lock-in.

@@ -996,6 +996,7 @@ var english = Catalog{
 	"cloud.benefitBackup":        "Automatic encrypted backups",
 	"cloud.benefitAI":            "Bundled AI — no separate key needed",
 	"cloud.upgradeTrust":         "Cancel or export anytime · end-to-end encrypted · the app stays free and local.",
+	"cloud.upgradeBoundary":      "Everything you use today is free and stays on your device. Cloud is an optional add-on — free for 14 days, then %s. Cancel anytime.",
 	"cloud.upgradeStart":         "Start free trial",
 	"cloud.upgradeLater":         "Maybe later",
 	"cloud.bannerTrialDays":      "Cloud trial — %d days left. Manage subscription →",
