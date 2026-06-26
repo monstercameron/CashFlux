@@ -155,6 +155,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 					Span(uistate.T("budgets.rollover")),
 				),
+				// C138: explain what rollover actually does, with a concrete example, so it's
+				// not an unexplained checkbox.
+				P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

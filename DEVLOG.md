@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C138 (rollover explainer)
+
+The rollover checkbox in the budget form had no explanation of what it does. Added
+`budgets.rolloverHint` — a muted line under the checkbox with a concrete two-direction example
+(leftover carries up, overspend carries down). Pure i18n + one `P` node in `budgets_row.go`; no logic
+change. Build green. (Stale LSP flagged `budgetRemainPhrase` undefined mid-edit; it's defined in
+`budgets.go:413` and the wasm build passed — ignored.)
+
 ## 2026-06-26 — batch: C70 + C110 (destructive-delete confirmation guards)
 
 Two related fixes — both add a confirmation step to a destructive delete that previously fired with no
