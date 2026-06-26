@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — batch: C68 implemented + C125/C151/C153/C216 verified
+
+C68 (transfer legs auto-tagged #needs-review): `CreateTransferPair` created both legs without
+`Reviewed`, so the `ActionFlagReview` workflow (which skips `Reviewed:true` entries, appstate.go:1226)
+auto-tagged them. Set `Reviewed: true` on both legs — a transfer is an explicit action, inherently
+reviewed. `go test ./internal/appstate` + full wasm build green.
+
+Verified-and-closed (already implemented, C-tagged in feature-appropriate files): C125 (budgets
+over-banner with total overspend), C151 (subs drop liability payments via IsLiabilityPayment),
+C153 (`editRecurring` inline-edit in planning), C216 (reports NW area chart is a self-scaling
+sparkline whose `moneyLabels` already treat values as minor units — internally consistent, no defect).
+Left C154 open: bills.go explicitly notes paid/unpaid is a layer above and there's no persistent paid
+field yet — genuinely pending.
+
 ## 2026-06-26 — batch: C16 implemented + C6/C124/C137/C18/C90/C5 verified-done
 
 Switched to 4-at-a-time throughput. Investigation found six MINOR items were already implemented by

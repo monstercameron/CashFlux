@@ -102,6 +102,9 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	outID = id.New()
 	inID = id.New()
 
+	// C68: a transfer is an explicit, unambiguous action the user just performed,
+	// so both legs are inherently "reviewed" — Reviewed:true keeps the ActionFlagReview
+	// workflow from auto-tagging them #needs-review (which read as a false alarm).
 	out := domain.Transaction{
 		ID: outID, AccountID: fromAcc.ID,
 		TransferAccountID: toAcc.ID,
@@ -109,6 +112,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		Date:              when,
 		Desc:              desc,
 		Payee:             toAcc.Name,
+		Reviewed:          true,
 	}
 	in := domain.Transaction{
 		ID: inID, AccountID: toAcc.ID,
@@ -117,6 +121,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		Date:              when,
 		Desc:              desc,
 		Payee:             fromAcc.Name,
+		Reviewed:          true,
 	}
 
 	if err := a.PutTransaction(out); err != nil {
