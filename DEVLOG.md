@@ -3,6 +3,15 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C182 (define Overall progress)
+
+The goals "Overall progress" tile carried its definition only through `smartTooltipFor`, which renders
+nothing unless the goal-progress smart feature is enabled (default off). Added an always-present native
+`Title(goals.overallProgressDef)` so the metric is defined regardless of smart state. The smart tip text
+(`smart.tipGoalProgress`) already exists in `en_smart.go` — my first grep only checked `en.go` and
+missed it; no need to add it. Build + i18n green. (Stale LSP flagged `goalsvc.Totals` undefined at
+goals.go:211 — a concurrent agent's in-flight change, not mine; wasm build passed, ignored.)
+
 ## 2026-06-26 — C138 (rollover explainer)
 
 The rollover checkbox in the budget form had no explanation of what it does. Added

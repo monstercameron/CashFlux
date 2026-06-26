@@ -566,6 +566,7 @@ var english = Catalog{
 	"goals.savedSoFar":        "Saved so far",
 	"goals.totalTarget":       "Total target",
 	"goals.overallProgress":   "Overall progress",
+	"goals.overallProgressDef": "Total saved across all goals divided by their combined target, as a percentage.",
 	"goals.linkedOptional":    "Linked account (optional)",
 	"goals.dateLabel":         "Target date",
 	"goals.linked":            "Linked account",

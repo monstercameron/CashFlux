@@ -270,7 +270,7 @@ func Goals() ui.Node {
 			// Overall progress is the key goals figure — annotated with a smart explainer
 			// tooltip so users understand what the combined percentage represents.
 			Div(css.Class("stat"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)), Title(uistate.T("goals.overallProgressDef")),
 					uistate.T("goals.overallProgress"),
 					smartTooltipFor(goalSmartSettings, "goal-progress", uistate.T("goals.overallProgress"), uistate.T("smart.tipGoalProgress")),
 				),
