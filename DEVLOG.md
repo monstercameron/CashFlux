@@ -3,6 +3,13 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C249 (chat send-button a11y)
+
+The Ask input already carried `aria-label=insights.askPlaceholder`; the gap was the Send button's
+decorative sparkles icon (announced as a glyph) and no explicit button name. Added
+`aria-label=insights.send` to the button and `aria-hidden=true` to the icon so AT reads just "Send".
+Build green.
+
 ## 2026-06-26 — C292 implemented + C109 verified
 
 - **C292** (AI-key trust disclosure conditionally hidden): the settings AI section only showed a

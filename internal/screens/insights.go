@@ -786,7 +786,9 @@ func Insights() ui.Node {
 	case loading.Get():
 		trailing = Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))
 	default:
-		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("insights.send")))
+		// C249: give the send button an explicit accessible name and mark the leading
+		// icon decorative so screen readers announce just "Send".
+		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
 	}
 	inputRow := Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
 		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
