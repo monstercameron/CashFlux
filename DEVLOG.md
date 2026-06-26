@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C201: inline APR / minimum-payment editor on the payoff card
+
+Tuning a debt's APR or minimum payment meant leaving the planner for /accounts. Added a per-liability
+inline editor: `debtRateRow` (its own component, rendered via `ui.CreateElement` so the per-row
+UseState/UseEvent hooks stay isolated when one is built per liability in a loop — the same isolation the
+ToggleRow include-toggles rely on). Two number inputs (APR, min/mo) seeded from the account; on blur it
+parses, validates `>= 0`, writes back via `PutAccount`, and bumps `rev` so BuildPlan re-runs and the
+months/interest/burn-down all refresh. Inputs carry account-named aria-labels. This closes the last
+non-DESIGN F26 item (C201); C202/C203 remain DESIGN. Build + i18n test green.
+
 ## 2026-06-26 — C200: dedicated /debt route + #debt anchor
 
 The payoff planner had no route or anchor — it sat several cards down /planning with no way to deep-link
