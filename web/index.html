@@ -1989,8 +1989,8 @@
       main.cf-scroll::-webkit-scrollbar-thumb:active { background: #55555e; }
 
       /* Settings flip */
-      .flip-backdrop { position:fixed; inset:0; background:rgba(4,4,6,.6); backdrop-filter:blur(3px); display:grid; place-items:center; opacity:0; transition:opacity .28s; z-index:50; }
-      .flip-backdrop.show { opacity:1; }
+      .flip-backdrop { position:fixed; inset:0; background:rgba(4,4,6,.6); backdrop-filter:blur(3px); display:grid; place-items:center; opacity:0; pointer-events:none; transition:opacity .28s; z-index:50; } /* C414: closed backdrop intercepts nothing */
+      .flip-backdrop.show { opacity:1; pointer-events:auto; }
       .flip-wrap { width:384px; max-width:92vw; height:470px; max-height:86vh; perspective:1500px; }
       .flip-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .55s cubic-bezier(.2,.75,.2,1); transform:rotateY(0) scale(.86); }
       .flip-inner.flipped { transform:rotateY(180deg) scale(1); }
@@ -2018,7 +2018,7 @@
       .swatch:hover { border-color: var(--text-faint); }
       .swatch.sel { border-color:#f4f4f5; }
       .set-input { width:100%; padding:.5rem .6rem; background:#1a1a1d; border:1px solid #34343a; border-radius:4px; color:#f4f4f5; font:inherit; }
-      .set-foot { padding:.75rem 1rem; border-top:1px solid #2a2a2c; display:flex; gap:.5rem; justify-content:flex-end; }
+      .set-foot { padding:.75rem 1rem; border-top:1px solid #2a2a2c; display:flex; flex-shrink:0; gap:.5rem; justify-content:flex-end; } /* C123: footer never squeezed off-panel */
       /* GX3-F3: align modal footer buttons to the same scale token as .btn so height is consistent. */
       .set-btn { min-width:96px; padding:var(--btn-py,0.5rem) 1rem; min-height:44px; border-radius:4px; cursor:pointer; font-size:.9rem; display:inline-flex; align-items:center; justify-content:center; }
       .set-btn.save { background:#1f2c24; border:1px solid #356b50; color:#7fd0a3; font-weight:600; }
