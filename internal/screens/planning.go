@@ -997,12 +997,18 @@ func Planning() ui.Node {
 				Form(css.Class("form-grid"),
 					labeledField(uistate.T("planning.debtStrategyExtra", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
 				),
-				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 0 && payoff.SuggestedExtra(debts) > 0,
+				// C202: the default ($0 extra) state ties snowball and avalanche, which
+				// reads as "broken" unless explained. With 2+ debts, always say why
+				// they match and how to make them diverge; offer a one-click suggested
+				// extra when one is available. (A single debt ties inherently — no hint.)
+				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 1,
 					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-						Span(css.Class("muted"), "At $0 extra the strategies tie."),
-						Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
-							OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
-							"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
+						Span(css.Class("muted"), uistate.T("planning.debtTieHint")),
+						If(payoff.SuggestedExtra(debts) > 0,
+							Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
+								OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
+								"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
+						),
 					),
 				),
 				body,

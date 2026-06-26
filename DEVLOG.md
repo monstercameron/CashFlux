@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C202: non-misleading default state on the debt planner
+
+At $0 extra the two strategies always tie (same total monthly outflow → same finish), so the default
+view looks broken. Prior work showed a tie hint, but only when a suggested-extra value existed. Broadened
+it: the explanation renders whenever the extra field is empty and there are 2+ debts (a single debt ties
+by nature — suppress the hint), and the one-click "Try $X/mo" suggestion is now nested as optional inside
+that hint rather than gating it. Wording moved out to `planning.debtTieHint`. Combined with the existing
+in-body `explain` line, the tie is always accounted for. Build + i18n green. F26 now has only C203 (DESIGN)
+left.
+
 ## 2026-06-26 — C201: inline APR / minimum-payment editor on the payoff card
 
 Tuning a debt's APR or minimum payment meant leaving the planner for /accounts. Added a per-liability

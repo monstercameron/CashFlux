@@ -680,6 +680,7 @@ var english = Catalog{
 	"planning.debtColApr":               "APR",
 	"planning.debtColMin":               "Min. payment",
 	"planning.strategyTimeSaved":        "%s clears your debt %s sooner.",
+	"planning.debtTieHint":              "At $0 extra, snowball and avalanche tie. Add an extra monthly amount to see them diverge.",
 	"planning.debtEditHeading":          "Adjust rates and minimum payments",
 	"planning.debtEditApr":              "APR %",
 	"planning.debtEditMin":              "Min/mo",
