@@ -1521,8 +1521,9 @@ var english = Catalog{
 	"insights.useBackend":              "Use backend proxy",
 	"insights.highlightsTitle":         "Spending highlights",
 	"insights.highlightsHint":          "Categories that moved a lot versus your recent average — no AI needed.",
-	"insights.highlightUp":             "%s spending is up %d%% — %s this month vs about %s a month.",
-	"insights.highlightDown":           "%s spending is down %d%% — %s this month vs about %s a month.",
+	"insights.highlightUp":             "%s spending is up %d%% (%s more) — %s this month vs about %s a month.",
+	"insights.highlightDown":           "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
+	"insights.highlightNone":           "%s — nothing spent yet this month (about %s a month usually).",
 	"insights.uncategorized":           "Uncategorized",
 
 	// Affordability answer card (L8 deterministic path)

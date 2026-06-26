@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C232 + C233 (anomaly highlight clarity)
+
+Both fixes live in `highlightText` (insights.go), reusing fields the `insights.Anomaly` struct already
+carries (`Delta`, `Current`):
+- **C233:** append the absolute dollar change to the up/down sentences ("(+$120 more)"), so the
+  magnitude is concrete, not just a percent.
+- **C232:** the highlight's "current period" is the in-progress month, so a category at $0 was rendering
+  as "down 100%" early in the month. Now `Current == 0 && Direction == Down` routes to a new
+  `insights.highlightNone` message ("nothing spent yet this month…") instead.
+
+Pure display change; no detector logic touched. Build + i18n green.
+
 ## 2026-06-26 — C222 + C226 (asset balances aren't cash)
 
 Both items stem from treating a slow-moving valuation like a reconciled cash balance. Fixed in two

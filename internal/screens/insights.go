@@ -1351,17 +1351,28 @@ func detectSpendingAnomalies(txns []domain.Transaction, categories []domain.Cate
 
 // highlightText is the plain-English sentence for one spending anomaly.
 func highlightText(a insights.Anomaly, base string) string {
+	current := fmtMoney(money.New(a.Current, base))
+	baseline := fmtMoney(money.New(a.Baseline, base))
+	// C232: the current period is the in-progress month, so a category with nothing
+	// spent yet reads as a misleading "down 100%". State it plainly instead.
+	if a.Current == 0 && a.Direction == insights.Down {
+		return uistate.T("insights.highlightNone", a.Category, baseline)
+	}
 	pct := a.PctChange
 	if pct < 0 {
 		pct = -pct
 	}
-	current := fmtMoney(money.New(a.Current, base))
-	baseline := fmtMoney(money.New(a.Baseline, base))
+	// C233: include the explicit dollar change, not just the percentage.
+	delta := a.Delta
+	if delta < 0 {
+		delta = -delta
+	}
+	deltaStr := fmtMoney(money.New(delta, base))
 	key := "insights.highlightDown"
 	if a.Direction == insights.Up {
 		key = "insights.highlightUp"
 	}
-	return uistate.T(key, a.Category, pct, current, baseline)
+	return uistate.T(key, a.Category, pct, deltaStr, current, baseline)
 }
 
 // highlightTone is the green/red text class for an anomaly's direction (up in
