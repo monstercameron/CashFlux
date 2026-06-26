@@ -114,6 +114,7 @@ var english = Catalog{
 	"notify.budgetNearBody":              "You're close to this budget's limit.",
 	"notify.digestTitle":                 "Your week in review",
 	"notify.digestBody":                  "Last week: %s in, %s out.",
+	"notify.catchUpError":               "Couldn't refresh notifications just now — they'll catch up shortly.",
 	"notify.largeTitle":                  "Large charge: %s",
 	"notify.largeBody":                   "%s — a bigger-than-usual transaction.",
 	"notify.largeNoDesc":                 "A transaction",

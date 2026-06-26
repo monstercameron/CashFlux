@@ -42,6 +42,8 @@ func runNotifyCatchUp() {
 				"panic", r,
 				"stack", string(debug.Stack()),
 			)
+			// C272: surface a quiet, non-alarming notice instead of failing silently.
+			uistate.PostNotice(uistate.T("notify.catchUpError"), true)
 		}
 	}()
 
