@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C198: real debt-payoff baseline in the sample
+
+The payoff progress card read "0% since Jul 1, 2022" because the sample hardcoded a $39,500 baseline
+started in 2022, while the sample's actual included debt (two car loans + a student loan + the rewards
+card) sums to roughly $100k. `TrackProgress` clamps negative paid-off to zero, so baseline < current
+always yields 0% — the logic was fine; the seed data was nonsensical. Fixed at the source:
+`SampleDataset()` now assigns to a `ds` variable, walks the included (non-mortgage, non-archived)
+liabilities through `ledger.Balance(a, ds.Transactions)`, sums the owed, and sets
+`PayoffBaseline.TotalOwed = currentOwed * 100 / 82` with `StartedAt = Sep 1, 2025` — i.e. "you've paid
+down ~18% since you started." This stays correct even if the sample debts change later.
+
+Import note: `store` now imports `ledger`. Confirmed no cycle (`ledger` imports domain/money/currency,
+none of which import `store`); `go build`/`go test ./internal/store` green, full js/wasm build green.
+All included sample debts are USD (the EUR travel card sits at €0), so the raw minor-unit sum is correct
+without FX here — noted in a comment in case a non-zero foreign debt is added later.
+
+Next in F26: snowball overlay on the burn-down (C199), dedicated /debt route (C200).
+
 ## 2026-06-26 — C197: snowball-vs-avalanche time-saved line
 
 The card already converted the strategy *interest* difference into a "saves $X" recommendation but

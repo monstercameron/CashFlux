@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
@@ -414,7 +415,7 @@ func SampleDataset() Dataset {
 
 	tinyPNG := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d}
 
-	return Dataset{
+	ds := Dataset{
 		Members: []domain.Member{
 			{ID: marcus, Name: "Marcus Hartley", IsDefault: true, Color: "#4ade80", Custom: map[string]any{}},
 			{ID: priya, Name: "Priya Hartley", Color: "#f472b6"},
@@ -852,9 +853,41 @@ func SampleDataset() Dataset {
 			// e.g. the €535 card showed $492 instead of ~$578, and 1 JPY read as $151 (a 22,000× error).
 			FXRates:            map[string]float64{"EUR": 1.08, "GBP": 1.27, "CAD": 0.74, "JPY": 0.0066},
 			FreshnessOverrides: map[string]int{checking: 7, k401: 90, roth: 90},
-			PayoffBaseline:     &PayoffBaseline{TotalOwed: 3950000, Currency: "USD", StartedAt: date(2022, time.July, 1)},
+			// PayoffBaseline is computed from the dataset's real debt below so it
+			// always reflects genuine progress (C198), not a stale hardcoded number.
 		},
 	}
+
+	// C198: derive the debt-payoff baseline from the actual current debt rather
+	// than hardcoding it. The old seed pinned TotalOwed at $39,500 "since Jul 1,
+	// 2022" — far below the ~$100k actually owed — so progress always read 0%.
+	// Here we sum the current owed across the included (non-mortgage) liabilities
+	// and set the baseline a bit higher, so the card shows real, sensible progress.
+	var currentOwed int64
+	for _, a := range ds.Accounts {
+		if a.Archived || a.Class != domain.ClassLiability || !a.IncludedInPayoff() {
+			continue
+		}
+		bal, err := ledger.Balance(a, ds.Transactions)
+		if err != nil {
+			continue
+		}
+		owed := bal.Amount
+		if owed < 0 {
+			owed = -owed
+		}
+		// All included sample debts are USD (the EUR travel card sits at €0), so a
+		// raw minor-unit sum is correct here without FX conversion.
+		currentOwed += owed
+	}
+	if currentOwed > 0 {
+		// Treat the current balance as ~82% of what was owed when tracking began,
+		// i.e. roughly 18% paid down since the start date — a believable story.
+		baseline := currentOwed * 100 / 82
+		ds.Settings.PayoffBaseline = &PayoffBaseline{TotalOwed: baseline, Currency: "USD", StartedAt: date(2025, time.September, 1)}
+	}
+
+	return ds
 }
 
 // boolN returns n when cond is true, else 0 — a small helper for conditionally
