@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — reconcile: C258 + C160 verified already implemented
+
+Two backlog items were already fully implemented in prior work but never flipped to done. Confirmed at
+their call sites, not by tag-grep:
+- **C258** (SMART-SU1 no-op + SMART-SU9 no toast): `smart_card.go` already (a) scrolls the named
+  subscription row into view with a transient highlight when you're already on `/subscriptions` instead
+  of issuing a no-op navigation (SU1), and (b) posts a `smart.taskAdded` confirmation toast after
+  creating the to-do (SU9). Both carry "SMART-SU1 fix"/"SMART-SU9 fix" comments at lines 77 and 133.
+- **C160** (autopay inference-only, no explicit user flag): `domain.Recurring.Autopay` is an explicit,
+  user-settable field surfaced as a `recurring.autopay` ToggleRow in both the add form
+  (`planning.go:699`) and the edit form (`planning.go:1145`), and persisted (`Autopay: autopayS.Get()`
+  at 1114). The flag is no longer inference-only.
+
+Left open deliberately: C234 (Ask-entry above-the-fold — a judgment-heavy layout reorder) and C181
+(goal-delete pointer-events — needs a confirmed CSS overlay repro, not a speculative change).
+
 ## 2026-06-26 — C303 (free-vs-paid + trial plain language)
 
 The UpgradeSheet listed Cloud benefits + an annual price + a trust line, but never plainly stated the
