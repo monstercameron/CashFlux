@@ -1329,6 +1329,7 @@ var english = Catalog{
 	// Dashboard
 	"dashboard.netWorth":               "Net worth",
 	"dashboard.netWorthConverted":      "converted to %s",
+	"dashboard.trendSoFar":             "(so far)",
 	"dashboard.netWorthTrend":          "Net worth trend",
 	"dashboard.income":                 "Income",
 	"dashboard.spending":               "Spending",

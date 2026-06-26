@@ -720,7 +720,14 @@ func netWorthTrendWidget(accounts []domain.Account, txns []domain.Transaction, r
 	}
 	pts := make([]chartspec.Point, len(series))
 	for i, m := range series {
-		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: trendPointLabel(cutoffs[i], months)}
+		label := trendPointLabel(cutoffs[i], months)
+		// C215: the final cutoff is next-month-start, so it captures the current
+		// month's data "so far" — label it as the current month + "(so far)" instead
+		// of the next month's name, which read as a confusing unlabeled partial point.
+		if i == len(series)-1 {
+			label = trendPointLabel(start, months) + " " + uistate.T("dashboard.trendSoFar")
+		}
+		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: label}
 	}
 	yFmt := ".3~s" // compact SI w/ enough precision to keep narrow-range ticks distinct, e.g. "21.4k"
 	if currency.Symbol(net.Currency) == "$" {

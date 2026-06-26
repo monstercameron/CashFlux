@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — batch: C215 implemented + C167/C172/C179/C271/C329 verified
+
+C215 (dashboard trend partial-month label): the net-worth trend builds cutoffs from -4mo to +1mo
+(`AddMonths(start, i-(months-2))`), so the final cutoff is next-month-start — it captures the current
+month's data "so far" but `trendPointLabel` showed it as next month's name. Now the last point is
+labelled with the current month + "(so far)" (`dashboard.trendSoFar`). Build + i18n green.
+
+Verified already-implemented (C-tagged at call sites): C167 (per-row cancel is `btn-ghost-danger`, not
+heavy; the heavy `btn-danger` is only the bulk savings-cancel), C172 (per-day balance curve rendered on
+/planning), C179 (goal "by" date uses `pr.FormatDate`), C271 (`dashCatchUpCard` "while you were away"),
+C329 (`dashOnboardCard` first-run checklist). C181 left pending — the goal delete uses `.btn-del-hover`
+with `:focus-within` re-enabling pointer-events, so the "blocked" state isn't reproducible from the code,
+but I couldn't positively confirm a fix, so not closing it.
+
 ## 2026-06-26 — C299: "last backed up" indicator (loop tick)
 
 The backup timestamp was already persisted (`lastBackupKey` via `recordBackupNow`, read by
