@@ -26,7 +26,11 @@ type Windows map[domain.AccountType]int
 type Dismissals map[string]time.Time
 
 // DefaultWindows returns CashFlux's default staleness windows. Debt-like
-// balances drift fastest and so have the shortest windows.
+// balances drift fastest and so have the shortest windows; slow-moving asset
+// values get much longer ones. C222/C226: an investment or other-asset balance
+// (the bucket today's property/vehicle valuations land in) is a periodically
+// estimated figure, not a reconciled cash balance, so nagging it monthly is
+// wrong — investments go 120 days and other illiquid assets 180 before a nudge.
 func DefaultWindows() Windows {
 	return Windows{
 		domain.TypeCreditCard:   14,
@@ -38,8 +42,8 @@ func DefaultWindows() Windows {
 		domain.TypeDebit:        30,
 		domain.TypeCash:         30,
 		domain.TypeSavings:      45,
-		domain.TypeInvestment:   60,
-		domain.TypeOther:        30,
+		domain.TypeInvestment:   120,
+		domain.TypeOther:        180,
 	}
 }
 

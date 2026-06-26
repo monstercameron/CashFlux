@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C222 + C226 (asset balances aren't cash)
+
+Both items stem from treating a slow-moving valuation like a reconciled cash balance. Fixed in two
+layers:
+- **freshness windows (pure):** investment 60→120 days, other 30→180. Added `TestDefaultWindows` +
+  `TestIsStale` cases locking the new windows in. This is the substance of C226's "30-day STALE
+  threshold wrong for illiquid assets" and resolves C222 (investments flagged too eagerly).
+- **wording (UI):** added `isValuationType(t)` (investment || other) in accounts_row.go and switched the
+  stale badge and update action to asset-appropriate copy — "Out of date" / "Update value" instead of
+  the banking "Stale" / "Update balance" (`accounts.staleValue`, `accounts.updateValue`).
+
+Deeper per-asset-type modelling (dedicated Property/Vehicle types, C224) stays in the F31 epic; once
+those exist they inherit `isValuationType` by adding themselves to it. Build + freshness + i18n green.
+
 ## 2026-06-26 — C182 (define Overall progress)
 
 The goals "Overall progress" tile carried its definition only through `smartTooltipFor`, which renders

@@ -52,6 +52,30 @@ type accountRowProps struct {
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
+// isValuationType reports whether an account's balance is a periodically
+// estimated valuation (an investment or an other/illiquid asset) rather than a
+// reconciled cash balance. C226: these read better with "Out of date / Update
+// value" than the banking-flavoured "Stale / Update balance".
+func isValuationType(t domain.AccountType) bool {
+	return t == domain.TypeInvestment || t == domain.TypeOther
+}
+
+// staleBadgeKey / updateActionKey pick asset-appropriate wording for the stale
+// badge and the update action (C226).
+func staleBadgeKey(t domain.AccountType) string {
+	if isValuationType(t) {
+		return "accounts.staleValue"
+	}
+	return "accounts.stale"
+}
+
+func updateActionKey(t domain.AccountType) string {
+	if isValuationType(t) {
+		return "accounts.updateValue"
+	}
+	return "accounts.updateBalance"
+}
+
 func moneyMajorOrEmpty(m money.Money, dec int) string {
 	if m.Amount == 0 {
 		return ""
@@ -507,7 +531,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), a.Name,
-				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("accounts.stale"))),
+				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 			),
@@ -524,7 +548,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
 		// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
 		// account is flagged.
-		If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.updateBalance")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("accounts.updateBalance")))),
+		If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T(updateActionKey(a.Type))), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
 		// Primary actions inline; everything else in the ⋯ menu.
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
@@ -532,7 +556,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T("accounts.updateBalance"))),
+				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
 				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),

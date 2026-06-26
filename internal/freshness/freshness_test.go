@@ -25,6 +25,14 @@ func TestDefaultWindows(t *testing.T) {
 	if d, _ := w.WindowDays(domain.TypeSavings); d != 45 {
 		t.Errorf("savings window = %d, want 45", d)
 	}
+	// C222/C226: slow-moving asset values get long windows so we don't nag them
+	// like a reconciled cash balance.
+	if d, _ := w.WindowDays(domain.TypeInvestment); d != 120 {
+		t.Errorf("investment window = %d, want 120", d)
+	}
+	if d, _ := w.WindowDays(domain.TypeOther); d != 180 {
+		t.Errorf("other-asset window = %d, want 180", d)
+	}
 }
 
 func TestIsStale(t *testing.T) {
@@ -38,6 +46,11 @@ func TestIsStale(t *testing.T) {
 		{"credit card 10d old (window 14)", acct(domain.TypeCreditCard, daysAgo(10)), false},
 		{"checking 20d old (window 30)", acct(domain.TypeChecking, daysAgo(20)), false},
 		{"checking 40d old (window 30)", acct(domain.TypeChecking, daysAgo(40)), true},
+		// C222/C226: slow-moving asset values aren't nagged like cash.
+		{"investment 90d old (window 120)", acct(domain.TypeInvestment, daysAgo(90)), false},
+		{"investment 130d old (window 120)", acct(domain.TypeInvestment, daysAgo(130)), true},
+		{"other-asset 120d old (window 180)", acct(domain.TypeOther, daysAgo(120)), false},
+		{"other-asset 200d old (window 180)", acct(domain.TypeOther, daysAgo(200)), true},
 		{"never confirmed", acct(domain.TypeSavings, time.Time{}), true},
 	}
 	for _, tt := range tests {
