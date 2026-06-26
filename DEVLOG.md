@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — batch: C16 implemented + C6/C124/C137/C18/C90/C5 verified-done
+
+Switched to 4-at-a-time throughput. Investigation found six MINOR items were already implemented by
+earlier R-series/C-series work but left open in the task list (false-pending): C6 (meta description in
+index.html), C124 (over-budget "$X over" via `budgetRemainPhrase`), C137 (carry badge plain phrasing),
+C18 ("Remind me monthly" sets a `documents.cadenceCreated` confirmation), C90 (`dupCount` runs over the
+filtered `shown` set), C5 (SyncChip uses `"local"` not `"synced"` with no backend). Verified each at its
+call site (the fixes carry their C-number in comments) and closed them.
+
+C16 was genuinely pending: the CSV importer returns `[]store.CSVRowError{Line, Reason}` but the summary
+showed only a count. Added `csvSkipDetail` to append a plain-English "line 3: bad amount; line 7: bad
+date (+2 more)" clause (capped at 3), wired into both the file-picker and paste import paths. New i18n
+`documents.skipLine/skipMore/skipReasonGeneric`. Build + i18n green.
+
+Note: the backlog has many false-pending MINOR items — fixes shipped earlier but their tasks never
+flipped. Verifying-and-closing them is legitimate completion progress.
+
 ## 2026-06-26 — C297: surface "Back up everything" in Settings → Data
 
 The whole-install backup (`backupEverything`, all workspaces + KV) lived only in the command palette,

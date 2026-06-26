@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pdftext"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/statement"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -38,6 +39,32 @@ import (
 const visionSystemPrompt = "You extract transactions from receipt and bank-statement images. " +
 	"Return each transaction with: date (YYYY-MM-DD), description, amount (negative for money out / " +
 	"expenses, positive for money in, as a string), and category."
+
+// csvSkipDetail turns the per-row CSV import errors into a short, plain-English
+// "which/why" clause (C16) — e.g. "line 3: bad amount; line 7: bad date (+2 more)".
+// Returns "" when nothing was skipped. Capped at a few rows so the toast stays short.
+func csvSkipDetail(rows []store.CSVRowError) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	const maxShown = 3
+	parts := make([]string, 0, maxShown)
+	for i, r := range rows {
+		if i >= maxShown {
+			break
+		}
+		reason := strings.TrimSpace(r.Reason)
+		if reason == "" {
+			reason = uistate.T("documents.skipReasonGeneric")
+		}
+		parts = append(parts, uistate.T("documents.skipLine", r.Line, reason))
+	}
+	detail := strings.Join(parts, "; ")
+	if len(rows) > maxShown {
+		detail += " " + uistate.T("documents.skipMore", len(rows)-maxShown)
+	}
+	return detail
+}
 
 // visionExtractionSchema constrains the vision reply to a transactions array
 // (OpenAI structured outputs, strict). All fields required + additionalProperties
@@ -159,6 +186,9 @@ func Documents() ui.Node {
 			summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
 			if len(skipped) > 0 {
 				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+				if d := csvSkipDetail(skipped); d != "" {
+					summary += " " + d
+				}
 			}
 			msg.Set(summary)
 			rev.Set(rev.Get() + 1)
@@ -187,6 +217,9 @@ func Documents() ui.Node {
 		summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
 		if len(skipped) > 0 {
 			summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+			if d := csvSkipDetail(skipped); d != "" {
+				summary += " " + d
+			}
 		}
 		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
