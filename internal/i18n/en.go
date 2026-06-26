@@ -942,6 +942,7 @@ var english = Catalog{
 	"widget.importanceLow":       "Low",
 	"settings.addMember":         "+ Add member",
 	"settings.householdMembers":  "Household members",
+	"settings.fxConventionHint": "Enter each rate as your base currency per 1 unit of that currency — e.g. 1.08 means 1 unit = 1.08 in your base currency.",
 	"settings.exchangeRates":     "Exchange rates",
 	"settings.noRates":           "No custom rates.",
 	"settings.screens":           "Screens",

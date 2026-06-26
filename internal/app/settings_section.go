@@ -57,6 +57,9 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.budgetMethodNote")),
 		H4(css.Class("set-label"), uistate.T("settings.exchangeRates")),
+		// C81: spell out the rate convention so users enter the right number — a rate is
+		// "base currency per 1 unit of the listed currency" (e.g. 1.08 ⇒ 1 unit = 1.08 base).
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.fxConventionHint")),
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
 		p.FXAIFetch,

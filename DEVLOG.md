@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — batch: C81 implemented + C53/C65/C107/C146 verified
+
+C81 (FX rate convention): the exchange-rates editor in Settings had no direction hint, inviting inverse
+entries (the same class of bug as the C77 JPY inversion). Added a base-agnostic explainer line under the
+heading via `settings.fxConventionHint`. Build + i18n green.
+
+Verified already-implemented (C-tagged at call sites): C53 (amount min/max filter wired —
+`onFilterAmountMin/Max` → `x.AmountMin/Max`), C65 (txn row-select has aria-label + aria-pressed; inline
+inputs labelled), C107 (RuleAddForm dropped the static `id="rule-add"` to avoid the modal/inline dup),
+C146 (the safespend pkg consolidates C141–146 with no $1 floor). Reconcile-grep on low C-numbers is
+noisy (collisions like a stray "C65"/"C74" tag in unrelated code), so each close was confirmed by reading
+the actual finding's code, not just the tag.
+
 ## 2026-06-26 — batch: C215 implemented + C167/C172/C179/C271/C329 verified
 
 C215 (dashboard trend partial-month label): the net-worth trend builds cutoffs from -4mo to +1mo
