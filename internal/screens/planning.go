@@ -918,9 +918,13 @@ func Planning() ui.Node {
 					}
 					mkBurnPts := func(schedule []int64) []chartspec.Point {
 						pts := make([]chartspec.Point, 0, len(schedule)+1)
-						pts = append(pts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base)})
+						// C203: label each month with its calendar date ("Jan 2026") so the
+						// x-axis reads as real months, not bare indices (0,1,2…). The chart's
+						// JS maps each visible tick to the nearest point's Label. X=0 is the
+						// current month; X=k is k months out (DebtFreeMonth(now,k+1)).
+						pts = append(pts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base), Label: payoff.DebtFreeMonth(now, 1).Format("Jan 2006")})
 						for i, b := range schedule {
-							pts = append(pts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base)})
+							pts = append(pts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base), Label: payoff.DebtFreeMonth(now, i+2).Format("Jan 2006")})
 						}
 						return pts
 					}

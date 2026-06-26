@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C203: calendar months on the burn-down x-axis (F26 complete)
+
+Last F26 item. The burn-down x-axis showed 0,1,2… (month indices). Inspecting the chart JS (web/chart.js)
+showed it already supports per-point labels: it builds `labelsByX[p.x] = p.label` and, when no explicit
+x-format is set, the bottom axis `tickFormat` returns `labelsByX[nearest]`. So the fix is pure data —
+set each burn `Point.Label` to its calendar month via `payoff.DebtFreeMonth(now, k+1).Format("Jan 2006")`
+(X=0 → current month; X=k → k months out). No Go-side chart changes, no axis-format change. The renderer
+only draws ~4 ticks, so labeling every point is fine. Build green.
+
+**F26 (debt payoff planner) is now fully done** — C195–C203 all shipped (FX correctness, time-saved,
+per-debt table, real progress baseline, snowball overlay, /debt route + anchor, inline APR/min editing,
+non-misleading $0 default, calendar-month axis).
+
 ## 2026-06-26 — C202: non-misleading default state on the debt planner
 
 At $0 extra the two strategies always tie (same total monthly outflow → same finish), so the default
