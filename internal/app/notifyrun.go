@@ -260,6 +260,17 @@ func loadLastBackup() time.Time {
 	return t
 }
 
+// lastBackupSummary is the plain-English "Last backed up <date>" line for the
+// Settings → Data section (C299), or a never-backed-up nudge. Formats with the
+// user's preferred date format (the non-hook formatter, safe anywhere).
+func lastBackupSummary() string {
+	t := loadLastBackup()
+	if t.IsZero() {
+		return uistate.T("settings.lastBackupNever")
+	}
+	return uistate.T("settings.lastBackup", uistate.LoadPrefs().FormatDate(t))
+}
+
 // backupReminderCandidates produces a gentle "back up your data" nudge when a
 // backup is due for the default cadence (B28). It's suppressed when there are no
 // transactions yet (nothing worth backing up), so a fresh install isn't nagged.

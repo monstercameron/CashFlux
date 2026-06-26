@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-26 — C299: "last backed up" indicator (loop tick)
+
+The backup timestamp was already persisted (`lastBackupKey` via `recordBackupNow`, read by
+`loadLastBackup`) and drove the reminder cadence, but nothing showed it. Added `lastBackupSummary()`
+in notifyrun.go (date via the non-hook `uistate.LoadPrefs().FormatDate`) and a line in Settings → Data
+under the export actions: "Last backed up <date>" or a never-backed-up nudge. `data-testid="last-backup"`.
+Build + i18n green. (Updates on next settings open, not live — acceptable for an informational indicator.)
+
 ## 2026-06-26 — C82: net-worth currency-conversion disclosure (loop tick)
 
 The net-worth KPI silently summed FX-converted foreign balances. Added a disclosure: when any
