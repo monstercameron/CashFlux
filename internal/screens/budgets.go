@@ -331,6 +331,29 @@ func Budgets() ui.Node {
 	envNeg := map[string]bool{}     // budgetID → whether the envelope is overdrawn
 	var assignBanner ui.Node = Fragment()
 	switch method {
+	case budgeting.MethodSimple:
+		// C119: surface income context in simple mode so the user can see how their
+		// budgets relate to what they actually earn. Use the same period-income helper
+		// as zero-based (ledger.PeriodTotals over the current month) — the simple mode
+		// just doesn't enforce "every dollar assigned"; it still helps to see the gap.
+		sms, sme := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
+		simpleIncome, _, _ := ledger.PeriodTotals(txns, sms, sme, rates)
+		simpleUnbudgeted := simpleIncome.Amount - totalLimit
+		var simpleDiffNode ui.Node
+		if simpleUnbudgeted > 0 {
+			simpleDiffNode = Span(css.Class(tw.TextUp), uistate.T("budgets.simpleUnbudgeted", fmtMoney(money.New(simpleUnbudgeted, base))))
+		} else if simpleUnbudgeted == 0 {
+			simpleDiffNode = Span(uistate.T("budgets.simpleFullyAllocated"))
+		} else {
+			simpleDiffNode = Span(css.Class(tw.TextDown), uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-simpleUnbudgeted, base))))
+		}
+		assignBanner = P(css.Class("budget-sub", tw.FontDisplay),
+			uistate.T("budgets.simpleIncome", fmtMoney(money.New(simpleIncome.Amount, base))),
+			" · ",
+			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(totalLimit, base))),
+			" · ",
+			simpleDiffNode,
+		)
 	case budgeting.MethodZeroBased:
 		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
 		income, _, _ := ledger.PeriodTotals(txns, ms, me, rates)

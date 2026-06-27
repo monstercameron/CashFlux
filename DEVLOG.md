@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C119 [F14]: Income awareness in simple budget mode
+
+The `/budgets` screen's `assignBanner` switch had two cases — `MethodZeroBased` and `MethodEnvelope` — but no `MethodSimple` case, so the default simple mode showed nothing above the budget list. The user had no way to see whether their budgets were sensibly sized relative to their income.
+
+**Fix.** Added `case budgeting.MethodSimple` that mirrors the zero-based income lookup: `ledger.PeriodTotals` over `budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)` returns the current month's income. The difference `simpleUnbudgeted = income.Amount − totalLimit` (where `totalLimit` is already computed above the switch) gives three states: positive (unbudgeted room, `tw.TextUp`), zero (fully allocated), negative (over-allocated relative to income, `tw.TextDown`). The banner is rendered as a single `P.budget-sub` with the three pieces joined by " · " separators — consistent with the zero-based banner's style.
+
+No new helpers, no new state atoms, no `On*` calls. Five i18n keys added to `en.go`.
+
+**Files.** `internal/screens/budgets.go`, `internal/i18n/en.go`. Build rc=0.
+
 ## 2026-06-27 — C69 [F8]: From-account selector on the transfer form
 
 The transfer form in `AccountRow` previously hard-coded the source as `a.ID` (the row whose overflow menu triggered the form). The `OnTransfer` callback always passed `a.ID` as `fromID`, making the user unable to initiate a transfer from a different account without navigating to that other account's row first.
