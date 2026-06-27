@@ -12,6 +12,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -192,6 +194,23 @@ func Run() {
 	// dedupes by key, so re-running never duplicates already-shown notifications.
 	if appstate.Default != nil {
 		appstate.Default.OnTxnMutated(func() { runNotifyCatchUp() })
+		// Wire the household role guard (R29 / C273): resolve the acting identity's
+		// role on every mutation so a member operating the app as a Viewer is held
+		// read-only. No selected identity — or an unknown/Owner/Admin one — resolves
+		// to RoleOwner (fully permissive), so the default single-user experience is
+		// unchanged; only an explicit Viewer identity is restricted.
+		appstate.Default.SetActiveRoleFunc(func() domain.MemberRole {
+			id := uistate.ActiveIdentityID()
+			if id == "" {
+				return domain.RoleOwner
+			}
+			for _, m := range appstate.Default.Members() {
+				if m.ID == id {
+					return memberrole.Resolve(m)
+				}
+			}
+			return domain.RoleOwner // no match → permissive
+		})
 	}
 
 	// Greet once after a version upgrade with a "what's new" pointer (C326).
