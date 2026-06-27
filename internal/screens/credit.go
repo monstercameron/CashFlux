@@ -21,6 +21,47 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// utilTrendPoint holds one dated utilization reading derived from a balance snapshot.
+type utilTrendPoint struct {
+	date string // short formatted date e.g. "Jan 2"
+	pct  int    // 0–100+ utilization percent
+	id   string // snapshot ID for keying
+}
+
+// buildUtilTrend fetches balance history for a card and converts it to a series
+// of utilization points. Only snapshots where the limit is known (limitMinor > 0)
+// produce a point. Returns nil when there are fewer than 2 points.
+func buildUtilTrend(app *appstate.App, accountID string, limitMinor int64) []utilTrendPoint {
+	if limitMinor <= 0 {
+		return nil
+	}
+	snaps := app.BalanceHistory(accountID)
+	if len(snaps) < 2 {
+		return nil
+	}
+	// Cap to last 8 snapshots.
+	start := 0
+	if len(snaps) > 8 {
+		start = len(snaps) - 8
+	}
+	recent := snaps[start:]
+
+	pts := make([]utilTrendPoint, 0, len(recent))
+	for _, s := range recent {
+		bal := s.BalanceMinor
+		if bal < 0 {
+			bal = -bal
+		}
+		pct := int(bal * 100 / limitMinor)
+		pts = append(pts, utilTrendPoint{
+			date: s.AsOf.Format("Jan 2"),
+			pct:  pct,
+			id:   s.ID,
+		})
+	}
+	return pts
+}
+
 // buildCreditInputs derives the credithealth.Inputs from live app data.
 // It computes current balances for every credit-card account via ledger.Balance
 // (matching the same pattern used by buildHealthInputs in health.go).
@@ -146,10 +187,25 @@ func creditScoreRing(r credithealth.Result, size int) ui.Node {
 	)
 }
 
+// creditTrendBarTone returns the bar tone for a utilization pct.
+func creditTrendBarTone(pct int) string {
+	switch {
+	case pct <= 10:
+		return "bg-up"
+	case pct <= 30:
+		return "bg-up"
+	case pct <= 50:
+		return "bg-warn"
+	default:
+		return "bg-down"
+	}
+}
+
 // creditCardRow renders one credit card's utilization detail: name, balance,
-// limit, utilization bar, and the actionable "pay $X to reach 30%" nudge.
+// limit, utilization bar, the actionable "pay $X to reach 30%" nudge, and
+// (when ≥2 balance snapshots exist) a compact chronological utilization trend.
 // This is a plain (non-interactive) display row, so MapKeyed is safe to use.
-func creditCardRow(cu credithealth.CardUtil, base, baseCur string) ui.Node {
+func creditCardRow(cu credithealth.CardUtil, base, baseCur string, trend []utilTrendPoint) ui.Node {
 	// Format balance: cards carry a negative balance (money owed); show owed amount.
 	owed := cu.BalanceMinor
 	if owed < 0 {
@@ -207,7 +263,49 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur string) ui.Node {
 		)
 	}
 
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, meta, nudge)
+	// Utilization trend (C210): shown only when ≥2 balance snapshots exist.
+	var trendPanel ui.Node = Fragment()
+	if len(trend) >= 2 {
+		keyOfPt := func(p utilTrendPoint) any { return p.id }
+		renderPt := func(p utilTrendPoint) ui.Node {
+			pct := p.pct
+			if pct > 100 {
+				pct = 100
+			}
+			barWidth := fmt.Sprintf("%d%%", pct)
+			tone := creditTrendBarTone(p.pct)
+			return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Span(css.Class("t-caption", tw.TextFaint, "util-trend-date"),
+					Style(map[string]string{"min-width": "4.5rem"}), p.date),
+				Div(css.Class("util-trend-track"),
+					Style(map[string]string{
+						"flex": "1", "background": "var(--line, #2a2a2d)",
+						"border-radius": "2px", "height": "6px", "overflow": "hidden",
+					}),
+					Div(css.Class(tone, "util-trend-bar"),
+						Style(map[string]string{
+							"width": barWidth, "height": "100%",
+							"border-radius": "2px",
+						})),
+				),
+				Span(css.Class("t-caption", tw.TextFaint),
+					Style(map[string]string{"min-width": "2.5rem", "text-align": "right"}),
+					fmt.Sprintf("%d%%", p.pct)),
+			)
+		}
+		trendPanel = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+			Style(map[string]string{"margin-top": "0.5rem"}),
+			P(css.Class("t-caption", tw.TextDim), uistate.T("credit.trendTitle")),
+			MapKeyed(trend, keyOfPt, renderPt),
+		)
+	} else if len(trend) == 0 && cu.LimitMinor > 0 {
+		// Card has a limit but no snapshots yet — show a muted nudge.
+		trendPanel = P(css.Class("t-caption", tw.TextFaint),
+			Style(map[string]string{"margin-top": "0.5rem"}),
+			uistate.T("credit.trendNoHistory"))
+	}
+
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, meta, nudge, trendPanel)
 }
 
 // fmtMinorAmount formats minor-unit integer cents into a decimal display string
@@ -230,9 +328,8 @@ func fmtMinorAmount(minor int64, decimals int) string {
 
 // CreditScreen is the full /credit page: an overall credit-health proxy score
 // ring (C208 — local, privacy-friendly, no bureau), then a per-card
-// utilization breakdown with actionable "pay $X to reach 30%" nudges (C209).
-// C210 (utilization history/trend) is out of scope — that needs stored
-// snapshots which don't exist yet.
+// utilization breakdown with actionable "pay $X to reach 30%" nudges (C209),
+// and per-card utilization trend bars derived from balance snapshots (C210).
 func CreditScreen() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -280,7 +377,8 @@ func CreditScreen() ui.Node {
 	// Per-card breakdown.
 	cardRows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap4)}
 	for _, cu := range r.Cards {
-		cardRows = append(cardRows, creditCardRow(cu, base, base))
+		trend := buildUtilTrend(app, cu.AccountID, cu.LimitMinor)
+		cardRows = append(cardRows, creditCardRow(cu, base, base, trend))
 	}
 	breakdown := uiw.Card(uiw.CardProps{
 		Title: uistate.T("credit.breakdownTitle"),

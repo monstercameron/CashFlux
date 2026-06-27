@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C210 [F28]: per-card utilization trend on /credit
+
+C225 already proved the `BalanceHistory` infrastructure works. C210 harvests it for the `/credit` screen without any new persistence.
+
+**Derivation.** `buildUtilTrend(app, accountID, limitMinor)` calls `app.BalanceHistory(accountID)` (returns ascending-sorted `[]domain.BalanceSnapshot`). Snapshots cap at the last 8 to keep the panel light. Per-snapshot utilization: `pct = abs(BalanceMinor) * 100 / limitMinor`. Credit-card balances may be negative (money owed), so the absolute value is taken. Integer division is correct here — utilization is a rough guide, not a precise decimal.
+
+**Rendering.** The trend panel uses `MapKeyed` with display-only rows — no `On*` hooks inside the loop, no framework gotcha. Each row: short date (Jan 2 format), a 6px track div with a fill-bar whose width `= min(pct,100)%` (a capped percent string), colored by `creditTrendBarTone` (same green/amber/red thresholds as the main utilization bar), and the raw percent label. Chronological order (oldest → newest, matching the ascending history) gives users a clean left-to-right reading direction.
+
+**Guard conditions.** `len(trend) < 2` suppresses the trend panel — a single snapshot communicates no change. When the card has a limit but no snapshots at all, a muted "Not enough history yet" nudge tells the user what to do. Cards with no limit (LimitMinor = 0) are skipped entirely.
+
+**Call site.** The loop in `CreditScreen` now calls `buildUtilTrend` per card and passes the result into `creditCardRow`. Signature change: added `trend []utilTrendPoint` parameter. No hooks in `creditCardRow` so the additional parameter is safe and doesn't destabilize hook counts.
+
 ## 2026-06-27 — C225 [F31]: valuation history after "Update balance"
 
 The problem: illiquid-asset accounts (property, vehicle, investment, retirement, crypto, other) track `OpeningBalance` as their current value, updated by "Update balance". There was no record of past values — once you set a new balance, the prior one was gone. That's fine for a bank account, but wrong for an asset whose appreciation/depreciation is the interesting signal.

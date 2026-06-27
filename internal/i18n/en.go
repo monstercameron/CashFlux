@@ -2231,6 +2231,9 @@ var english = Catalog{
 	"credit.missingLimitNote":   "%d card(s) have no credit limit set — add a limit to include them in the calculation.",
 	"credit.emptyTitle":         "No credit cards found",
 	"credit.emptyBody":          "Add a credit-card account with a credit limit to see your utilization breakdown here.",
+	// C210 [F28]: per-card utilization trend from balance snapshots
+	"credit.trendTitle":         "Utilization trend",
+	"credit.trendNoHistory":     "Not enough history yet — update this card's balance over time to see a trend.",
 
 	// Valuation history panel — C225 [F31]: shown for illiquid asset accounts
 	// (property, vehicle, investment, retirement, crypto, other) when the user
