@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C130 (custom date-range hint on /budgets)
+
+The date-range control is a global top-bar atom that sets the view window for period-aware
+screens. On /budgets it affects which transactions are used when computing spend vs. budget,
+but it does NOT redefine each budget's own cadence (weekly, monthly, etc.). Users have
+confused the two — they set a custom range thinking it would change the budget period.
+
+The fix is a single conditional muted paragraph at the top of the budgets list body, shown
+only when the view is in custom-range mode (`!periodWin.Get().IsSinglePeriod()`). This
+re-uses the already-available `periodWin` atom from `uistate.UsePeriod()` — no new state
+needed. The hint disappears when the user returns to single-period mode.
+
+i18n key `budgets.customRangeHint`; `data-testid="budgets-custom-range-hint"`.
+
 ## 2026-06-27 — C218 (dedicated /networth route)
 
 The net-worth section was buried inside /reports with no direct navigation entry, making it

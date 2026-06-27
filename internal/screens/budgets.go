@@ -350,6 +350,12 @@ func Budgets() ui.Node {
 					Span(uistate.T("budgets.addBudget")))),
 			),
 			Body: Fragment(
+				// C130: when the top-bar date range is in custom-range mode (not a single
+				// budget period), clarify that it changes the view window only — it doesn't
+				// redefine each budget's own period.
+				If(!periodWin.Get().IsSinglePeriod(),
+					P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
+						uistate.T("budgets.customRangeHint"))),
 				assignBanner,
 				// C125: when budgets are over, lead with a salient alert banner stating the
 				// total overspend up front — not just a small count pill — so the problem
