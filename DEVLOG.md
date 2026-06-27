@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C301: CloudMention dismiss changed to 30-day snooze
+
+**Problem:** `CloudMention` stored `"1"` in `cashflux:cloud-mention-dismissed` on both the "Not now" and "Learn more" buttons. On the next render, `lsGet(cloudMentionDismissedKey) != ""` was true — the banner was gone forever. Since `ShowUpgradeSheet()` is only called from `CloudMention.onLearn`, this meant the upgrade path was permanently blocked after a single dismiss, even if the user later wanted to learn more about Cloud features.
+
+**Root cause:** The dismiss was binary (empty vs non-empty string) with no expiry. `ShowUpgradeSheet()` itself is not gated by the dismiss flag — it works fine once the sheet has rendered — but the only call site (the mention banner) was permanently hidden.
+
+**Fix:** Two files changed:
+- `internal/app/cloudmention.go`: replaced `cloudMentionDismissedKey`/`"cashflux:cloud-mention-dismissed"` with `cloudMentionSnoozedKey`/`"cashflux:cloud-mention-snoozed"`. The new `cloudMentionSnoozed()` helper stores and reads a Unix timestamp; it returns true only while within 30 days of the snooze. After the window expires the banner re-appears. Both buttons now call `snooze()` (a plain `func`, not a hook — avoids calling `UseEvent` inside a lambda). The legacy `"1"` value (old permanent dismiss) parses as Unix epoch 1970-01-01, which is always outside the 30-day window, so existing dismissed installs gracefully re-surface the banner on upgrade without any migration.
+- `internal/app/persist.go`: `keptOnWipeKeys` updated from `"cashflux:cloud-mention-dismissed"` to `"cashflux:cloud-mention-snoozed"` so the snooze survives a data wipe (same behavior as before).
+
+**Design decisions:**
+- 30-day snooze window: enough time that it's not naggy, short enough that a user who initially dismissed but later wants Cloud doesn't have to hunt. The TODO in TODOS.md (R31-reengageable) called for "~30d" explicitly.
+- No i18n changes: the button labels ("Not now" / "Learn more") remain unchanged — the behavior change is invisible to the user except that the banner re-surfaces later.
+- `ShowUpgradeSheet()` is confirmed to not check the dismiss/snooze flag — it directly sets a global atom. Documented in the component comment.
+
+**Tests:** No pure-Go logic to test (all wasm-only). `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
+
 ## 2026-06-27 — C100: OpenAI key explainer in AI settings
 
 **Problem:** The AI section in Settings showed an API-key input and a single-line trust statement ("your key is stored only on this device...") but gave users no context for *what* the key is for, *how* to get one, or *what it costs*. A new user unfamiliar with OpenAI's API would not know whether the key requires a paid subscription, where to create one, or what CashFlux charges. This information gap led to drop-off at the key-entry step.

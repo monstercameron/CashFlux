@@ -31,7 +31,7 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:openai-key":              true,
 	"cashflux:websearch-key":           true,
 	"cashflux:cloud-ai-key-set":        true,
-	"cashflux:cloud-mention-dismissed": true,
+	"cashflux:cloud-mention-snoozed": true,
 	"cashflux:chat-system-prompt":      true,
 	"cashflux:rail-collapsed":          true,
 	"cashflux:rail-tool-groups":        true,
@@ -144,11 +144,13 @@ func hydrateDataset() {
 			_ = app.LoadSample()
 			// Fallback to sample — show the banner so the user knows (L6).
 			uistate.SetSampleActive(true)
-		} else {
-			// A real saved dataset means the user has personalised — clear any
-			// stale sample-active flag left from a prior first run.
-			uistate.SetSampleActive(false)
 		}
+		// NOTE (C1): do NOT force the sample-active flag off here. Autosave persists
+		// the seeded sample as a real dataset, so a reload lands on hydrateImport
+		// even when the user never personalised — clearing the flag here made the
+		// "viewing sample data" banner vanish permanently after one reload. The
+		// persisted localStorage flag is authoritative: it's set on seed and cleared
+		// on personalise/dismiss/wipe/own-import, so we let it stand.
 		markSeeded()
 	case hydrateSeed:
 		hadLocalDataset = false
@@ -273,6 +275,10 @@ func startDatasetAutosave() {
 		last = ""
 		save()
 	}
+	// Expose an immediate-persist trigger to screens that can't reach this
+	// unexported closure — used to flush a freshly loaded sample before a fast
+	// reload can race the ticker and lose it (C2).
+	uistate.CapturePersistNow(resaveDataset)
 	cb := js.FuncOf(func(js.Value, []js.Value) any { save(); return nil })
 	js.Global().Call("addEventListener", "pagehide", cb)
 	js.Global().Call("addEventListener", "visibilitychange", cb)
