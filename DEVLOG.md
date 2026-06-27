@@ -14550,3 +14550,14 @@ the expected and correct result, because CashFlux's token-based theming changes 
 weights, spacing and layout are theme-invariant, so hierarchy parity is architecturally guaranteed and now
 PROVEN by a committed gate. Added as the 'parity' dimension of ux_quality_gate.mjs. With contrast=0 +
 parity=0, R69's full acceptance is met. Both e2e files are mine/clean.
+
+## 2026-06-27 — R25: unified anomaly hub design (SPEC delivered)
+Collision-free new-file research deliverable while the screen layer is churned by the concurrent agent.
+docs/DESIGN_UNIFIED_ANOMALY_HUB.md: anomaly detection is genuinely fragmented (smartengine a1BalanceAnomaly
+3x-trailing-mean, insights spending highlights, notify EventLargeTransaction, attention needs-attention),
+surfaced in 5 places with independent severity/wording/dismissal. Specified the unification: one Anomaly
+shape with a stable entity+kind+period ID (dedup key) extending smart.Insight, one detection pass, /smart as
+canonical hub (+ an Unusual filter), derived surfaces (dashboard/notifications/reports) sharing ID+dismissal
+per 8.6. The presentation half is already shipped (R38 + R38/8.6); the design closes the detection/identity/
+dismissal loop. Adversarial review verified every cited file/symbol exists + design sound: PASS 4/4, no fixes.
+New doc, committed by explicit path (no reset, per the git-no-reset rule).
