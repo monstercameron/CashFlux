@@ -1535,10 +1535,25 @@
       /* up/down follow the live theme (var --up/--down) so gain/loss indicators stay
          legible in light mode — the literal dark values (#54b884/#d8716f) measure
          ~2.2:1 on white. Dark is byte-identical (engine sets --up/--down to these). */
-      .text-up { color: var(--up, #54b884); } .text-down { color: var(--down, #d8716f); } .text-warn { color: #cfa14e; }
+      /* Money tones reference the semantic money tokens (spec §4.3/§14.3): direction
+         only, never the interaction accent. Computed value is byte-identical today
+         (--money-positive/-negative alias --up/--down), so this is a zero-visual-change
+         semantic migration. --text-warn stays hardcoded for now — mapping it to
+         --severity-warn would shift the hue (#cfa14e → amber), a real change to defer. */
+      .text-up { color: var(--money-positive, #54b884); } .text-down { color: var(--money-negative, #d8716f); } .text-warn { color: #cfa14e; }
       .text-dim { color: #ababb3; } .text-faint { color: #7d7d85; } .text-fg { color: #f4f4f5; }
       .bg-up { background-color: #54b884; } .bg-down { background-color: #d8716f; }
       .bg-warn { background-color: #cfa14e; } .bg-dim { background-color: #ababb3; }
+      /* Interaction state hooks (spec §13.2): attribute-driven so components express
+         state via data-state/aria-* instead of ad-hoc classes. Net-new vocabulary —
+         no element currently sets data-state, so this restyles nothing today; screens
+         adopt it during the component pass. (The [aria-expanded] .chevron rotation hook
+         from §13.2 is deferred: existing .chevron elements already manage their own
+         rotation, so a global rule there would not be additive.) */
+      [data-state="selected"] { background: var(--surface-selected); }
+      [data-state="dirty"]    { border-color: var(--severity-warn); }
+      [data-state="error"]    { border-color: var(--severity-alert); }
+      [aria-busy="true"]      { cursor: progress; }
       .bg-fg { background-color: #f4f4f5; } .bg-line { background-color: #232325; }
 
       /* Artifacts (G20) --------------------------------------------------- */

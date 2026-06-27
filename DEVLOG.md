@@ -13556,3 +13556,13 @@ contrast-safe. Process: implemented, then ran an adversarial style-spec critic s
 first pass (5 findings), I applied the valid fixes (hover-tint→--interactive, add --bg) and documented
 the justified deviations; re-review returned PASS, no remaining fixes. web/index.html was clean of other
 agents' WIP, so the commit is a single isolated hunk.
+
+## 2026-06-27 — R46 follow-on: start using the tokens (money tones + §13.2 state hooks)
+Began consuming the new token layer so it isn't dead vocabulary. Migrated the `.text-up`/`.text-down`
+money utility classes onto `--money-positive`/`--money-negative` — byte-identical today (the tokens
+alias --up/--down), so zero visual change, but it codifies the §4.3 rule that money direction never
+borrows the interaction accent. Added the §13.2 attribute state hooks (`data-state=selected/dirty/error`,
+`aria-busy`) as additive vocabulary the component pass will emit; verified nothing currently sets
+data-state, so it restyles nothing. Deferred the §13.2 `[aria-expanded] .chevron` rotation rule because
+5 existing chevrons already manage their own rotation — a global rule there would be a behavior change,
+not an additive hook. Confined to web/index.html (no other agent's WIP there).
