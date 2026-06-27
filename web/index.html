@@ -2617,7 +2617,12 @@
          WCAG 2.5.5 / 44px touch-target recommendation. We grow hit
          areas with padding/min-height only; visual chrome is unchanged
          on desktop. */
-      @media (max-width: 640px) {
+      /* §5.5.9: the 44px tap-target floor applies to NARROW viewports AND to any
+         coarse-pointer (touch) device at any width — a tablet at 768px is still a
+         touch target. Adding (pointer: coarse) wires this whole control-sizing block
+         to pointer, not just width. Hybrid laptops report pointer:fine, so desktop is
+         unaffected. (The phone-only font/label shrink block below stays width-gated.) */
+      @media (max-width: 640px), (pointer: coarse) {
         /* Primary action buttons */
         .btn {
           min-height: 44px;
@@ -2652,6 +2657,18 @@
         .rstep { min-width: 44px; min-height: 44px; }
         /* Gear / settings inline buttons */
         .gear-inline, .gear-abs { min-width: 44px; min-height: 44px; }
+        /* Top-bar / rail icon controls (notifications, help, music, add, menu,
+           collapse) — discrete tap targets that weren't in the width-only block. */
+        .notify-btn, .muzak-btn, .add-btn, .add-caret, .menu-btn,
+        .icon-btn, .rail-collapse-btn {
+          min-width: 44px;
+          min-height: 44px;
+        }
+        /* Catch chrome buttons styled only by generated tw classes (workspace
+           switcher, breadcrumb back, custom-range, household) via their containers. */
+        .topbar button, .rail button { min-height: 44px; min-width: 44px; }
+        /* Short text buttons (e.g. "Not now") need a tappable width too. */
+        .btn { min-width: 44px; }
       }
 
       /* --- 2. Period/date controls (L11/L32) ---

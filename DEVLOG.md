@@ -13690,3 +13690,17 @@ the wm-table-wrap or a ledger), so only true page-level overflow fails. Result: 
 route×width checks — no horizontal overflow anywhere, including 320px. The R57 probe's old overflow flags
 (transactions/reports/widget-builder) are gone, fixed by the intervening C-backlog work. This completes the
 contrast (0) + density (0/16) + overflow (0/78) trio of the R44/R72 desktop UX quality gate — all green.
+
+## 2026-06-27 — R35/R53/§5.5.9: coarse-pointer 44px tap targets (220 → 0)
+Built a touch-target audit (e2e/ux_touch_audit.mjs) emulating a coarse pointer at 768px and found ~220
+discrete controls under 44px — because the app's 44px sizing was gated on @media (max-width:640px), i.e.
+viewport WIDTH, not pointer. A tablet/touchscreen at 768px+ got the small desktop controls. Fix: key that
+existing (already comprehensive) control-sizing block on `(max-width:640px), (pointer:coarse)` so it fires
+for any coarse pointer at any width — hybrid laptops report pointer:fine so desktop is untouched — and added
+the top-bar/rail icon + chrome buttons the width-only block had missed (notify/help/music/add/menu/collapse,
+plus workspace-switcher/breadcrumb/household via `.topbar button`/`.rail button` container rules, since those
+carry only generated tw classes). Iterated with the audit: 220 → 46 (after the media-query + icon rules) →
+16 (after topbar/rail container rules) → 0 (after min-width on rail/topbar buttons). Exempted genuinely
+inline/embedded controls (btn-icon-bare, btn-link, clickable titles/drill rows, sample-banner links) per
+§5.5.9 "where practical". Verified: coarse-pointer overflow 0 at 1024/768/640/390/320, and a 768px touch
+screenshot shows properly-sized, non-overflowing controls. CSS-only in index.html (mine); desktop unaffected.
