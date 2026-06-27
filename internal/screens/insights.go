@@ -130,10 +130,16 @@ func Insights() ui.Node {
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
 	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per
 	// use so the two placements get independent button nodes.
+	// C247: enrich the no-key gate with cost/where-to-get/privacy context so users
+	// understand BYOK before navigating away to Settings.
 	keyHintNode := func() ui.Node {
 		return Div(
 			P(css.Class("muted"), uistate.T("insights.keyHint")),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+			P(css.Class("muted", tw.Text13), uistate.T("insights.keyGateContext"),
+				" ", A(Attr("href", "https://platform.openai.com/api-keys"), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"), uistate.T("insights.keyGateLink")),
+				".",
+			),
+			Button(css.Class("btn btn-primary", tw.Mt1), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
 		)
 	}
 

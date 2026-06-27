@@ -1528,6 +1528,9 @@ var english = Catalog{
 	"insights.thinking":                "Thinking…",
 	"insights.needKey":                 "Add your OpenAI key in Settings first.",
 	"insights.keyHint":                 "Add your OpenAI key in Settings to enable AI insights. Your key stays on this device and is only sent to OpenAI when you ask.",
+	// C247: richer context for the no-key gate — powers, BYOK, cost, and where to get a key.
+	"insights.keyGateContext":          "The AI key powers the assistant chat, spending insights, and receipt reading. You bring your own key and pay OpenAI directly — CashFlux never charges for AI. Get a free key at",
+	"insights.keyGateLink":             "platform.openai.com/api-keys",
 	"insights.askTitle":                "Ask about your money",
 	"insights.askPlaceholder":          "e.g. How much could I save if I cut spending 10%?",
 	"insights.ask":                     "Ask",

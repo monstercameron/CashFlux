@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C247: AI key gate enriched with BYOK/cost/privacy context
+
+**Ticket:** C247 — "AI key gate lacks cost/where-to-get/privacy context."
+
+**Problem:** The no-key hint on /insights showed a single muted sentence ("Add your OpenAI key in Settings to enable AI insights. Your key stays on this device…") plus a "Settings" button. A user who had never configured an OpenAI key had no way to know (a) what AI features the key powers, (b) that billing goes directly to OpenAI (BYOK — CashFlux never charges for AI), or (c) where to create a key. This left the call-to-action as a dead end for curious users.
+
+**Decision:** Kept the existing `insights.keyHint` line verbatim (it handles the privacy/local-only point well). Added a second paragraph using a new `insights.keyGateContext` key with the BYOK billing context, followed by an inline `<a>` link (`insights.keyGateLink`) pointing to `platform.openai.com/api-keys` in a new tab (`target=_blank rel=noopener noreferrer`). The "Go to Settings" button is preserved but shifted down with `tw.Mt1` so the paragraph doesn't crowd it.
+
+**Mirror:** The `settings.aiKeyExplainer` text (added in C100) is the canonical copy for the Settings surface; the new `insights.keyGateContext` is a shorter, /insights-local variant so neither surface needs to import the other's wording verbatim.
+
+**Files:** `internal/screens/insights.go`, `internal/i18n/en.go`.
+**Tests:** `go test ./internal/i18n/` passes. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C257: VERIFY-CLOSE — /smart ranked hub + dashboard digest already shipped
 
 **Ticket:** C257 — "/smart is a settings catalog, not a ranked insight hub; dashboard shows no recommendations."
