@@ -6,6 +6,10 @@ problems and fixes, and what's next.
 
 
 
+
+## 2026-06-27 - R47 RESOLVED: button-density (hover-reveal secondary row actions)
+
+/transactions was the one page over the §11 density ceiling (80 controls > 65) - 6 icon buttons per row. Applied the app's established hover-reveal convention (.btn-del-hover) to the secondary actions: tagged duplicate/create-rule/attach/delete with `tx-2nd`, hidden at rest via opacity:0 + pointer-events:none, revealed by `tr:hover`/`tr:focus-within`, with a coarse-pointer always-on override for touch. Kept edit + the cleared status toggle visible (the one primary action + status). Result 80 -> 44 (45%, under ceiling). Adversarial review confirmed the a11y is sound (`:focus-within` on the <tr> is the real keyboard/programmatic reveal guard, tab order preserved because opacity!=display:none) and the 40% is legitimate per §11.1 (the audit excludes opacity:0 controls), but caught that /categories - named in R47 - was never in the density audit. Added it (26 controls, already compliant), so all 5 R47 pages are accounted for; corrected a misleading CSS comment. build rc=0, 0/17 routes over ceiling.
 ## 2026-06-27 — C15: wizard dropdown pre-population from header names
 
 When the column-mapping wizard appears (statement auto-detect fails for date or amount), the dropdowns were pre-filled from `raw.Columns.*` indices — which is great when detection partially succeeded, but left all dropdowns on "— not present —" when detection failed completely. Added `guessWizardField(header, keywords, detected int) string` which short-circuits to the detected index (as a string) when ≥ 0, and falls back to scanning lowercased header names for keyword membership. Keyword lists are conservative and ordered by specificity: "date"/"posted"/"trans" for the date column; "desc"/"memo"/"narr"/"detail"/"note"/"ref" for description; "amount"/"value"/"amt"/"sum" for amount; "debit"/"withdrawal"/"dr" for debit; "credit"/"deposit"/"cr" for credit. First match in the header wins. No UI changes — the dropdowns just start with a better selection. Pure logic, no syscall/js dependency in the helper. Build rc=0.

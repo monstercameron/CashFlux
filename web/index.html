@@ -1204,6 +1204,19 @@
       /* Actions collapse to an icon strip (G2 §1): compact square buttons, labels
          live in title/aria — no more 560px text-button sprawl. */
       .txn-table .td-actions .btn-icon { padding: 0.2rem 0.35rem; min-height: 0; }
+      /* R47 §8.4: secondary row actions (duplicate / create-rule / attach / delete)
+         are hidden at rest so a resting ledger row exposes only scan columns + the
+         primary action (edit) and the cleared status toggle. opacity (not
+         display:none) keeps them in the tab order. The real keyboard/programmatic
+         reveal guard is `:focus-within` on the row <tr> — focusing ANY control in the
+         row (including Tabbing straight onto a hidden button, since it is inside the
+         tr) negates the hide; `:focus-visible` on the button is belt-and-suspenders.
+         A coarse-pointer override keeps them always-on for touch (mirrors
+         .btn-del-hover). Cuts ~4 resting controls per row. */
+      .txn-table .tx-2nd { transition: opacity 0.12s ease; }
+      .txn-table tbody tr:not(:hover):not(:focus-within) .tx-2nd { opacity: 0; pointer-events: none; }
+      @media (pointer: coarse) { .txn-table .tx-2nd { opacity: 1 !important; pointer-events: auto !important; } }
+      .txn-table .tx-2nd:focus-visible { opacity: 1 !important; pointer-events: auto !important; }
       /* GX12-F3: actions column measured 168–170px — oversized for 2–3 icon-only buttons.
          Cap it to 96px so the ledger reclaims that space for data columns. */
       .txn-table .td-actions { white-space: nowrap; text-align: right; width: 96px; max-width: 96px; }

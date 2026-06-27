@@ -37,6 +37,7 @@ const ROUTES = [
   ['/allocate', 'planning'],
   ['/health', 'overview'],
   ['/todo', 'ledger'],
+  ['/categories', 'ledger'],
   ['/notifications', 'ledger'],
   ['/workflows', 'builder'],
   ['/customize', 'builder'],
