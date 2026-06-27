@@ -65,6 +65,71 @@ func TestFindDuplicatesNone(t *testing.T) {
 	}
 }
 
+func TestMerge(t *testing.T) {
+	d := day(2026, time.June, 1)
+	survivor := domain.Transaction{
+		ID:      "a",
+		Desc:    "Coffee",
+		Amount:  money.New(-500, "USD"),
+		Date:    d,
+		Tags:    []string{"work", "cafe"},
+		Cleared: false,
+	}
+	other1 := domain.Transaction{
+		ID:      "b",
+		Desc:    "Coffee",
+		Amount:  money.New(-500, "USD"),
+		Date:    d,
+		Tags:    []string{"CAFE", "receipt"}, // "CAFE" is duplicate of "cafe" (case-insensitive)
+		Cleared: true,
+	}
+	other2 := domain.Transaction{
+		ID:      "c",
+		Desc:    "Coffee",
+		Amount:  money.New(-500, "USD"),
+		Date:    d,
+		Tags:    []string{"expense"},
+		Cleared: false,
+	}
+
+	merged := Merge(survivor, []domain.Transaction{other1, other2})
+
+	// ID must remain the survivor's.
+	if merged.ID != "a" {
+		t.Errorf("ID = %q, want %q", merged.ID, "a")
+	}
+	// Amount must not change.
+	if merged.Amount.Amount != -500 {
+		t.Errorf("Amount = %d, want -500", merged.Amount.Amount)
+	}
+	// Cleared must be true because other1 was cleared.
+	if !merged.Cleared {
+		t.Error("Cleared should be true (other1 was cleared)")
+	}
+	// Tags: "work", "cafe" from survivor; "receipt" from other1 ("CAFE" deduped);
+	// "expense" from other2. "CAFE" must not appear as a second entry.
+	wantTags := []string{"work", "cafe", "receipt", "expense"}
+	if len(merged.Tags) != len(wantTags) {
+		t.Errorf("Tags = %v, want %v", merged.Tags, wantTags)
+	} else {
+		for i, tag := range merged.Tags {
+			if tag != wantTags[i] {
+				t.Errorf("Tags[%d] = %q, want %q", i, tag, wantTags[i])
+			}
+		}
+	}
+}
+
+func TestMergeNoClearedPropagation(t *testing.T) {
+	d := day(2026, time.June, 1)
+	survivor := domain.Transaction{ID: "a", Desc: "Tea", Amount: money.New(-300, "USD"), Date: d, Cleared: false}
+	other := domain.Transaction{ID: "b", Desc: "Tea", Amount: money.New(-300, "USD"), Date: d, Cleared: false}
+	merged := Merge(survivor, []domain.Transaction{other})
+	if merged.Cleared {
+		t.Error("Cleared should remain false when no transaction in group is cleared")
+	}
+}
+
 func TestFindDuplicatesTriple(t *testing.T) {
 	d := day(2026, time.June, 3)
 	txns := []domain.Transaction{

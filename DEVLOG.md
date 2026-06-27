@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C87 [F11]: merge duplicates (keep one, union tags)
+
+The `/duplicates` screen previously only supported per-row delete. C87 adds a true group-level merge: the first entry (survivor) gets its Tags unioned with all other entries (case-insensitive dedup, survivor tags first), its Cleared flag set if any entry was cleared, and all other entries are deleted — in one action.
+
+**Pure helper.** `dedupe.Merge(survivor, others)` is pure Go (no syscall/js), so it's trivially native-testable. The union uses a `seen` map keyed on `strings.ToLower(tag)` to deduplicate while preserving the survivor's original tag casing. Identity fields (ID, Amount, Date, AccountID) are never touched — correct because a duplicate group is defined by those fields being identical.
+
+**Hook placement.** `dupeGroup` is its own component (called via `ui.CreateElement`), so `UseEvent` at the top of that function body is unconditional and stable. The existing per-row `UseEvent` for delete is in `dupeRow`, also a component — no rule violation.
+
+**Survivor = first in group.** The screen already designates `g.IDs[0]` as the "Keep" entry with a badge. Merge inherits that convention — no new UX concept introduced.
+
+**Confirm message.** Shows count of entries to be removed (`len(g.IDs) - 1`) via `fmt.Sprintf`. `PostUndoable` fires on success for consistency with the delete flow.
+
 ## 2026-06-27 — C89 [F11]: /duplicates review screen
 
 The `/duplicates` screen (F11) had no dedicated UI — users could see a dedupe count notice in the transaction ledger but had no way to review all duplicate groups in one place and clean them up.

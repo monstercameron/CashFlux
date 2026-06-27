@@ -80,6 +80,48 @@ func FindDuplicates(txns []domain.Transaction) []Group {
 	return out
 }
 
+// Merge returns a copy of survivor with its metadata unioned from all transactions
+// in others. Specifically:
+//   - Tags are combined case-insensitively (survivor order preserved, duplicates dropped,
+//     tags from others appended in the order they first appear).
+//   - Cleared is set to true if any transaction in the group (survivor or others) is cleared.
+//   - Amount, Date, AccountID, ID, and all other identity fields are taken unchanged
+//     from survivor — they are identical across a duplicate group by signature.
+//
+// Merge is pure (no store access, no syscall/js) so it is unit-testable on native Go.
+func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Transaction {
+	out := survivor
+
+	// Union tags case-insensitively; preserve the survivor's original order first,
+	// then append any new tags seen in others.
+	seen := make(map[string]struct{}, len(survivor.Tags))
+	unified := make([]string, 0, len(survivor.Tags))
+	for _, tag := range survivor.Tags {
+		key := strings.ToLower(tag)
+		if _, ok := seen[key]; !ok {
+			seen[key] = struct{}{}
+			unified = append(unified, tag)
+		}
+	}
+	for _, other := range others {
+		if other.Cleared {
+			out.Cleared = true
+		}
+		for _, tag := range other.Tags {
+			key := strings.ToLower(tag)
+			if _, ok := seen[key]; !ok {
+				seen[key] = struct{}{}
+				unified = append(unified, tag)
+			}
+		}
+	}
+	if len(unified) > 0 {
+		out.Tags = unified
+	}
+
+	return out
+}
+
 // Count returns how many transactions across all groups are duplicates beyond the
 // first in each group — i.e. how many entries you could remove. It's the headline
 // "N possible duplicates" figure.

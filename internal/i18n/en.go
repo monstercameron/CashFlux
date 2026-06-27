@@ -2210,6 +2210,11 @@ var english = Catalog{
 	"duplicates.deleted":        "Duplicate deleted.",
 	"duplicates.emptyTitle":     "No duplicate transactions found",
 	"duplicates.emptyBody":      "Your ledger looks clean — no accidental double entries detected.",
+	// C87: per-group merge action
+	"duplicates.mergeBtn":       "Merge (keep one)",
+	"duplicates.mergeAria":      "Merge this duplicate group — keep one entry, union tags, remove the rest",
+	"duplicates.mergeConfirm":   "Merge this group? The first entry is kept with all tags combined. The other %d entries are removed.",
+	"duplicates.merged":         "Duplicates merged — one entry kept.",
 
 	// Credit health screen (C208 / C209 / F28)
 	"nav.credit":                "Credit health",

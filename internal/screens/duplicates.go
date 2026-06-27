@@ -28,6 +28,7 @@ type dupeGroupProps struct {
 	AccByID  map[string]domain.Account
 	BaseCur  string
 	OnDelete func(id string)
+	OnMerge  func(g dedupe.Group) // C87: merge-group action
 }
 
 // dupeGroup renders one card for a set of likely-duplicate transactions.
@@ -37,6 +38,17 @@ type dupeGroupProps struct {
 // MapKeyed), UseEvent calls inside it are at unconditional, stable positions.
 func dupeGroup(props dupeGroupProps) ui.Node {
 	g := props.Group
+
+	// C87: merge event — UseEvent at a stable, unconditional position in this component.
+	merge := ui.UseEvent(func() {
+		others := len(g.IDs) - 1
+		msg := fmt.Sprintf(uistate.T("duplicates.mergeConfirm"), others)
+		uistate.ConfirmModal(msg, true, func(ok bool) {
+			if ok && props.OnMerge != nil {
+				props.OnMerge(g)
+			}
+		})
+	})
 
 	// Format the shared amount for the group header.
 	dec := currency.Decimals(g.Currency)
@@ -74,6 +86,13 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 		badge,
 		Div(css.Class(tw.Flex1)),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("duplicates.keepNote")),
+		Button(
+			css.Class("btn-sm"),
+			Attr("type", "button"),
+			Attr("aria-label", uistate.T("duplicates.mergeAria")),
+			OnClick(merge),
+			uistate.T("duplicates.mergeBtn"),
+		),
 	)
 
 	// Per-transaction rows — each is its own component (dupeRow) so that
@@ -201,6 +220,38 @@ func DuplicatesScreen() ui.Node {
 		}
 		uistate.PostUndoable(uistate.T("duplicates.deleted"))
 	}
+
+	// C87: merge a duplicate group — keep the first entry (union tags/cleared),
+	// delete the rest. No hook here; plain func passed as a prop.
+	mergeTxns := func(g dedupe.Group) {
+		if len(g.IDs) < 2 {
+			return
+		}
+		survivorID := g.IDs[0]
+		survivor, ok := txnByID[survivorID]
+		if !ok {
+			return
+		}
+		others := make([]domain.Transaction, 0, len(g.IDs)-1)
+		for _, id := range g.IDs[1:] {
+			if t, ok := txnByID[id]; ok {
+				others = append(others, t)
+			}
+		}
+		merged := dedupe.Merge(survivor, others)
+		if err := app.PutTransaction(merged); err != nil {
+			uistate.PostNotice(err.Error(), false)
+			return
+		}
+		for _, t := range others {
+			if err := app.DeleteTransaction(t.ID); err != nil {
+				uistate.PostNotice(err.Error(), false)
+				return
+			}
+		}
+		uistate.PostUndoable(uistate.T("duplicates.merged"))
+	}
+
 	_ = base // reserved for future per-group currency display
 
 	// Empty state.
@@ -240,6 +291,7 @@ func DuplicatesScreen() ui.Node {
 				AccByID:  accByID,
 				BaseCur:  base,
 				OnDelete: deleteTxn,
+				OnMerge:  mergeTxns,
 			})
 		},
 	)
