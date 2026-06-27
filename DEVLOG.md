@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C295: confirm before dataset import overwrites everything
+
+**Problem:** Settings → Data → "Import dataset" called `app.ImportJSON(data)` the moment a file
+was chosen, with zero warning to the user. Since ImportJSON replaces ALL current data (accounts,
+transactions, budgets, goals), a mis-click or accidental file pick was completely destructive and
+irreversible.
+
+**Fix:** Wrapped the overwrite in a `uistate.ConfirmModalLabeled` call inside `importJSON()`
+(`internal/app/settings.go`), inserted after the file is read but before `app.ImportJSON()` is
+called. This is the right UX placement — confirm only fires once the user has committed to a file,
+not before — so there's no nag for users who cancel the file picker. The modal is destructive-styled
+(red confirm button), mirrors the wipe-data flow added in C298, and uses two new i18n keys:
+`settings.importConfirm` (warning message listing what gets replaced + "can't be undone") and
+`settings.importConfirmBtn` ("Replace all data").
+
+The only files changed are `internal/app/settings.go` and `internal/i18n/en.go`. Build passes
+(`GOOS=js GOARCH=wasm go build -o NUL .` exit 0); `go test ./internal/i18n/` passes.
+
 ## 2026-06-27 — C213: VERIFY-CLOSE — net-worth trend area chart hover tooltip
 
 C213 asked for interactive hover tooltips on the net-worth trend AreaChart (and other area/line

@@ -1371,21 +1371,34 @@ func importLanguages(notify func(string, bool)) {
 }
 
 // importJSON picks a JSON dataset file and replaces all data with it, then
-// bumps the data revision so screens refresh.
+// bumps the data revision so screens refresh.  A confirmation gate (C295)
+// is shown after the user has chosen a file but before the overwrite occurs,
+// so they cannot lose their data without an explicit yes.
 func importJSON(onChange func(), notify func(string, bool)) {
 	pickFile(".json", func(data []byte) {
 		app := appstate.Default
 		if app == nil {
 			return
 		}
-		if err := app.ImportJSON(data); err != nil {
-			notify(uistate.T("settings.importErr", err.Error()), true)
-			return
-		}
-		// A real import means the user is no longer on sample data (L6).
-		uistate.SetSampleActive(false)
-		onChange()
-		notify(uistate.T("settings.importedData"), false)
+		// C295: confirm before overwriting all current data.
+		uistate.ConfirmModalLabeled(
+			uistate.T("settings.importConfirm"),
+			uistate.T("settings.importConfirmBtn"),
+			true,
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				if err := app.ImportJSON(data); err != nil {
+					notify(uistate.T("settings.importErr", err.Error()), true)
+					return
+				}
+				// A real import means the user is no longer on sample data (L6).
+				uistate.SetSampleActive(false)
+				onChange()
+				notify(uistate.T("settings.importedData"), false)
+			},
+		)
 	})
 }
 
