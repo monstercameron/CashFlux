@@ -644,11 +644,57 @@ func (a *App) PutAccount(ac domain.Account) error {
 	if err := a.validateCustom("account", ac.Custom); err != nil {
 		return err
 	}
+	// Record a BalanceSnapshot when the balance changes — compare against the
+	// prior persisted value before writing. For new accounts with a nonzero
+	// opening balance, treat the prior balance as 0.
+	prior, exists, lookupErr := a.store.GetAccount(ac.ID)
+	if lookupErr == nil {
+		priorBalance := int64(0)
+		if exists {
+			priorBalance = prior.OpeningBalance.Amount
+		}
+		newBalance := ac.OpeningBalance.Amount
+		if newBalance != priorBalance {
+			asOf := ac.BalanceAsOf
+			if asOf.IsZero() {
+				asOf = time.Now()
+			}
+			snap := domain.BalanceSnapshot{
+				ID:           id.New(),
+				AccountID:    ac.ID,
+				BalanceMinor: newBalance,
+				Currency:     ac.Currency,
+				AsOf:         asOf,
+			}
+			if snapErr := a.store.PutBalanceSnapshot(snap); snapErr != nil {
+				a.log.Error("balance snapshot write failed", "accountId", ac.ID, "err", snapErr)
+				// Non-fatal: proceed with the account save.
+			}
+		}
+	}
 	if err := a.store.PutAccount(ac); err != nil {
 		return err
 	}
 	a.log.Info("account saved", "id", ac.ID)
 	return nil
+}
+
+// BalanceHistory returns the recorded balance snapshots for the given account,
+// sorted by AsOf ascending (oldest first). It is used by the accounts UI to
+// render a compact valuation-history panel for illiquid-asset accounts.
+func (a *App) BalanceHistory(accountID string) []domain.BalanceSnapshot {
+	snaps, err := a.store.ListBalanceSnapshots(accountID)
+	if err != nil {
+		a.log.Error("load balance history", "accountId", accountID, "err", err)
+		return nil
+	}
+	// Sort ascending by AsOf so callers can rely on chronological order.
+	for i := 1; i < len(snaps); i++ {
+		for j := i; j > 0 && snaps[j].AsOf.Before(snaps[j-1].AsOf); j-- {
+			snaps[j], snaps[j-1] = snaps[j-1], snaps[j]
+		}
+	}
+	return snaps
 }
 
 // validateCustom checks an entity's custom-field values against the definitions

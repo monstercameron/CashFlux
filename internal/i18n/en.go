@@ -2231,6 +2231,12 @@ var english = Catalog{
 	"credit.missingLimitNote":   "%d card(s) have no credit limit set — add a limit to include them in the calculation.",
 	"credit.emptyTitle":         "No credit cards found",
 	"credit.emptyBody":          "Add a credit-card account with a credit limit to see your utilization breakdown here.",
+
+	// Valuation history panel — C225 [F31]: shown for illiquid asset accounts
+	// (property, vehicle, investment, retirement, crypto, other) when the user
+	// has updated the balance at least twice.
+	"accounts.valuationHistoryTitle": "Value history",
+	"accounts.valuationHistoryEmpty": "No history yet — update the value to start tracking.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

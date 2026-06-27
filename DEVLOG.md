@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C225 [F31]: valuation history after "Update balance"
+
+The problem: illiquid-asset accounts (property, vehicle, investment, retirement, crypto, other) track `OpeningBalance` as their current value, updated by "Update balance". There was no record of past values — once you set a new balance, the prior one was gone. That's fine for a bank account, but wrong for an asset whose appreciation/depreciation is the interesting signal.
+
+**Domain.** `BalanceSnapshot` (ID, AccountID, BalanceMinor, Currency, AsOf) follows the same pattern as `Holding`: a compact typed record with `id.New()` for ID generation, stored in its own SQLite table with `json_extract` querying on accountId. No migration needed — `omitempty` on the dataset field.
+
+**Snapshot trigger.** `PutAccount` now calls `store.GetAccount` before writing. It compares the incoming `OpeningBalance.Amount` against the prior (zero for a brand-new account). Any change fires `PutBalanceSnapshot` with `AsOf = ac.BalanceAsOf` (the reconciliation date set by the "Update balance" flow) or `time.Now()` as fallback. The call is non-fatal: a snapshot write error is logged but the account save always proceeds. This matters for the zero-balance edge: creating a $300k property account immediately produces the first snapshot, which is correct behavior — that IS a balance event.
+
+**`BalanceHistory` accessor.** Returns snapshots ascending by AsOf using a simple insertion sort (history lists are short; stable is fine). The ascending order makes the UI reversal (most recent first) a trivial slice operation.
+
+**UI.** `accounts_row.go` computes the history panel before the return statement. Suppressed when `len(snaps) < 2` — single-snapshot accounts have no trend to show (the first snapshot is just "what it was when added"). Last 6 snapshots shown, reversed for most-recent-first display. `MapKeyed` with display-only render func — no `On*` hooks inside the loop, no framework gotcha triggered. The outer return wraps the existing row Div and the new historyPanel in a fragment Div so the panel appears below without being a flex row item.
+
+**Tests.** Store: CRUD round-trip (Put, List, filter by accountID, isolation). Dataset: lossless Export→Import→Export identity check. Appstate: initial balance records snapshot, balance unchanged = no new snapshot, two accounts' histories don't bleed. 5 total tests all pass native.
+
+**What I noticed.** The `BalanceHistory` threshold of `< 2` snapshots in the UI was a design call: showing one data point communicates nothing about change. Two or more lets you infer a trend direction. If users want to see the absolute starting value always, the threshold could drop to 1 — adding a TODO for that consideration.
+
 ## 2026-06-27 — C122 [F15]: post-transaction overspend re-evaluation (OnTxnMutated seam)
 
 The root issue: `runNotifyCatchUp()` is called once at boot and never again, so a budget-crossing transaction added via Quick-Add never surfaces a notification until the user reloads.

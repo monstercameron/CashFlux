@@ -566,6 +566,20 @@ type SubscriptionCancellation struct {
 	CancelledOn time.Time `json:"cancelledOn"`
 }
 
+// BalanceSnapshot records a point-in-time value for an account. It is appended
+// automatically by appstate.PutAccount whenever the account's balance changes, so
+// the user can see how an illiquid asset (property, vehicle, investment, other)
+// appreciated or depreciated over time. No schema migration is needed — the
+// "balance_snapshots" table is created on first write alongside all other entity
+// tables, and JSON round-trips automatically.
+type BalanceSnapshot struct {
+	ID            string    `json:"id"`
+	AccountID     string    `json:"accountId"`
+	BalanceMinor  int64     `json:"balanceMinor"`
+	Currency      string    `json:"currency,omitempty"`
+	AsOf          time.Time `json:"asOf"`
+}
+
 // Holding is a single investment position within an investment account. All
 // money values are integer minor units (e.g. cents for USD). Shares is
 // fractional because partial shares are common. No schema migration is needed

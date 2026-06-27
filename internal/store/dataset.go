@@ -65,6 +65,7 @@ type Dataset struct {
 	Budgets                   []domain.Budget                   `json:"budgets"`
 	Goals                     []domain.Goal                     `json:"goals"`
 	Holdings                  []domain.Holding                  `json:"holdings,omitempty"`
+	BalanceSnapshots          []domain.BalanceSnapshot          `json:"balanceSnapshots,omitempty"`
 	Tasks                     []domain.Task                     `json:"tasks"`
 	CustomFields              []customfields.Def                `json:"customFieldDefs,omitempty"`
 	Rules                     []rules.Rule                      `json:"rules,omitempty"`

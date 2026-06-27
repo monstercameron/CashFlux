@@ -49,6 +49,10 @@ type accountRowProps struct {
 	// When SmartSettings is zero-value the badge simply renders nothing (safe default).
 	SmartSettings smart.Settings
 	SmartByEntity map[string][]smart.Insight
+	// ValuationHistory holds the balance snapshots for illiquid-asset accounts,
+	// pre-loaded by the accounts screen so AccountRow has no store access.
+	// Nil or empty = no history panel rendered.
+	ValuationHistory []domain.BalanceSnapshot
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -568,48 +572,91 @@ func AccountRow(props accountRowProps) ui.Node {
 	if !menuOpen.Get() {
 		menuHidden = " hidden-menu"
 	}
-	return Div(css.Class("row"),
-		// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
-		// Credit Card are distinguishable without reading the meta-line.
-		Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
-			uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), a.Name,
-				If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
-				smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
-				smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
+
+	// Valuation history panel — displayed below the row for illiquid-asset
+	// accounts when at least 2 snapshots are available (C225 [F31]).
+	// Display-only: no On* hooks inside the MapKeyed loop.
+	var historyPanel ui.Node = Fragment()
+	if isValuationType(a.Type) && len(props.ValuationHistory) >= 2 {
+		histDec := dec // capture for closure
+		histCur := a.Currency
+		// Show up to the last 6 snapshots, most recent first.
+		snaps := props.ValuationHistory
+		start := 0
+		if len(snaps) > 6 {
+			start = len(snaps) - 6
+		}
+		recent := snaps[start:]
+		// Reverse so most recent appears at the top of the list.
+		reversed := make([]domain.BalanceSnapshot, len(recent))
+		for i, s := range recent {
+			reversed[len(recent)-1-i] = s
+		}
+		keyOfSnap := func(s domain.BalanceSnapshot) any { return s.ID }
+		renderSnap := func(s domain.BalanceSnapshot) ui.Node {
+			dateStr := s.AsOf.Format("Jan 2, 2006")
+			valStr := money.FormatMinor(s.BalanceMinor, histDec)
+			cur := s.Currency
+			if cur == "" {
+				cur = histCur
+			}
+			return Div(css.Class("val-hist-row"),
+				Span(css.Class("val-hist-date", tw.TextDim), dateStr),
+				Span(css.Class("val-hist-val"), valStr+" "+cur),
+			)
+		}
+		historyPanel = Div(css.Class("val-hist-panel"),
+			Attr("data-testid", "val-hist-panel-"+a.ID),
+			P(css.Class("val-hist-title", tw.TextDim), uistate.T("accounts.valuationHistoryTitle")),
+			Div(css.Class("val-hist-rows"), MapKeyed(reversed, keyOfSnap, renderSnap)),
+		)
+	}
+
+	return Div(
+		Div(css.Class("row"),
+			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
+			// Credit Card are distinguishable without reading the meta-line.
+			Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
+				uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+			Div(css.Class("row-main"),
+				Span(css.Class("row-desc"), a.Name,
+					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
+					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
+					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
+				),
+				Span(css.Class("row-meta"), meta),
 			),
-			Span(css.Class("row-meta"), meta),
-		),
-		// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
-		// render parenthesized for liabilities, so give the current balance an explicit accessible name
-		// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
-		// and screen-reader users without cluttering the row with a visible label.
-		Span(ClassStr(amountClass(props.Balance)),
-			Title(uistate.T("accounts.balanceTitle")),
-			Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(props.Balance))),
-			fmtMoney(props.Balance)),
-		// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
-		// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
-		// account is flagged.
-		If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T(updateActionKey(a.Type))), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
-		// Primary actions inline; everything else in the ⋯ menu.
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Div(css.Class("add-wrap"), Attr("id", menuID),
-			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
-				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
-				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-					Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
-					uistate.T("accounts.transferAction"))),
-				If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+			// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
+			// render parenthesized for liabilities, so give the current balance an explicit accessible name
+			// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
+			// and screen-reader users without cluttering the row with a visible label.
+			Span(ClassStr(amountClass(props.Balance)),
+				Title(uistate.T("accounts.balanceTitle")),
+				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(props.Balance))),
+				fmtMoney(props.Balance)),
+			// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
+			// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
+			// account is flagged.
+			If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T(updateActionKey(a.Type))), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
+			// Primary actions inline; everything else in the ⋯ menu.
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			Div(css.Class("add-wrap"), Attr("id", menuID),
+				Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
+					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
+					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
+						uistate.T("accounts.transferAction"))),
+					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+				),
 			),
+			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		historyPanel,
 	)
 }
 

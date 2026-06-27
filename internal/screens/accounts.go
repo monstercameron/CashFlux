@@ -328,9 +328,10 @@ func Accounts() ui.Node {
 			Members: app.Members(), Accounts: accounts, Categories: categories,
 			OnDelete: deleteAccount, OnArchive: archiveAccount, OnRefresh: refreshAccount,
 			OnSave: saveAccount, OnView: viewTransactions, OnSetBalance: setBalance,
-			OnTransfer:    doTransfer,
-			SmartSettings: smartSettings,
-			SmartByEntity: accountByEntity,
+			OnTransfer:       doTransfer,
+			SmartSettings:    smartSettings,
+			SmartByEntity:    accountByEntity,
+			ValuationHistory: app.BalanceHistory(ac.ID),
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }

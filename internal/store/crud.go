@@ -212,6 +212,21 @@ func (s *SQLiteStore) ListGoals() ([]domain.Goal, error) {
 	return loadRows[domain.Goal](s.db, "goals")
 }
 
+// --- Balance snapshots (valuation history) ---
+
+// PutBalanceSnapshot persists a single balance snapshot, inserting or replacing by ID.
+func (s *SQLiteStore) PutBalanceSnapshot(snap domain.BalanceSnapshot) error {
+	return putJSON(s.db, "balance_snapshots", snap.ID, snap)
+}
+
+// ListBalanceSnapshots returns every balance snapshot for the given account, in
+// insertion order (ascending by ID). Callers may re-sort by AsOf if needed.
+func (s *SQLiteStore) ListBalanceSnapshots(accountID string) ([]domain.BalanceSnapshot, error) {
+	return queryRows[domain.BalanceSnapshot](s.db,
+		"SELECT data FROM balance_snapshots WHERE json_extract(data, '$.accountId') = ? ORDER BY id",
+		accountID)
+}
+
 // --- Holdings ---
 
 // PutHolding persists a single investment holding, inserting or replacing by ID.
