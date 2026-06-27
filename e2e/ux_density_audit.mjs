@@ -65,9 +65,16 @@ for (const [route, type] of ROUTES) {
         const r = el.getBoundingClientRect();
         if (r.width < 2 || r.height < 2) return false;
         if (r.bottom <= 0 || r.top >= 1000 || r.right <= 0 || r.left >= 1440) return false; // first viewport only
-        const s = getComputedStyle(el);
-        if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false;
         if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+        // Effective visibility: a control is hidden if IT or any ancestor is
+        // display:none / visibility:hidden / opacity:0. The ancestor-opacity check
+        // matters for the §8.4 "reveal row actions on hover/focus" pattern, where the
+        // controls live in an opacity:0 wrapper at rest (still in the tab order, but
+        // not a resting visible control per §11.1).
+        for (let e = el; e && e !== document.body; e = e.parentElement) {
+          const s = getComputedStyle(e);
+          if (s.display === 'none' || s.visibility === 'hidden' || +s.opacity === 0) return false;
+        }
         return true;
       };
       // Shell = the persistent rail + topbar chrome; everything else is content.
