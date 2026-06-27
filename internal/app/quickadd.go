@@ -192,7 +192,10 @@ func QuickAddHost() uic.Node {
 		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
 	}
 
-	// "Mark as reviewed" checkbox: a confident entry skips the auto review-tag (L43).
+	// C47: "Mark as reviewed" checkbox: a confident entry skips the auto review-tag (L43).
+	// The original label key ("quickAdd.reviewed") was too terse — users couldn't tell
+	// what "reviewed" meant or what leaving it unchecked would do. Replaced with a clear
+	// primary label + a muted helper caption so the field is self-explanatory.
 	reviewedArgs := []any{Type("checkbox"), OnChange(onReviewed)}
 	if reviewed.Get() {
 		reviewedArgs = append(reviewedArgs, Attr("checked", ""))
@@ -283,9 +286,24 @@ func QuickAddHost() uic.Node {
 		catAssist,
 		ui.FormField(uistate.T("quickAdd.date"),
 			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
-		Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
-			Input(reviewedArgs...),
-			uistate.T("quickAdd.reviewed")),
+		// C47: wrap the checkbox in a block container so the helper caption sits
+		// below the label text, not inline with it. The outer Div is not a label
+		// so screen-readers read the Input's associated Label normally.
+		Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.15rem"}),
+			Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
+				Input(reviewedArgs...),
+				uistate.T("quickAdd.reviewedClear")),
+			Span(Style(map[string]string{"font-size": "0.72rem", "color": "var(--color-text-muted)", "padding-left": "1.4rem"}),
+				uistate.T("quickAdd.reviewedHelp"))),
+		// C42 TRIAGE — NO CODE BUG: native <input type="date"> has internal sub-field
+		// segments (mm / dd / yyyy) that capture Arrow/Tab key presses to cycle between
+		// them. On some browsers (Chrome/Edge) pressing Tab inside a date segment moves
+		// to the next segment rather than the next focusable element. This is pure
+		// browser-native behavior; there is no JavaScript key-trap in this file. The
+		// field order is: date → reviewed checkbox → "Save & add another" button →
+		// FlipPanel footer Save/Close, so once the user exits the date input (Tab past
+		// the last segment, or Shift+Tab back) focus does proceed to those controls
+		// correctly. No code change warranted — the tab order is already correct.
 		// C40: keep-open rapid entry. Disabled with the same validity gate as Save so
 		// it can't persist an invalid row. Lives in the body (the panel's footer Save
 		// closes the panel; this one deliberately keeps it open).
