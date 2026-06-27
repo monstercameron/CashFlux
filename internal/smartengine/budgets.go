@@ -100,7 +100,16 @@ func b8SafeToSpend(in Input) []smart.Insight {
 	goalNeeds := in.goalMonthlyNeedsBase()
 	safe := liquid - billsLeft - goalNeeds
 	if liquid < safeToSpendFloorAb {
-		return nil // nothing meaningful to report on an empty wallet
+		// Surface a low-balance warning rather than silently returning nothing:
+		// a near-empty wallet is itself the key fact the user should see.
+		return []smart.Insight{{
+			Feature:  "SMART-B8",
+			Page:     smart.PageBudgets,
+			Key:      "SMART-B8:" + in.Now.Format("2006-01"),
+			Title:    "Liquid cash is very low",
+			Detail:   "Your spendable cash is " + hmoneyc(liquid, in.Base) + " — well below the level needed to cover upcoming bills and goal contributions.",
+			Severity: smart.SeverityWarn,
+		}}
 	}
 	sev := smart.SeverityInfo
 	title := hmoneyc(safe, in.Base) + " is safe to spend"

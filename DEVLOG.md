@@ -13579,3 +13579,19 @@ hardcoded #c0392b to var(--action-danger) (byte-identical). Left all severity/te
 future severity work. Adversarial a11y reviewer ran: passed gates 1/3/4/5 first pass, FAILED gate 2 by
 catching .notify-badge (which my initial sweep missed); fixed it, re-verified the sweep is clean. CSS-only
 in web/index.html, no other agent's WIP there.
+
+## 2026-06-27 — R15 reality check: ship the clean logic, revert the buggy UI
+Went to finish R15's UI (safe-to-spend tile + budget tiles) and ran it through the live screenshot loop —
+which exposed two real defects in the earlier subagent's wiring: (1) the dashboard "Safe to spend" bento
+tile doesn't render at all (it emitted a Widget with hardcoded grid coords, but the bento layout is
+persisted/reconfigurable, so an unregistered tile never gets placed), and (2) the Budgets screen showed
+"Left $919.97 over" AND a redundant "Budget headroom ($919.97)" — the same figure twice, the second one
+even reintroducing the accounting-parens C124 had removed. That's exactly the "junky / side-project" look
+the goal forbids, so I did NOT ship it. Reverted the purely-mine broken/redundant edits (dashboard.go,
+budgets.go, budgets_row.go, insights.go, aitools.go + test) and dropped the new i18n file, since a partial
+commit of R15's interface+screen changes also risked a non-building snapshot. Left planning.go alone (it's
+interleaved with the other agent's cadence/autopay work). Shipped only the clean, self-contained, well-
+guarded logic win: R15-smart-floor (C146) — SMART-B8 now surfaces a "Liquid cash is very low" warning for
+near-empty wallets instead of silently returning nil. R15's UI (dashboard glanceable tile via proper bento
+registration; a single non-redundant budgets safe-to-spend stat) needs a focused, correct redo — noted for
+a dedicated pass. Lesson: route subagent-built UI through the screenshot loop BEFORE trusting it.
