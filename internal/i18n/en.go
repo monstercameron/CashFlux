@@ -982,6 +982,7 @@ var english = Catalog{
 	"settings.aiEnable":          "Enable AI features",
 	"settings.aiKeyPlaceholder":  "OpenAI API key (sk-…)",
 	"settings.aiKeyTrust":        "Your key is stored only on this device and used to call OpenAI directly from your browser — it never passes through CashFlux servers.",
+	"settings.aiKeyExplainer":    "The AI key powers the assistant chat, spending insights, and receipt photo reading. You bring your own key and pay OpenAI directly per use — CashFlux never charges for AI. Get a key at platform.openai.com/api-keys (free to create; pay only for what you use).",
 	"settings.aiNoKey":           "AI features stay off until you add a key. Your key is stored on this device and only sent to OpenAI when you ask.",
 	"settings.rememberKey":       "Remember my key on this device",
 	"settings.rememberKeyNote":   "Off by default: your key is kept only for this session. Turn on to save it (unencrypted) in this browser so AI stays on after a reload.",

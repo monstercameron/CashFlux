@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C100: OpenAI key explainer in AI settings
+
+**Problem:** The AI section in Settings showed an API-key input and a single-line trust statement ("your key is stored only on this device...") but gave users no context for *what* the key is for, *how* to get one, or *what it costs*. A new user unfamiliar with OpenAI's API would not know whether the key requires a paid subscription, where to create one, or what CashFlux charges. This information gap led to drop-off at the key-entry step.
+
+**Fix:** Added a `P` element with the new `settings.aiKeyExplainer` i18n key immediately after the `settings.aiKeyTrust` trust line in `settingsRightColumn` (`internal/app/settings_section.go`). The explainer names the three AI-powered features (assistant chat, spending insights, receipt photo reading), states clearly that the key is bring-your-own and that the user pays OpenAI directly per use with no CashFlux charge for AI, and directs users to `platform.openai.com/api-keys` to create one.
+
+**Design decisions:**
+- Rendered unconditionally (not behind the `AiKey == ""` guard) — the "where to get a key" detail is useful when the user is considering *changing* or *checking* their key, not only when they have none.
+- Uses the same `tw.TextFaint, tw.Text12, tw.Mt1` style as adjacent muted explainer lines for visual consistency.
+- Kept the URL in plain text (not an `<a>`) to stay consistent with the surrounding static text nodes and avoid an unintended call-to-action hierarchy that could pull focus from the input itself.
+
+**New i18n key:** `settings.aiKeyExplainer` — "The AI key powers the assistant chat, spending insights, and receipt photo reading. You bring your own key and pay OpenAI directly per use — CashFlux never charges for AI. Get a key at platform.openai.com/api-keys (free to create; pay only for what you use)."
+
+**Tests:** `go test ./internal/i18n/` passes. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C304: frame Cloud & server as subscription/connection surface
 
 **Problem:** The "Cloud & server" section in Settings opened directly with a data-disclosure line and raw backend connection controls (toggle, server-mode segment, URL input, token field). There was no sentence explaining *what* the section is for. A first-time user could easily read it as a developer infrastructure panel rather than as the place to connect CashFlux Cloud (for sync + automatic encrypted backups + bundled AI) or point to their own self-hosted server.
