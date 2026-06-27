@@ -121,6 +121,18 @@ func Documents() ui.Node {
 		defaultAcc = accounts[0].ID
 	}
 	imageURL := ui.UseState("")
+	// C98: persist the chosen image URL across navigation (e.g. when the user
+	// goes to Settings to add an OpenAI key and returns). The atom survives
+	// component teardown; the UseEffect below restores it on mount.
+	imageDraftAtom := uistate.UseImageDraft()
+	ui.UseEffect(func() func() {
+		if imageURL.Get() == "" {
+			if saved := imageDraftAtom.Get(); saved != "" {
+				imageURL.Set(saved)
+			}
+		}
+		return nil
+	}, "mount")
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
 	needsKey := ui.UseState(false)
@@ -417,6 +429,7 @@ func Documents() ui.Node {
 		pickImageDataURL(
 			func(u string) {
 				imageURL.Set(u)
+				imageDraftAtom.Set(u) // C98: persist across navigation
 				aiErr.Set("")
 				needsKey.Set(false)
 				draft.Set([]extract.Row{})
@@ -622,6 +635,7 @@ func Documents() ui.Node {
 		}
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
+		imageDraftAtom.Set("") // C98: clear persisted image after successful import
 		aiErr.Set("")
 		summary := uistate.T("documents.importedImage", plural(result.Imported, "transaction"))
 		if result.Skipped > 0 {
@@ -648,6 +662,7 @@ func Documents() ui.Node {
 		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows))
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
+		imageDraftAtom.Set("") // C98: clear persisted image after successful import
 		receiptTotal.Set("")
 		receiptMerchant.Set("")
 		receiptMode.Set(false)

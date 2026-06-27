@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C98 [F12]: Chosen receipt image preserved across Settings navigation
+
+When the user picks an image and is then prompted to go to Settings to add an OpenAI key, navigating away tears down the Documents component and the `ui.UseState("")` holding the image data-URL is lost. On return, the screen is blank — they have to re-choose.
+
+**Fix.** Added `internal/uistate/imagedraft.go` — a simple `state.Atom[string]` (atom ID "doc:imageDraft", initial ""). The `chooseImage` handler writes the data-URL to the atom whenever a file is picked. A `ui.UseEffect` with dep-key "mount" restores from the atom into the local UseState if the local state is still empty on first render — the return-from-Settings path triggers this. Both `importDraft` and `importReceipt` clear the atom (set to "") after a successful import so stale image data does not re-appear on a later visit.
+
+Kept it purely in-memory (no localStorage serialization) — the base64 data-URL for a 10 MB image would be large and the user's session is page-scoped anyway. The atom is held alive by the GWC atom registry for the lifetime of the WASM instance.
+
+**Files.** `internal/uistate/imagedraft.go` (new), `internal/screens/documents.go`. Build rc=0.
+
 ## 2026-06-27 — C224 [F31]: Property + Vehicle asset account types
 
 C73 shipped Retirement and Crypto as dedicated asset types with appropriate staleness windows and valuation terminology. C224 mirrors that pattern exactly for two common illiquid assets: real estate (Property) and a car (Vehicle).
