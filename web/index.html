@@ -1850,6 +1850,152 @@
          design/candidate-c.html. Drives the bento dashboard shell.
          Keep selectors in sync with that reference mockup.
          ============================================================ -->
+    <style id="enterprise-tokens">
+      /* ───────────────────────────────────────────────────────────────────────
+         ENTERPRISE SEMANTIC TOKEN LAYER (R46 — CASHFLUX_ENTERPRISE_UI_STYLE_SPEC §4,§5,§7,§13)
+         Step 1 of the token migration (spec §14.1): add semantic alias tokens that
+         derive from the runtime theme tokens (--bg-base/--bg-card/--accent/--up/--down/
+         --warn/--radius emitted onto :root by internal/theme) WITHOUT changing rendered
+         UI. Components migrate onto these roles in later passes; nothing is restyled
+         here. Engine-owned tokens (--line, --muted, --danger) are intentionally
+         NOT globally re-aliased: --muted resolves per-theme and --line is consumed
+         with a hardcoded fallback, so redefining them here would CHANGE dark-mode
+         rendering — a §14.1 step-1 ("no visual change") violation. They migrate per
+         selector in the later component pass, where each change is contrast-verified.
+         --bg is safe to bridge now (the engine emits it as the same value as
+         --surface-page), so it is aliased below per the §4.2 compatibility target.
+         ─────────────────────────────────────────────────────────────────────── */
+      :root {
+        /* Surfaces (§4.1) */
+        --surface-page:     var(--bg-base);
+        --surface-card:     var(--bg-card);
+        --surface-raised:   var(--bg-elev);
+        --surface-sunken:   color-mix(in srgb, var(--bg-base) 88%, #000 12%);
+        --surface-selected: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+
+        /* Borders (§4.1) */
+        --border-subtle:   color-mix(in srgb, var(--border) 70%, transparent);
+        --border-strong:   color-mix(in srgb, var(--border) 72%, var(--text) 28%);
+        --border-selected: var(--accent);
+
+        /* Text roles (§4.1) — money/labels must reference these, not raw tokens */
+        --text-primary:   var(--text);
+        --text-secondary: var(--text-dim);
+        --text-tertiary:  var(--text-faint);
+        --text-inverse:   #ffffff;
+
+        /* Interaction (§4.1) — accent is interaction ONLY, never money */
+        --interactive:       var(--accent);
+        --interactive-hover: color-mix(in srgb, var(--accent) 84%, var(--text) 16%);
+        --interactive-muted: var(--accent-dim);
+        --focus-ring:        var(--accent);
+
+        /* Money semantics (§4.3) — direction only */
+        --money-positive: var(--up);
+        --money-negative: var(--down);
+        --money-neutral:  var(--text-primary);
+
+        /* Severity (§4.3) — attention/risk; distinct from money + interaction */
+        --severity-info:  var(--accent);
+        --severity-nudge: var(--accent);
+        --severity-warn:  var(--warn);
+        --severity-alert: var(--danger);
+
+        /* §4.2 compatibility bridge: --bg is engine-emitted as the same value as
+           --surface-page, so aliasing it is zero visual change. (--line/--muted are
+           deferred — see header note.) */
+        --bg: var(--surface-page);
+
+        /* Dedicated destructive fill (§4.3): split from negative-money so white
+           label text stays contrast-safe on the button. --severity-alert below maps
+           to --danger per the §4.1 token table (alert and money-negative share a hue
+           by design); they're disambiguated by severity rails/icons per §8.6, and the
+           destructive *button fill* is split out here so it stays contrast-safe. */
+        --action-danger: #c0392b;
+
+        /* Chart palette (§4.4) */
+        --chart-1: var(--accent);
+        --chart-2: var(--up);
+        --chart-3: var(--warn);
+        --chart-4: #52a3ff;
+        --chart-5: #b88cff;
+        --chart-negative: var(--down);
+
+        /* Spacing scale (§5.1) — 4px sub-unit, 8px rhythm */
+        --space-0: 0;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 24px;
+        --space-6: 32px;
+        --space-7: 48px;
+        --space-8: 64px;
+
+        /* Radius scale (§7.1) — tighter enterprise set; --radius stays engine-owned */
+        --radius-0:    0;
+        --radius-xs:   2px;
+        --radius-sm:   4px;
+        --radius-md:   6px;
+        --radius-lg:   8px;
+        --radius-pill: 999px;
+
+        /* Elevation (§7.2) — hierarchy not decoration */
+        --shadow-1: 0 1px 2px rgba(0,0,0,0.22);
+        --shadow-2: 0 8px 24px rgba(0,0,0,0.28);
+        --shadow-3: 0 20px 60px rgba(0,0,0,0.38);
+
+        /* Type scale (§6.2) — fixed steps tracked by the user text-scale, NOT viewport.
+           The , 1) fallback matches the existing house convention (see #app zoom rule)
+           and degrades gracefully if --ui-scale is ever unset. */
+        --type-11: calc(11px * var(--ui-scale, 1));
+        --type-12: calc(12px * var(--ui-scale, 1));
+        --type-13: calc(13px * var(--ui-scale, 1));
+        --type-14: calc(14px * var(--ui-scale, 1));
+        --type-16: calc(16px * var(--ui-scale, 1));
+        --type-18: calc(18px * var(--ui-scale, 1));
+        --type-20: calc(20px * var(--ui-scale, 1));
+        --type-24: calc(24px * var(--ui-scale, 1));
+        --type-32: calc(32px * var(--ui-scale, 1));
+
+        /* Control sizing + interaction feedback (§13.3). --field-h defaults to 36px
+           per the §13.3 token table and §8.8 field CSS (var(--field-h, 36px)); the
+           §5.1 comfortable/compact 40/36 split is applied via density mode in a later
+           pass, not by changing this default. */
+        --control-h:         36px;
+        --control-h-compact: 32px;
+        --field-h:           36px;
+        --icon-button-size:  32px;
+        --focus-ring-width:  2px;
+        --focus-ring-offset: 2px;
+        --hover-tint:        color-mix(in srgb, var(--interactive) 8%, transparent);
+        --pressed-scale:     0.985;
+        --disabled-opacity:  0.48;
+
+        /* Motion durations (§13.3) */
+        --motion-instant: 0ms;
+        --motion-fast:    100ms;
+        --motion-base:    160ms;
+        --motion-medium:  220ms;
+        --motion-slow:    320ms;
+
+        /* Motion easing (§13.3) */
+        --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+        --ease-enter:      cubic-bezier(0, 0, 0, 1);
+        --ease-exit:       cubic-bezier(0.4, 0, 1, 1);
+        --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      /* Coarse-pointer / touch targets (§5.5.9): grow controls to 44px where the
+         pointer is imprecise, without changing the desktop fine-pointer defaults. */
+      @media (pointer: coarse) {
+        :root {
+          --control-h:        44px;
+          --field-h:          44px;
+          --icon-button-size: 44px;
+        }
+      }
+    </style>
     <style id="design-system">
       body.cf { -webkit-font-smoothing: antialiased; }
       .fig { font-variant-numeric: tabular-nums lining-nums; }

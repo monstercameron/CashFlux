@@ -13537,3 +13537,22 @@ cover due/not-due, multi-currency conversion, prorate fractions, and zero/edge h
 ./internal/safespend` green; package builds in isolation. The dashboard/planning/budgets UI wiring
 (R15-dashboard … R15-i18n) is implemented but deferred from commit until the contended screen files +
 build settle, and will go through the adversarial style-spec review loop before R15 is marked done.
+
+## 2026-06-27 — R46: enterprise semantic token layer (foundation)
+Laid the first course of the enterprise UX migration the spec asks for in §14.1: a semantic token
+alias layer (`<style id="enterprise-tokens">` in web/index.html) that maps the runtime theme tokens
+to the spec's role tokens — surfaces/borders/text/interactive/money/severity/charts (§4.1), spacing
+(§5.1), type scale (§6.2), radius (§7.1), elevation (§7.2), interaction+motion (§13.3), and a coarse-
+pointer 44px override (§5.5.9). It is intentionally additive: every alias is `var()` of an existing
+emitted token, so nothing is restyled and there is zero visual change this pass — that's the spec's
+step-1 rule, and it unblocks every later component-migration ticket (R36/R47/R48…) which can now
+reference roles instead of raw tokens. Two judgment calls, both documented in-code and verified by the
+adversarial reviewer: (1) `--line`/`--muted` are NOT globally re-aliased — they resolve per-theme / are
+consumed with hardcoded fallbacks, so redefining them would change dark-mode rendering (a §14.1 step-1
+violation); they migrate per selector later. (2) `--severity-alert` stays mapped to `--danger` per the
+§4.1 table (alert and money-negative share a hue by design, disambiguated by severity rails/icons per
+§8.6); the destructive *button* fill is split out as `--action-danger` so its white label stays
+contrast-safe. Process: implemented, then ran an adversarial style-spec critic subagent; it failed the
+first pass (5 findings), I applied the valid fixes (hover-tint→--interactive, add --bg) and documented
+the justified deviations; re-review returned PASS, no remaining fixes. web/index.html was clean of other
+agents' WIP, so the commit is a single isolated hunk.
