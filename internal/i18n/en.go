@@ -2115,6 +2115,8 @@ var english = Catalog{
 	"acctType.investment":   "Investment",
 	"acctType.retirement":   "Retirement",
 	"acctType.crypto":       "Crypto",
+	"acctType.property":     "Property",
+	"acctType.vehicle":      "Vehicle",
 	"acctType.other":        "Other",
 }
 

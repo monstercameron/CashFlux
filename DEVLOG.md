@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C224 [F31]: Property + Vehicle asset account types
+
+C73 shipped Retirement and Crypto as dedicated asset types with appropriate staleness windows and valuation terminology. C224 mirrors that pattern exactly for two common illiquid assets: real estate (Property) and a car (Vehicle).
+
+**Approach.** The change is purely additive — no existing logic needed restructuring. `TypeProperty` and `TypeVehicle` fall through to `ClassAsset` in `Class()` (the liability switch handles only the debt types; everything else defaults to asset). Both get 180-day freshness windows (same as TypeOther — the prior home for these assets) since a home or car valuation is revisited at most a few times a year. `isValuationType` includes them so the stale-badge copy uses "Out of date" language rather than "Stale balance" banking copy. `isLockableAsset` includes them so a lock-until date (e.g., don't prompt to revalue the house for 6 months) is visible at add time without toggling Advanced. Icons are the closest available glyphs: Box for Property, Calculator for Vehicle (the icon set doesn't yet have a house or car glyph — these are acceptable stand-ins for now).
+
+**Test fix.** `TestAllSlicesAreValid` had a hardcoded `want 13` for `AllAccountTypes`; updated to 15.
+
+**Files.** `internal/domain/enums.go`, `internal/domain/domain_test.go`, `internal/freshness/freshness.go`, `internal/screens/accounts_row.go`, `internal/screens/accounts.go`, `internal/screens/accountaddform.go`, `internal/i18n/en.go`. Tests exit 0; WASM build exit 0.
+
 ## 2026-06-27 — C12 [F2]: Draft-review account selector + Import button above the fold for all drafts
 
 The CSV draft-review screen had an above-fold action bar (`topBar`) gated on `len(rows) > 4`. For 1–4 rows the controls only appeared below the table, forcing users to scroll to choose an account or commit the import — a bad default for the common case of importing a handful of transactions.

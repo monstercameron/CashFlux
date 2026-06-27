@@ -45,6 +45,8 @@ func DefaultWindows() Windows {
 		domain.TypeInvestment:  120,
 		domain.TypeRetirement:  120, // C73: slow-moving like investments — same long window
 		domain.TypeCrypto:       30, // C73: volatile but manually updated — monthly cadence
+		domain.TypeProperty:    180, // C224: illiquid real-estate valuation — same long window as Other
+		domain.TypeVehicle:     180, // C224: illiquid vehicle valuation — same long window as Other
 		domain.TypeOther:        180,
 	}
 }

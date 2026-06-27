@@ -456,6 +456,10 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 		return icon.TrendingUp
 	case domain.TypeCrypto:
 		return icon.Scale
+	case domain.TypeProperty:
+		return icon.Box // closest available glyph for a real-estate/building asset (C224)
+	case domain.TypeVehicle:
+		return icon.Calculator // closest available glyph for a vehicle asset (C224)
 	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings:
 		return icon.Landmark
 	default:

@@ -205,7 +205,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	// Everyday liquid accounts (checking, debit, cash) can still reach it via Advanced.
 	at := domain.AccountType(accType.Get())
 	isLockableAsset := at == domain.TypeSavings || at == domain.TypeInvestment ||
-		at == domain.TypeRetirement || at == domain.TypeCrypto || at == domain.TypeOther
+		at == domain.TypeRetirement || at == domain.TypeCrypto ||
+		at == domain.TypeProperty || at == domain.TypeVehicle || at == domain.TypeOther
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "account-add-form"), OnSubmit(add),
 		// C7: first-run framing — when this is the household's very first account,

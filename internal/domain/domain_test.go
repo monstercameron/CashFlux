@@ -60,8 +60,8 @@ func TestAllSlicesAreValid(t *testing.T) {
 			t.Errorf("AllRelatedTypes has invalid %q", r)
 		}
 	}
-	if len(AllAccountTypes) != 13 {
-		t.Errorf("AllAccountTypes len = %d, want 13", len(AllAccountTypes))
+	if len(AllAccountTypes) != 15 {
+		t.Errorf("AllAccountTypes len = %d, want 15", len(AllAccountTypes))
 	}
 }
 

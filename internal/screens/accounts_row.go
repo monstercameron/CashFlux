@@ -59,7 +59,8 @@ type accountRowProps struct {
 // balance".
 func isValuationType(t domain.AccountType) bool {
 	return t == domain.TypeInvestment || t == domain.TypeRetirement ||
-		t == domain.TypeCrypto || t == domain.TypeOther
+		t == domain.TypeCrypto || t == domain.TypeProperty ||
+		t == domain.TypeVehicle || t == domain.TypeOther
 }
 
 // staleBadgeKey / updateActionKey pick asset-appropriate wording for the stale

@@ -44,14 +44,20 @@ const (
 	TypeInvestment   AccountType = "investment"
 	TypeRetirement   AccountType = "retirement"
 	TypeCrypto       AccountType = "crypto"
-	TypeOther        AccountType = "other"
+	// TypeProperty represents a real-estate asset (e.g. a home) whose value is a
+	// periodic user-entered estimate rather than a reconciled cash balance.
+	TypeProperty AccountType = "property"
+	// TypeVehicle represents a vehicle asset (e.g. a car) whose value is a
+	// periodic user-entered estimate rather than a reconciled cash balance.
+	TypeVehicle AccountType = "vehicle"
+	TypeOther   AccountType = "other"
 )
 
 // AllAccountTypes lists every valid account type.
 var AllAccountTypes = []AccountType{
 	TypeChecking, TypeDebit, TypeSavings, TypeCash, TypeCreditCard,
 	TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage,
-	TypeInvestment, TypeRetirement, TypeCrypto, TypeOther,
+	TypeInvestment, TypeRetirement, TypeCrypto, TypeProperty, TypeVehicle, TypeOther,
 }
 
 func (t AccountType) String() string { return string(t) }
