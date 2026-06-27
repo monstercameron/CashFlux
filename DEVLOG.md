@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C75: VERIFY-CLOSE — investment bucket granularity is a holdings concern
+
+C75 asked whether the single "investment" bucket was too coarse, covering brokerage, ETF, stock,
+and retirement all under one type. C73 already shipped the retirement split (TypeRetirement) and
+Crypto (TypeCrypto), which were the most distinct functional sub-types.
+
+The residual question is whether to further split TypeInvestment into TypeBrokerage / TypeETF /
+TypeStock. Assessment: no, and here's why.
+
+An account in CashFlux is a container — a source of balance/net-worth, a bucket for transaction
+categorization, a freshness-tracked balance line. Whether that container holds index funds or
+individual equities is a position-level question, not an account-level one. A single Fidelity
+brokerage account could hold ETFs, individual stocks, a money market fund, and cash — splitting
+it by the dominant instrument type would be arbitrary and force users to create multiple accounts
+for one real relationship with one institution.
+
+The correct layer for "brokerage vs ETF vs stock" is the holdings model: `Holding` domain type
+(R23, IMPL R23-foundation), which carries position-level asset class, ticker, cost-basis, and
+market value. That's where the allocation breakdown and performance attribution live. C75 is
+superseded by C73 (retirement/crypto done) + R23 (holdings epic, investment type sub-detail).
+
+No code change. Ticket closed as VERIFY-CLOSE. Note left in CHANGELOG.md Skipped section.
+
 ## 2026-06-27 — C74: surface lock-until in add-account form for lockable asset types
 
 Lock-until (maturity/hold-period date) was always behind the "Show advanced fields" toggle for
