@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C295 [F44]: Confirmation modal before dataset import
+
+### Problem
+`importJSON()` in `internal/app/settings.go` called `ImportJSONWithBlobs` immediately after the user chose a file — silently replacing their entire dataset with no warning.  The exact same destructive scope (wipe all accounts, transactions, budgets, goals) was unguarded, unlike `restoreFromBackup` and `wipeData` which both go through a confirm modal.
+
+### What was already done
+When investigating, the confirmation gate was already present in the codebase (a prior agent had implemented it).  `importJSON()` already wraps the import call in `uistate.ConfirmModalLabeled(...)` with destructive=true, i18n keys `settings.importConfirm` and `settings.importConfirmBtn` exist in `en.go`, and the call is structurally impossible to bypass (the `ImportJSONWithBlobs` call is inside the `ok==true` branch of the callback).
+
+### What this commit adds
+The implementation was complete but untested and untracked.  Added:
+- `internal/app/import_confirm_test.go` — native unit test `TestImportConfirmI18NKeys` asserting both i18n keys are registered and non-empty in the default English bundle.  A blank key here would silently display the raw key string as the confirm-button label, making the warning invisible.
+- `e2e/c295_import_confirm_check.mjs` — browser-driven test: exports dataset → reloads → drives Settings Import → asserts modal appears with "Replace all data" button → clicks Cancel → asserts no toast (abort verified) → drives import again → clicks Confirm → asserts success toast.
+- TODOS.md / CHANGELOG.md / DEVLOG.md updates marking C295 resolved.
+
+### Coverage note
+The native unit test cannot exercise the wasm dialog path (it is js/wasm-only).  The behavioral gate (modal appears → Cancel aborts → Confirm proceeds) is covered only by the browser e2e test.  That test requires a live gwc server on :8099.
+
 ## 2026-06-27 — C28 [F3]: Household-members step in setup checklist
 
 ### Problem
