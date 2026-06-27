@@ -33,6 +33,7 @@ func DefaultItems() []Item {
 		{ID: "kpi-income", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-spending", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-liabilities", ColSpan: 1, RowSpan: 1},
+		{ID: "kpi-assets", ColSpan: 1, RowSpan: 1},
 		{ID: "recent", ColSpan: 2, RowSpan: 2},
 		{ID: "budgets", ColSpan: 1, RowSpan: 2},
 		{ID: "trend", ColSpan: 1, RowSpan: 2},

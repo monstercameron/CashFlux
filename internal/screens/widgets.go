@@ -585,6 +585,7 @@ var widgetManagerTitleKeys = map[string]string{
 	"kpi-income":      "dashboard.income",
 	"kpi-spending":    "dashboard.spending",
 	"kpi-liabilities": "dashboard.liabilities",
+	"kpi-assets":      "dashboard.assets",
 	"recent":          "dashboard.recent",
 	"budgets":         "nav.budgets",
 	"goals":           "nav.goals",

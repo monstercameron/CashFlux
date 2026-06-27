@@ -241,6 +241,13 @@ func Dashboard() ui.Node {
 				Body: kpiBody(fmtMoney(liabilities), "", uistate.T("dashboard.accountsCount", active), "text-dim"),
 			})
 		},
+		"kpi-assets": func() ui.Node {
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-assets", Title: uistate.T("dashboard.assets"), Draggable: true, Resizable: true,
+				GridColumn: "1", GridRow: "3", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
+				Body: kpiBody(fmtMoney(assets), "text-up", uistate.T("dashboard.accountsCount", active), "text-dim"),
+			})
+		},
 		"recent":   func() ui.Node { return recentWidget(txns, widgetCfgs.For("recent")) },
 		"budgets":  func() ui.Node { return budgetsWidget(app, txns, rates, start, end, widgetCfgs.For("budgets")) },
 		"goals":    func() ui.Node { return goalsWidget(app, widgetCfgs.For("goals")) },
@@ -1027,6 +1034,7 @@ func todoMoreLink(props todoMoreProps) ui.Node {
 // via internal/goals. By default it features the first goal; configurably it can
 // feature the goal nearest completion, and the target-date caption is optional.
 func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
+	pr := uistate.UsePrefs().Get()
 	byProgress, showDate := false, true
 	if sch, ok := widgetcfg.SchemaFor("goals"); ok {
 		if f, ok := sch.FieldByKey("byProgress"); ok {
@@ -1056,7 +1064,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	pct := goals.Percent(g)
 	caption := fmt.Sprintf("%d%%", pct)
 	if showDate && !g.TargetDate.IsZero() {
-		caption += " · by " + g.TargetDate.Format("Jan 2")
+		caption += " · by " + pr.FormatDate(g.TargetDate)
 	}
 	body := Div(
 		Div(css.Class("t-body", tw.Flex, tw.JustifyBetween),
@@ -1157,6 +1165,7 @@ func budgetsWidget(app *appstate.App, txns []domain.Transaction, rates currency.
 // recentWidget is the 2×2 Recent transactions widget: newest activity as a
 // compact table with accounting amounts. Display-only, so rows build in a loop.
 func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
+	pr := uistate.UsePrefs().Get()
 	count := 6
 	if sch, ok := widgetcfg.SchemaFor("recent"); ok {
 		if f, ok := sch.FieldByKey("count"); ok {
@@ -1171,7 +1180,7 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 		rows := make([]ui.Node, 0, len(recent))
 		for _, t := range recent {
 			rows = append(rows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
-				Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16), t.Date.Format("Jan 2")),
+				Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16), pr.FormatDate(t.Date)),
 				Td(css.Class(tw.Py25), t.Desc),
 				Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)+" "+tw.ColorClass(figTone(t.Amount))), fmtMoney(t.Amount)),
 			))

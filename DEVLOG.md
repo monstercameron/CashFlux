@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C212: Assets KPI tile on the dashboard
+
+The net-worth computation in `dashboard.go` already destructures `nw.Assets` at line 98:
+`net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities`. The `liabilities` leg had a
+dedicated `kpi-liabilities` tile; `assets` had nothing — it was only visible via the net-worth
+math (net = assets - liabilities) but never surfaced as its own glanceable figure.
+
+Added `kpi-assets` following the identical pattern as the four existing KPI tiles:
+- `dashlayout/pack.go` `DefaultItems()`: one new `{ID: "kpi-assets", ColSpan: 1, RowSpan: 1}`
+  after `kpi-liabilities`. The bento bin-packer handles placement; the fifth KPI wraps naturally
+  to the next row in a 4-column grid.
+- `screens/dashboard.go` `renderers` map: `"kpi-assets"` closure using the existing `assets`
+  variable, styled with `text-up` tone (assets are positive). No new hook calls; hook order
+  is completely unchanged — `assets` was already in scope.
+- `screens/widgets.go` `widgetManagerTitleKeys`: `"kpi-assets": "dashboard.assets"` so the
+  Widget Manager labels it correctly.
+- `internal/i18n/en.go`: `"dashboard.assets": "Assets"` added alongside `dashboard.liabilities`.
+
+The tile is draggable/resizable (Draggable: true, Resizable: true) so users can reposition or
+remove it via the Widget Manager, same as every other bento tile.
+
 ## 2026-06-27 — C73: Retirement and Crypto account types
 
 Added two new `AccountType` constants: `TypeRetirement` and `TypeCrypto`. The enum design stays
