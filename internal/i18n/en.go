@@ -1452,6 +1452,11 @@ var english = Catalog{
 	"reports.deductibleDownloadTitle":  "Download deductible totals as a CSV file",
 	"reports.deductibleTotal":          "Total deductible: %s",
 	"reports.new":                      "new", // C238: shown on delta badge when prior period is zero and current > 0
+	// C243: report-type selector tab labels.
+	"reports.viewOverview":   "Overview",
+	"reports.viewCategories": "Categories",
+	"reports.viewNetWorth":   "Net worth",
+	"reports.viewAdvanced":   "Advanced",
 	// C237: YoY comparison toggle labels and YoY-mode covering caption.
 	"reports.yoyOff":                   "Compare year-over-year",
 	"reports.yoyOn":                    "Year-over-year on",

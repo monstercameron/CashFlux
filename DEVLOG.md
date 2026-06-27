@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C243: report-type selector (four tabbed views) on /reports
+
+/reports was a single scrolling mega-page — 13+ cards stacked, requiring users to scroll past the entire Spending block to reach Trends or Net Worth. C243 adds a four-tab segmented control (Overview / Categories / Net worth / Advanced) immediately below the global controls, so users can jump to the section they care about.
+
+Architecture decision: sections are pre-computed as `ui.Node` variables inside an immediately-invoked closure at the bottom of the return block, then a plain `switch reportView.Get()` picks which one to render. This keeps all On* hooks (for YoY, rollup, showAdvanced, the category drill) at stable positions in the function body — none move inside a loop or conditional. The IIFE pattern avoids cluttering the outer function with unused variable names while keeping the build compiler happy.
+
+`uiw.Segmented` (internal/ui package, aliased as `uiw`) is the right component — it already renders `role="radiogroup"` with roving tabindex and keyboard navigation, matching the period-resolution and theme selectors. Initial usage attempted `ui.Segmented` (GoWebComponents framework package) which doesn't exist under that name in this build — corrected to `uiw.Segmented`/`uiw.SegmentedProps`/`uiw.SegOption`. Build rc=0 after the correction.
+
+View layout: Overview gets the money-flow/payees/biggest-expenses/income/members sections (the "where did money go and come from" answers). Categories gets the ranked breakdown with its controls. Net worth gets the cash-flow trend + NW composition + savings-rate trend. Advanced surface is the existing disclosure-toggled custom-field/deductible cards (C242), now reachable directly. Hero zone, export, PDF, spend stats, and anomaly card stay visible across all views.
+
+Four new i18n keys added to `internal/i18n/en.go`. Files: `internal/screens/reports_screen.go`, `internal/i18n/en.go`, `CHANGELOG.md`, `DEVLOG.md`.
+
 ## 2026-06-27 — C229: top-merchants card with drill-through on /insights
 
 /insights was category-only for spending breakdowns — users couldn't see which specific merchants or payees absorbed the most spend. C229 adds a "Top merchants" card: aggregates expense transactions over a rolling 90-day window, grouped by `Transaction.Payee` (falling back to `Desc` when empty), sorts descending by total, and renders the top 7 as clickable rows.

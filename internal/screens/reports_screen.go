@@ -748,6 +748,11 @@ func Reports() ui.Node {
 		advancedCaret = uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	}
 
+	// C243 [F33]: report-type selector — four tabbed views so the user can jump
+	// directly to the section they care about instead of scrolling a mega-page.
+	// Defaults to "overview" (the cash-flow + spending summary the user sees first).
+	reportView := ui.UseState("overview")
+
 	// W-15: count-up the hero figures (Net / Income / Spend) when they change, reusing
 	// the dashboard's countup.js scanner. Keyed on the three amounts so it fires on
 	// mount and on real changes only; the scanner is a no-op under reduced-motion /
@@ -895,131 +900,156 @@ func Reports() ui.Node {
 			Header:     H2(css.Class("card-title"), uistate.T("reports.headsUp")),
 			Body:       Div(anomalyNodes),
 		})),
-		// Section dividers group the 13-card scroll into Spending / Income / Trends so
-		// Priya can navigate the page instead of reading it top-to-bottom (G9/C55).
-		H3(css.Class("section-divider"), uistate.T("reports.sectionSpending")),
-		uiw.Card(uiw.CardProps{
-			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
-				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
-				Div(css.Class(tw.Flex, tw.Gap2),
-					// C237: Year-over-Year comparison toggle — switches all deltas and category
-					// comparisons from period-over-period to the same period one year prior.
-					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-yoy-toggle"),
-						Attr("aria-pressed", boolStr(yoyMode.Get())),
-						Title(uistate.T("reports.yoyTitle")), OnClick(onToggleYoY),
-						uistate.T(yoyLabelKey)),
-					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
-						Attr("aria-pressed", boolStr(rollupCats.Get())),
-						Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
-						uistate.T(rollupLabelKey(rollupCats.Get()))),
-				),
-			),
-			Body: Fragment(
-				P(css.Class("muted"), narrative),
-				If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
-				If(len(catBarNodes) > 0, Div(catBarNodes)),
-				If(len(catDonutNodes) > 0, Div(catDonutNodes)),
-				catBody,
-			),
-		}),
-		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
-		If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "Money flow",
-			Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
-		})),
-		If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.topPayees"),
-			Body: Fragment(
-				If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
-				Div(css.Class("rows"), payeeNodes),
-			),
-		})),
-		If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.biggestExpenses"),
-			Body: Fragment(
-				If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
-				Div(css.Class("rows"), largestNodes),
-			),
-		})),
-		// R-9: only render the Income divider when at least one income/member section
-		// below it has content, so it never floats alone.
-		If(len(bigIncomeNodes) > 0 || len(incomeNodes) > 0 || (len(app.Members()) >= 2 && len(memberSpend) >= 1),
-			H3(css.Class("section-divider"), uistate.T("reports.sectionIncome"))),
-		If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.biggestDeposits"),
-			Rows:  bigIncomeNodes,
-		})),
-		If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.incomeBySource"),
-			Body: Fragment(
-				If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
-				If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
-				Div(css.Class("rows"), incomeNodes),
-			),
-		})),
-		// L21: show the member-spend section whenever the household has ≥2 members
-		// and at least one has attributed spending — not just when both have spend.
-		// With one member doing all the spending, the section still answers "who
-		// spent what?" and surfaces the unattributed remainder.
-		If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.byMember"),
-			Body:  Div(css.Class("rows"), memberNodes),
-		})),
-		// R-9: only render the Trends divider when a trend/net-worth section follows.
-		If(len(netSeries) >= 2 || len(accounts) > 0,
-			H3(css.Class("section-divider"), uistate.T("reports.sectionTrends"))),
-		If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("dashboard.cashFlow"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
-			),
-		})),
-		// R-11: net-worth composition (stat-grid) and the NW trend chart are one
-		// trajectory story — merge them into a single card (figures on top, trend
-		// below) instead of two cards with a rhythm break between them.
-		// C218: HTML id anchor so /networth can scroll to this section.
-		If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("dashboard.netWorth"),
-			Attrs: []any{Attr("id", "networth")},
-			Body: Fragment(
-				Div(css.Class("stat-grid"),
-					stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
-					stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
-					stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
-					If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
-				),
-				// C217: NW trend uses its own monthly labels, not the cash-flow period labels.
-				If(len(nw) >= 2, Fragment(
-					P(css.Class("muted"), uistate.T("reports.nwTrendMonthly", trendBuckets)),
-					uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: nwLabels, ValueLabels: nwValueLabels}),
-				)),
-			),
-		})),
-		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("reports.savingsTrend"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
-			),
-		})),
-		// G9.1 Item 6 — Advanced collapse: wraps custom field spend and deductible totals.
-		// Both are behind a disclosure toggle ("Advanced ▾/▲"), collapsed by default.
-		If(len(cfDefs) > 0,
-			Div(
-				Button(css.Class("disclosure-toggle"), Type("button"),
-					Attr("aria-expanded", boolStr(showAdvanced.Get())),
-					OnClick(onToggleAdvanced),
-					"Advanced ", advancedCaret,
-				),
-				If(showAdvanced.Get(),
-					Div(
-						customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
-						deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
+		// C243 [F33]: report-type selector — segmented control that gates each major
+		// section so users jump to what they care about instead of scrolling the whole
+		// page. Uses the same ui.Segmented/radiogroup pattern as the period selector.
+		Div(css.Class(tw.Mt2, tw.Mb1),
+			uiw.Segmented(uiw.SegmentedProps{
+				Label:    "Report type",
+				Selected: reportView.Get(),
+				OnSelect: func(v string) { reportView.Set(v) },
+				Options: []uiw.SegOption{
+					{Value: "overview", Label: uistate.T("reports.viewOverview")},
+					{Value: "categories", Label: uistate.T("reports.viewCategories")},
+					{Value: "networth", Label: uistate.T("reports.viewNetWorth")},
+					{Value: "advanced", Label: uistate.T("reports.viewAdvanced")},
+				},
+			}),
+		),
+		// Pre-compute each view into a variable, then show exactly one based on the
+		// selected tab. No On* hooks are called inside this selection — all hooks are
+		// registered at stable positions above in the function body.
+		func() ui.Node {
+			// ── Overview: cash-flow Sankey + top payees + biggest expenses ──────────
+			overviewSection := Fragment(
+				If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: "Money flow",
+					Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
+				})),
+				If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.topPayees"),
+					Body: Fragment(
+						If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
+						Div(css.Class("rows"), payeeNodes),
+					),
+				})),
+				If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.biggestExpenses"),
+					Body: Fragment(
+						If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
+						Div(css.Class("rows"), largestNodes),
+					),
+				})),
+				// Income breakdown sits in overview too: biggest deposits + by-source.
+				If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.biggestDeposits"),
+					Rows:  bigIncomeNodes,
+				})),
+				If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.incomeBySource"),
+					Body: Fragment(
+						If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
+						If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
+						Div(css.Class("rows"), incomeNodes),
+					),
+				})),
+				If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.byMember"),
+					Body:  Div(css.Class("rows"), memberNodes),
+				})),
+			)
+			// ── Categories: spending-by-category bar/donut + ranked rows ────────────
+			categoriesSection := Fragment(
+				uiw.Card(uiw.CardProps{
+					Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
+						H2(css.Class("card-title"), uistate.T("reports.byCategory")),
+						Div(css.Class(tw.Flex, tw.Gap2),
+							// C237: Year-over-Year comparison toggle.
+							Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-yoy-toggle"),
+								Attr("aria-pressed", boolStr(yoyMode.Get())),
+								Title(uistate.T("reports.yoyTitle")), OnClick(onToggleYoY),
+								uistate.T(yoyLabelKey)),
+							Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+								Attr("aria-pressed", boolStr(rollupCats.Get())),
+								Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
+								uistate.T(rollupLabelKey(rollupCats.Get()))),
+						),
+					),
+					Body: Fragment(
+						P(css.Class("muted"), narrative),
+						If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
+						If(len(catBarNodes) > 0, Div(catBarNodes)),
+						If(len(catDonutNodes) > 0, Div(catDonutNodes)),
+						catBody,
+					),
+				}),
+			)
+			// ── Net worth: NW composition + cash-flow trend + savings-rate trend ────
+			netWorthSection := Fragment(
+				If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("dashboard.cashFlow"),
+					Body: Fragment(
+						P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+						uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
+					),
+				})),
+				// R-11: NW composition + trend as a single card.
+				// C218: HTML id anchor so /networth can deep-link to this section.
+				If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("dashboard.netWorth"),
+					Attrs: []any{Attr("id", "networth")},
+					Body: Fragment(
+						Div(css.Class("stat-grid"),
+							stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
+							stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
+							stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
+							If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
+						),
+						// C217: NW trend uses its own monthly labels, not the cash-flow period labels.
+						If(len(nw) >= 2, Fragment(
+							P(css.Class("muted"), uistate.T("reports.nwTrendMonthly", trendBuckets)),
+							uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: nwLabels, ValueLabels: nwValueLabels}),
+						)),
+					),
+				})),
+				If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title: uistate.T("reports.savingsTrend"),
+					Body: Fragment(
+						P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+						uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
+					),
+				})),
+			)
+			// ── Advanced: custom-field spend + deductible totals ─────────────────────
+			// The disclosure toggle (showAdvanced) is preserved so the section stays
+			// collapsible when the user lands here and wants a quick scan first.
+			advancedSection := If(len(cfDefs) > 0,
+				Div(
+					Button(css.Class("disclosure-toggle"), Type("button"),
+						Attr("aria-expanded", boolStr(showAdvanced.Get())),
+						OnClick(onToggleAdvanced),
+						"Advanced ", advancedCaret,
+					),
+					If(showAdvanced.Get(),
+						Div(
+							customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
+							deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
+						),
 					),
 				),
-			),
-		),
+			)
+
+			switch reportView.Get() {
+			case "categories":
+				return categoriesSection
+			case "networth":
+				return netWorthSection
+			case "advanced":
+				return advancedSection
+			default: // "overview"
+				return overviewSection
+			}
+		}(),
 	)
 }
 
