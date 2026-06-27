@@ -219,6 +219,37 @@ func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start,
 	}
 }
 
+// PeriodRangeAnchored is like PeriodRange but for PeriodBiweekly it snaps the
+// 14-day grid to a user-supplied anchor date (a known payday) instead of the
+// internal epoch. This aligns every-two-weeks budget windows to the user's
+// actual pay cycle.
+//
+// For every period other than PeriodBiweekly the anchor is ignored and the call
+// delegates to PeriodRange. For PeriodBiweekly, if anchor is the zero time the
+// function likewise falls back to PeriodRange (preserving the default epoch
+// behavior for users who have not configured a pay-cycle anchor).
+//
+// The biweekly math mirrors PeriodRange: UTC day-normalised counts avoid DST
+// ambiguity at window boundaries.
+func PeriodRangeAnchored(p domain.Period, ref time.Time, weekStart time.Weekday, anchor time.Time) (start, end time.Time) {
+	if p != domain.PeriodBiweekly || anchor.IsZero() {
+		return PeriodRange(p, ref, weekStart)
+	}
+	// Normalise both dates to UTC midnight so DST transitions inside a fortnight
+	// never shift the boundary by an hour.
+	refDay := ref.In(time.UTC).Truncate(24 * time.Hour)
+	ancDay := anchor.In(time.UTC).Truncate(24 * time.Hour)
+	diff := int(refDay.Sub(ancDay).Hours()) / 24
+	if diff < 0 {
+		// Integer division truncates toward zero for negative values; adjust so
+		// the result floors to the start of the fortnight that contains ref.
+		diff = diff - 13
+	}
+	fortnight := (diff / 14) * 14
+	start = ancDay.AddDate(0, 0, fortnight).In(ref.Location())
+	return start, start.AddDate(0, 0, 14)
+}
+
 // EvaluateAll evaluates a set of budgets over the same period.
 func EvaluateAll(budgets []domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) ([]Status, error) {
 	out := make([]Status, 0, len(budgets))

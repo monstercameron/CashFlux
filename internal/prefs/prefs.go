@@ -113,6 +113,11 @@ type Prefs struct {
 	// existing prefs keep working; the user flips it from the Settings modal to stop
 	// the app dialing the backend (e.g. when the websocket is unreachable).
 	BackendDisabled bool `json:"backendDisabled,omitempty"`
+	// PayCycleAnchor is an ISO-8601 date ("2006-01-02") that identifies a known
+	// payday — the anchor date for the biweekly 14-day grid. When set, biweekly
+	// budget periods snap to the user's actual pay cycle instead of the fixed
+	// internal epoch. Empty string means no anchor (use default epoch behavior).
+	PayCycleAnchor string `json:"payCycleAnchor,omitempty"`
 }
 
 // BackendActive reports whether the app should talk to the backend: a server URL

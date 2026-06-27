@@ -127,7 +127,16 @@ func Budgets() ui.Node {
 	// The viewed period comes from the shared top-bar resolution control (C7) —
 	// the Budgets card no longer has its own competing month stepper.
 	periodWin := uistate.UsePeriod()
-	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
+	pr := uistate.UsePrefs().Get()
+	weekStart := pr.WeekStartWeekday()
+	// C128: parse the pay-cycle anchor from prefs. When set, biweekly budget
+	// periods snap to the user's actual payday instead of the internal epoch.
+	var payCycleAnchor time.Time
+	if pr.PayCycleAnchor != "" {
+		if t, err := time.Parse("2006-01-02", pr.PayCycleAnchor); err == nil {
+			payCycleAnchor = t
+		}
+	}
 
 	deleteBudget := func(budgetID string) {
 		// Guard the destructive delete with a confirm (matches the transactions delete
@@ -248,7 +257,10 @@ func Budgets() ui.Node {
 	rollNeg := map[string]bool{}      // budgetID → whether the previous-period carry is negative
 	rollEffCap := map[string]string{} // budgetID → formatted effective cap (C136, rollover budgets only)
 	for _, b := range budgets {
-		bs, be := budgeting.PeriodRange(b.Period, anchor, weekStart)
+		// C128: route biweekly budgets through PeriodRangeAnchored so the grid
+		// snaps to the user's actual pay cycle when PayCycleAnchor is set; all
+		// other periods fall back to PeriodRange unchanged.
+		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
 		// Rollover (C132): carry the previous period's remaining (negative when it
 		// was overspent) into this period's effective limit so Remaining/Percent/
 		// State/bar reflect the carry. Carryover() was never applied before, leaving

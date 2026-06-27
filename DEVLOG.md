@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C128 [F16]: pay-cycle anchor for biweekly budget periods
+
+The biweekly period grid was anchored to a fixed internal epoch (2006-01-02 Monday), so users whose payday doesn't align with that Monday would see the wrong fortnight every cycle. C128 adds a configurable anchor.
+
+**Pure function.** `budgeting.PeriodRangeAnchored(p, ref, weekStart, anchor)` computes the biweekly window using `anchor` as the grid origin instead of `epochMonday`. The logic mirrors the existing biweekly case: UTC-normalized day counts, integer division by 14, negative-correction for pre-anchor refs. Non-biweekly periods and a zero anchor both delegate to `PeriodRange` unchanged — so no regressions.
+
+**Zero-migration storage.** `Prefs.PayCycleAnchor string` is `omitempty`, so existing JSON persisted prefs round-trip cleanly with no migration needed.
+
+**Wire-up.** `/budgets` now reads `pr.PayCycleAnchor`, parses it with `time.Parse("2006-01-02", ...)`, and passes the result to `PeriodRangeAnchored` for each budget's period computation. Setting the anchor in Preferences propagates immediately on the next render.
+
+**Settings UI.** A `<input type="date">` added to the Preferences sub-section in `settingsRightColumn`, wired via `OnPayCycleAnchor func(string)` — same pattern as `OnWeekStart`. Clearing the field sets the anchor to empty string (falls back to epoch behavior).
+
+**Tests (5 table-driven cases):** ref within anchor fortnight, ref one fortnight later, ref before anchor, zero anchor fallback, non-biweekly period. All pass.
+
 ## 2026-06-27 — C87 [F11]: merge duplicates (keep one, union tags)
 
 The `/duplicates` screen previously only supported per-row delete. C87 adds a true group-level merge: the first entry (survivor) gets its Tags unioned with all other entries (case-insensitive dedup, survivor tags first), its Cleared flag set if any entry was cleared, and all other entries are deleted — in one action.

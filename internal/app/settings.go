@@ -911,6 +911,7 @@ func globalSettingsForm() uic.Node {
 		},
 		OnDateStyle: onDateStyle,
 		OnWeekStart: func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
+		OnPayCycleAnchor: func(v string) { p := prefsAtom.Get(); p.PayCycleAnchor = strings.TrimSpace(v); savePrefs(p) },
 
 		AiOn:       aiOn.Get(),
 		OnAiToggle: func(v bool) { aiOn.Set(v) },
@@ -1416,6 +1417,8 @@ func loadSample(onChange func(), notify func(string, bool)) {
 		return
 	}
 	onChange()
+	uistate.SetSampleActive(true)
+	uistate.RequestPersist() // C2: flush before a fast reload can race the autosave ticker
 	notify(uistate.T("settings.loadedSample"), false)
 }
 

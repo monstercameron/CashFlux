@@ -84,6 +84,7 @@ type settingsRightProps struct {
 	OnAppearanceLink func()      // closes panel + navigates to /appearance
 	OnDateStyle      uic.Handler // UseEvent
 	OnWeekStart      func(string)
+	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
 	// AI
 	AiOn          bool
 	OnAiToggle    func(bool)
@@ -194,6 +195,18 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			Option(Value(string(prefs.DateEU)), SelectedIf(p.Pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
 			Option(Value(string(prefs.DateLong)), SelectedIf(p.Pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
 		),
+		// C128: pay-cycle anchor — a known payday date used to align every-2-weeks
+		// budget periods to the user's actual pay cycle instead of the fixed epoch.
+		H4(css.Class("set-label"), uistate.T("settings.payCycleAnchor")),
+		Input(css.Class("set-input", tw.Mt045), Type("date"), Attr("aria-label", uistate.T("settings.payCycleAnchor")),
+			Value(p.Pr.PayCycleAnchor),
+			OnChange(func(e uic.Event) {
+				if p.OnPayCycleAnchor != nil {
+					p.OnPayCycleAnchor(e.GetValue())
+				}
+			}),
+		),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.payCycleAnchorHint")),
 
 		// 3 · AI — setup-once; key + model select in one logical cluster.
 		ui.Divider(),

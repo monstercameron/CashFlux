@@ -171,6 +171,73 @@ func expense(amount int64, cur, cat, member, day string) domain.Transaction {
 	}
 }
 
+// TestPeriodRangeAnchored verifies that PeriodRangeAnchored snaps biweekly grids
+// to the user-supplied payday anchor date.
+func TestPeriodRangeAnchored(t *testing.T) {
+	// anchor = 2026-06-05 (a Friday — simulates a user whose payday is every
+	// other Friday).
+	anchor := mustDate("2026-06-05")
+
+	t.Run("ref within anchor fortnight returns [anchor, anchor+14)", func(t *testing.T) {
+		// 2026-06-10 is 5 days after the anchor — inside the first fortnight.
+		ref := mustDate("2026-06-10")
+		s, e := PeriodRangeAnchored(domain.PeriodBiweekly, ref, time.Monday, anchor)
+		if s != mustDate("2026-06-05") || e != mustDate("2026-06-19") {
+			t.Errorf("got %s..%s, want 2026-06-05..2026-06-19", s.Format("2006-01-02"), e.Format("2006-01-02"))
+		}
+		if int(e.Sub(s).Hours()) != 14*24 {
+			t.Errorf("window %v, want 336h", e.Sub(s))
+		}
+	})
+
+	t.Run("ref one fortnight later returns next block", func(t *testing.T) {
+		// 2026-06-19 is exactly anchor + 14 days — starts the second fortnight.
+		ref := mustDate("2026-06-19")
+		s, e := PeriodRangeAnchored(domain.PeriodBiweekly, ref, time.Monday, anchor)
+		if s != mustDate("2026-06-19") || e != mustDate("2026-07-03") {
+			t.Errorf("got %s..%s, want 2026-06-19..2026-07-03", s.Format("2006-01-02"), e.Format("2006-01-02"))
+		}
+	})
+
+	t.Run("ref before anchor falls in previous fortnight", func(t *testing.T) {
+		// 2026-05-25 is 11 days before the anchor — sits in the prior window.
+		ref := mustDate("2026-05-25")
+		s, e := PeriodRangeAnchored(domain.PeriodBiweekly, ref, time.Monday, anchor)
+		if s != mustDate("2026-05-22") || e != mustDate("2026-06-05") {
+			t.Errorf("got %s..%s, want 2026-05-22..2026-06-05", s.Format("2006-01-02"), e.Format("2006-01-02"))
+		}
+		if int(e.Sub(s).Hours()) != 14*24 {
+			t.Errorf("window %v, want 336h", e.Sub(s))
+		}
+		// ref must be inside [start, end).
+		if ref.Before(s) || !ref.Before(e) {
+			t.Errorf("ref %s not in [%s, %s)", ref.Format("2006-01-02"), s.Format("2006-01-02"), e.Format("2006-01-02"))
+		}
+	})
+
+	t.Run("zero anchor falls back to PeriodRange", func(t *testing.T) {
+		ref := mustDate("2026-06-15")
+		got, gote := PeriodRangeAnchored(domain.PeriodBiweekly, ref, time.Monday, time.Time{})
+		want, wante := PeriodRange(domain.PeriodBiweekly, ref, time.Monday)
+		if got != want || gote != wante {
+			t.Errorf("zero anchor: got %s..%s, want %s..%s",
+				got.Format("2006-01-02"), gote.Format("2006-01-02"),
+				want.Format("2006-01-02"), wante.Format("2006-01-02"))
+		}
+	})
+
+	t.Run("non-biweekly period delegates to PeriodRange regardless of anchor", func(t *testing.T) {
+		ref := mustDate("2026-06-15")
+		got, gote := PeriodRangeAnchored(domain.PeriodMonthly, ref, time.Monday, anchor)
+		want, wante := PeriodRange(domain.PeriodMonthly, ref, time.Monday)
+		if got != want || gote != wante {
+			t.Errorf("monthly: got %s..%s, want %s..%s",
+				got.Format("2006-01-02"), gote.Format("2006-01-02"),
+				want.Format("2006-01-02"), wante.Format("2006-01-02"))
+		}
+	})
+}
+
 func TestSpentIndividualScope(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}
