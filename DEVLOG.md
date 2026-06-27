@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C208/C209 [F28]: /credit screen — local credit-health proxy surface
+
+The `credithealth` package was fully committed (engine + bands + per-card `CardUtil` + `AggUtil` + `Result`) but completely invisible to users: no route, no nav entry, no screen. This change wires it end-to-end.
+
+**Design decisions.** Mirrored `/health` exactly: `buildCreditInputs` gathers accounts + balances (via `ledger.Balance` on credit-card accounts) + transactions + `time.Now()`, then calls `credithealth.Evaluate()`. The screen renders an SVG ring (proxy score 0–100), aggregate utilization, a per-card breakdown, and — for each card over 30% — an actionable "Pay $X to reach 30% utilization" nudge sourced directly from `CardUtil.Target30Minor`.
+
+**Hook safety.** Per-card rows are display-only (no `OnClick`, no `ui.UseState`), so they are rendered inline from a plain Go loop building a `[]any` slice passed to `Div`. No `On*` calls inside loops — clean.
+
+**Money formatting.** Used the existing `currency.Decimals(base)` + `currency.Symbol(base)` helpers and a small `fmtMinorAmount` helper (minor-unit integer → decimal string) rather than pulling in `fmtMoney(money.Money)` — the credithealth API returns raw `int64` minor amounts, not `money.Money` structs, so this keeps things direct and avoids unnecessary wrapping.
+
+**Scope boundary.** C210 (utilization history/trend) requires stored time-series snapshots that don't exist yet. Explicitly excluded — noted in code comment and the route comment.
+
+**Build.** Screens package rc=0; full app rc=0.
+
 ## 2026-06-27 — C67 [F8]: Discoverable top-level Transfer action on /accounts
 
 Transfer creation was buried in each account's overflow (⋯) menu — a user who hadn't explored every row had no idea transfers were possible at all. The fix adds a "Transfer money" primary button that renders above the account lists whenever ≥ 2 non-archived accounts exist.

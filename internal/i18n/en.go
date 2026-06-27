@@ -2119,6 +2119,20 @@ var english = Catalog{
 	"acctType.property":     "Property",
 	"acctType.vehicle":      "Vehicle",
 	"acctType.other":        "Other",
+
+	// Credit health screen (C208 / C209 / F28)
+	"nav.credit":                "Credit health",
+	"screen.creditSub":          "Local credit-health proxy — private, no bureau",
+	"credit.outOf100":           "out of 100",
+	"credit.aggUtil":            "Overall utilization: %s",
+	"credit.breakdownTitle":     "Per-card utilization",
+	"credit.noLimit":            "No limit set",
+	"credit.balanceOfLimit":     "%s of %s limit",
+	"credit.payToReach30Prefix": "Pay ",
+	"credit.payToReach30Suffix": " to reach 30% utilization",
+	"credit.missingLimitNote":   "%d card(s) have no credit limit set — add a limit to include them in the calculation.",
+	"credit.emptyTitle":         "No credit cards found",
+	"credit.emptyBody":          "Add a credit-card account with a credit limit to see your utilization breakdown here.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.
