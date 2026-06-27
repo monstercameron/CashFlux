@@ -13617,3 +13617,13 @@ naive regex parser misreads those 0..1 floats as 0..255 and invents failures (th
 "attention-text 1.23:1" scare earlier); (2) icon glyphs (●/⚠) and gradient-background elements are excluded
 so they aren't judged at the 4.5 text threshold / against the wrong ancestor color. Exits with the failure
 count for CI gating. Density/screenshot dimensions of R44/R72 remain to be added.
+
+## 2026-06-27 — R44/R72 gate: composite translucent backgrounds (kill false positives)
+The contrast gate measured a leaf's background by walking to the first non-transparent ancestor color,
+but treated a TRANSLUCENT layer (e.g. a "today" calendar cell tinted at 12% accent, or a selected-row
+wash) as a solid fill — inventing green-on-green / 1:1 failures (the .cal-day "27" 1.02:1 scare, and a
+transactions "Cheap cosmetics" 1.10:1). bgOf now alpha-composites each translucent layer over the ones
+below it down to an opaque base, so the measured background is what the eye actually sees. Effect: TOTAL
+fell 28 -> 19 and the surviving failures are real and accurately scored (e.g. .cal-day.today's accent
+number is 3.90:1 dark / 3.67:1 light — a genuine marginal AA miss, not 1:1). Gate is now trustworthy
+enough to drive the per-screen contrast fixes. e2e-only, no app/other-agent files touched.

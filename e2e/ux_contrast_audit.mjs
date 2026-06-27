@@ -52,11 +52,26 @@ for (const route of ROUTES) {
         const ctx = cv.getContext('2d', { willReadFrequently: true });
         const norm = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3]]; };
         const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 3 && r.height > 3 && r.top >= 0 && r.top < 1000 && s.visibility !== 'hidden' && s.opacity !== '0'; };
-        // Effective background, walking ancestors. Returns null when the bg-providing
-        // element paints a gradient/image instead of a solid color — we can't sample a
-        // single representative pixel from a gradient, so the pair is skipped rather
-        // than reported as a (false) failure against an unrelated ancestor color.
-        const bgOf = (el) => { let e = el; while (e) { const cs = getComputedStyle(e); if (cs.backgroundImage && cs.backgroundImage !== 'none') return null; const c = norm(cs.backgroundColor); if (c[3] > 10) return [c[0], c[1], c[2]]; e = e.parentElement; } const b = norm(getComputedStyle(document.body).backgroundColor); return [b[0], b[1], b[2]]; };
+        // Effective background, walking ancestors and ALPHA-COMPOSITING translucent
+        // layers over the ones below — so a 12%-opacity tint (e.g. a "today" cell or a
+        // selected row) is blended over its card, not treated as a solid fill (which
+        // would invent green-on-green / 1:1 false failures). Returns null when a layer
+        // paints a gradient/image we can't sample as one representative color.
+        const over = (t, b) => { const a = t[3] / 255; return [Math.round(t[0] * a + b[0] * (1 - a)), Math.round(t[1] * a + b[1] * (1 - a)), Math.round(t[2] * a + b[2] * (1 - a)), 255]; };
+        const bgOf = (el) => {
+          const layers = []; let e = el;
+          while (e) {
+            const cs = getComputedStyle(e);
+            if (cs.backgroundImage && cs.backgroundImage !== 'none') return null;
+            const c = norm(cs.backgroundColor);
+            if (c[3] > 4) { layers.push(c); if (c[3] >= 250) break; }
+            e = e.parentElement;
+          }
+          let base = norm(getComputedStyle(document.body).backgroundColor); base[3] = 255;
+          if (layers.length && layers[layers.length - 1][3] >= 250) base = layers.pop();
+          for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i], base);
+          return [base[0], base[1], base[2]];
+        };
         // §12.1: text needs 4.5/3, but ICON GLYPHS (single non-alphanumeric symbol,
         // dots, emoji, arrows) are non-text UI judged at 3:1 elsewhere — exclude them
         // from the text audit so they aren't flagged at the stricter 4.5 threshold.
