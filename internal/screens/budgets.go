@@ -163,7 +163,7 @@ func Budgets() ui.Node {
 		})
 	}
 
-	saveBudget := func(id, newName, limitStr, periodStr, ownerID string, rollover bool) {
+	saveBudget := func(id, newName, limitStr, periodStr, ownerID, methodology string, rollover bool) {
 		for _, b := range app.Budgets() {
 			if b.ID != id {
 				continue
@@ -187,6 +187,12 @@ func Budgets() ui.Node {
 				b.Scope = domain.ScopeIndividual
 			}
 			b.Rollover = rollover
+			// Store per-budget methodology override; empty = inherit global.
+			if m := budgeting.Methodology(methodology); m.Valid() {
+				b.Methodology = methodology
+			} else {
+				b.Methodology = ""
+			}
 			if err := app.PutBudget(b); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -342,6 +348,14 @@ func Budgets() ui.Node {
 	method := budgeting.ParseMethodology(app.Settings().BudgetMethodology)
 	envAvail := map[string]string{} // budgetID → formatted envelope balance (envelope mode)
 	envNeg := map[string]bool{}     // budgetID → whether the envelope is overdrawn
+	// effectiveMethod returns a budget's method: its own override if set, else the
+	// global household method. An empty Methodology falls back to the global.
+	effectiveMethod := func(b domain.Budget) budgeting.Methodology {
+		if m := budgeting.ParseMethodology(b.Methodology); b.Methodology != "" && m.Valid() {
+			return m
+		}
+		return method
+	}
 	var assignBanner ui.Node = Fragment()
 	switch method {
 	case budgeting.MethodSimple:
@@ -381,17 +395,23 @@ func Budgets() ui.Node {
 		}
 	case budgeting.MethodEnvelope:
 		assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
-		for _, b := range budgets {
-			if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
-				// C124/C137 family: an overdrawn envelope reads "$X overdrawn", not the
-				// ambiguous accounting parens "($X)".
-				if av.IsNegative() {
-					envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
-				} else {
-					envAvail[b.ID] = fmtMoney(av)
-				}
-				envNeg[b.ID] = av.IsNegative()
+	}
+	// Compute envelope balance for every budget that uses the envelope method —
+	// either because the global method is envelope, or because the budget has its
+	// own per-budget override set to envelope (C118).
+	for _, b := range budgets {
+		if effectiveMethod(b) != budgeting.MethodEnvelope {
+			continue
+		}
+		if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+			// C124/C137 family: an overdrawn envelope reads "$X overdrawn", not the
+			// ambiguous accounting parens "($X)".
+			if av.IsNegative() {
+				envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
+			} else {
+				envAvail[b.ID] = fmtMoney(av)
 			}
+			envNeg[b.ID] = av.IsNegative()
 		}
 	}
 
@@ -434,7 +454,7 @@ func Budgets() ui.Node {
 				if shortfall.IsPositive() {
 					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
 				}
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], EffectiveCap: rollEffCap[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], EffectiveCap: rollEffCap[s.Budget.ID], EffectiveMethod: effectiveMethod(s.Budget), CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
 			},
 		)
 		listBody = Div(rows)
@@ -507,23 +527,24 @@ func Budgets() ui.Node {
 }
 
 type budgetRowProps struct {
-	Status         budgeting.Status
-	Category       string
-	Members        []domain.Member
-	Envelope       string        // formatted envelope balance (envelope methodology); "" hides the line
-	EnvelopeNeg    bool          // envelope is overdrawn → danger tone
-	PaceOver       string        // formatted projected overspend (pace, in-progress only); "" hides the line
-	RolloverCarry  string        // formatted previous-period carry for per-budget rollover; "" hides the line
-	RolloverNeg    bool          // previous-period carry is negative → danger tone
-	EffectiveCap   string        // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
-	CoverSources   []coverSource // budgets that can fund a "Cover…" (the row drops itself)
-	CoverShortfall string        // formatted overspend, for the "covers the $X over" hint
-	CoverDefault   string        // major-units default amount to prefill the cover field
-	OnDelete       func(string)
-	OnSave         func(id, name, limit, period, owner string, rollover bool)
-	OnCover        func(toID, fromID, amount string) error
-	OnTopUp        func(id, amount string) error // increase this budget's limit by the entered amount
-	OnDrill        func(categoryID string)       // open Transactions filtered to this budget's category
+	Status          budgeting.Status
+	Category        string
+	Members         []domain.Member
+	Envelope        string        // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg     bool          // envelope is overdrawn → danger tone
+	PaceOver        string        // formatted projected overspend (pace, in-progress only); "" hides the line
+	RolloverCarry   string        // formatted previous-period carry for per-budget rollover; "" hides the line
+	RolloverNeg     bool          // previous-period carry is negative → danger tone
+	EffectiveCap    string        // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
+	EffectiveMethod budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
+	CoverSources    []coverSource // budgets that can fund a "Cover…" (the row drops itself)
+	CoverShortfall  string        // formatted overspend, for the "covers the $X over" hint
+	CoverDefault    string        // major-units default amount to prefill the cover field
+	OnDelete        func(string)
+	OnSave          func(id, name, limit, period, owner, methodology string, rollover bool)
+	OnCover         func(toID, fromID, amount string) error
+	OnTopUp         func(id, amount string) error // increase this budget's limit by the entered amount
+	OnDrill         func(categoryID string)       // open Transactions filtered to this budget's category
 }
 
 // coverSource is one budget offered as a funding source in a row's "Cover…" picker.

@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C118 [F14]: per-budget methodology override
+
+The global methodology picker (simple/zero-based/envelope) forces a uniform mode across all budgets. The fix: add `Budget.Methodology` (a string, empty = inherit) and compute an effective method per budget at display time.
+
+**Data model.** `domain.Budget.Methodology string \`json:"methodology,omitempty"\`` is additive — old datasets load with empty, which correctly falls back to the global method. No store migration needed.
+
+**Effective-method resolution.** `effectiveMethod(b budgeting.Methodology)` is a local closure in `Budgets()`: if `b.Methodology` is non-empty and valid, use it; else use the global method. This is computed once per budget in the row construction loop and passed as a plain `EffectiveMethod` prop to `BudgetRow` — no On* hook involved.
+
+**Envelope per-budget.** Before this change, `envAvail` was only populated under a `case budgeting.MethodEnvelope:` branch, so a budget with `Methodology="envelope"` in a simple-mode household never saw its balance. Fixed: moved envelope calculation out of the switch into a separate loop that checks `effectiveMethod(b) == MethodEnvelope` per budget.
+
+**OnSave signature.** The `methodology string` parameter was threaded through: `budgetRowProps.OnSave`, `saveBudget`, and the `BudgetRow.saveEdit` handler. Hook count in `BudgetRow` is unchanged — `methodologyS` state and its reset in `startEdit` are added before the existing hooks, keeping the order stable.
+
+**Forms.** `budgetMethodOptions(selected)` and `budgetMethodLabel(m)` are package-level helpers (no On*) in `budgets_row.go`, reused by both the add form and the edit form. The "Use global default" option stores `""` so saving it clears the override.
+
+**What's deferred.** Zero-based effective-method behavior (per-budget "to assign" or per-budget income surfacing) is not implemented — the existing zero-based banner is still global-only. The feature is flagged as advisory (row shows method label) for zero-based single-budget overrides, which is safe and clear.
+
 ## 2026-06-27 — C210 [F28]: per-card utilization trend on /credit
 
 C225 already proved the `BalanceHistory` infrastructure works. C210 harvests it for the `/credit` screen without any new persistence.

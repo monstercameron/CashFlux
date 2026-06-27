@@ -588,6 +588,10 @@ var english = Catalog{
 	"budgets.duplicateBudget":    "A budget for this category, period, and owner already exists.",
 	// C190: sinking-fund set-aside summary line on /budgets.
 	"budgets.fundSetAside": "Sinking funds need %s this month — money committed to saving for future expenses.",
+	// C118: per-budget methodology override labels.
+	"budgets.methodLabel":       "Method for this budget",
+	"budgets.methodDefault":     "Use global default",
+	"budgets.methodOverrideRow": "Method: %s",
 
 	// Goals screen
 	"goals.add":                "Add goal",

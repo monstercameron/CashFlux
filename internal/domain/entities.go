@@ -396,7 +396,14 @@ type Budget struct {
 	Period     Period         `json:"period"`
 	Limit      money.Money    `json:"limit"`
 	Rollover   bool           `json:"rollover,omitempty"`
-	Custom     map[string]any `json:"custom,omitempty"`
+	// Methodology overrides the household-level budgeting method for this
+	// individual budget. An empty string means "inherit the global method".
+	// Valid values are the budgeting.Method* constants ("simple",
+	// "zero-based", "envelope"). JSON-persisted; no store migration needed —
+	// existing budgets without this field load with the empty string, which
+	// correctly falls back to the global method.
+	Methodology string         `json:"methodology,omitempty"`
+	Custom      map[string]any `json:"custom,omitempty"`
 }
 
 // Goal is a savings target, individual or shared.

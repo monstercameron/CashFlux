@@ -39,6 +39,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	periodS := ui.UseState(string(s.Budget.Period))
 	ownerS := ui.UseState(s.Budget.OwnerID)
 	rolloverS := ui.UseState(s.Budget.Rollover)
+	methodologyS := ui.UseState(s.Budget.Methodology)
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	// onPeriod/onOwner hooks kept for stable hook ordering; SelectInput owns the
@@ -52,11 +53,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		periodS.Set(string(s.Budget.Period))
 		ownerS.Set(s.Budget.OwnerID)
 		rolloverS.Set(s.Budget.Rollover)
+		methodologyS.Set(s.Budget.Methodology)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), rolloverS.Get())
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), methodologyS.Get(), rolloverS.Get())
 		editing.Set(false)
 	}))
 
@@ -162,6 +164,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// C138: explain what rollover actually does, with a concrete example, so it's
 				// not an unexplained checkbox.
 				P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
+				// C118: per-budget methodology override — "Use default" inherits the global
+				// household method; otherwise this budget uses its own chosen method.
+				labeledField(uistate.T("budgets.methodLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   budgetMethodOptions(methodologyS.Get()),
+						Selected:  methodologyS.Get(),
+						OnChange:  func(v string) { methodologyS.Set(v) },
+						AriaLabel: uistate.T("budgets.methodLabel"),
+					})),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -206,6 +217,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			ownerLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.individualOwner", m.Name))
 			break
 		}
+	}
+
+	// C118: show a small method badge when this budget has its own method override,
+	// so the user can see at a glance which budget uses a different approach from
+	// the household default. Hidden when the budget inherits the global method.
+	var methodLine ui.Node = Fragment()
+	if s.Budget.Methodology != "" {
+		methodLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.methodOverrideRow", budgetMethodLabel(budgeting.ParseMethodology(s.Budget.Methodology))))
 	}
 
 	// Envelope methodology: show the carried-forward balance under the period row.
@@ -327,6 +346,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))),
 		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
 		ownerLine,
+		methodLine,
 		paceLine,
 		rolloverLine,
 		effectiveCapLine,
@@ -334,4 +354,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverForm,
 		topupForm,
 	)
+}
+
+// budgetMethodLabel returns a short, localized label for a methodology value —
+// reused by the per-budget method badge and the method select options.
+func budgetMethodLabel(m budgeting.Methodology) string {
+	switch m {
+	case budgeting.MethodZeroBased:
+		return uistate.T("settings.budgetMethodZero")
+	case budgeting.MethodEnvelope:
+		return uistate.T("settings.budgetMethodEnvelope")
+	default:
+		return uistate.T("settings.budgetMethodSimple")
+	}
+}
+
+// budgetMethodOptions builds the SelectOptions for the per-budget method
+// override picker. The first option ("Use global default") stores an empty
+// value so that saving it clears the override, restoring global-method
+// inheritance. The remaining options mirror the global method picker labels.
+func budgetMethodOptions(selected string) []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: "", Label: uistate.T("budgets.methodDefault")},
+		{Value: string(budgeting.MethodSimple), Label: uistate.T("settings.budgetMethodSimple")},
+		{Value: string(budgeting.MethodZeroBased), Label: uistate.T("settings.budgetMethodZero")},
+		{Value: string(budgeting.MethodEnvelope), Label: uistate.T("settings.budgetMethodEnvelope")},
+	}
 }

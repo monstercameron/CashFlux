@@ -70,6 +70,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	owner := ui.UseState(domain.GroupOwnerID)
 	period := ui.UseState(string(domain.PeriodMonthly))
 	rollover := ui.UseState(false)
+	methodology := ui.UseState("") // empty = inherit global method
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
@@ -108,10 +109,15 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		if owner.Get() == domain.GroupOwnerID {
 			scope = domain.ScopeShared
 		}
+		// Resolve per-budget methodology override: empty = inherit global.
+		methodVal := methodology.Get()
+		if m := budgeting.Methodology(methodVal); methodVal != "" && !m.Valid() {
+			methodVal = ""
+		}
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			CategoryID: catID.Get(), Period: domain.Period(period.Get()), Limit: money.New(amt, base),
-			Rollover: rollover.Get(), Custom: customValuesToMap(budgetDefs, customVals.Get()),
+			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
@@ -121,6 +127,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		name.Set("")
 		limit.Set("")
 		rollover.Set(false)
+		methodology.Set("")
 		catID.Set(defaultCat)
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
@@ -174,6 +181,16 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
 			Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
 		),
+		// C118: per-budget methodology override. "Use global default" inherits the
+		// household method; otherwise this budget uses its own method regardless of
+		// the global picker.
+		labeledField(uistate.T("budgets.methodLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   budgetMethodOptions(methodology.Get()),
+				Selected:  methodology.Get(),
+				OnChange:  func(v string) { methodology.Set(v) },
+				AriaLabel: uistate.T("budgets.methodLabel"),
+			})),
 		MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),
