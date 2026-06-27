@@ -13595,3 +13595,14 @@ guarded logic win: R15-smart-floor (C146) — SMART-B8 now surfaces a "Liquid ca
 near-empty wallets instead of silently returning nil. R15's UI (dashboard glanceable tile via proper bento
 registration; a single non-redundant budgets safe-to-spend stat) needs a focused, correct redo — noted for
 a dedicated pass. Lesson: route subagent-built UI through the screenshot loop BEFORE trusting it.
+
+## 2026-06-27 — R69 light-mode contrast fix via a self-built audit gate
+Built a reusable cross-route WCAG contrast audit (e2e/ux_contrast_audit.mjs — see next entry) and used it
+to find real defects instead of guessing. First credible, systemic finding: the sample-data banner's
+"Start fresh"/"Dismiss" links use var(--accent), which in the LIGHT theme resolves to green (~#2e8b57) and
+reads ~3.8:1 on the pale (--accent-dim) banner — an AA fail on every route. Darkened the light-mode link
+to color-mix(--accent 70%, #000 30%) (clears 4.5:1, still green/interactive); dark mode untouched. Verified
+by re-running the gate: sample-banner-btn dropped out of the failure list and TOTAL fell 44 -> 28. The
+remaining 28 are follow-ups I did NOT bundle: --up money-green at ~4.36 (a light-theme token that's a hair
+too light — a Go internal/theme fix, not CSS), and component-specific cases (.cal-day today cell, a budget
+.pill). CSS-only in web/index.html (my clean lane).

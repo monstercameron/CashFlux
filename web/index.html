@@ -2374,7 +2374,10 @@
       .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:var(--text);
         cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
       .sample-banner-btn:hover { text-decoration-thickness:2px; }
-      [data-theme="light"] .sample-banner-btn { color:var(--accent); }
+      /* §12.1: light --accent is a green (~#2e8b57) that reads ~3.8:1 on the pale
+         banner — below AA. Darken it so the action link clears 4.5:1 while staying
+         a green, interactive-looking affordance. */
+      [data-theme="light"] .sample-banner-btn { color:color-mix(in srgb, var(--accent) 70%, #000 30%); }
       [data-theme="light"] .sample-banner-btn:hover { color:var(--text); }
       /* Dismiss inherits the sample-banner-btn color (dark: --text ≈8:1; light: --accent on pale
          green, passes AA). The old --text-dim override measured only 3.91:1 on the dark --accent-dim
