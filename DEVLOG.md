@@ -5,6 +5,10 @@ problems and fixes, and what's next.
 
 
 
+
+## 2026-06-27 - R49 RESOLVED: one dominant headline per page
+
+Closed R49 end-to-end. Started from the audit (6/10 pages had 3-4 equal-weight .stat-value figures), then actually fixed all 10: .stat-value.is-hero on the single key figure each screen's own code already comments as 'the key figure', plus the dashboard HomeHero net-worth bumped above the duplicate kpi-networth tile. Adversarial review caught two real issues - a missing overflow guard on the larger figures and the audit trivially passing 0-figure pages - both fixed (min-width:0/max-width + a <=720px size step that stays >8% above siblings so it can't re-tie; audit now labels 0-fig pages n/a). Validated: headline audit 0/10, overflow audit 0/78, build rc=0. Honest scope note: the finer §6.3 anatomy (delta lines, whole-dollar rounding, Fraunces numerals) is optional polish beyond the acceptance line and left as a follow-on; the acceptance criterion itself is met and gated.
 ## 2026-06-27 — C52: inline filter panel replaces modal FlipPanel overlay
 
 The transaction filter panel was rendered through `FlipPanel` — a fixed-position backdrop overlay (`.flip-backdrop`) that set `position:fixed; inset:0` and `place-items:center`, blocking everything behind it with a blurred semi-transparent scrim. Opening the filter panel blanked the visible table entirely, so users couldn't see the current result set while adjusting filters.

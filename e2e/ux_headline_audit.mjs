@@ -80,10 +80,12 @@ await browser.close();
 console.log(`R49 headline-figure audit — ${base}\n`);
 console.log('page             figs  topW  tied  status');
 for (const r of rows) {
+  // 0/1-figure pages can't "tie", but a 0-figure page is not a meaningful pass —
+  // label it n/a so it isn't read as a satisfied hero (e.g. an empty tool page).
+  const status = r.bad ? `❌ ${r.tied} figures tie for headline` : (r.count <= 0 ? 'n/a (no figures)' : 'ok');
   console.log(
     `${r.route.padEnd(15)} ${String(r.count).padStart(4)}  ${String(r.top).padStart(5)}  ${String(r.tied).padStart(4)}  ` +
-    (r.bad ? `❌ ${r.tied} figures tie for headline` : 'ok') +
-    (r.err ? `  ERR ${r.err}` : '')
+    status + (r.err ? `  ERR ${r.err}` : '')
   );
 }
 console.log(`\nPages with competing same-weight headline figures: ${failed}/${rows.length}`);

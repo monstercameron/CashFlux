@@ -1021,7 +1021,8 @@
       /* R49: the HomeHero net-worth IS the dashboard's hero figure, so it must
          outrank the KPI-strip tiles (which also use t-figure-lg) instead of tying
          with them — give it a clearly dominant display size + weight. */
-      .home-hero-nw-fig { line-height: 1.1; font-size: 2.6rem; font-weight: 800; letter-spacing: -0.02em; }
+      .home-hero-nw-fig { line-height: 1.1; font-size: 2.6rem; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+      @media (max-width: 720px) { .home-hero-nw-fig { font-size: 2.1rem; } }
       .home-hero-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: baseline; }
       .home-hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
       .home-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.1rem; }
@@ -1095,8 +1096,14 @@
       /* R49: one dominant headline figure per page. The single KEY figure in a
          .stat-grid (safe-to-spend Left, goal progress, monthly subscription burden,
          …) gets .is-hero so it reads as the page's story instead of tying for weight
-         with its supporting siblings. */
-      .stat-value.is-hero { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; }
+         with its supporting siblings. min-width:0 + the inherited nowrap let a long
+         value (e.g. $336,545.96) ride the grid's wrap instead of forcing page-level
+         horizontal overflow on a narrow tile (§5.5.11). */
+      .stat-value.is-hero { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; min-width: 0; max-width: 100%; }
+      /* On a narrow tile keep the hero dominant but smaller — 1.8rem still clears the
+         1.5rem siblings by 20% (past the audit's 8% tie threshold) while fitting a
+         6-figure value in a ~120px column. */
+      @media (max-width: 720px) { .stat-value.is-hero { font-size: 1.8rem; } }
       .stat-value.pos { color: var(--money-positive); }
       .stat-value.neg { color: var(--money-negative); }
       .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
