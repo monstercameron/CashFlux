@@ -1476,20 +1476,17 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 	}
 }
 
-// ApplyRules applies every saved categorization rule to all existing, non-transfer
-// transactions, overwriting any existing category when a rule matches. This is the
-// "Apply to existing" backfill path — it intentionally overwrites previously-set
-// categories so that correcting or reordering a rule propagates to past transactions.
-// Tags are additive (union): each tag from the rule is merged into the transaction's
-// existing tags without duplicating any tag already present, so manually-curated tags
-// are always preserved. Transfers are always skipped.
-// Returns the number of transactions that were changed.
-func (a *App) ApplyRules() (int, error) {
+// ApplyRulesWithCounts applies every saved categorization rule to all existing,
+// non-transfer transactions and returns both the total number of transactions changed
+// and a per-rule count (keyed by rule ID) of how many transactions each rule updated.
+// Semantics are identical to ApplyRules: categories are overwritten when a rule
+// matches, tags are merged additively, and transfers are skipped.
+func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err error) {
 	rs := a.Rules()
+	perRule = make(map[string]int, len(rs))
 	if len(rs) == 0 {
-		return 0, nil
+		return 0, perRule, nil
 	}
-	updated := 0
 	for _, t := range a.Transactions() {
 		if t.IsTransfer() {
 			continue
@@ -1510,13 +1507,27 @@ func (a *App) ApplyRules() (int, error) {
 		if !changed {
 			continue
 		}
-		if err := a.store.PutTransaction(t); err != nil {
-			return updated, err
+		if err = a.store.PutTransaction(t); err != nil {
+			return total, perRule, err
 		}
-		updated++
+		total++
+		perRule[r.ID]++
 	}
-	a.log.Info("applied rules to existing transactions", "updated", updated)
-	return updated, nil
+	a.log.Info("applied rules to existing transactions", "updated", total)
+	return total, perRule, nil
+}
+
+// ApplyRules applies every saved categorization rule to all existing, non-transfer
+// transactions, overwriting any existing category when a rule matches. This is the
+// "Apply to existing" backfill path — it intentionally overwrites previously-set
+// categories so that correcting or reordering a rule propagates to past transactions.
+// Tags are additive (union): each tag from the rule is merged into the transaction's
+// existing tags without duplicating any tag already present, so manually-curated tags
+// are always preserved. Transfers are always skipped.
+// Returns the number of transactions that were changed.
+func (a *App) ApplyRules() (int, error) {
+	n, _, err := a.ApplyRulesWithCounts()
+	return n, err
 }
 
 // ReassignCategory moves every transaction and budget referencing oldID to newID,

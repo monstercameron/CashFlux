@@ -86,7 +86,9 @@ func Rules() ui.Node {
 	}
 
 	applyExisting := ui.UseEvent(Prevent(func() {
-		n, err := app.ApplyRules()
+		// Capture the rule list at event time so match phrases are current.
+		currentRules := app.Rules()
+		n, perRule, err := app.ApplyRulesWithCounts()
 		if err != nil {
 			notice.Set(notice.Get().With(err.Error(), true))
 			return
@@ -94,7 +96,20 @@ func Rules() ui.Node {
 		if n == 0 {
 			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
 		} else {
-			notice.Set(notice.Get().With(uistate.T("rules.applied", plural(n, "transaction")), false))
+			msg := uistate.T("rules.applied", plural(n, "transaction"))
+			// Append per-rule breakdown when at least one rule fired.
+			if len(perRule) > 0 {
+				var parts []string
+				for _, r := range currentRules {
+					if cnt, ok := perRule[r.ID]; ok {
+						parts = append(parts, uistate.T("rules.appliedPerRule", r.Match, plural(cnt, "transaction")))
+					}
+				}
+				if len(parts) > 0 {
+					msg += " — " + strings.Join(parts, ", ") + "."
+				}
+			}
+			notice.Set(notice.Get().With(msg, false))
 		}
 		bump()
 	}))

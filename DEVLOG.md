@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C103: "Apply to existing" now shows per-rule transaction counts
+
+**Problem (C103):** When the user clicked "Apply to existing" on /rules, the toast said "Categorized 12 transactions." — one lump total with no indication of which rules did the work. With a dozen rules in play, that tells the user almost nothing about which rules are actually firing vs. dead weight.
+
+**Root cause:** `ApplyRules()` in `internal/appstate/appstate.go` returned a single `int`. There was no per-rule accounting anywhere in the code path.
+
+**Fix — appstate layer:** Added `ApplyRulesWithCounts()` alongside `ApplyRules()`. It runs the identical backfill loop but also increments `perRule[r.ID]` each time a transaction is written. Returns `(total int, perRule map[string]int, err error)`. `ApplyRules()` delegates to it with `n, _, err := a.ApplyRulesWithCounts()` — no call sites broken, no behavioral change for the workflow engine or other callers that only need the total.
+
+**Fix — screen layer:** `applyExisting` in `internal/screens/rules.go` now calls `ApplyRulesWithCounts()` and captures `app.Rules()` at event time (so match phrases are current). It iterates the rules slice in order, skips rules with count 0, and appends a per-rule breakdown to the notice: `"Categorized 12 transactions — \"uber\": 4 transactions, \"starbucks\": 8 transactions."` The order matches rule precedence (top to bottom), which is meaningful to the user.
+
+**i18n:** New key `rules.appliedPerRule` (`"\"%s\": %s"`) formats one per-rule segment; the joining and " — " prefix are assembled in Go.
+
+**Test:** `TestApplyRulesWithCounts` in `appstate_test.go` covers: two distinct rules each matching a different subset of transactions, verifying the per-rule map contains the exact counts and omits zero-match rule IDs, and that a second call (all idempotent) returns total=0 and empty map.
+
 ## 2026-06-27 — C104: ApplyRules tag union — rule tags now merged into already-tagged transactions
 
 **Problem (C104):** `ApplyRules()` (the "Apply to existing" backfill on /rules) was guarded by `len(t.Tags) == 0 && len(r.SetTags) > 0` for the tag-application step. This meant any transaction that already had even one tag was silently skipped for tag updates — rule tags were never added. A user who added a `#travel` tag manually and then later created a rule that should also tag matching transactions with `#work` would see nothing happen on backfill.

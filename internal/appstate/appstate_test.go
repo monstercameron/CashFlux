@@ -145,6 +145,67 @@ func TestApplyRules(t *testing.T) {
 	}
 }
 
+// TestApplyRulesWithCounts verifies that ApplyRulesWithCounts returns accurate
+// per-rule transaction counts alongside the global total, using the same fixture as
+// TestApplyRules but with two distinct rules so per-rule breakdown is meaningful.
+func TestApplyRulesWithCounts(t *testing.T) {
+	a := newApp(t, false)
+	acc := domain.Account{
+		ID: "ac1", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+	}
+	if err := a.PutAccount(acc); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	// Two rules so we can verify per-rule counts.
+	if err := a.PutRule(rules.Rule{ID: "r-uber", Match: "uber", SetCategoryID: "transport"}); err != nil {
+		t.Fatalf("PutRule uber: %v", err)
+	}
+	if err := a.PutRule(rules.Rule{ID: "r-coffee", Match: "starbucks", SetCategoryID: "coffee"}); err != nil {
+		t.Fatalf("PutRule coffee: %v", err)
+	}
+	mk := func(id, desc string) domain.Transaction {
+		return domain.Transaction{ID: id, AccountID: "ac1", Desc: desc, Date: time.Now(), Amount: money.New(-500, "USD")}
+	}
+	for _, tx := range []domain.Transaction{
+		mk("u1", "Uber ride home"),   // matches uber rule
+		mk("u2", "UberEats dinner"),  // matches uber rule
+		mk("c1", "Starbucks latte"),  // matches coffee rule
+		mk("no", "Grocery store"),    // no match
+		{ID: "tf", AccountID: "ac1", TransferAccountID: "other", Desc: "Uber transfer", Date: time.Now(), Amount: money.New(-500, "USD")},
+	} {
+		if err := a.PutTransaction(tx); err != nil {
+			t.Fatalf("PutTransaction %s: %v", tx.ID, err)
+		}
+	}
+
+	total, perRule, err := a.ApplyRulesWithCounts()
+	if err != nil {
+		t.Fatalf("ApplyRulesWithCounts: %v", err)
+	}
+	// u1, u2 (uber rule) + c1 (coffee rule) = 3 total; transfer + no-match skipped.
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+	if got := perRule["r-uber"]; got != 2 {
+		t.Errorf("uber rule count = %d, want 2", got)
+	}
+	if got := perRule["r-coffee"]; got != 1 {
+		t.Errorf("coffee rule count = %d, want 1", got)
+	}
+	if _, ok := perRule["r-missing"]; ok {
+		t.Error("perRule should not contain entries for rules that matched nothing")
+	}
+	// Second call is idempotent: no changes, totals all zero.
+	total2, perRule2, err2 := a.ApplyRulesWithCounts()
+	if err2 != nil {
+		t.Fatalf("ApplyRulesWithCounts (idempotent): %v", err2)
+	}
+	if total2 != 0 || len(perRule2) != 0 {
+		t.Errorf("idempotent call: total=%d perRule=%v, want 0/empty", total2, perRule2)
+	}
+}
+
 func TestRulesEntryImportApplyAndConflictFlow(t *testing.T) {
 	a := newApp(t, false)
 	if err := a.PutAccount(domain.Account{
