@@ -234,6 +234,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
 
+	// C136: show the effective cap (carry-in limit) on rollover budgets so the user
+	// can see at a glance the maximum they can spend this period, not just their
+	// base limit. Hidden when the carry is zero (cap == base limit, no note needed).
+	var effectiveCapLine ui.Node = Fragment()
+	if props.EffectiveCap != "" {
+		effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.effectiveCap", props.EffectiveCap))
+	}
+
 	// "Cover…" is offered only on an over-budget row that has another budget to
 	// pull from. The inline form picks a source and an amount (prefilled to the
 	// exact overspend), so Maya can clear the overspend without leaving the screen.
@@ -321,6 +329,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		ownerLine,
 		paceLine,
 		rolloverLine,
+		effectiveCapLine,
 		envLine,
 		coverForm,
 		topupForm,

@@ -242,9 +242,10 @@ func Budgets() ui.Node {
 	cats := app.Categories()
 	// Each budget rolls up its sub-categories' spend (D5).
 	statuses := make([]budgeting.Status, 0, len(budgets))
-	paceOver := map[string]string{}  // budgetID → formatted projected overspend (in-progress only)
-	rollCarry := map[string]string{} // budgetID → formatted previous-period carry
-	rollNeg := map[string]bool{}     // budgetID → whether the previous-period carry is negative
+	paceOver := map[string]string{}   // budgetID → formatted projected overspend (in-progress only)
+	rollCarry := map[string]string{}  // budgetID → formatted previous-period carry
+	rollNeg := map[string]bool{}      // budgetID → whether the previous-period carry is negative
+	rollEffCap := map[string]string{} // budgetID → formatted effective cap (C136, rollover budgets only)
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, anchor, weekStart)
 		// Rollover (C132): carry the previous period's remaining (negative when it
@@ -258,6 +259,12 @@ func Budgets() ui.Node {
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); perr == nil {
 				if eff, cerr := budgeting.Carryover(prev.Remaining, b.Limit); cerr == nil {
 					eval.Limit = eff
+					// C136: the effective cap is the carry-in limit (base + previous carry).
+					// Show it only when it differs from the base limit (i.e. there was a
+					// non-zero carry), so the note appears as soon as rollover has an effect.
+					if eff.Amount != b.Limit.Amount {
+						rollEffCap[b.ID] = fmtMoney(eff)
+					}
 				}
 				rollCarry[b.ID] = budgetRemainPhrase(prev.Remaining) // C124: "$90.00 over" not "($90.00)"
 				rollNeg[b.ID] = prev.Remaining.IsNegative()
@@ -373,7 +380,7 @@ func Budgets() ui.Node {
 				if shortfall.IsPositive() {
 					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
 				}
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], EffectiveCap: rollEffCap[s.Budget.ID], CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
 			},
 		)
 		listBody = Div(rows)
@@ -449,6 +456,7 @@ type budgetRowProps struct {
 	PaceOver       string        // formatted projected overspend (pace, in-progress only); "" hides the line
 	RolloverCarry  string        // formatted previous-period carry for per-budget rollover; "" hides the line
 	RolloverNeg    bool          // previous-period carry is negative → danger tone
+	EffectiveCap   string        // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
 	CoverSources   []coverSource // budgets that can fund a "Cover…" (the row drops itself)
 	CoverShortfall string        // formatted overspend, for the "covers the $X over" hint
 	CoverDefault   string        // major-units default amount to prefill the cover field

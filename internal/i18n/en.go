@@ -565,6 +565,7 @@ var english = Catalog{
 	"budgets.rolloverHint":       "When on, whatever is left over (or overspent) at the end of a period carries into the next one. Example: a $200 grocery budget with $30 unspent starts next period at $230; overspend by $20 and it starts at $180.",
 	"budgets.rolloverTitle":      "Roll unused funds into the next period",
 	"budgets.rolloverCarry":      "Carried from previous period: %s",
+	"budgets.effectiveCap":       "Effective cap this period: %s",
 	"budgets.suggest":            "You've averaged %s/mo here recently.",
 	"budgets.useSuggest":         "Use this",
 	"budgets.atRisk":             "At risk",
