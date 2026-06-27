@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C250: Active model + BYOK billing transparency in AI settings
+
+**Problem (C250):** After selecting an AI model in Settings, nothing in the UI confirmed which model was active or that usage is billed directly to the user's OpenAI account (token-based). Users might not realise that changing the model affects their OpenAI bill, or that CashFlux itself is never charged. The existing `settings.aiKeyExplainer` text (C100) explains the BYOK model but doesn't call out the currently selected model.
+
+**Approach:** Added a single muted `P` element beneath the model `<select>` using the existing `CurModel` prop. Rendering is unconditional — the note is always visible when the AI section is visible, so the active model is never ambiguous. The display name is resolved via a new `aiModelDisplayName()` pure helper (no hooks, no side effects) that switches on the model ID and defaults to "GPT-5.4 mini" for the empty string / unset case, matching the default option in the select.
+
+**What was touched:**
+- `internal/app/settings_section.go`: added `aiModelDisplayName()` helper before `settingsRightColumn`; added the disclosure `P` element with `C250` comment after the model `<select>`.
+- `internal/i18n/en.go`: new key `settings.aiModelNote` with `%s` placeholder for the model name.
+
+**Decision — placement:** The note sits immediately below the model select (before the web-search section), so the association between the select and the billing consequence is spatially obvious. Putting it above the select would be ambiguous; putting it further away (e.g., after the key input) would separate it from the control it annotates.
+
+**Tests:** `go test ./internal/i18n/` passes. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C129: PeriodYearly added to domain enum and budgeting PeriodRange
 
 **Problem (C129):** The budget period select only offered Weekly, Monthly, and Quarterly. Yearly budgets are a legitimate use case — e.g., tracking a capital-gains budget, an annual charitable-giving limit, or an HSA contribution ceiling. `domain.Period` had no `"yearly"` value and `PeriodRange` had no corresponding case.

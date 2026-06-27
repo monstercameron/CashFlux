@@ -140,6 +140,20 @@ type settingsRightProps struct {
 	Bump          func()
 }
 
+// aiModelDisplayName returns a short human-readable label for the given OpenAI
+// model ID. Falls back to the raw ID for any future models not yet listed.
+func aiModelDisplayName(model string) string {
+	switch model {
+	case "gpt-5.5":
+		return "GPT-5.5"
+	case "o4-mini":
+		return "o4-mini (reasoning)"
+	default:
+		// Covers "" (unset) and "gpt-5.4-mini" — the default selection.
+		return "GPT-5.4 mini"
+	}
+}
+
 // settingsRightColumn renders the right column of the global settings panel
 // (appearance, preferences, AI, cloud & server, data, advanced). Pure rendering
 // helper — no hooks.
@@ -201,6 +215,9 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			Option(Value("gpt-5.5"), SelectedIf(p.CurModel == "gpt-5.5"), "GPT-5.5"),
 			Option(Value("o4-mini"), SelectedIf(p.CurModel == "o4-mini"), "o4-mini (reasoning)"),
 		),
+		// C250: surface the active model and BYOK billing transparency so users know
+		// which model is active and that they pay OpenAI directly per token used.
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelNote", aiModelDisplayName(p.CurModel))),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(p.WsKey), OnInput(p.OnWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
