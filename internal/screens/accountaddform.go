@@ -199,6 +199,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
 	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
+	// C74: lock-until is meaningful for illiquid asset types (savings, investment,
+	// retirement, crypto, other) where a maturity / lock date matters at creation time.
+	// Everyday liquid accounts (checking, debit, cash) can still reach it via Advanced.
+	at := domain.AccountType(accType.Get())
+	isLockableAsset := at == domain.TypeSavings || at == domain.TypeInvestment ||
+		at == domain.TypeRetirement || at == domain.TypeCrypto || at == domain.TypeOther
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "account-add-form"), OnSubmit(add),
 		labeledField(uistate.T("common.name"),
@@ -252,7 +258,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
 			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
-		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.lockUntil"),
+		// C74: lock-until is surfaced directly for lockable asset types (savings /
+		// investment / retirement / crypto / other) — no Advanced toggle required.
+		// Liquid everyday accounts (checking / debit / cash) can still reach it via
+		// Advanced when it's genuinely useful (e.g. a locked flex-savings account
+		// classified loosely as "checking"). Liabilities never show this field.
+		If(isLockableAsset || (!isLiab && advOpen.Get()), labeledField(uistate.T("accounts.lockUntil"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), Value(lockUntil.Get()), OnInput(onLockUntil)))),
 		MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C74: surface lock-until in add-account form for lockable asset types
+
+Lock-until (maturity/hold-period date) was always behind the "Show advanced fields" toggle for
+asset accounts. For savings, investment, retirement, crypto, and other assets this is backwards —
+knowing that a CD matures in 18 months or that a retirement account has a penalty withdrawal date
+is core creation-time information, not an advanced option.
+
+Fix: added `isLockableAsset` bool in `accountaddform.go` after the existing `isLiab` computation.
+It's true for savings/investment/retirement/crypto/other. The lock-until `If` condition changes
+from `!isLiab && advOpen.Get()` to `isLockableAsset || (!isLiab && advOpen.Get())`.
+
+Edge cases covered:
+- Checking/debit/cash (liquid, everyday): still behind Advanced — lock dates are rarely set here
+  but Advanced remains the fallback when they are (e.g. a flex savings account typed as "checking").
+- Liabilities: neither `isLockableAsset` nor `!isLiab` is true, so the field is never shown.
+- All hook ordering is unchanged — `isLockableAsset` is a computed bool in the render body, not a
+  hook, so it computes fresh every render with zero hook-ordering risk.
+
+No new i18n keys — `accounts.lockUntil` was already present. State (`lockUntil`), event handler
+(`onLockUntil`), and the save path are completely unchanged; only the visibility guard is adjusted.
+
 ## 2026-06-27 — C290: /about route and sidebar "About & privacy" link
 
 The app had no dedicated About or Privacy page — the only trust content was in Help (/help) but
