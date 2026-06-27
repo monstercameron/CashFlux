@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C84 (FX rate discoverability on /accounts)
+
+The FX rate table lives inside Settings → Exchange rates, with no pointer from the Accounts
+screen. Users who have foreign-currency accounts (or missing rates that exclude accounts from
+net worth) have no obvious path there.
+
+Added a "Manage exchange rates" ghost button in `Accounts()` just below the missing-currencies
+error notice. It opens Settings directly, using the same `uistate.UseSettings()` /
+`settingsAtom.Set(uistate.Global())` pattern that subscription banners and upgrade sheets use.
+
+Condition: `len(nw.MissingCurrencies) > 0 || len(app.Settings().FXRates) > 0` — covers the
+two relevant states (missing rates that exclude accounts, or existing rates to review/edit).
+The button carries a `title` tooltip with fuller guidance text.
+
+Hook placement: `settingsAtom` and `openFXSettings` are declared at the top of `Accounts()`,
+alongside other `UseEvent` hooks (never inside a loop or conditional — hook-safe).
+
+New i18n keys: `accounts.manageFXRates` ("Manage exchange rates") and
+`accounts.manageFXRatesTitle` ("Open Settings to add or update exchange rates for
+foreign-currency accounts").
+
+Build: `GOOS=js GOARCH=wasm go build -o NUL .` exit 0. `go test ./internal/i18n/` pass.
+
 ## 2026-06-27 — C181 SKIP (goal delete button / budget-head pointer-events)
 
 Investigated whether `.budget-head` CSS or any overlay was blocking the goal

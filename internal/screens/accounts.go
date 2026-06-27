@@ -117,6 +117,11 @@ func Accounts() ui.Node {
 		bump()
 	}))
 
+	// C84: settings atom + handler so the "Manage exchange rates" affordance can
+	// open the Settings panel directly from /accounts, without a separate route.
+	settingsAtom := uistate.UseSettings()
+	openFXSettings := ui.UseEvent(Prevent(func() { settingsAtom.Set(uistate.Global()) }))
+
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	base := app.Settings().BaseCurrency
@@ -316,6 +321,17 @@ func Accounts() ui.Node {
 		),
 		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
 			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
+		// C84: FX rate discoverability — show a muted button whenever there are
+		// foreign-currency accounts (MissingCurrencies > 0) OR existing rates to
+		// review/edit (FXRates > 0). Opens Settings directly so users don't have
+		// to hunt for the exchange-rate table.
+		If(len(nw.MissingCurrencies) > 0 || len(app.Settings().FXRates) > 0,
+			Button(css.Class("btn btn-ghost"), Type("button"),
+				Title(uistate.T("accounts.manageFXRatesTitle")),
+				OnClick(openFXSettings),
+				uistate.T("accounts.manageFXRates"),
+			),
+		),
 		If(staleCount > 0, Div(Style(map[string]string{"margin-bottom": "0.6rem"}),
 			Button(css.Class("btn btn-stale"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
