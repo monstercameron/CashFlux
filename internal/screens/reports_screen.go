@@ -242,9 +242,15 @@ func Reports() ui.Node {
 	// reads the running total rather than per-period flow).
 	accounts := app.Accounts()
 	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, bounds, rates)
+	// Convert to major units (dollars) so the Y-axis ticks read "$14k" not "1400000"
+	// (C216: same fix applied to the dashboard NW chart in C16).
+	nwDiv := 1.0
+	for i := 0; i < currency.Decimals(base); i++ {
+		nwDiv *= 10
+	}
 	nw := make([]float64, len(nwSeries))
 	for i, m := range nwSeries {
-		nw[i] = float64(m.Amount)
+		nw[i] = float64(m.Amount) / nwDiv
 	}
 	// Net-worth composition (assets vs liabilities) as of now, for a breakdown card.
 	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
@@ -260,7 +266,7 @@ func Reports() ui.Node {
 	for i, v := range srInts {
 		srSeries[i] = float64(v)
 	}
-	// Per-point hover labels for the trend AreaCharts (R-4 follow-up): cash-flow / net-worth are minor
+	// Per-point hover labels for the trend AreaCharts (R-4 follow-up): cash-flow values are minor
 	// units → money; savings-rate is already a percent. Lets each trend point read its exact value on hover.
 	moneyLabels := func(vals []float64) []string {
 		out := make([]string, len(vals))
@@ -268,6 +274,12 @@ func Reports() ui.Node {
 			out[i] = fmtMoney(money.New(int64(v), base))
 		}
 		return out
+	}
+	// nwValueLabels builds hover labels for the NW trend from the raw minor-unit
+	// series (nwSeries), independent of the major-unit nw[] used for the Y-axis.
+	nwValueLabels := make([]string, len(nwSeries))
+	for i, m := range nwSeries {
+		nwValueLabels[i] = fmtMoney(money.New(m.Amount, base))
 	}
 	pctLabels := func(vals []float64) []string {
 		out := make([]string, len(vals))
@@ -882,8 +894,10 @@ func Reports() ui.Node {
 		// R-11: net-worth composition (stat-grid) and the NW trend chart are one
 		// trajectory story — merge them into a single card (figures on top, trend
 		// below) instead of two cards with a rhythm break between them.
+		// C218: HTML id anchor so /networth can scroll to this section.
 		If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.netWorth"),
+			Attrs: []any{Attr("id", "networth")},
 			Body: Fragment(
 				Div(css.Class("stat-grid"),
 					stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
@@ -891,7 +905,7 @@ func Reports() ui.Node {
 					stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 					If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 				),
-				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels, ValueLabels: moneyLabels(nw)})),
+				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels, ValueLabels: nwValueLabels})),
 			),
 		})),
 		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -1196,3 +1210,8 @@ func deductibleSection(
 		),
 	})
 }
+
+// NetWorth is the dedicated /networth view. It delegates to Reports() — the
+// net-worth section inside Reports carries id="networth" (C218) so the shell
+// can scroll to it when navigating to this route directly.
+func NetWorth() ui.Node { return Reports() }

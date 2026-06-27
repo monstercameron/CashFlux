@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C218 (dedicated /networth route)
+
+The net-worth section was buried inside /reports with no direct navigation entry, making it
+effectively undiscoverable unless a user already knew where to look.
+
+Followed the exact same pattern established by C200 (/debt) and C156 (/recurring):
+
+1. Added `id="networth"` HTML anchor to the net-worth `EntityListSection` card in
+   `reports_screen.go` (so the section is directly linkable and the browser can scroll to it).
+2. Added a thin `NetWorth() ui.Node` wrapper at the end of `reports_screen.go` that
+   delegates to `Reports()` — the route gets its own view func without duplicating any rendering
+   logic.
+3. Registered `/networth` in `screens.All()` after `/reports`, in SubGroupPlan.
+4. Added `railMeta` entry in `shell.go` mapping to `nav.netWorth` + `icon.TrendingUp`.
+5. Added i18n keys `nav.netWorth` ("Net worth") and `screen.netWorthSub` ("Assets, liabilities,
+   and your net-worth trend") in `en.go`.
+
+i18n test passes; GOOS=js GOARCH=wasm build exits 0. Registry test (wasm-only build tag)
+validates on the CI wasm lane — no path conflicts, non-nil View, known SubGroup.
+
 ## 2026-06-27 — C84 (FX rate discoverability on /accounts)
 
 The FX rate table lives inside Settings → Exchange rates, with no pointer from the Accounts
