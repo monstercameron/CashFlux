@@ -14371,3 +14371,14 @@ receipt/image (key-gated, labeled "Needs your OpenAI key") → AI statement pars
 summary → history. Hook-safe (handlers are props defined before the return; only the sibling render position
 moved). Also improves the funnel — import at top, the populated review draft just below. Adversarial reviewer
 PASS 4/4, no fixes. documents.go is clean-mine.
+
+## 2026-06-27 — R24: no-key AI fallback design (SPEC delivered)
+With the UX screens largely top-tier (verified across health/customize/goals/subscriptions/documents/admin)
+and most screen files now contended by the concurrent agent, did the collision-free research/spec ticket
+R24. docs/DESIGN_NO_KEY_AI_FALLBACK.md systematizes the no-key principle my recent Documents §8.9 fix
+exemplifies: AI is an opt-in accelerator, never the only door. Per-feature matrix maps every key-gated AI
+feature to its on-device deterministic fallback (smartengine insights, rules categorization, CSV/OFX +
+statement.ParseAny import, allocate's per-criterion breakdown) — grounded in real files. The one true gap
+(image OCR) is the only feature with no on-device equivalent, routed to R10. Adversarial reviewer
+spot-checked every claim against the codebase: PASS 4/4 (only a precision note to list transactions.go,
+applied). New doc, zero collision. Matches the R29-R34 "SPEC delivered" research-deliverable pattern.
