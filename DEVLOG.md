@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C254: Free SMART insights on by default for new users
+
+**Problem (C254):** A brand-new user opening the app saw zero smart insights across every screen, even though the `smart.Settings.IsEnabled` logic already returns `true` for Free-tier features on a zero (unset) value. The bug was that `LoadSmartSettings` returned `smart.Settings{}` when the KV key was absent, which is correct in-memory but left the persistent store empty. Worse, the function's comment said "everything OFF — the safe default" which directly contradicted `settings.go`'s design doc ("Free features are enabled by default"). The same wrong claim appeared in the `smart.go` package-level comment.
+
+**Root cause:** No one call site was wrong — `IsEnabled` on the zero value does return `true` for Free features. But:
+1. The empty KV meant any reload that rebuilt the `Settings` from scratch would start fresh again (no explicit record to work from), making persistence for schedules/mutes fragile.
+2. The misleading "everything OFF" comment was a trap for future contributors, who might write a code path checking `s.Enabled["SMART-A1"]` directly (false on zero-value map) rather than going through `IsEnabled`.
+
+**Fix:** `LoadSmartSettings` now detects the first-load case (empty KV), applies `EnableFreeOnly`, persists the result, and returns it — so Free features are explicitly in the `Enabled` map from the first render onward. AI features remain off by default. The unparseable-KV path continues to return zero Settings (safe fallback; next persist will restore). Corrected both misleading comments.
+
+**What was touched:**
+- `internal/uistate/smartsettings.go`: `LoadSmartSettings` now calls `EnableFreeOnly` + `SaveSmartSettings` on empty KV; comment rewritten.
+- `internal/smart/smart.go`: Package-level comment updated to say "Free features are ON by default; AI features are OFF by default."
+
+**Decision — no migration for existing users:** Existing users who already have a `cashflux:smart-settings` JSON blob are unaffected — `LoadSmartSettings` only takes the new path when the key is absent. A user who previously explicitly turned off a Free feature is not overridden.
+
+**Decision — no new test:** `TestIsEnabledTierDefaults` (already in `smart_test.go`) fully covers the contract. `TestEnableFreeOnly` and `TestSettingsEnabledHelpers` confirm the downstream behavior. The persistence path is a wasm-only `SettingKVSet`/`Get` boundary and is not unit-testable in native Go without a mock — and the logic it wraps is already tested.
+
+**Tests:** `go test ./internal/smart/` passes. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C250: Active model + BYOK billing transparency in AI settings
 
 **Problem (C250):** After selecting an AI model in Settings, nothing in the UI confirmed which model was active or that usage is billed directly to the user's OpenAI account (token-based). Users might not realise that changing the model affects their OpenAI bill, or that CashFlux itself is never charged. The existing `settings.aiKeyExplainer` text (C100) explains the BYOK model but doesn't call out the currently selected model.

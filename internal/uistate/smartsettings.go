@@ -16,13 +16,24 @@ import (
 // preferences, so they survive a dataset wipe like theme/language/prefs do.
 const smartSettingsKey = "cashflux:smart-settings"
 
-// LoadSmartSettings reads the persisted SMART opt-in settings. A missing or
-// unparseable value yields the zero Settings (everything OFF — the safe default,
-// since the series is strictly opt-in).
+// LoadSmartSettings reads the persisted SMART opt-in settings.
+//
+// First-time load (empty KV): applies EnableFreeOnly so that the deterministic,
+// on-device Free features are explicitly persisted as enabled — users see
+// insights immediately without any manual step (C254). The saved state is
+// returned so the caller and any subsequent render see the same value.
+//
+// Unparseable stored value: returns zero Settings, relying on the tier-default
+// logic in IsEnabled (Free → on, AI → off) for the next render, without
+// overwriting whatever partial value may be in the KV.
 func LoadSmartSettings() smart.Settings {
 	raw := SettingKVGet(smartSettingsKey)
 	if raw == "" {
-		return smart.Settings{}
+		// C254: first session — persist Free features as explicitly enabled so
+		// insights appear immediately, without requiring the user to visit /smart.
+		s := smart.EnableFreeOnly(smart.Settings{})
+		SaveSmartSettings(s)
+		return s
 	}
 	var s smart.Settings
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {

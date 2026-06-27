@@ -11,8 +11,9 @@
 //   - An Insight is one finding a Free engine produces: a glanceable headline,
 //     a plain-English reason, a severity, an optional money figure, and an
 //     optional one-tap Action. Insights are deterministic and dismissable.
-//   - Settings record which features the user has opted into (everything is OFF
-//     by default) and which insights they have dismissed.
+//   - Settings record which features the user has opted into and which insights
+//     they have dismissed. Free (deterministic) features are ON by default;
+//     AI features are OFF by default. See Settings.IsEnabled.
 //
 // The package holds NO syscall/js and no transport. Free engines (the rule
 // items) are pure functions over domain data that return []Insight. AI features
