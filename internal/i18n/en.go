@@ -2013,6 +2013,11 @@ var english = Catalog{
 	// What's new card so it goes beyond a bare version + changelog link.
 	"help.aboutTagline": "CashFlux is a local-first, household-aware budgeting app. Track spending, set budgets and goals, and see where your money goes — all without sending anything to a server.",
 	"help.aboutPrivacy": "Your data is stored on this device and never uploaded or shared. See the privacy section in Help → Your privacy for details.",
+
+	// C253: cross-link from /subscriptions to /insights so users know where to
+	// find the broader per-category spending anomaly highlights (no AI required).
+	"subs.seeSpendingAnalysis":      "See spending analysis",
+	"subs.seeSpendingAnalysisTitle": "Spending highlights — categories that moved a lot versus your recent average — are on the Insights screen",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

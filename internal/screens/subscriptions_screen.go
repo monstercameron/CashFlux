@@ -539,6 +539,20 @@ func Subscriptions() ui.Node {
 				)),
 			),
 		})),
+		// C253: cross-link to /insights so users know where to find the broader
+		// per-category spending anomaly highlights (which live on the Insights screen
+		// under "Spending highlights"). Reduces fragmentation: /subscriptions covers
+		// the recurring-charge view; /insights covers the per-category trend view.
+		P(css.Class("muted "+tw.Fold(tw.Text12, tw.Mt2)),
+			Text(uistate.T("subs.seeSpendingAnalysis")+" · "),
+			Button(ClassStr("btn-link "+tw.Fold(tw.Text12)),
+				Type("button"),
+				Title(uistate.T("subs.seeSpendingAnalysisTitle")),
+				Attr("data-testid", "subs-see-insights-link"),
+				OnClick(ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/insights")) })),
+				uistate.T("nav.insights"),
+			),
+		),
 	)
 }
 

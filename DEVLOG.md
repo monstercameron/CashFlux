@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C253: Cross-link from /subscriptions to /insights for anomaly discoverability
+
+**Ticket:** C253 [DESIGN] — "Anomaly surface fragmented across /insights, /subscriptions, /smart."
+
+**Problem:** CashFlux has three anomaly-adjacent surfaces that users navigate independently with no
+cross-links between them:
+- `/subscriptions` — detects recurring charge anomalies (price changes, stale subscriptions, late charges)
+- `/insights` — "Spending highlights" section flags per-category spend deviations vs. recent baseline (no AI required)
+- `/smart` — SMART-A1 "Balance anomaly watch" for per-account balance anomalies
+
+A user on /subscriptions wondering "am I spending more overall?" has no cue that /insights has the
+broader per-category analysis. The full anomaly hub (IMPL R25) is still pending and requires new
+wiring across the smartengine detectors — that's a larger task. For this DESIGN ticket, a safe
+contained cue in a clean file is the correct scope.
+
+**Fix:** Added a small muted footer at the very bottom of the `Subscriptions()` screen component
+in `internal/screens/subscriptions_screen.go`. It reads "See spending analysis · Insights" (using
+the existing `nav.insights` i18n key for the link label so it's consistent with sidebar navigation
+terminology). Clicking navigates to `/insights` via the existing `nav.Navigate` + `ui.UseEvent`
+pattern. The tooltip explains: "Spending highlights — categories that moved a lot versus your
+recent average — are on the Insights screen."
+
+Two new i18n keys added to `en.go`: `subs.seeSpendingAnalysis` and `subs.seeSpendingAnalysisTitle`.
+
+**Decision:** Unconditional vs. anomaly-conditional cue — chose unconditional. Detecting
+anomalies in the subscriptions screen to decide whether to show the cue would add a compute
+pass per render and would hide the link from users with no current anomalies but who still benefit
+from knowing /insights exists. A static low-prominence footer adds zero overhead.
+
+**What's next:** IMPL R25 will wire the 4 SMART anomaly detectors into a unified /insights
+Anomaly section + dashboard strip, which will be the complete solution to C252/C253.
+
 ## 2026-06-27 — C248: Static example AI conversations for keyless users on /insights
 
 **Ticket:** C248 — "No example AI conversations for keyless users to preview value."
