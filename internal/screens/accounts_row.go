@@ -143,14 +143,17 @@ func AccountRow(props accountRowProps) ui.Node {
 	}))
 	cancelSetBal := ui.UseEvent(Prevent(func() { settingBal.Set(false) }))
 
-	// Transfer form state (L43): pre-populated with this account as the source.
+	// Transfer form state (L43): pre-populated with this account as both source and
+	// cleared destination, so the user can override the From account (C69).
 	transferring := ui.UseState(false)
+	xferFromS := ui.UseState(a.ID)
 	xferToS := ui.UseState("")
 	xferAmtS := ui.UseState("")
 	xferDateS := ui.UseState(time.Now().Format("2006-01-02"))
 	xferDescS := ui.UseState("")
 	startTransfer := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
+		xferFromS.Set(a.ID)
 		xferToS.Set("")
 		xferAmtS.Set("")
 		xferDateS.Set(time.Now().Format("2006-01-02"))
@@ -158,14 +161,19 @@ func AccountRow(props accountRowProps) ui.Node {
 		transferring.Set(true)
 	}))
 	cancelTransfer := ui.UseEvent(Prevent(func() { transferring.Set(false) }))
-	// onXferTo hook kept for stable hook ordering; SelectInput owns the change event.
+	// onXferFrom / onXferTo hooks kept for stable hook ordering; SelectInput owns the
+	// change events via its OnChange prop.
+	ui.UseEvent(func(e ui.Event) { xferFromS.Set(e.GetValue()) })
 	ui.UseEvent(func(e ui.Event) { xferToS.Set(e.GetValue()) })
 	onXferAmt := ui.UseEvent(func(v string) { xferAmtS.Set(v) })
 	onXferDate := ui.UseEvent(func(v string) { xferDateS.Set(v) })
 	onXferDesc := ui.UseEvent(func(v string) { xferDescS.Set(v) })
 	doTransfer := ui.UseEvent(Prevent(func() {
+		if xferFromS.Get() == xferToS.Get() || xferToS.Get() == "" {
+			return // validation handled in the UI; guard here as a safety net
+		}
 		if props.OnTransfer != nil {
-			props.OnTransfer(a.ID, xferToS.Get(), xferAmtS.Get(), xferDateS.Get(), xferDescS.Get())
+			props.OnTransfer(xferFromS.Get(), xferToS.Get(), xferAmtS.Get(), xferDateS.Get(), xferDescS.Get())
 		}
 		transferring.Set(false)
 	}))
@@ -433,34 +441,57 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	}
 	if transferring.Get() {
-		// Build a "To account" option list: every non-archived account except this one.
+		// Build From/To option lists. Both draw from all non-archived accounts;
+		// each list excludes the account already selected in the other field so
+		// the user cannot choose the same account on both sides (C69).
+		fromID := xferFromS.Get()
+		toID := xferToS.Get()
+		fromOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
 		toOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
 		for _, ac := range props.Accounts {
-			if ac.ID == a.ID || ac.Archived {
+			if ac.Archived {
 				continue
 			}
-			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: ac.Name + " (" + ac.Currency + ")"})
+			label := ac.Name + " (" + ac.Currency + ")"
+			if ac.ID != toID {
+				fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: label})
+			}
+			if ac.ID != fromID {
+				toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: label})
+			}
 		}
+		sameAcct := fromID != "" && toID != "" && fromID == toID
+		submitDisabled := sameAcct || fromID == "" || toID == ""
 		return Div(css.Class("row-edit"),
 			H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}),
-				uistate.T("accounts.transferTitle", a.Name)),
+				uistate.T("accounts.transferTitle")),
 			Form(css.Class("form-grid"),
 				Attr("id", "acct-transfer-form-"+a.ID),
-				Attr("aria-label", uistate.T("accounts.transferFormLabel", a.Name)),
+				Attr("aria-label", uistate.T("accounts.transferFormLabel")),
 				OnSubmit(doTransfer),
+				labeledField(uistate.T("accounts.transferFromLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   fromOpts,
+						Selected:  fromID,
+						OnChange:  func(v string) { xferFromS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferFromLabel"),
+						TestID:    "acct-xfer-from-select",
+					})),
+				labeledField(uistate.T("accounts.transferToLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   toOpts,
+						Selected:  toID,
+						OnChange:  func(v string) { xferToS.Set(v) },
+						AriaLabel: uistate.T("accounts.transferToLabel"),
+						TestID:    "acct-xfer-to-select",
+					})),
+				If(sameAcct, P(css.Class("err"), Attr("role", "alert"),
+					uistate.T("accounts.transferSameAccountErr"))),
 				labeledField(uistate.T("accounts.transferAmount"),
 					Input(css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID),
 						Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
 						Value(xferAmtS.Get()), Step("0.01"), Attr("min", "0.01"),
 						OnInput(onXferAmt))),
-				labeledField(uistate.T("accounts.transferToLabel"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   toOpts,
-						Selected:  xferToS.Get(),
-						OnChange:  func(v string) { xferToS.Set(v) },
-						AriaLabel: uistate.T("accounts.transferToLabel"),
-						TestID:    "acct-xfer-to-select",
-					})),
 				labeledField(uistate.T("accounts.transferDateLabel"),
 					Input(css.Class("field"), Type("date"),
 						Attr("aria-label", uistate.T("accounts.transferDateLabel")),
@@ -469,7 +500,12 @@ func AccountRow(props accountRowProps) ui.Node {
 					Input(css.Class("field"), Type("text"),
 						Placeholder(uistate.T("accounts.transferDefaultDesc")),
 						Value(xferDescS.Get()), OnInput(onXferDesc))),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit")),
+				IfElse(submitDisabled,
+					Button(css.Class("btn btn-primary"), Type("submit"),
+						Attr("disabled", "disabled"),
+						uistate.T("accounts.transferSubmit")),
+					Button(css.Class("btn btn-primary"), Type("submit"),
+						uistate.T("accounts.transferSubmit"))),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelTransfer), uistate.T("action.cancel")),
 			),
 		)

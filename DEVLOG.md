@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C69 [F8]: From-account selector on the transfer form
+
+The transfer form in `AccountRow` previously hard-coded the source as `a.ID` (the row whose overflow menu triggered the form). The `OnTransfer` callback always passed `a.ID` as `fromID`, making the user unable to initiate a transfer from a different account without navigating to that other account's row first.
+
+**Fix.** Added a `xferFromS` state atom initialised to `a.ID` so the pre-selected default is still the row's own account — preserving the old UX pattern while making it overridable. The From and To `SelectInput` elements now each filter out whatever is currently selected in the other field, so both lists stay mutually exclusive at all times: as the user changes From, To's list immediately re-excludes the new From, and vice versa. When From == To (both non-empty), an inline `role="alert"` error message appears and the Transfer button is disabled via `IfElse`. The `doTransfer` event handler also guards against equal IDs as a safety net.
+
+Hook ordering is critical in GWC (all `UseState`/`UseEvent` calls must be unconditional and in the same order on every render). The old code had one placeholder `ui.UseEvent` for the To selector's change event (kept for stable ordering). I replaced it with two: one for From, one for To. The total hook count in the component increases by one `UseState` and one `UseEvent`; both are at stable positions before any early-return branches.
+
+`accounts.transferTitle` and `accounts.transferFormLabel` previously took a `%s` arg (the account name); with a user-selectable From, that title is no longer accurate. Both were changed to the static string "Transfer between accounts".
+
+**Files.** `internal/screens/accounts_row.go`, `internal/i18n/en.go`. Build rc=0.
+
 ## 2026-06-27 — C96/C99 [F12]: unreadable-receipt handling + vision cost note
 
 **C96.** The `onResult` handler for the AI vision path already had a `len(rows) == 0` branch that set an error message. However the message ("No transactions were found in that image.") was purely descriptive — no guidance on what to do. Upgraded the `documents.noneFound` i18n string to a friendlier, actionable variant: it now tells the user what likely went wrong (unreadable/blurry image) and offers two escape hatches (better photo or CSV import). The branch logic is unchanged; only the string changes.
