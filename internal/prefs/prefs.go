@@ -118,6 +118,12 @@ type Prefs struct {
 	// budget periods snap to the user's actual pay cycle instead of the fixed
 	// internal epoch. Empty string means no anchor (use default epoch behavior).
 	PayCycleAnchor string `json:"payCycleAnchor,omitempty"`
+	// MonthlyIncomeMinor is the household's configured monthly take-home pay in
+	// minor units of the base currency (e.g. cents for USD). When positive, it
+	// is used by budgeting helpers (50/30/20 template, income-awareness banners,
+	// safe-to-spend) in preference to the transaction-derived income figure.
+	// Zero means unset — fall back to summing income transactions for the period.
+	MonthlyIncomeMinor int64 `json:"monthlyIncomeMinor,omitempty"`
 }
 
 // BackendActive reports whether the app should talk to the backend: a server URL

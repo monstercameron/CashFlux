@@ -5,6 +5,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendauth"
@@ -84,7 +85,8 @@ type settingsRightProps struct {
 	OnAppearanceLink func()      // closes panel + navigates to /appearance
 	OnDateStyle      uic.Handler // UseEvent
 	OnWeekStart      func(string)
-	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
+	OnPayCycleAnchor   func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
+	OnMonthlyIncome    func(string) // sets MonthlyIncomeMinor from a major-unit string (empty = 0)
 	// AI
 	AiOn          bool
 	OnAiToggle    func(bool)
@@ -207,6 +209,16 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			}),
 		),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.payCycleAnchorHint")),
+		// C22: monthly income — the household's configured take-home pay. When
+		// set (> 0), budgeting helpers (50/30/20 template, income banners,
+		// safe-to-spend) prefer this figure over transaction-derived income,
+		// giving stable budgets even in months with unusual deposits.
+		H4(css.Class("set-label"), uistate.T("settings.monthlyIncome")),
+		uic.CreateElement(monthlyIncomeInput, monthlyIncomeInputProps{
+			ValueMinor: p.Pr.MonthlyIncomeMinor,
+			OnChange:   p.OnMonthlyIncome,
+		}),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.monthlyIncomeHint")),
 
 		// 3 · AI — setup-once; key + model select in one logical cluster.
 		ui.Divider(),
@@ -373,5 +385,43 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			dataBtn(uistate.T("settings.exportLangs"), false, p.OnExportLangs),
 			dataBtn(uistate.T("settings.importLangs"), false, p.OnImportLangs),
 		),
+	)
+}
+
+// monthlyIncomeInputProps configures the monthly-income text field. ValueMinor
+// is the persisted value in minor units (0 = unset); OnChange receives the raw
+// string the user typed, which the caller converts and persists.
+type monthlyIncomeInputProps struct {
+	ValueMinor int64
+	OnChange   func(string)
+}
+
+// monthlyIncomeInput is the "Monthly income" entry field (C22). It is its own
+// component so the OnInput hook sits at a stable position — not inside a loop.
+// The field shows a major-unit decimal (e.g. "5000.00" for 500000 cents); the
+// caller is responsible for parsing and persisting the value.
+func monthlyIncomeInput(props monthlyIncomeInputProps) uic.Node {
+	// Derive the display value: major units as a plain decimal string, or blank
+	// when unset (0) so the placeholder shows instead of a distracting "0.00".
+	displayVal := ""
+	if props.ValueMinor > 0 {
+		// USD-style: divide by 100. Use the generic 2-decimal representation for
+		// all currencies since this is a display default; exact decimal places are
+		// calibrated on the parse side where the base currency is available.
+		displayVal = strconv.FormatFloat(float64(props.ValueMinor)/100, 'f', 2, 64)
+	}
+	on := uic.UseEvent(func(v string) {
+		if props.OnChange != nil {
+			props.OnChange(v)
+		}
+	})
+	return Input(
+		css.Class("set-input", tw.Mt045),
+		Type("text"),
+		Attr("inputmode", "decimal"),
+		Attr("aria-label", uistate.T("settings.monthlyIncome")),
+		Attr("placeholder", uistate.T("settings.monthlyIncomePlaceholder")),
+		Value(displayVal),
+		OnInput(on),
 	)
 }

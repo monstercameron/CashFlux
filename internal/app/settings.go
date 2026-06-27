@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -909,9 +910,18 @@ func globalSettingsForm() uic.Node {
 			settingsAtom.Set(uistate.SettingsTarget{})
 			nav.Navigate(uistate.RoutePath("/appearance"))
 		},
-		OnDateStyle: onDateStyle,
-		OnWeekStart: func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
+		OnDateStyle:      onDateStyle,
+		OnWeekStart:      func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 		OnPayCycleAnchor: func(v string) { p := prefsAtom.Get(); p.PayCycleAnchor = strings.TrimSpace(v); savePrefs(p) },
+		OnMonthlyIncome: func(v string) {
+			amt, err := money.ParseMinor(strings.TrimSpace(v), currency.Decimals(base))
+			if err != nil || amt < 0 {
+				amt = 0
+			}
+			p := prefsAtom.Get()
+			p.MonthlyIncomeMinor = amt
+			savePrefs(p)
+		},
 
 		AiOn:       aiOn.Get(),
 		OnAiToggle: func(v bool) { aiOn.Set(v) },

@@ -97,7 +97,10 @@ func Budgets() ui.Node {
 		now := time.Now()
 		curStart := dateutil.MonthStart(now)
 		prevStart := dateutil.AddMonths(curStart, -1)
-		income := budgeting.IncomeForBudgets(0, txns, prevStart, curStart, base, rates)
+		// C22: prefer the configured monthly income when the user has set one;
+		// fall back to the transaction-derived figure when unset (0).
+		configuredIncome := uistate.CurrentPrefs().MonthlyIncomeMinor
+		income := budgeting.IncomeForBudgets(configuredIncome, txns, prevStart, curStart, base, rates)
 		if income <= 0 {
 			uistate.PostNotice(uistate.T("budgets.tmplNoIncome"), true)
 			return
@@ -363,9 +366,15 @@ func Budgets() ui.Node {
 		// budgets relate to what they actually earn. Use the same period-income helper
 		// as zero-based (ledger.PeriodTotals over the current month) — the simple mode
 		// just doesn't enforce "every dollar assigned"; it still helps to see the gap.
+		// C22: prefer the user's configured monthly income when set; fall back to
+		// transaction-derived income when unconfigured.
 		sms, sme := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
-		simpleIncome, _, _ := ledger.PeriodTotals(txns, sms, sme, rates)
-		simpleUnbudgeted := simpleIncome.Amount - totalLimit
+		rawSimpleIncome, _, _ := ledger.PeriodTotals(txns, sms, sme, rates)
+		simpleIncomeAmt := budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, sms, sme, base, rates)
+		if simpleIncomeAmt == 0 {
+			simpleIncomeAmt = rawSimpleIncome.Amount
+		}
+		simpleUnbudgeted := simpleIncomeAmt - totalLimit
 		var simpleDiffNode ui.Node
 		if simpleUnbudgeted > 0 {
 			simpleDiffNode = Span(css.Class(tw.TextUp), uistate.T("budgets.simpleUnbudgeted", fmtMoney(money.New(simpleUnbudgeted, base))))
@@ -375,7 +384,7 @@ func Budgets() ui.Node {
 			simpleDiffNode = Span(css.Class(tw.TextDown), uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-simpleUnbudgeted, base))))
 		}
 		assignBanner = P(css.Class("budget-sub", tw.FontDisplay),
-			uistate.T("budgets.simpleIncome", fmtMoney(money.New(simpleIncome.Amount, base))),
+			uistate.T("budgets.simpleIncome", fmtMoney(money.New(simpleIncomeAmt, base))),
 			" · ",
 			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(totalLimit, base))),
 			" · ",
@@ -383,8 +392,13 @@ func Budgets() ui.Node {
 		)
 	case budgeting.MethodZeroBased:
 		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
-		income, _, _ := ledger.PeriodTotals(txns, ms, me, rates)
-		toAssign := budgeting.ToAssign(income.Amount, totalLimit)
+		// C22: prefer configured monthly income; fall back to transaction-derived.
+		incomeAmt := budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, ms, me, base, rates)
+		if incomeAmt == 0 {
+			rawIncome, _, _ := ledger.PeriodTotals(txns, ms, me, rates)
+			incomeAmt = rawIncome.Amount
+		}
+		toAssign := budgeting.ToAssign(incomeAmt, totalLimit)
 		switch {
 		case toAssign > 0:
 			assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.toAssign", fmtMoney(money.New(toAssign, base))))
