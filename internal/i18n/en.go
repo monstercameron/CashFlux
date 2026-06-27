@@ -586,6 +586,8 @@ var english = Catalog{
 	"budgets.rowSub":             "%s · %s · %d%% · %s left",
 	"budgets.addedToast":         "Budget created.",
 	"budgets.duplicateBudget":    "A budget for this category, period, and owner already exists.",
+	// C190: sinking-fund set-aside summary line on /budgets.
+	"budgets.fundSetAside": "Sinking funds need %s this month — money committed to saving for future expenses.",
 
 	// Goals screen
 	"goals.add":                "Add goal",

@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -382,6 +383,24 @@ func Budgets() ui.Node {
 		}
 	}
 
+	// C190: sum the monthly set-aside across all active sinking-fund goals.
+	// FundSetAsideMinor is the canonical per-goal figure; summing over goals
+	// where IsSinkingFund && !Archived gives the household's total monthly
+	// commitment to funds. Surfaced only when the total is non-zero.
+	var totalFundSetAside int64
+	for _, g := range app.Goals() {
+		if g.IsSinkingFund && !g.Archived {
+			totalFundSetAside += goalsvc.FundSetAsideMinor(g, now)
+		}
+	}
+	fundSetAsideNode := Fragment()
+	if totalFundSetAside > 0 {
+		fundSetAsideNode = P(css.Class("budget-sub", tw.FontDisplay),
+			Attr("data-testid", "budgets-fund-setaside"),
+			uistate.T("budgets.fundSetAside", fmtMoney(money.New(totalFundSetAside, base))),
+		)
+	}
+
 	var listBody ui.Node
 	if len(statuses) == 0 {
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), AddTarget: "budget", Icon: icon.Budgets})
@@ -451,6 +470,11 @@ func Budgets() ui.Node {
 					P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
 						uistate.T("budgets.customRangeHint"))),
 				assignBanner,
+				// C190: sinking-fund monthly set-aside summary — shown when at least one
+				// active fund has a non-zero monthly contribution. Placed after the income
+				// / methodology banner so the reader sees income context first, then the
+				// committed fund savings as a committed slice of that income.
+				fundSetAsideNode,
 				// C125: when budgets are over, lead with a salient alert banner stating the
 				// total overspend up front — not just a small count pill — so the problem
 				// is impossible to miss. The count/near pills stay below as detail.

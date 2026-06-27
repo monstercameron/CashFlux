@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C190 [F25]: Sinking-fund set-aside on /budgets
+
+Wired `goals.FundSetAsideMinor` into the Budgets screen. The computation is a simple loop over `app.Goals()` filtering `IsSinkingFund && !Archived`, summing the per-goal monthly minor-unit amount. No new domain logic needed — `FundSetAsideMinor` already existed and was being used on the Goals screen; this just pulls it into budgets context.
+
+Placement decision: the summary line sits below `assignBanner` (the income/methodology context) so users see income first, then the slice committed to sinking funds — the natural reading order for "how is my money allocated?". The line is suppressed entirely when no funds exist (zero clutter principle matches the existing `overCount > 0` guards).
+
+The `goalsvc` alias was the only new import on `budgets.go`. One i18n key added: `budgets.fundSetAside`. `data-testid="budgets-fund-setaside"` for future e2e coverage.
+
 ## 2026-06-27 — C189/C192/C194 [F25]: Sinking-fund concept
 
 Added the first three sinking-fund tickets end-to-end. `IsSinkingFund` and `CategoryID` added to `domain.Goal` as `omitempty` JSON fields — no store migration needed (existing goals load as `IsSinkingFund=false`, `CategoryID=""`).
