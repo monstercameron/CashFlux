@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -54,9 +55,10 @@ func setupChecklist() ui.Node {
 	return uiw.Card(uiw.CardProps{Title: "Getting set up", Body: Div(body...)})
 }
 
-// whatsNewCard surfaces the current version + a few recent highlights, with a link
-// to the full changelog (R34-whatsnew). A discoverable surface rather than an
-// auto-popping sheet — calmer, and works offline (the bullets are static).
+// whatsNewCard surfaces a plain-English description of what CashFlux is, the
+// local-first privacy commitment, the current version, recent highlights, and
+// a link to the full changelog (C293 / R34-whatsnew). A discoverable surface
+// rather than an auto-popping sheet — calmer, and works offline.
 func whatsNewCard() ui.Node {
 	bullets := []string{
 		"Financial-health score — a 0–100 read of your overall position with next steps.",
@@ -65,6 +67,10 @@ func whatsNewCard() ui.Node {
 		"A privacy line in the sidebar — your data stays on this device.",
 	}
 	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
+	// C293: plain-English identity + privacy commitment so the card explains what
+	// CashFlux is and why it is safe to use — not just what changed.
+	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.aboutTagline")))
+	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.aboutPrivacy")))
 	body = append(body, P(css.Class("t-caption", tw.TextFaint), "Version "+version.Label()))
 	for _, b := range bullets {
 		body = append(body, P(css.Class("t-body", tw.TextDim), "• "+b))

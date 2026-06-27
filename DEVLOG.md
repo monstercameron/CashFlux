@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C293 (About card identity + privacy context)
+
+The "What's new" card in /help served only as a version label + recent highlights + changelog link.
+A new user had no way to understand what CashFlux is or why it is safe to use from that card.
+
+Added two lines at the top of `whatsNewCard()`:
+1. A tagline: "CashFlux is a local-first, household-aware budgeting app. Track spending, set budgets
+   and goals, and see where your money goes — all without sending anything to a server."
+2. A privacy line: "Your data is stored on this device and never uploaded or shared. See the privacy
+   section in Help → Your privacy for details."
+
+The strings are i18n keys (`help.aboutTagline`, `help.aboutPrivacy`) added to `en.go`, and `uistate`
+was imported into `help.go` to call `uistate.T()`. The existing bullets and changelog link are unchanged.
+The card now functions as both a release-notes surface and a trust/onboarding anchor.
+
 ## 2026-06-27 — C240 (consolidate reports CSV exports)
 
 The R-7 commit added a page-level `<details>` export dropdown covering all six CSV exports
