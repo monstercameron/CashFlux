@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C189/C192/C194 [F25]: Sinking-fund concept
+
+Added the first three sinking-fund tickets end-to-end. `IsSinkingFund` and `CategoryID` added to `domain.Goal` as `omitempty` JSON fields — no store migration needed (existing goals load as `IsSinkingFund=false`, `CategoryID=""`).
+
+**Form (C189/C192).** `goalAddForm` got two new state hooks (`isSinkingFund`, `categoryID`) plus two stable placeholder event hooks inserted in order (matching framework's no-reorder rule). The "Sinking fund" checkbox uses `OnChange(onSinkingFund)` — a stable hook, not inside a loop. The "Linked category" select reuses `SelectInput`, which owns its own event internally. Both fields reset on successful add.
+
+**Grouping (C194).** `Goals()` now partitions into three slices (`fundGoals`, `activeGoals`, `achievedGoals`). Funds render in a `uiw.Card` with header "Sinking funds · N" above the `EntityListSection`. Rows reuse `GoalRow` via `ui.CreateElement` (no hooks in loops). `FundSetAside` and `LinkedCategoryName` are pre-computed outside the `MapKeyed` call and passed as plain data on `goalRowProps` — no service calls inside the loop.
+
+**GoalRow display.** `fundChip` (set-aside rate badge) and `catLine` (category name sub-line) are conditionally rendered from the pre-computed props — both are pure `ui.Node` computations, no additional hooks.
+
+**Helpers.** `goalCategoryOptions` (mirrors `goalAccountOptions`), `categoryNameByID` (linear scan).
+
+Build rc=0; domain+goals tests pass.
+
 ## 2026-06-27 — C204/C205 [F27]: /loans amortization screen
 Built `internal/screens/loans.go` surfacing the committed `payoff.AmortizeFixed` / `AmortizeWithExtra` / `AmortSummary` engine to users. Key design decision: each installment loan card is its own component (`loanCard`) rendered via `ui.CreateElement` so per-card `UseState`/`UseEvent` hooks are at stable positions — the loop over `loans` only builds `loanCardProps` and calls `CreateElement`, never hooks directly. Defaulted term to 60 months for loans/personal-loans, 360 for mortgages (user-editable). Balances read via `ledger.Balance` and negated (liabilities are stored as negative). C205 extra-payment simulation shows months saved, interest saved, new payoff date, and payments left whenever `extraMinor > 0`. No stored term field was needed (C206 scope). Registered `/loans` next to `/credit` in the SubGroupPlan rail. Both `go build -o NUL ./internal/screens` and `go build -o NUL .` exit 0.
 

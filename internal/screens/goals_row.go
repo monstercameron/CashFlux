@@ -179,6 +179,26 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
+	// C189/C192: sinking-fund indicators — monthly set-aside chip and linked
+	// category label. Both are pre-computed by the Goals screen to avoid calling
+	// service functions inside a variable-length loop.
+	fundSetAside := props.FundSetAside
+	var fundChip ui.Node = Fragment()
+	if g.IsSinkingFund && fundSetAside > 0 {
+		fundAmt := money.New(fundSetAside, g.CurrentAmount.Currency)
+		fundChip = Span(ClassStr("pace-badge pace-rate"),
+			Attr("data-testid", "fund-setaside-"+g.ID),
+			uistate.T("goals.monthlySetAside", fmtMoney(fundAmt)),
+		)
+	}
+	var catLine ui.Node = Fragment()
+	if g.IsSinkingFund && props.LinkedCategoryName != "" {
+		catLine = Span(css.Class("budget-sub"),
+			Attr("data-testid", "fund-category-"+g.ID),
+			uistate.T("goals.fundLinkedCategory", props.LinkedCategoryName),
+		)
+	}
+
 	// C178: monthly contribution rate chip shown next to the pace badge so the
 	// user can see what they need to save per month without hunting through the
 	// sub-line text.
@@ -280,6 +300,8 @@ func GoalRow(props goalRowProps) ui.Node {
 			Span(css.Class("row-desc"), g.Name),
 			paceBadge(pace),
 			monthlyChip,
+			// C189: sinking-fund monthly set-aside chip (shown instead of / alongside monthlyChip).
+			fundChip,
 			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
@@ -294,6 +316,8 @@ func GoalRow(props goalRowProps) ui.Node {
 		overfundNote,
 		whatNext,
 		linkedLine,
+		// C192: linked category sub-line for sinking funds.
+		catLine,
 		contribForm,
 		editForm,
 	)

@@ -60,6 +60,9 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	advOpen := ui.UseState(false)
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
+	// C189: sinking-fund flag; C192: optional linked spending category.
+	isSinkingFund := ui.UseState(false)
+	categoryID := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { target.Set(v) })
@@ -72,6 +75,10 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	// onToggleAdv kept for stable hook ordering (C176: toggle removed, fields
 	// are always visible); the state var advOpen remains registered too.
 	ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
+	// onSinkingFund / onCategoryID hooks kept for stable hook ordering; the
+	// checkbox uses OnChange(onSinkingFund) and SelectInput owns onCategoryID.
+	onSinkingFund := ui.UseEvent(func(e ui.Event) { isSinkingFund.Set(e.IsChecked()) })
+	ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
 
 	goalDefs := app.CustomFieldDefsFor("goal")
 	onCustom := func(key, value string) {
@@ -113,6 +120,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			TargetAmount: money.New(tgt, base), CurrentAmount: money.New(cur, base), TargetDate: targetDate,
 			AccountID: linkAcct.Get(), Custom: customValuesToMap(goalDefs, customVals.Get()),
+			IsSinkingFund: isSinkingFund.Get(), CategoryID: categoryID.Get(),
 		}
 		if err := app.PutGoal(g); err != nil {
 			errMsg.Set(err.Error())
@@ -124,6 +132,8 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 		current.Set("0")
 		dateStr.Set("")
 		linkAcct.Set("")
+		isSinkingFund.Set(false)
+		categoryID.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		uistate.PostNotice(uistate.T("goals.addedToast"), false)
@@ -138,6 +148,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
+	catOptions := goalCategoryOptions(app.Categories(), categoryID.Get())
 
 	// Wish→goal assist: if the typed name parses as a free-text savings wish,
 	// offer a chip that fills both the name and the target amount in one click.
@@ -184,6 +195,26 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 				Selected:  linkAcct.Get(),
 				OnChange:  func(v string) { linkAcct.Set(v) },
 				AriaLabel: uistate.T("goals.linkedOptional"),
+			})),
+		// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
+		labeledField(uistate.T("goals.sinkingFund"),
+			func() ui.Node {
+				cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund)}
+				if isSinkingFund.Get() {
+					cbArgs = append(cbArgs, Attr("checked", ""))
+				}
+				return Div(
+					Input(cbArgs...),
+					Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
+				)
+			}()),
+		// C192: optional linked spending category for the fund (always shown, meaningful mainly for sinking funds).
+		labeledField(uistate.T("goals.linkedCategory"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   catOptions,
+				Selected:  categoryID.Get(),
+				OnChange:  func(v string) { categoryID.Set(v) },
+				AriaLabel: uistate.T("goals.linkedCategory"),
 			})),
 		MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

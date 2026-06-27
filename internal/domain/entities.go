@@ -411,8 +411,19 @@ type Goal struct {
 	AccountID     string      `json:"accountId,omitempty"`
 	// Archived marks a completed goal as moved to the "Achieved" section.
 	// JSON round-trips automatically; no store schema change is needed.
-	Archived bool           `json:"archived,omitempty"`
-	Custom   map[string]any `json:"custom,omitempty"`
+	Archived bool `json:"archived,omitempty"`
+	// IsSinkingFund marks the goal as a sinking fund — a bucket you save
+	// into regularly for an irregular future expense (car repairs, holidays,
+	// annual subscriptions, etc.). Sinking funds are displayed in a dedicated
+	// "Sinking funds" section on the Goals screen with their monthly set-aside
+	// contribution shown. JSON round-trips automatically; no store migration needed.
+	IsSinkingFund bool `json:"isSinkingFund,omitempty"`
+	// CategoryID links the sinking fund to a spending category so draw-downs
+	// can be matched against categorized transactions (C192). Optional — the
+	// field is meaningful mainly for sinking funds but is not constrained to
+	// them. JSON round-trips automatically; no store migration needed.
+	CategoryID string         `json:"categoryId,omitempty"`
+	Custom     map[string]any `json:"custom,omitempty"`
 }
 
 // EarmarkKind identifies what kind of entity an Earmark is targeting.

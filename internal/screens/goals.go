@@ -182,12 +182,16 @@ func Goals() ui.Node {
 	}
 
 	allGoals := app.Goals()
+	categories := app.Categories()
 
 	// Partition into active (non-archived) and achieved (archived).
-	var activeGoals, achievedGoals []domain.Goal
+	// Active goals are further split into regular goals and sinking funds (C194).
+	var activeGoals, fundGoals, achievedGoals []domain.Goal
 	for _, g := range allGoals {
 		if g.Archived {
 			achievedGoals = append(achievedGoals, g)
+		} else if g.IsSinkingFund {
+			fundGoals = append(fundGoals, g)
 		} else {
 			activeGoals = append(activeGoals, g)
 		}
@@ -198,6 +202,10 @@ func Goals() ui.Node {
 	// goal so Aaliyah's "what should I fund next?" is answered at the top.
 	sort.SliceStable(activeGoals, func(i, j int) bool {
 		return goalsvc.LessForList(activeGoals[i], activeGoals[j])
+	})
+	// Sinking-fund list: alphabetical.
+	sort.SliceStable(fundGoals, func(i, j int) bool {
+		return fundGoals[i].Name < fundGoals[j].Name
 	})
 	// Achieved list: alphabetical.
 	sort.SliceStable(achievedGoals, func(i, j int) bool {
@@ -247,8 +255,10 @@ func Goals() ui.Node {
 	goalSmartPr := uistate.UsePrefs().Get()
 	goalSmartIn := buildSmartInput(app, goalSmartPr.WeekStartWeekday())
 
+	now := time.Now()
+
 	var listBody ui.Node
-	if len(activeGoals) == 0 {
+	if len(activeGoals) == 0 && len(fundGoals) == 0 {
 		listBody = Fragment(
 			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals}),
 			smartEmptyStateFor(goalSmartSettings, smart.PageGoals, goalSmartIn),
@@ -261,6 +271,34 @@ func Goals() ui.Node {
 			},
 		)
 		listBody = Div(css.Class("goal-list"), rows)
+	}
+
+	// C194: sinking-funds section — shown above the regular goals when any exist.
+	// Each fund row reuses GoalRow for full interact functionality, and the
+	// row props carry the pre-computed monthly set-aside and resolved category name.
+	var fundsSection ui.Node = Fragment()
+	if len(fundGoals) > 0 {
+		fundRows := MapKeyed(fundGoals,
+			func(g domain.Goal) any { return g.ID },
+			func(g domain.Goal) ui.Node {
+				setAside := goalsvc.FundSetAsideMinor(g, now)
+				catName := categoryNameByID(categories, g.CategoryID)
+				return ui.CreateElement(GoalRow, goalRowProps{
+					Goal: g, Accounts: accounts, Members: members,
+					OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal,
+					OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
+					FundSetAside: setAside, LinkedCategoryName: catName,
+				})
+			},
+		)
+		fundsSection = uiw.Card(uiw.CardProps{
+			Attrs: []any{Attr("aria-label", uistate.T("goals.fundsSection"))},
+			Header: H2(css.Class("card-title"),
+				uistate.T("goals.fundsSection"),
+				Span(css.Class("budget-sub"), fmt.Sprintf(" · %d", len(fundGoals))),
+			),
+			Body: Div(css.Class("goal-list"), fundRows),
+		})
 	}
 
 	return Div(
@@ -277,6 +315,7 @@ func Goals() ui.Node {
 				Div(css.Class("stat-value is-hero"), fmt.Sprintf("%d%%", overallPct)),
 			),
 		)),
+		fundsSection,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.goals"),
 			HeaderAction: Fragment(
@@ -303,6 +342,11 @@ type goalRowProps struct {
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
 	OnRedirect     func()                        // a completed goal frees its monthly — jump to Allocate (L20)
+	// C189/C192: sinking-fund display data (zero values = not a fund / no link).
+	// FundSetAside is the monthly set-aside in minor units (from FundSetAsideMinor).
+	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).
+	FundSetAside        int64
+	LinkedCategoryName  string
 }
 
 // goalAccountOptions builds the linked-account SelectOptions for a goal, with a
@@ -315,10 +359,30 @@ func goalAccountOptions(accounts []domain.Account, selected string) []uiw.Select
 	return opts
 }
 
+// goalCategoryOptions builds the linked-category SelectOptions for a goal/fund,
+// with a leading "no link" choice. Used by goaladdform and the inline edit (C192).
+func goalCategoryOptions(categories []domain.Category, selected string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("goals.noCategoryLink")}}
+	for _, c := range categories {
+		opts = append(opts, uiw.SelectOption{Value: c.ID, Label: c.Name})
+	}
+	return opts
+}
+
 // accountName returns an account's name by id, or "" when not found.
 func accountName(accounts []domain.Account, id string) string {
 	if a, ok := domain.AccountByID(accounts, id); ok {
 		return a.Name
+	}
+	return ""
+}
+
+// categoryNameByID returns a category's name by id, or "" when not found.
+func categoryNameByID(categories []domain.Category, id string) string {
+	for _, c := range categories {
+		if c.ID == id {
+			return c.Name
+		}
 	}
 	return ""
 }
