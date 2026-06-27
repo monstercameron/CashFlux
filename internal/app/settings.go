@@ -453,6 +453,8 @@ var freshnessTypes = []struct {
 	{"settings.freshChecking", domain.TypeChecking},
 	{"settings.freshSavings", domain.TypeSavings},
 	{"settings.freshInvestments", domain.TypeInvestment},
+	{"settings.freshRetirement", domain.TypeRetirement},
+	{"settings.freshCrypto", domain.TypeCrypto},
 	{"settings.freshLoans", domain.TypeLoan},
 	{"settings.freshCash", domain.TypeCash},
 }
@@ -1319,7 +1321,7 @@ func exportJSON(notify func(string, bool)) {
 	if app == nil {
 		return
 	}
-	data, err := app.ExportJSON()
+	data, err := app.ExportJSONWithBlobs()
 	if err != nil {
 		notify(uistate.T("settings.exportDataErr", err.Error()), true)
 		return

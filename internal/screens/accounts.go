@@ -450,6 +450,10 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 		return icon.Landmark
 	case domain.TypeInvestment:
 		return icon.Reports
+	case domain.TypeRetirement:
+		return icon.TrendingUp
+	case domain.TypeCrypto:
+		return icon.Scale
 	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings:
 		return icon.Landmark
 	default:

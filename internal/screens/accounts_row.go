@@ -53,11 +53,13 @@ type accountRowProps struct {
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
 // isValuationType reports whether an account's balance is a periodically
-// estimated valuation (an investment or an other/illiquid asset) rather than a
-// reconciled cash balance. C226: these read better with "Out of date / Update
-// value" than the banking-flavoured "Stale / Update balance".
+// estimated valuation (an investment, retirement, crypto, or other/illiquid
+// asset) rather than a reconciled cash balance. C226/C73: these read better
+// with "Out of date / Update value" than the banking-flavoured "Stale / Update
+// balance".
 func isValuationType(t domain.AccountType) bool {
-	return t == domain.TypeInvestment || t == domain.TypeOther
+	return t == domain.TypeInvestment || t == domain.TypeRetirement ||
+		t == domain.TypeCrypto || t == domain.TypeOther
 }
 
 // staleBadgeKey / updateActionKey pick asset-appropriate wording for the stale

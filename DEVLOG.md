@@ -3,6 +3,46 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C73: Retirement and Crypto account types
+
+Added two new `AccountType` constants: `TypeRetirement` and `TypeCrypto`. The enum design stays
+consistent with the existing `TypeInvestment` pattern — string constants under `internal/domain`,
+`AllAccountTypes` slice updated from 11 to 13 elements, domain tests updated in lockstep.
+
+**Staleness windows** (`internal/freshness`): Retirement gets 120 days (same as Investment — both
+are illiquid/slow-moving assets you update manually a few times per year); Crypto gets 30 days
+(volatile but still manually entered — a monthly cadence is realistic without being naggy). Added
+as plain map entries in `DefaultWindows()`; no exhaustive switch involved.
+
+**Valuation type** (`accounts_row.go`): Extended `isValuationType` to include both new types so
+the "Out of date / Update value" UI wording applies instead of the "Stale / Update balance" variant
+used for cash accounts. Correct framing: you "update the value" of an investment, not "update the
+balance" like a checking account.
+
+**Icons** (`accounts.go`): `TypeRetirement` → `icon.TrendingUp` (long-term growth framing);
+`TypeCrypto` → `icon.Scale` (balance/volatility framing). Both icons were already in the icon set.
+
+**Labels**: No explicit i18n needed for dropdown labels — `humanizeType()` in `format.go`
+auto-capitalizes the first letter of the underlying string constant ("retirement"→"Retirement",
+"crypto"→"Crypto"), matching every other existing type label.
+
+**Settings freshness panel** (`settings.go` + `en.go`): Added rows for both types so users can
+configure their own staleness thresholds. New i18n keys `settings.freshRetirement` ("Retirement
+accounts") and `settings.freshCrypto` ("Crypto") slot in after the Investments row.
+
+**Quick-Add / accountselect exclusion**: Retirement and Crypto are assets (not liabilities), so
+they naturally pass the `ClassAsset` check — but they're not appropriate default spend accounts.
+Extended `isSpendAccount()` in `accountselect.go` and the inline fallback in `quickadd.go` to
+exclude both types alongside the existing `TypeInvestment` exclusion. Pattern is explicit and
+readable; no bitmask or category enum needed.
+
+**Liquid/runway no-op**: Both `ledger/liquid.go` and `runway/suggest.go` whitelist only cash-type
+accounts (checking, debit, savings, cash) with `default: continue`. The new types are implicitly
+excluded — no code change needed.
+
+**Tests pass**: `go test ./internal/domain/ ./internal/freshness/ ./internal/ledger/ ./internal/i18n/`
+all green. `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
+
 ## 2026-06-27 — C178 + C180 goal pace badge with monthly rate; inline contribute/edit
 
 **C178 — pace badge not contribution-rate aware:**

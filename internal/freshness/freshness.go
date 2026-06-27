@@ -42,7 +42,9 @@ func DefaultWindows() Windows {
 		domain.TypeDebit:        30,
 		domain.TypeCash:         30,
 		domain.TypeSavings:      45,
-		domain.TypeInvestment:   120,
+		domain.TypeInvestment:  120,
+		domain.TypeRetirement:  120, // C73: slow-moving like investments — same long window
+		domain.TypeCrypto:       30, // C73: volatile but manually updated — monthly cadence
 		domain.TypeOther:        180,
 	}
 }

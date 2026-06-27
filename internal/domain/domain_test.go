@@ -60,8 +60,8 @@ func TestAllSlicesAreValid(t *testing.T) {
 			t.Errorf("AllRelatedTypes has invalid %q", r)
 		}
 	}
-	if len(AllAccountTypes) != 11 {
-		t.Errorf("AllAccountTypes len = %d, want 11", len(AllAccountTypes))
+	if len(AllAccountTypes) != 13 {
+		t.Errorf("AllAccountTypes len = %d, want 13", len(AllAccountTypes))
 	}
 }
 
@@ -72,7 +72,7 @@ func TestAccountTypeClass(t *testing.T) {
 			t.Errorf("%s should be a liability", ty)
 		}
 	}
-	assets := []AccountType{TypeChecking, TypeDebit, TypeSavings, TypeCash, TypeInvestment, TypeOther}
+	assets := []AccountType{TypeChecking, TypeDebit, TypeSavings, TypeCash, TypeInvestment, TypeRetirement, TypeCrypto, TypeOther}
 	for _, ty := range assets {
 		if ty.Class() != ClassAsset || ty.IsLiability() {
 			t.Errorf("%s should be an asset", ty)

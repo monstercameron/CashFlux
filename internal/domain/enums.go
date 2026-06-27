@@ -42,13 +42,16 @@ const (
 	TypePersonalLoan AccountType = "personal_loan"
 	TypeMortgage     AccountType = "mortgage"
 	TypeInvestment   AccountType = "investment"
+	TypeRetirement   AccountType = "retirement"
+	TypeCrypto       AccountType = "crypto"
 	TypeOther        AccountType = "other"
 )
 
 // AllAccountTypes lists every valid account type.
 var AllAccountTypes = []AccountType{
 	TypeChecking, TypeDebit, TypeSavings, TypeCash, TypeCreditCard,
-	TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage, TypeInvestment, TypeOther,
+	TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage,
+	TypeInvestment, TypeRetirement, TypeCrypto, TypeOther,
 }
 
 func (t AccountType) String() string { return string(t) }

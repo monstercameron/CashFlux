@@ -76,10 +76,14 @@ func QuickAddHost() uic.Node {
 			}
 		}
 		if effAcct == "" {
-			// Default to the first non-investment asset (a real spending account), not
-			// e.g. a 401(k)/Brokerage, which shouldn't seed a transaction (L78-T3).
+			// Default to the first spending-type asset, not an investment/retirement/
+			// crypto account (none of which are natural places to record everyday
+			// spending transactions — C73/L78-T3).
 			for _, a := range accounts {
-				if a.Class == domain.ClassAsset && a.Type != domain.TypeInvestment && !a.Archived {
+				if a.Class == domain.ClassAsset && !a.Archived &&
+					a.Type != domain.TypeInvestment &&
+					a.Type != domain.TypeRetirement &&
+					a.Type != domain.TypeCrypto {
 					effAcct = a.ID
 					break
 				}

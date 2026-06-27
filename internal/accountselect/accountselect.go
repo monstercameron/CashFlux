@@ -16,13 +16,15 @@ import (
 const recentWindow = 90 * 24 * time.Hour
 
 // isSpendAccount reports whether an account qualifies as a "spend from" default:
-// it must be a non-archived asset account that is not an investment account.
-// Liability accounts and investment accounts are excluded because neither is a
-// natural place to record everyday spending.
+// it must be a non-archived asset account that is not a non-spending asset type
+// (investment, retirement, or crypto). Those types are not natural places to
+// record everyday spending transactions.
 func isSpendAccount(a domain.Account) bool {
 	return !a.Archived &&
 		a.Class == domain.ClassAsset &&
-		a.Type != domain.TypeInvestment
+		a.Type != domain.TypeInvestment &&
+		a.Type != domain.TypeRetirement &&
+		a.Type != domain.TypeCrypto
 }
 
 // isCheckingLike reports whether a is a checking, debit, or savings account —
