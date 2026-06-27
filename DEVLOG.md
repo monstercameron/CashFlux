@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C257: VERIFY-CLOSE — /smart ranked hub + dashboard digest already shipped
+
+**Ticket:** C257 — "/smart is a settings catalog, not a ranked insight hub; dashboard shows no recommendations."
+
+**Investigation:** All four candidate primary target files were dirty from concurrent agents (reports_screen.go, settingssectionnav.go, budgets.go, dashboard.go), so C257 was assessed as a VERIFY-CLOSE candidate using only clean secondary files.
+
+**Findings — /smart hub:** Commit `36a10440` (2026-06-25) split `SmartHub` into two tabs: "Insights" (the default) renders `smartInsightsSection` which calls `smart.SortInsights` then `smart.CapPerRule(insights, 3)` and feeds the result into a paginated `smartInsightsPager` — a fully ranked, paginated insight hub. The "Manage" tab holds the settings catalog. The C257 CHANGELOG entry was already written in that commit. The task list was simply not updated.
+
+**Findings — dashboard digest:** `smartDigestWidget` in `internal/screens/dashboard.go` (committed HEAD) registers in the `renderers` map under key `"smart-digest"`. It calls `buildSmartInput` + `smartengine.Run` + caps to `digestCap=3`, sorted, and renders via `smartInsightList`. `DefaultItems()` in `internal/dashlayout/pack.go` (clean, no concurrent edits) already includes `{ID: "smart-digest", ColSpan: 2, RowSpan: 1}`.
+
+**Conclusion:** Both halves of C257 are fully resolved. No code gap exists. `GOOS=js GOARCH=wasm go build` exits 0. Closing as VERIFIED-CLOSED.
+
 ## 2026-06-27 — R44: per-route UX score report (scorecard gate completed)
 
 **What:** R44 asked for "a script that produces a score report for all routes" so any R36-R43 visual/UX fix is verifiable against repeatable evidence. The four dimension audits (contrast/density/overflow/parity) already gate *aggregate* failures, but none answered "how is route X doing overall?" — so I added `e2e/ux_route_scorecard.mjs`, a per-route 0-100 desktop-UX score.
