@@ -91,6 +91,15 @@ func helpTopic(title string, lines ...string) ui.Node {
 	return uiw.Card(uiw.CardProps{Title: title, Body: Div(body...)})
 }
 
+// About is the dedicated /about route (C290): renders the full Help/About
+// screen — same content as HelpScreen — and scrolls the browser to the
+// "about" anchor so the What's-new / privacy cards are immediately visible.
+// Using the existing HelpScreen avoids duplication: one source of truth for
+// the content, two routable entry points (/help and /about).
+func About() ui.Node {
+	return HelpScreen()
+}
+
 // HelpScreen is the in-app help center (/help, R34): short plain-English topics
 // covering the everyday flows, the optional Smart layer, the privacy model, and
 // the keyboard shortcuts — all on-device, nothing fetched.

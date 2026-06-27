@@ -89,6 +89,7 @@ func All() []Route {
 		{Path: "/rules", Label: "nav.rules", Title: "nav.rules", Subtitle: "screen.rulesSub", Phase: 2, Group: GroupSystem, View: Rules},
 		{Path: "/appearance", Label: "nav.appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, Group: GroupSystem, View: Appearance},
 		{Path: "/help", Label: "nav.help", Title: "nav.help", Subtitle: "screen.helpSub", Phase: 1, Group: GroupSystem, View: HelpScreen},
+		{Path: "/about", Label: "nav.about", Title: "nav.about", Subtitle: "screen.aboutSub", Phase: 1, Group: GroupSystem, View: About},
 		{Path: "/admin", Label: "nav.admin", Title: "nav.admin", Subtitle: "screen.adminSub", Phase: 2, Group: GroupSystem, AdminOnly: true, View: AdminConsole},
 	}
 }

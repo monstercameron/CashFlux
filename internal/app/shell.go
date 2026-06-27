@@ -254,6 +254,7 @@ var railMeta = map[string]struct {
 	"/rules":          {"nav.rules", icon.Tag},
 	"/notifications":  {"nav.notifications", icon.Bell},
 	"/appearance":     {"nav.appearance", icon.Appearance},
+	"/about":          {"nav.about", icon.HelpCircle},
 	"/admin":          {"nav.admin", icon.Settings},
 }
 
@@ -705,6 +706,11 @@ func HouseholdCard() uic.Node {
 		// reassures without shouting.
 		Span(css.Class(tw.TextDim, tw.Text11, tw.Block, tw.TextCenter, tw.Px3, tw.Pb1, tw.LeadingTight),
 			uistate.T("trust.localFooter")),
+		// C290: "About & privacy" footer link so users can reach the /about page
+		// from the sidebar — a discoverable, persistent entry point that doesn't
+		// depend on knowing the ? shortcut or the nav list order.
+		A(css.Class(tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb1, tw.HoverTextFg, tw.Underline),
+			Attr("href", uistate.RoutePath("/about")), uistate.T("nav.aboutPrivacyLink")),
 		Span(css.Class("app-version", tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb2),
 			Attr("title", "CashFlux "+version.Label()), version.Label()),
 	)

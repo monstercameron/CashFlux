@@ -3,6 +3,31 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C290: /about route and sidebar "About & privacy" link
+
+The app had no dedicated About or Privacy page — the only trust content was in Help (/help) but
+/help wasn't explicitly a privacy surface, and the sidebar footer only had the muted trust tagline
+with no clickable entry point.
+
+Decision: reuse the existing `HelpScreen()` rather than creating a separate screen. The Help screen
+already contains the "What's new" card (identity + privacy commitment, added in C293) and a
+"Your privacy" topic — it's already the right About/Privacy surface. A thin `About()` wrapper
+in `help.go` delegates to `HelpScreen()` so there is one content source and two discoverable entry
+points (`/help` = full help center; `/about` = same content via a well-named route).
+
+Route: added to `screens.All()` as `GroupSystem, Phase 1` (same as `/help`) so it appears in the
+System section of the rail alongside Help, Appearance, etc. `railMeta` entry in `shell.go` uses
+`icon.HelpCircle` (the same icon as the standalone HelpButton — consistent visual language).
+
+Footer link: the `HouseholdCard` already had the muted "trust.localFooter" line and the version
+string. Added an "About & privacy" `<a href>` anchor between them. Using a plain `<a>` rather than
+a `Button` + `OnClick` because it doesn't need a hook (no event handler), avoids an `on*`-in-loop
+risk (HouseholdCard is a component, so it's safe, but plain anchors are simpler here), and gives
+users a real URL they can middle-click.
+
+New i18n keys: `nav.about`, `nav.aboutPrivacyLink`, `screen.aboutSub`. Tests: wasm build exit 0,
+`go test ./internal/i18n/` pass.
+
 ## 2026-06-27 — C212: Assets KPI tile on the dashboard
 
 The net-worth computation in `dashboard.go` already destructures `nw.Assets` at line 98:
