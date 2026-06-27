@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C183 [F24]: Monthly round-up savings automation
+
+### Problem
+C183 required round-up savings but the workflow engine can't do per-transaction round-ups without an ActionTransfer→TriggerTxnAdded loop. The spec called for a periodic batch approach: accumulate the spare-change deltas over a calendar month, then transfer the total in one shot.
+
+### Decisions
+- **Periodic batch, not per-transaction:** mirrors the just-shipped surplus sweep (sweep.go) exactly. One boot-time call per month, one transfer, one prefs guard to prevent double-dipping.
+- **Pure helpers first:** `roundUpTotal` and `roundUpDue` are pure functions with no side effects — easy to table-test on native Go. `RunDueRoundUps` is the `*App` method that has I/O.
+- **Granularity select (not free-form input):** $1 / $5 / $10 are the only meaningful choices; a free-form minor-unit input would confuse users. Stored as `RoundUpGranularityMinor int64` (100/500/1000).
+- **RoundUpLastPeriod not reset on save:** same decision as the sweep card — resetting would trigger an immediate re-run. Users who want to force a re-run disable then re-enable.
+- **`dateutil.InRange` for date bounds:** consistent with how the appstate test suite already clips transactions to a month window (appstate_test.go lines 265/364).
+- **`findAccount` reused from sweep.go:** already exists in the appstate package, no duplication.
+
+### Build outcome
+`go test ./internal/appstate/ ./internal/prefs/ -count=1` — both pass. Wasm builds of packages and root exit 0. `appstate.go` untouched (confirmed via `git status`).
+
 ## 2026-06-27 — R31-plans: Plans comparison surface + re-engageable upgrade path
 
 ### Problem

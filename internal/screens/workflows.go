@@ -64,6 +64,10 @@ func Workflows() ui.Node {
 		// area, immediately after pay-yourself-first, so both auto-save templates
 		// are discoverable in one place.
 		ui.CreateElement(sweepForm, sweepFormProps{Refresh: refresh}),
+		// C183: Round-up savings card follows the sweep card so all three
+		// automated savings features are grouped together in one discoverable
+		// section.
+		ui.CreateElement(roundUpForm, roundUpFormProps{Refresh: refresh}),
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: yoursTitle,
@@ -370,6 +374,162 @@ func sweepForm(_ sweepFormProps) ui.Node {
 		If(saved.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.sweepSaved"))),
 		Div(css.Class(tw.Mt2),
 			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.sweepSave")),
+		),
+	)
+}
+
+// roundUpFormProps passes the refresh callback into the round-up config card.
+type roundUpFormProps struct{ Refresh func() }
+
+// roundUpForm is the C183 monthly round-up savings configuration card. It lets
+// the user enable the round-up feature, choose the spending account to round up
+// and the savings destination, and set the rounding granularity (nearest $1,
+// $5, or $10). Saving writes directly to localStorage via uistate.PersistPrefs.
+// The boot-time RunDueRoundUps reads these on next startup.
+//
+// Its own component so all UseState/UseEvent hooks sit at stable render
+// positions, satisfying the framework's no-hooks-in-loops rule.
+func roundUpForm(_ roundUpFormProps) ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+
+	// Seed form state from persisted prefs.
+	p := uistate.LoadPrefs()
+
+	enabled := ui.UseState(p.RoundUpEnabled)
+	fromID := ui.UseState(p.RoundUpFromAccountID)
+	toID := ui.UseState(p.RoundUpToAccountID)
+	granStr := ui.UseState(func() string {
+		switch p.RoundUpGranularityMinor {
+		case 500:
+			return "500"
+		case 1000:
+			return "1000"
+		default:
+			return "100"
+		}
+	}())
+	msg := ui.UseState("")
+	saved := ui.UseState(false)
+
+	onEnabled := ui.UseEvent(func(e ui.Event) {
+		enabled.Set(e.IsChecked())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onFrom := ui.UseEvent(func(e ui.Event) {
+		fromID.Set(e.GetValue())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onTo := ui.UseEvent(func(e ui.Event) {
+		toID.Set(e.GetValue())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onGran := ui.UseEvent(func(e ui.Event) {
+		granStr.Set(e.GetValue())
+		msg.Set("")
+		saved.Set(false)
+	})
+
+	save := func() {
+		from := fromID.Get()
+		to := toID.Get()
+		en := enabled.Get()
+		if en {
+			if from == "" {
+				msg.Set(uistate.T("workflows.roundUpNeedFrom"))
+				return
+			}
+			if to == "" {
+				msg.Set(uistate.T("workflows.roundUpNeedTo"))
+				return
+			}
+			if from == to {
+				msg.Set(uistate.T("workflows.roundUpSameAccount"))
+				return
+			}
+		}
+		var gran int64 = 100
+		switch granStr.Get() {
+		case "500":
+			gran = 500
+		case "1000":
+			gran = 1000
+		}
+
+		cur := uistate.LoadPrefs()
+		cur.RoundUpEnabled = en
+		cur.RoundUpFromAccountID = from
+		cur.RoundUpToAccountID = to
+		cur.RoundUpGranularityMinor = gran
+		// RoundUpLastPeriod is intentionally NOT reset here — the user can
+		// disable+re-enable to force an immediate re-run if desired.
+		uistate.PersistPrefs(cur)
+		uistate.SetPrefs(cur)
+		msg.Set("")
+		saved.Set(true)
+	}
+
+	// Account option lists.
+	fromNone := Option(Value(""), SelectedIf(fromID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	toNone := Option(Value(""), SelectedIf(toID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	var fromOpts, toOpts []ui.Node
+	fromOpts = append(fromOpts, fromNone)
+	toOpts = append(toOpts, toNone)
+	for _, ac := range app.Accounts() {
+		if ac.Archived {
+			continue
+		}
+		label := ac.Name + " (" + string(ac.Type) + ")"
+		fromOpts = append(fromOpts, Option(Value(ac.ID), SelectedIf(fromID.Get() == ac.ID), label))
+		toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(toID.Get() == ac.ID), label))
+	}
+
+	return Fragment(
+		Hr(css.Class(tw.Mt2)),
+		// Round-up section title + description.
+		P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.roundUpTitle")),
+		P(css.Class("muted"), uistate.T("workflows.roundUpDesc")),
+		// Enable toggle.
+		Div(css.Class("toggle-row", tw.Mt2),
+			Label(css.Class("checkbox-label"),
+				Input(
+					Type("checkbox"),
+					Attr("aria-label", uistate.T("workflows.roundUpEnable")),
+					CheckedIf(enabled.Get()),
+					OnChange(onEnabled),
+				),
+				Text(" "+uistate.T("workflows.roundUpEnable")),
+			),
+		),
+		// Account + granularity inputs.
+		Div(css.Class("form-grid", tw.Mt2),
+			Select(css.Class("field"),
+				Attr("aria-label", uistate.T("workflows.roundUpFrom")),
+				OnChange(onFrom),
+				fromOpts,
+			),
+			Select(css.Class("field"),
+				Attr("aria-label", uistate.T("workflows.roundUpTo")),
+				OnChange(onTo),
+				toOpts,
+			),
+			Select(css.Class("field"),
+				Attr("aria-label", uistate.T("workflows.roundUpGran")),
+				OnChange(onGran),
+				Option(Value("100"), SelectedIf(granStr.Get() == "100"), uistate.T("workflows.roundUpGranDollar")),
+				Option(Value("500"), SelectedIf(granStr.Get() == "500"), uistate.T("workflows.roundUpGranFive")),
+				Option(Value("1000"), SelectedIf(granStr.Get() == "1000"), uistate.T("workflows.roundUpGranTen")),
+			),
+		),
+		If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
+		If(saved.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.roundUpSaved"))),
+		Div(css.Class(tw.Mt2),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.roundUpSave")),
 		),
 	)
 }

@@ -573,6 +573,7 @@ var english = Catalog{
 	"budgets.rolloverTitle":        "Roll unused funds into the next period",
 	"budgets.rolloverCarry":        "Carried from previous period: %s",
 	"budgets.effectiveCap":         "Effective cap this period: %s",
+	"budgets.proratedRest":         "~%s to spend for the rest of this period", // C143: even-pace per-category guidance
 	"budgets.suggest":              "You've averaged %s/mo here recently.",
 	"budgets.useSuggest":           "Use this",
 	"budgets.atRisk":               "At risk",
@@ -2136,6 +2137,22 @@ var english = Catalog{
 	"workflows.sweepNeedTo":      "Choose a savings destination.",
 	"workflows.sweepSameAccount": "Source and destination must be different accounts.",
 	"workflows.sweepBadBuffer":   "Enter a valid non-negative amount for the floor.",
+
+	// Round-up savings card — C183 [MAJOR F24].
+	"workflows.roundUpTitle":       "Round-up savings",
+	"workflows.roundUpDesc":        "Each month, we round your spending up to the nearest dollar (or more) and move the spare change to savings in one transfer — effortless, automatic micro-saving.",
+	"workflows.roundUpEnable":      "Enable monthly round-up savings",
+	"workflows.roundUpFrom":        "Round up from (spending account)",
+	"workflows.roundUpTo":          "Save into (savings account)",
+	"workflows.roundUpGran":        "Round up to nearest",
+	"workflows.roundUpGranDollar":  "Nearest $1",
+	"workflows.roundUpGranFive":    "Nearest $5",
+	"workflows.roundUpGranTen":     "Nearest $10",
+	"workflows.roundUpSave":        "Save round-up settings",
+	"workflows.roundUpSaved":       "Round-up settings saved — runs automatically once a month.",
+	"workflows.roundUpNeedFrom":    "Choose a spending account to round up.",
+	"workflows.roundUpNeedTo":      "Choose a savings destination.",
+	"workflows.roundUpSameAccount": "Spending account and savings account must be different.",
 
 	// Setup checklist — C23 [MAJOR F3]: surface base currency + week-start as the
 	// first first-run step so new users can find and confirm these early. The label

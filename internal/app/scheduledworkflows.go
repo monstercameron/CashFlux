@@ -62,6 +62,23 @@ func runDueScheduledWorkflowsOnBoot() {
 			resaveDataset()
 		}
 	}
+
+	// C183: monthly round-up batch — sum each expense's round-up delta over
+	// the calendar month and move the total to savings in one transfer, once
+	// per month.
+	nr, updatedPrefs2, err := app.RunDueRoundUps(now, updatedPrefs)
+	if err != nil {
+		app.Log().Error("boot run of round-up batch failed", "err", err)
+		return
+	}
+	if nr > 0 {
+		app.Log().Info("round-up batch executed on boot", "count", nr)
+		// Persist the updated RoundUpLastPeriod guard.
+		uistate.PersistPrefs(updatedPrefs2)
+		if resaveDataset != nil {
+			resaveDataset()
+		}
+	}
 }
 
 // fireBillDueTriggerOnBoot fires bill-due workflows once on startup if any

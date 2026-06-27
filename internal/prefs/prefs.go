@@ -144,6 +144,27 @@ type Prefs struct {
 	// guard: RunDueSweeps skips the sweep when SweepLastPeriod equals the
 	// current month's period key. Format: "2006-01".
 	SweepLastPeriod string `json:"sweepLastPeriod,omitempty"`
+
+	// RoundUpEnabled turns on the monthly round-up savings batch. When false
+	// (the default), RunDueRoundUps is a no-op even if the other round-up
+	// fields are set.
+	RoundUpEnabled bool `json:"roundUpEnabled,omitempty"`
+	// RoundUpFromAccountID is the spending account whose expense transactions
+	// are rounded up each month. Empty means the feature is effectively disabled.
+	RoundUpFromAccountID string `json:"roundUpFromAccountId,omitempty"`
+	// RoundUpToAccountID is the savings account that receives the consolidated
+	// round-up transfer at the end of each month.
+	RoundUpToAccountID string `json:"roundUpToAccountId,omitempty"`
+	// RoundUpGranularityMinor is the rounding bucket size in minor currency
+	// units. 100 means round each spend up to the nearest dollar (default);
+	// 500 rounds to the nearest $5; 1000 to the nearest $10. Zero is treated
+	// as 100 by RunDueRoundUps.
+	RoundUpGranularityMinor int64 `json:"roundUpGranularityMinor,omitempty"`
+	// RoundUpLastPeriod is the PeriodKey("monthly") value for the most recent
+	// month in which a round-up batch was successfully executed. It acts as a
+	// once-per-month guard: RunDueRoundUps skips the batch when
+	// RoundUpLastPeriod equals the current month's period key. Format: "2006-01".
+	RoundUpLastPeriod string `json:"roundUpLastPeriod,omitempty"`
 }
 
 // BackendActive reports whether the app should talk to the backend: a server URL
