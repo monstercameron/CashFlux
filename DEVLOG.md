@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C191 [F25]: Auto-accrual for sinking funds (once-per-month guard)
+
+The sinking-fund math was already shipped (`FundSetAsideMinor`, `DrawDownFund`) but nothing ever credited funds automatically — users had to contribute manually each month, defeating the purpose of a sinking fund.
+
+**Design.** The month guard lives in `domain.Goal.Custom["fundAccrualPeriod"]` as a UTC year-month string (e.g. `"2026-06"`). This is the same `map[string]any` field used by other extensible metadata; it JSON-persists with the goal at no schema cost. Comparing the stored value to `now.UTC().Format("2006-01")` is the entire double-credit prevention mechanism — simple, deterministic, free of the savings package (avoids an import cycle).
+
+**Amount cap.** `FundAccrualDue` returns `min(FundSetAsideMinor, remaining-to-target)` so a fund that is $50 away from its goal doesn't overshoot by a full monthly contribution. `RunDueFundAccruals` applies a redundant cap after `money.Add` as a defence-in-depth measure.
+
+**Boot wiring.** Called from `runDueScheduledWorkflowsOnBoot` using the same `now` snapshot as `RunDueScheduledWorkflows`. Both share the `resaveDataset` callback so the updated `fundAccrualPeriod` stamp is persisted on first boot of a new month.
+
+**No ActionTransfer.** The ticket's suggestion of "reuse R19 ActionTransfer" was appropriate for a rules-engine-driven approach; for this boot-time accrual the direct `money.Add` + `PutGoal` path is simpler, avoids coupling to the workflow layer, and is already fully tested at the pure-logic level.
+
 ## 2026-06-27 — C193 [F25]: SMART-BL9 sinking-fund nudge → real goal on /goals
 
 BL9 detected large irregular bills and suggested a sinking fund, but routed the suggestion to `/bills` as a to-do task rather than creating an actual goal or surfacing on `/goals` where the user acts on funds.

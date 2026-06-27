@@ -18,13 +18,26 @@ func runDueScheduledWorkflowsOnBoot() {
 	if app == nil {
 		return
 	}
-	n, err := app.RunDueScheduledWorkflows(time.Now())
+	now := time.Now()
+	n, err := app.RunDueScheduledWorkflows(now)
 	if err != nil {
 		app.Log().Error("boot run of due scheduled workflows failed", "err", err)
 		return
 	}
 	if n > 0 {
 		app.Log().Info("ran due scheduled workflows on boot", "count", n)
+		if resaveDataset != nil {
+			resaveDataset()
+		}
+	}
+
+	nf, err := app.RunDueFundAccruals(now)
+	if err != nil {
+		app.Log().Error("boot run of sinking-fund accruals failed", "err", err)
+		return
+	}
+	if nf > 0 {
+		app.Log().Info("auto-accrued sinking funds on boot", "count", nf)
 		if resaveDataset != nil {
 			resaveDataset()
 		}

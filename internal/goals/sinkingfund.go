@@ -49,6 +49,61 @@ func DrawDownFund(g domain.Goal, spendMinor int64) (domain.Goal, error) {
 	return g, nil
 }
 
+// fundAccrualPeriodKey returns the UTC year-month key used to guard monthly
+// accruals, e.g. "2026-06". It is the canonical period marker stored in
+// Goal.Custom["fundAccrualPeriod"].
+func fundAccrualPeriodKey(now time.Time) string {
+	return now.UTC().Format("2006-01")
+}
+
+// FundAccrualDue reports whether a sinking-fund goal is due for its monthly
+// auto-accrual as of now, and how many minor units should be credited.
+//
+// Returns due=false when any of the following hold:
+//   - the goal is not a sinking fund (IsSinkingFund is false)
+//   - the goal is archived
+//   - CurrentAmount is already at or above TargetAmount (fully funded)
+//   - the goal has already been accrued this calendar month (Custom["fundAccrualPeriod"] matches the current UTC year-month)
+//   - FundSetAsideMinor returns 0 (no TargetDate, deadline passed, or nothing remains)
+//
+// When due=true, amountMinor is the lesser of FundSetAsideMinor and the
+// remaining balance to target, ensuring the fund never exceeds TargetAmount.
+func FundAccrualDue(g domain.Goal, now time.Time) (due bool, amountMinor int64) {
+	if !g.IsSinkingFund || g.Archived {
+		return false, 0
+	}
+
+	// Already fully funded?
+	if g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0 {
+		return false, 0
+	}
+
+	// Already accrued this month?
+	periodKey := fundAccrualPeriodKey(now)
+	if marker, ok := g.Custom["fundAccrualPeriod"]; ok {
+		if s, ok := marker.(string); ok && s == periodKey {
+			return false, 0
+		}
+	}
+
+	// How much is the monthly set-aside?
+	setAside := FundSetAsideMinor(g, now)
+	if setAside <= 0 {
+		return false, 0
+	}
+
+	// Cap at the remaining balance so we never overshoot.
+	remaining := g.TargetAmount.Amount - g.CurrentAmount.Amount
+	if remaining <= 0 {
+		return false, 0
+	}
+	if setAside > remaining {
+		setAside = remaining
+	}
+
+	return true, setAside
+}
+
 // FundSetAsideMinor returns the monthly amount (in minor units of the goal's
 // currency) that must be set aside to reach the goal by its TargetDate.
 //

@@ -206,6 +206,121 @@ func TestFundSetAsideMinor(t *testing.T) {
 	}
 }
 
+// ─── FundAccrualDue ──────────────────────────────────────────────────────────
+
+func TestFundAccrualDue(t *testing.T) {
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	far := now.AddDate(0, 6, 0) // deadline 6 months out — set-aside will be > 0
+
+	// sinkFundGoal builds a sinking-fund goal with optional Custom fields.
+	sinkFundGoal := func(current, target int64, targetDate time.Time, custom map[string]any) domain.Goal {
+		g := domain.Goal{
+			IsSinkingFund: true,
+			TargetAmount:  money.New(target, "USD"),
+			CurrentAmount: money.New(current, "USD"),
+			TargetDate:    targetDate,
+			Custom:        custom,
+		}
+		return g
+	}
+
+	t.Run("not a sinking fund → not due", func(t *testing.T) {
+		g := sinkGoal(0, 120000, far) // IsSinkingFund == false
+		due, amt := FundAccrualDue(g, now)
+		if due {
+			t.Errorf("expected due=false for non-sinking-fund goal, got due=true amt=%d", amt)
+		}
+	})
+
+	t.Run("archived → not due", func(t *testing.T) {
+		g := sinkFundGoal(0, 120000, far, nil)
+		g.Archived = true
+		due, amt := FundAccrualDue(g, now)
+		if due {
+			t.Errorf("expected due=false for archived goal, got due=true amt=%d", amt)
+		}
+	})
+
+	t.Run("already at target → not due", func(t *testing.T) {
+		g := sinkFundGoal(120000, 120000, far, nil)
+		due, amt := FundAccrualDue(g, now)
+		if due {
+			t.Errorf("expected due=false when fully funded, got due=true amt=%d", amt)
+		}
+	})
+
+	t.Run("already accrued this month → not due", func(t *testing.T) {
+		periodKey := now.UTC().Format("2006-01") // "2026-06"
+		g := sinkFundGoal(0, 120000, far, map[string]any{"fundAccrualPeriod": periodKey})
+		due, amt := FundAccrualDue(g, now)
+		if due {
+			t.Errorf("expected due=false when already accrued this month, got due=true amt=%d", amt)
+		}
+	})
+
+	t.Run("no target date → not due (set-aside=0)", func(t *testing.T) {
+		g := sinkFundGoal(0, 120000, time.Time{}, nil)
+		due, amt := FundAccrualDue(g, now)
+		if due {
+			t.Errorf("expected due=false with no target date, got due=true amt=%d", amt)
+		}
+	})
+
+	t.Run("fresh month, under target → due with correct amount", func(t *testing.T) {
+		// $1200 goal, $0 saved, 6 months to deadline.
+		// FundSetAsideMinor will be ceil(120000/6) = 20000.
+		g := sinkFundGoal(0, 120000, far, nil)
+		due, amt := FundAccrualDue(g, now)
+		if !due {
+			t.Fatal("expected due=true for fresh sinking fund, got false")
+		}
+		wantSetAside := FundSetAsideMinor(g, now)
+		if amt != wantSetAside {
+			t.Errorf("amountMinor = %d, want %d (FundSetAsideMinor)", amt, wantSetAside)
+		}
+		if amt <= 0 {
+			t.Errorf("amountMinor must be > 0, got %d", amt)
+		}
+	})
+
+	t.Run("accrual from prior month is not a block", func(t *testing.T) {
+		// Last accrual was in May; June is a fresh month.
+		g := sinkFundGoal(20000, 120000, far, map[string]any{"fundAccrualPeriod": "2026-05"})
+		due, amt := FundAccrualDue(g, now)
+		if !due {
+			t.Fatal("expected due=true when prior month's marker doesn't match current month")
+		}
+		if amt <= 0 {
+			t.Errorf("amountMinor must be > 0, got %d", amt)
+		}
+	})
+
+	t.Run("set-aside capped at remaining to target", func(t *testing.T) {
+		// Only $500 left to target; monthly set-aside would exceed that.
+		// FundSetAsideMinor returns full monthly contribution; FundAccrualDue
+		// caps at the remaining ($500 = 50000 minor units).
+		remaining := int64(50000)
+		target := int64(120000)
+		current := target - remaining
+		g := sinkFundGoal(current, target, far, nil)
+		setAside := FundSetAsideMinor(g, now)
+		due, amt := FundAccrualDue(g, now)
+		if !due {
+			t.Fatal("expected due=true")
+		}
+		if setAside > remaining {
+			// Cap must have fired.
+			if amt != remaining {
+				t.Errorf("expected amountMinor capped at remaining=%d, got %d", remaining, amt)
+			}
+		} else {
+			if amt != setAside {
+				t.Errorf("expected amountMinor=%d (no cap needed), got %d", setAside, amt)
+			}
+		}
+	})
+}
+
 // TestFundSetAsideMinorAgreesWithMonthlyNeeded verifies that FundSetAsideMinor
 // and MonthlyNeeded return the same per-month figure for the same goal — they
 // must use identical months arithmetic.

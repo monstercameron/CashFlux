@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/freshness"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -1410,6 +1411,49 @@ func (a *App) RunDueScheduledWorkflows(now time.Time) (int, error) {
 		a.log.Info("ran due scheduled workflows", "count", ran)
 	}
 	return ran, nil
+}
+
+// RunDueFundAccruals auto-credits each sinking-fund goal that is due for its
+// monthly contribution as of now. It iterates all goals, calls
+// goals.FundAccrualDue to determine eligibility and the credit amount, credits
+// the goal's CurrentAmount (capped so it never exceeds TargetAmount), records
+// the current UTC year-month in Goal.Custom["fundAccrualPeriod"] as the
+// once-per-month guard, and persists the updated goal. Errors on individual
+// goals are logged and skipped; a store write error aborts and is returned.
+// Returns how many goals were credited.
+func (a *App) RunDueFundAccruals(now time.Time) (int, error) {
+	credited := 0
+	periodKey := now.UTC().Format("2006-01")
+	for _, g := range a.Goals() {
+		due, amountMinor := goals.FundAccrualDue(g, now)
+		if !due {
+			continue
+		}
+		credit := money.New(amountMinor, g.CurrentAmount.Currency)
+		updated, err := g.CurrentAmount.Add(credit)
+		if err != nil {
+			a.logErr("fundAccrual: add credit", err)
+			continue
+		}
+		// Final cap: never exceed TargetAmount (FundAccrualDue already constrains
+		// amountMinor, but guard here too in case of a currency mismatch edge case).
+		if updated.Amount > g.TargetAmount.Amount && g.TargetAmount.Amount > 0 {
+			updated = g.TargetAmount
+		}
+		g.CurrentAmount = updated
+		if g.Custom == nil {
+			g.Custom = make(map[string]any)
+		}
+		g.Custom["fundAccrualPeriod"] = periodKey
+		if err := a.PutGoal(g); err != nil {
+			return credited, fmt.Errorf("appstate: fund accrual put goal %q: %w", g.ID, err)
+		}
+		credited++
+	}
+	if credited > 0 {
+		a.log.Info("auto-accrued sinking funds", "count", credited)
+	}
+	return credited, nil
 }
 
 // isBudgetOver returns true when the given budget is currently in the StateOver
