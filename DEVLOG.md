@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C229: top-merchants card with drill-through on /insights
+
+/insights was category-only for spending breakdowns — users couldn't see which specific merchants or payees absorbed the most spend. C229 adds a "Top merchants" card: aggregates expense transactions over a rolling 90-day window, grouped by `Transaction.Payee` (falling back to `Desc` when empty), sorts descending by total, and renders the top 7 as clickable rows.
+
+Drill-through mirrors C228 exactly: clicking a row sets `TxFilter.Text = merchantName` on the shared `txFilterAtom` and navigates to /transactions. This reuses the existing `Criteria.Text` field which already matches against Payee (via `matchText` in txnfilter, wired in C50). No new filter field needed.
+
+Hook safety: `insightsMerchantRow` is its own component, so its `OnClick` hook registers at a stable position — not inside the variable-length merchant loop. Same pattern as `insightsHighlightRow` (C228). The `MapKeyed` loop builds the rank by linear scan over the already-short (<= 7) slice, which is acceptable.
+
+One compile fix: `tw.Shrink0` doesn't exist in the tw package, replaced with the plain CSS class string via `css.Class(...)`. Build passes (rc=0). Files: `internal/screens/insights.go`, `internal/i18n/en.go`, `CHANGELOG.md`.
+
 
 
 

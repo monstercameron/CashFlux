@@ -1601,6 +1601,11 @@ var english = Catalog{
 	"insights.flaggedHint":             "Possible duplicates, unusual charges, and balance anomalies — tap any row to review.",
 	"insights.highlightsTitle":         "Spending highlights",
 	"insights.highlightsHint":          "Categories that moved a lot versus your recent average — tap a row to see the transactions.",
+	// C229: top merchants by spend — payee-level breakdown over the last 90 days.
+	"insights.topMerchantsTitle":   "Top merchants",
+	"insights.topMerchantsHint":    "Your biggest payees by total spending over the last 90 days — tap any row to see the transactions.",
+	"insights.merchantTxCount":     "(%d txns)",
+	"insights.merchantDrillAria":   "View transactions for %s",
 	// C230: monthly spending time-series chart card.
 	"insights.spendTrendTitle":         "Spending over time",
 	"insights.spendTrendHint":          "Total spending each month for the last 6 months.",

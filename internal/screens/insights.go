@@ -745,6 +745,17 @@ func Insights() ui.Node {
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates, viewCategoryTransactions)
 
+	// C229: top-merchants card — drill-through sets a text/search filter on the
+	// merchant name so the transactions list shows only that payee's rows. The
+	// txFilterAtom is already registered at a stable position above.
+	viewMerchantTransactions := func(merchantName string) {
+		f := uistate.TxFilter{Text: merchantName}.Normalize()
+		txFilterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+	topMerchantsCard := topMerchantsSpendCard(txns, base, rates, viewMerchantTransactions)
+
 	// C230: monthly spending time-series chart — 6 months of expense outflow as an
 	// area sparkline. Computed once here (pure data, no hooks) and rendered in a
 	// labelled card between the highlights and anomaly sections.
@@ -951,6 +962,8 @@ func Insights() ui.Node {
 		// point is above-the-fold even when highlights and pins push the chat down.
 		askShortcut,
 		highlights,
+		// C229: top merchants by spend — payee-level breakdown over the last 90 days.
+		topMerchantsCard,
 		// C230: monthly spending time-series chart — shows the last 6 months of
 		// expense outflow so the user can see their spending trend at a glance.
 		spendTrendCard,
@@ -1695,6 +1708,128 @@ func highlightArrow(a insights.Anomaly) icon.Name {
 		return icon.ArrowUp
 	}
 	return icon.ArrowDown
+}
+
+// merchantSpend holds one payee's aggregated expense total for the top-merchants
+// card (C229).
+type merchantSpend struct {
+	Name  string
+	Total int64 // minor units, base currency
+	Count int
+}
+
+// insightsMerchantRowProps carries the display data and drill callback for one
+// top-merchants row. OnDrill is called with the merchant name when the user
+// clicks the row, navigating to /transactions filtered to that payee (C229).
+type insightsMerchantRowProps struct {
+	Merchant merchantSpend
+	Base     string
+	Rank     int
+	OnDrill  func(name string)
+}
+
+// insightsMerchantRow renders a single clickable top-merchant row. It is its
+// own component so its OnClick hook registers at a stable render position — never
+// inside the variable-length merchant loop (CRITICAL: never call On* in loops).
+func insightsMerchantRow(props insightsMerchantRowProps) ui.Node {
+	m := props.Merchant
+	drill := ui.UseEvent(func() { props.OnDrill(m.Name) })
+	amtStr := fmtMoney(money.New(m.Total, props.Base))
+	txLabel := uistate.T("insights.merchantTxCount", m.Count)
+	ariaLabel := uistate.T("insights.merchantDrillAria", m.Name)
+	return Button(
+		css.Class("insight-row insight-row--clickable"),
+		Type("button"),
+		Attr("aria-label", ariaLabel),
+		OnClick(drill),
+		Span(css.Class("insight-rank"), strconv.Itoa(props.Rank)),
+		Span(css.Class("insight-merchant-name", tw.Flex1, tw.TextLeft, tw.Truncate), m.Name),
+		Span(css.Class("insight-merchant-amount", tw.TextRight),
+			Span(css.Class(tw.FontMedium), amtStr),
+			Span(css.Class("muted", tw.Text12, tw.Ml1), txLabel),
+		),
+	)
+}
+
+// topMerchantsSpendCard aggregates expense transactions over the last 90 days
+// by payee/merchant (using Payee; falling back to Desc when Payee is empty),
+// then renders the top 7 as a labelled card with drill-through to /transactions.
+// Returns an empty node when there are no qualifying merchants. Each row is its
+// own component to keep OnClick hooks at stable positions (C229).
+func topMerchantsSpendCard(txns []domain.Transaction, base string, rates currency.Rates, onDrill func(name string)) ui.Node {
+	const maxRows = 7
+	cutoff := time.Now().AddDate(0, 0, -90)
+
+	// Aggregate spend by merchant name.
+	byName := map[string]*merchantSpend{}
+	for _, t := range txns {
+		if !t.IsExpense() || t.Date.Before(cutoff) {
+			continue
+		}
+		name := strings.TrimSpace(t.Payee)
+		if name == "" {
+			name = strings.TrimSpace(t.Desc)
+		}
+		if name == "" {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount.Abs(), base)
+		if err != nil {
+			continue
+		}
+		ms := byName[name]
+		if ms == nil {
+			ms = &merchantSpend{Name: name}
+			byName[name] = ms
+		}
+		ms.Total += conv.Amount
+		ms.Count++
+	}
+	if len(byName) == 0 {
+		return Fragment()
+	}
+
+	// Sort descending by total, then alphabetically for stable ties.
+	merchants := make([]merchantSpend, 0, len(byName))
+	for _, ms := range byName {
+		merchants = append(merchants, *ms)
+	}
+	sort.Slice(merchants, func(i, j int) bool {
+		if merchants[i].Total != merchants[j].Total {
+			return merchants[i].Total > merchants[j].Total
+		}
+		return merchants[i].Name < merchants[j].Name
+	})
+	if len(merchants) > maxRows {
+		merchants = merchants[:maxRows]
+	}
+
+	rows := MapKeyed(merchants,
+		func(m merchantSpend) any { return m.Name },
+		func(m merchantSpend) ui.Node {
+			rank := 0
+			for i, ms := range merchants {
+				if ms.Name == m.Name {
+					rank = i + 1
+					break
+				}
+			}
+			return ui.CreateElement(insightsMerchantRow, insightsMerchantRowProps{
+				Merchant: m,
+				Base:     base,
+				Rank:     rank,
+				OnDrill:  onDrill,
+			})
+		},
+	)
+
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("insights.topMerchantsTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("insights.topMerchantsHint")),
+			Div(css.Class("insight-list"), rows),
+		),
+	})
 }
 
 // affordCardText builds the inner HTML for a grounded affordability answer card.
