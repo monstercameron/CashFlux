@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/insights"
+	"github.com/monstercameron/CashFlux/internal/insights/localqa"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -348,6 +349,10 @@ func Insights() ui.Node {
 			return
 		}
 
+		// C245: clear any stale key-error before evaluating this new question so a
+		// prior "no key" message never persists into the next submission.
+		errMsg.Set("")
+
 		// Affordability fast-path: answer from real numbers, no AI key needed.
 		if q, ok := insights.ParseAffordQuery(text); ok {
 			monthlyNet := income.Amount - expense.Amount // this month's net (minor units)
@@ -363,6 +368,24 @@ func Insights() ui.Node {
 		}
 
 		if key == "" && !useBackendAI {
+			// C244: try to answer deterministically via localqa before falling back to
+			// the key-hint error. This makes the chat useful even with no OpenAI key.
+			intent, matched := localqa.Match(text)
+			if matched {
+				src := newInsightsQASource(app, base, rates)
+				if answer, answered := localqa.Answer(intent, src, text, func(minor int64) string {
+					return insightsMoneyFmt(minor, base)
+				}); answered {
+					hist := append(append([]chatTurn{}, turns.Get()...),
+						chatTurn{ID: id.New(), Role: "user", Text: text},
+						chatTurn{ID: id.New(), Role: "assistant", Text: answer},
+					)
+					turns.Set(hist)
+					input.Set("")
+					histIdx.Set(-1)
+					return
+				}
+			}
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
@@ -829,7 +852,10 @@ func Insights() ui.Node {
 	var trailing ui.Node
 	switch {
 	case noAI:
-		trailing = Fragment()
+		// C246: show a Send button on the no-key path so mouse/touch users can
+		// submit via click rather than only via Enter. Same aria-label as the
+		// keyed Send button (insights.send) for consistent screen-reader semantics.
+		trailing = Button(css.Class("btn btn-primary"), Type("button"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uistate.T("insights.send"))
 	case loading.Get():
 		trailing = Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))
 	default:

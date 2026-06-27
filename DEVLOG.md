@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C244/C245/C246: no-key localqa chat + Send button + error reset
+
+Three small tickets that together make the /insights chat usable without an API key.
+
+**C244 — localqa fallback in sendText.** The committed `internal/insights/localqa` package already contained a pure-Go intent matcher and answerer, but nothing wired it into the chat path. Added `insightsQASource` (new file `internal/screens/insights_localqa.go`) implementing the 7-method `localqa.Source` interface. Each method delegates to the same helpers already used across the app: `ledger.LiquidBalance`, `ledger.NetWorth`, `safespend.Compute` + `safespend.ToBaseFunc`, `bills.UpcomingAll`, `healthscore.Evaluate`/`buildHealthInputs`, and a partial-name category scan for spending queries. In `sendText`, the `key == "" && !useBackendAI` branch now tries `localqa.Match` + `localqa.Answer` first; only if localqa can't answer does it fall back to the key-hint error.
+
+**C245 — stale-error reset.** `errMsg.Set("")` was added as the very first statement in `sendText` (before the afford fast-path). Without it, a key-error displayed from a prior question persisted visually while the next question was being typed.
+
+**C246 — Send button on the no-key path.** The trailing slot for `case noAI` was `Fragment()` (nothing). Changed to a `Button` calling `onSubmit` with `aria-label` from `insights.send` (already in i18n). The "Go to Settings" key-hint below is preserved — the Send button sits alongside it.
+
+Build rc=0 after correcting domain.Goal field names (`g.CurrentAmount.Amount`, `g.TargetAmount.Amount`, `g.AccountID`) and the safespend converter type (`safespend.ToBaseFunc` returns `func(int64, string) int64`, not `func(money.Money) money.Money`).
+
 ## 2026-06-27 — C243: report-type selector (four tabbed views) on /reports
 
 /reports was a single scrolling mega-page — 13+ cards stacked, requiring users to scroll past the entire Spending block to reach Trends or Net Worth. C243 adds a four-tab segmented control (Overview / Categories / Net worth / Advanced) immediately below the global controls, so users can jump to the section they care about.
