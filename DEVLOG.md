@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C248: Static example AI conversations for keyless users on /insights
+
+**Ticket:** C248 — "No example AI conversations for keyless users to preview value."
+
+**Problem:** A user without an OpenAI key who visits /insights sees the key-gate call-to-action (C247 enriched it with BYOK/privacy context) but no demonstration of what the assistant actually does. The empty chat box gives no sense of the assistant's capability before they commit to adding a key.
+
+**Fix:** Added `exampleConversationsNode()` in `internal/screens/insights.go`, a pure presentational helper with no hooks or handlers. It renders three static Q→A example pairs:
+1. "What's my biggest spending category this month?" → spending analysis reply
+2. "Can I afford a $1,200 vacation next month?" → affordability analysis reply
+3. "Why is my net worth lower than last month?" → net-worth delta explanation reply
+
+Bubbles are styled to mirror the real chat (sky tint + `MlAuto` right-alignment for user, neutral tint for assistant). A header line reads "Example conversations · Here's what the AI assistant can do once you add a key." and a footer note says "Add your OpenAI key in Settings to ask your own questions."
+
+The node is rendered inside `If(noAI && empty, ...)` in the chat body, between the `chatHint` paragraph and the starter chips / composer — visible only to keyless users who have not yet started a conversation.
+
+**Hook-ordering discipline:** `exampleConversationsNode()` is a plain function returning static `ui.Node`; it calls `uistate.T()` for i18n but registers no hooks. The `If(noAI && empty, ...)` guard is consistent with existing `If(empty, ...)` and `If(!empty, thread)` conditional renders already in the same body.
+
+New i18n keys: `insights.examplesLabel`, `insights.examplesHint`, `insights.exampleQ1`, `insights.exampleA1`, `insights.exampleQ2`, `insights.exampleA2`, `insights.exampleQ3`, `insights.exampleA3`, `insights.examplesNotice`. Files changed: `internal/screens/insights.go`, `internal/i18n/en.go`. Build and i18n tests pass. (C248)
+
 ## 2026-06-27 — C251: System-prompt editor behind "Advanced" expander + "conversations saved" cue
 
 **Ticket:** C251 — "System-prompt editor surfaced to all; no 'conversations saved' cue."

@@ -931,6 +931,10 @@ func Insights() ui.Node {
 				P(css.Class("muted", tw.Text12, tw.Mb2), uistate.T("insights.savedOnDevice")),
 				backendToggle,
 				If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
+				// C248: show static example Q→A conversations for keyless users so they
+				// can preview the assistant's value before adding a key. Shown only when
+				// no AI is configured AND the thread is empty.
+				If(noAI && empty, exampleConversationsNode()),
 				If(!empty, thread),
 				// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
 				// own component so the Approve/Decline handlers re-attach cleanly each time
@@ -1340,6 +1344,41 @@ type suggestChipProps struct {
 func suggestChip(props suggestChipProps) ui.Node {
 	q, onPick := props.Q, props.OnPick
 	return Button(css.Class("btn chip-suggest"), Type("button"), OnClick(func() { onPick(q) }), q)
+}
+
+// exampleConversationsNode renders 2–3 static, clearly-labelled example Q→A pairs
+// so keyless users can preview the AI assistant's value before adding a key (C248).
+// The examples are purely illustrative — no inputs, no handlers — so they are safe
+// to render in a plain loop (no OnClick/UseEvent inside).
+func exampleConversationsNode() ui.Node {
+	type examplePair struct{ q, a string }
+	pairs := []examplePair{
+		{uistate.T("insights.exampleQ1"), uistate.T("insights.exampleA1")},
+		{uistate.T("insights.exampleQ2"), uistate.T("insights.exampleA2")},
+		{uistate.T("insights.exampleQ3"), uistate.T("insights.exampleA3")},
+	}
+	rows := make([]any, 0, len(pairs)*2)
+	for _, p := range pairs {
+		rows = append(rows,
+			// User bubble: right-aligned via MlAuto, sky tint — mirrors the real chat.
+			Div(css.Class(tw.Flex, tw.JustifyStart, tw.Mb2),
+				Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgSky10, tw.Px35, tw.Py2, tw.Text13, tw.WhitespacePreWrap, tw.MlAuto), p.q),
+			),
+			// Assistant bubble: left-aligned, neutral tint — mirrors the real chat.
+			Div(css.Class(tw.Flex, tw.JustifyStart, tw.Mb2),
+				Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13), p.a),
+			),
+		)
+	}
+	return Div(css.Class(tw.Mt3, tw.Mb2),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2),
+			Span(css.Class(tw.Text12, tw.FontSemibold, tw.TextFaint), uistate.T("insights.examplesLabel")),
+			Span(css.Class(tw.Text11, tw.TextFaint), "·"),
+			Span(css.Class(tw.Text12, tw.TextFaint), uistate.T("insights.examplesHint")),
+		),
+		Div(rows...),
+		P(css.Class("muted", tw.Text11, tw.Mt1), uistate.T("insights.examplesNotice")),
+	)
 }
 
 // spendingHighlights renders an offline "what changed" card: it detects

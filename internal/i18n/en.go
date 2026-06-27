@@ -1590,6 +1590,18 @@ var english = Catalog{
 	// C234: compact top-of-page entry point that jumps to the Ask section when the
 	// chat is below the fold (e.g. after spending highlights + pinned insights).
 	"insights.askNow": "Ask a question",
+	// C248: static example conversations shown to keyless users so they can preview
+	// the assistant's value before adding a key. Clearly labelled "Example" and
+	// non-interactive (illustrative only).
+	"insights.examplesLabel":  "Example conversations",
+	"insights.examplesHint":   "Here's what the AI assistant can do once you add a key:",
+	"insights.exampleQ1":      "What's my biggest spending category this month?",
+	"insights.exampleA1":      "Your top category this month is Dining Out at $420, up 18% from your $356 average. Groceries is second at $310, which is right on track. Want me to suggest ways to trim the dining budget?",
+	"insights.exampleQ2":      "Can I afford a $1,200 vacation next month?",
+	"insights.exampleA2":      "Based on your current month-to-date net of +$640 and your checking balance of $3,100, a $1,200 trip is feasible — you'd have about $1,900 left as a cushion. I'd suggest putting it on a credit card you pay in full so your cash buffer stays intact. Want me to run the numbers with your upcoming bills factored in?",
+	"insights.exampleQ3":      "Why is my net worth lower than last month?",
+	"insights.exampleA3":      "Your net worth dropped $830 month-over-month. The main driver was a $950 car repair expense — without that one-off, you'd be slightly ahead. Your savings account grew by $120, which is positive. Do you want me to project how long before you recover that dip given your current income rate?",
+	"insights.examplesNotice": "Add your OpenAI key in Settings to ask your own questions.",
 
 	// Affordability answer card (L8 deterministic path)
 	"insights.affordYes":         "Yes, you can afford %s.",
