@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C256: VERIFY-CLOSE + SU1 test bug fixed
+
+**Ticket:** C256 — "Recommendation actions are navigate-only, not executable."
+
+**Investigation:** Checked all C256-related files before touching anything. Found `c256_executable_actions_test.go` already existed (written by a prior agent pass). G12 test was passing; SU1 test was always `t.Skip`-ping.
+
+**Root cause of skip:** `TestSU1CancelCandidates_EmitsCancelSubscriptionAction` built Netflix transactions using `usd(1_99)` (a *positive* money value, i.e. income). `subscriptions.Detect` only tracks negative (expense) charges, so no subscription was detected and `su1CancelCandidates` returned empty. The test silently skipped instead of asserting the behavior.
+
+**Production code verdict:** `su1CancelCandidates` (SMART-SU1) was already emitting `ActionCancelSubscription` (added in an earlier C256 pass). `g12SuggestGoals` (SMART-G12) was already emitting `ActionCreateGoal`. The `smart_card.go` onAction switch handles both. No production code gap.
+
+**Fix:** Changed `usd(1_99)` to `usd(-1_99)` (expense) in the SU1 test; converted `t.Skip` to `t.Fatal` so the assertion is active. All 14 smartengine tests pass, including the now-executing SU1 case.
+
+**Only file changed:** `internal/smartengine/c256_executable_actions_test.go`.
+
+**What's next:** C257 (dashboard digest widget position / /smart as ranked hub) remains open and is the larger companion follow-on.
+
 ## 2026-06-27 — C255: VERIFY-CLOSE — Smart enabled-state persistence confirmed correct
 
 **Concern (C255):** C254 just changed `LoadSmartSettings` to seed Free features on first load. The question was: does toggling a smart setting actually call `SaveSmartSettings` and persist to KV, and does `LoadSmartSettings` restore it on a fresh session?

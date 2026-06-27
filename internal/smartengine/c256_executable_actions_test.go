@@ -58,20 +58,21 @@ func TestG12SuggestGoals_AbsentWhenEmergencyGoalExists(t *testing.T) {
 // SMART-SU1 emits ActionCancelSubscription with the subscription name when a
 // subscription qualifies as a cancel candidate.
 func TestSU1CancelCandidates_EmitsCancelSubscriptionAction(t *testing.T) {
-	// Build a subscription that qualifies: last charge is stale (more than one
-	// cadence period ago) so NeedsReview returns true → it's a cancel candidate.
-	// monthlyCharges ends at lastMonth; set lastMonth 3 months before now so
-	// the last charge is overdue.
+	// Build a subscription that qualifies: last charge is stale (more than two
+	// cadence periods ago) so NeedsReview returns true → it's a cancel candidate.
+	// Use a negative amount (expense) so subscriptions.Detect picks it up.
+	// monthlyCharges ending in March 2026 places the last charge ~110 days before
+	// June 2026, well over the 62-day monthly threshold.
 	now := time.Date(2026, 6, 25, 0, 0, 0, 0, time.UTC)
 	staleMonth := time.March // 3 months before June → NeedsReview fires
-	txns := monthlyCharges("Netflix", 1_99, staleMonth, recurringMinCount)
+	txns := monthlyCharges("Netflix", -1_99, staleMonth, recurringMinCount)
 	in := baseInput()
 	in.Now = now
 	in.Transactions = append(in.Transactions, txns...)
 
 	got := su1CancelCandidates(in)
 	if len(got) == 0 {
-		t.Skip("no cancel candidates — subscription may not qualify; skipping")
+		t.Fatal("want at least 1 cancel candidate (stale subscription), got 0")
 	}
 	for _, ins := range got {
 		if ins.Action == nil {
