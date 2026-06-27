@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Skipped (investigated, no change needed)
+- **C111 — /rules member filter (2026-06-27):** No member filter dropdown exists in `rules.go`; grepping `member` returned zero results. Nothing to remove or disclose.
+- **C214 — count-up dual net-worth figure (2026-06-27):** `countup.js` animates a single `[data-countup]` element per figure with no duplicate render path. No concrete double-render found in `dashboard*.go`; speculative rewrite skipped.
+- **C83 — add-menu "New account" / skip-link collision (2026-06-27):** No shared id, href, or selector matches both the `.skip-link` anchor and the `<button class="add-item">` "New account" item. No concrete collision; C83 already queued under IMPL R4-fx-ux.
+
 ### Changed
 - **R38/§8.6 — notification center surfaces urgent alerts instead of burying them (2026-06-27):** /notifications rendered in recency order, so a CRITICAL "over budget" alert sat at the BOTTOM below ~8 routine "due soon" reminders. The feed is now stable-sorted by severity (critical > warning > info) before render, keeping recency order within each tier — so the 6 distinct critical over-budget alerts lead, then warnings, then the rest. Display-only (read/catch-up/clear-all match by ID, unaffected). Passed an adversarial style-spec review (§8.6/§3.1). A TODO marks a future collapse-threshold for long same-rule runs.
 - **R55/§8.9 — /admin gated state is now a useful card, not a dead line (2026-06-27):** The signed-out /admin route rendered a single italic sentence floating in an empty page. It now renders a proper gated card: a title ("Admin console"), a specific reason/value (what the console manages — devices, sign-in sessions, audit log — that it needs a CashFlux Cloud sign-in, and that local data stays on-device either way), and one primary CTA ("Sign in to Cloud") that opens the global Settings panel. Passed an adversarial style-spec review (§8.9 anatomy, §3.5 trust, §8.1/§13 button). New i18n keys in en_enterprise.go.
