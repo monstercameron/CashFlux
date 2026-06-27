@@ -992,6 +992,9 @@ var english = Catalog{
 	// C304: frame the section as the subscription/connection surface, not raw infra.
 	"settings.cloudSectionIntro":     "Connect CashFlux Cloud for sync, automatic encrypted backups, and bundled AI across your devices — or point to your own self-hosted server. The rest of the app stays free and local either way.",
 	"settings.cloudDataDisclosure":   "When sync is on, your encrypted financial data (accounts, transactions, budgets, and more) is sent to the server you configure. When sync is off, everything stays on this device — nothing is transmitted.",
+	// C300: persistent price teaser shown near the Cloud heading so the plan cost is
+	// discoverable in Settings without waiting for the one-shot UpgradeSheet. %s = plan price.
+	"settings.cloudPricingTeaser": "Cloud is an optional add-on — free for 14 days, then %s. The rest of the app stays free and local.",
 	"settings.backendURL":            "Backend URL",
 	"settings.backendToken":      "Backend bearer token",
 	"settings.backendNote":       "Uploads store your OpenAI key encrypted in the backend SQLite database; the key is never returned to the browser.",

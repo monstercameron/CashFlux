@@ -216,6 +216,15 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// C291: always-visible data-disclosure — what leaves the device when sync is on
 		// vs. off. Shown before the toggle so the user sees the trade-off before acting.
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudDataDisclosure")),
+		// C300: persistent price teaser — shown when the user is not yet subscribed to
+		// Cloud so the plan cost is discoverable in Settings without relying on the
+		// one-shot UpgradeSheet. Omitted once authenticated (ServerToken set) to avoid
+		// showing a subscribe pitch to an existing subscriber.
+		If(p.CloudSelected && strings.TrimSpace(p.ServerToken) == "",
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1),
+				uistate.T("settings.cloudPricingTeaser", p.CloudPrice),
+			),
+		),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
 		// backend never throws websocket errors the user can't dismiss.

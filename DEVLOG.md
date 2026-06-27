@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C300: persistent plan price in Settings → Cloud & server
+
+**Problem (C300):** The plan price ($34.99/year / $3.99/month) was only visible inside the one-shot UpgradeSheet bottom sheet, or inside the subscribe block which itself required the user to have already manually switched the server-mode selector to "Cloud." A user who dismissed the UpgradeSheet and never explicitly selected cloud mode in Settings had no way to discover what the plan costs.
+
+**Fix:** Added a persistent pricing teaser paragraph in `settingsRightColumn` (in `internal/app/settings_section.go`), inserted immediately after the existing `settings.cloudDataDisclosure` line — before the BackendOn toggle. The paragraph uses the new i18n key `settings.cloudPricingTeaser`: `"Cloud is an optional add-on — free for 14 days, then %s. The rest of the app stays free and local."` with `p.CloudPrice` as the `%s` argument. It renders only when `p.CloudSelected && strings.TrimSpace(p.ServerToken) == ""` — i.e., the user has cloud selected but has not yet authenticated — so it is invisible to existing subscribers and users in self-host mode.
+
+**Design decisions:**
+- Condition on `CloudSelected` (not just always-on) to keep the teaser in context: a self-host user doesn't need CashFlux Cloud pricing.
+- Condition on empty `ServerToken` to suppress it for authenticated subscribers — they don't need a subscribe pitch.
+- Reuses `p.CloudPrice` (already the billing-interval-aware value computed in `settings.go`) so the price shown in the teaser automatically switches between annual/monthly if the user changes the billing interval.
+- New i18n key is `settings.cloudPricingTeaser` (a `%s` format); copy echoes the existing `cloud.upgradeBoundary` framing for consistency.
+
+**New i18n key:** `settings.cloudPricingTeaser`.
+
+**Files changed:** `internal/app/settings_section.go`, `internal/i18n/en.go`.
+
+**Tests:** `go test ./internal/i18n/` — PASS. Build error in `internal/screens/documents_csv_import.go` (undefined `El`) is from a concurrent agent and not in touched files; `GOOS=js GOARCH=wasm go build` on the pre-existing dirty files exits 1 solely on that file.
+
 ## 2026-06-27 — C131: Saturday week-start option
 
 **Problem (C131):** The week-start segmented control in Settings offered only two choices — Sunday and Monday — leaving users whose work or cultural week begins on Saturday without a matching option. The `WeekStart` type in `internal/prefs/prefs.go` defined only `WeekSunday` and `WeekMonday`; `Normalize()` rejected any other value and fell back to Sunday; `WeekStartWeekday()` returned either `time.Monday` or `time.Sunday` (default branch).
