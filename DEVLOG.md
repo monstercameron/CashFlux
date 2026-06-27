@@ -13659,3 +13659,13 @@ no color-only reliance); and the light .btn-stale "Update value/balance/Mark all
 4.45:1 on the chip) darkened to #92400e (~6:1). e2e/ux_contrast_audit.mjs now reports TOTAL 0 across all 8
 routes in dark AND light. Net arc this session: raw ~51 -> 0. The §12.1 contrast dimension of the R44/R72
 quality gate passes clean; the gate stays in the repo to keep it that way. All CSS in web/index.html (mine).
+
+## 2026-06-27 — R44/R72 density dimension: control-count audit gate
+Added e2e/ux_density_audit.mjs — counts first-viewport CONTENT controls per route (shell rail/topbar
+counted separately, hidden/offscreen/disabled excluded, per §11.1) and checks them against the §11
+archetype budgets. Finding: 15/16 routes are within budget — notably Dashboard 28/45, Transactions 55/65,
+To-do 44/65 — i.e. the older R57 probe's "98/97 control" numbers were counting shell + offscreen; real
+first-viewport content density is fine after the C-backlog work. The ONE genuine failure is /widget-manager
+at 100 vs a 70 ceiling (the control matrix R39/R42/R51 call out) — the concrete target for a progressive-
+disclosure redesign. Gate exits with the over-ceiling route count for CI. Pairs with the contrast gate
+(now 0) to cover the contrast + density dimensions of the R44/R72 desktop UX quality gate.
