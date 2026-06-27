@@ -424,12 +424,12 @@ func Documents() ui.Node {
 		aiModel = "gpt-5.5" // vision/receipt extraction: use the flagship vision model
 	}
 	readAI := ui.UseEvent(func() {
-		if settings.OpenAIKey == "" && !useBackendAI {
-			needsKey.Set(true)
-			return
-		}
 		if imageURL.Get() == "" {
 			aiErr.Set(uistate.T("documents.chooseImageFirst"))
+			return
+		}
+		if settings.OpenAIKey == "" && !useBackendAI {
+			needsKey.Set(true)
 			return
 		}
 		aiLoading.Set(true)

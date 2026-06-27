@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C95: reorder image-before-key validation on receipt import
+
+**Problem:** The `readAI` handler in `internal/screens/documents.go` checked `settings.OpenAIKey == "" && !useBackendAI` first and returned early with `needsKey.Set(true)`. The image-presence check (`imageURL.Get() == ""`) came second. A user who clicked "Read" without selecting an image got a misleading "add your OpenAI key" error even when the real problem was no image chosen.
+
+**Fix:** Swapped the two guard blocks so image presence is validated first (emitting `documents.chooseImageFirst` — "Choose an image first."). The key check only runs if an image is already present. No new i18n keys needed; `documents.chooseImageFirst` was already defined. One-line reorder, minimal footprint.
+
+**Files changed:** `internal/screens/documents.go`
+
 ## 2026-06-27 — C227: note manual local-first asset valuation (design disclosure)
 
 **Problem:** Valuation-type asset accounts (investment, retirement, crypto, other) have their
