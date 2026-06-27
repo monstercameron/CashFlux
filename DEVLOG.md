@@ -3,6 +3,19 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C67 [F8]: Discoverable top-level Transfer action on /accounts
+
+Transfer creation was buried in each account's overflow (⋯) menu — a user who hadn't explored every row had no idea transfers were possible at all. The fix adds a "Transfer money" primary button that renders above the account lists whenever ≥ 2 non-archived accounts exist.
+
+**Approach.** The accounts screen already had a page-level `doTransfer` function that calls `app.CreateTransferPair`. The cleanest path was to add a page-level form that drives that same function rather than duplicating any logic. The form is a standard GoWebComponents inline form — 7 `ui.UseState` + 4 `ui.UseEvent` hooks at a stable page-level position (not in a loop), so hook ordering is safe. Both From and To pickers draw from the full non-archived account list and exclude whatever is currently selected in the other field.
+
+One forward-reference wrinkle: `submitPageXfer` (a `ui.UseEvent`) needed to call `doTransfer`, but Go closures can't forward-reference a variable assigned later in the same function. Solved with a `var doTransferFn func(...)` declared before the hooks, then assigned `doTransferFn = doTransfer` immediately after `doTransfer` is defined. The closure captures the pointer, which is live by the time any submit fires.
+
+The `accounts_row.go` transfer form (per-row, opened from the ⋯ menu) is untouched — both paths call the same underlying logic and are valid entry points.
+
+**Files.** `internal/screens/accounts.go`, `internal/i18n/en.go`. Build rc=0.
+
+
 ## 2026-06-27 — C98 [F12]: Chosen receipt image preserved across Settings navigation
 
 When the user picks an image and is then prompted to go to Settings to add an OpenAI key, navigating away tears down the Documents component and the `ui.UseState("")` holding the image data-URL is lost. On return, the screen is blank — they have to re-choose.

@@ -124,6 +124,43 @@ func Accounts() ui.Node {
 	settingsAtom := uistate.UseSettings()
 	openFXSettings := ui.UseEvent(Prevent(func() { settingsAtom.Set(uistate.Global()) }))
 
+	// C67: page-level transfer form state hooks — declared here (stable position,
+	// not in a loop) so hook ordering is consistent across renders. The submit
+	// handler captures doTransferFn, a pointer resolved after doTransfer is defined.
+	pageXferOpen := ui.UseState(false)
+	pageXferFromS := ui.UseState("")
+	pageXferToS := ui.UseState("")
+	pageXferAmtS := ui.UseState("")
+	pageXferDateS := ui.UseState(time.Now().Format("2006-01-02"))
+	pageXferDescS := ui.UseState("")
+	openPageXfer := ui.UseEvent(Prevent(func() {
+		pageXferFromS.Set("")
+		pageXferToS.Set("")
+		pageXferAmtS.Set("")
+		pageXferDateS.Set(time.Now().Format("2006-01-02"))
+		pageXferDescS.Set("")
+		pageXferOpen.Set(true)
+	}))
+	cancelPageXfer := ui.UseEvent(Prevent(func() { pageXferOpen.Set(false) }))
+	// onPageXferFrom / onPageXferTo: SelectInput OnChange receives a plain string;
+	// plain funcs (not On* hooks) are safe to use as SelectInput.OnChange callbacks.
+	onPageXferFrom := func(v string) { pageXferFromS.Set(v) }
+	onPageXferTo := func(v string) { pageXferToS.Set(v) }
+	onPageXferAmt := ui.UseEvent(func(v string) { pageXferAmtS.Set(v) })
+	onPageXferDate := ui.UseEvent(func(v string) { pageXferDateS.Set(v) })
+	onPageXferDesc := ui.UseEvent(func(v string) { pageXferDescS.Set(v) })
+	// doTransferFn is a pointer so submitPageXfer can call doTransfer after it is
+	// defined below (Go does not allow forward references in closures).
+	var doTransferFn func(fromID, toID, amountStr, dateStr, desc string)
+	submitPageXfer := ui.UseEvent(Prevent(func() {
+		from, to := pageXferFromS.Get(), pageXferToS.Get()
+		if from == "" || to == "" || from == to || doTransferFn == nil {
+			return
+		}
+		doTransferFn(from, to, pageXferAmtS.Get(), pageXferDateS.Get(), pageXferDescS.Get())
+		pageXferOpen.Set(false)
+	}))
+
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	base := app.Settings().BaseCurrency
@@ -260,6 +297,8 @@ func Accounts() ui.Node {
 		bump()
 		noticeAtom.Set(noticeAtom.Get().With(uistate.T("accounts.transferDone"), false))
 	}
+	// C67: wire the page-level submit hook to the now-defined doTransfer closure.
+	doTransferFn = doTransfer
 
 	windows := app.FreshnessWindows()
 	now := time.Now()
@@ -338,6 +377,89 @@ func Accounts() ui.Node {
 			Button(css.Class("btn btn-stale"), Type("button"), Title(uistate.T("accounts.markAllTitle")), OnClick(markAllUpdated),
 				Text(uistate.T("accounts.markAll", plural(staleCount, "account")))),
 		)),
+		// C67: top-level "Transfer money" action — visible whenever there are at least
+		// two non-archived accounts. Clicking opens an inline form that reuses the
+		// existing doTransfer / CreateTransferPair flow without duplicating any logic.
+		If(len(accounts) >= 2 && !pageXferOpen.Get(),
+			Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+				Type("button"),
+				Attr("data-testid", "page-transfer-btn"),
+				Title(uistate.T("accounts.transferTitle")),
+				OnClick(openPageXfer),
+				uiw.Icon(icon.Accounts, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("accounts.transferMoney")),
+			),
+		),
+		If(pageXferOpen.Get(), func() ui.Node {
+			// Build From/To option lists from all non-archived accounts, excluding the
+			// account already selected in the other field so the user can't pick the same
+			// account on both sides.
+			pfrom, pto := pageXferFromS.Get(), pageXferToS.Get()
+			fromOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
+			toOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
+			for _, ac := range accounts {
+				if ac.Archived {
+					continue
+				}
+				lbl := ac.Name + " (" + ac.Currency + ")"
+				if ac.ID != pto {
+					fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
+				}
+				if ac.ID != pfrom {
+					toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
+				}
+			}
+			sameAcct := pfrom != "" && pto != "" && pfrom == pto
+			submitDisabled := sameAcct || pfrom == "" || pto == ""
+			return Div(css.Class("row-edit"),
+				Attr("data-testid", "page-transfer-form"),
+				H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}),
+					uistate.T("accounts.transferTitle")),
+				Form(css.Class("form-grid"),
+					Attr("aria-label", uistate.T("accounts.transferFormLabel")),
+					OnSubmit(submitPageXfer),
+					labeledField(uistate.T("accounts.transferFromLabel"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options:   fromOpts,
+							Selected:  pfrom,
+							OnChange:  onPageXferFrom,
+							AriaLabel: uistate.T("accounts.transferFromLabel"),
+							TestID:    "page-xfer-from-select",
+						})),
+					labeledField(uistate.T("accounts.transferToLabel"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options:   toOpts,
+							Selected:  pto,
+							OnChange:  onPageXferTo,
+							AriaLabel: uistate.T("accounts.transferToLabel"),
+							TestID:    "page-xfer-to-select",
+						})),
+					If(sameAcct, P(css.Class("err"), Attr("role", "alert"),
+						uistate.T("accounts.transferSameAccountErr"))),
+					labeledField(uistate.T("accounts.transferAmount"),
+						Input(css.Class("field"), Attr("id", "page-xfer-amt"),
+							Attr("data-testid", "page-xfer-amt"),
+							Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
+							Value(pageXferAmtS.Get()), Step("0.01"), Attr("min", "0.01"),
+							OnInput(onPageXferAmt))),
+					labeledField(uistate.T("accounts.transferDateLabel"),
+						Input(css.Class("field"), Type("date"),
+							Attr("aria-label", uistate.T("accounts.transferDateLabel")),
+							Value(pageXferDateS.Get()), OnInput(onPageXferDate))),
+					labeledField(uistate.T("accounts.transferDescLabel"),
+						Input(css.Class("field"), Type("text"),
+							Placeholder(uistate.T("accounts.transferDefaultDesc")),
+							Value(pageXferDescS.Get()), OnInput(onPageXferDesc))),
+					IfElse(submitDisabled,
+						Button(css.Class("btn btn-primary"), Type("submit"),
+							Attr("disabled", "disabled"),
+							uistate.T("accounts.transferSubmit")),
+						Button(css.Class("btn btn-primary"), Type("submit"),
+							uistate.T("accounts.transferSubmit"))),
+					Button(css.Class("btn"), Type("button"), OnClick(cancelPageXfer), uistate.T("action.cancel")),
+				),
+			)
+		}()),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title:        uistate.T("accounts.assets"),
 			HeaderAction: smartSectionAction(smartSettings),
