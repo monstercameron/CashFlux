@@ -15404,3 +15404,14 @@ canonical hub (+ an Unusual filter), derived surfaces (dashboard/notifications/r
 per 8.6. The presentation half is already shipped (R38 + R38/8.6); the design closes the detection/identity/
 dismissal loop. Adversarial review verified every cited file/symbol exists + design sound: PASS 4/4, no fixes.
 New doc, committed by explicit path (no reset, per the git-no-reset rule).
+
+## 2026-06-27 — C21 [F3]: /setup wizard DONE
+
+Built the guided setup wizard at /setup. Four unconditional step panels (currency/week-start,
+income, first account, members) controlled by a single UseState(0) step index. All UseEvent
+handlers hoisted to the top of SetupWizard() — no hooks in loops. Steps are If(step == N, node)
+guards on pre-computed nodes. Persistence: PutSettings for currency, SetPrefs for week-start +
+income, PutAccount + PutMember for entities. SettingKV tracks currencyConfirmed and wizardDone flags
+(not part of store.Settings). Progress bar via setup.Compute(). Route registered in screens.go
+(GroupSystem). en.go was dirty so i18n key strings serve as their own labels (acceptable fallback).
+Both WASM builds pass (./internal/screens and .).

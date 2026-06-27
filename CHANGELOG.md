@@ -4521,3 +4521,18 @@ and every commit updates this file under `Unreleased`.
 - Serve web assets from `web/` (clean project root); restyled host page with a dark theme.
 - Require bottom-up SDLC build order in `CLAUDE.md` (data model â†’ services/logic with tests â†’
   persistence â†’ state â†’ UI last).
+
+## C21 [F3] — Guided /setup wizard
+
+- Added internal/screens/setup.go: a new 4-step guided setup wizard at the /setup route.
+  Steps: (1) Currency & week-start, (2) Monthly income, (3) First account, (4) Household members.
+  Completion shows a "Go to dashboard" CTA.
+- All hooks (UseState, UseEvent) called unconditionally at top-level; step content pre-computed
+  as nodes and shown via If(step == N, node) — no hooks in loops.
+- Persistence: currency via pp.PutSettings, week-start + income via uistate.SetPrefs,
+  accounts via pp.PutAccount, members via pp.PutMember. SettingKVSet tracks
+  cashflux:setup:currencyConfirmed and cashflux:setup:wizardDone.
+- Progress bar driven by setup.Compute(...) with ✓/○ indicators per step.
+- Registered /setup in internal/screens/screens.go (GroupSystem, Phase 1).
+- i18n keys use uistate.T("setup.*") — keys fall back to the key name since en.go was dirty
+  and could not be edited.

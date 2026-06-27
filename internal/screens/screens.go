@@ -95,6 +95,10 @@ func All() []Route {
 		{Path: "/help", Label: "nav.help", Title: "nav.help", Subtitle: "screen.helpSub", Phase: 1, Group: GroupSystem, View: HelpScreen},
 		{Path: "/about", Label: "nav.about", Title: "nav.about", Subtitle: "screen.aboutSub", Phase: 1, Group: GroupSystem, View: About},
 		{Path: "/admin", Label: "nav.admin", Title: "nav.admin", Subtitle: "screen.adminSub", Phase: 2, Group: GroupSystem, AdminOnly: true, View: AdminConsole},
+		// C21: Guided setup wizard — /setup — walks new users through currency, income,
+		// first account, and household members. Lives in GroupSystem so it appears in
+		// nav but is also reachable as a direct route from empty-state CTAs.
+		{Path: "/setup", Label: "nav.setup", Title: "setup.pageTitle", Subtitle: "setup.pageSub", Phase: 1, Group: GroupSystem, View: SetupWizard},
 		// R31-plans: Plans comparison surface (/plans). Not in the rail (no Label/Group)
 		// so it doesn't clutter nav; reachable via the upgrade sheet, cloud mention, and
 		// direct navigation. Registered last so it doesn't shift group indices.
