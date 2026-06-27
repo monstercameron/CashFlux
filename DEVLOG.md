@@ -13627,3 +13627,13 @@ below it down to an opaque base, so the measured background is what the eye actu
 fell 28 -> 19 and the surviving failures are real and accurately scored (e.g. .cal-day.today's accent
 number is 3.90:1 dark / 3.67:1 light — a genuine marginal AA miss, not 1:1). Gate is now trustworthy
 enough to drive the per-screen contrast fixes. e2e-only, no app/other-agent files touched.
+
+## 2026-06-27 — R47/§8.6: budget pills become accessible severity badges
+The gate (now alpha-accurate) flagged the budgets "1 near the limit" pill at 2.10:1 in light — warn-amber
+text on a pale chip, the classic yellow-on-light AA failure. Fixed it the §8.6 way rather than chasing a
+darker amber: the pill carries severity in a tinted FILL + border (color-mix of --warn/--danger over
+--bg-elev) and keeps the LABEL at --text. Measured after: "6 over budget" 12.18:1, "1 near the limit"
+13.62:1 in light, and a screenshot confirms they read as clean status badges, not junky. New
+.pill.is-warn/.pill.is-danger in index.html (my lane) + budgets.go (clean at HEAD) swapped from tw.TextWarn/
+tw.TextDown to the new classes. This is the template for the other tw-text-tone pills across the app
+(follow-up, some in contended files). gofmt clean, wasm build rc=0.

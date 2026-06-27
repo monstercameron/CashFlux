@@ -1436,6 +1436,12 @@
       .pill { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.74rem; font-weight: 700;
         letter-spacing: 0.02em; padding: 0.12rem 0.5rem; border-radius: 999px;
         background: var(--bg-elev); border: 1px solid var(--border); white-space: nowrap; }
+      /* §8.6/§12.1 severity pills: carry the severity in a tinted fill + border and
+         keep the LABEL at --text, instead of low-contrast colored text (warn-amber on
+         a pale chip measured ~2.1:1 in light). Works in both themes because the tint is
+         a color-mix over --bg-elev and the label uses the theme's primary text. */
+      .pill.is-warn   { background: color-mix(in srgb, var(--warn) 16%, var(--bg-elev));   border-color: color-mix(in srgb, var(--warn) 40%, var(--border));   color: var(--text); }
+      .pill.is-danger { background: color-mix(in srgb, var(--danger) 14%, var(--bg-elev)); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); color: var(--text); }
 
       /* Insights starter chips (G13): a softer, more inviting pill — distinct from
          the hard-edged form .btn so they read as "tap to explore", not data entry. */
