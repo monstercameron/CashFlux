@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C239 (degenerate chart domain guard)
+
+Bar charts threw SVG "negative height" / NaN errors whenever every value was equal (notably all-zero
+data): `web/chart.js` built the y-scale domain as `[yMin, d3.max(ys)]`, which collapses to a single
+point, so d3 maps every datum to the same/NaN position and `Math.abs(y(p.y) - y(0))` yields NaN. Added
+a guard that gives the domain a minimal positive span (`yMax = yMin + 1`) when `max <= yMin`. JS-only
+change (chart shim, not compiled into wasm); Go build still verified, chart.js parses clean.
+
 ## 2026-06-26 — C249 (chat send-button a11y)
 
 The Ask input already carried `aria-label=insights.askPlaceholder`; the gap was the Send button's
