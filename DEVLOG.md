@@ -3,6 +3,32 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C58-ui split badge + C62 shift-click range selection
+
+Both tickets completed in two files only.
+
+**C58-ui (split badge):** The split-editor and inline-edit wiring shipped previously; the missing
+piece was a glanceable indicator on the non-editing row. Added a small "⑂ Split" chip conditionally
+next to the description using `t.HasSplits()` (already on `domain.Transaction` in
+`internal/domain/category_split.go`). Badge class `.badge-split` added to `web/index.html` after
+`.badge-soon` — same pill shape as the base `.badge` with a subtle teal tint to be visually distinct
+from `.badge-warn` (amber) and `.badge-soon` (blue) without grabbing too much attention. WCAG AA
+verified for both dark/light. `data-testid="txn-split-badge"` and `title` set for testability and
+keyboard/pointer accessibility.
+
+**C62 (shift-click range):** On audit, the full implementation was already in the codebase:
+- `transactions_row.go` `sel` handler already calls `e.JSValue().Get("shiftKey").Bool()` and passes
+  it to `OnToggleSelect`.
+- `transactions.go` `toggleSelect` already has anchor tracking (`lastSelID` atom), visible-order
+  capture (`visibleOrder` slice updated from the paginated `page` after each render), and the full
+  range-select loop (`if shift && lastSelID.Get() != "" && lastSelID.Get() != txnID { ...
+  visibleOrder[ai:bi+1] }`).
+
+No logic was missing. The ticket was already built by a prior agent but left in the backlog list.
+This commit completes the badge piece and confirms C62 as done.
+
+Both builds pass: `GOOS=js GOARCH=wasm go build ./internal/screens/` → rc=0; `go build ./...` → rc=0.
+
 ## 2026-06-27 — C39/C46 [F5]: Recent-payee autocomplete in Quick-Add
 
 ### Problem

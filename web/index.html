@@ -1091,6 +1091,11 @@
         text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 999px;
       }
       .badge-soon { background: #1e293b; color: #93c5fd; border: 1px solid #334155; }
+      /* C58-ui: split-transaction indicator chip. Subtle teal tint, clearly distinct from
+         warn/error red but lighter than the blue .badge-soon so it doesn't grab too much
+         attention — the split chip is informational, not actionable. */
+      .badge-split { background: #0f2a2a; color: #5eead4; border: 1px solid #134e4a; font-size: 0.68rem; vertical-align: middle; margin-left: 0.35rem; }
+      [data-theme="light"] .badge-split { background: #f0fdfa; color: #0d9488; border-color: #99f6e4; }
 
       .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
       .stat { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
