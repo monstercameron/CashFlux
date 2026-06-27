@@ -30,6 +30,7 @@ func TestPeriodLabel(t *testing.T) {
 		PeriodWeekly:    "Weekly",
 		PeriodMonthly:   "Monthly",
 		PeriodQuarterly: "Quarterly",
+		PeriodYearly:    "Year",
 		Period("nope"):  "Monthly", // an unknown period falls back to Monthly
 	}
 	for p, want := range cases {

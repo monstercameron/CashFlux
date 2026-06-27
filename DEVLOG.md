@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C129: PeriodYearly added to domain enum and budgeting PeriodRange
+
+**Problem (C129):** The budget period select only offered Weekly, Monthly, and Quarterly. Yearly budgets are a legitimate use case — e.g., tracking a capital-gains budget, an annual charitable-giving limit, or an HSA contribution ceiling. `domain.Period` had no `"yearly"` value and `PeriodRange` had no corresponding case.
+
+**What was touched:**
+- `internal/domain/enums.go`: added `PeriodYearly = "yearly"` to the const block; added it to `AllPeriods`; added `case PeriodYearly: return "Year"` to `Label()`; added it to `Valid()`'s switch.
+- `internal/budgeting/budgeting.go`: added `case domain.PeriodYearly` to `PeriodRange` — returns `[Jan 1 of ref.Year(), Jan 1 of ref.Year()+1)`, which is the natural calendar-year window.
+- `internal/budgeting/budgeting_test.go`: extended `TestPeriodRange` with a yearly case (ref=2026-06-15, expect 2026-01-01..2027-01-01).
+- `internal/domain/enums_edge_test.go`: extended `TestPeriodLabel` with `PeriodYearly → "Year"`.
+
+**UI wiring deferred:** `internal/screens/budgets.go` was dirty (concurrent agent), so the `<select>` option and `PeriodRange` call-site in the screen layer were not added. The pure infrastructure is ready; any agent that gets a clean `budgets.go` can trivially add `<option value="yearly">Year</option>` to the period selector.
+
+**Tests:** `go test ./internal/budgeting/ ./internal/domain/` both pass. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C103: "Apply to existing" now shows per-rule transaction counts
 
 **Problem (C103):** When the user clicked "Apply to existing" on /rules, the toast said "Categorized 12 transactions." — one lump total with no indication of which rules did the work. With a dozen rules in play, that tells the user almost nothing about which rules are actually firing vs. dead weight.

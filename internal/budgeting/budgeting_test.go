@@ -47,7 +47,13 @@ func TestPeriodRange(t *testing.T) {
 	// Quarterly: Q2 is Apr 1 .. Jul 1.
 	s, e = PeriodRange(domain.PeriodQuarterly, ref, time.Sunday)
 	if s != mustDate("2026-04-01") || e != mustDate("2026-07-01") {
-		t.Errorf("quarterly = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
+		t.Errorf("quarterly = %v..%v", s.Format("2006-01-02"), e.Format("2026-07-01"))
+	}
+
+	// Yearly: Jan 1, 2026 .. Jan 1, 2027.
+	s, e = PeriodRange(domain.PeriodYearly, ref, time.Sunday)
+	if s != mustDate("2026-01-01") || e != mustDate("2027-01-01") {
+		t.Errorf("yearly = %v..%v", s.Format("2006-01-02"), e.Format("2006-01-02"))
 	}
 }
 

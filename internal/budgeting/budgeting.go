@@ -165,6 +165,10 @@ func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start,
 		qm := ((int(m)-1)/3)*3 + 1
 		start = time.Date(y, time.Month(qm), 1, 0, 0, 0, 0, ref.Location())
 		return start, dateutil.AddMonths(start, 3)
+	case domain.PeriodYearly:
+		y := ref.Year()
+		start = time.Date(y, time.January, 1, 0, 0, 0, 0, ref.Location())
+		return start, time.Date(y+1, time.January, 1, 0, 0, 0, 0, ref.Location())
 	default:
 		return dateutil.MonthRange(ref)
 	}

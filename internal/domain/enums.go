@@ -133,10 +133,11 @@ const (
 	PeriodWeekly    Period = "weekly"
 	PeriodMonthly   Period = "monthly"
 	PeriodQuarterly Period = "quarterly"
+	PeriodYearly    Period = "yearly"
 )
 
 // AllPeriods lists every valid period.
-var AllPeriods = []Period{PeriodWeekly, PeriodMonthly, PeriodQuarterly}
+var AllPeriods = []Period{PeriodWeekly, PeriodMonthly, PeriodQuarterly, PeriodYearly}
 
 func (p Period) String() string { return string(p) }
 
@@ -147,6 +148,8 @@ func (p Period) Label() string {
 		return "Weekly"
 	case PeriodQuarterly:
 		return "Quarterly"
+	case PeriodYearly:
+		return "Year"
 	default:
 		return "Monthly"
 	}
@@ -155,7 +158,7 @@ func (p Period) Label() string {
 // Valid reports whether p is a known period.
 func (p Period) Valid() bool {
 	switch p {
-	case PeriodWeekly, PeriodMonthly, PeriodQuarterly:
+	case PeriodWeekly, PeriodMonthly, PeriodQuarterly, PeriodYearly:
 		return true
 	default:
 		return false
