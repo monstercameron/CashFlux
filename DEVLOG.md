@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C315 [F48]: explicit aria-label on sidebar nav items + HouseholdCard + breadcrumb button
+
+**Problem.** The `navItem` component (all sidebar/rail navigation anchors, including icon-only collapsed state) used only `title` for its accessible name. `title` is advisory in the HTML spec and browser ATs expose it inconsistently — some screen readers (VoiceOver/iOS, NVDA default settings) do not announce it as the accessible name on interactive elements. In collapsed-rail mode, the nav items render as icon-only links, making the `title`-only strategy particularly weak.
+
+**Fix.** Added `Attr("aria-label", props.Label)` alongside the existing `Title` in `navItem`'s args slice — the two attributes coexist: `title` still shows the native browser tooltip, `aria-label` overrides the computed accessible name for AT. `props.Label` is already the i18n-resolved label string passed in at call sites; no new strings or i18n keys needed.
+
+Applied the same pattern to two other `title`-only controls found on inspection: the `HouseholdCard` settings button and the breadcrumb "Dashboard" back-button in `TopBar`.
+
+The decorative spacer `Span` in `HouseholdCard`'s collapse row already had `aria-hidden="true"` — no change needed there.
+
+**Files.** `internal/app/shell.go` only. Build rc=0.
+
 ## 2026-06-27 — C126/C127 [F16]: biweekly + semi-monthly budget periods
 
 **Problem.** The budget period enum had only Weekly/Monthly/Quarterly/Yearly. Users paid biweekly or semi-monthly had no matching period, forcing them to approximate with weekly or monthly budgets.

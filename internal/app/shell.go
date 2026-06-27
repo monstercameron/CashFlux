@@ -587,7 +587,8 @@ func navItem(props navItemProps) uic.Node {
 	path := props.Path
 	args := []any{
 		ClassStr(cls),
-		Title(props.Label), // native tooltip + accessible name, esp. when collapsed to icons
+		Title(props.Label),              // native tooltip
+		Attr("aria-label", props.Label), // C315: explicit accessible name (title alone is unreliable for SR)
 		// A real href makes nav items keyboard-focusable links that screen readers
 		// announce and that support middle-click / open-in-new-tab (L34/L19 a11y);
 		// the click handler prevents the full-page load and does SPA navigation.
@@ -695,6 +696,7 @@ func HouseholdCard() uic.Node {
 			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
 			// signals it visually) without repeating it in the visible summary line.
 			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
+			Attr("aria-label", name+" · "+summary+" · "+uistate.T("household.settings")), // C315: explicit SR name
 			OnClick(func() { settings.Set(uistate.Global()) }),
 			ui.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)),
 			Span(css.Class("hh-text", tw.LeadingTight),
@@ -753,7 +755,7 @@ func TopBar(props topBarProps) uic.Node {
 			ui.Icon(icon.Menu, css.Class(tw.W5, tw.H5)),
 		),
 		Nav(css.Class("breadcrumb", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
-			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))),
+			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), Attr("aria-label", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))), // C315
 			If(!onDashboard, Span(css.Class(tw.TextFaint), "›")),
 			// The current page's title is the screen's single <h1> — so every screen
 			// has exactly one top-level heading for screen-reader heading navigation.
