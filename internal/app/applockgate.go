@@ -420,6 +420,12 @@ func buildAppLockSetup(doc js.Value) {
 			// R30: don't let a too-short passcode be set (the meter's hard floor).
 			errEl.Set("textContent", uistate.T("applock.tooShort"))
 			return
+		case applock.PasscodeStrength(pass) == applock.StrengthWeak:
+			// C287: reject trivial / low-variety passcodes that meet the length
+			// floor but are trivially guessable (all-same like "000000", or a
+			// simple run like "123456"). PasscodeStrength demotes these to Weak.
+			errEl.Set("textContent", uistate.T("applock.tooWeak"))
+			return
 		case pass != conf:
 			errEl.Set("textContent", uistate.T("applock.mismatch"))
 			return
