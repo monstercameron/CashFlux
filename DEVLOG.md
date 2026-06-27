@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C238 "new" delta badge when prior period is zero on /reports
+
+Root cause: `ledger.PercentChange(curr, prev)` returns `ok=false` when `prev==0`, which propagated
+as `HasDelta=false` on the `CategorySpend` row — and the reports screen's badge was only rendered
+when `HasDelta==true`. The "new category this period" case was silently swallowed.
+
+Fix in three layers:
+
+1. **`internal/reports/reports.go`** — added `PriorZero bool` to `CategorySpend`. In
+   `SpendingByCategory`, after the `PercentChange` call, when `!ok && row.Amount > 0` the field is
+   set to true. This only fires when a comparison was requested (the `compare` flag is true), so
+   no-comparison runs never produce spurious `PriorZero` values.
+
+2. **`internal/reports/rollup.go`** — `RollUpByParent` rolls leaf rows up to parent categories
+   and recomputes `DeltaPct`/`HasDelta` on the aggregate. Added a `comparisonRan` scan over the
+   input rows (true if any row has `HasDelta || PriorZero`). When `comparisonRan` and an
+   aggregated row ends with zero prior, `PriorZero` is set on the rolled-up row. Without this,
+   the rollup would silently suppress "new" badges for rolled-up parent categories whose children
+   were all new this period.
+
+3. **`internal/screens/reports_screen.go`** — `reportsCatRow` previously used a single `if
+   props.HasDelta && props.Amount != props.Prior` guard. Changed to a `switch` so `PriorZero`
+   renders a "new" chip (styled `text-down` with no arrow) and the existing delta path is
+   unchanged.
+
+`internal/i18n/en.go`: added `"reports.new": "new"`.
+
+Unit tests added in `reports_test.go` (`TestSpendingByCategoryComparison` extended + new
+`TestSpendingByCategoryNoPriorZeroWithoutComparison`) and `rollup_test.go`
+(`TestRollUpByParentPriorZero`). All native tests pass; wasm build exits 0.
+
 ## 2026-06-27 — C176 surface goal Owner + Linked account + Saved-so-far by default
 
 The add-goal form in `goaladdform.go` hid three meaningful fields — Saved-so-far, Owner,

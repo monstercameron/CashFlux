@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **C238 — show "new" delta badge on /reports when a category had zero spend in the prior period (2026-06-27):** When a comparison period was requested and a category appeared only this period (prior = 0), `PercentChange` returned ok=false and the badge was suppressed entirely. Added `PriorZero bool` to `CategorySpend` — set in `SpendingByCategory` and propagated through `RollUpByParent` — and updated `reportsCatRow` to render a "new" badge instead of nothing. New i18n key `reports.new`. Unit tests added in `reports_test.go` and `rollup_test.go`.
 - **C176 — surface goal Owner, Linked account, and Saved-so-far in the add-goal form by default (2026-06-27):** All three fields were hidden behind a "Show advanced fields" toggle in `goaladdform.go`. They are core goal attributes, not advanced options. Removed the toggle button and the `If(advOpen.Get(), …)` wrappers; all three fields now render unconditionally. Hook ordering preserved. No i18n keys added; existing `goals.savedSoFar`, `goals.owner`, `goals.linkedOptional` keys reused.
 
 ### Skipped (investigated, no change needed)

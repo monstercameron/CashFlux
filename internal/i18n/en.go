@@ -1398,6 +1398,7 @@ var english = Catalog{
 	"reports.deductibleHint":           "Expenses in categories you've marked as tax-deductible this period.",
 	"reports.deductibleDownloadTitle":  "Download deductible totals as a CSV file",
 	"reports.deductibleTotal":          "Total deductible: %s",
+	"reports.new":                      "new", // C238: shown on delta badge when prior period is zero and current > 0
 	"categories.deductible":            "Tax-deductible",
 	"categories.deductibleTitle":       "Mark this category as tax-deductible (expenses appear in the Deductible totals report)",
 	"dashboard.upcomingBills":          "Upcoming bills",
@@ -1571,6 +1572,7 @@ var english = Catalog{
 	"members.empty":              "No members yet.",
 	"members.addFirst":           "Add your first member",
 	"members.netWorthTitle":      "Net worth by member",
+	"members.spendTitle":         "Spending this period",
 	"members.roleMember":         "Member",
 	"members.roleDefault":        "Default member",
 	"members.defaultBadge":       "Default",

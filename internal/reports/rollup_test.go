@@ -53,3 +53,28 @@ func TestRollUpByParent(t *testing.T) {
 		t.Errorf("first row = %q, want rent (largest)", got[0].CategoryID)
 	}
 }
+
+// C238: when a comparison period ran but a rolled-up category had zero prior
+// spend, RollUpByParent must set PriorZero=true so the UI can show "new".
+func TestRollUpByParentPriorZero(t *testing.T) {
+	cats := []domain.Category{
+		{ID: "food", Name: "Food"},
+		{ID: "tech", Name: "Tech"}, // new this period — no prior
+	}
+	// "food" has a non-zero prior (comparison ran); "tech" has zero prior.
+	rows := []CategorySpend{
+		{CategoryID: "food", Amount: 10000, Prior: 8000, HasDelta: true, DeltaPct: 25},
+		{CategoryID: "tech", Amount: 5000, Prior: 0, PriorZero: true},
+	}
+	got := RollUpByParent(rows, cats)
+	byID := map[string]CategorySpend{}
+	for _, r := range got {
+		byID[r.CategoryID] = r
+	}
+	if byID["food"].PriorZero {
+		t.Error("food (non-zero prior) must not have PriorZero set after rollup")
+	}
+	if !byID["tech"].PriorZero {
+		t.Error("tech (zero prior, comparison ran) must have PriorZero set after rollup")
+	}
+}

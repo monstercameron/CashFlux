@@ -123,4 +123,27 @@ func TestSpendingByCategoryComparison(t *testing.T) {
 	if n := by["new"]; n.Amount != 8000 || n.Prior != 0 || n.HasDelta {
 		t.Errorf("new = %+v, want amount 8000 prior 0 no-delta", n)
 	}
+	// C238: category with zero prior and positive current must set PriorZero.
+	if n := by["new"]; !n.PriorZero {
+		t.Errorf("new category should have PriorZero=true, got %+v", n)
+	}
+	// Categories with a non-zero prior (or zero current) must NOT set PriorZero.
+	if by["food"].PriorZero {
+		t.Error("food (non-zero prior) must not set PriorZero")
+	}
+}
+
+// C238: SpendingByCategory with no comparison requested must never set PriorZero.
+func TestSpendingByCategoryNoPriorZeroWithoutComparison(t *testing.T) {
+	start, end := dt(2026, time.June, 1), dt(2026, time.July, 1)
+	txns := []domain.Transaction{expense("food", 100, dt(2026, time.June, 5))}
+	got, err := SpendingByCategory(txns, start, end, false, time.Time{}, time.Time{}, usdRates())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, r := range got {
+		if r.PriorZero {
+			t.Errorf("PriorZero must not be set when compare=false, got %+v", r)
+		}
+	}
 }

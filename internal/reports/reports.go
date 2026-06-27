@@ -30,6 +30,7 @@ type CategorySpend struct {
 	Prior      int64 // comparison period (0 when no comparison was requested)
 	DeltaPct   int64 // percent change vs Prior (see HasDelta)
 	HasDelta   bool  // whether DeltaPct is meaningful (a comparison ran with a non-zero prior)
+	PriorZero  bool  // true when a comparison ran but the prior period was zero and current > 0 (C238: show "new" instead of hiding the badge)
 }
 
 // categoryTotals sums absolute expense amounts by category over [start, end),
@@ -105,6 +106,12 @@ func SpendingByCategory(
 			row.Prior = prior[id]
 			pct, ok := ledger.PercentChange(row.Amount, row.Prior)
 			row.DeltaPct, row.HasDelta = pct, ok
+			// C238: when the prior period was zero but there IS spend this period,
+			// suppress %-change (undefined) and flag PriorZero so the UI can render
+			// a "new" badge instead of hiding the delta indicator entirely.
+			if !ok && row.Amount > 0 {
+				row.PriorZero = true
+			}
 		}
 		out = append(out, row)
 	}

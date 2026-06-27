@@ -19,7 +19,13 @@ func RollUpByParent(rows []CategorySpend, cats []domain.Category) []CategorySpen
 	top := topLevelMap(cats)
 	agg := map[string]*CategorySpend{}
 	order := make([]string, 0, len(rows))
+	// C238: track whether a comparison period was requested at all — if any input
+	// row had a non-zero prior OR was itself a PriorZero row, a comparison ran.
+	comparisonRan := false
 	for _, r := range rows {
+		if r.HasDelta || r.PriorZero {
+			comparisonRan = true
+		}
 		root, ok := top[r.CategoryID]
 		if !ok || root == "" {
 			root = r.CategoryID
@@ -39,6 +45,10 @@ func RollUpByParent(rows []CategorySpend, cats []domain.Category) []CategorySpen
 		if a.Prior > 0 {
 			a.DeltaPct = int64(float64(a.Amount-a.Prior) / float64(a.Prior) * 100)
 			a.HasDelta = true
+		} else if comparisonRan && a.Amount > 0 {
+			// C238: a comparison ran but this rolled-up category had zero prior spend.
+			// Flag PriorZero so the UI shows a "new" badge rather than nothing.
+			a.PriorZero = true
 		}
 		out = append(out, *a)
 	}

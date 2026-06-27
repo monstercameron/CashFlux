@@ -375,6 +375,7 @@ func Reports() ui.Node {
 			Prior:      r.Prior,
 			HasDelta:   r.HasDelta,
 			DeltaPct:   r.DeltaPct,
+			PriorZero:  r.PriorZero,
 			MaxCat:     maxCat,
 			CatIdx:     i,
 			FmtMinor:   fmtMinor,
@@ -1044,6 +1045,7 @@ type reportsCatRowProps struct {
 	Prior      int64
 	HasDelta   bool
 	DeltaPct   int64
+	PriorZero  bool // C238: comparison ran but prior period was zero and current > 0
 	MaxCat     int64
 	CatIdx     int // R-10: rank index → distinct share-bar hue
 	FmtMinor   func(int64) string
@@ -1059,7 +1061,13 @@ func reportsCatRow(props reportsCatRowProps) ui.Node {
 	drill := ui.UseEvent(func() { props.OnDrill(props.CategoryID) })
 
 	delta := Fragment()
-	if props.HasDelta && props.Amount != props.Prior {
+	switch {
+	case props.PriorZero:
+		// C238: category had spend this period but zero in the prior period — show
+		// "new" instead of hiding the badge entirely (can't divide by zero for a %).
+		delta = Span(ClassStr("row-meta "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" "+tw.ColorClass("text-down")),
+			Text(uistate.T("reports.new")))
+	case props.HasDelta && props.Amount != props.Prior:
 		tone, arrow := "text-down", icon.ArrowUp
 		if props.DeltaPct < 0 {
 			tone, arrow = "text-up", icon.ArrowDown
