@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C193 [F25]: SMART-BL9 sinking-fund nudge → real goal on /goals
+
+BL9 detected large irregular bills and suggested a sinking fund, but routed the suggestion to `/bills` as a to-do task rather than creating an actual goal or surfacing on `/goals` where the user acts on funds.
+
+**Three-layer fix:** (1) Pure data: added `GoalIsSinkingFund bool` + `GoalCategoryID string` to `smart.Action` — the right place to carry sinking-fund intent without coupling the smartengine to the UI layer. (2) Engine: BL9 now emits `ActionCreateGoal` with those fields set, targets `PageGoals`, and uses `abs64(annualMinor)` as the goal target so it's always positive. The recurring bill's `CategoryID` flows through to `GoalCategoryID` so the fund is linked to the right spending category automatically. (3) Handler: the `ActionCreateGoal` case in `smart_card.go` reads the flag and stamps the domain.Goal with `IsSinkingFund = true` + `CategoryID`; when the flag is off the existing behavior is preserved (plain goal, no fund). Toast distinguishes the two cases.
+
+**Test update rationale:** The existing `TestBL9SinkingFund` asserted `ActionCreateTask` — that was the old (wrong) behavior. Updating to assert `ActionCreateGoal`, `GoalIsSinkingFund`, and `PageGoals` is the correct behavioral change, not a test softening.
+
 ## 2026-06-27 — C219/C220/C221 [F30]: /investments holdings UI
 
 Three tickets combined: holdings list + add/delete (C219), performance summary (C220), and asset-class allocation bars (C221).

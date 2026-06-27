@@ -196,6 +196,13 @@ type Action struct {
 	GoalID            string
 	GoalMonthlyAmount int64
 
+	// ActionCreateGoal sinking-fund flag. When true the created goal is a
+	// sinking fund (domain.Goal.IsSinkingFund = true). GoalCategoryID, if
+	// non-empty, is stored on the goal to link it to a spending category so
+	// draw-downs can be matched (C192).
+	GoalIsSinkingFund bool
+	GoalCategoryID    string
+
 	// Optional link back to the subject entity, for either kind.
 	RelatedType string // e.g. "account", "transaction", "goal", "bill"
 	RelatedID   string

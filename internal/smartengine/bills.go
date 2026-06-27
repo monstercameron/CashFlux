@@ -595,7 +595,7 @@ func bl9SinkingFund(in Input) []smart.Insight {
 		}
 		out = append(out, smart.Insight{
 			Feature: "SMART-BL9",
-			Page:    smart.PageBills,
+			Page:    smart.PageGoals,
 			Key:     "SMART-BL9:" + r.ID,
 			Title:   "Set aside for " + r.Label,
 			Detail: r.Label + " is about " + in.hmoney(abs64(annual)) + "/yr, due " +
@@ -603,9 +603,17 @@ func bl9SinkingFund(in Input) []smart.Insight {
 				"/mo now avoids the lump-sum shock.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(in.baseMoney(monthly)).
-			WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
-				TaskTitle: "Set aside " + in.hmoney(monthly) + "/mo for " + r.Label,
-				TaskNotes: "Sinking fund for " + r.Label + " (" + in.hmoney(abs64(annual)) + "/yr, due " + due.Format("Jan 2") + ")."}))
+			WithAction(smart.Action{
+				Kind:              smart.ActionCreateGoal,
+				Label:             "Create a sinking fund",
+				GoalName:          r.Label + " Fund",
+				GoalTarget:        abs64(in.toBaseMinor(annualMinor(r), r.Amount.Currency)),
+				GoalCurrency:      in.Base,
+				GoalIsSinkingFund: true,
+				GoalCategoryID:    r.CategoryID,
+				RelatedType:       "bill",
+				RelatedID:         r.ID,
+			}))
 	}
 	return out
 }

@@ -104,8 +104,14 @@ func TestBL9SinkingFund(t *testing.T) {
 	if got[0].Amount.Amount != 5000 {
 		t.Errorf("monthly set-aside = %d, want 5000", got[0].Amount.Amount)
 	}
-	if got[0].Action == nil || got[0].Action.Kind != smart.ActionCreateTask {
-		t.Errorf("expected a create-task action")
+	if got[0].Action == nil || got[0].Action.Kind != smart.ActionCreateGoal {
+		t.Errorf("expected a create-goal action, got %v", got[0].Action)
+	}
+	if !got[0].Action.GoalIsSinkingFund {
+		t.Errorf("expected GoalIsSinkingFund = true")
+	}
+	if got[0].Page != smart.PageGoals {
+		t.Errorf("expected Page = PageGoals, got %q", got[0].Page)
 	}
 }
 

@@ -141,17 +141,23 @@ func smartInsightCard(props smartCardProps) ui.Node {
 			}
 			cur := smartCurrencyOr(ins.Action.GoalCurrency, app.Settings().BaseCurrency)
 			g := domain.Goal{
-				ID:           id.New(),
-				Name:         ins.Action.GoalName,
-				OwnerID:      domain.GroupOwnerID, // household-level goal; passes OwnerID validation
-				Scope:        domain.ScopeShared,
-				TargetAmount: money.Money{Amount: ins.Action.GoalTarget, Currency: cur},
+				ID:            id.New(),
+				Name:          ins.Action.GoalName,
+				OwnerID:       domain.GroupOwnerID, // household-level goal; passes OwnerID validation
+				Scope:         domain.ScopeShared,
+				TargetAmount:  money.Money{Amount: ins.Action.GoalTarget, Currency: cur},
+				IsSinkingFund: ins.Action.GoalIsSinkingFund,
+				CategoryID:    ins.Action.GoalCategoryID,
 			}
 			if err := app.PutGoal(g); err != nil {
 				uistate.PostNotice(err.Error(), true)
 				return
 			}
-			uistate.PostNotice(uistate.T("smart.goalCreated"), false)
+			noticeKey := "smart.goalCreated"
+			if ins.Action.GoalIsSinkingFund {
+				noticeKey = "smart.sinkingFundCreated"
+			}
+			uistate.PostNotice(uistate.T(noticeKey), false)
 			rev.Set(rev.Get() + 1)
 			nav.Navigate(uistate.RoutePath("/goals"))
 

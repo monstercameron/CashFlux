@@ -66,6 +66,7 @@ var smartKeys = Catalog{
 	"smart.dismiss":               "Dismiss",
 	"smart.taskAdded":             "Added to your to-dos.",
 	"smart.goalCreated":           "Goal created.",
+	"smart.sinkingFundCreated":    "Sinking fund created.",
 	"smart.recurringCreated":      "Added to your plan.",
 	"smart.subscriptionCancelled": "Subscription marked as cancelled.",
 	"smart.automateGoalCreated":   "Automatic monthly contribution set up.",
