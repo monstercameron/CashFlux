@@ -181,7 +181,7 @@ func Bills() ui.Node {
 					uistate.T("bills.totalDue"),
 					smartTooltipFor(billSmartSettings, "bills-due", uistate.T("bills.totalDue"), uistate.T("smart.tipBillsDue")),
 				),
-				Div(css.Class("stat-value "+tw.ColorClass("text-down")), fmtMoney(money.New(total, base))),
+				Div(css.Class("stat-value is-hero "+tw.ColorClass("text-down")), fmtMoney(money.New(total, base))),
 			),
 			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),

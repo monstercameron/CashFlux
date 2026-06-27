@@ -4,6 +4,10 @@ Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, 
 problems and fixes, and what's next.
 
 
+
+## 2026-06-27 - R49: one dominant headline figure (4 pages fixed)
+
+Acted on the R49 audit instead of only logging it. The .stat-grid pattern (shared across budgets/goals/bills/subscriptions/planning) rendered 3-4 equal-weight .stat-value figures, so no single number was the page's story. Added `.stat-value.is-hero` (2.1rem/800) and tagged the ONE key figure each screen's own code already comments as 'the key figure' - Left (safe-to-spend) on budgets, overall progress % on goals, monthly burden on subscriptions, total due on bills. Re-audit: 6/10 -> 2/10 failing. Remaining: /planning (figures come from the stat() helper, needs a hero variant) and the / dashboard bento (.t-figure tiles - needs a designated hero tile, a bigger change). Build rc=0; all four target pages verified passing by ux_headline_audit.mjs. R49 kept open until those two land.
 ## 2026-06-27 — C236: Save as PDF / Print button on /reports
 
 Added a lightweight "Save as PDF / Print" button to the Reports screen. The approach: call `js.Global().Call("print")` (i.e. `window.print()`) from a `ui.UseEvent` handler, which opens the browser's native print dialog. Chrome/Edge/Firefox/Safari all offer "Save as PDF" in that dialog, so this satisfies C236 without pulling in any server-side PDF library. The button sits below the CSV export `<details>` block and is clearly labeled. The `syscall/js` import was already present in the file. Decision: kept the button unconditional (always visible) — there's always content to print on /reports; no conditional guard needed unlike the Clear-filters pattern. Files: `internal/screens/reports_screen.go` (button), `internal/i18n/en.go` (new key `reports.saveAsPDF`). Build exits 0.

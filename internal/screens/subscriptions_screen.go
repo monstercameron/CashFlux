@@ -601,7 +601,7 @@ func Subscriptions() ui.Node {
 					uistate.T("subs.monthlyBurden"),
 					smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
 				),
-				Div(css.Class("stat-value "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
+				Div(css.Class("stat-value is-hero "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
 			),
 			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
 			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),

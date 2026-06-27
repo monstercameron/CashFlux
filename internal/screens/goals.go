@@ -274,7 +274,7 @@ func Goals() ui.Node {
 					uistate.T("goals.overallProgress"),
 					smartTooltipFor(goalSmartSettings, "goal-progress", uistate.T("goals.overallProgress"), uistate.T("smart.tipGoalProgress")),
 				),
-				Div(css.Class("stat-value"), fmt.Sprintf("%d%%", overallPct)),
+				Div(css.Class("stat-value is-hero"), fmt.Sprintf("%d%%", overallPct)),
 			),
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{

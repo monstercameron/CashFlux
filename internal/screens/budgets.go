@@ -391,7 +391,7 @@ func Budgets() ui.Node {
 					uistate.T("budgets.left"),
 					smartTooltipFor(smartSettings, "budget-safe", uistate.T("budgets.left"), uistate.T("smart.tipBudgetSafe")),
 				),
-				Div(ClassStr("stat-value "+accentFor(money.New(totalLimit-totalSpent, base))), budgetLeftValue(money.New(totalLimit-totalSpent, base))),
+				Div(ClassStr("stat-value is-hero "+accentFor(money.New(totalLimit-totalSpent, base))), budgetLeftValue(money.New(totalLimit-totalSpent, base))),
 			),
 		)),
 		uiw.EntityListSection(uiw.EntityListSectionProps{

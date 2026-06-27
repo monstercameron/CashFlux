@@ -1089,6 +1089,11 @@
       /* Keep stat figures on one line (G11): a "Next due" ISO date was hyphenating to
          "2026-07-" / "01" in the narrow single-column 768px stat card. */
       .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; letter-spacing: -0.015em; }
+      /* R49: one dominant headline figure per page. The single KEY figure in a
+         .stat-grid (safe-to-spend Left, goal progress, monthly subscription burden,
+         …) gets .is-hero so it reads as the page's story instead of tying for weight
+         with its supporting siblings. */
+      .stat-value.is-hero { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; }
       .stat-value.pos { color: var(--money-positive); }
       .stat-value.neg { color: var(--money-negative); }
       .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
