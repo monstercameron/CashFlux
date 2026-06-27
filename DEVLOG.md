@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C122 [F15]: post-transaction overspend re-evaluation (OnTxnMutated seam)
+
+The root issue: `runNotifyCatchUp()` is called once at boot and never again, so a budget-crossing transaction added via Quick-Add never surfaces a notification until the user reloads.
+
+**Observer seam, not a layer violation.** The fix adds a `[]func()` slice and two methods (`OnTxnMutated`/`fireTxnMutated`) to `appstate.App`. The appstate package stays pure Go (no syscall/js); the app layer (js/wasm only) wires the concrete callback at boot. This is the correct direction: appstate knows *when* mutations happen; the app layer knows *what to do* about them.
+
+**Import-storm guard.** A `suppressTxnObservers bool` field gates `fireTxnMutated` during bulk import. `ImportTransactionsCSV` sets it for the batch loop and fires exactly once at the end (if `n > 0`). The flag restores on the same stack frame — no defer needed since there's only one exit path after restoration.
+
+**DeleteTransactionWithTransferPair.** This method calls `DeleteTransaction` twice (one per transfer leg), which each now call `fireTxnMutated`. To avoid two observer firings per one user action, the method sets `suppressTxnObservers=true` before the first `DeleteTransaction`, restores it after both legs are gone, then calls `fireTxnMutated()` once. Pattern mirrors how `triggersSuspended` already handles the workflow-trigger case.
+
+**Dedup correctness.** `runNotifyCatchUp` uses the C121/C270 `DeliveredLog` keyed by notification ID, so re-running after every Quick-Add won't ever produce a duplicate notification for an alert that already fired. The first post-crossing mutation shows the alert; subsequent mutations on the same budget do nothing extra.
+
+**Tests (5 cases):** fires on add, fires on edit, fires on delete, import fires once for 3 rows, no-op re-import fires zero times. All native (`go test ./internal/appstate/ -count=1`), no wasm needed.
+
 ## 2026-06-27 — C128 [F16]: pay-cycle anchor for biweekly budget periods
 
 The biweekly period grid was anchored to a fixed internal epoch (2006-01-02 Monday), so users whose payday doesn't align with that Monday would see the wrong fortnight every cycle. C128 adds a configurable anchor.

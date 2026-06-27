@@ -186,6 +186,14 @@ func Run() {
 	// once on load, deduped via the persisted delivered log (B19). Boot-safe.
 	runNotifyCatchUp()
 
+	// Re-evaluate budget/alert conditions after every user transaction mutation
+	// (C122): register an observer so overspend notifications appear immediately
+	// after a Quick-Add or delete, not just at next reload. runNotifyCatchUp
+	// dedupes by key, so re-running never duplicates already-shown notifications.
+	if appstate.Default != nil {
+		appstate.Default.OnTxnMutated(func() { runNotifyCatchUp() })
+	}
+
 	// Greet once after a version upgrade with a "what's new" pointer (C326).
 	whatsNewToastOnBoot()
 

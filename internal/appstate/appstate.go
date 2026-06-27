@@ -68,6 +68,13 @@ type App struct {
 	// Notifier, if set, surfaces a workflow "notify" message to the user (e.g. a
 	// toast). The wasm app wires this; when nil, notices go only to the log.
 	Notifier func(string)
+	// txnMutatedFns is the set of observers registered via OnTxnMutated, called
+	// after any successful transaction add, edit, or delete (C122).
+	txnMutatedFns []func()
+	// suppressTxnObservers, when true, causes fireTxnMutated to return early
+	// without calling any observer — used during bulk import so the re-evaluation
+	// fires at most once per batch rather than once per row.
+	suppressTxnObservers bool
 }
 
 // Default is the process-wide App, set by Init and read by screens.
@@ -218,8 +225,12 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 	// workflows once per imported row (below) so txn_*-conditioned rules see each
 	// transaction's full context — instead of the single aggregate nil event
 	// WithoutTriggers emits, which left imported rows unrouted/unflagged (C92).
+	// Also suppress txnMutated observers per-row (import storm guard, C122): we
+	// fire them exactly once after the whole batch completes.
 	prevSuspended := a.triggersSuspended
 	a.triggersSuspended = true
+	prevSuppressObs := a.suppressTxnObservers
+	a.suppressTxnObservers = true
 	for _, t := range txns {
 		sig := t.AccountID + "|" + dedupe.Signature(t)
 		if seen[sig] {
@@ -233,10 +244,15 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 		}
 	}
 	a.triggersSuspended = prevSuspended
+	a.suppressTxnObservers = prevSuppressObs
 	if !a.triggersSuspended {
 		for i := range importedTxns {
 			a.RunTriggered(workflow.TriggerTxnAdded, &importedTxns[i])
 		}
+	}
+	// Fire the batch-level txnMutated notification once, regardless of row count.
+	if n > 0 {
+		a.fireTxnMutated()
 	}
 	a.log.Info("imported transactions from CSV", "imported", n, "parsed", len(txns), "duplicatesSkipped", dupes, "skipped", len(skipped))
 	return n, skipped, nil
@@ -1613,6 +1629,27 @@ func (a *App) ReassignCategory(oldID, newID string) (int, error) {
 	return moved, nil
 }
 
+// OnTxnMutated registers fn to be called after every successful transaction
+// add, edit, or delete (C122). Observers are called synchronously in
+// registration order. Registering the same function more than once is fine —
+// all copies will fire. The observer must not mutate transactions itself (it
+// may read state freely).
+func (a *App) OnTxnMutated(fn func()) {
+	a.txnMutatedFns = append(a.txnMutatedFns, fn)
+}
+
+// fireTxnMutated calls every registered OnTxnMutated observer. It is a no-op
+// when suppressTxnObservers is true (bulk-import guard: callers fire once after
+// the whole batch so observers don't run once per row).
+func (a *App) fireTxnMutated() {
+	if a.suppressTxnObservers {
+		return
+	}
+	for _, fn := range a.txnMutatedFns {
+		fn()
+	}
+}
+
 func (a *App) PutTransaction(t domain.Transaction) error {
 	if is := validate.ValidateTransaction(t); !is.OK() {
 		return is
@@ -1631,6 +1668,7 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if !existed && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerTxnAdded, &t)
 	}
+	a.fireTxnMutated()
 	return nil
 }
 
@@ -1648,7 +1686,11 @@ func (a *App) WithoutTriggers(fn func()) {
 	}
 }
 func (a *App) DeleteTransaction(id string) error {
-	return a.del("transaction", id, a.store.DeleteTransaction)
+	if err := a.del("transaction", id, a.store.DeleteTransaction); err != nil {
+		return err
+	}
+	a.fireTxnMutated()
+	return nil
 }
 
 // RestoreTransactions upserts each transaction in txns, restoring them to the
@@ -1666,6 +1708,7 @@ func (a *App) RestoreTransactions(txns []domain.Transaction) error {
 
 // DeleteTransactionWithTransferPair removes a transaction and, when it is one
 // leg of a transfer, also removes the reciprocal leg so balances stay paired.
+// The txnMutated observers fire exactly once after the full pair is removed.
 func (a *App) DeleteTransactionWithTransferPair(id string) error {
 	all := a.Transactions()
 	var target domain.Transaction
@@ -1676,17 +1719,27 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 			break
 		}
 	}
-	if err := a.DeleteTransaction(id); err != nil {
+	// Suppress per-leg firings; we'll fire once below after both legs are gone.
+	prev := a.suppressTxnObservers
+	a.suppressTxnObservers = true
+	err := a.DeleteTransaction(id)
+	if err != nil {
+		a.suppressTxnObservers = prev
 		return err
 	}
-	if !found || !target.IsTransfer() {
-		return nil
-	}
-	for _, t := range all {
-		if isReciprocalTransferLeg(target, t) {
-			return a.DeleteTransaction(t.ID)
+	if found && target.IsTransfer() {
+		for _, t := range all {
+			if isReciprocalTransferLeg(target, t) {
+				if err2 := a.DeleteTransaction(t.ID); err2 != nil {
+					a.suppressTxnObservers = prev
+					return err2
+				}
+				break
+			}
 		}
 	}
+	a.suppressTxnObservers = prev
+	a.fireTxnMutated()
 	return nil
 }
 
