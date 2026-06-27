@@ -16,8 +16,9 @@ type WeekStart string
 
 // The supported week-start choices.
 const (
-	WeekSunday WeekStart = "sunday"
-	WeekMonday WeekStart = "monday"
+	WeekSunday   WeekStart = "sunday"
+	WeekMonday   WeekStart = "monday"
+	WeekSaturday WeekStart = "saturday"
 )
 
 // DateStyle is how dates are rendered to the user.
@@ -137,7 +138,7 @@ func Default() Prefs {
 // older persisted data is always usable.
 func (p Prefs) Normalize() Prefs {
 	switch p.WeekStart {
-	case WeekSunday, WeekMonday:
+	case WeekSunday, WeekMonday, WeekSaturday:
 	default:
 		p.WeekStart = WeekSunday
 	}
@@ -233,10 +234,14 @@ func (p Prefs) FormatMonthYear(t time.Time) string {
 
 // WeekStartWeekday returns the configured first day of the week as a time.Weekday.
 func (p Prefs) WeekStartWeekday() time.Weekday {
-	if p.Normalize().WeekStart == WeekMonday {
+	switch p.Normalize().WeekStart {
+	case WeekMonday:
 		return time.Monday
+	case WeekSaturday:
+		return time.Saturday
+	default:
+		return time.Sunday
 	}
-	return time.Sunday
 }
 
 // WeekStartOf returns the start of the week (at 00:00 in t's location) that

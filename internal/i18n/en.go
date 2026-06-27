@@ -1091,6 +1091,7 @@ var english = Catalog{
 	"settings.weekStart":         "Week starts on",
 	"settings.sunday":            "Sunday",
 	"settings.monday":            "Monday",
+	"settings.saturday":          "Saturday",
 	"settings.dateFormat":        "Date format",
 	"ws.switch":                  "Switch workspace",
 	"ws.new":                     "+ New workspace",

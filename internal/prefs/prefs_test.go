@@ -58,6 +58,9 @@ func TestWeekStartWeekday(t *testing.T) {
 	if (Prefs{WeekStart: WeekSunday}).WeekStartWeekday() != time.Sunday {
 		t.Error("Sunday pref should map to time.Sunday")
 	}
+	if (Prefs{WeekStart: WeekSaturday}).WeekStartWeekday() != time.Saturday {
+		t.Error("Saturday pref should map to time.Saturday")
+	}
 	if (Prefs{}).WeekStartWeekday() != time.Sunday {
 		t.Error("blank week start should default to Sunday")
 	}
@@ -75,9 +78,27 @@ func TestWeekStartOf(t *testing.T) {
 	if mon.Weekday() != time.Monday || mon.Day() != 8 {
 		t.Errorf("Monday week start: got %v, want 2026-06-08", mon.Format("2006-01-02"))
 	}
+	// Saturday week start: the containing Saturday for Wednesday 2026-06-10 is 2026-06-06.
+	sat := Prefs{WeekStart: WeekSaturday}.WeekStartOf(wed)
+	if sat.Weekday() != time.Saturday || sat.Day() != 6 {
+		t.Errorf("Saturday week start: got %v, want 2026-06-06", sat.Format("2006-01-02"))
+	}
 	// Time-of-day is dropped.
 	if sun.Hour() != 0 || sun.Minute() != 0 {
 		t.Errorf("week start should be midnight, got %v", sun)
+	}
+}
+
+func TestWeekStartNormalize(t *testing.T) {
+	// All three valid values round-trip through Normalize unchanged.
+	for _, ws := range []WeekStart{WeekSunday, WeekMonday, WeekSaturday} {
+		if got := (Prefs{WeekStart: ws}).Normalize().WeekStart; got != ws {
+			t.Errorf("Normalize WeekStart %q = %q, want same", ws, got)
+		}
+	}
+	// Unknown value falls back to Sunday.
+	if got := (Prefs{WeekStart: "wednesday"}).Normalize().WeekStart; got != WeekSunday {
+		t.Errorf("Normalize unknown WeekStart = %q, want %q", got, WeekSunday)
 	}
 }
 

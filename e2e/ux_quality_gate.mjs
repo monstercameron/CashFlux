@@ -29,6 +29,7 @@ const DIMS = [
   { key: 'contrast', spec: '§12',     script: 'ux_contrast_audit.mjs' },
   { key: 'density',  spec: '§11',     script: 'ux_density_audit.mjs' },
   { key: 'overflow', spec: '§5.5.11', script: 'ux_overflow_audit.mjs' },
+  { key: 'parity',   spec: '§12.1',   script: 'ux_theme_parity_audit.mjs' },
 ];
 
 function run(script) {

@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C131: Saturday week-start option
+
+**Problem (C131):** The week-start segmented control in Settings offered only two choices — Sunday and Monday — leaving users whose work or cultural week begins on Saturday without a matching option. The `WeekStart` type in `internal/prefs/prefs.go` defined only `WeekSunday` and `WeekMonday`; `Normalize()` rejected any other value and fell back to Sunday; `WeekStartWeekday()` returned either `time.Monday` or `time.Sunday` (default branch).
+
+**Fix (bottom-up):**
+1. `internal/prefs/prefs.go`: added `WeekSaturday WeekStart = "saturday"`. Extended the `Normalize()` switch to accept `WeekSaturday` alongside the existing two constants. Rewrote `WeekStartWeekday()` as a three-case switch returning `time.Saturday` for the new value, preserving the Monday and Sunday branches.
+2. `internal/app/settings_section.go`: expanded the `ui.Segmented` options slice from two entries to three, appending `{Value: string(prefs.WeekSaturday), Label: uistate.T("settings.saturday")}`.
+3. `internal/i18n/en.go`: inserted `"settings.saturday": "Saturday"` alongside the existing `sunday` and `monday` keys.
+4. `internal/prefs/prefs_test.go`: added a Saturday assertion to `TestWeekStartWeekday`; added a Saturday case to `TestWeekStartOf` (containing Saturday for Wednesday 2026-06-10 → 2026-06-06); added a new `TestWeekStartNormalize` table test covering all three valid values and an unknown-value fallback.
+
+**Design decisions:**
+- Saturday is placed last in the segmented control (Sun → Mon → Sat) to preserve the Sun/Mon spatial memory from before the addition.
+- `WeekStartOf` correctly computes the Saturday-anchored week boundary via the existing `(int(day.Weekday()) - int(p.WeekStartWeekday()) + 7) % 7` formula; no special-casing needed.
+- No changes to `Default()` (stays Sunday) — adding a new valid value does not change the out-of-the-box preference.
+
+**New i18n key:** `settings.saturday`.
+
+**Files changed:** `internal/prefs/prefs.go`, `internal/prefs/prefs_test.go`, `internal/app/settings_section.go`, `internal/i18n/en.go`.
+
+**Tests:** `go test ./internal/prefs/` — 10/10 PASS. `go test ./internal/i18n/` — 10/10 PASS. `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
+
 ## 2026-06-27 — C302: discoverable manage/cancel/downgrade surface
 
 **Problem (C302):** The billing-portal entry point ("Manage subscription" button, which calls `OnOpenPortal` / `openBillingPortal`) was only shown inside `If(p.CloudSelected, Fragment(...))` — grouped with the "Subscribe" primary CTA and the billing-interval selector. From a subscriber's perspective, the button looked like part of the upgrade/checkout flow, not a management affordance for an existing subscription. A user who had already subscribed had no obvious path to cancel, change their plan, or update their payment method; they would need to know to go to Cloud & server settings, set mode to Cloud, then scan the checkout UI to find the portal button among the subscribe controls.
@@ -14467,3 +14488,13 @@ ceiling) and high-control reduction (widget-manager 100->23 via hover/focus disc
 targets+reductions, not user-switchable modes. Deliberately did NOT mark R36 (no route-archetype template
 hierarchy system), R46 (no automated off-token-hardcode audit), or R69 (no distinct hierarchy-parity score
 beyond contrast) — they're genuinely partial and marking them would overclaim. Honest reconciliation.
+
+## 2026-06-27 — R69 DONE: hierarchy-parity audit closes the gap
+The earlier adversarial check ruled R69 PARTIAL: contrast was 0 in both themes, but "scored for hierarchy
+parity, not just contrast" needed a distinct artifact. Built it: e2e/ux_theme_parity_audit.mjs captures a
+per-route structural fingerprint (font-size + weight + box height of headings/figures/labels) in dark and
+light and diffs them. It measures 0 mismatches across all 10 routes with matching element counts — which is
+the expected and correct result, because CashFlux's token-based theming changes ONLY colors; the type scale,
+weights, spacing and layout are theme-invariant, so hierarchy parity is architecturally guaranteed and now
+PROVEN by a committed gate. Added as the 'parity' dimension of ux_quality_gate.mjs. With contrast=0 +
+parity=0, R69's full acceptance is met. Both e2e files are mine/clean.

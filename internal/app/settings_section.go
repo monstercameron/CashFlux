@@ -164,7 +164,11 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
 			ui.Segmented(ui.SegmentedProps{
-				Options:  []ui.SegOption{{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")}, {Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")}},
+				Options: []ui.SegOption{
+					{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")},
+					{Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")},
+					{Value: string(prefs.WeekSaturday), Label: uistate.T("settings.saturday")},
+				},
 				Selected: string(p.Pr.WeekStart),
 				OnSelect: p.OnWeekStart,
 			}),
