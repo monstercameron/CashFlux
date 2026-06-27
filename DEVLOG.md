@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C251: System-prompt editor behind "Advanced" expander + "conversations saved" cue
+
+**Ticket:** C251 — "System-prompt editor surfaced to all; no 'conversations saved' cue."
+
+**Problem:** The "Edit prompt" button appeared in the conversation switcher bar for every user, regardless of whether they would ever want to touch the AI persona. For most users it is clutter. Additionally, there was no signal that conversations persist — a user might avoid typing anything meaningful, not knowing CashFlux saves their chat history locally.
+
+**Fix:** Two minimal changes to `internal/screens/insights.go`:
+1. Added `advancedOpen` state and `toggleAdvanced` event (both unconditionally registered at stable hook positions). The "Edit prompt" button is rendered inside `If(advancedOpen.Get(), ...)` so it only appears after the user taps "Advanced". The "Advanced" toggle itself uses `aria-expanded` for accessibility.
+2. Added a small muted `P` reading "Conversations are saved on this device." just below the switcher bar, always visible, so users know their history is stored locally before they start chatting.
+
+**Hook-ordering discipline:** All existing hooks (`openPrompt`, `onPromptInput`, `resetPrompt`, `savePrompt`, `closePrompt`) stay unconditionally registered; only the button's visibility is gated, not the handlers. The new `toggleAdvanced` event is appended after `newChatEvt` in hook registration order, keeping the list stable.
+
+New i18n keys: `insights.savedOnDevice`, `insights.showAdvanced`, `insights.hideAdvanced`. Files changed: `internal/screens/insights.go`, `internal/i18n/en.go`. Build and i18n tests pass. (C251)
+
 ## 2026-06-27 — C234: AI "Ask a question" top affordance + id="ask" anchor on /insights
 
 **Ticket:** C234 — "AI 'Ask' entry point is below the fold."

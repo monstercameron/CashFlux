@@ -1570,6 +1570,10 @@ var english = Catalog{
 	"settings.webSearchKeyPlaceholder": "Web search API key (optional)",
 	"settings.webSearchHint":           "Optional. The chat's web search uses a free, keyless engine by default; add a key here for paid or higher-limit access. Sent only with search requests.",
 	"insights.editPrompt":              "Edit prompt",
+	// C251: "conversations saved" cue and "Advanced" expander labels.
+	"insights.savedOnDevice":           "Conversations are saved on this device.",
+	"insights.showAdvanced":            "Advanced",
+	"insights.hideAdvanced":            "Advanced ∧",
 	"insights.promptTitle":             "Assistant prompt",
 	"insights.promptHint":              "Customize how the assistant behaves. Your live financial figures and the data tools are always provided automatically — this is just its persona and instructions.",
 	"insights.promptReset":             "Reset to default",

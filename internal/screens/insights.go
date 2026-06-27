@@ -177,6 +177,9 @@ func Insights() ui.Node {
 	promptDraft := ui.UseState("")
 	// A mutating tool awaiting the user's approval in the thread (nil = none pending).
 	pendingApproval := ui.UseState((*approvalReq)(nil))
+	// C251: "Advanced" expander controls visibility of the system-prompt editor.
+	// The hook itself (openPrompt) is always registered; only the button is gated.
+	advancedOpen := ui.UseState(false)
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -692,6 +695,7 @@ func Insights() ui.Node {
 
 	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
+	toggleAdvanced := ui.UseEvent(Prevent(func() { advancedOpen.Set(!advancedOpen.Get()) }))
 	// System-prompt editor handlers.
 	onPromptInput := ui.UseEvent(func(v string) { promptDraft.Set(v) })
 	openPrompt := ui.UseEvent(Prevent(func() {
@@ -829,9 +833,22 @@ func Insights() ui.Node {
 	// chat-pill pins a --border outline so the New-chat / Edit-prompt pills stay
 	// visible in light mode (the BorderBlack10 tint vanished on white) (G13).
 	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.HoverBgBlack03) + " chat-pill"
+	// C251: "Edit prompt" lives inside an "Advanced" expander so the switcher bar
+	// stays clean for everyday use. The openPrompt hook is always registered above;
+	// only the button's visibility is gated here.
+	advancedLabel := uistate.T("insights.showAdvanced")
+	advancedExpanded := "false"
+	if advancedOpen.Get() {
+		advancedLabel = uistate.T("insights.hideAdvanced")
+		advancedExpanded = "true"
+	}
+	pillFaint := pill + " " + tw.Fold(tw.TextFaint)
 	switcher := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
 		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-		Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
+		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), OnClick(toggleAdvanced), Span(advancedLabel)),
+		If(advancedOpen.Get(),
+			Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
+		),
 		MapKeyed(convs,
 			func(c domain.Conversation) any { return c.ID },
 			func(c domain.Conversation) ui.Node {
@@ -909,6 +926,9 @@ func Insights() ui.Node {
 			Attrs: []any{Attr("id", "ask")},
 			Body: Fragment(
 				switcher,
+				// C251: reassure users that chats are persisted locally so they can
+				// return to a conversation later without worrying about losing it.
+				P(css.Class("muted", tw.Text12, tw.Mb2), uistate.T("insights.savedOnDevice")),
 				backendToggle,
 				If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
 				If(!empty, thread),
