@@ -147,6 +147,18 @@ func buildHealthInputs(app *appstate.App, now time.Time) healthscore.Inputs {
 		}
 	}
 
+	// Net-worth trend: the trailing six-month change as a percentage, derived from
+	// the same ledger.NetWorthSeries the dashboard's net-worth chart uses (so the
+	// health factor and the chart agree). A meaningful percentage needs a positive
+	// starting net worth; a zero or negative baseline leaves the factor inapplicable
+	// (the model then excludes it and re-normalizes the remaining weights).
+	const healthNWTrendMonths = 6
+	nwStart := dateutil.AddMonths(curMonth, -healthNWTrendMonths)
+	if series, nwErr := ledger.NetWorthSeries(accounts, txns, []time.Time{nwStart, now}, rates); nwErr == nil && len(series) == 2 && series[0].Amount > 0 {
+		in.HasNWTrend = true
+		in.NWTrendPct = float64(series[1].Amount-series[0].Amount) / float64(series[0].Amount) * 100
+	}
+
 	return in
 }
 
