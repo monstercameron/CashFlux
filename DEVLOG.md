@@ -13566,3 +13566,16 @@ borrows the interaction accent. Added the §13.2 attribute state hooks (`data-st
 data-state, so it restyles nothing. Deferred the §13.2 `[aria-expanded] .chevron` rotation rule because
 5 existing chevrons already manage their own rotation — a global rule there would be a behavior change,
 not an additive hook. Confined to web/index.html (no other agent's WIP there).
+
+## 2026-06-27 — R47/§12.1: accessible destructive fills (screenshot loop online)
+Stood up the live screenshot pipeline (go run e2e/serve.go on :8099 + node Playwright) and captured a
+dashboard baseline, then did the first contrast-correctness UX fix it enables. Found that every "white
+text on a red fill" destructive control used var(--danger) (= --down = #d8716f), where white is only
+3.23:1 — a WCAG AA fail. Routed those fills through the dedicated --action-danger (#c0392b, white = 5.44:1):
+.btn-ghost-danger:hover, .chip-x:hover, and the .notify-badge count chip; also tokenized .btn-danger's
+hardcoded #c0392b to var(--action-danger) (byte-identical). Left all severity/text/border/tinted uses of
+--danger alone (correct per §4.3). Notably --severity-alert could NOT fix the badge — it also maps to
+--down — which confirms --action-danger is the only contrast-safe solid-red token; worth remembering for
+future severity work. Adversarial a11y reviewer ran: passed gates 1/3/4/5 first pass, FAILED gate 2 by
+catching .notify-badge (which my initial sweep missed); fixed it, re-verified the sweep is clean. CSS-only
+in web/index.html, no other agent's WIP there.

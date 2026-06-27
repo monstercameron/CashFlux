@@ -1233,7 +1233,7 @@
       .chip-x { display: inline-flex; align-items: center; justify-content: center; width: 1.1rem; height: 1.1rem;
         padding: 0; border: none; border-radius: 999px; background: transparent; color: var(--muted);
         font-size: 0.8rem; line-height: 1; cursor: pointer; }
-      .chip-x:hover { background: var(--danger); color: #fff; }
+      .chip-x:hover { background: var(--action-danger); color: #fff; }
       .chip-clear-all { background: none; border: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0.2rem 0.3rem; }
       .chip-clear-all:hover { text-decoration: underline; }
       /* Filters popover body: stacked labelled fields. */
@@ -1458,7 +1458,7 @@
       /* Ghost-danger: a low-weight destructive action so a per-row "Cancel" doesn't
          out-shout the data (G10) — danger tone on hover, not a solid red block. */
       .btn-ghost-danger { color: var(--danger); border: 1px solid var(--border); background: transparent; }
-      .btn-ghost-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+      .btn-ghost-danger:hover { background: var(--action-danger); color: #fff; border-color: var(--action-danger); }
       @media (max-width: 760px) {
         .sub-row .sub-actions { flex-wrap: wrap; }
       }
@@ -2541,7 +2541,7 @@
       .muzak-btn.relative { position:relative; }
       .notify-badge { position:absolute; top:-3px; right:-3px; min-width:15px; height:15px; padding:0 3px;
         display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; line-height:1;
-        color:#fff; background:var(--down,#dc2626); border-radius:999px; }
+        color:#fff; background:var(--action-danger,#c0392b); border-radius:999px; }
       .set-range { width:11rem; accent-color:var(--accent,#3b82f6); cursor:pointer; }
       /* Dashboard To-do widget inline complete checkbox. */
       .dash-check { flex:none; width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center;
@@ -2564,8 +2564,8 @@
          ~5.5:1 in both themes; danger shouldn't vary by theme anyway. */
       /* GD-20: match .btn-primary's dimensional gloss (GD-3) on the destructive button so the two
          CTA styles are consistent. Top stays #c0392b (white-label contrast preserved), darkens downward. */
-      .btn-danger { background: linear-gradient(180deg, #c0392b, color-mix(in srgb, #c0392b 85%, #000 15%));
-        border-color: color-mix(in srgb, #c0392b 82%, #000 18%); color:#fff;
+      .btn-danger { background: linear-gradient(180deg, var(--action-danger), color-mix(in srgb, var(--action-danger) 85%, #000 15%));
+        border-color: color-mix(in srgb, var(--action-danger) 82%, #000 18%); color:#fff;
         box-shadow: 0 1px 2px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.16); }
       .btn-danger:hover { filter:brightness(1.08); }
       .row.subtask { border-left:2px solid var(--line,#e5e7eb); }
