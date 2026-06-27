@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R44: per-route UX score report (scorecard gate completed)
+
+**What:** R44 asked for "a script that produces a score report for all routes" so any R36-R43 visual/UX fix is verifiable against repeatable evidence. The four dimension audits (contrast/density/overflow/parity) already gate *aggregate* failures, but none answered "how is route X doing overall?" — so I added `e2e/ux_route_scorecard.mjs`, a per-route 0-100 desktop-UX score.
+
+**Design:** scores from measurable style-spec signals only — content-control density vs the §11 archetype budget (reusing the density audit's `visible()`/shell-vs-content logic), horizontal overflow (§5.5.11), single-headline presence (§6.3), hero-figure presence, plus a §6.3 figure-wall penalty for walls of >=5 same-weight figures. Advisory: exits non-zero only below floor(60). Mean came out 97/100; `/transactions` is the one genuinely-dense ledger (80 > 65), and `/`+`/settings` legitimately trip the figure-wall rule (7 KPI values), `/allocate` lacks a hero.
+
+**Adversarial loop:** spawned a critical style-spec reviewer (per the standing goal). First pass FAILED with 6 concrete gaps — I'd initially over-penalized with a "shell-heavy" rule that mis-fired on the *calmest* pages (a 2-control /health read as chrome-dominated because the nav rail always has ~35 links), and missed §11.1 `tabindex` controls, had an `h1`/`.page-title` double-match bug, no dark-theme-only disclosure, an undocumented builder edit-mode ceiling, a silent route-list divergence vs the density audit, and only penalized hero==0 not the figure-wall. Removed the bogus penalty and fixed all six; re-review returned PASS. The tabindex fix alone surfaced a control the audit had been missing (/ and /settings 30->31).
+
+**Trade-off:** the figure-wall penalty applies to all archetypes (not just money pages) — a deliberate choice since a same-weight figure wall is a §6.3 problem anywhere. **Next:** edit-mode detection for builder pages would let the at-rest ceiling tighten from 70 to 55; contrast/parity remain scored only by the hard gate, not folded into the per-route number.
+
 ## 2026-06-27 — C256: VERIFY-CLOSE + SU1 test bug fixed
 
 **Ticket:** C256 — "Recommendation actions are navigate-only, not executable."
