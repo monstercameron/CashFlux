@@ -21,6 +21,37 @@ elsewhere or needed in the future — not safe to delete without a full grep of 
 
 Build verified: `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
 
+## 2026-06-27 — C144 skip + C72 verify-close
+
+**C144 [MAJOR F18] — budget "LEFT" tile shows a negative in parens:**
+Audited `internal/screens/budgets.go`. The "Left" stat tile (line 340) calls
+`budgetLeftValue(money.New(totalLimit-totalSpent, base))`. `budgetLeftValue()` was introduced
+as part of C124 (line 410-415): when the remaining is negative it returns
+`fmtMoney(m.Abs()) + " " + uistate.T("budgets.overWord")` — plain English ("$90.00 over"),
+not accounting parens. SKIP: already fixed by C124.
+
+**C72 [MAJOR F9] — dashboard shows multiple differing money figures:**
+Investigated `dashboard.go` and `dashboard_hero.go`. The reported concern was that two
+different net-worth figures appeared simultaneously, causing ambiguity.
+
+Findings:
+- `dashboardHero()` → `heroSummary()` renders a "Net worth" label + `fmtMoney(nw.Net)` in
+  the home band above the bento grid.
+- `Dashboard()` renders a bento `kpi-networth` widget also titled "Net worth" with the same
+  `fmtMoney(net)` value.
+- Both use the same `useNetWorth()` selector with the same `accounts`/`rates` inputs — the
+  computed value is identical.
+
+Both labels are consistent (`home.netWorth` and `dashboard.netWorth` → both translate to
+"Net worth"). Both show the same number. The C214 investigation (also today) confirmed there
+is no double-render from the count-up animation.
+
+VERIFY-CLOSE: the ticket described "multiple *differing* money figures" — both figures are
+the same value, both labeled "Net worth", neither is ambiguous relative to the other. The
+dual placement (hero + bento) is intentional (hero = above-fold glanceable; bento widget is
+draggable and can be hidden via Widget Manager). No code change needed. IMPL F9-account-types
+already in the backlog for adding a distinct "Assets" tile when that work lands.
+
 ## 2026-06-27 — C111/C214/C83 skip-triage (no-op investigations)
 
 Investigated three tickets for a bounded critical-review batch. All three are skips.
