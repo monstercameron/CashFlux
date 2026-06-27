@@ -809,19 +809,28 @@ func Insights() ui.Node {
 		composer = Fragment(inputRow, keyHintNode())
 	}
 
-	// Starter chips beat the blank box (L8): show them whenever the thread is empty,
-	// even before an AI key is set, so a new user sees what they can ask. Tapping one
-	// FILLS the Ask box (it doesn't send) so the user can review/edit, then press Send
-	// — which is also the natural moment to prompt for a key if none is configured.
+	// Starter chips (L8, C231): show them whenever the Ask input is empty, regardless
+	// of whether any conversation history exists. Returning users benefit from the quick
+	// prompts just as much as new ones — hiding them after the first message was wrong.
+	// Tapping a chip FILLS the Ask box (doesn't send) so the user can review/edit first.
 	chips := Fragment()
-	if empty && len(starters) > 0 {
+	if len(starters) > 0 && input.Get() == "" {
 		fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
-		chips = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb2),
-			MapKeyed(starters,
-				func(q string) any { return q },
-				func(q string) ui.Node {
-					return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: fillAsk})
-				},
+		// When a conversation is already in progress, add a compact section label so
+		// the chips row has context and doesn't look like a continuation of the thread.
+		var chipsLabel ui.Node = Fragment()
+		if !empty {
+			chipsLabel = P(css.Class("muted", tw.Text12, tw.Mb1), uistate.T("insights.suggestedQuestions"))
+		}
+		chips = Div(css.Class(tw.Mb2),
+			chipsLabel,
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
+				MapKeyed(starters,
+					func(q string) any { return q },
+					func(q string) ui.Node {
+						return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: fillAsk})
+					},
+				),
 			),
 		)
 	}

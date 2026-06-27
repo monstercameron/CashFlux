@@ -1589,6 +1589,8 @@ var english = Catalog{
 	"insights.highlightDown":           "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
 	"insights.highlightNone":           "%s — nothing spent yet this month (about %s a month usually).",
 	"insights.uncategorized":           "Uncategorized",
+	// C231: label above starter chips when a conversation is already in progress.
+	"insights.suggestedQuestions": "Suggested questions",
 	// C234: compact top-of-page entry point that jumps to the Ask section when the
 	// chat is below the fold (e.g. after spending highlights + pinned insights).
 	"insights.askNow": "Ask a question",

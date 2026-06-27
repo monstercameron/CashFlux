@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C231: AI starter chips visible even with conversation history
+
+**Ticket:** C231 [MAJOR] F32 — "Starter chips suppressed whenever conversation history exists."
+
+**Problem:** The quick-start suggestion chips on /insights were gated on `empty` — `len(convo) == 0`. On first visit they were helpful; on every subsequent visit (any history present) they vanished. Returning users had no quick-prompt scaffolding even when the input box was empty and the feature was most valuable.
+
+**Fix:** Changed the guard from `if empty && len(starters) > 0` to `if len(starters) > 0 && input.Get() == ""`. Chips show whenever the input is blank, regardless of history length. When history is present, a compact muted "Suggested questions" label is prepended so the row has clear context and doesn't visually blend into the thread above it. The chip data and `suggestChip` component are untouched. New i18n key: `insights.suggestedQuestions`. Build: `GOOS=js GOARCH=wasm go build ./internal/screens` exits 0.
+
 ## 2026-06-27 — C38: surface rule suggestions above Mermaid diagram with count badge
 
 **Ticket:** C38 [DESIGN] F4 — "Rule suggestions collapsed below the rule list + Mermaid diagram."
