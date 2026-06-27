@@ -15,23 +15,37 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// setupChecklist (R34-onboard) shows the first-run steps with a live ✓/○ from the
-// actual data, so a new household sees what's left to set up and a returning one
-// sees it's all done. Reads counts only — no mutation, safe to render anywhere.
+// setupChecklist (R34-onboard / C23) shows the first-run steps with a live ✓/○
+// from the actual data, so a new household sees what's left to set up and a
+// returning one sees it's all done. Reads counts only — no mutation, safe to
+// render anywhere. The first step surfaces base currency + week-start so new
+// users can no longer miss these settings (C23 [MAJOR F3]).
 func setupChecklist() ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return Fragment()
 	}
 	type step struct {
-		label string
+		label ui.Node // may be plain text or a link
 		done  bool
 	}
+
+	// C23: base currency + week-start step. Considered done when a non-empty
+	// BaseCurrency has been saved (the store default is "" until the user picks
+	// one). Week-start has a sensible default so it doesn't gate completion.
+	currencySet := app.Settings().BaseCurrency != ""
+	currencyLink := A(
+		Attr("href", uistate.RoutePath("/appearance")),
+		css.Class(tw.Underline, tw.HoverTextFg),
+		uistate.T("help.currencyStepLabel"),
+	)
+
 	steps := []step{
-		{"Add an account", len(app.Accounts()) > 0},
-		{"Record a transaction", len(app.Transactions()) > 0},
-		{"Set a budget", len(app.Budgets()) > 0},
-		{"Set a savings goal", len(app.Goals()) > 0},
+		{currencyLink, currencySet},
+		{Span(css.Class("t-body", tw.TextDim), "Add an account"), len(app.Accounts()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), "Record a transaction"), len(app.Transactions()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), "Set a budget"), len(app.Budgets()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), "Set a savings goal"), len(app.Goals()) > 0},
 	}
 	rows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
 	allDone := true
@@ -44,7 +58,7 @@ func setupChecklist() ui.Node {
 		}
 		rows = append(rows, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Span(ClassStr("t-body "+tw.ColorClass(tone)), mark),
-			Span(css.Class("t-body", tw.TextDim), s.label)))
+			s.label))
 	}
 	lead := "A few steps to get the most out of CashFlux:"
 	if allDone {

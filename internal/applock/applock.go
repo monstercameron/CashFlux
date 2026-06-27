@@ -78,9 +78,6 @@ const PBKDF2Iterations = 210_000
 // changes. Format: "pbkdf2$<iterations>$<hex-derived-key>".
 const pbkdf2Prefix = "pbkdf2"
 
-// pbkdf2KeyLen is the output length in bytes for the PBKDF2 derived key.
-const pbkdf2KeyLen = 32 // 256-bit
-
 // pbkdf2SHA256 is a stdlib-only PBKDF2 implementation using HMAC-SHA256 as the
 // pseudo-random function. It follows RFC 2898 §5.2 with dkLen == 32 (one block).
 // No external dependency is required because Go's standard library provides all

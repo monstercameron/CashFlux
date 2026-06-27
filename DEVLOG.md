@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C23 [F3]: base currency & week-start in first-run checklist
+
+The setup checklist on `/help` had four data-driven steps (account, transaction, budget, goal) but said nothing about base currency or week-start. A fresh user could go weeks using the USD default or Sunday week-start without knowing these settings exist.
+
+**Decision:** add a new first step in `setupChecklist()` that names both settings and links directly to `/appearance` (the `/appearance` route is where week-start lives in the Preferences panel; the label also calls out "Settings" for currency since that's a flip panel, not a route). The `step` type in the checklist was widened from `string` to `ui.Node` to allow the currency row to be an `A` element while the other rows stay as `Span`. No `On*` hooks, no loop-scoped handlers — purely structural.
+
+**Done signal:** `app.Settings().BaseCurrency != ""`. The store default is `""` until the user explicitly picks a currency; any non-empty value (even the implicit default that gets saved when the user opens Settings the first time and saves) marks it done. Week-start has a meaningful default so it doesn't block completion — the step is framed as "confirm" not "required".
+
+**No `setup/progress.go` change needed.** The `setup.CurrencyDone` in that package requires a `currencyConfirmed bool` parameter that doesn't exist in `store.Settings`. Rather than add a new persisted bool just for this UI hint, detecting a non-empty `BaseCurrency` is the correct signal — it accurately reflects whether the user has touched and saved currency settings.
+
 ## 2026-06-27 — R30-gatekdf: PBKDF2-SHA256 gate KDF + migration path
 
 The gate passcode hash was plain SHA-256 (`sha256.Sum256(salt+passcode)`). Fast hashes are brute-forceable offline if localStorage is ever extracted. The dataset crypto (PBKDF2-600k → AES-GCM-256) was already strong and does not change — this ticket only hardens the UI gate.
