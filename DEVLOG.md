@@ -3,6 +3,34 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C22 [F3]: Monthly income setting + budget integration
+
+The root gap was that CashFlux had no way for users to declare their income. Budgeting methods that depend on income (50/30/20, zero-based "to assign", income-awareness banners) all fell back entirely to summing income-tagged transactions from the current period — fragile and absent on new workspaces.
+
+**Data model.** `Prefs.MonthlyIncomeMinor int64` is a single int64 in minor units (cents for USD). Chose prefs (not domain/dataset) because this is a household configuration knob, not a transaction — it persists across dataset wipes and doesn't belong in the financial ledger. `omitempty` means existing users get zero (= disabled, fall back to old behavior). No migration needed.
+
+**Settings UI.** Added a `monthlyIncomeInput` component (own stable render position in `settings_section.go`) so the `UseEvent` hook is never inside any loop. The component converts stored minor units to a display string (e.g. 500000 → "5000.00") and parses back via `money.ParseMinor` on change. The `OnMonthlyIncome` callback is wired in `globalSettingsForm` (which owns all hooks), not in the pure `settingsRightColumn` renderer.
+
+**Budget wiring — event handler vs. render.** The `apply503020` handler is an event callback — `UsePrefs()` is illegal there. Used `uistate.CurrentPrefs()` (reads the already-captured atom, safe anywhere) to get the configured income. The simple-mode and zero-based sections run at render time where `pr := uistate.UsePrefs().Get()` is already in scope, so `pr.MonthlyIncomeMinor` is a plain field read.
+
+**Fallback pattern.** `budgeting.IncomeForBudgets(configuredMinor, txns, ...)` already returns transaction-derived income when configuredMinor == 0. At the budgets.go call-sites a second guard: if IncomeForBudgets also returns 0, fall back to the raw ledger period total — preserving pre-C22 behavior exactly for sparse workspaces.
+
+## 2026-06-27 — R32: field-level sync merge (conflict log + 3-way + soak)
+
+Three pieces shipped to advance R32 from research to tested infrastructure.
+
+**R32-conflict: `internal/syncmerge` — field-level LWW with conflict log.**
+The existing sync stack does whole-snapshot LWW (whoever has the latest `UpdatedAt` on the *workspace* wins). That's fine for the common case but can silently discard a field edited on device A while device B changed a different field. The fix starts here: model each workspace field as a `FieldValue{Value, UpdatedAt}` pair, where the timestamp tracks *when that field was last touched*, not when the entire record was written. `MergeRecord` walks both sides field by field, picks the later timestamp, and — crucially — records every diverging field in a `ConflictEntry`. Nothing is ever silently dropped. The package is pure Go (no `syscall/js`), so it unit-tests on native toolchain.
+
+**R32-merge: `ThreeWayMerge` extension.**
+Two-way LWW is lossy when two devices each edit a different field of the same record (both look like "changed" relative to the other side, but neither conflicts). Three-way merge against a known common base fixes that: if only one side changed a field, it wins cleanly; only when *both* sides changed the same field to *different* values does a conflict appear. The nil-base case degenerates to two-way LWW, so the function is safe to call without a stored base. Round-trip test: base with 3 fields, local edits A, remote edits B, C unchanged → merged has localA + remoteB + baseC, zero conflicts.
+
+**R32-soak: `sync_soak_test.go` under `//go:build soak`.**
+Two scenarios: (1) 32 concurrent goroutines each push 10 unique workspaces → 320 writes all accepted → list count verified; (2) 16 goroutines race on the same workspace over 20 rounds → conflict fan-out, LWW resolves, at least one accepted per round, workspace readable at end. Tagged `soak` so normal CI stays fast. Compile-verified with `go build -tags soak`.
+
+**What's still backend-coupled.**
+The `syncmerge` package is wired logically but not yet called from `sync_client.go` or the server's `PutWorkspace` handler. The server operates on opaque JSON blobs, so the merge layer would need the client to snapshot individual field timestamps (not currently in the proto). That plumbing is deferred to a future pass once the proto schema is extended (R32-server-conflict-meta). For now the package is proven correct by unit tests and ready to integrate.
+
 ## 2026-06-27 — C118 [F14]: per-budget methodology override
 
 The global methodology picker (simple/zero-based/envelope) forces a uniform mode across all budgets. The fix: add `Budget.Methodology` (a string, empty = inherit) and compute an effective method per budget at display time.
