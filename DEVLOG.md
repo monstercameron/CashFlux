@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C96/C99 [F12]: unreadable-receipt handling + vision cost note
+
+**C96.** The `onResult` handler for the AI vision path already had a `len(rows) == 0` branch that set an error message. However the message ("No transactions were found in that image.") was purely descriptive — no guidance on what to do. Upgraded the `documents.noneFound` i18n string to a friendlier, actionable variant: it now tells the user what likely went wrong (unreadable/blurry image) and offers two escape hatches (better photo or CSV import). The branch logic is unchanged; only the string changes.
+
+**C99.** No note about BYOK cost existed anywhere on the image-import surface. Added a `P` element below the action-button row in `ImageImportCard` carrying the `documents.imageCostNote` key: "Uses your OpenAI key — a vision read costs roughly a few US cents per image." Phrased as a qualitative estimate (no fabricated exact pricing), non-alarming, muted via the `muted` CSS class and `tw.Text12` for visual de-emphasis. Always shown (not conditional on key presence) so users see it before clicking and before entering a key.
+
+**Files.** `internal/i18n/en.go`, `internal/screens/documents_image_import.go`. Build rc=0.
+
 ## 2026-06-27 — C315 [F48]: explicit aria-label on sidebar nav items + HouseholdCard + breadcrumb button
 
 **Problem.** The `navItem` component (all sidebar/rail navigation anchors, including icon-only collapsed state) used only `title` for its accessible name. `title` is advisory in the HTML spec and browser ATs expose it inconsistently — some screen readers (VoiceOver/iOS, NVDA default settings) do not announce it as the accessible name on interactive elements. In collapsed-rail mode, the nav items render as icon-only links, making the `title`-only strategy particularly weak.

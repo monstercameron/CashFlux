@@ -52,6 +52,9 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 					),
 				),
 			),
+			// C99: muted cost note so BYOK users understand each vision call has a
+			// small credit cost before they click "Read with AI".
+			P(css.Class("muted", tw.Text12, tw.Mt1), uistate.T("documents.imageCostNote")),
 			// Image preview: shown once a file is chosen so the user can verify the
 			// scan result against the original receipt (C60).
 			If(props.ImageURL != "",
