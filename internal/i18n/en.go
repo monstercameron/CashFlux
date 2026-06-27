@@ -1596,6 +1596,8 @@ var english = Catalog{
 	"insights.usingBackend":            "Using the backend AI proxy.",
 	"insights.useOpenAI":               "Use OpenAI directly",
 	"insights.useBackend":              "Use backend proxy",
+	"insights.flaggedTitle":             "Flagged activity",
+	"insights.flaggedHint":             "Possible duplicates, unusual charges, and balance anomalies — tap any row to review.",
 	"insights.highlightsTitle":         "Spending highlights",
 	"insights.highlightsHint":          "Categories that moved a lot versus your recent average — no AI needed.",
 	"insights.highlightUp":             "%s spending is up %d%% (%s more) — %s this month vs about %s a month.",

@@ -24,6 +24,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -729,6 +731,11 @@ func Insights() ui.Node {
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates)
 
+	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
+	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
+	// pr is already declared above (UsePrefs hook at stable position).
+	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday())
+
 	// Pinned insights, newest first.
 	pins := app.SavedInsights()
 	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
@@ -925,6 +932,9 @@ func Insights() ui.Node {
 		// point is above-the-fold even when highlights and pins push the chat down.
 		askShortcut,
 		highlights,
+		// C252: four anomaly-type detector findings (duplicates, spikes, missing
+		// charges, balance anomalies) — shown unconditionally, no Smart gate.
+		flagged,
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
 		// thread below has room to grow.
 		pinnedCard,
@@ -1388,6 +1398,91 @@ func exampleConversationsNode() ui.Node {
 		Div(rows...),
 		P(css.Class("muted", tw.Text11, tw.Mt1), uistate.T("insights.examplesNotice")),
 	)
+}
+
+// smartAnomalyInsightRowProps carries one detector finding to its per-row
+// component. The route is the page the action navigates to; OnClick holds the
+// handler so On* never lives inside a loop.
+type smartAnomalyInsightRowProps struct {
+	Insight smart.Insight
+	Route   string
+	OnClick func()
+}
+
+// SmartAnomalyInsightRow renders one flagged-activity row with a click-through
+// to the relevant page. It is its own component so OnClick registers at a
+// stable hook position across the list (no On* in loops).
+func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
+	navigate := ui.UseEvent(func() { p.OnClick() })
+	iconName := icon.AlertTriangle
+	if p.Insight.Severity == smart.SeverityInfo {
+		iconName = icon.AlertCircle
+	}
+	return Button(
+		css.Class("insight-row insight-row-action"),
+		Type("button"),
+		Attr("aria-label", p.Insight.Title),
+		OnClick(navigate),
+		Span(ClassStr("insight-dot text-down"), uiw.Icon(iconName, css.Class(tw.W4, tw.H4))),
+		Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart, tw.MinW0),
+			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
+			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
+		),
+	)
+}
+
+// smartAnomalyHighlights runs the four anomaly-type SMART detectors (SMART-A1
+// balance anomaly, SMART-T2 duplicates, SMART-T6 spending spikes, SMART-T7
+// missing transaction) unconditionally — no Smart opt-in gate — and renders
+// their findings as a "Flagged activity" card on /insights. Returns an empty
+// node when the detectors find nothing.
+func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday) ui.Node {
+	nav := router.UseNavigate()
+	// Run with all Free features enabled so the four anomaly detectors always
+	// fire regardless of the user's per-feature SMART opt-in state.
+	in := buildSmartInput(app, weekStart)
+	freeSettings := smart.EnableFreeOnly(smart.Settings{})
+	all := smartengine.Run(in, freeSettings)
+
+	// Keep only the four anomaly detector codes.
+	anomalyCodes := map[string]bool{
+		"SMART-A1": true,
+		"SMART-T2": true,
+		"SMART-T6": true,
+		"SMART-T7": true,
+	}
+	var flagged []smart.Insight
+	for _, ins := range all {
+		if anomalyCodes[ins.Feature] {
+			flagged = append(flagged, ins)
+		}
+	}
+	if len(flagged) == 0 {
+		return Fragment()
+	}
+
+	rows := make([]ui.Node, 0, len(flagged))
+	for _, ins := range flagged {
+		route := "/transactions"
+		if ins.Page == smart.PageAccounts {
+			route = "/accounts"
+		}
+		capturedIns := ins
+		capturedRoute := route
+		rows = append(rows, ui.CreateElement(SmartAnomalyInsightRow, smartAnomalyInsightRowProps{
+			Insight: capturedIns,
+			Route:   capturedRoute,
+			OnClick: func() { nav.Navigate(uistate.RoutePath(capturedRoute)) },
+		}))
+	}
+
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("insights.flaggedTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("insights.flaggedHint")),
+			Div(css.Class("insight-list"), rows),
+		),
+	})
 }
 
 // spendingHighlights renders an offline "what changed" card: it detects
