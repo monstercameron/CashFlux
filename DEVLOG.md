@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+
+## 2026-06-27 - R49: headline-figure audit (shipped tool, ticket kept open)
+
+Built `e2e/ux_headline_audit.mjs` to measure R49 objectively: per page, rank money/stat figures by visual weight (fontSize x fontWeight) and flag when 2+ tie (within 8%) at the top - i.e. no single hero. Baseline: 6/10 R49 pages fail (budgets/goals/bills/subscriptions each have 3-4 equal-weight stat figures; planning + dashboard have 2). Reports/Accounts/Health/Allocate already have a dominant hero. Kept R49 OPEN and honest: the audit is the measurement; the fix (one dominant headline per page, promote primary or demote siblings) is per-page screen work to land against this gate. Next: fix the failing pages one at a time.
 ## 2026-06-27 — C102: rename description rule action
 
 Added the missing "rename payee/description" action to the rules engine. The design choice: rename applies to `Desc` (description), not `Payee` — the engine matches on `payee + " " + desc`, and rewriting `Desc` is the more common cleanup target (garbled import text). The field is `json:",omitempty"` so existing stored rules deserialize transparently. The add form (`ruleaddform.go`) was dirty and owned by another lane, so the UI change lands only in the inline-edit form (`rules.go`), which is sufficient for the feature to be fully usable. The `RenamedDesc` pure helper is exported for future at-entry wiring. Three packages compile: `internal/rules`, `internal/appstate`, `internal/screens`.
