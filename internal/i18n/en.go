@@ -1449,6 +1449,11 @@ var english = Catalog{
 	"reports.deductibleDownloadTitle":  "Download deductible totals as a CSV file",
 	"reports.deductibleTotal":          "Total deductible: %s",
 	"reports.new":                      "new", // C238: shown on delta badge when prior period is zero and current > 0
+	// C237: YoY comparison toggle labels and YoY-mode covering caption.
+	"reports.yoyOff":                   "Compare year-over-year",
+	"reports.yoyOn":                    "Year-over-year on",
+	"reports.yoyTitle":                 "Switch between comparing this period to the previous period (default) and to the same period one year ago",
+	"reports.coveringYoY":              "Covering %s – %s · compared with %s – %s (same period, prior year)",
 	"categories.deductible":            "Tax-deductible",
 	"categories.deductibleTitle":       "Mark this category as tax-deductible (expenses appear in the Deductible totals report)",
 	"dashboard.upcomingBills":          "Upcoming bills",
@@ -1479,6 +1484,8 @@ var english = Catalog{
 	"dashboard.attentionTaskOverdue":   "%s · %dd overdue",
 	"dashboard.attentionTaskHigh":      "%s · high priority",
 	"dashboard.dashboardLayout":        "Dashboard layout",
+	"dashboard.customize":              "Customize",
+	"dashboard.customizeAria":          "Customize dashboard — rearrange, show/hide, and restyle widgets",
 	"dashboard.layoutMode":             "How the tiles are arranged",
 	"dashboard.layoutCustom":           "Custom layout",
 	"dashboard.layoutAutoDefault":      "Auto · default order",

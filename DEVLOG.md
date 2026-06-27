@@ -4,6 +4,10 @@ Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, 
 problems and fixes, and what's next.
 
 
+## 2026-06-27 — C237: YoY comparison toggle on /reports
+
+Added the missing year-over-year comparison toggle to the reports screen. The `reports.YoYPrior(w)` helper was already in the codebase (pure function that shifts the window back 12 months with `AddDate(-1,0,0)`); the only missing piece was the UI toggle and the plumbing to select which prior window to use. Design decision: the toggle is per-session state (`ui.UseState(false)`) — off by default so the MoM default is unchanged for existing users. When on, `ps, pe` are derived from `YoYPrior(w).Range()` rather than `w.Shift(-1).Range()`, which means all downstream consumers (category deltas, hero Net delta chip, spendTrend, coverage caption) automatically compare against the prior year. The toggle is placed in the category card header alongside the rollup toggle, and the hero caption updates to name the prior period clearly. No engine changes needed.
+
 ## 2026-06-27 - R49: headline-figure audit (shipped tool, ticket kept open)
 
 Built `e2e/ux_headline_audit.mjs` to measure R49 objectively: per page, rank money/stat figures by visual weight (fontSize x fontWeight) and flag when 2+ tie (within 8%) at the top - i.e. no single hero. Baseline: 6/10 R49 pages fail (budgets/goals/bills/subscriptions each have 3-4 equal-weight stat figures; planning + dashboard have 2). Reports/Accounts/Health/Allocate already have a dominant hero. Kept R49 OPEN and honest: the audit is the measurement; the fix (one dominant headline per page, promote primary or demote siblings) is per-page screen work to land against this gate. Next: fix the failing pages one at a time.

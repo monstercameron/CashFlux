@@ -182,14 +182,25 @@ func Reports() ui.Node {
 	rollupCats := ui.UseState(false)
 	onToggleRollup := ui.UseEvent(func() { rollupCats.Set(!rollupCats.Get()) })
 
+	// C237: Year-over-Year comparison toggle. When on, the comparison period is
+	// exactly one calendar year prior (via reports.YoYPrior); when off, it is the
+	// immediately preceding window of the same length (MoM / period-over-period).
+	yoyMode := ui.UseState(false)
+	onToggleYoY := ui.UseEvent(func() { yoyMode.Set(!yoyMode.Get()) })
+
 	// The viewed period is the shared top-bar window; the comparison is the
-	// immediately preceding window of the same length. Persist the full window
-	// (resolution + anchors) so /reports reopens on the last-viewed period
-	// after a hard reload (L45/L58).
+	// immediately preceding window of the same length (or the same window one year
+	// prior when YoY mode is on). Persist the full window (resolution + anchors)
+	// so /reports reopens on the last-viewed period after a hard reload (L45/L58).
 	w := uistate.UsePeriod().Get()
 	uistate.PersistPeriodWindow(w)
 	cs, ce := w.Range()
-	ps, pe := w.Shift(-1).Range()
+	var ps, pe time.Time
+	if yoyMode.Get() {
+		ps, pe = reports.YoYPrior(w).Range()
+	} else {
+		ps, pe = w.Shift(-1).Range()
+	}
 
 	flow, _ := reports.IncomeVsExpense(txns, cs, ce, rates)
 	rows, _ := reports.SpendingByCategory(txns, cs, ce, true, ps, pe, rates)
@@ -756,11 +767,24 @@ func Reports() ui.Node {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
 	}
 
+	// C237: Build the hero coverage caption and the YoY toggle label from the
+	// current comparison mode so both reflect whether YoY is active.
+	var coveringLine string
+	if yoyMode.Get() {
+		coveringLine = uistate.T("reports.coveringYoY", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))
+	} else {
+		coveringLine = uistate.T("reports.covering", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))
+	}
+	yoyLabelKey := "reports.yoyOff"
+	if yoyMode.Get() {
+		yoyLabelKey = "reports.yoyOn"
+	}
+
 	return Div(
 		// G9.1 Item 1 — Hero zone: Net / Income / Spend as a prominent headline strip
 		// above the card flow. Savings rate, runway, no-spend days go in a secondary row.
 		Div(css.Class("reports-hero"),
-			P(css.Class("hero-period"), uistate.T("reports.covering", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))),
+			P(css.Class("hero-period"), coveringLine),
 			Div(css.Class("hero-main"),
 				Div(
 					P(css.Class("hero-flanker-label"), uistate.T("reports.net")),
@@ -870,10 +894,18 @@ func Reports() ui.Node {
 		uiw.Card(uiw.CardProps{
 			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
 				H2(css.Class("card-title"), uistate.T("reports.byCategory")),
-				Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
-					Attr("aria-pressed", boolStr(rollupCats.Get())),
-					Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
-					uistate.T(rollupLabelKey(rollupCats.Get()))),
+				Div(css.Class(tw.Flex, tw.Gap2),
+					// C237: Year-over-Year comparison toggle — switches all deltas and category
+					// comparisons from period-over-period to the same period one year prior.
+					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-yoy-toggle"),
+						Attr("aria-pressed", boolStr(yoyMode.Get())),
+						Title(uistate.T("reports.yoyTitle")), OnClick(onToggleYoY),
+						uistate.T(yoyLabelKey)),
+					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+						Attr("aria-pressed", boolStr(rollupCats.Get())),
+						Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
+						uistate.T(rollupLabelKey(rollupCats.Get()))),
+				),
 			),
 			Body: Fragment(
 				P(css.Class("muted"), narrative),
