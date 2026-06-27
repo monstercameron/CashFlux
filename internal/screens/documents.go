@@ -269,12 +269,16 @@ func Documents() ui.Node {
 				_ = rerr
 				wizardHeader.Set(header)
 				wizardRawRows.Set(rawRecs)
-				// Pre-fill wizard fields from whatever was auto-detected (-1 = absent).
-				wizardDate.Set(strconv.Itoa(raw.Columns.Date))
-				wizardDescCol.Set(strconv.Itoa(raw.Columns.Description))
-				wizardAmount.Set(strconv.Itoa(raw.Columns.Amount))
-				wizardDebit.Set(strconv.Itoa(raw.Columns.Debit))
-				wizardCredit.Set(strconv.Itoa(raw.Columns.Credit))
+				// Pre-fill wizard fields from whatever was auto-detected, with a
+				// name-based fallback (C15): if auto-detect found -1 for a field,
+				// scan header names for case-insensitive keyword matches so that
+				// common header names like "Date", "Amount", "Description" are
+				// pre-selected rather than left as "— not present —".
+				wizardDate.Set(guessWizardField(header, []string{"date", "posted", "trans"}, raw.Columns.Date))
+				wizardDescCol.Set(guessWizardField(header, []string{"desc", "memo", "narr", "detail", "note", "ref"}, raw.Columns.Description))
+				wizardAmount.Set(guessWizardField(header, []string{"amount", "value", "amt", "sum"}, raw.Columns.Amount))
+				wizardDebit.Set(guessWizardField(header, []string{"debit", "withdrawal", "dr"}, raw.Columns.Debit))
+				wizardCredit.Set(guessWizardField(header, []string{"credit", "deposit", "cr"}, raw.Columns.Credit))
 				wizardVisible.Set(true)
 				msg.Set(uistate.T("documents.stmtError", "Columns couldn't be detected automatically — use the mapping wizard below."))
 				return
@@ -1229,6 +1233,32 @@ func splitLine(line, sep string) []string {
 		out[i] = strings.Trim(strings.TrimSpace(p), `"`)
 	}
 	return out
+}
+
+// guessWizardField returns the pre-selected value for a wizard dropdown (as a
+// string index). If the auto-detector already found the column (detected >= 0),
+// that index is used verbatim. Otherwise the header names are scanned with a
+// case-insensitive contains-match against each keyword in turn; the first match
+// wins. Falls back to "-1" (not present) when nothing matches. This implements
+// C15: pre-populate wizard dropdowns from detected header text so that common
+// column names ("Date", "Amount", "Description", etc.) are auto-selected even
+// when the full auto-mapping fails.
+func guessWizardField(header []string, keywords []string, detected int) string {
+	if detected >= 0 {
+		return strconv.Itoa(detected)
+	}
+	lower := make([]string, len(header))
+	for i, h := range header {
+		lower[i] = strings.ToLower(h)
+	}
+	for _, kw := range keywords {
+		for i, h := range lower {
+			if strings.Contains(h, kw) {
+				return strconv.Itoa(i)
+			}
+		}
+	}
+	return "-1"
 }
 
 // wizardColumnOptions builds a <select> option list for picking a column from
