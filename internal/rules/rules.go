@@ -8,13 +8,16 @@ package rules
 
 import "strings"
 
-// Rule matches transaction text and assigns a category and/or tags.
+// Rule matches transaction text and assigns a category and/or tags. When
+// RenameDesc is non-empty the matching transaction's description is replaced
+// with that value, enabling a "clean up payee/description" action (C102).
 type Rule struct {
 	ID            string
 	Match         string // case-insensitive substring matched against payee + description
 	SetCategoryID string
 	SetTags       []string
-	Order         int `json:",omitempty"` // precedence: lower runs first (first match wins)
+	RenameDesc    string `json:",omitempty"` // when set, overwrites the transaction description on match
+	Order         int    `json:",omitempty"` // precedence: lower runs first (first match wins)
 }
 
 // matches reports whether pattern (trimmed, case-insensitive) is a substring of
@@ -83,4 +86,13 @@ func Tags(rs []Rule, payee, desc string) []string {
 		return r.SetTags
 	}
 	return nil
+}
+
+// RenamedDesc returns the replacement description set by the first matching
+// rule, or "" if no rule matches or the matching rule has no RenameDesc.
+func RenamedDesc(rs []Rule, payee, desc string) string {
+	if r := FirstMatch(rs, payee+" "+desc); r != nil {
+		return r.RenameDesc
+	}
+	return ""
 }

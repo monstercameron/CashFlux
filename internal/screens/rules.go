@@ -63,12 +63,12 @@ func Rules() ui.Node {
 			bump()
 		})
 	}
-	saveRule := func(ruleID, m, cat, tagStr string) {
+	saveRule := func(ruleID, m, cat, tagStr, renameDesc string) {
 		if errKey := validateRuleInput(m, cat); errKey != "" {
 			errMsg.Set(uistate.T(errKey))
 			return
 		}
-		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: textutil.CommaFields(tagStr)}
+		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: textutil.CommaFields(tagStr), RenameDesc: strings.TrimSpace(renameDesc)}
 		if err := app.PutRule(r); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -320,13 +320,13 @@ type ruleRowProps struct {
 	MatchCount     int    // how many existing transactions this rule's phrase hits
 	ShowMatchCount bool   // whether to show the count (there are transactions to count)
 	OnDelete       func(string)
-	OnSave         func(id, match, category, tags string)
+	OnSave         func(id, match, category, tags, renameDesc string) // C102: renameDesc rewrites description on match
 	OnDragStart    func()
 	OnDrop         func()
 }
 
-// RuleRow is a per-rule row, editable inline (match + category + tags). All hooks
-// are declared unconditionally so the edit toggle never reorders them.
+// RuleRow is a per-rule row, editable inline (match + category + tags + rename).
+// All hooks are declared unconditionally so the edit toggle never reorders them.
 func RuleRow(props ruleRowProps) ui.Node {
 	r := props.Rule
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
@@ -334,19 +334,22 @@ func RuleRow(props ruleRowProps) ui.Node {
 	matchS := ui.UseState(r.Match)
 	catS := ui.UseState(r.SetCategoryID)
 	tagsS := ui.UseState(strings.Join(r.SetTags, ", "))
+	renameDescS := ui.UseState(r.RenameDesc)
 	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
 	// onCat hook slot kept for stable hook ordering; SelectInput owns the event.
 	ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
+	onRenameDesc := ui.UseEvent(func(v string) { renameDescS.Set(v) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		matchS.Set(r.Match)
 		catS.Set(r.SetCategoryID)
 		tagsS.Set(strings.Join(r.SetTags, ", "))
+		renameDescS.Set(r.RenameDesc)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(r.ID, matchS.Get(), catS.Get(), tagsS.Get())
+		props.OnSave(r.ID, matchS.Get(), catS.Get(), tagsS.Get(), renameDescS.Get())
 		editing.Set(false)
 	}))
 
@@ -373,6 +376,9 @@ func RuleRow(props ruleRowProps) ui.Node {
 					AriaLabel: uistate.T("rules.categoryFieldLabel"),
 				}),
 				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
+				// C102: rename description action — when filled, matching transactions have their
+				// description rewritten to this value (e.g. clean up garbled bank feed text).
+				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), Value(renameDescS.Get()), OnInput(onRenameDesc)),
 				Button(css.Class("btn btn-primary fit"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn fit"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -386,6 +392,10 @@ func RuleRow(props ruleRowProps) ui.Node {
 	meta := uistate.T("rules.appliesTo", target)
 	if len(r.SetTags) > 0 {
 		meta += " · " + strings.Join(r.SetTags, ", ")
+	}
+	// C102: surface the rename action in the read-only row so users can see it fires.
+	if r.RenameDesc != "" {
+		meta += " · " + uistate.T("rules.renameDescMeta", r.RenameDesc)
 	}
 	return Div(css.Class("row"), Attr("draggable", "true"),
 		OnDragStart(func() {

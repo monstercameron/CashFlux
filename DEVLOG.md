@@ -3,6 +3,10 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C102: rename description rule action
+
+Added the missing "rename payee/description" action to the rules engine. The design choice: rename applies to `Desc` (description), not `Payee` — the engine matches on `payee + " " + desc`, and rewriting `Desc` is the more common cleanup target (garbled import text). The field is `json:",omitempty"` so existing stored rules deserialize transparently. The add form (`ruleaddform.go`) was dirty and owned by another lane, so the UI change lands only in the inline-edit form (`rules.go`), which is sufficient for the feature to be fully usable. The `RenamedDesc` pure helper is exported for future at-entry wiring. Three packages compile: `internal/rules`, `internal/appstate`, `internal/screens`.
+
 ## 2026-06-27 — R52/R64: chart decision-quality audit (shipped tool, tickets kept open honestly)
 
 **What:** built `e2e/ux_chart_audit.mjs` to grade every chart for decision-orientation (R52) and inventory/grade all charts (R64).

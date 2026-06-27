@@ -1504,6 +1504,11 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 				changed = true
 			}
 		}
+		// C102: apply the rename action when the rule specifies a new description.
+		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+			t.Desc = r.RenameDesc
+			changed = true
+		}
 		if !changed {
 			continue
 		}
