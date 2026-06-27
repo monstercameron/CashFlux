@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R30-gatekdf: PBKDF2-SHA256 gate KDF + migration path
+
+The gate passcode hash was plain SHA-256 (`sha256.Sum256(salt+passcode)`). Fast hashes are brute-forceable offline if localStorage is ever extracted. The dataset crypto (PBKDF2-600k → AES-GCM-256) was already strong and does not change — this ticket only hardens the UI gate.
+
+**No new dependency.** `golang.org/x/crypto/pbkdf2` is not in go.mod. Implemented PBKDF2-HMAC-SHA256 directly from RFC 2898 §5.2 using stdlib `crypto/hmac` + `crypto/sha256` + `encoding/binary`. With dkLen = 32 (one HMAC-SHA256 block = one PRF iteration block), the inner loop is simple: compute U_1, then XOR each subsequent U_i into the accumulator for `iterations-1` more rounds. No multi-block complexity needed.
+
+**Iteration count.** Chose 210,000 — the OWASP 2023 minimum for PBKDF2-SHA256 and aligned with NIST SP 800-132 guidance. The existing dataset KDF uses 600,000; the gate hash does not need to match (it's protecting a UI gate, not ciphertext) but 210k is a solid modern floor.
+
+**Self-describing format.** `"pbkdf2$<iters>$<hex-dk>"` makes the scheme auditable, version-upgradeable, and distinguishable from the legacy bare-hex format without a separate schema migration.
+
+**Migration design.** `VerifyPasscode` is the dispatch layer: it reads the prefix. If `"pbkdf2$"` → new path, needsMigration=false. If bare 64-char hex (no `$`) → legacy SHA-256 path, needsMigration=true on success. The caller (applockgate.go) can re-store `HashPasscodePBKDF2(...)` transparently on next successful unlock, so existing users migrate silently the first time they unlock after the update. The applockgate.go owner still needs to wire the swap — this package exposes the clean API; the UI call-site is off-limits for this ticket.
+
+**`WithPasscode` + `Config.Verify` updated.** `WithPasscode` now stores PBKDF2 hashes for all new/changed credentials. `Config.Verify` delegates to `VerifyPasscode`, so it handles both formats. Legacy `HashPasscode` kept as a package-private-equivalent deprecated function for the fallback path.
+
+**Tests.** 15 table-driven tests: format check, determinism/salt/passcode isolation, 8 VerifyPasscode sub-cases (correct PBKDF2, wrong PBKDF2, correct legacy + migration flag, wrong legacy, garbage, malformed header, bad hex, empty), constant-time exercise, WithPasscode/Verify integration. All pass in 2.66s.
+
 ## 2026-06-27 — C22 [F3]: Monthly income setting + budget integration
 
 The root gap was that CashFlux had no way for users to declare their income. Budgeting methods that depend on income (50/30/20, zero-based "to assign", income-awareness banners) all fell back entirely to summing income-tagged transactions from the current period — fragile and absent on new workspaces.

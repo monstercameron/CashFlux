@@ -4,7 +4,13 @@
 // keeps the app's screens behind a passcode and can auto-lock after a period of
 // inactivity. It is a deterrent, not encryption — the data still lives in the
 // browser's local storage — so the passcode is never stored in the clear; only a
-// salted SHA-256 hash is kept.
+// salted hash is kept.
+//
+// Since R30-gatekdf the gate hash uses PBKDF2-SHA256 at [PBKDF2Iterations]
+// iterations rather than plain SHA-256. Legacy bare-SHA-256 hashes are still
+// verified during a transparent migration window: on a successful unlock the
+// caller should re-hash and re-store using [HashPasscodePBKDF2] (see
+// [VerifyPasscode] needsMigration return value).
 //
 // Pure Go, no platform dependencies (the random salt and the wall clock are the
 // caller's job, so this stays deterministic and unit-testable). The wasm/UI layer
@@ -12,18 +18,27 @@
 package applock
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
 // Config is the persisted app-lock configuration. The zero value is a valid,
 // disabled lock (no passcode, no auto-lock).
+//
+// The Hash field stores either a legacy bare hex SHA-256 (pre-R30-gatekdf) or
+// the new self-describing "pbkdf2$<iters>$<hex>" format. Use [VerifyPasscode]
+// to verify — it handles both formats and flags when migration is due.
 type Config struct {
 	Enabled         bool   `json:"enabled"`
 	Salt            string `json:"salt"`            // random per-install, set with the passcode
-	Hash            string `json:"hash"`            // hex SHA-256 of Salt+passcode
+	Hash            string `json:"hash"`            // pbkdf2$<iters>$<hex> (or legacy bare SHA-256)
 	AutoLockMinutes int    `json:"autoLockMinutes"` // 0 = lock only on reload / manual lock
 	Hint            string `json:"hint,omitempty"`  // optional reminder, revealed only after failed tries
 	// Lock-screen content toggles. Stored as "hide" flags so the default (zero
@@ -53,8 +68,107 @@ func ValidHint(hint, passcode string) bool {
 	return !strings.Contains(strings.ToLower(hint), strings.ToLower(passcode))
 }
 
+// PBKDF2Iterations is the iteration count used by [HashPasscodePBKDF2].
+// 210,000 meets the 2023 OWASP recommendation for PBKDF2-HMAC-SHA256 and
+// matches the NIST SP 800-132 guidance tier for password storage.
+const PBKDF2Iterations = 210_000
+
+// pbkdf2Prefix is prepended to every hash produced by [HashPasscodePBKDF2] so
+// that stored values are self-describing and can survive future algorithm
+// changes. Format: "pbkdf2$<iterations>$<hex-derived-key>".
+const pbkdf2Prefix = "pbkdf2"
+
+// pbkdf2KeyLen is the output length in bytes for the PBKDF2 derived key.
+const pbkdf2KeyLen = 32 // 256-bit
+
+// pbkdf2SHA256 is a stdlib-only PBKDF2 implementation using HMAC-SHA256 as the
+// pseudo-random function. It follows RFC 2898 §5.2 with dkLen == 32 (one block).
+// No external dependency is required because Go's standard library provides all
+// the primitives.
+func pbkdf2SHA256(password, salt []byte, iterations int) []byte {
+	// PRF = HMAC-SHA256; one block (T_1) is sufficient for a 32-byte key.
+	mac := hmac.New(sha256.New, password)
+	mac.Write(salt)
+	// Block index 1 encoded as a big-endian uint32, per RFC 2898.
+	var block [4]byte
+	binary.BigEndian.PutUint32(block[:], 1)
+	mac.Write(block[:])
+	u := mac.Sum(nil) // U_1
+
+	out := make([]byte, len(u))
+	copy(out, u)
+
+	for i := 1; i < iterations; i++ {
+		mac.Reset()
+		mac.Write(u)
+		u = mac.Sum(nil)
+		for j := range out {
+			out[j] ^= u[j]
+		}
+	}
+	return out
+}
+
+// HashPasscodePBKDF2 derives a PBKDF2-SHA256 hash of passcode using salt and
+// returns a self-describing string of the form "pbkdf2$<iters>$<hex>". The
+// salt must be non-empty and comes from the caller (crypto/rand in the UI
+// layer). This is the preferred hash for all new gate credentials.
+func HashPasscodePBKDF2(passcode, salt string) string {
+	dk := pbkdf2SHA256([]byte(passcode), []byte(salt), PBKDF2Iterations)
+	return fmt.Sprintf("%s$%d$%s", pbkdf2Prefix, PBKDF2Iterations, hex.EncodeToString(dk))
+}
+
+// VerifyPasscode checks passcode against storedHash using the scheme indicated
+// by storedHash's format:
+//
+//   - New format ("pbkdf2$<iters>$<hex>"): verified with PBKDF2-SHA256.
+//     needsMigration is false.
+//   - Legacy format (bare 64-char hex, no "$" prefix): verified with the old
+//     plain SHA-256 path. On success needsMigration is true — the caller should
+//     re-hash with [HashPasscodePBKDF2] and persist the new value so the account
+//     graduates to the stronger scheme on next unlock.
+//
+// Always uses a constant-time comparison to prevent timing side-channels.
+// Returns an error if storedHash is not in a recognised format.
+func VerifyPasscode(passcode, salt, storedHash string) (ok bool, needsMigration bool, err error) {
+	if strings.HasPrefix(storedHash, pbkdf2Prefix+"$") {
+		// New PBKDF2 scheme: pbkdf2$<iters>$<hex>
+		parts := strings.SplitN(storedHash, "$", 3)
+		if len(parts) != 3 {
+			return false, false, errors.New("applock: malformed pbkdf2 hash: expected 3 '$'-separated parts")
+		}
+		iters, parseErr := strconv.Atoi(parts[1])
+		if parseErr != nil || iters <= 0 {
+			return false, false, fmt.Errorf("applock: invalid pbkdf2 iteration count %q", parts[1])
+		}
+		storedBytes, decErr := hex.DecodeString(parts[2])
+		if decErr != nil {
+			return false, false, fmt.Errorf("applock: malformed pbkdf2 hash hex: %w", decErr)
+		}
+		dk := pbkdf2SHA256([]byte(passcode), []byte(salt), iters)
+		match := subtle.ConstantTimeCompare(dk, storedBytes) == 1
+		return match, false, nil
+	}
+
+	// Legacy bare SHA-256 (64 hex chars, no "$").
+	if len(storedHash) == 64 && !strings.Contains(storedHash, "$") {
+		got := HashPasscode(passcode, salt)
+		match := subtle.ConstantTimeCompare([]byte(got), []byte(storedHash)) == 1
+		if match {
+			return true, true, nil // signal caller to re-hash
+		}
+		return false, false, nil
+	}
+
+	return false, false, fmt.Errorf("applock: unrecognised storedHash format (len=%d)", len(storedHash))
+}
+
 // HashPasscode returns the hex-encoded SHA-256 of salt+passcode. Deterministic
 // given the same inputs, so the salt must come from the caller.
+//
+// Deprecated: new gate credentials should use [HashPasscodePBKDF2]. This
+// function is retained for legacy verification and hash migration via
+// [VerifyPasscode].
 func HashPasscode(passcode, salt string) string {
 	sum := sha256.Sum256([]byte(salt + passcode))
 	return hex.EncodeToString(sum[:])
@@ -82,7 +196,7 @@ func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint st
 	return Config{
 		Enabled:         true,
 		Salt:            salt,
-		Hash:            HashPasscode(passcode, salt),
+		Hash:            HashPasscodePBKDF2(passcode, salt),
 		AutoLockMinutes: autoLockMinutes,
 		Hint:            strings.TrimSpace(hint),
 		HideQuotes:      c.HideQuotes,
@@ -94,14 +208,14 @@ func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint st
 func (c Config) Cleared() Config { return Config{} }
 
 // Verify reports whether passcode matches the configured hash. Always false when
-// the lock is disabled or unconfigured. Uses a constant-time comparison so a
-// wrong guess can't be timed against the real hash.
+// the lock is disabled or unconfigured. Handles both the legacy bare-SHA-256
+// format and the current PBKDF2 format via [VerifyPasscode].
 func (c Config) Verify(passcode string) bool {
 	if !c.Enabled || c.Hash == "" || c.Salt == "" {
 		return false
 	}
-	got := HashPasscode(passcode, c.Salt)
-	return subtle.ConstantTimeCompare([]byte(got), []byte(c.Hash)) == 1
+	ok, _, _ := VerifyPasscode(passcode, c.Salt, c.Hash)
+	return ok
 }
 
 // ShouldAutoLock reports whether the app should auto-lock given how many whole

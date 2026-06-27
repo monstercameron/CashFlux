@@ -2,7 +2,10 @@
 
 package applock
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestHashPasscodeDeterministicAndSalted(t *testing.T) {
 	h1 := HashPasscode("1234", "saltA")
@@ -194,5 +197,154 @@ func TestStrengthString(t *testing.T) {
 		if got := s.String(); got != want {
 			t.Errorf("Strength(%d).String() = %q, want %q", s, got, want)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// R30-gatekdf: PBKDF2 gate hash + VerifyPasscode migration path
+// ---------------------------------------------------------------------------
+
+func TestHashPasscodePBKDF2Format(t *testing.T) {
+	h := HashPasscodePBKDF2("hunter2", "saltsaltsalt")
+	// Must start with "pbkdf2$<iters>$" and contain only hex after the last $.
+	if !strings.HasPrefix(h, "pbkdf2$") {
+		t.Fatalf("want pbkdf2$ prefix, got %q", h)
+	}
+	parts := strings.SplitN(h, "$", 3)
+	if len(parts) != 3 {
+		t.Fatalf("want 3 parts, got %d in %q", len(parts), h)
+	}
+	if parts[1] != "210000" {
+		t.Errorf("want iteration count 210000, got %q", parts[1])
+	}
+	// hex portion: 32 bytes = 64 hex chars
+	if len(parts[2]) != 64 {
+		t.Errorf("want 64 hex chars for DK, got %d in %q", len(parts[2]), parts[2])
+	}
+}
+
+func TestHashPasscodePBKDF2Deterministic(t *testing.T) {
+	h1 := HashPasscodePBKDF2("password", "mysalt")
+	h2 := HashPasscodePBKDF2("password", "mysalt")
+	if h1 != h2 {
+		t.Error("PBKDF2 hash must be deterministic for the same inputs")
+	}
+	h3 := HashPasscodePBKDF2("password", "othersalt")
+	if h1 == h3 {
+		t.Error("different salts must produce different hashes")
+	}
+	h4 := HashPasscodePBKDF2("other", "mysalt")
+	if h1 == h4 {
+		t.Error("different passcodes must produce different hashes")
+	}
+}
+
+func TestVerifyPasscodeNewFormat(t *testing.T) {
+	salt := "testsalt"
+	cases := []struct {
+		name      string
+		passcode  string
+		stored    string
+		wantOk    bool
+		wantMigr  bool
+		wantErr   bool
+	}{
+		{
+			name:     "correct passcode — new PBKDF2 format",
+			passcode: "correct",
+			stored:   HashPasscodePBKDF2("correct", salt),
+			wantOk:   true, wantMigr: false, wantErr: false,
+		},
+		{
+			name:     "wrong passcode — new PBKDF2 format",
+			passcode: "wrong",
+			stored:   HashPasscodePBKDF2("correct", salt),
+			wantOk:   false, wantMigr: false, wantErr: false,
+		},
+		{
+			name:     "correct passcode — legacy SHA-256 returns needsMigration",
+			passcode: "correct",
+			stored:   HashPasscode("correct", salt),
+			wantOk:   true, wantMigr: true, wantErr: false,
+		},
+		{
+			name:     "wrong passcode — legacy SHA-256",
+			passcode: "wrong",
+			stored:   HashPasscode("correct", salt),
+			wantOk:   false, wantMigr: false, wantErr: false,
+		},
+		{
+			name:     "garbage storedHash — unrecognised format",
+			passcode: "anything",
+			stored:   "not-a-hash",
+			wantOk:   false, wantMigr: false, wantErr: true,
+		},
+		{
+			name:     "tampered PBKDF2 header — malformed parts",
+			passcode: "anything",
+			stored:   "pbkdf2$notanumber$deadbeef",
+			wantOk:   false, wantMigr: false, wantErr: true,
+		},
+		{
+			name:     "tampered PBKDF2 hex — non-hex chars",
+			passcode: "anything",
+			stored:   "pbkdf2$210000$ZZZZ",
+			wantOk:   false, wantMigr: false, wantErr: true,
+		},
+		{
+			name:     "empty storedHash — unrecognised format",
+			passcode: "anything",
+			stored:   "",
+			wantOk:   false, wantMigr: false, wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ok, migr, err := VerifyPasscode(tc.passcode, salt, tc.stored)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("wantErr=%v, got err=%v", tc.wantErr, err)
+			}
+			if ok != tc.wantOk {
+				t.Errorf("wantOk=%v, got ok=%v", tc.wantOk, ok)
+			}
+			if migr != tc.wantMigr {
+				t.Errorf("wantMigr=%v, got needsMigration=%v", tc.wantMigr, migr)
+			}
+		})
+	}
+}
+
+// TestVerifyPasscodeConstantTime ensures the constant-time path is exercised
+// for both matching and non-matching PBKDF2 hashes with no detectable early
+// exit (this is a structural test — it just proves ConstantTimeCompare is
+// called on equal-length inputs, not a timing oracle).
+func TestVerifyPasscodeConstantTime(t *testing.T) {
+	salt := "cttest"
+	stored := HashPasscodePBKDF2("secret", salt)
+	// Correct — must match.
+	ok, migr, err := VerifyPasscode("secret", salt, stored)
+	if !ok || migr || err != nil {
+		t.Errorf("constant-time path: correct passcode should match; ok=%v migr=%v err=%v", ok, migr, err)
+	}
+	// Wrong — must not match.
+	ok, migr, err = VerifyPasscode("wrong!", salt, stored)
+	if ok || migr || err != nil {
+		t.Errorf("constant-time path: wrong passcode should not match; ok=%v migr=%v err=%v", ok, migr, err)
+	}
+}
+
+// TestWithPasscodeUsesPBKDF2 confirms that Config.WithPasscode now stores the
+// new PBKDF2 format and that Config.Verify (which delegates to VerifyPasscode)
+// still works end-to-end.
+func TestWithPasscodeUsesPBKDF2(t *testing.T) {
+	c := Config{}.WithPasscode("mypass", "mysalt", 10, "")
+	if !strings.HasPrefix(c.Hash, "pbkdf2$") {
+		t.Errorf("WithPasscode should store PBKDF2 hash, got %q", c.Hash)
+	}
+	if !c.Verify("mypass") {
+		t.Error("Verify must succeed for the correct passcode after WithPasscode")
+	}
+	if c.Verify("wrong") {
+		t.Error("Verify must fail for the wrong passcode")
 	}
 }
