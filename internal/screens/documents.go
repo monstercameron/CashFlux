@@ -736,6 +736,19 @@ func Documents() ui.Node {
 	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
 
 	return Div(
+		// §8.9: lead with the no-key CSV import so a user without an OpenAI key is never
+		// blocked from importing; the (key-gated) AI image/statement import follows as the
+		// richer option. This also tightens the flow — importing populates the review draft
+		// rendered just below — instead of stranding the CSV card at the bottom of the page.
+		CsvImportCard(csvImportCardProps{
+			Accounts:     accounts,
+			ImportAcctID: importAcct.Get(),
+			Msg:          msg.Get(),
+			OnChooseFile: chooseCsvFile,
+			OnAcctChange: onAcct,
+			OnCsvInput:   onCsv,
+			OnImportCSV:  importCSV,
+		}),
 		ImageImportCard(imageImportCardProps{
 			ImageURL:  imageURL.Get(),
 			AILoading: aiLoading.Get(),
@@ -867,15 +880,6 @@ func Documents() ui.Node {
 			Accounts:     accounts,
 			ImportAcctID: importAcct.Get(),
 			BaseCurrency: app.Settings().BaseCurrency,
-		}),
-		CsvImportCard(csvImportCardProps{
-			Accounts:     accounts,
-			ImportAcctID: importAcct.Get(),
-			Msg:          msg.Get(),
-			OnChooseFile: chooseCsvFile,
-			OnAcctChange: onAcct,
-			OnCsvInput:   onCsv,
-			OnImportCSV:  importCSV,
 		}),
 		ImportHistoryList(importHistoryListProps{
 			Docs:     docs,

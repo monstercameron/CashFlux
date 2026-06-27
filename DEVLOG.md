@@ -14268,3 +14268,13 @@ samplebanner.go structure (role alert→status since it's persistent/non-urgent;
 first viewport on EVERY route (high-leverage, global). Adversarial reviewer: PASS 4/4, no fixes (one future
 a11y-hardening annotation re aria-description, non-blocking). samplebanner.go clean; index.html my hunk
 selectively staged around the other agent's concurrent C181 .btn-del-hover block.
+
+## 2026-06-27 — R55/§8.9: Documents exposes the no-key path first
+/documents led with the AI-key-gated image/receipt import, with the no-key CSV import card buried at the
+bottom (below the AI image card, AI statement parser, draft review, spend summary) — the R-audit's C13
+complaint and a §8.9/§9.4 violation ("expose non-AI alternatives first" / "never bury the safe/manual path
+below AI-key-gated paths"). Moved the CsvImportCard render to the TOP so the order is now CSV (no key) → AI
+receipt/image (key-gated, labeled "Needs your OpenAI key") → AI statement parser → draft review → spend
+summary → history. Hook-safe (handlers are props defined before the return; only the sibling render position
+moved). Also improves the funnel — import at top, the populated review draft just below. Adversarial reviewer
+PASS 4/4, no fixes. documents.go is clean-mine.
