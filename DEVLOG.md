@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C176 surface goal Owner + Linked account + Saved-so-far by default
+
+The add-goal form in `goaladdform.go` hid three meaningful fields — Saved-so-far, Owner,
+and Linked account — behind a "Show advanced fields" disclosure toggle. Users who didn't
+find the toggle would create goals with incorrect ownership/account links and no progress
+pre-fill. These are not advanced options; they are core attributes of a goal.
+
+Fix: removed the `Button(… cf-adv-toggle …)` and the three `If(advOpen.Get(), …)` wrappers
+so all three fields render unconditionally. The `advOpen` state and the hook registered by
+`ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })` remain in place (hook ordering must be
+stable); the hook is simply no longer wired to a button. The form's save path (`onSave` via
+`app.PutGoal`) and all state vars are unchanged. No i18n keys added or removed — the existing
+`goals.savedSoFar`, `goals.owner`, and `goals.linkedOptional` keys are reused. The two i18n
+keys `goals.showAdvanced` / `goals.hideAdvanced` remain in `en.go` (they may be referenced
+elsewhere or needed in the future — not safe to delete without a full grep of all callers).
+
+Build verified: `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
+
 ## 2026-06-27 — C111/C214/C83 skip-triage (no-op investigations)
 
 Investigated three tickets for a bounded critical-review batch. All three are skips.

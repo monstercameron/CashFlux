@@ -69,7 +69,9 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	// change event internally so these handlers are no longer wired to DOM.
 	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
 	ui.UseEvent(func(e ui.Event) { linkAcct.Set(e.GetValue()) })
-	onToggleAdv := ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
+	// onToggleAdv kept for stable hook ordering (C176: toggle removed, fields
+	// are always visible); the state var advOpen remains registered too.
+	ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
 
 	goalDefs := app.CustomFieldDefsFor("goal")
 	onCustom := func(key, value string) {
@@ -165,24 +167,24 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget))),
 		labeledField(uistate.T("goals.dateLabel"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
-		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
-			IfElse(advOpen.Get(), Text(uistate.T("goals.hideAdvanced")), Text(uistate.T("goals.showAdvanced")))),
-		If(advOpen.Get(), labeledField(uistate.T("goals.savedSoFar"),
-			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
-		If(advOpen.Get(), labeledField(uistate.T("goals.owner"),
+		// C176: Saved-so-far, Owner, and Linked account are always visible —
+		// they are core goal attributes, not advanced options.
+		labeledField(uistate.T("goals.savedSoFar"),
+			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent))),
+		labeledField(uistate.T("goals.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   ownerOptions,
 				Selected:  owner.Get(),
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("goals.owner"),
-			}))),
-		If(advOpen.Get(), labeledField(uistate.T("goals.linkedOptional"),
+			})),
+		labeledField(uistate.T("goals.linkedOptional"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   linkOptions,
 				Selected:  linkAcct.Get(),
 				OnChange:  func(v string) { linkAcct.Set(v) },
 				AriaLabel: uistate.T("goals.linkedOptional"),
-			}))),
+			})),
 		MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),

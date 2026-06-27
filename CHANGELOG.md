@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **C176 — surface goal Owner, Linked account, and Saved-so-far in the add-goal form by default (2026-06-27):** All three fields were hidden behind a "Show advanced fields" toggle in `goaladdform.go`. They are core goal attributes, not advanced options. Removed the toggle button and the `If(advOpen.Get(), …)` wrappers; all three fields now render unconditionally. Hook ordering preserved. No i18n keys added; existing `goals.savedSoFar`, `goals.owner`, `goals.linkedOptional` keys reused.
+
 ### Skipped (investigated, no change needed)
 - **C111 — /rules member filter (2026-06-27):** No member filter dropdown exists in `rules.go`; grepping `member` returned zero results. Nothing to remove or disclose.
 - **C214 — count-up dual net-worth figure (2026-06-27):** `countup.js` animates a single `[data-countup]` element per figure with no duplicate render path. No concrete double-render found in `dashboard*.go`; speculative rewrite skipped.
