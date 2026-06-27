@@ -13725,3 +13725,10 @@ e2e/ux_quality_gate.mjs — a single runner over the contrast (§12), density (�
 audits that prints a combined PASS/FAIL scorecard and exits non-zero if any dimension regresses (the R44
 "score report for all routes" capstone). All three pass green. ux_touch_audit.mjs stays as a separate
 optional check, not in the headline runner.
+
+## 2026-06-27 — track R-series: land backlog + mark R72 done, descope mobile
+User asked to mark R-todos complete as they're finished. The R35-R72 audit backlog was sitting uncommitted
+in TODOS.md (a concurrent agent's addition); committing it so the todos are durably trackable. This commit
+lands that R-backlog section and marks R72 (desktop UX quality gate) ✅ DONE — the shipped 4-audit gate suite
++ unified runner, all dimensions green. Also reflects the no-mobile descopes (R35/R53) and R44 [~] progress.
+Only TODOS.md is staged here — the other agent's code WIP (en.go/planning.go/chart.js) is untouched.
