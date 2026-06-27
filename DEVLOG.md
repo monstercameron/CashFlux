@@ -13523,3 +13523,17 @@ Phase-2 commit seam (RecordAuditPoint persists, applyingUndo replay guard) + Loa
 inline Toast undo + Activity per-entity filter. Integration: wired ParseAny into documents, merged i18n
 keys, fixed agent e2e gates (modal-open, multi-currency injection, no-auto-date wizard trigger, audit-feed
 assertion). Reverted (yet again) the half-written widget-builder edit. Combined wasm + go test ./... green.
+
+## 2026-06-26 — R-series: R15 safe-to-spend (logic layer landed)
+Started the R-series UX goal. Concurrent agent is actively editing the screen layer (dashboard/planning/
+budgets/insights/smartengine) — their mid-flight refactor (EntityListSection, CadenceBiweekly, Autopay,
+MajorFromMinor, loadLastSeen) has the wasm build red, so I'm staying off contended files and landing only
+what's cleanly isolated. R15-inputs is pure logic: `internal/safespend/inputs.go` derives the two
+commitment buckets — `BillsDueBefore` (bills due before the period horizon, FX-converted to base) and
+`GoalContributionsProrated` (prorated linear goal contributions over the period) — that feed the already-
+landed canonical `safespend.Compute`. `now time.Time` is injected so both are deterministically testable;
+neither reimplements the smartengine inline duplicate (the documented anti-pattern). Table-driven tests
+cover due/not-due, multi-currency conversion, prorate fractions, and zero/edge horizons. `go test
+./internal/safespend` green; package builds in isolation. The dashboard/planning/budgets UI wiring
+(R15-dashboard … R15-i18n) is implemented but deferred from commit until the contended screen files +
+build settle, and will go through the adversarial style-spec review loop before R15 is marked done.
