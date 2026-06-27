@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C291: cloud sync data-disclosure line
+
+C291 asked for an always-visible disclosure in the "Cloud & server" settings section telling users
+what data leaves the device when sync is enabled vs. disabled.
+
+Confirmed no such statement existed — only the `settings.backendNote` (about the AI key being
+stored in the backend SQLite, conditional on CloudSelected) and `settings.selfHostedNote` were
+present. Neither addressed general financial data movement.
+
+Decision: add one new i18n key `settings.cloudDataDisclosure` and render it as an unconditional
+`P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), ...)` immediately below the section H4, before the
+backend on/off toggle. Position before the toggle mirrors the C292 pattern where `settings.aiKeyTrust`
+is shown before the conditional key-related lines, so users read the trade-off before they interact.
+Text is plain English: encrypted data goes to the configured server when on; stays local when off.
+No new component, no state dependency. i18n test and wasm build both pass.
+
 ## 2026-06-27 — C75: VERIFY-CLOSE — investment bucket granularity is a holdings concern
 
 C75 asked whether the single "investment" bucket was too coarse, covering brokerage, ETF, stock,

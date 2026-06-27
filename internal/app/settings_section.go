@@ -202,6 +202,9 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// 4 · Cloud & server — power-user sync config after AI.
 		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
+		// C291: always-visible data-disclosure — what leaves the device when sync is on
+		// vs. off. Shown before the toggle so the user sees the trade-off before acting.
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudDataDisclosure")),
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
 		// backend never throws websocket errors the user can't dismiss.
