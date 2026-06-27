@@ -37,14 +37,16 @@ func TestPackDefaultReproducesArrangement(t *testing.T) {
 	want := map[string][2]int{ // id -> {col, row} (1-based)
 		"attention":    {1, 1}, // full-width digest at the top
 		"kpi-networth": {1, 2}, "kpi-income": {2, 2}, "kpi-spending": {3, 2}, "kpi-liabilities": {4, 2},
-		"recent": {1, 3}, "budgets": {3, 3}, "trend": {4, 3},
-		"goals": {1, 5}, "todo": {2, 5}, "accounts": {3, 5},
-		"cashflow": {1, 6}, "bills": {3, 6},
-		"savings": {1, 7}, "health": {3, 7},
-		"breakdown":    {1, 8},
-		"freshness":    {3, 8},
-		"highlight":    {1, 9},
-		"smart-digest": {3, 9},
+		"kpi-assets": {1, 3}, "kpi-safetospend": {2, 3}, "recent": {3, 3},
+		"budgets": {1, 4}, "trend": {2, 4},
+		"goals": {3, 5}, "todo": {4, 5},
+		"accounts": {1, 6}, "cashflow": {3, 6},
+		"bills": {1, 7}, "savings": {3, 7},
+		"health":       {1, 8},
+		"breakdown":    {3, 8},
+		"freshness":    {1, 9},
+		"highlight":    {3, 9},
+		"smart-digest": {1, 10},
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

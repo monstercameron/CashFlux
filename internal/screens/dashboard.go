@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/safespend"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
@@ -248,6 +249,28 @@ func Dashboard() ui.Node {
 				Body: kpiBody(fmtMoney(assets), "text-up", uistate.T("dashboard.accountsCount", active), "text-dim"),
 			})
 		},
+		// R15/C139: glanceable Safe-to-spend KPI tile — ONE canonical pure formula
+		// (liquid cash − bills due this period − prorated goal contributions), NO
+		// Smart/AI gate. Shares the safespend package with planning.go so every
+		// surface agrees (C140/C142). Red "−$X over" when the buffer is blown.
+		"kpi-safetospend": func() ui.Node {
+			liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
+			_, mEnd := dateutil.MonthRange(time.Now())
+			toBase := safespend.ToBaseFunc(rates)
+			billsDue := safespend.BillsDueBefore(accounts, app.Recurring(), time.Now(), mEnd, toBase)
+			goalNeeds := safespend.GoalContributionsProrated(app.Goals(), time.Now(), toBase)
+			bd := safespend.Compute(liquid.Amount, billsDue, goalNeeds, 0, base)
+			fig, tone, sub := fmtMoney(money.New(bd.SafeToSpend, base)), "text-up", uistate.T("dashboard.safeToSpendSub")
+			if bd.IsNegative {
+				fig = "−" + fmtMoney(money.New(-bd.SafeToSpend, base))
+				tone, sub = "text-down", uistate.T("dashboard.safeToSpendOver")
+			}
+			return uiw.Widget(uiw.WidgetProps{
+				ID: "kpi-safetospend", Title: uistate.T("dashboard.safeToSpend"), Draggable: true, Resizable: true,
+				GridColumn: "2", GridRow: "3", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
+				Body: kpiBody(fig, tone, sub, "text-dim"),
+			})
+		},
 		"recent":   func() ui.Node { return recentWidget(txns, widgetCfgs.For("recent")) },
 		"budgets":  func() ui.Node { return budgetsWidget(app, txns, rates, start, end, widgetCfgs.For("budgets")) },
 		"goals":    func() ui.Node { return goalsWidget(app, widgetCfgs.For("goals")) },
@@ -303,6 +326,11 @@ func Dashboard() ui.Node {
 		// Dismissed per session (the atom resets on reload). Only shown when
 		// lastSeen > 0 (not the very first open) and newCount > 0.
 		ui.CreateElement(dashCatchUpCard),
+		// C319: discoverable "Customize" affordance on the dashboard canvas itself —
+		// the layout/show-hide/size/style controls live on /widget-manager, but the
+		// dashboard previously had no on-canvas entry point. Shown only with data
+		// (alongside the bento).
+		If(len(accounts) > 0 || len(txns) > 0, ui.CreateElement(dashCustomizeBar)),
 		// C8: on a genuinely empty workspace (no accounts and no transactions) the
 		// bento KPI grid is just a wall of $0 tiles with no hierarchy — suppress it
 		// and let the welcome hero + onboarding checklist own the empty state. The
@@ -670,9 +698,29 @@ func cashFlowWidget(txns []domain.Transaction, rates currency.Rates) ui.Node {
 		Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.TextLg)+" "+tw.ColorClass(netTone)), fmtMoney(netMoney)),
 	)
 
+	// R52(a): a one-sentence plain-English takeaway under the bars, so the widget
+	// states what the income-vs-expense bars mean instead of leaving an unlabeled
+	// mini-chart to interpret. Toned to match the net (kept = up, short = down).
+	netAmt := last.income - last.expense
+	var caption ui.Node
+	switch {
+	case netAmt > 0:
+		caption = P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("data-testid", "cashflow-caption"),
+			uistate.T("dashboard.cashFlowKept", fmtMoney(netMoney), last.label))
+	case netAmt < 0:
+		caption = P(ClassStr("t-caption "+tw.ColorClass("text-down")), Attr("data-testid", "cashflow-caption"),
+			uistate.T("dashboard.cashFlowShort", fmtMoney(money.New(-netAmt, rates.Base)), last.label))
+	default:
+		caption = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cashflow-caption"),
+			uistate.T("dashboard.cashFlowEven", last.label))
+	}
+
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "cashflow", Title: uistate.T("dashboard.cashFlow"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "6",
-		Body: Div(css.Class(tw.Flex, tw.ItemsEnd, tw.Gap5), bars, netBlock),
+		Body: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
+			Div(css.Class(tw.Flex, tw.ItemsEnd, tw.Gap5), bars, netBlock),
+			caption,
+		),
 	})
 }
 
@@ -1196,6 +1244,26 @@ func recentWidget(txns []domain.Transaction, cfg widgetcfg.Config) ui.Node {
 		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: tw.Fold(tw.OverflowHidden),
 		Body: body,
 	})
+}
+
+// dashCustomizeBar (C319) is a compact, right-aligned "Customize" action above
+// the bento grid that navigates to /widget-manager (layout mode, show/hide,
+// sizes, tile styles). It gives the dashboard canvas a discoverable, keyboard-
+// reachable entry point to rearranging itself. Its own component so the nav hook
+// sits at a stable position.
+func dashCustomizeBar() ui.Node {
+	nav := router.UseNavigate()
+	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/widget-manager")) })
+	return Div(css.Class(tw.Flex, tw.JustifyEnd, tw.ItemsCenter, tw.Mb2),
+		Button(css.Class("btn btn-sm", tw.Flex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "dash-customize"),
+			Attr("aria-label", uistate.T("dashboard.customizeAria")),
+			Attr("title", uistate.T("dashboard.customizeAria")),
+			OnClick(open),
+			uiw.Icon(icon.Customize, css.Class(tw.W4, tw.H4)),
+			uistate.T("dashboard.customize"),
+		),
+	)
 }
 
 // DashboardLayoutControls renders the dashboard layout manager — the Custom/Auto
