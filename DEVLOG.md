@@ -3,6 +3,44 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C168/C141/C142: /planning surfacing — runway lead, safe-to-spend tile, unified terminology
+
+Three tickets landed in one pass because they are tightly coupled (same card, same formula, same
+naming surface).
+
+**C168 — runway leads:** The original order was `forecastCard` → `affordCard` → `runwayCard`. Users
+landing on /planning saw a 12-month net-worth projection first, which is a planning/investing answer
+— not the "will I make it to payday?" question most daily users have. The fix is a single reorder in
+the `return Div(...)` at the bottom of `Planning()`: `runwayCard` first, `affordCard` second,
+`forecastCard` third. Hook order is completely unaffected — all hooks are declared unconditionally
+at the top of `Planning()` well before any conditional card-building blocks, so this is pure
+render-order change.
+
+**C141 — safe-to-spend tile:** `safespend.Compute(...)` was already called inside `affordCard`'s
+if-block (invisible to the runway card). Hoisted to an IIFE (`planSafeToSpend`) computed once,
+top-level, before either card block. The runway card's `stat-grid` now shows a "Safe to spend"
+tile as the first stat, toned danger when negative. The affordability card reuses the same value
+(replaced the previous redundant computation). Consistent with the dashboard kpi-safetospend tile.
+
+**C142 — unified terminology:** The affordability card had a stat labeled "Free to spend" (key
+`planning.affordAvailable`). Renamed to "Safe to spend" via a new dedicated key
+`planning.affordAvailableLabel` in `internal/i18n/en_planningsurface.go` (init-merge pattern,
+doesn't touch concurrent-WIP `en.go`). The old key is preserved for any callers that may reference
+it. Net-worth chart labels are untouched ("Net worth in 12 months" / "Projected in 12 months" are
+accurate; only the safe-to-spend/affordability terminology unifies).
+
+**Decision log:**
+- Used a closure IIFE for `planSafeToSpend` rather than extracting a helper or adding yet another
+  if-block to avoid duplicating the bill/goal inputs. Clean single source.
+- Kept `planning.affordAvailable` in `en.go` intact; added `planning.affordAvailableLabel` as the
+  renamed key so a future search-and-replace of the old key can happen without risking a silent
+  zero-value if any path still uses the old string.
+- `en_planningsurface.go` follows the exact pattern of `en_setup.go`: package-level var + init
+  merge into `english` map.
+
+**Builds:** `GOOS=js GOARCH=wasm go build ./internal/screens/ ./internal/i18n/` → exit 0;
+`go build ./...` → exit 0.
+
 ## 2026-06-27 — C154: persistent per-bill paid/autopay status
 
 **Problem:** "Mark paid" posted a toast and called `RecordBillPayment` (which logs the transaction

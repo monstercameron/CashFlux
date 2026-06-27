@@ -518,28 +518,38 @@ func Planning() ui.Node {
 		})
 	}
 
+	// C141: compute safe-to-spend once at top-level so both the runway card (the
+	// lead section per C168) and the affordability card share the same canonical
+	// figure. Zero when app is nil (no accounts yet).
+	planSafeToSpend := func() int64 {
+		if app == nil {
+			return 0
+		}
+		accts := app.Accounts()
+		txns := app.Transactions()
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		liq, _ := ledger.LiquidBalance(accts, txns, rates)
+		_, mEnd := dateutil.MonthRange(time.Now())
+		toBase := safespend.ToBaseFunc(rates)
+		billsDue := safespend.BillsDueBefore(accts, app.Recurring(), time.Now(), mEnd, toBase)
+		goalNeeds := safespend.GoalContributionsProrated(app.Goals(), time.Now(), toBase)
+		return safespend.Compute(liq.Amount, billsDue, goalNeeds, 0, base).SafeToSpend
+	}()
+
 	// Affordability check (L8): "can I afford $X (in N months, keeping a buffer)?"
 	// projected from today's net worth and this month's net cash flow, via the pure
 	// internal/afford engine — a deterministic answer, not an AI guess.
 	affordCard := Fragment()
 	if app != nil {
-		accounts := app.Accounts()
 		txns := app.Transactions()
 		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		// C175: a purchase is paid from LIQUID cash, not net worth — base the
-		// affordability check on the same liquid balance the cash runway uses (C171),
-		// so the two features give consistent answers (net worth incl. 401k/home would
-		// say "yes" on money you can't actually spend).
-		liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
+		// C175/C141: safeStart comes from planSafeToSpend (liquid minus bills/goals)
+		// so the "can I afford it?" card is consistent with the Safe to spend tile
+		// at the top of the page. Monthly net is still used to project future months.
+		safeStart := planSafeToSpend
 		mStart, mEnd := dateutil.MonthRange(time.Now())
 		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 		monthlyNet := income.Amount - expense.Amount
-		// R15-planning: base affordability on safe-to-spend (liquid minus bills and
-		// goal contributions) so the answer is consistent with the dashboard KPI tile.
-		toBase := safespend.ToBaseFunc(rates)
-		billsDue := safespend.BillsDueBefore(accounts, app.Recurring(), time.Now(), mEnd, toBase)
-		goalNeeds := safespend.GoalContributionsProrated(app.Goals(), time.Now(), toBase)
-		safeStart := safespend.Compute(liquid.Amount, billsDue, goalNeeds, 0, base).SafeToSpend
 
 		var afBody ui.Node = P(css.Class("muted"), uistate.T("planning.affordEnter"))
 		if amt, aerr := money.ParseMinor(strings.TrimSpace(afAmount.Get()), currency.Decimals(base)); aerr == nil && amt > 0 {
@@ -565,7 +575,8 @@ func Planning() ui.Node {
 			afBody = Div(
 				Div(css.Class("stat-grid"),
 					stat(uistate.T("planning.affordProjected"), fmtMoney(money.New(res.ProjectedBalance, base)), ""),
-					stat(uistate.T("planning.affordAvailable"), fmtMoney(money.New(res.Available, base)), ""),
+					// C142: unified "Safe to spend" terminology — was "Free to spend".
+					stat(uistate.T("planning.affordAvailableLabel"), fmtMoney(money.New(res.Available, base)), ""),
 				),
 				verdict,
 			)
@@ -680,8 +691,16 @@ func Planning() ui.Node {
 					Series: []chartspec.Series{{Name: uistate.T("planning.runwayTitle"), Points: dayPts}},
 					Y:      chartspec.Axis{Format: rwYFmt},
 				}
+				// C141: surface Safe to spend as the headline tile in the runway
+				// section (which is now the page lead per C168), matching the
+				// dashboard kpi-safetospend terminology exactly.
+				s2sTone := ""
+				if planSafeToSpend < 0 {
+					s2sTone = "neg"
+				}
 				rwBody = Div(
 					Div(css.Class("stat-grid"),
+						stat(uistate.T("planning.safeToSpend"), fmtMoney(money.New(planSafeToSpend, base)), s2sTone),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
 						paydayStat,
@@ -1132,10 +1151,13 @@ func Planning() ui.Node {
 		})
 	}
 
+	// C168: lead with the near-term liquid cash-flow section (runway/safe-to-spend),
+	// not the 12-month net-worth chart — the payday question is more immediately
+	// actionable. forecastCard is demoted below affordability and runway.
 	return Div(
-		forecastCard,
-		affordCard,
 		runwayCard,
+		affordCard,
+		forecastCard,
 		recurringCard,
 		plansCard,
 		debtCard,
