@@ -37,6 +37,11 @@ type emptyCTAProps struct {
 	// Unset falls back to a neutral box glyph (C46). Ignored for the bare-message
 	// variant, where a glyph would clutter transient "no match" / "all done" lines.
 	Icon icon.Name
+	// ImportLink, when true, adds a secondary "Import from a file" link below the
+	// primary CTA that navigates to /documents (C14) — so a user staring at an
+	// empty accounts/transactions list discovers the bulk-import path instead of
+	// only the one-at-a-time add flow.
+	ImportLink bool
 }
 
 // EmptyStateCTA renders a friendly empty-state block: a short message plus a
@@ -50,6 +55,17 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 	onClick := ui.UseEvent(Prevent(func() { focusByID(props.FocusID) }))
 	onNav := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(props.Href)) }))
 	onAddTarget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget(props.AddTarget) }))
+	// C14: secondary "Import from a file" navigation, used when ImportLink is set.
+	// Registered unconditionally so the hook order is stable regardless of props.
+	onImport := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/documents")) }))
+	importLink := func() ui.Node {
+		if !props.ImportLink {
+			return Fragment()
+		}
+		return Button(css.Class("btn-link", tw.Text12, tw.Mt1), Type("button"),
+			Attr("data-testid", "empty-import-link"), OnClick(onImport),
+			uistate.T("common.importFromFile"))
+	}
 
 	if props.FocusID == "" {
 		glyph := props.Icon
@@ -62,6 +78,7 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 				uiw.Icon(glyph, css.Class(tw.W8, tw.H8, "empty-icon")),
 				P(css.Class("empty"), props.Message),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onAddTarget), props.CTALabel),
+				importLink(),
 			)
 		}
 		// Href: navigate to where the data is created.
@@ -84,5 +101,6 @@ func EmptyStateCTA(props emptyCTAProps) ui.Node {
 		uiw.Icon(glyph, css.Class(tw.W8, tw.H8, tw.TextFaint)),
 		P(css.Class("empty"), props.Message),
 		Button(css.Class("btn btn-primary"), Type("button"), OnClick(onClick), props.CTALabel),
+		importLink(),
 	)
 }

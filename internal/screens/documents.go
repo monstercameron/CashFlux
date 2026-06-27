@@ -113,6 +113,7 @@ func Documents() ui.Node {
 	csvText := ui.UseState("")
 	stmtText := ui.UseState("")
 	msg := ui.UseState("")
+	cadenceMsg := ui.UseState("") // C18: inline confirmation shown next to the reminder button
 
 	accounts := app.Accounts()
 	defaultAcc := ""
@@ -400,10 +401,11 @@ func Documents() ui.Node {
 			Recurrence: domain.CadenceMonthly,
 		}
 		if err := app.PutTask(t); err != nil {
-			msg.Set("Couldn't create reminder: " + err.Error())
+			cadenceMsg.Set("Couldn't create reminder: " + err.Error())
 			return
 		}
-		msg.Set(uistate.T("documents.cadenceCreated", due.Format("Jan 2, 2006")))
+		// C18: confirm right next to the button (not in the far-away top message).
+		cadenceMsg.Set(uistate.T("documents.cadenceCreated", due.Format("Jan 2, 2006")))
 		rev.Set(rev.Get() + 1)
 	})
 
@@ -752,15 +754,6 @@ func Documents() ui.Node {
 			OnCsvInput:   onCsv,
 			OnImportCSV:  importCSV,
 		}),
-		ImageImportCard(imageImportCardProps{
-			ImageURL:  imageURL.Get(),
-			AILoading: aiLoading.Get(),
-			AIErr:     aiErr.Get(),
-			NeedsKey:  needsKey.Get(),
-			OnChoose:  chooseImage,
-			OnReadAI:  readAI,
-			Nav:       nav,
-		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("documents.stmtTitle"),
 			Body: Fragment(
@@ -786,8 +779,25 @@ func Documents() ui.Node {
 					P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
 						OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
+					If(cadenceMsg.Get() != "",
+						Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
+							Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
 				),
 			),
+		}),
+		// C13: the AI-powered image import comes LAST, after both no-AI paths (CSV +
+		// statement paste), behind a labelled separator — so a user without an OpenAI
+		// key is never led with a gated feature.
+		Div(css.Class("doc-section-sep"), Attr("role", "separator"),
+			Span(uistate.T("documents.aiSectionLabel"))),
+		ImageImportCard(imageImportCardProps{
+			ImageURL:  imageURL.Get(),
+			AILoading: aiLoading.Get(),
+			AIErr:     aiErr.Get(),
+			NeedsKey:  needsKey.Get(),
+			OnChoose:  chooseImage,
+			OnReadAI:  readAI,
+			Nav:       nav,
 		}),
 		// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
 		// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
@@ -1028,8 +1038,13 @@ func DocHistoryRow(props docHistoryRowProps) ui.Node {
 	d := props.Doc
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(d.ID) }))
 	meta := docKindLabel(d.Kind) + " · " + d.UploadedAt.Format("Jan 2, 2006") + " · " + docStatusLabel(d.Status)
-	if len(d.Extracted) > 0 {
-		meta += " · " + plural(len(d.Extracted), "row")
+	// CSV imports don't retain raw rows, so fall back to RowCount for the count (C11).
+	count := len(d.Extracted)
+	if count == 0 {
+		count = d.RowCount
+	}
+	if count > 0 {
+		meta += " · " + plural(count, "transaction")
 	}
 	if props.AccountName != "" {
 		meta += " · " + props.AccountName

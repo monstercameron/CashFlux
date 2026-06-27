@@ -59,13 +59,22 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		return nil
 	}
 
-	// Build per-row components, flagging duplicates (G14 §4).
+	// Build per-row components, flagging duplicates (G14 §4). A row is a duplicate
+	// if it matches an already-imported transaction (props.SeenSigs) OR an earlier
+	// row in this same batch (C17 — within-batch repeats are skipped on import too,
+	// so they should badge identically rather than look importable).
 	items := make([]ui.Node, 0, len(rows))
+	batchSeen := make(map[string]bool, len(rows))
 	for i, r := range rows {
+		sig := r.Signature()
 		dup := false
 		if props.SeenSigs != nil {
-			dup = props.SeenSigs[r.Signature()]
+			dup = props.SeenSigs[sig]
 		}
+		if batchSeen[sig] {
+			dup = true
+		}
+		batchSeen[sig] = true
 		items = append(items, ui.CreateElement(DraftRow, draftRowProps{
 			Index:       i,
 			Row:         r,
@@ -156,13 +165,35 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		)
 	}
 
-	// G14 §1 / §7: count how many rows are already-imported duplicates so the
-	// banner can show an actionable summary.
+	// C12: a condensed, sticky action bar at the TOP of the review card so the
+	// account selector + Import button are reachable without scrolling past a long
+	// list of rows. Shown for the plain (non-receipt) import — receipt mode keeps
+	// its single bottom form (total/merchant/account belong together there). It
+	// shares the same handlers and selected-account state as the bottom footer, so
+	// either control imports into the same account.
+	topBar := Fragment()
+	if !props.ReceiptMode && len(rows) > 4 {
+		topOpts := make([]ui.Node, 0, len(props.Accounts))
+		for _, a := range props.Accounts {
+			topOpts = append(topOpts, Option(Value(a.ID), SelectedIf(props.ImportAcctID == a.ID), a.Name))
+		}
+		topBar = Form(css.Class("draft-actionbar"), OnSubmit(props.OnImportDraft),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), topOpts),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.importThese")),
+		)
+	}
+
+	// G14 §1 / §7: count how many rows are duplicates (already-imported OR repeated
+	// within this batch — C17) so the banner can show an actionable summary that
+	// matches the per-row badges.
 	dupCount := 0
+	countSeen := make(map[string]bool, len(rows))
 	for _, r := range rows {
-		if props.SeenSigs != nil && props.SeenSigs[r.Signature()] {
+		sig := r.Signature()
+		if (props.SeenSigs != nil && props.SeenSigs[sig]) || countSeen[sig] {
 			dupCount++
 		}
+		countSeen[sig] = true
 	}
 
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -185,6 +216,7 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 			),
 			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
 			props.Toggle,
+			topBar,
 			Div(css.Class("rows"), items),
 			footer,
 		),

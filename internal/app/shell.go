@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/navorder"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/screens"
@@ -675,7 +676,7 @@ func HouseholdCard() uic.Node {
 		// position — the On*-hooks-in-loops rule is satisfied because this is called via
 		// uic.CreateElement, not inside a variable-length loop.
 		Div(css.Class("rail-collapse-row", tw.Flex, tw.JustifyBetween, tw.ItemsCenter, tw.Pt2),
-			Span(), // spacer so the button floats right
+			Span(Attr("aria-hidden", "true")), // spacer so the button floats right (C315: decorative)
 			Button(css.Class("rail-collapse-btn", tw.W7, tw.H7, tw.Flex, tw.ItemsCenter, tw.JustifyCenter, tw.Rounded4, tw.TextFaint, tw.HoverTextFg, tw.HoverBgHover),
 				Type("button"),
 				Title(collapseTitle),
@@ -741,6 +742,9 @@ func TopBar(props topBarProps) uic.Node {
 	}[curPath]
 	return Div(css.Class("topbar", tw.BorderB, tw.BorderLine, tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Px6, tw.Gap3, tw.Sticky, tw.Top0, tw.BgBase, tw.Z20),
 		Button(css.Class("menu-btn", tw.W7, tw.H7, tw.MlN1), Attr("title", uistate.T("topbar.menu")),
+			// C315: icon-only button needs an accessible name (title alone isn't reliably
+			// exposed as the AX name to screen readers).
+			Attr("aria-label", uistate.T("topbar.menu")),
 			OnClick(func() {
 				next := !collapsed.Get()
 				collapsed.Set(next)
@@ -760,11 +764,58 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
 			uic.CreateElement(NotifyBell),
+			uic.CreateElement(ThemeToggle),
 			uic.CreateElement(HelpButton),
 			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(AddMenu),
 		),
 	)
+}
+
+// ThemeToggle (C317) is a top-bar button that cycles the color theme
+// Dark → Light → System without opening Settings — the theme system existed
+// (prefs.Theme + /appearance) but had no discoverable chrome affordance. It uses
+// the exact persist+apply path the /appearance Segmented uses (ApplyPrefs +
+// PersistPrefs + ApplyTheme(LoadTheme())) so inline CSS vars track the mode.
+func ThemeToggle() uic.Node {
+	pAtom := uistate.UsePrefs()
+	p := pAtom.Get()
+	next := prefs.ThemeLight
+	switch p.Theme {
+	case prefs.ThemeDark:
+		next = prefs.ThemeLight
+	case prefs.ThemeLight:
+		next = prefs.ThemeSystem
+	default:
+		next = prefs.ThemeDark
+	}
+	cycle := uic.UseEvent(func() {
+		np := pAtom.Get()
+		np.Theme = next
+		uistate.ApplyPrefs(np)
+		uistate.PersistPrefs(np)
+		pAtom.Set(np)
+		uistate.ApplyTheme(uistate.LoadTheme())
+	})
+	label := uistate.T("topbar.themeToggle", uistate.T("settings.theme"+themeWord(p.Theme)), uistate.T("settings.theme"+themeWord(next)))
+	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Type("button"), Attr("title", label), Attr("aria-label", label),
+		Attr("data-testid", "theme-toggle"), Attr("data-theme-current", string(p.Theme)),
+		OnClick(cycle),
+		ui.Icon(icon.Appearance, css.Class(tw.W5, tw.H5)),
+	)
+}
+
+// themeWord maps a Theme to the i18n key suffix used by settings.theme{Dark,Light,System}.
+func themeWord(t prefs.Theme) string {
+	switch t {
+	case prefs.ThemeLight:
+		return "Light"
+	case prefs.ThemeSystem:
+		return "System"
+	default:
+		return "Dark"
+	}
 }
 
 // HelpButton is the top-bar "?" that opens the help center (C327/C328): help was
@@ -938,6 +989,7 @@ func ResolutionControl() uic.Node {
 
 	return Span(css.Class("reso-control", tw.Flex, tw.ItemsCenter, tw.Gap25),
 		ui.Segmented(ui.SegmentedProps{
+			Label: uistate.T("resolution.granularity"), // C318: name the radiogroup
 			Options: []ui.SegOption{
 				{Value: string(period.Week), Label: "Week"},
 				{Value: string(period.Month), Label: "Month"},

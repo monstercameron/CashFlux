@@ -178,6 +178,7 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.weekStart")),
 			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.weekStart"), // C318: name the radiogroup
 				Options: []ui.SegOption{
 					{Value: string(prefs.WeekSunday), Label: uistate.T("settings.sunday")},
 					{Value: string(prefs.WeekMonday), Label: uistate.T("settings.monday")},

@@ -303,7 +303,11 @@ func Dashboard() ui.Node {
 		// Dismissed per session (the atom resets on reload). Only shown when
 		// lastSeen > 0 (not the very first open) and newCount > 0.
 		ui.CreateElement(dashCatchUpCard),
-		Div(tiles...),
+		// C8: on a genuinely empty workspace (no accounts and no transactions) the
+		// bento KPI grid is just a wall of $0 tiles with no hierarchy — suppress it
+		// and let the welcome hero + onboarding checklist own the empty state. The
+		// grid returns the moment there's any real data to summarise.
+		If(len(accounts) > 0 || len(txns) > 0, Div(tiles...)),
 		// L43: Quick Transfer shortcut — a persistent affordance on the dashboard so
 		// users can initiate a transfer without hunting for the Transactions screen.
 		// Accounts is the natural home for transfer creation (the full form lives

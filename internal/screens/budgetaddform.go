@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -167,9 +168,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			})),
 		labeledField(uistate.T("budgets.limitLabel"),
 			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
-		Label(css.Class("field"),
-			Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
-			Span(Title(uistate.T("budgets.rolloverTitle")), "Roll over unused funds"),
+		// C117: keep the checkbox on the same line as its label at narrow widths
+		// (≤1280px) — flex + nowrap, shrink-0 on the box (matches budgets_row.go).
+		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
+			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
+			Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
 		),
 		MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})

@@ -106,6 +106,7 @@ var (
 	MlN1   = raw("margin-left", "-0.25rem")
 	M3     = css.Margin(css.Rem(0.75))
 	MAuto  = css.Margin(css.Auto)
+	Mb1    = raw("margin-bottom", "0.25rem")
 	Mb2    = raw("margin-bottom", "0.5rem")
 	Mb3    = raw("margin-bottom", "0.75rem")
 	MlAuto = raw("margin-left", "auto")

@@ -251,22 +251,30 @@ func Transactions() ui.Node {
 		bump()
 	}
 
-	editTxn := func(orig domain.Transaction, newDesc, amountStr, catID, dateStr, memberID, tagsStr string) {
+	// C59: editTxn returns true on success so the row knows whether to close the
+	// inline editor. On validation failure it posts a toast and returns false,
+	// keeping the form open so the user can correct the value.
+	editTxn := func(orig domain.Transaction, newDesc, newPayee, amountStr, catID, dateStr, memberID, tagsStr string) bool {
 		acc := accByID[orig.AccountID]
 		amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(acc.Currency))
 		if err != nil || amt <= 0 {
-			errMsg.Set(uistate.T("transactions.positiveAmount"))
-			return
+			msg := uistate.T("transactions.positiveAmount")
+			errMsg.Set(msg)
+			uistate.PostNotice(msg, false)
+			return false
 		}
 		if orig.Amount.IsNegative() {
 			amt = -amt // preserve the original income/expense sign
 		}
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateStr))
 		if derr != nil {
-			errMsg.Set(uistate.T("transactions.invalidDate"))
-			return
+			msg := uistate.T("transactions.invalidDate")
+			errMsg.Set(msg)
+			uistate.PostNotice(msg, false)
+			return false
 		}
 		orig.Desc = strings.TrimSpace(newDesc)
+		orig.Payee = strings.TrimSpace(newPayee) // C60: preserve edited payee
 		orig.Amount = money.New(amt, orig.Amount.Currency)
 		orig.CategoryID = catID
 		orig.Date = date
@@ -276,7 +284,8 @@ func Transactions() ui.Node {
 		orig.Tags = textutil.CommaFields(tagsStr) // C48: parse comma-separated tags (empty clears)
 		if err := app.PutTransaction(orig); err != nil {
 			errMsg.Set(err.Error())
-			return
+			uistate.PostNotice(err.Error(), false)
+			return false
 		}
 		errMsg.Set("")
 		bump()
@@ -284,6 +293,7 @@ func Transactions() ui.Node {
 		// so an inline edit could "take" silently. Post a non-undo info notice to match the rest of
 		// the app's feedback language.
 		uistate.PostNotice(uistate.T("toast.txnUpdated"), false)
+		return true
 	}
 
 	deleteTxn := func(txnID string) {
@@ -527,7 +537,7 @@ func Transactions() ui.Node {
 	var listBody ui.Node
 	switch {
 	case len(txns) == 0:
-		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions})
+		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
 	case len(shown) == 0:
 		listBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
 	default:

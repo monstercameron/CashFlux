@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"math"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -736,6 +737,19 @@ func Reports() ui.Node {
 		advancedCaret = uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 	}
 
+	// W-15: count-up the hero figures (Net / Income / Spend) when they change, reusing
+	// the dashboard's countup.js scanner. Keyed on the three amounts so it fires on
+	// mount and on real changes only; the scanner is a no-op under reduced-motion /
+	// data-wonder=off (it just sets the final text). Hook runs before the early return
+	// below so its position stays stable across renders.
+	heroSig := fmt.Sprintf("%d|%d|%d", net.Amount, flow.Income, flow.Expense)
+	ui.UseEffect(func() func() {
+		if fn := js.Global().Get("cashfluxCountUpScan"); fn.Type() == js.TypeFunction {
+			fn.Invoke()
+		}
+		return nil
+	}, heroSig)
+
 	// R-8: with no income and no spend in the window there's nothing to report — show
 	// a single empty-state CTA instead of a page of all-zero figures and charts.
 	if flow.Income == 0 && flow.Expense == 0 {
@@ -750,21 +764,40 @@ func Reports() ui.Node {
 			Div(css.Class("hero-main"),
 				Div(
 					P(css.Class("hero-flanker-label"), uistate.T("reports.net")),
-					P(ClassStr("hero-net "+accentFor(net)), fmtMoney(net)),
+					P(ClassStr("hero-net "+accentFor(net)), Attr("data-countup", ""), fmtMoney(net)),
 					netDeltaChip,
 				),
 				Div(css.Class("hero-flankers"),
 					Div(css.Class("hero-flanker"),
 						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.income")),
-						Span(css.Class("hero-flanker-value", "pos"), fmtMoney(money.New(flow.Income, base))),
+						Span(css.Class("hero-flanker-value", "pos"), Attr("data-countup", ""), fmtMoney(money.New(flow.Income, base))),
 					),
 					Div(css.Class("hero-flanker"),
 						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.spending")),
-						Span(css.Class("hero-flanker-value", "neg"), fmtMoney(money.New(flow.Expense, base))),
+						Span(css.Class("hero-flanker-value", "neg"), Attr("data-countup", ""), fmtMoney(money.New(flow.Expense, base))),
 					),
 				),
 			),
 			Div(css.Class("hero-secondary"),
+				// G9.1: surface Net worth (the household's headline balance) in the first
+				// viewport with its most-recent monthly change, instead of only deep in a
+				// trends card. Net stays the page hero; this is a secondary reference stat.
+				If(len(accounts) > 0, Div(css.Class("hero-stat"), Attr("data-testid", "reports-hero-networth"),
+					Span(css.Class("hero-stat-label"), uistate.T("dashboard.netWorth")),
+					Span(ClassStr("hero-stat-value "+accentFor(nwNet)), fmtMoney(nwNet)),
+					func() ui.Node {
+						if len(nwSeries) < 2 || nwChange == 0 {
+							return Fragment()
+						}
+						arrow, tone := "▲", "pos"
+						mag := nwChange
+						if nwChange < 0 {
+							arrow, tone, mag = "▼", "neg", -nwChange
+						}
+						return Span(ClassStr("hero-stat-sub "+tone), Attr("title", uistate.T("reports.vsPrevPeriod")),
+							arrow+" "+fmtMoney(money.New(mag, base))+" "+uistate.T("reports.vsPrev"))
+					}(),
+				)),
 				Div(css.Class("hero-stat"),
 					Span(css.Class("hero-stat-label"), uistate.T("dashboard.savingsRate")),
 					Span(ClassStr("hero-stat-value "+toneForSavingsRate(flow.SavingsRate())), fmt.Sprintf("%d%%", flow.SavingsRate())),

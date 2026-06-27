@@ -14,8 +14,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -75,6 +77,52 @@ func Budgets() ui.Node {
 	errMsg := ui.UseState("")
 	// Open the add-budget modal from the card header (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
+	// C112: switch the budgeting methodology (standard / zero-based / envelope) right
+	// from /budgets — previously only reachable buried in global Settings, so the
+	// zero-based + envelope views were effectively inaccessible to most users.
+	onMethod := ui.UseEvent(func(e ui.Event) {
+		s := app.Settings()
+		s.BudgetMethodology = e.GetValue()
+		_ = app.PutSettings(s)
+		bump()
+	})
+	// C114: one-click 50/30/20 starter template. Uses last full calendar month's
+	// income as the base, generates a per-category proposal via the tested
+	// budgeting.Generate5030, and creates a monthly budget for each proposed category
+	// that doesn't already have one (never clobbers an existing budget).
+	apply503020 := ui.UseEvent(Prevent(func() {
+		txns := app.Transactions()
+		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		now := time.Now()
+		curStart := dateutil.MonthStart(now)
+		prevStart := dateutil.AddMonths(curStart, -1)
+		income := budgeting.IncomeForBudgets(0, txns, prevStart, curStart, base, rates)
+		if income <= 0 {
+			uistate.PostNotice(uistate.T("budgets.tmplNoIncome"), true)
+			return
+		}
+		res := budgeting.Generate5030(income, app.Categories(), txns, now)
+		existing := map[string]bool{}
+		for _, b := range app.Budgets() {
+			existing[b.CategoryID] = true
+		}
+		n := 0
+		for _, prop := range res.Proposals {
+			if prop.LimitMinor <= 0 || existing[prop.Category.ID] {
+				continue
+			}
+			nb := domain.Budget{
+				ID: id.New(), Name: prop.Category.Name, CategoryID: prop.Category.ID,
+				Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+				Period: domain.PeriodMonthly, Limit: money.New(prop.LimitMinor, base),
+			}
+			if err := app.PutBudget(nb); err == nil {
+				n++
+			}
+		}
+		bump()
+		uistate.PostNotice(uistate.T("budgets.tmplApplied", plural(n, "budget")), false)
+	}))
 	// The viewed period comes from the shared top-bar resolution control (C7) —
 	// the Budgets card no longer has its own competing month stepper.
 	periodWin := uistate.UsePeriod()
@@ -292,7 +340,13 @@ func Budgets() ui.Node {
 		assignBanner = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
 		for _, b := range budgets {
 			if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
-				envAvail[b.ID] = fmtMoney(av)
+				// C124/C137 family: an overdrawn envelope reads "$X overdrawn", not the
+				// ambiguous accounting parens "($X)".
+				if av.IsNegative() {
+					envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
+				} else {
+					envAvail[b.ID] = fmtMoney(av)
+				}
 				envNeg[b.ID] = av.IsNegative()
 			}
 		}
@@ -344,6 +398,16 @@ func Budgets() ui.Node {
 			Title: uistate.T("nav.budgets"),
 			HeaderAction: Fragment(
 				smartSectionAction(smartSettings),
+				// C112: in-context budget-method picker (standard / zero-based / envelope).
+				Select(css.Class("field", "set-input"), Attr("data-testid", "budgets-method"),
+					Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+					Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
+					Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+					Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+				),
+				// C114: one-click 50/30/20 starter template.
+				Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "budgets-template-503020"),
+					Title(uistate.T("budgets.tmplTitle")), OnClick(apply503020), uistate.T("budgets.tmpl503020")),
 				If(len(statuses) > 0, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 					Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -435,10 +499,25 @@ func budgetTitle(name, category string) string {
 }
 
 // periodOptions builds the budget-period SelectOptions.
+// periodLabel localizes a budget period for the UI (the domain layer's
+// Period.Label() is hardcoded English by design — domain stays i18n-free). C116.
+func periodLabel(p domain.Period) string {
+	switch p {
+	case domain.PeriodWeekly:
+		return uistate.T("budgets.periodWeekly")
+	case domain.PeriodQuarterly:
+		return uistate.T("budgets.periodQuarterly")
+	case domain.PeriodYearly:
+		return uistate.T("budgets.periodYearly")
+	default:
+		return uistate.T("budgets.periodMonthly")
+	}
+}
+
 func periodOptions(selected string) []uiw.SelectOption {
 	opts := make([]uiw.SelectOption, 0, len(domain.AllPeriods))
 	for _, p := range domain.AllPeriods {
-		opts = append(opts, uiw.SelectOption{Value: string(p), Label: p.Label()})
+		opts = append(opts, uiw.SelectOption{Value: string(p), Label: periodLabel(p)})
 	}
 	return opts
 }

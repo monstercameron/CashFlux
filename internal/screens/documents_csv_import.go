@@ -33,6 +33,12 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 		Title: uistate.T("documents.csvTitle"),
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("documents.csvDesc")),
+			// C19: collapsible "how to get your bank's CSV" guidance — most users don't
+			// know their bank exports one. Closed by default so it doesn't add noise.
+			Details(css.Class("csv-help"), Attr("data-testid", "csv-bank-help"),
+				Summary(uistate.T("documents.bankCsvHelpTitle")),
+				P(css.Class("muted", tw.Mt1), uistate.T("documents.bankCsvHelpBody")),
+			),
 			// File picker: the primary path for real .csv files (C60).
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "csv-file-picker"),

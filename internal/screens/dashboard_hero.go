@@ -205,6 +205,9 @@ func heroWelcome(_ struct{}) ui.Node {
 		}
 		rev.Set(rev.Get() + 1)
 		uistate.SetSampleActive(true)
+		// Flush immediately so a reload within the autosave tick can't lose the
+		// freshly loaded sample (C2).
+		uistate.RequestPersist()
 	})
 	onAddAccount := ui.UseEvent(func() { uistate.SetAddTarget("account") })
 

@@ -1005,6 +1005,10 @@
       .hero-stat-value.neg { color: var(--money-negative); }
       [data-theme="light"] .hero-stat-value.pos { color: var(--money-positive) !important; }
       [data-theme="light"] .hero-stat-value.neg { color: var(--money-negative) !important; }
+      /* G9.1: small signed change line under a hero secondary stat (net-worth delta). */
+      .hero-stat-sub { font-size: 0.72rem; font-weight: 600; font-variant-numeric: tabular-nums; opacity: 0.9; }
+      .hero-stat-sub.pos { color: var(--money-positive); }
+      .hero-stat-sub.neg { color: var(--money-negative); }
       /* Dashboard HomeHero band (EC4): the component (internal/screens/homehero.go) ships
          these class names but no CSS existed for the layout wrappers, so the this-month
          stat blocks collapsed to display:block and the label+value jammed together
@@ -1046,6 +1050,13 @@
       .cal-cell.today .cal-day { color: var(--text); font-weight: 700; }
       .cal-day { font-size:12px; color:var(--text-dim); }
       .cal-dot { position:absolute; bottom:6px; left:6px; width:7px; height:7px; border-radius:50%; background:var(--danger,#d8716f); }
+      /* C150: urgency-toned bill dots (danger=due/overdue, warn=within 3d, soon=further out). */
+      .cal-dot--danger { background:var(--danger,#d8716f); }
+      .cal-dot--warn   { background:var(--color-warn,#d6a23e); }
+      .cal-dot--soon   { background:var(--accent,#2e8b57); }
+      /* C150: a busy day shows the bill count inside a slightly larger pill. */
+      .cal-dot--count { width:auto; min-width:14px; height:14px; padding:0 3px; bottom:5px; display:inline-flex;
+        align-items:center; justify-content:center; font-size:9px; font-weight:700; color:#fff; line-height:1; }
       /* Bills two-column layout (G11 follow-up): at ≥1024 px the bill list sits on the
          left and the calendar floats to the right so both are visible without scrolling. */
       .bills-layout { display: flex; flex-direction: column; gap: 1rem; }
@@ -1406,12 +1417,30 @@
       .artifact-list-footer { border-top: 1px solid var(--border); padding-top: 0.75rem; margin-top: 0.5rem; }
       /* G14 Documents: step-indicator accent on the active review card + amber duplicate-row badge. */
       .card-step-active { border-left: 3px solid var(--accent); }
+      /* C13: labelled separator before the optional AI image-import section. */
+      .doc-section-sep { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0 0.5rem;
+        color: var(--text-dim, #9aa0a6); font-size: 0.8rem; }
+      .doc-section-sep::before, .doc-section-sep::after { content: ""; flex: 1 1 auto; height: 1px;
+        background: var(--border, rgba(255,255,255,0.1)); }
+      /* C12: sticky top action bar for the draft-review card so the account
+         picker + Import button stay reachable above a long row list. */
+      .draft-actionbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 0.5rem; align-items: center;
+        padding: 0.5rem 0; margin: 0.25rem 0 0.5rem; background: var(--bg-elev, #1a1a1d);
+        border-bottom: 1px solid var(--border, rgba(255,255,255,0.08)); }
+      .draft-actionbar .field { flex: 1 1 auto; min-width: 0; }
+      .draft-actionbar .btn { flex: 0 0 auto; }
       .badge-warn { display: inline-block; background: #b45309; color: #fff; font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 6px; }
       /* G5 Goals: breathing room between bar and sub-line; dimmer secondary % text; stable row height; hide × at rest. */
       .goal-sub { margin-top: 0.5rem; }
       .goal-sub-dim { color: var(--text-dim); font-size: 0.8rem; }
       .budget { min-height: 100px; }
       .budget:not(:hover):not(:focus-within) .btn-del-hover { opacity: 0; pointer-events: none; }
+      /* C181: always show delete on touch/coarse-pointer devices (hover is unavailable) */
+      @media (pointer: coarse) {
+        .budget .btn-del-hover { opacity: 1 !important; pointer-events: auto !important; }
+      }
+      /* C181: keyboard fallback — show when the button itself has focus */
+      .btn-del-hover:focus-visible { opacity: 1 !important; pointer-events: auto !important; }
       .cover-form { margin-top: 0.6rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev, rgba(255,255,255,0.02)); }
       .cover-form .form-grid { margin-top: 0.4rem; }
       /* Bar track (G4 §6): a touch more contrast than --bg-elev so a 0%/empty bar

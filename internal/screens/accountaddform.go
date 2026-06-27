@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -207,6 +208,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		at == domain.TypeRetirement || at == domain.TypeCrypto || at == domain.TypeOther
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "account-add-form"), OnSubmit(add),
+		// C7: first-run framing — when this is the household's very first account,
+		// explain in one friendly line what an account is and that nothing leaves the
+		// device. Disappears once any account exists, so it never nags returning users.
+		If(len(app.Accounts()) == 0,
+			P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
+				uistate.T("accounts.firstRunHint"))),
 		labeledField(uistate.T("common.name"),
 			Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...)),
 		labeledField(uistate.T("accounts.typeLabel"),
@@ -240,6 +247,14 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))),
 		labeledField(uistate.T("accounts.openingBalance"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+		// C27: explain what the opening balance is — and that for a card/loan you enter
+		// the amount currently owed (it's tracked as a liability).
+		P(css.Class(tw.TextFaint, tw.Text12), func() string {
+			if isLiab {
+				return uistate.T("accounts.openingBalanceHintLiab")
+			}
+			return uistate.T("accounts.openingBalanceHint")
+		}()),
 		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
 			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(creditLimit.Get()), Step("0.01"), OnInput(onCreditLimit)))),
 		If(isLiab, labeledField(uistate.T("accounts.apr"),

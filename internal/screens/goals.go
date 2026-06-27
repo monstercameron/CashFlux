@@ -323,6 +323,17 @@ func accountName(accounts []domain.Account, id string) string {
 	return ""
 }
 
+// csvImportSummary builds the confirmation message after a CSV import, naming the
+// destination account when one is known (C10): "Imported N transactions into
+// <Account>." Falls back to the account-less phrasing for an unselected target.
+func csvImportSummary(accounts []domain.Account, acctID string, n int) string {
+	txns := plural(n, "transaction")
+	if name := accountName(accounts, acctID); name != "" {
+		return uistate.T("documents.importedCsvInto", txns, name)
+	}
+	return uistate.T("documents.importedCsv", txns)
+}
+
 // barFillStyle is the inline width for a goal's progress bar. The fill *tone* is
 // driven by a CSS state class (see paceBarClass) so a near-complete, behind, or
 // on-track goal reads differently at a glance instead of one flat accent (G5/C51).

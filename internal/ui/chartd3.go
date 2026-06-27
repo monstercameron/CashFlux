@@ -74,11 +74,17 @@ func chartD3(props ChartProps) uic.Node {
 	if props.Class != "" {
 		cls += " " + props.Class
 	}
+	// C315: role="img" must have a non-empty accessible name. Fall back to a generic
+	// "Chart" when no Label is supplied so the element is never an anonymous image.
+	label := props.Label
+	if label == "" {
+		label = "Chart"
+	}
 	return Div(
 		Attr("id", id),
 		ClassStr(cls),
 		Attr("role", "img"),
-		Attr("aria-label", props.Label),
+		Attr("aria-label", label),
 		Style(map[string]string{"width": "100%", "height": h}),
 	)
 }

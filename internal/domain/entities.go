@@ -368,6 +368,10 @@ type Document struct {
 	MemberID   string         `json:"memberId,omitempty"`
 	Status     DocumentStatus `json:"status"`
 	Extracted  []DocumentRow  `json:"extracted,omitempty"`
+	// RowCount is the number of transactions imported from this document. For CSV
+	// imports the raw rows aren't retained, so this records the count for the
+	// import-history row (C11) when Extracted is empty.
+	RowCount int `json:"rowCount,omitempty"`
 }
 
 // IsTransfer reports whether the transaction is a transfer between accounts.

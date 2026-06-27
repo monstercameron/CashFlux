@@ -239,6 +239,7 @@ func ThemeEditor() uic.Node {
 		If(fontMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
 		If(len(fontRows) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py1), fontRows)),
 		ui.Segmented(ui.SegmentedProps{
+			Label:    "Density", // C318: name the radiogroup
 			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: "Comfortable"}, {Value: string(theme.Compact), Label: "Compact"}},
 			Selected: string(t.Density),
 			OnSelect: func(v string) {
@@ -250,6 +251,7 @@ func ThemeEditor() uic.Node {
 		Div(css.Class("toggle-row"),
 			Span("Icon weight"),
 			ui.Segmented(ui.SegmentedProps{
+				Label:    "Icon weight", // C318: name the radiogroup
 				Options:  []ui.SegOption{{Value: "1.2", Label: "Thin"}, {Value: "1.6", Label: "Regular"}, {Value: "2.2", Label: "Bold"}},
 				Selected: strconv.FormatFloat(t.IconStroke, 'g', -1, 64),
 				OnSelect: func(v string) {

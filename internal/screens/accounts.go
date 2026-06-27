@@ -94,6 +94,8 @@ func Accounts() ui.Node {
 			return
 		}
 		bump()
+		uistate.SetSampleActive(true)
+		uistate.RequestPersist() // C2: flush before a fast reload can race the ticker
 	}))
 	markAllUpdated := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
@@ -343,7 +345,7 @@ func Accounts() ui.Node {
 			// modal), matching every other entity screen — previously a bare "No asset accounts yet." line
 			// with no glyph and no way to act from the page. The liabilities card stays a plain celebratory
 			// line below (no CTA — never nudge a new user to add debt).
-			Body:         IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
+			Body:         IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
 		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("dashboard.liabilities"),
