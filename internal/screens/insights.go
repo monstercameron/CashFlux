@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -744,6 +745,11 @@ func Insights() ui.Node {
 
 	highlights := spendingHighlights(txns, app.Categories(), base, rates, viewCategoryTransactions)
 
+	// C230: monthly spending time-series chart — 6 months of expense outflow as an
+	// area sparkline. Computed once here (pure data, no hooks) and rendered in a
+	// labelled card between the highlights and anomaly sections.
+	spendTrendCard := monthlySpendingChart(txns, base, rates)
+
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
 	// pr is already declared above (UsePrefs hook at stable position).
@@ -945,6 +951,9 @@ func Insights() ui.Node {
 		// point is above-the-fold even when highlights and pins push the chat down.
 		askShortcut,
 		highlights,
+		// C230: monthly spending time-series chart — shows the last 6 months of
+		// expense outflow so the user can see their spending trend at a glance.
+		spendTrendCard,
 		// C252: four anomaly-type detector findings (duplicates, spikes, missing
 		// charges, balance anomalies) — shown unconditionally, no Smart gate.
 		flagged,
@@ -1625,6 +1634,49 @@ func highlightText(a insights.Anomaly, base string) string {
 		key = "insights.highlightUp"
 	}
 	return uistate.T(key, a.Category, pct, deltaStr, current, baseline)
+}
+
+// monthlySpendingChart builds the last 6 months of total expense outflow from
+// txns and renders a labelled area-chart card for /insights (C230). Returns an
+// empty node when there are fewer than 2 data points (nothing to trend).
+func monthlySpendingChart(txns []domain.Transaction, base string, rates currency.Rates) ui.Node {
+	const buckets = 6
+	curMonth := dateutil.MonthStart(time.Now())
+	bounds := make([]time.Time, buckets+1)
+	for k := 0; k <= buckets; k++ {
+		bounds[k] = dateutil.AddMonths(curMonth, k-buckets)
+	}
+	flows, err := reports.IncomeExpenseSeries(txns, bounds, rates)
+	if err != nil || len(flows) < 2 {
+		return Fragment()
+	}
+	vals := make([]float64, len(flows))
+	for i, f := range flows {
+		// Expense is a non-negative minor-unit amount (per PeriodFlow contract);
+		// the chart rises as spending grows (higher bar = more spent that month).
+		vals[i] = float64(f.Expense)
+	}
+	// x-axis month abbreviations and per-point hover labels.
+	labels := make([]string, 0, len(vals))
+	valLabels := make([]string, 0, len(vals))
+	for i := range vals {
+		labels = append(labels, bounds[i].Format("Jan"))
+		valLabels = append(valLabels, fmtMoney(money.New(int64(vals[i]), base)))
+	}
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("insights.spendTrendTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("insights.spendTrendHint")),
+			uiw.AreaChart(uiw.AreaChartProps{
+				Values:      vals,
+				Stroke:      "#e05c5c",
+				GradientID:  "cf-insights-spend",
+				Label:       uistate.T("insights.spendTrendTitle"),
+				Labels:      labels,
+				ValueLabels: valLabels,
+			}),
+		),
+	})
 }
 
 // highlightTone is the green/red text class for an anomaly's direction (up in

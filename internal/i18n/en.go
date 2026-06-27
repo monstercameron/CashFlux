@@ -1601,6 +1601,9 @@ var english = Catalog{
 	"insights.flaggedHint":             "Possible duplicates, unusual charges, and balance anomalies — tap any row to review.",
 	"insights.highlightsTitle":         "Spending highlights",
 	"insights.highlightsHint":          "Categories that moved a lot versus your recent average — tap a row to see the transactions.",
+	// C230: monthly spending time-series chart card.
+	"insights.spendTrendTitle":         "Spending over time",
+	"insights.spendTrendHint":          "Total spending each month for the last 6 months.",
 	"insights.highlightDrillAria":      "View %s transactions",
 	"insights.highlightUp":             "%s spending is up %d%% (%s more) — %s this month vs about %s a month.",
 	"insights.highlightDown":           "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",

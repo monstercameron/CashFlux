@@ -8,6 +8,16 @@ problems and fixes, and what's next.
 
 
 
+## 2026-06-27 — C230: monthly spending time-series chart on /insights
+
+The /insights screen had "Spending highlights" (category anomaly rows) and an AI chat, but no visual time-series — no way to see whether total spending was trending up or down over recent months. Added a "Spending over time" area-chart card placed between highlights and anomaly flags.
+
+Data source: `reports.IncomeExpenseSeries` over 6 monthly bounds (same call as /reports cash-flow trend). `PeriodFlow.Expense` is non-negative by contract, so values are used directly as chart heights. Month abbreviations from the bounds array become x-axis labels; per-point hovers are formatted via `fmtMoney`.
+
+Render: `uiw.AreaChart` with a red stroke (`#e05c5c`) and a unique gradient ID (`cf-insights-spend`). The chart is inside a standard `EntityListSection` card to match surrounding card styling, placed after highlights so the user first sees "what categories moved" then "what the overall trend looks like."
+
+build rc=0.
+
 ## 2026-06-27 — C228: spending-highlight drill-through to /transactions
 
 The spending-highlights card on /insights (anomaly "what changed this month" rows) was non-interactive — clicking a row did nothing. Fixed by wiring in the same category drill-through pattern used by /reports (L58 FILTER_CARRY): `UseTxFilter` atom set + persisted, then `nav.Navigate("/transactions")`.
