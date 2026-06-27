@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C217: decouple net-worth trend from cash-flow period selector
+
+C217 reported that the NW trend on /reports rescales when you change the cash-flow period selector
+(monthly/quarterly/weekly). Confirmed: the NW series used the same `bounds` array as the cash-flow
+trend, which is built from `w.Res`. So switching to "quarterly" made the NW chart show 6 quarterly
+snapshots instead of 6 monthly ones, which is conceptually wrong — net worth is a cumulative
+point-in-time metric best shown on a stable monthly cadence.
+
+Fix: compute `nwBounds` (and `nwLabels`) from `dateutil.MonthStart(time.Now())` with monthly steps,
+always `trendBuckets` months back. The NW AreaChart now uses `nwLabels` instead of `trendLabels`.
+The `curMonth` that was previously re-declared in the runway block is now reused (removed duplicate
+`:=`). Added a muted P caption below the chart with the new i18n key `reports.nwTrendMonthly` so
+users understand the cadence is fixed. Wasm build passes; no native tests for this file.
+
 ## 2026-06-27 — C291: cloud sync data-disclosure line
 
 C291 asked for an always-visible disclosure in the "Cloud & server" settings section telling users

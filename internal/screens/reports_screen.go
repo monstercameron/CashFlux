@@ -238,10 +238,21 @@ func Reports() ui.Node {
 		trendLabels = append(trendLabels, bounds[i].Format("Jan"))
 	}
 
-	// Net-worth trend: net worth as of each period boundary (cumulative, so it
-	// reads the running total rather than per-period flow).
+	// Net-worth trend: always monthly, independent of the cash-flow period selector
+	// (C217). Net worth is a cumulative point-in-time series — re-bucketing it to
+	// weekly or quarterly makes no sense. We always show the last trendBuckets months.
 	accounts := app.Accounts()
-	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, bounds, rates)
+	curMonth := dateutil.MonthStart(time.Now())
+	nwBounds := make([]time.Time, 0, trendBuckets+1)
+	for k := 0; k <= trendBuckets; k++ {
+		nwBounds = append(nwBounds, dateutil.AddMonths(curMonth, k-trendBuckets))
+	}
+	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, nwBounds, rates)
+	// x-axis labels for the NW chart: month abbreviation from nwBounds.
+	nwLabels := make([]string, 0, len(nwSeries))
+	for i := 0; i < len(nwSeries) && i < len(nwBounds); i++ {
+		nwLabels = append(nwLabels, nwBounds[i].Format("Jan"))
+	}
 	// Convert to major units (dollars) so the Y-axis ticks read "$14k" not "1400000"
 	// (C216: same fix applied to the dashboard NW chart in C16).
 	nwDiv := 1.0
@@ -254,7 +265,7 @@ func Reports() ui.Node {
 	}
 	// Net-worth composition (assets vs liabilities) as of now, for a breakdown card.
 	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
-	// Net-worth change over the most recent period of the trend (last step).
+	// Net-worth change over the most recent monthly step of the trend (last step).
 	var nwChange int64
 	if n := len(nwSeries); n >= 2 {
 		nwChange = nwSeries[n-1].Amount - nwSeries[n-2].Amount
@@ -294,7 +305,7 @@ func Reports() ui.Node {
 	// doesn't understate spending). Liquid = cash-type accounts only.
 	const runwayMonths = 6
 	liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
-	curMonth := dateutil.MonthStart(time.Now())
+	// curMonth already declared above for the NW trend bounds.
 	monthBounds := make([]time.Time, 0, runwayMonths+1)
 	for k := 0; k <= runwayMonths; k++ {
 		monthBounds = append(monthBounds, dateutil.AddMonths(curMonth, k-runwayMonths))
@@ -906,7 +917,11 @@ func Reports() ui.Node {
 					stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 					If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 				),
-				If(len(nw) >= 2, uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: trendLabels, ValueLabels: nwValueLabels})),
+				// C217: NW trend uses its own monthly labels, not the cash-flow period labels.
+				If(len(nw) >= 2, Fragment(
+					P(css.Class("muted"), uistate.T("reports.nwTrendMonthly", trendBuckets)),
+					uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: nwLabels, ValueLabels: nwValueLabels}),
+				)),
 			),
 		})),
 		If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{

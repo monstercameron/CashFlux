@@ -1370,6 +1370,7 @@ var english = Catalog{
 	"reports.sectionTrends":            "Trends over recent periods",
 	"reports.covering":                 "Covering %s – %s · compared with %s – %s",
 	"reports.trendHint":                "Net cash flow over the last %d periods.",
+	"reports.nwTrendMonthly":           "Net worth over the last %d months. Always shown on a monthly cadence, independent of the selected period.",
 	"reports.byCategory":               "Spending by category",
 	"reports.rollupOn":                 "Show sub-categories",
 	"reports.rollupOff":                "Roll up sub-categories",
