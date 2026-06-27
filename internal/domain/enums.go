@@ -130,14 +130,25 @@ func (s Scope) Valid() bool {
 type Period string
 
 const (
-	PeriodWeekly    Period = "weekly"
-	PeriodMonthly   Period = "monthly"
+	// PeriodWeekly is a 7-day rolling window anchored to the household week-start.
+	PeriodWeekly Period = "weekly"
+	// PeriodBiweekly is a 14-day window on a stable fortnightly grid (every 2 weeks).
+	PeriodBiweekly Period = "biweekly"
+	// PeriodSemimonthly splits each calendar month into two halves: the 1st–15th and the 16th–end.
+	PeriodSemimonthly Period = "semimonthly"
+	// PeriodMonthly is a full calendar month.
+	PeriodMonthly Period = "monthly"
+	// PeriodQuarterly is a three-month calendar quarter (Q1–Q4).
 	PeriodQuarterly Period = "quarterly"
-	PeriodYearly    Period = "yearly"
+	// PeriodYearly is the full calendar year (Jan 1 – Dec 31).
+	PeriodYearly Period = "yearly"
 )
 
-// AllPeriods lists every valid period.
-var AllPeriods = []Period{PeriodWeekly, PeriodMonthly, PeriodQuarterly, PeriodYearly}
+// AllPeriods lists every valid period in display order.
+var AllPeriods = []Period{
+	PeriodWeekly, PeriodBiweekly, PeriodSemimonthly,
+	PeriodMonthly, PeriodQuarterly, PeriodYearly,
+}
 
 func (p Period) String() string { return string(p) }
 
@@ -146,6 +157,10 @@ func (p Period) Label() string {
 	switch p {
 	case PeriodWeekly:
 		return "Weekly"
+	case PeriodBiweekly:
+		return "Every 2 weeks"
+	case PeriodSemimonthly:
+		return "Twice a month"
 	case PeriodQuarterly:
 		return "Quarterly"
 	case PeriodYearly:
@@ -158,7 +173,7 @@ func (p Period) Label() string {
 // Valid reports whether p is a known period.
 func (p Period) Valid() bool {
 	switch p {
-	case PeriodWeekly, PeriodMonthly, PeriodQuarterly, PeriodYearly:
+	case PeriodWeekly, PeriodBiweekly, PeriodSemimonthly, PeriodMonthly, PeriodQuarterly, PeriodYearly:
 		return true
 	default:
 		return false

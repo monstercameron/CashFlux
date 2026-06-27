@@ -152,23 +152,68 @@ func EvaluateRollup(budget domain.Budget, all []domain.Transaction, start, end t
 	})
 }
 
+// epochMonday is the Monday of an arbitrary fixed week used to establish the
+// fortnightly grid for biweekly periods. Any Monday will do; 2006-01-02 is the
+// reference date in Go's time package (which is itself a Monday).
+var epochMonday = time.Date(2006, time.January, 2, 0, 0, 0, 0, time.UTC)
+
 // PeriodRange returns the half-open [start, end) range for the budget period of
 // kind p that contains ref. weekStart sets the first day of the week for weekly
-// periods. An unknown period falls back to monthly.
+// and biweekly periods. An unknown period falls back to monthly.
 func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start, end time.Time) {
 	switch p {
 	case domain.PeriodWeekly:
 		start = dateutil.WeekStart(ref, weekStart)
 		return start, start.AddDate(0, 0, 7)
+
+	case domain.PeriodBiweekly:
+		// Snap the reference date to the start of its 7-day week, then determine
+		// which fortnight of the stable 14-day grid it falls in. The grid is
+		// anchored to epochMonday, shifted by weekStart so that every biweekly
+		// window boundary aligns with a week-start boundary.
+		anchor := epochMonday
+		if weekStart != time.Monday {
+			// Shift the epoch anchor by the offset from Monday to weekStart.
+			offset := int(weekStart) - int(time.Monday)
+			if offset < 0 {
+				offset += 7
+			}
+			anchor = anchor.AddDate(0, 0, offset)
+		}
+		// Use UTC-normalised day counts to avoid DST ambiguity at boundaries.
+		refDay := ref.In(time.UTC).Truncate(24 * time.Hour)
+		ancDay := anchor.In(time.UTC)
+		diff := int(refDay.Sub(ancDay).Hours()) / 24
+		if diff < 0 {
+			// Go's integer division truncates toward zero; adjust for negative diff.
+			diff = diff - 13
+		}
+		fortnight := (diff / 14) * 14
+		start = ancDay.AddDate(0, 0, fortnight).In(ref.Location())
+		return start, start.AddDate(0, 0, 14)
+
+	case domain.PeriodSemimonthly:
+		// First half: [1st, 16th); second half: [16th, 1st of next month).
+		y, m, d := ref.Date()
+		loc := ref.Location()
+		if d <= 15 {
+			start = time.Date(y, m, 1, 0, 0, 0, 0, loc)
+			return start, time.Date(y, m, 16, 0, 0, 0, 0, loc)
+		}
+		start = time.Date(y, m, 16, 0, 0, 0, 0, loc)
+		return start, time.Date(y, m+1, 1, 0, 0, 0, 0, loc)
+
 	case domain.PeriodQuarterly:
 		y, m, _ := ref.Date()
 		qm := ((int(m)-1)/3)*3 + 1
 		start = time.Date(y, time.Month(qm), 1, 0, 0, 0, 0, ref.Location())
 		return start, dateutil.AddMonths(start, 3)
+
 	case domain.PeriodYearly:
 		y := ref.Year()
 		start = time.Date(y, time.January, 1, 0, 0, 0, 0, ref.Location())
 		return start, time.Date(y+1, time.January, 1, 0, 0, 0, 0, ref.Location())
+
 	default:
 		return dateutil.MonthRange(ref)
 	}

@@ -57,6 +57,111 @@ func TestPeriodRange(t *testing.T) {
 	}
 }
 
+// TestPeriodRangeBiweekly verifies that biweekly windows are exactly 14 days,
+// contiguous (no gaps or overlaps between consecutive fortnight windows), and
+// that a date mid-window falls inside the correct window.
+func TestPeriodRangeBiweekly(t *testing.T) {
+	tests := []struct {
+		name      string
+		ref       string
+		weekStart time.Weekday
+		wantStart string
+		wantEnd   string
+	}{
+		// Epoch (2006-01-02) is itself a Monday; first fortnight begins there.
+		{"epoch Monday itself", "2006-01-02", time.Monday, "2006-01-02", "2006-01-16"},
+		{"epoch+1 (Tuesday mid-window)", "2006-01-03", time.Monday, "2006-01-02", "2006-01-16"},
+		{"epoch+13 (Sunday, last day of window)", "2006-01-15", time.Monday, "2006-01-02", "2006-01-16"},
+		{"epoch+14 (Monday, start of next window)", "2006-01-16", time.Monday, "2006-01-16", "2006-01-30"},
+		// 2026-06-15 is a Monday; verify it lands in a real fortnight.
+		{"2026-06-15 Monday", "2026-06-15", time.Monday, "2026-06-08", "2026-06-22"},
+		{"2026-06-14 Sunday (mid window, Mon-start)", "2026-06-14", time.Monday, "2026-06-08", "2026-06-22"},
+		// Sunday-start grid: 2026-06-14 is itself a Sunday, so it is exactly on a
+		// Sun-anchored fortnight boundary — it starts a new 14-day window.
+		{"epoch anchor shifts for Sun-start", "2026-06-14", time.Sunday, "2026-06-14", "2026-06-28"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref := mustDate(tt.ref)
+			s, e := PeriodRange(domain.PeriodBiweekly, ref, tt.weekStart)
+			if s != mustDate(tt.wantStart) || e != mustDate(tt.wantEnd) {
+				t.Errorf("biweekly(%s, ws=%v) = %s..%s, want %s..%s",
+					tt.ref, tt.weekStart,
+					s.Format("2006-01-02"), e.Format("2006-01-02"),
+					tt.wantStart, tt.wantEnd)
+			}
+			// Window must be exactly 14 days.
+			if int(e.Sub(s).Hours()) != 14*24 {
+				t.Errorf("biweekly window is %v, want 336h", e.Sub(s))
+			}
+			// ref must be inside [start, end).
+			if ref.Before(s) || !ref.Before(e) {
+				t.Errorf("ref %s not in [%s, %s)", tt.ref, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+
+	// Contiguity: consecutive biweekly windows must be gap-free.
+	base := mustDate("2026-01-01")
+	prev := mustDate("2026-01-01")
+	for i := 0; i < 26; i++ {
+		probe := base.AddDate(0, 0, i*14)
+		s, e := PeriodRange(domain.PeriodBiweekly, probe, time.Monday)
+		if i > 0 && s != prev {
+			t.Errorf("gap between window %d and %d: prev end %s, next start %s",
+				i-1, i, prev.Format("2006-01-02"), s.Format("2006-01-02"))
+		}
+		prev = e
+	}
+}
+
+// TestPeriodRangeSemimonthly verifies first-half (1st–15th) and second-half
+// (16th–end-of-month) windows across varying month lengths.
+func TestPeriodRangeSemimonthly(t *testing.T) {
+	tests := []struct {
+		name      string
+		ref       string
+		wantStart string
+		wantEnd   string
+	}{
+		// First half
+		{"1st of month → first half", "2026-06-01", "2026-06-01", "2026-06-16"},
+		{"mid first half (10th)", "2026-06-10", "2026-06-01", "2026-06-16"},
+		{"15th (last day of first half)", "2026-06-15", "2026-06-01", "2026-06-16"},
+		// Second half
+		{"16th → second half", "2026-06-16", "2026-06-16", "2026-07-01"},
+		{"mid second half (20th)", "2026-06-20", "2026-06-16", "2026-07-01"},
+		{"30th (last day of 30-day month)", "2026-06-30", "2026-06-16", "2026-07-01"},
+		// 31-day month
+		{"31-day month: 16th→end", "2026-01-31", "2026-01-16", "2026-02-01"},
+		// February (28 days in non-leap year)
+		{"Feb non-leap: first half", "2026-02-10", "2026-02-01", "2026-02-16"},
+		{"Feb non-leap: second half (17th)", "2026-02-17", "2026-02-16", "2026-03-01"},
+		{"Feb non-leap: 28th", "2026-02-28", "2026-02-16", "2026-03-01"},
+		// February in a leap year
+		{"Feb leap: second half (16th)", "2024-02-16", "2024-02-16", "2024-03-01"},
+		{"Feb leap: 29th", "2024-02-29", "2024-02-16", "2024-03-01"},
+		// December year-boundary
+		{"Dec: second half → Jan 1", "2026-12-25", "2026-12-16", "2027-01-01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ref := mustDate(tt.ref)
+			s, e := PeriodRange(domain.PeriodSemimonthly, ref, time.Sunday)
+			if s != mustDate(tt.wantStart) || e != mustDate(tt.wantEnd) {
+				t.Errorf("semimonthly(%s) = %s..%s, want %s..%s",
+					tt.ref,
+					s.Format("2006-01-02"), e.Format("2006-01-02"),
+					tt.wantStart, tt.wantEnd)
+			}
+			// ref must be inside [start, end).
+			if ref.Before(s) || !ref.Before(e) {
+				t.Errorf("ref %s not in [%s, %s)", tt.ref, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
 func expense(amount int64, cur, cat, member, day string) domain.Transaction {
 	return domain.Transaction{
 		Amount:     money.New(-amount, cur),

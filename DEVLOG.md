@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C126/C127 [F16]: biweekly + semi-monthly budget periods
+
+**Problem.** The budget period enum had only Weekly/Monthly/Quarterly/Yearly. Users paid biweekly or semi-monthly had no matching period, forcing them to approximate with weekly or monthly budgets.
+
+**Biweekly anchor design.** The key constraint is determinism: any date must map to exactly one 14-day window regardless of when the budget was created. The approach: anchor to Go's reference epoch Monday (2006-01-02), shift by `weekStart` offset (so the grid boundaries always fall on the user's configured week-start day), then integer-divide the day-difference from the anchor into 14-day buckets. UTC-normalized day counts prevent DST ambiguity at boundaries. This gives a fixed fortnightly grid aligned to week-start rather than a "rolling" window from the most recent payment — simpler and more consistent for budgeting purposes.
+
+**Semi-monthly.** Calendar-native: days 1–15 → [1st, 16th); days 16–end → [16th, 1st of next month). The upper half end date is computed as `time.Date(y, m+1, 1, ...)` which Go's time package correctly handles for December (wraps to Jan of y+1) and for all month lengths including Feb 28/29.
+
+**UI wiring.** `periodLabel()` already had a `switch` for per-period i18n; added two cases. `periodOptions()` already iterates `domain.AllPeriods`; no other change needed. Two new i18n keys added.
+
+**Tests.** One test case in the initial biweekly table had the wrong expected value — `2026-06-14` is itself a Sunday, so with a Sunday weekStart it lands exactly on a fortnight boundary (starts a new window, not mid-prior-window as I initially assumed). Fixed the test expectation after confirming the implementation output was correct.
+
 ## 2026-06-27 — C185/C188 [F24]: pay-yourself-first savings automation template + framing
 
 **Problem.** C185: the previous "pay yourself first" path (if any) was a single-leg autopost — no actual money movement. C188: the auto-save concept was completely invisible on the Workflows screen; users had no framed entry point.

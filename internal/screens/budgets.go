@@ -513,6 +513,10 @@ func periodLabel(p domain.Period) string {
 	switch p {
 	case domain.PeriodWeekly:
 		return uistate.T("budgets.periodWeekly")
+	case domain.PeriodBiweekly:
+		return uistate.T("budgets.periodBiweekly")
+	case domain.PeriodSemimonthly:
+		return uistate.T("budgets.periodSemimonthly")
 	case domain.PeriodQuarterly:
 		return uistate.T("budgets.periodQuarterly")
 	case domain.PeriodYearly:
