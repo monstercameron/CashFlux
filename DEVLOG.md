@@ -13669,3 +13669,15 @@ first-viewport content density is fine after the C-backlog work. The ONE genuine
 at 100 vs a 70 ceiling (the control matrix R39/R42/R51 call out) — the concrete target for a progressive-
 disclosure redesign. Gate exits with the over-ceiling route count for CI. Pairs with the contrast gate
 (now 0) to cover the contrast + density dimensions of the R44/R72 desktop UX quality gate.
+
+## 2026-06-27 — R39/R47/§8.4: widget-manager density (the one route over ceiling)
+The density gate flagged exactly one route over the §11 budget: /widget-manager at 100 vs a 70 builder
+ceiling (every row showed vis-toggle + 2 resize steppers + 2 reorder arrows = ~7 controls × 14 rows).
+First attempt (hide .wm-size/.wm-reorder on hover) made the Size/Order columns read EMPTY at rest — worse,
+junky. Redid it the right way: each row now shows the size VALUE ("4×1") and order position at rest, with
+the resize/reorder CONTROLS grid-stacked over them (same cell → no layout shift) and revealed on row
+hover/focus-within via opacity (kept in tab order, so keyboard users reveal by focusing). Screenshots
+confirm: clean informative table at rest, that row's steppers/arrows appear on hover, no jump. Also had to
+fix the density gate itself — getComputedStyle reports a control's OWN opacity as 1 even inside an opacity:0
+wrapper, so visible() now walks ancestors (committed separately). Result: manager 100 → 23 resting controls,
+and the whole app is 0/16 over ceiling. Go change in widgets.go (clean) + CSS in index.html (mine).

@@ -523,27 +523,35 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 			}),
 		),
 		Td(css.Class("wm-col-size"),
-			Div(css.Class("wm-size"),
-				wmStepper("W", col, uistate.T("widget.narrower"), uistate.T("widget.wider"),
-					func() { resize(col-1, row) }, func() { resize(col+1, row) }),
-				wmStepper("H", row, uistate.T("widget.shorter"), uistate.T("widget.taller"),
-					func() { resize(col, row-1) }, func() { resize(col, row+1) }),
+			// §8.4 row-action density: the size VALUE shows at rest; the resize steppers
+			// overlay it (grid-stacked, no layout shift) and reveal on row hover/focus.
+			Div(css.Class("wm-stack"),
+				Span(css.Class("wm-static"), Attr("aria-hidden", "true"), Textf("%d×%d", col, row)),
+				Div(css.Class("wm-size"),
+					wmStepper("W", col, uistate.T("widget.narrower"), uistate.T("widget.wider"),
+						func() { resize(col-1, row) }, func() { resize(col+1, row) }),
+					wmStepper("H", row, uistate.T("widget.shorter"), uistate.T("widget.taller"),
+						func() { resize(col, row-1) }, func() { resize(col, row+1) }),
+				),
 			),
 		),
 		Td(css.Class("wm-col-order"),
-			Div(css.Class("wm-reorder"),
-				Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
-					DisabledIf(props.Index == 0), OnClick(func() {
-						if props.OnUp != nil {
-							props.OnUp()
-						}
-					}), "↑"),
-				Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
-					DisabledIf(props.Index >= props.Total-1), OnClick(func() {
-						if props.OnDown != nil {
-							props.OnDown()
-						}
-					}), "↓"),
+			Div(css.Class("wm-stack"),
+				Span(css.Class("wm-static"), Attr("aria-hidden", "true"), Textf("%d", props.Index+1)),
+				Div(css.Class("wm-reorder"),
+					Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
+						DisabledIf(props.Index == 0), OnClick(func() {
+							if props.OnUp != nil {
+								props.OnUp()
+							}
+						}), "↑"),
+					Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
+						DisabledIf(props.Index >= props.Total-1), OnClick(func() {
+							if props.OnDown != nil {
+								props.OnDown()
+							}
+						}), "↓"),
+				),
 			),
 		),
 	)

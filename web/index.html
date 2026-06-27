@@ -2482,6 +2482,21 @@
         font-size:12px; color:var(--dim,#6b7280); border-left:1px solid var(--line,#e5e7eb);
         border-right:1px solid var(--line,#e5e7eb); padding:0 .2rem; }
       .wm-reorder { display:inline-flex; gap:.3rem; justify-content:center; }
+      /* §8.4 row-action density: the size/order VALUE shows at rest; the resize +
+         reorder CONTROLS overlay it (grid-stacked in the same cell, so no layout
+         shift) and reveal on row hover/focus-within. opacity (not display:none) keeps
+         the controls in the keyboard tab order — focusing one reveals the group and
+         fades the static value via :focus-within. This drops the manager's resting
+         control count ~100 → ~1/row (under the §11 builder ceiling) while the columns
+         still read complete. Reduced-motion users get the global transition-off. */
+      .wm-stack { display: grid; align-items: center; justify-items: start; }
+      .wm-stack > * { grid-area: 1 / 1; }
+      .wm-col-order .wm-stack { justify-items: center; }
+      .wm-static { opacity: 1; color: var(--text-dim); font-variant-numeric: tabular-nums; transition: opacity var(--motion-fast, 120ms) var(--ease-standard, ease); }
+      .wm-size, .wm-reorder { opacity: 0; transition: opacity var(--motion-fast, 120ms) var(--ease-standard, ease); }
+      .wm-row:hover .wm-static, .wm-row:focus-within .wm-static { opacity: 0; }
+      .wm-row:hover .wm-size, .wm-row:hover .wm-reorder,
+      .wm-row:focus-within .wm-size, .wm-row:focus-within .wm-reorder { opacity: 1; }
       .wm-arrow { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
         border:1px solid var(--line,#e5e7eb); border-radius:8px; background:transparent; cursor:pointer;
         color:inherit; line-height:1; transition:background .12s ease, border-color .12s ease; }
