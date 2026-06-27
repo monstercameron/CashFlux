@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C314 [F47]: Serve wasm compressed
+
+### Problem
+`e2e/serve.go` only set `Content-Type: application/wasm` — no `Content-Encoding`, no `Vary`. The 66 MB wasm took ~48 s on a 10 Mbps link cold. The deploy workflow produced no compressed artifacts, so GitHub Pages served it uncompressed as well.
+
+### Decisions
+- **Precompressed sibling first, on-the-fly gzip as fallback:** if a CI build produces `main.wasm.br` / `main.wasm.gz` the server serves them directly at zero CPU cost. When running locally (no siblings), it compresses on the fly with `BestSpeed` (speed over ratio — the transfer win dominates). Brotli on-the-fly was not added since there is no brotli dep in go.mod and adding one would bring a C library; only precompressed `.br` is served.
+- **`compress/gzip` stdlib only:** no new dependencies.
+- **`Vary: Accept-Encoding` unconditional:** always set so intermediate caches never serve a cached compressed response to a client that sent no Accept-Encoding.
+- **sw.js unchanged:** the Cache API operates on decoded (decompressed) response bodies; compressed wasm passes through transparently. No changes needed.
+- **CI: `gzip -9 -k` + `brotli -k -q9`:** keep the original so the job can still inspect/measure it; `-k` avoids accidentally deleting the file that the Pages artifact upload needs. `apt-get install brotli` is fast on ubuntu-latest.
+- **Measured ratio:** 66,052,546 B → 13,709,902 B gzip-9 = **4.8× reduction (79%)**, ~48 s → ~10 s @10 Mbps.
+
+### Test strategy
+Four table-driven/scenario tests in `e2e/serve_compress_test.go` using synthetic 40-byte wasm files (no 66 MB dependency): on-the-fly gzip round-trip, identity path, Vary always present, sibling takes precedence over on-the-fly.
+
 ## 2026-06-27 — C183 [F24]: Monthly round-up savings automation
 
 ### Problem
