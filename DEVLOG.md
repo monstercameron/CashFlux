@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C325 [F50]: In-app support & bug-report section on /help
+
+C325 identified a gap: users have no way to report a bug or give feedback without leaving the app. The /help screen is the natural home — it is already the in-app help center and is reachable from every screen via the top-bar "?" button.
+
+**Implementation.** Added a `supportCard()` function in `help.go` that renders a card titled "Support & feedback". The card body has: a short invite line ("Found a bug, have a feature idea, or just want to say something? We'd love to hear from you.") followed by two `<a>` elements — "Report a bug →" linking to `https://github.com/monstercameron/CashFlux/issues/new` and "Feature requests & feedback →" linking to `https://github.com/monstercameron/CashFlux/issues`. Both links use `target="_blank"` + `rel="noopener noreferrer"` per the pattern already established by the changelog link in `whatsNewCard()`.
+
+The card is inserted in `HelpScreen()` immediately after `whatsNewCard()` — logically grouped with the app-identity section, before the topic FAQ cards. Six new i18n keys under `help.support*` in `en.go`.
+
+No hooks, no state, no JS calls — pure static render. Fully offline-capable.
+
+**Files.** `internal/screens/help.go`, `internal/i18n/en.go`. Build rc=0.
+
 ## 2026-06-27 — C119 [F14]: Income awareness in simple budget mode
 
 The `/budgets` screen's `assignBanner` switch had two cases — `MethodZeroBased` and `MethodEnvelope` — but no `MethodSimple` case, so the default simple mode showed nothing above the budget list. The user had no way to see whether their budgets were sensibly sized relative to their income.

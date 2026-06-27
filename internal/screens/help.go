@@ -82,6 +82,27 @@ func whatsNewCard() ui.Node {
 	return uiw.Card(uiw.CardProps{Title: "What's new", Body: Div(body...)})
 }
 
+// supportCard (C325) renders the "Support & feedback" section: a short invite
+// line and two GitHub links (bug report + feature request) so users always have
+// a reachable path to the project without leaving the app.
+func supportCard() ui.Node {
+	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
+	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.supportInvite")))
+	body = append(body,
+		A(Attr("href", "https://github.com/monstercameron/CashFlux/issues/new"),
+			Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+			Attr("title", uistate.T("help.supportBugTitle")),
+			css.Class(tw.Underline, tw.HoverTextFg),
+			uistate.T("help.supportBugLabel")+" →"))
+	body = append(body,
+		A(Attr("href", "https://github.com/monstercameron/CashFlux/issues"),
+			Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+			Attr("title", uistate.T("help.supportFeatureTitle")),
+			css.Class(tw.Underline, tw.HoverTextFg),
+			uistate.T("help.supportFeatureLabel")+" →"))
+	return uiw.Card(uiw.CardProps{Title: uistate.T("help.supportTitle"), Body: Div(body...)})
+}
+
 // helpTopic renders one help card: a title and one or more plain-English lines.
 func helpTopic(title string, lines ...string) ui.Node {
 	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
@@ -107,6 +128,7 @@ func HelpScreen() ui.Node {
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5),
 		setupChecklist(),
 		whatsNewCard(),
+		supportCard(),
 		helpTopic("Getting started",
 			"Add an account (Accounts → Add account), then record what you spend and earn from the + button or the dashboard's Add transaction.",
 			"Set a budget per category in Budgets, and track savings targets in Goals — the dashboard rolls it all up."),

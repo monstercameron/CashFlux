@@ -2078,6 +2078,15 @@ var english = Catalog{
 	"help.aboutTagline": "CashFlux is a local-first, household-aware budgeting app. Track spending, set budgets and goals, and see where your money goes — all without sending anything to a server.",
 	"help.aboutPrivacy": "Your data is stored on this device and never uploaded or shared. See the privacy section in Help → Your privacy for details.",
 
+	// Support & feedback card (C325) — in-app contact / bug-report / feedback path
+	// so users always have a way to reach the project without leaving the app.
+	"help.supportTitle":      "Support & feedback",
+	"help.supportInvite":     "Found a bug, have a feature idea, or just want to say something? We'd love to hear from you.",
+	"help.supportBugLabel":   "Report a bug",
+	"help.supportBugTitle":   "Open a new issue on GitHub to report a bug",
+	"help.supportFeatureLabel": "Feature requests & feedback",
+	"help.supportFeatureTitle": "Browse or open GitHub issues for feature requests and feedback",
+
 	// C253: cross-link from /subscriptions to /insights so users know where to
 	// find the broader per-category spending anomaly highlights (no AI required).
 	"subs.seeSpendingAnalysis":      "See spending analysis",
