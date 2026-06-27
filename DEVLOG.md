@@ -14397,3 +14397,12 @@ statement.ParseAny import, allocate's per-criterion breakdown) — grounded in r
 (image OCR) is the only feature with no on-device equivalent, routed to R10. Adversarial reviewer
 spot-checked every claim against the codebase: PASS 4/4 (only a precision note to list transactions.go,
 applied). New doc, zero collision. Matches the R29-R34 "SPEC delivered" research-deliverable pattern.
+
+## 2026-06-27 — R22 reconciled DONE (credit-health proxy already shipped)
+R22 ("local credit-health proxy") was unmarked but already implemented: internal/healthscore exposes credit
+utilization as the credit-health proxy (AggUtilizationPct = total card balance / total credit limit; weighted
+0.10 factor applicable iff HasCredit; utilizationScore curve; "under 30%" target + improvement action;
+tested), wired to live accounts in health.go and shown on /health. Ran an adversarial verification: VERDICT
+R22 SATISFIED — local-only, deterministic, explainable, real-data; the ticket asks for a proxy, not a FICO
+replica. Gaps (payment-history + account-age signals) are a legitimate future extension, tracked as its own
+follow-on, not a reason to hold R22 open. Marked [x] with evidence; no app code changed (reconciliation).
