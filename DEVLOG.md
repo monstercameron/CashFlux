@@ -3,6 +3,9 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C204/C205 [F27]: /loans amortization screen
+Built `internal/screens/loans.go` surfacing the committed `payoff.AmortizeFixed` / `AmortizeWithExtra` / `AmortSummary` engine to users. Key design decision: each installment loan card is its own component (`loanCard`) rendered via `ui.CreateElement` so per-card `UseState`/`UseEvent` hooks are at stable positions — the loop over `loans` only builds `loanCardProps` and calls `CreateElement`, never hooks directly. Defaulted term to 60 months for loans/personal-loans, 360 for mortgages (user-editable). Balances read via `ledger.Balance` and negated (liabilities are stored as negative). C205 extra-payment simulation shows months saved, interest saved, new payoff date, and payments left whenever `extraMinor > 0`. No stored term field was needed (C206 scope). Registered `/loans` next to `/credit` in the SubGroupPlan rail. Both `go build -o NUL ./internal/screens` and `go build -o NUL .` exit 0.
+
 ## 2026-06-27 — C208/C209 [F28]: /credit screen — local credit-health proxy surface
 
 The `credithealth` package was fully committed (engine + bands + per-card `CardUtil` + `AggUtil` + `Result`) but completely invisible to users: no route, no nav entry, no screen. This change wires it end-to-end.
