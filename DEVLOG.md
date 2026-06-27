@@ -3,6 +3,14 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C12 [F2]: Draft-review account selector + Import button above the fold for all drafts
+
+The CSV draft-review screen had an above-fold action bar (`topBar`) gated on `len(rows) > 4`. For 1–4 rows the controls only appeared below the table, forcing users to scroll to choose an account or commit the import — a bad default for the common case of importing a handful of transactions.
+
+**Fix.** Changed `len(rows) > 4` to `len(rows) >= 1`. The `!props.ReceiptMode` guard is preserved — receipt mode has its own single-location form where account+merchant belong together. The bottom footer is also preserved for long lists (belt-and-suspenders). Minimal surgical change: one operator token on one line.
+
+**Files.** `internal/screens/documents_draft_review.go`. Build rc=0.
+
 ## 2026-06-27 — C325 [F50]: In-app support & bug-report section on /help
 
 C325 identified a gap: users have no way to report a bug or give feedback without leaving the app. The /help screen is the natural home — it is already the in-app help center and is reachable from every screen via the top-bar "?" button.

@@ -172,7 +172,7 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 	// shares the same handlers and selected-account state as the bottom footer, so
 	// either control imports into the same account.
 	topBar := Fragment()
-	if !props.ReceiptMode && len(rows) > 4 {
+	if !props.ReceiptMode && len(rows) >= 1 {
 		topOpts := make([]ui.Node, 0, len(props.Accounts))
 		for _, a := range props.Accounts {
 			topOpts = append(topOpts, Option(Value(a.ID), SelectedIf(props.ImportAcctID == a.ID), a.Name))
