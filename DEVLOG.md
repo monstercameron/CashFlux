@@ -13650,3 +13650,12 @@ failures 0, TOTAL 14 -> 7, and Dashboard/Transactions/Budgets/Planning/Subscript
 themes. Screenshot confirms the darker green reads rich and professional, not muddy. internal/theme AA tests
 green; dark untouched. Remaining 7 gate fails are marginal edges (stale-account buttons ~4.45, a reports
 count, today's calendar cell) — follow-ups. All in my lane (index.html + internal/theme, both uncontended).
+
+## 2026-06-27 — R69/§12.1: contrast gate hits 0 across all routes, both themes
+Cleared the final marginal AA edges the gate flagged: .hero-stat-value.pos (a green "pos" stat) and the
+calendar today-cell number both used var(--accent) (~4.25-4.41:1) — the stat now uses var(--money-positive)
+and the today number uses var(--text) (today is still obvious via its accent border + 12% tint + bold, so
+no color-only reliance); and the light .btn-stale "Update value/balance/Mark all updated" amber (#b45309,
+4.45:1 on the chip) darkened to #92400e (~6:1). e2e/ux_contrast_audit.mjs now reports TOTAL 0 across all 8
+routes in dark AND light. Net arc this session: raw ~51 -> 0. The §12.1 contrast dimension of the R44/R72
+quality gate passes clean; the gate stays in the repo to keep it that way. All CSS in web/index.html (mine).

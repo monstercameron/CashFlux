@@ -1001,9 +1001,9 @@
          "pos" on no-spend days) but no CSS rendered them, so a negative savings rate read as plain
          white like a healthy one. Color by sign/health so the warning states (short runway, negative
          savings rate) are glanceable — matching the Net/Income/Spending strip directly above. */
-      .hero-stat-value.pos { color: var(--accent); }
+      .hero-stat-value.pos { color: var(--money-positive); }
       .hero-stat-value.neg { color: var(--danger); }
-      [data-theme="light"] .hero-stat-value.pos { color: var(--accent) !important; }
+      [data-theme="light"] .hero-stat-value.pos { color: var(--money-positive) !important; }
       [data-theme="light"] .hero-stat-value.neg { color: var(--danger) !important; }
       /* Dashboard HomeHero band (EC4): the component (internal/screens/homehero.go) ships
          these class names but no CSS existed for the layout wrappers, so the this-month
@@ -1043,7 +1043,7 @@
       /* GD-11: "today" got only an accent border — easy to miss. Add a faint accent wash + bold
          accent day number so the current day reads at a glance (theme-adaptive via color-mix). */
       .cal-cell.today { border-color:var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-      .cal-cell.today .cal-day { color: var(--accent); font-weight: 700; }
+      .cal-cell.today .cal-day { color: var(--text); font-weight: 700; }
       .cal-day { font-size:12px; color:var(--text-dim); }
       .cal-dot { position:absolute; bottom:6px; left:6px; width:7px; height:7px; border-radius:50%; background:var(--danger,#d8716f); }
       /* Bills two-column layout (G11 follow-up): at ≥1024 px the bill list sits on the
@@ -1098,7 +1098,7 @@
          action, not muted chrome. */
       .btn-stale { border: 1px solid #c2870b; color: #d98c00; }
       .btn-stale:hover { background: rgba(245,158,11,0.12); }
-      [data-theme="light"] .btn-stale { color: #b45309; border-color: #d39200; }
+      [data-theme="light"] .btn-stale { color: #92400e; border-color: #d39200; }
 
       /* Account-type glyph slot (G3 §5). */
       .acct-type-icon { display: inline-flex; align-items: center; flex: none; }
