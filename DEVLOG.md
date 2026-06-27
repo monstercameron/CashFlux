@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C39/C46 [F5]: Recent-payee autocomplete in Quick-Add
+
+### Problem
+Quick-Add had no Payee field at all (C46) and no autocomplete (C39). Users had to retype payee
+names every time. `domain.Transaction.Payee` was never populated by the Quick-Add path.
+
+### What I did
+1. **`internal/payees/payees.go`** — New pure package (no `syscall/js`). `RecentPayees(txns []domain.Transaction, limit int) []string` returns distinct payee labels, newest-first, case-insensitive dedup. Prefers `Transaction.Payee`; falls back to `Transaction.Desc` when blank (matches the pattern already used by the rules engine). 10 table-driven tests cover: empty input, blank-skip, Payee-over-Desc preference, Desc fallback, case-insensitive dedup, newest-first ordering, limit, zero-limit (all), whitespace trim, mixed Payee+Desc.
+
+2. **`internal/app/quickadd.go`** — Added `payee` UseState + `onPayee` UseEvent (stable hook positions before the open guard). `reset()` clears the new state. `Transaction.Payee` is now set on save. Added a `Payee` FormField with an Input carrying `list="qa-payees"` and `data-testid="txn-add-payee"`. The `<datalist id="qa-payees">` is built from `payees.RecentPayees(app.Transactions(), 50)` and emitted into the form grid.
+
+3. **`internal/i18n/en_payeeac.go`** — `quickAdd.payee` + `quickAdd.payeePlaceholder` via init-merge pattern (avoids concurrent-WIP `en.go`).
+
+4. **`e2e/c39_payee_autocomplete_check.mjs`** — Opens Quick-Add (Alt+N), asserts `data-testid=txn-add-payee` exists with `list="qa-payees"`, asserts `datalist#qa-payees` is in the DOM. Saves a transaction with a unique payee, re-opens, and verifies the payee appears as a datalist `<option>`. Browser can't expose the native dropdown in headless mode, so we verify the DOM wiring directly.
+
+### Decisions
+- Used native `<datalist>` over a custom combobox — zero JS, fully accessible, browser handles keyboard/mouse navigation. The `ui.Combobox` noted in the feature-review research exists but adds overhead vs the native element which already satisfies C39's goal.
+- Payee field is optional (no `aria-required`), keeping quick entry low-friction.
+- `RecentPayees` lives in `internal/payees` (not `internal/appstate`) to keep it importable from both native tests and the wasm build without pulling in the state layer.
+- Insertion-sort used inside `RecentPayees` — payee lists are small (≤hundreds), near-sorted input is common, and avoiding `sort.Slice` keeps the package import-clean.
+
+### What's next
+C46 follow-on: `reset()` already clears the payee state (included in this commit). Remaining C39/C46 item from TODOS (2581): done.
+
 ## 2026-06-27 — C299 [F44]: "Last backed up" timestamp in Settings → Data
 
 ### Problem

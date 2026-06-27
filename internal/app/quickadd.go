@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/payees"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/smarttext"
@@ -38,6 +39,7 @@ func QuickAddHost() uic.Node {
 	acctID := uic.UseState("")
 	kind := uic.UseState("Expense")
 	amount := uic.UseState("")
+	payee := uic.UseState("")
 	desc := uic.UseState("")
 	catID := uic.UseState("")
 	date := uic.UseState("")
@@ -46,6 +48,7 @@ func QuickAddHost() uic.Node {
 	onReviewed := uic.UseEvent(func(e uic.Event) { reviewed.Set(e.IsChecked()) })
 	onAcct := uic.UseEvent(func(e uic.Event) { acctID.Set(e.GetValue()) })
 	onAmount := uic.UseEvent(func(v string) { amount.Set(v) })
+	onPayee := uic.UseEvent(func(v string) { payee.Set(v) })
 	onDesc := uic.UseEvent(func(v string) { desc.Set(v) })
 	onCat := uic.UseEvent(func(e uic.Event) { catID.Set(e.GetValue()) })
 	onDate := uic.UseEvent(func(v string) { date.Set(v) })
@@ -103,6 +106,7 @@ func QuickAddHost() uic.Node {
 		acctID.Set("")
 		kind.Set("Expense")
 		amount.Set("")
+		payee.Set("")
 		desc.Set("")
 		catID.Set("")
 		date.Set("")
@@ -143,9 +147,9 @@ func QuickAddHost() uic.Node {
 			member = acc.OwnerID
 		}
 		t := domain.Transaction{
-			ID: id.New(), AccountID: acc.ID, Date: d, Desc: strings.TrimSpace(desc.Get()),
-			CategoryID: catID.Get(), Amount: money.New(amt, acc.Currency), MemberID: member,
-			Reviewed: reviewed.Get(),
+			ID: id.New(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
+			Desc: strings.TrimSpace(desc.Get()), CategoryID: catID.Get(),
+			Amount: money.New(amt, acc.Currency), MemberID: member, Reviewed: reviewed.Get(),
 		}
 		// Apply auto-categorization rules on save (it won't overwrite a manual
 		// category). Quick-add is now the sole manual-add path after the inline
@@ -241,10 +245,21 @@ func QuickAddHost() uic.Node {
 		formValid = false
 	}
 
+	// C39/C46: build a datalist of recent payees (distinct, newest-first, ≤50) so the
+	// Payee input offers autocomplete suggestions without constraining the user to them.
+	recentPayees := payees.RecentPayees(app.Transactions(), 50)
+	payeeDatalistArgs := make([]any, 0, len(recentPayees)+1)
+	payeeDatalistArgs = append(payeeDatalistArgs, Attr("id", "qa-payees"))
+	for _, p := range recentPayees {
+		payeeDatalistArgs = append(payeeDatalistArgs, Option(Value(p)))
+	}
+	payeeDatalist := Datalist(payeeDatalistArgs...)
+
 	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
 	// Wrap each in ui.FormField so they render a visible caption above the control,
 	// matching the .labeled-field pattern used by all entity add modals.
 	body := Div(css.Class("form-grid"),
+		payeeDatalist,
 		ui.FormField(uistate.T("quickAdd.account"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
 		ui.Segmented(ui.SegmentedProps{
@@ -258,6 +273,8 @@ func QuickAddHost() uic.Node {
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
 			Input(css.Class("field"), Type("number"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+		ui.FormField(uistate.T("quickAdd.payee"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), Value(payee.Get()), OnInput(onPayee))),
 		ui.FormField(uistate.T("quickAdd.description"),
 			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
 		descAssist,
