@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // runDueScheduledWorkflowsOnBoot runs every enabled scheduled workflow whose
@@ -38,6 +39,25 @@ func runDueScheduledWorkflowsOnBoot() {
 	}
 	if nf > 0 {
 		app.Log().Info("auto-accrued sinking funds on boot", "count", nf)
+		if resaveDataset != nil {
+			resaveDataset()
+		}
+	}
+
+	// C184: monthly surplus sweep — move leftover balance above the configured
+	// buffer from the source account to the savings destination, once per month.
+	p := uistate.LoadPrefs()
+	cfg := appstate.SweepConfigFromPrefs(p)
+	ns, updatedPrefs, err := app.RunDueSweeps(now, cfg, p)
+	if err != nil {
+		app.Log().Error("boot run of surplus sweep failed", "err", err)
+		return
+	}
+	if ns > 0 {
+		app.Log().Info("surplus sweep executed on boot", "count", ns)
+		// Persist the updated SweepLastPeriod guard so the sweep doesn't repeat
+		// in this calendar month even after a reload.
+		uistate.PersistPrefs(updatedPrefs)
 		if resaveDataset != nil {
 			resaveDataset()
 		}

@@ -124,6 +124,26 @@ type Prefs struct {
 	// safe-to-spend) in preference to the transaction-derived income figure.
 	// Zero means unset — fall back to summing income transactions for the period.
 	MonthlyIncomeMinor int64 `json:"monthlyIncomeMinor,omitempty"`
+
+	// SweepEnabled turns on the monthly surplus-sweep job. When false (the
+	// default), RunDueSweeps is a no-op even if the other sweep fields are set.
+	SweepEnabled bool `json:"sweepEnabled,omitempty"`
+	// SweepFromAccountID is the source account whose surplus is swept each month
+	// (typically a checking account). Empty means the sweep is disabled.
+	SweepFromAccountID string `json:"sweepFromAccountId,omitempty"`
+	// SweepToAccountID is the destination savings account that receives the
+	// swept surplus. Empty means the sweep is disabled.
+	SweepToAccountID string `json:"sweepToAccountId,omitempty"`
+	// SweepBufferMinor is the minimum balance (in the source account's minor
+	// currency units) to keep in the source account after a sweep. The sweep
+	// only transfers the amount above this floor, so the source account always
+	// retains at least SweepBufferMinor. Zero means no floor — sweep the full surplus.
+	SweepBufferMinor int64 `json:"sweepBufferMinor,omitempty"`
+	// SweepLastPeriod is the PeriodKey("monthly") value for the most recent
+	// month in which a sweep was successfully executed. It acts as a once-per-month
+	// guard: RunDueSweeps skips the sweep when SweepLastPeriod equals the
+	// current month's period key. Format: "2006-01".
+	SweepLastPeriod string `json:"sweepLastPeriod,omitempty"`
 }
 
 // BackendActive reports whether the app should talk to the backend: a server URL

@@ -60,6 +60,10 @@ func Workflows() ui.Node {
 		// the user's most likely first action is visible before the general
 		// workflow builder, which is a lower-level tool.
 		ui.CreateElement(pyfForm, pyfFormProps{Refresh: refresh}),
+		// C184: Surplus-sweep config card sits in the same "Savings automations"
+		// area, immediately after pay-yourself-first, so both auto-save templates
+		// are discoverable in one place.
+		ui.CreateElement(sweepForm, sweepFormProps{Refresh: refresh}),
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: yoursTitle,
@@ -202,6 +206,172 @@ func pyfForm(props pyfFormProps) ui.Node {
 			),
 		),
 	})
+}
+
+// sweepFormProps passes the refresh callback into the surplus-sweep config card.
+type sweepFormProps struct{ Refresh func() }
+
+// sweepForm is the C184 surplus-sweep configuration card. It reads the current
+// sweep prefs, lets the user enable/disable the sweep and choose the source
+// account, destination account, and buffer floor. Saving writes directly to
+// localStorage via uistate.PersistPrefs — the same path used by the appearance
+// and date-format prefs. The boot-time RunDueSweeps reads these on next startup.
+//
+// Its own component so all UseState/UseEvent hooks sit at stable render
+// positions, satisfying the framework's no-hooks-in-loops rule.
+func sweepForm(_ sweepFormProps) ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	dec := currency.Decimals(base)
+
+	// Seed form state from persisted prefs so the card always reflects the
+	// currently saved config, even after a reload.
+	p := uistate.LoadPrefs()
+
+	enabled := ui.UseState(p.SweepEnabled)
+	fromID := ui.UseState(p.SweepFromAccountID)
+	toID := ui.UseState(p.SweepToAccountID)
+	bufStr := ui.UseState(func() string {
+		if p.SweepBufferMinor > 0 {
+			return money.FormatMinor(p.SweepBufferMinor, dec)
+		}
+		return ""
+	}())
+	msg := ui.UseState("")
+	saved := ui.UseState(false)
+
+	onEnabled := ui.UseEvent(func(e ui.Event) {
+		enabled.Set(e.IsChecked())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onFrom := ui.UseEvent(func(e ui.Event) {
+		fromID.Set(e.GetValue())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onTo := ui.UseEvent(func(e ui.Event) {
+		toID.Set(e.GetValue())
+		msg.Set("")
+		saved.Set(false)
+	})
+	onBuf := ui.UseEvent(func(v string) {
+		bufStr.Set(v)
+		msg.Set("")
+		saved.Set(false)
+	})
+
+	save := func() {
+		from := fromID.Get()
+		to := toID.Get()
+		en := enabled.Get()
+		if en {
+			if from == "" {
+				msg.Set(uistate.T("workflows.sweepNeedFrom"))
+				return
+			}
+			if to == "" {
+				msg.Set(uistate.T("workflows.sweepNeedTo"))
+				return
+			}
+			if from == to {
+				msg.Set(uistate.T("workflows.sweepSameAccount"))
+				return
+			}
+		}
+		var buf int64
+		raw := strings.TrimSpace(bufStr.Get())
+		if raw != "" {
+			v, err := money.ParseMinor(raw, dec)
+			if err != nil || v < 0 {
+				msg.Set(uistate.T("workflows.sweepBadBuffer"))
+				return
+			}
+			buf = v
+		}
+
+		cur := uistate.LoadPrefs()
+		cur.SweepEnabled = en
+		cur.SweepFromAccountID = from
+		cur.SweepToAccountID = to
+		cur.SweepBufferMinor = buf
+		// SweepLastPeriod is intentionally NOT reset here — clearing it would
+		// cause an immediate re-sweep on the next boot even if one already
+		// ran this month. The user can disable+re-enable to force a re-run.
+		uistate.PersistPrefs(cur)
+		uistate.SetPrefs(cur)
+		msg.Set("")
+		saved.Set(true)
+	}
+
+	// Account option lists.
+	fromNone := Option(Value(""), SelectedIf(fromID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	toNone := Option(Value(""), SelectedIf(toID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	var fromOpts, toOpts []ui.Node
+	fromOpts = append(fromOpts, fromNone)
+	toOpts = append(toOpts, toNone)
+	for _, ac := range app.Accounts() {
+		if ac.Archived {
+			continue
+		}
+		label := ac.Name + " (" + string(ac.Type) + ")"
+		fromOpts = append(fromOpts, Option(Value(ac.ID), SelectedIf(fromID.Get() == ac.ID), label))
+		toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(toID.Get() == ac.ID), label))
+	}
+
+	bufPlaceholder := uistate.T("workflows.sweepBuffer", base)
+
+	return Fragment(
+		Hr(css.Class(tw.Mt2)),
+		// Surplus-sweep section title + description.
+		P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.sweepTitle")),
+		P(css.Class("muted"), uistate.T("workflows.sweepDesc")),
+		// Enable toggle.
+		Div(css.Class("toggle-row", tw.Mt2),
+			Label(css.Class("checkbox-label"),
+				Input(
+					Type("checkbox"),
+					Attr("aria-label", uistate.T("workflows.sweepEnable")),
+					CheckedIf(enabled.Get()),
+					OnChange(onEnabled),
+				),
+				Text(" "+uistate.T("workflows.sweepEnable")),
+			),
+		),
+		// Account + buffer inputs (always visible so the user can configure
+		// before enabling — identical UX pattern to the PYF form above).
+		Div(css.Class("form-grid", tw.Mt2),
+			Select(css.Class("field"),
+				Attr("aria-label", uistate.T("workflows.sweepFrom")),
+				OnChange(onFrom),
+				fromOpts,
+			),
+			Select(css.Class("field"),
+				Attr("aria-label", uistate.T("workflows.sweepTo")),
+				OnChange(onTo),
+				toOpts,
+			),
+			Input(css.Class("field"),
+				Attr("placeholder", bufPlaceholder),
+				Attr("aria-label", bufPlaceholder),
+				Attr("inputmode", "decimal"),
+				Value(bufStr.Get()),
+				OnInput(onBuf),
+			),
+		),
+		If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
+		If(saved.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.sweepSaved"))),
+		Div(css.Class(tw.Mt2),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.sweepSave")),
+		),
+	)
 }
 
 type addWorkflowFormProps struct{ Refresh func() }

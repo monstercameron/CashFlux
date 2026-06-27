@@ -1411,15 +1411,19 @@ var english = Catalog{
 	"accounts.markClearedTitle":       "Mark this transaction cleared",
 
 	// Dashboard
-	"dashboard.netWorth":               "Net worth",
-	"dashboard.netWorthConverted":      "converted to %s",
-	"dashboard.trendSoFar":             "(so far)",
-	"dashboard.netWorthTrend":          "Net worth trend",
-	"dashboard.income":                 "Income",
-	"dashboard.spending":               "Spending",
-	"dashboard.liabilities":            "Liabilities",
-	"dashboard.assets":                 "Assets",
-	"dashboard.savingsRate":            "Savings rate",
+	"dashboard.netWorth":          "Net worth",
+	"dashboard.netWorthConverted": "converted to %s",
+	"dashboard.trendSoFar":        "(so far)",
+	"dashboard.netWorthTrend":     "Net worth trend",
+	"dashboard.income":            "Income",
+	"dashboard.spending":          "Spending",
+	"dashboard.liabilities":       "Liabilities",
+	"dashboard.assets":            "Assets",
+	"dashboard.savingsRate":       "Savings rate",
+	// R15/C139: glanceable safe-to-spend KPI tile.
+	"dashboard.safeToSpend":            "Safe to spend",
+	"dashboard.safeToSpendSub":         "Liquid cash, after bills & goals this period",
+	"dashboard.safeToSpendOver":        "Over — bills & goals exceed your cash",
 	"dashboard.healthScore":            "Financial health",
 	"dashboard.cashFlow":               "Cash flow",
 	"reports.net":                      "Net",
@@ -2117,6 +2121,21 @@ var english = Catalog{
 	"workflows.pyfSameAccount":    "Source and destination must be different accounts.",
 	"workflows.pyfNeedAmount":     "Enter a positive amount.",
 	"workflows.pyfCreated":        "Auto-save set up — transfers will start next period.",
+
+	// C184 [F24]: surplus-sweep automation — monthly job that moves the balance
+	// above the configured buffer floor from a source to a savings account.
+	"workflows.sweepTitle":       "Surplus sweep",
+	"workflows.sweepDesc":        "Once a month, any balance above your set floor is automatically swept into your savings account — so extra cash doesn't just sit idle.",
+	"workflows.sweepEnable":      "Enable monthly surplus sweep",
+	"workflows.sweepFrom":        "Sweep from (source account)",
+	"workflows.sweepTo":          "Sweep to (savings account)",
+	"workflows.sweepBuffer":      "Keep at least (%s)",
+	"workflows.sweepSave":        "Save sweep settings",
+	"workflows.sweepSaved":       "Sweep settings saved — runs automatically at the start of each month.",
+	"workflows.sweepNeedFrom":    "Choose a source account.",
+	"workflows.sweepNeedTo":      "Choose a savings destination.",
+	"workflows.sweepSameAccount": "Source and destination must be different accounts.",
+	"workflows.sweepBadBuffer":   "Enter a valid non-negative amount for the floor.",
 
 	// Setup checklist — C23 [MAJOR F3]: surface base currency + week-start as the
 	// first first-run step so new users can find and confirm these early. The label
