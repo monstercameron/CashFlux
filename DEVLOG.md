@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C304: frame Cloud & server as subscription/connection surface
+
+**Problem:** The "Cloud & server" section in Settings opened directly with a data-disclosure line and raw backend connection controls (toggle, server-mode segment, URL input, token field). There was no sentence explaining *what* the section is for. A first-time user could easily read it as a developer infrastructure panel rather than as the place to connect CashFlux Cloud (for sync + automatic encrypted backups + bundled AI) or point to their own self-hosted server.
+
+**Fix:** Added a single `P` element immediately after the "Cloud & server" `H4` heading in `settingsRightColumn` (`internal/app/settings_section.go`). The text names the three concrete benefits (sync, backups, bundled AI), mentions the self-host option, and ends with the reassurance that the rest of the app stays free and local either way. This orients the user before they encounter any controls.
+
+**Design decisions:**
+- Placed *before* the C291 data-disclosure line (which explains what leaves the device when sync is on). The framing sentence answers "what is this for?" first; the data-disclosure answers "what does it transmit?" second — the right reading order.
+- Used the same `tw.TextFaint, tw.Text12, tw.Mt1` style as adjacent muted explainer lines — consistent with `settings.aiKeyTrust`, `settings.cloudDataDisclosure`, etc.
+- Reused the `settings.*` namespace; key is `settings.cloudSectionIntro`.
+
+**New i18n key:** `settings.cloudSectionIntro` — "Connect CashFlux Cloud for sync, automatic encrypted backups, and bundled AI across your devices — or point to your own self-hosted server. The rest of the app stays free and local either way."
+
+**Tests:** `go test ./internal/i18n/` passes. `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C97: image type and size validation before vision upload
 
 **Problem:** `pickImageDataURL` in `internal/screens/documents.go` read any chosen file into a base64 data URL and set `imageURL` state unconditionally, with no checks on MIME type or file size. A user could accidentally select a 50 MB raw photo, a PDF, or a non-image file, causing a confusing downstream failure (vision API rejects, or slow/expensive encoding with no useful result).

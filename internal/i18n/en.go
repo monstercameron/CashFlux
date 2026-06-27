@@ -986,6 +986,8 @@ var english = Catalog{
 	"settings.rememberKey":       "Remember my key on this device",
 	"settings.rememberKeyNote":   "Off by default: your key is kept only for this session. Turn on to save it (unencrypted) in this browser so AI stays on after a reload.",
 	"settings.backendTitle":          "Cloud & server",
+	// C304: frame the section as the subscription/connection surface, not raw infra.
+	"settings.cloudSectionIntro":     "Connect CashFlux Cloud for sync, automatic encrypted backups, and bundled AI across your devices — or point to your own self-hosted server. The rest of the app stays free and local either way.",
 	"settings.cloudDataDisclosure":   "When sync is on, your encrypted financial data (accounts, transactions, budgets, and more) is sent to the server you configure. When sync is off, everything stays on this device — nothing is transmitted.",
 	"settings.backendURL":            "Backend URL",
 	"settings.backendToken":      "Backend bearer token",

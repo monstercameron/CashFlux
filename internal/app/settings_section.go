@@ -202,6 +202,11 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// 4 · Cloud & server — power-user sync config after AI.
 		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
+		// C304: framing line — communicates this section as the subscription/connection
+		// surface (sync + backup + bundled AI, self-host option), not raw infrastructure.
+		// Placed immediately after the heading so the user's first question ("what is this
+		// for?") is answered before they see any controls.
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudSectionIntro")),
 		// C291: always-visible data-disclosure — what leaves the device when sync is on
 		// vs. off. Shown before the toggle so the user sees the trade-off before acting.
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudDataDisclosure")),
