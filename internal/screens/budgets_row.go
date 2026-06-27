@@ -151,8 +151,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						OnChange:  func(v string) { ownerS.Set(v) },
 						AriaLabel: uistate.T("common.owner"),
 					})),
-				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Input(append([]any{Type("checkbox"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
+				// C117: prevent the label from wrapping the checkbox away from its text
+				// at narrow widths (≤1280px). flex-wrap:nowrap keeps checkbox + label
+				// on one line; flex-shrink:0 on the checkbox prevents it from being
+				// squeezed to zero under extreme constraints.
+				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
+					Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 					Span(uistate.T("budgets.rollover")),
 				),
 				// C138: explain what rollover actually does, with a concrete example, so it's

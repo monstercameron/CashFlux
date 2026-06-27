@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C117 (rollover checkbox label wrap fix)
+
+The budget edit form's rollover Label uses `tw.Flex + tw.ItemsCenter` (display:flex,
+align-items:center). Without `flex-wrap:nowrap`, browsers can wrap flex children at
+narrow container widths — around 1280px the checkbox ended up on its own line, visually
+detached from the "Roll over" text even though the HTML label element still wraps both
+(so click-area semantics remained intact, but visually it looked broken).
+
+Fix: `Attr("style", "flex-wrap:nowrap")` on the Label + `Attr("style", "flex-shrink:0")`
+on the Input so the checkbox can't be squeezed. Two inline styles, no new CSS classes
+needed. This pattern mirrors how the transactions row handles wrapping controls.
+
 ## 2026-06-27 — C130 (custom date-range hint on /budgets)
 
 The date-range control is a global top-bar atom that sets the view window for period-aware
