@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C255: VERIFY-CLOSE — Smart enabled-state persistence confirmed correct
+
+**Concern (C255):** C254 just changed `LoadSmartSettings` to seed Free features on first load. The question was: does toggling a smart setting actually call `SaveSmartSettings` and persist to KV, and does `LoadSmartSettings` restore it on a fresh session?
+
+**Trace:**
+
+1. `LoadSmartSettings` reads from `SettingKVGet(smartSettingsKey)`, which uses the PRESERVED settings KV (survives session reloads and data wipes). On an empty KV (first session), seeds Free features via `EnableFreeOnly` and calls `SaveSmartSettings` immediately — consistent state from the first render onward.
+
+2. Feature toggle in `smartFeatureRow.onChange` calls `uistate.SetSmartFeatureEnabled(code, on)`, which does `LoadSmartSettings().SetEnabled(...) → SaveSmartSettings(s)` → `SettingKVSet(smartSettingsKey, json)`. No in-memory-only update path exists.
+
+3. All bulk controls (`EnableAllSmart`, `DisableAllSmart`, `EnableFreeSmart`, `SetSmartDensity`, `SetSmartMuted`, `SetSmartCadence`, `MarkSmartRun`, `SetSmartResult`) follow the same load→mutate→save→SettingKVSet pattern. No path updates in-memory and skips the persist.
+
+4. `TestSettingsJSONRoundTrip` (already in `internal/smart/smart_test.go` as of C254) covers the full marshal→unmarshal cycle for every field, confirming no data is lost across the serialization boundary.
+
+**Verdict:** No code gap. C255 is resolved entirely by C254's seeding logic. The persistence loop was correct before C255 was filed (toggles always called SaveSmartSettings); the only risk was the first-session path returning a zero value without persisting, which C254 sealed. Closing as VERIFY-CLOSE with no code changes.
+
+**Tests:** `go test ./internal/smart/...` (all pass including `TestSettingsJSONRoundTrip`). `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C254: Free SMART insights on by default for new users
 
 **Problem (C254):** A brand-new user opening the app saw zero smart insights across every screen, even though the `smart.Settings.IsEnabled` logic already returns `true` for Free-tier features on a zero (unset) value. The bug was that `LoadSmartSettings` returned `smart.Settings{}` when the KV key was absent, which is correct in-memory but left the persistent store empty. Worse, the function's comment said "everything OFF — the safe default" which directly contradicted `settings.go`'s design doc ("Free features are enabled by default"). The same wrong claim appeared in the `smart.go` package-level comment.
