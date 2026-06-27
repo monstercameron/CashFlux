@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C185/C188 [F24]: pay-yourself-first savings automation template + framing
+
+**Problem.** C185: the previous "pay yourself first" path (if any) was a single-leg autopost — no actual money movement. C188: the auto-save concept was completely invisible on the Workflows screen; users had no framed entry point.
+
+**Design choice: separate `CreatePayYourselfFirstWorkflow` vs inline in the UI.** The UI needed to pass explicit from/to accounts (user picks both), a variable cadence, and an arbitrary amount — none of those match `CreateWorkflowFromGoal` which auto-picks the source and locks to monthly. Added `CreatePayYourselfFirstWorkflow(fromID, toID string, amountMinor int64, cadence domain.RecurringCadence)` to `savings_ops.go` rather than building inline in the view, keeping business logic out of the screen layer.
+
+**DedupeKey convention.** Followed the existing `pyf:<wfID>:<YYYY-MM>` pattern from `CreateWorkflowFromGoal`. For weekly cadence the initial `nextRun` is computed as the next Sunday (7 - weekday offset). The DedupeKey month fragment is set at creation time; the apply layer will update it at run time per the existing convention.
+
+**UI structure.** `pyfForm` is its own component (not a closure inside `Workflows()`) so all UseState/UseEvent hooks sit at stable render positions. The framing description (C188) is placed as the first section on the screen, before the general workflow builder, so "savings automations" read as the primary feature for the typical user who wants to set up a recurring transfer. Account selects list all non-archived accounts with type labels so the user can distinguish checking from savings without knowing internal IDs.
+
+**Scope discipline.** Round-up and surplus-sweep are still deferred (C183/C184) — they require computed-amount effects and a different UX interaction model. This commit stays focused: framing + PYF template only.
+
+**Build.** GOOS=js GOARCH=wasm go build exits 0 for both `./internal/appstate` and `./internal/screens`. All `go test ./internal/appstate/ -run Workflow` tests pass (8/8 PASS).
+
 ## 2026-06-27 — C244/C245/C246: no-key localqa chat + Send button + error reset
 
 Three small tickets that together make the /insights chat usable without an API key.

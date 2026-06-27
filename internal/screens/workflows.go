@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
+	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -54,6 +56,10 @@ func Workflows() ui.Node {
 	}
 
 	return Div(
+		// C188: savings automations framing + PYF template (C185) come first so
+		// the user's most likely first action is visible before the general
+		// workflow builder, which is a lower-level tool.
+		ui.CreateElement(pyfForm, pyfFormProps{Refresh: refresh}),
 		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: yoursTitle,
@@ -61,6 +67,141 @@ func Workflows() ui.Node {
 		}),
 		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
 	)
+}
+
+// pyfFormProps passes the refresh callback into the pay-yourself-first form.
+type pyfFormProps struct{ Refresh func() }
+
+// pyfForm is the savings automations section (C188) with the pay-yourself-first
+// template (C185). It creates a scheduled ActionTransfer workflow so money moves
+// from a source account to a savings account on the chosen cadence — a real
+// two-leg transfer, not a single-leg autopost.
+//
+// Its own component so all UseState/UseEvent hooks sit at stable render positions,
+// satisfying the framework's no-hooks-in-loops rule even when the account list
+// changes length.
+func pyfForm(props pyfFormProps) ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	dec := currency.Decimals(base)
+
+	fromID := ui.UseState("")
+	toID := ui.UseState("")
+	amtStr := ui.UseState("")
+	cadence := ui.UseState(string(domain.CadenceMonthly))
+	msg := ui.UseState("")
+	success := ui.UseState(false)
+
+	onFrom := ui.UseEvent(func(e ui.Event) { fromID.Set(e.GetValue()); msg.Set(""); success.Set(false) })
+	onTo := ui.UseEvent(func(e ui.Event) { toID.Set(e.GetValue()); msg.Set(""); success.Set(false) })
+	onAmt := ui.UseEvent(func(v string) { amtStr.Set(v); msg.Set(""); success.Set(false) })
+	onCadence := ui.UseEvent(func(e ui.Event) { cadence.Set(e.GetValue()) })
+
+	save := func() {
+		app := appstate.Default
+		from := fromID.Get()
+		to := toID.Get()
+		if from == "" {
+			msg.Set(uistate.T("workflows.pyfNeedFrom"))
+			return
+		}
+		if to == "" {
+			msg.Set(uistate.T("workflows.pyfNeedTo"))
+			return
+		}
+		if from == to {
+			msg.Set(uistate.T("workflows.pyfSameAccount"))
+			return
+		}
+		amt, err := money.ParseMinor(strings.TrimSpace(amtStr.Get()), dec)
+		if err != nil || amt <= 0 {
+			msg.Set(uistate.T("workflows.pyfNeedAmount"))
+			return
+		}
+		cad := domain.RecurringCadence(cadence.Get())
+		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
+			msg.Set(err.Error())
+			return
+		}
+		// Reset form on success.
+		fromID.Set("")
+		toID.Set("")
+		amtStr.Set("")
+		cadence.Set(string(domain.CadenceMonthly))
+		msg.Set("")
+		success.Set(true)
+		if props.Refresh != nil {
+			props.Refresh()
+		}
+	}
+
+	// Build account option lists for from/to selects. All non-archived accounts
+	// are offered; the user chooses the appropriate source and destination.
+	fromNone := Option(Value(""), SelectedIf(fromID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	toNone := Option(Value(""), SelectedIf(toID.Get() == ""), uistate.T("workflows.pyfChooseAccount"))
+	var fromOpts, toOpts []ui.Node
+	fromOpts = append(fromOpts, fromNone)
+	toOpts = append(toOpts, toNone)
+	for _, ac := range app.Accounts() {
+		if ac.Archived {
+			continue
+		}
+		label := ac.Name + " (" + string(ac.Type) + ")"
+		fromOpts = append(fromOpts, Option(Value(ac.ID), SelectedIf(fromID.Get() == ac.ID), label))
+		toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(toID.Get() == ac.ID), label))
+	}
+
+	amtPlaceholder := uistate.T("workflows.pyfAmount", base)
+
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("workflows.savingsTitle"),
+		Body: Fragment(
+			// C188 framing: tell the user why this section exists before showing
+			// a form, so it doesn't appear as just another workflow builder.
+			P(css.Class("muted"), uistate.T("workflows.savingsDesc")),
+			Hr(css.Class(tw.Mt2)),
+			// Pay-yourself-first template.
+			P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.pyfTitle")),
+			P(css.Class("muted"), uistate.T("workflows.pyfDesc")),
+			Div(css.Class("form-grid", tw.Mt2),
+				Select(css.Class("field"),
+					Attr("aria-label", uistate.T("workflows.pyfFrom")),
+					OnChange(onFrom),
+					fromOpts,
+				),
+				Select(css.Class("field"),
+					Attr("aria-label", uistate.T("workflows.pyfTo")),
+					OnChange(onTo),
+					toOpts,
+				),
+				Input(css.Class("field"),
+					Attr("placeholder", amtPlaceholder),
+					Attr("aria-label", amtPlaceholder),
+					Attr("inputmode", "decimal"),
+					Value(amtStr.Get()),
+					OnInput(onAmt),
+				),
+				Select(css.Class("field"),
+					Attr("aria-label", uistate.T("workflows.pyfCadence")),
+					OnChange(onCadence),
+					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.pyfCadenceWeekly")),
+					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.pyfCadenceMonthly")),
+				),
+			),
+			If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
+			If(success.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.pyfCreated"))),
+			Div(css.Class(tw.Mt2),
+				Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.pyfSave")),
+			),
+		),
+	})
 }
 
 type addWorkflowFormProps struct{ Refresh func() }

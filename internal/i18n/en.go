@@ -2043,6 +2043,25 @@ var english = Catalog{
 	"workflows.varTxnPayee":       "Transaction payee / description text",
 	"workflows.varTxnCategory":    "Transaction category name",
 
+	// C185/C188 — Savings automations: pay-yourself-first template + framing
+	"workflows.savingsTitle":       "Savings automations",
+	"workflows.savingsDesc":        "Move money to savings automatically on a schedule. Set it up once and you pay yourself first — before any other spending has a chance to eat into it.",
+	"workflows.pyfTitle":           "Pay yourself first",
+	"workflows.pyfDesc":            "Pick a source account, a savings destination, an amount, and how often — then save. A scheduled transfer will run automatically.",
+	"workflows.pyfFrom":            "From (source account)",
+	"workflows.pyfTo":              "To (savings account)",
+	"workflows.pyfAmount":          "Amount (%s)",
+	"workflows.pyfCadence":         "How often",
+	"workflows.pyfCadenceWeekly":   "Weekly",
+	"workflows.pyfCadenceMonthly":  "Monthly",
+	"workflows.pyfSave":            "Set up auto-save",
+	"workflows.pyfChooseAccount":   "— Choose account —",
+	"workflows.pyfNeedFrom":        "Choose a source account.",
+	"workflows.pyfNeedTo":          "Choose a savings destination.",
+	"workflows.pyfSameAccount":     "Source and destination must be different accounts.",
+	"workflows.pyfNeedAmount":      "Enter a positive amount.",
+	"workflows.pyfCreated":         "Auto-save set up — transfers will start next period.",
+
 	// Help / About card (C293) — plain-English identity + privacy context for the
 	// What's new card so it goes beyond a bare version + changelog link.
 	"help.aboutTagline": "CashFlux is a local-first, household-aware budgeting app. Track spending, set budgets and goals, and see where your money goes — all without sending anything to a server.",

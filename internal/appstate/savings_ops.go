@@ -100,6 +100,76 @@ func (a *App) CreateWorkflowFromGoal(goalID string, monthlyAmount int64) (workfl
 	return wf, nil
 }
 
+// CreatePayYourselfFirstWorkflow builds and persists a pay-yourself-first (PYF)
+// scheduled workflow with explicitly supplied accounts. Unlike
+// CreateWorkflowFromGoal (which auto-picks the funding account from a goal),
+// this variant is driven from the UI where the user has chosen both the source
+// (from) and destination (to) accounts and the cadence.
+//
+// The workflow is named "Pay yourself first → <to-account name>" and the
+// DedupeKey follows the same "pyf:<workflowID>:<YYYY-MM>" convention so the
+// same period never transfers twice even if the scheduled runner fires more than
+// once within a month.
+func (a *App) CreatePayYourselfFirstWorkflow(fromID, toID string, amountMinor int64, cadence domain.RecurringCadence) (workflow.Workflow, error) {
+	if fromID == "" {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: source account is required")
+	}
+	if toID == "" {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: destination account is required")
+	}
+	if fromID == toID {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: source and destination must be different accounts")
+	}
+	if amountMinor <= 0 {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: amount must be positive, got %d", amountMinor)
+	}
+
+	// Resolve the destination account name for the workflow label.
+	toName := toID
+	for _, ac := range a.Accounts() {
+		if ac.ID == toID {
+			toName = ac.Name
+			break
+		}
+	}
+
+	wfID := id.New()
+	now := a.clock()
+	nextRun := firstOfNextMonth(now)
+	if cadence == domain.CadenceWeekly {
+		nextRun = now.AddDate(0, 0, 7-int(now.Weekday()))
+	}
+
+	act := workflow.Action{
+		Kind:                  workflow.ActionTransfer,
+		TransferFromAccountID: fromID,
+		TransferToAccountID:   toID,
+		TransferAmount:        amountMinor,
+		DedupeKey:             "pyf:" + wfID + ":" + now.Format("2006-01"),
+	}
+	if err := workflow.ValidateTransferAction(act, workflow.TriggerScheduled); err != nil {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: %w", err)
+	}
+
+	wf := workflow.Workflow{
+		ID:      wfID,
+		Name:    "Pay yourself first → " + toName,
+		Enabled: true,
+		Trigger: workflow.Trigger{
+			Kind:    workflow.TriggerScheduled,
+			Cadence: cadence,
+			NextRun: nextRun,
+		},
+		Actions: []workflow.Action{act},
+	}
+
+	if err := a.PutWorkflow(wf); err != nil {
+		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: save workflow: %w", err)
+	}
+	a.log.Info("pay-yourself-first workflow created", "workflow", wf.ID, "from", fromID, "to", toID, "amount", amountMinor, "cadence", cadence)
+	return wf, nil
+}
+
 // pickFundingAccount returns the ID of the best funding account: the first
 // non-archived asset account (not equal to excludeID), giving preference to
 // checking and debit account types (most liquid) over savings and other types.
