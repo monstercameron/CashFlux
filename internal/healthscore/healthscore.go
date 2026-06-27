@@ -37,6 +37,13 @@ const (
 // below this the result is BandNoData (one factor isn't a "health" picture).
 const minApplicable = 2
 
+// negativeCashFlowPenalty is a flat deduction (C261) applied to the overall score
+// when the household's trailing savings rate is negative. It is a soft nudge, not
+// a hard floor: a deficit shouldn't be invisible just because the savings factor
+// alone already scored 0, but neither should it cliff the headline to "Critical"
+// when the rest of the picture is strong. Subtracted after the weighted average.
+const negativeCashFlowPenalty = 15
+
 // Inputs are the pre-derived signals, one per factor, each paired with a flag for
 // whether that factor applies to this household. A factor that doesn't apply (e.g.
 // no credit cards) is dropped and its weight redistributed — it is NOT scored zero.
@@ -212,6 +219,15 @@ func Evaluate(in Inputs) Result {
 		}
 	}
 	res.Score = clampPct(int(math.Round(weighted)))
+
+	// Soft penalty for running a deficit (C261): negative cash flow already zeroes
+	// the savings factor, but a flat deduction on top keeps a structural shortfall
+	// from hiding behind strong emergency-fund or utilization scores — without the
+	// double-penalty cliff a hard floor would impose.
+	if res.NegativeCashFlow {
+		res.Score = clampPct(res.Score - negativeCashFlowPenalty)
+	}
+
 	res.Band = bandFor(res.Score)
 	res.Steps = buildSteps(defs)
 	return res

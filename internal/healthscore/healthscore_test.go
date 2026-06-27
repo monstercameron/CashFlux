@@ -64,18 +64,33 @@ func TestFactorScoreCurves(t *testing.T) {
 	}
 }
 
-func TestNegativeSavings_NoHardCapButFlagged(t *testing.T) {
-	in := full()
-	in.SavingsRatePct = -50 // overspending; savings factor → 0
-	r := Evaluate(in)
-	if !r.NegativeCashFlow {
-		t.Error("expected NegativeCashFlow=true")
+func TestNegativeSavings_SoftPenalty(t *testing.T) {
+	// A flat savings rate of 0 zeroes the savings factor WITHOUT flagging negative
+	// cash flow (0 is not < 0), so it isolates the soft penalty: the only difference
+	// between this and the -50 case is the deduction itself.
+	base := full()
+	base.SavingsRatePct = 0
+	neg := full()
+	neg.SavingsRatePct = -50 // overspending; savings factor also → 0, plus the penalty
+
+	rb := Evaluate(base)
+	rn := Evaluate(neg)
+
+	if rb.NegativeCashFlow {
+		t.Error("savings rate of 0 should not flag negative cash flow")
 	}
-	// The other four factors are perfect, so the score must NOT be hard-capped at <50:
-	// only the savings factor's 0 drags the weighted average. Excellent everywhere else
-	// must still produce a strong score (proving no double-penalty hard cap).
-	if r.Score < 70 {
-		t.Errorf("negative savings should only cost the savings factor, score=%d want >=70 (no hard cap)", r.Score)
+	if !rn.NegativeCashFlow {
+		t.Error("expected NegativeCashFlow=true at -50%")
+	}
+	// Soft penalty (C261): exactly negativeCashFlowPenalty points lower, since the
+	// underlying factor scores are identical (both have a 0 savings factor).
+	if diff := rb.Score - rn.Score; diff != negativeCashFlowPenalty {
+		t.Errorf("soft penalty: base=%d neg=%d diff=%d, want %d", rb.Score, rn.Score, diff, negativeCashFlowPenalty)
+	}
+	// Not a hard cap: with otherwise-perfect factors the score stays a real number,
+	// not cliffed to "Critical".
+	if rn.Score < 40 {
+		t.Errorf("soft penalty should nudge, not cliff; score=%d", rn.Score)
 	}
 }
 
@@ -168,8 +183,8 @@ func TestNotEnoughData(t *testing.T) {
 func TestReNormalization_EveryPermutation(t *testing.T) {
 	base := full()
 	// Distinct factor scores so weighting actually matters.
-	base.SavingsRatePct = 10  // 50
-	base.EmergencyMonths = 3  // 60
+	base.SavingsRatePct = 10     // 50
+	base.EmergencyMonths = 3     // 60
 	base.ObligationRatioPct = 36 // 50
 	base.BudgetAdherencePct = 80 // 80
 	base.AggUtilizationPct = 30  // 70

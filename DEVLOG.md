@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C261 [F37]: Negative-savings guardrail (soft penalty, not hard cap)
+
+### Problem
+C261 asked to "cap score <50 on negative savings rate". On inspection the aggregate health
+engine (`healthscore.Evaluate`) was already built and wired into `/health` — the real open
+question was the negative-cash-flow guardrail. But the code *deliberately* had none: a test
+(`TestNegativeSavings_NoHardCapButFlagged`) documented the prior author's view that a hard cap
+double-penalizes a deficit, since negative savings already zeroes the savings factor.
+
+### Decision
+Rather than silently override that tested design choice, surfaced the conflict and took the
+**soft-penalty** path: a flat −15 deduction (`negativeCashFlowPenalty`) after the weighted
+average when the savings rate is negative. This keeps a structural deficit visible (a household
+spending more than it earns shouldn't read "Good" purely on a fat emergency fund) without the
+cliff a hard floor imposes. Rewrote the test to `TestNegativeSavings_SoftPenalty`, which isolates
+the deduction by comparing savings=0% (factor 0, not flagged) against −50% (factor 0, flagged):
+the only delta is exactly the penalty.
+
+### Next
+Engine + screen need no further change — the penalty flows through `buildHealthInputs` → the ring
+automatically. Backlog reconciliation pass ongoing (many `[ ]` items are already built).
+
 ## 2026-06-27 — C295 [F44]: Confirmation modal before dataset import
 
 ### Problem
