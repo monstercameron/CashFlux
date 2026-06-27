@@ -3,6 +3,28 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C108: ApplyRules backfill now overwrites already-categorized transactions
+
+**Problem (C108):** `ApplyRules()` (the "Apply to existing" button on the /rules screen) iterated every non-transfer transaction and skipped any that already had a `CategoryID`. The intent was to avoid clobbering manually-set categories, but the effect was that correcting a rule — e.g., changing a match phrase or pointing it at a different category — never affected past transactions. Users who fixed a mis-rule had to manually re-categorize everything.
+
+**Root cause:** Line 1492 in `internal/appstate/appstate.go`:
+```go
+if t.CategoryID != "" || t.IsTransfer() {
+    continue
+}
+```
+The `CategoryID != ""` guard was the culprit.
+
+**Decision — always overwrite, keep transfers and idempotent writes safe:**
+There is no `ManuallySet` flag in the domain (a transaction's category is a bare `string` with no provenance). Adding one would be a bigger schema change and was out of scope. The backfill path is explicitly user-initiated ("Apply to existing"), so overwriting is the right behavior — the user is choosing to re-evaluate. The two safeguards kept:
+1. `IsTransfer()` skips are preserved — transfer legs should never be auto-categorized.
+2. Tags are additive-only: rule tags are only applied when the transaction currently has none, so manually-curated tag sets are preserved.
+3. Idempotency optimization: if both `CategoryID` and `Tags` are already at the rule's values, the store write is skipped (no churn).
+
+**Test changes:** `TestApplyRules` in `appstate_test.go` updated — t2 ("Uber Eats dinner", previously "food") now correctly gets overwritten to "transport" by the matching Uber rule, so the expected count goes from 2 to 3. New pure test `TestFirstMatchIgnoresCurrentCategory` added in `internal/rules/rules_test.go` to document and guard the invariant that `FirstMatch` itself never looks at an existing category — the overwrite decision belongs to the caller.
+
+**Files changed:** `internal/appstate/appstate.go`, `internal/appstate/appstate_test.go`, `internal/rules/rules_test.go`. No i18n keys added.
+
 ## 2026-06-27 — C259: sort insights by severity before per-rule cap in the Smart hub
 
 **Problem (C259):** The "insights unranked" part of C259. `smartInsightsSection` was calling `smart.CapPerRule(insights, 3)` without first calling `smart.SortInsights`. The `CapPerRule` function keeps the first `n` insights per rule seen in iteration order, and its own doc explicitly requires "input must already be severity-sorted (highest Severity value first)." Without the sort, the cap could retain low-severity findings and drop high-severity ones. The "Enable free features only" bulk button was already fully implemented (wired in `smartManageControls`, backed by `uistate.EnableFreeSmart`/`smart.EnableFreeOnly`, and i18n key `smart.enableFreeOnly`).

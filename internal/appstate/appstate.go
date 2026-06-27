@@ -1476,12 +1476,13 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 	}
 }
 
-// ApplyRules assigns a category to every currently uncategorized, non-transfer
-// transaction whose payee/description matches a saved rule (first match wins),
-// also adding the rule's tags when the transaction has none. Already-categorized
-// transactions are left untouched. It returns how many transactions were updated.
-// This is the retroactive counterpart to applying rules at entry/import — handy
-// after adding a rule or importing via a path that doesn't auto-apply (e.g. CSV).
+// ApplyRules applies every saved categorization rule to all existing, non-transfer
+// transactions, overwriting any existing category when a rule matches. This is the
+// "Apply to existing" backfill path — it intentionally overwrites previously-set
+// categories so that correcting or reordering a rule propagates to past transactions.
+// Tags are additive only: the rule's tags are applied when the transaction currently
+// carries none, so manually-curated tags are preserved. Transfers are always skipped.
+// Returns the number of transactions that were changed.
 func (a *App) ApplyRules() (int, error) {
 	rs := a.Rules()
 	if len(rs) == 0 {
@@ -1489,16 +1490,21 @@ func (a *App) ApplyRules() (int, error) {
 	}
 	updated := 0
 	for _, t := range a.Transactions() {
-		if t.CategoryID != "" || t.IsTransfer() {
+		if t.IsTransfer() {
 			continue
 		}
 		r := rules.FirstMatch(rs, t.Payee+" "+t.Desc)
 		if r == nil {
 			continue
 		}
+		changed := t.CategoryID != r.SetCategoryID
 		t.CategoryID = r.SetCategoryID
 		if len(t.Tags) == 0 && len(r.SetTags) > 0 {
 			t.Tags = r.SetTags
+			changed = true
+		}
+		if !changed {
+			continue
 		}
 		if err := a.store.PutTransaction(t); err != nil {
 			return updated, err

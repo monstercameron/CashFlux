@@ -53,6 +53,29 @@ func TestEmptyMatchNeverFires(t *testing.T) {
 	}
 }
 
+// TestFirstMatchIgnoresCurrentCategory verifies that FirstMatch (which drives the
+// backfill path) returns a rule regardless of whether the transaction already has a
+// category. The caller — not this package — decides whether to overwrite; the match
+// itself must never be suppressed by an existing category. This is the correctness
+// guarantee that makes rule corrections propagate to past transactions (C108).
+func TestFirstMatchIgnoresCurrentCategory(t *testing.T) {
+	rs := []Rule{
+		{ID: "r1", Match: "uber", SetCategoryID: "transport"},
+	}
+	// Simulate a transaction that already carries "food" — the match still fires.
+	r := FirstMatch(rs, "Uber Eats dinner")
+	if r == nil {
+		t.Fatal("FirstMatch returned nil; expected r1 to match")
+	}
+	if r.SetCategoryID != "transport" {
+		t.Errorf("SetCategoryID = %q, want transport", r.SetCategoryID)
+	}
+	// A transaction whose text doesn't match returns nil regardless.
+	if got := FirstMatch(rs, "Grocery store lunch"); got != nil {
+		t.Errorf("non-matching text should return nil, got %+v", got)
+	}
+}
+
 func TestConflicts(t *testing.T) {
 	rs := []Rule{
 		{ID: "a", Match: "shop"},        // fires

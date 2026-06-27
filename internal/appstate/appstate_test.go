@@ -117,8 +117,10 @@ func TestApplyRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyRules: %v", err)
 	}
-	if n != 2 {
-		t.Errorf("updated = %d, want 2", n)
+	// t1 (uncategorized, matches) + t2 (already "food" but still matches → overwritten)
+	// + t5 (uncategorized, matches) = 3 updates. t3 no match, t4 transfer skipped.
+	if n != 3 {
+		t.Errorf("updated = %d, want 3", n)
 	}
 	byID := map[string]domain.Transaction{}
 	for _, tx := range a.Transactions() {
@@ -127,11 +129,12 @@ func TestApplyRules(t *testing.T) {
 	if got := byID["t1"]; got.CategoryID != "transport" || len(got.Tags) != 1 || got.Tags[0] != "travel" {
 		t.Errorf("t1 not categorized by rule: %+v", got)
 	}
-	if byID["t2"].CategoryID != "food" {
-		t.Errorf("t2 should keep its category, got %q", byID["t2"].CategoryID)
+	// ApplyRules now overwrites already-categorized transactions so corrections propagate.
+	if byID["t2"].CategoryID != "transport" {
+		t.Errorf("t2 should be overwritten to transport by matching rule, got %q", byID["t2"].CategoryID)
 	}
 	if byID["t3"].CategoryID != "" {
-		t.Errorf("t3 should stay uncategorized, got %q", byID["t3"].CategoryID)
+		t.Errorf("t3 should stay uncategorized (no matching rule), got %q", byID["t3"].CategoryID)
 	}
 	if byID["t4"].CategoryID != "" {
 		t.Errorf("t4 transfer should be skipped, got %q", byID["t4"].CategoryID)
