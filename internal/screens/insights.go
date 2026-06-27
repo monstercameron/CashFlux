@@ -864,6 +864,25 @@ func Insights() ui.Node {
 
 	noData := len(accounts) == 0 && len(txns) == 0
 
+	// C234: compact top-of-page affordance — visible immediately on load, before
+	// spending highlights and pinned insights push the chat box below the fold.
+	// Clicking scrolls to and focuses the chat input so the user lands in the Ask
+	// section without manually scrolling. Hidden when noData (no point asking yet).
+	askShortcut := Fragment()
+	if !noData {
+		askShortcut = Div(css.Class(tw.Flex, tw.Mb2),
+			Button(css.Class("btn", tw.MlAuto), Type("button"),
+				Attr("aria-label", uistate.T("insights.askNow")),
+				OnClick(func() {
+					scrollToID("ask")
+					focusByID("cf-chat-input")
+				}),
+				uiw.Icon(icon.Sparkles, css.Class(tw.W4, tw.H4, tw.Mr2)),
+				uistate.T("insights.askNow"),
+			),
+		)
+	}
+
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
 		// user knows to add an account before asking questions. The chat section is still
@@ -876,12 +895,18 @@ func Insights() ui.Node {
 				Icon:      icon.Insights,
 			}),
 		})),
+		// C234: "Ask a question" shortcut button — shown at the top so the entry
+		// point is above-the-fold even when highlights and pins push the chat down.
+		askShortcut,
 		highlights,
 		// Pinned insights sit ABOVE the chat as quick references, so the conversation
 		// thread below has room to grow.
 		pinnedCard,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("insights.chatTitle"),
+			// C234: id="ask" anchor lets the top shortcut button and any deep-link
+			// (#ask) scroll directly to the chat box.
+			Attrs: []any{Attr("id", "ask")},
 			Body: Fragment(
 				switcher,
 				backendToggle,

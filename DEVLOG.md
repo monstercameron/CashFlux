@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C234: AI "Ask a question" top affordance + id="ask" anchor on /insights
+
+**Ticket:** C234 — "AI 'Ask' entry point is below the fold."
+
+**Problem:** On /insights, the "Ask CashFlux" chat section sits after spending highlights and pinned insights. A user with several pinned insights could reach the page and not see the chat input at all without scrolling. There was also no anchor to link directly to the chat section.
+
+**Fix:** Two minimal changes to `internal/screens/insights.go`:
+1. Added `Attrs: []any{Attr("id", "ask")}` to the chat `EntityListSection` so the section has a stable DOM anchor. Deep-links like `#ask` and `scrollToID("ask")` both work against it.
+2. Added a compact right-aligned "Ask a question" button at the top of the page content (below the no-data empty state, above highlights). It calls `scrollToID("ask")` followed by `focusByID("cf-chat-input")`, landing the user in the chat input immediately. Hidden when the no-data guard fires (the chat box is still rendered, but there is nothing to ask about). Used `tw.MlAuto` to push the button to the right edge without needing a `JustifyEnd` class.
+
+New i18n key `insights.askNow = "Ask a question"` added to `internal/i18n/en.go`. `go test ./internal/i18n/` and `GOOS=js GOARCH=wasm go build` both pass. (C234)
+
 ## 2026-06-27 — C247: AI key gate enriched with BYOK/cost/privacy context
 
 **Ticket:** C247 — "AI key gate lacks cost/where-to-get/privacy context."
