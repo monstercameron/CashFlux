@@ -13681,3 +13681,12 @@ confirm: clean informative table at rest, that row's steppers/arrows appear on h
 fix the density gate itself — getComputedStyle reports a control's OWN opacity as 1 even inside an opacity:0
 wrapper, so visible() now walks ancestors (committed separately). Result: manager 100 → 23 resting controls,
 and the whole app is 0/16 over ceiling. Go change in widgets.go (clean) + CSS in index.html (mine).
+
+## 2026-06-27 — R44/R72 overflow dimension: page-level horizontal-overflow gate
+Added e2e/ux_overflow_audit.mjs — loads every route across the §5.5.11 width matrix (1440/1200/900/768/
+390/320) and flags any route whose DOCUMENT scrolls sideways (a §5.3 release blocker), naming the widest
+offending element. It excludes legitimate inner scrollers (an element inside overflow-x:auto/scroll, e.g.
+the wm-table-wrap or a ledger), so only true page-level overflow fails. Result: 0 failures across 78
+route×width checks — no horizontal overflow anywhere, including 320px. The R57 probe's old overflow flags
+(transactions/reports/widget-builder) are gone, fixed by the intervening C-backlog work. This completes the
+contrast (0) + density (0/16) + overflow (0/78) trio of the R44/R72 desktop UX quality gate — all green.
