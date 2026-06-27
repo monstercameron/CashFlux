@@ -205,6 +205,7 @@ func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled 
 	case len(insights) == 0:
 		body = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.allClear"))
 	default:
+		smart.SortInsights(insights)
 		capped := smart.CapPerRule(insights, 3)
 		body = ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped})
 	}

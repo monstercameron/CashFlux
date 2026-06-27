@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C259: sort insights by severity before per-rule cap in the Smart hub
+
+**Problem (C259):** The "insights unranked" part of C259. `smartInsightsSection` was calling `smart.CapPerRule(insights, 3)` without first calling `smart.SortInsights`. The `CapPerRule` function keeps the first `n` insights per rule seen in iteration order, and its own doc explicitly requires "input must already be severity-sorted (highest Severity value first)." Without the sort, the cap could retain low-severity findings and drop high-severity ones. The "Enable free features only" bulk button was already fully implemented (wired in `smartManageControls`, backed by `uistate.EnableFreeSmart`/`smart.EnableFreeOnly`, and i18n key `smart.enableFreeOnly`).
+
+**Fix:** One-line addition — `smart.SortInsights(insights)` immediately before `smart.CapPerRule(insights, 3)` in the `default` branch of `smartInsightsSection` in `internal/screens/smart.go`. `SortInsights` sorts in-place: highest severity first, then by feature code, then by key, giving a total deterministic order. The cap then reliably keeps the three highest-severity insights per rule.
+
+**Design note:** The sort happens in the render path, not at engine-run time, so the insight slice is ephemeral (already a fresh slice per render from `runSmart`). No mutation risk.
+
+**Files changed:** `internal/screens/smart.go` (one line added).
+
+**No new i18n keys.** `GOOS=js GOARCH=wasm go build` exits 0.
+
 ## 2026-06-27 — C300: persistent plan price in Settings → Cloud & server
 
 **Problem (C300):** The plan price ($34.99/year / $3.99/month) was only visible inside the one-shot UpgradeSheet bottom sheet, or inside the subscribe block which itself required the user to have already manually switched the server-mode selector to "Cloud." A user who dismissed the UpgradeSheet and never explicitly selected cloud mode in Settings had no way to discover what the plan costs.
