@@ -3,6 +3,31 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C213: VERIFY-CLOSE — net-worth trend area chart hover tooltip
+
+C213 asked for interactive hover tooltips on the net-worth trend AreaChart (and other area/line
+charts). Auditing `web/chart.js` (the D3 chart shim):
+
+- The `line / area` render loop (post-bar) already appends invisible `<circle>` hit-targets
+  (`r=7`, `fill="transparent"`) at each data point, each with a child SVG `<title>` showing
+  the label (from `labelsByX[Math.round(p.x)] || p.label`) plus the value formatted via
+  `valFmt()` — which emits `curSym + d3.format(",.2f")(v)` for money axes (the `y.format =
+  "money"` path) and falls back to compact-thousands or the spec's explicit d3 format string.
+
+- The `valFmt()` helper was introduced specifically to give exact full-precision reads on hover
+  while the axis tick formatter stays compact ("$1.5k"). This matches the bar chart's
+  `bars.append("title")` and donut's `slices.append("title")` — all three use the same SVG
+  native-tooltip pattern.
+
+- All three AreaChart call sites in `/reports` (`netSeries`, `nw`, `srSeries`) pass
+  `Labels: trendLabels` / `nwLabels` and `ValueLabels: moneyLabels(nw)` / `pctLabels(srSeries)`,
+  which are mapped into `labelsByX` — so the "Mar: $1,480.00" hover text is fully wired.
+
+- The feature landed in `e4e7a563` ("feat: keep-tidy + QA pass — chart tooltips, empty states,
+  a11y, FX fix, e2e stories"), confirmed present in the currently deployed `web/chart.js`.
+
+No code change. Closing C213 as already resolved.
+
 ## 2026-06-27 — C166: SKIP — subscription detection preferences (ignore category/account type)
 
 C166 asks for user preferences to exclude transactions by category or account type from subscription
