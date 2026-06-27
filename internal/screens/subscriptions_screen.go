@@ -67,7 +67,57 @@ func Subscriptions() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	rawSubs, _ := subscriptions.Detect(app.Transactions(), rates, 2)
+	// C166: load detection preferences and filter transactions before detection so
+	// charges from ignored categories or account types are never considered. This
+	// lets users tune out noisy spending (e.g. "Dining" one-offs or investment
+	// account transfers) without touching the per-subscription ignore list.
+	detectPrefs := uistate.LoadSubsDetectPrefs()
+	allTxns := app.Transactions()
+	allAccts := app.Accounts()
+
+	// Build accountID → AccountType map for the account-type filter.
+	acctTypeByID := make(map[string]string, len(allAccts))
+	for _, ac := range allAccts {
+		acctTypeByID[ac.ID] = string(ac.Type)
+	}
+
+	// Build a set of account types that actually appear in transactions (for the
+	// preference panel — we only show options that are relevant to the dataset).
+	acctTypesInUse := make(map[string]bool, 8)
+	for _, t := range allTxns {
+		if typ, ok := acctTypeByID[t.AccountID]; ok && typ != "" {
+			acctTypesInUse[typ] = true
+		}
+	}
+
+	// Load all categories for the preference panel's category filter list.
+	allCats := app.Categories()
+
+	// Apply detection preferences: exclude transactions from ignored categories
+	// or account types before running detection.
+	ignoredCatSet := make(map[string]bool, len(detectPrefs.IgnoredCategoryIDs))
+	for _, id := range detectPrefs.IgnoredCategoryIDs {
+		ignoredCatSet[id] = true
+	}
+	ignoredAcctTypeSet := make(map[string]bool, len(detectPrefs.IgnoredAccountTypes))
+	for _, typ := range detectPrefs.IgnoredAccountTypes {
+		ignoredAcctTypeSet[typ] = true
+	}
+	filteredTxns := allTxns
+	if len(ignoredCatSet) > 0 || len(ignoredAcctTypeSet) > 0 {
+		filteredTxns = make([]domain.Transaction, 0, len(allTxns))
+		for _, t := range allTxns {
+			if ignoredCatSet[t.CategoryID] {
+				continue
+			}
+			if ignoredAcctTypeSet[acctTypeByID[t.AccountID]] {
+				continue
+			}
+			filteredTxns = append(filteredTxns, t)
+		}
+	}
+
+	rawSubs, _ := subscriptions.Detect(filteredTxns, rates, 2)
 
 	// Build a lookup of ignored subscriptions by lower-case name so we can
 	// filter them out of the active detected list and show them in a separate
@@ -83,8 +133,6 @@ func Subscriptions() ui.Node {
 	// debits, lender-named charges) — they recur like subscriptions but aren't ones,
 	// and counting them inflated both the list and the annual total. IsLiabilityPayment
 	// checks the debiting account's class/type and lender-phrase labels.
-	allTxns := app.Transactions()
-	allAccts := app.Accounts()
 	var subs []subscriptions.Subscription
 	var ignoredSubs []subscriptions.Subscription
 	for _, s := range rawSubs {
@@ -193,6 +241,9 @@ func Subscriptions() ui.Node {
 		// active list.
 		notice.Set(notice.Get().With(uistate.T("subs.unignoredConfirm", name), false))
 	}
+
+	// C166: session state for the detection preferences panel (open/closed toggle).
+	prefsOpen := ui.UseState(false)
 
 	// --- Cancel-candidates multi-select (L12) ---
 	// Session state: map of sub Name → selected. All mutations copy-on-write so
@@ -437,6 +488,101 @@ func Subscriptions() ui.Node {
 		},
 	)
 
+	// C166: build the detection preferences panel. Collect account types present in
+	// the dataset (for the type checkboxes) and sort categories alphabetically for
+	// a scannable list. Each checkbox row is its own component so hooks stay stable.
+	activeFilterCount := len(detectPrefs.IgnoredCategoryIDs) + len(detectPrefs.IgnoredAccountTypes)
+	prefsToggleLabel := uistate.T("subs.detectPrefsShow")
+	if prefsOpen.Get() {
+		prefsToggleLabel = uistate.T("subs.detectPrefsHide")
+	}
+	if activeFilterCount > 0 {
+		badge := uistate.T("subs.detectActiveFilters", activeFilterCount)
+		if activeFilterCount > 1 {
+			badge = uistate.T("subs.detectActiveFiltersMany", activeFilterCount)
+		}
+		prefsToggleLabel += " (" + badge + ")"
+	}
+	togglePrefs := ui.UseEvent(Prevent(func() { prefsOpen.Set(!prefsOpen.Get()) }))
+
+	// Ordered account types: only include types that actually appear in
+	// transactions so the list stays relevant.
+	orderedAcctTypes := make([]string, 0, len(domain.AllAccountTypes))
+	for _, typ := range domain.AllAccountTypes {
+		if acctTypesInUse[string(typ)] {
+			orderedAcctTypes = append(orderedAcctTypes, string(typ))
+		}
+	}
+
+	// Category rows: iterate allCats in their store-defined order (already sorted
+	// by the store). Only show expense categories (subscription detection only runs
+	// on expenses, so income categories are irrelevant).
+	expenseCats := make([]domain.Category, 0, len(allCats))
+	for _, c := range allCats {
+		if c.Kind == domain.KindExpense && c.ParentID == "" {
+			expenseCats = append(expenseCats, c)
+		}
+	}
+
+	// catFilterSection is pre-computed because If() only takes 2 args (no else branch).
+	var catFilterSection ui.Node
+	if len(expenseCats) == 0 {
+		catFilterSection = P(css.Class("row-meta"), uistate.T("subs.detectCategoriesNone"))
+	} else {
+		catFilterSection = Div(css.Class(tw.Fold(tw.Mt2)),
+			Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectCategoriesLabel")),
+			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2)),
+				MapKeyed(expenseCats,
+					func(c domain.Category) any { return "cat|" + c.ID },
+					func(c domain.Category) ui.Node {
+						return ui.CreateElement(SubsDetectCatRow, subsDetectCatRowProps{
+							CatID:   c.ID,
+							Label:   c.Name,
+							Ignored: detectPrefs.HasIgnoredCategory(c.ID),
+						})
+					},
+				),
+			),
+		)
+	}
+
+	detectPrefsPanel := Section(
+		css.Class("card"),
+		Attr("data-testid", "subs-detect-prefs"),
+		Div(css.Class(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween)),
+			Button(
+				css.Class("btn btn-sm"),
+				Type("button"),
+				Attr("data-testid", "subs-detect-prefs-toggle"),
+				Attr("aria-expanded", fmt.Sprintf("%v", prefsOpen.Get())),
+				OnClick(togglePrefs),
+				prefsToggleLabel,
+			),
+		),
+		If(prefsOpen.Get(), Fragment(
+			P(css.Class("row-meta "+tw.Fold(tw.Mt1, tw.Mb2)), uistate.T("subs.detectPrefsDesc")),
+			// Account-type checkboxes (fixed set, no loop — rendered inline).
+			If(len(orderedAcctTypes) > 0, Div(css.Class(tw.Fold(tw.Mt2, tw.Mb1)),
+				Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectAccountTypesLabel")),
+				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2)),
+					MapKeyed(orderedAcctTypes,
+						func(typ string) any { return "accttype|" + typ },
+						func(typ string) ui.Node {
+							return ui.CreateElement(SubsDetectAcctTypeRow, subsDetectAcctTypeRowProps{
+								AcctType: typ,
+								Label:    uistate.T("acctType." + typ),
+								Ignored:  detectPrefs.HasIgnoredAccountType(typ),
+							})
+						},
+					),
+				),
+			)),
+			// Category checkboxes — each row is its own component (variable-length loop rule).
+			// If() is 2-arg only, so compute the section node before the panel definition.
+			catFilterSection,
+		)),
+	)
+
 	return Div(
 		If(len(lateCharges) > 0, Section(
 			css.Class("card"),
@@ -447,6 +593,7 @@ func Subscriptions() ui.Node {
 				uistate.T("subs.lateChargesTitle")),
 			Div(css.Class("rows"), lateChargeRows),
 		)),
+		detectPrefsPanel,
 		If(len(subs) > 0, Div(css.Class("stat-grid"),
 			// Monthly burden is the key subscriptions figure — tooltip explains how it's calculated.
 			Div(css.Class("stat"),
@@ -866,4 +1013,84 @@ func subscriptionCadenceLabel(c subscriptions.Cadence) string {
 	default:
 		return uistate.T("subs.monthly")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// C166: Detection preference checkbox row components
+// ---------------------------------------------------------------------------
+
+// subsDetectCatRowProps holds the props for one category filter checkbox.
+type subsDetectCatRowProps struct {
+	CatID   string // category ID
+	Label   string // display name
+	Ignored bool   // whether this category is currently in the ignore list
+}
+
+// SubsDetectCatRow renders one category checkbox in the "Detection preferences"
+// panel. Each row is its own component so its OnChange hook sits at a stable
+// render position regardless of how many categories exist (variable-length loop
+// rule). Toggling saves immediately via SaveSubsDetectPrefs, which bumps the
+// store mutation revision and re-renders the screen.
+func SubsDetectCatRow(props subsDetectCatRowProps) ui.Node {
+	id := props.CatID
+	onChange := ui.UseEvent(func(e ui.Event) {
+		p := uistate.LoadSubsDetectPrefs()
+		uistate.SaveSubsDetectPrefs(p.WithCategoryToggled(id))
+	})
+	return Label(
+		css.Class(tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" detect-pref-label"),
+		Style(map[string]string{
+			"padding":       "0.25rem 0.5rem",
+			"border-radius": "4px",
+			"border":        "1px solid var(--border)",
+			"font-size":     "0.8rem",
+			"cursor":        "pointer",
+			"user-select":   "none",
+		}),
+		Attr("data-testid", "subs-detect-cat-"+id),
+		Input(
+			Type("checkbox"),
+			Attr("aria-label", props.Label),
+			CheckedIf(props.Ignored),
+			OnChange(onChange),
+		),
+		Text(props.Label),
+	)
+}
+
+// subsDetectAcctTypeRowProps holds the props for one account-type filter checkbox.
+type subsDetectAcctTypeRowProps struct {
+	AcctType string // account type string (e.g. "checking")
+	Label    string // display label (from i18n)
+	Ignored  bool   // whether this type is currently in the ignore list
+}
+
+// SubsDetectAcctTypeRow renders one account-type checkbox in the "Detection
+// preferences" panel. Each row is its own component for hook-stability (same
+// rationale as SubsDetectCatRow). Toggling saves immediately.
+func SubsDetectAcctTypeRow(props subsDetectAcctTypeRowProps) ui.Node {
+	typ := props.AcctType
+	onChange := ui.UseEvent(func(e ui.Event) {
+		p := uistate.LoadSubsDetectPrefs()
+		uistate.SaveSubsDetectPrefs(p.WithAccountTypeToggled(typ))
+	})
+	return Label(
+		css.Class(tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" detect-pref-label"),
+		Style(map[string]string{
+			"padding":       "0.25rem 0.5rem",
+			"border-radius": "4px",
+			"border":        "1px solid var(--border)",
+			"font-size":     "0.8rem",
+			"cursor":        "pointer",
+			"user-select":   "none",
+		}),
+		Attr("data-testid", "subs-detect-accttype-"+typ),
+		Input(
+			Type("checkbox"),
+			Attr("aria-label", props.Label),
+			CheckedIf(props.Ignored),
+			OnChange(onChange),
+		),
+		Text(props.Label),
+	)
 }

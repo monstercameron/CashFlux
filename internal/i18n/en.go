@@ -67,6 +67,7 @@ var english = Catalog{
 	"resolution.customRange":     "Custom range",
 	"resolution.singlePeriod":    "Single period",
 	"resolution.jumpTo":          "Jump to…",
+	"resolution.granularity":     "Time period granularity",
 	"resolution.presetThis":      "This period",
 	"resolution.presetLast":      "Last period",
 	"resolution.presetQuarter":   "This quarter",
@@ -2019,6 +2020,31 @@ var english = Catalog{
 	// find the broader per-category spending anomaly highlights (no AI required).
 	"subs.seeSpendingAnalysis":      "See spending analysis",
 	"subs.seeSpendingAnalysisTitle": "Spending highlights — categories that moved a lot versus your recent average — are on the Insights screen",
+
+	// C166: subscription detection preferences — ignore categories / account types.
+	"subs.detectPrefsTitle":       "Detection preferences",
+	"subs.detectPrefsDesc":        "Transactions in ignored categories or account types are skipped during detection. Use this to keep noisy spending out of your subscription list.",
+	"subs.detectPrefsShow":        "Detection preferences",
+	"subs.detectPrefsHide":        "Hide preferences",
+	"subs.detectCategoriesLabel":  "Ignore categories",
+	"subs.detectCategoriesNone":   "No spending categories found.",
+	"subs.detectAccountTypesLabel": "Ignore account types",
+	"subs.detectActiveFilters":    "%d active filter",
+	"subs.detectActiveFiltersMany": "%d active filters",
+	// account-type labels for the preference checkboxes
+	"acctType.checking":     "Checking",
+	"acctType.debit":        "Debit",
+	"acctType.savings":      "Savings",
+	"acctType.cash":         "Cash",
+	"acctType.credit_card":  "Credit card",
+	"acctType.line_of_credit": "Line of credit",
+	"acctType.loan":         "Loan",
+	"acctType.personal_loan": "Personal loan",
+	"acctType.mortgage":     "Mortgage",
+	"acctType.investment":   "Investment",
+	"acctType.retirement":   "Retirement",
+	"acctType.crypto":       "Crypto",
+	"acctType.other":        "Other",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.
