@@ -13704,3 +13704,16 @@ carry only generated tw classes). Iterated with the audit: 220 → 46 (after the
 inline/embedded controls (btn-icon-bare, btn-link, clickable titles/drill rows, sample-banner links) per
 §5.5.9 "where practical". Verified: coarse-pointer overflow 0 at 1024/768/640/390/320, and a 768px touch
 screenshot shows properly-sized, non-overflowing controls. CSS-only in index.html (mine); desktop unaffected.
+
+## 2026-06-27 — no mobile (user directive) + unified desktop UX gate runner
+User directive: "no mobile! remove those todos." CashFlux is desktop-first; the mobile-shell/phone-layout
+redesign is out of scope. Descoped R35 (mobile shell) and R53 (rebuild mobile) and trimmed R44's "desktop
+and mobile" to desktop-only — edits applied in TODOS.md but NOT committed by me, because the entire R35-R72
+audit section is a concurrent agent's UNCOMMITTED addition (committing it would sweep their ~141 lines); the
+descope rides in the working tree until they commit. Recorded the directive in agent memory. Also de-
+emphasized the coarse-pointer touch dimension: it's a desktop-spec §5.5.9 concern (touchscreen laptops), but
+to honor "no mobile" the headline gate now covers the three unambiguously-desktop dimensions only. Shipped
+e2e/ux_quality_gate.mjs — a single runner over the contrast (§12), density (§11), and overflow (§5.5.11)
+audits that prints a combined PASS/FAIL scorecard and exits non-zero if any dimension regresses (the R44
+"score report for all routes" capstone). All three pass green. ux_touch_audit.mjs stays as a separate
+optional check, not in the headline runner.
