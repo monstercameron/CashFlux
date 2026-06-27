@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R52/R64: chart decision-quality audit (shipped tool, tickets kept open honestly)
+
+**What:** built `e2e/ux_chart_audit.mjs` to grade every chart for decision-orientation (R52) and inventory/grade all charts (R64).
+
+**Two real bugs caught by self-review before trusting the result:**
+1. The first version restricted to the first viewport and reported "1 chart per route, 0 violations" — a false pass. A probe showed /reports actually has 10 charts, /planning 6, all below the fold. Fixed to audit the whole page (19 charts found).
+2. While hardening, `if (el.closest('svg')) return` matched the element itself (closest includes self), so every svg was skipped → 0 charts. Fixed to `el.parentElement.closest('svg')` (skip only svgs nested in another svg).
+
+**Adversarial review (very critical) → kept both tickets OPEN.** It correctly flagged: (a) detection missed CSS div-charts (`.vb-segbar`/`.wb-bar`) — added them; (b) generic fallback aria-labels ("Trend chart"/"Chart") were passing as real names — now rejected; (c) most importantly, I had mis-attributed "fixes land as C-items" to R64 — that clause is R63's; R64's acceptance literally requires an accessible description AND a nearby action on EVERY chart. With 2/19 lacking a real accessible name and 11/19 lacking an action, R64 is genuinely not met. Rather than rename the goalposts, I'm being a reality-anchor: the grading audit (R64's core artifact) ships and confirms 0 decorative charts, but both tickets stay `[ ]` with the exact gaps logged (2 svg-`<title>` names incl. the Mermaid Sankey wrapper-vs-svg aria gap; 11 chart-card drill-down actions). Those are screen/chart-code fixes deferred while reports/planning/dashboard churn.
+
+**Why open, not closed:** marking R52/R64 done on a "0 decorative" pass would overstate the work — the audit can't verify titles read as insight sentences, and the action/a11y acceptance criteria are unmet. The tool is the durable win; closure waits on the remediation.
+
 ## 2026-06-27 — C231: AI starter chips visible even with conversation history
 
 **Ticket:** C231 [MAJOR] F32 — "Starter chips suppressed whenever conversation history exists."
