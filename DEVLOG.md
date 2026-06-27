@@ -3,6 +3,35 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C166: SKIP — subscription detection preferences (ignore category/account type)
+
+C166 asks for user preferences to exclude transactions by category or account type from subscription
+detection, so (e.g.) a grocery spend that looks recurring doesn't show up as a subscription.
+
+Current state audit:
+- `IgnoredSubscriptions` in the store: a per-name ignore set (user-explicit, shipped in C164/C165).
+- `IsLiabilityPayment`: account-class-based exclusion (C161) — prevents credit card payments from
+  appearing as subscriptions.
+- `subscriptions.Detect(txns, rates, minOccurrences)`: no category or account-type exclusion
+  parameter. The signature is pure; no prefs struct is threaded through.
+
+What would need to happen to implement C166:
+1. New `SubscriptionDetectionPrefs` type (or extension to an existing prefs struct) with fields like
+   `IgnoredCategories []string` and `IgnoredAccountTypes []domain.AccountType`.
+2. KV load/save path — either a new key in appstate or piggyback on existing prefs; either way it
+   needs round-trip persistence and migration.
+3. UI surface — a Settings panel or /subscriptions filter section where users toggle categories or
+   account types to exclude.
+4. Wire into `subscriptions.Detect()` — either extend the function signature or apply a post-filter
+   before rendering.
+5. Tests for the new prefs round-trip and the exclusion logic.
+
+That is minimum 3 distinct packages (domain or prefs, store, UI) touched for a non-trivial new
+feature. Not a single safe commit. The right time to tackle this is as part of a subscriptions
+overhaul alongside R16 (recurring model) — not a standalone patch.
+
+Decision: SKIP. No code change.
+
 ## 2026-06-27 — C217: decouple net-worth trend from cash-flow period selector
 
 C217 reported that the NW trend on /reports rescales when you change the cash-flow period selector
