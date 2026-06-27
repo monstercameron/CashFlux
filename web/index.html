@@ -783,6 +783,13 @@
         --hover: #e8e6e1;
         color-scheme: light; /* native controls (date picker, dropdowns, scrollbars) light-themed */
       }
+      /* §12.1: the money-positive green (--up #54b884) reads ~4.3:1 on light cards —
+         just under AA for the dollar figures that matter most. In light mode darken
+         the money-positive token to a green that clears 4.5:1 on white and the page
+         (#157a43 → ~5.4/5.0). Uses :root[data-theme=light] (specificity 0,2,0) so it
+         wins over the :root alias regardless of source order. money-negative red is
+         already AA-safe in light, so it's left alone. */
+      :root[data-theme="light"] { --money-positive: #157a43; }
       [data-theme="light"] .bg-base { background-color: #f7f6f3; }
       [data-theme="light"] .bg-tile { background-color: #ffffff; }
       [data-theme="light"] .bg-hover, [data-theme="light"] .hover\:bg-hover:hover { background-color: #efede8; }
@@ -1215,7 +1222,7 @@
         .txn-table td.row-desc { max-width: none; white-space: normal; }
       }
       .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-      .amount-income { color: var(--accent); }
+      .amount-income { color: var(--money-positive); } /* §4.3: income is money-positive, not the interaction accent */
       .amount-expense { color: var(--danger); }
 
       /* Transactions filter toolbar (C47): compact search + Filters popover + chips. */

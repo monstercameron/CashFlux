@@ -13637,3 +13637,16 @@ darker amber: the pill carries severity in a tinted FILL + border (color-mix of 
 .pill.is-warn/.pill.is-danger in index.html (my lane) + budgets.go (clean at HEAD) swapped from tw.TextWarn/
 tw.TextDown to the new classes. This is the template for the other tw-text-tone pills across the app
 (follow-up, some in contended files). gofmt clean, wasm build rc=0.
+
+## 2026-06-27 — R69: positive-money green passes AA in light, app-wide
+The gate's biggest remaining cluster was positive-money green at ~4.25-4.36:1 in light (Accounts,
+Subscriptions, Reports, dashboard). Tracing it showed two distinct color sources: figures coloured by a
+tw class referencing var(--up) (emitted INLINE by ApplyTheme, so CSS can't override it), and figures using
+.amount-income/.text-up (CSS, var(--accent)/var(--money-positive)). Fixed both at the root: darkened the
+light theme greens in internal/theme (lightBase + Paper preset) #1f8a52 -> #157a43 so the inline --up
+clears AA, and pointed .amount-income at var(--money-positive) (a §4.3 correctness fix — income isn't the
+interaction accent) plus a :root[data-theme=light] money-positive override. Result via the gate: money-green
+failures 0, TOTAL 14 -> 7, and Dashboard/Transactions/Budgets/Planning/Subscriptions fully AA-clean both
+themes. Screenshot confirms the darker green reads rich and professional, not muddy. internal/theme AA tests
+green; dark untouched. Remaining 7 gate fails are marginal edges (stale-account buttons ~4.45, a reports
+count, today's calendar cell) — follow-ups. All in my lane (index.html + internal/theme, both uncontended).

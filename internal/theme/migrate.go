@@ -39,7 +39,7 @@ func lightBase() Theme {
 		Text:        "#1c1c1e",
 		TextDim:     "#56565c",
 		Accent:      "#2e8b57",
-		Up:          "#1f8a52",
+		Up:          "#157a43", // darker green: #1f8a52 read ~4.4:1 on light cards (under AA)
 		Down:        "#b3322f",
 		Radius:      0,
 		FontUI:      "Inter",

@@ -92,7 +92,7 @@ var presets = map[string]Theme{
 		Text:        "#1f2328",
 		TextDim:     "#5b6068",
 		Accent:      "#3f51d6",
-		Up:          "#1f8a52",
+		Up:          "#157a43", // darker green: #1f8a52 read ~4.4:1 on the white card (under AA)
 		Down:        "#b3322f",
 		Radius:      10,
 		FontUI:      "Inter",
