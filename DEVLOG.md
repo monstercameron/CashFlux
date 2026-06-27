@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C104: ApplyRules tag union — rule tags now merged into already-tagged transactions
+
+**Problem (C104):** `ApplyRules()` (the "Apply to existing" backfill on /rules) was guarded by `len(t.Tags) == 0 && len(r.SetTags) > 0` for the tag-application step. This meant any transaction that already had even one tag was silently skipped for tag updates — rule tags were never added. A user who added a `#travel` tag manually and then later created a rule that should also tag matching transactions with `#work` would see nothing happen on backfill.
+
+**Root cause:** `internal/appstate/appstate.go` line 1502:
+```go
+if len(t.Tags) == 0 && len(r.SetTags) > 0 {
+    t.Tags = r.SetTags
+    changed = true
+}
+```
+The `len(t.Tags) == 0` guard made tag application all-or-nothing: either the transaction had no tags (apply all rule tags) or it was skipped entirely. No union was computed.
+
+**Fix:** Replaced the guard block with a per-tag union loop using the existing `addTagUnique` helper. For each tag in `r.SetTags`, if the tag is not already in `t.Tags`, it is appended and `changed` is set to true. If all tags were already present, `changed` stays false and no store write is issued — preserving idempotency. Manually-curated tags are always preserved; rule tags accumulate additively.
+
+**Test update:** `TestApplyRules` in `appstate_test.go` had the old assertion for `t5` (a transaction with pre-existing `["existing"]` matched by a rule with `SetTags:["travel"]`): it expected the tags to stay as `["existing"]` (the buggy behavior). Updated to correctly expect `["existing","travel"]` after the fix. The count assertion (n==3) is unchanged since t5 was already counted due to its category change.
+
+**No category behavior change:** Category overwriting (C108's fix) is untouched. This is tags only.
+
 ## 2026-06-27 — C108: ApplyRules backfill now overwrites already-categorized transactions
 
 **Problem (C108):** `ApplyRules()` (the "Apply to existing" button on the /rules screen) iterated every non-transfer transaction and skipped any that already had a `CategoryID`. The intent was to avoid clobbering manually-set categories, but the effect was that correcting a rule — e.g., changing a match phrase or pointing it at a different category — never affected past transactions. Users who fixed a mis-rule had to manually re-categorize everything.

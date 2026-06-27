@@ -1480,8 +1480,9 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 // transactions, overwriting any existing category when a rule matches. This is the
 // "Apply to existing" backfill path — it intentionally overwrites previously-set
 // categories so that correcting or reordering a rule propagates to past transactions.
-// Tags are additive only: the rule's tags are applied when the transaction currently
-// carries none, so manually-curated tags are preserved. Transfers are always skipped.
+// Tags are additive (union): each tag from the rule is merged into the transaction's
+// existing tags without duplicating any tag already present, so manually-curated tags
+// are always preserved. Transfers are always skipped.
 // Returns the number of transactions that were changed.
 func (a *App) ApplyRules() (int, error) {
 	rs := a.Rules()
@@ -1499,9 +1500,12 @@ func (a *App) ApplyRules() (int, error) {
 		}
 		changed := t.CategoryID != r.SetCategoryID
 		t.CategoryID = r.SetCategoryID
-		if len(t.Tags) == 0 && len(r.SetTags) > 0 {
-			t.Tags = r.SetTags
-			changed = true
+		for _, tag := range r.SetTags {
+			before := len(t.Tags)
+			t.Tags = addTagUnique(t.Tags, tag)
+			if len(t.Tags) != before {
+				changed = true
+			}
 		}
 		if !changed {
 			continue

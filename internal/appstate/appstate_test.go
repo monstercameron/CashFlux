@@ -139,8 +139,9 @@ func TestApplyRules(t *testing.T) {
 	if byID["t4"].CategoryID != "" {
 		t.Errorf("t4 transfer should be skipped, got %q", byID["t4"].CategoryID)
 	}
-	if got := byID["t5"]; got.CategoryID != "transport" || len(got.Tags) != 1 || got.Tags[0] != "existing" {
-		t.Errorf("t5 should be categorized while preserving existing tags: %+v", got)
+	// t5 had Tags:["existing"] before; rule adds "travel" — result must be both, in order.
+	if got := byID["t5"]; got.CategoryID != "transport" || len(got.Tags) != 2 || got.Tags[0] != "existing" || got.Tags[1] != "travel" {
+		t.Errorf("t5 should union rule tags into existing tags: %+v", got)
 	}
 }
 
