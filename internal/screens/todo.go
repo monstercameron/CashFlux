@@ -481,9 +481,9 @@ func TaskRow(props taskRowProps) ui.Node {
 			Span(css.Class("row-desc"), t.Title),
 			Div(css.Class("task-meta"), meta),
 		),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		Button(css.Class("btn row-2nd"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
+		Button(css.Class("btn row-2nd", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Button(css.Class("btn-del row-2nd"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 	return Div(rowArgs...)
 }

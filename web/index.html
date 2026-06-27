@@ -1217,6 +1217,16 @@
       .txn-table tbody tr:not(:hover):not(:focus-within) .tx-2nd { opacity: 0; pointer-events: none; }
       @media (pointer: coarse) { .txn-table .tx-2nd { opacity: 1 !important; pointer-events: auto !important; } }
       .txn-table .tx-2nd:focus-visible { opacity: 1 !important; pointer-events: auto !important; }
+      /* R39 §8.4: generic progressive row actions for `.row`-based lists (e.g. /todo).
+         A resting row shows its scan content + primary control; secondary actions
+         tagged .row-2nd reveal on row hover or keyboard focus-within (opacity keeps
+         tab order — the row's :focus-within is the real keyboard guard), with a
+         coarse-pointer override for touch. Only elements I tag .row-2nd are affected,
+         so this is safe on the otherwise-generic .row class. */
+      .row .row-2nd { transition: opacity 0.12s ease; }
+      .row:not(:hover):not(:focus-within) .row-2nd { opacity: 0; pointer-events: none; }
+      @media (pointer: coarse) { .row .row-2nd { opacity: 1 !important; pointer-events: auto !important; } }
+      .row .row-2nd:focus-visible { opacity: 1 !important; pointer-events: auto !important; }
       /* GX12-F3: actions column measured 168–170px — oversized for 2–3 icon-only buttons.
          Cap it to 96px so the ledger reclaims that space for data columns. */
       .txn-table .td-actions { white-space: nowrap; text-align: right; width: 96px; max-width: 96px; }

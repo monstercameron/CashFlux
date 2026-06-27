@@ -7,6 +7,10 @@ problems and fixes, and what's next.
 
 
 
+
+## 2026-06-27 - R39 progress: progressive To-do rows (generic .row-2nd)
+
+Generalised the R47 hover-reveal pattern into a reusable `.row-2nd` class for any `.row`-based list and applied it to /todo: the complete-toggle + title stay at rest; Add-subtask/Edit/Delete reveal on hover or keyboard focus-within. /todo 44 -> 17 resting controls (61%). The CSS is scoped so only tagged elements are affected, safe on the generic .row class. R39 names 7 surfaces; transactions (R47) and todo are the dense ones now made progressive - notifications/subscriptions already expose 1-2 row actions and categories/accounts/widget-manager are already lean, so R39 is close but I'm keeping it open until each remaining list is explicitly verified rather than over-claim. build rc=0.
 ## 2026-06-27 — C9: local-first framing on the import screen
 
 New users hitting the /documents screen for the first time see a CSV import card with no explanation of WHY there's no "Connect your bank" button — they could interpret it as a missing feature rather than an intentional privacy trade-off. Added a one-sentence note at the top of the CSV card body: your data stays on-device, no bank login, export CSV from your bank and import here, this is a privacy benefit. Kept it small (`tw.Text12`) and un-alarming (`muted`) so it doesn't compete with the action buttons. The `bankCsvHelpTitle`/`bankCsvHelpBody` collapsible (C19, already implemented) sits just below and provides the how-to-export detail; this note provides the why. No structural changes to the import flow. Build rc=0.
