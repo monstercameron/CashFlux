@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C240 (consolidate reports CSV exports)
+
+The R-7 commit added a page-level `<details>` export dropdown covering all six CSV exports
+(category, income-by-source, payees, biggest-expenses, member-spend, tax-summary). However the six
+individual per-card "Download CSV" / "Tax summary" buttons were never removed, so each export was
+offered from two different places: the consolidated menu at the top of the page and an inline button
+at the bottom of its respective card.
+
+Removed the per-card button groups from the category card (both buttons), the payees section,
+the biggest-expenses section, the income-by-source section, and the member-spend section. The
+consolidated export menu is now the single surface for all reports CSV downloads — less clutter,
+clearer intent, and no duplicated action paths for users.
+
+Also fixed a pre-existing build blocker: `smart_strip.go` had an unused `"fmt"` import introduced
+by a concurrent agent (the `itoaStrip` function was added as a replacement for `fmt.Sprintf` but
+the import was not removed). Removed the dead import to restore the clean build.
+
 ## 2026-06-27 — C239 (degenerate chart domain guard)
 
 Bar charts threw SVG "negative height" / NaN errors whenever every value was equal (notably all-zero

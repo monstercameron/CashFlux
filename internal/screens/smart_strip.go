@@ -77,6 +77,13 @@ func SmartStrip(props smartStripProps) ui.Node {
 
 	openHub := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/smart")) })
 
+	// R38 (§3.1/§8.6): lead with the single most-severe insight (insights are
+	// severity-sorted); the rest expand in place on request, so the strip is a
+	// glanceable decision layer, not a stack that buries the page's primary content.
+	// Collapse resets per page (the strip is keyed by path) → decision-first default.
+	expanded := ui.UseState(false)
+	toggleExpand := ui.UseEvent(func() { expanded.Set(!expanded.Get()) })
+
 	// "View all (N)" link in the card header — only when more exist than shown.
 	var headerAction ui.Node
 	if total > len(insights) {
@@ -103,8 +110,24 @@ func SmartStrip(props smartStripProps) ui.Node {
 	// Body: the Free insight cards, then the page's AI run-controls (gated on a
 	// configured provider — an honest hint instead of dead controls otherwise).
 	var bodyParts []any
-	if len(insights) > 0 {
-		bodyParts = append(bodyParts, smartInsightList(insights))
+	shown := insights
+	if !expanded.Get() && len(insights) > 1 {
+		shown = insights[:1] // collapsed: just the top insight
+	}
+	if len(shown) > 0 {
+		bodyParts = append(bodyParts, smartInsightList(shown))
+	}
+	// In-place expand/collapse for the remaining inline insights (distinct from
+	// "View all" which navigates to the /smart hub for the complete catalog).
+	if len(insights) > 1 {
+		ariaExp := "false"
+		label := fmt.Sprintf(uistate.T("smart.stripMore"), len(insights)-1)
+		if expanded.Get() {
+			ariaExp, label = "true", uistate.T("smart.stripLess")
+		}
+		bodyParts = append(bodyParts, Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+			Attr("data-testid", "smart-strip-toggle"), Attr("aria-expanded", ariaExp),
+			OnClick(toggleExpand), label))
 	}
 	if len(aiFeats) > 0 {
 		conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)

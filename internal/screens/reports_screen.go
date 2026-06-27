@@ -575,6 +575,39 @@ func Reports() ui.Node {
 		}
 	}
 
+	// V8: ranked bar chart for income by source — mirrors the spending bar/donut
+	// pattern so the Income section has the same visual depth as Spending. Top 8
+	// sources by absolute amount; Tableau10 colors by rank (matching the sibling
+	// donut palette for cohesion).
+	var incomeBarNodes []ui.Node
+	{
+		var barPairs []struct {
+			Label  string
+			Amount int64
+		}
+		for i, r := range incomeRows {
+			if i >= 8 {
+				break
+			}
+			if r.Amount == 0 {
+				continue
+			}
+			barPairs = append(barPairs, struct {
+				Label  string
+				Amount int64
+			}{Label: nameOf(r.CategoryID), Amount: absI64(r.Amount)})
+		}
+		if len(barPairs) > 0 {
+			spec := reportsBarSpec(barPairs, decimals)
+			if len(spec.Series) > 0 {
+				for i := range spec.Series[0].Points {
+					spec.Series[0].Points[i].Color = tableau10(i)
+				}
+			}
+			incomeBarNodes = append(incomeBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top income sources ranked by amount", CurrencySymbol: currency.Symbol(base)}))
+		}
+	}
+
 	// V7: ranked bar charts for top payees and biggest expenses.
 	var payeeBarNodes []ui.Node
 	{
@@ -791,26 +824,6 @@ func Reports() ui.Node {
 				If(len(catBarNodes) > 0, Div(catBarNodes)),
 				If(len(catDonutNodes) > 0, Div(catDonutNodes)),
 				catBody,
-				If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
-					}), uistate.T("reports.downloadCsv")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-tax-summary"), Title(uistate.T("reports.taxSummaryTitle")), OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						// Tax summary always covers a full calendar year. When viewing
-						// a Year window use that year; otherwise fall back to the current
-						// calendar year so the export is always a complete annual set.
-						yr := w.From.Year()
-						if w.Res != period.Year {
-							yr = time.Now().Year()
-						}
-						ys := time.Date(yr, time.January, 1, 0, 0, 0, 0, time.UTC)
-						ye := time.Date(yr+1, time.January, 1, 0, 0, 0, 0, time.UTC)
-						summary, _ := reports.YearTax(txns, yr, ys, ye, rates)
-						downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
-					}), uistate.T("reports.taxSummary")),
-				)),
 			),
 		}),
 		// G9.1 Item 5 — Sankey moved up: directly after category → Sankey → payees → biggest expenses.
@@ -823,16 +836,6 @@ func Reports() ui.Node {
 			Body: Fragment(
 				If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
 				Div(css.Class("rows"), payeeNodes),
-				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
-					Button(css.Class("btn"), Type("button"),
-						Attr("data-testid", "reports-payees-csv"),
-						Title(uistate.T("reports.downloadCsvTitle")),
-						OnClick(func() {
-							csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-							downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
-						}),
-						uistate.T("reports.downloadCsv")),
-				),
 			),
 		})),
 		If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -840,16 +843,6 @@ func Reports() ui.Node {
 			Body: Fragment(
 				If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
 				Div(css.Class("rows"), largestNodes),
-				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1)),
-					Button(css.Class("btn"), Type("button"),
-						Attr("data-testid", "reports-largest-csv"),
-						Title(uistate.T("reports.downloadCsvTitle")),
-						OnClick(func() {
-							csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-							downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
-						}),
-						uistate.T("reports.downloadCsv")),
-				),
 			),
 		})),
 		// R-9: only render the Income divider when at least one income/member section
@@ -863,14 +856,9 @@ func Reports() ui.Node {
 		If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.incomeBySource"),
 			Body: Fragment(
+				If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
 				If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
 				Div(css.Class("rows"), incomeNodes),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
-					}), uistate.T("reports.downloadCsv")),
-				),
 			),
 		})),
 		// L21: show the member-spend section whenever the household has ≥2 members
@@ -879,21 +867,7 @@ func Reports() ui.Node {
 		// spent what?" and surfaces the unattributed remainder.
 		If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("reports.byMember"),
-			Body: Fragment(
-				Div(css.Class("rows"), memberNodes),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("reports.downloadCsvTitle")), OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						nm := func(id string) string {
-							if n := memberName[id]; n != "" {
-								return n
-							}
-							return uistate.T("reports.noMember")
-						}
-						downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, nm, csvAmount))
-					}), uistate.T("reports.downloadCsv")),
-				),
-			),
+			Body:  Div(css.Class("rows"), memberNodes),
 		})),
 		// R-9: only render the Trends divider when a trend/net-worth section follows.
 		If(len(netSeries) >= 2 || len(accounts) > 0,
