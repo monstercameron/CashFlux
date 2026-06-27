@@ -262,6 +262,18 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// Signed-in devices list + per-device revoke (§7.11) — shown once authenticated.
 		If(strings.TrimSpace(p.ServerToken) != "", uic.CreateElement(DevicesList)),
 		If(p.CloudSelected, Fragment(
+			// C302: discoverable manage/cancel/downgrade surface — shown whenever the
+			// user is authenticated with the cloud backend, so a subscriber can always
+			// find the billing portal without hunting through the checkout UI.
+			If(strings.TrimSpace(p.ServerToken) != "", Fragment(
+				H4(css.Class("set-label"), uistate.T("settings.manageSubTitle")),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.manageSubHint")),
+				Button(css.Class("btn", tw.Mt045), Type("button"),
+					Attr("data-testid", "manage-subscription"),
+					OnClick(p.OnOpenPortal),
+					uistate.T("settings.manageSub"),
+				),
+			)),
 			H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
 			Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), p.CloudPrice),
@@ -277,7 +289,6 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			}),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(p.OnStartCheckout), uistate.T("settings.cloudSubscribe")),
-				Button(css.Class("btn"), Type("button"), OnClick(p.OnOpenPortal), uistate.T("settings.manageSub")),
 			),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
 		)),

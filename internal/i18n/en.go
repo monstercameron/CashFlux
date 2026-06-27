@@ -408,6 +408,7 @@ var english = Catalog{
 	"common.no":            "No",
 	"common.notReady":      "App state is not ready yet.",
 	"common.name":          "Name",
+	"common.importFromFile": "Or import from a file (CSV, statement, or image)",
 	"common.reassignTitle": "Reassign before deleting",
 	"common.moveAndDelete": "Move and delete",
 
@@ -817,6 +818,7 @@ var english = Catalog{
 	"documents.csvTitle":             "Import transactions from CSV",
 	"documents.csvDesc":              "Paste rows with a header line. Columns are matched by name: date, payee, amount, account, category, member (each by name or ID); currency is optional and defaults to your base currency; extra columns are ignored. Amounts are decimal — negative for expenses.",
 	"documents.import":               "Import",
+	"documents.aiSectionLabel":       "Or scan a receipt or statement image with AI (needs an OpenAI key)",
 	"documents.stmtTitle":            "Import a bank or card statement",
 	"documents.stmtDesc":             "Paste a statement export in almost any layout — the columns (date, description, amount, or separate debit/credit) are detected automatically. Parsed rows drop into the review list below, where you can edit or remove them before importing; duplicates already in the account are skipped.",
 	"documents.stmtParse":            "Parse statement",
@@ -1065,6 +1067,8 @@ var english = Catalog{
 	"settings.cloudPlanMonthly":  "Monthly",
 	"settings.cloudSubscribe":    "Subscribe",
 	"settings.manageSub":         "Manage subscription",
+	"settings.manageSubTitle":    "Manage your subscription",
+	"settings.manageSubHint":     "Open the billing portal to change your plan, update your payment method, or cancel anytime. Your local data is never affected.",
 	"settings.cloudTrustLine":    "Cancel anytime. Export anytime. Your OpenAI key is encrypted server-side when uploaded.",
 	"settings.billingFailed":     "Billing couldn't start: %s",
 	"settings.aiModel":           "AI model",
@@ -1302,6 +1306,7 @@ var english = Catalog{
 
 	// Accounts screen
 	"accounts.addTitle":           "Add account",
+	"accounts.firstRunHint":       "Add your first account to start tracking money — a checking account, savings, credit card, or cash. Everything stays on this device.",
 	"accounts.currency":           "Currency",
 	"accounts.useOtherCurrency":   "Use a different currency",
 	"accounts.openingBalance":     "Opening balance",

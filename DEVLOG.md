@@ -3,6 +3,26 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C302: discoverable manage/cancel/downgrade surface
+
+**Problem (C302):** The billing-portal entry point ("Manage subscription" button, which calls `OnOpenPortal` / `openBillingPortal`) was only shown inside `If(p.CloudSelected, Fragment(...))` — grouped with the "Subscribe" primary CTA and the billing-interval selector. From a subscriber's perspective, the button looked like part of the upgrade/checkout flow, not a management affordance for an existing subscription. A user who had already subscribed had no obvious path to cancel, change their plan, or update their payment method; they would need to know to go to Cloud & server settings, set mode to Cloud, then scan the checkout UI to find the portal button among the subscribe controls.
+
+**Root cause:** The manage-portal button (`settings.manageSub`) was paired with the subscribe CTA as a secondary action, making it functionally dual-purpose (pre- and post-subscription) but visually associated with "before you subscribe." There was no dedicated management block.
+
+**Fix:** In `internal/app/settings_section.go`, inside the `If(p.CloudSelected, Fragment(...))` block, added a gated sub-section at the top: when `p.ServerToken != ""` (the user is authenticated with the cloud backend), render a "Manage your subscription" heading (`settings.manageSubTitle`), a plain-English hint (`settings.manageSubHint`), and the billing-portal button with `data-testid="manage-subscription"`. The "Subscribe" button row is now a standalone `Div` without the portal button paired alongside it. The portal button itself is removed from the subscribe row — it is only shown in the new dedicated management section (which itself is only shown when authenticated). For unauthenticated cloud users (who haven't signed in), the management block is hidden and the subscribe row is the sole visible CTA.
+
+**Design decisions:**
+- Gate on `ServerToken != ""` (not on a separate `IsSubscribed` prop): the only way to manage a subscription via the portal is if you're authenticated with the cloud backend. This is the correct and minimal signal.
+- Placed BEFORE the checkout block: the management action should be the first thing a returning subscriber sees when they enter the cloud section, not buried below the plan selector.
+- `data-testid="manage-subscription"`: makes the button directly addressable in automated tests without relying on text matching.
+- Removed portal button from subscribe row: pairing it there was confusing (the portal has no useful action before subscribing, as the user has no subscription to manage). Post-subscribe the dedicated block is shown instead.
+
+**New i18n keys:** `settings.manageSubTitle` ("Manage your subscription"), `settings.manageSubHint` (portal/cancel/change hint).
+
+**Files changed:** `internal/app/settings_section.go`, `internal/i18n/en.go`.
+
+**Tests:** `go test ./internal/i18n/` passes. `GOOS=js GOARCH=wasm go build -o NUL .` exits 0.
+
 ## 2026-06-27 — C301: CloudMention dismiss changed to 30-day snooze
 
 **Problem:** `CloudMention` stored `"1"` in `cashflux:cloud-mention-dismissed` on both the "Not now" and "Learn more" buttons. On the next render, `lsGet(cloudMentionDismissedKey) != ""` was true — the banner was gone forever. Since `ShowUpgradeSheet()` is only called from `CloudMention.onLearn`, this meant the upgrade path was permanently blocked after a single dismiss, even if the user later wanted to learn more about Cloud features.
