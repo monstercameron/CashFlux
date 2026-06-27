@@ -341,6 +341,13 @@ func (a *App) Budgets() []domain.Budget {
 func (a *App) Goals() []domain.Goal { v, err := a.store.ListGoals(); a.logErr("goals", err); return v }
 func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("tasks", err); return v }
 
+// Holdings returns every persisted investment holding.
+func (a *App) Holdings() []domain.Holding {
+	v, err := a.store.ListHoldings()
+	a.logErr("holdings", err)
+	return v
+}
+
 // Rules returns every auto-categorization rule.
 func (a *App) Rules() []rules.Rule { v, err := a.store.ListRules(); a.logErr("rules", err); return v }
 
@@ -1739,6 +1746,18 @@ func (a *App) PutGoal(g domain.Goal) error {
 	return nil
 }
 func (a *App) DeleteGoal(id string) error { return a.del("goal", id, a.store.DeleteGoal) }
+
+// PutHolding persists an investment holding (insert or replace by ID).
+func (a *App) PutHolding(h domain.Holding) error {
+	if err := a.store.PutHolding(h); err != nil {
+		return fmt.Errorf("appstate: put holding: %w", err)
+	}
+	a.log.Info("holding saved", "id", h.ID, "ticker", h.Ticker)
+	return nil
+}
+
+// DeleteHolding removes an investment holding by ID.
+func (a *App) DeleteHolding(id string) error { return a.del("holding", id, a.store.DeleteHolding) }
 
 // ArchiveGoal sets the Archived flag on a goal to archive (true) or restore
 // (false) it. The goal must already exist; a missing ID returns an error.

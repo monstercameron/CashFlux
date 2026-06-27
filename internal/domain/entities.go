@@ -565,3 +565,35 @@ type SubscriptionCancellation struct {
 	SubName     string    `json:"subName"`
 	CancelledOn time.Time `json:"cancelledOn"`
 }
+
+// Holding is a single investment position within an investment account. All
+// money values are integer minor units (e.g. cents for USD). Shares is
+// fractional because partial shares are common. No schema migration is needed
+// — the "holdings" table is created on first write alongside all other entity
+// tables, and JSON round-trips automatically.
+type Holding struct {
+	ID        string `json:"id"`
+	AccountID string `json:"accountId"` // investment account this holding belongs to
+
+	// Ticker is the exchange symbol (e.g. "AAPL"). Empty for funds or other
+	// positions that have no ticker.
+	Ticker string `json:"ticker,omitempty"`
+
+	// Name is the human-readable name of the security or fund.
+	Name string `json:"name"`
+
+	// Shares is the number of units held (fractional shares allowed).
+	Shares float64 `json:"shares"`
+
+	// CostBasisMinor is the total acquisition cost in minor currency units
+	// (e.g. cents). Used to compute unrealized gain/loss.
+	CostBasisMinor int64 `json:"costBasisMinor"`
+
+	// CurrentPriceMinorPerShare is the latest known price per share in minor
+	// currency units. Multiply by Shares to get current market value.
+	CurrentPriceMinorPerShare int64 `json:"currentPriceMinorPerShare"`
+
+	// AssetClass is a broad category label, e.g. "Stocks", "Bonds", "Cash",
+	// "Crypto", "Real Estate". Empty means unclassified.
+	AssetClass string `json:"assetClass,omitempty"`
+}

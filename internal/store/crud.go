@@ -212,6 +212,28 @@ func (s *SQLiteStore) ListGoals() ([]domain.Goal, error) {
 	return loadRows[domain.Goal](s.db, "goals")
 }
 
+// --- Holdings ---
+
+// PutHolding persists a single investment holding, inserting or replacing by ID.
+func (s *SQLiteStore) PutHolding(h domain.Holding) error {
+	return putJSON(s.db, "holdings", h.ID, h)
+}
+
+// GetHolding retrieves one holding by ID. Returns (zero, false, nil) when not found.
+func (s *SQLiteStore) GetHolding(id string) (domain.Holding, bool, error) {
+	return getJSON[domain.Holding](s.db, "holdings", id)
+}
+
+// DeleteHolding removes a holding by ID. Returns true if a row was deleted.
+func (s *SQLiteStore) DeleteHolding(id string) (bool, error) {
+	return deleteRow(s.db, "holdings", id)
+}
+
+// ListHoldings returns every persisted holding in insertion order.
+func (s *SQLiteStore) ListHoldings() ([]domain.Holding, error) {
+	return loadRows[domain.Holding](s.db, "holdings")
+}
+
 // --- Tasks ---
 
 func (s *SQLiteStore) PutTask(t domain.Task) error { return putJSON(s.db, "tasks", t.ID, t) }

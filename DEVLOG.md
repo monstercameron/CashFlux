@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C219-foundation [F30]: Holding domain + store persistence
+
+The `portfolio` package was already committed and tested (PortfolioSummary, AllocationByHolding, AllocationByAssetClass), but there was no persisted model to feed it. This slice adds the minimal foundation: a `domain.Holding` entity, the `holdings` SQLite table, four CRUD methods on `SQLiteStore`, a `Holdings []domain.Holding` field in `Dataset` (lossless JSON round-trip), and `Holdings()`/`PutHolding()`/`DeleteHolding()` accessors on `App`.
+
+**Import-cycle decision.** `portfolio` imports only `math` and `sort` — it does not import `domain`. So the converter lives in `portfolio` as `FromDomain`/`FromDomainSlice`. The direction is `portfolio → domain`, not the reverse. Had `portfolio` imported `domain`, the converter would have needed to go in a third package (e.g. an adapter in `appstate` or `screens`), but that was not necessary here.
+
+**No schema migration.** Like Goal/Archived, the `holdings` table is created with `IF NOT EXISTS` in the schema constant, so existing in-memory databases (each session is fresh) pick it up without any versioned migration step.
+
+**Tests.** `TestHoldingCRUD` covers Put → Get → List → Update → Delete. `TestDatasetHoldingRoundTrip` extends the existing `sampleDataset` helper with a holding and verifies byte-for-byte losslessness (same approach as the Goals/Workflows round-trip tests). `TestFromDomain` and `TestFromDomainSlicePortfolioSummary` confirm the converter maps fields correctly and that `PortfolioSummary` produces correct aggregates from domain-sourced holdings. All pass; wasm build exit 0.
+
 ## 2026-06-27 — C190 [F25]: Sinking-fund set-aside on /budgets
 
 Wired `goals.FundSetAsideMinor` into the Budgets screen. The computation is a simple loop over `app.Goals()` filtering `IsSinkingFund && !Archived`, summing the per-goal monthly minor-unit amount. No new domain logic needed — `FundSetAsideMinor` already existed and was being used on the Goals screen; this just pulls it into budgets context.
