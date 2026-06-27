@@ -73,6 +73,7 @@ func All() []Route {
 		{Path: "/health", Label: "nav.health", Title: "nav.health", Subtitle: "screen.healthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: HealthScreen},
 		{Path: "/credit", Label: "nav.credit", Title: "nav.credit", Subtitle: "screen.creditSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: CreditScreen},
 		{Path: "/loans", Label: "nav.loans", Title: "nav.loans", Subtitle: "screen.loansSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: LoansScreen},
+		{Path: "/investments", Label: "nav.investments", Title: "nav.investments", Subtitle: "screen.investmentsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: InvestmentsScreen},
 		{Path: "/recurring", Label: "nav.recurring", Title: "nav.recurring", Subtitle: "screen.recurringSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Recurring},
 		{Path: "/subscriptions", Label: "nav.subscriptions", Title: "nav.subscriptions", Subtitle: "screen.subscriptionsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Subscriptions},
 		{Path: "/bills", Label: "nav.bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBills, View: Bills},

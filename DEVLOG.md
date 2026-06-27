@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C219/C220/C221 [F30]: /investments holdings UI
+
+Three tickets combined: holdings list + add/delete (C219), performance summary (C220), and asset-class allocation bars (C221).
+
+**Hook-stability strategy.** The pattern from `loans.go` was followed exactly: every interactive element is its own named component called via `ui.CreateElement` so its `UseState`/`UseEvent` calls occupy fixed positions in the hook registry. Three sub-components: `holdingRow` (1 `UseEvent` — delete handler), `addHoldingForm` (6 `UseState` + 7 `UseEvent` — one per field + save), and `investmentAccountCard` (pure display, no hooks, wraps the above via `CreateElement`). `InvestmentsScreen` itself has one `UseEffect`-adjacent call (`UseDataRevision().Get()`) at top level.
+
+**tw utilities actually available.** Earlier draft referenced `tw.FontTabular`, `tw.Mt4`, `tw.Mb4`, `tw.GridCols4` — none exist. Had to substitute: `FontMedium` for tabular weight, `Mt3`/`Mb3` for medium margin, `GridCols2` for the 2×2 summary grid. `tw.TextDim` is a `css.Rule` (not a string), so mixed-context expressions use `tw.ColorClass("text-dim")` for the string path and `css.Class(..., tw.TextDim)` for the typed path.
+
+**Allocation bars vs. chart.** No chart/SVG primitive is readily available in the GWC component library, so the C221 allocation breakdown renders as a labeled bar list: each asset class gets a label row (name + pct + value) above a thin progress bar (`height:6px`, `background:var(--up)`, width set via inline `style`). Acceptable per the spec ("labeled allocation BAR list is an acceptable fallback").
+
+**Overall summary card.** Added an aggregate "Portfolio overview" card above the per-account cards — shown only when at least one holding exists. Covers the case where a user has multiple investment accounts and wants a single total figure. The per-account card redundantly shows its own 2×2 summary so each account is self-contained.
+
+**Empty states.** Two tiers: (1) no investment accounts at all → full-page card with nudge to add an Investment/Retirement/Crypto account; (2) account exists but no holdings → inline "No holdings yet" caption within the account card's holdings section, with the add form always visible.
+
 ## 2026-06-27 — C219-foundation [F30]: Holding domain + store persistence
 
 The `portfolio` package was already committed and tested (PortfolioSummary, AllocationByHolding, AllocationByAssetClass), but there was no persisted model to feed it. This slice adds the minimal foundation: a `domain.Holding` entity, the `holdings` SQLite table, four CRUD methods on `SQLiteStore`, a `Holdings []domain.Holding` field in `Dataset` (lossless JSON round-trip), and `Holdings()`/`PutHolding()`/`DeleteHolding()` accessors on `App`.
