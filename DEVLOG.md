@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R46: semantic token-role audit (money vs severity vs accent)
+
+**What:** R46 wants color to carry one meaning per context — brand accent, money positive/negative, and warning/critical severity as distinct token roles, with no off-token hardcodes. Built `e2e/ux_token_roles_audit.mjs` as a fast source audit (no browser) over web/index.html's CSS.
+
+**Findings & fixes:** the live violation class was money figures borrowing the brand/severity tokens. 13 money selectors (`.hero-net.pos/.neg`, `.hero-net-delta`, `.hero-flanker-value`, `.hero-stat-value`, `.stat-value`) painted positive money with `--accent` (#2e8b57, brand seagreen) and negative money with `--danger` (severity red). Moved them all to `--money-positive`/`--money-negative`. The positive side visibly brightens (#2e8b57 → #54b884) which is *more* correct — money green now reads distinct from brand, and contrast improves. `.amount-expense` was also on `--danger`; moved to `--money-negative`.
+
+**Adversarial loop (two rounds):** first review FAILED — the audit's selector set missed `.amount-expense`/`.amount-income`, and flagged a scope-honesty concern (R46 names five role separations, I'd done one). Fixed: expanded the selector set; added a BIDIRECTIONAL severity check (severity elements must not borrow money tokens); documented that brand-accent legitimately also serves the interactive/selected-nav role and chrome uses bg/border tokens, both already separated, so money<->severity is the live boundary. Second review caught a subtler bug: `.attention-item.is-critical` used `var(--down)` — the *alias* of `--money-negative` — for its border/dot, and my token regex only matched the canonical `--money-*` spelling, so the audit missed it. Made the token match alias-aware (`--up`/`--down`) and moved `.is-critical` onto the severity `--danger` token (now symmetric with `.is-warning`→`--warn`). Audit green both directions.
+
+**Trade-off / next:** the audit guards the money<->severity boundary specifically (the historically-violated one); a fuller R46 could add explicit role checks for selected-nav vs brand-accent and passive-chrome, but those are already clean in the current tokens. **Validation:** audit exit 0, build rc 0, contrast audit 0 money-figure failures.
+
 ## 2026-06-27 — C253: Cross-link from /subscriptions to /insights for anomaly discoverability
 
 **Ticket:** C253 [DESIGN] — "Anomaly surface fragmented across /insights, /subscriptions, /smart."

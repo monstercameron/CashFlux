@@ -874,7 +874,7 @@
       [data-theme="light"] .attention-item { background: var(--bg-card, #ffffff); color: #1c1c1e; border-color: #e4e2dd; }
       /* GX11-F5: is-critical/is-warning chips in light mode showed a colored border on a
          transparent bg (empty error-box look). Pair the border with a faint danger/warn tint. */
-      [data-theme="light"] .attention-item.is-critical { background: color-mix(in srgb, var(--down, #dc2626) 6%, #ffffff); border-color: color-mix(in srgb, var(--down, #dc2626) 30%, #e4e2dd); }
+      [data-theme="light"] .attention-item.is-critical { background: color-mix(in srgb, var(--danger, #dc2626) 6%, #ffffff); border-color: color-mix(in srgb, var(--danger, #dc2626) 30%, #e4e2dd); }
       [data-theme="light"] .attention-item.is-warning { background: color-mix(in srgb, var(--warn, #d97706) 6%, #ffffff); border-color: color-mix(in srgb, var(--warn, #d97706) 30%, #e4e2dd); }
       /* G22 CRITICAL: custom page content area had no background-color in light mode — the
          body dark bg bled through the transparent content div as a near-black void. Apply
@@ -978,18 +978,18 @@
       .hero-period { font-size: 0.825rem; font-weight: 500; color: var(--text-dim); margin: 0 0 0.6rem; }
       .hero-main { display: flex; align-items: baseline; gap: 1.5rem; flex-wrap: wrap; }
       .hero-net { font-size: 2.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.025em; }
-      .hero-net.pos { color: var(--accent); }
-      .hero-net.neg { color: var(--danger); }
+      .hero-net.pos { color: var(--money-positive); }
+      .hero-net.neg { color: var(--money-negative); }
       /* G9.1: period-over-period Net delta chip under the headline figure. */
       .hero-net-delta { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.2rem; font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .hero-net-delta.pos { color: var(--accent); }
-      .hero-net-delta.neg { color: var(--danger); }
+      .hero-net-delta.pos { color: var(--money-positive); }
+      .hero-net-delta.neg { color: var(--money-negative); }
       .hero-flankers { display: flex; gap: 1.25rem; align-items: baseline; flex-wrap: wrap; }
       .hero-flanker { display: flex; flex-direction: column; gap: 0.1rem; }
       .hero-flanker-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
       .hero-flanker-value { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -0.015em; }
-      .hero-flanker-value.pos { color: var(--accent); }
-      .hero-flanker-value.neg { color: var(--danger); }
+      .hero-flanker-value.pos { color: var(--money-positive); }
+      .hero-flanker-value.neg { color: var(--money-negative); }
       .hero-secondary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
       .hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
       /* --text-dim (not --text-faint): the uppercase eyebrow label measured only 3.58:1 on --text-faint
@@ -1002,9 +1002,9 @@
          white like a healthy one. Color by sign/health so the warning states (short runway, negative
          savings rate) are glanceable — matching the Net/Income/Spending strip directly above. */
       .hero-stat-value.pos { color: var(--money-positive); }
-      .hero-stat-value.neg { color: var(--danger); }
+      .hero-stat-value.neg { color: var(--money-negative); }
       [data-theme="light"] .hero-stat-value.pos { color: var(--money-positive) !important; }
-      [data-theme="light"] .hero-stat-value.neg { color: var(--danger) !important; }
+      [data-theme="light"] .hero-stat-value.neg { color: var(--money-negative) !important; }
       /* Dashboard HomeHero band (EC4): the component (internal/screens/homehero.go) ships
          these class names but no CSS existed for the layout wrappers, so the this-month
          stat blocks collapsed to display:block and the label+value jammed together
@@ -1078,8 +1078,8 @@
       /* Keep stat figures on one line (G11): a "Next due" ISO date was hyphenating to
          "2026-07-" / "01" in the narrow single-column 768px stat card. */
       .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; white-space: nowrap; letter-spacing: -0.015em; }
-      .stat-value.pos { color: var(--accent); }
-      .stat-value.neg { color: var(--danger); }
+      .stat-value.pos { color: var(--money-positive); }
+      .stat-value.neg { color: var(--money-negative); }
       .stat-sub { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
 
       /* Net-worth-dominant summary (G3): a hero net-worth tile beside smaller
@@ -1223,7 +1223,7 @@
       }
       .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
       .amount-income { color: var(--money-positive); } /* §4.3: income is money-positive, not the interaction accent */
-      .amount-expense { color: var(--danger); }
+      .amount-expense { color: var(--money-negative); } /* §4.3: an expense is money-negative, NOT the critical-severity --danger */
 
       /* Transactions filter toolbar (C47): compact search + Filters popover + chips. */
       .filter-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
@@ -2451,8 +2451,8 @@
       .attention-item:focus-visible { outline:2px solid var(--accent,#3b82f6); outline-offset:1px; }
       .attention-dot { font-size:11px; line-height:1; flex:none; }
       .attention-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      .attention-item.is-critical { border-left:3px solid var(--down,#dc2626); }
-      .attention-item.is-critical .attention-dot { color:var(--down,#dc2626); }
+      .attention-item.is-critical { border-left:3px solid var(--danger,#dc2626); }
+      .attention-item.is-critical .attention-dot { color:var(--danger,#dc2626); }
       .attention-item.is-warning { border-left:3px solid var(--warn,#d97706); }
       .attention-item.is-warning .attention-dot { color:var(--warn,#d97706); }
       .attention-item.is-info .attention-dot { color:var(--dim,#6b7280); }
@@ -2865,8 +2865,8 @@
       /* QW-2 title weight (already 600 at L716; reasserted) */
       .card-title { font-weight: 600; }
       /* QW-3 stat value semantic color — beats .stat-value{color:var(--text)} at L1140 */
-      .stat-value.neg { color: var(--danger) !important; }
-      .stat-value.pos { color: var(--accent) !important; }
+      .stat-value.neg { color: var(--money-negative) !important; }
+      .stat-value.pos { color: var(--money-positive) !important; }
       /* QW-4 share bar height */
       .share-bar { height: 8px !important; }
       .share-bar > div { height: 8px !important; }
