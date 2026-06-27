@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C181 SKIP (goal delete button / budget-head pointer-events)
+
+Investigated whether `.budget-head` CSS or any overlay was blocking the goal
+delete button. Findings:
+
+- `.budget-head` is `display:flex; align-items:baseline; justify-content:space-between;`
+  with no `overflow:hidden`, no `position:absolute`, no `z-index`. No stacking or clipping.
+- The `pointer-events:none` in index.html is intentional hover-reveal:
+  `.budget:not(:hover):not(:focus-within) .btn-del-hover { opacity:0; pointer-events:none }`
+  This hides the delete button until the row is hovered or focused — a deliberate UX decision,
+  not a bug. The button does activate on hover.
+- No sibling element was found that covers the button region.
+
+No concrete CSS pointer-events blocking bug was found. Skipping — the hover-reveal is working
+as designed. If repro steps emerge in future QA (e.g. the button is inaccessible even on hover),
+re-open with the specific scenario.
+
 ## 2026-06-27 — C156 (dedicated /recurring route)
 
 The recurring management card lives inside /planning, which means users with bills to manage
