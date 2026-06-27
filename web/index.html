@@ -2374,9 +2374,14 @@
       /* Sample-data banner (G1): these classes were unstyled, so "Start fresh" and
          "Dismiss" rendered as adjacent inline text reading "Start freshDismiss".
          Give the banner a compact styled strip with a clear gap between actions. */
-      .sample-banner { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.6rem;
-        padding:.5rem .85rem; margin-bottom:1rem; background:var(--accent-dim); border:1px solid var(--border);
-        border-radius:var(--radius); font-size:.86rem; }
+      /* R41: compact sample-mode CHIP (was a full-width banner). inline-flex so it
+         shrinks to its content and sits left-aligned at the top of the page instead
+         of spanning the whole width and dominating the first viewport on every page. */
+      .sample-banner { display:inline-flex; flex-wrap:wrap; align-items:center; gap:.5rem;
+        padding:.2rem .35rem .2rem .6rem; margin-bottom:1rem; max-width:100%;
+        background:var(--accent-dim); border:1px solid var(--border);
+        border-radius:999px; font-size:.8rem; }
+      .sample-banner-dot { width:7px; height:7px; border-radius:999px; flex:0 0 auto; background:var(--accent); }
       .sample-banner-text { color:var(--text-dim); }
       .sample-banner-actions { display:flex; align-items:center; gap:.6rem; }
       /* Banner CTA color: --text (not --accent). In dark the banner bg is var(--accent-dim)

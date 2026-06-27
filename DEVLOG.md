@@ -14258,3 +14258,13 @@ critical>warning>info) on the visible feed before render — recency preserved w
 mutation). Result: the 6 distinct critical over-budget alerts now lead, then warnings (due-soon), then the
 rest. Adversarial reviewer: PASS (4/4); flagged a future collapse-threshold for >4 same-rule rows (added a
 TODO) and the pre-existing "money dipped" digest copy (separate ticket). notifications.go is clean-mine.
+
+## 2026-06-27 — R41: sample banner → compact chip (global)
+The sample-data indicator was a full-width green banner on every page's first viewport. Demoted it to a
+compact left-aligned pill (~248x32px vs ~1200px full-width): a status dot + "Sample data" + "Start fresh" +
+"Dismiss", with the long explanation moved to the chip's title tooltip. CSS-only chip shape in index.html
+(.sample-banner → inline-flex pill + .sample-banner-dot), short label via new en_samplebanner.go, and the
+samplebanner.go structure (role alert→status since it's persistent/non-urgent; title tooltip). Frees the
+first viewport on EVERY route (high-leverage, global). Adversarial reviewer: PASS 4/4, no fixes (one future
+a11y-hardening annotation re aria-description, non-blocking). samplebanner.go clean; index.html my hunk
+selectively staged around the other agent's concurrent C181 .btn-del-hover block.
