@@ -881,6 +881,13 @@ func Reports() ui.Node {
 				),
 			)
 		}(),
+		// C236: "Save as PDF" button opens the browser print dialog, which lets users
+		// save the current report as a PDF without any server-side dependency.
+		func() ui.Node {
+			printReport := ui.UseEvent(func(_ ui.Event) { js.Global().Call("print") })
+			return Button(css.Class("btn", "btn-sm", tw.Mt1), Type("button"), OnClick(printReport),
+				uistate.T("reports.saveAsPDF"))
+		}(),
 		If(spendStats.Count > 0, P(css.Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
 		// G9.1 Item 3 — Heads-up anomaly card gets .card-alert urgency border.
 		If(len(anomalyNodes) > 0, uiw.Card(uiw.CardProps{

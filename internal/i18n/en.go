@@ -1434,6 +1434,7 @@ var english = Catalog{
 	"reports.noPayee":                  "(no description)",
 	"reports.downloadCsv":              "Download CSV",
 	"reports.export":                   "Export CSV ▾",
+	"reports.saveAsPDF":                "Save as PDF / Print",
 	"reports.downloadCsvTitle":         "Download the spending-by-category breakdown as a CSV file",
 	"reports.empty":                    "No spending in this period yet.",
 	"reports.addFirst":                 "Add transactions",

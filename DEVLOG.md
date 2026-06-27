@@ -4,6 +4,10 @@ Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, 
 problems and fixes, and what's next.
 
 
+## 2026-06-27 — C236: Save as PDF / Print button on /reports
+
+Added a lightweight "Save as PDF / Print" button to the Reports screen. The approach: call `js.Global().Call("print")` (i.e. `window.print()`) from a `ui.UseEvent` handler, which opens the browser's native print dialog. Chrome/Edge/Firefox/Safari all offer "Save as PDF" in that dialog, so this satisfies C236 without pulling in any server-side PDF library. The button sits below the CSV export `<details>` block and is clearly labeled. The `syscall/js` import was already present in the file. Decision: kept the button unconditional (always visible) — there's always content to print on /reports; no conditional guard needed unlike the Clear-filters pattern. Files: `internal/screens/reports_screen.go` (button), `internal/i18n/en.go` (new key `reports.saveAsPDF`). Build exits 0.
+
 ## 2026-06-27 — C237: YoY comparison toggle on /reports
 
 Added the missing year-over-year comparison toggle to the reports screen. The `reports.YoYPrior(w)` helper was already in the codebase (pure function that shifts the window back 12 months with `AddDate(-1,0,0)`); the only missing piece was the UI toggle and the plumbing to select which prior window to use. Design decision: the toggle is per-session state (`ui.UseState(false)`) — off by default so the MoM default is unchanged for existing users. When on, `ps, pe` are derived from `YoYPrior(w).Range()` rather than `w.Shift(-1).Range()`, which means all downstream consumers (category deltas, hero Net delta chip, spendTrend, coverage caption) automatically compare against the prior year. The toggle is placed in the category card header alongside the rollup toggle, and the hero caption updates to name the prior period clearly. No engine changes needed.
