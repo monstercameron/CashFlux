@@ -15446,3 +15446,21 @@ income, PutAccount + PutMember for entities. SettingKV tracks currencyConfirmed 
 (not part of store.Settings). Progress bar via setup.Compute(). Route registered in screens.go
 (GroupSystem). en.go was dirty so i18n key strings serve as their own labels (acceptable fallback).
 Both WASM builds pass (./internal/screens and .).
+
+## 2026-06-27 — C290/C293/C291/C292 [F43]: Real About & Privacy screen at /about
+
+The `About()` function in `help.go` was a stub that just returned `HelpScreen()`. C290 called for a real /about route, and C293 wanted an expanded About surface with the local-first privacy commitment — not just a version line.
+
+**What was built:**
+- `internal/screens/about.go` — new file, `AboutScreen()` with five focused cards.
+- `internal/i18n/en_about.go` — 25 i18n keys, init-merge pattern (no `en.go` touch).
+- `help.go` — one-line edit: stub now calls `AboutScreen()`.
+- Unit test `internal/i18n/en_about_test.go` — all 25 keys pass.
+- e2e `e2e/c290_about_check.mjs` — asserts real content, not Help stub.
+
+**Disclosure accuracy decisions:**
+- Cloud sync: checked `settings.backendNote` and `settings.cloudTrustLine` in `en.go`; the existing copy says "OpenAI key encrypted server-side" and "encrypted in transit" (not E2E). The about copy says "encrypted snapshot … sent over HTTPS" and notes it goes to the user-configured self-hosted backend, not any CashFlux-operated server. Conservative and accurate.
+- AI: described the client-only path (BYOK, localStorage) with an accurate note that key + data summary go to OpenAI only on explicit invocation.
+- C291/C292 are addressed by the cloud-sync and AI disclosure cards. Full remediation of the in-settings disclosures (ungate cloudTrustLine, move keyexplainer) remains open per the F43 backlog.
+
+Wasm rc=0, 25/25 unit tests pass, gofmt clean.
