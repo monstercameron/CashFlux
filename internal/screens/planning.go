@@ -461,7 +461,7 @@ func Planning() ui.Node {
 							uistate.T("planning.projectedNetWorth"),
 							smartTooltipFor(planSmartSettings, "planning-forecast", uistate.T("planning.projectedNetWorth"), uistate.T("smart.tipPlanningForecast")),
 						),
-						Div(ClassStr("stat-value "+accentFor(endVal)), fmtMoney(endVal)),
+						Div(ClassStr("stat-value is-hero "+accentFor(endVal)), fmtMoney(endVal)),
 					),
 					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
 				),
