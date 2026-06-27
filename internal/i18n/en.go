@@ -2195,6 +2195,22 @@ var english = Catalog{
 	"investments.noAccountsTitle":        "No investment accounts found",
 	"investments.noAccountsBody":         "Add an Investment, Retirement, or Crypto account to track your holdings here.",
 
+	// Duplicates review screen (C89 / F11)
+	"nav.duplicates":             "Duplicates",
+	"screen.duplicatesSub":      "Review and remove accidental double entries",
+	"duplicates.headline":       "%d possible duplicate entries across %d groups",
+	"duplicates.hint":           "Each group shares the same date, amount, and description. Keep one — delete the rest.",
+	"duplicates.groupCount":     "%d entries",
+	"duplicates.keepNote":       "First entry is kept",
+	"duplicates.keepLabel":      "Keep this one",
+	"duplicates.keepBadge":      "Keep",
+	"duplicates.deleteBtn":      "Delete duplicate",
+	"duplicates.deleteAria":     "Delete duplicate transaction %s",
+	"duplicates.deleteConfirm":  "Delete this duplicate transaction? This can't be undone.",
+	"duplicates.deleted":        "Duplicate deleted.",
+	"duplicates.emptyTitle":     "No duplicate transactions found",
+	"duplicates.emptyBody":      "Your ledger looks clean — no accidental double entries detected.",
+
 	// Credit health screen (C208 / C209 / F28)
 	"nav.credit":                "Credit health",
 	"screen.creditSub":          "Local credit-health proxy — private, no bureau",

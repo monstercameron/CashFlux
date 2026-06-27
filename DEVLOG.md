@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C89 [F11]: /duplicates review screen
+
+The `/duplicates` screen (F11) had no dedicated UI — users could see a dedupe count notice in the transaction ledger but had no way to review all duplicate groups in one place and clean them up.
+
+**Detection delegated.** `dedupe.FindDuplicates` was already correct: it normalises descriptions, excludes transfer legs, groups by (date, amount, currency, normalized description), and returns only groups of ≥2 IDs sorted newest-first. The screen is pure presentation on top of that.
+
+**Component layering for hook stability.** The GWC hook rules require `UseEvent` (and any other hook) to be called at a fixed render position — never inside a variable-length loop body. Three layers: (1) `DuplicatesScreen` holds only `UseDataRevision().Get()` at top; (2) `dupeGroup` (called via `ui.CreateElement`) renders one card per group, uses a `MapKeyed` for its rows but delegates each row to…; (3) `dupeRow` (called via `ui.CreateElement` inside that `MapKeyed`) holds the single `UseEvent` for the delete-confirm handler. This means exactly one `UseEvent` per rendered row, at a fixed position — no hook-count drift as groups change.
+
+**IsFirst via ID comparison.** The row-level `isFirst` flag is computed as `id == g.IDs[0]` rather than tracking a loop index, since `MapKeyed` render functions take a single item argument (not item+index).
+
+**Delete path.** `app.DeleteTransaction` is correct here — `FindDuplicates` already excludes transfers, so there is no transfer-pair to unpair. `ConfirmModal` guards the action; `PostUndoable` shows a toast on success.
+
 ## 2026-06-27 — C191 [F25]: Auto-accrual for sinking funds (once-per-month guard)
 
 The sinking-fund math was already shipped (`FundSetAsideMinor`, `DrawDownFund`) but nothing ever credited funds automatically — users had to contribute manually each month, defeating the purpose of a sinking fund.
