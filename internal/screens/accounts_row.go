@@ -339,6 +339,11 @@ func AccountRow(props accountRowProps) ui.Node {
 						AriaLabel: uistate.T("accounts.setBalanceCategoryLabel"),
 						TestID:    "setbal-cat-select",
 					})),
+				// C227: for valuation-type assets (investment/retirement/crypto/other),
+				// note that values are entered manually and no external API is called.
+				If(isValuationType(a.Type), P(css.Class("t-caption", tw.TextDim),
+					Attr("data-testid", "valuation-manual-note"),
+					uistate.T("accounts.valuationManualNote"))),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelSetBal), uistate.T("action.cancel")),
 			),

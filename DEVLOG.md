@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C227: note manual local-first asset valuation (design disclosure)
+
+**Problem:** Valuation-type asset accounts (investment, retirement, crypto, other) have their
+balances updated via "Update value" but the UI gave no indication that CashFlux is local-first
+and intentionally does not call external pricing APIs (Zillow, KBB, etc.). The manual-entry
+requirement felt like a gap rather than a deliberate privacy trade-off.
+
+**Decision:** Surface a muted one-liner inside the set-balance/update-value sub-form, shown
+only when `isValuationType(a.Type)` is true. Placement inside the open form (not in the
+collapsed row) keeps the main accounts list uncluttered — the note appears exactly when the
+user is entering a value, which is the right moment to set expectations.
+
+**Files changed:**
+- `internal/i18n/en.go` — added `accounts.valuationManualNote`
+- `internal/screens/accounts_row.go` — added `If(isValuationType(a.Type), P(...))` in the
+  `settingBal.Get()` block, after the category picker and before the Save/Cancel buttons.
+
 ## 2026-06-27 — C294: include artifact blobs in dataset export (backup completeness)
 
 **Root cause (two wiring bugs, not a missing feature):**
