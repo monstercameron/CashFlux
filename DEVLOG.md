@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C111/C214/C83 skip-triage (no-op investigations)
+
+Investigated three tickets for a bounded critical-review batch. All three are skips.
+
+**C111 [DESIGN F13] — /rules member filter has no effect (rules are global):**
+Grepped `member` across `internal/screens/rules.go` — zero results. There is no member
+filter dropdown on the Rules screen. The ticket describes a control that was either never
+implemented or was previously removed. No disclosure is needed because there is nothing
+to disclose. Skip reason: no member filter exists in rules.go.
+
+**C214 [MINOR F29] — Count-up animation shows a transient dual net-worth figure:**
+Reviewed `web/countup.js`, `internal/screens/dashboard.go`, and `internal/screens/dashboard_hero.go`.
+The count-up mechanism works on a single DOM element per figure: Go renders the final value
+as `textContent` on a `[data-countup]` node, then `cashfluxCountUpScan()` (called via
+`ui.UseEffect`) overwrites `textContent` with a 0→N tween and restores the exact original
+string at the last frame. There is no second element; no duplicate render path. The JS
+deduplicates via `data-countup-last` so re-renders with the same value are no-ops. No
+concrete double-render is present in the code. The ticket likely describes a C72 phantom
+(dual net-worth in the bento grid vs. hero), which is a separate pending IMPL. Skip reason:
+cannot find a concrete double-render — would be a speculative rewrite.
+
+**C83 [MINOR F10] — Add-menu "New account" item collides with skip-link selector:**
+Audited `internal/app/shell.go` (skip-link: `A(css.Class("skip-link"), href=path+"#main")`),
+`internal/app/addmenu.go` ("New account": a `<button class="add-item">` inside `.add-menu`,
+no id, no href), `web/index.html` (.skip-link positioned at top-left, .add-menu unrelated CSS),
+and all e2e files. Found no shared id, no querySelector that matches both. `gx_04_a11y.mjs`
+line 113 uses a combined selector `.skip-link, a[href='#main'], a[href='#content']` to locate
+the skip-link — but the "New account" button is a `<button>`, not an `<a>`, so it cannot
+match this selector. No CSS rule targets both. Note: C83 is already queued under
+`IMPL R4-fx-ux` for a later triage pass. Skip reason: no concrete collision found in code,
+CSS, or tests.
+
 ## 2026-06-27 — C117 (rollover checkbox label wrap fix)
 
 The budget edit form's rollover Label uses `tw.Flex + tw.ItemsCenter` (display:flex,
@@ -13893,3 +13925,12 @@ sessions, and audit log; needs CashFlux Cloud; local data stays on-device either
 auth lives. admin.go + en_enterprise.go (both clean, not the contended en.go). Adversarial style-spec
 reviewer: PASS first try, no fixes. Scoped to the sign-in state; the access-denied state is a known thinner
 treatment (separate). R55 is broad (all empty/gated states) — this is one increment, not the whole ticket.
+
+## 2026-06-27 — R38/§8.6: notification center prioritized by severity
+The Notification Center rendered in recency order, so a CRITICAL "Baby & Childcare over budget" alert was
+buried at the bottom under ~8 routine "due soon" reminders. Added a stable severity sort (notifySeverityRank:
+critical>warning>info) on the visible feed before render — recency preserved within each tier, display-only
+(read/catch-up/clear-all match by ID so unaffected; VisibleFeed returns a fresh slice so no shared-state
+mutation). Result: the 6 distinct critical over-budget alerts now lead, then warnings (due-soon), then the
+rest. Adversarial reviewer: PASS (4/4); flagged a future collapse-threshold for >4 same-rule rows (added a
+TODO) and the pre-existing "money dipped" digest copy (separate ticket). notifications.go is clean-mine.

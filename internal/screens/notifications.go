@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -33,6 +34,19 @@ func notifySeverityPill(sev string) ui.Node {
 		return Span(css.Class("sev-pill", "sev-critical"), Attr("aria-label", "Critical"), "Critical")
 	default:
 		return Span(css.Class("sev-pill", "sev-info"), Attr("aria-label", "Info"), "Info")
+	}
+}
+
+// notifySeverityRank orders severities for the prioritized feed: critical above
+// warning above everything else (info / reminders). Higher = more urgent.
+func notifySeverityRank(sev string) int {
+	switch sev {
+	case "critical":
+		return 3
+	case "warning":
+		return 2
+	default:
+		return 1
 	}
 }
 
@@ -152,6 +166,18 @@ func NotificationCenter() ui.Node {
 	// Apply the snooze filter: hide items snoozed until a future time.
 	now := time.Now().Unix()
 	visible := uistate.VisibleFeed(feed, now)
+
+	// §8.6: prioritize the feed by severity so an urgent CRITICAL/WARNING alert is
+	// never buried below routine reminders. Stable sort keeps the existing recency
+	// order within each severity tier (VisibleFeed returns a fresh slice, so this
+	// doesn't mutate the stored feed; read/catch-up logic below matches by ID).
+	// TODO(§8.6 group-repeated-hits): if one rule fires across many entities at once
+	// (e.g. >4 "X is over budget" at the same severity), collapse the leading block
+	// into a "N budgets over — review all" group row with expand, so a long run of
+	// near-identical rows doesn't dominate the top. Borderline-acceptable at ~6 today.
+	sort.SliceStable(visible, func(i, j int) bool {
+		return notifySeverityRank(visible[i].Severity) > notifySeverityRank(visible[j].Severity)
+	})
 
 	// C271: read lastSeen before the mark-read effect mutates state, so the
 	// catch-up count reflects what arrived since the prior open, not zero.
