@@ -3,6 +3,37 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C154: persistent per-bill paid/autopay status
+
+**Problem:** "Mark paid" posted a toast and called `RecordBillPayment` (which logs the transaction
+and advances `Recurring.NextDue`) but never wrote the paid mark anywhere. A reload would show the
+bill as unpaid again. The underlying domain model (`RecurringOccurrence` / `OccurrenceKey` /
+`MarkPaid`) was already built (IMPL R16-model) but not wired to UI state.
+
+**Approach:** Persistence via the existing KV table (`SetKV`/`GetKV`) rather than a new store
+table — the KV path already survives reload (it's in SQLite, serialized with the dataset), avoids
+touching schema migration code, and the access pattern (load-modify-save a small JSON map) is
+right-sized for the expected key count (~months × bills).
+
+Key format: `"billID|YYYY-MM-DD"` where billID is the account ID (liability-account bills) or
+`"recurring:<id>"` (recurring-derived bills). This mirrors `domain.OccurrenceKey` semantics but
+uses the full `AccountID` from `bills.Bill` — so account bills and recurring bills get different
+namespaces with no collision. Map value is a unix timestamp (seconds) for the mark time; all we
+actually test is `_, ok := m[key]`.
+
+**UI changes in `BillRow`:** Added a third hook `unmarkPaid := ui.UseEvent(...)` — always
+registered (stable hook count), not guarded by `IsPaid`. Paid row: green "Paid" chip next to the
+name, urgency-tone stripped from meta, "Unmark paid" button instead of "Mark paid". Both buttons
+always exist in the hook registry; `IfElse` selects which renders. `data-testid` on chip and
+unmark button for testability.
+
+**Files:** `internal/appstate/occurrences.go` (new), `internal/i18n/en_billspaid.go` (new),
+`internal/screens/bills_screen.go` (wired). Builds: native `go build ./...` → rc=0;
+`GOOS=js GOARCH=wasm` screens+app+appstate → rc=0; `go test ./internal/appstate/` → ok.
+
+Unblocks `#432` (IMPL R16-ui umbrella), which also needs the persistent paid state for the
+`/recurring` route's inline paid toggles.
+
 ## 2026-06-27 — C58-ui split badge + C62 shift-click range selection
 
 Both tickets completed in two files only.

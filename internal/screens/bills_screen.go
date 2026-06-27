@@ -118,7 +118,24 @@ func Bills() ui.Node {
 			notice.Set(notice.Get().With(err.Error(), true))
 			return
 		}
+		// C154: persist the paid mark so status survives reloads.
+		if err := app.MarkOccurrencePaid(b.AccountID, b.DueDate); err != nil {
+			app.Log().Error("mark occurrence paid", "billID", b.AccountID, "err", err)
+		}
 		notice.Set(notice.Get().With(uistate.T("bills.paidLogged", b.Name), false))
+		rev.Set(rev.Get() + 1)
+	}
+
+	unmarkPaid := func(b bills.Bill) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.UnmarkOccurrencePaid(b.AccountID, b.DueDate); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		notice.Set(notice.Get().With(uistate.T("bills.unpaidLogged", b.Name), false))
 		rev.Set(rev.Get() + 1)
 	}
 
@@ -130,7 +147,8 @@ func Bills() ui.Node {
 			amt = money.New(b.Amount.Amount, base)
 		}
 		total += amt.Amount
-		billRows = append(billRows, billRowData{Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate)})
+		isPaid := app.OccurrencePaid(b.AccountID, b.DueDate)
+		billRows = append(billRows, billRowData{Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate), IsPaid: isPaid})
 	}
 
 	// Cadence-correct yearly total: annualize each obligation by its own cadence,
@@ -153,7 +171,7 @@ func Bills() ui.Node {
 		},
 		func(r billRowData) ui.Node {
 			return ui.CreateElement(BillRow, billRowProps{
-				Data: r, OnRemind: remind, OnMarkPaid: markPaid,
+				Data: r, OnRemind: remind, OnMarkPaid: markPaid, OnUnmarkPaid: unmarkPaid,
 				SmartSettings: billSmartSettings,
 				SmartByEntity: billByEntity,
 			})
@@ -302,12 +320,14 @@ type billRowData struct {
 	Bill     bills.Bill
 	Shown    money.Money // amount converted to the base currency
 	DueLabel string      // pre-formatted due date
+	IsPaid   bool        // C154: whether this occurrence has been marked paid
 }
 
 type billRowProps struct {
-	Data       billRowData
-	OnRemind   func(b bills.Bill, shown money.Money, dueLabel string)
-	OnMarkPaid func(b bills.Bill)
+	Data         billRowData
+	OnRemind     func(b bills.Bill, shown money.Money, dueLabel string)
+	OnMarkPaid   func(b bills.Bill)
+	OnUnmarkPaid func(b bills.Bill) // C154: removes the paid mark for this occurrence
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// Bills are liability accounts; the badge key is Bill.AccountID.
 	SmartSettings smart.Settings
@@ -325,6 +345,13 @@ func BillRow(props billRowProps) ui.Node {
 			props.OnMarkPaid(d.Bill)
 		}
 	}))
+	// C154: unmark-paid hook must always be registered (stable hook count per
+	// component; never inside a conditional).
+	unmarkPaid := ui.UseEvent(Prevent(func() {
+		if props.OnUnmarkPaid != nil {
+			props.OnUnmarkPaid(d.Bill)
+		}
+	}))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
 	// Urgency tone so an imminent bill stands out at a glance (C57): danger when
 	// due today/past, warn within three days. The "due today / in N days" wording
@@ -332,6 +359,12 @@ func BillRow(props billRowProps) ui.Node {
 	metaCls := "row-meta"
 	if t := billUrgencyTone(d.Bill.DaysUntil); t != "" {
 		metaCls += " " + t
+	}
+	// C154: when the occurrence is marked paid, hide the urgency tone and show a
+	// "Paid" chip so the user can see at a glance this bill is settled. The
+	// "Unmark paid" button lets them undo in one click.
+	if d.IsPaid {
+		metaCls = "row-meta"
 	}
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
@@ -342,12 +375,18 @@ func BillRow(props billRowProps) ui.Node {
 			// C154: surface autopay so the user knows this bill is charged automatically
 			// (no manual payment needed — just keep funds available).
 			If(d.Bill.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "bill-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
+			// C154: paid chip — visible when this occurrence is marked paid.
+			If(d.IsPaid, Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"), Attr("title", uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
 		// bill-sub-actions: fixed trailing group so action buttons don't crowd the
 		// name/amount area, mirroring the .sub-actions pattern from G10 (G11 follow-up).
 		Div(css.Class("bill-sub-actions"),
-			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
+			// C154: show "Unmark paid" when already paid, "Mark paid" otherwise.
+			IfElse(d.IsPaid,
+				Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.unmarkPaidTitle")), Attr("data-testid", "bill-unmark-paid"), OnClick(unmarkPaid), uistate.T("bills.unmarkPaid")),
+				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
+			),
 			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 		),
 	)
