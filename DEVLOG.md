@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C38: surface rule suggestions above Mermaid diagram with count badge
+
+**Ticket:** C38 [DESIGN] F4 — "Rule suggestions collapsed below the rule list + Mermaid diagram."
+
+**Problem:** The "Suggested rules" section was rendered last in the `/rules` page — after the "Your rules" card and after the Mermaid rule-precedence diagram. The suggestions were only visible after significant scrolling, making them effectively undiscoverable for most users.
+
+**Fix:** Reordered the return `Div` in `Rules()` to: Your rules card → Suggested rules (C38) → Rule order / Mermaid (power-user). The suggestion engine (`rulesuggest.Suggest`) already existed and was already working; this was purely a layout change. Also updated the section title to include a count badge — "Suggested rules (N)" via a new `rules.suggestedTitleCount` i18n key — so the number of available suggestions is visible without scrolling into the section.
+
+**No logic changes:** the suggestion generation, expand/collapse toggle, and accept handler are untouched.
+
+**Files:** `internal/screens/rules.go`, `internal/i18n/en.go`. Build: `GOOS=js GOARCH=wasm go build ./internal/screens` exits 0.
+
 ## 2026-06-27 — R46: semantic token-role audit (money vs severity vs accent)
 
 **What:** R46 wants color to carry one meaning per context — brand accent, money positive/negative, and warning/critical severity as distinct token roles, with no off-token hardcodes. Built `e2e/ux_token_roles_audit.mjs` as a fast source audit (no browser) over web/index.html's CSS.

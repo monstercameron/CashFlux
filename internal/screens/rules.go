@@ -201,7 +201,7 @@ func Rules() ui.Node {
 			toggleBtn = Button(css.Class("btn"), Type("button"), OnClick(toggleShowAll), label)
 		}
 		suggestCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("rules.suggestedTitle"),
+			Title: uistate.T("rules.suggestedTitleCount", len(suggestions)),
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("rules.suggestedHint")),
 				Div(css.Class("rows"), MapKeyed(visible,
@@ -219,7 +219,7 @@ func Rules() ui.Node {
 
 	// Lead with the user's own rules (G18 §1): the 15-row suggestions card used to
 	// push "Your rules" — Bianca's primary concern — entirely below the fold. Order
-	// is now Your rules → Rule order → Suggestions (discovery aid, secondary).
+	// is now Your rules → Suggestions (discovery aid, near-top) → Rule order (power-user).
 	return Div(
 		uiw.Card(uiw.CardProps{
 			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
@@ -247,6 +247,9 @@ func Rules() ui.Node {
 				list,
 			),
 		}),
+		// Suggestions surface above the Mermaid diagram (C38): users discover AI-suggested
+		// rules before scrolling through the precedence chain (which is a power-user view).
+		suggestCard,
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
 		If(len(rs) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: "Rule order",
@@ -258,7 +261,6 @@ func Rules() ui.Node {
 				}),
 			),
 		})),
-		suggestCard,
 	)
 }
 
