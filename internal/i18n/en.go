@@ -796,6 +796,7 @@ var english = Catalog{
 	"plans.prefillNone":          "— Choose account —",
 
 	// Documents screen
+	"documents.localFirstNote":       "CashFlux is local-first: your data stays on your device and never leaves it. There's no bank login or live connection — instead, export a CSV from your bank and import it here. This keeps your financial data completely private.",
 	"documents.csvEmpty":             "Paste some CSV first.",
 	"documents.csvError":             "Couldn't read that CSV: %s",
 	"documents.importedCsv":          "Imported %s.",

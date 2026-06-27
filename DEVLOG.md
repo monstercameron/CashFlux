@@ -7,6 +7,10 @@ problems and fixes, and what's next.
 
 
 
+## 2026-06-27 — C9: local-first framing on the import screen
+
+New users hitting the /documents screen for the first time see a CSV import card with no explanation of WHY there's no "Connect your bank" button — they could interpret it as a missing feature rather than an intentional privacy trade-off. Added a one-sentence note at the top of the CSV card body: your data stays on-device, no bank login, export CSV from your bank and import here, this is a privacy benefit. Kept it small (`tw.Text12`) and un-alarming (`muted`) so it doesn't compete with the action buttons. The `bankCsvHelpTitle`/`bankCsvHelpBody` collapsible (C19, already implemented) sits just below and provides the how-to-export detail; this note provides the why. No structural changes to the import flow. Build rc=0.
+
 ## 2026-06-27 - R47 RESOLVED: button-density (hover-reveal secondary row actions)
 
 /transactions was the one page over the §11 density ceiling (80 controls > 65) - 6 icon buttons per row. Applied the app's established hover-reveal convention (.btn-del-hover) to the secondary actions: tagged duplicate/create-rule/attach/delete with `tx-2nd`, hidden at rest via opacity:0 + pointer-events:none, revealed by `tr:hover`/`tr:focus-within`, with a coarse-pointer always-on override for touch. Kept edit + the cleared status toggle visible (the one primary action + status). Result 80 -> 44 (45%, under ceiling). Adversarial review confirmed the a11y is sound (`:focus-within` on the <tr> is the real keyboard/programmatic reveal guard, tab order preserved because opacity!=display:none) and the 40% is legitimate per §11.1 (the audit excludes opacity:0 controls), but caught that /categories - named in R47 - was never in the density audit. Added it (26 controls, already compliant), so all 5 R47 pages are accounted for; corrected a misleading CSS comment. build rc=0, 0/17 routes over ceiling.

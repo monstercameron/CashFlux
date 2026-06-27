@@ -32,6 +32,10 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("documents.csvTitle"),
 		Body: Fragment(
+			// C9: local-first framing — make the no-bank-login trade-off explicit up front
+			// so it reads as a privacy benefit rather than a missing feature.
+			P(css.Class("muted", tw.Text12), Attr("data-testid", "local-first-note"),
+				uistate.T("documents.localFirstNote")),
 			P(css.Class("muted"), uistate.T("documents.csvDesc")),
 			// C19: collapsible "how to get your bank's CSV" guidance — most users don't
 			// know their bank exports one. Closed by default so it doesn't add noise.
