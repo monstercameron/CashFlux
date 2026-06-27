@@ -13764,3 +13764,19 @@ in TODOS.md (a concurrent agent's addition); committing it so the todos are dura
 lands that R-backlog section and marks R72 (desktop UX quality gate) ✅ DONE — the shipped 4-audit gate suite
 + unified runner, all dimensions green. Also reflects the no-mobile descopes (R35/R53) and R44 [~] progress.
 Only TODOS.md is staged here — the other agent's code WIP (en.go/planning.go/chart.js) is untouched.
+
+## 2026-06-27 — R38 DONE: Smart strip becomes a decision layer
+The global inline Smart strip (smart_strip.go, rendered above every relevant page by the shell) stacked up
+to 3 full insight cards, burying core content (e.g. /subscriptions led with 3 "cancel utility" cards while
+the subscription stats + list sat below the fold). Redesigned it as a decision layer: lead with the SINGLE
+most-severe insight (insights are severity-sorted via smart.SortInsights), the rest behind an in-place
+"Show N more" toggle (aria-expanded, keyboard-operable) plus the existing "View all (N)" → /smart hub.
+Collapse resets per page (the strip is keyed by route) so each page is decision-first by default. New i18n
+in en_smartstrip.go (avoids the contended en.go). MEASURED /subscriptions: strip went from a 3-card stack
+owning the viewport to one insight + "Show 2 more", and the Monthly/Yearly/Active/Share stats + the list
+are now visible above the fold. Adversarial style-spec reviewer: FAILED first pass (4 findings) — fixed
+the label ("+N more"→"Show N more"); the other 3 (fold/dismiss the subscriptions-screen lateCharges alert;
+§8.6 engine-grouping of repeated same-rule hits) were ADDRESSED as sound out-of-scope/mitigated boundaries
+(lateCharges is a screen feature not the strip; collapse shows only 1 at rest so repetition is opt-in).
+Re-review: PASS, no remaining fixes. R38 acceptance ("no long Smart stack above core content") met. Marked
+R38 [x] in TODOS working tree (commit deferred — other agent active on TODOS.md). smart_strip.go is clean.
