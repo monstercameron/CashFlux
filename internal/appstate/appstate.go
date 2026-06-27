@@ -75,6 +75,11 @@ type App struct {
 	// without calling any observer — used during bulk import so the re-evaluation
 	// fires at most once per batch rather than once per row.
 	suppressTxnObservers bool
+	// activeRoleFn, when non-nil, is called by roleGuard / memberRoleGuard on
+	// every mutating operation to determine whether the current operator's role
+	// permits the action. Injected via SetActiveRoleFunc; nil ⇒ permissive
+	// (RoleOwner). See readonly.go for the seam design.
+	activeRoleFn func() domain.MemberRole
 }
 
 // Default is the process-wide App, set by Init and read by screens.
@@ -505,6 +510,9 @@ func (a *App) logErr(entity string, err error) {
 // --- validated write-through accessors ---
 
 func (a *App) PutMember(m domain.Member) error {
+	if err := a.memberRoleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateMember(m); !is.OK() {
 		return is
 	}
@@ -517,7 +525,12 @@ func (a *App) PutMember(m domain.Member) error {
 	a.log.Info("member saved", "id", m.ID)
 	return nil
 }
-func (a *App) DeleteMember(id string) error { return a.del("member", id, a.store.DeleteMember) }
+func (a *App) DeleteMember(id string) error {
+	if err := a.memberRoleGuard(); err != nil {
+		return err
+	}
+	return a.del("member", id, a.store.DeleteMember)
+}
 
 // SetDefaultMember marks exactly one member as the default for new member-scoped
 // forms.
@@ -638,6 +651,9 @@ func (a *App) DeleteMemberAfterReassign(oldID, newID string) (int, error) {
 }
 
 func (a *App) PutAccount(ac domain.Account) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateAccount(ac); !is.OK() {
 		return is
 	}
@@ -719,9 +735,17 @@ func (a *App) validateCustom(entityType string, custom map[string]any) error {
 	}
 	return is
 }
-func (a *App) DeleteAccount(id string) error { return a.del("account", id, a.store.DeleteAccount) }
+func (a *App) DeleteAccount(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("account", id, a.store.DeleteAccount)
+}
 
 func (a *App) PutCategory(c domain.Category) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateCategory(c); !is.OK() {
 		return is
 	}
@@ -737,6 +761,9 @@ func (a *App) PutCategory(c domain.Category) error {
 // top-level category) so deleting a parent never leaves orphaned children with a
 // dangling ParentID (L28).
 func (a *App) DeleteCategory(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	for _, child := range categorytree.ReparentOnDelete(a.Categories(), id) {
 		if err := a.store.PutCategory(child); err != nil {
 			return fmt.Errorf("appstate: re-home child %q before deleting %q: %w", child.ID, id, err)
@@ -748,6 +775,9 @@ func (a *App) DeleteCategory(id string) error {
 // PutRule saves an auto-categorization rule. A rule needs an ID, a non-empty
 // match phrase, and a target category to be useful.
 func (a *App) PutRule(r rules.Rule) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if r.ID == "" {
 		return fmt.Errorf("appstate: rule needs an id")
 	}
@@ -765,7 +795,12 @@ func (a *App) PutRule(r rules.Rule) error {
 }
 
 // DeleteRule removes an auto-categorization rule.
-func (a *App) DeleteRule(id string) error { return a.del("rule", id, a.store.DeleteRule) }
+func (a *App) DeleteRule(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("rule", id, a.store.DeleteRule)
+}
 
 // ReorderRules sets each rule's precedence (Order) from its position in
 // orderedIDs (index 0 = highest precedence, runs first). Ids not present keep
@@ -839,6 +874,9 @@ type DocumentImportResult struct {
 
 // PutDocument saves an imported-document record (needs an ID).
 func (a *App) PutDocument(d domain.Document) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if d.ID == "" {
 		return fmt.Errorf("appstate: document needs an id")
 	}
@@ -850,7 +888,12 @@ func (a *App) PutDocument(d domain.Document) error {
 }
 
 // DeleteDocument removes an imported-document record.
-func (a *App) DeleteDocument(id string) error { return a.del("document", id, a.store.DeleteDocument) }
+func (a *App) DeleteDocument(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("document", id, a.store.DeleteDocument)
+}
 
 // ImportReviewedDocumentRows commits reviewed document-extraction rows into the
 // ledger for an account, skipping same-date/same-amount duplicates and recording
@@ -945,6 +988,9 @@ func documentRowsFromExtract(rows []extract.Row) []domain.DocumentRow {
 
 // PutSavedInsight pins an AI insight (needs an ID and non-empty text).
 func (a *App) PutSavedInsight(si domain.SavedInsight) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if si.ID == "" {
 		return fmt.Errorf("appstate: saved insight needs an id")
 	}
@@ -960,6 +1006,9 @@ func (a *App) PutSavedInsight(si domain.SavedInsight) error {
 
 // DeleteSavedInsight removes a pinned AI insight.
 func (a *App) DeleteSavedInsight(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("saved insight", id, a.store.DeleteSavedInsight)
 }
 
@@ -976,6 +1025,9 @@ func (a *App) Conversations() []domain.Conversation {
 // PutConversation saves (inserts or replaces) an Insights conversation. It needs
 // an ID; a blank title falls back to a generic label.
 func (a *App) PutConversation(c domain.Conversation) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if c.ID == "" {
 		return fmt.Errorf("appstate: conversation needs an id")
 	}
@@ -990,12 +1042,18 @@ func (a *App) PutConversation(c domain.Conversation) error {
 
 // DeleteConversation removes a saved Insights chat.
 func (a *App) DeleteConversation(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("conversation", id, a.store.DeleteConversation)
 }
 
 // PutRecurring saves a recurring cash flow. It needs an ID, a label, a currency
 // on the amount, and a cadence.
 func (a *App) PutRecurring(r domain.Recurring) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if r.ID == "" {
 		return fmt.Errorf("appstate: recurring needs an id")
 	}
@@ -1050,11 +1108,17 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 
 // DeleteRecurring removes a recurring cash flow.
 func (a *App) DeleteRecurring(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("recurring", id, a.store.DeleteRecurring)
 }
 
 // PutAllocProfile saves a capital-allocation weight profile (needs an ID and a name).
 func (a *App) PutAllocProfile(p domain.AllocationProfile) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if p.ID == "" {
 		return fmt.Errorf("appstate: allocation profile needs an id")
 	}
@@ -1070,11 +1134,17 @@ func (a *App) PutAllocProfile(p domain.AllocationProfile) error {
 
 // DeleteAllocProfile removes a saved allocation profile.
 func (a *App) DeleteAllocProfile(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("alloc profile", id, a.store.DeleteAllocProfile)
 }
 
 // PutFormula saves a custom formula (needs an ID, a name, and an expression).
 func (a *App) PutFormula(f domain.Formula) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if f.ID == "" {
 		return fmt.Errorf("appstate: formula needs an id")
 	}
@@ -1092,10 +1162,18 @@ func (a *App) PutFormula(f domain.Formula) error {
 }
 
 // DeleteFormula removes a saved formula.
-func (a *App) DeleteFormula(id string) error { return a.del("formula", id, a.store.DeleteFormula) }
+func (a *App) DeleteFormula(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("formula", id, a.store.DeleteFormula)
+}
 
 // PutPlan saves a what-if plan (needs an ID, a name, and a positive horizon).
 func (a *App) PutPlan(p domain.Plan) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if p.ID == "" {
 		return fmt.Errorf("appstate: plan needs an id")
 	}
@@ -1113,10 +1191,18 @@ func (a *App) PutPlan(p domain.Plan) error {
 }
 
 // DeletePlan removes a saved plan.
-func (a *App) DeletePlan(id string) error { return a.del("plan", id, a.store.DeletePlan) }
+func (a *App) DeletePlan(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("plan", id, a.store.DeletePlan)
+}
 
 // PutCustomPage saves a user-authored page (needs an ID, a name, and a slug).
 func (a *App) PutCustomPage(p domain.CustomPage) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if p.ID == "" {
 		return fmt.Errorf("appstate: custom page needs an id")
 	}
@@ -1135,11 +1221,17 @@ func (a *App) PutCustomPage(p domain.CustomPage) error {
 
 // DeleteCustomPage removes a user-authored page.
 func (a *App) DeleteCustomPage(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("customPage", id, a.store.DeleteCustomPage)
 }
 
 // PutArtifact saves a user artifact (needs an ID, a name, and a kind).
 func (a *App) PutArtifact(art domain.Artifact) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if art.ID == "" {
 		return fmt.Errorf("appstate: artifact needs an id")
 	}
@@ -1158,11 +1250,17 @@ func (a *App) PutArtifact(art domain.Artifact) error {
 
 // DeleteArtifact removes a user artifact.
 func (a *App) DeleteArtifact(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("artifact", id, a.store.DeleteArtifact)
 }
 
 // PutWorkflow saves a user automation (needs an ID and a name).
 func (a *App) PutWorkflow(w workflow.Workflow) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if w.ID == "" {
 		return fmt.Errorf("appstate: workflow needs an id")
 	}
@@ -1178,6 +1276,9 @@ func (a *App) PutWorkflow(w workflow.Workflow) error {
 
 // DeleteWorkflow removes a workflow.
 func (a *App) DeleteWorkflow(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("workflow", id, a.store.DeleteWorkflow)
 }
 
@@ -1697,6 +1798,9 @@ func (a *App) fireTxnMutated() {
 }
 
 func (a *App) PutTransaction(t domain.Transaction) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateTransaction(t); !is.OK() {
 		return is
 	}
@@ -1732,6 +1836,9 @@ func (a *App) WithoutTriggers(fn func()) {
 	}
 }
 func (a *App) DeleteTransaction(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if err := a.del("transaction", id, a.store.DeleteTransaction); err != nil {
 		return err
 	}
@@ -1799,6 +1906,9 @@ func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
 }
 
 func (a *App) PutBudget(b domain.Budget) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateBudget(b); !is.OK() {
 		return is
 	}
@@ -1821,7 +1931,12 @@ func (a *App) PutBudget(b domain.Budget) error {
 	}
 	return nil
 }
-func (a *App) DeleteBudget(id string) error { return a.del("budget", id, a.store.DeleteBudget) }
+func (a *App) DeleteBudget(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("budget", id, a.store.DeleteBudget)
+}
 
 // CoverBudget moves amt of budgeted money from the source budget's limit to the
 // destination's, covering an overspend without changing the household's total
@@ -1865,6 +1980,9 @@ func (a *App) CoverBudget(fromID, toID string, amt money.Money) error {
 }
 
 func (a *App) PutGoal(g domain.Goal) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateGoal(g); !is.OK() {
 		return is
 	}
@@ -1888,10 +2006,18 @@ func (a *App) PutGoal(g domain.Goal) error {
 	}
 	return nil
 }
-func (a *App) DeleteGoal(id string) error { return a.del("goal", id, a.store.DeleteGoal) }
+func (a *App) DeleteGoal(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("goal", id, a.store.DeleteGoal)
+}
 
 // PutHolding persists an investment holding (insert or replace by ID).
 func (a *App) PutHolding(h domain.Holding) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if err := a.store.PutHolding(h); err != nil {
 		return fmt.Errorf("appstate: put holding: %w", err)
 	}
@@ -1900,7 +2026,12 @@ func (a *App) PutHolding(h domain.Holding) error {
 }
 
 // DeleteHolding removes an investment holding by ID.
-func (a *App) DeleteHolding(id string) error { return a.del("holding", id, a.store.DeleteHolding) }
+func (a *App) DeleteHolding(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("holding", id, a.store.DeleteHolding)
+}
 
 // ArchiveGoal sets the Archived flag on a goal to archive (true) or restore
 // (false) it. The goal must already exist; a missing ID returns an error.
@@ -1920,6 +2051,9 @@ func (a *App) ArchiveGoal(goalID string, archive bool) error {
 }
 
 func (a *App) PutTask(t domain.Task) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if is := validate.ValidateTask(t); !is.OK() {
 		return is
 	}
@@ -1945,7 +2079,12 @@ func (a *App) CreateFreshnessReminderTask(title string) (domain.Task, error) {
 	}
 	return t, nil
 }
-func (a *App) DeleteTask(id string) error { return a.del("task", id, a.store.DeleteTask) }
+func (a *App) DeleteTask(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("task", id, a.store.DeleteTask)
+}
 
 // CompleteTask marks the task identified by id as done and, if the task has a
 // non-empty Recurrence, atomically saves a fresh open successor via
@@ -1984,6 +2123,9 @@ func (a *App) CompleteTask(taskID, nextID string, now time.Time) error {
 // PutCustomFieldDef validates and saves a custom-field definition. The Def must
 // be sound (id, entity type, key, label, known type; choice fields need options).
 func (a *App) PutCustomFieldDef(d customfields.Def) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if issues := d.Validate(); len(issues) > 0 {
 		var is validate.Issues
 		for _, m := range issues {
@@ -2000,6 +2142,9 @@ func (a *App) PutCustomFieldDef(d customfields.Def) error {
 
 // DeleteCustomFieldDef removes a custom-field definition by id.
 func (a *App) DeleteCustomFieldDef(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("customFieldDef", id, a.store.DeleteCustomFieldDef)
 }
 

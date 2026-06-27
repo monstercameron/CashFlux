@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R29 enforcement core: ActiveIdentity atom + appstate read-only guard
+
+### Problem
+R29-identity/seam/enforce needed implementing across three clean packages (`uistate`, `memberrole`, `appstate`) without touching any forbidden screen/app files (concurrent WIP from another agent) and without creating an import cycle (`appstate` must not import `uistate`).
+
+### Key architectural decision: injection seam over direct import
+The layering constraint is strict: `appstate` is imported by `uistate` (via `kvbridge.go`) so `appstate` importing `uistate` would cycle. The solution is a function-field injection seam: `App.activeRoleFn func() domain.MemberRole`, set at wasm boot time by the entry point (which can freely close over both packages). The wasm entry point wires: `app.SetActiveRoleFunc(func() domain.MemberRole { resolve active identity member from uistate; look up role from member list })`. On native Go / tests the fn is injected inline — no uistate needed. The default (fn=nil) returns `RoleOwner` so every existing call site keeps working with zero changes.
+
+### R29-identity
+`internal/uistate/activeidentity.go` mirrors the existing `activemember.go` pattern exactly: `UseActiveIdentity()` atom (js+wasm build-tagged), persisted to `cashflux:active-identity` in the KV store, captured for out-of-render `SetActiveIdentity`. The atom is carefully documented as "who is operating" (role enforcement), distinct from `UseActiveMember` (whose data is shown). No conflation of the two.
+
+### R29-seam
+`CanEdit()` and `CanManageMembers()` on `*App` delegate to `memberrole.CanEditEntities` / `memberrole.CanManageMembers` — the predicates already existed and were tested. No new logic added to `memberrole`; the seam just composes.
+
+### R29-enforce
+`roleGuard()` (blocks financial entity writes for Viewer) and `memberRoleGuard()` (blocks member CRUD for non-Owner) applied to every `PutX`/`DeleteX` in `appstate.go`, `settle.go`, and `importprofile_ops.go` — 40+ call sites. The guard fires before any validation, so Viewer gets `ErrReadOnly` with no wasted work. `DeleteTransactionWithTransferPair` and other composite methods (e.g. `DeleteMemberAfterReassign`) are covered transitively (they call the guarded primitives). `ErrReadOnly` is a package-level sentinel for `errors.Is` detection.
+
+### Tests
+13 table-driven cases in `readonly_test.go` covering: default permissive (no fn wired), CanEdit/CanManageMembers per all three roles, ErrReadOnly sentinel via errors.Is, PutAccount gating (owner/admin/viewer), DeleteAccount gating, PutTransaction gating, PutMember/DeleteMember Owner-only enforcement, and dynamic role switching via `SetActiveRoleFunc`. All pass.
+
+### What's deferred
+R29-ui: button gating (disabled-with-tooltip), identity switcher in the header, "viewing as <member> · <role>" chip, honesty note. These all live in screen/app files owned by the concurrent agent — correctly deferred, not blocked.
+
 ## 2026-06-27 — C23 [F3]: base currency & week-start in first-run checklist
 
 The setup checklist on `/help` had four data-driven steps (account, transaction, budget, goal) but said nothing about base currency or week-start. A fresh user could go weeks using the USD default or Sunday week-start without knowing these settings exist.

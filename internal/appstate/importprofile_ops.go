@@ -39,6 +39,9 @@ func (a *App) ImportProfiles() []importmap.SavedProfile {
 // a new ID is assigned. If a profile with that ID already exists it is
 // replaced. The profile name must not be blank.
 func (a *App) SaveImportProfile(sp importmap.SavedProfile) (importmap.SavedProfile, error) {
+	if err := a.roleGuard(); err != nil {
+		return importmap.SavedProfile{}, err
+	}
 	if strings.TrimSpace(sp.Profile.Name) == "" {
 		return importmap.SavedProfile{}, fmt.Errorf("appstate: import profile name is required")
 	}
@@ -62,6 +65,9 @@ func (a *App) SaveImportProfile(sp importmap.SavedProfile) (importmap.SavedProfi
 // DeleteImportProfile removes the saved profile with the given ID. It is a
 // no-op (and returns nil) when no profile with that ID exists.
 func (a *App) DeleteImportProfile(profileID string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	importProfilesMu.Lock()
 	defer importProfilesMu.Unlock()
 	next := importProfiles[:0]

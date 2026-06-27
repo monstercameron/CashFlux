@@ -28,6 +28,9 @@ func (a *App) Settlements() []domain.Settlement {
 // PutSharedExpense validates and persists a shared expense (the saved forward
 // split): it needs an id, a payer, and at least one share.
 func (a *App) PutSharedExpense(e domain.SharedExpense) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if e.ID == "" {
 		return fmt.Errorf("appstate: shared expense id is required")
 	}
@@ -46,12 +49,18 @@ func (a *App) PutSharedExpense(e domain.SharedExpense) error {
 
 // DeleteSharedExpense removes a shared expense from the settle-up ledger.
 func (a *App) DeleteSharedExpense(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("sharedExpense", id, a.store.DeleteSharedExpense)
 }
 
 // RecordSettlement validates and persists a payment from one member to another
 // that squares up the shared ledger.
 func (a *App) RecordSettlement(s domain.Settlement) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if s.ID == "" {
 		return fmt.Errorf("appstate: settlement id is required")
 	}
@@ -73,6 +82,9 @@ func (a *App) RecordSettlement(s domain.Settlement) error {
 
 // DeleteSettlement removes a recorded settlement.
 func (a *App) DeleteSettlement(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	return a.del("settlement", id, a.store.DeleteSettlement)
 }
 
