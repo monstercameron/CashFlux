@@ -260,6 +260,36 @@ func alertRow(props alertRowProps) uic.Node {
 	return Fragment(toggle, threshInput)
 }
 
+// learnThresholdRow renders a small number-input control (C35) that lets the
+// user tune how many payee→category corrections must accumulate before a
+// suggestion chip appears in Quick-Add. Writes directly to the preserved KV
+// store via uistate.SaveLearnThreshold. Its own component so the input's
+// UseEvent hook stays at a stable render position.
+func learnThresholdRow() uic.Node {
+	cur := uistate.LoadLearnThreshold()
+	thresh := uic.UseState(cur)
+	onThresh := uic.UseEvent(func(v string) {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n < 1 {
+			return
+		}
+		thresh.Set(n)
+		uistate.SaveLearnThreshold(n)
+	})
+	ariaLabel := uistate.T("settings.learnThresholdLabel")
+	return Div(
+		H4(css.Class("set-label"), uistate.T("settings.learnThresholdLabel")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.learnThresholdHint")),
+		Div(css.Class("toggle-row"),
+			Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.learnThresholdLabel")),
+			Input(css.Class("rate-in"), Type("number"), Attr("min", "1"), Attr("step", "1"),
+				Attr("aria-label", ariaLabel), Attr("data-testid", "settings-learn-threshold"),
+				Value(strconv.Itoa(thresh.Get())),
+				OnChange(onThresh)),
+		),
+	)
+}
+
 // musicSettings is the Settings-modal control group for the background music: an
 // on/off toggle and a volume slider. It writes the shared muzak atoms (the same
 // ones the top-bar speaker button uses), so changes apply live and persist. Its

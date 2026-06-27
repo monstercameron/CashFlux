@@ -3,6 +3,47 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C33/C34/C35: self-learning categorization wired end-to-end
+
+The `internal/learntally` tally engine was already shipped (pure, tested, no syscall/js) but
+completely unwired — no save path fed it, no UI read from it, and the threshold was hard-coded.
+This commit closes all three umbrella tickets.
+
+**C33 — corrections feed back:** The tally needs to be incremented on every deliberate category
+assignment, not just at import time. Two save paths wired: `saveCore()` in `quickadd.go` (the
+Quick-Add panel) and the `editTxn` closure in `transactions.go` (inline-edit ledger row). Both
+prefer the Payee field as the key, falling back to Description — matching what `ShouldSuggest`
+will later read. Guard: skip when `categoryID == ""`.
+
+**C34 — live chip in Quick-Add:** The learned chip appears below the rule-based chip, using the
+same `screens.SmartFieldAssist` pattern. The two chips are kept strictly non-overlapping: the
+learned chip only surfaces when `suggestedCatID == ""` (no rule matched) AND `catID.Get() == ""`
+(user hasn't already chosen). This prevents them from fighting. The `learnedCatAssist` variable is
+always declared as `uic.Node = Fragment()` before the conditional that might populate it — hook
+order stays stable. No new `UseState`/`UseEvent` at this level; the chip widget handles its own
+hooks internally via `CreateElement`.
+
+**C35 — configurable threshold:** Stored in preserved KV (`SettingKVGet`/`SettingKVSet`) at
+`cashflux:learn-threshold` so it survives a dataset wipe. `learnThresholdRow()` in `settings.go`
+is its own component (owns a `UseState` + `UseEvent` at a fixed render position). Placed in the
+settings left column after `notifySettings` (alert thresholds) and before `musicSettings` — a
+natural grouping with the other numeric thresholds.
+
+**Persistence layer (`internal/uistate/learntally_store.go`):** Three functions —
+`LoadLearnTally`, `SaveLearnTally`, `IncrementLearnTally` (load-mutate-save in one call) — and
+two for the threshold. Uses `SettingKVGet`/`SettingKVSet` (preserved, not the data KV) for both.
+The tally JSON is the native Go `map[string]map[string]int` serialization the `learntally.Tally`
+type is built on, so it round-trips cleanly.
+
+**Compile bug caught at build time:** The prior session used `ui.Node` and `ui.Fragment()` — but
+`internal/ui` is the project's own local package (form controls, charts, etc.) and does not export
+those. The GWC type is `uic.Node` (aliased import) and the fragment is `Fragment()` from the
+dot-imported `html/shorthand`. One-line fix.
+
+**Decision:** both the tally and the threshold go into the *settings* KV (preserved), not the data
+KV. Rationale: learned behavior represents user preference, not financial data — a dataset wipe or
+import-overwrite should not reset months of learned corrections.
+
 ## 2026-06-27 — C168/C141/C142: /planning surfacing — runway lead, safe-to-spend tile, unified terminology
 
 Three tickets landed in one pass because they are tightly coupled (same card, same formula, same

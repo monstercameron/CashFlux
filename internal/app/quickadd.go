@@ -160,6 +160,17 @@ func QuickAddHost() uic.Node {
 			post(err.Error(), true)
 			return false
 		}
+		// C33: record payee→category in the self-learning tally whenever a category
+		// was explicitly provided by the user. The payee field (or description as
+		// fallback) is the key; the tally is persisted across reloads via the
+		// preserved KV store so corrections accumulate session-to-session.
+		if t.CategoryID != "" {
+			learnPayee := strings.TrimSpace(t.Payee)
+			if learnPayee == "" {
+				learnPayee = strings.TrimSpace(t.Desc)
+			}
+			uistate.IncrementLearnTally(learnPayee, t.CategoryID)
+		}
 		// PutTransaction now fires the "transaction added" workflow trigger itself
 		// (for every add path), so no explicit RunTriggered call here.
 		dataRev.Update(func(v int) int { return v + 1 })
@@ -236,6 +247,37 @@ func QuickAddHost() uic.Node {
 		catID.Set(suggestedCatID)
 	})
 
+	// (c) C34: self-learning category assist — when no rule matched and the user
+	//     hasn't picked a category yet, consult the persisted learntally. If the
+	//     top payee→category correction count has crossed the user-tunable threshold,
+	//     surface a chip. We key on payee first (more specific), falling back to the
+	//     description, to match what saveCore records.
+	learnThreshold := uistate.LoadLearnThreshold()
+	learnTally := uistate.LoadLearnTally()
+	learnPayeeKey := strings.TrimSpace(payee.Get())
+	if learnPayeeKey == "" {
+		learnPayeeKey = strings.TrimSpace(rawDesc)
+	}
+	var learnedCatAssist uic.Node = Fragment()
+	if suggestedCatID == "" && catID.Get() == "" {
+		if learnedCatID, ok := learnTally.ShouldSuggest(learnPayeeKey, learnThreshold); ok {
+			var learnedCatName string
+			for _, c := range app.Categories() {
+				if c.ID == learnedCatID {
+					learnedCatName = c.Name
+					break
+				}
+			}
+			if learnedCatName != "" {
+				// Reuse SmartFieldAssist chip pattern: chip text will read
+				// `✦ Use "Groceries"` which is the correct affordance.
+				learnedCatAssist = screens.SmartFieldAssist(qaSmartSettings, "qa-learned-cat", learnedCatName, func() {
+					catID.Set(learnedCatID)
+				})
+			}
+		}
+	}
+
 	// Form validity (L78-T1): Save is disabled until Description and a non-zero
 	// Amount are present, so an invalid submit can't close the panel or lose input.
 	// Computed before the body so "Save & add another" (C40) shares the same gate.
@@ -284,6 +326,7 @@ func QuickAddHost() uic.Node {
 		ui.FormField(uistate.T("quickAdd.category"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
 		catAssist,
+		learnedCatAssist,
 		ui.FormField(uistate.T("quickAdd.date"),
 			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
 		// C47: wrap the checkbox in a block container so the helper caption sits

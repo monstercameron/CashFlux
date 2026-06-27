@@ -287,6 +287,18 @@ func Transactions() ui.Node {
 			uistate.PostNotice(err.Error(), false)
 			return false
 		}
+		// C33: record the payee→category correction whenever the category is
+		// explicitly set in an inline edit. The payee field is preferred as the
+		// tally key (more specific); description is the fallback. Only record when
+		// the incoming catID is non-empty so clearing a category doesn't tally a
+		// blank category — the tally measures positive associations, not deletions.
+		if catID != "" {
+			learnPayee := strings.TrimSpace(newPayee)
+			if learnPayee == "" {
+				learnPayee = strings.TrimSpace(newDesc)
+			}
+			uistate.IncrementLearnTally(learnPayee, catID)
+		}
 		errMsg.Set("")
 		bump()
 		// L99-T1: single-transaction edits had no confirmation feedback (the bulk ops all toast),

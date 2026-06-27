@@ -69,6 +69,7 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
 		uic.CreateElement(notifySettings),
+		uic.CreateElement(learnThresholdRow),
 		uic.CreateElement(musicSettings),
 	)
 }
