@@ -263,6 +263,47 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 	return n, skipped, nil
 }
 
+// PreviewCSVImport parses data as CSV transactions (using the same logic as
+// ImportTransactionsCSV) and returns the total number of parseable rows and how
+// many of those would be skipped as duplicates of existing transactions — without
+// writing anything to the store. Use the returned counts to surface a pre-import
+// duplicate warning to the user before calling ImportTransactionsCSV.
+func (a *App) PreviewCSVImport(data []byte, fallbackAccountID string) (total, dupes int, err error) {
+	base := "USD"
+	if s := a.Settings(); s.BaseCurrency != "" {
+		base = s.BaseCurrency
+	}
+	txns, _, parseErr := store.TransactionsFromCSVResilient(data, base)
+	if parseErr != nil {
+		return 0, 0, parseErr
+	}
+	// Apply the same account/category/member resolution so AccountIDs match.
+	accPairs := make([][2]string, 0, len(a.Accounts()))
+	for _, ac := range a.Accounts() {
+		accPairs = append(accPairs, [2]string{ac.ID, ac.Name})
+	}
+	catPairs := make([][2]string, 0, len(a.Categories()))
+	for _, c := range a.Categories() {
+		catPairs = append(catPairs, [2]string{c.ID, c.Name})
+	}
+	memPairs := make([][2]string, 0, len(a.Members()))
+	for _, m := range a.Members() {
+		memPairs = append(memPairs, [2]string{m.ID, m.Name})
+	}
+	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
+	for i := range txns {
+		txns[i].AccountID = resolveAcc(txns[i].AccountID)
+		if txns[i].AccountID == "" && fallbackAccountID != "" {
+			txns[i].AccountID = fallbackAccountID
+		}
+		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
+		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
+		txns[i].MemberID = resolveMem(txns[i].MemberID)
+	}
+	d := dedupe.CountIncomingDuplicates(txns, a.Transactions(), fallbackAccountID)
+	return len(txns), d, nil
+}
+
 // idResolver builds a function that maps a CSV reference cell to an entity id:
 // an exact id passes through, a case-insensitive name match resolves to its id,
 // and anything else (including "") is returned unchanged so the validated write

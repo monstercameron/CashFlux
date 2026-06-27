@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C88 [F11]: Pre-import duplicate warning on CSV path
+
+### Problem
+The CSV import has always silently skipped duplicate rows and reported a post-import count. C88 asked for a pre-import warning so users know before they commit. The review (draft) pipeline already shows per-row duplicate badges for the vision/statement path; the bare CSV paste/file-picker paths had no such gate.
+
+### Approach
+Added `dedupe.CountIncomingDuplicates` — a pure helper that mirrors `ImportTransactionsCSV`'s per-account signature logic exactly. `appstate.PreviewCSVImport` wraps it after field resolution (so account/category/member name cells are resolved before comparing). In `documents.go`, both `importCSV` (paste) and `chooseCsvFile` (file picker) now call a shared `previewCSVDuplicates` closure first: if dupes found, bytes are stashed in `pendingCSV` state and a `csvDupWarn` banner appears; `confirmCSV` (UseEvent) commits via the shared `commitCSVImport` helper. If no dupes, the import is immediate — zero extra clicks on the clean path.
+
+### What I chose NOT to do
+"Import anyway" is implemented (it's just clicking the confirm button), so we get both warn+skip and warn+import. The ticket said "import anyway" was acceptable if simple — it was, so it's there.
+
+### i18n
+New `internal/i18n/en_dupwarn.go` (init-merge, doesn't touch en.go which is concurrent WIP).
+
+### Tests
+5 table-driven unit tests in `TestCountIncomingDuplicates` cover: no dupes, 1-of-2, 3-of-5, blank-AccountID fallback, different-account isolation. e2e `c88_csv_dup_warn_check.mjs` drives the paste path; file-picker path shares the same helper.
+
 ## 2026-06-27 — C261 [F37]: Negative-savings guardrail (soft penalty, not hard cap)
 
 ### Problem

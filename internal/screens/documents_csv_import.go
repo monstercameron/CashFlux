@@ -20,10 +20,19 @@ type csvImportCardProps struct {
 	ImportAcctID string
 	Msg          string
 
+	// DupWarn is non-empty when a pre-import preview detected duplicate rows.
+	// It holds the human-readable warning string. When set, OnConfirmCSV
+	// replaces the primary import action so the user can proceed knowingly.
+	DupWarn string
+
 	OnChooseFile ui.Handler
 	OnAcctChange ui.Handler
 	OnCsvInput   ui.Handler
-	OnImportCSV  ui.Handler
+	// OnImportCSV runs the preview first; if duplicates are found it sets
+	// DupWarn and waits for OnConfirmCSV.
+	OnImportCSV ui.Handler
+	// OnConfirmCSV commits the import after the user acknowledges the warning.
+	OnConfirmCSV ui.Handler
 }
 
 // CsvImportCard renders the CSV import section: file picker, account selector,
@@ -62,7 +71,21 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 					OnInput(props.OnCsvInput),
 				),
 			),
-			If(props.Msg != "", P(css.Class("muted"), props.Msg)),
+			// C88: pre-import duplicate warning — shown when the preview step detects
+			// that some incoming rows match existing transactions. The user can confirm
+			// ("Import anyway") to proceed with the existing skip-duplicate behavior, or
+			// simply paste different data to start fresh.
+			If(props.DupWarn != "",
+				Div(css.Class("notice notice-warn", tw.Mt2), Attr("role", "alert"),
+					Attr("data-testid", "csv-dup-warn"),
+					Span(props.DupWarn),
+					Button(css.Class("btn btn-sm"), Style(map[string]string{"margin-left": "0.5rem"}), Type("button"),
+						Attr("data-testid", "csv-dup-confirm"),
+						OnClick(props.OnConfirmCSV),
+						uistate.T("documents.dupWarnConfirm")),
+				),
+			),
+			If(props.Msg != "", P(css.Class("muted"), Attr("data-testid", "csv-import-msg"), props.Msg)),
 		),
 	})
 }

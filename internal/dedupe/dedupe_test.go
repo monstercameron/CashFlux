@@ -145,3 +145,71 @@ func TestFindDuplicatesTriple(t *testing.T) {
 		t.Errorf("Count = %d, want 2", Count(groups))
 	}
 }
+
+func TestCountIncomingDuplicates(t *testing.T) {
+	d := day(2026, time.June, 1)
+	existing := []domain.Transaction{
+		txn("e1", "Coffee", -500, d),
+		txn("e2", "Rent", -100000, d),
+	}
+	// Assign AccountID so per-account signatures match.
+	for i := range existing {
+		existing[i].AccountID = "acc1"
+	}
+
+	tests := []struct {
+		name      string
+		incoming  []domain.Transaction
+		wantDupes int
+	}{
+		{
+			name: "no duplicates",
+			incoming: []domain.Transaction{
+				func() domain.Transaction { t := txn("n1", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(),
+			},
+			wantDupes: 0,
+		},
+		{
+			name: "one of two is a duplicate of existing",
+			incoming: []domain.Transaction{
+				func() domain.Transaction { t := txn("n1", "Coffee", -500, d); t.AccountID = "acc1"; return t }(),     // dup
+				func() domain.Transaction { t := txn("n2", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // fresh
+			},
+			wantDupes: 1,
+		},
+		{
+			name: "three of five rows are duplicates",
+			incoming: []domain.Transaction{
+				func() domain.Transaction { t := txn("n1", "Coffee", -500, d); t.AccountID = "acc1"; return t }(),     // dup of e1
+				func() domain.Transaction { t := txn("n2", "Rent", -100000, d); t.AccountID = "acc1"; return t }(),    // dup of e2
+				func() domain.Transaction { t := txn("n3", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // fresh
+				func() domain.Transaction { t := txn("n4", "Fuel", -4000, d); t.AccountID = "acc1"; return t }(),      // fresh
+				func() domain.Transaction { t := txn("n5", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // dup of n3 (within-batch)
+			},
+			wantDupes: 3,
+		},
+		{
+			name: "fallback accountID applied when AccountID is blank",
+			incoming: []domain.Transaction{
+				func() domain.Transaction { t := txn("n1", "Coffee", -500, d); t.AccountID = ""; return t }(), // blank → "acc1" fallback → dup
+			},
+			wantDupes: 1,
+		},
+		{
+			name: "different account means no dup",
+			incoming: []domain.Transaction{
+				func() domain.Transaction { t := txn("n1", "Coffee", -500, d); t.AccountID = "acc2"; return t }(), // same sig but different account → fresh
+			},
+			wantDupes: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := CountIncomingDuplicates(tc.incoming, existing, "acc1")
+			if got != tc.wantDupes {
+				t.Errorf("CountIncomingDuplicates = %d, want %d", got, tc.wantDupes)
+			}
+		})
+	}
+}

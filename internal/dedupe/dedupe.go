@@ -132,3 +132,33 @@ func Count(groups []Group) int {
 	}
 	return n
 }
+
+// CountIncomingDuplicates returns how many rows in incoming would be skipped as
+// duplicates if imported into an account that already contains existing. A row is
+// a duplicate when its per-account signature (AccountID + "|" + Signature) matches
+// an existing transaction OR an earlier row in the same incoming batch — mirroring
+// exactly the logic in appstate.ImportTransactionsCSV so the pre-import count is
+// always consistent with the post-import "skipped" tally.
+//
+// accountID is the fallback account used for incoming rows whose AccountID is
+// blank; it should match the fallbackAccountID passed to ImportTransactionsCSV.
+func CountIncomingDuplicates(incoming []domain.Transaction, existing []domain.Transaction, accountID string) int {
+	seen := make(map[string]bool, len(existing))
+	for _, t := range existing {
+		seen[t.AccountID+"|"+Signature(t)] = true
+	}
+	dupes := 0
+	for _, t := range incoming {
+		acct := t.AccountID
+		if acct == "" {
+			acct = accountID
+		}
+		sig := acct + "|" + Signature(t)
+		if seen[sig] {
+			dupes++
+		} else {
+			seen[sig] = true
+		}
+	}
+	return dupes
+}

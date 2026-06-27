@@ -115,6 +115,12 @@ func Documents() ui.Node {
 	msg := ui.UseState("")
 	cadenceMsg := ui.UseState("") // C18: inline confirmation shown next to the reminder button
 
+	// C88: pre-import duplicate warning state.
+	// csvDupWarn holds the human-readable warning string (non-empty = warning visible).
+	// pendingCSV holds the raw CSV bytes awaiting user confirmation; cleared on import or cancel.
+	csvDupWarn := ui.UseState("")
+	pendingCSV := ui.UseState([]byte(nil))
+
 	accounts := app.Accounts()
 	defaultAcc := ""
 	if len(accounts) > 0 {
@@ -179,47 +185,14 @@ func Documents() ui.Node {
 		})
 	}
 
-	// chooseCsvFile opens a file picker for .csv files and feeds the bytes
-	// directly into the CSV import pipeline, skipping the paste step (C60).
-	chooseCsvFile := ui.UseEvent(func() {
-		pickFile(".csv,text/csv", func(_, _ string, data []byte) {
-			if len(data) == 0 {
-				msg.Set(uistate.T("documents.csvFileEmpty"))
-				return
-			}
-			n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
-			if err != nil {
-				friendly := strings.TrimPrefix(err.Error(), "store: ")
-				msg.Set(uistate.T("documents.csvError", friendly))
-				return
-			}
-			if n > 0 {
-				recordDocument(domain.DocCSV, importAcct.Get(), nil, n)
-			}
-			summary := csvImportSummary(accounts, importAcct.Get(), n)
-			if len(skipped) > 0 {
-				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
-				if d := csvSkipDetail(skipped); d != "" {
-					summary += " " + d
-				}
-			}
-			msg.Set(summary)
-			rev.Set(rev.Get() + 1)
-		})
-	})
-	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
-	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
-	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
-
-	importCSV := ui.UseEvent(Prevent(func() {
-		data := strings.TrimSpace(csvText.Get())
-		if data == "" {
-			msg.Set(uistate.T("documents.csvEmpty"))
-			return
-		}
-		n, skipped, err := app.ImportTransactionsCSV([]byte(data), importAcct.Get())
+	// commitCSVImport is the shared write path used by both the paste and file-picker
+	// flows after any duplicate warning has been acknowledged. It calls
+	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
+	commitCSVImport := func(data []byte) {
+		n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
+		csvDupWarn.Set("")
+		pendingCSV.Set(nil)
 		if err != nil {
-			// Don't surface the internal "store:" package prefix to the user (C27).
 			friendly := strings.TrimPrefix(err.Error(), "store: ")
 			msg.Set(uistate.T("documents.csvError", friendly))
 			return
@@ -236,6 +209,73 @@ func Documents() ui.Node {
 		}
 		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
+	}
+
+	// confirmCSV is the "Import anyway" handler: commits the pending CSV bytes
+	// that were held after the user saw the duplicate warning (C88).
+	confirmCSV := ui.UseEvent(func() {
+		data := pendingCSV.Get()
+		if len(data) == 0 {
+			return
+		}
+		commitCSVImport(data)
+	})
+
+	// previewCSVDuplicates checks incoming CSV bytes for duplicate rows. If any
+	// are found it stores the bytes and sets the warning text, returning true so
+	// the caller knows to pause before importing. If no dupes, returns false and
+	// the caller should proceed directly.
+	previewCSVDuplicates := func(data []byte) (hasDupes bool) {
+		total, dupes, err := app.PreviewCSVImport(data, importAcct.Get())
+		if err != nil || dupes == 0 {
+			return false
+		}
+		pendingCSV.Set(data)
+		if dupes == total {
+			csvDupWarn.Set(uistate.T("documents.dupWarnAllDups", dupes))
+		} else {
+			csvDupWarn.Set(uistate.T("documents.dupWarnBanner", dupes, total))
+		}
+		return true
+	}
+
+	// chooseCsvFile opens a file picker for .csv files and feeds the bytes
+	// directly into the CSV import pipeline, skipping the paste step (C60).
+	// C88: if duplicates are detected the bytes are staged and a warning is shown;
+	// the user confirms via "Import anyway" before the write happens.
+	chooseCsvFile := ui.UseEvent(func() {
+		pickFile(".csv,text/csv", func(_, _ string, data []byte) {
+			if len(data) == 0 {
+				msg.Set(uistate.T("documents.csvFileEmpty"))
+				return
+			}
+			if previewCSVDuplicates(data) {
+				// Warning is now visible; import is held until user confirms.
+				return
+			}
+			commitCSVImport(data)
+		})
+	})
+	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
+	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
+	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
+
+	// importCSV is the paste-path import handler (C88: two-step with dup warning).
+	// First call: runs a preview — if duplicates are found, stores the bytes and
+	// surfaces the warning; the user then clicks "Import anyway" (confirmCSV).
+	// If no duplicates, proceeds directly to commitCSVImport.
+	importCSV := ui.UseEvent(Prevent(func() {
+		data := strings.TrimSpace(csvText.Get())
+		if data == "" {
+			msg.Set(uistate.T("documents.csvEmpty"))
+			return
+		}
+		raw := []byte(data)
+		if previewCSVDuplicates(raw) {
+			// Duplicate warning is now shown; import waits for user confirmation.
+			return
+		}
+		commitCSVImport(raw)
 	}))
 
 	// parseStatement (C74) parses a pasted bank/credit-card statement in any common
@@ -768,10 +808,12 @@ func Documents() ui.Node {
 			Accounts:     accounts,
 			ImportAcctID: importAcct.Get(),
 			Msg:          msg.Get(),
+			DupWarn:      csvDupWarn.Get(),
 			OnChooseFile: chooseCsvFile,
 			OnAcctChange: onAcct,
 			OnCsvInput:   onCsv,
 			OnImportCSV:  importCSV,
+			OnConfirmCSV: confirmCSV,
 		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("documents.stmtTitle"),
