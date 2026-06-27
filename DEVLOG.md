@@ -14438,3 +14438,12 @@ tested), wired to live accounts in health.go and shown on /health. Ran an advers
 R22 SATISFIED — local-only, deterministic, explainable, real-data; the ticket asks for a proxy, not a FICO
 replica. Gaps (payment-history + account-age signals) are a legitimate future extension, tracked as its own
 follow-on, not a reason to hold R22 open. Marked [x] with evidence; no app code changed (reconciliation).
+
+## 2026-06-27 — reconcile marks: R60 DONE (others verified PARTIAL, not overclaimed)
+User asked to mark completed todos. Ran an adversarial verification of the 4 gate-adjacent tickets against
+their literal acceptance: R60 SATISFIED, R36/R46/R69 PARTIAL. Marked ONLY R60 [x] — "enterprise density
+model": explicit per-archetype density targets + hard ceilings enforced by ux_density_audit.mjs (0/16 over
+ceiling) and high-control reduction (widget-manager 100->23 via hover/focus disclosure); acceptance is
+targets+reductions, not user-switchable modes. Deliberately did NOT mark R36 (no route-archetype template
+hierarchy system), R46 (no automated off-token-hardcode audit), or R69 (no distinct hierarchy-parity score
+beyond contrast) — they're genuinely partial and marking them would overclaim. Honest reconciliation.
