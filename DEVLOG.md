@@ -3,6 +3,35 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C294: include artifact blobs in dataset export (backup completeness)
+
+**Root cause (two wiring bugs, not a missing feature):**
+
+1. `backupEverything()` in `internal/app/backupall.go` called `activeDataset()` which called
+   `app.ExportJSONRedacted()` — a redacted-but-no-blob variant originally designed for autosave.
+   Image bytes that had been offloaded from SQLite to IndexedDB (IDB) were simply absent from the
+   backup JSON with no error or warning.
+
+2. `importJSON()` in `internal/app/settings.go` called `app.ImportJSON(data)` — the plain import
+   that stores artifact records as-is, without migrating embedded `Bytes` into IDB. A backup
+   restored via "Import dataset" would re-embed images in the dataset, inflating every subsequent
+   autosave to localStorage.
+
+Both functions already existed and were already correct for their primary call-sites:
+`ExportJSONRedactedWithBlobs` in `artifact_ops.go` handles the redact-and-rehydrate path;
+`ImportJSONWithBlobs` handles parse-and-migrate. The fix was pure wiring — two one-liners.
+
+**What was NOT broken:** The Settings → Data "Export dataset" button correctly called
+`ExportJSONWithBlobs()`. Only the automated `backupEverything()` path (palette) and the
+`importJSON()` re-import path had the wrong function wired.
+
+**Files changed:**
+- `internal/app/backupall.go` — `activeDataset()`: `ExportJSONRedacted` → `ExportJSONRedactedWithBlobs`
+- `internal/app/settings.go` — `importJSON()`: `ImportJSON` → `ImportJSONWithBlobs`
+- `internal/appstate/artifact_roundtrip_test.go` — new; `memBlobStore` mock + two round-trip tests
+
+**Tests:** `go test ./internal/appstate/ ./internal/store/ ./internal/backup/` — all pass.
+
 ## 2026-06-27 — C295: confirm before dataset import overwrites everything
 
 **Problem:** Settings → Data → "Import dataset" called `app.ImportJSON(data)` the moment a file

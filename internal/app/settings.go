@@ -1389,7 +1389,10 @@ func importJSON(onChange func(), notify func(string, bool)) {
 				if !ok {
 					return
 				}
-				if err := app.ImportJSON(data); err != nil {
+				// ImportJSONWithBlobs moves embedded artifact image bytes
+				// into IndexedDB so the autosave doesn't write them back to
+				// localStorage (C294 — blob-complete round-trip on import).
+				if err := app.ImportJSONWithBlobs(data); err != nil {
 					notify(uistate.T("settings.importErr", err.Error()), true)
 					return
 				}

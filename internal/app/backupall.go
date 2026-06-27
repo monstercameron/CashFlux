@@ -46,13 +46,14 @@ func gatherBackupDatasets(r workspace.Registry, activeDS string) []string {
 }
 
 // activeDataset serializes the live active-workspace dataset (OpenAI key redacted,
-// matching the autosave), or "" when unavailable.
+// artifact image bytes rehydrated from IndexedDB so the backup is fully
+// self-contained), or "" when unavailable.
 func activeDataset() string {
 	app := appstate.Default
 	if app == nil {
 		return ""
 	}
-	data, err := app.ExportJSONRedacted()
+	data, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
 		return ""
 	}
