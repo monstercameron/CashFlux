@@ -136,13 +136,18 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 				}),
 				props.ClearAllLabel),
 		)),
-		If(open.Get(), FlipPanel(FlipPanelProps{
-			Title:     props.FiltersTitle,
-			Back:      props.FilterFields,
-			Height:    "440px",
-			CloseOnly: true,
-			OnClose:   func() { open.Set(false) },
-		})),
+		// C52: inline collapsible filter panel — no backdrop, no occlusion. The table
+		// remains visible below while the user adjusts filters. The panel mounts/unmounts
+		// with the open state (same as before for the FlipPanel) so it is keyed correctly.
+		If(open.Get(), Div(css.Class("filter-inline-panel"),
+			Attr("role", "region"), Attr("aria-label", props.FiltersTitle),
+			Div(css.Class("filter-inline-header"),
+				H3(css.Class("filter-inline-title"), props.FiltersTitle),
+				Button(css.Class("set-close"), Type("button"), Attr("title", "Close"),
+					OnClick(func() { open.Set(false) }), "✕"),
+			),
+			Div(css.Class("filter-inline-body"), props.FilterFields),
+		)),
 	)
 }
 

@@ -1266,6 +1266,16 @@
       .filter-fields { display: flex; flex-direction: column; gap: 0.7rem; }
       .filter-fields .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
       .filter-fields .field-label .field { color: var(--text); }
+      /* C52: inline non-occluding filter panel — replaces the modal FlipPanel so the
+         transaction table stays visible while filters are adjusted. Sits in normal
+         document flow above the chips / table; no backdrop, no fixed positioning. */
+      .filter-inline-panel { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 0.8rem; overflow: hidden; }
+      .filter-inline-header { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--border); }
+      .filter-inline-title { margin: 0; font-size: 0.88rem; font-weight: 600; }
+      .filter-inline-body { padding: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.7rem; }
+      .filter-inline-body .filter-fields { flex: 1 1 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.7rem; }
+      .filter-inline-body .filter-fields .field-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+      .filter-inline-body .filter-fields .field-label .field { color: var(--text); }
 
       /* Forms */
       .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; align-items: end; }
