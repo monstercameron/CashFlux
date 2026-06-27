@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C299 [F44]: "Last backed up" timestamp in Settings → Data
+
+### Problem
+The `recordBackupNow()` helper stamps `cashflux:lastBackedUpAt` in localStorage after a successful Export JSON. `lastBackupSummary()` formats it and `settings_section.go` renders it with `data-testid="last-backup"`. But the UI line was already rendered as of the last commit — the actual gap was: (1) `backupEverything()` never called `recordBackupNow()`, so "Back up everything" from the palette never updated the timestamp; and (2) the i18n keys lived only in the concurrent-WIP `en.go`.
+
+### What I did
+- **`internal/app/backupall.go`:** Added `recordBackupNow()` call after `downloadBytes(...)` in `backupEverything()`. One line. This makes the palette "Back up everything" action stamp the timestamp, just like Export JSON already did.
+- **`internal/i18n/en_backupts.go`:** New file with the two keys (`settings.lastBackup`, `settings.lastBackupNever`) via the init-merge pattern. This decouples C299's string changes from the concurrent-WIP `en.go` so neither agent's commit clobbers the other.
+- **`internal/app/backup_ts_test.go`:** Unit test `TestLastBackupI18NKeys` table-tests both keys — non-empty, `settings.lastBackup` has `%s` verb, `settings.lastBackupNever` does not.
+- **`e2e/c299_last_backup_check.mjs`:** Browser test opens Settings, asserts initial "never" state, triggers Export JSON via the command palette, reloads, then asserts the element text is no longer the "never" copy.
+
+### Trade-offs / notes
+The rendering and `lastBackupSummary()` were already in HEAD — no changes needed there. The only code change is the one-line `recordBackupNow()` addition to `backupEverything()`. The e2e test's "never" check is best-effort: if a prior session left a timestamp in localStorage the warn-check skips gracefully (the transition assertion is the meaningful invariant).
+
 ## 2026-06-27 — C88 [F11]: Pre-import duplicate warning on CSV path
 
 ### Problem

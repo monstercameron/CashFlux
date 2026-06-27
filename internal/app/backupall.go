@@ -83,6 +83,7 @@ func backupEverything() {
 		return
 	}
 	downloadBytes("cashflux-backup.json", "application/json", data)
+	recordBackupNow() // C299: stamp so "Last backed up" reflects full backups too
 	paletteNotify(uistate.T("backup.everythingDone"), false)
 }
 
