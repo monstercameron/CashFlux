@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/planning"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/runway"
+	"github.com/monstercameron/CashFlux/internal/safespend"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -38,6 +39,12 @@ import (
 // screen, anchored at #debt, so this renders that screen; the dedicated route
 // gives it its own nav item and URL instead of being buried mid-/planning.
 func DebtPlanner() ui.Node { return Planning() }
+
+// Recurring is the /recurring route — a dedicated, discoverable entry point to the
+// recurring cash-flow manager (C156). The manager lives within the Planning
+// screen, anchored at #recurring, so this renders that screen; the dedicated
+// route gives it a nav-rail entry in the Bills & recurring sub-section.
+func Recurring() ui.Node { return Planning() }
 
 // debtRateRowProps configures one debtRateRow.
 type debtRateRowProps struct {
@@ -495,6 +502,12 @@ func Planning() ui.Node {
 		mStart, mEnd := dateutil.MonthRange(time.Now())
 		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
 		monthlyNet := income.Amount - expense.Amount
+		// R15-planning: base affordability on safe-to-spend (liquid minus bills and
+		// goal contributions) so the answer is consistent with the dashboard KPI tile.
+		toBase := safespend.ToBaseFunc(rates)
+		billsDue := safespend.BillsDueBefore(accounts, app.Recurring(), time.Now(), mEnd, toBase)
+		goalNeeds := safespend.GoalContributionsProrated(app.Goals(), time.Now(), toBase)
+		safeStart := safespend.Compute(liquid.Amount, billsDue, goalNeeds, 0, base).SafeToSpend
 
 		var afBody ui.Node = P(css.Class("muted"), uistate.T("planning.affordEnter"))
 		if amt, aerr := money.ParseMinor(strings.TrimSpace(afAmount.Get()), currency.Decimals(base)); aerr == nil && amt > 0 {
@@ -503,7 +516,7 @@ func Planning() ui.Node {
 			if reserved < 0 {
 				reserved = 0
 			}
-			res := afford.CanAfford(amt, liquid.Amount, monthlyNet, months, reserved)
+			res := afford.CanAfford(amt, safeStart, monthlyNet, months, reserved)
 			var verdict ui.Node
 			if res.Affordable {
 				verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.affordYes"))
@@ -685,6 +698,8 @@ func Planning() ui.Node {
 		)
 		recurringCard = uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("recurring.title"),
+			// C156: HTML id anchor so /recurring route and /planning#recurring are directly linkable.
+			Attrs: []any{Attr("id", "recurring")},
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("recurring.hint")),
 				Form(css.Class("form-grid"), OnSubmit(addRecurring),
@@ -696,7 +711,7 @@ func Planning() ui.Node {
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
-					uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: rAutopay.Get(), OnChange: func(v bool) { rAutopay.Set(v) }}), // C157
+				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: rAutopay.Get(), OnChange: func(v bool) { rAutopay.Set(v) }}), // C157
 				errText("refi-err", rErr.Get()),
 				totalNote,
 				list,

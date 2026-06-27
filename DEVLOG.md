@@ -3,6 +3,23 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C156 (dedicated /recurring route)
+
+The recurring management card lives inside /planning, which means users with bills to manage
+have to hunt for it — no nav-rail shortcut, no direct URL. The fix mirrors C200 (the /debt route):
+
+1. `Recurring()` thin view func in `planning.go` (same file as `DebtPlanner()`) — one line,
+   delegates to `Planning()`. Lives in the `js && wasm` file so it can reference `Planning()`.
+2. `/recurring` route entry in `screens.go` under SubGroupBills ("Bills & recurring"), Phase 2.
+3. `railMeta` entry in `shell.go` mapping `/recurring` → Bills icon + `nav.recurring` key.
+4. `id="recurring"` anchor on the `EntityListSection` wrapper in `planning.go` so the card is
+   directly linkable via `/planning#recurring` (same technique as the `id="debt"` anchor).
+5. i18n keys `nav.recurring` ("Bills & recurring") and `screen.recurringSub` ("Manage bills
+   and recurring cash flows") in `en.go`.
+
+Build: `GOOS=js GOARCH=wasm go build -o NUL .` exit 0. `go test ./internal/i18n/` pass.
+`go test ./internal/screens/` expected build-constraint skip (all files are `js && wasm`).
+
 ## 2026-06-27 — C293 (About card identity + privacy context)
 
 The "What's new" card in /help served only as a version label + recent highlights + changelog link.

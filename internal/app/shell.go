@@ -237,6 +237,7 @@ var railMeta = map[string]struct {
 	"/debt":           {"nav.debt", icon.Planning},
 	"/allocate":       {"nav.allocate", icon.Allocate},
 	"/reports":        {"nav.reports", icon.Reports},
+	"/recurring":      {"nav.recurring", icon.Bills},
 	"/subscriptions":  {"nav.subscriptions", icon.Subscriptions},
 	"/bills":          {"nav.bills", icon.Bills},
 	"/split":          {"nav.split", icon.Split},
