@@ -1,0 +1,152 @@
+[
+  {
+    "route": "/",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\dashboard.png",
+    "h1": "Dashboard"
+  },
+  {
+    "route": "/accounts",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\accounts.png",
+    "h1": "Accounts"
+  },
+  {
+    "route": "/transactions",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\transactions.png",
+    "h1": "Transactions"
+  },
+  {
+    "route": "/budgets",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\budgets.png",
+    "h1": "Budgets"
+  },
+  {
+    "route": "/goals",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\goals.png",
+    "h1": "Goals"
+  },
+  {
+    "route": "/todo",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\todo.png",
+    "h1": "To-do"
+  },
+  {
+    "route": "/notifications",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\notifications.png",
+    "h1": "Notifications"
+  },
+  {
+    "route": "/planning",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\planning.png",
+    "h1": "Planning"
+  },
+  {
+    "route": "/debt",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\debt.png",
+    "h1": "Dashboard"
+  },
+  {
+    "route": "/allocate",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\allocate.png",
+    "h1": "Allocate"
+  },
+  {
+    "route": "/reports",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\reports.png",
+    "h1": "Reports"
+  },
+  {
+    "route": "/health",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\health.png",
+    "h1": "Financial health"
+  },
+  {
+    "route": "/subscriptions",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\subscriptions.png",
+    "h1": "Subscriptions"
+  },
+  {
+    "route": "/bills",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\bills.png",
+    "h1": "Bills"
+  },
+  {
+    "route": "/split",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\split.png",
+    "h1": "Split a bill"
+  },
+  {
+    "route": "/insights",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\insights.png",
+    "h1": "Insights"
+  },
+  {
+    "route": "/smart",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\smart.png",
+    "h1": "Smart"
+  },
+  {
+    "route": "/documents",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\documents.png",
+    "h1": "Documents"
+  },
+  {
+    "route": "/customize",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\customize.png",
+    "h1": "Customize"
+  },
+  {
+    "route": "/artifacts",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\artifacts.png",
+    "h1": "Artifacts"
+  },
+  {
+    "route": "/activity",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\activity.png",
+    "h1": "Activity"
+  },
+  {
+    "route": "/workflows",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\workflows.png",
+    "h1": "Workflows"
+  },
+  {
+    "route": "/widget-builder",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\widget-builder.png",
+    "h1": "Widget builder"
+  },
+  {
+    "route": "/widget-manager",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\widget-manager.png",
+    "h1": "Widget manager"
+  },
+  {
+    "route": "/members",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\members.png",
+    "h1": "Members"
+  },
+  {
+    "route": "/categories",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\categories.png",
+    "h1": "Categories"
+  },
+  {
+    "route": "/rules",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\rules.png",
+    "h1": "Rules"
+  },
+  {
+    "route": "/appearance",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\appearance.png",
+    "h1": "Appearance"
+  },
+  {
+    "route": "/help",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\help.png",
+    "h1": "Help"
+  },
+  {
+    "route": "/admin",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile\\admin.png",
+    "h1": "Admin"
+  }
+]

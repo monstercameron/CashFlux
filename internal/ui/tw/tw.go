@@ -64,6 +64,7 @@ var (
 	JustifyStart     = css.Justify.Start
 	JustifyCenter    = css.Justify.Center
 	JustifyBetween   = css.Justify.Between
+	JustifyEnd       = raw("justify-content", "flex-end")
 	ContentStart     = raw("align-content", "flex-start")
 	PlaceItemsCenter = raw("place-items", "center")
 	SelfStart        = raw("align-self", "flex-start")

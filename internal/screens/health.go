@@ -222,10 +222,18 @@ func healthRing(r healthscore.Result, size int) ui.Node {
 	}
 	px := fmt.Sprintf("%dpx", size)
 
+	// R52/R64 a11y: the ring is the primary score visual, so give it a real
+	// screen-reader name (role=img + a one-sentence label with the score and band)
+	// rather than hiding it; the overlay number below is then aria-hidden so the
+	// score isn't announced twice.
+	ringLabel := uistate.T("health.ringLabel", r.Score, string(r.Band))
+	if r.Band == healthscore.BandNoData {
+		ringLabel = uistate.T("health.ringLabelNoData")
+	}
 	ring := Svg(
 		Attr("viewBox", "0 0 120 120"),
 		Attr("width", px), Attr("height", px),
-		Attr("aria-hidden", "true"),
+		Attr("role", "img"), Attr("aria-label", ringLabel),
 		// Faint full track.
 		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
 			Attr("fill", "none"), Attr("stroke", "var(--line, #2a2a2d)"), Attr("stroke-width", "10")),
@@ -240,6 +248,8 @@ func healthRing(r healthscore.Result, size int) ui.Node {
 	)
 
 	overlay := Div(
+		// Visual duplicate of the score the ring's aria-label already announces.
+		Attr("aria-hidden", "true"),
 		Style(map[string]string{
 			"position": "absolute", "inset": "0",
 			"display": "flex", "flex-direction": "column",

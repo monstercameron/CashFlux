@@ -122,7 +122,7 @@ func buildAppLockGate(doc js.Value) {
 	gate.Call("setAttribute", "aria-label", uistate.T("applock.gateAriaLabel"))
 
 	card := doc.Call("createElement", "div")
-	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);background:var(--surface,#ffffff);border-radius:12px;padding:2rem 1.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.08);")
+	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);background:var(--bg-elev,#1a1a1d);border-radius:12px;padding:2rem 1.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);")
 	card.Set("innerHTML", `<div id="cf-lock-greeting" style="font-size:1rem;opacity:0.85;"></div>`+
 		`<div id="cf-lock-date" style="font-size:0.82rem;opacity:0.55;margin-bottom:0.3rem;"></div>`+
 		`<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+

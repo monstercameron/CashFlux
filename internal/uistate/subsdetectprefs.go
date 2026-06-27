@@ -23,6 +23,38 @@ type SubsDetectPrefs struct {
 	// IgnoredAccountTypes is the set of account-type strings (e.g. "checking",
 	// "investment") whose transactions are excluded from detection.
 	IgnoredAccountTypes []string `json:"ignoredAccountTypes,omitempty"`
+	// MinOccurrences is the detection sensitivity: the minimum number of times a
+	// charge must repeat before it counts as a subscription. 0 = unset (use the
+	// default of 2). Higher = fewer, more-confident matches; lower = catch newer
+	// or less-frequent charges. (C166)
+	MinOccurrences int `json:"minOccurrences,omitempty"`
+}
+
+// defaultSubsMinOccurrences is the detection threshold used when the user hasn't
+// chosen one — two sightings is the lightest evidence of a recurring charge.
+const defaultSubsMinOccurrences = 2
+
+// MinOccurrencesOrDefault returns the configured detection threshold, or the
+// default (2) when unset, clamped to a sane 2..6 range.
+func (p SubsDetectPrefs) MinOccurrencesOrDefault() int {
+	n := p.MinOccurrences
+	if n <= 0 {
+		return defaultSubsMinOccurrences
+	}
+	if n > 6 {
+		return 6
+	}
+	return n
+}
+
+// WithMinOccurrences returns a copy of p with the detection threshold set.
+func (p SubsDetectPrefs) WithMinOccurrences(n int) SubsDetectPrefs {
+	out := SubsDetectPrefs{
+		IgnoredCategoryIDs:  append([]string(nil), p.IgnoredCategoryIDs...),
+		IgnoredAccountTypes: append([]string(nil), p.IgnoredAccountTypes...),
+		MinOccurrences:      n,
+	}
+	return out
 }
 
 // HasIgnoredCategory reports whether id appears in the ignored-category list.
@@ -51,6 +83,7 @@ func (p SubsDetectPrefs) WithCategoryToggled(id string) SubsDetectPrefs {
 	out := SubsDetectPrefs{
 		IgnoredCategoryIDs:  make([]string, 0, len(p.IgnoredCategoryIDs)),
 		IgnoredAccountTypes: append([]string(nil), p.IgnoredAccountTypes...),
+		MinOccurrences:      p.MinOccurrences,
 	}
 	found := false
 	for _, v := range p.IgnoredCategoryIDs {
@@ -72,6 +105,7 @@ func (p SubsDetectPrefs) WithAccountTypeToggled(typ string) SubsDetectPrefs {
 	out := SubsDetectPrefs{
 		IgnoredCategoryIDs:  append([]string(nil), p.IgnoredCategoryIDs...),
 		IgnoredAccountTypes: make([]string, 0, len(p.IgnoredAccountTypes)),
+		MinOccurrences:      p.MinOccurrences,
 	}
 	found := false
 	for _, v := range p.IgnoredAccountTypes {

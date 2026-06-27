@@ -23,6 +23,11 @@ cleared-vs-uncleared **reconciliation**, and a rule that every figure it shows �
 allocation score — can be **traced back to the transactions behind it**. Your spreadsheet, but it does the
 math, keeps the receipts, and never phones home.
 
+> **Honest status:** CashFlux is **alpha**. The architecture and the pure-logic core are real and
+> tested, the live demo is usable, and the feature areas below are in the app — but some are still
+> rough or evolving, and multi-device sync needs the (optional) backend. The feature list is what
+> CashFlux *does*, not a roadmap; maturity varies by area. See [`TODOS.md`](./TODOS.md) for what's next.
+
 **▶ Try it now:** **[monstercameron.github.io/CashFlux](https://monstercameron.github.io/CashFlux/)**
 — the latest `main`, redeployed on every push. It starts empty; hit **Settings → "Load sample"** to
 explore with realistic data. Everything you do stays in your browser's local storage.
@@ -41,6 +46,9 @@ throws that whole layout out.
 - **The UI is Go.** Components, state, routing, event handlers — all written in Go, compiled to
   **WebAssembly** (a binary the browser runs natively, like a tiny program). There's basically **no
   hand-written JavaScript**; the screens are Go functions returning a tree of elements.
+- **The styling is Go.** No separate CSS file or Tailwind build — styles are written in Go right next
+  to the markup with a typed utility layer, type-checked, and compiled into the same binary. Get a
+  color name wrong and it won't build (instead of silently rendering the wrong thing).
 - **The database is Go, in your tab.** It runs a real **SQLite** engine ([ncruces/go-sqlite3], no C,
   no cgo) *inside the browser*. Your "server" is a SQLite file that never leaves the page.
 - **The money math is Go, and it's correct.** Currency, balances, budgets, debt payoff, allocation
@@ -72,44 +80,93 @@ use it:
   `state` atoms and computed values.
 - 🏷️ **Typed HTML, no template language** — a Go `html`/`shorthand` DSL with control-flow helpers
   (`If`, `Map`, `MapKeyed`, `Switch`) that compile-check your markup.
+- 🎨 **Typed CSS, no stylesheet** — a Tailwind-shaped utility layer (`css` + `css/u`) authored in Go
+  right next to the markup. Type-safe values (`Hex`, `Spacing`, `Rem`), variants (`Hover`, `Md`,
+  `Dark`), and `Transition` compose inline; every rule folds to a deterministic, content-hashed class,
+  dedupes, and injects once. A typo is a compile error — not a silently-broken rule. No CSS file, no
+  Tailwind/PostCSS, no purge step.
 - 🧭 **Batteries included** — client-side router, shared state, `fetch`/WebSocket hooks, i18n, a11y
-  primitives, PWA, SSR + hydration, feature flags, and devtools — one Go module.
+  primitives, PWA, SSR + hydration, feature flags, and devtools — one Go module, and CashFlux
+  exercises most of them in anger.
 - 🔗 **Shared types client ↔ server** — the same structs everywhere; no DTO drift, no codegen dance.
-- 🚫 **No npm, no bundler** — `go build` is your build step. That's the whole toolchain.
+- 🚫 **No npm, no bundler, no CSS pipeline** — markup, styling, logic, and the database all compile
+  from one toolchain. For your app code, `go build` *is* the build step.
 
 ```go
 package main
 
 import (
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	// The shorthand package is commonly dot-imported for JSX-like readability.
+	// You can also import it normally if your codebase forbids dot imports.
+	. "github.com/monstercameron/GoWebComponents/css/u"          // styling — bare
+	. "github.com/monstercameron/GoWebComponents/html/shorthand" // elements — bare
+	"github.com/monstercameron/GoWebComponents/css"
 	"github.com/monstercameron/GoWebComponents/ui"
 	"github.com/monstercameron/GoWebComponents/utils"
 )
 
-// A self-contained, stateful component — written in Go, compiled to WebAssembly.
-// No JSX, no bundler, no node_modules.
-func Counter(start int) ui.Node {
-	count := ui.UseState(start)
-	inc := ui.UseEvent(Prevent(func() {
-		count.Update(func(n int) int { return n + 1 })
-	}))
+// Styles fold once into deterministic, content-hashed classes and dedupe across
+// the app — typed values mean a typo is a compile error, not a broken rule.
+var (
+	card = Rules(
+		Flex, FlexCol, Gap(Spacing4), Pad(Spacing8),
+		Rounded(RadiusXl), Bg(Slate900), Border(Slate700), Shadow(Shadow2xl),
+		MinWidth(Px(260)),
+		Md(Pad(Spacing10)), // responsive
+		Dark(Bg(Black)),    // dark mode
+	)
+	button = Rules(
+		InlineFlex, ItemsCenter, JustifyCenter, PadX(Spacing5), PadY(Spacing2),
+		Rounded(RadiusLg), FontSemibold, Fg(White), Cursor.Pointer,
+		Transition(PropAll, Ms(120), Ease), Active(Transform(Scale(0.95))),
+	)
+)
 
-	return Div(Class("card"),
-		H2(Class("card-title"), "Clicks"),
-		P(Textf("You clicked %d times.", count.Get())),
-		If(count.Get() >= 10, P(Class("muted"), "🔥 you're on a roll")),
-		Button(Class("btn btn-primary"), Type("button"), OnClick(inc), "Click me"),
+// Props are a plain Go struct — typed, named, and trivially extensible as the
+// component grows (positional args would get unreadable past one or two).
+type CounterProps struct {
+	Start int
+	Label string
+}
+
+// A self-contained, stateful component — markup, state, events, AND styling,
+// all in Go, compiled to WebAssembly. No JSX, no CSS file, no node_modules.
+func Counter(p CounterProps) ui.Node {
+	count := ui.UseState(p.Start)
+
+	return Div(Class(card),
+		Span(Class(Fg(Slate400), FontMedium, TextTransform.Uppercase, Tracking(Ems(0.18))),
+			p.Label),
+		Div(Class(FontSize(Rem(3)), FontBold, Fg(White), FontVariantNumeric.TabularNums),
+			Textf("%d", count.Get())),
+		If(count.Get() >= 10, Span(Class(Fg(Slate500)), "🔥 you're on a roll")),
+		Button(Class(button, Bg(Sky500), Hover(Bg(Sky600))),
+			Props{Type: "button", OnClick: ui.UseEvent(func() { count.Set(count.Get() + 1) })},
+			"Click me"),
 	)
 }
 
 func main() {
-	ui.Render(ui.CreateElement(func() ui.Node { return Counter(0) }), "#app")
+	css.SeedFromDocument() // adopt server-rendered styles on hydration, don't re-inject
+	// The framework reflects the props struct straight into the component call.
+	ui.Render(ui.CreateElement(Counter, CounterProps{Start: 0, Label: "Clicks"}), "#app")
 	utils.WaitForever()
 }
 ```
 
-That's a complete, interactive component — state, events, conditional rendering — in pure Go. Ship it to
-the browser with one `GOOS=js GOARCH=wasm go build`.
+That's a complete, interactive component — state, events, conditional rendering, **and styling** — in
+pure Go, with no stylesheet shipped alongside it. Build it with one `GOOS=js GOARCH=wasm go build`; the
+class names are content-hashed and stable, so the same source always emits the same CSS.
+
+> **About those hooks (for React folks):** it's React's model — call-order-identified, so no hooks in
+> conditions or loops; state is per-instance; effects support cleanup. The one Go-specific rule:
+> background goroutines may *update* existing state but must not *create* hooks (call `UseState` only
+> from the component body). And it's enforced statically — the `hookcheck` analyzer fails the build on
+> a misplaced hook, so you find out at compile time, not in production.
+
+> **Props are just a struct:** `CreateElement` reflects `CounterProps` straight into the call above —
+> the same mechanism that hands keyed list rows their data — so components stay typed and idiomatic
+> however many fields they grow.
 
 **→ Star it / build with it: [github.com/monstercameron/GoWebComponents][GoWebComponents]**
 

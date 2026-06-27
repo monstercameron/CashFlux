@@ -991,6 +991,17 @@
       .hero-flanker-value.pos { color: var(--money-positive); }
       .hero-flanker-value.neg { color: var(--money-negative); }
       .hero-secondary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+      /* Reports overview: pair the ranked-list cards into two columns on wide screens so
+         the page reads as a dashboard instead of one long single column. Single column
+         below 1100px (and the wide Sankey above stays full-width, outside this grid).
+         Cards align to the top of each row so uneven-height cards don't stretch. */
+      .reports-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+      @media (min-width: 1100px) { .reports-grid { grid-template-columns: 1fr 1fr; } }
+      /* Pair the category ranked-bar + donut side-by-side inside the Spending card
+         on wide screens (magnitude view + share view of one dataset); stacks below
+         900px so each chart keeps a usable width. */
+      .reports-chart-pair { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+      @media (min-width: 900px) { .reports-chart-pair { grid-template-columns: 1fr 1fr; } }
       .hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
       /* --text-dim (not --text-faint): the uppercase eyebrow label measured only 3.58:1 on --text-faint
          (fails AA); --text-dim lifts it past 4.5 while staying a quiet label. */

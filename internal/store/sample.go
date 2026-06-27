@@ -939,6 +939,9 @@ func svgBarChart(title, color string, labels []string, vals []float64, lab func(
 	bw := slot * 0.54
 	for i, v := range vals {
 		h := (v / maxV) * (svgYBot - svgYTop)
+		if h < 0 {
+			h = 0
+		}
 		bx := svgX0 + slot*float64(i) + (slot-bw)/2
 		by := svgYBot - h
 		fmt.Fprintf(&b, `<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="3" fill="%s"/>`, bx, by, bw, h, color)

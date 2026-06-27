@@ -1856,11 +1856,61 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		return err
 	}
 	a.log.Info("transaction saved", "id", t.ID)
+	if !existed {
+		// C192: spending against a sinking fund's linked category draws the fund
+		// down. New transactions only (so editing doesn't re-draw).
+		a.applySinkingFundDrawdown(t)
+	}
 	if !existed && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerTxnAdded, &t)
 	}
 	a.fireTxnMutated()
 	return nil
+}
+
+// applySinkingFundDrawdown decrements any non-archived sinking-fund goal linked
+// (by CategoryID) to the transaction's category when the transaction is an
+// expense, so real spending against the linked category draws the fund down
+// (C192, R20-drawdown-wire). Income and transfers are ignored. The spend is
+// converted to each fund's currency; a fund is skipped (with a warning) when no
+// FX rate is available. Persists via the store directly — it's an automatic
+// internal balance update, not a user edit, so it bypasses role/validation and
+// the milestone-toast side effects of PutGoal.
+func (a *App) applySinkingFundDrawdown(t domain.Transaction) {
+	if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
+		return
+	}
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	spendAbs := t.Amount.Abs()
+	for _, g := range a.Goals() {
+		if !g.IsSinkingFund || g.Archived || g.CategoryID != t.CategoryID {
+			continue
+		}
+		amt := spendAbs
+		if spendAbs.Currency != g.CurrentAmount.Currency {
+			conv, err := rates.Convert(spendAbs, g.CurrentAmount.Currency)
+			if err != nil {
+				a.log.Warn("sinking-fund drawdown skipped: no FX rate",
+					"goal", g.ID, "from", spendAbs.Currency, "to", g.CurrentAmount.Currency)
+				continue
+			}
+			amt = conv
+		}
+		updated, err := goals.DrawDownFund(g, amt.Amount)
+		if err != nil {
+			a.log.Warn("sinking-fund drawdown failed", "goal", g.ID, "err", err)
+			continue
+		}
+		if err := a.store.PutGoal(updated); err != nil {
+			a.log.Error("sinking-fund drawdown persist failed", "goal", g.ID, "err", err)
+			continue
+		}
+		a.log.Info("sinking-fund drawn down", "goal", g.ID, "by", amt.Amount, "now", updated.CurrentAmount.Amount)
+	}
 }
 
 // WithoutTriggers runs fn with automatic transaction-added workflow firing paused

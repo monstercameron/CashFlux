@@ -39,13 +39,13 @@ func Appearance() uic.Node {
 	}
 
 	return Div(css.Class("page-content"),
-		// Theme mode — Dark / Light / System.
-		// role="group" + aria-label programmatically associates the H4 heading text
-		// with the Segmented control so screen readers announce the group name when
-		// the control receives focus (WCAG 1.3.1 / 4.1.2).
-		Div(Attr("role", "group"), Attr("aria-label", uistate.T("settings.appearance")),
+		// Theme mode — Dark / Light / System. C318: the Segmented itself carries the
+		// accessible group name (role="radiogroup" + aria-label), so the wrapper is a
+		// plain layout Div — no redundant outer role="group" nesting a radiogroup.
+		Div(
 			H4(css.Class("set-label"), uistate.T("settings.appearance")),
 			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.appearance"),
 				Options: []ui.SegOption{
 					{Value: string(prefs.ThemeDark), Label: uistate.T("settings.themeDark")},
 					{Value: string(prefs.ThemeLight), Label: uistate.T("settings.themeLight")},
@@ -60,11 +60,12 @@ func Appearance() uic.Node {
 			}),
 		),
 
-		// Motion / WONDER — existing toggle-row div gains role="group" + aria-label
-		// so the visible "Motion" label is associated with the Segmented control.
-		Div(css.Class("toggle-row", tw.Mt2), Attr("role", "group"), Attr("aria-label", uistate.T("settings.motion")),
+		// Motion / WONDER — C318: the Segmented carries its own radiogroup aria-label,
+		// so the row is a plain layout div (no redundant outer role="group").
+		Div(css.Class("toggle-row", tw.Mt2),
 			Span(uistate.T("settings.motion")),
 			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.motion"),
 				Options: []ui.SegOption{
 					{Value: string(prefs.MotionFull), Label: uistate.T("settings.motionFull")},
 					{Value: string(prefs.MotionSubtle), Label: uistate.T("settings.motionSubtle")},

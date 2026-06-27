@@ -32,6 +32,7 @@ var settingsNavKeys = []string{
 	"settings.aiTitle",
 	"settings.backendTitle",
 	"settings.data",
+	"applock.section",
 	"settings.languages",
 }
 

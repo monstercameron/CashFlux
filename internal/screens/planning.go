@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/afford"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -26,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/runway"
 	"github.com/monstercameron/CashFlux/internal/safespend"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -139,10 +141,12 @@ func Planning() ui.Node {
 	rCategory := ui.UseState("")
 	rAutopost := ui.UseState(false)
 	rAutopay := ui.UseState(false) // C157
+	rNextDue := ui.UseState("")    // C149: first due date (blank = today)
 	rErr := ui.UseState("")
 	postMsg := ui.UseState("")
 	onRLabel := ui.UseEvent(func(v string) { rLabel.Set(v) })
 	onRAmount := ui.UseEvent(func(v string) { rAmount.Set(v) })
+	onRNextDue := ui.UseEvent(func(v string) { rNextDue.Set(v) })
 	onRCadence := ui.UseEvent(func(e ui.Event) { rCadence.Set(e.GetValue()) })
 	onRAccount := ui.UseEvent(func(e ui.Event) { rAccount.Set(e.GetValue()) })
 	onRCategory := ui.UseEvent(func(e ui.Event) { rCategory.Set(e.GetValue()) })
@@ -160,9 +164,16 @@ func Planning() ui.Node {
 			rErr.Set(uistate.T("recurring.amountRequired"))
 			return
 		}
+		// C149: honor the chosen first-due date; blank/invalid falls back to today.
+		nextDue := time.Now()
+		if s := strings.TrimSpace(rNextDue.Get()); s != "" {
+			if d, derr := dateutil.ParseDate(s); derr == nil {
+				nextDue = d
+			}
+		}
 		r := domain.Recurring{
 			ID: id.New(), Label: label, Amount: money.New(amt, base),
-			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: time.Now(),
+			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: nextDue,
 			AccountID: rAccount.Get(), CategoryID: rCategory.Get(), Autopost: rAutopost.Get(), Autopay: rAutopay.Get(),
 		}
 		if err := app.PutRecurring(r); err != nil {
@@ -173,12 +184,33 @@ func Planning() ui.Node {
 		rAmount.Set("")
 		rAutopost.Set(false)
 		rAutopay.Set(false)
+		rNextDue.Set("")
 		rErr.Set("")
 		rev.Set(rev.Get() + 1)
 	}))
 	deleteRecurring := func(rid string) {
 		if app != nil {
 			_ = app.DeleteRecurring(rid)
+			rev.Set(rev.Get() + 1)
+		}
+	}
+
+	// C147: one-click "add to plan" for an auto-detected recurring charge. Builds a
+	// domain.Recurring from the detected subscription (charges are expenses → stored
+	// negative, matching the sign convention) and persists it, then refreshes.
+	addDetected := func(s subscriptions.Subscription) {
+		if app == nil {
+			return
+		}
+		nextDue := s.NextRenewal
+		if nextDue.IsZero() {
+			nextDue = time.Now()
+		}
+		r := domain.Recurring{
+			ID: id.New(), Label: s.Name, Amount: money.New(-s.Amount, base),
+			Cadence: domain.RecurringCadence(string(s.Cadence)), NextDue: nextDue,
+		}
+		if err := app.PutRecurring(r); err == nil {
 			rev.Set(rev.Get() + 1)
 		}
 	}
@@ -579,6 +611,22 @@ func Planning() ui.Node {
 					lowTone = "neg"
 				}
 				lowDate := time.Now().AddDate(0, 0, proj.MinDay).Format("Jan 2")
+				// C169: payday-anchored balance — "what will my liquid cash be on my next
+				// payday?" Anchors on the day-of-month derived from the configured pay-cycle
+				// anchor (prefs.PayCycleAnchor). Omitted entirely when no anchor is set.
+				var paydayStat ui.Node = Fragment()
+				if curPrefs := uistate.LoadPrefs(); curPrefs.PayCycleAnchor != "" {
+					if anchor, aerr := time.Parse("2006-01-02", curPrefs.PayCycleAnchor); aerr == nil {
+						ph := runway.NextPaydayHorizon(time.Now(), anchor.Day(), runwayDays)
+						paydayBal := cashflow.PaydayBalance(proj, ph)
+						paydayDate := time.Now().AddDate(0, 0, ph).Format("Jan 2")
+						payTone := ""
+						if paydayBal < 0 {
+							payTone = "neg"
+						}
+						paydayStat = stat(uistate.T("planning.paydayBalance", paydayDate), fmtMoney(money.New(paydayBal, base)), payTone)
+					}
+				}
 				var verdict ui.Node
 				if proj.WillBreach() {
 					breachDate := time.Now().AddDate(0, 0, proj.BreachDay).Format("Jan 2")
@@ -636,6 +684,7 @@ func Planning() ui.Node {
 					Div(css.Class("stat-grid"),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
+						paydayStat,
 					),
 					verdict,
 					// C173: the low-point line carries the date; tone it (danger) when the
@@ -683,6 +732,41 @@ func Planning() ui.Node {
 		for _, r := range recs {
 			monthlyTotal += r.MonthlyEquivalent()
 		}
+
+		// C147: surface auto-detected recurring charges that aren't in the plan yet,
+		// ungated (the SMART-P1 insight only fires when Smart is enabled, off by
+		// default — so detection never reached most users). Each detected charge gets
+		// a one-click "Add to plan". Already-planned labels and liability payments
+		// (loan/card autopay — would double-count) are filtered out.
+		detRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		existingLabels := map[string]bool{}
+		for _, r := range recs {
+			existingLabels[strings.ToLower(strings.TrimSpace(r.Label))] = true
+		}
+		detected, _ := subscriptions.Detect(app.Transactions(), detRates, 3)
+		var detectedRows []ui.Node
+		for _, s := range detected {
+			if existingLabels[strings.ToLower(strings.TrimSpace(s.Name))] {
+				continue
+			}
+			if subscriptions.IsLiabilityPayment(s, app.Transactions(), app.Accounts()) {
+				continue
+			}
+			sub := s // capture per-iteration value for the row's OnAdd closure
+			detectedRows = append(detectedRows, ui.CreateElement(detectedRecurringRow, detectedRecurringRowProps{
+				Name:    sub.Name,
+				Monthly: uistate.T("recurring.detectedMonthly", fmtMoney(money.New(sub.MonthlyAmount(), base)), cadenceLabel(domain.RecurringCadence(string(sub.Cadence)))),
+				OnAdd:   func() { addDetected(sub) },
+			}))
+		}
+		detectedSection := Fragment()
+		if len(detectedRows) > 0 {
+			detectedSection = Div(css.Class("detected-recurring", tw.Mt2), Attr("data-testid", "detected-recurring"),
+				P(css.Class("row-desc"), uistate.T("recurring.detectedTitle", plural(len(detectedRows), "charge"))),
+				P(css.Class("muted"), uistate.T("recurring.detectedHint")),
+				Div(css.Class("rows"), detectedRows),
+			)
+		}
 		totalNote := Fragment()
 		if len(recs) > 0 {
 			totalNote = P(css.Class("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
@@ -708,12 +792,15 @@ func Planning() ui.Node {
 					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
+					// C149: first-due date (blank = today).
+					labeledField(uistate.T("recurring.nextDueLabel"), Input(css.Class("field"), Type("date"), Attr("data-testid", "recurring-nextdue"), Attr("aria-label", uistate.T("recurring.nextDueLabel")), Value(rNextDue.Get()), OnInput(onRNextDue))),
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: rAutopay.Get(), OnChange: func(v bool) { rAutopay.Set(v) }}), // C157
 				errText("refi-err", rErr.Get()),
 				totalNote,
+				detectedSection,
 				list,
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
@@ -1243,6 +1330,30 @@ func PlanRow(props planRowProps) ui.Node {
 			),
 		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+	)
+}
+
+// detectedRecurringRowProps drives one auto-detected recurring charge row (C147).
+type detectedRecurringRowProps struct {
+	Name    string
+	Monthly string // pre-formatted "~$X/mo · Monthly" descriptor
+	OnAdd   func()
+}
+
+// detectedRecurringRow renders one auto-detected recurring charge with an
+// "Add to plan" button. It is its own component so the button's OnClick hook sits
+// at a stable render position — the detected list is variable-length (the
+// framework no-hooks-in-loops gotcha).
+func detectedRecurringRow(props detectedRecurringRowProps) ui.Node {
+	add := ui.UseEvent(Prevent(func() { props.OnAdd() }))
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), props.Name),
+			Span(css.Class("row-meta"), props.Monthly),
+		),
+		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "detected-add"),
+			Attr("aria-label", uistate.T("recurring.addToPlanAria", props.Name)),
+			Title(uistate.T("recurring.addToPlan")), OnClick(add), uistate.T("recurring.addToPlan")),
 	)
 }
 

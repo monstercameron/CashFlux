@@ -127,8 +127,8 @@ func Transactions() ui.Node {
 	}
 	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
 	onFilterTag := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Tag = e.GetValue() }) }) // C49
-	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) }) // C53
-	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) }) // C53
+	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) })  // C53
+	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) })  // C53
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 	onFilterCleared := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Cleared = e.GetValue() }) })
@@ -294,6 +294,22 @@ func Transactions() ui.Node {
 		// the app's feedback language.
 		uistate.PostNotice(uistate.T("toast.txnUpdated"), false)
 		return true
+	}
+
+	// C58: persist a category breakdown set in the inline split editor. The editor
+	// validates that the splits balance to the transaction amount before calling this.
+	saveSplits := func(updated domain.Transaction) {
+		if err := app.PutTransaction(updated); err != nil {
+			errMsg.Set(err.Error())
+			uistate.PostNotice(err.Error(), false)
+			return
+		}
+		bump()
+		if updated.HasSplits() {
+			uistate.PostNotice(uistate.T("splitEditor.saved"), false)
+		} else {
+			uistate.PostNotice(uistate.T("splitEditor.cleared"), false)
+		}
 	}
 
 	deleteTxn := func(txnID string) {
@@ -589,7 +605,7 @@ func Transactions() ui.Node {
 					Selected: selected.Get()[t.ID],
 					ShowTags: anyTags,
 					OnDelete: deleteTxn, OnDuplicate: duplicateTxn, OnSave: editTxn, OnToggleSelect: toggleSelect, OnToggleCleared: toggleCleared, OnCreateRule: createRuleFromTxn,
-					OnAttach: attachReceipt, OnViewReceipt: viewReceipt,
+					OnAttach: attachReceipt, OnViewReceipt: viewReceipt, OnSaveSplits: saveSplits,
 					SmartSettings: txnSmartSettings,
 					SmartByEntity: txnByEntity,
 				})
@@ -810,11 +826,11 @@ func Transactions() ui.Node {
 			HeaderAction: smartSectionAction(txnSmartSettings),
 			Body: Fragment(
 				uiw.FilterToolbar(uiw.FilterToolbarProps{
-					Search:        f.Text,
-					SearchLabel:   uistate.T("transactions.searchPlaceholder"),
-					OnSearch:      onFilterText,
-					FiltersLabel:  uistate.T("transactions.filters"),
-					FiltersTitle:  uistate.T("transactions.filtersTitle"),
+					Search:       f.Text,
+					SearchLabel:  uistate.T("transactions.searchPlaceholder"),
+					OnSearch:     onFilterText,
+					FiltersLabel: uistate.T("transactions.filters"),
+					FiltersTitle: uistate.T("transactions.filtersTitle"),
 					ActiveAriaLabel: func(n int) string { // C57
 						if n == 0 {
 							return uistate.T("transactions.filters")

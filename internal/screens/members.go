@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -182,6 +183,31 @@ func Members() ui.Node {
 		Span(ClassStr("amount "+accentFor(grp)), fmtMoney(grp)),
 	))
 
+	// C280: spending this period, by member, using the shared period selector.
+	// Uses the same period window as /reports so the figures are consistent.
+	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
+	memberSpend, _ := reports.SpendingByMember(app.Transactions(), periodStart, periodEnd, rates)
+	spendByMember := make(map[string]int64, len(memberSpend))
+	for _, s := range memberSpend {
+		spendByMember[s.MemberID] = s.Amount
+	}
+	spendRows := make([]ui.Node, 0, len(members)+1)
+	for _, m := range members {
+		amt := money.New(spendByMember[m.ID], base)
+		spendRows = append(spendRows, Div(css.Class("row"),
+			Span(css.Class("row-desc"), m.Name),
+			Span(css.Class("amount"), fmtMoney(amt)),
+		))
+	}
+	// Unattributed spend (MemberID == "") shown under the shared-household label.
+	if unattr, ok := spendByMember[""]; ok && unattr > 0 {
+		amt := money.New(unattr, base)
+		spendRows = append(spendRows, Div(css.Class("row"),
+			Span(css.Class("row-desc"), uistate.T("owner.group")),
+			Span(css.Class("amount"), fmtMoney(amt)),
+		))
+	}
+
 	// When the reassign panel opens, move focus to its target select so a
 	// keyboard user lands on the choice they must make (L-quickhit #47).
 	ui.UseEffect(func() func() {
@@ -238,6 +264,12 @@ func Members() ui.Node {
 		If(len(members) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("members.netWorthTitle"),
 			Rows:  ownerRows,
+		})),
+		// C280: per-member spending this period — shows who spent what so the household
+		// can see contribution patterns at a glance without navigating to /reports.
+		If(len(members) > 0 && len(spendRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("members.spendTitle"),
+			Rows:  spendRows,
 		})),
 	)
 }

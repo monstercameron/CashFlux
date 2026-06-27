@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const url = process.argv[2] || 'http://127.0.0.1:8099/';
+const out = process.argv[3] || 'e2e/r-series-shots/shot.png';
+const vw = parseInt(process.argv[4]||'1440',10), vh = parseInt(process.argv[5]||'1000',10);
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: vw, height: vh } });
+await p.goto(url, { waitUntil: 'domcontentloaded' });
+await p.waitForSelector('.card, .bento, .w, main', { timeout: 20000 }).catch(()=>{});
+await p.waitForTimeout(1200);
+await p.screenshot({ path: out, fullPage: false });
+await b.close();
+console.log('OK '+out);

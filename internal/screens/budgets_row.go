@@ -248,7 +248,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if props.RolloverCarry != "" {
 		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
 		if props.RolloverNeg {
-			cls += " " + tw.Fold(tw.TextDown)
+			// C134: a carried-in deficit is a heads-up about where the period STARTED,
+			// not a "you've overspent now" alert — render it in the caution amber
+			// (TextWarn) so it reads distinctly from the danger-red overspend badge,
+			// instead of conflating the two as the same alarming red.
+			cls += " " + tw.Fold(tw.TextWarn)
 		}
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
@@ -259,6 +263,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	var effectiveCapLine ui.Node = Fragment()
 	if props.EffectiveCap != "" {
 		effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.effectiveCap", props.EffectiveCap))
+	}
+
+	// C143: even-pace guidance — how much of what's left can be spent over the days
+	// still in the period, so the user knows the sustainable daily-ish pace instead
+	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
+	var proratedLine ui.Node = Fragment()
+	if props.ProratedRest != "" {
+		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
+			uistate.T("budgets.proratedRest", props.ProratedRest))
 	}
 
 	// "Cover…" is offered only on an over-budget row that has another budget to
@@ -348,6 +361,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		ownerLine,
 		methodLine,
 		paceLine,
+		proratedLine,
 		rolloverLine,
 		effectiveCapLine,
 		envLine,

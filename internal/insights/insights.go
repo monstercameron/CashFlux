@@ -62,6 +62,12 @@ type Options struct {
 	// ThresholdPct is the minimum absolute percent change (vs the baseline) that
 	// counts as an anomaly. Values below 1 are treated as 1.
 	ThresholdPct int64
+	// SuppressDecrease drops "Down" anomalies (current period below baseline).
+	// Callers set this while the current period is only partially elapsed: you
+	// can't truthfully say spending "fell" before the period is over, so an
+	// unspent-so-far category would otherwise read as a false "down 100%" (C232).
+	// Increases ("Up") still fire mid-period — an overspend is real as it happens.
+	SuppressDecrease bool
 }
 
 // DefaultOptions flags categories that moved at least 50% versus a baseline of at
@@ -118,6 +124,9 @@ func Detect(series []CategorySeries, opts Options) []Anomaly {
 		dir := Up
 		if delta < 0 {
 			dir = Down
+		}
+		if dir == Down && opts.SuppressDecrease {
+			continue // C232: don't flag a decrease before the period is complete.
 		}
 		out = append(out, Anomaly{
 			Category:  s.Category,

@@ -33,7 +33,7 @@ type transactionRowProps struct {
 	ShowTags        bool // whether the Tags column is present this render (G2 §6)
 	OnDelete        func(string)
 	OnDuplicate     func(domain.Transaction)
-	OnSave          func(orig domain.Transaction, desc, amount, categoryID, date, memberID, tags string)
+	OnSave          func(orig domain.Transaction, desc, payee, amount, categoryID, date, memberID, tags string) bool
 	OnToggleSelect  func(id string, shift bool)
 	OnToggleCleared func(domain.Transaction)
 	// OnCreateRule navigates to the Rules screen with the add-form prefilled from
@@ -43,6 +43,9 @@ type transactionRowProps struct {
 	// opens a preview of an attached receipt (L29).
 	OnAttach      func(domain.Transaction)
 	OnViewReceipt func(domain.AttachmentRef)
+	// OnSaveSplits (C58) persists a category breakdown set in the inline split
+	// editor; the screen wires it to PutTransaction. May be nil (no split UI).
+	OnSaveSplits func(domain.Transaction)
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// The badge key is the transaction ID (Action.RelatedID set by transaction engines).
 	SmartSettings smart.Settings
@@ -100,14 +103,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	defaultRowMember := t.MemberID
 	editing := ui.UseState(false)
 	descS := ui.UseState(t.Desc)
+	payeeS := ui.UseState(t.Payee) // C60: editable payee in inline edit
 	amountS := ui.UseState(amountMajor)
 	catS := ui.UseState(t.CategoryID)
 	dateS := ui.UseState(dateISO)
 	memberS := ui.UseState(defaultRowMember)
 	tagsS := ui.UseState(strings.Join(t.Tags, ", ")) // C48: editable tags (comma-separated)
+	splitOpen := ui.UseState(t.HasSplits())          // C58: reveal the split-into-categories editor
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
+	onPayee := ui.UseEvent(func(v string) { payeeS.Set(v) }) // C60
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
+	toggleSplit := ui.UseEvent(Prevent(func() { splitOpen.Set(!splitOpen.Get()) })) // C58
 	// onCat and onMember hooks are preserved as anonymous stubs so the hook slot
 	// order is stable; the actual onChange is wired through uiw.SelectInput below.
 	ui.UseEvent(func(e ui.Event) {})
@@ -115,6 +122,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	ui.UseEvent(func(e ui.Event) {})
 	startEdit := ui.UseEvent(Prevent(func() {
 		descS.Set(t.Desc)
+		payeeS.Set(t.Payee)
 		amountS.Set(amountMajor)
 		catS.Set(t.CategoryID)
 		dateS.Set(dateISO)
@@ -124,8 +132,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(t, descS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get(), tagsS.Get())
-		editing.Set(false)
+		// C59: only close the editor when OnSave signals success (returns true);
+		// a validation failure (e.g. amount = 0) keeps the form open so the user
+		// can correct the value.
+		if props.OnSave(t, descS.Get(), payeeS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get(), tagsS.Get()) {
+			editing.Set(false)
+		}
 	}))
 
 	// Land the cursor in the first field when the inline editor opens (§6.7).
@@ -163,11 +175,20 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		// GM2-4: inline-edit had 0 labeled-field wrappers (description + amount were
 		// placeholder-only, invisible to screen readers once text is entered). Wrap
 		// each in labeledField() to match the entity add-form pattern.
+		onEditKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+			if e.GetKey() == "Escape" {
+				e.PreventDefault()
+				editing.Set(false)
+			}
+		})
 		return Tr(css.Class("row-edit"),
 			Td(Attr("colspan", editColspan),
-				Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				Form(css.Class("form-grid"), OnSubmit(saveEdit), OnKeyDown(onEditKeyDown),
 					labeledField(uistate.T("transactions.descPlaceholder"),
 						Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
+					// C60: payee field in inline edit so the merchant name is editable.
+					labeledField(uistate.T("transactions.payeeLabel"),
+						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Attr("data-testid", "txn-edit-payee"), Placeholder(uistate.T("transactions.payeeLabel")), Value(payeeS.Get()), OnInput(onPayee))),
 					labeledField(uistate.T("transactions.amountPlaceholder"),
 						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount))),
 					uiw.FormField(uistate.T("transactions.categoryLabel"),
@@ -192,6 +213,18 @@ func TransactionRow(props transactionRowProps) ui.Node {
 					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 					Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 				),
+				// C58: split-transaction editor — a toggle reveals a self-contained
+				// SplitEditor child (kept outside the Form so its buttons never submit
+				// the inline edit). Shown only when a save handler is wired.
+				If(props.OnSaveSplits != nil, Fragment(
+					Button(css.Class("btn", "btn-sm"), Style(map[string]string{"margin-top": "0.5rem"}), Type("button"),
+						Attr("data-testid", "txn-split-toggle"), Attr("aria-expanded", ariaBool(splitOpen.Get())),
+						OnClick(toggleSplit),
+						uistate.T(splitToggleKey(splitOpen.Get(), t.HasSplits()))),
+					If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
+						Txn: t, Categories: props.Categories, OnSave: props.OnSaveSplits,
+					})),
+				)),
 			),
 		)
 	}

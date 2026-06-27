@@ -1,0 +1,182 @@
+[
+  {
+    "route": "/",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\dashboard.png",
+    "h1": "Dashboard",
+    "title": "Dashboard · CashFlux"
+  },
+  {
+    "route": "/accounts",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\accounts.png",
+    "h1": "Accounts",
+    "title": "Accounts · CashFlux"
+  },
+  {
+    "route": "/transactions",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\transactions.png",
+    "h1": "Transactions",
+    "title": "Transactions · CashFlux"
+  },
+  {
+    "route": "/budgets",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\budgets.png",
+    "h1": "Budgets",
+    "title": "Budgets · CashFlux"
+  },
+  {
+    "route": "/goals",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\goals.png",
+    "h1": "Goals",
+    "title": "Goals · CashFlux"
+  },
+  {
+    "route": "/todo",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\todo.png",
+    "h1": "To-do",
+    "title": "To-do · CashFlux"
+  },
+  {
+    "route": "/notifications",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\notifications.png",
+    "h1": "Notifications",
+    "title": "Notifications · CashFlux"
+  },
+  {
+    "route": "/planning",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\planning.png",
+    "h1": "Planning",
+    "title": "Planning · CashFlux"
+  },
+  {
+    "route": "/debt",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\debt.png",
+    "h1": "Dashboard",
+    "title": "Dashboard · CashFlux"
+  },
+  {
+    "route": "/allocate",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\allocate.png",
+    "h1": "Allocate",
+    "title": "Allocate · CashFlux"
+  },
+  {
+    "route": "/reports",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\reports.png",
+    "h1": "Reports",
+    "title": "Reports · CashFlux"
+  },
+  {
+    "route": "/health",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\health.png",
+    "h1": "Financial health",
+    "title": "Financial health · CashFlux"
+  },
+  {
+    "route": "/subscriptions",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\subscriptions.png",
+    "h1": "Subscriptions",
+    "title": "Subscriptions · CashFlux"
+  },
+  {
+    "route": "/bills",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\bills.png",
+    "h1": "Bills",
+    "title": "Bills · CashFlux"
+  },
+  {
+    "route": "/split",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\split.png",
+    "h1": "Split a bill",
+    "title": "Split a bill · CashFlux"
+  },
+  {
+    "route": "/insights",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\insights.png",
+    "h1": "Insights",
+    "title": "Insights · CashFlux"
+  },
+  {
+    "route": "/smart",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\smart.png",
+    "h1": "Smart",
+    "title": "Smart · CashFlux"
+  },
+  {
+    "route": "/documents",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\documents.png",
+    "h1": "Documents",
+    "title": "Documents · CashFlux"
+  },
+  {
+    "route": "/customize",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\customize.png",
+    "h1": "Customize",
+    "title": "Customize · CashFlux"
+  },
+  {
+    "route": "/artifacts",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\artifacts.png",
+    "h1": "Artifacts",
+    "title": "Artifacts · CashFlux"
+  },
+  {
+    "route": "/activity",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\activity.png",
+    "h1": "Activity",
+    "title": "Activity · CashFlux"
+  },
+  {
+    "route": "/workflows",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\workflows.png",
+    "h1": "Workflows",
+    "title": "Workflows · CashFlux"
+  },
+  {
+    "route": "/widget-builder",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\widget-builder.png",
+    "h1": "Widget builder",
+    "title": "Widget builder · CashFlux"
+  },
+  {
+    "route": "/widget-manager",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\widget-manager.png",
+    "h1": "Widget manager",
+    "title": "Widget manager · CashFlux"
+  },
+  {
+    "route": "/members",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\members.png",
+    "h1": "Members",
+    "title": "Members · CashFlux"
+  },
+  {
+    "route": "/categories",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\categories.png",
+    "h1": "Categories",
+    "title": "Categories · CashFlux"
+  },
+  {
+    "route": "/rules",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\rules.png",
+    "h1": "Rules",
+    "title": "Rules · CashFlux"
+  },
+  {
+    "route": "/appearance",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\appearance.png",
+    "h1": "Appearance",
+    "title": "Appearance · CashFlux"
+  },
+  {
+    "route": "/help",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\help.png",
+    "h1": "Help",
+    "title": "Help · CashFlux"
+  },
+  {
+    "route": "/admin",
+    "file": "e2e\\ux-audit-2026-06-26\\mobile-spa\\admin.png",
+    "h1": "Admin",
+    "title": "Admin · CashFlux"
+  }
+]

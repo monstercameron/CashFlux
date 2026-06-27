@@ -1635,7 +1635,21 @@ func detectSpendingAnomalies(txns []domain.Transaction, categories []domain.Cate
 		}
 		series = append(series, insights.CategorySeries{Category: name, Spend: spend})
 	}
-	return insights.Detect(series, insights.DefaultOptions())
+	// C232: while the current month is only partly elapsed, suppress "decrease"
+	// anomalies — a category not yet spent on this month would otherwise read as a
+	// false "down 100%". Increases still surface (an overspend is real as it lands).
+	// Threshold: treat the month as "complete enough" to trust a decrease at 90%+.
+	opts := insights.DefaultOptions()
+	now := time.Now()
+	_, monthEnd := dateutil.MonthRange(now)
+	monthDays := monthEnd.Sub(curStart).Hours() / 24
+	if monthDays > 0 {
+		elapsed := now.Sub(curStart).Hours() / 24
+		if elapsed/monthDays < 0.9 {
+			opts.SuppressDecrease = true
+		}
+	}
+	return insights.Detect(series, opts)
 }
 
 // categoryNameToIDMap builds a reverse map from category name → category ID

@@ -312,6 +312,40 @@ func Reports() ui.Node {
 		return out
 	}
 
+	// R52(a): decision-oriented chart captions — a one-sentence plain-English
+	// takeaway (direction + magnitude over the window) instead of only a generic
+	// "last N months" hint, so each trend chart states its insight at a glance.
+	cashFlowTakeaway := ""
+	if len(netSeries) >= 2 {
+		delta := int64(netSeries[len(netSeries)-1] - netSeries[0])
+		latest := fmtMoney(money.New(int64(netSeries[len(netSeries)-1]), base))
+		mag := fmtMoney(money.New(absMinor(delta), base))
+		switch {
+		case delta > 0:
+			cashFlowTakeaway = uistate.T("reports.cashFlowTakeawayUp", latest, mag)
+		case delta < 0:
+			cashFlowTakeaway = uistate.T("reports.cashFlowTakeawayDown", latest, mag)
+		default:
+			cashFlowTakeaway = uistate.T("reports.cashFlowTakeawayFlat", latest)
+		}
+	}
+	savingsTakeaway := ""
+	if len(srSeries) >= 2 {
+		first, last := int(srSeries[0]), int(srSeries[len(srSeries)-1])
+		pts := last - first
+		if pts < 0 {
+			pts = -pts
+		}
+		switch {
+		case last > first:
+			savingsTakeaway = uistate.T("reports.savingsTakeawayUp", last, pts)
+		case last < first:
+			savingsTakeaway = uistate.T("reports.savingsTakeawayDown", last, pts)
+		default:
+			savingsTakeaway = uistate.T("reports.savingsTakeawayFlat", last)
+		}
+	}
+
 	// Cash runway (B21): how long spendable cash would last at the average burn
 	// over the last six *full* months (the current partial month is excluded so it
 	// doesn't understate spending). Liquid = cash-type accounts only.
@@ -587,6 +621,21 @@ func Reports() ui.Node {
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID))),
 			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
 		))
+	}
+	// R52(a): one-sentence takeaway for the Income-by-source card, mirroring the
+	// Spending card's narrative so income reads as a decision, not just rows+charts:
+	// names the top source and its share of total income.
+	incomeTakeaway := ""
+	if len(incomeRows) > 0 && incomeRows[0].Amount > 0 {
+		var incomeTotal int64
+		for _, r := range incomeRows {
+			incomeTotal += r.Amount
+		}
+		top := incomeRows[0]
+		if incomeTotal > 0 {
+			pct := top.Amount * 100 / incomeTotal
+			incomeTakeaway = uistate.T("reports.incomeTakeaway", nameOf(top.CategoryID), fmtMinor(top.Amount), pct)
+		}
 	}
 
 	// V4: income-by-source donut chart.
@@ -921,42 +970,51 @@ func Reports() ui.Node {
 		// registered at stable positions above in the function body.
 		func() ui.Node {
 			// ── Overview: cash-flow Sankey + top payees + biggest expenses ──────────
+			// The wide cash-flow Sankey stays full-width above; the ranked-list cards
+			// (payees / expenses / deposits / income / by-member) pair into a responsive
+			// 2-column grid on wide viewports (`.reports-grid`) so the overview reads as
+			// a dashboard instead of a single long column with wasted horizontal space.
+			// Each If(...) collapses to an empty Fragment when its data is absent, so a
+			// missing section leaves no empty grid cell.
 			overviewSection := Fragment(
 				If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 					Title: "Money flow",
 					Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
 				})),
-				If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.topPayees"),
-					Body: Fragment(
-						If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
-						Div(css.Class("rows"), payeeNodes),
-					),
-				})),
-				If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.biggestExpenses"),
-					Body: Fragment(
-						If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
-						Div(css.Class("rows"), largestNodes),
-					),
-				})),
-				// Income breakdown sits in overview too: biggest deposits + by-source.
-				If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.biggestDeposits"),
-					Rows:  bigIncomeNodes,
-				})),
-				If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.incomeBySource"),
-					Body: Fragment(
-						If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
-						If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
-						Div(css.Class("rows"), incomeNodes),
-					),
-				})),
-				If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.byMember"),
-					Body:  Div(css.Class("rows"), memberNodes),
-				})),
+				Div(css.Class("reports-grid"),
+					If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.topPayees"),
+						Body: Fragment(
+							If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
+							Div(css.Class("rows"), payeeNodes),
+						),
+					})),
+					If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.biggestExpenses"),
+						Body: Fragment(
+							If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
+							Div(css.Class("rows"), largestNodes),
+						),
+					})),
+					// Income breakdown sits in overview too: biggest deposits + by-source.
+					If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.biggestDeposits"),
+						Rows:  bigIncomeNodes,
+					})),
+					If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.incomeBySource"),
+						Body: Fragment(
+							If(incomeTakeaway != "", P(css.Class("muted"), Attr("data-testid", "income-takeaway"), incomeTakeaway)),
+							If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
+							If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
+							Div(css.Class("rows"), incomeNodes),
+						),
+					})),
+					If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.byMember"),
+						Body:  Div(css.Class("rows"), memberNodes),
+					})),
+				),
 			)
 			// ── Categories: spending-by-category bar/donut + ranked rows ────────────
 			categoriesSection := Fragment(
@@ -978,26 +1036,31 @@ func Reports() ui.Node {
 					Body: Fragment(
 						P(css.Class("muted"), narrative),
 						If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
-						If(len(catBarNodes) > 0, Div(catBarNodes)),
-						If(len(catDonutNodes) > 0, Div(catDonutNodes)),
+						// The ranked bar (magnitude) and donut (share) are two views of the
+						// same data — pair them side-by-side on wide screens so the card reads
+						// as one picture instead of two stacked 200px charts; they stack on
+						// narrow screens. Ranked rows stay full-width below.
+						If(len(catBarNodes) > 0 || len(catDonutNodes) > 0, Div(css.Class("reports-chart-pair"),
+							If(len(catBarNodes) > 0, Div(catBarNodes)),
+							If(len(catDonutNodes) > 0, Div(catDonutNodes)),
+						)),
 						catBody,
 					),
 				}),
 			)
-			// ── Net worth: NW composition + cash-flow trend + savings-rate trend ────
+			// ── Net worth: NW composition (headline, full-width) + the two supporting
+			// trend charts (cash-flow, savings-rate) paired side-by-side on wide
+			// screens via .reports-grid, so the tab reads as a dashboard. ──────────
 			netWorthSection := Fragment(
-				If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("dashboard.cashFlow"),
-					Body: Fragment(
-						P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-						uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
-					),
-				})),
-				// R-11: NW composition + trend as a single card.
+				// R-11: NW composition + trend as a single headline card.
 				// C218: HTML id anchor so /networth can deep-link to this section.
 				If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 					Title: uistate.T("dashboard.netWorth"),
 					Attrs: []any{Attr("id", "networth")},
+					// R52(b): a nearby drill-down — net worth composes from accounts, so
+					// link straight to /accounts to see (and adjust) what's behind the figure.
+					HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/accounts")),
+						Attr("data-testid", "networth-drill"), uistate.T("reports.viewAccounts")),
 					Body: Fragment(
 						Div(css.Class("stat-grid"),
 							stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
@@ -1012,13 +1075,28 @@ func Reports() ui.Node {
 						)),
 					),
 				})),
-				If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("reports.savingsTrend"),
-					Body: Fragment(
-						P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-						uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
-					),
-				})),
+				// Cash-flow + savings-rate trends are two supporting period charts — pair
+				// them side-by-side on wide screens (stack below 1100px). Each If(...)
+				// collapses to an empty Fragment, leaving no empty grid cell.
+				If(len(netSeries) >= 2 || len(srSeries) >= 2, Div(css.Class("reports-grid"),
+					If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("dashboard.cashFlow"),
+						Body: Fragment(
+							// R52(a): lead with the insight sentence; the period span is a quiet sub-line.
+							If(cashFlowTakeaway != "", P(ClassStr("budget-sub "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "cashflow-takeaway"), cashFlowTakeaway)),
+							P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+							uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
+						),
+					})),
+					If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("reports.savingsTrend"),
+						Body: Fragment(
+							If(savingsTakeaway != "", P(ClassStr("budget-sub "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "savings-takeaway"), savingsTakeaway)),
+							P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+							uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
+						),
+					})),
+				)),
 			)
 			// ── Advanced: custom-field spend + deductible totals ─────────────────────
 			// The disclosure toggle (showAdvanced) is preserved so the section stays
@@ -1039,14 +1117,33 @@ func Reports() ui.Node {
 				),
 			)
 
+			// reportsTabEmpty renders a calm, centered note when a selected tab has
+			// no data, so the area below the segmented control never goes silently
+			// blank (e.g. Advanced with no custom fields, Net worth with no accounts).
+			reportsTabEmpty := func(msg string) ui.Node {
+				return Div(css.Class("muted"), Attr("data-testid", "reports-tab-empty"),
+					Style(map[string]string{"text-align": "center", "padding": "2.5rem 1rem", "max-width": "32rem", "margin": "0 auto"}),
+					msg)
+			}
+
 			switch reportView.Get() {
 			case "categories":
 				return categoriesSection
 			case "networth":
+				if len(netSeries) < 2 && len(accounts) == 0 && len(srSeries) < 2 {
+					return reportsTabEmpty(uistate.T("reports.emptyNetWorth"))
+				}
 				return netWorthSection
 			case "advanced":
+				if len(cfDefs) == 0 {
+					return reportsTabEmpty(uistate.T("reports.emptyAdvanced"))
+				}
 				return advancedSection
 			default: // "overview"
+				if len(moneyFlows) <= 1 && len(payeeNodes) == 0 && len(largestNodes) == 0 &&
+					len(bigIncomeNodes) == 0 && len(incomeNodes) == 0 && len(memberNodes) == 0 {
+					return reportsTabEmpty(uistate.T("reports.emptyOverview"))
+				}
 				return overviewSection
 			}
 		}(),

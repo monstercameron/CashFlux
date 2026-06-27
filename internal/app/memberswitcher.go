@@ -8,6 +8,7 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -49,10 +50,11 @@ func MemberSwitcher() uic.Node {
 	}
 	for _, m := range members {
 		m := m
+		role := memberrole.Label(memberrole.Resolve(m))
 		opts = append(opts, Option(
 			Value(m.ID),
 			SelectedIf(current == m.ID),
-			m.Name,
+			m.Name+" · "+role,
 		))
 	}
 

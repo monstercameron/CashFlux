@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,7 +118,7 @@ func Subscriptions() ui.Node {
 		}
 	}
 
-	rawSubs, _ := subscriptions.Detect(filteredTxns, rates, 2)
+	rawSubs, _ := subscriptions.Detect(filteredTxns, rates, detectPrefs.MinOccurrencesOrDefault()) // C166: user-tunable sensitivity
 
 	// Build a lookup of ignored subscriptions by lower-case name so we can
 	// filter them out of the active detected list and show them in a separate
@@ -504,6 +505,13 @@ func Subscriptions() ui.Node {
 		prefsToggleLabel += " (" + badge + ")"
 	}
 	togglePrefs := ui.UseEvent(Prevent(func() { prefsOpen.Set(!prefsOpen.Get()) }))
+	// C166: detection-sensitivity control — how many times a charge must repeat
+	// before it counts as a subscription. Saves immediately (same pattern as the
+	// ignore toggles) so the list recomputes.
+	onMinOccur := ui.UseEvent(func(e ui.Event) {
+		n, _ := strconv.Atoi(e.GetValue())
+		uistate.SaveSubsDetectPrefs(uistate.LoadSubsDetectPrefs().WithMinOccurrences(n))
+	})
 
 	// Ordered account types: only include types that actually appear in
 	// transactions so the list stays relevant.
@@ -561,6 +569,16 @@ func Subscriptions() ui.Node {
 		),
 		If(prefsOpen.Get(), Fragment(
 			P(css.Class("row-meta "+tw.Fold(tw.Mt1, tw.Mb2)), uistate.T("subs.detectPrefsDesc")),
+			// C166: detection sensitivity — minimum repeat count to qualify as a sub.
+			Div(css.Class(tw.Fold(tw.Mt2, tw.Mb1)),
+				Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectSensitivityLabel")),
+				Select(css.Class("field"), Attr("data-testid", "subs-detect-min-occur"),
+					Attr("aria-label", uistate.T("subs.detectSensitivityLabel")), OnChange(onMinOccur),
+					Option(Value("2"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 2), uistate.T("subs.detectSens2")),
+					Option(Value("3"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 3), uistate.T("subs.detectSens3")),
+					Option(Value("4"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 4), uistate.T("subs.detectSens4")),
+				),
+			),
 			// Account-type checkboxes (fixed set, no loop — rendered inline).
 			If(len(orderedAcctTypes) > 0, Div(css.Class(tw.Fold(tw.Mt2, tw.Mb1)),
 				Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectAccountTypesLabel")),

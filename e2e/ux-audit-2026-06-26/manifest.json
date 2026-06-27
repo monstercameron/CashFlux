@@ -1,0 +1,212 @@
+[
+  {
+    "route": "/",
+    "file": "e2e\\ux-audit-2026-06-26\\dashboard.png",
+    "title": "Dashboard · CashFlux",
+    "h1": "Dashboard",
+    "errors": []
+  },
+  {
+    "route": "/accounts",
+    "file": "e2e\\ux-audit-2026-06-26\\accounts.png",
+    "title": "Accounts · CashFlux",
+    "h1": "Accounts",
+    "errors": []
+  },
+  {
+    "route": "/transactions",
+    "file": "e2e\\ux-audit-2026-06-26\\transactions.png",
+    "title": "Transactions · CashFlux",
+    "h1": "Transactions",
+    "errors": []
+  },
+  {
+    "route": "/budgets",
+    "file": "e2e\\ux-audit-2026-06-26\\budgets.png",
+    "title": "Budgets · CashFlux",
+    "h1": "Budgets",
+    "errors": []
+  },
+  {
+    "route": "/goals",
+    "file": "e2e\\ux-audit-2026-06-26\\goals.png",
+    "title": "Goals · CashFlux",
+    "h1": "Goals",
+    "errors": []
+  },
+  {
+    "route": "/todo",
+    "file": "e2e\\ux-audit-2026-06-26\\todo.png",
+    "title": "To-do · CashFlux",
+    "h1": "To-do",
+    "errors": []
+  },
+  {
+    "route": "/notifications",
+    "file": "e2e\\ux-audit-2026-06-26\\notifications.png",
+    "title": "Notifications · CashFlux",
+    "h1": "Notifications",
+    "errors": []
+  },
+  {
+    "route": "/planning",
+    "file": "e2e\\ux-audit-2026-06-26\\planning.png",
+    "title": "Planning · CashFlux",
+    "h1": "Planning",
+    "errors": []
+  },
+  {
+    "route": "/debt",
+    "file": "e2e\\ux-audit-2026-06-26\\debt.png",
+    "title": "Dashboard · CashFlux",
+    "h1": "Dashboard",
+    "errors": []
+  },
+  {
+    "route": "/allocate",
+    "file": "e2e\\ux-audit-2026-06-26\\allocate.png",
+    "title": "Allocate · CashFlux",
+    "h1": "Allocate",
+    "errors": []
+  },
+  {
+    "route": "/reports",
+    "file": "e2e\\ux-audit-2026-06-26\\reports.png",
+    "title": "Reports · CashFlux",
+    "h1": "Reports",
+    "errors": []
+  },
+  {
+    "route": "/health",
+    "file": "e2e\\ux-audit-2026-06-26\\health.png",
+    "title": "Financial health · CashFlux",
+    "h1": "Financial health",
+    "errors": []
+  },
+  {
+    "route": "/subscriptions",
+    "file": "e2e\\ux-audit-2026-06-26\\subscriptions.png",
+    "title": "Subscriptions · CashFlux",
+    "h1": "Subscriptions",
+    "errors": []
+  },
+  {
+    "route": "/bills",
+    "file": "e2e\\ux-audit-2026-06-26\\bills.png",
+    "title": "Bills · CashFlux",
+    "h1": "Bills",
+    "errors": []
+  },
+  {
+    "route": "/split",
+    "file": "e2e\\ux-audit-2026-06-26\\split.png",
+    "title": "Split a bill · CashFlux",
+    "h1": "Split a bill",
+    "errors": []
+  },
+  {
+    "route": "/insights",
+    "file": "e2e\\ux-audit-2026-06-26\\insights.png",
+    "title": "Insights · CashFlux",
+    "h1": "Insights",
+    "errors": []
+  },
+  {
+    "route": "/smart",
+    "file": "e2e\\ux-audit-2026-06-26\\smart.png",
+    "title": "Smart · CashFlux",
+    "h1": "Smart",
+    "errors": []
+  },
+  {
+    "route": "/documents",
+    "file": "e2e\\ux-audit-2026-06-26\\documents.png",
+    "title": "Documents · CashFlux",
+    "h1": "Documents",
+    "errors": []
+  },
+  {
+    "route": "/customize",
+    "file": "e2e\\ux-audit-2026-06-26\\customize.png",
+    "title": "Customize · CashFlux",
+    "h1": "Customize",
+    "errors": []
+  },
+  {
+    "route": "/artifacts",
+    "file": "e2e\\ux-audit-2026-06-26\\artifacts.png",
+    "title": "Artifacts · CashFlux",
+    "h1": "Artifacts",
+    "errors": []
+  },
+  {
+    "route": "/activity",
+    "file": "e2e\\ux-audit-2026-06-26\\activity.png",
+    "title": "Activity · CashFlux",
+    "h1": "Activity",
+    "errors": []
+  },
+  {
+    "route": "/workflows",
+    "file": "e2e\\ux-audit-2026-06-26\\workflows.png",
+    "title": "Workflows · CashFlux",
+    "h1": "Workflows",
+    "errors": []
+  },
+  {
+    "route": "/widget-builder",
+    "file": "e2e\\ux-audit-2026-06-26\\widget-builder.png",
+    "title": "Widget builder · CashFlux",
+    "h1": "Widget builder",
+    "errors": []
+  },
+  {
+    "route": "/widget-manager",
+    "file": "e2e\\ux-audit-2026-06-26\\widget-manager.png",
+    "title": "Widget manager · CashFlux",
+    "h1": "Widget manager",
+    "errors": []
+  },
+  {
+    "route": "/members",
+    "file": "e2e\\ux-audit-2026-06-26\\members.png",
+    "title": "Members · CashFlux",
+    "h1": "Members",
+    "errors": []
+  },
+  {
+    "route": "/categories",
+    "file": "e2e\\ux-audit-2026-06-26\\categories.png",
+    "title": "Categories · CashFlux",
+    "h1": "Categories",
+    "errors": []
+  },
+  {
+    "route": "/rules",
+    "file": "e2e\\ux-audit-2026-06-26\\rules.png",
+    "title": "Rules · CashFlux",
+    "h1": "Rules",
+    "errors": []
+  },
+  {
+    "route": "/appearance",
+    "file": "e2e\\ux-audit-2026-06-26\\appearance.png",
+    "title": "Appearance · CashFlux",
+    "h1": "Appearance",
+    "errors": []
+  },
+  {
+    "route": "/help",
+    "file": "e2e\\ux-audit-2026-06-26\\help.png",
+    "title": "Help · CashFlux",
+    "h1": "Help",
+    "errors": []
+  },
+  {
+    "route": "/admin",
+    "file": "e2e\\ux-audit-2026-06-26\\admin.png",
+    "title": "Admin · CashFlux",
+    "h1": "Admin",
+    "errors": []
+  }
+]

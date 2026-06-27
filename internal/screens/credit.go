@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -13,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -153,10 +155,13 @@ func creditScoreRing(r credithealth.Result, size int) ui.Node {
 	figure := fmt.Sprintf("%d", r.ProxyScore)
 	px := fmt.Sprintf("%dpx", size)
 
+	// R52/R64 a11y: label the ring (role=img + one-sentence name) rather than
+	// hiding it; the overlay number below is aria-hidden so the score isn't read
+	// twice. Mirrors the healthRing fix.
 	ring := Svg(
 		Attr("viewBox", "0 0 120 120"),
 		Attr("width", px), Attr("height", px),
-		Attr("aria-hidden", "true"),
+		Attr("role", "img"), Attr("aria-label", uistate.T("credit.ringLabel", r.ProxyScore, string(r.Band))),
 		// Faint full track.
 		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
 			Attr("fill", "none"), Attr("stroke", "var(--line, #2a2a2d)"), Attr("stroke-width", "10")),
@@ -171,6 +176,8 @@ func creditScoreRing(r credithealth.Result, size int) ui.Node {
 	)
 
 	overlay := Div(
+		// Visual duplicate of the score the ring's aria-label already announces.
+		Attr("aria-hidden", "true"),
 		Style(map[string]string{
 			"position": "absolute", "inset": "0",
 			"display": "flex", "flex-direction": "column",
@@ -205,7 +212,7 @@ func creditTrendBarTone(pct int) string {
 // limit, utilization bar, the actionable "pay $X to reach 30%" nudge, and
 // (when ≥2 balance snapshots exist) a compact chronological utilization trend.
 // This is a plain (non-interactive) display row, so MapKeyed is safe to use.
-func creditCardRow(cu credithealth.CardUtil, base, baseCur string, trend []utilTrendPoint) ui.Node {
+func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSaveLimit func(string, int64), trend []utilTrendPoint) ui.Node {
 	// Format balance: cards carry a negative balance (money owed); show owed amount.
 	owed := cu.BalanceMinor
 	if owed < 0 {
@@ -305,7 +312,52 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur string, trend []utilT
 			uistate.T("credit.trendNoHistory"))
 	}
 
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, meta, nudge, trendPanel)
+	// C211: inline credit-limit editor so the limit (which drives utilization) can
+	// be corrected right here, instead of only in the account edit form. Its own
+	// component so its input hook sits at a stable position (rows render in a loop).
+	limitEditor := ui.CreateElement(creditLimitEditor, creditLimitEditorProps{
+		AccountID: cu.AccountID, Currency: acctCur, LimitMinor: cu.LimitMinor, OnSave: onSaveLimit,
+	})
+
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, meta, nudge, trendPanel, limitEditor)
+}
+
+// creditLimitEditorProps drives the inline credit-limit editor (C211).
+type creditLimitEditorProps struct {
+	AccountID  string
+	Currency   string
+	LimitMinor int64
+	OnSave     func(accountID string, limitMinor int64)
+}
+
+// creditLimitEditor is a small inline editor for a card's credit limit. It is its
+// own component so its UseState/UseEvent hooks sit at a stable render position —
+// credit-card rows render in a variable-length loop (the framework gotcha).
+func creditLimitEditor(props creditLimitEditorProps) ui.Node {
+	dec := currency.Decimals(props.Currency)
+	init := ""
+	if props.LimitMinor > 0 {
+		init = money.FormatMinor(props.LimitMinor, dec)
+	}
+	val := ui.UseState(init)
+	saved := ui.UseState(false)
+	onInput := ui.UseEvent(func(v string) { val.Set(v); saved.Set(false) })
+	commit := func() {
+		m, err := money.ParseMinor(strings.TrimSpace(val.Get()), dec)
+		if err == nil && m >= 0 && props.OnSave != nil {
+			props.OnSave(props.AccountID, m)
+			saved.Set(true)
+		}
+	}
+	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
+		Span(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"min-width": "5rem"}), uistate.T("credit.limitLabel")),
+		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
+			Attr("data-testid", "credit-limit-edit"),
+			Attr("aria-label", uistate.T("credit.limitEditAria", props.AccountID)),
+			Placeholder(uistate.T("credit.limitPlaceholder")),
+			Value(val.Get()), OnInput(onInput), OnBlur(func() { commit() })),
+		If(saved.Get(), Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), uistate.T("credit.limitSaved"))),
+	)
 }
 
 // fmtMinorAmount formats minor-unit integer cents into a decimal display string
@@ -375,10 +427,34 @@ func CreditScreen() ui.Node {
 	)})
 
 	// Per-card breakdown.
+	accByID := map[string]domain.Account{}
+	for _, a := range app.Accounts() {
+		accByID[a.ID] = a
+	}
+	// C211: persist an edited credit limit (in the account's own currency), then the
+	// data-revision bump re-renders utilization with the new denominator.
+	saveLimit := func(id string, limitMinor int64) {
+		acc, ok := accByID[id]
+		if !ok {
+			return
+		}
+		acc.CreditLimit = money.New(limitMinor, acc.Currency)
+		if err := app.PutAccount(acc); err != nil {
+			app.Log().Error("credit-limit save failed", "account", id, "err", err)
+			return
+		}
+		// PutAccount is the logic layer and doesn't touch the UI; bump the shared
+		// data revision so the screen re-renders and utilization recomputes.
+		uistate.BumpDataRevision()
+	}
 	cardRows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap4)}
 	for _, cu := range r.Cards {
 		trend := buildUtilTrend(app, cu.AccountID, cu.LimitMinor)
-		cardRows = append(cardRows, creditCardRow(cu, base, base, trend))
+		acctCur := base
+		if a, ok := accByID[cu.AccountID]; ok && a.Currency != "" {
+			acctCur = a.Currency
+		}
+		cardRows = append(cardRows, creditCardRow(cu, base, base, acctCur, saveLimit, trend))
 	}
 	breakdown := uiw.Card(uiw.CardProps{
 		Title: uistate.T("credit.breakdownTitle"),

@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/safespend"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -261,10 +262,11 @@ func Budgets() ui.Node {
 	cats := app.Categories()
 	// Each budget rolls up its sub-categories' spend (D5).
 	statuses := make([]budgeting.Status, 0, len(budgets))
-	paceOver := map[string]string{}   // budgetID → formatted projected overspend (in-progress only)
-	rollCarry := map[string]string{}  // budgetID → formatted previous-period carry
-	rollNeg := map[string]bool{}      // budgetID → whether the previous-period carry is negative
-	rollEffCap := map[string]string{} // budgetID → formatted effective cap (C136, rollover budgets only)
+	paceOver := map[string]string{}     // budgetID → formatted projected overspend (in-progress only)
+	rollCarry := map[string]string{}    // budgetID → formatted previous-period carry
+	rollNeg := map[string]bool{}        // budgetID → whether the previous-period carry is negative
+	rollEffCap := map[string]string{}   // budgetID → formatted effective cap (C136, rollover budgets only)
+	proratedRest := map[string]string{} // budgetID → formatted even-pace amount left for the rest of the period (C143)
 	for _, b := range budgets {
 		// C128: route biweekly budgets through PeriodRangeAnchored so the grid
 		// snaps to the user's actual pay cycle when PayCycleAnchor is set; all
@@ -302,6 +304,19 @@ func Budgets() ui.Node {
 		// finished period or an already-over budget doesn't double up the message.
 		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
 			paceOver[b.ID] = fmtMoney(p.OverBy)
+		}
+		// C143: even-pace per-category safe-to-spend — how much of this budget's
+		// remaining can be spent over the days still left, so the user paces instead
+		// of blowing it all early. Only while the period is genuinely in progress and
+		// the budget still has room; hidden once it's over (paceOver owns that case).
+		if !st.Remaining.IsNegative() && st.Remaining.Amount > 0 {
+			daysInPeriod := int(be.Sub(bs).Hours() / 24)
+			daysLeft := int(be.Sub(now).Hours() / 24)
+			if daysLeft > 0 && daysLeft < daysInPeriod {
+				if v := safespend.ComputeCategory(st.Remaining.Amount, daysLeft, daysInPeriod); v > 0 && v < st.Remaining.Amount {
+					proratedRest[b.ID] = fmtMoney(money.New(v, base))
+				}
+			}
 		}
 	}
 
@@ -468,7 +483,7 @@ func Budgets() ui.Node {
 				if shortfall.IsPositive() {
 					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
 				}
-				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], EffectiveCap: rollEffCap[s.Budget.ID], EffectiveMethod: effectiveMethod(s.Budget), CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
+				return ui.CreateElement(BudgetRow, budgetRowProps{Status: s, Category: catName[s.Budget.CategoryID], Members: app.Members(), Envelope: envAvail[s.Budget.ID], EnvelopeNeg: envNeg[s.Budget.ID], PaceOver: paceOver[s.Budget.ID], RolloverCarry: rollCarry[s.Budget.ID], RolloverNeg: rollNeg[s.Budget.ID], EffectiveCap: rollEffCap[s.Budget.ID], ProratedRest: proratedRest[s.Budget.ID], EffectiveMethod: effectiveMethod(s.Budget), CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault, OnDelete: deleteBudget, OnSave: saveBudget, OnCover: coverBudget, OnTopUp: topupBudget, OnDrill: viewTransactions})
 			},
 		)
 		listBody = Div(rows)
@@ -544,16 +559,17 @@ type budgetRowProps struct {
 	Status          budgeting.Status
 	Category        string
 	Members         []domain.Member
-	Envelope        string        // formatted envelope balance (envelope methodology); "" hides the line
-	EnvelopeNeg     bool          // envelope is overdrawn → danger tone
-	PaceOver        string        // formatted projected overspend (pace, in-progress only); "" hides the line
-	RolloverCarry   string        // formatted previous-period carry for per-budget rollover; "" hides the line
-	RolloverNeg     bool          // previous-period carry is negative → danger tone
-	EffectiveCap    string        // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
+	Envelope        string                // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg     bool                  // envelope is overdrawn → danger tone
+	PaceOver        string                // formatted projected overspend (pace, in-progress only); "" hides the line
+	RolloverCarry   string                // formatted previous-period carry for per-budget rollover; "" hides the line
+	RolloverNeg     bool                  // previous-period carry is negative → danger tone
+	EffectiveCap    string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
+	ProratedRest    string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
-	CoverSources    []coverSource // budgets that can fund a "Cover…" (the row drops itself)
-	CoverShortfall  string        // formatted overspend, for the "covers the $X over" hint
-	CoverDefault    string        // major-units default amount to prefill the cover field
+	CoverSources    []coverSource         // budgets that can fund a "Cover…" (the row drops itself)
+	CoverShortfall  string                // formatted overspend, for the "covers the $X over" hint
+	CoverDefault    string                // major-units default amount to prefill the cover field
 	OnDelete        func(string)
 	OnSave          func(id, name, limit, period, owner, methodology string, rollover bool)
 	OnCover         func(toID, fromID, amount string) error

@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -49,6 +50,14 @@ func Bills() ui.Node {
 	// (G11 follow-up: default horizon + "Show all" toggle).
 	showAll := ui.UseState(false)
 	toggleShowAll := ui.UseEvent(Prevent(func() { showAll.Set(!showAll.Get()) }))
+
+	// C148: the bills calendar was locked to the current month. calMonthOffset lets
+	// the user page forward/back through months (0 = this month) so they can see
+	// what's due next month or review last month, not just the current grid.
+	calMonthOffset := ui.UseState(0)
+	calPrev := ui.UseEvent(Prevent(func() { calMonthOffset.Set(calMonthOffset.Get() - 1) }))
+	calNext := ui.UseEvent(Prevent(func() { calMonthOffset.Set(calMonthOffset.Get() + 1) }))
+	calToday := ui.UseEvent(Prevent(func() { calMonthOffset.Set(0) }))
 
 	now := time.Now()
 	allUpcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
@@ -210,10 +219,22 @@ func Bills() ui.Node {
 					),
 				),
 			}),
-			If(len(allUpcoming) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-				Title: uistate.T("bills.calendar", monthLabel(now)),
-				Body:  billsCalendar(bills.MonthCalendar(allUpcoming, now.Year(), now.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
-			})),
+			If(len(allUpcoming) > 0, func() ui.Node {
+				dispMonth := dateutil.AddMonths(dateutil.MonthStart(now), calMonthOffset.Get())
+				nav := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap1),
+					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-prev"),
+						Attr("aria-label", uistate.T("bills.calPrev")), Title(uistate.T("bills.calPrev")), OnClick(calPrev), "◀"),
+					If(calMonthOffset.Get() != 0, Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-today"),
+						OnClick(calToday), uistate.T("bills.calThisMonth"))),
+					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-next"),
+						Attr("aria-label", uistate.T("bills.calNext")), Title(uistate.T("bills.calNext")), OnClick(calNext), "▶"),
+				)
+				return uiw.EntityListSection(uiw.EntityListSectionProps{
+					Title:        uistate.T("bills.calendar", monthLabel(dispMonth)),
+					HeaderAction: nav,
+					Body:         billsCalendar(bills.MonthCalendar(allUpcoming, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
+				})
+			}()),
 		),
 	)
 }
@@ -241,11 +262,31 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 			}
 			var dot ui.Node = Fragment()
 			if len(day.Bills) > 0 {
-				names := day.Bills[0].Name
-				for _, b := range day.Bills[1:] {
-					names += ", " + b.Name
+				// C150: the dot now conveys amount (per-bill name + amount in the title)
+				// and urgency (color: danger when due today/overdue, warn within 3 days,
+				// neutral when further out). Multiple bills on a day show the count.
+				names := ""
+				for i, bb := range day.Bills {
+					if i > 0 {
+						names += ", "
+					}
+					names += bb.Name + " (" + fmtMoney(bb.Amount) + ")"
 				}
-				dot = Span(css.Class("cal-dot"), Attr("title", names))
+				dotCls := "cal-dot"
+				switch d := day.Bills[0].DaysUntil; {
+				case d <= 0:
+					dotCls += " cal-dot--danger"
+				case d <= 3:
+					dotCls += " cal-dot--warn"
+				default:
+					dotCls += " cal-dot--soon"
+				}
+				if len(day.Bills) > 1 {
+					// Render the count inside the dot so a busy day reads at a glance.
+					dot = Span(ClassStr(dotCls+" cal-dot--count"), Attr("title", names), Attr("aria-label", names), strconv.Itoa(len(day.Bills)))
+				} else {
+					dot = Span(ClassStr(dotCls), Attr("title", names), Attr("aria-label", names))
+				}
 			}
 			args = append(args, Div(ClassStr(cls),
 				Span(css.Class("cal-day"), strconv.Itoa(day.Date.Day())),

@@ -122,7 +122,11 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		// AddHost modal, so a hardcoded id="rule-add" produced a duplicate id when the
 		// modal opened over the screen. Nothing references the id (the aria-label is the
 		// accessible name, data-testid is the test hook), so it's dropped.
-		Input(append([]any{css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+		// C109: Match wrapped in FormField for a visible label (previously aria-label-only).
+		// Order is trigger-first (Match → Category → Tags): "when payee contains X, assign Y".
+		uiw.FormField(uistate.T("rules.matchFieldLabel"),
+			Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+		),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   catOpts,
@@ -130,7 +134,9 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				OnChange:  func(v string) { categoryID.Set(v) },
 				AriaLabel: uistate.T("rules.categoryFieldLabel"),
 			})),
-		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
+		uiw.FormField(uistate.T("rules.tagsFieldLabel"),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
+		),
 		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		If(liveMatch != "" && len(texts) > 0, P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
 		errText("rule-err", errMsg.Get()),

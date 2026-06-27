@@ -56,6 +56,20 @@ func TestDetect(t *testing.T) {
 			want:   nil,
 		},
 		{
+			name:   "SuppressDecrease drops a down anomaly (C232 partial-month)",
+			series: []CategorySeries{{Category: "Gas", Spend: []int64{10000, 10000, 2000}}}, // -80%
+			opts:   Options{MinPeriods: 2, MinBaseline: 1000, ThresholdPct: 50, SuppressDecrease: true},
+			want:   nil,
+		},
+		{
+			name:   "SuppressDecrease still flags an increase",
+			series: []CategorySeries{{Category: "Dining", Spend: []int64{10000, 10000, 10000, 20000}}}, // +100%
+			opts:   Options{MinPeriods: 2, MinBaseline: 1000, ThresholdPct: 50, SuppressDecrease: true},
+			want: []Anomaly{{
+				Category: "Dining", Current: 20000, Baseline: 10000, Delta: 10000, PctChange: 100, Direction: Up,
+			}},
+		},
+		{
 			name: "sorted by absolute delta, then category",
 			series: []CategorySeries{
 				{Category: "Small", Spend: []int64{10000, 10000, 16000}},  // +6000, +60%
