@@ -13606,3 +13606,14 @@ by re-running the gate: sample-banner-btn dropped out of the failure list and TO
 remaining 28 are follow-ups I did NOT bundle: --up money-green at ~4.36 (a light-theme token that's a hair
 too light — a Go internal/theme fix, not CSS), and component-specific cases (.cal-day today cell, a budget
 .pill). CSS-only in web/index.html (my clean lane).
+
+## 2026-06-27 — R44/R72 (contrast slice): reusable WCAG contrast audit gate
+Committed e2e/ux_contrast_audit.mjs — the contrast dimension of the desktop UX quality gate the audit
+tickets call for. It drives every main route in dark+light per the §11.1 protocol (1440x1000, dark first,
+seeded sample data), samples visible leaf text nodes, resolves the effective background by walking
+ancestors, and scores §12 contrast (4.5 normal / 3 large). Two correctness details that took iteration:
+(1) colors are normalized through a 1x1 canvas so color-mix()'s `color(srgb ...)` output is read right — a
+naive regex parser misreads those 0..1 floats as 0..255 and invents failures (that bug produced a phantom
+"attention-text 1.23:1" scare earlier); (2) icon glyphs (●/⚠) and gradient-background elements are excluded
+so they aren't judged at the 4.5 text threshold / against the wrong ancestor color. Exits with the failure
+count for CI gating. Density/screenshot dimensions of R44/R72 remain to be added.
