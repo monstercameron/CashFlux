@@ -425,25 +425,28 @@ func smartReceiptCard(props smartReceiptProps) ui.Node {
 			errMsg.Set(uistate.T("smart.receiptNeedsKey"))
 			return
 		}
-		pickImageDataURL(func(dataURL string) {
-			req := smartai.ReceiptOCR()
-			model := aiprovider.SmartModelID
-			if _, m, ok := aiprovider.SmartModel(); ok {
-				model = m.ID
-			}
-			loading.Set(true)
-			errMsg.Set("")
-			answer.Set("")
-			ai.SendVisionChat(props.Conn.Key, ai.DefaultBaseURL, model, req.System, req.User, dataURL, 0,
-				func(text string, _ ai.Usage) {
-					t := strings.TrimSpace(text)
-					loading.Set(false)
-					answer.Set(t)
-					uistate.SetSmartResult("SMART-T8", t, time.Now())
-				},
-				func(e string) { loading.Set(false); errMsg.Set(e) },
-			)
-		})
+		pickImageDataURL(
+			func(dataURL string) {
+				req := smartai.ReceiptOCR()
+				model := aiprovider.SmartModelID
+				if _, m, ok := aiprovider.SmartModel(); ok {
+					model = m.ID
+				}
+				loading.Set(true)
+				errMsg.Set("")
+				answer.Set("")
+				ai.SendVisionChat(props.Conn.Key, ai.DefaultBaseURL, model, req.System, req.User, dataURL, 0,
+					func(text string, _ ai.Usage) {
+						t := strings.TrimSpace(text)
+						loading.Set(false)
+						answer.Set(t)
+						uistate.SetSmartResult("SMART-T8", t, time.Now())
+					},
+					func(e string) { loading.Set(false); errMsg.Set(e) },
+				)
+			},
+			func(e string) { errMsg.Set(e) },
+		)
 	})
 
 	var result ui.Node = Fragment()

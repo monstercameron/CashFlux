@@ -159,10 +159,10 @@ func Documents() ui.Node {
 
 	// recordDocument saves a best-effort audit record of an import (logged by
 	// appstate on failure). Declared before the import handlers that call it.
-	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row) {
+	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row, rowCount int) {
 		_ = app.PutDocument(domain.Document{
 			ID: id.New(), Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
-			Status: domain.DocImported, Extracted: toDocumentRows(rows),
+			Status: domain.DocImported, Extracted: toDocumentRows(rows), RowCount: rowCount,
 		})
 	}
 
@@ -181,9 +181,9 @@ func Documents() ui.Node {
 				return
 			}
 			if n > 0 {
-				recordDocument(domain.DocCSV, "", nil)
+				recordDocument(domain.DocCSV, importAcct.Get(), nil, n)
 			}
-			summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
+			summary := csvImportSummary(accounts, importAcct.Get(), n)
 			if len(skipped) > 0 {
 				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
 				if d := csvSkipDetail(skipped); d != "" {
@@ -212,9 +212,9 @@ func Documents() ui.Node {
 			return
 		}
 		if n > 0 {
-			recordDocument(domain.DocCSV, "", nil)
+			recordDocument(domain.DocCSV, importAcct.Get(), nil, n)
 		}
-		summary := uistate.T("documents.importedCsv", plural(n, "transaction"))
+		summary := csvImportSummary(accounts, importAcct.Get(), n)
 		if len(skipped) > 0 {
 			summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
 			if d := csvSkipDetail(skipped); d != "" {
@@ -408,12 +408,15 @@ func Documents() ui.Node {
 	})
 
 	chooseImage := ui.UseEvent(func() {
-		pickImageDataURL(func(u string) {
-			imageURL.Set(u)
-			aiErr.Set("")
-			needsKey.Set(false)
-			draft.Set([]extract.Row{})
-		})
+		pickImageDataURL(
+			func(u string) {
+				imageURL.Set(u)
+				aiErr.Set("")
+				needsKey.Set(false)
+				draft.Set([]extract.Row{})
+			},
+			func(e string) { aiErr.Set(e) },
+		)
 	})
 
 	settings := app.Settings()
@@ -636,7 +639,7 @@ func Documents() ui.Node {
 			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
 			return
 		}
-		recordDocument(domain.DocImage, importAcct.Get(), rows)
+		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows))
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
 		receiptTotal.Set("")
@@ -1114,10 +1117,18 @@ func absAmount(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// maxImageBytes is the client-side size cap for vision/OCR uploads (C97).
+// Vision APIs reject or charge heavily for very large images; 10 MB covers
+// any reasonable receipt or statement photo while blocking accidental uploads
+// of raw camera bursts or multi-page scans.
+const maxImageBytes = 10 * 1024 * 1024 // 10 MB
+
 // pickImageDataURL opens a file picker for images and calls onData with the
 // chosen file as a base64 data: URL. The data never leaves the device except to
-// OpenAI when the user clicks Read.
-func pickImageDataURL(onData func(string)) {
+// OpenAI when the user clicks Read. If the chosen file fails the lightweight
+// client-side checks (type or size), onErr is called with a human-readable
+// message and the file is not read (C97).
+func pickImageDataURL(onData func(string), onErr func(string)) {
 	doc := js.Global().Get("document")
 	input := doc.Call("createElement", "input")
 	input.Set("type", "file")
@@ -1136,9 +1147,29 @@ func pickImageDataURL(onData func(string)) {
 	onChange = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		files := input.Get("files")
 		if files.Length() > 0 {
+			file := files.Index(0)
+
+			// C97: validate MIME type — must be an image.
+			mimeType := file.Get("type").String()
+			if !strings.HasPrefix(mimeType, "image/") {
+				onErr(uistate.T("documents.imageTypeInvalid"))
+				onLoad.Release()
+				onChange.Release()
+				return nil
+			}
+
+			// C97: validate file size — reject files over the cap.
+			size := file.Get("size").Int()
+			if size > maxImageBytes {
+				onErr(uistate.T("documents.imageTooLarge"))
+				onLoad.Release()
+				onChange.Release()
+				return nil
+			}
+
 			reader := js.Global().Get("FileReader").New()
 			reader.Set("onload", onLoad)
-			reader.Call("readAsDataURL", files.Index(0))
+			reader.Call("readAsDataURL", file)
 		} else {
 			onLoad.Release()
 		}

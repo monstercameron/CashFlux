@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C97: image type and size validation before vision upload
+
+**Problem:** `pickImageDataURL` in `internal/screens/documents.go` read any chosen file into a base64 data URL and set `imageURL` state unconditionally, with no checks on MIME type or file size. A user could accidentally select a 50 MB raw photo, a PDF, or a non-image file, causing a confusing downstream failure (vision API rejects, or slow/expensive encoding with no useful result).
+
+**Fix:** Added `onErr func(string)` as a second parameter to `pickImageDataURL`. Inside the `onChange` JS handler, before calling `FileReader.readAsDataURL`, two checks run on the File object:
+1. `file.Get("type").String()` must `HasPrefix("image/")` — otherwise calls `onErr(uistate.T("documents.imageTypeInvalid"))` and returns without reading.
+2. `file.Get("size").Int()` must be ≤ 10 MB (`maxImageBytes = 10 * 1024 * 1024`) — otherwise calls `onErr(uistate.T("documents.imageTooLarge"))` and returns.
+
+Both callbacks properly release the JS funcs before returning, preventing leaks. The `chooseImage` handler in `Documents()` passes `func(e string) { aiErr.Set(e) }` as `onErr`; errors surface in the same position as other image-import errors. The secondary call site in `smartai.go` (`SmartReceiptCard`) was also updated to pass its `errMsg` setter.
+
+**Size cap rationale:** 10 MB covers virtually all reasonable receipt or bank-statement photos (a typical JPEG receipt photo is 1–4 MB). Vision APIs (OpenAI) fail or cost disproportionately for large images, and the browser's base64 encoding of a 50 MB raw image blocks the UI thread.
+
+**New i18n keys:**
+- `documents.imageTypeInvalid` — "That file doesn't look like an image. Please choose a JPEG, PNG, WebP, or GIF."
+- `documents.imageTooLarge` — "That image is too large (over 10 MB). Please resize or compress it before uploading."
+
+**Files changed:**
+- `internal/screens/documents.go` — `pickImageDataURL` signature + validation logic; `chooseImage` caller updated
+- `internal/screens/smartai.go` — second call site updated
+- `internal/i18n/en.go` — two new keys under `// C97` block
+
 ## 2026-06-27 — C95: reorder image-before-key validation on receipt import
 
 **Problem:** The `readAI` handler in `internal/screens/documents.go` checked `settings.OpenAIKey == "" && !useBackendAI` first and returned early with `needsKey.Set(true)`. The image-presence check (`imageURL.Get() == ""`) came second. A user who clicked "Read" without selecting an image got a misleading "add your OpenAI key" error even when the real problem was no image chosen.

@@ -787,6 +787,7 @@ var english = Catalog{
 	"documents.csvEmpty":             "Paste some CSV first.",
 	"documents.csvError":             "Couldn't read that CSV: %s",
 	"documents.importedCsv":          "Imported %s.",
+	"documents.importedCsvInto":      "Imported %s into %s.",
 	"documents.importedCsvSkipped":   "Skipped %s (couldn't be read).",
 	"documents.skipLine":             "line %d: %s",
 	"documents.skipMore":             "(+%d more)",
@@ -1952,6 +1953,10 @@ var english = Catalog{
 	"documents.extractAI":         "Extract with AI",
 	"documents.categorizing":      "Working…",
 	"documents.suggestCategories": "Suggest categories",
+
+	// C97 — image type/size validation (Documents screen)
+	"documents.imageTypeInvalid": "That file doesn't look like an image. Please choose a JPEG, PNG, WebP, or GIF.",
+	"documents.imageTooLarge":    "That image is too large (over 10 MB). Please resize or compress it before uploading.",
 
 	// C65 — workflow condition variable reference (Workflows screen)
 	"workflows.conditionHint":     "Available variables — click to insert:",
