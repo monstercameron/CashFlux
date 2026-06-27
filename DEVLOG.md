@@ -13837,3 +13837,13 @@ the label ("+N more"→"Show N more"); the other 3 (fold/dismiss the subscriptio
 (lateCharges is a screen feature not the strip; collapse shows only 1 at rest so repetition is opt-in).
 Re-review: PASS, no remaining fixes. R38 acceptance ("no long Smart stack above core content") met. Marked
 R38 [x] in TODOS working tree (commit deferred — other agent active on TODOS.md). smart_strip.go is clean.
+
+## 2026-06-27 — R55: /admin gated state (dead line → §8.9 card)
+The signed-out /admin page was a single italic line ("Sign in to the cloud to view the admin console.")
+floating in an empty viewport — the R-audit's "visually dead" gated state. Rebuilt it per §8.9: a card with
+a title ("Admin console"), a specific reason/value paragraph (it manages the synced household's devices,
+sessions, and audit log; needs CashFlux Cloud; local data stays on-device either way), and one primary CTA
+"Sign in to Cloud" that opens the global Settings panel (uistate.UseSettings().Set(Global())) where cloud
+auth lives. admin.go + en_enterprise.go (both clean, not the contended en.go). Adversarial style-spec
+reviewer: PASS first try, no fixes. Scoped to the sign-in state; the access-denied state is a known thinner
+treatment (separate). R55 is broad (all empty/gated states) — this is one increment, not the whole ticket.

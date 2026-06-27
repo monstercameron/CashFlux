@@ -246,13 +246,22 @@ func AdminConsole() ui.Node {
 	}, endpoint+"\x00"+token+"\x00"+itoa64(loadRev.Get()))
 
 	retry := ui.UseEvent(func() { loadRev.Set(loadRev.Get() + 1) })
+	// Declared before the switch so its hook position is stable across states.
+	openCloudSettings := ui.UseEvent(func() { uistate.UseSettings().Set(uistate.Global()) })
 
 	switch screenState.Get() {
 	case adminStateSignIn:
-		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{
-			Icon:    icon.Settings,
-			Message: uistate.T("admin.signInPrompt"),
-		})
+		// §8.9 gated state: title + why it's gated + the value + one primary action
+		// (open Settings → Cloud to sign in), instead of a lone dead sentence.
+		return Section(css.Class("card admin-gate"),
+			H2(css.Class("card-title"), uistate.T("admin.signInTitle")),
+			P(css.Class("t-body text-dim"), uistate.T("admin.signInPrompt")),
+			Div(css.Class(tw.Fold(tw.Mt3)),
+				Button(css.Class("btn btn-primary"), Type("button"),
+					Attr("data-testid", "admin-signin-cta"),
+					OnClick(openCloudSettings), uistate.T("admin.signInCta")),
+			),
+		)
 
 	case adminStateForbidden:
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{

@@ -30,7 +30,9 @@ var adminKeys = Catalog{
 	"admin.colCreated":  "Joined",
 
 	// Empty / access states
-	"admin.signInPrompt": "Sign in to the cloud to view the admin console.",
+	"admin.signInTitle":  "Admin console",
+	"admin.signInPrompt": "The admin console manages your synced household — its devices, sign-in sessions, and audit log. It's available once you sign in to CashFlux Cloud. Your local data stays on this device either way.",
+	"admin.signInCta":    "Sign in to Cloud",
 	"admin.accessDenied": "Admin access only. Your account does not have operator permissions.",
 	"admin.noUsers":      "No users found.",
 
