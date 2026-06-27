@@ -21,8 +21,8 @@ import (
 // of 1970-01-01 — which is far more than cloudMentionSnoozeDays ago, so the banner
 // re-surfaces correctly on upgrade without any migration code.
 const (
-	cloudMentionSnoozedKey  = "cashflux:cloud-mention-snoozed"
-	cloudMentionSnoozeDays  = 30 // re-surface the banner after this many days
+	cloudMentionSnoozedKey = "cashflux:cloud-mention-snoozed"
+	cloudMentionSnoozeDays = 30 // re-surface the banner after this many days
 )
 
 // cloudMentionSnoozed returns true when the stored snooze timestamp is within the
@@ -45,11 +45,12 @@ func cloudMentionSnoozed() bool {
 // CloudMention is a calm, dismissible banner that introduces the optional CashFlux
 // Cloud tier (sync + backup + AI proxy) without nagging (§7.11). It shows only
 // when the user hasn't snoozed it within the last 30 days and isn't already
-// syncing. "Learn more" opens the Cloud settings; "Not now" snoozes for 30 days.
+// syncing. "Learn more" navigates to the Plans comparison surface (/plans);
+// "Not now" snoozes for 30 days.
 // After the snooze window expires the banner re-surfaces automatically — dismissing
-// it is a snooze, not a permanent opt-out, so ShowUpgradeSheet() always works and
-// the upgrade path is never permanently buried. Its own component so the snooze +
-// atom hooks stay at a stable render position.
+// it is a snooze, not a permanent opt-out, so the upgrade path is never permanently
+// buried. Its own component so the snooze + atom hooks stay at a stable render
+// position (§7.11, R31-reengage).
 func CloudMention() uic.Node {
 	snoozed := uic.UseState(cloudMentionSnoozed())
 
@@ -64,17 +65,22 @@ func CloudMention() uic.Node {
 	}
 
 	onDismiss := uic.UseEvent(func() { snooze() })
-	onLearn := uic.UseEvent(func() {
-		snooze()
-		ShowUpgradeSheet() // open the benefits/pricing sheet (§7.11 upsell funnel)
-	})
+	// R31-reengage: snooze the banner when the user clicks "Learn more" so it
+	// doesn't re-appear immediately; navigation to /plans is handled by the
+	// anchor href — no imperative router call needed.
+	onLearn := uic.UseEvent(func() { snooze() })
 
 	return Div(css.Class("cloud-mention", tw.Flex, tw.FlexCol, tw.Gap1),
 		Attr("role", "note"),
 		P(css.Class("cloud-mention-title"), uistate.T("cloud.mentionTitle")),
 		P(css.Class("cloud-mention-body", tw.Text12, tw.TextDim), uistate.T("cloud.mentionBody")),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
-			Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(onLearn), uistate.T("cloud.mentionLearn")),
+			// R31-reengage: "Learn more" navigates to the permanent /plans
+			// comparison surface (replacing the one-shot ShowUpgradeSheet call),
+			// so full pricing is always one step away without consuming a modal.
+			// ShowUpgradeSheet still fires from gated Cloud actions (§7.11).
+			A(css.Class("btn", "btn-sm"), Attr("href", uistate.RoutePath("/plans")),
+				OnClick(onLearn), uistate.T("cloud.mentionLearn")),
 			Button(css.Class("btn", "btn-sm", tw.TextFaint), Type("button"), OnClick(onDismiss), uistate.T("cloud.mentionDismiss")),
 		),
 	)

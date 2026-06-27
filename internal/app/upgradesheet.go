@@ -49,6 +49,7 @@ func UpgradeSheet() uic.Node {
 		open.Set(false)
 		settings.Set(uistate.Global()) // Cloud section hosts the trial → Stripe Checkout flow
 	})
+	viewPlans := uic.UseEvent(func() { open.Set(false) })
 
 	price := uistate.T("settings.cloudPriceAnnual")
 	return Div(css.Class("upsheet-backdrop"), Attr("role", "dialog"), Attr("aria-modal", "false"),
@@ -71,6 +72,12 @@ func UpgradeSheet() uic.Node {
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(startTrial), uistate.T("cloud.upgradeStart")),
 				Button(css.Class("btn"), Type("button"), OnClick(close), uistate.T("cloud.upgradeLater")),
+			),
+			// R31-reengage: persistent link to the Plans comparison surface so users can
+			// always return to pricing details without opening the sheet again (C301).
+			A(css.Class("upsheet-plans-link", tw.Text12, tw.TextDim, tw.Underline),
+				Attr("href", uistate.RoutePath("/plans")), OnClick(viewPlans),
+				uistate.T("plans.backToPlans"),
 			),
 		),
 	)

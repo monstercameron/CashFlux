@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R31-plans: Plans comparison surface + re-engageable upgrade path
+
+### Problem
+R31 identified that the upgrade path was invisible and one-shot: `cloudmention.go` both buttons write a permanent dismiss key; `UpgradeSheet` is then unreachable. No `/plans` surface existed; prices were only visible inside the transient sheet. C300/C301/C303 all pointed at the same root: upgrade is ephemeral, not durable.
+
+### Decisions
+- **New screen at `/plans`** — not a modal or settings tab, a full navigable screen. It's the canonical pricing source-of-truth: Free vs Cloud comparison, both prices (`$34.99/yr` / `$3.99/mo`), REAL values from existing i18n keys, 14-day trial, trust copy, self-host note. No dark patterns.
+- **en_plans.go for strings** — following the `en_home.go` init-merge pattern to keep all new keys out of the user-WIP `en.go`.
+- **Re-engage via anchor, not modal** — changed `cloudmention.go` "Learn more" from `ShowUpgradeSheet()` to `<a href="/plans">`. The sheet is now an in-context pitch (gated actions → sheet → start trial); the banner leads to the permanent page. Both paths coexist; `ShowUpgradeSheet` remains for gated action use (§7.11).
+- **upgradesheet.go got a "View plans →" link** — a small persistent link below the action buttons. Even after "Maybe later", pricing is one tap away.
+- **R31-chip deferred from nav/shell** — placing the chip in the shell header or settings nav would have required touching `shell.go` or `settingssectionnav.go` (other-agent WIP). The chip lives on the `/plans` screen for now; TODO to wire it into chrome once those files are clean.
+- **R31-portal deferred** — Stripe manage/cancel requires a backend Stripe customer portal URL from `billing_http.go`. Blocked on R32 hosted tier. No fake stub built.
+
+### Build outcome
+`go build ./internal/i18n/` — clean (native). `go vet ./internal/i18n/` — clean. `go build ./internal/app/ ./internal/screens/` (js/wasm) — fails with 1 error in `workflows.go:341: undefined: Id` (other agent's WIP, not my files). Zero errors in my changed/new files.
+
 ## 2026-06-27 — R29 enforcement core: ActiveIdentity atom + appstate read-only guard
 
 ### Problem
