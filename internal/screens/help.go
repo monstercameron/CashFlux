@@ -40,12 +40,19 @@ func setupChecklist() ui.Node {
 		uistate.T("help.currencyStepLabel"),
 	)
 
+	membersLink := A(
+		Attr("href", uistate.RoutePath("/members")),
+		css.Class(tw.Underline, tw.HoverTextFg),
+		uistate.T("help.membersStepLabel"),
+	)
+
 	steps := []step{
 		{currencyLink, currencySet},
 		{Span(css.Class("t-body", tw.TextDim), "Add an account"), len(app.Accounts()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), "Record a transaction"), len(app.Transactions()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), "Set a budget"), len(app.Budgets()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), "Set a savings goal"), len(app.Goals()) > 0},
+		{membersLink, len(app.Members()) >= 2},
 	}
 	rows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
 	allDone := true

@@ -178,6 +178,9 @@ var english = Catalog{
 	"bills.reminderNote":                 "Payment of %s due %s.",
 	"bills.reminderAdded":                "Added a reminder to pay %s.",
 	"bills.calendar":                     "%s calendar",
+	"bills.calPrev":                      "Previous month", // C148: bills calendar month navigation
+	"bills.calNext":                      "Next month",
+	"bills.calThisMonth":                 "This month",
 	"bills.downloadCsv":                  "Download CSV",
 	"bills.downloadCsvTitle":             "Download your upcoming bills as a CSV file",
 	"subs.monthlyBurden":                 "Monthly subscriptions",
@@ -2159,6 +2162,9 @@ var english = Catalog{
 	// becomes a link to /appearance where week-start lives; currency is in Settings
 	// (opened from the household card in the sidebar).
 	"help.currencyStepLabel": "Confirm base currency & week start (Settings → Appearance)",
+	// C28: household-members step — optional, shown so solo users know the
+	// feature exists; marked done once a second member is added (≥2 members).
+	"help.membersStepLabel": "Add household members (optional)",
 
 	// Help / About card (C293) — plain-English identity + privacy context for the
 	// What's new card so it goes beyond a bare version + changelog link.

@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C28 [F3]: Household-members step in setup checklist
+
+### Problem
+`setupChecklist()` had steps for currency, account, transaction, budget, and goal — but nothing for household members. A new user setting up a multi-person household would never discover `/members` from the onboarding surface.
+
+### Decisions
+- **Optional step, always visible:** The step shows `○` for a solo user (< 2 members) and `✓` once a second member is added. It never blocks the "all done" state since solo is valid — the goal is discoverability, not gatekeeping.
+- **Link to /members:** Mirrors the `currencyLink` pattern exactly — an `<a href="/members">` anchor styled with `tw.Underline, tw.HoverTextFg`. Single new i18n key `help.membersStepLabel = "Add household members (optional)"`.
+- **Appended last:** Members is the most optional of the onboarding tasks; appending it after goals preserves the existing priority order (currency → account → transaction → budget → goal → members).
+
 ## 2026-06-27 — C314 [F47]: Serve wasm compressed
 
 ### Problem
