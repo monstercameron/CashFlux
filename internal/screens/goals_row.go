@@ -111,59 +111,6 @@ func GoalRow(props goalRowProps) ui.Node {
 		return nil
 	}, fmt.Sprintf("%t-%t", editing.Get(), contributing.Get()))
 
-	if contributing.Get() {
-		linkedAcctName := accountName(props.Accounts, g.AccountID)
-		var ledgerRow ui.Node = Fragment()
-		if linkedAcctName != "" {
-			cbArgs := []any{Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger)}
-			if postLedgerS.Get() {
-				cbArgs = append(cbArgs, Attr("checked", ""))
-			}
-			ledgerRow = labeledField(
-				uistate.T("goals.contributePostLedger", linkedAcctName),
-				Input(cbArgs...),
-			)
-		}
-		return Div(css.Class("budget"),
-			Div(css.Class("budget-head"), Span(css.Class("row-desc"), g.Name)),
-			Form(css.Class("form-grid"), OnSubmit(doContribute),
-				labeledField(uistate.T("goals.contributeAmount"),
-					Input(css.Class("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt))),
-				ledgerRow,
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
-			),
-		)
-	}
-	if editing.Get() {
-		return Div(css.Class("budget"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				labeledField(uistate.T("common.name"),
-					Input(css.Class("field"), Attr("id", "goal-edit-"+g.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
-				labeledField(uistate.T("goals.targetLabel"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget))),
-				labeledField(uistate.T("goals.dateLabel"),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
-				labeledField(uistate.T("goals.owner"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
-						Selected:  ownerS.Get(),
-						OnChange:  func(v string) { ownerS.Set(v) },
-						AriaLabel: uistate.T("goals.owner"),
-					})),
-				labeledField(uistate.T("goals.linked"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   goalAccountOptions(props.Accounts, acctS.Get()),
-						Selected:  acctS.Get(),
-						OnChange:  func(v string) { acctS.Set(v) },
-						AriaLabel: uistate.T("goals.linked"),
-					})),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
-
 	pct := goalsvc.Percent(g)
 	rem, _ := goalsvc.Remaining(g)
 	complete, _ := goalsvc.IsComplete(g)
@@ -232,6 +179,19 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
+	// C178: monthly contribution rate chip shown next to the pace badge so the
+	// user can see what they need to save per month without hunting through the
+	// sub-line text.
+	var monthlyChip ui.Node = Fragment()
+	if !complete && !g.TargetDate.IsZero() {
+		if per, ok, _ := goalsvc.MonthlyNeeded(g, time.Now()); ok {
+			monthlyChip = Span(ClassStr("pace-badge pace-rate"),
+				Attr("title", uistate.T("goals.paceNeededTitle")),
+				uistate.T("goals.paceNeeded", fmtMoney(per)),
+			)
+		}
+	}
+
 	// Archive button shown on complete active goals; Unarchive shown on archived goals.
 	var archiveBtn ui.Node = Fragment()
 	if g.Archived {
@@ -256,11 +216,70 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
+	// C180: contribute form rendered inline below the row (not as an early return)
+	// so the header row buttons remain visible while the form is open.
+	var contribForm ui.Node = Fragment()
+	if contributing.Get() {
+		linkedAcctName := accountName(props.Accounts, g.AccountID)
+		var ledgerRow ui.Node = Fragment()
+		if linkedAcctName != "" {
+			cbArgs := []any{Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger)}
+			if postLedgerS.Get() {
+				cbArgs = append(cbArgs, Attr("checked", ""))
+			}
+			ledgerRow = labeledField(
+				uistate.T("goals.contributePostLedger", linkedAcctName),
+				Input(cbArgs...),
+			)
+		}
+		contribForm = Div(css.Class("goal-inline-form"),
+			Form(css.Class("form-grid"), OnSubmit(doContribute),
+				labeledField(uistate.T("goals.contributeAmount"),
+					Input(css.Class("field"), Attr("id", "goal-contrib-"+g.ID), Type("number"), Placeholder(uistate.T("goals.contributeAmount")), Value(contribAmtS.Get()), Step("0.01"), OnInput(onContribAmt))),
+				ledgerRow,
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.contribute")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelContribute), uistate.T("action.cancel")),
+			),
+		)
+	}
+
+	// C180: inline edit form — similarly rendered below the row so action buttons stay.
+	var editForm ui.Node = Fragment()
+	if editing.Get() {
+		editForm = Div(css.Class("goal-inline-form"),
+			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+				labeledField(uistate.T("common.name"),
+					Input(css.Class("field"), Attr("id", "goal-edit-"+g.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+				labeledField(uistate.T("goals.targetLabel"),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget))),
+				labeledField(uistate.T("goals.dateLabel"),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
+				labeledField(uistate.T("goals.owner"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
+						Selected:  ownerS.Get(),
+						OnChange:  func(v string) { ownerS.Set(v) },
+						AriaLabel: uistate.T("goals.owner"),
+					})),
+				labeledField(uistate.T("goals.linked"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   goalAccountOptions(props.Accounts, acctS.Get()),
+						Selected:  acctS.Get(),
+						OnChange:  func(v string) { acctS.Set(v) },
+						AriaLabel: uistate.T("goals.linked"),
+					})),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+			),
+		)
+	}
+
 	return Div(css.Class("budget"),
 		Attr("data-testid", "goal-row-"+g.ID),
 		Div(css.Class("budget-head"),
 			Span(css.Class("row-desc"), g.Name),
 			paceBadge(pace),
+			monthlyChip,
 			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
@@ -275,5 +294,7 @@ func GoalRow(props goalRowProps) ui.Node {
 		overfundNote,
 		whatNext,
 		linkedLine,
+		contribForm,
+		editForm,
 	)
 }

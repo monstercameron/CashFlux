@@ -567,6 +567,8 @@ var english = Catalog{
 	"goals.paceOverdue":        "Past due",
 	"goals.paceDueSoon":        "Due soon",
 	"goals.paceOnTrack":        "On track",
+	"goals.paceNeeded":         "%s/mo",          // C178: monthly contribution rate chip next to pace badge
+	"goals.paceNeededTitle":    "Monthly amount needed to reach goal on time", // C178: tooltip
 	"goals.targetPlaceholder":  "Target (%s)",
 	"goals.savedSoFar":         "Saved so far",
 	"goals.totalTarget":        "Total target",

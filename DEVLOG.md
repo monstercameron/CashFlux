@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C178 + C180 goal pace badge with monthly rate; inline contribute/edit
+
+**C178 — pace badge not contribution-rate aware:**
+The `paceBadge(pace)` function returned only a status label ("On track", "Due soon", etc.) with no
+dollar figure. `MonthlyNeeded` was already called and surfaced in the sub-line text
+(`"· save $X/mo"`), but not in the badge position where a user scanning the row header would see
+it first.
+
+Fix: computed `MonthlyNeeded` just before the final return and conditionally rendered a
+`pace-badge pace-rate` chip immediately after `paceBadge(pace)` in the `budget-head`. The chip
+shows `$X/mo` with a tooltip ("Monthly amount needed to reach goal on time"). It is suppressed
+when the goal is complete, has no target date, or when `MonthlyNeeded` returns ok=false (e.g. the
+goal is already fully funded). Two new i18n keys: `goals.paceNeeded` / `goals.paceNeededTitle`.
+
+**C180 — contribute/edit forms replaced the whole row, hiding action buttons:**
+Both the contribute form and the inline edit form used early `return` statements that substituted
+the entire row with a bare form. The `budget-head` (containing Contribute / Edit / Delete buttons)
+was completely absent while a form was open.
+
+Fix: removed both early returns. The forms are now assembled as `contribForm` / `editForm`
+variables (conditionally non-empty) and appended to the main return block after `linkedLine`. The
+`budget-head` with all its action buttons is always rendered; the form expands below when active.
+Hook ordering is strictly unchanged — all `UseState`, `UseEvent`, and `UseEffect` calls remain at
+the top of `GoalRow` before any reads of state, so the hook registry stays stable across renders.
+The `UseEffect` focus trap still targets the correct element IDs and fires correctly because the
+effect key (`editing.Get()`/`contributing.Get()`) triggers re-evaluation after state change.
+
+Build verified: `GOOS=js GOARCH=wasm go build -o NUL .` exits 0. `go test ./internal/goals/
+./internal/i18n/` — ok.
+
 ## 2026-06-27 — C238 "new" delta badge when prior period is zero on /reports
 
 Root cause: `ledger.PercentChange(curr, prev)` returns `ok=false` when `prev==0`, which propagated
