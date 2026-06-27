@@ -8,6 +8,14 @@ problems and fixes, and what's next.
 
 
 
+## 2026-06-27 — C228: spending-highlight drill-through to /transactions
+
+The spending-highlights card on /insights (anomaly "what changed this month" rows) was non-interactive — clicking a row did nothing. Fixed by wiring in the same category drill-through pattern used by /reports (L58 FILTER_CARRY): `UseTxFilter` atom set + persisted, then `nav.Navigate("/transactions")`.
+
+The key complication: `insights.Anomaly.Category` is the display name (string), not the ID, because `CategorySeries.Category` is set to the name in `detectSpendingAnomalies`. So the fix adds `categoryNameToIDMap` (a simple reverse map of `[]domain.Category`) and threads the reverse lookup into the click callback in `Insights()`.
+
+Hook ordering: `OnClick` must not be called inside the variable-length anomaly loop (framework rule). Added `insightsHighlightRow` as a standalone component accepting an `OnDrill func(catName string)` prop, and `spendingHighlights` now uses `MapKeyed` + `ui.CreateElement(insightsHighlightRow, ...)`. The hint text updated from "no AI needed" to "tap a row to see the transactions" to surface the new affordance. build rc=0, files: insights.go, i18n/en.go.
+
 ## 2026-06-27 - R39 progress: progressive To-do rows (generic .row-2nd)
 
 Generalised the R47 hover-reveal pattern into a reusable `.row-2nd` class for any `.row`-based list and applied it to /todo: the complete-toggle + title stay at rest; Add-subtask/Edit/Delete reveal on hover or keyboard focus-within. /todo 44 -> 17 resting controls (61%). The CSS is scoped so only tagged elements are affected, safe on the generic .row class. R39 names 7 surfaces; transactions (R47) and todo are the dense ones now made progressive - notifications/subscriptions already expose 1-2 row actions and categories/accounts/widget-manager are already lean, so R39 is close but I'm keeping it open until each remaining list is explicitly verified rather than over-claim. build rc=0.

@@ -729,7 +729,20 @@ func Insights() ui.Node {
 		uistate.PersistPrefs(p)
 	}))
 
-	highlights := spendingHighlights(txns, app.Categories(), base, rates)
+	// C228: wire the highlight-row drill-through using the same pattern as the
+	// reports category drill (L58 FILTER_CARRY). UseTxFilter is called once at a
+	// stable position; the callback is threaded down as a plain func.
+	txFilterAtom := uistate.UseTxFilter()
+	catsByName := categoryNameToIDMap(app.Categories())
+	viewCategoryTransactions := func(catName string) {
+		catID := catsByName[catName]
+		f := uistate.TxFilter{Category: catID}.Normalize()
+		txFilterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+
+	highlights := spendingHighlights(txns, app.Categories(), base, rates, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
@@ -1485,24 +1498,55 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday) ui.Node {
 	})
 }
 
+// insightsHighlightRowProps carries the display data and drill callback for one
+// spending-highlight row. OnDrill is called with the anomaly's category name
+// when the user clicks the row, so the parent can resolve it to an ID and
+// navigate to /transactions filtered to that category (C228).
+type insightsHighlightRowProps struct {
+	Anomaly insights.Anomaly
+	Base    string
+	OnDrill func(catName string)
+}
+
+// insightsHighlightRow renders a single clickable spending-highlight row. It is
+// a standalone component so its OnClick hook is registered at a stable render
+// position — not inside the variable-length anomaly loop in spendingHighlights
+// (CRITICAL: never call On* helpers inside a variable-length loop).
+func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
+	a := props.Anomaly
+	drill := ui.UseEvent(func() { props.OnDrill(a.Category) })
+	return Button(
+		css.Class("insight-row insight-row--clickable"),
+		Type("button"),
+		Attr("aria-label", uistate.T("insights.highlightDrillAria", a.Category)),
+		OnClick(drill),
+		Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), css.Class(tw.W4, tw.H4))),
+		Span(highlightText(a, props.Base)),
+	)
+}
+
 // spendingHighlights renders an offline "what changed" card: it detects
 // categories whose spend this month deviates materially from their recent
 // average and explains each in plain English. It needs no AI key. Returns an
 // empty node when there's nothing notable, so the card simply doesn't appear.
-// The card is non-interactive, so its rows are safe to render in a loop.
-func spendingHighlights(txns []domain.Transaction, categories []domain.Category, base string, rates currency.Rates) ui.Node {
+// Each row is wrapped in its own component so the OnClick hook stays at a
+// stable render position (C228 drill-through).
+func spendingHighlights(txns []domain.Transaction, categories []domain.Category, base string, rates currency.Rates, onDrill func(catName string)) ui.Node {
 	anomalies := detectSpendingAnomalies(txns, categories, rates)
 	if len(anomalies) == 0 {
 		return Fragment()
 	}
 
-	rows := make([]ui.Node, 0, len(anomalies))
-	for _, a := range anomalies {
-		rows = append(rows, P(css.Class("insight-row"),
-			Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), css.Class(tw.W4, tw.H4))),
-			Span(highlightText(a, base)),
-		))
-	}
+	rows := MapKeyed(anomalies,
+		func(a insights.Anomaly) any { return a.Category },
+		func(a insights.Anomaly) ui.Node {
+			return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
+				Anomaly: a,
+				Base:    base,
+				OnDrill: onDrill,
+			})
+		},
+	)
 
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("insights.highlightsTitle"),
@@ -1544,6 +1588,17 @@ func detectSpendingAnomalies(txns []domain.Transaction, categories []domain.Cate
 		series = append(series, insights.CategorySeries{Category: name, Spend: spend})
 	}
 	return insights.Detect(series, insights.DefaultOptions())
+}
+
+// categoryNameToIDMap builds a reverse map from category name → category ID
+// used by the drill-through callback (C228) to look up the ID from the
+// anomaly's Category field (which is the display name).
+func categoryNameToIDMap(categories []domain.Category) map[string]string {
+	m := make(map[string]string, len(categories))
+	for _, c := range categories {
+		m[c.Name] = c.ID
+	}
+	return m
 }
 
 // highlightText is the plain-English sentence for one spending anomaly.
