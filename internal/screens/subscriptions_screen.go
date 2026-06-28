@@ -38,27 +38,35 @@ func nameSlug(name string) string {
 	return strings.NewReplacer(" ", "-", "/", "-", ".", "-", "'", "", "\"", "").Replace(s)
 }
 
+// SubscriptionsPanelProps holds configuration for SubscriptionsPanel. Currently
+// the panel reads all state from appstate.Default; the struct exists so call sites
+// pass SubscriptionsPanelProps{} and future props can be added without altering
+// existing callers.
+type SubscriptionsPanelProps struct{}
+
+// SubscriptionsPanel is a registered component that owns all subscriptions-view
+// logic and hooks. It is mounted on the /subscriptions route (via the
+// Subscriptions() thin shell) and embedded in the tabbed /recurring hub
+// (FEATURE_MAP §5.3/§5.7b). Each mount gets an isolated hook scope so
+// tab-switching does not share selection or preferences state.
+//
 // Subscriptions lists recurring charges detected from transaction history (B25):
 // each subscription's cadence, charge, normalized monthly cost, and next renewal,
-// plus the total monthly/annual burden. Includes:
-//   - Per-row cancel-candidate selection with running "save $X/year" summary.
-//   - Bulk "mark selected as cancelled" action.
-//   - Quiet "worth reviewing?" badge on subscriptions not seen in 2+ cadence intervals.
-func Subscriptions() ui.Node {
+// plus the total monthly/annual burden. Includes per-row cancel-candidate
+// selection with a running "save $X/year" summary, bulk cancel, and a quiet
+// "worth reviewing?" badge on subscriptions not seen in 2+ cadence intervals.
+func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	base := "USD"
+	if app != nil {
+		if b := app.Settings().BaseCurrency; b != "" {
+			base = b
+		}
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	pr := uistate.UsePrefs().Get()
 
-	// Drill from a detected subscription to its underlying charges: open
-	// Transactions searched for the payee, so the user can verify the detection
-	// (mirrors the Accounts/Budgets/Goals drill pattern, C30/C56).
+	// === Hooks — all unconditional (GWC rule) ===
+
+	// Drill from a detected subscription to its underlying charges.
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
 	viewCharges := func(payee string) {
@@ -67,6 +75,88 @@ func Subscriptions() ui.Node {
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
+
+	pr := uistate.UsePrefs().Get()
+	notice := uistate.UseNotice()
+
+	// C166: session state for the detection preferences panel (open/closed toggle).
+	prefsOpen := ui.UseState(false)
+
+	// --- Cancel-candidates multi-select (L12) ---
+	// Session state: map of sub Name → selected. All mutations copy-on-write so
+	// UseState detects the change and re-renders.
+	selectedState := ui.UseState(map[string]bool{})
+
+	// allSelected and allSubsForSelect are set during rendering and captured by the
+	// selectAllToggle closure so the event handler always reads the latest values.
+	var allSelected bool
+	var allSubsForSelect []subscriptions.Subscription
+
+	selectAllToggle := ui.UseEvent(Prevent(func() {
+		if allSelected {
+			selectedState.Set(map[string]bool{})
+		} else {
+			next := make(map[string]bool, len(allSubsForSelect))
+			for _, s := range allSubsForSelect {
+				next[s.Name] = true
+			}
+			selectedState.Set(next)
+		}
+	}))
+
+	// doBulkCancel is self-contained: it re-reads cancelList from app at call time
+	// so it can be registered as a stable hook before cancelMap is computed during
+	// rendering. notice and selectedState are captured by reference from the hooks
+	// above and always reflect the most recent render's values.
+	doBulkCancel := func() {
+		a := appstate.Default
+		if a == nil {
+			return
+		}
+		cancelList := a.Cancellations()
+		cancelMap := make(map[string]time.Time, len(cancelList))
+		for _, c := range cancelList {
+			cancelMap[strings.ToLower(strings.TrimSpace(c.SubName))] = c.CancelledOn
+		}
+		sel := selectedState.Get()
+		now := time.Now()
+		for name, isSelected := range sel {
+			if !isSelected {
+				continue
+			}
+			key := strings.ToLower(strings.TrimSpace(name))
+			if _, alreadyCancelled := cancelMap[key]; alreadyCancelled {
+				continue
+			}
+			if err := a.MarkSubscriptionCancelled(name, now); err != nil {
+				notice.Set(notice.Get().With(err.Error(), true))
+				return
+			}
+		}
+		selectedState.Set(map[string]bool{})
+	}
+	bulkCancelEvt := ui.UseEvent(Prevent(doBulkCancel))
+
+	togglePrefs := ui.UseEvent(Prevent(func() { prefsOpen.Set(!prefsOpen.Get()) }))
+
+	// C166: detection-sensitivity control — how many times a charge must repeat
+	// before it counts as a subscription. Saves immediately (same pattern as the
+	// ignore toggles) so the list recomputes.
+	onMinOccur := ui.UseEvent(func(e ui.Event) {
+		n, _ := strconv.Atoi(e.GetValue())
+		uistate.SaveSubsDetectPrefs(uistate.LoadSubsDetectPrefs().WithMinOccurrences(n))
+	})
+
+	// insightsNav is the cross-link handler wired to the footer "Spending analysis"
+	// button; registered unconditionally so hook count is stable.
+	insightsNav := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/insights")) })
+
+	// === Rendering (nil-guarded) ===
+	if app == nil {
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	}
+
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
 	// C166: load detection preferences and filter transactions before detection so
 	// charges from ignored categories or account types are never considered. This
@@ -167,7 +257,6 @@ func Subscriptions() ui.Node {
 
 	// remind creates a to-do dated to the subscription's next renewal, so a
 	// "should I keep this?" task surfaces before the next charge (B25).
-	notice := uistate.UseNotice()
 	remind := func(s subscriptions.Subscription) {
 		app := appstate.Default
 		if app == nil {
@@ -243,13 +332,20 @@ func Subscriptions() ui.Node {
 		notice.Set(notice.Get().With(uistate.T("subs.unignoredConfirm", name), false))
 	}
 
-	// C166: session state for the detection preferences panel (open/closed toggle).
-	prefsOpen := ui.UseState(false)
+	// Derive savings and count from current selection for the summary bar.
+	sel := selectedState.Get()
+	savings := subscriptions.AnnualSavings(subs, sel)
+	selectedCount := 0
+	for _, v := range sel {
+		if v {
+			selectedCount++
+		}
+	}
 
-	// --- Cancel-candidates multi-select (L12) ---
-	// Session state: map of sub Name → selected. All mutations copy-on-write so
-	// UseState detects the change and re-renders.
-	selectedState := ui.UseState(map[string]bool{})
+	// Set variables captured by the hooks registered above so the event handlers
+	// read the correct render-time values when they fire.
+	allSelected = selectedCount == len(subs) && len(subs) > 0
+	allSubsForSelect = subs
 
 	toggle := func(name string) {
 		cur := selectedState.Get()
@@ -261,42 +357,9 @@ func Subscriptions() ui.Node {
 		selectedState.Set(next)
 	}
 
-	// Bulk cancel: mark every selected (non-cancelled) subscription as cancelled,
-	// then clear the selection so the UI resets cleanly.
-	doBulkCancel := func() {
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		sel := selectedState.Get()
-		now := time.Now()
-		for name, isSelected := range sel {
-			if !isSelected {
-				continue
-			}
-			key := strings.ToLower(strings.TrimSpace(name))
-			if _, alreadyCancelled := cancelMap[key]; alreadyCancelled {
-				continue
-			}
-			if err := app.MarkSubscriptionCancelled(name, now); err != nil {
-				notice.Set(notice.Get().With(err.Error(), true))
-				return
-			}
-		}
-		selectedState.Set(map[string]bool{})
-	}
-
-	// Derive savings and count from current selection for the summary bar.
-	sel := selectedState.Get()
-	savings := subscriptions.AnnualSavings(subs, sel)
-	selectedCount := 0
-	for _, v := range sel {
-		if v {
-			selectedCount++
-		}
-	}
-
 	// Build the savings summary bar (only shown when ≥1 subscription is selected).
+	// Uses the pre-registered bulkCancelEvt hook instead of an inline UseEvent
+	// call so the hook count stays stable regardless of selectedCount (GWC rule).
 	var savingsSummary ui.Node
 	if selectedCount > 0 {
 		savingsLabel := uistate.T("subs.cancelSavings", selectedCount, fmtMoney(money.New(savings, base)))
@@ -315,7 +378,7 @@ func Subscriptions() ui.Node {
 				Title(uistate.T("subs.cancelSelectedTitle")),
 				Attr("aria-label", uistate.T("subs.cancelSelectedTitle")),
 				Attr("data-testid", "subs-bulk-cancel-btn"),
-				OnClick(ui.UseEvent(Prevent(doBulkCancel))),
+				OnClick(bulkCancelEvt),
 				uistate.T("subs.cancelSelected"),
 			),
 		)
@@ -327,21 +390,6 @@ func Subscriptions() ui.Node {
 	monthlyTotal := subscriptions.MonthlyTotal(subs)
 
 	now := time.Now()
-	// Select-all / Clear affordance (G10 §7): makes multi-select cancel
-	// discoverable — a user who misses the individual checkboxes sees this
-	// prompt and understands the pattern immediately.
-	allSelected := selectedCount == len(subs) && len(subs) > 0
-	selectAllToggle := ui.UseEvent(Prevent(func() {
-		if allSelected {
-			selectedState.Set(map[string]bool{})
-		} else {
-			next := make(map[string]bool, len(subs))
-			for _, s := range subs {
-				next[s.Name] = true
-			}
-			selectedState.Set(next)
-		}
-	}))
 
 	// Compute page-level smart insights once (not per row). Current subscription
 	// engines do not set RelatedID (they use subscription names), so byEntity is
@@ -504,14 +552,6 @@ func Subscriptions() ui.Node {
 		}
 		prefsToggleLabel += " (" + badge + ")"
 	}
-	togglePrefs := ui.UseEvent(Prevent(func() { prefsOpen.Set(!prefsOpen.Get()) }))
-	// C166: detection-sensitivity control — how many times a charge must repeat
-	// before it counts as a subscription. Saves immediately (same pattern as the
-	// ignore toggles) so the list recomputes.
-	onMinOccur := ui.UseEvent(func(e ui.Event) {
-		n, _ := strconv.Atoi(e.GetValue())
-		uistate.SaveSubsDetectPrefs(uistate.LoadSubsDetectPrefs().WithMinOccurrences(n))
-	})
 
 	// Ordered account types: only include types that actually appear in
 	// transactions so the list stays relevant.
@@ -714,11 +754,19 @@ func Subscriptions() ui.Node {
 				Type("button"),
 				Title(uistate.T("subs.seeSpendingAnalysisTitle")),
 				Attr("data-testid", "subs-see-insights-link"),
-				OnClick(ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/insights")) })),
+				OnClick(insightsNav),
 				uistate.T("nav.insights"),
 			),
 		),
 	)
+}
+
+// Subscriptions is the /subscriptions route — a thin shell that renders
+// SubscriptionsPanel. The shell provides the heading and subtitle from the route
+// registry; SubscriptionsPanel owns all content, hooks, and logic
+// (FEATURE_MAP §5.3/§5.7b).
+func Subscriptions() ui.Node {
+	return ui.CreateElement(SubscriptionsPanel, SubscriptionsPanelProps{})
 }
 
 // subscriptionRowProps holds the props for a single subscription row.

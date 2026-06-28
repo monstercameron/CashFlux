@@ -3,6 +3,51 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.3/§5.7b: tabbed /recurring hub — Bills + Subscriptions folded in
+
+**What:** The `/recurring` page previously showed only `RecurringManagerPanel` (the scheduled
+cash-flow manager). This commit makes it a full three-tab hub: Scheduled, Bills, Subscriptions.
+
+**Changes:**
+
+1. `BillsPanel` registered component extracted from `Bills()` in `bills_screen.go`. Key
+   restructuring: all 9 hooks (UsePrefs, showAll UseState + toggleShowAll UseEvent, calMonthOffset
+   UseState + 3 nav UseEvents, UseNotice, UseDataRevision) moved before `if app == nil` so hook
+   count is stable across renders — matching the RecurringManagerPanel pattern. Bills() is now a
+   two-liner thin shell.
+
+2. `SubscriptionsPanel` registered component extracted from `Subscriptions()` in
+   `subscriptions_screen.go`. More involved restructuring: 10 hooks hoisted. Two specific
+   challenges solved:
+   - The original savingsSummary block contained `ui.UseEvent(Prevent(doBulkCancel))` inside an
+     `if selectedCount > 0` conditional — a hook-in-conditional violation for a registered
+     component. Fixed by pre-registering `bulkCancelEvt := ui.UseEvent(Prevent(doBulkCancel))` at
+     the top and using it by reference in the conditional block.
+   - `selectAllToggle`'s closure reads `allSelected` and `subs` (render-time values computed after
+     the nil guard). Fixed by declaring `var allSelected bool` and `var allSubsForSelect
+     []subscriptions.Subscription` before the UseEvent registration, then assigning them during
+     rendering — the closure captures the variables by reference and reads the most recent render's
+     values when it fires.
+   - `doBulkCancel` made self-contained (re-reads `cancelMap` from `app.Cancellations()` at call
+     time) so it can be registered as a stable hook before `cancelMap` is computed.
+   - `insightsNav` (the cross-link to /insights) extracted as a top-level UseEvent so no hooks
+     appear in the return block.
+
+3. `RecurringHub` registered component in `recurring.go`: one `UseState("scheduled")` tab cursor,
+   `uiw.Segmented` control with 3 options, switch-on-tab to select which child component to mount.
+   Each arm is a `ui.CreateElement` — hooks isolated in the child, so switching tabs is safe.
+
+4. New `internal/i18n/en_recurring_tabs.go` (init-merge pattern): 3 keys for the tab labels.
+
+**Why hooks before nil guard matters:** Registered components (ui.CreateElement) must have a stable
+hook count across all renders of the same instance. If `app == nil` at boot, returning early before
+any hooks means that instance would register 0 hooks; on the next render when `app != nil` it would
+register N hooks — a count mismatch causing GWC to panic. Moving hooks above the nil guard ensures
+the count is always N; the rendering section is nil-guarded, not the hook section.
+
+**Routes unchanged:** `/bills` and `/subscriptions` are thin shells. `/recurring` now owns all
+three panels. Nav grouping and route registry untouched.
+
 ## 2026-06-28 — FEATURE_MAP §5.3: drop the recurring manager from /planning
 
 **What:** The parallel agent's `/recurring` commit (`75daaea4`) extracted `RecurringManagerPanel`

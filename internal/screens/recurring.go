@@ -261,11 +261,52 @@ func RecurringManagerPanel(p RecurringManagerPanelProps) ui.Node {
 	})
 }
 
+// RecurringHubProps holds configuration for RecurringHub. The struct exists so
+// call sites pass RecurringHubProps{} and future props can be added without
+// altering existing callers.
+type RecurringHubProps struct{}
+
+// RecurringHub is a registered component that owns the three-tab /recurring hub
+// (FEATURE_MAP §5.3): Scheduled (RecurringManagerPanel), Bills (BillsPanel), and
+// Subscriptions (SubscriptionsPanel). Each tab body is a separate ui.CreateElement
+// call — hooks are isolated inside each child component, so tab switching is
+// hook-safe regardless of which panels have been rendered previously.
+func RecurringHub(p RecurringHubProps) ui.Node {
+	activeTab := ui.UseState("scheduled")
+
+	tab := activeTab.Get()
+	var content ui.Node
+	switch tab {
+	case "bills":
+		content = ui.CreateElement(BillsPanel, BillsPanelProps{})
+	case "subscriptions":
+		content = ui.CreateElement(SubscriptionsPanel, SubscriptionsPanelProps{})
+	default:
+		content = ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{})
+	}
+
+	return Div(
+		Div(css.Class(tw.Mb2),
+			uiw.Segmented(uiw.SegmentedProps{
+				Label:    "Recurring view",
+				Selected: tab,
+				OnSelect: func(v string) { activeTab.Set(v) },
+				Options: []uiw.SegOption{
+					{Value: "scheduled", Label: uistate.T("recurring.tabScheduled")},
+					{Value: "bills", Label: uistate.T("recurring.tabBills")},
+					{Value: "subscriptions", Label: uistate.T("recurring.tabSubscriptions")},
+				},
+			}),
+		),
+		content,
+	)
+}
+
 // Recurring is the /recurring route — the dedicated "Money that repeats" page.
-// It renders the scheduled cash-flow manager (RecurringManagerPanel) as its own
-// scoped screen, replacing the former alias to Planning() (FEATURE_MAP §5.7a).
+// It renders RecurringHub, which provides a three-tab view: Scheduled (the
+// cash-flow manager), Bills, and Subscriptions (FEATURE_MAP §5.3/§5.7b).
 // The shell provides the heading and subtitle from the route registry
-// (nav.recurring / screen.recurringSub); this function owns only the content.
+// (nav.recurring / screen.recurringSub); RecurringHub owns all content.
 func Recurring() ui.Node {
-	return ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{})
+	return ui.CreateElement(RecurringHub, RecurringHubProps{})
 }

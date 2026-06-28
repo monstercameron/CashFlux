@@ -30,20 +30,25 @@ import (
 // unless the user enables "Show all" (G11 follow-up).
 const billsHorizonDays = 90
 
-// Bills lists upcoming payments derived from liability accounts' due-day and
-// minimum payment (B22): each bill's next due date, how soon it's due, and the
-// amount, soonest first, with the total due up top, a month calendar, and a
-// per-bill "Mark paid" that logs a payment transaction (C57).
-func Bills() ui.Node {
+// BillsPanelProps holds configuration for BillsPanel. Currently the panel reads
+// all state from appstate.Default; the struct exists so call sites pass
+// BillsPanelProps{} and future props can be added without altering callers.
+type BillsPanelProps struct{}
+
+// BillsPanel is a registered component that owns all bills-view logic and hooks.
+// It is mounted on the /bills route (via the Bills() thin shell) and embedded in
+// the tabbed /recurring hub (FEATURE_MAP §5.3/§5.7b). Each mount gets an isolated
+// hook scope so tab-switching does not share calendar or mark-paid state.
+func BillsPanel(p BillsPanelProps) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	base := "USD"
+	if app != nil {
+		if b := app.Settings().BaseCurrency; b != "" {
+			base = b
+		}
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+
+	// === Hooks — all unconditional (GWC rule) ===
 	pr := uistate.UsePrefs().Get()
 
 	// showAll controls whether bills beyond the 90-day default horizon are shown
@@ -58,6 +63,16 @@ func Bills() ui.Node {
 	calPrev := ui.UseEvent(Prevent(func() { calMonthOffset.Set(calMonthOffset.Get() - 1) }))
 	calNext := ui.UseEvent(Prevent(func() { calMonthOffset.Set(calMonthOffset.Get() + 1) }))
 	calToday := ui.UseEvent(Prevent(func() { calMonthOffset.Set(0) }))
+
+	notice := uistate.UseNotice()
+	rev := uistate.UseDataRevision()
+
+	// === Rendering (nil-guarded) ===
+	if app == nil {
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	}
+
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
 	now := time.Now()
 	allUpcoming := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
@@ -77,7 +92,6 @@ func Bills() ui.Node {
 
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).
-	notice := uistate.UseNotice()
 	remind := func(b bills.Bill, shown money.Money, dueLabel string) {
 		app := appstate.Default
 		if app == nil {
@@ -98,7 +112,6 @@ func Bills() ui.Node {
 		}
 		notice.Set(notice.Get().With(uistate.T("bills.reminderAdded", b.Name), false))
 	}
-	rev := uistate.UseDataRevision()
 
 	// Compute page-level smart insights once (not per row) so each BillRow can call
 	// smartBadgeFor with its AccountID. Bills use account IDs as the related entity
@@ -255,6 +268,14 @@ func Bills() ui.Node {
 			}()),
 		),
 	)
+}
+
+// Bills is the /bills route — a thin shell that renders BillsPanel. The shell
+// provides the heading and subtitle from the route registry (nav.bills /
+// screen.billsSub); BillsPanel owns all content, hooks, and logic
+// (FEATURE_MAP §5.3/§5.7b).
+func Bills() ui.Node {
+	return ui.CreateElement(BillsPanel, BillsPanelProps{})
 }
 
 // monthLabel renders a month/year heading like "June 2026".
