@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -48,6 +49,9 @@ func Insights() ui.Node {
 	settings := app.Settings()
 	key := settings.OpenAIKey
 	pr := uistate.UsePrefs().Get().Normalize()
+	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
+	// spend calcs below can be pre-filtered consistently.
+	insightsScopeAtom := uistate.UseActiveScope()
 	useBackendAI := pr.BackendActive()
 	model := settings.OpenAIModel
 	if model == "" {
@@ -68,9 +72,17 @@ func Insights() ui.Node {
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
+	// MIA-extend (#445-9): apply the active scope to transactions so all spend
+	// calcs (income/expense, topCatSpend, highlights, merchants, chart, series)
+	// reflect the user's chosen scope. Household NW stays unscoped — it is an
+	// account-level aggregate and the scoped tile lives on the dashboard.
+	insightsSc := insightsScopeAtom.Get()
+	insightsInstOf := func(a domain.Account) string { return a.Institution }
+	insightsIDs := scope.ResolveScope(accounts, insightsSc, insightsInstOf)
+	scopedTxns := scope.ApplyScopeToTxns(txns, insightsIDs)
 	net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
 	mStart, mEnd := dateutil.MonthRange(time.Now())
-	income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
+	income, expense, _ := ledger.PeriodTotals(scopedTxns, mStart, mEnd, rates)
 	active := 0
 	for _, a := range accounts {
 		if !a.Archived {
@@ -84,7 +96,7 @@ func Insights() ui.Node {
 	// a blank box never stalls them — top spend category, a near-limit budget, and
 	// a near-target goal (C59: fuller context means more useful starter questions).
 	topCatSpend := map[string]int64{}
-	for _, t := range txns {
+	for _, t := range scopedTxns {
 		if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
 			if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
 				topCatSpend[t.CategoryID] += conv.Amount
@@ -766,7 +778,7 @@ func Insights() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	highlights := spendingHighlights(txns, app.Categories(), base, rates, viewCategoryTransactions)
+	highlights := spendingHighlights(scopedTxns, app.Categories(), base, rates, viewCategoryTransactions)
 
 	// C229: top-merchants card — drill-through sets a text/search filter on the
 	// merchant name so the transactions list shows only that payee's rows. The
@@ -777,12 +789,12 @@ func Insights() ui.Node {
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
-	topMerchantsCard := topMerchantsSpendCard(txns, base, rates, viewMerchantTransactions)
+	topMerchantsCard := topMerchantsSpendCard(scopedTxns, base, rates, viewMerchantTransactions)
 
 	// C230: monthly spending time-series chart — 6 months of expense outflow as an
 	// area sparkline. Computed once here (pure data, no hooks) and rendered in a
 	// labelled card between the highlights and anomaly sections.
-	spendTrendCard := monthlySpendingChart(txns, base, rates)
+	spendTrendCard := monthlySpendingChart(scopedTxns, base, rates)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
@@ -972,6 +984,25 @@ func Insights() ui.Node {
 		)
 	}
 
+	// MIA-extend (#445-9): when the user has an active scope show a compact
+	// muted chip so they know the figures below are filtered. Because screens
+	// cannot import app (import cycle), we build this inline using the already-
+	// read insightsSc value and the existing nav hook. No extra On* hook needed
+	// — OnClick closures over nav directly.
+	scopeNotice := Fragment()
+	if !insightsSc.IsAll() {
+		scopeNotice = Div(css.Class("scope-notice", tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2)),
+			Span(css.Class("t-caption text-dim"), uistate.T("insights.scopeNotice")),
+			Button(
+				Type("button"),
+				css.Class("btn-link t-caption text-dim"),
+				Attr("data-testid", "insights-scope-change"),
+				OnClick(func() { nav.Navigate(uistate.RoutePath("/reports")) }),
+				uistate.T("insights.scopeChangeReports"),
+			),
+		)
+	}
+
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
 		// user knows to add an account before asking questions. The chat section is still
@@ -984,6 +1015,10 @@ func Insights() ui.Node {
 				Icon:      icon.Insights,
 			}),
 		})),
+		// MIA-extend (#445-9): compact scope notice — shown when a scope is active
+		// so the user knows these figures are filtered. "Change scope in Reports →"
+		// links directly to the ScopeSelector on /reports.
+		scopeNotice,
 		// C234: "Ask a question" shortcut button — shown at the top so the entry
 		// point is above-the-fold even when highlights and pins push the chat down.
 		askShortcut,

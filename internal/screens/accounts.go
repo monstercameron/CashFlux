@@ -161,9 +161,15 @@ func Accounts() ui.Node {
 		pageXferOpen.Set(false)
 	}))
 
-	// C278: scope the displayed list to the active member when one is selected.
-	// The atom is read at a stable top-level hook position; filtering is plain code.
-	activeMemberID := uistate.UseActiveMember().Get()
+	// C278/MIA-extend (#445-8): scope the displayed list to the active scope.
+	// UseActiveScope is a state.UseAtom call — same stable hook slot as the
+	// former UseActiveMember call it replaces. Preserve legacy owner-filter
+	// semantics: when exactly one owner is scoped, pass that ID to
+	// ownerVisibleTo; otherwise show all members' accounts.
+	activeMemberID := ""
+	if s := uistate.UseActiveScope().Get(); len(s.Owners) == 1 {
+		activeMemberID = s.Owners[0]
+	}
 
 	accounts := app.Accounts()
 	txns := app.Transactions()

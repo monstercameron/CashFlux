@@ -204,6 +204,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	minpS := ui.UseState(moneyMajorOrEmpty(a.MinPayment, dec))
 	dueS := ui.UseState(intOrEmpty(a.DueDayOfMonth))
 	lenderS := ui.UseState(a.Lender)
+	institutionS := ui.UseState(a.Institution)
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
 	stabS := ui.UseState(intOrEmpty(a.StabilityScore))
@@ -227,6 +228,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	onMinp := ui.UseEvent(func(v string) { minpS.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
+	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
@@ -243,6 +245,12 @@ func AccountRow(props accountRowProps) ui.Node {
 		minpS.Set(moneyMajorOrEmpty(a.MinPayment, dec))
 		dueS.Set(intOrEmpty(a.DueDayOfMonth))
 		lenderS.Set(a.Lender)
+		// MIA-extend (#445-10): pre-fill institution from lender when blank.
+		if a.Institution == "" {
+			institutionS.Set(a.Lender)
+		} else {
+			institutionS.Set(a.Institution)
+		}
 		retS.Set(floatOrEmpty(a.ExpectedReturnAPR))
 		liqS.Set(intOrEmpty(a.LiquidityScore))
 		stabS.Set(intOrEmpty(a.StabilityScore))
@@ -293,6 +301,8 @@ func AccountRow(props accountRowProps) ui.Node {
 				cp.LockUntil = time.Time{}
 			}
 		}
+		// MIA-extend (#445-10): normalise institution name on every save.
+		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
 		props.OnSave(cp)
 		editing.Set(false)
 	}))
@@ -600,6 +610,16 @@ func AccountRow(props accountRowProps) ui.Node {
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
 				If(isLiab, labeledField(uistate.T("accounts.lender"),
 					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
+				// MIA-extend (#445-10): institution field shown for all account types.
+				labeledField(uistate.T("accounts.institution"),
+					uiw.Combobox(uiw.SuggestProps{
+						Value:       institutionS.Get(),
+						Placeholder: uistate.T("accounts.institutionHint"),
+						AriaLabel:   uistate.T("accounts.institution"),
+						OnInput:     onInstitution,
+						Options:     domain.UniqueInstitutions(props.Accounts),
+						ListID:      "inst-list-edit-" + a.ID,
+					})),
 				// Asset advanced fields: tucked behind a disclosure so the common edit
 				// path (name · owner · balance) stays short — mirrors the add form (C49).
 				If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
@@ -683,6 +703,14 @@ func AccountRow(props accountRowProps) ui.Node {
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
 				Span(css.Class("row-meta"), meta),
+				// MIA-extend (#445-10): nudge to fill missing institution.
+				If(a.Institution == "" && !a.Archived,
+					Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
+						Attr("data-testid", "set-institution-"+a.ID),
+						Title(uistate.T("accounts.setInstitution")),
+						OnClick(startEdit),
+						uistate.T("accounts.setInstitution"),
+					)),
 			),
 			// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
 			// render parenthesized for liabilities, so give the current balance an explicit accessible name

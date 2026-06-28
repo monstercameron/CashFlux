@@ -73,3 +73,17 @@ func humanizeType(t string) string {
 	}
 	return strings.ToUpper(t[:1]) + t[1:]
 }
+
+// titleCaseWords converts a string to title case (first letter of each word
+// capitalised, rest lowercased). Used when normalising free-text institution
+// names on save (MIA-extend #445-10).
+func titleCaseWords(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) == 0 {
+			continue
+		}
+		words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+	}
+	return strings.Join(words, " ")
+}

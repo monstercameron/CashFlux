@@ -6,6 +6,7 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -22,11 +23,16 @@ import (
 // position in the hook chain regardless of whether the banner is visible,
 // satisfying the framework's On*-hooks-must-not-be-in-conditionals rule.
 func ScopeBanner() uic.Node {
-	activeMember := uistate.UseActiveMember()
-	activeID := activeMember.Get()
+	// MIA-extend (#445-8): read the active scope; derive a single member ID when
+	// exactly one owner is in scope (the legacy "Viewing as <member>" case).
+	sc := uistate.UseActiveScope().Get()
+	activeID := ""
+	if len(sc.Owners) == 1 {
+		activeID = sc.Owners[0]
+	}
 
 	clearScope := uic.UseEvent(func() {
-		uistate.SetActiveMember("")
+		uistate.SetActiveScope(scope.ReportScope{})
 	})
 
 	if activeID == "" {

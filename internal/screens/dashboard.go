@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/safespend"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
@@ -77,32 +78,28 @@ func Dashboard() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
-	// L21: scope spending/income KPIs to the active member when one is selected
-	// in the top-bar switcher. Net worth is account-based so it stays household-
-	// wide regardless of the member view.
-	activeMemberAtom := uistate.UseActiveMember()
-	activeMemberID := activeMemberAtom.Get()
-	kpiTxns := txns
-	if activeMemberID != "" {
-		filtered := make([]domain.Transaction, 0, len(txns))
-		for _, t := range txns {
-			if t.MemberID == activeMemberID {
-				filtered = append(filtered, t)
-			}
-		}
-		kpiTxns = filtered
-	}
+	// MIA-extend (#445-8): apply the active report scope to accounts and
+	// transactions so KPI tiles, spending totals, and the net-worth tile all
+	// reflect the user's chosen scope (member / institution / type / account).
+	// UseActiveScope is a hook (state.UseAtom) and occupies the same stable slot
+	// as the former UseActiveMember call it replaces.
+	sc := uistate.UseActiveScope().Get()
+	instOf := func(a domain.Account) string { return a.Institution }
+	ids := scope.ResolveScope(accounts, sc, instOf)
+	kpiTxns := scope.ApplyScopeToTxns(txns, ids)
+	scopedAccounts := scope.ApplyScopeToAccounts(accounts, ids)
+	scopeSig := fmt.Sprintf("%v|%v|%v|%v", sc.Owners, sc.Institutions, sc.Types, sc.AccountIDs)
 
 	// Memoized via state.UseComputed keyed on app.Rev() — recomputes only when the
 	// dataset/FX actually changes, not on every re-render (§1.6).
-	nw := useNetWorth(app, accounts, txns, rates)
+	nw := useNetWorth(app, scopedAccounts, txns, rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 	w := uistate.UsePeriod().Get()
 	widgetCfgs := uistate.UseWidgetConfigs().Get()
 	start, end := w.Range()
-	// Memoized (§1.6): keyed on app.Rev() + the period + the active-member filter,
+	// Memoized (§1.6): keyed on app.Rev() + the period + the full scope sig,
 	// so it recomputes only when one of those changes.
-	income, expense := usePeriodTotals(app, kpiTxns, start, end, rates, activeMemberID)
+	income, expense := usePeriodTotals(app, kpiTxns, start, end, rates, scopeSig)
 
 	// W-15: trigger count-up animation on the KPI hero figures whenever the
 	// underlying values change. The sig is keyed on the four headline amounts so
@@ -144,12 +141,8 @@ func Dashboard() ui.Node {
 		}
 	}
 
-	active := 0
-	for _, a := range accounts {
-		if !a.Archived {
-			active++
-		}
-	}
+	// scopedAccounts is already non-archived (ResolveScope excludes archived IDs).
+	active := len(scopedAccounts)
 
 	// "Remind me" on the freshness nudge → create a to-do and jump to the list.
 	nav := router.UseNavigate()
@@ -170,8 +163,9 @@ func Dashboard() ui.Node {
 	})
 
 	// Net-worth change since the start of this month (end of last month).
+	// MIA-extend (#445-8): use scopedAccounts so the scoped NW drives the tile.
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
-	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
+	if prev, _ := ledger.NetWorthSeries(scopedAccounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
 		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
 			// A flat 0% reads as "nothing moved" rather than "income == spending";
 			// say so plainly with the absolute delta instead of a misleading "▲ 0%"
@@ -197,11 +191,24 @@ func Dashboard() ui.Node {
 	} else {
 		// C82: when the total folds in non-base-currency accounts, disclose that a
 		// conversion happened so the figure isn't read as a raw same-currency sum.
-		for _, ac := range accounts {
-			if !ac.Archived && ac.Currency != "" && ac.Currency != base {
+		// MIA-extend (#445-8): check scopedAccounts for the FX-disclosure signal.
+		for _, ac := range scopedAccounts {
+			if ac.Currency != "" && ac.Currency != base {
 				nwSub += " · " + uistate.T("dashboard.netWorthConverted", base)
 				break
 			}
+		}
+	}
+
+	// MIA-extend (#445-8): when a scope is active, show "vs household total: $X"
+	// as a muted second sub-label on the net-worth tile so the user can compare
+	// their scoped view to the full household at a glance.
+	// Use ledger.NetWorthExplained directly (not via the hook) to avoid
+	// registering an extra state.UseComputed slot.
+	hhNWSub := ""
+	if !sc.IsAll() {
+		if hhResult, err := ledger.NetWorthExplained(accounts, txns, rates); err == nil {
+			hhNWSub = uistate.T("dashboard.householdTotal", fmtMoney(hhResult.Net))
 		}
 	}
 
@@ -215,10 +222,21 @@ func Dashboard() ui.Node {
 			return attentionWidget(app, txns, rates, start, end, freshnessDismissals.Get(), widgetCfgs.For("attention"), attnCol, attnRow)
 		},
 		"kpi-networth": func() ui.Node {
+			// MIA-extend (#445-8): build a custom body so we can append the optional
+			// "vs household total" second sub-label when the user has an active scope.
+			nwBody := kpiBodyHero(fmtMoney(net), figTone(net), nwSub, nwTone)
+			if hhNWSub != "" {
+				nwBody = Div(
+					Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(figTone(net))),
+						Attr("data-countup", ""), fmtMoney(net)),
+					Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" "+tw.ColorClass(nwTone)), nwSub),
+					Div(ClassStr("t-caption "+tw.Fold(tw.Pt15)+" text-dim"), hhNWSub),
+				)
+			}
 			return uiw.Widget(uiw.WidgetProps{
 				ID: "kpi-networth", Title: uistate.T("dashboard.netWorth"), Draggable: true, Resizable: true,
 				GridColumn: "1", GridRow: "2", BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
-				Body: kpiBodyHero(fmtMoney(net), figTone(net), nwSub, nwTone),
+				Body: nwBody,
 			})
 		},
 		"kpi-income": func() ui.Node {

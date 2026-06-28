@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — MIA-extend [#445]: scope on dashboard + insights + institution input
+
+**Goal:** Three parts: (8) replace the ad-hoc member KPI filter on the dashboard with the full scope engine; (9) pre-filter insights txns through scope; (10) add Institution input to the account forms with Combobox autocomplete and a backfill nudge.
+
+**Dashboard scope:** Replaced the `UseActiveMember()` block with `UseActiveScope()` → `scope.ResolveScope` → `scope.ApplyScopeToTxns/ApplyScopeToAccounts`. The resolved `ids` set is AND-across-dims/OR-within; `ResolveScope` returns all non-archived IDs when `IsAll()`. `scopedAccounts` (already non-archived) flows into `useNetWorth`, `NetWorthSeries`, and the FX-loop — the old `!ac.Archived` guard is no longer needed there. The `scopeSig` string memoises `usePeriodTotals` across all four scope dimensions. The "vs household total" sub-label calls `ledger.NetWorthExplained(accounts, txns, rates)` directly — 2-return-value signature, wrapped in `if err == nil` to handle the error quietly. The kpi-networth renderer builds a custom body with the optional third sub-label only when `hhNWSub != ""`.
+
+**Insights scope:** `UseActiveScope()` inserted at hook slot 2 (after `UsePrefs()`, before `router.UseNavigate()`) — slot stable. Pre-filtered `scopedTxns` derived outside any hook and used throughout. `detectSpendingAnomalies` is a helper function that receives `txns` as a param; it's correctly scoped via the `spendingHighlights(scopedTxns,...)` call chain, not by modifying the helper internally. Inline `scopeNotice` chip avoids the `internal/app` import cycle by building the button inline.
+
+**Institution field:** `titleCaseWords` added to `format.go` (already imports `strings`). Hook positions: `institutionS := ui.UseState(...)` immediately after `lenderS`; `onInstitution := ui.UseEvent(...)` immediately after `onLender` — preserves the GWC hook-ordering invariant. `startEdit` pre-fills from Lender when Institution is blank (key UX affordance: for existing cards/loans the lender name is a reasonable institution default). `saveEdit` normalises unconditionally (all account types). The `Combobox` component from `internal/ui/inputs.go` handles `<input list> + <datalist>` natively, requires a unique `ListID` per row (`"inst-list-edit-"+a.ID`). Backfill nudge sits inside `row-main` as a `btn-link` — `startEdit` is already a captured `UseEvent` hook so calling it from an `If()` node is safe.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build ./internal/screens/ ./internal/app/ ./internal/uistate/` rc=0 (initial run had a 2-return-value error on `NetWorthExplained`, fixed by wrapping in if-err); `go test ./internal/scope/ ./internal/domain/` pass.
+
 ## 2026-06-27 — C279/C280 delta [#474]: Ghost-member guard + DRY splitter + income-split card
 
 **Context:** Three remaining deltas to close the F41 per-member umbrella (#474). The prior session had already shipped fractional ownership (`OwnershipShares`), the spending card on `/members`, and active-member scoping. These three pieces are the guard rails and the income counterpart.

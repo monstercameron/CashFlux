@@ -9,6 +9,7 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -35,12 +36,26 @@ func MemberSwitcher() uic.Node {
 		return Fragment()
 	}
 
-	activeMember := uistate.UseActiveMember()
-	current := activeMember.Get()
+	// MIA-extend (#445-8): read the active scope so the switcher preserves all
+	// non-owner dimensions (Institutions, Types, AccountIDs) when changing members.
+	scopeAtom := uistate.UseActiveScope()
+	cur := scopeAtom.Get()
+	current := ""
+	if len(cur.Owners) == 1 {
+		current = cur.Owners[0]
+	}
 
 	onChange := OnChange(func(v string) {
-		activeMember.Set(v)
-		uistate.PersistActiveMember(v)
+		var owners []string
+		if v != "" {
+			owners = []string{v}
+		}
+		uistate.SetActiveScope(scope.ReportScope{
+			Institutions: cur.Institutions,
+			Owners:       owners,
+			Types:        cur.Types,
+			AccountIDs:   cur.AccountIDs,
+		})
 	})
 
 	// Build <option> elements: "Everyone" first, then each member in store

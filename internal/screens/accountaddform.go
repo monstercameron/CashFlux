@@ -74,6 +74,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	minPayment := ui.UseState("")
 	dueDay := ui.UseState("")
 	lender := ui.UseState("")
+	institution := ui.UseState("")
 	expReturn := ui.UseState("")
 	liquidity := ui.UseState("")
 	stability := ui.UseState("")
@@ -102,6 +103,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
 	onDueDay := ui.UseEvent(func(v string) { dueDay.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lender.Set(v) })
+	onInstitution := ui.UseEvent(func(v string) { institution.Set(v) })
 	onExpReturn := ui.UseEvent(func(v string) { expReturn.Set(v) })
 	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
@@ -167,6 +169,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				}
 			}
 		}
+		// MIA-extend (#445-10): normalise institution; pre-fill from lender when blank.
+		inst := titleCaseWords(strings.TrimSpace(institution.Get()))
+		if inst == "" && acc.Lender != "" {
+			inst = titleCaseWords(acc.Lender)
+		}
+		acc.Institution = inst
 		acc.Custom = customValuesToMap(accDefs, customVals.Get())
 		if splitOwn.Get() {
 			shares := cloneSharesMap(ownerShares.Get())
@@ -192,6 +200,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		minPayment.Set("")
 		dueDay.Set("")
 		lender.Set("")
+		institution.Set("")
 		expReturn.Set("")
 		liquidity.Set("")
 		lockUntil.Set("")
@@ -327,6 +336,16 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueDay.Get()), OnInput(onDueDay)))),
 		If(isLiab, labeledField(uistate.T("accounts.lender"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lender.Get()), OnInput(onLender)))),
+		// MIA-extend (#445-10): institution field shown for all account types.
+		labeledField(uistate.T("accounts.institution"),
+			uiw.Combobox(uiw.SuggestProps{
+				Value:       institution.Get(),
+				Placeholder: uistate.T("accounts.institutionHint"),
+				AriaLabel:   uistate.T("accounts.institution"),
+				OnInput:     onInstitution,
+				Options:     domain.UniqueInstitutions(app.Accounts()),
+				ListID:      "inst-list-add",
+			})),
 		If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
 			IfElse(advOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
