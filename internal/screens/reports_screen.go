@@ -276,24 +276,10 @@ func Reports() ui.Node {
 		nwBounds = append(nwBounds, dateutil.AddMonths(curMonth, k-trendBuckets))
 	}
 	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, nwBounds, rates)
-	// x-axis labels for the NW chart: month abbreviation from nwBounds.
-	nwLabels := make([]string, 0, len(nwSeries))
-	for i := 0; i < len(nwSeries) && i < len(nwBounds); i++ {
-		nwLabels = append(nwLabels, nwBounds[i].Format("Jan"))
-	}
-	// Convert to major units (dollars) so the Y-axis ticks read "$14k" not "1400000"
-	// (C216: same fix applied to the dashboard NW chart in C16).
-	nwDiv := 1.0
-	for i := 0; i < currency.Decimals(base); i++ {
-		nwDiv *= 10
-	}
-	nw := make([]float64, len(nwSeries))
-	for i, m := range nwSeries {
-		nw[i] = float64(m.Amount) / nwDiv
-	}
-	// Net-worth composition (assets vs liabilities) as of now, for a breakdown card.
-	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
-	// Net-worth change over the most recent monthly step of the trend (last step).
+	// Net worth snapshot and period change — used in the hero zone secondary stats.
+	// The full stat-grid + composition bar + trend chart are rendered by the shared
+	// NetWorthPanel component (FEATURE_MAP §5.7b); only nwNet and nwChange stay here.
+	nwNet, _, _, _ := ledger.NetWorth(accounts, txns, rates)
 	var nwChange int64
 	if n := len(nwSeries); n >= 2 {
 		nwChange = nwSeries[n-1].Amount - nwSeries[n-2].Amount
@@ -313,12 +299,6 @@ func Reports() ui.Node {
 			out[i] = fmtMoney(money.New(int64(v), base))
 		}
 		return out
-	}
-	// nwValueLabels builds hover labels for the NW trend from the raw minor-unit
-	// series (nwSeries), independent of the major-unit nw[] used for the Y-axis.
-	nwValueLabels := make([]string, len(nwSeries))
-	for i, m := range nwSeries {
-		nwValueLabels[i] = fmtMoney(money.New(m.Amount, base))
 	}
 	pctLabels := func(vals []float64) []string {
 		out := make([]string, len(vals))
@@ -1079,55 +1059,16 @@ func Reports() ui.Node {
 					),
 				}),
 			)
-			// ── Net worth: NW composition (headline, full-width) + the two supporting
+			// ── Net worth tab: canonical NW panel (§5.7b) + the two supporting
 			// trend charts (cash-flow, savings-rate) paired side-by-side on wide
 			// screens via .reports-grid, so the tab reads as a dashboard. ──────────
-			// R52 "more chart types": an assets-vs-liabilities composition bar so the
-			// balance-sheet split reads visually, not just as three stat numbers.
-			// Assets green / liabilities red (semantic money tones, not the Tableau
-			// palette). Shown only when there's something to compare.
-			var nwCompBar ui.Node = Fragment()
-			if nwAssets.Amount != 0 || nwLiab.Amount != 0 {
-				compPairs := []struct {
-					Label  string
-					Amount int64
-				}{
-					{Label: uistate.T("accounts.assets"), Amount: absI64(nwAssets.Amount)},
-					{Label: uistate.T("dashboard.liabilities"), Amount: absI64(nwLiab.Amount)},
-				}
-				compSpec := reportsBarSpec(compPairs, decimals)
-				if len(compSpec.Series) > 0 && len(compSpec.Series[0].Points) == 2 {
-					compSpec.Series[0].Points[0].Color = "#54b884" // assets (money-positive)
-					compSpec.Series[0].Points[1].Color = "#d8716f" // liabilities (money-negative)
-				}
-				nwCompBar = uiw.Chart(uiw.ChartProps{Spec: compSpec, Height: "120px", Label: uistate.T("reports.assetsVsLiabilities"), CurrencySymbol: currency.Symbol(base)})
-			}
+			// The stat-grid + composition bar + NW trend are rendered by the shared
+			// NetWorthPanel component so the same widget appears on both the
+			// standalone /networth screen and here without duplicating computation.
 			netWorthSection := Fragment(
-				// R-11: NW composition + trend as a single headline card.
-				// C218: HTML id anchor so /networth can deep-link to this section.
-				If(len(accounts) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: uistate.T("dashboard.netWorth"),
-					Attrs: []any{Attr("id", "networth")},
-					// R52(b): a nearby drill-down — net worth composes from accounts, so
-					// link straight to /accounts to see (and adjust) what's behind the figure.
-					HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/accounts")),
-						Attr("data-testid", "networth-drill"), uistate.T("reports.viewAccounts")),
-					Body: Fragment(
-						Div(css.Class("stat-grid"),
-							stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
-							stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
-							stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
-							If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
-						),
-						// R52: assets-vs-liabilities composition bar (visual balance-sheet split).
-						nwCompBar,
-						// C217: NW trend uses its own monthly labels, not the cash-flow period labels.
-						If(len(nw) >= 2, Fragment(
-							P(css.Class("muted"), uistate.T("reports.nwTrendMonthly", trendBuckets)),
-							uiw.AreaChart(uiw.AreaChartProps{Values: nw, Stroke: "#7c83ff", GradientID: "nw-reports", Label: uistate.T("dashboard.netWorthTrend"), Labels: nwLabels, ValueLabels: nwValueLabels}),
-						)),
-					),
-				})),
+				// §5.7b: embed the canonical net-worth panel; its hooks run in their
+				// own component scope so the Reports switch/case is safe.
+				ui.CreateElement(NetWorthPanel, NetWorthPanelProps{}),
 				// Cash-flow + savings-rate trends are two supporting period charts — pair
 				// them side-by-side on wide screens (stack below 1100px). Each If(...)
 				// collapses to an empty Fragment, leaving no empty grid cell.
@@ -1485,8 +1426,3 @@ func deductibleSection(
 		),
 	})
 }
-
-// NetWorth is the dedicated /networth view. It delegates to Reports() — the
-// net-worth section inside Reports carries id="networth" (C218) so the shell
-// can scroll to it when navigating to this route directly.
-func NetWorth() ui.Node { return Reports() }

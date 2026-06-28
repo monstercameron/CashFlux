@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7a/b: real scoped /networth screen (stop aliasing Reports)
+
+**What:** `/networth` aliased `Reports()` — clicking "Net worth" in the nav opened the full four-tab Reports screen. This commit replaces the alias with a purpose-built scoped page.
+
+**Core decision — registered `NetWorthPanel` component:** The NW stat-grid + composition bar + trend chart need to appear in two places: the standalone `/networth` screen and the Reports networth tab. Per §5.7b the requirement is "compute once; render the canonical widget; everywhere else embeds it." A registered component (`ui.CreateElement(NetWorthPanel, NetWorthPanelProps{})`) gives each use site its own stable hook scope, which is critical because the Reports networth tab is inside a `switch/case` — calling hooks in a conditional parent would violate the GWC hook-ordering rule. Making it a `ui.CreateElement` component sidesteps this entirely: the panel's `UseDataRevision` hook is always at position 1 within the panel's own render, regardless of where the panel is used.
+
+**What the panel computes:** Reads `appstate.Default` directly (no props needed). Subscribes to `UseDataRevision` for live re-render on mutations. Computes `ledger.NetWorth` for the snapshot and `ledger.NetWorthSeries` for the 6-month monthly trend — both using full unscoped accounts/txns so the household balance-sheet is always complete. Builds the comp bar via `reportsBarSpec` (same function `reports_screen.go` uses). Renders: stat-grid (assets/liabilities/net-worth/change), composition bar, trend AreaChart, "View accounts" link. Returns `Fragment()` when there are no accounts.
+
+**What stays in Reports():** The hero zone (`nwNet`, `nwSeries`, `nwChange`) for the Reports hero strip remains — it's a different rendering of the same data, not a duplicate widget. The cash-flow and savings-rate supporting charts in the networth tab remain in `reports_screen.go` only.
+
+**Removed from reports_screen.go:** `nwLabels`, `nwDiv`, `nw` (the float64 slice), `nwValueLabels`, `nwCompBar`, the inline `EntityListSection` — all moved into `NetWorthPanel`. The `nwNet, nwAssets, nwLiab, _` destructuring becomes `nwNet, _, _, _` since only `nwNet` is needed for the hero zone. The `NetWorth()` alias at the bottom of `reports_screen.go` is removed (the real `NetWorth()` now lives in `networth.go`).
+
+**Files changed:** `internal/screens/networth.go` (new), `internal/screens/reports_screen.go` (edited), `CHANGELOG.md`, `DEVLOG.md`. No route registry changes, no i18n additions (all keys already existed).
+
 ## 2026-06-28 — FEATURE_MAP §5.7c dedup #3: reuse TopPayeesTrailing in insights top-merchants card
 
 **What:** The `topMerchantsSpendCard` function in `internal/screens/insights.go` contained a
