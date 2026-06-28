@@ -49,6 +49,9 @@ func DefaultItems() []Item {
 		{ID: "freshness", ColSpan: 2, RowSpan: 1},
 		{ID: "highlight", ColSpan: 2, RowSpan: 1},
 		{ID: "smart-digest", ColSpan: 2, RowSpan: 1},
+		// R25: always-on SMART anomaly hub — four detector types (balance,
+		// duplicates, spending spikes, missing transactions) without any opt-in gate.
+		{ID: "anomaly-hub", ColSpan: 2, RowSpan: 1},
 	}
 }
 

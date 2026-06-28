@@ -3,6 +3,44 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — R25/C252: anomaly-hub widget closes the dashboard gap for F35
+
+**The gap:** `/insights` already surfaced the four SMART anomaly detector types (SMART-A1 balance,
+SMART-T2 duplicates, SMART-T6 spending spikes, SMART-T7 missing transaction) via
+`smartAnomalyHighlights` (C252 landed earlier). The dashboard had `topHighlightWidget` (single
+spending anomaly from `detectSpendingAnomalies`) and the `attention` widget (feeds an `anomalyPtr`
+to `attention.Rank`), but zero coverage of the four SMART detector types. #454 was the remaining
+half of the anomaly-hub umbrella.
+
+**Implementation strategy:** Rather than exporting `smartAnomalyHighlights` and calling it from
+the dashboard (it calls `router.UseNavigate()` which is a hook — fine inside a component, but
+`smartAnomalyHighlights` is not registered as a component), we built a fresh `anomalyHubWidget`
+component that duplicates the detection logic pattern from `smartAnomalyHighlights` without copying
+its render shape. The detection core is two lines: `buildSmartInput(app, weekStart)` +
+`smartengine.Run(in, smart.EnableFreeOnly(smart.Settings{}))` — both already used in the identical
+form on `/insights`. No detection logic was duplicated; only the render shape differs (compact bento
+tile vs. full EntityListSection card).
+
+**Hook discipline:** `anomalyHubWidget` uses `router.UseNavigate()` once at the top (stable),
+builds a `toInsights` closure, and passes it as a plain `func()` prop to a separate
+`anomalyHubViewAll` sub-component (which owns its `UseEvent`). Per-row navigation is the same
+pattern: each row is a `ui.CreateElement(anomalyHubRow, ...)` carrying an `OnClick func()` — the
+row owns its `UseEvent`, no `On*` in the loop. Hook order is unconditionally stable regardless of
+how many findings are present.
+
+**Design decisions:**
+- Cap at 3 rows (glanceable; the full list is one click away on `/insights`).
+- Empty state stays always-on (`"No anomalies detected — everything looks normal."`) so the tile
+  is always meaningful in the widget manager and the zero-anomaly case reads as reassurance, not
+  nothing.
+- "View full analysis →" drill always navigates to `/insights` regardless of which anomaly type is
+  shown — consistent, predictable, and avoids diverging per-item routing from the tile.
+- Widget placed after `smart-digest` in `DefaultItems` (2×1 default span) so it shares the lower
+  grid area with other auxiliary insights.
+
+**No changes to insights.go** — all new code is additive in `dashboard.go` + `pack.go` +
+`en_anomalyhub.go`. Both build targets exit 0.
+
 ## 2026-06-27 — C33/C34/C35: self-learning categorization wired end-to-end
 
 The `internal/learntally` tally engine was already shipped (pure, tested, no syscall/js) but

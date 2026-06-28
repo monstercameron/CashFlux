@@ -289,6 +289,11 @@ func Dashboard() ui.Node {
 		},
 		"highlight":    func() ui.Node { return topHighlightWidget(txns, app.Categories(), rates) },
 		"smart-digest": func() ui.Node { return smartDigestWidget(app) },
+		// R25/C252: always-on SMART anomaly hub — four detector types (balance,
+		// duplicates, spending spikes, missing transactions) surfaced on the dashboard
+		// without any Smart opt-in gate. Shares buildSmartInput + EnableFreeOnly with
+		// the /insights version so detection is identical on both surfaces.
+		"anomaly-hub": func() ui.Node { return ui.CreateElement(anomalyHubWidget, app) },
 	}
 
 	hidden := uistate.UseHiddenWidgets().Get()
@@ -1628,4 +1633,124 @@ func dashBudgetRow(props dashBudgetRowProps) ui.Node {
 		)
 	}
 	return Div(header, bar)
+}
+
+// anomalyHubRowProps carries one SMART anomaly finding to its per-row component.
+type anomalyHubRowProps struct {
+	Insight smart.Insight
+	Route   string
+	OnClick func()
+}
+
+// anomalyHubRow renders one flagged-activity row on the dashboard anomaly-hub
+// widget. It is its own component so OnClick registers at a stable hook position
+// across the list (no On* in loops). Reuses the same visual treatment as
+// SmartAnomalyInsightRow on /insights.
+func anomalyHubRow(p anomalyHubRowProps) ui.Node {
+	navigate := ui.UseEvent(func() { p.OnClick() })
+	iconName := icon.AlertTriangle
+	if p.Insight.Severity == smart.SeverityInfo {
+		iconName = icon.AlertCircle
+	}
+	return Button(
+		css.Class("insight-row insight-row-action"),
+		Type("button"),
+		Attr("aria-label", p.Insight.Title),
+		OnClick(navigate),
+		Span(ClassStr("insight-dot text-down"), uiw.Icon(iconName, css.Class(tw.W4, tw.H4))),
+		Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart, tw.MinW0),
+			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
+			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
+		),
+	)
+}
+
+// anomalyHubViewAllProps carries the navigation callback to the drill-through button.
+type anomalyHubViewAllProps struct {
+	OnClick func()
+}
+
+// anomalyHubViewAll is the "View full analysis" link at the bottom of the widget.
+// Its own component keeps the navigate hook at a stable position outside any loop.
+func anomalyHubViewAll(p anomalyHubViewAllProps) ui.Node {
+	open := ui.UseEvent(func() { p.OnClick() })
+	return Button(
+		css.Class("btn-link t-caption", tw.Mt2, tw.SelfStart),
+		Type("button"),
+		Attr("aria-label", uistate.T("dashboard.anomalyHubViewAllAria")),
+		OnClick(open),
+		uistate.T("dashboard.anomalyHubViewAll"),
+	)
+}
+
+// anomalyHubWidget is the R25 "Flagged activity" dashboard tile. It runs the four
+// anomaly-type SMART detectors (SMART-A1 balance, SMART-T2 duplicates, SMART-T6
+// spending spikes, SMART-T7 missing transaction) unconditionally — no Smart opt-in
+// gate — and surfaces the top 1–3 findings as a compact bento widget. Drill-through
+// navigates to /insights for the full analysis. Returns a full bento tile.
+func anomalyHubWidget(app *appstate.App) ui.Node {
+	nav := router.UseNavigate()
+
+	const widgetID = "anomaly-hub"
+	const maxRows = 3
+
+	pr := uistate.UsePrefs().Get()
+	in := buildSmartInput(app, pr.WeekStartWeekday())
+	freeSettings := smart.EnableFreeOnly(smart.Settings{})
+	all := smartengine.Run(in, freeSettings)
+
+	// Keep only the four anomaly detector codes (same filter as /insights).
+	anomalyCodes := map[string]bool{
+		"SMART-A1": true,
+		"SMART-T2": true,
+		"SMART-T6": true,
+		"SMART-T7": true,
+	}
+	var flagged []smart.Insight
+	for _, ins := range all {
+		if anomalyCodes[ins.Feature] {
+			flagged = append(flagged, ins)
+		}
+	}
+
+	// Cap at maxRows so the widget stays glanceable.
+	if len(flagged) > maxRows {
+		flagged = flagged[:maxRows]
+	}
+
+	toInsights := func() { nav.Navigate(uistate.RoutePath("/insights")) }
+
+	var body ui.Node
+	if len(flagged) == 0 {
+		body = Div(
+			P(css.Class("t-body", tw.TextUp), uistate.T("dashboard.anomalyHubClear")),
+			ui.CreateElement(anomalyHubViewAll, anomalyHubViewAllProps{OnClick: toInsights}),
+		)
+	} else {
+		rows := make([]ui.Node, 0, len(flagged))
+		for _, ins := range flagged {
+			route := "/transactions"
+			if ins.Page == smart.PageAccounts {
+				route = "/accounts"
+			}
+			capturedIns := ins
+			capturedRoute := route
+			rows = append(rows, ui.CreateElement(anomalyHubRow, anomalyHubRowProps{
+				Insight: capturedIns,
+				Route:   capturedRoute,
+				OnClick: func() { nav.Navigate(uistate.RoutePath(capturedRoute)) },
+			}))
+		}
+		body = Div(
+			P(css.Class("t-caption", tw.TextDim, tw.Mb2), uistate.T("dashboard.anomalyHubHint")),
+			Div(css.Class("insight-list"), rows),
+			ui.CreateElement(anomalyHubViewAll, anomalyHubViewAllProps{OnClick: toInsights}),
+		)
+	}
+
+	return uiw.Widget(uiw.WidgetProps{
+		ID: widgetID, Title: uistate.T("dashboard.anomalyHubTitle"), Draggable: true, Resizable: true,
+		GridColumn: "1 / span 2", GridRow: "11",
+		Body: body,
+	})
 }
