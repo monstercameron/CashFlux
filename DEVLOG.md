@@ -3,6 +3,39 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C206 [F27]: Sample loan payments converted to amortizing liability transfers
+
+**Root cause:** `SampleDataset()` seeded installment loan payments as categorized expense
+transactions from checking (e.g. `catAutoLoan`, `catMortgage`, `catEducation`). The loan
+liability accounts (mortgage, Marcus's car, Priya's car, Priya's student loan) had no
+transactions posted to them, so `ledger.Balance` returned the static opening balance for each
+loan every time — the accounts never amortized.
+
+**Why that matters for /loans:** `LoansScreen` in `internal/screens/loans.go` computes the
+current principal by calling `ledger.Balance(a, txns)` for each installment loan and then feeds
+it to `payoff.AmortizeFixed`. With a frozen opening balance the amortization schedule always
+started from the original loan amount regardless of how much time had passed — a 48-month-old
+mortgage looked like it hadn't received a single payment.
+
+**The fix:** Replaced all four loan payment transactions (mortgage, student loan, carM, carP)
+with proper two-legged transfers. The out-leg posts a negative amount from checking; the in-leg
+posts a matching positive amount to the loan liability account. Since the loan's opening balance
+is a negative amount (you owe money), each positive in-leg transaction reduces the outstanding
+balance. After 48 months of $1,480 mortgage payments the outstanding balance is ~$153k lower;
+after 18 months of $620/mo the car shows ~$11k of paydown; the student loan shows ~$14k.
+
+**IDs:** New transfer IDs follow the pattern `tx-<YYYY-MM>-mortgage-out/in` etc. The old
+`tx-<YYYY-MM>-mortgage` ID (single expense leg) no longer exists, but because IDs are used
+only for idempotent re-seeding and not referenced anywhere else in the dataset (no other entity
+points at transaction IDs by value), this is safe.
+
+**What was left unchanged:** The recurring-schedule entries for the loan payments
+(`rec-carpay-m`, `rec-carpay-p`, `rec-studentloan`, `rec-mortgage`) remain as-is — they're
+informational for the bill calendar and don't affect balance computation.
+
+`go build ./...` exit 0; `go test ./internal/store/` pass. The 3 pre-existing failures in
+`dashlayout`, `screenlint`, and `validate` are unchanged and pre-date this commit.
+
 ## 2026-06-27 — R25/C252: anomaly-hub widget closes the dashboard gap for F35
 
 **The gap:** `/insights` already surfaced the four SMART anomaly detector types (SMART-A1 balance,

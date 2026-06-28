@@ -215,7 +215,22 @@ func SampleDataset() Dataset {
 		// Mortgage P&I and HOA are monthly; property tax is billed semi-annually
 		// (two installments, April & October); home insurance is an annual premium
 		// (each September) — each with its real-world cadence.
-		txn("mortgage", 1, checking, "Beacon Bank Home Loans", "Mortgage payment", catMortgage, -148000)
+		// C206: mortgage payment as a two-legged transfer so the mortgage liability
+		// balance amortizes each month. The out-leg leaves checking; the in-leg
+		// credits the mortgage account, reducing the outstanding principal.
+		{
+			dt := date(y, m, 1)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-mortgage-out", tag), AccountID: checking, Date: dt,
+				Payee: "Beacon Bank Home Loans", Desc: "Mortgage payment",
+				Amount: usd(-148000), MemberID: marcus, TransferAccountID: mortgage, Cleared: cleared(dt),
+			})
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-mortgage-in", tag), AccountID: mortgage, Date: dt,
+				Payee: "Beacon Bank Home Loans", Desc: "Mortgage payment",
+				Amount: usd(148000), MemberID: marcus, TransferAccountID: checking, Cleared: cleared(dt),
+			})
+		}
 		txn("hoa", 1, checking, "Birchwood Condo Association", "HOA dues", catHOA, -38000)
 		if m == time.April || m == time.October {
 			txn("proptax", 12, checking, "County Tax Collector", "Property tax (installment)", catPropTax, -240000)
@@ -251,7 +266,22 @@ func SampleDataset() Dataset {
 			txn("masterclass", 16, card, "MasterClass", "MasterClass", catSubs, -1800)
 		}
 		txnBy(priya, "bizsoft", 5, bizchk, "Shopify", "Shop software", catBizExp, -3900)
-		txnBy(priya, "studentloan", 5, checking, "EdFinance Servicing", "Student loan payment", catEducation, -32000)
+		// C206: student loan payment as a proper two-legged transfer so the sloan
+		// liability balance decreases each month (amortizes) instead of staying flat.
+		// The out-leg leaves checking; the in-leg credits sloan, reducing the owed balance.
+		{
+			dt := date(y, m, 5)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-studentloan-out", tag), AccountID: checking, Date: dt,
+				Payee: "EdFinance Servicing", Desc: "Student loan payment",
+				Amount: usd(-32000), MemberID: priya, TransferAccountID: sloan, Cleared: cleared(dt),
+			})
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-studentloan-in", tag), AccountID: sloan, Date: dt,
+				Payee: "EdFinance Servicing", Desc: "Student loan payment",
+				Amount: usd(32000), MemberID: priya, TransferAccountID: checking, Cleared: cleared(dt),
+			})
+		}
 
 		// --- Variable living expenses ---
 		txn("grocery1", 6, checking, "Greenfield Market", "Groceries", catGroceries, -(20000+v*1500+boolN(babyMonth, 4000)))
@@ -265,11 +295,35 @@ func SampleDataset() Dataset {
 			txnBy(priya, "gas2", 24, checking, "Chevron", "Gas (Priya's car)", catGas, -(4500 + v*400))
 		}
 		// Car payments appear only once each car is financed.
+		// C206: modeled as two-legged transfers (checking → car-loan account) so the
+		// loan liabilities amortize down each month rather than staying at their
+		// opening balances. The in-leg posts a positive amount to the loan account,
+		// reducing the outstanding balance (which started as a negative opening bal).
 		if i >= 30 { // Marcus's expensive car — financed Jan 2025
-			txn("carpay-m", 15, checking, "Apex Auto Finance", "Car payment (Marcus)", catAutoLoan, -62000)
+			dt := date(y, m, 15)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-carpay-m-out", tag), AccountID: checking, Date: dt,
+				Payee: "Apex Auto Finance", Desc: "Car payment (Marcus)",
+				Amount: usd(-62000), MemberID: marcus, TransferAccountID: carM, Cleared: cleared(dt),
+			})
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-carpay-m-in", tag), AccountID: carM, Date: dt,
+				Payee: "Apex Auto Finance", Desc: "Car payment (Marcus)",
+				Amount: usd(62000), MemberID: marcus, TransferAccountID: checking, Cleared: cleared(dt),
+			})
 		}
 		if i >= 38 { // Priya's car — financed Sep 2025
-			txnBy(priya, "carpay-p", 17, checking, "Apex Auto Finance", "Car payment (Priya)", catAutoLoan, -48000)
+			dt := date(y, m, 17)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-carpay-p-out", tag), AccountID: checking, Date: dt,
+				Payee: "Apex Auto Finance", Desc: "Car payment (Priya)",
+				Amount: usd(-48000), MemberID: priya, TransferAccountID: carP, Cleared: cleared(dt),
+			})
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-carpay-p-in", tag), AccountID: carP, Date: dt,
+				Payee: "Apex Auto Finance", Desc: "Car payment (Priya)",
+				Amount: usd(48000), MemberID: priya, TransferAccountID: checking, Cleared: cleared(dt),
+			})
 		}
 		// Car insurance: quarterly, and steps up once both cars are on the policy.
 		if int(m)%3 == 0 {
