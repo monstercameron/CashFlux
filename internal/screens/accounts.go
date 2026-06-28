@@ -183,24 +183,25 @@ func Accounts() ui.Node {
 	nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
-	var assetList, liabList, archivedList []domain.Account
+	// Liabilities now live on /debt; /accounts shows only asset-class accounts.
+	var assetList, archivedList []domain.Account
 	for _, ac := range accounts {
 		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
 			continue
 		}
-		switch {
-		case ac.Archived:
+		if ac.Class == domain.ClassLiability {
+			continue // liabilities belong on /debt
+		}
+		if ac.Archived {
 			archivedList = append(archivedList, ac)
-		case ac.Class == domain.ClassLiability:
-			liabList = append(liabList, ac)
-		default:
+		} else {
 			assetList = append(assetList, ac)
 		}
 	}
-	// Sort assets and liabilities by current balance, largest first (G3 §7), so the
-	// accounts that move net worth most sit at the top of each group instead of in
-	// insertion order. Balances are converted to base so multi-currency rows sort
-	// comparably; a missing FX rate falls back to raw minor units.
+	// Sort assets by current balance, largest first (G3 §7), so the accounts that
+	// move net worth most sit at the top instead of in insertion order. Balances are
+	// converted to base so multi-currency rows sort comparably; a missing FX rate
+	// falls back to raw minor units.
 	convBal := func(ac domain.Account) int64 {
 		bal, _ := ledger.Balance(ac, txns)
 		if c, err := rates.Convert(bal, base); err == nil {
@@ -209,7 +210,6 @@ func Accounts() ui.Node {
 		return bal.Amount
 	}
 	sort.SliceStable(assetList, func(i, j int) bool { return convBal(assetList[i]) > convBal(assetList[j]) })
-	sort.SliceStable(liabList, func(i, j int) bool { return convBal(liabList[i]) > convBal(liabList[j]) })
 
 	// Net-worth month-to-date delta (G3 §3): the change in net worth since the
 	// first of the current month, so Theo can answer "up or down this month?" at a
@@ -372,7 +372,11 @@ func Accounts() ui.Node {
 				netWorthDeltaLine(nwDelta, haveDelta),
 			),
 			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
-			stat(uistate.T("dashboard.liabilities"), fmtMoney(liabilities), "neg"),
+			// Liabilities total links to /debt rather than expanding inline (IA remap §5.3).
+			Div(css.Class("stat"),
+				A(css.Class("stat-label"), Href(uistate.RoutePath("/debt")), uistate.T("dashboard.liabilities")),
+				Div(ClassStr("stat-value neg"), fmtMoney(liabilities)),
+			),
 		),
 		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
 			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
@@ -482,10 +486,6 @@ func Accounts() ui.Node {
 			// with no glyph and no way to act from the page. The liabilities card stays a plain celebratory
 			// line below (no CTA — never nudge a new user to add debt).
 			Body:         IfElse(len(assetList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true}), Div(css.Class("rows"), MapKeyed(assetList, keyOf, renderRow))),
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("dashboard.liabilities"),
-			Body:  IfElse(len(liabList) == 0, P(css.Class("empty"), uistate.T("accounts.noLiabilities")), Div(css.Class("rows"), MapKeyed(liabList, keyOf, renderRow))),
 		}),
 		If(len(archivedList) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("accounts.archived"),
