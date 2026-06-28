@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7a: real scoped /debt page (stop aliasing Planning)
+
+**What:** `/debt` was `func DebtPlanner() ui.Node { return Planning() }` — clicking "Debt payoff" opened the full Planning kitchen sink. This commit replaces the alias with a focused "What you owe" page.
+
+**Core decision — `DebtStrategyPanel` registered component:** The snowball-vs-avalanche strategy block needs to appear in two places (/debt and /planning). Wrapping it as `ui.CreateElement(DebtStrategyPanel, ...)` gives each use site isolated hook scope — critical because the block owns `dsExtra` and `rev` state that must not bleed between consumers. `debtRateRow`/`debtRateRowProps` remain in `planning.go` (same package).
+
+**What `DebtPlanner()` shows:** (1) Total-owed hero — all non-archived liability balances FX-converted to base, plus a "Debt-free by <Month Year>" sub-line when avalanche at $0 extra is viable. (2) Compact read-only liability list sorted by balance descending — name, type badge (`acctType.<type>`), balance in neg tone, APR if set, utilization % for credit cards with a known limit, "Manage on Accounts" link. (3) `ui.CreateElement(DebtStrategyPanel, ...)`.
+
+**What stays in Planning:** Everything except the inline debt block. Two fewer hooks (`dsExtra`, `onDsExtra`) in Planning — safe because hooks are component-local and Planning mounts fresh each navigation.
+
+**Build fix:** `"fig neg " + tw.FontDisplay` wouldn't compile (`tw.FontDisplay` is `css.Rule`, not `string`). Changed to `"fig neg " + tw.Fold(tw.FontDisplay)` following the existing pattern.
+
+**Files:** `internal/screens/debt.go` (new), `internal/screens/planning.go` (edited), `internal/i18n/en.go` (4 keys), `CHANGELOG.md`, `DEVLOG.md`.
+
+
 ## 2026-06-28 — FEATURE_MAP remap, item 7: split /customize into Formulas + /fields
 
 **What:** Started executing the themed-remap proposal (docs/FEATURE_MAP.md §5). Picked the

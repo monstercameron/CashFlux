@@ -754,6 +754,12 @@ var english = Catalog{
 	"planning.totalInterest":            "Total interest",
 	"planning.totalPaid":                "Total paid",
 
+	// Debt screen (/debt — scoped "What you owe" page, FEATURE_MAP §5.7a)
+	"debt.whatYouOwe":      "What you owe",
+	"debt.totalOwed":       "Total owed",
+	"debt.noDebts":         "No debts — nice.",
+	"debt.manageAccounts":  "Manage on Accounts",
+
 	// Recurring cash flows (Planning)
 	"recurring.title":             "Recurring cash flows",
 	"recurring.hint":              "Bills, paychecks, and subscriptions that repeat. Enter a negative amount for money out, positive for money in.",
