@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -143,6 +144,11 @@ func Reports() ui.Node {
 	// the subscription; the value itself is not used here.
 	_ = uistate.UseDataRevision().Get()
 
+	// #444: active scope atom — hook called at a stable position (hook 2) so the
+	// chain never shifts across renders. Scope resolution happens after txns and
+	// accounts are available below.
+	scopeAtom := uistate.UseActiveScope()
+
 	// Navigation + filter wiring for the category drill-through (L58): clicking a
 	// category row opens /transactions pre-filtered to that category, mirroring
 	// the budgets→transactions drill (C30/C50). Hooks are called once at a stable
@@ -162,6 +168,16 @@ func Reports() ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	txns := app.Transactions()
+	accounts := app.Accounts()
+
+	// #444: resolve the active scope to a sorted set of in-scope account IDs,
+	// then derive the filtered transaction slice used by all per-period spend and
+	// series calculations. Net-worth calls keep the full txns so household NW is
+	// always the household total regardless of the chosen scope.
+	sc := scopeAtom.Get()
+	instOf := func(a domain.Account) string { return a.Institution }
+	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
+	scopedTxns := scope.ApplyScopeToTxns(txns, scopeIDs)
 
 	// Custom-field grouper: collect transaction-scoped field defs and track which
 	// one the user has chosen for the roll-up section. Defaults to the first field.
@@ -202,16 +218,16 @@ func Reports() ui.Node {
 		ps, pe = w.Shift(-1).Range()
 	}
 
-	flow, _ := reports.IncomeVsExpense(txns, cs, ce, rates)
-	rows, _ := reports.SpendingByCategory(txns, cs, ce, true, ps, pe, rates)
+	flow, _ := reports.IncomeVsExpense(scopedTxns, cs, ce, rates)
+	rows, _ := reports.SpendingByCategory(scopedTxns, cs, ce, true, ps, pe, rates)
 
 	// No-spend days: elapsed days in the period with zero spending (motivating).
-	noSpendDays := reports.NoSpendDays(txns, cs, ce, time.Now())
-	spendStats, _ := reports.SpendingStats(txns, cs, ce, rates)
+	noSpendDays := reports.NoSpendDays(scopedTxns, cs, ce, time.Now())
+	spendStats, _ := reports.SpendingStats(scopedTxns, cs, ce, rates)
 
 	// Previous comparable period flow, computed once for both the headline spending
 	// trend and the hero Net delta chip (G9.1: period-over-period context).
-	prevFlow, prevFlowErr := reports.IncomeVsExpense(txns, ps, pe, rates)
+	prevFlow, prevFlowErr := reports.IncomeVsExpense(scopedTxns, ps, pe, rates)
 	prevFlowOK := prevFlowErr == nil
 
 	// Headline spending trend vs the previous comparable period (up = worse).
@@ -239,7 +255,7 @@ func Reports() ui.Node {
 	for k := 0; k <= trendBuckets; k++ {
 		bounds = append(bounds, period.Step(w.Res, startCur, k-(trendBuckets-1)))
 	}
-	flows, _ := reports.IncomeExpenseSeries(txns, bounds, rates)
+	flows, _ := reports.IncomeExpenseSeries(scopedTxns, bounds, rates)
 	netSeries := make([]float64, len(flows))
 	for i, f := range flows {
 		netSeries[i] = float64(f.Net())
@@ -253,7 +269,7 @@ func Reports() ui.Node {
 	// Net-worth trend: always monthly, independent of the cash-flow period selector
 	// (C217). Net worth is a cumulative point-in-time series — re-bucketing it to
 	// weekly or quarterly makes no sense. We always show the last trendBuckets months.
-	accounts := app.Accounts()
+	// NW uses the full unscoped txns so the household balance-sheet is always complete.
 	curMonth := dateutil.MonthStart(time.Now())
 	nwBounds := make([]time.Time, 0, trendBuckets+1)
 	for k := 0; k <= trendBuckets; k++ {
@@ -284,7 +300,7 @@ func Reports() ui.Node {
 	}
 
 	// Savings-rate trend: percent of income kept per period.
-	srInts, _ := reports.SavingsRateSeries(txns, bounds, rates)
+	srInts, _ := reports.SavingsRateSeries(scopedTxns, bounds, rates)
 	srSeries := make([]float64, len(srInts))
 	for i, v := range srInts {
 		srSeries[i] = float64(v)
@@ -350,13 +366,13 @@ func Reports() ui.Node {
 	// over the last six *full* months (the current partial month is excluded so it
 	// doesn't understate spending). Liquid = cash-type accounts only.
 	const runwayMonths = 6
-	liquid, _ := ledger.LiquidBalance(accounts, txns, rates)
+	liquid, _ := ledger.LiquidBalance(accounts, scopedTxns, rates)
 	// curMonth already declared above for the NW trend bounds.
 	monthBounds := make([]time.Time, 0, runwayMonths+1)
 	for k := 0; k <= runwayMonths; k++ {
 		monthBounds = append(monthBounds, dateutil.AddMonths(curMonth, k-runwayMonths))
 	}
-	monthFlows, _ := reports.IncomeExpenseSeries(txns, monthBounds, rates)
+	monthFlows, _ := reports.IncomeExpenseSeries(scopedTxns, monthBounds, rates)
 	burn := reports.AverageMonthlyExpense(monthFlows)
 	runway := reports.EstimateRunway(liquid.Amount, burn)
 
@@ -401,7 +417,7 @@ func Reports() ui.Node {
 	// Reuses the shared insights detector (also behind the Insights highlights and
 	// dashboard widget), filtered to overspending.
 	var anomalyNodes []ui.Node
-	for _, a := range detectSpendingAnomalies(txns, cats, rates) {
+	for _, a := range detectSpendingAnomalies(scopedTxns, cats, rates) {
 		if a.Direction != insights.Up {
 			continue
 		}
@@ -519,7 +535,7 @@ func Reports() ui.Node {
 	}
 
 	// Top payees: where the money went by merchant/description this period.
-	payees, _ := reports.TopPayees(txns, cs, ce, rates, 8)
+	payees, _ := reports.TopPayees(scopedTxns, cs, ce, rates, 8)
 	var maxPayee int64
 	for _, p := range payees {
 		if a := absI64(p.Amount); a > maxPayee {
@@ -539,7 +555,7 @@ func Reports() ui.Node {
 	}
 
 	// Biggest individual expenses this period.
-	largest, _ := reports.LargestExpenses(txns, cs, ce, rates, 8)
+	largest, _ := reports.LargestExpenses(scopedTxns, cs, ce, rates, 8)
 	var maxExp int64
 	for _, e := range largest {
 		if a := absI64(e.Amount); a > maxExp {
@@ -563,7 +579,7 @@ func Reports() ui.Node {
 	}
 
 	// Spending by member: the household "who spent what" view this period.
-	memberSpend, _ := reports.SpendingByMember(txns, cs, ce, rates)
+	memberSpend, _ := reports.SpendingByMember(scopedTxns, cs, ce, rates)
 	memberName := make(map[string]string, len(app.Members()))
 	for _, m := range app.Members() {
 		memberName[m.ID] = m.Name
@@ -587,7 +603,7 @@ func Reports() ui.Node {
 	}
 
 	// Biggest deposits: the largest individual income transactions this period.
-	bigIncome, _ := reports.LargestIncome(txns, cs, ce, rates, 8)
+	bigIncome, _ := reports.LargestIncome(scopedTxns, cs, ce, rates, 8)
 	var maxBigIncome int64
 	for _, e := range bigIncome {
 		if a := absI64(e.Amount); a > maxBigIncome {
@@ -611,7 +627,7 @@ func Reports() ui.Node {
 	}
 
 	// Income by source: where the money comes from this period.
-	incomeRows, _ := reports.IncomeByCategory(txns, cs, ce, rates)
+	incomeRows, _ := reports.IncomeByCategory(scopedTxns, cs, ce, rates)
 	var incomeNodes []ui.Node
 	for _, r := range incomeRows {
 		if r.Amount == 0 {
@@ -739,7 +755,7 @@ func Reports() ui.Node {
 
 	// Spending-by-weekday insight: which day money tends to leave.
 	weekdayPeakLine := ""
-	if wd, err := reports.SpendingByWeekday(txns, cs, ce, rates); err == nil {
+	if wd, err := reports.SpendingByWeekday(scopedTxns, cs, ce, rates); err == nil {
 		if d, ok := reports.PeakWeekday(wd); ok {
 			weekdayPeakLine = uistate.T("reports.peakWeekday", d.String(), fmtMinor(wd[d]))
 		}
@@ -835,6 +851,9 @@ func Reports() ui.Node {
 	}
 
 	return Div(
+		// #444: Scope selector — lets the user filter all report figures by institution,
+		// owner, account type, or saved view before any of the charts render.
+		ui.CreateElement(ScopeSelector),
 		// G9.1 Item 1 — Hero zone: Net / Income / Spend as a prominent headline strip
 		// above the card flow. Savings rate, runway, no-spend days go in a secondary row.
 		Div(css.Class("reports-hero"),
@@ -929,7 +948,7 @@ func Reports() ui.Node {
 						downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, memberNm, csvAmount))
 					}),
 					opt(uistate.T("reports.taxSummary"), func() {
-						summary, _ := reports.YearTax(txns, taxYear, ys, ye, rates)
+						summary, _ := reports.YearTax(scopedTxns, taxYear, ys, ye, rates)
 						downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
 					}),
 				),
@@ -1144,8 +1163,8 @@ func Reports() ui.Node {
 					),
 					If(showAdvanced.Get(),
 						Div(
-							customFieldSpendSection(txns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
-							deductibleSection(txns, cats, cs, ce, rates, base, fmtMinor, w),
+							customFieldSpendSection(scopedTxns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
+							deductibleSection(scopedTxns, cats, cs, ce, rates, base, fmtMinor, w),
 						),
 					),
 				),

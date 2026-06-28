@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — MIA-reports+banner [#444]: wire scope into /reports + ScopeBanner + ScopeSelector
+
+**Goal:** Three-part close of the MIA reports+banner ticket: (5) feed all /reports per-period calculations through the active scope, (6) extend ScopeBanner to show multi-dimensional "Viewing:" label, (7) build the new ScopeSelector UI component.
+
+**Part (5) — /reports scope wiring:** The key structural move was to place `UseActiveScope()` as stable hook 2 in `Reports()` (unconditional, after `UseDataRevision`), then move `accounts := app.Accounts()` to immediately after `txns := app.Transactions()` so scope resolution (`ResolveScope` + `ApplyScopeToTxns`) can run before the first downstream calculation. Every per-period spend/series call now receives `scopedTxns` instead of `txns`. NW-specific calls (`NetWorthSeries`, `NetWorth`, `LiquidBalance` accounts side) deliberately keep the full unscoped slices — household net worth must always reflect the complete picture. `ui.CreateElement(ScopeSelector)` lands as the first child of the return Div, matching the zero-prop pattern used by `ScopeBanner` (`uic.CreateElement(ScopeBanner)` in `shell.go`).
+
+**Part (6) — ScopeBanner multi-dim:** The previous ScopeBanner only showed "Viewing as <member>" from the legacy member atom. The new version is driven entirely by `UseActiveScope()` and builds a `parts []string` slice — one string per non-empty scope dimension (Institutions joined by "/", Owners resolved to display names, Types converted to Title Case) — joined with " · " for the label. `bannerTypeLabel` converts snake_case domain types without pulling in any external dependency. Two hook positions remain stable and unconditional even when the component returns `Fragment()` early (`sc.IsAll()`).
+
+**Part (7) — ScopeSelector component:** Lives in `internal/screens/` (not `internal/app/`) to avoid the circular import: `app` → `screens` already exists. Nine stable top-level hooks declared in `ScopeSelector()` before any conditional rendering: `UseActiveScope`, `UseState` (×4: showSave, saveName, showAccts, selectedSV), `UseEvent` (×3: clearAll, openSave, cancelSave, toggleAccts). Three more event handlers (`svChange`, `saveConfirm`, `deleteView`) use plain closures (acceptable: GWC's `OnChange`/`OnClick` accept `any`). Per-chip `scopeChip` and per-account `scopeAcctRow` are standalone components so their `UseEvent` hooks are at stable positions. Toggle helpers return `nil` not `[]string{}` so the empty-slice-means-all `IsAll()` check continues to work correctly.
+
+**Key decision — nil vs empty slice:** `toggleStringSlice` and `toggleTypeSlice` both return `nil` when the toggle removes the last item. `scope.IsAll()` checks `len(s.Institutions) == 0 && len(s.Owners) == 0 && len(s.Types) == 0 && len(s.AccountIDs) == 0` — Go's `len(nil) == 0` means this works correctly for both nil and empty slices, but returning nil is semantically cleaner (a zero-value struct).
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build ./internal/screens/ ./internal/app/ ./internal/i18n/` rc=0; `go test ./internal/scope/ ./internal/screenlint/` both pass. screenlint ratchet held: `Div(css.Class("rows"` count unchanged; no new `Section(css.Class("card"` patterns.
+
 ## 2026-06-27 — Integrate uncommitted working-tree WIP (unblock MIA #444/#453)
 
 **Context:** After shipping #443/#358/#474/#445/#390 this run, the working tree still carried a coherent, build-and-test-green set of polish changes that prior lanes never committed (health-score `Step.Key` + tests, C290 `/privacy` route, C41/C45 Quick-Add archived filter, plus reports/i18n/PWA support). This dirty `reports_screen.go`/`app.go`/`en.go` blocked #444 (MIA ScopeSelector) and #453 — I couldn't add to those files without bundling/clobbering the lane's work.
