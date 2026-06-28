@@ -1816,50 +1816,17 @@ func insightsMerchantRow(props insightsMerchantRowProps) ui.Node {
 // own component to keep OnClick hooks at stable positions (C229).
 func topMerchantsSpendCard(txns []domain.Transaction, base string, rates currency.Rates, onDrill func(name string)) ui.Node {
 	const maxRows = 7
-	cutoff := time.Now().AddDate(0, 0, -90)
 
-	// Aggregate spend by merchant name.
-	byName := map[string]*merchantSpend{}
-	for _, t := range txns {
-		if !t.IsExpense() || t.Date.Before(cutoff) {
-			continue
-		}
-		name := strings.TrimSpace(t.Payee)
-		if name == "" {
-			name = strings.TrimSpace(t.Desc)
-		}
-		if name == "" {
-			continue
-		}
-		conv, err := rates.Convert(t.Amount.Abs(), base)
-		if err != nil {
-			continue
-		}
-		ms := byName[name]
-		if ms == nil {
-			ms = &merchantSpend{Name: name}
-			byName[name] = ms
-		}
-		ms.Total += conv.Amount
-		ms.Count++
-	}
-	if len(byName) == 0 {
+	// Delegate the 90-day trailing aggregation to the pure reports package.
+	summaries, err := reports.TopPayeesTrailing(txns, 90, time.Now(), rates, maxRows)
+	if err != nil || len(summaries) == 0 {
 		return Fragment()
 	}
 
-	// Sort descending by total, then alphabetically for stable ties.
-	merchants := make([]merchantSpend, 0, len(byName))
-	for _, ms := range byName {
-		merchants = append(merchants, *ms)
-	}
-	sort.Slice(merchants, func(i, j int) bool {
-		if merchants[i].Total != merchants[j].Total {
-			return merchants[i].Total > merchants[j].Total
-		}
-		return merchants[i].Name < merchants[j].Name
-	})
-	if len(merchants) > maxRows {
-		merchants = merchants[:maxRows]
+	// Map pure aggregation results into the local rendering type.
+	merchants := make([]merchantSpend, len(summaries))
+	for i, s := range summaries {
+		merchants[i] = merchantSpend{Name: s.Name, Total: s.Amount, Count: s.Count}
 	}
 
 	rows := MapKeyed(merchants,

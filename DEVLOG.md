@@ -3,6 +3,48 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7c dedup #3: reuse TopPayeesTrailing in insights top-merchants card
+
+**What:** The `topMerchantsSpendCard` function in `internal/screens/insights.go` contained a
+self-contained 35-line top-payee aggregation (map accumulate → sort → limit) that duplicated
+logic already housed in `internal/reports`. This refactor eliminates the duplicate.
+
+**Approach — added `TopPayeesTrailing` + `PayeeSummary` to `internal/reports/payees.go`:**
+The existing `TopPayees` function couldn't be called directly for two reasons: (1) it groups by
+`t.Desc` only (case-insensitive), while the insights card resolves names from `t.Payee` first
+(falling back to `t.Desc`) and does not case-fold; (2) it doesn't track per-payee transaction
+count, which the card displays as a secondary label. Calling `TopPayees` directly would have
+silently changed which payees appear and how they're grouped.
+
+New exported function `TopPayeesTrailing(txns, days, asOf, rates, limit) ([]PayeeSummary, error)`:
+- Uses `!t.Date.Before(cutoff)` date semantics (matching insights.go's existing behaviour exactly).
+- Resolves name as `t.Payee` → `t.Desc` fallback; skips blank names (no catchall empty-key entry).
+- No case-folding — each distinct spelling is its own entry (matches insights.go).
+- Tracks `Count int` per payee for the per-row transaction-count label.
+- Returns `[]PayeeSummary{Name, Amount int64, Count int}` — a new public type, named to avoid
+  collision with `PayeeTotal` (which only has Name + Amount and uses Desc-based grouping).
+
+**What changed:**
+- `internal/reports/payees.go`: `PayeeSummary` struct + `TopPayeesTrailing` function added before
+  `TopPayees`. Existing `TopPayees` API/behaviour unchanged.
+- `internal/reports/payees_test.go`: 7 new table-driven test cases under `TestTopPayeesTrailing`
+  using the package's existing `payeeWithFields` helper (added) + `usdRates()` / `dt()`.
+- `internal/screens/insights.go`: hand-rolled aggregation block (map build, sort, slice) replaced
+  with `reports.TopPayeesTrailing(txns, 90, time.Now(), rates, maxRows)`; result mapped to
+  `[]merchantSpend` for the unchanged rendering/drill-through path.
+
+**Decisions:**
+- `TopPayeesTrailing` is self-contained (not factored from `TopPayees`) because the name-resolution
+  and case-folding contracts differ in a way that sharing a core helper would obscure. The two
+  functions address semantically different use cases (period reports vs. insights card).
+- Error propagates from the new function; insights.go treats any error as empty (returns Fragment()),
+  consistent with how other report helpers are handled there.
+- `merchantSpend` stays as the rendering type in insights.go — the mapping (Name/Amount/Count) is
+  trivial and keeps the view code unchanged.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build -o ./web/bin/main.wasm .` rc=0;
+`go test ./...` all pass (internal/reports: 0.860s fresh run, all 7 new cases green).
+
 ## 2026-06-28 — FEATURE_MAP §5.7c dedup #1: extract runAnomalyDetectors helper
 
 **What:** Pure internal refactor removing a verbatim copy-paste of the SMART anomaly-detection
