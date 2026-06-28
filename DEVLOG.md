@@ -3,6 +3,27 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.3: drop the recurring manager from /planning
+
+**What:** The parallel agent's `/recurring` commit (`75daaea4`) extracted `RecurringManagerPanel`
+into `recurring.go` and made `Recurring()` a scoped page — but left
+`ui.CreateElement(RecurringManagerPanel, …)` embedded in `Planning()`'s return ("renders
+identically"), so the recurring manager showed on both `/recurring` and `/planning`. e2e confirmed
+the duplication. This commit removes that single embed line so `/planning` sheds recurring entirely
+(§5.3). Same shape as the debt narrowing earlier today.
+
+**Collision handling:** `recurring.go` was already committed by the other agent (`git ls-files` +
+clean status confirmed it's tracked, not uncommitted WIP). I only touched `planning.go` — a one-line
+removal — and staged just that + the e2e. Their component/page is untouched. Verified the uncommitted
+diff was exactly the embed removal before committing (no entanglement with their work).
+
+**Verify:** wasm `go build` rc=0; `e2e/verify_recurring_scoped.mjs` 5/5 — `/recurring` shows the
+manager and no Planning-only sections; `/planning` shows the forecast and no recurring manager; no
+page errors.
+
+**Planning() is now fully narrowed** — runway, affordability, forecast, what-if only. Both Planning
+aliases (`/debt`, `/recurring`) are now real scoped pages with no debt/recurring left on `/planning`.
+
 ## 2026-06-28 — FEATURE_MAP §5.7a + §5.3: real scoped /recurring; extract RecurringManagerPanel
 
 **What:** `/recurring` was a stub alias (`func Recurring() ui.Node { return Planning() }`) that

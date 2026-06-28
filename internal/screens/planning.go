@@ -611,13 +611,12 @@ func Planning() ui.Node {
 	// C168: lead with the near-term liquid cash-flow section (runway/safe-to-spend),
 	// not the 12-month net-worth chart — the payday question is more immediately
 	// actionable. forecastCard is demoted below affordability and runway.
-	// The recurring manager is now the shared RecurringManagerPanel component,
-	// owned by recurring.go (FEATURE_MAP §5.7a), so its hooks are isolated here.
+	// The recurring cash-flow manager lives at /recurring (RecurringManagerPanel in
+	// recurring.go, FEATURE_MAP §5.7a) — it is not embedded here.
 	return Div(
 		runwayCard,
 		affordCard,
 		forecastCard,
-		ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{}),
 		plansCard,
 	)
 }
