@@ -259,7 +259,8 @@ var english = Catalog{
 	"subs.lateChargesTitle":              "Charged after cancellation",
 	"subs.lateCharge":                    "You cancelled %s on %s but were charged %s on %s.",
 	"nav.documents":                      "Documents",
-	"nav.customize":                      "Customize",
+	"nav.customize":                      "Formulas",
+	"nav.fields":                         "Custom fields",
 
 	// Rail sections
 	"rail.myPages":  "My pages",
@@ -290,7 +291,8 @@ var english = Catalog{
 	"screen.splitSub":          "Split a shared expense between members",
 	"screen.insightsSub":       "AI analysis and advice",
 	"screen.documentsSub":      "Import statements and receipts with AI",
-	"screen.customizeSub":      "Custom fields and formulas",
+	"screen.customizeSub":      "Build your own metrics with formulas",
+	"screen.fieldsSub":         "Add your own fields to any entity",
 	"screen.artifactsSub":      "Images and datasets for your pages",
 	"screen.workflowsSub":      "Automate actions with triggers and rules",
 	"screen.widgetBuilderSub":  "Build a custom dashboard widget",

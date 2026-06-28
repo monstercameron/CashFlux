@@ -17,9 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/i18n"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
@@ -529,6 +529,7 @@ var hideableScreens = []struct{ LabelKey, Path string }{
 	{"nav.insights", "/insights"},
 	{"nav.documents", "/documents"},
 	{"nav.customize", "/customize"},
+	{"nav.fields", "/fields"},
 	{"nav.members", "/members"},
 	{"nav.categories", "/categories"},
 	{"nav.rules", "/rules"},

@@ -12,9 +12,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/navorder"
 	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -256,6 +256,7 @@ var railMeta = map[string]struct {
 	"/insights":       {"nav.insights", icon.Insights},
 	"/documents":      {"nav.documents", icon.Page},
 	"/customize":      {"nav.customize", icon.Customize},
+	"/fields":         {"nav.fields", icon.Tag},
 	"/artifacts":      {"nav.artifacts", icon.Page},
 	"/workflows":      {"nav.workflows", icon.Customize},
 	"/widget-builder": {"nav.widgetBuilder", icon.PlusCircle},

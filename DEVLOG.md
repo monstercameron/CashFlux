@@ -3,6 +3,48 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP remap, item 7: split /customize into Formulas + /fields
+
+**What:** Started executing the themed-remap proposal (docs/FEATURE_MAP.md §5). Picked the
+safest, fully-feasible slice first (§5.8 marked it FEASIBLE) to establish the build+e2e loop before
+the riskier god-function extractions: split the two-theme Customize super-screen into two
+single-theme pages — `/customize` = "Formulas" (the formula calculator) and a new `/fields` =
+"Custom fields" (the custom-field-definitions manager).
+
+**Why this first:** Per the §5.8 feasibility audit, `Customize()` was already a 3-line compositor of
+two discrete, file-separated functions (`FormulaCalculator` in customize_formula.go,
+`CustomFieldsManager` in customfields.go) — so the split is a route-and-label change with zero logic
+risk. It proves the pipeline end-to-end and is a real, shippable piece of the remap.
+
+**Changes:** `customize.go` narrowed `Customize()` to return `FormulaCalculator()` and added a
+`CustomFields()` thin shell (same nil-guard pattern) returning `CustomFieldsManager()`. Registered
+`/fields` in `screens.go` (Tools/Build). i18n: relabeled `nav.customize` to "Formulas" (the page now
+owns one theme, so "Customize" was ambiguous next to a sibling "Custom fields"), added `nav.fields`
++ `screen.fieldsSub`, retuned `screen.customizeSub`. Wired the new route into the two nav surfaces
+that enumerate routes explicitly: the command palette (`settings.go`) and the rail icon map
+(`shell.go`, `icon.Tag`).
+
+**Verification:** wasm `go build` rc=0; `go vet ./internal/screens` rc=0 (compiles registry_test.go
+with the new route — it asserts non-empty Label/Title + valid sub-group); native `go test
+./internal/i18n` ok. Wrote `e2e/verify_fields_split.mjs` driving headless Chromium against the
+deep-link `e2e/serve.go` server: 11/11 assertions pass — both rail entries render, `/customize`
+shows the calculator and not the fields manager, `/fields` shows the fields manager and not the
+calculator, deep-link refresh to `/fields` resolves, zero page errors.
+
+**Gotcha hit:** first e2e run failed to find the "Formulas" rail link — the server was serving a
+**stale `web/bin/main.wasm.gz`** (yesterday's build) ahead of the fresh raw `.wasm` via
+Accept-Encoding negotiation in `serve.go`. Removed the precompressed sibling (git-ignored artifact);
+re-run went green. Note for future e2e: rebuild or delete `main.wasm.{gz,br}` after a wasm rebuild.
+
+**Concurrency note:** a parallel agent is also working the FEATURE_MAP remap and has already landed
+§5.7c (scoreRingNode, runAnomalyDetectors, top-merchants dedup) and §5.7a item 2 (real `/networth`)
+on main. This commit touches a disjoint set of files (customize/fields) — no overlap; staged only my
+own files by explicit path.
+
+**Next:** the heavy items remain — de-monolith `Planning()` (~30 hooks) into scoped `/planning` +
+`/debt` + `/recurring`, and make `Insights` component-shaped for the `/assistant` merge (§5.8
+critical path). Those are NEEDS-EXTRACTION and should each be their own commit.
+
 ## 2026-06-28 — FEATURE_MAP §5.7a/b: real scoped /networth screen (stop aliasing Reports)
 
 **What:** `/networth` aliased `Reports()` — clicking "Net worth" in the nav opened the full four-tab Reports screen. This commit replaces the alias with a purpose-built scoped page.
