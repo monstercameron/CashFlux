@@ -78,6 +78,10 @@ type Account struct {
 	Scope          Scope        `json:"scope"`
 	Class          AccountClass `json:"class"`
 	Type           AccountType  `json:"type"`
+	// Institution is the name of the financial institution that holds this account
+	// (e.g. "Chase", "Wells Fargo", "Fidelity"). Optional; omitted from JSON when
+	// empty so existing stored rows round-trip to "" with no migration needed.
+	Institution    string       `json:"institution,omitempty"`
 	Currency       string       `json:"currency"`
 	OpeningBalance money.Money  `json:"openingBalance"`
 	BalanceAsOf    time.Time    `json:"balanceAsOf"`

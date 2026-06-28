@@ -3,6 +3,20 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — MIA-foundation [#443]: Account.Institution + saved views + active-scope atom
+
+**Goal:** Lay the pure-Go and UI-state infrastructure for Multi-Institution Analytics without building any UI (that's tickets #444 and #445). Three orthogonal pieces, bottom-up.
+
+**Account.Institution field:** Added as `json:",omitempty"` so all existing rows round-trip to `""` — no store migration, no schema change. Placed logically between `Type` and `Currency` on the struct. Companion `UniqueInstitutions([]Account) []string` in `account_helpers.go` returns a case-insensitively deduped, case-insensitively sorted list. The first-seen casing of each institution is preserved (so "Chase" beats a later "CHASE"). 9 table-driven tests cover empty, single, dedup, blank-skip, and sort-order cases.
+
+**Saved views (pure, scope package):** `SavedView{ID, Name, Scope}` stored as a flat `map[string]string` (id → JSON). All three operations — `ListSavedViews`, `PutSavedView`, `DeleteSavedView` — take and return maps so they are pure functions with no side effects; the caller decides where to persist the map. `ListSavedViews` skips bad-JSON entries silently. 9 tests cover round-trip, sort order, nil-map safety, bad-JSON skip, overwrite, and scope field round-trip. App facade in `internal/appstate/savedview.go` mirrors `occurrences.go` exactly: loads the outer map from settings KV (`cashflux:saved-scopes`, survives wipe), delegates to the pure helpers, saves back. Methods: `SavedViews()`, `PutSavedView(v)`, `DeleteSavedView(id)`.
+
+**Active-scope atom:** `internal/uistate/activescope.go` (`//go:build js && wasm`) mirrors `activemember.go` precisely: `UseActiveScope()` atom + `SetActiveScope()` + `persistActiveScope()` + `loadActiveScope()`. Persisted as JSON under `cashflux:active-scope`. Migration on first read: if the new key is absent but the legacy `cashflux:active-member` key exists, the member ID is promoted into `Scope.Owners`, the new key is written, and the old key is deleted. This is transparent — no UX change for existing installs. `ActiveMemberFromScope()` is the compatibility bridge: returns the single owner ID when `len(Owners)==1`, otherwise `""`.
+
+**Non-breaking path chosen:** `activemember.go` is left completely untouched. The working tree has other agents' uncommitted changes in several files; touching `activemember.go` risked a merge conflict with no benefit since the migration runs in `loadActiveScope()`. Callers that need a member-ID string for the next ticket (#444) can call `ActiveMemberFromScope()`.
+
+**What's next:** Ticket #444 wires `UseActiveScope()` into `/reports` and builds a `ScopeSelector` UI; ticket #445 extends scope to the dashboard and institution management in the account form.
+
 ## 2026-06-27 — C105 [F13]: Structured rule conditions (field/op/value matching)
 
 **Problem:** Every rule matched against a single global substring (`Match`) applied to the entire transaction text (payee + description). There was no way to write a rule like "payee IS Amazon AND amount > $50" or "account IS savings". The substring match was too blunt to be useful for power users and blocked several real categorization patterns.
