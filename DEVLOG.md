@@ -15779,3 +15779,20 @@ The `About()` function in `help.go` was a stub that just returned `HelpScreen()`
 - C291/C292 are addressed by the cloud-sync and AI disclosure cards. Full remediation of the in-settings disclosures (ungate cloudTrustLine, move keyexplainer) remains open per the F43 backlog.
 
 Wasm rc=0, 25/25 unit tests pass, gofmt clean.
+
+## 2026-06-27 — C279 [F41] #358: Fractional account ownership + income attribution
+
+Full C279 ticket. Built bottom-up per CLAUDE.md: domain → pure logic + tests → ledger wiring → UI.
+
+**What was built:**
+1. `Account.OwnershipShares map[string]int` (`internal/domain/entities.go`) — `omitempty` JSON tag, sum-to-100 invariant in doc comment, nil-safe for all pre-existing JSON. No migration needed.
+2. `SplitByShares` (`internal/ledger/shares.go`) — Hamilton/largest-remainder apportionment over integer minor units. Works on absolute value, applies sign at end so negative amounts are handled correctly. Deterministic tie-break: sort members alphabetically first, then `SliceStable` on remainders descending so equal-remainder ties resolve by member ID order.
+3. Tests (`shares_test.go`) — 11 table-driven cases: indivisible 10 across 33/33/34, zero amount, negative 60/40, negative indivisible, alpha tie-break, large indivisible. Sum invariant guard conditioned on `len(c.shares) > 0` (empty/nil shares return empty map, so sum = 0 is correct). `TestNetByOwnerFractionalShares` (`ledger_test.go`) — 60/40 joint EUR account at 1.25 rate, archived-account exclusion, owner rollup == household NetWorth.
+4. `NetByOwner` wiring (`internal/ledger/ledger.go`) — `len(a.OwnershipShares) > 0` check before the existing `OwnerID` path. SplitByShares receives the already-FX-converted base-currency amount.
+5. UI — `OwnerShareRow` standalone component in `accounts_row.go` (owns `UseEvent`, receives plain-func `OnChange` callback from `MapKeyed`). Edit form hooks (`splitOwnS`, `sharesMapS`, `onToggleSplitOwn`) hoisted above all early-return branches for stable ordering. `saveEdit` clears `OwnershipShares = nil` when split mode is off. Same pattern in `accountaddform.go`: `splitOwn`, `ownerShares`, `onToggleSplitOwn` at top-level; `add` closure validates sum == 100 before `PutAccount`; post-save resets. Sub-form only rendered when `len(app.Members()) >= 2`.
+
+**Bugs caught in tests:**
+- `TestNetByOwnerFractionalShares` was initially written with expected values 16000/4000, computing the split on EUR minor units (10000) and treating the result as USD minor directly. Corrected to 17500/5000: ledger converts €100 at 1.25 rate → $125 (12500 USD minor) before splitting, giving m1 7500 + 10000 solo = 17500, m2 5000.
+- `shares_test.go` sum invariant fired on empty/nil cases (sum 0 ≠ amountMinor). Fixed by wrapping the assertion in `if len(c.shares) > 0`.
+
+**Files changed:** `internal/domain/entities.go`, `internal/ledger/shares.go` (new), `internal/ledger/shares_test.go` (new), `internal/ledger/ledger.go`, `internal/ledger/ledger_test.go`, `internal/screens/accounts_row.go`, `internal/screens/accountaddform.go`, `internal/i18n/en_ownershares.go` (new), `CHANGELOG.md`, `DEVLOG.md`.

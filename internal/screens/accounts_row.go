@@ -216,6 +216,10 @@ func AccountRow(props accountRowProps) ui.Node {
 	// editAdvOpen tracks whether the advanced asset fields are expanded in the
 	// inline-edit form (mirrors the add form's disclosure, C49).
 	editAdvOpen := ui.UseState(false)
+	// splitOwnS / sharesMapS: fractional-ownership sub-form state. Hoisted here
+	// (not inside the editing block) so hook ordering is stable on every render.
+	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
+	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
@@ -230,6 +234,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// onOwner hook kept for stable hook ordering; SelectInput owns the change event.
 	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	onToggleEditAdv := ui.UseEvent(func() { editAdvOpen.Set(!editAdvOpen.Get()) })
+	onToggleSplitOwn := ui.UseEvent(func() { splitOwnS.Set(!splitOwnS.Get()) })
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
 		balS.Set(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -243,6 +248,8 @@ func AccountRow(props accountRowProps) ui.Node {
 		stabS.Set(intOrEmpty(a.StabilityScore))
 		lockS.Set(lockISO)
 		ownerS.Set(a.OwnerID)
+		splitOwnS.Set(len(a.OwnershipShares) > 0)
+		sharesMapS.Set(cloneSharesMap(a.OwnershipShares))
 		// Collapse advanced section on open so returning users start from a clean
 		// short form; they can expand again if they need to adjust an advanced field.
 		editAdvOpen.Set(false)
@@ -253,6 +260,13 @@ func AccountRow(props accountRowProps) ui.Node {
 		cp := a
 		cp.Name = strings.TrimSpace(nameS.Get())
 		cp.OwnerID = ownerS.Get()
+		// Persist fractional ownership shares when split mode is active;
+		// clear them when the user switches back to single-owner mode.
+		if splitOwnS.Get() {
+			cp.OwnershipShares = cloneSharesMap(sharesMapS.Get())
+		} else {
+			cp.OwnershipShares = nil
+		}
 		if ownerS.Get() == domain.GroupOwnerID {
 			cp.Scope = domain.ScopeShared
 		} else {
@@ -529,6 +543,50 @@ func AccountRow(props accountRowProps) ui.Node {
 						OnChange:  func(v string) { ownerS.Set(v) },
 						AriaLabel: uistate.T("common.owner"),
 					})),
+				// Split-ownership disclosure: available when there are 2+ members.
+				// Per-member input rows use OwnerShareRow (a standalone component)
+				// so no On* handler is called inside the MapKeyed loop (CLAUDE.md §gotchas).
+				If(len(props.Members) >= 2, func() ui.Node {
+					shareSum := 0
+					for _, v := range sharesMapS.Get() {
+						shareSum += v
+					}
+					// onShareChange is a plain func — not an On* hook — so it is safe
+					// to capture as a prop inside MapKeyed.
+					onShareChange := func(memberID string, valStr string) {
+						n, _ := strconv.Atoi(valStr)
+						m := sharesMapS.Get()
+						nm := make(map[string]int, len(m)+1)
+						for k, v := range m {
+							nm[k] = v
+						}
+						nm[memberID] = n
+						sharesMapS.Set(nm)
+					}
+					return Div(
+						Button(css.Class("btn cf-adv-toggle"), Type("button"),
+							Attr("aria-expanded", ariaBool(splitOwnS.Get())),
+							OnClick(onToggleSplitOwn),
+							IfElse(splitOwnS.Get(),
+								Text(uistate.T("account.splitOwnership")+" ▴"),
+								Text(uistate.T("account.splitOwnership")+" ▾"))),
+						If(splitOwnS.Get(), Div(
+							P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
+							MapKeyed(props.Members,
+								func(m domain.Member) any { return m.ID },
+								func(m domain.Member) ui.Node {
+									return ui.CreateElement(OwnerShareRow, ownerShareRowProps{
+										Member:   m,
+										Share:    sharesMapS.Get()[m.ID],
+										OnChange: onShareChange,
+									})
+								}),
+							If(shareSum != 100,
+								P(css.Class("err"), Attr("role", "alert"),
+									uistate.T("account.shareSumError", shareSum))),
+						)),
+					)
+				}()),
 				labeledField(uistate.T("accounts.openingBalance"),
 					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
 				// Liability-specific fields (always shown when editing a liability).
@@ -696,4 +754,49 @@ func parseMoneyOrZero(s string, dec int, cur string) money.Money {
 		return money.New(amt, cur)
 	}
 	return money.Money{Currency: cur}
+}
+
+// cloneSharesMap returns a shallow copy of src, or nil when src is nil/empty.
+// Used to initialise edit-form state without aliasing the account's map.
+func cloneSharesMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// ownerShareRowProps carries data and the callback for one member's percentage
+// field in the fractional-ownership sub-form.
+type ownerShareRowProps struct {
+	Member   domain.Member
+	Share    int    // current percentage (0–100)
+	OnChange func(memberID string, valStr string) // plain func — never an On* hook
+}
+
+// OwnerShareRow renders a single member's share-percentage input. It is a
+// standalone component so the parent can use MapKeyed over a variable-length
+// member slice without calling On* hooks inside a loop (CLAUDE.md §gotchas).
+func OwnerShareRow(props ownerShareRowProps) ui.Node {
+	onChange := ui.UseEvent(func(v string) { props.OnChange(props.Member.ID, v) })
+	shareStr := ""
+	if props.Share > 0 {
+		shareStr = strconv.Itoa(props.Share)
+	}
+	return Div(css.Class("form-grid"),
+		Style(map[string]string{"grid-template-columns": "1fr auto", "align-items": "center", "gap": "0.5rem"}),
+		Span(css.Class(tw.TextDim), props.Member.Name),
+		Label(css.Class("labeled-field"),
+			Style(map[string]string{"display": "flex", "flex-direction": "row", "align-items": "center", "gap": "0.25rem"}),
+			Input(css.Class("field"),
+				Style(map[string]string{"width": "5rem"}),
+				Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"),
+				Attr("aria-label", props.Member.Name+" "+uistate.T("account.sharePercent")),
+				Value(shareStr), OnInput(onChange)),
+			Span(css.Class(tw.TextDim), "%"),
+		),
+	)
 }

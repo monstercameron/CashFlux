@@ -419,6 +419,72 @@ func TestNetWorthRollupsMultiMemberMultiCurrencyArchived(t *testing.T) {
 	}
 }
 
+// TestNetByOwnerFractionalShares verifies that a 60/40 joint account is split
+// across two owner buckets and still aggregates correctly with FX conversion.
+func TestNetByOwnerFractionalShares(t *testing.T) {
+	// EUR→USD rate of 1.25: 1 EUR = 1.25 USD.
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.25}}
+
+	// A solo account: m1 owns it 100%.
+	solo := domain.Account{
+		ID: "solo", OwnerID: "m1", Class: domain.ClassAsset,
+		Currency: "USD", OpeningBalance: usd(10000), // $100
+	}
+	// A joint EUR account: 60% m1, 40% m2.
+	joint := domain.Account{
+		ID: "joint", OwnerID: domain.GroupOwnerID, Class: domain.ClassAsset,
+		Currency: "EUR", OpeningBalance: money.New(8000, "EUR"), // €80
+		OwnershipShares: map[string]int{"m1": 60, "m2": 40},
+	}
+	// An archived account — must not appear.
+	old := domain.Account{
+		ID: "old", OwnerID: "m1", Class: domain.ClassAsset,
+		Currency: "USD", OpeningBalance: usd(99999), Archived: true,
+	}
+
+	txns := []domain.Transaction{
+		// +€20 on the joint account → joint total becomes €100 = $125
+		{AccountID: "joint", Amount: money.New(2000, "EUR")},
+	}
+
+	got, err := NetByOwner([]domain.Account{solo, joint, old}, txns, rates)
+	if err != nil {
+		t.Fatalf("NetByOwner: %v", err)
+	}
+
+	// joint balance = €100 → $125 (12500 minor USD, since 1 EUR = 1.25 USD). Split 60/40:
+	//   m1: 12500*60/100=7500 minor USD, remainder=0 → $75
+	//   m2: 12500*40/100=5000 minor USD, remainder=0 → $50
+	// m1 total: solo $100 + joint share $75 = $175 (17500 minor)
+	// m2 total: joint share $50 (5000 minor)
+	wantM1 := usd(17500)
+	wantM2 := usd(5000)
+	if !got["m1"].Equal(wantM1) {
+		t.Errorf("m1 = %v, want %v", got["m1"], wantM1)
+	}
+	if !got["m2"].Equal(wantM2) {
+		t.Errorf("m2 = %v, want %v", got["m2"], wantM2)
+	}
+	if _, ok := got[domain.GroupOwnerID]; ok {
+		t.Error("group owner should not appear when OwnershipShares is set")
+	}
+	// Total must equal non-archived net worth.
+	var sum money.Money = money.Zero("USD")
+	for _, bal := range got {
+		sum, err = sum.Add(bal)
+		if err != nil {
+			t.Fatalf("sum: %v", err)
+		}
+	}
+	nwNet, _, _, err := NetWorth([]domain.Account{solo, joint, old}, txns, rates)
+	if err != nil {
+		t.Fatalf("NetWorth: %v", err)
+	}
+	if !sum.Equal(nwNet) {
+		t.Errorf("owner rollup sum = %v, want household net %v", sum, nwNet)
+	}
+}
+
 func TestNetWorthRollupsSumToHouseholdAndRestoreArchived(t *testing.T) {
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.20}}
 	accounts := []domain.Account{

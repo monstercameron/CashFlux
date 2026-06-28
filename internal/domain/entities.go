@@ -72,9 +72,18 @@ func (p MemberPrefs) IsZero() bool {
 // Account is anything you own (asset) or owe (liability). Optional fields apply
 // only to the relevant class; a zero value means "unset".
 type Account struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	OwnerID        string       `json:"ownerId"` // member ID, or GroupOwnerID
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OwnerID string `json:"ownerId"` // member ID, or GroupOwnerID
+
+	// OwnershipShares optionally records fractional ownership of this account as
+	// integer percentage points per member (e.g. {"m1": 60, "m2": 40}). When
+	// non-empty the values must sum to exactly 100. An empty/nil map means the
+	// account is owned wholly by OwnerID (the binary-ownership default); any
+	// stored JSON that pre-dates this field deserialises to nil with no migration
+	// needed. NetByOwner honours these shares instead of OwnerID when set.
+	OwnershipShares map[string]int `json:"ownershipShares,omitempty"`
+
 	Scope          Scope        `json:"scope"`
 	Class          AccountClass `json:"class"`
 	Type           AccountType  `json:"type"`

@@ -237,6 +237,10 @@ func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs
 // NetByOwner returns each owner's net worth (sum of their account balances in
 // base currency) keyed by owner ID — member IDs plus domain.GroupOwnerID for
 // shared accounts. Archived accounts are excluded.
+//
+// When an account has a non-empty OwnershipShares map, its base-currency
+// balance is split across the share members via SplitByShares (largest-remainder
+// Hamilton apportionment) rather than attributed wholly to OwnerID.
 func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (map[string]money.Money, error) {
 	out := make(map[string]money.Money)
 	for _, a := range accounts {
@@ -251,14 +255,31 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 		if err != nil {
 			return nil, err
 		}
-		cur, ok := out[a.OwnerID]
-		if !ok {
-			cur = money.Zero(rates.Base)
+
+		if len(a.OwnershipShares) > 0 {
+			// Fractional ownership: split the base-currency amount across share holders.
+			parts := SplitByShares(conv.Amount, a.OwnershipShares)
+			for memberID, part := range parts {
+				cur, ok := out[memberID]
+				if !ok {
+					cur = money.Zero(rates.Base)
+				}
+				if cur, err = cur.Add(money.New(part, rates.Base)); err != nil {
+					return nil, err
+				}
+				out[memberID] = cur
+			}
+		} else {
+			// Binary ownership: attribute the full balance to OwnerID.
+			cur, ok := out[a.OwnerID]
+			if !ok {
+				cur = money.Zero(rates.Base)
+			}
+			if cur, err = cur.Add(conv); err != nil {
+				return nil, err
+			}
+			out[a.OwnerID] = cur
 		}
-		if cur, err = cur.Add(conv); err != nil {
-			return nil, err
-		}
-		out[a.OwnerID] = cur
 	}
 	return out, nil
 }

@@ -79,6 +79,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	stability := ui.UseState("")
 	lockUntil := ui.UseState("")
 	advOpen := ui.UseState(false)
+	splitOwn := ui.UseState(false)
+	ownerShares := ui.UseState(map[string]int{})
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 	// C78: single-currency households hide the currency picker (L37), which otherwise
@@ -105,6 +107,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })
 	onLockUntil := ui.UseEvent(func(v string) { lockUntil.Set(v) })
 	onToggleAdv := ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
+	onToggleSplitOwn := ui.UseEvent(func() { splitOwn.Set(!splitOwn.Get()) })
 
 	accDefs := app.CustomFieldDefsFor("account")
 	onCustom := func(key, value string) {
@@ -165,6 +168,18 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			}
 		}
 		acc.Custom = customValuesToMap(accDefs, customVals.Get())
+		if splitOwn.Get() {
+			shares := cloneSharesMap(ownerShares.Get())
+			sum := 0
+			for _, v := range shares {
+				sum += v
+			}
+			if sum != 100 {
+				errMsg.Set(uistate.T("account.shareSumError", sum))
+				return
+			}
+			acc.OwnershipShares = shares
+		}
 		if err := app.PutAccount(acc); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -182,6 +197,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		lockUntil.Set("")
 		stability.Set("")
 		customVals.Set(map[string]string{})
+		splitOwn.Set(false)
+		ownerShares.Set(map[string]int{})
 		errMsg.Set("")
 		// The add modal lives in AddHost (a sibling of the Accounts screen), so
 		// closing it only re-renders AddHost. Bump the shared data revision so the
@@ -234,6 +251,50 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				OnChange:  func(v string) { owner.Set(v) },
 				AriaLabel: uistate.T("common.owner"),
 			}))),
+		// Split-ownership disclosure: available when there are 2+ members.
+		// Per-member input rows use OwnerShareRow (a standalone component)
+		// so no On* handler is called inside the MapKeyed loop (CLAUDE.md §gotchas).
+		If(len(app.Members()) >= 2, func() ui.Node {
+			shareSum := 0
+			for _, v := range ownerShares.Get() {
+				shareSum += v
+			}
+			// onShareChange is a plain func — not an On* hook — so it is safe
+			// to capture as a prop inside MapKeyed.
+			onShareChange := func(memberID string, valStr string) {
+				n, _ := strconv.Atoi(valStr)
+				m := ownerShares.Get()
+				nm := make(map[string]int, len(m)+1)
+				for k, v := range m {
+					nm[k] = v
+				}
+				nm[memberID] = n
+				ownerShares.Set(nm)
+			}
+			return Div(
+				Button(css.Class("btn cf-adv-toggle"), Type("button"),
+					Attr("aria-expanded", ariaBool(splitOwn.Get())),
+					OnClick(onToggleSplitOwn),
+					IfElse(splitOwn.Get(),
+						Text(uistate.T("account.splitOwnership")+" ▴"),
+						Text(uistate.T("account.splitOwnership")+" ▾"))),
+				If(splitOwn.Get(), Div(
+					P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
+					MapKeyed(app.Members(),
+						func(m domain.Member) any { return m.ID },
+						func(m domain.Member) ui.Node {
+							return ui.CreateElement(OwnerShareRow, ownerShareRowProps{
+								Member:   m,
+								Share:    ownerShares.Get()[m.ID],
+								OnChange: onShareChange,
+							})
+						}),
+					If(shareSum != 100 && splitOwn.Get(),
+						P(css.Class("err"), Attr("role", "alert"),
+							uistate.T("account.shareSumError", shareSum))),
+				)),
+			)
+		}()),
 		If(!singleCurrency || revealCurr.Get(), labeledField(uistate.T("accounts.currency"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   currencyOptions(app, curr.Get()),
