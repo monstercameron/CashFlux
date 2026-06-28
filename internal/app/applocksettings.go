@@ -35,6 +35,9 @@ func appLockSection(onChange func()) uic.Node {
 		}
 		actions = append(actions,
 			dataBtn(uistate.T("applock.cmdChange"), false, func() { showAppLockSetup(onChange) }),
+			// C282: passkey manager button — opens the WebAuthn PRF setup modal.
+			// Always shown when the lock is enabled so users can add/remove a passkey.
+			dataBtn(uistate.T("webauthn.manageBtn"), false, showPasskeyManager),
 			dataBtn(uistate.T("applock.cmdRemove"), true, func() {
 				disableAppLock()
 				if onChange != nil {

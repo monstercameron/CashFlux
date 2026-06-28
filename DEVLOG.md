@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C282 [#461]: WebAuthn PRF passkey local unlock
+
+**Goal:** Add fingerprint / face / device-PIN unlock as an additive second path on top of the argon2id passcode gate (#460). Build-verified only; the WebAuthn biometric ceremony was NOT runtime-tested (headless); passcode fallback preserved, no lockout path.
+
+**Non-negotiable invariants that shaped every design decision:**
+1. NO LOCKOUT — the passcode must always be a working unlock path.
+2. ADDITIVE — `datasetcrypto.go` (PBKDF2 → AES-GCM-256 dataset key) is untouched.
+3. HIDDEN on unsupported devices — `Available()` check via `isUserVerifyingPlatformAuthenticatorAvailable()` + PRF capability heuristic gates the UI.
+
+**Why "wrap the passcode" and not "wrap the dataset key"?**
+The dataset has no DEK layer — the dataset key is derived directly from the passcode via PBKDF2, so there is no separable key object to wrap. Introducing a DEK layer would touch `datasetcrypto.go`, risking the passcode path and complicating the argon2id migration just shipped. The chosen approach stores the UTF-8 passcode itself encrypted under the PRF-derived AES-256 key. On unlock, the recovered passcode goes through the same `onAppUnlocked(passcode)` function the passcode gate calls — zero change to the dataset decrypt path.
+
+**PRF approach:** `navigator.credentials.get()` with `extensions:{prf:{eval:{first:salt}}}` returns 32 bytes from the authenticator — stable for (credential, salt) pair, never extractable, never transmitted. Those 32 bytes are fed to `crypto.subtle.importKey("raw", prf32, {name:"AES-GCM", length:256})` producing a volatile in-memory CryptoKey, which encrypts the passcode string into a `prfVault{v, iv, cipher}` JSON blob. The blob is stored in localStorage (safe — meaningless without the authenticator).
+
+**Stale vault safety:** `loadAppLock().Verify(recoveredPasscode)` is called before `onAppUnlocked()`. A stale vault (passcode changed since registration) silently calls `clearPasskey()` and returns an error — user falls back to passcode input. `clearPasskey()` is also called in `enableAppLock()` and `disableAppLock()` to proactively invalidate on any passcode change.
+
+**Gate wiring:** The passkey unlock button appears between the main "Unlock" button and "Forgot passcode?" in `buildAppLockGate()`, conditionally on `hasPasskey()`. It is included in the focus trap. The "Manage passkey" button in Settings → Security → App lock calls `showPasskeyManager()` which runs `Available()` first before showing the modal.
+
+**New package:** `internal/webauthn` (js && wasm only) — pure syscall/js wrappers. No channels, no goroutines — all async via `.then()/.catch()` callback chains matching `datasetcrypto.go`'s existing pattern. All `js.Func` values Released before the outer `onDone` is called.
+
+**Pure-Go foundation:** `vaultfmt.go` has no build tag so `marshalVault`/`parseVault` are testable natively. Five test functions verify round-trip, version field presence, all parse-error branches, rejection of empty inputs, and a structural proof that vault helpers are disjoint from dataset crypto (`TestPasskeylessDatasetUnchanged`).
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build .` rc=0; `go test ./internal/app/ ./internal/screenlint/` rc=0 (vault tests pass).
+
 ## 2026-06-27 — MIA-reports+banner [#444]: wire scope into /reports + ScopeBanner + ScopeSelector
 
 **Goal:** Three-part close of the MIA reports+banner ticket: (5) feed all /reports per-period calculations through the active scope, (6) extend ScopeBanner to show multi-dimensional "Viewing:" label, (7) build the new ScopeSelector UI component.

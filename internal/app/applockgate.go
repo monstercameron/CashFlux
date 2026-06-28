@@ -142,6 +142,40 @@ func buildAppLockGate(doc js.Value) {
 	btn.Get("style").Set("cssText", "padding:0.75rem 0.8rem;min-height:44px;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
 	card.Call("appendChild", btn)
 
+	// --- WebAuthn passkey unlock (C282) ---
+	// Shown only when a credential is already registered (hasPasskey()), so
+	// users who never set up a passkey see no change. The passcode input above
+	// stays unconditionally visible — this button is purely additive.
+	passkeyBtn := js.Undefined()
+	if hasPasskey() {
+		passkeyBtn = doc.Call("createElement", "button")
+		passkeyBtn.Set("type", "button")
+		passkeyBtn.Set("textContent", uistate.T("webauthn.unlockBtn"))
+		passkeyBtn.Get("style").Set("cssText", "padding:0.75rem 0.8rem;min-height:44px;border-radius:8px;border:1px solid var(--accent,#2e8b57);background:transparent;color:var(--accent,#2e8b57);font-weight:600;cursor:pointer;")
+		passkeyBtn.Call("setAttribute", "aria-label", uistate.T("webauthn.unlockBtn"))
+		pkBtnRef := passkeyBtn // capture for closure
+		pkCb := js.FuncOf(func(js.Value, []js.Value) any {
+			// Show "Verifying…" in the shared message area while the ceremony runs.
+			if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
+				msg.Set("textContent", uistate.T("webauthn.unlockTitle"))
+				msg.Get("style").Set("color", "")
+			}
+			pkBtnRef.Set("disabled", true)
+			unlockWithPasskey(doc, gate, func(err error) {
+				pkBtnRef.Set("disabled", false)
+				if err != nil {
+					if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
+						msg.Set("textContent", uistate.T("webauthn.unlockFail"))
+						msg.Get("style").Set("color", "var(--danger,#d8716f)")
+					}
+				}
+			})
+			return nil
+		})
+		passkeyBtn.Call("addEventListener", "click", pkCb)
+		card.Call("appendChild", passkeyBtn)
+	}
+
 	forgot := doc.Call("createElement", "button")
 	forgot.Set("type", "button")
 	forgot.Set("textContent", uistate.T("applock.forgot"))
@@ -256,7 +290,12 @@ func buildAppLockGate(doc js.Value) {
 
 	// Focus trap: keep Tab within the gate's controls so a locked app's covered
 	// background can't be reached by keyboard (mirrors the FlipPanel trap).
-	focusables := []js.Value{inp, btn, forgot}
+	// Include the passkey button in the trap when it is present.
+	focusables := []js.Value{inp, btn}
+	if !passkeyBtn.IsUndefined() {
+		focusables = append(focusables, passkeyBtn)
+	}
+	focusables = append(focusables, forgot)
 	trapCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
 		if len(a) == 0 || a[0].Get("key").String() != "Tab" {
 			return nil

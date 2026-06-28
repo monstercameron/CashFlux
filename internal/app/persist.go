@@ -47,6 +47,11 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:sync-status":             true,
 	"cashflux:sync-queue":              true,
 	"cashflux:workspaces":              true,
+	// WebAuthn PRF passkey state (C282) — preserved so the passkey survives a
+	// financial-data wipe; the credential is worthless without the authenticator.
+	"cashflux:webauthn-credid": true,
+	"cashflux:webauthn-salt":   true,
+	"cashflux:webauthn-vault":  true,
 }
 
 // keptOnWipePrefixes preserves whole families: other workspaces' bundled state and

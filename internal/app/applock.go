@@ -56,6 +56,9 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	if !c.Enabled {
 		return false
 	}
+	// Invalidate any existing PRF vault so a stale wrapped passcode can't be
+	// used to unlock with the old credential (C282 lockout-safety invariant).
+	clearPasskey()
 	saveAppLock(c)
 	// Remember the passcode for the session so the dataset autosave can encrypt at
 	// rest immediately (C45), without waiting for a reload + unlock.
@@ -67,6 +70,10 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 // disableAppLock removes the passcode lock and forgets the session passcode, so
 // the next autosave writes plaintext — completing the reverse (decrypt) migration.
 func disableAppLock() {
+	// Remove the PRF vault first (C282): once the lock is gone there is no
+	// passcode to wrap, so the vault is meaningless. Clear before wiping the
+	// config so an interrupted reload can't leave a dangling vault.
+	clearPasskey()
 	saveAppLock(applock.Config{})
 	activePasscode = ""
 	migrateDatasetAtRest() // rewrite the at-rest copy as plaintext now
