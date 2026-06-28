@@ -346,16 +346,23 @@ func fmtMinorAmount(minor int64, decimals int) string {
 	return fmt.Sprintf("%d.%0*d", whole, decimals, frac)
 }
 
-// CreditScreen is the full /credit page: an overall credit-health proxy score
-// ring (C208 — local, privacy-friendly, no bureau), then a per-card
-// utilization breakdown with actionable "pay $X to reach 30%" nudges (C209),
-// and per-card utilization trend bars derived from balance snapshots (C210).
-func CreditScreen() ui.Node {
+// CreditHealthPanelProps configures CreditHealthPanel. No external props are
+// required; the panel reads appstate.Default directly.
+type CreditHealthPanelProps struct{}
+
+// CreditHealthPanel renders the credit-health proxy score ring (C208), per-card
+// utilization breakdown with actionable nudges (C209), utilization trend bars
+// (C210), and inline credit-limit editors (C211) as a registered component.
+// It owns its UseDataRevision hook so it can be embedded at two call sites
+// (/credit and /debt) without duplicating state or violating GWC hook rules.
+func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
+	// Hook declared unconditionally before any conditional return (GWC rule).
+	_ = uistate.UseDataRevision().Get()
+
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	_ = uistate.UseDataRevision().Get()
 
 	now := time.Now()
 	base := app.Settings().BaseCurrency
@@ -443,4 +450,10 @@ func CreditScreen() ui.Node {
 
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5),
 		hero, breakdown, missingNote, disclaimer)
+}
+
+// CreditScreen is the /credit route — a thin shell rendering CreditHealthPanel.
+// The panel owns all hooks and state so it can also be embedded in /debt.
+func CreditScreen() ui.Node {
+	return ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{})
 }

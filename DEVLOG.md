@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.3: fold credit + loans into /debt (CreditHealthPanel + LoansPanel)
+
+**What:** Completed the §5.3 "/debt" consolidation. `/credit` and `/loans` previously had all their
+logic in `CreditScreen()` and `LoansScreen()` top-level functions. This commit extracts those bodies
+into registered `ui.CreateElement` components (`CreditHealthPanel`, `LoansPanel`) and embeds them
+conditionally in `DebtPlanner()`.
+
+**Core decision — hook restructuring:** `CreditScreen()` and `LoansScreen()` both called
+`uistate.UseDataRevision().Get()` AFTER a `app == nil` early return, which violates GWC's rule that
+hooks must be unconditional. The extraction was the opportunity to fix this: in both panels, the
+hook is now the very first statement, before the nil guard. This makes the components correct per
+GWC and safe to mount from any call site.
+
+**Core decision — conditional embed via If():** In `DebtPlanner()`, the credit/loans sections are
+gated on `hasCreditCards` and `hasInstallmentLoans` flags accumulated while building `liabRows` (so
+we do a single pass over liabList rather than a separate loop). `If(flag, ui.CreateElement(Panel, props))`
+is safe because the panel component owns its hooks — `DebtPlanner()` itself has no hooks that would
+be destabilized by the conditional. Per the task spec: "panels are components — their hooks are
+inside them, not in DebtPlanner."
+
+**Core decision — no new i18n keys:** The section headings reuse existing keys (`nav.credit` =
+"Credit health", `screen.creditSub` for the subtitle, `nav.loans` = "Loans", `screen.loansSub`).
+This avoids touching `en.go` (risk of concurrent-agent conflict) and reuses canonical labels already
+visible in the nav rail, so users get consistent terminology.
+
+**Files changed:** `internal/screens/credit.go` (CreditHealthPanel extracted, CreditScreen thin shell),
+`internal/screens/loans.go` (LoansPanel extracted, LoansScreen thin shell),
+`internal/screens/debt.go` (hasCreditCards/hasInstallmentLoans flags + two conditional sections),
+`CHANGELOG.md`, `DEVLOG.md`.
+
 ## 2026-06-28 — FEATURE_MAP §5.7a: real scoped /debt page (stop aliasing Planning)
 
 **What:** `/debt` was `func DebtPlanner() ui.Node { return Planning() }` — clicking "Debt payoff" opened the full Planning kitchen sink. This commit replaces the alias with a focused "What you owe" page.

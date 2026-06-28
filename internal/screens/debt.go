@@ -399,10 +399,20 @@ func DebtPlanner() ui.Node {
 	// utilization if a credit card with a known limit. No per-row interactive
 	// elements here — editing stays on /accounts; no hooks needed.
 	liabRows := make([]ui.Node, 0, len(liabList))
+	var hasCreditCards bool
+	var hasInstallmentLoans bool
 	for _, ac := range liabList {
 		bal, _ := ledger.Balance(ac, txns)
 		balAbs := bal.Abs()
 		typeLabel := uistate.T("acctType." + string(ac.Type))
+
+		// Determine which optional sections to show below.
+		if ac.Type == domain.TypeCreditCard {
+			hasCreditCards = true
+		}
+		if isInstallmentLoan(ac.Type) {
+			hasInstallmentLoans = true
+		}
 
 		var aprBadge ui.Node = Fragment()
 		if ac.InterestRateAPR > 0 {
@@ -428,6 +438,9 @@ func DebtPlanner() ui.Node {
 		))
 	}
 
+	// The credit and loans panels are registered components (ui.CreateElement),
+	// so their hooks are isolated and safe to use inside conditional If() calls.
+	// Never inline hook-bearing code here — the panels own their own hook slots.
 	return Div(
 		// Hero: total owed across all liabilities + best-case debt-free date.
 		uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -448,5 +461,27 @@ func DebtPlanner() ui.Node {
 		}),
 		// Shared snowball-vs-avalanche strategy panel (also embedded in /planning).
 		ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{}),
+		// Credit health section — shown only when at least one credit card exists.
+		// CreditHealthPanel is a registered component and owns its own hooks.
+		If(hasCreditCards,
+			uiw.EntityListSection(uiw.EntityListSectionProps{
+				Title: uistate.T("nav.credit"),
+				Body: Fragment(
+					P(css.Class("muted"), uistate.T("screen.creditSub")),
+					ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
+				),
+			}),
+		),
+		// Loans section — shown only when at least one installment loan exists.
+		// LoansPanel is a registered component and owns its own hooks.
+		If(hasInstallmentLoans,
+			uiw.EntityListSection(uiw.EntityListSectionProps{
+				Title: uistate.T("nav.loans"),
+				Body: Fragment(
+					P(css.Class("muted"), uistate.T("screen.loansSub")),
+					ui.CreateElement(LoansPanel, LoansPanelProps{}),
+				),
+			}),
+		),
 	)
 }

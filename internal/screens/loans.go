@@ -271,18 +271,26 @@ func loanCard(props loanCardProps) ui.Node {
 	})
 }
 
-// LoansScreen is the /loans page: a per-account amortization summary for each
-// installment loan (TypeLoan / TypePersonalLoan / TypeMortgage) with an
-// extra-payment simulation (C204 + C205, F27).
+// LoansPanelProps configures LoansPanel. No external props are required;
+// the panel reads appstate.Default directly.
+type LoansPanelProps struct{}
+
+// LoansPanel renders a per-account amortization summary for each installment
+// loan (TypeLoan / TypePersonalLoan / TypeMortgage) with an extra-payment
+// simulation (C204 + C205, F27) as a registered component. It owns its
+// UseDataRevision hook so it can be embedded at two call sites (/loans and
+// /debt) without duplicating state or violating GWC hook rules.
 //
 // Each loan card is its own component so hooks stay at stable, unconditional
 // positions — never inside a variable-length loop.
-func LoansScreen() ui.Node {
+func LoansPanel(props LoansPanelProps) ui.Node {
+	// Hook declared unconditionally before any conditional return (GWC rule).
+	_ = uistate.UseDataRevision().Get()
+
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	_ = uistate.UseDataRevision().Get()
 
 	settings := app.Settings()
 	baseCur := settings.BaseCurrency
@@ -334,4 +342,10 @@ func LoansScreen() ui.Node {
 	}
 
 	return Div(append([]any{css.Class(tw.Flex, tw.FlexCol, tw.Gap5)}, cards...)...)
+}
+
+// LoansScreen is the /loans route — a thin shell rendering LoansPanel.
+// The panel owns all hooks and state so it can also be embedded in /debt.
+func LoansScreen() ui.Node {
+	return ui.CreateElement(LoansPanel, LoansPanelProps{})
 }
