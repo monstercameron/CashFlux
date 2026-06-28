@@ -144,54 +144,22 @@ func creditProxyColor(r credithealth.Result) string {
 	return fmt.Sprintf("hsl(%d, 64%%, 52%%)", creditHue(r.ProxyScore))
 }
 
-// creditScoreRing renders the circular proxy-score gauge as an SVG, matching
-// the design of healthRing in health.go. size is the outer pixel diameter.
+// creditScoreRing renders the circular proxy-score gauge as an SVG, delegating
+// the shared geometry to scoreRingNode (FEATURE_MAP §5.7c). This wrapper is
+// responsible only for deriving the credit-specific color, figure text, and
+// R52/R64 aria label.
 func creditScoreRing(r credithealth.Result, size int) ui.Node {
-	const radius = 52.0
-	const circ = 2 * 3.141592653589793 * radius
 	pct := float64(r.ProxyScore)
-	offset := circ * (1 - pct/100)
 	color := creditProxyColor(r)
 	figure := fmt.Sprintf("%d", r.ProxyScore)
-	px := fmt.Sprintf("%dpx", size)
-
 	// R52/R64 a11y: label the ring (role=img + one-sentence name) rather than
 	// hiding it; the overlay number below is aria-hidden so the score isn't read
 	// twice. Mirrors the healthRing fix.
-	ring := Svg(
-		Attr("viewBox", "0 0 120 120"),
-		Attr("width", px), Attr("height", px),
-		Attr("role", "img"), Attr("aria-label", uistate.T("credit.ringLabel", r.ProxyScore, string(r.Band))),
-		// Faint full track.
-		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
-			Attr("fill", "none"), Attr("stroke", "var(--line, #2a2a2d)"), Attr("stroke-width", "10")),
-		// Score arc — starts at 12 o'clock (rotate -90), rounded cap.
-		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
-			Attr("fill", "none"), Attr("stroke", color), Attr("stroke-width", "10"),
-			Attr("stroke-linecap", "round"),
-			Attr("stroke-dasharray", fmt.Sprintf("%.2f", circ)),
-			Attr("stroke-dashoffset", fmt.Sprintf("%.2f", offset)),
-			Attr("transform", "rotate(-90 60 60)"),
-			Style(map[string]string{"transition": "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .6s ease"})),
-	)
-
-	overlay := Div(
-		// Visual duplicate of the score the ring's aria-label already announces.
-		Attr("aria-hidden", "true"),
-		Style(map[string]string{
-			"position": "absolute", "inset": "0",
-			"display": "flex", "flex-direction": "column",
-			"align-items": "center", "justify-content": "center",
-		}),
-		Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(creditBandTone(r.Band))),
-			Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure),
-		Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), uistate.T("credit.outOf100")),
-	)
-
-	return Div(
-		Style(map[string]string{"position": "relative", "width": px, "height": px, "flex": "0 0 " + px}),
-		ring, overlay,
-	)
+	ringLabel := uistate.T("credit.ringLabel", r.ProxyScore, string(r.Band))
+	centerLabel := Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(creditBandTone(r.Band))),
+		Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure)
+	subLabel := Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), uistate.T("credit.outOf100"))
+	return scoreRingNode(pct, color, size, ringLabel, centerLabel, subLabel)
 }
 
 // creditTrendBarTone returns the bar tone for a utilization pct.

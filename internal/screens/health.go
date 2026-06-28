@@ -207,21 +207,20 @@ func healthBarTone(score int) string {
 // stroked arc whose length is the score and whose color is the continuous hue. The
 // score figure is overlaid in the display font (and picks up the count-up tween via
 // the `fig` class). size is the outer pixel diameter.
+//
+// The SVG geometry is delegated to the shared scoreRingNode helper; this wrapper
+// is responsible only for deriving the health-specific color, figure text, aria
+// label, and the BandNoData / no-data handling.
 func healthRing(r healthscore.Result, size int) ui.Node {
-	const radius = 52.0
-	const circ = 2 * 3.141592653589793 * radius
 	pct := float64(r.Score)
 	if r.Band == healthscore.BandNoData {
 		pct = 0
 	}
-	offset := circ * (1 - pct/100)
 	color := healthColor(r)
 	figure := fmt.Sprintf("%d", r.Score)
 	if r.Band == healthscore.BandNoData {
 		figure = "—"
 	}
-	px := fmt.Sprintf("%dpx", size)
-
 	// R52/R64 a11y: the ring is the primary score visual, so give it a real
 	// screen-reader name (role=img + a one-sentence label with the score and band)
 	// rather than hiding it; the overlay number below is then aria-hidden so the
@@ -230,40 +229,10 @@ func healthRing(r healthscore.Result, size int) ui.Node {
 	if r.Band == healthscore.BandNoData {
 		ringLabel = uistate.T("health.ringLabelNoData")
 	}
-	ring := Svg(
-		Attr("viewBox", "0 0 120 120"),
-		Attr("width", px), Attr("height", px),
-		Attr("role", "img"), Attr("aria-label", ringLabel),
-		// Faint full track.
-		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
-			Attr("fill", "none"), Attr("stroke", "var(--line, #2a2a2d)"), Attr("stroke-width", "10")),
-		// Score arc — starts at 12 o'clock (rotate -90), rounded cap, animates length.
-		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
-			Attr("fill", "none"), Attr("stroke", color), Attr("stroke-width", "10"),
-			Attr("stroke-linecap", "round"),
-			Attr("stroke-dasharray", fmt.Sprintf("%.2f", circ)),
-			Attr("stroke-dashoffset", fmt.Sprintf("%.2f", offset)),
-			Attr("transform", "rotate(-90 60 60)"),
-			Style(map[string]string{"transition": "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .6s ease"})),
-	)
-
-	overlay := Div(
-		// Visual duplicate of the score the ring's aria-label already announces.
-		Attr("aria-hidden", "true"),
-		Style(map[string]string{
-			"position": "absolute", "inset": "0",
-			"display": "flex", "flex-direction": "column",
-			"align-items": "center", "justify-content": "center",
-		}),
-		Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(healthTextTone(r.Band))),
-			Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure),
-		Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), "out of 100"),
-	)
-
-	return Div(
-		Style(map[string]string{"position": "relative", "width": px, "height": px, "flex": "0 0 " + px}),
-		ring, overlay,
-	)
+	centerLabel := Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(healthTextTone(r.Band))),
+		Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure)
+	subLabel := Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), "out of 100")
+	return scoreRingNode(pct, color, size, ringLabel, centerLabel, subLabel)
 }
 
 // healthDeltaLine renders the "since last month" change chip from a prior score,

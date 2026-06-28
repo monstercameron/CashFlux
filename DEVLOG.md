@@ -3,6 +3,36 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7c dedup #2: extract shared scoreRingNode helper
+
+**What:** Pure internal refactor. Two screens (`internal/screens/health.go` → `healthRing`,
+`internal/screens/credit.go` → `creditScoreRing`) had a verbatim copy-paste SVG gauge
+implementation — same radius, circumference, dasharray/dashoffset arc math, rotate(−90),
+rounded linecap, and overlay layout. The `creditScoreRing` function even carried a comment
+"matching healthRing in health.go" acknowledging the duplication.
+
+**What changed:**
+- New file `internal/screens/scorering.go`: single `scoreRingNode` helper that owns all
+  fixed SVG geometry (viewBox, r=52, cx/cy=60, track circle, arc circle with animation
+  transition, aria role=img, and the overlay flex container).
+- `healthRing` rewritten as a 10-line wrapper: computes pct/color/figure/ringLabel (including
+  BandNoData → pct=0 / figure="—" / ringLabelNoData), builds the centerLabel and subLabel
+  nodes with the health tone class, then delegates to `scoreRingNode`.
+- `creditScoreRing` rewritten symmetrically: pct from ProxyScore, HSL color from
+  `creditProxyColor`, i18n sub-label from `credit.outOf100`, credit band tone class.
+
+**Decisions:**
+- Signature `scoreRingNode(pct, ringColor, size, ariaLabel, centerLabel, subLabel)` keeps
+  the callers responsible for all domain-specific values and the shared function
+  responsibility-free of any domain import.
+- The centerLabel node (including `size/3` font size) is built by the caller rather than
+  passing separate tone+figure+size args; cleaner separation — scoreRingNode never needs to
+  know about `tw.ColorClass` or `tw.FontDisplay`.
+- BandNoData handling stays entirely in health.go because it is health-domain logic; the
+  shared helper treats pct=0 as a valid input with no special meaning.
+
+**Verify:** all three gates green — `go build ./...`, WASM build, `go test ./...`.
+
 ## 2026-06-28 — C307/C309 [#464]: iOS install hint + sync conflict resolve-modal
 
 **What:** Three-part completion of R32-sync-pwa. (A) iOS "Add to Home Screen" hint. (B) Sync conflict resolve-modal with "Keep my changes" (force-push) and "Use server version" (safe pull). (C) C308 native note in TODOS.
