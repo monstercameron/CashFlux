@@ -880,7 +880,9 @@ func (a *App) transactionAutoRules() []rules.Rule {
 }
 
 // SuggestTransactionFields applies the first matching auto-categorization rule
-// to draft fields without overriding a manual category or tags.
+// to draft fields without overriding a manual category or tags. It uses the
+// legacy (text-only) match path, so it is appropriate for the quick-add suggestion
+// where no amount/account/date context is available yet.
 func (a *App) SuggestTransactionFields(text, categoryID string, tags []string) (string, []string) {
 	r := rules.FirstMatch(a.transactionAutoRules(), text)
 	if r == nil {
@@ -895,13 +897,25 @@ func (a *App) SuggestTransactionFields(text, categoryID string, tags []string) (
 	return categoryID, tags
 }
 
-// AutoCategorizeTransaction applies auto-categorization to a transaction without
-// overwriting manual category/tags. Transfers are excluded from categorization.
+// AutoCategorizeTransaction applies auto-categorization to a transaction using
+// the full structured-condition path (C105), which evaluates field/op/value
+// conditions when present and falls back to the legacy Match substring otherwise.
+// Transfers are excluded from categorization.
 func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction {
 	if t.IsTransfer() {
 		return t
 	}
-	t.CategoryID, t.Tags = a.SuggestTransactionFields(t.Payee+" "+t.Desc, t.CategoryID, t.Tags)
+	rs := a.transactionAutoRules()
+	r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
+	if r == nil {
+		return t
+	}
+	if strings.TrimSpace(t.CategoryID) == "" && r.SetCategoryID != "" {
+		t.CategoryID = r.SetCategoryID
+	}
+	if len(t.Tags) == 0 && len(r.SetTags) > 0 {
+		t.Tags = append([]string(nil), r.SetTags...)
+	}
 	return t
 }
 
@@ -1746,7 +1760,9 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		if t.IsTransfer() {
 			continue
 		}
-		r := rules.FirstMatch(rs, t.Payee+" "+t.Desc)
+		// C105: use full structured-condition matching so condition-bearing rules
+		// are evaluated with amount/account/date context on the backfill path.
+		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
 		if r == nil {
 			continue
 		}

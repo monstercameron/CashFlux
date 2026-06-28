@@ -3,6 +3,24 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C105 [F13]: Structured rule conditions (field/op/value matching)
+
+**Problem:** Every rule matched against a single global substring (`Match`) applied to the entire transaction text (payee + description). There was no way to write a rule like "payee IS Amazon AND amount > $50" or "account IS savings". The substring match was too blunt to be useful for power users and blocked several real categorization patterns.
+
+**Design:** Added `Conditions []RuleCondition` to `Rule` (omitempty, so all existing serialized rules are unaffected). A rule with non-empty Conditions ignores `Match` — the conditions evaluate AND-together. A rule with empty Conditions uses the existing `Match` substring path. Both are in `FirstMatchFull`; the old `FirstMatch` (quick-suggest path, text-only) skips condition-bearing rules entirely to avoid false suggestions when amount/account context isn't available.
+
+**Existing `Condition` type:** `conditions.go` already had a `Condition` type for keyword/amount/account matching (different design: keyword sets, not field/op/value). Kept it untouched; the new `RuleCondition` is a parallel type attached to `Rule.Conditions`. Both are now present in the package.
+
+**TxnDate wrapper:** Date conditions need a `time.Time`, but zero-time shouldn't match anything. Wrapped in `TxnDate{t time.Time}` so callers can pass `rules.NewTxnDate(t.Date)` and the evaluator checks `txnDate.t.IsZero()` before any date comparison.
+
+**Amount in minor units:** Condition values are stored as strings. `matchAmount` parses the value as `int64` (same unit as `t.Amount.Amount` — cents). The i18n hint documents this for users entering conditions.
+
+**Hook-ordering safety in the form:** The 3-slot condition UI appends 6 `UseState` calls (enabled/field/op/value × 3) and 6 `UseEvent` calls (onEnable/onValue × 3) at stable top-level positions in `ruleAddForm`. The `renderCondSlot` helper receives them as arguments (`ui.Handler` for enable/value, `func(string)` for field/op dropdowns) and wires them in. No `On*` ever registers inside a loop or conditional.
+
+**Build note:** First draft used `func(ui.Event)` and `func(string)` as handler argument types in `renderCondSlot`, but `ui.UseEvent` returns `ui.Handler` (a struct), not a bare function. Fixed by changing the signature to accept `ui.Handler` for enable/value args (passed directly to `OnChange`/`OnInput` which accept `any`), and plain `func(string)` for the SelectInput dropdowns (which call a typed callback).
+
+**Tests:** 26 cases in `TestMatchConditions` + `TestFirstMatchFull`. All pass in 0.785s native.
+
 ## 2026-06-27 — C278 [F41]: Scope accounts/budgets/goals/allocate by active member
 
 **Problem:** The `ScopeBanner` (C281) visibly advertised which member's view was active, and the dashboard already filtered KPIs and transactions by `activeMemberID`, but the four main list screens — accounts, budgets, goals, and the allocate candidates screen — ignored the atom entirely. A user switched to "Marcus" and still saw every account, every budget, and every goal from the household pool. The member-scoping feature was effectively cosmetic.
