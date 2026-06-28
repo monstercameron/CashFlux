@@ -85,7 +85,9 @@ func TestValidateBudget(t *testing.T) {
 	if is := ValidateBudget(good); !is.OK() {
 		t.Errorf("valid budget failed: %v", is)
 	}
-	is := ValidateBudget(domain.Budget{Period: "yearly", Limit: usd(0)})
+	// "yearly" equals domain.PeriodYearly and is valid — use an actually invalid
+	// period string so ValidateBudget can flag the "period" field as expected.
+	is := ValidateBudget(domain.Budget{Period: "bogus", Limit: usd(0)})
 	for _, f := range []string{"name", "ownerId", "categoryId", "scope", "period", "limit"} {
 		if !hasField(is, f) {
 			t.Errorf("expected issue for %q, got %v", f, is)

@@ -253,15 +253,19 @@ func AdminConsole() ui.Node {
 	case adminStateSignIn:
 		// §8.9 gated state: title + why it's gated + the value + one primary action
 		// (open Settings → Cloud to sign in), instead of a lone dead sentence.
-		return Section(css.Class("card admin-gate"),
-			H2(css.Class("card-title"), uistate.T("admin.signInTitle")),
-			P(css.Class("t-body text-dim"), uistate.T("admin.signInPrompt")),
-			Div(css.Class(tw.Fold(tw.Mt3)),
-				Button(css.Class("btn btn-primary"), Type("button"),
-					Attr("data-testid", "admin-signin-cta"),
-					OnClick(openCloudSettings), uistate.T("admin.signInCta")),
+		// Use uiw.Card so the scaffold guard in internal/screenlint stays clean.
+		return uiw.Card(uiw.CardProps{
+			ClassParts: []any{"admin-gate"},
+			Title:      uistate.T("admin.signInTitle"),
+			Body: Fragment(
+				P(css.Class("t-body text-dim"), uistate.T("admin.signInPrompt")),
+				Div(css.Class(tw.Fold(tw.Mt3)),
+					Button(css.Class("btn btn-primary"), Type("button"),
+						Attr("data-testid", "admin-signin-cta"),
+						OnClick(openCloudSettings), uistate.T("admin.signInCta")),
+				),
 			),
-		)
+		})
 
 	case adminStateForbidden:
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{
