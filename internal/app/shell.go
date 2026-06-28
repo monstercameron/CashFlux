@@ -268,6 +268,10 @@ var railMeta = map[string]struct {
 	"/appearance":     {"nav.appearance", icon.Appearance},
 	"/about":          {"nav.about", icon.HelpCircle},
 	"/admin":          {"nav.admin", icon.Settings},
+	// IA-remap §5.6: three new hub routes on the Tools rail.
+	"/assistant": {"nav.assistant", icon.Sparkles},
+	"/household": {"nav.household", icon.Users},
+	"/studio":    {"nav.studio", icon.Customize},
 }
 
 // navGroup builds the rail items for one screen group, in registry order. The
@@ -335,13 +339,15 @@ func systemNav() []railItem { return navGroup(screens.GroupSystem) }
 func toolSubGroupLabel(sg string) string {
 	switch sg {
 	case screens.SubGroupPlan:
-		return uistate.T("rail.subPlan")
-	case screens.SubGroupBills:
-		return uistate.T("rail.subBills")
-	case screens.SubGroupData:
-		return uistate.T("rail.subData")
+		return uistate.T("nav.toolsPlan")
+	case screens.SubGroupUnderstand:
+		return uistate.T("nav.toolsUnderstand")
 	case screens.SubGroupBuild:
-		return uistate.T("rail.subBuild")
+		return uistate.T("rail.subBuild") // "Build" — key already defined in en.go
+	case screens.SubGroupData:
+		return uistate.T("nav.toolsData")
+	case screens.SubGroupBills:
+		return uistate.T("rail.subBills") // retained; no rail routes currently use it
 	}
 	return sg
 }

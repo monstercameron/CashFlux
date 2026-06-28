@@ -3,6 +3,45 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.6 capstone: IA-remap route wiring + rail regroup
+
+**What:** This is the capstone integration commit of the §5 IA remap. The content work — real scoped
+pages for /debt, /recurring, /networth; the /assistant, /household, and /studio hub views — was
+completed across approximately 13 commits by parallel worktree agents. This commit wires the route
+registry and rail nav to reflect that finished work.
+
+**Three files changed:**
+
+1. `internal/screens/screens.go` — Route registry rewritten.
+   - Added `SubGroupUnderstand = "understand"` const. `SubGroupBills` kept (const stability; no
+     rail routes use it now).
+   - `ToolsSubGroups` reordered: `{Plan, Understand, Build, Data}`.
+   - `All()` fully rebuilt: PRIMARY unchanged (Dashboard/Transactions/Accounts/Budgets/Goals/
+     Todo/Notifications); TOOLS split into 4 sub-groups (Plan: 5, Understand: 4, Build: 4, Data:
+     5); SYSTEM trimmed to 5 (members, categories, rules migrated out); 13 routes moved off-rail
+     (no Group — still routable via direct URL or hub deep-links).
+
+2. `internal/app/shell.go` — Two targeted edits.
+   - `toolSubGroupLabel`: updated Plan/Data labels to new i18n keys; added Understand case;
+     kept Build reusing the existing `rail.subBuild` key (value "Build" unchanged).
+   - `railMeta`: added entries for /assistant (Sparkles), /household (Users), /studio (Customize)
+     so the three new hub routes show proper icons in the rail.
+
+3. `internal/i18n/i18n_iaremap.go` — New file, init-merge pattern. 7 keys: nav.household,
+   screen.householdSub, nav.studio, screen.studioSub, nav.toolsUnderstand, nav.toolsPlan,
+   nav.toolsData. Keys in i18n_assistant.go (nav.assistant / screen.assistantSub) and en.go
+   (rail.subBuild) were verified present — not redefined to avoid the duplicate-key init panic.
+
+**Why off-rail instead of removed?** The consolidated sub-routes (credit, loans, bills,
+subscriptions, insights, smart, members, split, widget-builder, widget-manager, documents,
+duplicates, plans) remain registered with Title/Subtitle/View so: (a) deep links still work, (b)
+page headings still render correctly, (c) hub pages that embed the panels via ui.CreateElement can
+navigate to the canonical URL for breadcrumb and history. Removing them entirely would break any
+bookmarks and the panel-level drill-through links.
+
+**Build verification:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build -o ./web/bin/main.wasm .`
+rc=0; `go test ./...` all pass including `internal/i18n` (catalog validates for duplicate keys).
+
 ## 2026-06-28 — FEATURE_MAP §5.3/§5.7b: tabbed /recurring hub — Bills + Subscriptions folded in
 
 **What:** The `/recurring` page previously showed only `RecurringManagerPanel` (the scheduled
