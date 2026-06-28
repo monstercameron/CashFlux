@@ -177,6 +177,10 @@ func Allocate() ui.Node {
 	incomeNudgeDismissed := ui.UseState(false)
 	dismissIncomeNudge := ui.UseEvent(Prevent(func() { incomeNudgeDismissed.Set(true) }))
 
+	// C278: scope candidates to the active member when one is selected.
+	// Atom read at a stable top-level hook position; filtering is plain code below.
+	activeMemberID := uistate.UseActiveMember().Get()
+
 	// Compute this month's income once (pure read — no hooks).
 	settings0 := app.Settings()
 	base0 := settings0.BaseCurrency
@@ -275,6 +279,12 @@ func Allocate() ui.Node {
 		if a.Archived {
 			continue
 		}
+		// C278: when a member view is active, show only that member's accounts plus
+		// shared (group) accounts. ownerVisibleTo keeps group-owned items visible
+		// to every member view, consistent with the dashboard's scoping convention.
+		if !ownerVisibleTo(a.OwnerID, activeMemberID) {
+			continue
+		}
 		if a.Class == domain.ClassLiability {
 			if a.InterestRateAPR > 0 {
 				cands = append(cands, allocate.Candidate{
@@ -296,6 +306,10 @@ func Allocate() ui.Node {
 	// Unfinished goals are candidates too — funding them is a place to put money.
 	for _, g := range app.Goals() {
 		if done, _ := goalsvc.IsComplete(g); done {
+			continue
+		}
+		// C278: scope goals to the active member (same convention as accounts above).
+		if !ownerVisibleTo(g.OwnerID, activeMemberID) {
 			continue
 		}
 		var remaining int64

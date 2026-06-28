@@ -60,6 +60,10 @@ func Goals() ui.Node {
 	// hunting for the FAB quick-add panel).
 	addGoal := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("goal") }))
 
+	// C278: scope the displayed list to the active member when one is selected.
+	// Atom read at a stable top-level hook position; filtering is plain code below.
+	activeMemberID := uistate.UseActiveMember().Get()
+
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -181,7 +185,16 @@ func Goals() ui.Node {
 		}
 	}
 
-	allGoals := app.Goals()
+	rawGoals := app.Goals()
+	// C278: when a member view is active, show only that member's goals plus
+	// shared (group) goals. ownerVisibleTo keeps group-owned goals visible
+	// to every member view, consistent with the dashboard's scoping convention.
+	allGoals := make([]domain.Goal, 0, len(rawGoals))
+	for _, g := range rawGoals {
+		if ownerVisibleTo(g.OwnerID, activeMemberID) {
+			allGoals = append(allGoals, g)
+		}
+	}
 	categories := app.Categories()
 
 	// Partition into active (non-archived) and achieved (archived).

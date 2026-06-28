@@ -3,6 +3,22 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C278 [F41]: Scope accounts/budgets/goals/allocate by active member
+
+**Problem:** The `ScopeBanner` (C281) visibly advertised which member's view was active, and the dashboard already filtered KPIs and transactions by `activeMemberID`, but the four main list screens — accounts, budgets, goals, and the allocate candidates screen — ignored the atom entirely. A user switched to "Marcus" and still saw every account, every budget, and every goal from the household pool. The member-scoping feature was effectively cosmetic.
+
+**Approach:** Read `UseActiveMember().Get()` once at a stable top-level hook position in each of the four screen functions, then filter in plain Go code before building any list or partition. This is identical to the pattern already used by `dashboard.go` (L21 / lines 83–94). No conditional hooks, no atom reads inside loops — the GWC hook-ordering constraint is fully respected.
+
+**Shared helper:** Grepped for any existing owner-match helpers (`ownerVisibleTo`, `memberOwned`, `forMember`, `ByOwner`, `filterOwner`, `memberFilter`) — none existed. Added `ownerVisibleTo(ownerID, activeMemberID string) bool` to `internal/screens/format.go` alongside the existing money formatting helpers. Logic: if `activeMemberID == ""` (everyone view) return true unconditionally; else return true if `ownerID == activeMemberID` or `ownerID == domain.GroupOwnerID`. The `domain` import was not previously in `format.go` — added it.
+
+**Per-screen decisions:**
+- `accounts.go`: hook goes before `accounts := app.Accounts()`, filter is a guard at the top of the `for _, ac := range accounts` partition loop (skip non-visible accounts before the archived/liability/asset branch).
+- `budgets.go`: hook goes after the `errMsg := ui.UseState("")` hook; `app.Budgets()` renamed `allBudgets`; a filtered `budgets` slice is built before the rest of the render — downstream code already used the name `budgets` so no other renames needed.
+- `goals.go`: hook goes after the `addGoal := ui.UseEvent(...)` hook; `app.Goals()` renamed `rawGoals`; filtered result kept as `allGoals` (already the downstream name).
+- `allocate.go`: hook goes after the `dismissIncomeNudge` hook; two loops get a filter guard — one for account candidates, one for goal candidates.
+
+**Screenlint:** No new `Section(css.Class("card"...` scaffolds added, no new `Div(css.Class("rows"...` containers — baseline unchanged. `go test ./internal/screenlint/` green.
+
 ## 2026-06-27 — C281 [F41]: "Viewing as <member>" scope banner + C277 KPI scoping confirmed
 
 **Problem:** The active-member atom (in `internal/uistate/activemember.go`) already drove real

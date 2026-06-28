@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -49,6 +50,19 @@ func accentFor(m money.Money) string {
 		return "neg"
 	}
 	return "pos"
+}
+
+// ownerVisibleTo reports whether an entity with the given ownerID should be
+// shown when activeMemberID is the current member view. When activeMemberID is
+// "" (everyone view) all entities are visible. Otherwise, group-/household-owned
+// entities (GroupOwnerID) are always shown, and individual entities are shown
+// only when their OwnerID matches the active member. Consistent with the
+// dashboard's scoping convention (L21 / C278).
+func ownerVisibleTo(ownerID, activeMemberID string) bool {
+	if activeMemberID == "" {
+		return true
+	}
+	return ownerID == activeMemberID || ownerID == domain.GroupOwnerID
 }
 
 // humanizeType turns an enum like "credit_card" into "Credit card".

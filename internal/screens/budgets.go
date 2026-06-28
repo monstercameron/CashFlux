@@ -77,6 +77,9 @@ func Budgets() ui.Node {
 	}
 
 	errMsg := ui.UseState("")
+	// C278: scope the displayed list to the active member when one is selected.
+	// Atom read at a stable top-level hook position; filtering is plain code below.
+	activeMemberID := uistate.UseActiveMember().Get()
 	// Open the add-budget modal from the card header (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
 	// C112: switch the budgeting methodology (standard / zero-based / envelope) right
@@ -243,7 +246,16 @@ func Budgets() ui.Node {
 		return fmt.Errorf("budget not found")
 	}
 
-	budgets := app.Budgets()
+	allBudgets := app.Budgets()
+	// C278: when a member view is active, show only that member's budgets plus
+	// shared (group) budgets. ownerVisibleTo keeps group-owned budgets visible
+	// to every member view, consistent with the dashboard's scoping convention.
+	budgets := make([]domain.Budget, 0, len(allBudgets))
+	for _, b := range allBudgets {
+		if ownerVisibleTo(b.OwnerID, activeMemberID) {
+			budgets = append(budgets, b)
+		}
+	}
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	now := time.Now()

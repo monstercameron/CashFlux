@@ -161,6 +161,10 @@ func Accounts() ui.Node {
 		pageXferOpen.Set(false)
 	}))
 
+	// C278: scope the displayed list to the active member when one is selected.
+	// The atom is read at a stable top-level hook position; filtering is plain code.
+	activeMemberID := uistate.UseActiveMember().Get()
+
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	base := app.Settings().BaseCurrency
@@ -175,6 +179,9 @@ func Accounts() ui.Node {
 
 	var assetList, liabList, archivedList []domain.Account
 	for _, ac := range accounts {
+		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
+			continue
+		}
 		switch {
 		case ac.Archived:
 			archivedList = append(archivedList, ac)
