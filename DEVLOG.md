@@ -3,6 +3,39 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7a + §5.3: real scoped /recurring; extract RecurringManagerPanel
+
+**What:** `/recurring` was a stub alias (`func Recurring() ui.Node { return Planning() }`) that
+dumped the entire Planning kitchen sink on the user instead of a focused view. This commit makes
+it a real "Money that repeats" screen. Created `internal/screens/recurring.go` with:
+
+1. `RecurringManagerPanelProps` (empty struct for future extensibility) + `RecurringManagerPanel`
+   — a registered `ui.CreateElement` component that owns all 19 recurring-manager hooks moved out
+   of `Planning()`. Hooks: 11 UseState (rev/rLabel/rAmount/rCadence/rAccount/rCategory/rAutopost/
+   rAutopay/rNextDue/rErr/postMsg) + 7 UseEvent (onRLabel/onRAmount/onRNextDue/onRCadence/
+   onRAccount/onRCategory/addRecurring) + postDue UseEvent + three plain funcs
+   (deleteRecurring/addDetected/editRecurring). Renders the add-form, auto-detected charges (C147),
+   monthly-total note, per-row list (reusing RecurringRow/detectedRecurringRow), Post due action.
+
+2. `Recurring()` — now a one-line thin shell returning
+   `ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{})`. Shell provides heading
+   (nav.recurring / screen.recurringSub); no new i18n keys needed.
+
+**Changes to planning.go:** removed the `Recurring()` alias function; removed the 19 recurring
+hooks block; removed the inline `recurringCard` build block; replaced `recurringCard,` in the
+return with `ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{})`; added
+`plRev := ui.UseState(0)` at the same hook position for plans-refresh; removed the now-unused
+`subscriptions` import.
+
+**Why registered component, not inline:** the GWC hook rule prohibits conditional or
+variable-position hooks. Making `RecurringManagerPanel` a `ui.CreateElement` component gives it
+an isolated hook scope at both call sites (`Planning()` and `Recurring()`), avoiding any
+hook-order violation if the card is conditionally rendered. The same approach was used earlier
+for `DebtStrategyPanel`, `CreditHealthPanel`, `LoansPanel`, `NetWorthPanel`, etc.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build -o ./web/bin/main.wasm .` rc=0;
+`go test ./...` all pass.
+
 ## 2026-06-28 — FEATURE_MAP §5.3: narrow /planning, move payoff calculator to /debt
 
 **What:** Finished the `/debt` single-theme goal. A parallel agent had made `/debt` a real scoped
