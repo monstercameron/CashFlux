@@ -6,6 +6,8 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -55,14 +57,15 @@ func SampleDataBanner() uic.Node {
 	onStartFresh := uic.UseEvent(startFresh)
 
 	return Div(
-		// R41: a compact, left-aligned sample-mode CHIP — not a full-width banner that
-		// dominates every page's first viewport. role="status" (not "alert") since it's
-		// a persistent, non-urgent indicator; the full explanation is the title tooltip.
+		// C4: upgraded to a visually prominent amber-tinted notice strip with an icon
+		// so users clearly understand they are viewing demo data (not their own). Still
+		// a compact chip (R41) — not a full-width banner — role="status" (persistent,
+		// non-urgent); the full explanation is the title tooltip.
 		css.Class("sample-banner"),
 		Attr("role", "status"),
 		Attr("data-testid", "sample-data-banner"),
 		Attr("title", uistate.T("sample.chipTitle")),
-		Span(css.Class("sample-banner-dot"), Attr("aria-hidden", "true")),
+		ui.Icon(icon.AlertCircle, css.Class("sample-banner-icon")),
 		Span(css.Class("sample-banner-text"), uistate.T("sample.chipLabel")),
 		Div(css.Class("sample-banner-actions"),
 			Button(

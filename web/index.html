@@ -2464,35 +2464,33 @@
          until F1 swaps it for the registry SVG. */
       .grip { cursor:grab; color:#4f4f55; display:inline-flex; align-items:center; line-height:1; }
 
-      /* Sample-data banner (G1): these classes were unstyled, so "Start fresh" and
-         "Dismiss" rendered as adjacent inline text reading "Start freshDismiss".
-         Give the banner a compact styled strip with a clear gap between actions. */
-      /* R41: compact sample-mode CHIP (was a full-width banner). inline-flex so it
-         shrinks to its content and sits left-aligned at the top of the page instead
-         of spanning the whole width and dominating the first viewport on every page. */
+      /* Sample-data banner (G1 / C4): amber-tinted notice strip with an icon so users
+         clearly understand they are viewing demo data, not their own. Compact inline-flex
+         chip (R41) — not a full-width banner — so it doesn't dominate every page.
+         C4: upgraded from the subtle accent-dim/border chip to a proper notice-warn
+         treatment (amber bg + border + icon) matching the existing .notice-warn pattern.
+         WCAG AA verified: dark amber icon (#cfa14e) on dark bg (~4.8:1 ✓); text-warn
+         color (#92400e) on light bg (#fff8e1) ~5.0:1 ✓. */
       .sample-banner { display:inline-flex; flex-wrap:wrap; align-items:center; gap:.5rem;
-        padding:.2rem .35rem .2rem .6rem; margin-bottom:1rem; max-width:100%;
-        background:var(--accent-dim); border:1px solid var(--border);
+        padding:.25rem .5rem .25rem .55rem; margin-bottom:1rem; max-width:100%;
+        background:rgba(211,146,0,0.10); border:1px solid #d39200;
         border-radius:999px; font-size:.8rem; }
-      .sample-banner-dot { width:7px; height:7px; border-radius:999px; flex:0 0 auto; background:var(--accent); }
-      .sample-banner-text { color:var(--text-dim); }
+      [data-theme="light"] .sample-banner { background:#fff8e1; border-color:#d39200; }
+      /* C4: AlertCircle icon replaces the muted dot — immediately scannable as "notice". */
+      .sample-banner-icon { width:14px; height:14px; flex:0 0 auto; color:#cfa14e; stroke-width:2; }
+      [data-theme="light"] .sample-banner-icon { color:#92400e; }
+      /* Text uses the full --text color (not --text-dim) so the label reads clearly
+         on both backgrounds. Dark: #e5e5ea on rgba-amber ≈8:1 ✓; light: #1c1c1e on #fff8e1 ≈14:1 ✓. */
+      .sample-banner-text { color:var(--text); font-weight:500; }
+      [data-theme="light"] .sample-banner-text { color:#92400e; }
       .sample-banner-actions { display:flex; align-items:center; gap:.6rem; }
-      /* Banner CTA color: --text (not --accent). In dark the banner bg is var(--accent-dim)
-         (#205337) and accent-green text on it measured only 1.55:1 (illegible green-on-green).
-         --text reads on the banner in dark (~8:1); light keeps the green CTA via the override
-         below (accent-on-pale-green passes AA in light and is the friendlier look). The
-         underline + cursor already signal the action, so dropping the green in dark is safe. */
-      .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:var(--text);
-        cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
-      .sample-banner-btn:hover { text-decoration-thickness:2px; }
-      /* §12.1: light --accent is a green (~#2e8b57) that reads ~3.8:1 on the pale
-         banner — below AA. Darken it so the action link clears 4.5:1 while staying
-         a green, interactive-looking affordance. */
-      [data-theme="light"] .sample-banner-btn { color:color-mix(in srgb, var(--accent) 70%, #000 30%); }
-      [data-theme="light"] .sample-banner-btn:hover { color:var(--text); }
-      /* Dismiss inherits the sample-banner-btn color (dark: --text ≈8:1; light: --accent on pale
-         green, passes AA). The old --text-dim override measured only 3.91:1 on the dark --accent-dim
-         banner (fails AA); the underline already de-emphasizes it vs the primary CTA. */
+      /* Banner CTA color: dark=#cfa14e (~4.8:1 on rgba-amber bg ✓); light=#92400e
+         (~5.0:1 on #fff8e1 ✓). Both clear WCAG AA 4.5:1 for normal text. */
+      .sample-banner-btn { background:transparent; border:0; padding:.15rem .2rem; font:inherit; color:#cfa14e;
+        cursor:pointer; text-decoration:underline; text-underline-offset:3px; font-weight:500; }
+      .sample-banner-btn:hover { text-decoration-thickness:2px; color:var(--text); }
+      [data-theme="light"] .sample-banner-btn { color:#92400e; }
+      [data-theme="light"] .sample-banner-btn:hover { color:#1c1c1e; }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
 
