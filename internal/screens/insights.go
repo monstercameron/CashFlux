@@ -28,7 +28,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
-	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -1536,23 +1535,7 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday) ui.Node {
 	nav := router.UseNavigate()
 	// Run with all Free features enabled so the four anomaly detectors always
 	// fire regardless of the user's per-feature SMART opt-in state.
-	in := buildSmartInput(app, weekStart)
-	freeSettings := smart.EnableFreeOnly(smart.Settings{})
-	all := smartengine.Run(in, freeSettings)
-
-	// Keep only the four anomaly detector codes.
-	anomalyCodes := map[string]bool{
-		"SMART-A1": true,
-		"SMART-T2": true,
-		"SMART-T6": true,
-		"SMART-T7": true,
-	}
-	var flagged []smart.Insight
-	for _, ins := range all {
-		if anomalyCodes[ins.Feature] {
-			flagged = append(flagged, ins)
-		}
-	}
+	flagged := runAnomalyDetectors(app, weekStart)
 	if len(flagged) == 0 {
 		return Fragment()
 	}

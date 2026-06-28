@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.7c dedup #1: extract runAnomalyDetectors helper
+
+**What:** Pure internal refactor removing a verbatim copy-paste of the SMART anomaly-detection
+compute block that existed in two screens: `smartAnomalyHighlights` (Insights screen) and
+`anomalyHubWidget` (Dashboard). Both ran `buildSmartInput` → `smartengine.Run(freeSettings)` →
+filter to the four codes A1/T2/T6/T7 with identical logic.
+
+**What changed:**
+- `internal/screens/smart_adapter.go`: new `runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insight` placed alongside the existing `buildSmartInput` / `runSmart` helpers — the natural home for shared SMART compute utilities.
+- `internal/screens/insights.go`: 14-line compute block in `smartAnomalyHighlights` replaced with `flagged := runAnomalyDetectors(app, weekStart)`. The now-unused `smartengine` import removed.
+- `internal/screens/dashboard.go`: 15-line compute block in `anomalyHubWidget` replaced with `flagged := runAnomalyDetectors(app, pr.WeekStartWeekday())`. Each function retains its own distinct row renderer.
+
+**Decisions:**
+- Helper placed in `smart_adapter.go` rather than a new file — it fits the file's existing purpose (bridging app data into the SMART engine) and avoids a new file for a single function.
+- Signature takes `weekStart time.Weekday` explicitly (matching `buildSmartInput`) so each caller controls where it reads prefs from; the helper stays hook-free and safe to call anywhere.
+- No behavior change: same input construction, same four anomaly codes, same nil-returning filter logic.
+
+**All three verify gates passed:** `go build ./...` rc=0; wasm build rc=0; `go test ./...` all green.
+
 ## 2026-06-28 — FEATURE_MAP §5.7c dedup #2: extract shared scoreRingNode helper
 
 **What:** Pure internal refactor. Two screens (`internal/screens/health.go` → `healthRing`,

@@ -1713,23 +1713,7 @@ func anomalyHubWidget(app *appstate.App) ui.Node {
 	const maxRows = 3
 
 	pr := uistate.UsePrefs().Get()
-	in := buildSmartInput(app, pr.WeekStartWeekday())
-	freeSettings := smart.EnableFreeOnly(smart.Settings{})
-	all := smartengine.Run(in, freeSettings)
-
-	// Keep only the four anomaly detector codes (same filter as /insights).
-	anomalyCodes := map[string]bool{
-		"SMART-A1": true,
-		"SMART-T2": true,
-		"SMART-T6": true,
-		"SMART-T7": true,
-	}
-	var flagged []smart.Insight
-	for _, ins := range all {
-		if anomalyCodes[ins.Feature] {
-			flagged = append(flagged, ins)
-		}
-	}
+	flagged := runAnomalyDetectors(app, pr.WeekStartWeekday())
 
 	// Cap at maxRows so the widget stays glanceable.
 	if len(flagged) > maxRows {

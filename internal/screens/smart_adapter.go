@@ -46,6 +46,30 @@ func runSmart(app *appstate.App, weekStart time.Weekday, s smart.Settings) []sma
 	return smartengine.Run(buildSmartInput(app, weekStart), s)
 }
 
+// runAnomalyDetectors runs the four SMART anomaly detectors (A1/T2/T6/T7) with
+// all Free features force-enabled, so they always fire regardless of the user's
+// per-feature opt-in state. It is the shared compute kernel used by both the
+// Insights screen (smartAnomalyHighlights) and the Anomaly Hub dashboard widget
+// (anomalyHubWidget) — only the row renderer differs between the two call sites.
+func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insight {
+	in := buildSmartInput(app, weekStart)
+	freeSettings := smart.EnableFreeOnly(smart.Settings{})
+	all := smartengine.Run(in, freeSettings)
+	anomalyCodes := map[string]bool{
+		"SMART-A1": true,
+		"SMART-T2": true,
+		"SMART-T6": true,
+		"SMART-T7": true,
+	}
+	var flagged []smart.Insight
+	for _, ins := range all {
+		if anomalyCodes[ins.Feature] {
+			flagged = append(flagged, ins)
+		}
+	}
+	return flagged
+}
+
 // aiProviderConfigured reports whether the user has an inference provider set up
 // (a stored OpenAI key, or the hosted backend AI). It drives the "needs a
 // provider" hint on AI features so the cost story stays honest.
