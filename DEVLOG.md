@@ -3,6 +3,42 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C281 [F41]: "Viewing as <member>" scope banner + C277 KPI scoping confirmed
+
+**Problem:** The active-member atom (in `internal/uistate/activemember.go`) already drove real
+dashboard filtering — `kpiTxns` was already scoped by `activeMemberID` in `dashboard.go` — but
+there was zero visible indication to the user that the view was scoped. The MemberSwitcher select
+in the top-bar is easy to miss; no banner or persistent cue announced the filter was active.
+
+**C281 — ScopeBanner:** A new `ScopeBanner` component (`internal/app/scopebanner.go`) mounted
+in `shell.go` immediately after the existing SampleDataBanner and SubscriptionBanner. Renders
+a teal-tinted pill (`role="status"`) with the member name and a "View all" clear-link when
+`UseActiveMember().Get() != ""`. Returns `Fragment()` when no member is active so it contributes
+no DOM nodes. The `UseEvent` hook is always called (not inside a conditional) because the early
+return comes AFTER the hook declaration — this is the correct GWC pattern. "View all" calls
+`uistate.SetActiveMember("")` which sets the atom and persists "" to localStorage.
+
+**Why a banner vs a header row:** The spec wanted the scope visible "across member-scoped
+screens." The shell banner position makes it appear above every screen's content without
+modifying any individual screen, keeping the change to 3 files (scopebanner.go + shell.go +
+index.html) and avoiding any screen-specific hook-ordering risk.
+
+**CSS strategy:** `.scope-banner` mirrors `.sample-banner` in structure (inline-flex pill,
+border-radius 999px, small font) but uses the accent color family instead of amber — visually
+distinct from the sample-data notice while remaining on-brand. Light-mode variant hard-codes
+`#e8f0fe` / `#1a56db` for WCAG AA compliance (~4.6:1 on the blue text vs light bg).
+
+**C277 — ALREADY-SCOPED evidence:** `dashboard.go` lines 83–94 filter `kpiTxns` from the
+full transaction list whenever `activeMemberID != ""`. Every downstream value — `income`,
+`expense`, `cashFlow`, `incCount`, `expCount` (the "N deposits · N transactions" counters in
+the KPI tile subtitles) — derives exclusively from `kpiTxns`. Net worth stays household-wide
+by design (it reads `accounts`, not `kpiTxns`). C277 is satisfied by the existing scoping;
+the C281 banner makes that scoping visible.
+
+**Files changed:** `internal/app/scopebanner.go` (new), `internal/i18n/en_scopebanner.go`
+(new, 4 keys), `internal/app/shell.go` (+3 lines wiring), `web/index.html` (CSS + print exclude).
+All three build targets exit 0; screenlint passes.
+
 ## 2026-06-27 — C206 [F27]: Sample loan payments converted to amortizing liability transfers
 
 **Root cause:** `SampleDataset()` seeded installment loan payments as categorized expense

@@ -179,6 +179,11 @@ func Shell(props ShellProps) uic.Node {
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(SubscriptionBanner),
+			// C281: "Viewing as <member>" scope banner — shown whenever the top-bar
+			// member switcher has a member selected. Renders nothing for the default
+			// everyone/"" view. Placed after the other global status banners so the
+			// stacking order reads: sample → subscription → member scope.
+			uic.CreateElement(ScopeBanner),
 			// Each screen renders as its OWN component (CreateElement → its own fiber,
 			// so its hooks never share the Shell's), keyed by the active route path.
 			// The key is what makes navigating BETWEEN two pages of the same component

@@ -185,7 +185,7 @@
            The per-row Actions column and the select checkboxes are noise on paper. Form
            controls (the search box, filter selects) are interactive-only too — the ledger
            data is plain <td> text, not inputs, so hiding controls never drops statement data. */
-        aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner,
+        aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner, .scope-banner,
         .app-banner, .toast, .reso-control, .home-hero-actions, .reports-export,
         input, select, textarea,
         /* Action buttons (Export CSV, Roll up sub-categories, Mark paid, Edit, …) are interactive-only
@@ -2491,6 +2491,23 @@
       .sample-banner-btn:hover { text-decoration-thickness:2px; color:var(--text); }
       [data-theme="light"] .sample-banner-btn { color:#92400e; }
       [data-theme="light"] .sample-banner-btn:hover { color:#1c1c1e; }
+      /* C281: "Viewing as <member>" scope banner — a calm teal-tinted chip sitting
+         below the top-bar banners on every screen when a member filter is active.
+         Uses the accent color family (--accent / --accent-dim) to distinguish it
+         from the amber sample-data banner while staying on-brand. */
+      .scope-banner { display:inline-flex; flex-wrap:wrap; align-items:center; gap:.5rem;
+        padding:.25rem .5rem .25rem .65rem; margin-bottom:.6rem; max-width:100%;
+        background:var(--accent-dim, rgba(0,122,255,0.12)); border:1px solid var(--accent, #007aff);
+        border-radius:999px; font-size:.8rem; }
+      .scope-banner-text { color:var(--text); font-weight:500; }
+      .scope-banner-btn { background:transparent; border:0; padding:.15rem .25rem; font:inherit;
+        color:var(--accent, #007aff); cursor:pointer; text-decoration:underline;
+        text-underline-offset:3px; font-weight:500; }
+      .scope-banner-btn:hover { text-decoration-thickness:2px; color:var(--text); }
+      [data-theme="light"] .scope-banner { background:#e8f0fe; border-color:#1a56db; }
+      [data-theme="light"] .scope-banner-text { color:#1a3a6c; }
+      [data-theme="light"] .scope-banner-btn { color:#1a56db; }
+      [data-theme="light"] .scope-banner-btn:hover { color:#1c1c1e; }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
 
