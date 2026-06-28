@@ -483,5 +483,8 @@ func DebtPlanner() ui.Node {
 				),
 			}),
 		),
+		// Manual single-debt payoff what-if (moved off /planning — FEATURE_MAP §5.3).
+		// A registered component so its four input hooks stay in their own scope.
+		ui.CreateElement(PayoffCalculatorPanel, PayoffCalculatorPanelProps{}),
 	)
 }

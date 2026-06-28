@@ -3,6 +3,42 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — FEATURE_MAP §5.3: narrow /planning, move payoff calculator to /debt
+
+**What:** Finished the `/debt` single-theme goal. A parallel agent had made `/debt` a real scoped
+page but deliberately left `DebtStrategyPanel` shared and rendered on `/planning` too, and the manual
+payoff calculator also still lived in `Planning()`. e2e confirmed the duplication: debt-payoff showed
+on both pages. This commit removes all debt content from `/planning`.
+
+**Decision — extract the payoff calculator into a registered component, not delete it.** The manual
+single-debt what-if (balance/APR/payment/extra → months, payoff date, total interest) is real
+functionality; it belongs on `/debt`, not nowhere. Rather than hand-thread its four hooks into
+`DebtPlanner()`'s body, I moved it into `PayoffCalculatorPanel` (a `ui.CreateElement` component in a
+new `payoffcalc.go`) so its hooks live in their own isolated scope — same pattern the parallel agent
+used for `DebtStrategyPanel`/`CreditHealthPanel`/`LoansPanel`. Mounted via one `ui.CreateElement`
+line on `/debt`. The `DebtStrategyPanel` was already a shared component, so removing it from
+`/planning` is just dropping one render site — the component (used by `/debt`) is untouched.
+
+**Removal from Planning():** pulled the four `UseState` (balStr/aprStr/payStr/extraStr) + four
+`UseEvent` hooks, the `resultBody` projection-compute switch, and the two payoff `EntityListSection`s
++ the `DebtStrategyPanel` render. Hook-ordering note: removing a contiguous block of hooks from the
+top of `Planning()`'s chain is safe — the remaining hooks keep their relative call order. Then
+dropped the now-unused `fmt` and `payoff` imports (compiler-confirmed unused).
+
+**Concurrency:** the parallel agent owns `debt.go` and recently committed the credit/loans fold. I
+synced (behind=0), edited the committed files, and staged only my own (`planning.go`, `debt.go`,
+`payoffcalc.go`, the e2e). Reversing their "keep strategy on /planning" choice was deliberate — the
+user's explicit goal is single-theme pages, and FEATURE_MAP §5.3 says /planning sheds debt.
+
+**Verify:** wasm `go build` rc=0; `e2e/verify_debt_scoped.mjs` 9/9 — `/debt` now shows the payoff
+calculator + strategy + no Planning sections; `/planning` shows forecast + affordability + zero debt
+widgets; no page errors. (LSP threw stale "DebtPlanner redeclared / CreditHealthPanel undefined"
+noise throughout from an out-of-date index; the real compiler was clean — trust `go build`.)
+
+**Next:** `/recurring` is still aliased to `Planning()` — extract the recurring manager (11 UseState
++ 5 UseEvent, the largest surface) into a scoped page; then `/assistant` (make `Insights`
+component-shaped), `/household`, `/studio`, `/accounts`→assets, `/transactions` absorb import+dupes.
+
 ## 2026-06-28 — FEATURE_MAP §5.3: fold credit + loans into /debt (CreditHealthPanel + LoansPanel)
 
 **What:** Completed the §5.3 "/debt" consolidation. `/credit` and `/loans` previously had all their
