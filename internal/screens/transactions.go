@@ -81,6 +81,10 @@ func Transactions() ui.Node {
 	}
 	zeroBulk := bulkSnapshot{}
 	lastBulk := ui.UseState(zeroBulk)
+	// txnView controls which in-page panel is shown. Values: "ledger" (default),
+	// "import" (DocumentsPanel), "duplicates" (DuplicatesPanel). Stored as state
+	// so the GWC reconciler tracks it across re-renders at a stable hook position.
+	txnView := ui.UseState("ledger")
 	noticeAtom := uistate.UseNotice()
 	notifyErr := func(text string) { noticeAtom.Set(noticeAtom.Get().With(text, true)) }
 	filterAtom := uistate.UseTxFilter()
@@ -512,6 +516,23 @@ func Transactions() ui.Node {
 		selected.Set(nm)
 	}))
 
+	// onShowImport / onShowDuplicates toggle the embedded panel entry points.
+	// Clicking the active view's button returns to the ledger (toggle semantics).
+	onShowImport := ui.UseEvent(Prevent(func() {
+		if txnView.Get() == "import" {
+			txnView.Set("ledger")
+		} else {
+			txnView.Set("import")
+		}
+	}))
+	onShowDuplicates := ui.UseEvent(Prevent(func() {
+		if txnView.Get() == "duplicates" {
+			txnView.Set("ledger")
+		} else {
+			txnView.Set("duplicates")
+		}
+	}))
+
 	// Compute page-level smart insights once (not per row) so each TransactionRow can
 	// call smartBadgeFor with its own ID. Transaction engines (SMART-T2, T4, T6, T7,
 	// T11, T13) set RelatedID to the transaction ID.
@@ -831,12 +852,50 @@ func Transactions() ui.Node {
 		)
 	}
 
+	// embeddedPanel holds the DocumentsPanel or DuplicatesPanel when the view mode
+	// is not "ledger". ui.CreateElement isolates each panel's hook state from this
+	// component, satisfying the GWC hook rule for conditional child rendering.
+	var embeddedPanel ui.Node = Fragment()
+	switch txnView.Get() {
+	case "import":
+		embeddedPanel = ui.CreateElement(DocumentsPanel, documentsPanelProps{})
+	case "duplicates":
+		embeddedPanel = ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{})
+	}
+
+	// Precompute header button labels — toggle semantics: clicking the active
+	// panel's button returns to the ledger; clicking the other activates it.
+	importBtnLabel := uistate.T("transactions.importBtn")
+	if txnView.Get() == "import" {
+		importBtnLabel = uistate.T("transactions.importBtnClose")
+	}
+	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
+	if txnView.Get() == "duplicates" {
+		dupBtnLabel = uistate.T("transactions.dupReviewClose")
+	} else if dupCount > 0 {
+		dupBtnLabel = uistate.T("transactions.dupReviewBadge", plural(dupCount, "duplicate"))
+	}
+
 	return Div(
 		previewNode,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title:        uistate.T("transactions.listTitle"),
-			HeaderAction: smartSectionAction(txnSmartSettings),
-			Body: Fragment(
+			Title: uistate.T("transactions.listTitle"),
+			HeaderAction: Fragment(
+				smartSectionAction(txnSmartSettings),
+				Button(css.Class("btn btn-sm"), Type("button"),
+					Attr("data-testid", "txn-import-btn"),
+					Attr("aria-label", importBtnLabel),
+					OnClick(onShowImport),
+					Text(importBtnLabel)),
+				Button(css.Class("btn btn-sm"), Type("button"),
+					Attr("data-testid", "txn-dupes-btn"),
+					Attr("aria-label", dupBtnLabel),
+					OnClick(onShowDuplicates),
+					Text(dupBtnLabel)),
+			),
+			Body: IfElse(txnView.Get() != "ledger",
+				embeddedPanel,
+				Fragment(
 				uiw.FilterToolbar(uiw.FilterToolbarProps{
 					Search:       f.Text,
 					SearchLabel:  uistate.T("transactions.searchPlaceholder"),
@@ -893,7 +952,7 @@ func Transactions() ui.Node {
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
 				)),
 				listBody,
-			),
+			)),
 		}),
 	)
 }

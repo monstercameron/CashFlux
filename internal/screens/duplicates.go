@@ -176,16 +176,18 @@ func dupeRow(props dupeRowProps) ui.Node {
 	)
 }
 
-// DuplicatesScreen is the /duplicates page (C89, F11). It groups all
-// transactions by dedupe.Signature (same date + amount + normalized
-// description), retains only groups of 2 or more, and lets the user delete
-// the extras one by one with a confirmation prompt. The first transaction in
-// each group is implicitly kept; the others each get a "Delete duplicate" button.
-//
-// Architecture: per-row hook state (UseEvent) lives inside dupeRow; per-group
-// layout lives inside dupeGroup. DuplicatesScreen itself holds no per-item
-// hooks — only UseDataRevision() to react to data changes.
-func DuplicatesScreen() ui.Node {
+// duplicatesPanelProps is the props bag for DuplicatesPanel. Currently empty
+// — the panel reads all its data from appstate.Default — but typed so it can be
+// embedded via ui.CreateElement and have its hook state isolated from parents.
+type duplicatesPanelProps struct{}
+
+// DuplicatesPanel is the registered component that groups duplicate transactions
+// and lets the user delete or merge them. Extracted from DuplicatesScreen() so it
+// can be embedded on /transactions without duplicating logic (FEATURE_MAP §5.3 /
+// §5.7b). Per-row hook state (UseEvent) lives inside dupeRow; per-group layout
+// lives inside dupeGroup. DuplicatesPanel itself holds no per-item hooks — only
+// UseDataRevision() to react to data changes.
+func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
@@ -300,4 +302,11 @@ func DuplicatesScreen() ui.Node {
 		summary,
 		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap4), groupCards),
 	)
+}
+
+// DuplicatesScreen is the /duplicates route — a thin shell that delegates
+// entirely to DuplicatesPanel. Routes remain registered (pending rail regroup);
+// logic lives in DuplicatesPanel so it can also be embedded on /transactions.
+func DuplicatesScreen() ui.Node {
+	return ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{})
 }

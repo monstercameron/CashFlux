@@ -98,11 +98,16 @@ const textExtractionSystemPrompt = "You extract bank/credit-card transactions fr
 	"Return ONLY a JSON object: {\"transactions\":[{\"date\":\"YYYY-MM-DD\",\"description\":\"...\",\"amount\":\"...\",\"category\":\"\"}]}. " +
 	"Amount: negative for money out/expenses (e.g. \"-45.00\"), positive for money in. No prose, no markdown."
 
-// Documents imports transactions two ways: paste CSV (no AI), or read a receipt/
-// statement image with the OpenAI vision model (bring-your-own-key). Extracted
-// rows are reviewed, then imported into a chosen account through the validated
-// write path.
-func Documents() ui.Node {
+// documentsPanelProps is the props bag for DocumentsPanel. Currently empty —
+// the panel reads all its data from appstate.Default — but typed so it can be
+// embedded via ui.CreateElement and have its hook state isolated from parents.
+type documentsPanelProps struct{}
+
+// DocumentsPanel is the registered component that owns the full import UI:
+// CSV paste, statement paste/wizard, receipt vision, draft review, and import
+// history. Extracted from Documents() so it can be embedded on /transactions
+// without duplicating logic (FEATURE_MAP §5.3 / §5.7b).
+func DocumentsPanel(props documentsPanelProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
@@ -1480,4 +1485,11 @@ func ProfileRow(props profileRowProps) ui.Node {
 			OnClick(del),
 			uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
+}
+
+// Documents is the /documents route — a thin shell that delegates entirely to
+// DocumentsPanel. Routes remain registered (pending rail regroup); logic lives
+// in DocumentsPanel so it can also be embedded on /transactions.
+func Documents() ui.Node {
+	return ui.CreateElement(DocumentsPanel, documentsPanelProps{})
 }
