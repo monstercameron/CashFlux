@@ -4,6 +4,11 @@ package smart
 
 import "time"
 
+// CurrentSettingsVersion is the current schema version for Settings. A stored
+// row with Version==0 is a legacy pre-C254 record and will be upgraded by
+// Migrate the next time it is loaded.
+const CurrentSettingsVersion = 1
+
 // Settings is the user's preference state for the SMART series. Free
 // (deterministic, on-device) features are enabled by default so users get value
 // immediately; AI features stay opt-in so no spend happens without consent.
@@ -24,6 +29,11 @@ import "time"
 // tests trivially. The zero value is valid: Free features on by tier default, AI
 // features off by tier default, nothing dismissed.
 type Settings struct {
+	// Version is a schema marker used for stale-state migration. Zero means a
+	// legacy pre-C254 row; CurrentSettingsVersion means fully migrated.
+	// json:"version,omitempty" omits the field when zero so existing zero-version
+	// rows round-trip without spurious JSON changes.
+	Version     int             `json:"version,omitempty"`
 	Enabled     map[string]bool `json:"enabled,omitempty"`
 	ExplicitOff map[string]bool `json:"explicitOff,omitempty"`
 	Dismissed   map[string]bool `json:"dismissed,omitempty"`

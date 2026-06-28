@@ -16,30 +16,55 @@ import (
 // preferences, so they survive a dataset wipe like theme/language/prefs do.
 const smartSettingsKey = "cashflux:smart-settings"
 
-// LoadSmartSettings reads the persisted SMART opt-in settings.
+// LoadSmartSettings reads the persisted SMART opt-in settings. It is a PURE
+// read: it never writes to the KV, eliminating the pre-init clobber race that
+// existed when the store may not yet be ready.
 //
-// First-time load (empty KV): applies EnableFreeOnly so that the deterministic,
-// on-device Free features are explicitly persisted as enabled — users see
-// insights immediately without any manual step (C254). The saved state is
-// returned so the caller and any subsequent render see the same value.
+// Empty KV (first session, or store not yet initialised): returns the
+// EnableFreeOnly defaults WITHOUT persisting them. InitSmartSettings is
+// responsible for the one-time persist; it must be called from the app boot
+// sequence after the store is confirmed ready. Even if InitSmartSettings is
+// never reached (e.g. an unusual boot path), the C254 "Free features on"
+// contract is satisfied because IsEnabled falls back to the tier default.
 //
 // Unparseable stored value: returns zero Settings, relying on the tier-default
 // logic in IsEnabled (Free → on, AI → off) for the next render, without
 // overwriting whatever partial value may be in the KV.
+//
+// Loaded value: passes through Migrate so that legacy pre-C254 rows are
+// transparently upgraded on the next read. The migrated value is NOT persisted
+// here; it is written on the next normal SaveSmartSettings call.
 func LoadSmartSettings() smart.Settings {
 	raw := SettingKVGet(smartSettingsKey)
 	if raw == "" {
-		// C254: first session — persist Free features as explicitly enabled so
-		// insights appear immediately, without requiring the user to visit /smart.
-		s := smart.EnableFreeOnly(smart.Settings{})
-		SaveSmartSettings(s)
-		return s
+		// Store not yet initialised or fresh first session. Return free-on
+		// defaults without any write so we cannot race with store init.
+		return smart.EnableFreeOnly(smart.Settings{})
 	}
 	var s smart.Settings
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		return smart.Settings{}
 	}
-	return s
+	// Transparently upgrade legacy rows (Version==0) to the current schema.
+	// Explicit user choices are preserved; only unset Free features are filled
+	// in. The migrated value is persisted on the next normal SaveSmartSettings
+	// call, not here, so this path stays free of side-effects.
+	return smart.Migrate(s)
+}
+
+// InitSmartSettings performs the one-time default persist for new installs. It
+// writes the EnableFreeOnly defaults (with the current schema Version) only
+// when the KV is still empty, making it idempotent — safe to call on every
+// boot. It MUST be called after the store is confirmed ready (e.g. from the
+// post-store-ready wiring block in app.Run) so that the write lands in a live
+// store and is never lost or premature.
+func InitSmartSettings() {
+	if SettingKVGet(smartSettingsKey) != "" {
+		return // already initialised
+	}
+	s := smart.EnableFreeOnly(smart.Settings{})
+	s.Version = smart.CurrentSettingsVersion
+	SaveSmartSettings(s)
 }
 
 // SaveSmartSettings persists the SMART opt-in settings. Persisting bumps the

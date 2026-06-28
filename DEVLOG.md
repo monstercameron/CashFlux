@@ -3,6 +3,29 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — R26 [#453]: Pure smart-settings read + boot-time init + stale-state migration
+
+**Problem:** `LoadSmartSettings()` was performing a WRITE (`SaveSmartSettings`) as a side-effect of a READ. If the SQLite KV/settings store was not yet ready when `LoadSmartSettings` was first called, the empty-KV path triggered a default-write that could race with store init and either clobber real persisted settings or be silently lost. Separately, legacy pre-C254 rows (Version==0) had no migration path, so users who installed before the C254 "free features on by default" change would not automatically get free insights enabled.
+
+**Part 1 — Pure read fix:**
+The fix was to remove the write from the read path entirely. `LoadSmartSettings()` now returns `EnableFreeOnly(Settings{})` on an empty KV without calling `SaveSmartSettings`. The write is done by a new exported `InitSmartSettings()` function that is idempotent (no-op if KV already populated).
+
+**Boot ordering — statically verified:**
+`InitSmartSettings()` is called inside the `if appstate.Default != nil` block in `internal/app/app.go`, alongside `OnTxnMutated` and `SetActiveRoleFunc`. This block is the proven post-store-ready wiring point in the boot sequence. Boot ordering is statically guaranteed by placement — no runtime detection needed. Failure mode is benign: if the call were ever skipped, `LoadSmartSettings` already returns free-on defaults via the tier-default path in `IsEnabled(TierFree → true)`, so the C254 contract is satisfied without any persist.
+
+**Part 2 — Conservative stale-state migration:**
+`smart.Settings` has both `Enabled` and `ExplicitOff` maps, so "explicit vs unset" is fully distinguishable. The migration strategy is therefore precise: for Version==0 rows, only fill in the free-on default for Free features that have NO explicit state (absent from both maps). This is the maximally conservative approach — it never touches `ExplicitOff` (unlike `EnableFreeOnly` which clears it), so a user who explicitly turned off a Free feature before the C254 change keeps that choice honored after migration.
+
+Migration runs inside `LoadSmartSettings` after unmarshal (transparent on every load of a legacy row). The migrated value is NOT immediately persisted — it writes on the next normal `SaveSmartSettings` call (e.g., the user toggles any setting). This keeps the read path side-effect-free.
+
+**Part 3 — Dashboard digest widget position (SKIPPED):**
+`smart-digest` is already at position 21 in `DefaultItems()` (near-bottom, ColSpan:2 RowSpan:1, after `highlight`, before `anomaly-hub`). This is a reasonable placement for a supplementary cross-app digest widget. No obvious ordering problem was found; the Part 3 intent was unclear, so it was skipped per the ticket's own guidance ("if the intent is unclear, SKIP").
+
+**Test coverage:**
+7 table-driven tests in `internal/smart/migrate_test.go`: explicit-off preservation, unset-free-becomes-on, already-migrated no-op, explicit-on AI preserved, mixed legacy row, AI not enabled by default, idempotency (calling Migrate twice is safe). All pass.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build ./internal/uistate/ ./internal/app/ ./internal/screens/` rc=0; `go test ./internal/smart/ ./internal/dashlayout/ ./internal/screenlint/` all pass.
+
 ## 2026-06-27 — C274 [#352]: Local per-member profile + PIN switch
 
 **Goal:** "Who's using CashFlux?" — let a shared household device present a member picker so each person gets their own scoped view, with an optional PIN to prevent casual shoulder-surf access-switches.

@@ -225,6 +225,14 @@ func Run() {
 			}
 			return domain.RoleOwner // no match → permissive
 		})
+		// Persist the Free-feature defaults on first run (C254 / R26). This call
+		// is placed here — in the same block where appstate.Default is confirmed
+		// non-nil and the store is proven ready — so boot ordering is statically
+		// guaranteed: we are already past the store-init seam. The failure mode is
+		// benign: if this call were ever skipped, LoadSmartSettings already returns
+		// the free-on defaults without persisting (the C254 contract is satisfied
+		// via the tier-default path), so no insights are lost.
+		uistate.InitSmartSettings()
 	}
 
 	// Greet once after a version upgrade with a "what's new" pointer (C326).
