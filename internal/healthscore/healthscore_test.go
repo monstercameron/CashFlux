@@ -486,3 +486,29 @@ func TestWeightReNormalization_NWTrend(t *testing.T) {
 		}
 	}
 }
+
+// TestSteps_CarryKey verifies every prioritized step carries its stable factor
+// Key (so the UI can route a step to the screen where the user acts on it), and
+// that the Key is one of the known factor keys — not an empty/unknown string.
+func TestSteps_CarryKey(t *testing.T) {
+	in := full()
+	// Push several factors low so steps are generated.
+	in.SavingsRatePct = 0
+	in.EmergencyMonths = 0
+	in.ObligationRatioPct = 60
+	in.BudgetAdherencePct = 40
+	in.AggUtilizationPct = 90
+	r := Evaluate(in)
+	if len(r.Steps) == 0 {
+		t.Fatal("low-scoring inputs should produce prioritized steps")
+	}
+	known := map[string]bool{"savings": true, "emergency": true, "debt": true, "budget": true, "utilization": true, "nw-trend": true}
+	for _, s := range r.Steps {
+		if s.Key == "" {
+			t.Errorf("step %q has an empty Key", s.Factor)
+		}
+		if !known[s.Key] {
+			t.Errorf("step Key %q is not a known factor key", s.Key)
+		}
+	}
+}

@@ -189,6 +189,12 @@ func QuickAddHost() uic.Node {
 
 	acctOpts := make([]uic.Node, 0, len(accounts))
 	for _, a := range accounts {
+		// C41: don't offer archived accounts as a destination for a NEW transaction —
+		// they're retired. Keep one only if it's somehow the current selection, so we
+		// never silently drop the effective account out from under the user.
+		if a.Archived && a.ID != effAcct {
+			continue
+		}
 		// C45: append a type cue ("Everyday · Checking") so two similarly-named
 		// accounts (e.g. business vs personal checking) are distinguishable in the
 		// dropdown instead of being truncated to identical names.

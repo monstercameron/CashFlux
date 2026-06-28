@@ -73,10 +73,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <!-- Design system (candidate C): Inter for UI, Fraunces for display headings + figures -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Design system (candidate C): Inter for UI, Fraunces for display headings + figures.
+         Self-hosted (web/fonts/, vendored from the css2 API) — a local-first / no-tracking app
+         must NOT fetch fonts from Google's CDN at boot (privacy leak + would break offline). -->
+    <link href="./fonts.css" rel="stylesheet" />
     <!-- Tailwind CDN removed (C91): all utility classes are now emitted by the typed
          Go `tw`/css vocabulary at runtime into <style id="gwc-css">. No external CSS
          dependency, works offline. The former tailwind.config palette/type tokens live

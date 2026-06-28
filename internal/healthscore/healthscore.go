@@ -99,6 +99,10 @@ type Factor struct {
 // TimeFraming is optional context the UI/builder may fill (e.g. "~8 months away");
 // the model leaves it empty when it can't be derived from the score alone.
 type Step struct {
+	// Key is the stable factor identifier (e.g. "savings", "debt", "utilization"),
+	// so the UI can map a step to the screen where the user acts on it without
+	// matching the human-facing Factor label (which is localized/reworded).
+	Key         string
 	Factor      string
 	Action      string
 	Target      string
@@ -268,7 +272,7 @@ func buildSteps(defs []factorDef) []Step {
 	}
 	steps := make([]Step, 0, len(cands))
 	for _, c := range cands {
-		steps = append(steps, Step{Factor: c.def.label, Action: stepAction(c.def.key), Target: c.def.target})
+		steps = append(steps, Step{Key: c.def.key, Factor: c.def.label, Action: stepAction(c.def.key), Target: c.def.target})
 	}
 	return steps
 }

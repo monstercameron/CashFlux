@@ -374,6 +374,7 @@ func HealthScreen() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
+	nav := router.UseNavigate()
 
 	now := time.Now()
 	month := now.Format("2006-01")
@@ -404,14 +405,19 @@ func HealthScreen() ui.Node {
 		Body:  Div(rows...),
 	})
 
-	// Prioritized steps.
+	// Prioritized steps — each is a drill-down to the screen where the user acts on
+	// it (R52: decision → action), routed by the step's stable Key.
 	stepNodes := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap3)}
 	for _, s := range r.Steps {
-		stepNodes = append(stepNodes, Div(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1),
-			Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), s.Factor),
-			Div(css.Class("t-caption", tw.TextDim), s.Action),
-			Div(css.Class("t-caption", tw.TextFaint), "Target: "+s.Target),
-		))
+		route := healthStepRoute(s.Key)
+		stepNodes = append(stepNodes, ui.CreateElement(healthStepRow, healthStepRowProps{
+			Factor: s.Factor, Action: s.Action, Target: s.Target, Route: route,
+			OnOpen: func() {
+				if route != "" {
+					nav.Navigate(uistate.RoutePath(route))
+				}
+			},
+		}))
 	}
 	var steps ui.Node = Fragment()
 	if len(r.Steps) > 0 {
@@ -425,6 +431,53 @@ func HealthScreen() ui.Node {
 		"Calculated on your device from your own data — never uploaded or shared.")
 
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5), hero, breakdown, steps, privacy)
+}
+
+// healthStepRoute maps a health-factor key to the screen where the user acts on
+// it, so a "Where to focus next" step becomes a one-click drill-down. Returns ""
+// for keys with no natural destination (the step then renders non-clickable).
+func healthStepRoute(key string) string {
+	switch key {
+	case "savings":
+		return "/transactions" // trim spending — review where the money goes
+	case "emergency":
+		return "/goals" // build an emergency-fund goal
+	case "debt":
+		return "/debt" // the debt-payoff planner
+	case "budget":
+		return "/budgets" // bring over-budget categories back in line
+	case "utilization":
+		return "/credit" // pay down card balances
+	case "nw-trend":
+		return "/accounts" // net worth composes from accounts
+	default:
+		return ""
+	}
+}
+
+type healthStepRowProps struct {
+	Factor, Action, Target, Route string
+	OnOpen                        func()
+}
+
+// healthStepRow renders one prioritized "focus next" step. When a Route exists
+// the whole row is a button that drills to that screen (R52 decision→action); it
+// is its own component so the OnClick hook sits at a stable position (steps render
+// in a variable-length loop — the framework no-hooks-in-loops rule).
+func healthStepRow(p healthStepRowProps) ui.Node {
+	open := ui.UseEvent(Prevent(func() { p.OnOpen() }))
+	body := Fragment(
+		Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), p.Factor),
+		Div(css.Class("t-caption", tw.TextDim), p.Action),
+		Div(css.Class("t-caption", tw.TextFaint), "Target: "+p.Target),
+	)
+	if p.Route == "" {
+		return Div(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1), body)
+	}
+	return Button(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1, tw.TextLeft, tw.WFull, tw.HoverBgHover),
+		Type("button"), Attr("data-testid", "health-step"),
+		Attr("aria-label", uistate.T("health.stepOpen", p.Factor)),
+		OnClick(open), body)
 }
 
 // healthFactorRow renders one factor in the /health breakdown: its label + value, a

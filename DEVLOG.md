@@ -3,6 +3,16 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — Integrate uncommitted working-tree WIP (unblock MIA #444/#453)
+
+**Context:** After shipping #443/#358/#474/#445/#390 this run, the working tree still carried a coherent, build-and-test-green set of polish changes that prior lanes never committed (health-score `Step.Key` + tests, C290 `/privacy` route, C41/C45 Quick-Add archived filter, plus reports/i18n/PWA support). This dirty `reports_screen.go`/`app.go`/`en.go` blocked #444 (MIA ScopeSelector) and #453 — I couldn't add to those files without bundling/clobbering the lane's work.
+
+**Decision:** With explicit user authorization to "integrate the stalled lane WIP," I committed the dirty working tree as one honest integration commit (mixed pre-existing WIP, green: `go build ./...` rc=0, `go test ./...` rc=0). This cleans the tree and unblocks #444/#453.
+
+**What I deliberately did NOT do:** force-apply the 3 git stashes (rebase debris from my earlier pushing-subagents' `git pull --rebase` on a dirty tree). `stash@{1}` alone is +2048/−4901 across 54 files (a large `widget_builder.go` refactor + node_modules churn) and conflicts with current `dashboard.go`/`web/index.html`; `stash@{2}` guts `widgets.go`; `stash@{0}` is a tiny CHANGELOG/DEVLOG fragment. Applying them would clobber/lose work and risk huge deletions — the opposite of "integrate." Left stored + flagged for manual reconciliation.
+
+**Next:** #444 (MIA ScopeSelector, now unblocked) → #461 (WebAuthn) → #352 (per-member auth) → #453, one Sonnet subagent at a time.
+
 ## 2026-06-27 — MIA-extend [#445]: scope on dashboard + insights + institution input
 
 **Goal:** Three parts: (8) replace the ad-hoc member KPI filter on the dashboard with the full scope engine; (9) pre-filter insights txns through scope; (10) add Institution input to the account forms with Combobox autocomplete and a backfill nudge.

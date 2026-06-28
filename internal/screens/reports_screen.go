@@ -979,11 +979,17 @@ func Reports() ui.Node {
 			overviewSection := Fragment(
 				If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
 					Title: "Money flow",
-					Body:  uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
+					// R52(b): drill to the ledger to trace the income→spending flows.
+					HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
+						Attr("data-testid", "moneyflow-drill"), uistate.T("reports.viewTransactions")),
+					Body: uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
 				})),
 				Div(css.Class("reports-grid"),
 					If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 						Title: uistate.T("reports.topPayees"),
+						// R52(b): drill to the ledger to see the payee detail behind the ranking.
+						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
+							Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions")),
 						Body: Fragment(
 							If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
 							Div(css.Class("rows"), payeeNodes),
@@ -991,6 +997,9 @@ func Reports() ui.Node {
 					})),
 					If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 						Title: uistate.T("reports.biggestExpenses"),
+						// R52(b): drill to the ledger to inspect the individual expenses.
+						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
+							Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions")),
 						Body: Fragment(
 							If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
 							Div(css.Class("rows"), largestNodes),
@@ -1003,6 +1012,9 @@ func Reports() ui.Node {
 					})),
 					If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 						Title: uistate.T("reports.incomeBySource"),
+						// R52(b): drill to the ledger to see the income transactions behind the sources.
+						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
+							Attr("data-testid", "income-drill"), uistate.T("reports.viewTransactions")),
 						Body: Fragment(
 							If(incomeTakeaway != "", P(css.Class("muted"), Attr("data-testid", "income-takeaway"), incomeTakeaway)),
 							If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
@@ -1051,6 +1063,26 @@ func Reports() ui.Node {
 			// ── Net worth: NW composition (headline, full-width) + the two supporting
 			// trend charts (cash-flow, savings-rate) paired side-by-side on wide
 			// screens via .reports-grid, so the tab reads as a dashboard. ──────────
+			// R52 "more chart types": an assets-vs-liabilities composition bar so the
+			// balance-sheet split reads visually, not just as three stat numbers.
+			// Assets green / liabilities red (semantic money tones, not the Tableau
+			// palette). Shown only when there's something to compare.
+			var nwCompBar ui.Node = Fragment()
+			if nwAssets.Amount != 0 || nwLiab.Amount != 0 {
+				compPairs := []struct {
+					Label  string
+					Amount int64
+				}{
+					{Label: uistate.T("accounts.assets"), Amount: absI64(nwAssets.Amount)},
+					{Label: uistate.T("dashboard.liabilities"), Amount: absI64(nwLiab.Amount)},
+				}
+				compSpec := reportsBarSpec(compPairs, decimals)
+				if len(compSpec.Series) > 0 && len(compSpec.Series[0].Points) == 2 {
+					compSpec.Series[0].Points[0].Color = "#54b884" // assets (money-positive)
+					compSpec.Series[0].Points[1].Color = "#d8716f" // liabilities (money-negative)
+				}
+				nwCompBar = uiw.Chart(uiw.ChartProps{Spec: compSpec, Height: "120px", Label: uistate.T("reports.assetsVsLiabilities"), CurrencySymbol: currency.Symbol(base)})
+			}
 			netWorthSection := Fragment(
 				// R-11: NW composition + trend as a single headline card.
 				// C218: HTML id anchor so /networth can deep-link to this section.
@@ -1068,6 +1100,8 @@ func Reports() ui.Node {
 							stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
 							If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
 						),
+						// R52: assets-vs-liabilities composition bar (visual balance-sheet split).
+						nwCompBar,
 						// C217: NW trend uses its own monthly labels, not the cash-flow period labels.
 						If(len(nw) >= 2, Fragment(
 							P(css.Class("muted"), uistate.T("reports.nwTrendMonthly", trendBuckets)),

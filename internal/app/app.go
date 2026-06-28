@@ -147,6 +147,20 @@ func Run() {
 			View: func() ui.Node { return screens.CustomPage(liveCustomPageSlug()) },
 		})
 	})
+	// C290: /privacy is a natural URL (and share-crawler target) for the privacy
+	// statement, which lives on the About screen. Register it as an explicit alias
+	// to the About view so it renders the About & Privacy page instead of silently
+	// falling through the "*" catch-all to the dashboard. Not added to screens.All()
+	// so it doesn't create a duplicate nav item; ActivePath points at /about so the
+	// rail highlights About.
+	r.Register(uistate.RoutePath("/privacy"), func(router.Attrs) *router.Element {
+		return ui.CreateElement(Shell, ShellProps{
+			Title:      uistate.T("nav.about"),
+			Subtitle:   uistate.T("screen.aboutSub"),
+			ActivePath: "/about",
+			View:       screens.About,
+		})
+	})
 	// Unknown paths fall back to the dashboard, still inside the Shell.
 	r.Register("*", func(router.Attrs) *router.Element {
 		home := screens.All()[0]

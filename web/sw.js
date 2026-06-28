@@ -2,12 +2,17 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v271";
+const CACHE = "cashflux-v272";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./favicon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
   "./marked.min.js", "./purify.min.js", "./d3.min.js",
+  // Self-hosted font stylesheet (the @font-face decls for Fraunces + Inter). The
+  // woff2 binaries under ./fonts/ are large (~1.4 MB across subsets); they cache via
+  // the runtime fetch handler on first online load rather than bloating the install
+  // precache. A never-been-online cold load falls back to system fonts gracefully.
+  "./fonts.css",
 ];
 
 self.addEventListener("install", (event) => {
@@ -16,8 +21,13 @@ self.addEventListener("install", (event) => {
   // no longer prevents the rest from being cached, so offline stays usable (L19).
   event.waitUntil(
     caches.open(CACHE)
-      .then((c) => Promise.all(CORE.map((u) => c.add(u).catch(() => {}))))
-      .catch(() => {})
+      // C312: don't swallow precache failures silently. Log which asset failed (a
+      // failed ./bin/main.wasm is the difference between an offline boot and a blank
+      // page), so the gap is visible in the console / SW devtools rather than hidden.
+      .then((c) => Promise.all(CORE.map((u) =>
+        c.add(u).catch((e) => console.warn("[sw] precache failed:", u, e && e.message ? e.message : e))
+      )))
+      .catch((e) => console.warn("[sw] caches.open failed:", e && e.message ? e.message : e))
       .then(() => self.skipWaiting())
   );
 });

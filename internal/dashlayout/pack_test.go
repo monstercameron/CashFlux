@@ -47,6 +47,7 @@ func TestPackDefaultReproducesArrangement(t *testing.T) {
 		"freshness":    {1, 9},
 		"highlight":    {3, 9},
 		"smart-digest": {1, 10},
+		"anomaly-hub":  {3, 10}, // R25 always-on anomaly hub (added to DefaultItems)
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

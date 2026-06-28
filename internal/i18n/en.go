@@ -108,7 +108,9 @@ var english = Catalog{
 	"nav.reports":                     "Reports",
 	"nav.health":                      "Financial health",
 	// R52/R64 a11y: accessible name for the financial-health score ring.
-	"health.ringLabel":                   "Financial health score: %d out of 100 — %s",
+	"health.ringLabel": "Financial health score: %d out of 100 — %s",
+	"health.stepOpen":  "%s — open the screen to act on this", // R52: focus-step drill-down
+
 	"health.ringLabelNoData":             "Financial health score: not enough data yet",
 	"nav.subscriptions":                  "Subscriptions",
 	"notify.staleTitle":                  "%s needs an update",
@@ -1503,11 +1505,13 @@ var english = Catalog{
 	"reports.deductibleTotal":          "Total deductible: %s",
 	"reports.new":                      "new", // C238: shown on delta badge when prior period is zero and current > 0
 	// C243: report-type selector tab labels.
-	"reports.viewOverview":   "Overview",
-	"reports.viewCategories": "Categories",
-	"reports.viewNetWorth":   "Net worth",
-	"reports.viewAccounts":   "View accounts", // R52(b): drill from net-worth composition to /accounts
-	"reports.viewAdvanced":   "Advanced",
+	"reports.viewOverview":        "Overview",
+	"reports.viewCategories":      "Categories",
+	"reports.viewNetWorth":        "Net worth",
+	"reports.viewAccounts":        "View accounts",         // R52(b): drill from net-worth composition to /accounts
+	"reports.viewTransactions":    "View transactions",     // R52(b): drill from payees/expenses cards to /transactions
+	"reports.assetsVsLiabilities": "Assets vs liabilities", // R52: balance-sheet composition bar
+	"reports.viewAdvanced":        "Advanced",
 	// Per-tab empty states: shown when a selected report tab has no data to display,
 	// so the area below the tabs never goes silently blank.
 	"reports.emptyNetWorth": "Add an account to see your net worth and how it's trending over time.",
