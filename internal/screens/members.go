@@ -154,7 +154,27 @@ func Members() ui.Node {
 
 	members := app.Members()
 	renderRow := func(m domain.Member) ui.Node {
-		return ui.CreateElement(MemberRow, memberRowProps{Member: m, OnDelete: deleteMember, OnSetDefault: setDefault, OnSave: saveMember, OnView: viewTransactions})
+		mID := m.ID // capture for closures
+		return ui.CreateElement(MemberRow, memberRowProps{
+			Member:       m,
+			OnDelete:     deleteMember,
+			OnSetDefault: setDefault,
+			OnSave:       saveMember,
+			OnView:       viewTransactions,
+			// C274: per-member PIN management.
+			MemberHasPIN: app.MemberHasPIN(mID),
+			OnSetPIN: func(id, pin string) error {
+				err := app.SetMemberPIN(id, pin)
+				if err == nil {
+					bump() // re-render so MemberHasPIN reflects the new state
+				}
+				return err
+			},
+			OnClearPIN: func(id string) {
+				app.ClearMemberPIN(id)
+				bump()
+			},
+		})
 	}
 	keyOf := func(m domain.Member) any { return m.ID }
 
@@ -400,6 +420,10 @@ type memberRowProps struct {
 	OnSetDefault func(string)
 	OnSave       func(id, name, color, dateStyle, defAccountID, role string)
 	OnView       func(string)
+	// C274: per-member PIN management (device-level access control).
+	MemberHasPIN bool
+	OnSetPIN     func(id, pin string) error // nil → PIN management unavailable
+	OnClearPIN   func(id string)            // nil → PIN management unavailable
 }
 
 // MemberRow is a per-member row. It can be edited inline (name + color). All
@@ -448,6 +472,40 @@ func MemberRow(props memberRowProps) ui.Node {
 		return nil
 	}, editKey)
 
+	// C274: per-member PIN management hooks — declared unconditionally so
+	// hook depth is stable regardless of the editing / showPINForm state.
+	showPINForm := ui.UseState(false)
+	pinInputS := ui.UseState("")
+	pinErrS := ui.UseState("")
+	onPINInput := ui.UseEvent(func(v string) { pinInputS.Set(v) })
+	onShowPINForm := ui.UseEvent(Prevent(func() {
+		showPINForm.Set(true)
+		pinInputS.Set("")
+		pinErrS.Set("")
+	}))
+	onCancelPINForm := ui.UseEvent(Prevent(func() {
+		showPINForm.Set(false)
+		pinInputS.Set("")
+		pinErrS.Set("")
+	}))
+	onSubmitPIN := ui.UseEvent(Prevent(func() {
+		if props.OnSetPIN == nil {
+			return
+		}
+		if err := props.OnSetPIN(m.ID, pinInputS.Get()); err != nil {
+			pinErrS.Set(uistate.T("profileSwitch.pinTooWeak"))
+		} else {
+			pinErrS.Set("")
+			showPINForm.Set(false)
+			pinInputS.Set("")
+		}
+	}))
+	onRemovePIN := ui.UseEvent(Prevent(func() {
+		if props.OnClearPIN != nil {
+			props.OnClearPIN(m.ID)
+		}
+	}))
+
 	if editing.Get() {
 		return Div(css.Class("row"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
@@ -490,6 +548,58 @@ func MemberRow(props memberRowProps) ui.Node {
 	// badge, replacing the generic "Default"/"Member" cosmetic labels. The
 	// "default" quick-add-seed chip is kept separately and visually distinct.
 	roleLabel := memberrole.Label(memberrole.Resolve(m))
+
+	// C274: build the PIN management section. Two modes:
+	//  - showPINForm=true  → inline set/change form
+	//  - showPINForm=false → "Set PIN" button, or "Change PIN"+"Remove PIN" if set
+	var pinSection ui.Node
+	if props.OnSetPIN != nil {
+		if showPINForm.Get() {
+			pinLbl := uistate.T("profileSwitch.setPIN")
+			if props.MemberHasPIN {
+				pinLbl = uistate.T("profileSwitch.changePIN")
+			}
+			pinSection = Form(css.Class("form-grid"),
+				Attr("data-testid", "member-pin-form-"+m.ID),
+				OnSubmit(onSubmitPIN),
+				uiw.FormField(uistate.T("profileSwitch.pinNew"),
+					Input(css.Class("field"), Type("password"),
+						Attr("autocomplete", "off"),
+						Attr("data-testid", "member-pin-input-"+m.ID),
+						Value(pinInputS.Get()),
+						OnInput(onPINInput),
+					),
+				),
+				If(pinErrS.Get() != "", P(css.Class("notice-danger"), pinErrS.Get())),
+				Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
+				Button(css.Class("btn"), Type("button"), OnClick(onCancelPINForm),
+					uistate.T("profileSwitch.pinFormCancel")),
+			)
+		} else if props.MemberHasPIN {
+			pinSection = Span(
+				Button(css.Class("btn"), Type("button"),
+					Title(uistate.T("profileSwitch.changePIN")),
+					Attr("data-testid", "member-change-pin-"+m.ID),
+					OnClick(onShowPINForm),
+					uistate.T("profileSwitch.changePIN"),
+				),
+				Button(css.Class("btn"), Type("button"),
+					Title(uistate.T("profileSwitch.removePIN")),
+					Attr("data-testid", "member-remove-pin-"+m.ID),
+					OnClick(onRemovePIN),
+					uistate.T("profileSwitch.removePIN"),
+				),
+			)
+		} else {
+			pinSection = Button(css.Class("btn"), Type("button"),
+				Title(uistate.T("profileSwitch.setPIN")),
+				Attr("data-testid", "member-set-pin-"+m.ID),
+				OnClick(onShowPINForm),
+				uistate.T("profileSwitch.setPIN"),
+			)
+		}
+	}
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"),
@@ -509,6 +619,7 @@ func MemberRow(props memberRowProps) ui.Node {
 		),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		pinSection,
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("members.deleteTitle")), Title(uistate.T("members.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }

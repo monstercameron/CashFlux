@@ -3,6 +3,31 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C274 [#352]: Local per-member profile + PIN switch
+
+**Goal:** "Who's using CashFlux?" — let a shared household device present a member picker so each person gets their own scoped view, with an optional PIN to prevent casual shoulder-surf access-switches.
+
+**SCOPE BOUNDARY (critical):** This is device-level profile gating and scope-switch auth only. There is no cryptographic per-member data isolation — all members share the same local dataset. A member's PIN does not encrypt their data; it only gates the scope-switch. This is a shared-device convenience layer, not per-member logins. This is documented in `profileswitch.go` package comment and the CHANGELOG.
+
+**Dependency architecture:**
+`app` imports `screens` (for the shell), and `screens` imports `app` would create a cycle. The spec said to put PIN functions in `internal/app/memberpin.go`, but the per-member PIN management also needs to reach `MemberHasPIN` etc. from `screens/members.go`. Resolution: implement core PIN logic as methods on `*appstate.App` in `internal/appstate/memberpin_js.go` (wasm-tagged). Since `screens` already imports `appstate`, `members.go` can call `appstate.Default.SetMemberPIN(...)` directly. The `app/memberpin.go` wrappers delegate to `appstate.Default` for use within the `app` package. No import cycle.
+
+**GWC hook compliance:**
+- `ProfileSwitchHost` has 8 hooks all declared unconditionally before the `if !open.Get()` early return, so hook depth is stable across open/closed renders.
+- Per-card click handlers are wrapped in `profileCardItem` sub-components (one `UseEvent` per instance). The outer picker never calls `UseEvent` inside the member loop.
+- `MemberRow` PIN hooks (8 total) are declared unconditionally before the `if editing.Get()` conditional branch.
+
+**Owner override design:**
+Owner may switch to any profile without the target's PIN. Rationale: the device owner manages the household account and must not be locked out by another member setting a PIN. The override is disclosed in the picker (note only visible to the current owner). `uistate.ActiveIdentityID()` is used to identify the caller at switch time (not `UseActiveMember` which is the view scope).
+
+**`cards...` spread bug:**
+Initially wrote `Div(css.Class("cf-ps-cards"), cards...)` which is illegal Go: you cannot mix a literal variadic argument with a slice spread when the function takes `...any`. Fixed by seeding `cards := []any{css.Class("cf-ps-cards")}` so `Div(cards...)` is the sole spread.
+
+**`uiw.LabeledField` does not exist:**
+The `internal/ui` package exports `FormField(label, control)`, not `LabeledField`. One build-time error; fixed immediately.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build ./internal/app/ ./internal/screens/ ./internal/i18n/` rc=0; `go test ./internal/applock/ ./internal/screenlint/` pass.
+
 ## 2026-06-27 — C282 [#461]: WebAuthn PRF passkey local unlock
 
 **Goal:** Add fingerprint / face / device-PIN unlock as an additive second path on top of the argon2id passcode gate (#460). Build-verified only; the WebAuthn biometric ceremony was NOT runtime-tested (headless); passcode fallback preserved, no lockout path.

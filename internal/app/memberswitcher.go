@@ -39,6 +39,10 @@ func MemberSwitcher() uic.Node {
 	// MIA-extend (#445-8): read the active scope so the switcher preserves all
 	// non-owner dimensions (Institutions, Types, AccountIDs) when changing members.
 	scopeAtom := uistate.UseActiveScope()
+	// C274: "Switch profile…" button opens the "Who's using CashFlux?" modal.
+	// UseEvent registered here (at a stable position, not inside a loop) so
+	// the hook depth is always constant regardless of the member count.
+	openSwitch := uic.UseEvent(func() { openProfileSwitch() })
 	cur := scopeAtom.Get()
 	current := ""
 	if len(cur.Owners) == 1 {
@@ -81,5 +85,18 @@ func MemberSwitcher() uic.Node {
 		onChange,
 	}
 	args = append(args, opts...)
-	return Select(args...)
+	// C274: render the scope <select> alongside a "Switch profile…" button
+	// that opens the device-user-switching modal. Wrapped in a Span so the
+	// pair sits together in the top-bar without introducing a block element.
+	return Span(css.Class("cf-member-switcher-wrap"),
+		Select(args...),
+		Button(css.Class("btn", tw.Text13),
+			Type("button"),
+			Attr("aria-label", uistate.T("profileSwitch.switchBtn")),
+			Attr("data-testid", "profile-switch-btn"),
+			Title(uistate.T("profileSwitch.switchBtn")),
+			OnClick(openSwitch),
+			uistate.T("profileSwitch.switchBtn"),
+		),
+	)
 }

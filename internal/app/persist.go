@@ -52,6 +52,9 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:webauthn-credid": true,
 	"cashflux:webauthn-salt":   true,
 	"cashflux:webauthn-vault":  true,
+	// Per-member PIN map (C274) — PINs are a device-level access control layer;
+	// wiping financial data must not lock members out of their own profiles.
+	"cashflux:member-pins": true,
 }
 
 // keptOnWipePrefixes preserves whole families: other workspaces' bundled state and
