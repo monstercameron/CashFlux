@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -49,6 +50,11 @@ func Members() ui.Node {
 		owned := 0
 		for _, a := range app.Accounts() {
 			if a.OwnerID == memberID {
+				owned++
+			} else if _, ok := a.OwnershipShares[memberID]; ok {
+				// Ghost-member guard: also count membership as a fractional-ownership
+				// share holder. Without this, a deleted member leaves dangling keys in
+				// OwnershipShares on all accounts where it was a co-owner (C279 delta).
 				owned++
 			}
 		}
@@ -208,6 +214,22 @@ func Members() ui.Node {
 		))
 	}
 
+	// C279: income split this period — equal apportionment of total household
+	// income across non-group members. Errors (e.g. FX rates unavailable for a
+	// foreign-currency transaction) silently suppress the card rather than
+	// showing zeros that would imply "no income this period".
+	var incomeRows []ui.Node
+	if splits, err := allocate.SplitPeriodIncome(app.Transactions(), members, periodStart, periodEnd, base, rates); err == nil && len(splits) > 0 {
+		incomeRows = make([]ui.Node, 0, len(splits))
+		for _, s := range splits {
+			amt := money.New(s.Amount, base)
+			incomeRows = append(incomeRows, Div(css.Class("row"),
+				Span(css.Class("row-desc"), s.Name),
+				Span(css.Class("amount"), fmtMoney(amt)),
+			))
+		}
+	}
+
 	// When the reassign panel opens, move focus to its target select so a
 	// keyboard user lands on the choice they must make (L-quickhit #47).
 	ui.UseEffect(func() func() {
@@ -270,6 +292,12 @@ func Members() ui.Node {
 		If(len(members) > 0 && len(spendRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("members.spendTitle"),
 			Rows:  spendRows,
+		})),
+		// C279: income split this period — equal apportionment of total period income
+		// shown alongside the spending card so members can compare contribution vs. burn.
+		If(len(members) > 0 && len(incomeRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("members.incomeSplitTitle"),
+			Rows:  incomeRows,
 		})),
 	)
 }

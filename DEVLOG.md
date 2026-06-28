@@ -3,6 +3,18 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-27 — C279/C280 delta [#474]: Ghost-member guard + DRY splitter + income-split card
+
+**Context:** Three remaining deltas to close the F41 per-member umbrella (#474). The prior session had already shipped fractional ownership (`OwnershipShares`), the spending card on `/members`, and active-member scoping. These three pieces are the guard rails and the income counterpart.
+
+**Delta 1 — Ghost-member guard in `ownedCount`:** The existing check only caught members as `OwnerID`. If a member appeared only as a key in `account.OwnershipShares` (fractional co-holder with a different sole `OwnerID`), deleting them would bypass the reassign gate and leave dangling map keys. Fix: added `else if _, ok := a.OwnershipShares[memberID]; ok { owned++ }` in the accounts loop inside `ownedCount`. Used `else if` to avoid double-counting the unusual case where a member is both the `OwnerID` AND a share key. The `appstate.ReassignOwner` cleanup (introduced in the same prior session) already handles the map redistribution on the store side; this fix wires the UI guard to trigger it.
+
+**Delta 2 — DRY splitter:** `ledger.SplitByShares` had a full copy of the Hamilton/largest-remainder implementation. `split.ByWeights` is the canonical version (already tested with 11 cases). Refactored `SplitByShares` to a thin adapter: pre-sort member IDs lexically → build `[]WeightedMember` → call `ByWeights` on the absolute value → restore sign. Tie-breaking is identical because `ByWeights` breaks by slice index (which equals lexical order after pre-sort). All 11 existing shares tests pass unchanged; no behavioral delta.
+
+**Delta 3 — Income split:** New `allocate.SplitPeriodIncome`. Equal-weight design chosen as the initial fallback — no per-member income-weight configuration exists yet; a future field on `domain.Member` can be added without changing the function signature. Returns `nil, nil` when all members are the group pseudo-member, keeping the UI card invisible rather than showing a misleading "0 members" state. FX errors surface as returned errors (not silently swallowed) so the caller can choose to suppress the card rather than display zeros that imply "no income". 9 table-driven tests cover every significant path including the `ErrUnknownRate` sentinel propagation and transfer exclusion. i18n in a new file (`en_membersplit.go`, init-merge) to avoid touching `en.go` which has other-agent WIP. Card on `/members` gated by `len(incomeRows) > 0` — zero income or FX error → card absent.
+
+**Verify:** `go build ./...` exit 0; `go test ./internal/ledger/ ./internal/split/ ./internal/allocate/ ./internal/domain/` all pass; `GOOS=js GOARCH=wasm go build ./internal/screens/ ./internal/app/` exit 0.
+
 ## 2026-06-27 — MIA-foundation [#443]: Account.Institution + saved views + active-scope atom
 
 **Goal:** Lay the pure-Go and UI-state infrastructure for Multi-Institution Analytics without building any UI (that's tickets #444 and #445). Three orthogonal pieces, bottom-up.

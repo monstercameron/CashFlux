@@ -636,8 +636,32 @@ func (a *App) ReassignOwner(oldID, newID string) (int, error) {
 	}
 	moved := 0
 	for _, ac := range a.Accounts() {
+		changed := false
 		if ac.OwnerID == oldID {
 			ac.OwnerID, ac.Scope = newID, scope
+			changed = true
+		}
+		// Ghost-member guard: also clean up OwnershipShares when the deleted
+		// member appears as a share holder (even if not the OwnerID). Rebuild
+		// the map without oldID, redistribute its percentage to newID, then
+		// clear the map entirely if fewer than two holders remain so the account
+		// reverts to single-owner OwnerID behaviour.
+		if oldShare, ok := ac.OwnershipShares[oldID]; ok {
+			newShares := make(map[string]int, len(ac.OwnershipShares))
+			for k, v := range ac.OwnershipShares {
+				if k != oldID {
+					newShares[k] = v
+				}
+			}
+			newShares[newID] += oldShare
+			if len(newShares) < 2 {
+				ac.OwnershipShares = nil
+			} else {
+				ac.OwnershipShares = newShares
+			}
+			changed = true
+		}
+		if changed {
 			if err := a.store.PutAccount(ac); err != nil {
 				return moved, err
 			}
