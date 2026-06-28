@@ -433,6 +433,143 @@ func hasConflictBackup(workspaceID string) bool {
 	return ok
 }
 
+// resolveConflictKeepLocal re-pushes the stashed local dataset with Force=true
+// so the server accepts it unconditionally (bypassing the LWW staleness check),
+// then clears the conflict backup and marks sync as settled. Called by
+// SyncConflictHost's "Keep my changes" action. (C309 / #464)
+func resolveConflictKeepLocal() {
+	pr := uistate.LoadPrefs().Normalize()
+	if !pr.BackendActive() {
+		return
+	}
+	r := loadRegistry()
+	w, ok := r.Active()
+	if !ok {
+		return
+	}
+	item, ok := loadConflictBackup(w.ID)
+	if !ok {
+		// Nothing stashed — conflict may have already been resolved; reset status.
+		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		return
+	}
+	go func() {
+		syncPushMu.Lock()
+		defer syncPushMu.Unlock()
+		setSyncStatus(syncStatus{State: "syncing"})
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		if err != nil {
+			setSyncStatus(syncStatus{State: "error", Pending: 0, Message: "backend unavailable"})
+			logSyncError("conflict resolve-keep dial failed", err)
+			return
+		}
+		defer conn.Close()
+		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, item.WorkspaceID, []byte(item.Dataset))
+		if err != nil {
+			setSyncStatus(syncStatus{State: "error", Message: "artifact upload failed"})
+			logSyncError("conflict resolve-keep artifact upload failed", err)
+			return
+		}
+		var resp backendrpc.PutWorkspaceResponse
+		err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+			Workspace: backendrpc.Workspace{
+				ID:       item.WorkspaceID,
+				Name:     item.Name,
+				Color:    item.Color,
+				Sort:     item.Sort,
+				DeviceID: item.DeviceID,
+			},
+			Dataset:         dataset,
+			ClientUpdatedAt: item.ClientUpdatedAt,
+			Force:           true, // bypass LWW staleness check — user chose "keep local"
+		}, &resp, backendrpc.JSONCallOptions()...)
+		if err != nil {
+			setSyncStatus(syncStatus{State: "error", Message: "force push failed"})
+			logSyncError("conflict resolve-keep force push failed", err)
+			return
+		}
+		// Force=true means the server always accepts; clear the backup and settle.
+		clearConflictBackup(item.WorkspaceID)
+		saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
+		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		uistate.PostNotice(uistate.T("sync.conflictResolvedKeepLocal"), false)
+	}()
+}
+
+// resolveConflictUseServer pulls the current server snapshot, applies it
+// locally, and discards the stashed local dataset ONLY after a successful
+// import — so the stash is never lost due to a mid-operation failure. Called by
+// SyncConflictHost's "Use server version" action. (C309 / #464)
+func resolveConflictUseServer() {
+	pr := uistate.LoadPrefs().Normalize()
+	if !pr.BackendActive() {
+		return
+	}
+	r := loadRegistry()
+	w, ok := r.Active()
+	if !ok {
+		return
+	}
+	wID := w.ID
+	go func() {
+		setSyncStatus(syncStatus{State: "syncing"})
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		if err != nil {
+			// Revert to conflict so the chip still offers the modal.
+			setSyncStatus(syncStatus{State: "conflict", Message: "backend unavailable"})
+			logSyncError("conflict resolve-server dial failed", err)
+			return
+		}
+		defer conn.Close()
+		var resp backendrpc.GetWorkspaceResponse
+		err = conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: wID}, &resp, backendrpc.JSONCallOptions()...)
+		if err != nil {
+			setSyncStatus(syncStatus{State: "conflict"})
+			logSyncError("conflict resolve-server pull failed", err)
+			return
+		}
+		if !resp.Found || len(resp.Dataset) == 0 {
+			// Server has no snapshot — treat as resolved (nothing to pull).
+			clearConflictBackup(wID)
+			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+			return
+		}
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, wID, resp.Dataset)
+		if err != nil {
+			setSyncStatus(syncStatus{State: "conflict"})
+			logSyncError("conflict resolve-server hydrate failed", err)
+			return
+		}
+		app := appstate.Default
+		if app == nil {
+			setSyncStatus(syncStatus{State: "conflict"})
+			return
+		}
+		if err := app.ImportJSON(dataset); err != nil {
+			setSyncStatus(syncStatus{State: "conflict"})
+			logSyncError("conflict resolve-server import failed", err)
+			return
+		}
+		lsSet(datasetStoreKey, string(dataset))
+		hadLocalDataset = true
+		saveSyncMeta(wID, syncMeta{
+			UpdatedAt: resp.Workspace.UpdatedAt,
+			Version:   resp.Workspace.Version,
+			Hash:      datasetHash(dataset),
+		})
+		// Only discard the stash after the import has succeeded — the user's local
+		// edit is recoverable until this point.
+		clearConflictBackup(wID)
+		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		uistate.PostNotice(uistate.T("sync.conflictResolvedUseServer"), false)
+		reloadPage()
+	}()
+}
+
 func enqueueSyncMutation(item queuedSyncMutation) {
 	upsertQueuedSyncMutation(item)
 	setSyncStatus(syncStatus{State: "syncing", Pending: len(loadSyncQueue())})

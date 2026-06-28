@@ -81,6 +81,12 @@ func SyncChip() uic.Node {
 	}
 
 	onClick := uic.UseEvent(func() {
+		// In conflict state the chip opens the resolve modal (C309 / #464) rather
+		// than the generic settings panel — the user needs to make an explicit choice.
+		if cur := loadSyncStatus(); cur.State == "conflict" {
+			openSyncConflict()
+			return
+		}
 		requestBackendSyncNow()
 		settings.Set(uistate.Global())
 	})

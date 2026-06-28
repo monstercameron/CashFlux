@@ -3,6 +3,33 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — C307/C309 [#464]: iOS install hint + sync conflict resolve-modal
+
+**What:** Three-part completion of R32-sync-pwa. (A) iOS "Add to Home Screen" hint. (B) Sync conflict resolve-modal with "Keep my changes" (force-push) and "Use server version" (safe pull). (C) C308 native note in TODOS.
+
+**Part A — iOS install hint (`web/index.html`):**
+iOS Safari never fires `beforeinstallprompt`, so the existing `installBtn` IIFE never shows on iPhone/iPad. A separate `<div id="iosHintBanner">` + `<script>` block handles iOS exclusively: checks `/iP(hone|ad|od)/i.test(navigator.userAgent) && !navigator.standalone` and the `cashflux:ios-hint-dismissed` localStorage flag. If the banner has never been dismissed and the UA matches an iOS device in non-standalone mode, the banner appears with instructions to tap Share → "Add to Home Screen". The × button sets the localStorage key so it never reappears. Styled inline with the dark-green `#1f2c24 / #356b50 / #7fd0a3` palette matching the install button. Strictly additive — the existing `installBtn` IIFE, `manifest.webmanifest`, and `sw.js` are untouched.
+
+**Part B — Sync conflict resolve-modal (`internal/app/syncconflict.go`):**
+Modelled on the `ProfileSwitchHost` singleton pattern: one `state.UseAtom("sync:conflict:open", false)` atom, three `UseEvent` hooks, all unconditional before any early return. `SyncConflictHost` is mounted in `shell.go` after `ProfileSwitchHost`. `openSyncConflict()` is a package-level function that external callers use to open it; `syncchip.go` now calls it (via a fresh `loadSyncStatus()` inside the `UseEvent` closure — not a captured render-time value) when the chip state is "conflict", instead of opening the generic settings panel.
+
+Two resolve helpers live in `sync_client.go`:
+- `resolveConflictKeepLocal()`: loads the conflict-backup stash (`loadConflictBackup`), goroutine with `syncPushMu.Lock()`, dials backend, calls `prepareBackendSyncDataset`, then `conn.Invoke` with `PutWorkspaceRequest{Force: true}`. The `Force` field was already present in `backendrpc/ai.go` and honored by the server's LWW check — no proto/struct change needed. On success: `clearConflictBackup`, `saveSyncMeta`, `setSyncStatus("synced")`, notice toast. On failure: reverts to "error" (chip stays clickable).
+- `resolveConflictUseServer()`: goroutine (no push mutex — read + import path), dials, `GetWorkspace`, `hydrateBackendSyncDataset`, `app.ImportJSON`, persists to `datasetStoreKey`. Critically, `clearConflictBackup(wID)` is called ONLY after `ImportJSON` succeeds — if any step fails, the stash is preserved and the chip reverts to "conflict" state so the modal is still accessible. After success: `saveSyncMeta`, `setSyncStatus("synced")`, notice, `reloadPage()`.
+
+i18n: 13 keys in `internal/i18n/en_syncconflict.go` using the init-merge pattern (separate file, `func init()` merges into `english` map — `en.go` is never touched).
+
+**Part C — C308 note in `TODOS.md`:**
+Paragraph added after the C308 bullet: PWA is the shipped pragmatic path; Capacitor with 60 MB Go-WASM is untested (WKWebView memory/large-binary risks); native rewrite is a multi-month initiative; right sequence is ship PWA → measure retention → evaluate native.
+
+**Key decisions:**
+- `Force: true` flag availability was confirmed in `backendrpc.PutWorkspaceRequest` (already existed); the server's LWW staleness check already has a bypass for this field.
+- Safe discard ordering: the stash/backup is cleared ONLY after the import path fully succeeds, not before — data loss is impossible even if the network drops mid-resolution.
+- Hook stability: all `UseAtom` + `UseEvent` calls precede the `if !open.Get() { return }` early return, matching the GWC framework rule; mirrored the ProfileSwitchHost pattern exactly.
+- `loadSyncStatus()` is called fresh inside the onClick closure rather than capturing the render-time `st` — ensures the conflict check uses current state at click time, not stale render-time state.
+
+**Verify:** `go build ./...` rc=0; `GOOS=js GOARCH=wasm go build ./internal/app/ ./internal/i18n/` rc=0; `go test ./internal/app/ ./internal/screenlint/` pass.
+
 ## 2026-06-28 — R26 [#453]: Pure smart-settings read + boot-time init + stale-state migration
 
 **Problem:** `LoadSmartSettings()` was performing a WRITE (`SaveSmartSettings`) as a side-effect of a READ. If the SQLite KV/settings store was not yet ready when `LoadSmartSettings` was first called, the empty-KV path triggered a default-write that could race with store init and either clobber real persisted settings or be silently lost. Separately, legacy pre-C254 rows (Version==0) had no migration path, so users who installed before the C254 "free features on by default" change would not automatically get free insights enabled.

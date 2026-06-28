@@ -209,6 +209,9 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(DialogHost),
 		// C274: profile-switch modal — "Who's using CashFlux?" device user-switching.
 		uic.CreateElement(ProfileSwitchHost),
+		// C309 (#464): sync-conflict resolve modal — "Keep my changes" (force-push)
+		// or "Use server version" (pull + discard stash). Opened by the amber chip.
+		uic.CreateElement(SyncConflictHost),
 		uic.CreateElement(UpgradeSheet),
 		uic.CreateElement(Toast),
 		// Headless SMART proactive digest driver: fires on cadence when opted in,

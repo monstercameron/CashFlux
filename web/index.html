@@ -3193,6 +3193,42 @@
       })();
     </script>
 
+    <!-- iOS "Add to Home Screen" hint (C307 / #464): iOS Safari never fires
+         beforeinstallprompt so the installBtn above never shows there. This
+         separate, dismissible banner surfaces the manual A2HS path instead.
+         Does NOT touch the installBtn IIFE above. -->
+    <div id="iosHintBanner"
+      style="display:none; position:fixed; bottom:1rem; right:1rem; z-index:30;
+             max-width:300px; padding:0.7rem 1rem; border-radius:6px;
+             background:#1f2c24; border:1px solid #356b50; color:#7fd0a3;
+             font-size:0.88rem; line-height:1.45; box-shadow:0 2px 8px rgba(0,0,0,.4);">
+      <button id="iosHintClose" type="button"
+        style="float:right; margin-left:0.6rem; background:none; border:none;
+               color:#7fd0a3; cursor:pointer; font-size:1.1rem; line-height:1;
+               padding:0;" aria-label="Dismiss install hint">&#x00D7;</button>
+      On iPhone or iPad: tap <strong>Share</strong>, then
+      <strong>'Add to Home Screen'</strong> to install CashFlux.
+    </div>
+    <script>
+      // iOS A2HS hint: shown only on iOS Safari outside standalone mode, once
+      // per browser (localStorage flag prevents re-showing after dismiss).
+      (function () {
+        var IOS_KEY = 'cashflux:ios-hint-dismissed';
+        if (!/iP(hone|ad|od)/i.test(navigator.userAgent)) return;
+        if (navigator.standalone) return;
+        if (localStorage.getItem(IOS_KEY)) return;
+        var banner = document.getElementById('iosHintBanner');
+        var close  = document.getElementById('iosHintClose');
+        if (banner) banner.style.display = 'block';
+        if (close) {
+          close.addEventListener('click', function () {
+            localStorage.setItem(IOS_KEY, '1');
+            if (banner) banner.style.display = 'none';
+          });
+        }
+      })();
+    </script>
+
     <!-- D3 (pinned) + the chart shim the Go ui.Chart component drives. Loaded
          before the wasm boot so window.cashfluxRenderChart exists by first paint;
          both are service-worker cached for offline use. -->
