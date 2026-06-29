@@ -182,6 +182,18 @@ func TestCatalogSortColumnsResolve(t *testing.T) {
 		Start:        mustDate("2026-06-01"), End: mustDate("2026-07-01"), Now: now,
 	}
 	for _, c := range widgetcatalog.CollectionDefs() {
+		// A collection's default sort must be one of its offered sort columns.
+		if c.DefaultSort != "" {
+			ok := false
+			for _, sfld := range c.Sort {
+				if sfld.Column == c.DefaultSort {
+					ok = true
+				}
+			}
+			if !ok {
+				t.Errorf("collection %q: DefaultSort %q is not in its Sort columns", c.Value, c.DefaultSort)
+			}
+		}
 		for _, sfld := range c.Sort {
 			for _, arg := range []string{sfld.Column, "-" + sfld.Column} {
 				fr, err := HydrateFrame(&domain.Pipeline{

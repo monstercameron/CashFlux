@@ -89,8 +89,11 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	limit := ui.UseState("6")
 	listDisplay := ui.UseState("cap") // cap | scroll | page
 	listLink := ui.UseState(true)     // add a "view all" link to the source screen
-	sortBy := ui.UseState("")         // list sort column ("" = source's natural order)
-	sortDir := ui.UseState("desc")    // desc | asc (engine arg gets a "-" prefix for desc)
+	// Sort defaults to the initial collection's recommended order (transactions →
+	// newest first) so a fresh list looks intentional; it stays fully overridable.
+	defCol, defDesc := widgetcatalog.DefaultSort("transactions")
+	sortBy := ui.UseState(defCol)            // list sort column ("" = source's natural order)
+	sortDir := ui.UseState(sortDirOf(defDesc)) // desc | asc (engine arg gets a "-" prefix for desc)
 	chartIsSeries := ui.UseState(true)
 	blocks := ui.UseState(widgetcatalog.IncomeVsSpendingBlocks())
 	cols := ui.UseState("2")
@@ -101,6 +104,13 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	activeStarter := ui.UseState("")
 	layoutAtom := uistate.UseLayoutItems()
 	nav := router.UseNavigate()
+
+	// applyDefaultSort pre-selects a collection's recommended order (still overridable).
+	applyDefaultSort := func(coll string) {
+		col, desc := widgetcatalog.DefaultSort(coll)
+		sortBy.Set(col)
+		sortDir.Set(sortDirOf(desc))
+	}
 
 	spec := studioBuildSpec(studioSpecInput{
 		kind: kind.Get(), title: title.Get(), formula: formula.Get(), format: format.Get(), sub: sub.Get(),
@@ -137,9 +147,8 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	applyStarter := func(st widgetcatalog.Starter) {
 		kind.Set(st.Kind)
 		title.Set(st.Title)
-		sub.Set(st.Sub)    // always reset the caption so a starter never inherits stale text
-		sortBy.Set("")     // a preset uses the source's natural order until the user sorts
-		sortDir.Set("desc")
+		sub.Set(st.Sub)            // always reset the caption so a starter never inherits stale text
+		applyDefaultSort(st.Collection) // a preset adopts its source's recommended sort
 		if st.Formula != "" {
 			formula.Set(st.Formula)
 		}
@@ -203,9 +212,9 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 		},
 		setSortDir: sortDir.Set,
 		setKind:  func(v string) { kind.Set(v); activeStarter.Set("") }, setTitle: title.Set, setFormula: formula.Set, setFormat: format.Set, setSub: sub.Set,
-		// Changing the data source clears the sort column — its columns differ, so a
-		// stale choice could reference a column the new source doesn't have.
-		setCollection: func(v string) { collection.Set(v); sortBy.Set("") }, setSeries: series.Set,
+		// Changing the data source adopts that collection's default sort — its columns
+		// differ, so this both gives a sensible order and avoids a stale column choice.
+		setCollection: func(v string) { collection.Set(v); applyDefaultSort(v) }, setSeries: series.Set,
 		setChartSrc:   func(v string) { chartIsSeries.Set(v == "series") },
 		setLimit:      limit.Set, setCols: cols.Set, setRows: rows.Set,
 		toggleAdvanced: func() {
@@ -407,6 +416,14 @@ func studioBuildSpec(in studioSpecInput) domain.WidgetSpec {
 		spec.Content = domain.ContentLayout{Mode: domain.LayoutCustom, Blocks: append([]domain.Block(nil), in.blocks...)}
 	}
 	return spec
+}
+
+// sortDirOf maps a descending bool to the sort-direction value the form/spec use.
+func sortDirOf(desc bool) string {
+	if desc {
+		return "desc"
+	}
+	return "asc"
 }
 
 func atoiOr(s string, def int) int {
@@ -634,7 +651,7 @@ func studioDesignerForm(s studioDesignerFormState) ui.Node {
 		// keeps the source's natural order (e.g. newest transactions first). The
 		// direction labels adapt to the column type: High↔Low for numbers, A↔Z for text.
 		if sortFields := widgetcatalog.SortFields(s.collection); len(sortFields) > 0 {
-			sortOpts := []widgetcatalog.Option{{Value: "", Label: "Default order"}}
+			sortOpts := []widgetcatalog.Option{{Value: "", Label: "Natural order"}}
 			selNumeric := true
 			for _, sfld := range sortFields {
 				sortOpts = append(sortOpts, widgetcatalog.Option{Value: sfld.Column, Label: sfld.Label})

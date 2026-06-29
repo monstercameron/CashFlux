@@ -221,22 +221,33 @@ type Collection struct {
 	Value, Label     string
 	Route, LinkLabel string      // full-data screen; empty Route = no "view all" target
 	Sort             []SortField // columns this collection's rows can be ordered by
+	// DefaultSort is the column a fresh list of this collection is ordered by out of
+	// the box (must be one of Sort's columns; "" = the source's natural order).
+	// DefaultDesc sets that default's direction (true = descending). The designer
+	// pre-selects this so a new list looks intentional, and it stays fully overridable.
+	DefaultSort string
+	DefaultDesc bool
 }
 
 // collectionDefs is the canonical collection list. Add a collection here once and it
 // flows to the picker (Collections), the "view all" link (CollectionRoute) and the
-// sort control (SortFields) alike. Sort columns must match the widgetsource Frame.
+// sort control (SortFields/DefaultSort) alike. Sort columns must match the widgetsource Frame.
 var collectionDefs = []Collection{
 	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions",
-		Sort: []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "desc", Label: "Description"}}},
+		Sort:        []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "desc", Label: "Description"}},
+		DefaultSort: "date", DefaultDesc: true}, // newest first
 	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts",
-		Sort: []SortField{{Column: "balance", Label: "Balance", Numeric: true}, {Column: "name", Label: "Name"}}},
+		Sort:        []SortField{{Column: "balance", Label: "Balance", Numeric: true}, {Column: "name", Label: "Name"}},
+		DefaultSort: "balance", DefaultDesc: true}, // largest balance first
 	{Value: "budgets", Label: "Budget status", Route: "/budgets", LinkLabel: "View all budgets",
-		Sort: []SortField{{Column: "percent", Label: "Used %", Numeric: true}, {Column: "name", Label: "Name"}}},
+		Sort:        []SortField{{Column: "percent", Label: "Used %", Numeric: true}, {Column: "name", Label: "Name"}},
+		DefaultSort: "percent", DefaultDesc: true}, // most-used / at-risk first
 	{Value: "bills", Label: "Upcoming bills", Route: "/bills", LinkLabel: "View all bills",
-		Sort: []SortField{{Column: "due", Label: "Due date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "name", Label: "Name"}}},
+		Sort:        []SortField{{Column: "due", Label: "Due date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "name", Label: "Name"}},
+		DefaultSort: "due", DefaultDesc: false}, // soonest due first
 	{Value: "spending-breakdown", Label: "Spending by category", Route: "/reports", LinkLabel: "Open spending reports",
-		Sort: []SortField{{Column: "amount", Label: "Amount", Numeric: true}, {Column: "percent", Label: "Share", Numeric: true}, {Column: "name", Label: "Category"}}},
+		Sort:        []SortField{{Column: "amount", Label: "Amount", Numeric: true}, {Column: "percent", Label: "Share", Numeric: true}, {Column: "name", Label: "Category"}},
+		DefaultSort: "amount", DefaultDesc: true}, // biggest spend first
 }
 
 // CollectionDefs returns the full collection definitions (label + link target).
@@ -273,6 +284,18 @@ func SortFields(collection string) []SortField {
 		}
 	}
 	return nil
+}
+
+// DefaultSort returns a collection's out-of-the-box ordering (column + descending),
+// pre-selected by the designer. ("", false) for an unknown collection or one whose
+// natural order is the intended default.
+func DefaultSort(collection string) (column string, desc bool) {
+	for _, c := range collectionDefs {
+		if c.Value == collection {
+			return c.DefaultSort, c.DefaultDesc
+		}
+	}
+	return "", false
 }
 
 // SortDirections returns the two ordering choices with labels that read naturally for
