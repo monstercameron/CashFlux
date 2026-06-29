@@ -10,6 +10,29 @@ import (
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 )
 
+// TestClear verifies a data wipe can empty the session feed and that it's reusable
+// afterward (a new entry appends cleanly).
+func TestClear(t *testing.T) {
+	l := auditlog.New(500)
+	l.Append(mkEntry("ae-1", "user", "added", "transaction", "t1", "Added transaction t1", time.Unix(1000, 0)))
+	l.Append(mkEntry("ae-2", "user", "deleted", "account", "a1", "Deleted account a1", time.Unix(2000, 0)))
+	if l.Len() != 2 {
+		t.Fatalf("Len before clear = %d, want 2", l.Len())
+	}
+	l.Clear()
+	if l.Len() != 0 {
+		t.Errorf("Len after clear = %d, want 0", l.Len())
+	}
+	if got := l.Recent(10); got != nil {
+		t.Errorf("Recent after clear = %v, want nil", got)
+	}
+	// Still usable after clearing.
+	l.Append(mkEntry("ae-3", "user", "added", "budget", "b1", "Added budget b1", time.Unix(3000, 0)))
+	if l.Len() != 1 {
+		t.Errorf("Len after re-append = %d, want 1", l.Len())
+	}
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 func mkEntry(id, actor, action, eType, eID, summary string, at time.Time) auditlog.Entry {

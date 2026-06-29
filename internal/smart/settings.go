@@ -55,6 +55,20 @@ type Settings struct {
 	Density Density `json:"density,omitempty"`
 }
 
+// ClearGenerated returns a copy of s with all DATA-DERIVED smart state removed —
+// dismissed insight keys, per-feature last-run timestamps, and cached AI result
+// text (the "smart messages") — while KEEPING the user's preferences: which
+// features are on/off (Enabled/ExplicitOff), their schedules, mutes, and the
+// density dial. A data wipe uses this: cached messages and dismissals describe
+// transactions/accounts that no longer exist, so they must not survive a wipe,
+// but the user's opt-ins should. s is a value; the original is not mutated.
+func (s Settings) ClearGenerated() Settings {
+	s.Dismissed = nil
+	s.LastRun = nil
+	s.Results = nil
+	return s
+}
+
 // IsEnabled reports whether a feature is effectively on, applying the tier-based
 // default for features the user has never explicitly toggled:
 //

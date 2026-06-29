@@ -156,6 +156,19 @@ func DisableAllSmart() smart.Settings {
 	return s
 }
 
+// ClearSmartGenerated wipes the DATA-DERIVED smart state — dismissed insights,
+// last-run stamps, and cached AI result "messages" — plus the digest-delivered
+// log, while keeping the user's feature opt-ins/schedules/mutes/density. A data
+// wipe calls this: the smart PREFERENCES live in the preserved settings KV (they
+// survive a wipe like theme/language), but the generated content describes data
+// that no longer exists, so it must not survive. Writing the cleared settings
+// before the post-wipe dataset export means the reload re-hydrates the cleared
+// state, not the stale one.
+func ClearSmartGenerated() {
+	SaveSmartSettings(LoadSmartSettings().ClearGenerated())
+	SettingKVDelete(digestDeliveredKey)
+}
+
 // EnableFreeSmart enables all Free-tier features and persists. AI-tier features
 // are left at their current state (explicitly-on AI features stay on; others
 // stay at the off-by-default tier default).

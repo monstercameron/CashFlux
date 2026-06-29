@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -1488,6 +1489,15 @@ func wipeData(onChange func(), notify func(string, bool)) {
 			notify(uistate.T("settings.wipeErr", err.Error()), true)
 			return
 		}
+		// The store wipe cleared the financial tables and the audit_log table, but two
+		// things live outside that sweep and would otherwise survive: (1) the in-memory
+		// activity feed (the Activity screen's preferred source, re-hydrated from the
+		// table at boot), and (2) the data-derived SMART content — cached AI "messages",
+		// dismissals, last-run stamps, and the digest log — which sit in the PRESERVED
+		// settings KV. Clear both now, before the dataset export below, so a stale feed
+		// or stale smart message can't reappear after the reload.
+		auditview.Feed.Clear()
+		uistate.ClearSmartGenerated()
 		// A wipe means the user is starting fresh — hide the sample banner (L6).
 		uistate.SetSampleActive(false)
 		// Make the wipe authoritative: clear non-settings keys and persist the emptied

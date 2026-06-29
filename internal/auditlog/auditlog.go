@@ -68,6 +68,15 @@ func (l *Log) Append(e Entry) {
 	l.entries = append(l.entries, e)
 }
 
+// Clear removes every entry, resetting the log to empty. A data wipe uses this to
+// reset the session-scoped activity feed so cleared activity can't linger in
+// memory (the persisted audit_log table is cleared separately by the store wipe).
+func (l *Log) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.entries = nil
+}
+
 // Recent returns at most n entries in reverse-chronological order (newest first).
 // If n ≤ 0 all entries are returned.
 func (l *Log) Recent(n int) []Entry {
