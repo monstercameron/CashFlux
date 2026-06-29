@@ -116,6 +116,11 @@ type WidgetProps struct {
 	// dashboard welcome/hero so it reads as clean content but is still a configurable
 	// widget. CSS: .w.chrome-hover in web/index.html.
 	ChromeHover bool
+	// Preview renders the tile as a non-interactive preview (e.g. the Studio live
+	// preview): no settings gear, drag grip, or resize handles — the surrounding
+	// editor owns configuration, so those per-tile affordances would be dead/
+	// misleading here. Pair with Draggable=false / Resizable=false.
+	Preview bool
 }
 
 // Widget is the candidate-C bento cell shell shared by every dashboard widget: a
@@ -173,8 +178,12 @@ func widget(props WidgetProps) uic.Node {
 	// per-tile color and an importance rank (plus any schema fields) — so the
 	// gear always shows. (It used to be hidden on no-schema tiles outside the
 	// auto-importance mode, when the panel could read as empty (C21); the
-	// per-widget color (B20) gives every tile a meaningful setting.)
-	gear := uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
+	// per-widget color (B20) gives every tile a meaningful setting.) A preview
+	// tile omits it — there's no settings host to present it in an editor.
+	var gear uic.Node = Fragment()
+	if !props.Preview {
+		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
+	}
 
 	dragSrc := uistate.UseDragSource()
 	dragPreview := uistate.UseDragPreview()
@@ -479,9 +488,14 @@ func widget(props WidgetProps) uic.Node {
 	if ic := widgetIcon(props.ID); ic.Valid() {
 		titleNode = Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.MinW0), Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)), titleNode)
 	}
+	// The drag grip signals draggability; a non-interactive preview tile drops it.
+	var grip uic.Node = Fragment()
+	if !props.Preview {
+		grip = Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))) // six-dot drag grip
+	}
 	args = append(args,
 		Div(css.Class("wh"),
-			Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), // six-dot drag grip (signals draggable, not a menu)
+			grip,
 			titleNode,
 			gear,
 		),

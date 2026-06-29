@@ -66,6 +66,11 @@ type RenderCtx struct {
 
 	// Spec is the current placement's validated widget spec.
 	Spec domain.WidgetSpec
+
+	// Preview marks a non-interactive render (the Studio live preview): tiles drop
+	// their settings gear, drag grip, and resize handles, since the editor — not the
+	// tile — owns configuration there.
+	Preview bool
 }
 
 // Renderer renders one widget body from a RenderCtx.

@@ -132,7 +132,7 @@ func renderKPISpec(spec domain.WidgetSpec, c widgetrender.RenderCtx) ui.Node {
 		body = kpiBody(fig, tone, subText, subTone)
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: spec.ID, Title: title, Draggable: true, Resizable: true,
+		ID: spec.ID, Title: title, Draggable: !c.Preview, Resizable: !c.Preview, Preview: c.Preview,
 		GridColumn: pres.Col, GridRow: pres.Row,
 		BodyClass: "kpi " + tw.Fold(tw.Flex, tw.FlexCol, tw.JustifyCenter),
 		Body:      body,

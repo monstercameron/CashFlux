@@ -60,6 +60,7 @@ func studioPreviewCtx(app *appstate.App) widgetrender.RenderCtx {
 		ScopedAccounts: accounts, ScopedTxns: txns,
 		Rates: rates, Base: base, Start: start, End: end,
 		PeriodLabel: now.Format("Jan 2006"), Vars: vars, Net: net,
+		Preview: true, // the form owns configuration — drop the tile's dead gear/grip/resize
 	}
 }
 

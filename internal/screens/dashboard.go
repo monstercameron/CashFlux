@@ -121,7 +121,7 @@ func safeRenderSpec(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) (node ui
 	case domain.KindList, domain.KindTable, domain.KindChart:
 		return hydrateAndRenderFrame(spec, ctx)
 	case domain.KindSpacer:
-		return uiw.Widget(uiw.WidgetProps{ID: spec.ID, ChromeHover: true, Body: Fragment()}), true
+		return uiw.Widget(uiw.WidgetProps{ID: spec.ID, ChromeHover: true, Preview: ctx.Preview, Body: Fragment()}), true
 	}
 	return widgetrender.Render(spec.NativeID, ctx)
 }
@@ -172,13 +172,13 @@ func renderGenericFrame(spec domain.WidgetSpec, fr domain.Frame, ctx widgetrende
 	}
 	if spec.Kind == domain.KindChart {
 		return uiw.Widget(uiw.WidgetProps{
-			ID: spec.ID, Title: title, Draggable: true, Resizable: true,
+			ID: spec.ID, Title: title, Draggable: !ctx.Preview, Resizable: !ctx.Preview, Preview: ctx.Preview,
 			BodyClass: tw.Fold(tw.Flex, tw.FlexCol, tw.MinH0),
 			Body:      genericChartBody(fr, ctx.Base),
 		})
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: spec.ID, Title: title, Draggable: true, Resizable: true,
+		ID: spec.ID, Title: title, Draggable: !ctx.Preview, Resizable: !ctx.Preview, Preview: ctx.Preview,
 		BodyClass: tw.Fold(tw.OverflowHidden, tw.Flex, tw.FlexCol, tw.MinH0),
 		Body:      ui.CreateElement(genericListWidget, genericListProps{Spec: spec, Frame: fr, Base: ctx.Base}),
 	})
@@ -324,7 +324,7 @@ func renderCustomContent(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) ui.
 		}
 	}
 	return uiw.Widget(uiw.WidgetProps{
-		ID: spec.ID, Title: title, Draggable: true, Resizable: true,
+		ID: spec.ID, Title: title, Draggable: !ctx.Preview, Resizable: !ctx.Preview, Preview: ctx.Preview,
 		Style: spec.Style.CSS(),
 		// Content model: a 4-column CSS grid (NOT the surface packer) — blocks stack in
 		// order at intrinsic height, each spanning Block.ColSpan columns so figures can
