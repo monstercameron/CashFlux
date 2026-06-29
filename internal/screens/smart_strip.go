@@ -117,7 +117,10 @@ func SmartStrip(props smartStripProps) ui.Node {
 		shown = insights[:1] // collapsed: just the top insight
 	}
 	if len(shown) > 0 {
-		bodyParts = append(bodyParts, smartInsightList(shown))
+		// Flat list rows (not bordered cards) so the strip reads as one panel of
+		// insights, consistent with the dashboard's flat tiles rather than nesting
+		// cards inside the strip card.
+		bodyParts = append(bodyParts, smartStripList(shown))
 	}
 	// In-place expand/collapse for the remaining inline insights (distinct from
 	// "View all" which navigates to the /smart hub for the complete catalog).
@@ -149,11 +152,18 @@ func SmartStrip(props smartStripProps) ui.Node {
 		}
 	}
 
+	// On the Dashboard (cross-page summary, Page==""), the strip sits with the bento
+	// grid, so it drops the rounded-card look for square corners + the grid gap to
+	// match the .w tiles. On concrete pages it stays the normal rounded card.
+	classParts := []any{tw.Mb3}
+	if props.Page == "" {
+		classParts = []any{"smart-strip-bento"}
+	}
 	bodyArgs := append([]any{ClassStr(tw.Fold(tw.FlexCol, tw.Gap3))}, bodyParts...)
 	return uiw.Card(uiw.CardProps{
 		Header:     smartBrandHeader(uistate.T("smart.stripTitle"), false, headerAction),
 		TestID:     "smart-strip-" + pageKey,
-		ClassParts: []any{tw.Mb3},
+		ClassParts: classParts,
 		Body:       Div(bodyArgs...),
 	})
 }

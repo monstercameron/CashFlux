@@ -23,9 +23,13 @@ import (
 )
 
 // smartCardProps carries one insight to render. The insight is passed whole; the
-// card formats its own amount and tone so callers stay simple.
+// card formats its own amount and tone so callers stay simple. Compact renders a
+// flat row (no bordered/rounded box) so the dashboard's Smart digest tile matches
+// the flat-row style of every other bento tile, instead of nesting cards in a card.
 type smartCardProps struct {
-	Ins smart.Insight
+	Ins     smart.Insight
+	Compact bool // flat list row (no bordered box) — the Smart strip
+	Glance  bool // tightest: truncated, no action footer — the dashboard digest tile
 }
 
 // severityTone maps an insight severity to a color token understood by
@@ -228,7 +232,29 @@ func smartInsightCard(props smartCardProps) ui.Node {
 		)
 	}
 
-	return Article(ClassStr("smart-card "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap1, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)),
+	// Three layouts share one component:
+	//   • default — a bordered, rounded card (the /smart hub aesthetic).
+	//   • Compact — a flat list row with a hairline divider (the Smart strip).
+	//   • Glance  — the tightest variant for the height-constrained dashboard digest
+	//     tile: a single title line + a one-line truncated detail and NO action
+	//     footer, so each insight is a glanceable line-pair that fits the tile.
+	flat := props.Compact || props.Glance
+	boxCls := "smart-card " + tw.Fold(tw.Flex, tw.FlexCol, tw.Gap1, tw.Border, tw.BorderLine, tw.RoundedXl, tw.Px3, tw.Py2)
+	if flat {
+		// Omit the "smart-card" class: its CSS forces a bordered, rounded, shadowed box
+		// (with !important) and a severity left-rail. A flat row with a hairline divider
+		// matches the surrounding surface; the severity dot still carries the signal.
+		boxCls = "smart-row " + tw.Fold(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py15, tw.BorderB, tw.BorderLine)
+	}
+
+	detailCls := tw.Fold(tw.Text13, tw.TextDim)
+	titleCls := tw.Fold(tw.FontSemibold, tw.Text14)
+	if props.Glance {
+		detailCls = tw.Fold(tw.Text13, tw.TextDim, tw.LineClamp2) // two lines, word-boundary ellipsis
+		titleCls = tw.Fold(tw.FontSemibold, tw.Text14, tw.Truncate)
+	}
+
+	children := []any{
 		Attr("data-testid", "smart-card"),
 		Attr("data-feature", ins.Feature),
 		Attr("data-severity", ins.Severity.String()),
@@ -237,16 +263,19 @@ func smartInsightCard(props smartCardProps) ui.Node {
 		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsStart, tw.JustifyBetween, tw.Gap2)),
 			Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsStart, tw.Gap2, tw.MinW0)),
 				Span(ClassStr(tw.ColorClass(tone)), Attr("aria-hidden", "true"), "●"),
-				Span(ClassStr(tw.Fold(tw.FontSemibold, tw.Text14)), ins.Title),
+				Span(ClassStr(titleCls), ins.Title),
 			),
 			amountNode,
 		),
 
 		// Reason / explanation.
-		P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), ins.Detail),
+		P(ClassStr(detailCls), ins.Detail),
+	}
 
-		// Footer: optional action + dismiss.
-		Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1)),
+	// Glance is a passive summary (the digest tile) — no action/dismiss footer; the
+	// full controls live on the Smart strip and the /smart hub.
+	if !props.Glance {
+		children = append(children, Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1)),
 			actionNode,
 			Button(ClassStr("btn btn-sm btn-ghost "+tw.Fold(tw.MlAuto)), Type("button"),
 				Attr("data-testid", "smart-dismiss"),
@@ -255,8 +284,10 @@ func smartInsightCard(props smartCardProps) ui.Node {
 				OnClick(onDismiss),
 				uistate.T("smart.dismiss"),
 			),
-		),
-	)
+		))
+	}
+
+	return Article(append([]any{ClassStr(boxCls)}, children...)...)
 }
 
 // smartCurrencyOr returns preferred when non-empty, otherwise fallback. It is
@@ -276,6 +307,33 @@ func smartInsightList(insights []smart.Insight) ui.Node {
 		MapKeyed(insights,
 			func(i smart.Insight) any { return i.Key },
 			func(i smart.Insight) ui.Node { return ui.CreateElement(smartInsightCard, smartCardProps{Ins: i}) },
+		),
+	)
+}
+
+// smartStripList renders insights as flat list rows (Compact) for the Smart strip
+// — one panel of insight rows rather than bordered cards nested in the strip card.
+func smartStripList(insights []smart.Insight) ui.Node {
+	return Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol)),
+		MapKeyed(insights,
+			func(i smart.Insight) any { return i.Key },
+			func(i smart.Insight) ui.Node {
+				return ui.CreateElement(smartInsightCard, smartCardProps{Ins: i, Compact: true})
+			},
+		),
+	)
+}
+
+// smartDigestList renders insights as tight Glance rows for the dashboard's Smart
+// digest tile: one title line + a truncated detail and no action footer, so each
+// insight fits the height-constrained bento tile instead of overflowing it.
+func smartDigestList(insights []smart.Insight) ui.Node {
+	return Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol)),
+		MapKeyed(insights,
+			func(i smart.Insight) any { return i.Key },
+			func(i smart.Insight) ui.Node {
+				return ui.CreateElement(smartInsightCard, smartCardProps{Ins: i, Glance: true})
+			},
 		),
 	)
 }
