@@ -77,6 +77,8 @@ type Dataset struct {
 	Formulas                  []domain.Formula                  `json:"formulas,omitempty"`
 	Plans                     []domain.Plan                     `json:"plans,omitempty"`
 	CustomPages               []domain.CustomPage               `json:"customPages,omitempty"`
+	Placements                []domain.Placement                `json:"placements,omitempty"`
+	Molecules                 []domain.Molecule                 `json:"molecules,omitempty"`
 	Artifacts                 []domain.Artifact                 `json:"artifacts,omitempty"`
 	Workflows                 []workflow.Workflow               `json:"workflows,omitempty"`
 	WorkflowRuns              []workflow.Run                    `json:"workflowRuns,omitempty"`

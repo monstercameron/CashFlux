@@ -3,6 +3,38 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-28 — Unified declarative widget engine + Studio authoring
+
+**What:** Made the whole dashboard composable from a `domain.WidgetSpec` that a pure engine hydrates,
+and built a Studio surface where a casual user can design those same dashboard-level widgets with a
+live preview rendered by the *actual* engine (no separate mock renderer). Spec Kinds: Scalar (KPI),
+Pipeline (list/collection), Graph (chart), NativeID (legacy bridge), Content (compound content-layout
+tiles). Everything pickable in Studio is data-driven from `internal/widgetcatalog` — no hardcoding;
+e.g. `CollectionRoute` resolves from `collectionDefs` rows, not a switch.
+
+**Decisions / trade-offs:**
+- *Atoms vs molecules.* Atoms are indivisible reductions over the fundamental sources (transactions,
+  accounts, bills, goals). Molecules are formula strings over atoms (net_worth = "assets - liabilities").
+  This is what makes formulas auditable end-to-end — the metric picker shows a molecule's decomposition
+  ("Built from atoms"), and the advanced editor expands net_worth → its atom formula rather than showing
+  the opaque ID. KPI/savings tiles became *programmable*: their figure is a configurable formula over the
+  engine variable surface (new `Text` config field + `clamp`/`safediv`/`floor`/`ceil` formula funcs).
+- *Persistence as hydration.* Placements + molecule overrides persist to their own SQLite tables and ride
+  along with export; built-ins are the seed, a user's edit overrides by name. So a designed widget is just
+  stored spec data the engine rehydrates.
+- *List polish.* cap/scroll/page display modes; the pager lives in a pinned footer so overflowing rows
+  never push it out of the tile's `overflow:hidden`; a data-driven "view all" deep-links to the source.
+
+**Problems hit / fixed:**
+- Grid preview ignored the 4-slot max — root cause was `grid-template-columns: repeat(var(--pcols), …)`,
+  which is invalid CSS (repeat() can't take a custom-property count); the grid never had 4 columns. Fixed
+  with a literal `repeat(4, …)` + per-tile `grid-column/grow span`. Found only by *measuring* tile widths
+  with getBoundingClientRect, not by eyeballing a screenshot — a rigor lesson.
+- GWC hook gotchas (On* in variable-length loops) solved by wrapping every interactive row/control in its
+  own leaf component that owns its hooks.
+
+**What's next:** the /goal god-tier-Studio loop continues; remaining polish is incremental.
+
 ## 2026-06-28 — FEATURE_MAP §5.6 capstone: IA-remap route wiring + rail regroup
 
 **What:** This is the capstone integration commit of the §5 IA remap. The content work — real scoped

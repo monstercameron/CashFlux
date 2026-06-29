@@ -48,6 +48,7 @@ func TestPackDefaultReproducesArrangement(t *testing.T) {
 		"highlight":    {3, 9},
 		"smart-digest": {1, 10},
 		"anomaly-hub":  {3, 10}, // R25 always-on anomaly hub (added to DefaultItems)
+		"spotlight":    {3, 11}, // compound content-layout demo (backfills beside smart-digest's 2nd row)
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

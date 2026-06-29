@@ -2175,6 +2175,109 @@
 
       /* Bento grid — square outlined cells with a small gap.
          One base cell unit; every row is exactly one unit so widgets integer-scale. */
+      /* ── Studio widget designer ───────────────────────────────────────────
+         A focused composer: a sectioned config rail on the left, a live preview
+         "stage" (on a faint dashboard grid) on the right. Built on the app's own
+         dark/green tokens, not a generic form. */
+      .studio-design { margin-top:14px; }
+      .studio-design-head { margin-bottom:18px; }
+      .studio-eyebrow { display:block; font-size:.7rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
+      .studio-design-title { font-family:var(--font-display, Georgia, serif); font-size:1.7rem; line-height:1.1; margin:.18rem 0 .15rem; color:var(--text); }
+      .studio-design-sub { color:var(--text-dim); font-size:.95rem; max-width:46ch; }
+      /* Form is a fixed-width rail; the preview takes the rest so the mini-dashboard
+         renders the widget at a faithful, readable slot size. */
+      .studio-design-grid { display:grid; grid-template-columns: minmax(0,400px) minmax(0,1fr); gap:28px; align-items:start; }
+      @media (max-width: 1100px) { .studio-design-grid { grid-template-columns: 1fr; } }
+
+      .studio-form { display:flex; flex-direction:column; gap:18px; }
+      .studio-section { border-top:1px solid var(--border); padding-top:16px; }
+      .studio-section:first-of-type { border-top:0; padding-top:0; }
+      .studio-section-title { display:block; font-size:.78rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); margin-bottom:12px; }
+      .studio-section-body { display:flex; flex-direction:column; gap:14px; }
+
+      .field-label { display:flex; flex-direction:column; gap:6px; }
+      .studio-label { font-size:.82rem; font-weight:600; color:var(--text-dim); }
+      .studio-hint { font-size:.76rem; color:var(--text-faint); line-height:1.4; }
+      .studio-formula { font-size:.74rem; color:var(--accent); font-family:var(--font-mono, ui-monospace, monospace); background:color-mix(in srgb, var(--accent) 8%, transparent); border:1px solid color-mix(in srgb, var(--accent) 22%, var(--border)); border-radius:7px; padding:.3rem .55rem; align-self:flex-start; }
+      .studio-field, .field-label > .field, .field-label select, .field-label .seg { width:100%; }
+      .studio-field-lg { font-size:1.15rem; font-weight:600; padding:.6rem .8rem; }
+
+      /* Type selector — a row of selectable cards (the primary choice). */
+      .studio-section-body > .studio-type-grid, .studio-type-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+      .studio-type-card { display:flex; flex-direction:column; align-items:flex-start; gap:3px; text-align:left; padding:13px 14px; border:1px solid var(--border); border-radius:13px; background:#121214; color:var(--text); cursor:pointer; transition: border-color .12s, background .12s, transform .08s; }
+      .studio-type-card:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); transform: translateY(-1px); }
+      .studio-type-card.is-selected { border-color:var(--accent); background: color-mix(in srgb, var(--accent) 12%, #121214); box-shadow: inset 0 0 0 1px var(--accent); }
+      .studio-type-icon { color:var(--accent); display:inline-flex; margin-bottom:4px; }
+      .studio-type-icon svg { width:26px; height:26px; }
+      .studio-type-label { font-weight:650; font-size:.98rem; }
+      .studio-type-desc { font-size:.76rem; color:var(--text-faint); }
+
+      .studio-size-row { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+
+      /* Compound block editor — an aligned table (header + rows). */
+      .studio-blocks { display:flex; flex-direction:column; gap:8px; }
+      .studio-block-head, .studio-block-row { display:grid; grid-template-columns: 26px minmax(110px,1fr) minmax(150px,1.9fr) 84px auto; gap:10px; align-items:center; }
+      .studio-block-head { padding:0 11px; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); }
+      .studio-block-row { padding:9px 11px; border:1px solid var(--border); border-radius:11px; background:#121214; }
+      .studio-block-row .field-compact { min-width:0; }
+      .studio-block-row .field-compact select, .studio-block-row .field-compact .field { width:100%; }
+      .studio-block-shows { display:flex; gap:8px; min-width:0; align-items:end; }
+      .studio-block-shows > * { flex:1 1 0; min-width:0; }
+      .studio-microfield { display:flex; flex-direction:column; gap:3px; }
+      .studio-microlabel { font-size:.64rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); }
+      .studio-addblock { width:100%; border-style:dashed !important; color:var(--text-dim); }
+      .studio-addblock:hover { border-color:var(--accent); color:var(--text); }
+      .studio-toggle { align-self:flex-start; background:transparent !important; border:0 !important; padding:.2rem 0 !important; color:var(--accent); font-size:.82rem; text-decoration:none; }
+      .studio-toggle:hover { text-decoration:underline; }
+      .studio-block-num { width:1.6rem; height:1.6rem; display:grid; place-items:center; border-radius:7px; background:#1a1a1d; color:var(--text-faint); font-size:.72rem; font-weight:700; }
+      .studio-block-actions { display:flex; gap:6px; align-items:center; justify-self:end; }
+      .studio-block-move-group { display:flex; gap:3px; }
+      .btn-icon, .studio-block-move { background:#1a1a1d; border:1px solid var(--border); border-radius:7px; color:var(--text-dim); cursor:pointer; padding:.2rem .45rem; height:2rem; transition:border-color .12s, color .12s; }
+      .btn-icon:hover, .studio-block-move:hover { border-color:var(--accent); color:var(--text); }
+      .field-compact { gap:0; }
+
+      /* Studio-designed list widgets: scrollable rows + a pinned, always-visible
+         footer holding the pager and/or "view all" link. */
+      .studio-list-root { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; height:100%; }
+      .studio-list-body { flex:1 1 auto; min-height:0; overflow-y:auto; }
+      .studio-list-footer { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; padding-top:8px; margin-top:8px; border-top:1px solid var(--border); }
+      .studio-list-pager { display:flex; align-items:center; justify-content:center; gap:14px; }
+      .studio-list-pager .btn-icon { width:1.8rem; height:1.8rem; display:grid; place-items:center; padding:0; }
+      .studio-list-pager .btn-icon svg { width:1rem; height:1rem; }
+      .studio-list-pager .t-caption { min-width:4.5rem; text-align:center; font-variant-numeric:tabular-nums; }
+      .btn-icon.is-disabled { opacity:.3; pointer-events:none; }
+      .studio-list-link { color:var(--accent); align-self:flex-start; font-size:.82rem; background:transparent; border:0; cursor:pointer; padding:0; }
+      .studio-list-link:hover { text-decoration:underline; }
+
+      /* Formula builder — grouped metric reference. */
+      .fb-groups { display:flex; flex-direction:column; gap:16px; }
+      .fb-group-title { display:block; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); margin-bottom:6px; }
+      .fb-meta { font-family:var(--font-mono, ui-monospace, monospace); font-size:.72rem; color:var(--text-faint); }
+
+      /* Preview stage — the widget sits on a faint dashboard grid so the result
+         reads as "this is your dashboard tile". */
+      .studio-stage-wrap { position:sticky; top:16px; display:flex; flex-direction:column; gap:12px; padding:18px; border:1px solid var(--border); border-radius:18px; background:var(--bg-elev); }
+      .studio-stage-head { display:flex; align-items:baseline; justify-content:space-between; }
+      .studio-stage-hint { font-size:.74rem; color:var(--text-faint); }
+      .studio-stage { border-radius:14px; padding:14px; background:
+          linear-gradient(0deg, color-mix(in srgb, var(--accent) 4%, transparent), transparent),
+          repeating-linear-gradient(0deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),
+          repeating-linear-gradient(90deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),
+          #0e0e10; border:1px solid var(--border); min-height:180px; display:grid; place-items:stretch; }
+      /* Real 4-column bento at the dashboard's fixed column count + 152px rows, so a
+         tile occupies its true width×height slots (never more than 4 wide). */
+      .studio-stage-inner { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); grid-auto-rows: 152px; gap:10px; align-content:start; }
+      .studio-stage-cell { display:grid; }       /* the tile stretches to fill its slot span like a real bento cell */
+      .studio-stage-cell .w { min-height:0; height:100%; }
+      .studio-publish { width:100%; justify-content:center; padding:.7rem 1rem; font-weight:650; }
+      .studio-status { font-size:.86rem; color:var(--accent); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      .studio-status a { color:var(--accent); text-decoration:underline; }
+      .studio-starter-row { display:flex; flex-wrap:wrap; gap:8px; }
+      .studio-starter { font-size:.82rem; padding:.36rem .8rem; border:1px solid color-mix(in srgb, var(--accent) 22%, var(--border)); border-radius:999px; background:#15151a; color:var(--text); cursor:pointer; transition:border-color .12s, color .12s, background .12s; }
+      .studio-starter:hover { border-color:var(--accent); color:var(--text); }
+      .studio-starter.is-active { border-color:var(--accent); color:var(--text); background:color-mix(in srgb, var(--accent) 14%, #121214); }
+      .studio-verb { font-size:.72rem; padding:.2rem .5rem; border:1px solid var(--border); border-radius:7px; background:#121214; color:var(--text-dim); cursor:pointer; font-family:var(--font-mono, monospace); }
+      .studio-verb:hover { border-color:var(--accent); color:var(--text); }
       .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
       .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .12s ease; will-change: transform; } /* GX8-F2 */
       .w:hover { border-color:#44444c; }
@@ -2510,6 +2613,28 @@
       [data-theme="light"] .scope-banner-btn:hover { color:#1c1c1e; }
       .wbody { padding:0 .7rem .7rem; flex:1; min-height:0; }
       .kpi { padding:.95rem 1rem; }
+
+      /* Chrome-on-hover widgets (e.g. the dashboard welcome/hero): the tile reads as
+         clean borderless content, then its card surface + controls fade in on hover so
+         it's still a movable, configurable widget. Driven by ui.WidgetProps.ChromeHover. */
+      /* The Smart strip on the Dashboard reads as part of the bento grid: square
+         corners, the tile border color, and the 10px grid gap — not a rounded
+         floating card. (Concrete pages keep the normal rounded .card strip.) */
+      .card.smart-strip-bento { border-radius:0 !important; border-color:#34343a; box-shadow:none; margin:10px 0 0; }
+      [data-theme="light"] .card.smart-strip-bento { border-color:#e4e2dd; }
+
+      .w.chrome-hover { background:transparent !important; border-color:transparent !important; box-shadow:none !important; }
+      .w.chrome-hover > .wbody { padding:0; }
+      /* Float the header controls into the top-right corner so they don't reserve a
+         title-bar row, and fade them with the surface. */
+      .w.chrome-hover > .wh { position:absolute; top:.45rem; right:.55rem; left:auto; width:auto; padding:0; margin:0; z-index:2; opacity:0; transition:opacity .15s var(--wonder-ease, ease); }
+      .w.chrome-hover > .wh h2 { display:none; }      /* the hero carries its own heading */
+      .w.chrome-hover > .wh .grip { display:none; }   /* not drag-reordered from the bar */
+      .w.chrome-hover .rz { opacity:0; transition:opacity .15s var(--wonder-ease, ease); }
+      .w.chrome-hover:hover { background:var(--bg-card) !important; border-color:var(--border) !important; }
+      .w.chrome-hover:hover > .wh { opacity:1; }
+      .w.chrome-hover:hover .rz { opacity:1; }
+      @media (hover:none) { .w.chrome-hover > .wh { opacity:1; } }
 
       /* Insights chat: style the marked-rendered Markdown (Tailwind's preflight
          strips default heading/list/spacing styles, so the assistant's replies would

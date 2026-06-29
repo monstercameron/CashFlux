@@ -1,0 +1,311 @@
+// SPDX-License-Identifier: MIT
+
+// Package widgetcatalog is the data-driven catalog of building blocks a widget
+// designer offers: the named METRICS a formula can reference (engine atoms +
+// molecules + the household's custom fields), plus the option sets for formats,
+// pipeline sources/transforms, content-block kinds and template verbs. Every picker
+// in the Studio designer is populated from here, so nothing is hardcoded in the UI
+// and a new engine variable or custom field shows up automatically. Pure Go, no
+// syscall/js — unit-tested. See docs/UNIFIED_WIDGET_API.md.
+package widgetcatalog
+
+import (
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
+)
+
+// Group buckets a metric for display in the picker.
+type Group string
+
+const (
+	GroupCore     Group = "Core money"
+	GroupActivity Group = "Activity"
+	GroupCounts   Group = "Counts"
+	GroupCustom   Group = "Custom fields"
+)
+
+// Metric is one named value a formula can reference, with a friendly label and a
+// one-line description so a casual user can choose the figure they care about.
+// Atoms are indivisible reductions over the data; molecules are compound figures
+// defined as a formula over atoms (Formula is set, Molecule true) — e.g. net worth =
+// "assets - liabilities" — so the picker can show that a figure is built from atoms.
+type Metric struct {
+	Name     string // engine variable name (e.g. "net_worth", "cf_txn_tip")
+	Label    string // human label (e.g. "Net worth")
+	Doc      string // one-line explanation
+	Group    Group
+	Molecule bool   // true if this is a compound figure (built from atoms via a formula)
+	Formula  string // the molecule's definition over atoms (empty for atoms/custom fields)
+}
+
+// Option is a value/label pair for a select-style picker.
+type Option struct {
+	Value string
+	Label string
+}
+
+// metricMeta curates the label + group + one-line doc for each built-in engine
+// variable. A variable not listed still appears (label derived from its name), so
+// the catalog never silently drops a metric the engine exposes.
+var metricMeta = map[string]struct {
+	Label string
+	Group Group
+	Doc   string
+}{
+	"net_worth":          {"Net worth", GroupCore, "Everything you own minus everything you owe."},
+	"assets":             {"Assets", GroupCore, "Total balance of your asset accounts."},
+	"liabilities":        {"Liabilities", GroupCore, "Total balance of what you owe."},
+	"liquid_cash":        {"Liquid cash", GroupCore, "Cash you can spend right now."},
+	"safe_to_spend":      {"Safe to spend", GroupCore, "Liquid cash after this month's bills and goals."},
+	"income":             {"Income", GroupActivity, "Money in over the chosen period."},
+	"expense":            {"Spending", GroupActivity, "Money out over the chosen period."},
+	"cashflow_net":       {"Net cash flow", GroupActivity, "Income minus spending for the period."},
+	"savings_rate":       {"Savings rate", GroupActivity, "Percent of income you kept."},
+	"bills_due":          {"Bills due", GroupActivity, "Bills due before month-end."},
+	"goal_needs":         {"Goal set-asides", GroupActivity, "What your goals need this month."},
+	"income_count":       {"Number of deposits", GroupCounts, "How many deposits this period."},
+	"expense_count":      {"Number of expenses", GroupCounts, "How many expenses this period."},
+	"accounts":           {"Accounts", GroupCounts, "Count of active accounts."},
+	"asset_accounts":     {"Asset accounts", GroupCounts, "Count of asset accounts."},
+	"liability_accounts": {"Liability accounts", GroupCounts, "Count of liability accounts."},
+	"transactions":       {"Transactions", GroupCounts, "Count of transactions."},
+	"members":            {"Household members", GroupCounts, "Count of household members."},
+	"budgets":            {"Budgets", GroupCounts, "Count of budgets."},
+	"goals":              {"Goals", GroupCounts, "Count of goals."},
+	"tasks":              {"To-dos", GroupCounts, "Count of to-dos."},
+}
+
+// Metrics returns every metric a formula can reference: the built-in engine
+// variables (atoms then molecules) followed by the household's numeric custom
+// fields, each labelled and described. A molecule carries its atom-built Formula
+// (taken from molecules, falling back to the engine defaults) so the designer can
+// show that a compound figure is composed from atoms. defs/molecules may be nil.
+func Metrics(defs []customfields.Def, molecules []domain.Molecule) []Metric {
+	if len(molecules) == 0 {
+		molecules = engineenv.DefaultMolecules()
+	}
+	formulaOf := make(map[string]string, len(molecules))
+	for _, m := range molecules {
+		formulaOf[m.Name] = m.Formula
+	}
+	out := make([]Metric, 0, len(engineenv.Names)+len(defs))
+	for _, name := range engineenv.Names {
+		m := Metric{Name: name, Label: humanize(name), Group: GroupActivity}
+		if meta, ok := metricMeta[name]; ok {
+			m.Label, m.Group, m.Doc = meta.Label, meta.Group, meta.Doc
+		}
+		if f, ok := formulaOf[name]; ok {
+			m.Molecule, m.Formula = true, f
+		}
+		out = append(out, m)
+	}
+	for _, name := range engineenv.CustomFieldNames(defs) {
+		out = append(out, Metric{
+			Name:  name,
+			Label: customFieldLabel(name, defs),
+			Doc:   "Sum of your custom field over its entity.",
+			Group: GroupCustom,
+		})
+	}
+	return out
+}
+
+// MetricNames returns just the names (for quick validation / reference lists).
+func MetricNames(defs []customfields.Def) []string {
+	ms := Metrics(defs, nil)
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.Name
+	}
+	return out
+}
+
+// Formats are the KPI/figure display formats.
+func Formats() []Option {
+	return []Option{
+		{"currency", "Money"},
+		{"percent", "Percent"},
+		{"number", "Number"},
+	}
+}
+
+// Kinds are the widget kinds the designer can produce.
+func Kinds() []Option {
+	return []Option{
+		{"kpi", "Single figure"},
+		{"compound", "Custom layout"},
+		{"list", "List"},
+		{"chart", "Chart"},
+	}
+}
+
+// FigureFormats are the display formats for a single figure block (the standard
+// formats plus a signed +/- money variant).
+func FigureFormats() []Option {
+	return append(Formats(), Option{Value: "signed", Label: "Signed (+/−)"})
+}
+
+// ListDisplays are the ways a list widget can present its rows: cap to N, scroll all
+// within the tile, or page through them.
+func ListDisplays() []Option {
+	return []Option{
+		{Value: "cap", Label: "Show top rows"},
+		{Value: "scroll", Label: "Scroll all"},
+		{Value: "page", Label: "Page through"},
+	}
+}
+
+// ChartSourceTypes are the two shapes a chart can take.
+func ChartSourceTypes() []Option {
+	return []Option{
+		{"series", "Trend over time"},
+		{"collection", "Breakdown"},
+	}
+}
+
+// Starter is a one-click preset that pre-fills the designer so a casual user never
+// faces a blank canvas. Pure data — the UI maps a click onto its form fields. For a
+// compound preset, Blocks carries the canonical layout so re-picking the preset always
+// restores it (never leaves stale user-edited blocks).
+type Starter struct {
+	Label, Title, Kind, Formula, Format, Sub, Collection, Series string
+	Blocks                                                       []domain.Block
+}
+
+// RowCounts are the row-count choices for a list widget.
+func RowCounts() []Option {
+	return []Option{{Value: "3", Label: "3"}, {Value: "5", Label: "5"}, {Value: "6", Label: "6"}, {Value: "10", Label: "10"}, {Value: "15", Label: "15"}}
+}
+
+// IncomeVsSpendingBlocks is the canonical "income vs spending" compound layout: a
+// caption over two side-by-side money figures. Reused as the designer's default
+// compound blocks and the "Income vs spending" starter so they never drift.
+func IncomeVsSpendingBlocks() []domain.Block {
+	return []domain.Block{
+		{Kind: domain.BlockText, Text: "This month", Style: domain.Style{FontWeight: "600"}},
+		{Kind: domain.BlockFigure, Bind: "income|currency", ColSpan: 2, Style: domain.Style{Text: "var(--up)"}},
+		{Kind: domain.BlockFigure, Bind: "expense|currency", ColSpan: 2, Style: domain.Style{Text: "var(--down)"}},
+	}
+}
+
+// Starters returns the built-in starter presets, ordered simplest-first.
+func Starters() []Starter {
+	return []Starter{
+		{Label: "Net worth", Title: "Net worth", Kind: "kpi", Formula: "net_worth", Format: "currency"},
+		{Label: "Savings rate", Title: "Savings rate", Kind: "kpi", Formula: "savings_rate", Format: "percent"},
+		{Label: "Income vs spending", Title: "This month", Kind: "compound", Blocks: IncomeVsSpendingBlocks()},
+		{Label: "Recent activity", Title: "Recent activity", Kind: "list", Collection: "transactions"},
+		{Label: "Spending breakdown", Title: "Spending breakdown", Kind: "chart", Collection: "spending-breakdown"},
+		{Label: "Net worth trend", Title: "Net worth trend", Kind: "chart", Series: "networth"},
+	}
+}
+
+// Collection is a list/chart row source, defined in one place with its picker label
+// AND the full-data screen it links to (route + link label). The route lives ON the
+// collection definition so there's a single source of truth — no parallel mapping.
+type Collection struct {
+	Value, Label     string
+	Route, LinkLabel string // full-data screen; empty Route = no "view all" target
+}
+
+// collectionDefs is the canonical collection list. Add a collection here once and it
+// flows to the picker (Collections) and the "view all" link (CollectionRoute) alike.
+var collectionDefs = []Collection{
+	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions"},
+	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts"},
+	{Value: "budgets", Label: "Budget status", Route: "/budgets", LinkLabel: "View all budgets"},
+	{Value: "bills", Label: "Upcoming bills", Route: "/bills", LinkLabel: "View all bills"},
+	{Value: "spending-breakdown", Label: "Spending by category", Route: "/reports", LinkLabel: "Open spending reports"},
+}
+
+// CollectionDefs returns the full collection definitions (label + link target).
+func CollectionDefs() []Collection { return append([]Collection(nil), collectionDefs...) }
+
+// Collections are the row sources for a List/Chart pipeline (picker options derived
+// from the canonical definitions).
+func Collections() []Option {
+	out := make([]Option, len(collectionDefs))
+	for i, c := range collectionDefs {
+		out[i] = Option{Value: c.Value, Label: c.Label}
+	}
+	return out
+}
+
+// CollectionRoute returns the full-data screen route + link label for a collection,
+// looked up from its definition. ("","") when the collection has no dedicated screen.
+func CollectionRoute(collection string) (path, label string) {
+	for _, c := range collectionDefs {
+		if c.Value == collection {
+			return c.Route, c.LinkLabel
+		}
+	}
+	return "", ""
+}
+
+// SeriesMetrics are the time-series sources for a Chart pipeline.
+func SeriesMetrics() []Option {
+	return []Option{
+		{"networth", "Net worth over time"},
+		{"cashflow", "Cash flow by month"},
+	}
+}
+
+// Transforms are the Frame→Frame pipeline steps the designer can add.
+func Transforms() []Option {
+	return []Option{
+		{"limit", "Limit rows"},
+		{"sort", "Sort by column"},
+		{"filter", "Filter rows"},
+	}
+}
+
+// BlockKinds are the content blocks a compound (custom-layout) widget can place.
+func BlockKinds() []Option {
+	return []Option{
+		{"figure", "Figure (a metric)"},
+		{"text", "Text / caption"},
+		{"icon", "Icon"},
+		{"divider", "Divider"},
+		{"spacer", "Spacer"},
+		{"dataview", "Embedded data"},
+	}
+}
+
+// TemplateVerbs are the formatting verbs usable in a sub-label / text template
+// token ("{{ metric | verb }}").
+func TemplateVerbs() []Option {
+	return []Option{
+		{"currency", "Money"},
+		{"percent", "Percent"},
+		{"number", "Number"},
+		{"signed", "Signed money (+/-)"},
+		{"plural:item", "Count + noun"},
+		{"arrow", "Up/down arrow"},
+	}
+}
+
+// humanize turns a snake_case variable name into a Title Case label as a fallback.
+func humanize(name string) string {
+	parts := strings.Split(name, "_")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	return strings.Join(parts, " ")
+}
+
+// customFieldLabel resolves a cf_<entity>_<key> variable back to the custom field's
+// display name + entity, falling back to a humanized key.
+func customFieldLabel(varName string, defs []customfields.Def) string {
+	for _, d := range defs {
+		if engineenv.CustomFieldVar(d) == varName {
+			return d.Label + " (" + d.EntityType + ")"
+		}
+	}
+	return humanize(strings.TrimPrefix(varName, "cf_"))
+}

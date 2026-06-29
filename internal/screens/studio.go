@@ -36,7 +36,7 @@ type StudioHubProps struct{}
 // commit (FEATURE_MAP §5.3). The existing /widget-builder, /widget-manager, and
 // /p/:slug routes continue to function unchanged.
 func StudioHub(props StudioHubProps) ui.Node {
-	tab := ui.UseState("build")
+	tab := ui.UseState("design")
 
 	return Div(
 		Div(css.Class(tw.Mt2),
@@ -45,6 +45,9 @@ func StudioHub(props StudioHubProps) ui.Node {
 				Selected: tab.Get(),
 				OnSelect: func(v string) { tab.Set(v) },
 				Options: []uiw.SegOption{
+					{Value: "design", Label: uistate.T("studio.tabDesign")},
+					{Value: "formulas", Label: uistate.T("studio.tabFormulas")},
+					{Value: "fields", Label: uistate.T("studio.tabFields")},
 					{Value: "build", Label: uistate.T("studio.tabBuild")},
 					{Value: "manage", Label: uistate.T("studio.tabManage")},
 					{Value: "pages", Label: uistate.T("studio.tabPages")},
@@ -55,12 +58,18 @@ func StudioHub(props StudioHubProps) ui.Node {
 		// scoped to that component and never share positions with the hub's hooks.
 		func() ui.Node {
 			switch tab.Get() {
+			case "formulas":
+				return ui.CreateElement(studioFormulasPanel, studioFormulasPanelProps{})
+			case "fields":
+				return ui.CreateElement(studioFieldsPanel, studioFieldsPanelProps{})
+			case "build":
+				return ui.CreateElement(studioBuilderPanel, studioBuilderPanelProps{})
 			case "manage":
 				return ui.CreateElement(studioManagerPanel, studioManagerPanelProps{})
 			case "pages":
 				return ui.CreateElement(studioPagesPanel, studioPagesPanelProps{})
-			default: // "build"
-				return ui.CreateElement(studioBuilderPanel, studioBuilderPanelProps{})
+			default: // "design" — the spec-based widget designer
+				return ui.CreateElement(studioDesignerPanel, studioDesignerPanelProps{})
 			}
 		}(),
 	)
@@ -78,6 +87,19 @@ type studioBuilderPanelProps struct{}
 // VisualBuilder's hooks (UseEffect × 3, UseState × 9, UseEvent × n) are scoped
 // to this component and do not occupy positions inside StudioHub's hook chain.
 func studioBuilderPanel(_ studioBuilderPanelProps) ui.Node { return VisualBuilder() }
+
+type studioFormulasPanelProps struct{}
+
+// studioFormulasPanel embeds the formula/compound-variable editor (Customize) as a
+// Studio tab, isolated so its hooks are scoped to this component. Grouping formulas
+// with the widget designer keeps every "what to measure" tool in one place.
+func studioFormulasPanel(_ studioFormulasPanelProps) ui.Node { return Customize() }
+
+type studioFieldsPanelProps struct{}
+
+// studioFieldsPanel embeds the custom-fields editor as a Studio tab (isolated hooks),
+// so custom values live alongside formulas and the designer that consumes them.
+func studioFieldsPanel(_ studioFieldsPanelProps) ui.Node { return CustomFields() }
 
 type studioManagerPanelProps struct{}
 

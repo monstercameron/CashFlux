@@ -29,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -1296,6 +1297,64 @@ func (a *App) PutCustomPage(p domain.CustomPage) error {
 	}
 	a.log.Info("custom page saved", "id", p.ID, "slug", p.Slug)
 	return nil
+}
+
+// PutPlacements upserts a surface's widget placements (the unified-widget layout
+// representation). It is UI layout state — like the layout atoms — so it carries
+// no role guard; a viewer arranging their own view persists normally.
+func (a *App) PutPlacements(ps []domain.Placement) error {
+	for _, p := range ps {
+		if err := a.store.PutPlacement(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Placements returns the persisted widget placements for a surface (e.g.
+// "dashboard"), the engine's canonical placement representation.
+func (a *App) Placements(surface string) []domain.Placement {
+	v, err := a.store.PlacementsForSurface(surface)
+	a.logErr("placements", err)
+	return v
+}
+
+// Molecules returns the active compound-variable definitions: the engine defaults
+// (net_worth, safe_to_spend, …) with any persisted in the dataset overriding by
+// name or adding new ones. So a user's edit to a formula like net_worth is stored
+// in the DB and travels with export, while built-ins remain the seed.
+func (a *App) Molecules() []domain.Molecule {
+	out := engineenv.DefaultMolecules()
+	persisted, err := a.store.ListMolecules()
+	a.logErr("molecules", err)
+	if len(persisted) == 0 {
+		return out
+	}
+	idx := map[string]int{}
+	for i, m := range out {
+		idx[m.Name] = i
+	}
+	for _, p := range persisted {
+		if i, ok := idx[p.Name]; ok {
+			out[i] = p
+		} else {
+			idx[p.Name] = len(out)
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// PutMolecule persists a compound-variable definition (a name + formula over the
+// engine atoms). The formula is validated for parseability before saving.
+func (a *App) PutMolecule(m domain.Molecule) error {
+	if strings.TrimSpace(m.Name) == "" || strings.TrimSpace(m.Formula) == "" {
+		return fmt.Errorf("appstate: molecule needs a name and a formula")
+	}
+	if _, err := formula.References(m.Formula); err != nil {
+		return fmt.Errorf("appstate: molecule %q has an invalid formula: %w", m.Name, err)
+	}
+	return a.store.PutMolecule(m)
 }
 
 // DeleteCustomPage removes a user-authored page.

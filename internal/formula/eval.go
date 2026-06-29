@@ -211,6 +211,68 @@ func evalCall(c Call, env Env) (Value, error) {
 			return nil, err
 		}
 		return math.Round(f), nil
+	case "floor":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("formula: floor() takes 1 argument")
+		}
+		f, err := asNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Floor(f), nil
+	case "ceil":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("formula: ceil() takes 1 argument")
+		}
+		f, err := asNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Ceil(f), nil
+	case "clamp":
+		// clamp(value, lo, hi) → value bounded to [lo, hi]. The readable way to keep a
+		// derived figure (e.g. a savings-rate %) within sensible bounds.
+		if len(args) != 3 {
+			return nil, fmt.Errorf("formula: clamp() takes 3 arguments")
+		}
+		v, err := asNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		lo, err := asNumber(args[1])
+		if err != nil {
+			return nil, err
+		}
+		hi, err := asNumber(args[2])
+		if err != nil {
+			return nil, err
+		}
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		return math.Max(lo, math.Min(hi, v)), nil
+	case "safediv":
+		// safediv(a, b, fallback) → a/b, or fallback when b == 0. The zero-guarded
+		// division every ratio KPI needs (savings rate, utilization, …).
+		if len(args) != 3 {
+			return nil, fmt.Errorf("formula: safediv() takes 3 arguments")
+		}
+		a, err := asNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		b, err := asNumber(args[1])
+		if err != nil {
+			return nil, err
+		}
+		fb, err := asNumber(args[2])
+		if err != nil {
+			return nil, err
+		}
+		if b == 0 {
+			return fb, nil
+		}
+		return a / b, nil
 	case "if":
 		if len(args) != 3 {
 			return nil, fmt.Errorf("formula: if() takes 3 arguments")

@@ -48,10 +48,14 @@ func DefaultItems() []Item {
 		{ID: "breakdown", ColSpan: 2, RowSpan: 1},
 		{ID: "freshness", ColSpan: 2, RowSpan: 1},
 		{ID: "highlight", ColSpan: 2, RowSpan: 1},
-		{ID: "smart-digest", ColSpan: 2, RowSpan: 1},
+		{ID: "smart-digest", ColSpan: 2, RowSpan: 2},
 		// R25: always-on SMART anomaly hub — four detector types (balance,
 		// duplicates, spending spikes, missing transactions) without any opt-in gate.
 		{ID: "anomaly-hub", ColSpan: 2, RowSpan: 1},
+		// spotlight: a compound widget built entirely from a custom intra-tile content
+		// layout (icon + heading + side-by-side figures + divider + templated caption),
+		// rendered by the content-layout engine — demonstrates fully custom widgets.
+		{ID: "spotlight", ColSpan: 2, RowSpan: 2},
 	}
 }
 

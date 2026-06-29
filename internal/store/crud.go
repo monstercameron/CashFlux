@@ -434,6 +434,59 @@ func (s *SQLiteStore) ListCustomPages() ([]domain.CustomPage, error) {
 	return loadRows[domain.CustomPage](s.db, "custompages")
 }
 
+// --- Widget placements (unified widget instances on a surface) ---
+
+// placementKey is the row key for a placement: "<surface>/<id>", so the same
+// widget id can be placed on different surfaces without colliding.
+func placementKey(p domain.Placement) string { return p.Surface + "/" + p.ID }
+
+// PutPlacement upserts one placement.
+func (s *SQLiteStore) PutPlacement(p domain.Placement) error {
+	return putJSON(s.db, "placements", placementKey(p), p)
+}
+
+// DeletePlacement removes one placement.
+func (s *SQLiteStore) DeletePlacement(p domain.Placement) (bool, error) {
+	return deleteRow(s.db, "placements", placementKey(p))
+}
+
+// ListPlacements returns every persisted placement across all surfaces.
+func (s *SQLiteStore) ListPlacements() ([]domain.Placement, error) {
+	return loadRows[domain.Placement](s.db, "placements")
+}
+
+// PlacementsForSurface returns the persisted placements for one surface.
+func (s *SQLiteStore) PlacementsForSurface(surface string) ([]domain.Placement, error) {
+	all, err := s.ListPlacements()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Placement, 0, len(all))
+	for _, p := range all {
+		if p.Surface == surface {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// --- Molecules (compound engine-variable formula definitions) ---
+
+// PutMolecule upserts a compound-variable definition (keyed by Name).
+func (s *SQLiteStore) PutMolecule(m domain.Molecule) error {
+	return putJSON(s.db, "molecules", m.Name, m)
+}
+
+// DeleteMolecule removes a molecule definition.
+func (s *SQLiteStore) DeleteMolecule(name string) (bool, error) {
+	return deleteRow(s.db, "molecules", name)
+}
+
+// ListMolecules returns every persisted molecule definition.
+func (s *SQLiteStore) ListMolecules() ([]domain.Molecule, error) {
+	return loadRows[domain.Molecule](s.db, "molecules")
+}
+
 // --- Artifacts (user-stored images and datasets) ---
 
 func (s *SQLiteStore) PutArtifact(a domain.Artifact) error {

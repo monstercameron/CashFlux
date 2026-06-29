@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS allocprofiles (id TEXT PRIMARY KEY, data TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS formulas     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS plans        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS custompages  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS placements   (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS molecules    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS artifacts    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS workflows    (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS workflowruns (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -165,6 +167,12 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "custompages", ds.CustomPages, func(p domain.CustomPage) string { return p.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "placements", ds.Placements, placementKey); err != nil {
+		return err
+	}
+	if err := replaceRows(tx, "molecules", ds.Molecules, func(m domain.Molecule) string { return m.Name }); err != nil {
+		return err
+	}
 	if err := replaceRows(tx, "artifacts", ds.Artifacts, func(a domain.Artifact) string { return a.ID }); err != nil {
 		return err
 	}
@@ -278,6 +286,12 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.CustomPages, err = loadRows[domain.CustomPage](s.db, "custompages"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Placements, err = loadRows[domain.Placement](s.db, "placements"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Molecules, err = loadRows[domain.Molecule](s.db, "molecules"); err != nil {
 		return Dataset{}, err
 	}
 	if ds.Artifacts, err = loadRows[domain.Artifact](s.db, "artifacts"); err != nil {

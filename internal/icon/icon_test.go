@@ -12,7 +12,7 @@ import (
 var curated = []Name{
 	Dashboard, Accounts, Transactions, Budgets, Goals, Todo, Settings, Page,
 	Plus, Menu, Tag, Users, Planning, Allocate, Insights, Customize, Reports, Subscriptions, Bills, Split,
-	ChevronDown, ChevronLeft, ChevronRight, Close, MoreH,
+	ChevronDown, ChevronLeft, ChevronRight, Close, MoreH, Grip,
 	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, TrendingUp, TrendingDown,
 	ArrowUp, ArrowDown, ArrowUpCircle, ArrowDownCircle,
 	Pencil, Refresh, List, PlusCircle,

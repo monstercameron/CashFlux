@@ -782,6 +782,7 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
+			If(onDashboard, uic.CreateElement(DashCustomizeButton)),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(ThemeToggle),
 			uic.CreateElement(HelpButton),
@@ -848,6 +849,21 @@ func HelpButton() uic.Node {
 		Type("button"), Attr("title", uistate.T("nav.help")), Attr("aria-label", uistate.T("nav.help")),
 		Attr("data-testid", "help-button"), OnClick(open),
 		ui.Icon(icon.HelpCircle, css.Class(tw.W5, tw.H5)),
+	)
+}
+
+// DashCustomizeButton is the top-bar "Customize" icon (dashboard only): a quiet,
+// standardized entry point to the widget manager (layout mode, show/hide, sizes,
+// tile styles), grouped with the other page-level top-bar actions instead of a
+// floating bar above the bento. Icon-only to stay out of the way.
+func DashCustomizeButton() uic.Node {
+	nav := router.UseNavigate()
+	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/widget-manager")) })
+	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Type("button"),
+		Attr("title", uistate.T("dashboard.customizeAria")), Attr("aria-label", uistate.T("dashboard.customizeAria")),
+		Attr("data-testid", "dash-customize"), OnClick(open),
+		ui.Icon(icon.Customize, css.Class(tw.W5, tw.H5)),
 	)
 }
 

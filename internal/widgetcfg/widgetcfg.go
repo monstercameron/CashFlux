@@ -24,6 +24,7 @@ const (
 	Toggle FieldType = "toggle" // boolean ("true"/"false")
 	Number FieldType = "number" // integer, optionally clamped to [Min, Max]
 	Select FieldType = "select" // one of Options
+	Text   FieldType = "text"   // free text (e.g. a configurable formula expression)
 )
 
 // Option is one choice for a Select field.

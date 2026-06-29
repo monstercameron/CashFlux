@@ -104,9 +104,18 @@ type WidgetProps struct {
 	BodyClass  string   // extra classes for the body, e.g. "flex flex-col justify-center" or "kpi"
 	GridColumn string   // CSS grid-column span, e.g. "1" or "1 / span 2"
 	GridRow    string   // CSS grid-row span, e.g. "2" or "3 / span 2"
-	Draggable  bool     // mark the cell draggable (drag-reorder behavior wired separately)
+	// Style overlays spec-level inline CSS (a declarative WidgetSpec.Style, §7.7) on
+	// the tile, applied on top of the per-tile widgetstyle config. Used by custom
+	// content-layout (compound) widgets that carry their own token-first style.
+	Style      map[string]string
+	Draggable  bool // mark the cell draggable (drag-reorder behavior wired separately)
 	Resizable  bool     // show the directional resize handles
 	OnGear     func()   // open this widget's settings (gear click)
+	// ChromeHover renders the tile borderless and chromeless (no card surface, grip,
+	// or gear) until it is hovered, when the surface + controls fade in. Used for the
+	// dashboard welcome/hero so it reads as clean content but is still a configurable
+	// widget. CSS: .w.chrome-hover in web/index.html.
+	ChromeHover bool
 }
 
 // Widget is the candidate-C bento cell shell shared by every dashboard widget: a
@@ -198,6 +207,9 @@ func widget(props WidgetProps) uic.Node {
 	}
 
 	cellClass := "w"
+	if props.ChromeHover {
+		cellClass += " chrome-hover" // borderless + chromeless until hovered (CSS)
+	}
 	if dragSrc.Get() == props.ID && props.ID != "" {
 		cellClass += " drag" // dims the widget while it is being dragged
 	}
@@ -218,6 +230,11 @@ func widget(props WidgetProps) uic.Node {
 	}
 	cfgs := uistate.UseWidgetConfigs().Get()
 	for k, v := range widgetstyle.InlineStyle(widgetstyle.Effective(cfgs.For(widgetstyle.GlobalID), cfgs.For(props.ID))) {
+		style[k] = v
+	}
+	// Spec-level declarative style (compound content-layout widgets) overlays last so
+	// the author's token-first WidgetSpec.Style is the source of truth for the tile.
+	for k, v := range props.Style {
 		style[k] = v
 	}
 	// The renderer doesn't reset an omitted style key in place, so a cleared accent
@@ -464,7 +481,7 @@ func widget(props WidgetProps) uic.Node {
 	}
 	args = append(args,
 		Div(css.Class("wh"),
-			Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.MoreH, css.Class(tw.W4, tw.H4))), // decorative drag grip
+			Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), // six-dot drag grip (signals draggable, not a menu)
 			titleNode,
 			gear,
 		),

@@ -6,10 +6,42 @@ package widgetcfg
 // registers here; the flip panel renders these and the widget reads its values.
 // Add a widget's feasible settings by appending a Schema in init.
 func init() {
+	// KPI tiles are formula-driven and programmable: each computes its figure by
+	// evaluating a CONFIGURABLE expression over the engine variable surface
+	// (internal/engineenv) — net_worth, income, safe_to_spend, savings_rate, and
+	// cf_* custom fields, all derived from fundamental sources (transactions,
+	// accounts, bills, goals). The seeded formula reproduces the built-in figure;
+	// the user can rewrite it (and the display format) in the tile's settings.
+	formatField := Field{Key: "format", Label: "Display as", Type: Select, Default: "currency", Options: []Option{
+		{Value: "currency", Label: "Currency"},
+		{Value: "percent", Label: "Percent"},
+		{Value: "number", Label: "Number"},
+	}}
+	kpi := func(id, title, formula, format string) {
+		ff := formatField
+		ff.Default = format
+		register(Schema{
+			WidgetID: id, Title: title,
+			Fields: []Field{
+				{Key: "formula", Label: "Formula (over engine variables)", Type: Text, Default: formula},
+				ff,
+			},
+		})
+	}
+	kpi("kpi-networth", "Net worth", "net_worth", "currency")
+	kpi("kpi-assets", "Assets", "assets", "currency")
+	kpi("kpi-liabilities", "Liabilities", "liabilities", "currency")
+	kpi("kpi-income", "Income", "income", "currency")
+	kpi("kpi-spending", "Spending", "expense", "currency")
+	kpi("kpi-safetospend", "Safe to spend", "safe_to_spend", "currency")
+
 	register(Schema{
 		WidgetID: "savings",
 		Title:    "Savings rate",
 		Fields: []Field{
+			// Programmable like the KPI tiles: the rate is a configurable formula over
+			// the engine variables (default = (income−expense)/income, clamped).
+			{Key: "formula", Label: "Formula (over engine variables)", Type: Text, Default: "clamp(safediv(income - expense, income, 0) * 100, -100, 100)"},
 			{Key: "target", Label: "Target savings rate", Type: Number, Default: "20", Unit: "%", Min: 0, Max: 100},
 			{Key: "showBar", Label: "Show progress bar", Type: Toggle, Default: "true"},
 		},

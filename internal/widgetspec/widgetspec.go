@@ -9,6 +9,7 @@ package widgetspec
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/monstercameron/CashFlux/internal/formula"
@@ -120,13 +121,21 @@ func EvalKPI(expr string, vars map[string]float64) (float64, error) {
 func Format(value float64, format string) string {
 	switch format {
 	case FormatPercent:
-		return trim(value) + "%"
+		// Percent reads best rounded — one decimal, trailing ".0" dropped (23.0 → 23%,
+		// 23.77 → 23.8%) — never a raw 15-digit float.
+		return trimRound(value, 1) + "%"
 	default: // FormatNumber, FormatCurrency (caller may override), or unset
-		return trim(value)
+		return trimRound(value, 2)
 	}
 }
 
-// trim formats a float without a trailing ".000…" while keeping real decimals.
-func trim(v float64) string {
-	return strconv.FormatFloat(v, 'f', -1, 64)
+// trimRound rounds v to at most n decimal places, then drops trailing zeros and a
+// bare decimal point, so display values never show float-precision noise.
+func trimRound(v float64, n int) string {
+	return strconv.FormatFloat(round(v, n), 'f', -1, 64)
+}
+
+func round(v float64, n int) float64 {
+	p := math.Pow(10, float64(n))
+	return math.Round(v*p) / p
 }

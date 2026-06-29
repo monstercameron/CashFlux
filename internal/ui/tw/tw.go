@@ -228,6 +228,9 @@ var (
 
 	Truncate          = []css.Rule{raw("overflow", "hidden"), raw("text-overflow", "ellipsis"), raw("white-space", "nowrap")}
 	WhitespacePreWrap = raw("white-space", "pre-wrap")
+	// LineClamp2 truncates multi-line text to two lines with a clean ellipsis at a
+	// word boundary (vs Truncate, which clips a single line mid-word).
+	LineClamp2 = []css.Rule{raw("display", "-webkit-box"), raw("-webkit-line-clamp", "2"), raw("-webkit-box-orient", "vertical"), raw("overflow", "hidden")}
 )
 
 // --- color (exact palette hex; theme-var migration is a follow-up) ------------

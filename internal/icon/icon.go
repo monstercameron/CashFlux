@@ -48,6 +48,7 @@ const (
 	ChevronRight Name = "chevron-right"
 	Close        Name = "x"
 	MoreH        Name = "more-horizontal"
+	Grip         Name = "grip" // six-dot drag handle (signals draggable, vs MoreH = menu)
 
 	// Status + trend glyphs (carry meaning at a glance; color via caller classes).
 	Check           Name = "check"
@@ -134,6 +135,7 @@ var inner = map[Name]string{
 	ChevronRight: `<path d="M9 18l6-6-6-6"/>`,
 	Close:        `<path d="M18 6 6 18"/><path d="M6 6l12 12"/>`,
 	MoreH:        `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
+	Grip:         `<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>`,
 
 	Check:           `<path d="M20 6 9 17l-5-5"/>`,
 	CheckCircle:     `<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>`,

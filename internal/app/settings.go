@@ -469,6 +469,15 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 			opts = append(opts, Option(Value(o.Value), SelectedIf(cur == o.Value), o.Label))
 		}
 		return Div(css.Class("toggle-row"), Span(f.Label), Select(opts...))
+	case widgetcfg.Text:
+		// Free text — e.g. a configurable formula expression. Programmable: the user
+		// can rewrite a KPI's formula (over the engine variable surface) right here.
+		on := uic.UseEvent(func(v string) { props.OnSet(f.Key, v) })
+		return Div(css.Class("toggle-row", tw.FlexCol, tw.ItemsStart, tw.Gap1),
+			Span(f.Label),
+			Input(css.Class("set-input", tw.WFull), Type("text"), Attr("aria-label", f.Label),
+				Attr("spellcheck", "false"), Value(f.Str(props.Cfg)), OnInput(on)),
+		)
 	default:
 		return Fragment()
 	}

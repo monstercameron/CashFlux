@@ -7,10 +7,13 @@ package i18n
 // merge into the source catalog alongside the existing screen keys.
 var studioKeys = Catalog{
 	// Tab control
-	"studio.tabsLabel": "Studio section",
-	"studio.tabBuild":  "Build widget",
-	"studio.tabManage": "Manage widgets",
-	"studio.tabPages":  "My pages",
+	"studio.tabsLabel":   "Studio section",
+	"studio.tabDesign":   "Design",
+	"studio.tabFormulas": "Formulas",
+	"studio.tabFields":   "Custom fields",
+	"studio.tabBuild":    "Build widget",
+	"studio.tabManage":   "Manage widgets",
+	"studio.tabPages":    "My pages",
 
 	// My pages panel — create form
 	"studio.pageName":   "Page name",
