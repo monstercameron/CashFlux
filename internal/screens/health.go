@@ -300,6 +300,10 @@ func healthWidgetNode(struct{}) ui.Node {
 	}
 
 	nav := router.UseNavigate()
+	// Stable hook position (created every render, regardless of band) so the OnClick
+	// below registers through UseEvent rather than a raw literal — keeps the hook
+	// sequence consistent with the rest of the codebase.
+	openSteps := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/health")) })
 
 	var right ui.Node
 	if r.Band == healthscore.BandNoData {
@@ -319,7 +323,7 @@ func healthWidgetNode(struct{}) ui.Node {
 			healthDeltaLine(r.Score, prior, hasPrior),
 			weakLine,
 			Div(css.Class(tw.Mt2),
-				Button(css.Class("btn-link"), OnClick(func() { nav.Navigate(uistate.RoutePath("/health")) }), "View steps →")),
+				Button(css.Class("btn-link"), OnClick(openSteps), "View steps →")),
 		)
 	}
 
