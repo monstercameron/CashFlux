@@ -88,6 +88,8 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	limit := ui.UseState("6")
 	listDisplay := ui.UseState("cap") // cap | scroll | page
 	listLink := ui.UseState(true)     // add a "view all" link to the source screen
+	sortBy := ui.UseState("")         // list sort column ("" = source's natural order)
+	sortDir := ui.UseState("desc")    // desc | asc (engine arg gets a "-" prefix for desc)
 	chartIsSeries := ui.UseState(true)
 	blocks := ui.UseState(widgetcatalog.IncomeVsSpendingBlocks())
 	cols := ui.UseState("2")
@@ -102,7 +104,8 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	spec := studioBuildSpec(studioSpecInput{
 		kind: kind.Get(), title: title.Get(), formula: formula.Get(), format: format.Get(), sub: sub.Get(),
 		collection: collection.Get(), series: series.Get(), chartIsSeries: chartIsSeries.Get(),
-		limit: atoiOr(limit.Get(), 6), listDisplay: listDisplay.Get(), listLink: listLink.Get(), blocks: blocks.Get(),
+		limit: atoiOr(limit.Get(), 6), listDisplay: listDisplay.Get(), listLink: listLink.Get(),
+		sortBy: sortBy.Get(), sortDir: sortDir.Get(), blocks: blocks.Get(),
 	})
 
 	publishFn := func() {
@@ -133,7 +136,9 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	applyStarter := func(st widgetcatalog.Starter) {
 		kind.Set(st.Kind)
 		title.Set(st.Title)
-		sub.Set(st.Sub) // always reset the caption so a starter never inherits stale text
+		sub.Set(st.Sub)    // always reset the caption so a starter never inherits stale text
+		sortBy.Set("")     // a preset uses the source's natural order until the user sorts
+		sortDir.Set("desc")
 		if st.Formula != "" {
 			formula.Set(st.Formula)
 		}
@@ -177,10 +182,29 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 		molecules:   app.Molecules(),
 		advanced:    advanced.Get(),
 		listDisplay: listDisplay.Get(), listLink: listLink.Get(),
+		sortBy: sortBy.Get(), sortDir: sortDir.Get(),
 		setListDisplay: listDisplay.Set,
 		setListLink:    func(v string) { listLink.Set(v == "yes") },
+		// Picking a column also sets a sensible default direction for its type
+		// (numbers High→Low, text A→Z); the user can still flip it.
+		setSortBy: func(v string) {
+			sortBy.Set(v)
+			if v == "" {
+				return
+			}
+			dir := "asc"
+			for _, sfld := range widgetcatalog.SortFields(collection.Get()) {
+				if sfld.Column == v && sfld.Numeric {
+					dir = "desc"
+				}
+			}
+			sortDir.Set(dir)
+		},
+		setSortDir: sortDir.Set,
 		setKind:  func(v string) { kind.Set(v); activeStarter.Set("") }, setTitle: title.Set, setFormula: formula.Set, setFormat: format.Set, setSub: sub.Set,
-		setCollection: collection.Set, setSeries: series.Set,
+		// Changing the data source clears the sort column — its columns differ, so a
+		// stale choice could reference a column the new source doesn't have.
+		setCollection: func(v string) { collection.Set(v); sortBy.Set("") }, setSeries: series.Set,
 		setChartSrc:   func(v string) { chartIsSeries.Set(v == "series") },
 		setLimit:      limit.Set, setCols: cols.Set, setRows: rows.Set,
 		toggleAdvanced: func() {
@@ -319,6 +343,8 @@ type studioSpecInput struct {
 	limit                             int
 	listDisplay                       string // cap | scroll | page
 	listLink                          bool
+	sortBy                            string // list sort column ("" = natural order)
+	sortDir                           string // desc | asc
 	blocks                            []domain.Block
 }
 
@@ -337,6 +363,15 @@ func studioBuildSpec(in studioSpecInput) domain.WidgetSpec {
 	case "list":
 		spec.Kind = domain.KindList
 		p := domain.Pipeline{Source: domain.Source{Kind: domain.SourceCollection, Collection: in.collection}}
+		// Sort first (over the full set) so a following limit/cap keeps the right rows.
+		// Engine arg: a leading "-" sorts descending; bare name ascending.
+		if in.sortBy != "" {
+			arg := in.sortBy
+			if in.sortDir != "asc" {
+				arg = "-" + in.sortBy
+			}
+			p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformSort, Arg: arg})
+		}
 		// "cap" trims to N at the engine; "scroll"/"page" pull up to a safety cap and
 		// the renderer scrolls/pages within it.
 		switch in.listDisplay {
@@ -509,11 +544,13 @@ type studioDesignerFormState struct {
 	advanced                          bool
 	listDisplay                       string
 	listLink                          bool
+	sortBy, sortDir                   string
 
 	setKind, setTitle, setFormula, setFormat, setSub func(string)
 	setCollection, setSeries, setChartSrc            func(string)
 	setLimit, setCols, setRows                       func(string)
 	setListDisplay, setListLink                      func(string)
+	setSortBy, setSortDir                            func(string)
 	toggleAdvanced                                   func()
 	addBlock                                         func()
 	changeBlock                                      func(int, domain.Block)
@@ -591,6 +628,23 @@ func studioDesignerForm(s studioDesignerFormState) ui.Node {
 		if route, lbl := widgetcatalog.CollectionRoute(s.collection); route != "" {
 			dataFields = append(dataFields, seg("Add a link: “"+lbl+"”", boolToYesNo(s.listLink),
 				[]uiw.SegOption{{Value: "yes", Label: "Yes"}, {Value: "no", Label: "No"}}, s.setListLink))
+		}
+		// Sort control — order rows by one of the source's columns. "Default order"
+		// keeps the source's natural order (e.g. newest transactions first). The
+		// direction labels adapt to the column type: High↔Low for numbers, A↔Z for text.
+		if sortFields := widgetcatalog.SortFields(s.collection); len(sortFields) > 0 {
+			sortOpts := []widgetcatalog.Option{{Value: "", Label: "Default order"}}
+			selNumeric := true
+			for _, sfld := range sortFields {
+				sortOpts = append(sortOpts, widgetcatalog.Option{Value: sfld.Column, Label: sfld.Label})
+				if sfld.Column == s.sortBy {
+					selNumeric = sfld.Numeric
+				}
+			}
+			dataFields = append(dataFields, sf("Sort by", s.sortBy, sortOpts, s.setSortBy))
+			if s.sortBy != "" {
+				dataFields = append(dataFields, seg("Order", s.sortDir, segFrom(widgetcatalog.SortDirections(selNumeric)), s.setSortDir))
+			}
 		}
 	case "chart":
 		dataTitle = "The chart"

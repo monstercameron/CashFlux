@@ -203,22 +203,40 @@ func Starters() []Starter {
 	}
 }
 
-// Collection is a list/chart row source, defined in one place with its picker label
-// AND the full-data screen it links to (route + link label). The route lives ON the
-// collection definition so there's a single source of truth — no parallel mapping.
+// SortField is one column a list widget can be ordered by: the Frame column name the
+// engine's sort transform targets, a friendly label, and whether the column is numeric
+// (so the designer can offer "High → Low" vs "A → Z" direction labels). Defined per
+// collection so the sort picker only ever offers columns that exist in that source.
+type SortField struct {
+	Column  string // Frame column name (must match the widgetsource resolver's output)
+	Label   string // human label (e.g. "Amount", "Date")
+	Numeric bool   // numeric/money/percent → hi/low direction; text → a/z
+}
+
+// Collection is a list/chart row source, defined in one place with its picker label,
+// the full-data screen it links to (route + link label), AND the columns it can be
+// sorted by. Everything about a source lives on its definition so there's a single
+// source of truth — no parallel mapping.
 type Collection struct {
 	Value, Label     string
-	Route, LinkLabel string // full-data screen; empty Route = no "view all" target
+	Route, LinkLabel string      // full-data screen; empty Route = no "view all" target
+	Sort             []SortField // columns this collection's rows can be ordered by
 }
 
 // collectionDefs is the canonical collection list. Add a collection here once and it
-// flows to the picker (Collections) and the "view all" link (CollectionRoute) alike.
+// flows to the picker (Collections), the "view all" link (CollectionRoute) and the
+// sort control (SortFields) alike. Sort columns must match the widgetsource Frame.
 var collectionDefs = []Collection{
-	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions"},
-	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts"},
-	{Value: "budgets", Label: "Budget status", Route: "/budgets", LinkLabel: "View all budgets"},
-	{Value: "bills", Label: "Upcoming bills", Route: "/bills", LinkLabel: "View all bills"},
-	{Value: "spending-breakdown", Label: "Spending by category", Route: "/reports", LinkLabel: "Open spending reports"},
+	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions",
+		Sort: []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "desc", Label: "Description"}}},
+	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts",
+		Sort: []SortField{{Column: "balance", Label: "Balance", Numeric: true}, {Column: "name", Label: "Name"}}},
+	{Value: "budgets", Label: "Budget status", Route: "/budgets", LinkLabel: "View all budgets",
+		Sort: []SortField{{Column: "percent", Label: "Used %", Numeric: true}, {Column: "name", Label: "Name"}}},
+	{Value: "bills", Label: "Upcoming bills", Route: "/bills", LinkLabel: "View all bills",
+		Sort: []SortField{{Column: "due", Label: "Due date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "name", Label: "Name"}}},
+	{Value: "spending-breakdown", Label: "Spending by category", Route: "/reports", LinkLabel: "Open spending reports",
+		Sort: []SortField{{Column: "amount", Label: "Amount", Numeric: true}, {Column: "percent", Label: "Share", Numeric: true}, {Column: "name", Label: "Category"}}},
 }
 
 // CollectionDefs returns the full collection definitions (label + link target).
@@ -243,6 +261,28 @@ func CollectionRoute(collection string) (path, label string) {
 		}
 	}
 	return "", ""
+}
+
+// SortFields returns the columns a collection's list can be ordered by ("" / unknown
+// collection → none, so the UI simply hides the sort control). Looked up from the
+// canonical collection definition.
+func SortFields(collection string) []SortField {
+	for _, c := range collectionDefs {
+		if c.Value == collection {
+			return append([]SortField(nil), c.Sort...)
+		}
+	}
+	return nil
+}
+
+// SortDirections returns the two ordering choices with labels that read naturally for
+// the column type: numeric columns get High↔Low, text columns get A↔Z. The stable
+// values ("desc"/"asc") map to the engine's sort arg (a "-" prefix for descending).
+func SortDirections(numeric bool) []Option {
+	if numeric {
+		return []Option{{"desc", "High → Low"}, {"asc", "Low → High"}}
+	}
+	return []Option{{"asc", "A → Z"}, {"desc", "Z → A"}}
 }
 
 // SeriesMetrics are the time-series sources for a Chart pipeline.

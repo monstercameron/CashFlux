@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
 )
 
 func usd(n int64) money.Money { return money.New(n, "USD") }
@@ -161,6 +162,41 @@ func TestHydrateFrameFilterEquality(t *testing.T) {
 	}, dc)
 	if err != nil || notOk.Rows != 2 {
 		t.Fatalf("state!=ok rows = %d err=%v, want 2", notOk.Rows, err)
+	}
+}
+
+// TestCatalogSortColumnsResolve guards the contract between the data-driven sort
+// catalog (widgetcatalog.SortFields) and the resolvers: every column the designer
+// offers as a sort option must actually exist in that collection's Frame, in both
+// directions, so a published widget can never reference a column the source lacks.
+func TestCatalogSortColumnsResolve(t *testing.T) {
+	budgets, cats, txns := budgetFixtures()
+	now := mustDate("2026-06-15")
+	dc := DataCtx{
+		Accounts:     []domain.Account{{ID: "a1", Name: "Checking", Currency: "USD", OpeningBalance: usd(50000)}, {ID: "a2", Name: "Savings", Currency: "USD", OpeningBalance: usd(120000)}},
+		Transactions: txns,
+		Budgets:      budgets,
+		Categories:   cats,
+		Recurring:    []domain.Recurring{{ID: "r1", Label: "Rent", Amount: usd(-150000), NextDue: mustDate("2026-06-20"), Cadence: domain.CadenceMonthly}},
+		Rates:        currency.Rates{Base: "USD"},
+		Start:        mustDate("2026-06-01"), End: mustDate("2026-07-01"), Now: now,
+	}
+	for _, c := range widgetcatalog.CollectionDefs() {
+		for _, sfld := range c.Sort {
+			for _, arg := range []string{sfld.Column, "-" + sfld.Column} {
+				fr, err := HydrateFrame(&domain.Pipeline{
+					Source:    domain.Source{Kind: domain.SourceCollection, Collection: c.Value},
+					Transform: []domain.Transform{{Kind: domain.TransformSort, Arg: arg}},
+				}, dc)
+				if err != nil {
+					t.Errorf("collection %q sort %q: %v", c.Value, arg, err)
+					continue
+				}
+				if _, ok := fr.Column(sfld.Column); !ok {
+					t.Errorf("collection %q: sort column %q not in resolved frame", c.Value, sfld.Column)
+				}
+			}
+		}
 	}
 }
 
