@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
@@ -168,6 +169,12 @@ func Run() {
 	})
 
 	r.Mount("#app")
+
+	// Wire the dashboard bento drag-reorder coordinator + FLIP reflow animation
+	// (the in-Go replacement for the former web/flip.js helper): registers the
+	// document-level scroll-lock + drag-retargeting listeners once, now that the DOM
+	// host exists.
+	uiw.InitBentoCoordinator()
 
 	// Global keyboard shortcuts (Alt+1..9 → primary nav sections).
 	wireKeyboardShortcuts()

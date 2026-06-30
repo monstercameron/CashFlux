@@ -119,6 +119,59 @@ func genericListWidget(p genericListProps) ui.Node {
 	return Div(css.Class("studio-list-root"), listBody, footer)
 }
 
+// widgetDisplay returns a list tile's overflow behavior ("cap" | "scroll" |
+// "page") from its settings, falling back to def for an unset/unknown value.
+func widgetDisplay(spec domain.WidgetSpec, def string) string {
+	switch spec.Settings["display"] {
+	case "cap", "scroll", "page":
+		return spec.Settings["display"]
+	}
+	return def
+}
+
+// pagedListProps configures pagedList.
+type pagedListProps struct {
+	Rows     []ui.Node // pre-built row nodes (whole list; pagedList shows one page)
+	PageSize int
+	AsTable  bool // wrap each page's rows in <table><tbody> (table rows) vs a plain block
+}
+
+// pagedList shows a fixed-size page of pre-built row nodes with a prev/next pager
+// footer, owning its page-index state. The dashboard list tiles whose display
+// setting is "page" render their rows through it, so a long list (e.g. recent
+// transactions) is browsable in-tile without scrolling or clipping.
+func pagedList(p pagedListProps) ui.Node {
+	page := ui.UseState(0)
+	size := p.PageSize
+	if size < 1 {
+		size = 6
+	}
+	total := (len(p.Rows) + size - 1) / size
+	if total < 1 {
+		total = 1
+	}
+	cur := page.Get()
+	if cur > total-1 {
+		cur = total - 1
+	}
+	if cur < 0 {
+		cur = 0
+	}
+	start := cur * size
+	end := min(start+size, len(p.Rows))
+	pageRows := p.Rows[start:end]
+	var content ui.Node
+	if p.AsTable {
+		content = Table(css.Class("t-body", tw.WFull), Tbody(pageRows))
+	} else {
+		content = Div(pageRows)
+	}
+	return Div(css.Class("dash-paged"),
+		Div(css.Class("dash-paged-body"), content),
+		ui.CreateElement(listPager, listPagerProps{Page: cur, Total: total, OnPage: page.Set}),
+	)
+}
+
 type listPagerProps struct {
 	Page, Total int
 	OnPage      func(int)

@@ -759,8 +759,12 @@ func TopBar(props topBarProps) uic.Node {
 	periodAware := map[string]bool{
 		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true, "/reports": true,
 	}[curPath]
-	return Div(css.Class("topbar", tw.BorderB, tw.BorderLine, tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Px6, tw.Gap3, tw.Sticky, tw.Top0, tw.BgBase, tw.Z20),
-		Button(css.Class("menu-btn", tw.W7, tw.H7, tw.MlN1), Attr("title", uistate.T("topbar.menu")),
+	// The bar is built from four zones — menu, title, a scope+period "context"
+	// group, and the primary actions. On wide screens they sit on one flex row; below
+	// 1536px the CSS switches to a two-row grid (title + actions on top, the context
+	// group as a dedicated full-width bar beneath) so controls never wrap raggedly.
+	return Div(css.Class("topbar", tw.BorderB, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Px6, tw.Gap3, tw.Sticky, tw.Top0, tw.BgBase, tw.Z20),
+		Button(css.Class("menu-btn tb-menu", tw.W7, tw.H7, tw.MlN1), Attr("title", uistate.T("topbar.menu")),
 			// C315: icon-only button needs an accessible name (title alone isn't reliably
 			// exposed as the AX name to screen readers).
 			Attr("aria-label", uistate.T("topbar.menu")),
@@ -771,23 +775,38 @@ func TopBar(props topBarProps) uic.Node {
 			}),
 			ui.Icon(icon.Menu, css.Class(tw.W5, tw.H5)),
 		),
-		Nav(css.Class("breadcrumb", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
+		Nav(css.Class("breadcrumb tb-title", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
 			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), Attr("aria-label", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))), // C315
 			If(!onDashboard, Span(css.Class(tw.TextFaint), "›")),
 			// The current page's title is the screen's single <h1> — so every screen
 			// has exactly one top-level heading for screen-reader heading navigation.
 			H1(css.Class(tw.TextLg, tw.FontSemibold, tw.Truncate), Attr("aria-current", "page"), props.Title),
 		),
-		Div(css.Class("topbar-controls", tw.MlAuto, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
+		// Context zone: the view's scope (member) and period. On narrow screens this
+		// becomes its own full-width row beneath the title, scrolling horizontally if
+		// the date picker is wider than the viewport (rather than wrapping).
+		Div(css.Class("tb-context", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.MinW0, tw.TextDim, tw.Text13),
 			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
-			If(onDashboard, uic.CreateElement(DashCustomizeButton)),
-			uic.CreateElement(NotifyBell),
-			uic.CreateElement(ThemeToggle),
-			uic.CreateElement(HelpButton),
+		),
+		// Actions zone: stays on the title row at every size.
+		Div(css.Class("tb-actions", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
+			// Secondary, low-frequency app toggles. Inline on the widest screens; folded
+			// into the "More" menu below 1580px. They stay mounted when hidden so stateful
+			// ones (e.g. MuzakToggle's player effect) keep running.
+			Span(css.Class("topbar-secondary", tw.Flex, tw.ItemsCenter, tw.Gap25),
+				If(onDashboard, uic.CreateElement(DashCustomizeButton)),
+				uic.CreateElement(ThemeToggle),
+				uic.CreateElement(HelpButton),
+			),
+			// Music on/off is a direct, always-visible top-bar action (not folded into
+			// the More menu) so it's one click from anywhere.
 			uic.CreateElement(MuzakToggle),
+			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
+			// The "⋯ More" overflow menu sits last, against the right edge.
+			uic.CreateElement(MoreMenu, moreMenuProps{OnDashboard: onDashboard}),
 		),
 	)
 }
@@ -963,107 +982,115 @@ func MuzakToggle() uic.Node {
 func ResolutionControl() uic.Node {
 	atom := uistate.UsePeriod()
 	w := atom.Get()
+	open := uic.UseState(false)
 	rangeMode := uic.UseState(false)
-	isCurrent := w.IsCurrent(time.Now())
+	menuID := uic.UseId()
+	closeMenu := func() { open.Set(false) }
+	// Escape / outside-click dismissal, matching the +Add and More menus.
+	ui.DismissPopover(open.Get(), menuID, closeMenu)
 
-	// Quick presets. The select always shows its placeholder (it's an action menu,
-	// not a persistent selection), so choosing an option applies it and the
-	// control snaps back. Quarter/YTD also change the resolution, so persist it.
-	onPreset := uic.UseEvent(func(e uic.Event) {
-		now := time.Now()
-		switch e.GetValue() {
-		case "this":
-			atom.Set(period.NewWindow(w.Res, now, w.WeekStart))
-		case "last":
-			atom.Set(period.Previous(w.Res, now, w.WeekStart))
-		case "quarter":
-			uistate.PersistResolution(period.Quarter)
-			atom.Set(period.NewWindow(period.Quarter, now, w.WeekStart))
-		case "ytd":
-			uistate.PersistResolution(period.Month)
-			atom.Set(period.YearToDate(now, w.WeekStart))
-		case "lastyear":
-			uistate.PersistResolution(period.Year)
-			atom.Set(period.PriorYear(now, w.WeekStart))
-		}
-	})
-
-	var stepper uic.Node
-	if rangeMode.Get() {
-		stepper = Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap25),
-			ui.StepperPill(ui.StepperPillProps{
-				Label:     w.FromLabel(),
-				OnPrev:    func() { atom.Set(w.StepFrom(-1)) },
-				OnNext:    func() { atom.Set(w.StepFrom(1)) },
-				PrevLabel: uistate.T("resolution.fromEarlier"),
-				NextLabel: uistate.T("resolution.fromLater"),
+	// preset builds one quick-jump button in the popover. Called at fixed positions
+	// (not a loop) so its OnClick hook stays at a stable position.
+	preset := func(label, v string) uic.Node {
+		return Button(css.Class("period-preset"), Type("button"), Attr("role", "menuitem"),
+			OnClick(func() {
+				now := time.Now()
+				switch v {
+				case "this":
+					atom.Set(period.NewWindow(w.Res, now, w.WeekStart))
+				case "last":
+					atom.Set(period.Previous(w.Res, now, w.WeekStart))
+				case "quarter":
+					uistate.PersistResolution(period.Quarter)
+					atom.Set(period.NewWindow(period.Quarter, now, w.WeekStart))
+				case "ytd":
+					uistate.PersistResolution(period.Month)
+					atom.Set(period.YearToDate(now, w.WeekStart))
+				case "lastyear":
+					uistate.PersistResolution(period.Year)
+					atom.Set(period.PriorYear(now, w.WeekStart))
+				}
+				closeMenu()
 			}),
-			Span(css.Class(tw.TextFaint), "–"),
-			ui.StepperPill(ui.StepperPillProps{
-				Label:     w.ToLabel(),
-				OnPrev:    func() { atom.Set(w.StepTo(-1)) },
-				OnNext:    func() { atom.Set(w.StepTo(1)) },
-				PrevLabel: uistate.T("resolution.toEarlier"),
-				NextLabel: uistate.T("resolution.toLater"),
-			}),
-		)
-	} else {
-		stepper = ui.StepperPill(ui.StepperPillProps{
-			Label:     w.Label(),
-			OnPrev:    func() { atom.Set(w.Shift(-1)) },
-			OnNext:    func() { atom.Set(w.Shift(1)) },
-			PrevLabel: uistate.T("resolution.prevPeriod"),
-			NextLabel: uistate.T("resolution.nextPeriod"),
-		})
+			label)
 	}
 
+	// The pill shows the current single period, or the from–to range.
+	pillLabel := w.Label()
+	if rangeMode.Get() {
+		pillLabel = w.FromLabel() + " – " + w.ToLabel()
+	}
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
+	}
+	hidden := ""
+	if !open.Get() {
+		hidden = " hidden-menu"
+	}
+
+	// The dual From/To steppers only appear inside the popover in custom-range mode.
+	rangeRow := Fragment()
+	if rangeMode.Get() {
+		rangeRow = Div(css.Class("period-rangerow", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.FlexWrap),
+			ui.StepperPill(ui.StepperPillProps{Label: w.FromLabel(), OnPrev: func() { atom.Set(w.StepFrom(-1)) }, OnNext: func() { atom.Set(w.StepFrom(1)) }, PrevLabel: uistate.T("resolution.fromEarlier"), NextLabel: uistate.T("resolution.fromLater")}),
+			Span(css.Class(tw.TextFaint), "–"),
+			ui.StepperPill(ui.StepperPillProps{Label: w.ToLabel(), OnPrev: func() { atom.Set(w.StepTo(-1)) }, OnNext: func() { atom.Set(w.StepTo(1)) }, PrevLabel: uistate.T("resolution.toEarlier"), NextLabel: uistate.T("resolution.toLater")}),
+		)
+	}
 	rangeLabel := uistate.T("resolution.customRange")
 	if rangeMode.Get() {
 		rangeLabel = uistate.T("resolution.singlePeriod")
 	}
 
-	return Span(css.Class("reso-control", tw.Flex, tw.ItemsCenter, tw.Gap25),
-		ui.Segmented(ui.SegmentedProps{
-			Label: uistate.T("resolution.granularity"), // C318: name the radiogroup
-			Options: []ui.SegOption{
-				{Value: string(period.Week), Label: "Week"},
-				{Value: string(period.Month), Label: "Month"},
-				{Value: string(period.Quarter), Label: "Quarter"},
-				{Value: string(period.Year), Label: "Year"},
-			},
-			Selected: string(w.Res),
-			OnSelect: func(v string) {
-				r := period.Resolution(v)
-				uistate.PersistResolution(r)
-				atom.Set(w.SetResolution(r, time.Now()))
-			},
-		}),
-		Select(css.Class("rstep", tw.Text12), Attr("aria-label", uistate.T("resolution.jumpTo")), Attr("title", uistate.T("resolution.jumpTo")), OnChange(onPreset),
-			Option(Value(""), SelectedIf(true), uistate.T("resolution.jumpTo")),
-			Option(Value("this"), uistate.T("resolution.presetThis")),
-			Option(Value("last"), uistate.T("resolution.presetLast")),
-			Option(Value("quarter"), uistate.T("resolution.presetQuarter")),
-			Option(Value("ytd"), uistate.T("resolution.presetYTD")),
-			Option(Value("lastyear"), uistate.T("resolution.presetPriorYear")),
+	// A single compact control: ‹ [period ⌄] › — the chevrons page the window; the
+	// center pill opens a popover with the granularity, quick jumps and custom range.
+	return Div(css.Class("period-control add-wrap"), Attr("id", menuID),
+		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.prevPeriod")), Attr("title", uistate.T("resolution.prevPeriod")),
+			OnClick(func() { atom.Set(w.Shift(-1)) }), ui.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
+		Button(css.Class("period-pill"), Type("button"), Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
+			Attr("data-testid", "period-pill"), Attr("title", uistate.T("resolution.jumpTo")),
+			OnClick(func() { open.Set(!open.Get()) }),
+			Span(css.Class("period-label"), pillLabel),
+			ui.Icon(icon.ChevronDown, css.Class("period-caret", tw.W3, tw.H3)),
 		),
-		stepper,
-		If(!isCurrent, Button(css.Class(tw.Px2, tw.Py1, tw.TextDim, tw.HoverTextFg, tw.Text12), Type("button"),
-			Attr("title", uistate.T("resolution.thisPeriodTitle")),
-			OnClick(func() { atom.Set(period.NewWindow(w.Res, time.Now(), w.WeekStart)) }),
-			uistate.T("resolution.thisPeriod"))),
-		// Custom range toggle: TextDim (not TextFaint) so the clickable control clears
-		// AA — TextFaint (#7d7d85) measured 1.87:1 on the light page bg. Matches its
-		// sibling "This period" button above, which already uses TextDim.
-		Button(css.Class(tw.Px2, tw.Py1, tw.TextDim, tw.HoverTextFg, tw.Text12), Type("button"),
-			OnClick(func() {
-				if rangeMode.Get() {
-					// Leaving range mode collapses back to a single period.
-					atom.Set(w.Single())
-					rangeMode.Set(false)
-				} else {
-					rangeMode.Set(true)
-				}
+		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.nextPeriod")), Attr("title", uistate.T("resolution.nextPeriod")),
+			OnClick(func() { atom.Set(w.Shift(1)) }), ui.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
+		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
+		Div(ClassStr("period-pop add-menu open-left"+hidden), Attr("role", "menu"),
+			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("resolution.granularity"), // C318: name the radiogroup
+				Options: []ui.SegOption{
+					{Value: string(period.Week), Label: "Week"},
+					{Value: string(period.Month), Label: "Month"},
+					{Value: string(period.Quarter), Label: "Quarter"},
+					{Value: string(period.Year), Label: "Year"},
+				},
+				Selected: string(w.Res),
+				OnSelect: func(v string) {
+					r := period.Resolution(v)
+					uistate.PersistResolution(r)
+					atom.Set(w.SetResolution(r, time.Now()))
+				},
 			}),
-			rangeLabel),
+			Div(css.Class("period-presets", tw.Flex, tw.FlexWrap, tw.Gap15),
+				preset(uistate.T("resolution.presetThis"), "this"),
+				preset(uistate.T("resolution.presetLast"), "last"),
+				preset(uistate.T("resolution.presetQuarter"), "quarter"),
+				preset(uistate.T("resolution.presetYTD"), "ytd"),
+				preset(uistate.T("resolution.presetPriorYear"), "lastyear"),
+			),
+			rangeRow,
+			Button(css.Class("period-rangetoggle"), Type("button"),
+				OnClick(func() {
+					if rangeMode.Get() {
+						atom.Set(w.Single())
+						rangeMode.Set(false)
+					} else {
+						rangeMode.Set(true)
+					}
+				}),
+				rangeLabel),
+		),
 	)
 }

@@ -41,11 +41,11 @@ func PersistItems(items []dashlayout.Item) {
 func loadItems() []dashlayout.Item {
 	raw := kvGet(layoutStoreID)
 	if raw == "" {
-		return dashlayout.DefaultItems()
+		return dashlayout.DefaultLayoutItems()
 	}
 	var items []dashlayout.Item
 	if err := json.Unmarshal([]byte(raw), &items); err != nil || len(items) == 0 || items[0].ID == "" {
-		return dashlayout.DefaultItems()
+		return dashlayout.DefaultLayoutItems()
 	}
 	// Reconcile against the current widget set so a layout saved by an older build
 	// gains newly-introduced widgets (e.g. "attention") and sheds retired ones,

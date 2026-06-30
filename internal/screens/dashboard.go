@@ -465,6 +465,9 @@ func effectivePipeline(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) domai
 		if atRisk {
 			p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformFilter, Arg: "atrisk"})
 		}
+		// In scroll/page mode, fetch a generous set so the tile can scroll/page through
+		// more than the cap; "cap" keeps the top N.
+		limit = listFetchLimit(spec, "scroll", limit, 30)
 		if limit > 0 {
 			p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformLimit, N: limit})
 		}
@@ -476,6 +479,7 @@ func effectivePipeline(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) domai
 		if f, ok := sch.FieldByKey("cleared"); ok {
 			p.Source.Cleared = f.Bool(spec.Settings)
 		}
+		limit = listFetchLimit(spec, "scroll", limit, 30)
 		if limit > 0 {
 			p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformLimit, N: limit})
 		}
@@ -490,14 +494,55 @@ func effectivePipeline(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) domai
 		if f, ok := sch.FieldByKey("count"); ok {
 			limit = f.Int(spec.Settings)
 		}
+		// Recent defaults to "page": fetch a generous set so there are several pages
+		// (or a long scroll); "cap" keeps just the count.
+		limit = listFetchLimit(spec, "page", limit, 60)
 		if limit > 0 {
 			p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformLimit, N: limit})
 		}
 	case "bills":
-		// The bills tile shows the next four upcoming charges (no count setting).
-		p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformLimit, N: 4})
+		// Default "scroll": show the upcoming run, scrollable; "cap" keeps the next four.
+		p.Transform = append(p.Transform, domain.Transform{Kind: domain.TransformLimit, N: listFetchLimit(spec, "scroll", 4, 16)})
 	}
 	return p
+}
+
+// listFetchLimit decides how many rows to fetch for a list tile given its display
+// behavior. In "cap" mode it returns capN (the top-N the user sees). In "scroll"
+// or "page" mode it returns the larger fetchN so the tile has enough rows to
+// scroll through or page across. def is the tile's default display mode.
+func listFetchLimit(spec domain.WidgetSpec, def string, capN, fetchN int) int {
+	if widgetDisplay(spec, def) == "cap" {
+		return capN
+	}
+	return fetchN
+}
+
+// bentoFlipDriver is a zero-output component that owns the bento FLIP reflow trigger
+// and the drag-preview subscription, deliberately split out of Dashboard(). Dashboard
+// recomputes every widget's data frame on each render; if it subscribed to the live
+// drag-preview atom (as it used to via flipSig), every dragover re-ran all of that —
+// over a large ledger that pinned the main thread for hundreds of ms and made the drag
+// feel frozen. This component subscribes to the layout + drag atoms instead and renders
+// nothing, so a dragover re-renders only the cheap per-tile shells and this driver. It
+// runs uiw.FlipBento() on any arrangement change (drag preview, drop, resize, auto-mode)
+// and registers the render-captured drag-atom reset the coordinator's safety net calls.
+func bentoFlipDriver() ui.Node {
+	layoutItems := uistate.UseLayoutItems().Get()
+	layoutMode := uistate.UseLayoutMode().Get()
+	flipSig := string(layoutMode)
+	for _, it := range layoutItems {
+		flipSig += fmt.Sprintf("|%s:%dx%d:%d", it.ID, it.ColSpan, it.RowSpan, it.Importance)
+	}
+	// Keyed on the layout signature only — NOT on any drag atom. The drag is now
+	// coordinator/DOM-driven (no atom writes mid-drag), so the FLIP fires on real
+	// arrangement changes (a drop reorder, resize, or auto-mode switch), which is
+	// exactly when tiles actually move.
+	ui.UseEffect(func() func() {
+		uiw.FlipBento()
+		return nil
+	}, flipSig)
+	return Fragment()
 }
 
 // Dashboard shows headline metrics in the candidate-C bento grid, driven by the
@@ -509,25 +554,14 @@ func Dashboard() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
-	// Smoothly animate tiles when the bento arrangement changes (drag-reorder,
-	// resize, auto-layout switch) via the FLIP shim (web/flip.js). Keyed on a
-	// signature of the layout, so it fires exactly when the arrangement could
-	// move — not on every data tick. (B2)
+	// The drag-preview FLIP trigger + drag-atom reads live in a separate tiny
+	// component (bentoFlipDriver), NOT here. Dashboard() recomputes every widget's
+	// frame over the full dataset, so subscribing it to the live drag-preview atom
+	// re-ran all of that on every dragover — over a large ledger that blocked the main
+	// thread for hundreds of ms and made dragging feel frozen. The driver subscribes
+	// to the drag atoms instead and renders nothing, so a dragover re-renders only the
+	// cheap tile shells + the driver, never the data frames. (B2 / perf)
 	layoutItems := uistate.UseLayoutItems().Get()
-	layoutMode := uistate.UseLayoutMode().Get()
-	flipSig := string(layoutMode)
-	for _, it := range layoutItems {
-		flipSig += fmt.Sprintf("|%s:%dx%d:%d", it.ID, it.ColSpan, it.RowSpan, it.Importance)
-	}
-	// Include the live drag preview so the FLIP also animates the reflow that
-	// happens while dragging over tiles, not just on drop (B2).
-	flipSig += "|" + uistate.UseDragSource().Get() + ">" + uistate.UseDragPreview().Get()
-	ui.UseEffect(func() func() {
-		if fn := js.Global().Get("cashfluxFlipBento"); fn.Type() == js.TypeFunction {
-			fn.Invoke()
-		}
-		return nil
-	}, flipSig)
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
@@ -718,6 +752,8 @@ func Dashboard() ui.Node {
 	// no-touch-chrome: lets the CSS agent hide drag/resize affordances (.grip, .rz
 	// buttons) under @media (hover:none) so they don't show on touch screens (L33).
 	tiles = append(tiles, css.Class("bento no-touch-chrome"))
+	// Renders nothing; owns the FLIP reflow trigger (keyed on layout, not drag state).
+	tiles = append(tiles, ui.CreateElement(bentoFlipDriver))
 	// The dashboard surface's full placement set (built-ins + hidden + their saved
 	// settings/style), persisted to SQLite as first-class rows below so the layout
 	// travels with export and is the engine's canonical representation (§8).
@@ -919,6 +955,23 @@ func dashCatchUpCard() ui.Node {
 // freshnessWidget is the full-width Freshness nudge: a friendly reminder of which
 // account balances look stale (via internal/freshness), with how long since each
 // was last updated.
+// humanizeStaleDays renders an account's days-since-update as a calm, capped
+// label rather than a raw day count: a four-year-old sample balance reads "4y+",
+// not an alarming "1460d". Days stay literal up to two months, then collapse to
+// months and finally years so the freshness chips never shout a giant number.
+func humanizeStaleDays(days int) string {
+	switch {
+	case days < 1:
+		return "today"
+	case days < 60:
+		return fmt.Sprintf("%dd", days)
+	case days < 365:
+		return fmt.Sprintf("%dmo", days/30)
+	default:
+		return fmt.Sprintf("%dy+", days/365)
+	}
+}
+
 func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismissals freshness.Dismissals, onRemind, onDismiss ui.Handler) ui.Node {
 	now := time.Now()
 	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
@@ -938,7 +991,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 		for _, a := range shown {
 			chips = append(chips, Span(css.Class("member-chip"),
 				Span(a.Name),
-				Span(css.Class("fig", tw.TextWarn), fmt.Sprintf("· %dd", freshness.DaysSinceUpdate(a, now))),
+				Span(css.Class("fig", tw.TextWarn), "· "+humanizeStaleDays(freshness.DaysSinceUpdate(a, now))),
 			))
 		}
 		if extra > 0 {
@@ -992,9 +1045,13 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		}
 		body = Div(css.Class("t-body", tw.SpaceY25), rows)
 	}
+	bodyCls := ""
+	if fr.Rows > 0 && widgetDisplay(c.Spec, "scroll") != "cap" {
+		bodyCls = tw.Fold(tw.OverflowYAuto)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "bills", Title: uistate.T("dashboard.upcomingBills"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
-		Body: body,
+		BodyClass: bodyCls, Body: body,
 	})
 }
 
@@ -1420,14 +1477,18 @@ func accountsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		))
 	}
 	var body ui.Node
+	bodyCls := ""
 	if len(cells) == 0 {
 		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No accounts yet.", Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
 	} else {
 		body = Div(css.Class("t-body", tw.Grid, tw.GridCols3, tw.Gap4), cells)
+		if widgetDisplay(c.Spec, "scroll") != "cap" {
+			bodyCls = tw.Fold(tw.OverflowYAuto)
+		}
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "accounts", Title: uistate.T("nav.accounts"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "5",
-		Body: body,
+		BodyClass: bodyCls, Body: body,
 	})
 }
 
@@ -1637,7 +1698,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 			Span(css.Class(tw.TextDim), "saved"),
 			Span(css.Class("fig t-body", tw.FontDisplay), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
 		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-fg", Class: "mt-2"}),
+		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-up", Class: "mt-2"}),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), caption),
 	)
 	return uiw.Widget(uiw.WidgetProps{
@@ -1689,9 +1750,13 @@ func budgetsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		}
 		body = Div(css.Class("t-body", tw.SpaceY4), rows)
 	}
+	bodyCls := ""
+	if fr.Rows > 0 && widgetDisplay(c.Spec, "scroll") != "cap" {
+		bodyCls = tw.Fold(tw.OverflowYAuto)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budgets", Title: uistate.T("nav.budgets"), Draggable: true, Resizable: true,
-		GridColumn: "3", GridRow: "3 / span 2", Body: body,
+		GridColumn: "3", GridRow: "3 / span 2", BodyClass: bodyCls, Body: body,
 	})
 }
 
@@ -1705,7 +1770,10 @@ func recentFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	descCol, _ := fr.Column("desc")
 	amtCol, _ := fr.Column("amount")
 	curCol, _ := fr.Column("currency")
+	display := widgetDisplay(c.Spec, "page")
+	pageSize := atoiOr(c.Spec.Settings["count"], 6)
 	var body ui.Node
+	bodyCls := tw.Fold(tw.OverflowHidden)
 	if fr.Rows == 0 {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noTransactions"))
 	} else {
@@ -1719,11 +1787,19 @@ func recentFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 				Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)+" "+tw.ColorClass(figTone(amt))), fmtMoney(amt)),
 			))
 		}
-		body = Table(css.Class("t-body", tw.WFull), Tbody(rows))
+		switch display {
+		case "page":
+			body = ui.CreateElement(pagedList, pagedListProps{Rows: rows, PageSize: pageSize, AsTable: true})
+		case "scroll":
+			body = Table(css.Class("t-body", tw.WFull), Tbody(rows))
+			bodyCls = tw.Fold(tw.OverflowYAuto)
+		default: // cap
+			body = Table(css.Class("t-body", tw.WFull), Tbody(rows))
+		}
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "recent", Title: uistate.T("dashboard.recent"), Draggable: true, Resizable: true,
-		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: tw.Fold(tw.OverflowHidden),
+		GridColumn: "1 / span 2", GridRow: "3 / span 2", BodyClass: bodyCls,
 		Body: body,
 	})
 }
@@ -1738,7 +1814,7 @@ func DashboardLayoutControls() ui.Node {
 	layoutAtom := uistate.UseLayoutItems()
 	modeAtom := uistate.UseLayoutMode()
 	reset := func() {
-		d := dashlayout.DefaultItems()
+		d := dashlayout.DefaultLayoutItems()
 		layoutAtom.Set(d)
 		uistate.PersistItems(d)
 	}

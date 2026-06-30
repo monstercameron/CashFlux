@@ -133,6 +133,31 @@ func SetSmartResult(code, text string, now time.Time) smart.Settings {
 	return s
 }
 
+// SetSmartQuoteTheme sets the daily-quote theme and INVALIDATES the cached quote
+// (clears its stored result + last-run) so the dashboard regenerates a fresh quote
+// in the new theme on the next render. Passing the current theme is the "new
+// quote" action — it just clears the cache. Persists.
+func SetSmartQuoteTheme(theme string) smart.Settings {
+	s := LoadSmartSettings()
+	s.QuoteTheme = theme
+	delete(s.Results, "SMART-QUOTE") // delete on a nil map is a safe no-op
+	delete(s.LastRun, "SMART-QUOTE")
+	SaveSmartSettings(s)
+	return s
+}
+
+// SetSmartQuoteContext toggles personalization of the daily quote (whether the
+// user's financial snapshot steers the quote choice) and invalidates the cached
+// quote so the next render regenerates with the new setting. Persists.
+func SetSmartQuoteContext(on bool) smart.Settings {
+	s := LoadSmartSettings()
+	s.QuoteUseContext = on
+	delete(s.Results, "SMART-QUOTE")
+	delete(s.LastRun, "SMART-QUOTE")
+	SaveSmartSettings(s)
+	return s
+}
+
 // SetSmartDensity sets the global "how much smart weaves into the app" dial and
 // persists.
 func SetSmartDensity(d smart.Density) smart.Settings {

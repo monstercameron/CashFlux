@@ -679,11 +679,105 @@
         display: flex; align-items: center; gap: 1.25rem;
         padding: 0.75rem 1.25rem; background: rgba(11,16,32,0.85);
         backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
-        /* Wrap controls onto a second row when they don't fit, rather than
-           turning a fixed-height header into a scroll container (C34). */
-        flex-wrap: wrap; row-gap: 0.4rem; min-height: 3.5rem;
+        /* Single row on wide screens; ≤1600px the layout switches to an explicit
+           two-row grid (see the responsive block) rather than ragged wrapping. */
+        flex-wrap: nowrap; min-height: 3.5rem;
       }
-      .topbar-controls { flex-wrap: wrap; row-gap: 0.4rem; }
+      /* ── Top bar: one calm row ─────────────────────────────────────────────
+         The bar is a single line of type and quiet controls. The sprawling date
+         picker is collapsed into ONE compact control — ‹ [Jun 2026 ⌄] › — whose
+         pill opens a popover for granularity / quick jumps / custom range. Every
+         control shares one height (2rem) and an 8px radius, scoped to .topbar so
+         the same primitives keep their own sizing elsewhere. */
+      .topbar { --tb-h: 2rem; gap: .85rem; }
+      .tb-title { margin-right: auto; min-width: 0; }   /* push the cluster to the right */
+      .tb-context, .tb-actions { display: inline-flex; align-items: center; }
+      .tb-context { gap: .5rem; }
+      .tb-actions { gap: .15rem; }
+      /* Quiet hairline divider between the context (scope + period) and the actions. */
+      .tb-actions::before { content: ""; align-self: center; width: 1px; height: 1.15rem; margin: 0 .35rem; background: var(--border); }
+
+      /* Member scope select — quiet, unified height. */
+      .topbar .member-switcher { height: var(--tb-h); border: 1px solid var(--border); border-radius: 8px;
+        background: var(--bg-elev, transparent); color: inherit; font-size: .82rem; padding: 0 1.5rem 0 .6rem; max-width: 12rem; }
+      .topbar .cf-member-switcher-wrap { display: inline-flex; align-items: center; gap: .4rem; flex: none; white-space: nowrap; }
+      .topbar .cf-member-switcher-wrap .btn { height: var(--tb-h); display: inline-flex; align-items: center; border-radius: 8px; font-size: .82rem; }
+
+      /* Compact period control: ‹ pill › as one rounded, bordered unit. */
+      .period-control { position: relative; display: inline-flex; align-items: center; height: var(--tb-h);
+        border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev, transparent); overflow: visible; }
+      .period-step { display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 100%;
+        border: 0; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 7px; }
+      .period-step:hover { background: var(--hover, color-mix(in srgb, var(--text) 8%, transparent)); color: var(--text); }
+      .period-pill { display: inline-flex; align-items: center; gap: .4rem; height: 100%; padding: 0 .55rem;
+        border: 0; border-inline: 1px solid var(--border); background: transparent; color: inherit; font: inherit;
+        font-size: .82rem; font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap; }
+      .period-pill:hover { background: var(--hover, color-mix(in srgb, var(--text) 8%, transparent)); }
+      .period-pill[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+      .period-caret { color: var(--text-dim); transition: transform .15s ease; }
+      .period-pill[aria-expanded="true"] .period-caret { transform: rotate(180deg); }
+      /* Popover (reuses the .add-menu shell for position/elevation/animation). */
+      .period-pop { min-width: 17rem; padding: .65rem; display: flex; flex-direction: column; gap: .55rem; }
+      .period-pop .seg { display: flex; width: 100%; }
+      .period-pop .seg-btn { flex: 1; justify-content: center; }
+      .period-presets { display: flex; flex-wrap: wrap; gap: .35rem; }
+      .period-preset { padding: .3rem .6rem; border: 1px solid var(--border); border-radius: 999px;
+        background: transparent; color: var(--text-dim); font-size: .78rem; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+      .period-preset:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); border-color: var(--accent); }
+      .period-rangetoggle { align-self: flex-start; padding: .15rem .1rem; border: 0; background: transparent;
+        color: var(--accent); font-size: .78rem; font-weight: 600; cursor: pointer; }
+      .period-rangetoggle:hover { text-decoration: underline; }
+      .period-rangerow { padding-top: .15rem; }
+
+      /* The member <select> and "Switch profile…" inherit the global input rules
+         (select{min-height:44} / .btn{min-height:44}); override so they match the
+         bar's 2rem height like every other control. */
+      .topbar .tb-context select.member-switcher { height: var(--tb-h); min-height: 0; padding: 0 1.5rem 0 .6rem; }
+      .topbar .cf-member-switcher-wrap .btn { height: var(--tb-h); min-height: 0; padding: 0 .7rem; }
+
+      /* Action icons — square, same height, and a single GHOST style (the bell/+ had
+         light-mode boxed borders while ⋯ was borderless — now they all match). The +
+         keeps the accent color so it still reads as the primary "add". */
+      .topbar .tb-actions .icon-btn,
+      .topbar .tb-actions .more-btn,
+      .topbar .tb-actions .notify-btn,
+      .topbar .tb-actions .muzak-btn,
+      .topbar .tb-actions .add-btn { width: var(--tb-h); height: var(--tb-h); border-radius: 8px;
+        display: inline-flex; align-items: center; justify-content: center; }
+      .topbar .tb-actions .add-caret { width: 1.2rem; height: var(--tb-h); border-radius: 8px; }
+      .topbar .tb-actions .icon-btn,
+      .topbar .tb-actions .more-btn,
+      .topbar .tb-actions .notify-btn,
+      .topbar .tb-actions .muzak-btn,
+      .topbar .tb-actions .add-btn,
+      .topbar .tb-actions .add-caret { background: transparent !important; border: 0 !important; }
+      .topbar .tb-actions .icon-btn:hover,
+      .topbar .tb-actions .more-btn:hover,
+      .topbar .tb-actions .notify-btn:hover,
+      .topbar .tb-actions .muzak-btn:hover,
+      .topbar .tb-actions .add-btn:hover,
+      .topbar .tb-actions .add-caret:hover { background: color-mix(in srgb, var(--text) 8%, transparent) !important; color: var(--text); }
+      .topbar .tb-actions .add-btn { color: var(--accent); }
+      /* The low-frequency toggles (customize/theme/help/music) always live in the
+         "⋯ More" menu — one labeled menu beats four cryptic icons, and it keeps the
+         single row uncluttered. Inline copies stay hidden-but-mounted so MuzakToggle's
+         audio-player effect keeps running. */
+      .topbar-secondary { display: none !important; }
+      .topbar-more { display: inline-flex !important; }
+
+      /* Controls keep their intrinsic size (never shrink into each other); the title
+         is the only flexible element — it truncates. */
+      .topbar .tb-context > *, .topbar .tb-actions > * { flex: none; }
+      /* Progressive declutter so the single row stays comfortable down to tablet:
+         drop the secondary "Switch profile…" button first (it's also on the sidebar
+         household card), then the member scope at the narrowest widths. !important
+         beats the global .btn / runtime atomic display rules. */
+      @media (max-width: 1000px) {
+        .topbar [data-testid="profile-switch-btn"] { display: none !important; }
+      }
+      @media (max-width: 680px) {
+        .topbar .tb-context .cf-member-switcher-wrap { display: none !important; }
+      }
       .brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 800; white-space: nowrap; }
       .brand-mark {
         display: grid; place-items: center; width: 1.6rem; height: 1.6rem;
@@ -1026,18 +1120,92 @@
          ("Income$6,982.00"). Lay them out like the Reports hero secondary stats: a wrapping
          row of label-above-value blocks. Greeting/figure/label spans already carry scoped
          tw styles; these rules add only the missing container/spacing. */
-      .home-hero { margin-bottom: 1.25rem; }
-      .home-hero-greeting { margin: 0 0 0.75rem; }
-      .home-hero-nw { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.85rem; }
-      /* R49: the HomeHero net-worth IS the dashboard's hero figure, so it must
-         outrank the KPI-strip tiles (which also use t-figure-lg) instead of tying
-         with them — give it a clearly dominant display size + weight. */
-      .home-hero-nw-fig { line-height: 1.1; font-size: 2.6rem; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-      @media (max-width: 720px) { .home-hero-nw-fig { font-size: 2.1rem; } }
-      .home-hero-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: baseline; }
-      .home-hero-stat { display: flex; flex-direction: column; gap: 0.1rem; }
-      .home-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.1rem; }
+      /* ── Dashboard hero ──────────────────────────────────────────────────────
+         An elevated, atmospheric headline card: the net-worth figure + its monthly
+         delta chip beside a living 6-month sparkline, over a soft brand-tinted
+         gradient. Refined editorial: calm depth, strong type, a quiet entrance. */
+      .home-hero {
+        position: relative; overflow: hidden;
+        margin-bottom: 1.25rem; padding: 1.6rem 1.8rem 1.5rem;
+        border-radius: 18px; border: 1px solid var(--border);
+        background:
+          radial-gradient(135% 130% at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 52%),
+          radial-gradient(120% 130% at 100% 0%, color-mix(in srgb, var(--up, #54b884) 8%, transparent), transparent 48%),
+          var(--bg-card, #ffffff);
+        box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 18px 42px -26px rgba(0,0,0,.30);
+      }
+      /* faint luminous hairline along the top edge */
+      .home-hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 45%, transparent), transparent); opacity: .6; }
+
+      .home-hero-top { margin-bottom: 1.15rem; }
+      .home-hero-greeting { margin: 0; }
+      .home-hero-date { margin: 0.2rem 0 0; color: var(--text-faint); font-size: 0.82rem; letter-spacing: 0.01em; }
+
+      .home-hero-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
+      .home-hero-nw-block { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+      .home-hero-nw-label { display: inline-flex; align-items: center; gap: 0.3rem;
+        text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.68rem; font-weight: 600; color: var(--text-faint); }
+      /* R49: the hero net-worth IS the dashboard's hero figure — clearly dominant. */
+      .home-hero-nw-fig { line-height: 1.04; font-size: 3.1rem; font-weight: 800; letter-spacing: -0.025em;
+        white-space: nowrap; font-variant-numeric: tabular-nums; }
+      @media (max-width: 720px) { .home-hero-nw-fig { font-size: 2.3rem; } }
+      .home-hero-delta { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.2rem;
+        padding: 0.18rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums;
+        background: color-mix(in srgb, currentColor 13%, transparent); }
+      .home-hero-spark { flex: 1 1 200px; max-width: 360px; min-width: 150px; align-self: stretch; display: flex; align-items: flex-end; opacity: 0.95; }
+      .home-hero-spark svg { width: 100%; height: 68px; }
+
+      .home-hero-stats { display: flex; flex-wrap: wrap; align-items: stretch; margin-top: 1.35rem;
+        border-top: 1px solid var(--border); padding-top: 1rem; }
+      .home-hero-stat { display: flex; flex-direction: column; gap: 0.15rem;
+        padding-right: 1.5rem; margin-right: 1.5rem; border-right: 1px solid var(--border); }
+      .home-hero-stat:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+      .home-hero-stat-label { text-transform: uppercase; letter-spacing: 0.07em; font-size: 0.66rem; font-weight: 600; }
+      .home-hero-stat-value { font-size: 1.15rem; }
+
+      .home-hero-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.25rem; }
       .home-hero-welcome-body { max-width: 42rem; }
+
+      /* Quote of the day — a calm italic footer ribbon (opt-in AI Smart+ feature). */
+      .home-hero-quote { display: flex; align-items: center; gap: 0.65rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+      .hero-quote-mark { flex: none; color: var(--accent); font-size: 0.85rem; opacity: 0.85; }
+      .hero-quote-text { flex: 1; min-width: 0; font-family: var(--font-display, "Fraunces", serif); font-style: italic;
+        font-size: 1.02rem; line-height: 1.4; color: var(--text); }
+      .hero-quote-cite { font-style: normal; font-family: var(--font-ui, "Inter", sans-serif); font-size: 0.82rem;
+        font-weight: 500; color: var(--text-faint); white-space: nowrap; }
+      .hero-quote-loading { color: var(--text-faint); animation: quoteShimmer 1.5s ease-in-out infinite; }
+      @keyframes quoteShimmer { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.95; } }
+      @media (prefers-reduced-motion: reduce) { .hero-quote-loading { animation: none; } }
+      .hero-quote-hint { flex: 1; color: var(--text-faint); font-size: 0.85rem; }
+      .hero-quote-controls { flex: none; display: inline-flex; align-items: center; gap: 0.4rem; opacity: 0.55; transition: opacity 0.15s ease; }
+      .home-hero-quote:hover .hero-quote-controls { opacity: 1; }
+      .hero-quote-theme { height: 1.85rem; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-elev, transparent);
+        color: var(--text-dim); font-size: 0.75rem; padding: 0 1.3rem 0 0.5rem; cursor: pointer; }
+      .hero-quote-refresh { width: 1.85rem; height: 1.85rem; border: 1px solid var(--border); border-radius: 7px; background: transparent;
+        color: var(--text-dim); cursor: pointer; font-size: 0.95rem; display: inline-flex; align-items: center; justify-content: center; }
+      .hero-quote-refresh:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+      .hero-quote-ctx { padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: transparent;
+        color: var(--text-dim); font-size: 0.72rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+        transition: color 0.12s, border-color 0.12s, background 0.12s; }
+      .hero-quote-ctx:hover { color: var(--text); }
+      .hero-quote-ctx.is-on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+      .home-hero-quote--off { margin-top: 1rem; padding-top: 0.85rem; }
+      .hero-quote-enable { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.32rem 0.75rem; border: 1px dashed var(--border);
+        border-radius: 999px; background: transparent; color: var(--text-dim); font-size: 0.82rem; cursor: pointer;
+        transition: color 0.12s, border-color 0.12s, background 0.12s; }
+      .hero-quote-enable:hover { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+      .hero-quote-enable .hero-quote-mark { opacity: 1; }
+
+      /* Quiet staggered entrance on load. */
+      @keyframes heroRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+      .home-hero-top, .home-hero-main, .home-hero-stats, .home-hero-actions { animation: heroRise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+      .home-hero-main    { animation-delay: 0.06s; }
+      .home-hero-stats   { animation-delay: 0.12s; }
+      .home-hero-actions { animation-delay: 0.18s; }
+      @media (prefers-reduced-motion: reduce) {
+        .home-hero-top, .home-hero-main, .home-hero-stats, .home-hero-actions { animation: none; }
+      }
       /* G9.1 Alert card strip — heads-up anomaly urgency. */
       .card-alert { border-left: 4px solid var(--danger); background: color-mix(in srgb, var(--danger) 6%, var(--card-bg)); }
       /* C125: salient over-budget banner — leads the list when any budget is over. */
@@ -2241,6 +2409,11 @@
       .studio-list-root { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; height:100%; }
       .studio-list-body { flex:1 1 auto; min-height:0; overflow-y:auto; }
       .studio-list-footer { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; padding-top:8px; margin-top:8px; border-top:1px solid var(--border); }
+      /* Dashboard "page" display mode: a scrollable page area above a fixed pager
+         footer (so the prev/next is always reachable, never pushed off). */
+      .dash-paged { display:flex; flex-direction:column; height:100%; min-height:0; }
+      .dash-paged-body { flex:1 1 auto; min-height:0; overflow-y:auto; }
+      .dash-paged .studio-list-pager { flex:0 0 auto; padding-top:8px; margin-top:8px; border-top:1px solid var(--border); }
       .studio-list-pager { display:flex; align-items:center; justify-content:center; gap:14px; }
       .studio-list-pager .btn-icon { width:1.8rem; height:1.8rem; display:grid; place-items:center; padding:0; }
       .studio-list-pager .btn-icon svg { width:1rem; height:1rem; }
@@ -2286,7 +2459,13 @@
          would otherwise clobber this drag-ghost cue. This is a functional drag
          affordance (not a motion flourish), so it should always apply while
          dragging regardless of the WONDER setting. */
-      .w.drag { opacity:.35 !important; pointer-events:none; cursor:grabbing; }
+      /* NOTE: deliberately NO pointer-events:none here. Toggling pointer-events on the
+         element being dragged mid-drag can abort the native HTML5 drag in newer Chromium
+         (Chrome 150+) — the drag never fires dragend, so the drag state + scroll-lock get
+         stuck on (tile dims but won't move, cursor stuck "grabbing", scroll fights back).
+         The drag coordinator targets via a pre-drag geometry snapshot, not live hit-
+         testing, so the dragged tile no longer needs to be click-through. (perf/Chrome150) */
+      .w.drag { opacity:.35 !important; cursor:grabbing; }
       [data-bento-dragging] .bento { cursor:grabbing; }
       [data-bento-dragging] .bento .w:not(.drag) { transition: border-color .15s ease, box-shadow .15s ease; }
 
@@ -2453,17 +2632,10 @@
           grid-auto-rows: minmax(var(--cell), auto) !important; }
         .bento > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
       }
-      /* Tablet/narrow (C19): the top bar's controls (resolution segmented + jump +
-         stepper + custom range + Add) ran off the right edge with no wrap, so some
-         were unreachable. Let the bar grow to two rows — breadcrumb on top, the
-         controls wrapping onto a full-width second row — so nothing is clipped. */
+      /* Tablet/narrow (C19): the top bar's two-row grid layout (see the ≤1536
+         block above) already handles the bar; here we only keep the unrelated list-
+         row wrapping so action buttons fall below the description on tight rows. */
       @media (max-width: 1024px) {
-        /* height:auto must beat Tailwind's .h-14; flex:1 0 100% forces the
-           control cluster onto its own full-width row (without it, flexbox just
-           shrinks everything onto one line and squashes the breadcrumb). */
-        .topbar { height: auto !important; min-height: 3.5rem; flex-wrap: wrap; row-gap: .4rem; padding-top: .4rem; padding-bottom: .4rem; }
-        .topbar-controls { margin-left: 0; flex: 1 0 100%; flex-wrap: wrap; row-gap: .4rem; justify-content: flex-start; }
-        .reso-control { flex-wrap: wrap; row-gap: .4rem; }
         /* List rows (transactions etc.): let the action buttons wrap below the
            description instead of overlapping it when the row is too narrow (C19).
            row-main keeps flex:1 so it takes the first line and the controls flow
@@ -2479,18 +2651,9 @@
         .bento > * { grid-column: auto !important; grid-row: auto !important; }
         .bento > *:first-child { grid-column: 1 / -1 !important; } /* dashboard header spans both columns */
       }
-      /* GX7-F2: at narrow portrait widths (≤480px) the topbar controls wrap to 3–4 rows,
-         consuming up to 296px (37%) of an 800px phone screen before any content appears.
-         Switch to a horizontally-scrollable single-row strip so all controls stay accessible
-         without bloating the vertical chrome. The existing two-row wrap (C19, ≤1024px) is
-         preserved at tablet widths; this override only kicks in at phone width. */
-      @media (max-width: 480px) {
-        .topbar { flex-wrap: nowrap; overflow-x: auto; min-height: 3rem; height: auto !important;
-          -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-        .topbar::-webkit-scrollbar { display: none; }
-        .topbar-controls { flex: 0 0 auto; flex-wrap: nowrap; overflow-x: visible; row-gap: 0; }
-        .reso-control { flex-wrap: nowrap; }
-      }
+      /* (Phone-width topbar override removed: the bar is now a single compact row
+         — ‹period› pill + actions — that fits without horizontal scroll, and scroll
+         would clip the period/More popovers.) */
       /* GX7-F4: at ≤767px the bento override (.bento>* { grid-column: 1/-1 }) can leak into
          .stat-grid when it sits inside the bento flow, collapsing the KPI row to 1 column.
          Re-assert auto-fit with a tighter minmax (120px) so 3 stat tiles fit in 344px. */
@@ -3360,7 +3523,6 @@
     <!-- D3 vendored locally (C44): no third-party CDN, no SRI gap, works offline. -->
     <script src="./d3.min.js"></script>
     <script src="./chart.js"></script>
-    <script src="./flip.js"></script>
     <!-- W-15 WONDER: count-up animation for KPI hero figures on dashboard mount. -->
     <script src="./countup.js"></script>
     <!-- Calming background music ("muzak"): low-volume looping ambient player. -->

@@ -106,3 +106,86 @@ func TestReconcileIdempotentOnDefaults(t *testing.T) {
 		}
 	}
 }
+
+// The curated default layout must be a strict, duplicate-free subset of the full
+// catalog — every seeded tile is a real, registrable widget.
+func TestDefaultLayoutItemsSubsetOfCatalog(t *testing.T) {
+	catalog := make(map[string]bool, len(DefaultItems()))
+	for _, d := range DefaultItems() {
+		catalog[d.ID] = true
+	}
+	seen := map[string]bool{}
+	for _, it := range DefaultLayoutItems() {
+		if !catalog[it.ID] {
+			t.Errorf("curated layout has %q, which is not in the catalog", it.ID)
+		}
+		if seen[it.ID] {
+			t.Errorf("curated layout lists %q more than once", it.ID)
+		}
+		seen[it.ID] = true
+	}
+	if len(DefaultLayoutItems()) >= len(DefaultItems()) {
+		t.Errorf("curated layout (%d) should be smaller than the catalog (%d) — it deduplicates",
+			len(DefaultLayoutItems()), len(DefaultItems()))
+	}
+}
+
+// The curated default layout must tile the 4-column grid with no empty cells —
+// every row between the top and the last placed tile is fully filled — so the
+// dashboard never shows a dead gap in its default arrangement.
+func TestDefaultLayoutPacksGapFree(t *testing.T) {
+	const cols = 4
+	placed := Pack(DefaultLayoutItems(), cols)
+	occupied := map[[2]int]bool{}
+	maxRow, area := 0, 0
+	for _, p := range placed {
+		for dr := 0; dr < p.RowSpan; dr++ {
+			for dc := 0; dc < p.ColSpan; dc++ {
+				occupied[[2]int{p.Row + dr, p.Col + dc}] = true
+			}
+			if p.Row+dr > maxRow {
+				maxRow = p.Row + dr
+			}
+		}
+		area += p.ColSpan * p.RowSpan
+	}
+	if area != maxRow*cols {
+		t.Fatalf("curated layout leaves gaps: covers %d cells but spans %d rows × %d cols = %d", area, maxRow, cols, maxRow*cols)
+	}
+	for r := 1; r <= maxRow; r++ {
+		for c := 1; c <= cols; c++ {
+			if !occupied[[2]int{r, c}] {
+				t.Errorf("empty cell at row %d, col %d in the default layout", r, c)
+			}
+		}
+	}
+}
+
+// Reconcile is stable on the curated layout, and never auto-adds a catalog-only
+// widget the curated layout deliberately omits (e.g. the hero-duplicate KPIs).
+func TestReconcileHonorsCuratedOmissions(t *testing.T) {
+	got := Reconcile(DefaultLayoutItems())
+	if !equalStrings(idsOf(got), idsOf(DefaultLayoutItems())) {
+		t.Fatalf("reconciling the curated layout changed it: %v", idsOf(got))
+	}
+	// A widget omitted from the curated layout but present in the catalog.
+	curated := map[string]bool{}
+	for _, it := range DefaultLayoutItems() {
+		curated[it.ID] = true
+	}
+	var omitted string
+	for _, d := range DefaultItems() {
+		if !curated[d.ID] {
+			omitted = d.ID
+			break
+		}
+	}
+	if omitted == "" {
+		t.Skip("no catalog-only widget to check")
+	}
+	for _, it := range got {
+		if it.ID == omitted {
+			t.Fatalf("Reconcile re-added the curated-omitted widget %q", omitted)
+		}
+	}
+}

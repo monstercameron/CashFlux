@@ -6,12 +6,18 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smartai"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -76,6 +82,12 @@ func dashboardHero() ui.Node {
 		netDisplay = "+" + fmtMoney(netMoney)
 	}
 
+	// A trailing 6-month net-worth series powers the hero sparkline, and the change
+	// since the start of the current month becomes the delta chip — both turn the
+	// flat figure into a living, contextual headline. Both degrade gracefully: if
+	// the series can't be computed the spark/chip simply don't render.
+	spark, delta, deltaTone := heroNetWorthTrend(accounts, txns, rates, nw.Net.Currency)
+
 	return ui.CreateElement(heroSummary, heroSummaryProps{
 		NetWorth:     fmtMoney(nw.Net),
 		NetWorthTone: figTone(nw.Net),
@@ -84,7 +96,45 @@ func dashboardHero() ui.Node {
 		Net:          netDisplay,
 		NetTone:      figTone(netMoney),
 		SavingsPct:   savingsPct,
+		Spark:        spark,
+		Delta:        delta,
+		DeltaTone:    deltaTone,
 	})
+}
+
+// heroNetWorthTrend builds the hero's trailing 6-month net-worth series (for the
+// sparkline) and the month-over-start delta (for the chip). Returns an empty
+// series and delta on any computation error so the hero renders cleanly without
+// them.
+func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base string) (spark []float64, delta, deltaTone string) {
+	const months = 6
+	now := time.Now()
+	cur := dateutil.MonthStart(now)
+	cutoffs := make([]time.Time, 0, months+1)
+	for i := months - 1; i >= 0; i-- {
+		cutoffs = append(cutoffs, dateutil.AddMonths(cur, -i))
+	}
+	cutoffs = append(cutoffs, now) // current point
+	series, err := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
+	if err != nil || len(series) < 2 {
+		return nil, "", ""
+	}
+	spark = make([]float64, len(series))
+	for i, m := range series {
+		spark[i] = float64(m.Amount)
+	}
+	// Delta = change since the start of the current month (the last two points).
+	d := series[len(series)-1].Amount - series[len(series)-2].Amount
+	arrow, tone := "▲", "text-up"
+	mag := d
+	switch {
+	case d < 0:
+		arrow, tone, mag = "▼", "text-down", -d
+	case d == 0:
+		arrow, tone = "■", "text-dim"
+	}
+	delta = arrow + " " + fmtMoney(money.New(mag, base)) + " " + uistate.T("home.thisMonth")
+	return spark, delta, tone
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +151,9 @@ type heroSummaryProps struct {
 	Net          string // formatted cash-flow net (income − spending)
 	NetTone      string // color token for the net figure
 	SavingsPct   int
+	Spark        []float64 // trailing 6-month net-worth series for the hero sparkline (nil → no chart)
+	Delta        string    // formatted "▲ $X this month" net-worth change ("" → no chip)
+	DeltaTone    string    // color token for the delta chip
 }
 
 // heroSummary renders the non-empty hero: a time-of-day greeting, the
@@ -131,26 +184,49 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		savingsTone = "text-warn"
 	}
 
+	// Optional delta chip ("▲ $X this month") and net-worth sparkline.
+	var delta ui.Node = Fragment()
+	if props.Delta != "" {
+		delta = Span(ClassStr("home-hero-delta "+tw.ColorClass(props.DeltaTone)), props.Delta)
+	}
+	var spark ui.Node = Fragment()
+	if len(props.Spark) >= 2 {
+		spark = Div(css.Class("home-hero-spark"),
+			uiw.AreaChart(uiw.AreaChartProps{
+				Values: props.Spark, GradientID: "hero-spark", Width: 260, Height: 72,
+				Label: uistate.T("home.netWorth"),
+			}),
+		)
+	}
+
 	return Div(css.Class("home-hero"),
-		// Band heading — H2 because the topbar shell provides the implicit page
-		// landmark; this is the next heading level (WCAG 2.4.6, no level-skip).
-		H2(ClassStr("home-hero-greeting "+tw.Fold(tw.FontDisplay, tw.Text28, tw.LeadingTight, tw.TrackingTight)),
-			greeting,
+		// Greeting + a quiet date line for context — H2 because the topbar shell
+		// provides the implicit page landmark (WCAG 2.4.6, no level-skip).
+		Div(css.Class("home-hero-top"),
+			H2(ClassStr("home-hero-greeting "+tw.Fold(tw.FontDisplay, tw.Text28, tw.LeadingTight, tw.TrackingTight)),
+				greeting,
+			),
+			P(css.Class("home-hero-date"), time.Now().Format("Monday, January 2")),
 		),
 
-		// Net-worth hero figure — the single most important number on this page.
-		Div(css.Class("home-hero-nw"),
-			Span(css.Class("home-hero-nw-label t-caption", tw.TextFaint),
-				uistate.T("home.netWorth"),
-				// Optional smart explainer (gated by the global density dial).
-				smartTooltipFor(uistate.LoadSmartSettings(), "networth", uistate.T("home.netWorth"), uistate.T("smart.tipNetWorth")),
+		// Headline row: the net-worth figure + change chip on the left, a living
+		// 6-month sparkline filling the right.
+		Div(css.Class("home-hero-main"),
+			Div(css.Class("home-hero-nw-block"),
+				Span(css.Class("home-hero-nw-label"),
+					uistate.T("home.netWorth"),
+					// Optional smart explainer (gated by the global density dial).
+					smartTooltipFor(uistate.LoadSmartSettings(), "networth", uistate.T("home.netWorth"), uistate.T("smart.tipNetWorth")),
+				),
+				Div(ClassStr("home-hero-nw-fig fig "+
+					tw.Fold(tw.FontDisplay)+" "+
+					tw.ColorClass(props.NetWorthTone)),
+					Attr("data-countup", ""),
+					props.NetWorth,
+				),
+				delta,
 			),
-			Div(ClassStr("home-hero-nw-fig fig t-figure-lg "+
-				tw.Fold(tw.FontDisplay)+" "+
-				tw.ColorClass(props.NetWorthTone)),
-				Attr("data-countup", ""),
-				props.NetWorth,
-			),
+			spark,
 		),
 
 		// This-month compact stat row (income / spending / net / savings rate).
@@ -178,6 +254,9 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				uistate.T("home.quickAddAccount"),
 			),
 		),
+
+		// Quote of the day (opt-in AI Smart+ feature) — a calm footer ribbon.
+		ui.CreateElement(heroQuote, struct{}{}),
 	)
 }
 
@@ -254,5 +333,202 @@ func heroStat(label, value, tone string) ui.Node {
 	return Div(css.Class("home-hero-stat"),
 		Span(css.Class("home-hero-stat-label t-caption", tw.TextFaint), label),
 		Span(ClassStr(valueCls), Attr("data-countup", ""), value),
+	)
+}
+
+// ---------------------------------------------------------------------------
+// Quote of the day (SMART-QUOTE) — an opt-in AI Smart+ feature
+// ---------------------------------------------------------------------------
+
+// quoteCode is the SMART series feature code for the daily quote.
+const quoteCode = "SMART-QUOTE"
+
+// quoteThemes are the selectable styles. The value is sent verbatim to the model
+// as the requested theme, and shown as the option label.
+var quoteThemes = []string{"Stoic", "Mindful", "Playful", "Poetic", "Practical", "Bold", "Witty"}
+
+// cleanQuote strips wrapping whitespace and any surrounding quotation marks the
+// model may add, so the displayed line is just the quote.
+func cleanQuote(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "\"'“”‘’")
+	return strings.TrimSpace(s)
+}
+
+func quoteSameDay(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
+}
+
+// splitQuote separates a "<quote> — <author>" line into its text and attribution.
+// It splits on the LAST dash separator so a dash inside the quote doesn't steal
+// the author. Returns an empty author when no separator is present.
+func splitQuote(s string) (quote, author string) {
+	for _, sep := range []string{" — ", " – ", " -- ", " — ", "—", "–"} {
+		if i := strings.LastIndex(s, sep); i > 0 {
+			return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+len(sep):])
+		}
+	}
+	return strings.TrimSpace(s), ""
+}
+
+// heroQuote renders the dashboard "Quote of the day". It is an opt-in AI feature
+// (Smart+): when enabled and an OpenAI key (or backend) is configured it generates
+// one short money-mindset quote per day in the chosen theme via the user's own
+// key, caches it in the SMART Results store (so it shows between renders without
+// re-spending), and refreshes when the day rolls over or the theme changes. All
+// hooks are called unconditionally (stable positions) before any state-based
+// branch in the returned markup.
+func heroQuote(_ struct{}) ui.Node {
+	app := appstate.Default
+	_ = uistate.UseDataRevision().Get()
+	prefs := uistate.UsePrefs().Get().Normalize()
+	tick := ui.UseState(0)
+	_ = tick.Get() // re-render after async generation / setting changes
+	loading := ui.UseState(false)
+	errored := ui.UseState(false)
+
+	settings := uistate.LoadSmartSettings()
+	enabled := app != nil && settings.IsEnabled(quoteCode)
+	theme := settings.QuoteThemeOr()
+	useContext := settings.QuoteUseContext
+	now := time.Now()
+	cached := settings.ResultFor(quoteCode)
+	last := settings.LastRunAt(quoteCode)
+	fresh := cached != "" && quoteSameDay(last, now)
+
+	aiKey, model := "", "gpt-5.4-mini"
+	if app != nil {
+		aiKey = app.Settings().OpenAIKey
+		if m := app.Settings().OpenAIModel; m != "" {
+			model = m
+		}
+	}
+	useBackend := prefs.BackendActive()
+	hasProvider := aiKey != "" || useBackend
+
+	// Handlers (declared unconditionally for stable hook order).
+	enable := ui.UseEvent(func() { uistate.SetSmartFeatureEnabled(quoteCode, true); tick.Set(tick.Get() + 1) })
+	onTheme := ui.UseEvent(func(e ui.Event) {
+		uistate.SetSmartQuoteTheme(e.GetValue())
+		loading.Set(false)
+		tick.Set(tick.Get() + 1)
+	})
+	onNew := ui.UseEvent(func() {
+		uistate.SetSmartQuoteTheme(theme)
+		loading.Set(false)
+		errored.Set(false)
+		tick.Set(tick.Get() + 1)
+	})
+	onContext := ui.UseEvent(func() {
+		uistate.SetSmartQuoteContext(!useContext)
+		loading.Set(false)
+		errored.Set(false)
+		tick.Set(tick.Get() + 1)
+	})
+
+	// Personalization snapshot (only built — and only sent — when the user opts in).
+	context := ""
+	if useContext && app != nil {
+		context = financialContextString(app)
+	}
+
+	// Auto-generate once per (theme, context, day): the key embeds LastRun + today
+	// so a "new quote" (which clears LastRun), a theme/context change, and a day
+	// rollover all re-fire it, while a fresh same-day cache does not.
+	autoKey := fmt.Sprintf("quote|%v|%s|%v|%v|%d|%s", enabled, theme, useContext, hasProvider, last.Unix(), now.Format("2006-01-02"))
+	ui.UseEffect(func() func() {
+		if !enabled || app == nil || !hasProvider || fresh || loading.Get() {
+			return nil
+		}
+		loading.Set(true)
+		errored.Set(false)
+		uistate.MarkSmartRun(quoteCode, now) // stamp before the call to guard re-entry
+		req := smartai.QuoteOfDay(theme, context)
+		messages := []ai.Message{
+			{Role: ai.RoleSystem, Content: req.System},
+			{Role: ai.RoleUser, Content: req.User},
+		}
+		onOK := func(c string, _ ai.Usage) {
+			q := cleanQuote(c)
+			loading.Set(false)
+			if q == "" {
+				errored.Set(true)
+				tick.Set(tick.Get() + 1)
+				return
+			}
+			uistate.SetSmartResult(quoteCode, q, time.Now())
+			tick.Set(tick.Get() + 1)
+		}
+		onErr := func(_ string) { loading.Set(false); errored.Set(true); tick.Set(tick.Get() + 1) }
+		if useBackend {
+			ai.SendProxyChat(prefs.ServerURL, prefs.ServerToken, model, messages, 0.85, onOK, onErr)
+		} else {
+			ai.SendChat(aiKey, ai.DefaultBaseURL, model, messages, 0.85, onOK, onErr)
+		}
+		return nil
+	}, autoKey)
+
+	if app == nil {
+		return Fragment()
+	}
+
+	// Disabled → a quiet, discoverable opt-in.
+	if !enabled {
+		return Div(css.Class("home-hero-quote home-hero-quote--off"),
+			Button(css.Class("hero-quote-enable"), Type("button"), OnClick(enable),
+				Attr("data-testid", "hero-quote-enable"),
+				Span(css.Class("hero-quote-mark"), "✦"),
+				uistate.T("home.quoteEnable"),
+			),
+		)
+	}
+
+	// Body: the cited quote, a loading line, a "needs key" hint, or — on a failed
+	// generation — a calm retry line (rather than a stuck "Composing…").
+	var body ui.Node
+	switch {
+	case fresh:
+		qt, author := splitQuote(cached)
+		body = Span(css.Class("hero-quote-text"), Attr("data-testid", "hero-quote-text"),
+			qt,
+			If(author != "", Span(css.Class("hero-quote-cite"), " — "+author)),
+		)
+	case !hasProvider:
+		body = Span(css.Class("hero-quote-hint"), uistate.T("home.quoteNeedKey"))
+	case loading.Get():
+		body = Span(css.Class("hero-quote-text hero-quote-loading"), uistate.T("home.quoteLoading"))
+	case errored.Get():
+		body = Span(css.Class("hero-quote-hint"), uistate.T("home.quoteError"))
+	default:
+		body = Span(css.Class("hero-quote-text hero-quote-loading"), uistate.T("home.quoteLoading"))
+	}
+
+	themeSel := []any{css.Class("hero-quote-theme"),
+		Attr("aria-label", uistate.T("home.quoteThemeLabel")), Attr("title", uistate.T("home.quoteThemeLabel")),
+		OnChange(onTheme)}
+	for _, th := range quoteThemes {
+		themeSel = append(themeSel, Option(Value(th), SelectedIf(th == theme), th))
+	}
+
+	// Personalize toggle: a pill that includes the user's financial context to
+	// steer which quote is chosen. aria-pressed reflects state.
+	ctxCls := "hero-quote-ctx"
+	if useContext {
+		ctxCls += " is-on"
+	}
+
+	return Div(css.Class("home-hero-quote"),
+		Span(css.Class("hero-quote-mark"), "✦"),
+		body,
+		Div(css.Class("hero-quote-controls"),
+			Button(ClassStr(ctxCls), Type("button"), OnClick(onContext),
+				Attr("aria-pressed", fmt.Sprintf("%v", useContext)),
+				Attr("data-testid", "hero-quote-context"),
+				Attr("title", uistate.T("home.quoteContextTitle")),
+				uistate.T("home.quoteContext")),
+			If(hasProvider, Button(css.Class("hero-quote-refresh"), Type("button"), OnClick(onNew),
+				Attr("aria-label", uistate.T("home.quoteNew")), Attr("title", uistate.T("home.quoteNew")), "↻")),
+			Select(themeSel...),
+		),
 	)
 }

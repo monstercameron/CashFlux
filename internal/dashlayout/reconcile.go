@@ -10,22 +10,27 @@ import "strings"
 // chart"). Reconcile preserves custom ids so published cards survive reloads.
 func IsCustomID(id string) bool { return strings.Contains(id, ":") }
 
-// Reconcile merges a persisted item list against the current DefaultItems set so
-// a saved layout survives across releases: it keeps the user's items, order, and
+// Reconcile merges a persisted item list against the current widget set so a
+// saved layout survives across releases: it keeps the user's items, order, and
 // sizes, drops any ids that are no longer real widgets, and splices in any
-// newly-introduced default widgets near their intended slot — right after the
-// nearest earlier default that's already present (so a headline widget lands at
-// the top and a footer widget lands at the bottom, instead of all newcomers
-// piling up in one place).
+// newly-introduced *default-layout* widgets near their intended slot — right
+// after the nearest earlier default that's already present (so a headline widget
+// lands at the top and a footer widget lands at the bottom, instead of all
+// newcomers piling up in one place).
+//
+// Validity is judged against the full catalog (DefaultItems) so any catalog
+// widget a user has added stays put, but only the curated DefaultLayoutItems set
+// is spliced in as a "new default" — a catalog-only widget the curated layout
+// deliberately omits is never auto-added back.
 func Reconcile(saved []Item) []Item {
-	defs := DefaultItems()
-	defOrder := make(map[string]int, len(defs))
-	for i, d := range defs {
+	catalog := DefaultItems()
+	defOrder := make(map[string]int, len(catalog))
+	for i, d := range catalog {
 		defOrder[d.ID] = i
 	}
 
 	have := make(map[string]bool, len(saved))
-	result := make([]Item, 0, len(defs))
+	result := make([]Item, 0, len(catalog))
 	for _, s := range saved {
 		_, known := defOrder[s.ID]
 		if (known || IsCustomID(s.ID)) && !have[s.ID] {
@@ -34,7 +39,7 @@ func Reconcile(saved []Item) []Item {
 		}
 	}
 
-	for _, d := range defs {
+	for _, d := range DefaultLayoutItems() {
 		if have[d.ID] {
 			continue
 		}

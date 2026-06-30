@@ -22,24 +22,25 @@ type Request struct {
 // /smart catalog only offers a toggle for AI features that actually do something
 // (mirroring the Free-engine HasEngine gate). It grows as features ship.
 var implemented = map[string]bool{
-	"SMART-A3":   true, // account name/type cleanup
-	"SMART-A5":   true, // natural-language account Q&A
-	"SMART-A10":  true, // account health explanation
-	"SMART-T1":   true, // auto-categorization
-	"SMART-T3":   true, // natural-language search
-	"SMART-T5":   true, // merchant name cleanup
-	"SMART-T12":  true, // tax-relevant tagging
-	"SMART-G4":   true, // goal drafting from a wish
-	"SMART-G9":   true, // goal-priority suggestion
-	"SMART-P2":   true, // plain-language scenario draft
-	"SMART-P3":   true, // narrated forecast/outlook summary
-	"SMART-AL4":  true, // plain-language allocation intent
-	"SMART-SU2":  true, // overlapping-service detection
-	"SMART-SU10": true, // category-benchmark context
-	"SMART-SU13": true, // bundle-opportunity finder
-	"SMART-T10":  true, // smart import field-mapping
-	"SMART-T8":   true, // receipt OCR (vision)
-	"SMART-D4":   true, // natural-language to-do quick-add
+	"SMART-A3":    true, // account name/type cleanup
+	"SMART-A5":    true, // natural-language account Q&A
+	"SMART-A10":   true, // account health explanation
+	"SMART-T1":    true, // auto-categorization
+	"SMART-T3":    true, // natural-language search
+	"SMART-T5":    true, // merchant name cleanup
+	"SMART-T12":   true, // tax-relevant tagging
+	"SMART-G4":    true, // goal drafting from a wish
+	"SMART-G9":    true, // goal-priority suggestion
+	"SMART-P2":    true, // plain-language scenario draft
+	"SMART-P3":    true, // narrated forecast/outlook summary
+	"SMART-AL4":   true, // plain-language allocation intent
+	"SMART-SU2":   true, // overlapping-service detection
+	"SMART-SU10":  true, // category-benchmark context
+	"SMART-SU13":  true, // bundle-opportunity finder
+	"SMART-T10":   true, // smart import field-mapping
+	"SMART-T8":    true, // receipt OCR (vision)
+	"SMART-D4":    true, // natural-language to-do quick-add
+	"SMART-QUOTE": true, // daily money-mindset quote (hub)
 }
 
 // Implemented reports whether the AI feature has a shipped UI.
@@ -126,6 +127,33 @@ const healthSystem = "You are a finance assistant. Given the accounts and balanc
 // AccountHealth builds the SMART-A10 request from an account/balance snapshot.
 func AccountHealth(accountContext string) Request {
 	return Request{System: healthSystem, User: "Accounts:\n" + strings.TrimSpace(accountContext)}
+}
+
+// quoteSystem frames SMART-QUOTE: one real, ATTRIBUTED quote about money fitting
+// the requested theme, returned in a fixed "<quote> — <author>" shape so the UI
+// can show the citation. Accuracy of attribution is required; "Unknown" is the
+// honest fallback rather than a fabricated author.
+const quoteSystem = "You select one genuine, well-known quotation about money, wealth, saving, or financial wisdom " +
+	"that fits the requested theme. It must be a real quote with a correct attribution — never invent the wording or the " +
+	"author; if you are not confident of the author, attribute it to \"Unknown\". When a person's financial situation is " +
+	"provided, prefer a quote whose message is especially relevant to it (their goals, debts, or habits) — but keep it a " +
+	"real, accurate quote, never tailored or fabricated. " +
+	"Return EXACTLY one line in the form: <quote> — <author>. No surrounding quotation marks, no preamble, no commentary."
+
+// QuoteOfDay builds the SMART-QUOTE request: a real, cited quote in the user's
+// chosen theme (e.g. "Stoic", "Playful", "Zen"). When financialContext is
+// non-empty (the user opted to personalize), it is appended so the model can pick
+// a quote relevant to their situation; the citation must still be genuine.
+func QuoteOfDay(theme, financialContext string) Request {
+	t := strings.TrimSpace(theme)
+	if t == "" {
+		t = "calm and encouraging"
+	}
+	user := "Theme: " + t
+	if c := strings.TrimSpace(financialContext); c != "" {
+		user += "\n\nThis person's financial situation (pick a quote relevant to it):\n" + c
+	}
+	return Request{System: quoteSystem, User: user}
 }
 
 // overlapSystem frames SMART-SU2: spot redundant subscriptions.

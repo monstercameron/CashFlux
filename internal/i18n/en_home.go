@@ -14,11 +14,22 @@ var homeKeys = Catalog{
 	"home.greetingEvening":   "Good evening.",
 
 	// Hero stat labels (non-empty dataset).
-	"home.netWorth":    "Net worth",
-	"home.income":      "Income",
-	"home.spending":    "Spending",
-	"home.net":         "Net",
-	"home.savingsRate": "Savings rate",
+	"home.netWorth":  "Net worth",
+	"home.thisMonth": "this month",
+
+	// Quote of the day (SMART-QUOTE, opt-in AI).
+	"home.quoteEnable":       "Add a daily quote",
+	"home.quoteNeedKey":      "Add your OpenAI key in Settings to get a daily quote.",
+	"home.quoteLoading":      "Composing today's quote…",
+	"home.quoteThemeLabel":   "Quote theme",
+	"home.quoteNew":          "New quote",
+	"home.quoteError":        "Couldn't load today's quote — try again.",
+	"home.quoteContext":      "Personalize",
+	"home.quoteContextTitle": "Use your goals and finances to pick a more relevant quote (sends a snapshot to your AI provider)",
+	"home.income":            "Income",
+	"home.spending":          "Spending",
+	"home.net":               "Net",
+	"home.savingsRate":       "Savings rate",
 
 	// Quick-action button labels (non-empty dataset).
 	"home.quickAddTxn":     "Add transaction",

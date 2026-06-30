@@ -41,7 +41,7 @@ var kpiPresentation = map[string]struct {
 	"kpi-networth":    {"1", "2", "sign", true},
 	"kpi-income":      {"2", "2", "text-up", false},
 	"kpi-spending":    {"3", "2", "text-down", false},
-	"kpi-liabilities": {"4", "2", "text-warn", false},
+	"kpi-liabilities": {"4", "2", "text-down", false}, // debt reads in the same red as liability balances elsewhere (Accounts card), not a one-off amber
 	"kpi-assets":      {"1", "3", "text-up", false},
 	"kpi-safetospend": {"2", "3", "sign", false},
 }
@@ -192,7 +192,9 @@ func init() {
 	R("freshness", func(c widgetrender.RenderCtx) ui.Node {
 		return freshnessWidget(c.Accounts, c.App.FreshnessWindows(), c.Dismissals, c.RemindToUpdate, c.DismissFreshness)
 	})
-	R("highlight", func(c widgetrender.RenderCtx) ui.Node { return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates) })
+	R("highlight", func(c widgetrender.RenderCtx) ui.Node {
+		return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates)
+	})
 	R("smart-digest", func(c widgetrender.RenderCtx) ui.Node { return smartDigestWidget(c.App) })
 	R("anomaly-hub", func(c widgetrender.RenderCtx) ui.Node { return ui.CreateElement(anomalyHubWidget, c.App) })
 }

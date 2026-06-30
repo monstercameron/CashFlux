@@ -46,11 +46,21 @@ func init() {
 			{Key: "showBar", Label: "Show progress bar", Type: Toggle, Default: "true"},
 		},
 	})
+	// display controls a list tile's overflow behavior when there are more rows
+	// than fit: cap (top N), scroll (overflow-scroll inside the tile), or page
+	// (prev/next pager). The renderers and the data pipeline both honor it.
+	displayOpts := []Option{
+		{Value: "cap", Label: "Show the top few"},
+		{Value: "scroll", Label: "Scroll inside the tile"},
+	}
+	displayPaged := append(append([]Option{}, displayOpts...), Option{Value: "page", Label: "Page through them"})
+
 	register(Schema{
 		WidgetID: "recent",
 		Title:    "Recent transactions",
 		Fields: []Field{
-			{Key: "count", Label: "Rows to show", Type: Number, Default: "6", Min: 3, Max: 20},
+			{Key: "count", Label: "Rows per page", Type: Number, Default: "6", Min: 3, Max: 20},
+			{Key: "display", Label: "When there are more", Type: Select, Default: "page", Options: displayPaged},
 		},
 	})
 	register(Schema{
@@ -86,6 +96,7 @@ func init() {
 		Fields: []Field{
 			{Key: "count", Label: "Accounts to show", Type: Number, Default: "6", Min: 3, Max: 12},
 			{Key: "cleared", Label: "Show cleared balance only", Type: Toggle, Default: "false"},
+			{Key: "display", Label: "When there are more", Type: Select, Default: "scroll", Options: displayOpts},
 		},
 	})
 	register(Schema{
@@ -94,6 +105,14 @@ func init() {
 		Fields: []Field{
 			{Key: "count", Label: "Budgets to show", Type: Number, Default: "6", Min: 3, Max: 20},
 			{Key: "atRisk", Label: "Show only near or over budget", Type: Toggle, Default: "false"},
+			{Key: "display", Label: "When there are more", Type: Select, Default: "scroll", Options: displayOpts},
+		},
+	})
+	register(Schema{
+		WidgetID: "bills",
+		Title:    "Upcoming bills",
+		Fields: []Field{
+			{Key: "display", Label: "When there are more", Type: Select, Default: "scroll", Options: displayOpts},
 		},
 	})
 	register(Schema{

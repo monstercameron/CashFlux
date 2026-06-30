@@ -18,6 +18,8 @@ var english = Catalog{
 
 	// Top bar
 	"topbar.menu":          "Collapse menu",
+	"topbar.more":          "More",
+	"topbar.theme":         "Theme",
 	"muzak.turnOn":         "Turn music on",
 	"muzak.turnOff":        "Turn music off",
 	"settings.music":       "Background music",
@@ -755,10 +757,10 @@ var english = Catalog{
 	"planning.totalPaid":                "Total paid",
 
 	// Debt screen (/debt — scoped "What you owe" page, FEATURE_MAP §5.7a)
-	"debt.whatYouOwe":      "What you owe",
-	"debt.totalOwed":       "Total owed",
-	"debt.noDebts":         "No debts — nice.",
-	"debt.manageAccounts":  "Manage on Accounts",
+	"debt.whatYouOwe":     "What you owe",
+	"debt.totalOwed":      "Total owed",
+	"debt.noDebts":        "No debts — nice.",
+	"debt.manageAccounts": "Manage on Accounts",
 
 	// Recurring cash flows (Planning)
 	"recurring.title":             "Recurring cash flows",

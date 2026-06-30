@@ -59,6 +59,57 @@ func DefaultItems() []Item {
 	}
 }
 
+// DefaultLayoutItems is the curated *initial* dashboard a fresh install shows —
+// a deliberately edited, tiered subset of the full catalog (DefaultItems). It
+// excludes tiles whose figures the hero already shows (net worth, income,
+// spending, savings rate) and redundant insight tiles (smart-digest duplicates
+// the anomaly hub + smart strip; spotlight is a demo triplicate of the hero
+// stats), so no number appears twice above the fold. The excluded widgets stay
+// in the catalog and can be re-added; only the seed layout is curated.
+//
+// Ordering follows three tiers: (1) what needs me — attention; (2) snapshot —
+// the figures NOT in the hero (assets, liabilities, safe to spend, health);
+// (3) how I'm doing — trends, budgets, cash flow, accounts, recent, breakdown,
+// goals, to-do, and the low-urgency notices. Spans differ from the catalog
+// defaults where the curated layout reads better: trend and budgets are widened
+// to two columns so their chart/bars are legible, and accounts gets a second row
+// so its balances never clip.
+func DefaultLayoutItems() []Item {
+	// Importance descends with position so the auto-importance layout mode reproduces
+	// this curated priority (the field is otherwise 0 and that mode would fall back to
+	// the unrelated catalog order). Spans are chosen so the tiles tile the 4-column
+	// grid with NO empty cells: each row's spans sum to 4 (see TestDefaultLayoutPacksGapFree).
+	return []Item{
+		// Tier 1 — what needs me.
+		{ID: "attention", ColSpan: 4, RowSpan: 1, Importance: 100},
+		// Tier 2 — snapshot figures the hero does not already show. assets(1) +
+		// liabilities(1) + safe-to-spend(2) fills the row exactly; safe-to-spend takes
+		// the double width because it carries the longest sub-label.
+		{ID: "kpi-assets", ColSpan: 1, RowSpan: 1, Importance: 92},
+		{ID: "kpi-liabilities", ColSpan: 1, RowSpan: 1, Importance: 91},
+		{ID: "kpi-safetospend", ColSpan: 2, RowSpan: 1, Importance: 90},
+		// Tier 3 — how I'm doing.
+		{ID: "health", ColSpan: 2, RowSpan: 1, Importance: 82},
+		{ID: "trend", ColSpan: 2, RowSpan: 2, Importance: 80},
+		{ID: "budgets", ColSpan: 2, RowSpan: 2, Importance: 78},
+		{ID: "cashflow", ColSpan: 2, RowSpan: 1, Importance: 72},
+		{ID: "bills", ColSpan: 2, RowSpan: 1, Importance: 70},
+		{ID: "accounts", ColSpan: 2, RowSpan: 2, Importance: 64},
+		{ID: "recent", ColSpan: 2, RowSpan: 2, Importance: 62},
+		{ID: "breakdown", ColSpan: 2, RowSpan: 1, Importance: 54},
+		// Goals and to-do sit two-wide as a paired row so their content has room: the
+		// goal's "(due …)" title no longer wraps below its siblings, and to-do task
+		// titles read in full instead of truncating mid-word.
+		{ID: "goals", ColSpan: 2, RowSpan: 1, Importance: 52},
+		{ID: "todo", ColSpan: 2, RowSpan: 1, Importance: 50},
+		{ID: "highlight", ColSpan: 2, RowSpan: 1, Importance: 40},
+		{ID: "freshness", ColSpan: 2, RowSpan: 1, Importance: 38},
+		// anomaly-hub ("Flagged activity") is intentionally NOT in the default view: it
+		// duplicates the always-present Smart strip below the bento and otherwise sits as
+		// a sparse "no anomalies" card. It stays in the catalog and can be added back.
+	}
+}
+
 // Pack flows items into a cols-wide grid using first-fit placement (scan
 // row-major, top-to-bottom then left-to-right, place each item in the earliest
 // slot where its whole span fits without overlapping an already-placed tile),

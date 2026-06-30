@@ -107,10 +107,10 @@ type WidgetProps struct {
 	// Style overlays spec-level inline CSS (a declarative WidgetSpec.Style, §7.7) on
 	// the tile, applied on top of the per-tile widgetstyle config. Used by custom
 	// content-layout (compound) widgets that carry their own token-first style.
-	Style      map[string]string
-	Draggable  bool // mark the cell draggable (drag-reorder behavior wired separately)
-	Resizable  bool     // show the directional resize handles
-	OnGear     func()   // open this widget's settings (gear click)
+	Style     map[string]string
+	Draggable bool   // mark the cell draggable (drag-reorder behavior wired separately)
+	Resizable bool   // show the directional resize handles
+	OnGear    func() // open this widget's settings (gear click)
 	// ChromeHover renders the tile borderless and chromeless (no card surface, grip,
 	// or gear) until it is hovered, when the surface + controls fade in. Used for the
 	// dashboard welcome/hero so it reads as clean content but is still a configurable
@@ -185,24 +185,13 @@ func widget(props WidgetProps) uic.Node {
 		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
 	}
 
-	dragSrc := uistate.UseDragSource()
-	dragPreview := uistate.UseDragPreview()
-	// Live drag-over preview (B2): while dragging, show the dragged tile moved in
-	// front of the tile under the cursor — a render-time reorder only, so the
-	// persisted layout is untouched and the preview reverts cleanly on cancel.
+	// Grid placement comes straight from packing the persisted sequence. There is NO
+	// render-time drag preview anymore: a live preview meant every dragover re-rendered
+	// this data-heavy dashboard (recomputing all frames over the whole ledger), which
+	// froze the drag on large datasets. The drag is now coordinator/DOM-driven — the
+	// dragged tile dims via a CSS class the coordinator toggles directly (no atom, no
+	// re-render), and the reorder happens once on drop (internal/ui/bentoflip.go). (perf)
 	arranged := dashlayout.Arrange(items, mode)
-	if src, tgt := dragSrc.Get(), dragPreview.Get(); src != "" && tgt != "" && src != tgt {
-		ti := -1
-		for i, it := range arranged {
-			if it.ID == tgt {
-				ti = i
-				break
-			}
-		}
-		if ti >= 0 {
-			arranged = dashlayout.Move(arranged, src, ti)
-		}
-	}
 	packed := dashlayout.Pack(arranged, gridCols)
 	gridCol, gridRow := props.GridColumn, props.GridRow
 	colSpan, rowSpan := 1, 1
@@ -219,9 +208,8 @@ func widget(props WidgetProps) uic.Node {
 	if props.ChromeHover {
 		cellClass += " chrome-hover" // borderless + chromeless until hovered (CSS)
 	}
-	if dragSrc.Get() == props.ID && props.ID != "" {
-		cellClass += " drag" // dims the widget while it is being dragged
-	}
+	// The dragging dim (.w.drag) is applied by the coordinator directly on the DOM
+	// element, not from state here, so a drag causes no re-render.
 	args := []any{
 		ClassStr(cellClass),
 		Attr("data-widget", props.ID),
@@ -385,94 +373,51 @@ func widget(props WidgetProps) uic.Node {
 				}
 			}),
 			OnDragStart(func() {
-				dragSrc.Set(id)
-				if fn := js.Global().Get("cashfluxBentoDragStart"); fn.Type() == js.TypeFunction {
-					fn.Invoke(id)
+				// A panic in a drag handler is otherwise fatal (the framework re-panics
+				// unhandled event errors → "Go program has already exited" → frozen app),
+				// so contain + log it here. (internal/ui/bentoflip.go recoverBento.)
+				defer recoverBento("widget.OnDragStart")
+				bentoDragStart(id) // snapshots geometry + dims the tile directly (no atom)
+			}),
+			// Allow the drop: the coordinator's document dragover listener computes the
+			// stable insertion target continuously, so the per-tile handler only needs to
+			// preventDefault. No dragPreview atom is written, so there is no re-render.
+			OnDragOver(Prevent(func(uic.Event) {})),
+			OnDrop(Prevent(func(uic.Event) {})), // preventDefault only; reorder is in OnDragEnd
+			OnDragEnd(func() {
+				// The single reorder point. dragend always fires (even on a drop outside a
+				// tile), on the source element. The coordinator stashed the source +
+				// insertion target before tearing the drag down (it dims/undims and ends
+				// the drag in its own capture-phase listeners), so read those. This is the
+				// only state write a drag makes — once, at the end — so the dashboard
+				// re-renders exactly once (the actual reorder), never mid-drag. (perf)
+				defer recoverBento("widget.OnDragEnd")
+				src, target := LastDropSource(), LastDropTarget()
+				if src == "" {
+					src = id // dragend fires on the source tile
+				}
+				if src == "" || target == "" || src == target {
+					return
+				}
+				baked := dashlayout.Arrange(items, mode)
+				ti := -1
+				for i, it := range baked {
+					if it.ID == target {
+						ti = i
+						break
+					}
+				}
+				if ti < 0 {
+					return
+				}
+				next := dashlayout.Move(baked, src, ti)
+				itemsAtom.Set(next)
+				uistate.PersistItems(next)
+				if mode != dashlayout.ModeCustom {
+					modeAtom.Set(dashlayout.ModeCustom)
+					uistate.PersistLayoutMode(dashlayout.ModeCustom)
 				}
 			}),
-			OnDragOver(Prevent(func(e uic.Event) {
-				// Native dragover fires constantly, and the animated grid moves
-				// underneath the pointer. Use the JS drag snapshot to choose a
-				// stable target from the pre-drag geometry instead of trusting the
-				// current DOM hit target, which can oscillate during FLIP.
-				target := id
-				if fn := js.Global().Get("cashfluxBentoDragTarget"); fn.Type() == js.TypeFunction {
-					v := fn.Invoke(e.JSValue().Get("clientX"), e.JSValue().Get("clientY"))
-					if v.Type() == js.TypeString && v.String() != "" {
-						target = v.String()
-					}
-				}
-				if target != "" && target != dragPreview.Get() {
-					dragPreview.Set(target)
-				}
-			})), // allow drop + live preview
-			OnDrop(Prevent(func(e uic.Event) {
-				// Reorder the dragged tile to the drop target's position, then the
-				// grid re-Packs around it (iOS-home-screen reflow) instead of a
-				// pairwise swap. A manual drag is an explicit hand-arrangement, so it
-				// bakes the current (possibly auto-arranged) order into the sequence
-				// and switches to Custom mode (C24).
-				target := dragPreview.Get()
-				if target == "" {
-					target = id
-				}
-				if fn := js.Global().Get("cashfluxBentoDragTarget"); fn.Type() == js.TypeFunction {
-					v := fn.Invoke(e.JSValue().Get("clientX"), e.JSValue().Get("clientY"))
-					if v.Type() == js.TypeString && v.String() != "" {
-						target = v.String()
-					}
-				}
-				if src := dragSrc.Get(); src != "" && target != "" && src != target {
-					baked := dashlayout.Arrange(items, mode)
-					ti := -1
-					for i, it := range baked {
-						if it.ID == target {
-							ti = i
-							break
-						}
-					}
-					if ti >= 0 {
-						next := dashlayout.Move(baked, src, ti)
-						itemsAtom.Set(next)
-						uistate.PersistItems(next)
-						if mode != dashlayout.ModeCustom {
-							modeAtom.Set(dashlayout.ModeCustom)
-							uistate.PersistLayoutMode(dashlayout.ModeCustom)
-						}
-					}
-				}
-				dragSrc.Set("")
-				dragPreview.Set("")
-				if fn := js.Global().Get("cashfluxBentoDragEnd"); fn.Type() == js.TypeFunction {
-					fn.Invoke()
-				}
-			})),
-			OnDragEnd(func() {
-				if src, target := dragSrc.Get(), dragPreview.Get(); src != "" && target != "" && src != target {
-					baked := dashlayout.Arrange(items, mode)
-					ti := -1
-					for i, it := range baked {
-						if it.ID == target {
-							ti = i
-							break
-						}
-					}
-					if ti >= 0 {
-						next := dashlayout.Move(baked, src, ti)
-						itemsAtom.Set(next)
-						uistate.PersistItems(next)
-						if mode != dashlayout.ModeCustom {
-							modeAtom.Set(dashlayout.ModeCustom)
-							uistate.PersistLayoutMode(dashlayout.ModeCustom)
-						}
-					}
-				}
-				dragSrc.Set("")
-				dragPreview.Set("")
-				if fn := js.Global().Get("cashfluxBentoDragEnd"); fn.Type() == js.TypeFunction {
-					fn.Invoke()
-				}
-			}), // clear (reverts preview if dropped outside)
 		)
 	}
 	// The title drills into the tile's data screen when one exists (C30); it stays

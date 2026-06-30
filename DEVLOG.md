@@ -3,6 +3,144 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-29 — Drag "crash" was jank: coordinator/DOM-driven drag
+
+**What:** The user's console finally told the truth — NO panic, just `[Violation] 'mousemove' handler took
+372ms` / `'requestAnimationFrame' took 143ms`. The "crash/can't-click/stuck-dim" was the main thread
+pinned by 200–370 ms re-renders during the drag. Root cause: the bento drag drove a live preview via
+state atoms (`dragSrc` dim, `dragPreview` reflow); the per-tile Widget components subscribe to those, so
+every dragover re-rendered the whole data-heavy `Dashboard()` (recompute all frames over 2 313 txns
+≈ 250 ms). Continuous dragover → continuous freezes.
+
+**False starts (all measured, all instructive):**
+- Split the FLIP/drag subscription into a `bentoFlipDriver` child — Dashboard STILL re-ran (proved via a
+  re-run counter): GWC re-renders the parent when subscribed children re-render, and the Widgets are the
+  subscribers. Verified by logging that every atom Dashboard reads was UNCHANGED across re-runs.
+- A `state.UseAtom`-based "force clear" safety net I'd added earlier actually PANICKED (UseAtom outside
+  render is fatal) — found and removed; see the entry below.
+
+**Real fix:** make the drag write NO state until the drop. Coordinator (`internal/ui/bentoflip.go`) now:
+dims the dragged tile by toggling the `.w.drag` class directly on the DOM (deferred one rAF — adding
+`pointer-events:none` synchronously inside the `dragstart` handler DEADLOCKS the native drag; cost me a
+hang to discover), drops the live-reflow preview entirely, tracks the stable target, and stashes
+source+target at drag end. `widget.go` stops reading `dragSrc`/`dragPreview` (zero re-renders during a
+drag); the single reorder runs in `OnDragEnd` from the stashed values. The FLIP trigger moved to a tiny
+`bentoFlipDriver` keyed on the layout signature only.
+
+**Measured:** same 2 313-txn dataset — dragging now produces ZERO long tasks (was 4×~250 ms); only the
+drop re-renders once (~0.5 s, since the frame recompute still isn't memoized — noted as a follow-up).
+
+**Gotchas logged:** (1) adding `pointer-events:none` to the dragged element during `dragstart` hangs the
+browser's native DnD — defer it. (2) A 2-wide tile reordered before a 1-wide tile can leave the PACKED
+visual order unchanged (the wide tile wraps a row while the narrow one fills the gap) — a sequence move
+that looks like "moved nothing"; don't assert packed-order moves for mixed-width pairs in tests.
+
+## 2026-06-29 — Drag still crashing: contain + log every fatal path
+
+**What:** User reported the drag STILL crashes after the UseAtom fix. I couldn't reproduce with sample
+data + default layout (a sweep dragging all 16 default tiles + a 4-style crash-probe = 0 panics), so the
+panic depends on their specific dashboard/data (custom/added widgets). Rather than keep guessing blind,
+made every fatal drag path self-guarding so the next occurrence is contained + logged with an exact
+location instead of freezing the app.
+
+**Findings from reading the GWC runtime:**
+- Component event handlers ARE wrapped (`event_wrap_wasm.go`), but an unhandled panic (no error
+  boundary) ends in `finalizeUnhandledPanicContext` → `panic(...)` — i.e. it RE-PANICS, which is fatal.
+  So a panic in `widget.go`'s `OnDrop`/etc. takes down the whole app.
+- The coordinator's document listeners, rAF loops, and `setTimeout` callbacks are raw `js.FuncOf` with
+  NO recovery — also fatal.
+- Spec tile rendering already goes through `safeRenderSpec`, so render is covered; the uncovered fatal
+  paths were exactly the drag callbacks.
+
+**Fix:** `recoverBento(label)` (logs `[bento] recovered panic in <label>: <err>` + stack, contains it);
+`safeFunc` wraps all coordinator `js.FuncOf`; `FlipBento`/`bentoDragStart`/`End`/`Target` defer it; the
+four per-tile drag handlers defer it. Plus a real latent bug: the Go port dropped flip.js's CSS-selector
+escaping — the retarget concatenated the widget id straight into `querySelector('[data-widget="..."]')`,
+so a custom-widget id with a CSS-special char throws → panic. New `tileByID` uses `CSS.escape`.
+
+**Net effect:** even the still-unknown panic can no longer freeze the app — it logs a labelled stack and
+the page stays clickable. Need the user's `[bento] recovered panic in …` console line to pinpoint and
+properly fix the root cause (it's data/layout-specific). SW cache v273→v274.
+
+**Verify:** build rc=0 (validated, atomic web/bin); `go test ./...` clean; `go vet` (wasm) clean; real-drag
+e2e + all-tiles sweep + crash-probe all green, 0 panics.
+
+## 2026-06-29 — Drag freeze: the real bug was UseAtom-outside-render
+
+**What:** User reported tiles dimming on grab but not moving, staying dimmed, and the whole app
+becoming unclickable ("I think the program crashes"). My first e2e tests (synthetic `DragEvent`s)
+passed and hid it; converting them to **real `page.mouse` grip drags** + a crash-probe that captures
+ALL console output finally reproduced a hard Go panic: `state.UseAtom → GoUseAtomGlobal →
+reconciler_elements.go:46`. Root cause: a `state.UseAtom(...)` hook called from a raw JS event/timer
+callback (no component render context) panics, and a Go/wasm panic is fatal — "Go program has already
+exited", every event handler dead → unclickable page, tile stuck dimmed. That IS the user's symptom.
+
+**The irony:** the panic was in my *own* first attempt at a cleanup safety net (`uistate.ForceClearDragState`
+called `UseAtom` from the coordinator). So I both found the class of bug and had written an instance of
+it. Fixed by capturing the atom handles during `Dashboard()`'s render and registering a reset closure
+(`ui.RegisterDragAtomClear`); the coordinator invokes only the captured `.Set` (safe outside render),
+never `UseAtom`.
+
+**Second gotcha (also caught only by the real-drag test):** I added `pointerup`/`mouseup`/`pointercancel`
+→ clear-drag-atoms as a net. That broke the drag entirely — all events fired but the tile never dimmed
+and never moved. Reason: a native HTML5 drag *begins* by firing **`pointercancel`** (the pointer gesture
+converts to a drag), so clearing the source/preview atoms there wipes the just-started drag. Reverted
+those three to scroll-lock-only (as the original flip.js had them); the dim-atoms are cleared ONLY on the
+genuine end events (`dragend`/`drop`, deferred via `setTimeout 0` so it runs after — and can't race — the
+per-tile reorder) plus explicit `Escape`.
+
+**Lesson logged:** synthetic `DragEvent` dispatch is NOT a substitute for a real `page.mouse` drag in
+e2e — it bypasses native pointer→drag conversion (the `pointercancel` at drag start) and the render/timer
+contexts where `UseAtom` panics. Both regressions were invisible to synthetic tests and obvious to the
+real-drag test. Drag e2e must use real mouse drags.
+
+**Verify:** `GOOS=js GOARCH=wasm go build` rc=0 (validated, atomically swapped into `web/bin`); `go test
+./...` clean; `go vet` (wasm) clean; real-drag `dashboard_grid_reorder.test.mjs` + `_stress` PASS;
+crash-probe (4 drag styles) → 0 console errors, app responsive after each.
+
+## 2026-06-29 — Bento drag/FLIP: helper JS → Go
+
+**What:** Moved the dashboard bento's reorder behavior out of the hand-written `web/flip.js` helper and
+into wasm. New `internal/ui/bentoflip.go` is a faithful port of the three pieces flip.js owned: (1) the
+FLIP settle animation (`FlipBento` — record each tile's screen position, then on the next layout-changing
+render jump tiles back to where they were with no transition and glide the offset to zero); (2) the
+stable drag-target coordinator (`bentoDragStart`/`Target`/`End`) — snapshots pre-drag tile geometry into
+zones so the insertion target tracks pointer travel, not animated siblings, with hysteresis so a tile
+sliding under the pointer during FLIP can't steal the target; (3) a drag scroll-lock that pins the
+scroller so native HTML5 auto-scroll doesn't fight the reflow. `InitBentoCoordinator()` registers the
+autonomous document listeners (pointerdown/dragstart/dragover/drop/dragend/scroll/up) once at boot from
+`internal/app/app.go`. `widget.go` calls the coordinator from its per-tile drag handlers; `dashboard.go`
+calls `uiw.FlipBento()` from its layout-signature effect. Deleted `web/flip.js`, its `<script>` tag in
+`index.html`, and `./flip.js` from the `sw.js` precache.
+
+**Decisions / trade-offs:**
+- Kept the exact same retarget mechanism as flip.js: the capture-phase `dragover`/`drop` document
+  listeners detect when the browser's hit-test tile differs from the snapshotted stable target, then
+  `preventDefault`+`stopImmediatePropagation` and re-dispatch a synthetic `DragEvent` to the stable tile
+  (guarded by a `retargeting` re-entrancy flag). This preserves the no-oscillation guarantee without
+  changing the per-tile handler contract.
+- Reused single `js.Func` allocations for the rAF callbacks (scroll-lock loop + FLIP settle frame) so the
+  port doesn't leak a closure per frame the way a naive `js.FuncOf` per call would.
+- The old `window.cashflux*` drag globals are intentionally gone — nothing in JS needs them anymore, and
+  their absence is now an asserted invariant in the e2e tests.
+
+**Problems / fixes:**
+- The two existing reorder e2e tests were stale on two axes: they referenced removed default widgets
+  (`kpi-income`) and `window.cashfluxBento*` globals, and they read the persisted layout from
+  `localStorage` (it moved to SQLite/IndexedDB long ago). Also confirmed Playwright's `page.mouse` does
+  **not** drive native HTML5 drag-and-drop (the order never changed), so the stress test's mouse-drag
+  approach couldn't have been exercising reorder at all. Rewrote both to dispatch real `DragEvent`s
+  through the Go pipeline, use the curated default widgets (`kpi-assets`/`kpi-liabilities`/
+  `kpi-safetospend`), simulate FLIP churn with CSS transforms mid-hover, and check persistence by
+  reloading (after waiting past the 4s autosave ticker) / reading the live grid.
+
+**Verify:** `GOOS=js GOARCH=wasm go build` rc=0 (wasm validated, atomically swapped into `web/bin`);
+`go test ./...` clean; both rewritten e2e tests PASS against the Go port.
+
+**Next:** none for this — behavior parity reached. (Broader: the GOWEBCOMPONENTS_GAPS analysis cited
+flip.js as evidence of an animation/coordination framework gap; that evidence is now in-Go, but the
+underlying gap argument is unchanged.)
+
 ## 2026-06-28 — Unified declarative widget engine + Studio authoring
 
 **What:** Made the whole dashboard composable from a `domain.WidgetSpec` that a pure engine hydrates,

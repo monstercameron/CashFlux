@@ -53,6 +53,28 @@ type Settings struct {
 	// Density is the global "how much smart weaves into the app" dial (see
 	// density.go). The empty value means the Standard default.
 	Density Density `json:"density,omitempty"`
+	// QuoteTheme is the stylistic theme for the SMART-QUOTE daily quote (e.g.
+	// "Stoic", "Playful"). Empty means the default theme. It is a preference, so
+	// ClearGenerated keeps it.
+	QuoteTheme string `json:"quoteTheme,omitempty"`
+	// QuoteUseContext opts the daily quote into personalization: when true, a
+	// snapshot of the user's financial situation (goals, flows) is sent so the
+	// model picks a quote relevant to it. Off by default — no figures leave the
+	// device for the quote unless the user turns this on. A preference (kept by
+	// ClearGenerated).
+	QuoteUseContext bool `json:"quoteUseContext,omitempty"`
+}
+
+// DefaultQuoteTheme is the fallback theme for the daily quote when the user
+// hasn't picked one.
+const DefaultQuoteTheme = "Stoic"
+
+// QuoteThemeOr returns the chosen quote theme, or DefaultQuoteTheme when unset.
+func (s Settings) QuoteThemeOr() string {
+	if s.QuoteTheme == "" {
+		return DefaultQuoteTheme
+	}
+	return s.QuoteTheme
 }
 
 // ClearGenerated returns a copy of s with all DATA-DERIVED smart state removed —

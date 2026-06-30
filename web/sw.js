@@ -2,11 +2,11 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v272";
+const CACHE = "cashflux-v276";
 const CORE = [
   "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm", "./manifest.webmanifest",
   "./favicon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
-  "./chart.js", "./flip.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
+  "./chart.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
   "./marked.min.js", "./purify.min.js", "./d3.min.js",
   // Self-hosted font stylesheet (the @font-face decls for Fraunces + Inter). The
   // woff2 binaries under ./fonts/ are large (~1.4 MB across subsets); they cache via

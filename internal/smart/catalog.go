@@ -163,6 +163,7 @@ var catalog = []Feature{
 
 	// ── Hub (cross-app) ───────────────────────────────────────────────────────
 	rule("SMART-DIGEST", PageHub, "Proactive money digest", "Post a brief summary of your top active insights to the notification feed on a chosen cadence."),
+	ai("SMART-QUOTE", PageHub, "Quote of the day", "A short money-mindset quote on the dashboard, written fresh each day in a theme you choose.", false, 120, 40),
 }
 
 // byCode indexes the catalog for O(1) lookups, built once at init.
