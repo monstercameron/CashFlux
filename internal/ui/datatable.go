@@ -39,9 +39,29 @@ type DataTableProps struct {
 	Columns []Column // header columns, in order
 	Body    any      // the <tr> rows for the current page (e.g. a MapKeyed result)
 
+	// StickyHead pins the header row to the top of the scroll container while the
+	// body scrolls beneath it, so the column headers stay visible on a long table.
+	// It adds the "dt-sticky" class, which the stylesheet turns into a sticky,
+	// opaque thead (position:sticky; top:0). Opt-in per table.
+	StickyHead bool
+
+	// Virtual, when non-nil, renders the body as a windowed (virtualized) list: only
+	// the rows near the viewport are materialized, with spacer rows preserving the full
+	// scroll height, so a list of thousands of rows stays smooth. Body is ignored in
+	// this mode — rows come from Virtual.RowAt. See datatable_virtual.go.
+	Virtual *VirtualSpec
+
 	// Sort state. Sort is the active SortKey; Dir is "asc" or "desc".
 	Sort, Dir string
 	OnSort    func(sortKey string)
+
+	// SortSpinner makes the table manage a sort-in-progress indicator itself: clicking a
+	// sortable header shows a spinner on that column (and marks the table aria-busy)
+	// while the re-sort runs, then clears when the new Sort/Dir arrive. The re-sort
+	// (the OnSort call) is deferred one macrotask so the spinner paints first — useful
+	// when sorting a large list is momentarily expensive. Opt-in; the caller passes a
+	// plain OnSort and the table owns the indicator. No per-caller state machine needed.
+	SortSpinner bool
 
 	// Pagination (optional — omit OnPage to render no footer). Page is 1-based;
 	// Total is the full (unpaged) row count; PageSize<=0 means "all".
@@ -49,32 +69,105 @@ type DataTableProps struct {
 	PageSizes             []int
 	OnPage                func(page int)
 	OnPageSize            func(size int)
+
+	// TopPager also renders the pager (page nav + rows-per-page) ABOVE the table, not
+	// only below it — so on a long list the rows-per-page control is reachable without
+	// scrolling all the way to the bottom. No effect when OnPage is nil.
+	TopPager bool
 }
 
-// DataTable renders the table chrome around the caller-rendered Body rows.
+// DataTable renders the table chrome around the caller-rendered Body rows. It is a
+// thin wrapper over the dataTable component so the table's own hooks (the managed
+// sort spinner) stay isolated from the caller's hook order — and so the table can be
+// rendered conditionally (e.g. only when there are rows) like any component.
 func DataTable(props DataTableProps) ui.Node {
+	return ui.CreateElement(dataTable, props)
+}
+
+// dataTable is the table component: the header row, the body (a windowed virtual list
+// or the caller's rows), an optional top + bottom pager, and the managed sort spinner.
+func dataTable(props DataTableProps) ui.Node {
+	// Managed sort spinner (SortSpinner): clicking a sortable header shows a spinner on
+	// that column while the re-sort runs, then clears when the new Sort/Dir props arrive.
+	// The OnSort call is deferred one macrotask so the spinner paints before the (maybe
+	// heavy) re-sort. The hooks run unconditionally so the hook order is stable; they
+	// stay inert unless SortSpinner is set. This is what makes the spinner a standard
+	// table config rather than a per-screen state machine.
+	sorting := ui.UseState("")
+	ui.UseEffect(func() func() {
+		if sorting.Get() != "" {
+			sorting.Set("")
+		}
+		return nil
+	}, props.Sort+"|"+props.Dir)
+	sortingKey := ""
+	onSort := props.OnSort
+	if props.SortSpinner && props.OnSort != nil {
+		sortingKey = sorting.Get()
+		raw := props.OnSort
+		onSort = func(key string) {
+			if sorting.Get() != "" {
+				return // a sort is already in flight; ignore re-entrant clicks
+			}
+			sorting.Set(key)
+			deferMacrotask(func() { raw(key) })
+		}
+	}
+
 	headers := make([]any, 0, len(props.Columns))
 	for _, c := range props.Columns {
-		headers = append(headers, ui.CreateElement(dtHeader, dtHeaderProps{Col: c, Sort: props.Sort, Dir: props.Dir, OnSort: props.OnSort}))
+		headers = append(headers, ui.CreateElement(dtHeader, dtHeaderProps{
+			Col: c, Sort: props.Sort, Dir: props.Dir, OnSort: onSort,
+			Sorting: sortingKey != "" && sortingKey == c.SortKey,
+		}))
 	}
 	cls := "data-table"
 	if props.Class != "" {
 		cls += " " + props.Class
 	}
-	table := Table(ClassStr(cls), Thead(Tr(headers...)), Tbody(props.Body))
+	if props.StickyHead {
+		cls += " dt-sticky"
+	}
+
+	// The body is either a windowed virtual list (huge datasets) or the caller's
+	// pre-rendered rows.
+	var body ui.Node
+	if props.Virtual != nil {
+		vs := *props.Virtual
+		if vs.ColSpan == 0 {
+			vs.ColSpan = len(props.Columns)
+		}
+		body = ui.CreateElement(dtVirtualBody, vs)
+	} else {
+		body = Tbody(props.Body)
+	}
+
+	tableArgs := []any{ClassStr(cls), Thead(Tr(headers...)), body}
+	if sortingKey != "" {
+		tableArgs = append(tableArgs, Attr("aria-busy", "true"))
+	}
+	table := Table(tableArgs...)
 	if props.OnPage == nil {
 		return table
 	}
-	return Div(table, ui.CreateElement(dtPager, dtPagerProps{
-		Page: props.Page, Total: props.Total, PageSize: props.PageSize,
-		PageSizes: props.PageSizes, OnPage: props.OnPage, OnPageSize: props.OnPageSize,
-	}))
+	pager := func(top bool) ui.Node {
+		return ui.CreateElement(dtPager, dtPagerProps{
+			Page: props.Page, Total: props.Total, PageSize: props.PageSize,
+			PageSizes: props.PageSizes, OnPage: props.OnPage, OnPageSize: props.OnPageSize,
+			Top: top,
+		})
+	}
+	if props.TopPager {
+		return Div(pager(true), table, pager(false))
+	}
+	return Div(table, pager(false))
 }
 
 type dtHeaderProps struct {
 	Col       Column
 	Sort, Dir string
 	OnSort    func(string)
+	Sorting   bool // this column is being re-sorted — show a spinner, not the caret
 }
 
 // dtHeader renders one column header — a plain <th> or a sortable header button.
@@ -103,6 +196,11 @@ func dtHeader(props dtHeaderProps) ui.Node {
 			caretIcon = Icon(icon.ArrowDown, css.Class(tw.W4, tw.H4, tw.ShrinkO))
 		}
 	}
+	// While this column's sort is in flight, swap the caret for a spinner so the user
+	// sees the sort is working (the sticky header keeps it in view on a long list).
+	if props.Sorting {
+		caretIcon = Span(css.Class("dt-spin dt-spin-sm"), Attr("aria-hidden", "true"))
+	}
 	key := c.SortKey
 	on := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnSort(key) })
 	args = append(args, Attr("aria-sort", ariaSort),
@@ -115,6 +213,7 @@ type dtPagerProps struct {
 	PageSizes             []int
 	OnPage                func(int)
 	OnPageSize            func(int)
+	Top                   bool // rendered above the table (adds the data-pager-top class)
 }
 
 type pagerSizeBtnProps struct {
@@ -177,7 +276,11 @@ func dtPager(props dtPagerProps) ui.Node {
 	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
 	groupArgs := []any{css.Class("pager-sizes"), Attr("role", "group"), Attr("aria-label", uistate.T("ui.table.rowsPerPage"))}
 	groupArgs = append(groupArgs, sizeBtns...)
-	return Div(css.Class("data-pager"),
+	pagerCls := "data-pager"
+	if props.Top {
+		pagerCls += " data-pager-top"
+	}
+	return Div(css.Class(pagerCls),
 		Button(prevArgs...),
 		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),

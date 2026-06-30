@@ -3,6 +3,39 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Widgetize /transactions + reusable DataTable options + transaction source column
+
+**What:** Reworked /transactions into a thin surface host that renders engine widget tiles
+(toolbar/bulkbar/undobar/table/import/duplicates) through the same `safeRenderSpec` pipeline as the
+dashboard — "everything on the page is a widget", with shared state in atoms rather than one screen
+embedding a widget. Then standardized four table behaviours as opt-in `DataTable` config so any table
+can reuse them: `StickyHead`, `Virtual` (windowed/virtualized rows for the "All" view), `SortSpinner`,
+`TopPager`. Finally added a transaction **Source/provenance** feature end-to-end (new `domain.TxnSource`
+enum + `Transaction.Source`, tagged at every creation path, sort+filter in `txnfilter`, lossless CSV
+round-trip, a sortable/filterable Source column, and a realistic mix incl. document-sourced receipts in
+the sample data).
+
+**Decisions / trade-offs:**
+- *Everything-is-a-widget:* the user explicitly wanted each block to be an engine widget rendered via
+  the spec pipeline, not raw nodes embedding one widget. Tiles are keyed by spec id (MapKeyed) so
+  inserting the conditional bulk/undo tiles never shifts the table's hook alignment.
+- *Sort spinner standardization:* the spinner's state machine first lived in the screen (a one-off).
+  Moved it into `DataTable` behind `SortSpinner` and made `DataTable` a thin component wrapper so its
+  hooks stay isolated (also fixes a latent bug — the table is rendered conditionally inside a switch,
+  which would break if it held hooks directly).
+- *Virtualization:* confirmed via the framework source that a `UseState` setter schedules a re-render
+  from any call site, so a raw scroll-listener can drive the window; `fastEqual` skips no-op updates so
+  it only re-renders when the row window actually shifts.
+- *No SQL migration for Source:* every entity persists as a JSON blob, so the new field is covered
+  automatically; only CSV (a fixed column list) needed manual extension, with column-presence logic so
+  our export round-trips losslessly while a foreign CSV defaults to "imported".
+
+**Problems hit:** sticky header was occluded by the sticky `.topbar` (fixed with a `--dt-sticky-top`
+offset var); checkbox `.checked` doesn't visually reflect (pre-existing GWC quirk, the green `.selected`
+row is the signal); CSV round-trip test failed until source-column-presence logic preserved empty values.
+
+**Next:** repoint the ~25–30 older transactions e2e tests that targeted the inline screen.
+
 ## 2026-06-29 — Drag "crash" was jank: coordinator/DOM-driven drag
 
 **What:** The user's console finally told the truth — NO panic, just `[Violation] 'mousemove' handler took

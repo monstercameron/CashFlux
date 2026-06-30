@@ -236,6 +236,12 @@ var collectionDefs = []Collection{
 	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions",
 		Sort:        []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "desc", Label: "Description"}},
 		DefaultSort: "date", DefaultDesc: true}, // newest first
+	// The full ledger source the widgetized /transactions table renders from: the same
+	// transactions with the richer columns (payee/account/category/cleared). No "view
+	// all" route — this IS the full view.
+	{Value: "transactions-full", Label: "All transactions",
+		Sort:        []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "payee", Label: "Payee"}, {Column: "account", Label: "Account"}, {Column: "category", Label: "Category"}, {Column: "source", Label: "Source"}},
+		DefaultSort: "date", DefaultDesc: true}, // newest first
 	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts",
 		Sort:        []SortField{{Column: "balance", Label: "Balance", Numeric: true}, {Column: "name", Label: "Name"}},
 		DefaultSort: "balance", DefaultDesc: true}, // largest balance first

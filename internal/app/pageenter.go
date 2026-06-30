@@ -93,6 +93,34 @@ func triggerPageEnter() {
 	raf.Invoke(first)
 }
 
+// triggerRailAnim plays the rail-toggle "settle" animation: it adds a transient
+// .cf-rail-anim class to <html> (which CSS keys the #cf-page-view scale-settle off,
+// see web/index.html), then removes it after the animation window. Removing first +
+// forcing a reflow restarts the keyframe cleanly if the rail is toggled again rapidly.
+// No-op when the document is unavailable (tests). Motion gating (reduced-motion /
+// WONDER-off) is handled in CSS, so the class is always safe to add.
+func triggerRailAnim() {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	root := doc.Get("documentElement")
+	if root.IsNull() || root.IsUndefined() {
+		return
+	}
+	cl := root.Get("classList")
+	cl.Call("remove", "cf-rail-anim")
+	root.Get("offsetWidth") // force reflow so a rapid re-toggle replays from the start
+	cl.Call("add", "cf-rail-anim")
+	var cb js.Func
+	cb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		cl.Call("remove", "cf-rail-anim")
+		cb.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", cb, 460)
+}
+
 // triggerScrollReveal calls window.cashfluxWonder.observe() (W-21) to register
 // new .card elements with the IntersectionObserver after each route change.
 // It is a no-op if the JS controller is absent (e.g. script load failed, tests).

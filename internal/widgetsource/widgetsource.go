@@ -14,6 +14,7 @@
 package widgetsource
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/bills"
@@ -155,6 +156,55 @@ func RecentTransactions(txns []domain.Transaction) domain.Frame {
 		domain.Field{Name: "desc", Type: domain.FieldString, Values: descs},
 		domain.Field{Name: "amount", Type: domain.FieldMoney, Values: amounts},
 		domain.Field{Name: "currency", Type: domain.FieldString, Values: currencies},
+	)
+}
+
+// RichTransactions produces the fuller Frame the widgetized /transactions table
+// renders: every transaction newest-first with the columns the ledger view needs —
+// id (for drill-to-edit), date (unix seconds), payee, desc, amount (minor units,
+// signed, own currency), currency, account + category display names (resolved from
+// the supplied lists), cleared (bool) and tags (comma-joined). Row trimming is a
+// limit transform applied by the pipeline. Pure: no syscall/js.
+func RichTransactions(txns []domain.Transaction, accounts []domain.Account, cats []domain.Category) domain.Frame {
+	acctName := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		acctName[a.ID] = a.Name
+	}
+	catName := make(map[string]string, len(cats))
+	for _, c := range cats {
+		catName[c.ID] = c.Name
+	}
+	// Preserve the INPUT order — the caller (the widgetized ledger) passes rows already
+	// sorted by the active sort column/direction, so re-sorting here would override the
+	// user's chosen sort. (Contrast RecentTransactions, which forces newest-first for
+	// the dashboard "recent" tile.) A pipeline sort transform can still reorder it.
+	var ids, dates, payees, descs, amounts, currencies, accountsCol, categories, cleared, tagsCol, sources []any
+	for _, t := range txns {
+		ids = append(ids, t.ID)
+		dates = append(dates, float64(t.Date.Unix()))
+		payees = append(payees, t.Payee)
+		descs = append(descs, t.Desc)
+		amounts = append(amounts, t.Amount.Amount)
+		currencies = append(currencies, t.Amount.Currency)
+		accountsCol = append(accountsCol, acctName[t.AccountID])
+		categories = append(categories, catName[t.CategoryID])
+		cleared = append(cleared, t.Cleared)
+		tagsCol = append(tagsCol, strings.Join(t.Tags, ", "))
+		// Display label for the provenance column ("Manual"/"Imported"/…, "—" if unset).
+		sources = append(sources, t.Source.Label())
+	}
+	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
+		domain.Field{Name: "date", Type: domain.FieldNumber, Values: dates},
+		domain.Field{Name: "payee", Type: domain.FieldString, Values: payees},
+		domain.Field{Name: "desc", Type: domain.FieldString, Values: descs},
+		domain.Field{Name: "amount", Type: domain.FieldMoney, Values: amounts},
+		domain.Field{Name: "currency", Type: domain.FieldString, Values: currencies},
+		domain.Field{Name: "account", Type: domain.FieldString, Values: accountsCol},
+		domain.Field{Name: "category", Type: domain.FieldString, Values: categories},
+		domain.Field{Name: "cleared", Type: domain.FieldBool, Values: cleared},
+		domain.Field{Name: "tags", Type: domain.FieldString, Values: tagsCol},
+		domain.Field{Name: "source", Type: domain.FieldString, Values: sources},
 	)
 }
 

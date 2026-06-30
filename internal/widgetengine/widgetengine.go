@@ -245,6 +245,8 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 			return widgetsource.AccountBalances(dc.Accounts, dc.Transactions, s.Cleared, 0), nil
 		case "transactions":
 			return widgetsource.RecentTransactions(dc.Transactions), nil
+		case "transactions-full":
+			return widgetsource.RichTransactions(dc.Transactions, dc.Accounts, dc.Categories), nil
 		case "bills":
 			return widgetsource.UpcomingBills(dc.Accounts, dc.Recurring, dc.Now), nil
 		case "spending-breakdown":

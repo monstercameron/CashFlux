@@ -206,6 +206,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(SettingsHost),
 		uic.CreateElement(QuickAddHost),
 		uic.CreateElement(AddHost),
+		uic.CreateElement(TxnEditHost),
 		uic.CreateElement(DialogHost),
 		// C274: profile-switch modal — "Who's using CashFlux?" device user-switching.
 		uic.CreateElement(ProfileSwitchHost),
@@ -391,9 +392,27 @@ func Sidebar(props sidebarProps) uic.Node {
 	current := props.ActivePath
 	hidden := uistate.UseHiddenModules().Get()
 	cls := "rail " + tw.Fold(tw.W60, tw.ShrinkO, tw.BorderR, tw.BorderLine, tw.Flex, tw.FlexCol)
-	if uistate.UseRailCollapsed().Get() {
+	railCollapsed := uistate.UseRailCollapsed().Get()
+	if railCollapsed {
 		cls += " collapsed"
 	}
+	// Play the rail-toggle settle animation whenever the collapsed state changes — from
+	// any toggle source (the panel chevron, the top-bar menu button, or a shortcut), since
+	// they all flip this atom and re-render the Sidebar. Skipped on first render so it
+	// doesn't fire on initial load.
+	railAnimFirst := uic.UseRef(true)
+	railAnimKey := "0"
+	if railCollapsed {
+		railAnimKey = "1"
+	}
+	uic.UseEffect(func() func() {
+		if railAnimFirst.Get() {
+			railAnimFirst.Set(false)
+			return nil
+		}
+		triggerRailAnim()
+		return nil
+	}, railAnimKey)
 
 	// Hide screens the user has switched off (locked screens stay visible).
 	var visibleNav []railItem
@@ -688,7 +707,7 @@ func HouseholdCard() uic.Node {
 	// The horizontal inset lives on this wrapper's padding (not the button's margin):
 	// a <button> is fit-content by default so it needs w-full to span the rail, and
 	// w-full + horizontal margins would overflow (the margins add onto 100%).
-	return Div(css.Class(tw.MtAuto, tw.Px3),
+	return Div(css.Class("rail-foot", tw.MtAuto, tw.Px3),
 		// On-panel collapse toggle (C20): sits above the household card, right-aligned.
 		// Using its own component (HouseholdCard) keeps this OnClick at a stable render
 		// position — the On*-hooks-in-loops rule is satisfied because this is called via

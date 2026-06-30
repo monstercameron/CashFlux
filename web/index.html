@@ -1352,6 +1352,18 @@
       /* Transactions table (C47): a dense, sortable, column-aligned ledger. */
       .txn-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
       .txn-table thead th { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 600; white-space: nowrap; position: sticky; top: 0; background: var(--bg); z-index: 1; }
+      /* dt-sticky — the reusable DataTable StickyHead option (uiw.DataTableProps.StickyHead).
+         Pins the header row to the top of the scroll container while the body scrolls beneath
+         it, so the column headers stay visible on a long table. The card-surface background +
+         z-index keep scrolled rows from bleeding through; the soft shadow lifts the header so it
+         reads as floating above the ledger. Card-matched bg blends into the widget tile. */
+      .data-table.dt-sticky thead th { position: sticky; top: var(--dt-sticky-top, 0px); z-index: 5; background: var(--bg-card); box-shadow: 0 1px 0 var(--border), 0 6px 10px -8px rgba(0,0,0,0.45); }
+      /* dt-spin — the DataTable in-flight indicator. The header sort caret is swapped for
+         this spinner while a column re-sorts (SortingKey), so a large-list sort reads as
+         "working" rather than frozen. Reuses a single rotate keyframe. */
+      .dt-spin { display: inline-block; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: dt-spin 0.65s linear infinite; }
+      .dt-spin-sm { width: 13px; height: 13px; vertical-align: middle; margin-left: 0.1rem; }
+      @keyframes dt-spin { to { transform: rotate(360deg); } }
       /* GX4-F3: padding-block lifts .th-sort from 20px to ≥24px — meets WCAG 2.5.8 minimum tap target. */
       .txn-table .th-sort { background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0.2rem 0; display: inline-flex; align-items: center; gap: 0.15rem; min-height: 24px; }
       .txn-table .th-sort:hover { color: var(--text); }
@@ -1428,6 +1440,9 @@
       .txn-table thead th.td-amount, .txn-table thead th.td-actions { text-align: right; }
       /* Reusable DataTable pagination footer. */
       .data-pager { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.6rem 0.2rem 0.1rem; font-size: 0.86rem; }
+      /* A duplicate pager above the table (TopPager) so rows-per-page is reachable on a
+         long list without scrolling to the bottom; a bottom border sets it off from the rows. */
+      .data-pager.data-pager-top { padding: 0.1rem 0.2rem 0.55rem; border-bottom: 1px solid var(--border); margin-bottom: 0.45rem; }
       .data-pager .data-pos { font-variant-numeric: tabular-nums; }
       .data-pager .data-pager-label { margin-left: auto; }
       .data-pager .field { width: auto; min-width: 4.5rem; }
@@ -2452,6 +2467,30 @@
       .studio-verb { font-size:.72rem; padding:.2rem .5rem; border:1px solid var(--border); border-radius:7px; background:#121214; color:var(--text-dim); cursor:pointer; font-family:var(--font-mono, monospace); }
       .studio-verb:hover { border-color:var(--accent); color:var(--text); }
       .bento { display:grid; --cell:152px; grid-template-columns: repeat(4, minmax(0,1fr)); grid-template-rows: repeat(8, var(--cell)); grid-auto-rows: var(--cell); gap:10px; overflow-anchor:none; }
+      /* bento-ledger (widgetized /transactions): content-sized rows. Every block is its
+         own full-width engine widget tile (toolbar, optional bulk/undo bars, then the
+         ledger table) auto-flowing into successive rows. Each tile GROWS to fit its
+         content instead of being clipped to the dashboard's fixed 152px cells — the
+         table tile in particular must show the whole paginated ledger + the pager. */
+      /* The page scrolls under the sticky .topbar (~3.5rem), so the ledger table's
+         sticky header parks just below the bar instead of at viewport top:0 (where the
+         bar would hide it). The generic .dt-sticky rule reads this offset; it defaults
+         to 0 elsewhere (e.g. a self-scrolling table or a modal with no topbar). */
+      .bento.bento-ledger { grid-template-rows: auto; grid-auto-rows: auto; --dt-sticky-top: 3.5rem; }
+      .bento.bento-ledger > .w { height:auto; min-height:0; overflow:visible; }
+      /* Stable column widths: default table-layout:auto re-fits every column to the
+         CURRENT page's content, so sorting/paging makes the columns jump around
+         (distracting). Fixing the layout + per-column widths keeps them rock-steady;
+         Description (col 4) is left to take the remaining space. */
+      .bento-ledger .txn-table { table-layout:fixed; width:100%; }
+      .bento-ledger .txn-table th, .bento-ledger .txn-table td { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .bento-ledger .txn-table th:nth-child(1), .bento-ledger .txn-table td:nth-child(1) { width:40px; }
+      .bento-ledger .txn-table th:nth-child(2), .bento-ledger .txn-table td:nth-child(2) { width:116px; }
+      .bento-ledger .txn-table th:nth-child(3), .bento-ledger .txn-table td:nth-child(3) { width:120px; }
+      .bento-ledger .txn-table th:nth-child(5), .bento-ledger .txn-table td:nth-child(5) { width:184px; }
+      .bento-ledger .txn-table th:nth-child(6), .bento-ledger .txn-table td:nth-child(6) { width:150px; }
+      /* col 7 = Source (provenance) */
+      .bento-ledger .txn-table th:nth-child(7), .bento-ledger .txn-table td:nth-child(7) { width:118px; }
       .w { position:relative; background:#121214; border:1px solid #34343a; overflow:hidden; display:flex; flex-direction:column; transition: border-color .12s ease; will-change: transform; } /* GX8-F2 */
       .w:hover { border-color:#44444c; }
       /* opacity is !important: .bento .w carries the wonder-bento-enter entrance
@@ -2583,14 +2622,28 @@
       aside.rail nav { scrollbar-width: none; }
       aside.rail nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
-      /* sidebar collapse */
-      aside.rail { transition:width .18s ease; }
+      /* sidebar collapse — a smooth spring slide; the menu labels + brand don't blink
+         out, they fade, slide left and scale to zero width as the rail closes (and grow
+         back on open), so the whole menu reads as scaling with the rail. */
+      aside.rail { transition:width .34s cubic-bezier(.22,.61,.36,1); will-change:width; }
       aside.rail.collapsed { width:58px; }
-      aside.rail.collapsed .brand-name,
-      aside.rail.collapsed .nv span,
+      aside.rail .nv > span, aside.rail .brand-name {
+        overflow:hidden; white-space:nowrap; max-width:14rem; opacity:1; transform:none;
+        transition: max-width .34s cubic-bezier(.22,.61,.36,1), opacity .2s ease, transform .3s cubic-bezier(.22,.61,.36,1);
+      }
+      aside.rail .nv { transition: gap .34s cubic-bezier(.22,.61,.36,1), padding .3s cubic-bezier(.22,.61,.36,1); }
+      aside.rail.collapsed .nv > span, aside.rail.collapsed .brand-name {
+        max-width:0; opacity:0; transform:translateX(-10px) scale(.82); pointer-events:none;
+      }
       aside.rail.collapsed nav .rail-section,
       aside.rail.collapsed .hh-text { display:none; }
       aside.rail.collapsed .nv { justify-content:center; gap:0; padding-left:0; padding-right:0; position:relative; }
+      /* Collapsed rail is icon-only: hide the optional Cloud upsell card and the foot
+         meta (trust line, About & privacy link, version) which would otherwise wrap into
+         an unreadable sliver. The chevron + household settings icon stay. */
+      aside.rail.collapsed .cloud-mention,
+      aside.rail.collapsed .rail-foot > span,
+      aside.rail.collapsed .rail-foot > a { display:none; }
       /* Alt+1–9 keyboard-jump hint at the trailing edge of each primary nav item (L34).
          Surfaces the otherwise-undiscoverable shortcut; hidden when the rail is collapsed. */
       .nav-alt-hint { margin-left:auto; font-size:0.7rem; line-height:1; color:var(--muted); opacity:0.7;
@@ -2603,6 +2656,7 @@
       aside.rail.collapsed .nv:focus-visible > span,
       aside.rail.collapsed .nv:focus-within > span {
         display:block; position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%);
+        max-width:none; opacity:1; pointer-events:auto; /* override the collapsed resting state so the flyout isn't clipped */
         white-space:nowrap; background:var(--bg-elev); color:var(--text);
         border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem;
         font-size:13px; line-height:1; box-shadow:0 6px 18px rgba(0,0,0,.28); z-index:60; pointer-events:auto;
@@ -2613,6 +2667,19 @@
         aside.rail.collapsed .nv:focus-within > span { animation: rail-flyout .12s ease both; }
       }
       @keyframes rail-flyout { from { opacity:0; transform:translate(-4px,-50%); } to { opacity:1; transform:translateY(-50%); } }
+
+      /* Page settle: when the rail toggles, the page content eases from a slight inward
+         scale back to full size (transform-origin at the rail edge), so the page reads as
+         scaling open/closed alongside the menu rather than just reflowing. The transient
+         .cf-rail-anim class is added to <html> for the duration by triggerRailAnim (Go).
+         Gated off under reduced-motion / WONDER-off. */
+      @keyframes rail-page-settle { from { transform: scale(.985); } to { transform: none; } }
+      html.cf-rail-anim:not([data-wonder="off"]) #cf-page-view {
+        animation: rail-page-settle .4s cubic-bezier(.22,.61,.36,1); transform-origin: left center;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html.cf-rail-anim #cf-page-view { animation: none !important; }
+      }
 
       /* Phone layout (C10): below 768px the full 240px rail pushed content
          off-screen and the page scrolled horizontally. Collapse the rail to its

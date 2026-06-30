@@ -35,8 +35,10 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Transactions is the global ledger: add income/expense, list newest first, delete.
-func Transactions() ui.Node {
+// transactionsLegacy is the original full-page ledger (add income/expense, list
+// newest first, delete). It has been superseded by the widgetized Transactions()
+// in transactions_widget.go and is retained for reference / reuse of its handlers.
+func transactionsLegacy() ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
@@ -896,63 +898,63 @@ func Transactions() ui.Node {
 			Body: IfElse(txnView.Get() != "ledger",
 				embeddedPanel,
 				Fragment(
-				uiw.FilterToolbar(uiw.FilterToolbarProps{
-					Search:       f.Text,
-					SearchLabel:  uistate.T("transactions.searchPlaceholder"),
-					OnSearch:     onFilterText,
-					FiltersLabel: uistate.T("transactions.filters"),
-					FiltersTitle: uistate.T("transactions.filtersTitle"),
-					ActiveAriaLabel: func(n int) string { // C57
-						if n == 0 {
-							return uistate.T("transactions.filters")
-						}
-						return uistate.T("transactions.filtersActiveAria", plural(n, "filter"))
-					},
-					FilterFields:  filtersBody,
-					Chips:         chips,
-					OnRemoveChip:  func(key string) { removeFilter(txnfilter.FilterField(key)) },
-					OnClearAll:    clearAllFilters,
-					ClearAllLabel: uistate.T("transactions.clearAllFilters"),
-					RemoveLabel:   uistate.T("transactions.removeFilter"),
-					Actions: []ui.Node{
-						// C51: only show "Clear" when at least one filter is active — an
-						// always-visible clear-with-nothing-to-clear is dead UI noise.
-						If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
-						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
-					},
-				}),
-				If(len(selected.Get()) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
-					Span(css.Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportSelectedTitle")), Attr("data-testid", "bulk-export-selected"), OnClick(exportSelected), uistate.T("transactions.exportSelected")),
-					Button(css.Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
-					Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+					uiw.FilterToolbar(uiw.FilterToolbarProps{
+						Search:       f.Text,
+						SearchLabel:  uistate.T("transactions.searchPlaceholder"),
+						OnSearch:     onFilterText,
+						FiltersLabel: uistate.T("transactions.filters"),
+						FiltersTitle: uistate.T("transactions.filtersTitle"),
+						ActiveAriaLabel: func(n int) string { // C57
+							if n == 0 {
+								return uistate.T("transactions.filters")
+							}
+							return uistate.T("transactions.filtersActiveAria", plural(n, "filter"))
+						},
+						FilterFields:  filtersBody,
+						Chips:         chips,
+						OnRemoveChip:  func(key string) { removeFilter(txnfilter.FilterField(key)) },
+						OnClearAll:    clearAllFilters,
+						ClearAllLabel: uistate.T("transactions.clearAllFilters"),
+						RemoveLabel:   uistate.T("transactions.removeFilter"),
+						Actions: []ui.Node{
+							// C51: only show "Clear" when at least one filter is active — an
+							// always-visible clear-with-nothing-to-clear is dead UI noise.
+							If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
+							Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
+						},
+					}),
+					If(len(selected.Get()) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
+						Span(css.Class("muted"), uistate.T("transactions.selected", plural(len(selected.Get()), "transaction"))),
+						Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportSelectedTitle")), Attr("data-testid", "bulk-export-selected"), OnClick(exportSelected), uistate.T("transactions.exportSelected")),
+						Button(css.Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
+						Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+					)),
+					If(len(lastBulk.Get().Prior) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
+						Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", lastBulk.Get().Label)),
+						Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
+					)),
+					// Summary + select-all on one line (G2 §7): the select-all button used to
+					// sit orphaned above the table, costing ~40px of vertical space; it now
+					// rides alongside the count/net summary.
+					If(len(shown) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.4rem"}),
+						Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
+						smartTooltipFor(txnSmartSettings, "txn-total", uistate.T("transactions.listTitle"), uistate.T("smart.tipTxnTotal")),
+						If(unclearedCount > 0, Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summaryUncleared", unclearedCount)))),
+						Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
+					)),
+					// Screen-reader live region announcing the match count as filters change
+					// (stays mounted across renders, so the zero-results case is announced too).
+					P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
+					If(dupCount > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.6rem"}),
+						Span(css.Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
+						Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
+					)),
+					listBody,
 				)),
-				If(len(lastBulk.Get().Prior) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
-					Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", lastBulk.Get().Label)),
-					Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
-				)),
-				// Summary + select-all on one line (G2 §7): the select-all button used to
-				// sit orphaned above the table, costing ~40px of vertical space; it now
-				// rides alongside the count/net summary.
-				If(len(shown) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.4rem"}),
-					Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base))))),
-					smartTooltipFor(txnSmartSettings, "txn-total", uistate.T("transactions.listTitle"), uistate.T("smart.tipTxnTotal")),
-					If(unclearedCount > 0, Span(css.Class("muted"), Attr("aria-hidden", "true"), Text(uistate.T("transactions.summaryUncleared", unclearedCount)))),
-					Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")), OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")),
-				)),
-				// Screen-reader live region announcing the match count as filters change
-				// (stays mounted across renders, so the zero-results case is announced too).
-				P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus)),
-				If(dupCount > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"margin-bottom": "0.6rem"}),
-					Span(css.Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
-					Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates")),
-				)),
-				listBody,
-			)),
 		}),
 	)
 }
