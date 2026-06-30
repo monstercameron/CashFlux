@@ -113,6 +113,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		Desc:              desc,
 		Payee:             toAcc.Name,
 		Reviewed:          true,
+		Source:            domain.TxnSourceManual,
 	}
 	in := domain.Transaction{
 		ID: inID, AccountID: toAcc.ID,
@@ -122,6 +123,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		Desc:              desc,
 		Payee:             fromAcc.Name,
 		Reviewed:          true,
+		Source:            domain.TxnSourceManual,
 	}
 
 	if err := a.PutTransaction(out); err != nil {

@@ -20,7 +20,7 @@ import (
 // csvHeader is the stable column order for transaction CSV export.
 var csvHeader = []string{
 	"id", "date", "account_id", "payee", "desc", "category_id",
-	"amount", "currency", "transfer_account_id", "cleared", "tags", "member_id",
+	"amount", "currency", "transfer_account_id", "cleared", "tags", "member_id", "source",
 }
 
 // TransactionsToCSV serializes transactions to CSV with a header row. Amounts
@@ -45,6 +45,7 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			strconv.FormatBool(t.Cleared),
 			strings.Join(t.Tags, ";"),
 			t.MemberID,
+			string(t.Source),
 		}
 		if err := w.Write(row); err != nil {
 			return nil, err
@@ -85,6 +86,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 	for i, name := range records[0] {
 		idx[strings.ToLower(strings.TrimSpace(name))] = i
 	}
+	_, srcCol := idx["source"] // whether the file carries provenance (vs a foreign CSV)
 	col := func(row []string, name string) string {
 		if i, ok := idx[name]; ok && i < len(row) {
 			return strings.TrimSpace(row[i])
@@ -174,9 +176,25 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberID:          colID(row, "member"),
+			Source:            csvSource(col(row, "source"), srcCol),
 		})
 	}
 	return out, skipped, nil
+}
+
+// csvSource reads the provenance from a CSV row. A valid source value is preserved
+// (so an export round-trips losslessly, including an empty source). columnPresent is
+// whether the CSV had a "source" header at all: when it did not, the file is a
+// foreign upload whose provenance IS "imported"; when it did, an empty/unknown cell
+// is kept empty so a round-tripped untagged row stays untagged.
+func csvSource(raw string, columnPresent bool) domain.TxnSource {
+	if s := domain.TxnSource(strings.TrimSpace(raw)); s.Valid() {
+		return s
+	}
+	if !columnPresent {
+		return domain.TxnSourceImported
+	}
+	return ""
 }
 
 // TransactionsFromCSV parses transactions from CSV. Columns are matched by their
@@ -203,6 +221,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 	for i, name := range records[0] {
 		idx[strings.ToLower(strings.TrimSpace(name))] = i
 	}
+	_, srcCol := idx["source"] // whether the file carries provenance (vs a foreign CSV)
 	col := func(row []string, name string) string {
 		if i, ok := idx[name]; ok && i < len(row) {
 			return strings.TrimSpace(row[i])
@@ -287,6 +306,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberID:          colID(row, "member"),
+			Source:            csvSource(col(row, "source"), srcCol),
 		})
 	}
 	return out, nil

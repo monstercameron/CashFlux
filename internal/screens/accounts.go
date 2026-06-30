@@ -247,7 +247,7 @@ func Accounts() ui.Node {
 		if amount, ok := ledger.AdjustmentToTarget(currentBal, target); ok {
 			adj := domain.Transaction{
 				ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: uistate.T("accounts.balanceAdjustment"),
-				Amount: amount, Cleared: true, CategoryID: catID,
+				Amount: amount, Cleared: true, CategoryID: catID, Source: domain.TxnSourceManual,
 			}
 			if err := app.PutTransaction(adj); err != nil {
 				errMsg.Set(err.Error())

@@ -70,6 +70,7 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 			Payee:     fmt.Sprintf("Goal contribution — %s", g.Name),
 			Desc:      fmt.Sprintf("Contribution to savings goal %q", g.Name),
 			Amount:    money.New(-amt.Amount, amt.Currency), // debit
+			Source:    domain.TxnSourceManual,               // a deliberate user contribution
 		}
 		if err := a.PutTransaction(txn); err != nil {
 			// The goal was already saved; surface the error but don't roll back

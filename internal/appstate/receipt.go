@@ -98,7 +98,7 @@ func (a *App) ImportReceipt(r extract.Receipt, accountID string, date time.Time)
 	}
 	tx := domain.Transaction{
 		ID: id.New(), AccountID: accountID, Date: date, Desc: desc, Payee: strings.TrimSpace(r.Merchant),
-		Amount: money.New(-totalMinor, base), Splits: splits,
+		Amount: money.New(-totalMinor, base), Splits: splits, Source: domain.TxnSourceScanned,
 	}
 	// A single-category receipt also gets that category on the transaction itself.
 	if cat := singleCategory(splits); cat != "" {

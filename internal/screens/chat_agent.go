@@ -639,7 +639,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					}
 				}
 				amt := money.New(currency.MinorFromMajor(a.Amount, acc.Currency), acc.Currency)
-				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: amt, Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now}
+				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: amt, Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now, Source: domain.TxnSourceAssistant}
 				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
 					t.Date = d
 				}
@@ -810,8 +810,8 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				if conv, err := rates.Convert(fromMoney.Abs(), to.Currency); err == nil {
 					toMoney = conv // honor FX across currencies
 				}
-				out := domain.Transaction{ID: id.New(), AccountID: from.ID, Amount: money.New(-fromMinor, from.Currency), TransferAccountID: to.ID, Date: when, Payee: to.Name, Desc: "Transfer to " + to.Name}
-				in := domain.Transaction{ID: id.New(), AccountID: to.ID, Amount: toMoney, TransferAccountID: from.ID, Date: when, Payee: from.Name, Desc: "Transfer from " + from.Name}
+				out := domain.Transaction{ID: id.New(), AccountID: from.ID, Amount: money.New(-fromMinor, from.Currency), TransferAccountID: to.ID, Date: when, Payee: to.Name, Desc: "Transfer to " + to.Name, Source: domain.TxnSourceAssistant}
+				in := domain.Transaction{ID: id.New(), AccountID: to.ID, Amount: toMoney, TransferAccountID: from.ID, Date: when, Payee: from.Name, Desc: "Transfer from " + from.Name, Source: domain.TxnSourceAssistant}
 				if err := app.PutTransaction(out); err != nil {
 					return "Couldn't record the transfer: " + err.Error()
 				}

@@ -84,16 +84,16 @@ type Account struct {
 	// needed. NetByOwner honours these shares instead of OwnerID when set.
 	OwnershipShares map[string]int `json:"ownershipShares,omitempty"`
 
-	Scope          Scope        `json:"scope"`
-	Class          AccountClass `json:"class"`
-	Type           AccountType  `json:"type"`
+	Scope Scope        `json:"scope"`
+	Class AccountClass `json:"class"`
+	Type  AccountType  `json:"type"`
 	// Institution is the name of the financial institution that holds this account
 	// (e.g. "Chase", "Wells Fargo", "Fidelity"). Optional; omitted from JSON when
 	// empty so existing stored rows round-trip to "" with no migration needed.
-	Institution    string       `json:"institution,omitempty"`
-	Currency       string       `json:"currency"`
-	OpeningBalance money.Money  `json:"openingBalance"`
-	BalanceAsOf    time.Time    `json:"balanceAsOf"`
+	Institution    string      `json:"institution,omitempty"`
+	Currency       string      `json:"currency"`
+	OpeningBalance money.Money `json:"openingBalance"`
+	BalanceAsOf    time.Time   `json:"balanceAsOf"`
 
 	// Liability-only fields.
 	CreditLimit     money.Money `json:"creditLimit,omitempty"`
@@ -141,8 +141,12 @@ type Transaction struct {
 	Tags              []string        `json:"tags,omitempty"`
 	MemberID          string          `json:"memberId,omitempty"`
 	SourceDocID       string          `json:"sourceDocId,omitempty"`
-	Attachments       []AttachmentRef `json:"attachments,omitempty"`
-	Custom            map[string]any  `json:"custom,omitempty"`
+	// Source records how this transaction entered the ledger (manual entry, CSV
+	// import, document scan, recurring rule, AI assistant). Empty = not recorded
+	// (e.g. created before provenance tracking); reads as "—". See domain.TxnSource.
+	Source      TxnSource       `json:"source,omitempty"`
+	Attachments []AttachmentRef `json:"attachments,omitempty"`
+	Custom      map[string]any  `json:"custom,omitempty"`
 	// Reviewed marks an entry the user has explicitly confirmed on entry, so
 	// auto-review workflows (ActionFlagReview) skip tagging it "needs-review"
 	// (L43 — suppress the auto-tag on confident manual entry).
@@ -224,7 +228,7 @@ type RecurringCadence string
 
 const (
 	CadenceWeekly      RecurringCadence = "weekly"
-	CadenceBiweekly    RecurringCadence = "biweekly"    // every 14 days (C152) — common payday/bill cycle
+	CadenceBiweekly    RecurringCadence = "biweekly" // every 14 days (C152) — common payday/bill cycle
 	CadenceMonthly     RecurringCadence = "monthly"
 	CadenceSemimonthly RecurringCadence = "semimonthly" // twice a month, ~1st & 15th (C152)
 	CadenceQuarterly   RecurringCadence = "quarterly"
@@ -401,14 +405,14 @@ func (t Transaction) IsExpense() bool { return !t.IsTransfer() && t.Amount.IsNeg
 // Budget is a spending limit for a category, owned by a member (individual) or
 // the group (shared).
 type Budget struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Scope      Scope          `json:"scope"`
-	OwnerID    string         `json:"ownerId"`
-	CategoryID string         `json:"categoryId"`
-	Period     Period         `json:"period"`
-	Limit      money.Money    `json:"limit"`
-	Rollover   bool           `json:"rollover,omitempty"`
+	ID         string      `json:"id"`
+	Name       string      `json:"name"`
+	Scope      Scope       `json:"scope"`
+	OwnerID    string      `json:"ownerId"`
+	CategoryID string      `json:"categoryId"`
+	Period     Period      `json:"period"`
+	Limit      money.Money `json:"limit"`
+	Rollover   bool        `json:"rollover,omitempty"`
 	// Methodology overrides the household-level budgeting method for this
 	// individual budget. An empty string means "inherit the global method".
 	// Valid values are the budgeting.Method* constants ("simple",
@@ -593,11 +597,11 @@ type SubscriptionCancellation struct {
 // "balance_snapshots" table is created on first write alongside all other entity
 // tables, and JSON round-trips automatically.
 type BalanceSnapshot struct {
-	ID            string    `json:"id"`
-	AccountID     string    `json:"accountId"`
-	BalanceMinor  int64     `json:"balanceMinor"`
-	Currency      string    `json:"currency,omitempty"`
-	AsOf          time.Time `json:"asOf"`
+	ID           string    `json:"id"`
+	AccountID    string    `json:"accountId"`
+	BalanceMinor int64     `json:"balanceMinor"`
+	Currency     string    `json:"currency,omitempty"`
+	AsOf         time.Time `json:"asOf"`
 }
 
 // Holding is a single investment position within an investment account. All

@@ -1037,6 +1037,7 @@ func (a *App) transactionFromDocumentRow(acc domain.Account, decimals int, r ext
 	t := domain.Transaction{
 		ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc,
 		CategoryID: a.categoryIDForDocumentRow(r.Category), Amount: money.New(amt, acc.Currency),
+		Source: domain.TxnSourceScanned,
 	}
 	return a.AutoCategorizeTransaction(t), true
 }
@@ -1171,6 +1172,7 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 			t := domain.Transaction{
 				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
 				Amount: r.Amount, Date: now, Payee: r.Label, Desc: r.Label,
+				Source: domain.TxnSourceRecurring,
 			}
 			if err := a.PutTransaction(t); err != nil {
 				return err
@@ -1182,6 +1184,7 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 	t := domain.Transaction{
 		ID: id.New(), AccountID: accountID, Amount: amount, Date: now,
 		Payee: name, Desc: "Bill payment: " + name,
+		Source: domain.TxnSourceRecurring,
 	}
 	return a.PutTransaction(t)
 }
@@ -1668,6 +1671,7 @@ func (a *App) PostDueRecurring(asOf time.Time) (int, error) {
 			t := domain.Transaction{
 				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
 				Date: r.NextDue, Amount: r.Amount, Desc: r.Label,
+				Source: domain.TxnSourceRecurring,
 			}
 			if err := a.store.PutTransaction(t); err != nil {
 				return posted, err

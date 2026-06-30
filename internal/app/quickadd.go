@@ -150,6 +150,7 @@ func QuickAddHost() uic.Node {
 			ID: id.New(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
 			Desc: strings.TrimSpace(desc.Get()), CategoryID: catID.Get(),
 			Amount: money.New(amt, acc.Currency), MemberID: member, Reviewed: reviewed.Get(),
+			Source: domain.TxnSourceManual,
 		}
 		// Apply auto-categorization rules on save (it won't overwrite a manual
 		// category). Quick-add is now the sole manual-add path after the inline

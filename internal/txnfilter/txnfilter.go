@@ -19,7 +19,7 @@ import (
 )
 
 // SortKeys are the columns the ledger can be ordered by, in display order.
-var SortKeys = []string{"date", "amount", "payee", "category", "account"}
+var SortKeys = []string{"date", "amount", "payee", "category", "account", "source"}
 
 // Sort directions.
 const (
@@ -30,7 +30,7 @@ const (
 // Pagination defaults for the ledger. PageSizeAll is the sentinel page size that
 // shows every row on one page; DefaultPageSize is the out-of-the-box window.
 const (
-	DefaultPageSize = 50
+	DefaultPageSize = 25
 	PageSizeAll     = -1
 )
 
@@ -67,14 +67,17 @@ type Criteria struct {
 	Account  string `json:"account,omitempty"`
 	Category string `json:"category,omitempty"`
 	Member   string `json:"member,omitempty"`
+	// Source filters to transactions with this provenance (domain.TxnSource value:
+	// "manual"/"imported"/"scanned"/"recurring"/"assistant"). Empty = no source filter.
+	Source string `json:"source,omitempty"`
 	// Tag filters to transactions carrying this exact tag (C49). Empty = no tag
 	// filter. Matched case-insensitively against each of a transaction's Tags.
-	Tag      string `json:"tag,omitempty"`
-	From     string `json:"from,omitempty"`
-	To       string `json:"to,omitempty"`
-	Sort     string `json:"sort,omitempty"`
-	Dir      string `json:"dir,omitempty"`
-	Cleared  string `json:"cleared,omitempty"`
+	Tag     string `json:"tag,omitempty"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	Sort    string `json:"sort,omitempty"`
+	Dir     string `json:"dir,omitempty"`
+	Cleared string `json:"cleared,omitempty"`
 	// CustomKey/CustomVal filter by a transaction custom field's value (L18): a
 	// row matches when its Custom[CustomKey] stringifies to CustomVal. Both empty
 	// = no custom-field filter.
@@ -138,17 +141,18 @@ type FilterField string
 
 // The filter dimensions, in toolbar display order.
 const (
-	FieldText     FilterField = "text"
-	FieldAccount  FilterField = "account"
-	FieldCategory FilterField = "category"
-	FieldMember   FilterField = "member"
-	FieldTag      FilterField = "tag"
-	FieldFrom     FilterField = "from"
-	FieldTo       FilterField = "to"
-	FieldCleared  FilterField = "cleared"
+	FieldText      FilterField = "text"
+	FieldAccount   FilterField = "account"
+	FieldCategory  FilterField = "category"
+	FieldMember    FilterField = "member"
+	FieldSource    FilterField = "source"
+	FieldTag       FilterField = "tag"
+	FieldFrom      FilterField = "from"
+	FieldTo        FilterField = "to"
+	FieldCleared   FilterField = "cleared"
 	FieldAmountMin FilterField = "amountMin"
 	FieldAmountMax FilterField = "amountMax"
-	FieldCustom   FilterField = "custom"
+	FieldCustom    FilterField = "custom"
 )
 
 // ActiveFilter describes one engaged filter for the toolbar's count badge and
@@ -174,6 +178,7 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	add(FieldAccount, c.Account)
 	add(FieldCategory, c.Category)
 	add(FieldMember, c.Member)
+	add(FieldSource, c.Source)
 	add(FieldTag, c.Tag)
 	add(FieldFrom, c.From)
 	add(FieldTo, c.To)
@@ -205,6 +210,8 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.Category = ""
 	case FieldMember:
 		c.Member = ""
+	case FieldSource:
+		c.Source = ""
 	case FieldTag:
 		c.Tag = ""
 	case FieldFrom:
@@ -278,6 +285,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case c.Account != "" && t.AccountID != c.Account:
 		case c.Category != "" && t.CategoryID != c.Category:
 		case c.Member != "" && t.MemberID != c.Member:
+		case c.Source != "" && string(t.Source) != c.Source:
 		case tagF != "" && !hasTag(t, tagF):
 		case hasMin && AbsAmount(t) < currency.MinorFromMajor(minMajor, t.Amount.Currency):
 		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
@@ -325,6 +333,10 @@ func compare(a, b domain.Transaction, key string, l Labels) int {
 		return strings.Compare(strings.ToLower(l.category(a)), strings.ToLower(l.category(b)))
 	case "account":
 		return strings.Compare(strings.ToLower(l.account(a)), strings.ToLower(l.account(b)))
+	case "source":
+		// Order by the display label so the column reads sensibly; untagged rows
+		// ("—") sort after the named sources.
+		return strings.Compare(strings.ToLower(a.Source.Label()), strings.ToLower(b.Source.Label()))
 	default: // date
 		switch {
 		case a.Date.Before(b.Date):

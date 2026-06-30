@@ -285,3 +285,62 @@ func (s TaskSource) Valid() bool {
 		return false
 	}
 }
+
+// TxnSource records the provenance of a transaction — how it entered the ledger.
+// It is set at each creation path so the ledger can show (and filter by) where a
+// row came from. An empty value means the source was not recorded (e.g. a row
+// created before provenance tracking) and reads as "—" in the UI.
+type TxnSource string
+
+const (
+	// TxnSourceManual is a row a person entered by hand (quick-add, the add form, a
+	// balance reconcile adjustment, or a user-initiated transfer).
+	TxnSourceManual TxnSource = "manual"
+	// TxnSourceImported is a row parsed from an uploaded file (CSV import).
+	TxnSourceImported TxnSource = "imported"
+	// TxnSourceScanned is a row extracted from an uploaded document or receipt image
+	// (the vision/extract import path).
+	TxnSourceScanned TxnSource = "scanned"
+	// TxnSourceRecurring is a row generated automatically from a recurring rule, bill,
+	// or goal contribution.
+	TxnSourceRecurring TxnSource = "recurring"
+	// TxnSourceAssistant is a row created by the in-app AI assistant (chat agent).
+	TxnSourceAssistant TxnSource = "assistant"
+)
+
+// AllTxnSources lists every known transaction source, in display order.
+var AllTxnSources = []TxnSource{
+	TxnSourceManual, TxnSourceImported, TxnSourceScanned, TxnSourceRecurring, TxnSourceAssistant,
+}
+
+func (s TxnSource) String() string { return string(s) }
+
+// Valid reports whether s is a known, non-empty transaction source.
+func (s TxnSource) Valid() bool {
+	switch s {
+	case TxnSourceManual, TxnSourceImported, TxnSourceScanned, TxnSourceRecurring, TxnSourceAssistant:
+		return true
+	default:
+		return false
+	}
+}
+
+// Label is the human-readable name shown in the ledger's Source column and filter.
+// An unset or unknown source reads as an em dash so untracked rows are obvious
+// rather than blank.
+func (s TxnSource) Label() string {
+	switch s {
+	case TxnSourceManual:
+		return "Manual"
+	case TxnSourceImported:
+		return "Imported"
+	case TxnSourceScanned:
+		return "Scanned"
+	case TxnSourceRecurring:
+		return "Recurring"
+	case TxnSourceAssistant:
+		return "Assistant"
+	default:
+		return "—"
+	}
+}

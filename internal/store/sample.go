@@ -57,6 +57,43 @@ func EmptyDataset() Dataset {
 // the rest of the app uses — while the monthly transfers to savings, the Roth
 // IRA, and the 401(k) move both legs, so balances and the net-worth trend
 // actually change over time. All ids are stable so re-loading is idempotent.
+// sampleSourceFor assigns a plausible provenance to a demo transaction so the
+// ledger's Source column is illustrative in the sample data: receipts scan, bills
+// recur, transfers are manual, and the everyday rows spread deterministically (by a
+// stable per-id hash) across a realistic mix of manual / imported / scanned / AI.
+func sampleSourceFor(t domain.Transaction) domain.TxnSource {
+	if t.SourceDocID != "" {
+		return domain.TxnSourceScanned
+	}
+	if t.TransferAccountID != "" {
+		return domain.TxnSourceManual
+	}
+	p := strings.ToLower(t.Payee + " " + t.Desc)
+	for _, kw := range []string{
+		"paycheck", "part-time", "mortgage", "hoa", "property tax", "insurance",
+		"loan", "subscription", "premium", "netflix", "spotify", "gym", "utilit",
+		"internet", "electric", "phone", "rent",
+	} {
+		if strings.Contains(p, kw) {
+			return domain.TxnSourceRecurring
+		}
+	}
+	sum := 0
+	for i := 0; i < len(t.ID); i++ {
+		sum += int(t.ID[i])
+	}
+	switch sum % 10 {
+	case 0, 1, 2:
+		return domain.TxnSourceImported
+	case 3:
+		return domain.TxnSourceScanned
+	case 4:
+		return domain.TxnSourceAssistant
+	default:
+		return domain.TxnSourceManual
+	}
+}
+
 func SampleDataset() Dataset {
 	usd := func(n int64) money.Money { return money.New(n, "USD") }
 	eur := func(n int64) money.Money { return money.New(n, "EUR") } // for the foreign-trip FX demo
@@ -73,53 +110,53 @@ func SampleDataset() Dataset {
 		priya  = "m-priya"
 	)
 	const (
-		checking = "acct-checking"   // joint
-		hysa     = "acct-hysa"       // joint emergency / house / baby savings (thin)
-		k401     = "acct-401k"       // Marcus's retirement
-		roth     = "acct-roth"       // Roth IRA
-		bizchk   = "acct-bizchecking" // Priya's online-business checking
-		wsb      = "acct-brokerage"   // Marcus's self-directed "WSB" trading account
-		cash     = "acct-cash"
-		home     = "acct-home"     // the condo they own — now too small for the baby
-		mortgage = "acct-mortgage" // mortgage on the condo
-		carM     = "acct-carloan-marcus" // the expensive car (financed Jan 2025)
-		carP     = "acct-carloan-priya"  // second car (financed Sep 2025)
-		sloan    = "acct-studentloan"     // Priya's student loan
-		card     = "acct-card"            // rewards card, carried revolving balance
-		travelcard = "acct-travelcard"    // EUR travel card used abroad (FX demo)
+		checking   = "acct-checking"    // joint
+		hysa       = "acct-hysa"        // joint emergency / house / baby savings (thin)
+		k401       = "acct-401k"        // Marcus's retirement
+		roth       = "acct-roth"        // Roth IRA
+		bizchk     = "acct-bizchecking" // Priya's online-business checking
+		wsb        = "acct-brokerage"   // Marcus's self-directed "WSB" trading account
+		cash       = "acct-cash"
+		home       = "acct-home"           // the condo they own — now too small for the baby
+		mortgage   = "acct-mortgage"       // mortgage on the condo
+		carM       = "acct-carloan-marcus" // the expensive car (financed Jan 2025)
+		carP       = "acct-carloan-priya"  // second car (financed Sep 2025)
+		sloan      = "acct-studentloan"    // Priya's student loan
+		card       = "acct-card"           // rewards card, carried revolving balance
+		travelcard = "acct-travelcard"     // EUR travel card used abroad (FX demo)
 	)
 	const (
 		// Income
-		catSalary   = "cat-salary"
-		catSideProj = "cat-sideprojects"
-		catPartTime = "cat-parttime"
-		catBizInc   = "cat-business-income"
+		catSalary    = "cat-salary"
+		catSideProj  = "cat-sideprojects"
+		catPartTime  = "cat-parttime"
+		catBizInc    = "cat-business-income"
 		catInvestInc = "cat-investing-income" // realized trading gains
-		catOtherInc = "cat-other-income"
+		catOtherInc  = "cat-other-income"
 		// Expense parents
-		catHousing   = "cat-housing"
-		catUtilities = "cat-utilities"
-		catGroceries = "cat-groceries"
-		catDining    = "cat-dining"
-		catTransport = "cat-transport"
-		catInsurance = "cat-insurance"
-		catHealth    = "cat-health"
-		catBaby      = "cat-baby"
-		catSubs      = "cat-subscriptions"
-		catShopping  = "cat-shopping"
-		catEntertain = "cat-entertainment"
-		catEducation = "cat-education"
-		catGifts     = "cat-gifts"
-		catTravel    = "cat-travel"
-		catBizExp    = "cat-business-expense"
-		catVices     = "cat-vices"        // the guilty-pleasure noise: cigarettes, cheap cosmetics
+		catHousing    = "cat-housing"
+		catUtilities  = "cat-utilities"
+		catGroceries  = "cat-groceries"
+		catDining     = "cat-dining"
+		catTransport  = "cat-transport"
+		catInsurance  = "cat-insurance"
+		catHealth     = "cat-health"
+		catBaby       = "cat-baby"
+		catSubs       = "cat-subscriptions"
+		catShopping   = "cat-shopping"
+		catEntertain  = "cat-entertainment"
+		catEducation  = "cat-education"
+		catGifts      = "cat-gifts"
+		catTravel     = "cat-travel"
+		catBizExp     = "cat-business-expense"
+		catVices      = "cat-vices"          // the guilty-pleasure noise: cigarettes, cheap cosmetics
 		catInvestLoss = "cat-investing-loss" // realized trading losses (WSB)
-		catFees      = "cat-fees"
+		catFees       = "cat-fees"
 		// Expense sub-categories (nested, to exercise the category tree)
 		catElectric      = "cat-electricity"
 		catInternet      = "cat-internet"
-		catMortgage      = "cat-mortgage"   // child of Housing
-		catHOA           = "cat-hoa"        // child of Housing
+		catMortgage      = "cat-mortgage"    // child of Housing
+		catHOA           = "cat-hoa"         // child of Housing
 		catPropTax       = "cat-propertytax" // child of Housing
 		catGas           = "cat-gas"
 		catAutoLoan      = "cat-autoloan"
@@ -150,7 +187,14 @@ func SampleDataset() Dataset {
 	}
 
 	var txns []domain.Transaction
-	add := func(t domain.Transaction) { txns = append(txns, t) }
+	add := func(t domain.Transaction) {
+		// Tag a plausible provenance so the ledger's Source column shows a realistic
+		// mix in the demo data (real entries get their source at their creation path).
+		if t.Source == "" {
+			t.Source = sampleSourceFor(t)
+		}
+		txns = append(txns, t)
+	}
 	cleared := func(d time.Time) bool { return !d.After(clearedAsOf) }
 
 	// --- 48 months of recurring activity (2022-07 .. 2026-06) ---
@@ -284,8 +328,8 @@ func SampleDataset() Dataset {
 		}
 
 		// --- Variable living expenses ---
-		txn("grocery1", 6, checking, "Greenfield Market", "Groceries", catGroceries, -(20000+v*1500+boolN(babyMonth, 4000)))
-		txnBy(priya, "grocery2", 20, checking, "Greenfield Market", "Groceries", catGroceries, -(17000+v*1000+boolN(babyMonth, 3000)))
+		txn("grocery1", 6, checking, "Greenfield Market", "Groceries", catGroceries, -(20000 + v*1500 + boolN(babyMonth, 4000)))
+		txnBy(priya, "grocery2", 20, checking, "Greenfield Market", "Groceries", catGroceries, -(17000 + v*1000 + boolN(babyMonth, 3000)))
 		// Dining — the "bad decision": several outings a month, chronically over budget.
 		txn("dining1", 12, card, "Trattoria Nove", "Dinner out", catDining, -(16000 + v*2200))
 		txnBy(priya, "dining2", 21, card, "Sushi Hana", "Date night", catDining, -(13000 + v*1800))
@@ -334,7 +378,7 @@ func SampleDataset() Dataset {
 			txn("insurance", 6, checking, "SafeHarbor Insurance", "Car insurance", catCarInsurance, ins)
 		}
 		txn("health", 16, checking, "Wellness Pharmacy", "Pharmacy", catHealth, -(3000 + v*700))
-		txn("shopping", 22, checking, "Northside Goods", "Household & shopping", catShopping, -(11000+v*2500+boolN(babyMonth, 9000)))
+		txn("shopping", 22, checking, "Northside Goods", "Household & shopping", catShopping, -(11000 + v*2500 + boolN(babyMonth, 9000)))
 		txn("fun", 18, checking, "Cineplex", "Movies & fun", catEntertain, -(5000 + v*1300))
 		// Coffee runs — feeds the rules engine ("coffee" → Dining) and "Apply rules".
 		coffee := func(slot string, d int) {
@@ -455,7 +499,17 @@ func SampleDataset() Dataset {
 	// A Costco run split across two categories (exercises CategorySplit).
 	add(domain.Transaction{ID: "tx-costco-2026-02", AccountID: checking, Date: date(2026, time.February, 15), Payee: "Costco", Desc: "Costco run", Amount: usd(-28000), MemberID: priya, Cleared: true, Splits: []domain.CategorySplit{{CategoryID: catGroceries, Amount: usd(-18000)}, {CategoryID: catShopping, Amount: usd(-10000)}}})
 	// A pricey anniversary dinner (more dining excess) — linked to a receipt doc + artifact.
-	add(domain.Transaction{ID: "tx-anniv-dinner-2026-02", AccountID: card, Date: date(2026, time.February, 22), Payee: "Nobu", Desc: "Anniversary dinner", CategoryID: catDining, Amount: usd(-24000), MemberID: marcus, Cleared: true, Tags: []string{"big-purchase"}, SourceDocID: "doc-receipt", Attachments: []domain.AttachmentRef{{ArtifactID: "art-receipt", Name: "nobu-receipt.png", Kind: "image", MIME: "image/png"}}})
+	add(domain.Transaction{ID: "tx-anniv-dinner-2026-02", AccountID: card, Date: date(2026, time.February, 22), Payee: "Nobu", Desc: "Anniversary dinner", CategoryID: catDining, Amount: usd(-24000), MemberID: marcus, Cleared: true, Tags: []string{"big-purchase"}, Source: domain.TxnSourceScanned, SourceDocID: "doc-receipt", Attachments: []domain.AttachmentRef{{ArtifactID: "art-receipt", Name: "nobu-receipt.png", Kind: "image", MIME: "image/png"}}})
+
+	// --- Recent scanned receipts (document-sourced) ---------------------------------
+	// These demonstrate the "Scanned" provenance end-to-end: each is tagged
+	// Source=Scanned, links to a Document (so it shows in the Documents panel), and
+	// carries an attached receipt artifact you can preview from the ledger. Dated in the
+	// current month so they land on the first (newest-first) page of the ledger.
+	add(domain.Transaction{ID: "tx-receipt-grocery-2026-06", AccountID: card, Date: date(2026, time.June, 22), Payee: "Greenfield Market", Desc: "Groceries (scanned receipt)", CategoryID: catGroceries, Amount: usd(-14280), MemberID: priya, Cleared: true, Source: domain.TxnSourceScanned, SourceDocID: "doc-grocery", Attachments: []domain.AttachmentRef{{ArtifactID: "art-grocery", Name: "greenfield-receipt.png", Kind: "image", MIME: "image/png"}}})
+	add(domain.Transaction{ID: "tx-receipt-pharmacy-2026-06", AccountID: card, Date: date(2026, time.June, 18), Payee: "Riverside Pharmacy", Desc: "Prenatal vitamins (scanned receipt)", CategoryID: catHealth, Amount: usd(-4820), MemberID: priya, Cleared: true, Source: domain.TxnSourceScanned, SourceDocID: "doc-pharmacy", Attachments: []domain.AttachmentRef{{ArtifactID: "art-pharmacy", Name: "pharmacy-receipt.png", Kind: "image", MIME: "image/png"}}})
+	add(domain.Transaction{ID: "tx-receipt-hardware-2026-06", AccountID: checking, Date: date(2026, time.June, 9), Payee: "Bishop's Hardware", Desc: "Nursery paint & supplies (scanned receipt)", CategoryID: catShopping, Amount: usd(-8650), MemberID: marcus, Cleared: true, Source: domain.TxnSourceScanned, SourceDocID: "doc-hardware", Attachments: []domain.AttachmentRef{{ArtifactID: "art-hardware", Name: "hardware-receipt.png", Kind: "image", MIME: "image/png"}}})
+	add(domain.Transaction{ID: "tx-receipt-dining-2026-06", AccountID: card, Date: date(2026, time.June, 5), Payee: "Pho Saigon", Desc: "Team lunch (scanned receipt)", CategoryID: catDining, Amount: usd(-3140), MemberID: marcus, Cleared: true, Source: domain.TxnSourceScanned, SourceDocID: "doc-dining", Attachments: []domain.AttachmentRef{{ArtifactID: "art-dining", Name: "pho-receipt.png", Kind: "image", MIME: "image/png"}}})
 
 	// --- Pregnancy / baby (recent tail) ---
 	add(domain.Transaction{ID: "tx-ob-2026-04", AccountID: card, Date: date(2026, time.April, 9), Payee: "Riverside OB-GYN", Desc: "Prenatal visit", CategoryID: catBaby, Amount: usd(-18000), MemberID: priya, Cleared: true, Tags: []string{"reimbursable", "baby"}, Custom: map[string]any{"reimbursable": true, "project": "Personal"}})
@@ -544,7 +598,7 @@ func SampleDataset() Dataset {
 			{ID: "goal-car", Name: "Pay off Marcus's car loan", Scope: domain.ScopeIndividual, OwnerID: marcus, TargetAmount: usd(3800000), CurrentAmount: usd(600000), TargetDate: date(2030, time.January, 1)},
 		},
 		Tasks: []domain.Task{
-			{ID: "task-card", Title: "Pay the credit card before the 22nd", Notes: "We're carrying a balance — pay more than the minimum this month.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.June, 22), RelatedType: domain.RelatedAccount, RelatedID: card, MemberID: marcus, Source: domain.SourceManual},
+			{ID: "task-card", Title: "Pay down the credit card balance", Notes: "We're carrying a balance — pay more than the minimum this month.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.June, 22), RelatedType: domain.RelatedAccount, RelatedID: card, MemberID: marcus, Source: domain.SourceManual},
 			{ID: "task-emergency", Title: "Build a real emergency fund — worried about layoffs at work", Notes: "Aim for 3 months of expenses. It's tight on basically one steady income, but start with $200/mo even if it's slow — especially before the baby comes.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.August, 1), RelatedType: domain.RelatedGoal, RelatedID: "goal-emergency", MemberID: marcus, Source: domain.SourceManual},
 			{ID: "task-baby-budget", Title: "Set up the nursery and finalize baby budget", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.October, 1), RelatedType: domain.RelatedGoal, RelatedID: "goal-baby", MemberID: priya, Source: domain.SourceManual},
 			{ID: "task-dining-budget", Title: "Dining is way over budget — let's cut back", Status: domain.StatusOpen, Priority: domain.PriorityMedium, RelatedType: domain.RelatedBudget, RelatedID: "bud-dining", MemberID: marcus, Source: domain.SourceAI},
@@ -595,6 +649,11 @@ func SampleDataset() Dataset {
 				{Date: "2026-02-22", Description: "Nobu — Anniversary dinner", Amount: "-240.00", Category: "Dining"},
 			}},
 			{ID: "doc-pending", Filename: "ob-receipt.jpg", Kind: domain.DocImage, UploadedAt: date(2026, time.June, 11), MemberID: priya, Status: domain.DocPending},
+			// Receipt scans behind the recent document-sourced transactions above.
+			{ID: "doc-grocery", Filename: "greenfield-receipt.png", Kind: domain.DocImage, UploadedAt: date(2026, time.June, 22), AccountID: card, MemberID: priya, Status: domain.DocExtracted, Extracted: []domain.DocumentRow{{Date: "2026-06-22", Description: "Greenfield Market", Amount: "-142.80", Category: "Groceries"}}},
+			{ID: "doc-pharmacy", Filename: "pharmacy-receipt.png", Kind: domain.DocImage, UploadedAt: date(2026, time.June, 18), AccountID: card, MemberID: priya, Status: domain.DocExtracted, Extracted: []domain.DocumentRow{{Date: "2026-06-18", Description: "Riverside Pharmacy", Amount: "-48.20", Category: "Health & Fitness"}}},
+			{ID: "doc-hardware", Filename: "hardware-receipt.png", Kind: domain.DocImage, UploadedAt: date(2026, time.June, 9), AccountID: checking, MemberID: marcus, Status: domain.DocExtracted, Extracted: []domain.DocumentRow{{Date: "2026-06-09", Description: "Bishop's Hardware", Amount: "-86.50", Category: "Shopping"}}},
+			{ID: "doc-dining", Filename: "pho-receipt.png", Kind: domain.DocImage, UploadedAt: date(2026, time.June, 5), AccountID: card, MemberID: marcus, Status: domain.DocExtracted, Extracted: []domain.DocumentRow{{Date: "2026-06-05", Description: "Pho Saigon", Amount: "-31.40", Category: "Dining"}}},
 		},
 		SavedInsights: []domain.SavedInsight{
 			{ID: "insight-dining", Text: "Dining is your biggest leak: it runs roughly $250–$400 over the $300 monthly budget almost every month — about $3,500/year you could redirect to the baby fund or the car loan.", CreatedAt: date(2026, time.May, 2)},
@@ -729,6 +788,10 @@ func SampleDataset() Dataset {
 		},
 		Artifacts: []domain.Artifact{
 			{ID: "art-receipt", Name: "nobu-receipt.png", Kind: "image", MIME: "image/png", Bytes: tinyPNG, Size: len(tinyPNG), CreatedAt: date(2026, time.February, 22)},
+			{ID: "art-grocery", Name: "greenfield-receipt.png", Kind: "image", MIME: "image/png", Bytes: tinyPNG, Size: len(tinyPNG), CreatedAt: date(2026, time.June, 22)},
+			{ID: "art-pharmacy", Name: "pharmacy-receipt.png", Kind: "image", MIME: "image/png", Bytes: tinyPNG, Size: len(tinyPNG), CreatedAt: date(2026, time.June, 18)},
+			{ID: "art-hardware", Name: "hardware-receipt.png", Kind: "image", MIME: "image/png", Bytes: tinyPNG, Size: len(tinyPNG), CreatedAt: date(2026, time.June, 9)},
+			{ID: "art-dining", Name: "pho-receipt.png", Kind: "image", MIME: "image/png", Bytes: tinyPNG, Size: len(tinyPNG), CreatedAt: date(2026, time.June, 5)},
 			{ID: "art-spending", Name: "spending-by-category.csv", Kind: "csv", Columns: []string{"Category", "This month", "Average"}, Rows: [][]string{
 				{"Dining", "540.00", "470.00"},
 				{"Groceries", "412.00", "395.00"},
@@ -901,7 +964,7 @@ func SampleDataset() Dataset {
 			{ID: "audit-4", At: date(2026, time.May, 26), Actor: "Marcus Hartley", Action: "create", EntityType: "settlement", EntityID: "settle-1", Summary: "Recorded settlement from Priya ($55)"},
 		},
 		Settings: Settings{
-			BaseCurrency:       "USD",
+			BaseCurrency: "USD",
 			// Rates are USD-per-foreign-unit (currency.Rates convention: Rates["EUR"]=1.08 ⇒ 1 EUR = $1.08).
 			// The earlier seed used the inverse (foreign-per-USD), which mis-valued every non-USD account —
 			// e.g. the €535 card showed $492 instead of ~$578, and 1 JPY read as $151 (a 22,000× error).
