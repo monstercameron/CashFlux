@@ -3,6 +3,53 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Move all CSS + tokens from index.html into type-safe Go (`internal/styles`)
+
+**What:** Migrated the entire design system — the three `<style>` blocks in `web/index.html`
+(~3 400 lines: `:root` tokens, every component class, light theme, `@media print`, keyframes) — into a
+new **type-safe Go** package `internal/styles`, injected at boot via `app.Run()` → `styles.Register()`
+into a managed `<style id="cf-app-css">`. The CSS is now *Go source*, not text in the HTML shell.
+`web/index.html` went 3 672 → 283 lines, keeping only a minimal literal-color `boot-critical` block.
+
+**Why this shape (not the hashed css engine):** The GWC `css` engine folds rules into *content-hashed*
+class names and **hashes `@keyframes` names** too — it can't emit the literal global selectors
+(`.btn`, `:root`, `[data-theme="light"] …`, `@media print`) or literal-named keyframes the existing
+markup already references. So I built a small **typed CSS-text builder** instead: `dsl.go` defines a
+typed `decl{prop,value}`, `rule`/`ruleMedia`/`rawBlock`/`keyframes`/`important`, and `Build()` renders
+the sheet in source order; `install.go` is the thin `syscall/js` injector. A one-shot transpiler
+(kept in scratchpad) parsed the original CSS — string-aware comment stripping, brace-aware rule
+parsing that handles `@media`/`@keyframes`, `goName()` camel-casing of properties — and emitted
+`rules_gen.go` (1 269 rules in original cascade order) + `props_gen.go` (134 typed property
+constructors). The original CSS is now gone from `index.html`, so these generated files are the
+**canonical source** — maintained directly as Go (headers updated to say so; the transpiler can't
+re-run).
+
+**Typing decision:** property *names* are fully typed (one constructor each, never a raw string at a
+call site); values stay verbatim strings — the realistic ceiling for arbitrary CSS values, and an
+optional future enhancement is mapping simple values (`8px`, `#2e8b57`) to typed helpers/token
+constants.
+
+**Cascade + FOUC:** `cf-app-css` is injected as the first thing in `Run()`, before any render, so it
+registers ahead of the css-utility engine's `gwc-css` and equal-specificity utilities still win
+exactly as before. The boot splash paints before the wasm (which owns the styles) loads, so it keeps
+its own tiny inline literal-color stylesheet.
+
+**Verification:** `go test ./internal/styles/...` green (`TestGeneratedHasKeyRules` — 129 535 bytes,
+1 269 rules); `gofmt`/`go vet` clean; wasm build rc=0 (atomic web/bin swap); transactions e2e PASS
+including the CSS-dependent layout checks (sticky header pins flush under the topbar, stable column
+widths across sort); a 12-page boot-gated screenshot sweep showed the design system injected on every
+page (129 535 bytes) with zero page errors, and baseline-vs-migrated screenshots are pixel-identical
+across dashboard/transactions/accounts/budgets/goals/todo/reports/debt/appearance/recurring/planning/
+insights. A first screenshot pass caught the boot splash mid-fade on heavy pages — confirmed a timing
+artifact (re-shot with a boot-hidden gate; identical to baseline), not a regression. SW cache
+v283→v284.
+
+**Kept:** `internal/ui/tw` (the typed Tailwind-compatible utility vocabulary) is untouched — this
+removed Tailwind's *static in-HTML stylesheet*, the "external CSS dep", not the Go utility layer.
+
+**Next:** optionally promote value-typing (px/hex/token constants); repoint the ~25–30 older
+transactions e2e specs that still target the pre-widget inline screen.
+
 ## 2026-06-30 — Widgetize /transactions + reusable DataTable options + transaction source column
 
 **What:** Reworked /transactions into a thin surface host that renders engine widget tiles

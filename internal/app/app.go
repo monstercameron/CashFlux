@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/styles"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/router"
@@ -52,6 +53,12 @@ func liveCustomPageSlug() string {
 // interactive.
 func Run() {
 	utils.DisableAllDebug()
+
+	// Install the app design system (the former index.html <style> blocks, now authored
+	// as type-safe Go in internal/styles) into <head> before anything renders, so it is
+	// present on first paint and registers ahead of the css utility engine's <style>
+	// (preserving cascade order).
+	styles.Register()
 
 	// Open the IndexedDB-backed storage primitive and migrate any legacy localStorage
 	// data into it FIRST — before anything reads persisted state. After this the app
