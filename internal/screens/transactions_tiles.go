@@ -23,6 +23,53 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// --- toolbar field helpers ------------------------------------------------------
+// These compose the reusable uiw primitives (SelectInput / OptionsFrom) so the
+// toolbar stays declarative — "label + options + a plain handler" — instead of
+// repeating the hand-rolled Select/aria/Option-loop pattern per field.
+
+// withAllOption prepends the empty-value "all / none" choice to an option list.
+func withAllOption(allLabel string, opts []uiw.SelectOption) []uiw.SelectOption {
+	return append([]uiw.SelectOption{{Value: "", Label: allLabel}}, opts...)
+}
+
+// withFieldLabel wraps a control in the toolbar's `field-label` shell.
+func withFieldLabel(label string, control ui.Node) ui.Node {
+	return Label(css.Class("field-label"), label, control)
+}
+
+// filterSelect is one labeled <select> filter: the reusable SelectInput (which owns
+// its own change hook) inside a field-label. onPick gets the chosen value.
+func filterSelect(label, selected string, opts []uiw.SelectOption, onPick func(string)) ui.Node {
+	return withFieldLabel(label, uiw.SelectInput(uiw.SelectInputProps{
+		Options: opts, Selected: selected, AriaLabel: label, OnChange: onPick,
+	}))
+}
+
+// dateField / amountField are labeled date / amount inputs. Their change hook is
+// created by the caller and passed in, since a text input fires on every keystroke
+// (so the handler must live at a stable position in the owning component).
+func dateField(label, value string, onInput ui.Handler) ui.Node {
+	return withFieldLabel(label, Input(css.Class("field"), Type("date"),
+		Attr("aria-label", label), Value(value), OnInput(onInput)))
+}
+
+func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
+	return withFieldLabel(label, Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+		Attr("aria-label", label), Placeholder(placeholder), Value(value), OnInput(onInput)))
+}
+
+// actionBtn is one labelled action button (used by the bulk-action bar) — collapses
+// the repeated Button(class, type, title, [testid], onClick, label) boilerplate.
+func actionBtn(label, title, class, testID string, onClick ui.Handler) ui.Node {
+	args := []any{css.Class(class), Type("button"), Title(title), OnClick(onClick)}
+	if testID != "" {
+		args = append(args, Attr("data-testid", testID))
+	}
+	args = append(args, label)
+	return Button(args...)
+}
+
 // txnToolbarProps carries the data the toolbar tile reads to build its filter
 // option lists, chips, duplicate notice, and screen-reader summary.
 type txnToolbarProps struct {
@@ -35,9 +82,8 @@ type txnToolbarProps struct {
 // txnToolbarWidget is the txn-toolbar tile: the search box, the collapsible filter
 // fields, the active-filter chips, and the primary actions (add, clear, export CSV,
 // and the import / review-duplicates sub-view toggles), plus a select-all control, a
-// duplicate notice, and a screen-reader live summary of the filtered set. It owns
-// every filter-field hook and writes the shared filter / view / selection atoms so
-// the table and bulk tiles react in step.
+// duplicate notice, and a screen-reader live summary of the filtered set. It writes
+// the shared filter / view / selection atoms so the table and bulk tiles react in step.
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseTxFilter()
@@ -77,22 +123,14 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		uistate.PersistTxFilter(cleared)
 	}
 
-	// Filter handlers — UseEvent hooks at stable top-level positions inside this tile.
+	// Text/date/amount inputs fire on every keystroke, so their handlers are hooks at
+	// stable positions here. The <select> filters use SelectInput (which owns its own
+	// change hook), so they just take a plain setter closure below — no hook each.
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
-	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
-	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
-	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
-	onFilterSource := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Source = e.GetValue() }) })
-	onFilterTag := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Tag = e.GetValue() }) })
 	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) })
 	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
-	onFilterCleared := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Cleared = e.GetValue() }) })
-	onFilterCustomKey := ui.UseEvent(func(e ui.Event) {
-		setFilter(func(x *uistate.TxFilter) { x.CustomKey, x.CustomVal = e.GetValue(), "" })
-	})
-	onFilterCustomVal := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = e.GetValue() }) })
 	onFilterCustomValText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = v }) })
 	clearFilters := ui.UseEvent(Prevent(clearAllFilters))
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
@@ -111,20 +149,17 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		downloadBytes("transactions.csv", "text/csv", data)
 	}))
 
-	onShowImport := ui.UseEvent(Prevent(func() {
-		if viewAtom.Get() == uistate.TxnViewImport {
-			viewAtom.Set(uistate.TxnViewLedger)
-		} else {
-			viewAtom.Set(uistate.TxnViewImport)
+	toggleView := func(v string) func() {
+		return func() {
+			if viewAtom.Get() == v {
+				viewAtom.Set(uistate.TxnViewLedger)
+			} else {
+				viewAtom.Set(v)
+			}
 		}
-	}))
-	onShowDuplicates := ui.UseEvent(Prevent(func() {
-		if viewAtom.Get() == uistate.TxnViewDuplicates {
-			viewAtom.Set(uistate.TxnViewLedger)
-		} else {
-			viewAtom.Set(uistate.TxnViewDuplicates)
-		}
-	}))
+	}
+	onShowImport := ui.UseEvent(Prevent(toggleView(uistate.TxnViewImport)))
+	onShowDuplicates := ui.UseEvent(Prevent(toggleView(uistate.TxnViewDuplicates)))
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
 		nm := map[string]bool{}
@@ -148,23 +183,17 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 	}))
 
-	// Filter option lists + chips.
-	filterAccOptions := []ui.Node{Option(Value(""), SelectedIf(f.Account == ""), uistate.T("transactions.allAccounts"))}
-	for _, a := range accounts {
-		filterAccOptions = append(filterAccOptions, Option(Value(a.ID), SelectedIf(f.Account == a.ID), a.Name))
-	}
-	filterCatOptions := []ui.Node{Option(Value(""), SelectedIf(f.Category == ""), uistate.T("transactions.allCategories"))}
-	for _, c := range categories {
-		filterCatOptions = append(filterCatOptions, Option(Value(c.ID), SelectedIf(f.Category == c.ID), c.Name))
-	}
-	filterSourceOptions := []ui.Node{Option(Value(""), SelectedIf(f.Source == ""), uistate.T("transactions.allSources"))}
-	for _, s := range domain.AllTxnSources {
-		filterSourceOptions = append(filterSourceOptions, Option(Value(string(s)), SelectedIf(f.Source == string(s)), s.Label()))
-	}
-	filterMemberOptions := []ui.Node{Option(Value(""), SelectedIf(f.Member == ""), uistate.T("transactions.allMembers"))}
-	for _, m := range members {
-		filterMemberOptions = append(filterMemberOptions, Option(Value(m.ID), SelectedIf(f.Member == m.ID), m.Name))
-	}
+	// Filter option lists, built once from the entity slices via the reusable
+	// OptionsFrom helper (value extractor + label extractor) rather than per-field loops.
+	accOpts := withAllOption(uistate.T("transactions.allAccounts"),
+		uiw.OptionsFrom(accounts, func(a domain.Account) string { return a.ID }, func(a domain.Account) string { return a.Name }, ""))
+	catOpts := withAllOption(uistate.T("transactions.allCategories"),
+		uiw.OptionsFrom(categories, func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
+	memberOpts := withAllOption(uistate.T("transactions.allMembers"),
+		uiw.OptionsFrom(members, func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
+	sourceOpts := withAllOption(uistate.T("transactions.allSources"),
+		uiw.OptionsFrom(domain.AllTxnSources, func(s domain.TxnSource) string { return string(s) }, func(s domain.TxnSource) string { return s.Label() }, ""))
+
 	tagSet := map[string]struct{}{}
 	for _, t := range txns {
 		for _, tg := range t.Tags {
@@ -178,9 +207,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		tagList = append(tagList, tg)
 	}
 	sort.Strings(tagList)
-	filterTagOptions := []ui.Node{Option(Value(""), SelectedIf(f.Tag == ""), uistate.T("transactions.allTags"))}
-	for _, tg := range tagList {
-		filterTagOptions = append(filterTagOptions, Option(Value(tg), SelectedIf(f.Tag == tg), tg))
+	tagOpts := withAllOption(uistate.T("transactions.allTags"),
+		uiw.OptionsFrom(tagList, func(s string) string { return s }, func(s string) string { return s }, ""))
+
+	clearedOpts := []uiw.SelectOption{
+		{Value: "", Label: uistate.T("transactions.clearedAll")},
+		{Value: "no", Label: uistate.T("transactions.notCleared")},
+		{Value: "yes", Label: uistate.T("transactions.cleared")},
 	}
 
 	chipLabel := func(af txnfilter.ActiveFilter) string {
@@ -219,67 +252,57 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		chips = append(chips, uiw.Chip{Key: string(af.Field), Label: chipLabel(af)})
 	}
 
-	// Custom-field filter control (L18): field picker + a value control shaped by type.
+	// Custom-field filter (L18): a field picker + a value control shaped by the field's
+	// type — both built from the same reusable SelectInput.
 	txnDefs := app.CustomFieldDefsFor("transaction")
 	var customFilterNode ui.Node = Fragment()
 	if len(txnDefs) > 0 {
-		keyOpts := []ui.Node{Option(Value(""), SelectedIf(f.CustomKey == ""), uistate.T("transactions.filterCustomNone"))}
 		var selDef *customfields.Def
 		for i := range txnDefs {
-			d := txnDefs[i]
-			keyOpts = append(keyOpts, Option(Value(d.Key), SelectedIf(f.CustomKey == d.Key), d.Label))
-			if d.Key == f.CustomKey {
+			if txnDefs[i].Key == f.CustomKey {
 				selDef = &txnDefs[i]
 			}
 		}
+		keyOpts := withAllOption(uistate.T("transactions.filterCustomNone"),
+			uiw.OptionsFrom(txnDefs, func(d customfields.Def) string { return d.Key }, func(d customfields.Def) string { return d.Label }, ""))
+		keySelect := uiw.SelectInput(uiw.SelectInputProps{
+			Options: keyOpts, Selected: f.CustomKey, AriaLabel: uistate.T("transactions.filterCustomField"),
+			OnChange: func(v string) { setFilter(func(x *uistate.TxFilter) { x.CustomKey, x.CustomVal = v, "" }) },
+		})
 		var valControl ui.Node = Fragment()
 		if selDef != nil {
+			setVal := func(v string) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = v }) }
+			valAria := uistate.T("transactions.filterCustomValue")
 			switch selDef.Type {
 			case customfields.TypeSelect:
-				opts := []ui.Node{Option(Value(""), SelectedIf(f.CustomVal == ""), uistate.T("transactions.filterCustomAny"))}
-				for _, o := range selDef.Options {
-					opts = append(opts, Option(Value(o), SelectedIf(f.CustomVal == o), o))
-				}
-				valControl = Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), OnChange(onFilterCustomVal), opts)
+				opts := withAllOption(uistate.T("transactions.filterCustomAny"),
+					uiw.OptionsFrom(selDef.Options, func(o string) string { return o }, func(o string) string { return o }, ""))
+				valControl = uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: f.CustomVal, AriaLabel: valAria, OnChange: setVal})
 			case customfields.TypeBool:
-				valControl = Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), OnChange(onFilterCustomVal),
-					Option(Value(""), SelectedIf(f.CustomVal == ""), uistate.T("transactions.filterCustomAny")),
-					Option(Value("true"), SelectedIf(f.CustomVal == "true"), uistate.T("common.yes")),
-					Option(Value("false"), SelectedIf(f.CustomVal == "false"), uistate.T("common.no")))
+				opts := []uiw.SelectOption{
+					{Value: "", Label: uistate.T("transactions.filterCustomAny")},
+					{Value: "true", Label: uistate.T("common.yes")},
+					{Value: "false", Label: uistate.T("common.no")},
+				}
+				valControl = uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: f.CustomVal, AriaLabel: valAria, OnChange: setVal})
 			default:
-				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Placeholder(uistate.T("transactions.filterCustomValue")), Value(f.CustomVal), OnInput(onFilterCustomValText))
+				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", valAria), Placeholder(valAria), Value(f.CustomVal), OnInput(onFilterCustomValText))
 			}
 		}
-		customFilterNode = Label(css.Class("field-label"), uistate.T("transactions.filterCustomField"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCustomField")), OnChange(onFilterCustomKey), keyOpts),
-			valControl)
+		customFilterNode = withFieldLabel(uistate.T("transactions.filterCustomField"), Fragment(keySelect, valControl))
 	}
 
 	filtersBody := Div(css.Class("filter-fields"),
-		Label(css.Class("field-label"), uistate.T("transactions.filterAccount"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterAccount")), OnChange(onFilterAcc), filterAccOptions)),
-		Label(css.Class("field-label"), uistate.T("transactions.filterCategory"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterCategory")), OnChange(onFilterCat), filterCatOptions)),
-		Label(css.Class("field-label"), uistate.T("transactions.member"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.member")), OnChange(onFilterMember), filterMemberOptions)),
-		Label(css.Class("field-label"), uistate.T("transactions.filterSource"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterSource")), OnChange(onFilterSource), filterSourceOptions)),
-		If(len(tagList) > 0, Label(css.Class("field-label"), uistate.T("transactions.filterTag"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterTag")), OnChange(onFilterTag), filterTagOptions))),
-		Label(css.Class("field-label"), uistate.T("transactions.fromDate"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), Value(f.From), OnInput(onFilterFrom))),
-		Label(css.Class("field-label"), uistate.T("transactions.toDate"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), Value(f.To), OnInput(onFilterTo))),
-		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMin"),
-			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMin")), Placeholder(uistate.T("transactions.filterAmountMinPh")), Value(f.AmountMin), OnInput(onFilterAmountMin))),
-		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMax"),
-			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMax")), Placeholder(uistate.T("transactions.filterAmountMaxPh")), Value(f.AmountMax), OnInput(onFilterAmountMax))),
-		Label(css.Class("field-label"), uistate.T("transactions.clearedStatus"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
-				Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),
-				Option(Value("no"), SelectedIf(f.Cleared == "no"), uistate.T("transactions.notCleared")),
-				Option(Value("yes"), SelectedIf(f.Cleared == "yes"), uistate.T("transactions.cleared")),
-			)),
+		filterSelect(uistate.T("transactions.filterAccount"), f.Account, accOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Account = v }) }),
+		filterSelect(uistate.T("transactions.filterCategory"), f.Category, catOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Category = v }) }),
+		filterSelect(uistate.T("transactions.member"), f.Member, memberOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Member = v }) }),
+		filterSelect(uistate.T("transactions.filterSource"), f.Source, sourceOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Source = v }) }),
+		If(len(tagList) > 0, filterSelect(uistate.T("transactions.filterTag"), f.Tag, tagOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Tag = v }) })),
+		dateField(uistate.T("transactions.fromDate"), f.From, onFilterFrom),
+		dateField(uistate.T("transactions.toDate"), f.To, onFilterTo),
+		amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
+		amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
+		filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
 		customFilterNode,
 	)
 
@@ -377,8 +400,6 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		selAtom.Set(map[string]bool{})
 		anchorAtom.Set("")
 	}
-
-	onBulkCat := ui.UseEvent(func(e ui.Event) { bulkCatAtom.Set(e.GetValue()) })
 
 	bulkSetCleared := func(val bool) {
 		sel := selAtom.Get()
@@ -482,20 +503,21 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 
 	clearSelection := ui.UseEvent(Prevent(clearSel))
 
-	bulkCatOptions := []ui.Node{Option(Value(""), SelectedIf(bulkCatAtom.Get() == ""), uistate.T("transactions.bulkNoCategory"))}
-	for _, c := range app.Categories() {
-		bulkCatOptions = append(bulkCatOptions, Option(Value(c.ID), SelectedIf(bulkCatAtom.Get() == c.ID), c.Name))
-	}
+	bulkCatOpts := withAllOption(uistate.T("transactions.bulkNoCategory"),
+		uiw.OptionsFrom(app.Categories(), func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
 
 	n := len(selAtom.Get())
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		Span(css.Class("muted"), uistate.T("transactions.selected", plural(n, "transaction"))),
-		Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.categoryToApply")), Title(uistate.T("transactions.categoryToApply")), OnChange(onBulkCat), bulkCatOptions),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.applyCategoryTitle")), OnClick(bulkRecategorize), uistate.T("transactions.applyCategory")),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markClearedTitle")), OnClick(bulkMarkCleared), uistate.T("transactions.markCleared")),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.markUnclearedTitle")), OnClick(bulkMarkUncleared), uistate.T("transactions.markUncleared")),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportSelectedTitle")), Attr("data-testid", "bulk-export-selected"), OnClick(exportSelected), uistate.T("transactions.exportSelected")),
-		Button(css.Class("btn-del"), Type("button"), Title(uistate.T("transactions.deleteSelectedTitle")), OnClick(bulkDelete), uistate.T("transactions.deleteSelected")),
+		uiw.SelectInput(uiw.SelectInputProps{
+			Options: bulkCatOpts, Selected: bulkCatAtom.Get(), AriaLabel: uistate.T("transactions.categoryToApply"),
+			OnChange: func(v string) { bulkCatAtom.Set(v) },
+		}),
+		actionBtn(uistate.T("transactions.applyCategory"), uistate.T("transactions.applyCategoryTitle"), "btn", "", bulkRecategorize),
+		actionBtn(uistate.T("transactions.markCleared"), uistate.T("transactions.markClearedTitle"), "btn", "", bulkMarkCleared),
+		actionBtn(uistate.T("transactions.markUncleared"), uistate.T("transactions.markUnclearedTitle"), "btn", "", bulkMarkUncleared),
+		actionBtn(uistate.T("transactions.exportSelected"), uistate.T("transactions.exportSelectedTitle"), "btn", "bulk-export-selected", exportSelected),
+		actionBtn(uistate.T("transactions.deleteSelected"), uistate.T("transactions.deleteSelectedTitle"), "btn-del", "", bulkDelete),
 		Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
