@@ -294,21 +294,24 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
-	return Div(css.Class("budget"),
+	return Div(ClassStr("goal-card "+goalCardStateClass(pace, complete)),
 		Attr("data-testid", "goal-row-"+g.ID),
-		Div(css.Class("budget-head"),
-			Span(css.Class("row-desc"), g.Name),
+		// Header: the goal name gets its own line, with pace / monthly / fund chips.
+		Div(css.Class("goal-card-head"),
+			Span(css.Class("goal-card-title"), g.Name),
 			paceBadge(pace),
 			monthlyChip,
-			// C189: sinking-fund monthly set-aside chip (shown instead of / alongside monthlyChip).
 			fundChip,
-			Span(css.Class("budget-amount"), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
-			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
-			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
-			archiveBtn,
-			Button(css.Class("btn-del", "btn-del-hover"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")), Div(ClassStr("bar-fill "+paceBarClass(pace)), Attr("style", barFillStyle(pct)))),
+		// The card's "loader": a saved-of-target progress bar with the amount (left) and
+		// percent (right) rendered inside it, tinted by pace.
+		Div(css.Class("goal-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")),
+			Div(ClassStr("bar-fill "+paceBarClass(pace)), Attr("style", barFillStyle(pct))),
+			Div(css.Class("goal-card-loader-figs"),
+				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(g.CurrentAmount)), " / "+fmtMoney(g.TargetAmount)),
+				Span(css.Class("budget-pct"), fmt.Sprintf("%d%%", pct)),
+			),
+		),
 		Div(css.Class("budget-sub goal-sub"),
 			Span(subPrimary),
 			If(subSecondary != "", Span(css.Class("goal-sub-dim"), " · "+subSecondary)),
@@ -316,9 +319,31 @@ func GoalRow(props goalRowProps) ui.Node {
 		overfundNote,
 		whatNext,
 		linkedLine,
-		// C192: linked category sub-line for sinking funds.
 		catLine,
+		// Footer: the row actions, pinned to the bottom of the card.
+		Div(css.Class("goal-card-actions"),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(contribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))),
+			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
+			archiveBtn,
+			Button(css.Class("btn-del", "btn-del-hover"), Type("button"), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		),
 		contribForm,
 		editForm,
 	)
+}
+
+// goalCardStateClass tints a goal card by its pace: a green stripe on-track, amber when
+// due soon / in the final stretch, red when overdue, a calm "done" when complete.
+func goalCardStateClass(p goalsvc.Pace, complete bool) string {
+	if complete {
+		return "is-done"
+	}
+	switch p {
+	case goalsvc.PaceOverdue:
+		return "is-overdue"
+	case goalsvc.PaceDueSoon, goalsvc.PaceFinalStretch:
+		return "is-soon"
+	default:
+		return "is-ontrack"
+	}
 }

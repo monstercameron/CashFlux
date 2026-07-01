@@ -4578,6 +4578,120 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
+	// contained card with a saved-of-target "loader" bar holding the amount + percent,
+	// a pace-tinted accent stripe, and footer actions.
+	rule(".bento-goals .goal-list",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fill, minmax(340px, 1fr))"),
+		gap("0.75rem"),
+	)
+	rule(".bento-goals .goal-card",
+		position("relative"),
+		display("flex"),
+		flexDirection("column"),
+		minHeight("196px"),
+		padding("0.9rem 1.15rem 0.85rem"),
+		border("1px solid var(--border)"),
+		borderRadius("14px"),
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		boxShadow("inset 5px 0 0 var(--accent)"),
+		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease"),
+	)
+	rule(".bento-goals .goal-card:hover",
+		borderColor("color-mix(in srgb, var(--accent) 34%, var(--border))"),
+		background("color-mix(in srgb, var(--bg-elev) 85%, transparent)"),
+		transform("translateY(-1px)"),
+	)
+	rule(".bento-goals .goal-card.is-soon",
+		boxShadow("inset 5px 0 0 #f59e0b"),
+	)
+	rule(".bento-goals .goal-card.is-overdue",
+		boxShadow("inset 5px 0 0 var(--danger)"),
+		background("color-mix(in srgb, var(--danger) 10%, var(--bg-elev))"),
+	)
+	rule(".bento-goals .goal-card.is-done",
+		boxShadow("inset 5px 0 0 color-mix(in srgb, var(--accent) 55%, var(--text-dim))"),
+	)
+	rule(".bento-goals .goal-card-head",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.45rem"),
+		marginBottom("0.1rem"),
+	)
+	rule(".bento-goals .goal-card-title",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontWeight("700"),
+		fontSize("1.05rem"),
+		color("var(--fg, var(--text))"),
+	)
+	// The loader: a taller progress bar holding the amount (left) + percent (right).
+	rule(".bento-goals .goal-card-loader",
+		position("relative"),
+		overflow("hidden"),
+		height("42px"),
+		margin("0.55rem 0 0.6rem"),
+		borderRadius("10px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".bento-goals .goal-card-loader .bar-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		bottom("0"),
+		height("100%"),
+		borderRadius("0"),
+		boxShadow("none"),
+		zIndex("0"),
+	)
+	rule(".bento-goals .goal-card-loader-figs",
+		position("relative"),
+		zIndex("1"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		height("100%"),
+		padding("0 0.75rem"),
+		gap("0.5rem"),
+	)
+	rule(".bento-goals .goal-card-loader .budget-amount",
+		fontVariantNumeric("tabular-nums"),
+		fontSize("0.92rem"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
+	)
+	rule(".bento-goals .goal-card-loader .budget-amount .budget-spent",
+		color("var(--fg, var(--text))"),
+		fontWeight("700"),
+	)
+	rule(".bento-goals .goal-card-loader .budget-pct",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("700"),
+		fontSize("0.8rem"),
+		color("color-mix(in srgb, var(--accent) 40%, #ffffff)"),
+		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
+		whiteSpace("nowrap"),
+	)
+	// Footer actions pinned to the card bottom with a hairline separator.
+	rule(".bento-goals .goal-card-actions",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.35rem"),
+		marginTop("auto"),
+		paddingTop("0.7rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 70%, transparent)"),
+	)
+	rule(".bento-goals .goal-sub",
+		marginTop("0"),
+	)
 	// --- /budgets visual polish. Scoped to .bento-budgets so the shared .budget /
 	// .bar / .budget-sub styles used on other screens (allocate, goals, reports) stay
 	// untouched. Each budget becomes an elevated meter-card with a state-colored left
