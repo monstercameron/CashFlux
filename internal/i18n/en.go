@@ -533,6 +533,7 @@ var english = Catalog{
 	"budgets.addFunds":             "Add funds",
 	"budgets.topupHint":            "Increase %s (currently %s) by:",
 	"budgets.moreActions":          "More actions",
+	"budgets.reviewTitle":          "Review this category's transactions",
 	"budgets.editAction":           "Edit budget",
 	"budgets.deleteAction":         "Delete budget",
 	"budgets.formulaTitle":         "Budget metrics",

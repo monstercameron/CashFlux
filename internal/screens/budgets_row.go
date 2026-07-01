@@ -267,6 +267,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// menu (like /accounts), so the row stays uncluttered and a misclick can't
 			// delete a budget.
 			Div(css.Class("budget-actions"),
+				// Quick review: jump to /transactions filtered to this budget's category
+				// (the category title is also a drill link, but a labelled button is
+				// discoverable). Hidden when the budget has no category.
+				If(s.Budget.CategoryID != "", Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drill),
+					uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
 				coverBtn,
 				topupBtn,
 				Div(css.Class("add-wrap"), Attr("id", menuID),

@@ -99,6 +99,12 @@ try {
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(300);
 
+  // B12 — the "Transactions" button jumps to /transactions filtered by the category.
+  check("B12 row has a Transactions review button", await page.evaluate(() => !!document.querySelector('.bento-budgets .budget-actions [data-testid^="budget-view-txns-"]')));
+  await page.locator('.bento-budgets .budget-actions [data-testid^="budget-view-txns-"]').first().click().catch(() => {});
+  await page.waitForTimeout(800);
+  check("B12b clicking it navigates to /transactions", await page.evaluate(() => location.pathname.endsWith("/transactions")));
+
   const pass = results.filter(r => r.ok).length, fail = results.length - pass;
   console.log("\n════════════════════════════════════════════");
   console.log(`RESULT: ${pass} PASS · ${fail} FAIL`);
