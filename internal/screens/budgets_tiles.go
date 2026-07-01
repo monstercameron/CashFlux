@@ -58,8 +58,14 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	}
 	smartSettings := uistate.LoadSmartSettings()
 
+	// "Spent" is only red once there's actually spending — red on $0.00 reads as an
+	// error rather than a healthy "nothing spent yet" (design critique).
+	spentTone := ""
+	if v.TotalSpent > 0 {
+		spentTone = "neg"
+	}
 	statGrid := Div(css.Class("stat-grid"),
-		stat(uistate.T("budgets.spent"), fmtMoney(money.New(v.TotalSpent, v.Base)), "neg"),
+		stat(uistate.T("budgets.spent"), fmtMoney(money.New(v.TotalSpent, v.Base)), spentTone),
 		stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(v.TotalLimit, v.Base)), ""),
 		// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
 		Div(css.Class("stat"),
@@ -237,7 +243,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
 			Attr("data-testid", "budgets-toggle-formulas"), Title(uistate.T("budgets.formulaTitle")),
 			OnClick(onToggleFormulas), Text(formulasLabel)),
-		If(hasBudgets, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		// "+ Add budget" is the page's primary action — give it a solid accent treatment
+		// so it clearly outranks the ghost method/template/metrics controls (critique #5).
+		If(hasBudgets, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("budgets.addBudget")))),

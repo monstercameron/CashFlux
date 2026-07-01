@@ -4336,36 +4336,36 @@ func registerGenerated() {
 	// no longer vanish into the background), and a tinted percent chip. ---
 	rule(".bento-budgets .budget",
 		position("relative"),
-		padding("0.95rem 1.1rem"),
-		margin("0.6rem 0"),
+		padding("0.85rem 1.15rem 0.95rem"),
+		margin("0.8rem 0"),
 		border("1px solid var(--border)"),
 		borderRadius("14px"),
-		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
-		boxShadow("inset 3px 0 0 var(--accent)"),
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		boxShadow("inset 5px 0 0 var(--accent)"),
 		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease"),
 	)
 	rule(".bento-budgets .budget:first-child",
 		borderTop("1px solid var(--border)"),
 	)
 	rule(".bento-budgets .budget:hover",
-		borderColor("color-mix(in srgb, var(--accent) 32%, var(--border))"),
-		background("color-mix(in srgb, var(--bg-elev) 82%, transparent)"),
+		borderColor("color-mix(in srgb, var(--accent) 34%, var(--border))"),
+		background("color-mix(in srgb, var(--bg-elev) 85%, transparent)"),
 		transform("translateY(-1px)"),
-		boxShadow("inset 3px 0 0 var(--accent), 0 8px 24px -14px rgba(0,0,0,0.7)"),
+		boxShadow("inset 5px 0 0 var(--accent), 0 10px 28px -16px rgba(0,0,0,0.75)"),
 	)
 	rule(".bento-budgets .budget.is-near, .bento-budgets .budget.is-risk",
-		boxShadow("inset 3px 0 0 #f59e0b"),
+		boxShadow("inset 5px 0 0 #f59e0b"),
 	)
 	rule(".bento-budgets .budget.is-near:hover, .bento-budgets .budget.is-risk:hover",
-		boxShadow("inset 3px 0 0 #f59e0b, 0 8px 24px -14px rgba(0,0,0,0.7)"),
+		boxShadow("inset 5px 0 0 #f59e0b, 0 10px 28px -16px rgba(0,0,0,0.75)"),
 	)
 	rule(".bento-budgets .budget.is-over",
-		background("color-mix(in srgb, var(--danger) 7%, var(--bg-elev))"),
-		boxShadow("inset 3px 0 0 var(--danger)"),
+		background("color-mix(in srgb, var(--danger) 11%, var(--bg-elev))"),
+		boxShadow("inset 5px 0 0 var(--danger)"),
 	)
 	rule(".bento-budgets .budget.is-over:hover",
-		borderColor("color-mix(in srgb, var(--danger) 34%, var(--border))"),
-		boxShadow("inset 3px 0 0 var(--danger), 0 8px 24px -14px rgba(0,0,0,0.7)"),
+		borderColor("color-mix(in srgb, var(--danger) 36%, var(--border))"),
+		boxShadow("inset 5px 0 0 var(--danger), 0 10px 28px -16px rgba(0,0,0,0.75)"),
 	)
 	rule(".bento-budgets .budget-head",
 		display("flex"),
@@ -4373,39 +4373,56 @@ func registerGenerated() {
 		justifyContent("space-between"),
 		flexWrap("nowrap"),
 		gap("0.75rem"),
-		marginBottom("0.1rem"),
+		marginBottom("0.55rem"),
 	)
 	rule(".bento-budgets .budget-head-main",
 		display("flex"),
-		alignItems("center"),
-		gap("0.6rem"),
+		alignItems("baseline"),
+		gap("0.55rem"),
 		minWidth("0"),
 		flex("1 1 auto"),
 	)
+	// Actions recede at rest so the card reads clean, and come forward on hover/focus.
 	rule(".bento-budgets .budget-actions",
 		display("flex"),
 		alignItems("center"),
-		gap("0.4rem"),
+		gap("0.35rem"),
 		flexShrink("0"),
 		whiteSpace("nowrap"),
+		opacity("0.4"),
+		transition("opacity 0.15s ease"),
+	)
+	rule(".bento-budgets .budget:hover .budget-actions, .bento-budgets .budget:focus-within .budget-actions",
+		opacity("1"),
 	)
 	rule(".bento-budgets .budget-actions .btn, .bento-budgets .budget-actions .btn-del",
 		flexShrink("0"),
 		whiteSpace("nowrap"),
 	)
+	// Name-first hierarchy: the category name is the card title.
 	rule(".bento-budgets .budget .row-desc",
 		flex("1 1 auto"),
 		minWidth("0"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
-		fontWeight("600"),
-		fontSize("1rem"),
+		fontWeight("700"),
+		fontSize("1.05rem"),
 		color("var(--fg, var(--text))"),
 	)
+	// The spent/limit amount is secondary context: muted, tabular, pushed right of the
+	// title; only the spent figure carries foreground weight.
 	rule(".bento-budgets .budget-head-main .budget-amount",
 		flexShrink("0"),
 		marginLeft("auto"),
+		fontVariantNumeric("tabular-nums"),
+		fontSize("0.9rem"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+	)
+	rule(".bento-budgets .budget-amount .budget-spent",
+		color("var(--fg, var(--text))"),
+		fontWeight("600"),
 	)
 	rule(".bento-budgets .budget-drill",
 		textDecoration("none"),
@@ -4413,48 +4430,63 @@ func registerGenerated() {
 	rule(".bento-budgets .budget-drill:hover",
 		color("var(--accent)"),
 	)
-	rule(".bento-budgets .budget-amount",
-		fontWeight("600"),
-		fontSize("0.95rem"),
-	)
+	// Percent chip: brighter, legible text on a stronger health tint (the old dark-green
+	// on dark-green failed at a glance).
 	rule(".bento-budgets .budget-pct",
 		display("inline-flex"),
 		alignItems("center"),
 		fontVariantNumeric("tabular-nums"),
 		fontWeight("700"),
-		fontSize("0.76rem"),
+		fontSize("0.75rem"),
 		letterSpacing("0.01em"),
-		padding("0.12rem 0.5rem"),
+		padding("0.14rem 0.55rem"),
 		borderRadius("999px"),
-		color("var(--accent)"),
-		background("color-mix(in srgb, var(--accent) 15%, transparent)"),
+		flexShrink("0"),
+		color("color-mix(in srgb, var(--accent) 45%, #ffffff)"),
+		background("color-mix(in srgb, var(--accent) 26%, transparent)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".bento-budgets .budget.is-near .budget-pct, .bento-budgets .budget.is-risk .budget-pct",
-		color("#f59e0b"),
-		background("color-mix(in srgb, #f59e0b 16%, transparent)"),
+		color("#fbbf24"),
+		background("color-mix(in srgb, #f59e0b 26%, transparent)"),
 	)
 	rule(".bento-budgets .budget.is-over .budget-pct",
-		color("var(--danger)"),
-		background("color-mix(in srgb, var(--danger) 15%, transparent)"),
+		color("color-mix(in srgb, var(--danger) 42%, #ffffff)"),
+		background("color-mix(in srgb, var(--danger) 26%, transparent)"),
 	)
+	// The progress bar is the card's centerpiece: tall, rounded, over a clearly visible
+	// track so even a 0%/low budget reads at a glance.
 	rule(".bento-budgets .bar",
-		height("10px"),
-		background("color-mix(in srgb, var(--fg, #ffffff) 10%, transparent)"),
+		height("16px"),
+		background("color-mix(in srgb, var(--fg, #ffffff) 9%, transparent)"),
 		border("0"),
-		margin("0.7rem 0 0.55rem"),
+		borderRadius("8px"),
+		margin("0 0 0.5rem"),
 	)
 	rule(".bento-budgets .bar-fill",
-		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, #000000), var(--accent))"),
-		boxShadow("0 0 10px -1px color-mix(in srgb, var(--accent) 55%, transparent)"),
+		borderRadius("8px"),
+		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #000000), var(--accent))"),
+		boxShadow("0 0 12px -1px color-mix(in srgb, var(--accent) 55%, transparent)"),
 	)
 	rule(".bento-budgets .bar-fill.near",
 		background("linear-gradient(90deg, #d97706, #f59e0b)"),
-		boxShadow("0 0 10px -1px color-mix(in srgb, #f59e0b 50%, transparent)"),
+		boxShadow("0 0 12px -1px color-mix(in srgb, #f59e0b 50%, transparent)"),
 	)
 	rule(".bento-budgets .bar-fill.over",
-		background("linear-gradient(90deg, color-mix(in srgb, var(--danger) 78%, #000000), var(--danger))"),
-		boxShadow("0 0 10px -1px color-mix(in srgb, var(--danger) 55%, transparent)"),
+		background("linear-gradient(90deg, color-mix(in srgb, var(--danger) 70%, #000000), var(--danger))"),
+		boxShadow("0 0 12px -1px color-mix(in srgb, var(--danger) 55%, transparent)"),
+	)
+	// A single quiet metadata line below the bar (status · remaining · period); the
+	// redundant "% used" line is gone (the bar + chip carry that).
+	rule(".bento-budgets .budget > .budget-sub:first-of-type",
+		fontSize("0.84rem"),
+		color("var(--text-dim)"),
+		marginTop("0"),
+	)
+	// Make "Left" the dominant summary figure — it's the number that matters most, so
+	// it outsizes Spent/Budgeted (critique #4).
+	rule(".bento-budgets .stat-value.is-hero",
+		fontSize("2.6rem"),
 	)
 	rule(".bento-ledger .txn-table",
 		tableLayout("fixed"),

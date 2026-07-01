@@ -377,7 +377,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
 						title),
 					Span(css.Class("row-desc"), title)),
-				Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
+				// Spent carries foreground weight; the "/ limit" reads as muted context
+				// (the name is the card's title, the amount is secondary — see styles).
+				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(s.Spent)), " / "+fmtMoney(limit)),
 				// A compact percent-used chip, tinted by health state — an at-a-glance focal
 				// figure that complements the bar (capped display, e.g. "112%" when over).
 				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
@@ -392,13 +394,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		// Sub-line split (G4 §8): the primary line carries the at-a-glance signal —
-		// health status + money left; the period and percent drop to a dimmer
-		// secondary line so they read as low-signal context, not equal weight.
-		// C124: budgetRemainPhrase yields "$50.00 left" or "$50.00 over" (no accounting
-		// parens), so the rowPrimary template carries only the label + the phrase.
-		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))),
-		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
+		// One quiet metadata line beneath the bar: health status · money left · period.
+		// The old separate "Period · X% used" line is dropped — the bar and the percent
+		// chip already carry the "% used" signal, so it was redundant clutter (design
+		// critique). C124: budgetRemainPhrase yields "$50.00 left"/"$50.00 over" (no
+		// accounting parens).
+		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period)),
 		ownerLine,
 		methodLine,
 		customLine,
