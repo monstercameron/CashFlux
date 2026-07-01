@@ -47,13 +47,15 @@ func AddHost() uic.Node {
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
 		})
 	case "budget":
+		// NoFooter: the form owns its own Cancel + Add budget bar (pinned to the bottom),
+		// so there's no separate Close footer and no dead space above it.
 		return uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:     uistate.T("budgets.add"),
-			Width:     "560px",
-			Height:    "820px",
-			CloseOnly: true,
-			OnClose:   close,
-			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
+			Title:    uistate.T("budgets.add"),
+			Width:    "540px",
+			Height:   "700px",
+			NoFooter: true,
+			OnClose:  close,
+			Back:     uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
 		})
 	case "task":
 		return uiw.FlipPanel(uiw.FlipPanelProps{

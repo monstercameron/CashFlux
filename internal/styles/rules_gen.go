@@ -2584,6 +2584,63 @@ func registerGenerated() {
 		gap("0.6rem"),
 		alignItems("end"),
 	)
+	// Add-budget modal: a flex-column shell so the fields sit at the top and the action
+	// bar pins to the bottom (breathing room above the CTA, never dead space below it).
+	rule(".budget-add-shell",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.9rem"),
+		height("100%"),
+		minHeight("0"),
+	)
+	// Two-column field grid (wider cells than the default 150px min, so selects don't
+	// truncate and the form reads calmly); identity fields + rollover span the full width.
+	rule(".budget-add-grid",
+		gridTemplateColumns("repeat(auto-fit, minmax(224px, 1fr))"),
+		gap("0.7rem 0.9rem"),
+		alignItems("end"),
+	)
+	rule(".budget-add-grid .ba-full",
+		prop("grid-column", "1 / -1"),
+	)
+	// Rollover: a calm full-width toggle line, not a boxed field.
+	rule(".budget-add-grid .ba-check",
+		display("flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		flexWrap("nowrap"),
+		padding("0.35rem 0.1rem"),
+		fontSize("0.9rem"),
+		color("var(--text)"),
+		prop("cursor", "pointer"),
+	)
+	// Action bar pinned to the modal's bottom: a quiet Cancel + a prominent primary. Sticky
+	// so it stays visible (with a solid backing) even if a field-heavy form has to scroll;
+	// margin-top:auto pins it to the bottom when the form is short.
+	rule(".budget-add-actions",
+		display("flex"),
+		justifyContent("flex-end"),
+		alignItems("center"),
+		gap("0.6rem"),
+		marginTop("auto"),
+		position("sticky"),
+		bottom("-1.5rem"),
+		paddingTop("0.9rem"),
+		paddingBottom("1.5rem"),
+		marginBottom("-1.5rem"),
+		background("var(--bg-panel, #121214)"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".budget-add-actions .ba-submit",
+		minHeight("46px"),
+		padding("0 1.5rem"),
+		fontWeight("600"),
+		fontSize("0.95rem"),
+		minWidth("150px"),
+	)
+	rule(".budget-add-actions .btn",
+		minHeight("46px"),
+	)
 	rule(".field",
 		width("100%"),
 		padding("0.5rem 0.6rem"),

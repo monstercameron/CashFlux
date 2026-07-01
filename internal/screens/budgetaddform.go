@@ -16,7 +16,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -87,6 +86,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
 	ui.UseEvent(func(e ui.Event) { period.Set(e.GetValue()) })
 	onRollover := ui.UseEvent(func() { rollover.Set(!rollover.Get()) })
+	cancel := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
 
 	budgetDefs := app.CustomFieldDefsFor("budget")
 	onCustom := func(key, value string) {
@@ -189,72 +193,74 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	suggestRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	suggestion, _ := budgeting.SuggestLimit(catID.Get(), app.Transactions(), time.Now(), 6, suggestRates)
 
-	return Form(css.Class("form-grid"), Attr("data-testid", "budget-add-form"), OnSubmit(add),
-		// Name + Variable name stack full-width at the top (they're the budget's identity),
-		// so the var-name field reads directly under the name rather than in the grid's
-		// second column.
-		Div(Attr("style", "grid-column:1 / -1"),
-			labeledField(uistate.T("common.name"),
-				Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
-		// Optional explicit variable name for formulas/widgets, with a live chip showing
-		// the exact variable generated + a collision warning against other budgets.
-		Div(Attr("style", "grid-column:1 / -1"),
-			labeledField(uistate.T("budgets.varNameLabel"),
-				entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
-		labeledField(uistate.T("budgets.categoryLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   catOptions,
-				Selected:  catID.Get(),
-				OnChange:  func(v string) { catID.Set(v) },
-				AriaLabel: uistate.T("budgets.categoryLabel"),
-			})),
-		// When creating a new category, let the user name it (defaults to the budget
-		// name). Assigning a transaction to this category is how it counts to the budget.
-		If(catID.Get() == budgetNewCatSentinel, labeledField(uistate.T("budgets.newCategoryName"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
-				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName)))),
-		// C30: hide the owner picker until members exist (it only offers "Everyone"
-		// otherwise — meaningless in a 0-member household; owner stays shared).
-		If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   ownerOptions,
-				Selected:  owner.Get(),
-				OnChange:  func(v string) { owner.Set(v) },
-				AriaLabel: uistate.T("common.owner"),
-			}))),
-		labeledField(uistate.T("budgets.period"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   periodOptions(period.Get()),
-				Selected:  period.Get(),
-				OnChange:  func(v string) { period.Set(v) },
-				AriaLabel: uistate.T("budgets.period"),
-			})),
-		labeledField(uistate.T("budgets.limitLabel"),
-			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
-		// C117: keep the checkbox on the same line as its label at narrow widths
-		// (≤1280px) — flex + nowrap, shrink-0 on the box (matches budgets_row.go).
-		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
-			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
-			Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
+	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), OnSubmit(add),
+		Div(css.Class("form-grid", "budget-add-grid"),
+			// Name + Variable name (the budget's identity) stack full-width at the top, so
+			// the var-name field reads directly under the name rather than in a grid column.
+			Div(css.Class("ba-full"),
+				labeledField(uistate.T("common.name"),
+					Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
+			Div(css.Class("ba-full"),
+				labeledField(uistate.T("budgets.varNameLabel"),
+					entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
+			// Category is full-width so its long "Create a new category" option isn't
+			// truncated, and the new-category name field sits directly beneath it.
+			Div(css.Class("ba-full"),
+				labeledField(uistate.T("budgets.categoryLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   catOptions,
+						Selected:  catID.Get(),
+						OnChange:  func(v string) { catID.Set(v) },
+						AriaLabel: uistate.T("budgets.categoryLabel"),
+					}))),
+			If(catID.Get() == budgetNewCatSentinel, Div(css.Class("ba-full"),
+				labeledField(uistate.T("budgets.newCategoryName"),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
+						Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName))))),
+			// Owner / Period / Limit / Method pair up two-per-row in the grid. Owner is
+			// hidden until members exist (it only offers "Everyone" otherwise).
+			If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   ownerOptions,
+					Selected:  owner.Get(),
+					OnChange:  func(v string) { owner.Set(v) },
+					AriaLabel: uistate.T("common.owner"),
+				}))),
+			labeledField(uistate.T("budgets.period"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   periodOptions(period.Get()),
+					Selected:  period.Get(),
+					OnChange:  func(v string) { period.Set(v) },
+					AriaLabel: uistate.T("budgets.period"),
+				})),
+			labeledField(uistate.T("budgets.limitLabel"),
+				Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
+			labeledField(uistate.T("budgets.methodLabel"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   budgetMethodOptions(methodology.Get()),
+					Selected:  methodology.Get(),
+					OnChange:  func(v string) { methodology.Set(v) },
+					AriaLabel: uistate.T("budgets.methodLabel"),
+				})),
+			// Rollover gets its own full-width row so the label never wraps.
+			Label(css.Class("ba-full", "ba-check"),
+				Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
+				Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
+			),
+			MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+			}),
 		),
-		// C118: per-budget methodology override. "Use global default" inherits the
-		// household method; otherwise this budget uses its own method regardless of
-		// the global picker.
-		labeledField(uistate.T("budgets.methodLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   budgetMethodOptions(methodology.Get()),
-				Selected:  methodology.Get(),
-				OnChange:  func(v string) { methodology.Set(v) },
-				AriaLabel: uistate.T("budgets.methodLabel"),
-			})),
-		MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-		}),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.add")),
 		If(suggestion > 0, Div(css.Class("suggest-row"),
 			Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
 			Button(css.Class("btn"), Type("button"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
 		)),
 		errText("budget-err", errMsg.Get()),
+		// Action bar pinned to the bottom of the modal: a quiet Cancel and the primary,
+		// full-width-feeling "Add budget".
+		Div(css.Class("budget-add-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), uistate.T("budgets.add")),
+		),
 	)
 }
