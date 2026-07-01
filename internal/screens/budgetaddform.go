@@ -210,18 +210,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
 				Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...))),
-		// Optional explicit variable name for formulas/widgets, with a live preview + a
-		// collision warning against other budgets' handles.
+		// Optional explicit variable name for formulas/widgets, with a live chip showing
+		// the exact variable generated + a collision warning against other budgets.
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("budgets.varNameLabel"),
-				Div(css.Class("cover-amount-block"),
-					Input(css.Class("field"), Attr("id", "budget-add-varname"), Type("text"),
-						Placeholder(budgetVarPlaceholder(name.Get())), Value(varName.Get()), OnInput(onVarName)),
-					Span(css.Class("cover-fx-hint"), uistate.T("budgets.varNameHint", budgetVarPreview(varName.Get(), name.Get()))),
-					If(budgetVarCollision(app, "", varName.Get(), name.Get()) != "",
-						Span(css.Class("cover-fx-err"), Attr("data-testid", "budget-add-varname-warn"),
-							budgetVarCollision(app, "", varName.Get(), name.Get()))),
-				))),
+				budgetVarField(app, "", "budget-add-varname", "budget-add-varname-warn", varName.Get(), name.Get(), onVarName))),
 		labeledField(uistate.T("budgets.categoryLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   catOptions,

@@ -571,14 +571,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		// Variable name: an optional explicit handle for this budget in formulas/widgets.
 		// Empty falls back to the display name; the resolved variable is previewed live.
 		labeledField(uistate.T("budgets.varNameLabel"),
-			Div(css.Class("cover-amount-block"),
-				Input(css.Class("field"), Attr("id", "budget-edit-varname"), Type("text"),
-					Placeholder(budgetVarPlaceholder(nameS.Get())), Value(varNameS.Get()), OnInput(onVarName)),
-				Span(css.Class("cover-fx-hint"), uistate.T("budgets.varNameHint", budgetVarPreview(varNameS.Get(), nameS.Get()))),
-				If(budgetVarCollision(app, props.BudgetID, varNameS.Get(), nameS.Get()) != "",
-					Span(css.Class("cover-fx-err"), Attr("data-testid", "budget-varname-warn"),
-						budgetVarCollision(app, props.BudgetID, varNameS.Get(), nameS.Get()))),
-			)),
+			budgetVarField(app, props.BudgetID, "budget-edit-varname", "budget-varname-warn", varNameS.Get(), nameS.Get(), onVarName)),
 		labeledField(uistate.T("budgets.limitLabel"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
 		labeledField(uistate.T("budgets.period"),
@@ -855,9 +848,10 @@ func budgetVarPlaceholder(name string) string {
 	return uistate.T("budgets.varNamePlaceholder")
 }
 
-// budgetVarPreview renders an example of the resolved variable a budget will expose,
-// e.g. "budget_rent_remaining" — using the explicit var name when set, else the name.
-func budgetVarPreview(varName, name string) string {
+// budgetVarBase is the base handle a budget exposes ("budget_<slug>"), from the explicit
+// var name when set else the display name. Shown live as a chip so the user can see
+// exactly what variable their budget generates.
+func budgetVarBase(varName, name string) string {
 	src := varName
 	if src == "" {
 		src = name
@@ -866,7 +860,25 @@ func budgetVarPreview(varName, name string) string {
 	if slug == "" {
 		slug = "…"
 	}
-	return "budget_" + slug + "_remaining"
+	return "budget_" + slug
+}
+
+// budgetVarField renders the shared "Variable name" editor: the input, a live chip that
+// shows the exact variable the budget generates (budget_<slug>), the fields it exposes,
+// and a collision warning. inputID/warnTestID differ between the add and edit forms.
+func budgetVarField(app *appstate.App, selfID, inputID, warnTestID string, varName, name string, onInput ui.Handler) ui.Node {
+	base := budgetVarBase(varName, name)
+	warn := budgetVarCollision(app, selfID, varName, name)
+	return Div(css.Class("budget-var-block"),
+		Input(css.Class("field"), Attr("id", inputID), Type("text"),
+			Placeholder(budgetVarPlaceholder(name)), Value(varName), OnInput(onInput)),
+		Div(css.Class("budget-var-preview"),
+			Span(css.Class("budget-var-preview-lead"), uistate.T("budgets.varNameGenerates")),
+			Span(ClassStr("budget-var-chip"), base+"_remaining"),
+			Span(css.Class("budget-var-preview-fields"), uistate.T("budgets.varNameFields")),
+		),
+		If(warn != "", Span(css.Class("cover-fx-err"), Attr("data-testid", warnTestID), warn)),
+	)
 }
 
 // budgetVarCollision returns a warning when the resolved variable slug for (varName else

@@ -527,6 +527,8 @@ var english = Catalog{
 	"budgets.varNameLabel":           "Variable name (optional)",
 	"budgets.varNamePlaceholder":     "budget name",
 	"budgets.varNameHint":            "Use this budget in formulas & widgets as %s. Leave blank to derive it from the name.",
+	"budgets.varNameGenerates":       "Generates",
+	"budgets.varNameFields":          "· also _limit _spent _over _percent",
 	"budgets.varNameTaken":           "That variable name is already used by \"%s\". Pick another.",
 	"budgets.period":                 "Period",
 	"budgets.categoryLabel":          "Category",
