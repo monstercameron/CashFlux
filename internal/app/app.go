@@ -98,6 +98,8 @@ func Run() {
 	// when a remembered on-device key is available while locked), so the lock screen
 	// shows a fresh AI quote next time rather than the static fallback.
 	refreshDailyLockQuote()
+	// Re-apply any standing recurring budget covers whose period has rolled over.
+	applyRecurringCovers()
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.

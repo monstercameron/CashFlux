@@ -301,7 +301,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
-					OnDelete: cbs.OnDelete, OnDrill: viewTransactions,
+					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 				})
 			},
 		)

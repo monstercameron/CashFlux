@@ -7,6 +7,7 @@ package screens
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -117,6 +118,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{}) // sourceID → checked
 	coverWtS := ui.UseState(map[string]int{})   // sourceID → ratio weight (default 1)
+	recurringS := ui.UseState(b.RecurringCover != nil)
 	errS := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
@@ -125,6 +127,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
 	onCoverAmt := ui.UseEvent(func(v string) { coverAmtS.Set(v) })
 	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
+	onToggleRecurring := ui.UseEvent(func() { recurringS.Set(!recurringS.Get()) })
 	// Plain funcs (not hooks) passed down to each per-source row component, so the
 	// checkbox/weight On* handlers live in the row, not in this loop.
 	onToggleSrc := func(sid string) {
@@ -191,6 +194,31 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				errS.Set(err.Error())
 				return
 			}
+		}
+		// Save / clear the standing recurring arrangement per the toggle (re-fetch the
+		// destination since CoverBudget just mutated the budget set).
+		start, _ := budgeting.PeriodRange(b.Period, time.Now(), pr.WeekStartWeekday())
+		for _, nb := range app.Budgets() {
+			if nb.ID != props.BudgetID {
+				continue
+			}
+			if recurringS.Get() {
+				var srcs []domain.CoverShare
+				for _, sc := range coverSrcs {
+					if coverSelS.Get()[sc.ID] {
+						w := coverWtS.Get()[sc.ID]
+						if w <= 0 {
+							w = 1
+						}
+						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w})
+					}
+				}
+				nb.RecurringCover = &domain.RecurringCover{AmountMinor: amt, Sources: srcs, LastAppliedPeriod: start.Format("2006-01-02")}
+			} else {
+				nb.RecurringCover = nil
+			}
+			_ = app.PutBudget(nb)
+			break
 		}
 		uistate.BumpDataRevision()
 		done()
@@ -308,19 +336,29 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				)),
 			// Multi-source: check the budgets to pull from (split equally by default);
 			// the ratio input per source lets the split be unequal.
-			Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
+			Div(
+				Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
+				Span(css.Class("cover-spread-sub"), uistate.T("budgets.coverSpreadSub")),
+			),
 			Div(css.Class("cover-sources"),
 				MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
-					shareStr := ""
+					shareStr, over := "", false
 					if sh, ok := shares[sc.ID]; ok && sh > 0 {
 						shareStr = fmtMoney(money.New(sh, cur))
+						over = sh >= sc.LimitMinor // a share this source can't fully give
 					}
 					return ui.CreateElement(coverSourceRow, coverSourceRowProps{
 						ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
 						Selected: coverSelS.Get()[sc.ID], Weight: coverWtS.Get()[sc.ID], ShareStr: shareStr,
+						Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)),
 						OnToggle: onToggleSrc, OnWeight: onWeightSrc,
 					})
 				}),
+			),
+			// Repeat this cover automatically at the start of each new period.
+			Label(css.Class("cover-recurring-toggle"),
+				Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-recurring"), OnChange(onToggleRecurring)}, checkedAttr(recurringS.Get())...)...),
+				Span(uistate.T("budgets.coverRecurring")),
 			),
 			errLine,
 			Div(css.Class("acct-edit-actions"),
@@ -448,12 +486,15 @@ type coverSourceRowProps struct {
 	Selected  bool
 	Weight    int
 	ShareStr  string // formatted amount this source contributes (when selected)
+	Over      bool   // this source's share exceeds what it can give
+	AvailStr  string // formatted amount this source can give (its limit)
 	OnToggle  func(string)
 	OnWeight  func(string, int)
 }
 
-// coverSourceRow renders a checkbox to include a source budget, and — when checked —
-// a ratio input (default 1) plus the live amount that ratio yields.
+// coverSourceRow renders a styled checkbox to include a source budget, and — when
+// checked — a ratio input (default 1) plus the live amount that ratio yields. When the
+// share exceeds the source's limit it turns amber with an "only $X available" note.
 func coverSourceRow(props coverSourceRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
 	onWeight := ui.UseEvent(func(v string) { n, _ := strconv.Atoi(strings.TrimSpace(v)); props.OnWeight(props.ID, n) })
@@ -461,9 +502,17 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 	if props.Selected && w <= 0 {
 		w = 1
 	}
-	return Div(css.Class("cover-src-row"),
+	rowCls := "cover-src-row"
+	if props.Selected {
+		rowCls += " is-checked"
+	}
+	shareCls := "cover-src-share"
+	if props.Over {
+		shareCls += " is-over"
+	}
+	return Div(css.Class(rowCls),
 		Label(css.Class("cover-src-main"),
-			Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-src-"+props.ID), OnChange(onToggle)}, checkedAttr(props.Selected)...)...),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "cover-src-"+props.ID), OnChange(onToggle)}, checkedAttr(props.Selected)...)...),
 			Span(css.Class("cover-src-name"), props.Label),
 			Span(css.Class("cover-src-remain"), props.RemainStr+" left"),
 		),
@@ -471,7 +520,10 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 			Span(css.Class("cover-src-ratio-label"), uistate.T("budgets.coverRatio")),
 			Input(css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
 				Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)),
-			Span(css.Class("cover-src-share"), props.ShareStr),
+			Div(css.Class("cover-src-shares"),
+				Span(ClassStr(shareCls), If(props.Over, Span(css.Class("cover-src-warn"), "⚠ ")), props.ShareStr),
+				If(props.Over, Span(css.Class("cover-src-avail"), uistate.T("budgets.coverOnlyAvail", props.AvailStr))),
+			),
 		)),
 	)
 }

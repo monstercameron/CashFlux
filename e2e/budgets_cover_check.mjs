@@ -59,6 +59,26 @@ try {
   });
   check("C6 cover applied: modal closed and baby's limit rose to $420", closed && babyAmt.includes("420.00"), `closed=${closed} amt=${babyAmt}`);
 
+  // C7 — recurring: reopen cover, check a source, toggle recurring on, submit → badge.
+  await p.locator('[data-testid="budget-cover-btn-bud-baby"]').click();
+  await p.waitForTimeout(600);
+  await (await p.$$('[data-testid^="cover-src-"]'))[0].click();
+  await p.fill("#budget-cover-amt", "10"); await p.waitForTimeout(150);
+  await p.locator('[data-testid="cover-recurring"]').click(); await p.waitForTimeout(150);
+  await p.locator('.acct-edit-form button[type="submit"]').click();
+  await p.waitForTimeout(1000);
+  check("C7 recurring toggle saves a standing cover (badge shows on the row)", await p.evaluate(()=>!!document.querySelector('[data-testid="recurring-badge-bud-baby"]')));
+
+  // C8 — the ⋯ menu offers "Remove recurring coverage".
+  const babyRow = p.locator('.bento-budgets .budget', { hasText: 'Baby & Childcare' }).first();
+  await babyRow.locator('.add-wrap button[aria-haspopup="menu"]').click(); await p.waitForTimeout(400);
+  check("C8 ⋯ menu offers Remove recurring coverage", await p.evaluate(()=>!!document.querySelector('.add-menu:not(.hidden-menu) [data-testid="remove-recurring-btn-bud-baby"]')));
+
+  // C9 — removing it (with confirm) clears the badge.
+  await p.locator('.add-menu:not(.hidden-menu) [data-testid="remove-recurring-btn-bud-baby"]').click(); await p.waitForTimeout(400);
+  await p.locator("#cf-dialog-confirm").click(); await p.waitForTimeout(800);
+  check("C9 confirming removal clears the recurring badge", await p.evaluate(()=>!document.querySelector('[data-testid="recurring-badge-bud-baby"]')));
+
   const pass=results.filter(r=>r.ok).length, fail=results.length-pass;
   console.log("\n════════════════════════════════════════════");
   console.log(`RESULT: ${pass} PASS · ${fail} FAIL`);

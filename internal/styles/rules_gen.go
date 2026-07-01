@@ -5081,13 +5081,37 @@ func registerGenerated() {
 		minWidth("0"),
 	)
 	rule(".cover-spread-label",
-		fontSize("0.8rem"),
-		color("var(--text-dim)"),
+		display("block"),
+		fontSize("0.9rem"),
+		fontWeight("600"),
+		color("var(--fg, var(--text))"),
 	)
+	rule(".cover-spread-sub",
+		display("block"),
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+		marginTop("0.05rem"),
+	)
+	// The source list is bounded and scrolls internally, so the recurring toggle and
+	// the Cancel/Cover actions below it stay visible without scrolling the whole modal.
 	rule(".cover-sources",
 		display("flex"),
 		flexDirection("column"),
-		gap("0.35rem"),
+		gap("0.4rem"),
+		maxHeight("240px"),
+		overflowY("auto"),
+		paddingRight("0.25rem"),
+		margin("0.15rem 0 0.1rem"),
+	)
+	// "Use full $X" reads as the accent shortcut it is, not a dead dark label (critic #4).
+	rule(".cover-amount-row .btn",
+		flexShrink("0"),
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		color("var(--accent)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".cover-amount-row .btn:hover",
+		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 	)
 	rule(".cover-src-row",
 		display("flex"),
@@ -5095,25 +5119,67 @@ func registerGenerated() {
 		justifyContent("space-between"),
 		flexWrap("wrap"),
 		gap("0.5rem"),
-		padding("0.5rem 0.65rem"),
+		padding("0.55rem 0.7rem"),
 		border("1px solid var(--border)"),
+		borderLeft("3px solid transparent"),
 		borderRadius("10px"),
-		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
+		transition("background 0.15s ease, border-color 0.15s ease"),
+	)
+	// Checked source: tinted with an accent left-stripe so the selection reads at a
+	// glance (critic #5 + highest-leverage change).
+	rule(".cover-src-row.is-checked",
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+		borderLeftColor("var(--accent)"),
 	)
 	rule(".cover-src-main",
 		display("flex"),
 		alignItems("center"),
-		gap("0.5rem"),
+		gap("0.55rem"),
 		minWidth("0"),
 		flex("1 1 auto"),
 		cursor("pointer"),
+	)
+	// Branded checkbox (critic #1): no more native OS-blue box.
+	rule(".cf-check",
+		appearance("none"),
+		width("17px"),
+		height("17px"),
+		flexShrink("0"),
+		margin("0"),
+		border("1.5px solid color-mix(in srgb, var(--fg, #ffffff) 34%, transparent)"),
+		borderRadius("4px"),
+		background("transparent"),
+		cursor("pointer"),
+		position("relative"),
+		transition("background 0.12s ease, border-color 0.12s ease"),
+	)
+	rule(".cf-check:checked",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".cf-check:checked::after",
+		content("\"\""),
+		position("absolute"),
+		left("5px"),
+		top("2px"),
+		width("4px"),
+		height("8px"),
+		border("solid #06210f"),
+		borderWidth("0 2px 2px 0"),
+		transform("rotate(45deg)"),
+	)
+	rule(".cf-check:focus-visible",
+		outline("2px solid color-mix(in srgb, var(--accent) 60%, transparent)"),
+		outlineOffset("2px"),
 	)
 	rule(".cover-src-name",
 		fontWeight("600"),
 	)
 	rule(".cover-src-remain",
-		fontSize("0.8rem"),
-		color("var(--text-dim)"),
+		fontSize("0.78rem"),
+		color("var(--text-faint, #666)"),
+		fontWeight("400"),
 		whiteSpace("nowrap"),
 	)
 	rule(".cover-src-ratio",
@@ -5126,15 +5192,49 @@ func registerGenerated() {
 		fontSize("0.78rem"),
 		color("var(--text-dim)"),
 	)
+	// Suppress the native number spinners on the ratio input (critic #2).
 	rule(".cover-src-weight",
-		width("64px"),
+		width("58px"),
+		appearance("textfield"),
+	)
+	rule(".cover-src-weight::-webkit-inner-spin-button, .cover-src-weight::-webkit-outer-spin-button",
+		appearance("none"),
+		margin("0"),
+	)
+	rule(".cover-src-shares",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("flex-end"),
+		minWidth("72px"),
 	)
 	rule(".cover-src-share",
 		fontVariantNumeric("tabular-nums"),
-		fontWeight("600"),
+		fontWeight("700"),
+		fontSize("0.95rem"),
 		color("var(--accent)"),
-		minWidth("64px"),
-		textAlign("right"),
+		whiteSpace("nowrap"),
+	)
+	// Over-allocated source: amber, not the same green as a valid share (critic UX bug).
+	rule(".cover-src-share.is-over",
+		color("#f59e0b"),
+	)
+	rule(".cover-src-avail",
+		fontSize("0.72rem"),
+		color("#f59e0b"),
+		whiteSpace("nowrap"),
+	)
+	// Recurring toggle in the cover editor + the row badge.
+	rule(".cover-recurring-toggle",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		marginTop("0.25rem"),
+		fontSize("0.88rem"),
+		cursor("pointer"),
+	)
+	rule(".budget-recurring",
+		color("var(--accent)"),
+		fontWeight("600"),
 	)
 	rule(".acct-edit-actions .btn",
 		minWidth("104px"),

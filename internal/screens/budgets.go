@@ -249,7 +249,8 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 // BudgetRow. The edit / top-up / cover editors now live in the shell-root flip modal
 // (BudgetEditForm) which mutates the store directly, so the row only needs delete.
 type budgetRowCallbacks struct {
-	OnDelete func(string)
+	OnDelete          func(string)
+	OnRemoveRecurring func(string)
 }
 
 // buildBudgetRowCallbacks wires the store mutations for BudgetRow, mirroring the
@@ -279,26 +280,55 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 				uistate.BumpDataRevision()
 			})
 		},
+		OnRemoveRecurring: func(budgetID string) {
+			name := uistate.T("budgets.thisBudget")
+			for _, b := range app.Budgets() {
+				if b.ID == budgetID {
+					if n := catName[b.CategoryID]; n != "" {
+						name = n
+					}
+					break
+				}
+			}
+			uistate.ConfirmModal(uistate.T("budgets.removeRecurringConfirm", name), true, func(ok bool) {
+				if !ok {
+					return
+				}
+				for _, b := range app.Budgets() {
+					if b.ID != budgetID {
+						continue
+					}
+					b.RecurringCover = nil
+					if err := app.PutBudget(b); err != nil {
+						uistate.PostNotice(err.Error(), true)
+						return
+					}
+					break
+				}
+				uistate.BumpDataRevision()
+			})
+		},
 	}
 }
 
 // --- shared row props + formatting helpers (used by BudgetRow + the add form) ------
 
 type budgetRowProps struct {
-	Status          budgeting.Status
-	Category        string
-	Members         []domain.Member
-	BudgetDefs      []customfields.Def    // custom-field defs for the "budget" entity (display + inline edit)
-	Envelope        string                // formatted envelope balance (envelope methodology); "" hides the line
-	EnvelopeNeg     bool                  // envelope is overdrawn → danger tone
-	PaceOver        string                // formatted projected overspend (pace, in-progress only); "" hides the line
-	RolloverCarry   string                // formatted previous-period carry for per-budget rollover; "" hides the line
-	RolloverNeg     bool                  // previous-period carry is negative → danger tone
-	EffectiveCap    string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
-	ProratedRest    string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
-	EffectiveMethod budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
-	OnDelete        func(string)
-	OnDrill         func(categoryID string) // open Transactions filtered to this budget's category
+	Status            budgeting.Status
+	Category          string
+	Members           []domain.Member
+	BudgetDefs        []customfields.Def    // custom-field defs for the "budget" entity (display + inline edit)
+	Envelope          string                // formatted envelope balance (envelope methodology); "" hides the line
+	EnvelopeNeg       bool                  // envelope is overdrawn → danger tone
+	PaceOver          string                // formatted projected overspend (pace, in-progress only); "" hides the line
+	RolloverCarry     string                // formatted previous-period carry for per-budget rollover; "" hides the line
+	RolloverNeg       bool                  // previous-period carry is negative → danger tone
+	EffectiveCap      string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
+	ProratedRest      string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
+	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
+	OnDelete          func(string)
+	OnRemoveRecurring func(string)            // clear this budget's recurring cover (confirmed)
+	OnDrill           func(categoryID string) // open Transactions filtered to this budget's category
 }
 
 // budgetLeftValue formats a budget's remaining amount for the summary "Left" stat

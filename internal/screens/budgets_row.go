@@ -58,6 +58,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	openCover := ui.UseEvent(Prevent(func() {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
 	}))
+	removeRecurring := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnRemoveRecurring != nil {
+			props.OnRemoveRecurring(s.Budget.ID)
+		}
+	}))
+	hasRecurring := s.Budget.RecurringCover != nil
 
 	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
 
@@ -216,6 +223,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
+						If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 					),
 				),
@@ -228,6 +236,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// critique). C124: budgetRemainPhrase yields "$50.00 left"/"$50.00 over" (no
 		// accounting parens).
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period)),
+		If(hasRecurring, Span(css.Class("budget-sub", "budget-recurring"), Attr("data-testid", "recurring-badge-"+s.Budget.ID), uistate.T("budgets.recurringBadge"))),
 		ownerLine,
 		methodLine,
 		customLine,

@@ -426,6 +426,27 @@ type Budget struct {
 	// correctly falls back to the global method.
 	Methodology string         `json:"methodology,omitempty"`
 	Custom      map[string]any `json:"custom,omitempty"`
+	// RecurringCover, when set, is a standing arrangement that re-applies a cover into
+	// this budget at the start of each new period: move AmountMinor of limit into this
+	// budget, split across Sources by weight. Nil = no recurring coverage. JSON-
+	// persisted; existing budgets load with nil (no migration needed).
+	RecurringCover *RecurringCover `json:"recurringCover,omitempty"`
+}
+
+// CoverShare is one source budget's weighted share in a recurring cover.
+type CoverShare struct {
+	BudgetID string `json:"budgetId"`
+	Weight   int    `json:"weight"`
+}
+
+// RecurringCover is a per-period, standing cover arrangement stored on the destination
+// budget. Each new period the app moves AmountMinor of limit into the destination,
+// split across Sources in proportion to their weights. LastAppliedPeriod is the start
+// date (YYYY-MM-DD) of the period last covered, so it applies at most once per period.
+type RecurringCover struct {
+	AmountMinor       int64        `json:"amountMinor"`
+	Sources           []CoverShare `json:"sources"`
+	LastAppliedPeriod string       `json:"lastAppliedPeriod,omitempty"`
 }
 
 // Goal is a savings target, individual or shared.

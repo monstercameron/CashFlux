@@ -3,6 +3,34 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-07-01 — Recurring budget coverage + cover-modal redesign
+
+**Recurring cover.** Added a toggle to the Cover editor that turns a one-time cover into a standing
+arrangement. Design decision on semantics (it was genuinely ambiguous): a recurring cover is stored on
+the destination budget (`domain.Budget.RecurringCover` = amount + weighted sources + last-applied
+period) and **re-applied once per period by a boot hook** (`applyRecurringCovers`), moving the fixed
+amount from the sources each new period. It's drain-safe — a source that can't give its share is simply
+skipped (per-source `CoverBudget` errors ignored), so a depleted source never blocks the rest. I chose
+the boot-hook base-move model over a per-period effective-limit reallocation because it composes with
+the existing one-time cover (which permanently moves base limits) without rewriting the core budget
+math; the trade-off is that sources drain over many periods, which is the honest consequence of "keep
+moving budget every period" and is removable via the ⋯ menu. The row shows a "↻ Recurring cover" badge;
+the ⋯ menu gains "Remove recurring coverage" (confirmed, mirrors the delete pattern).
+
+**Cover-modal redesign (design critique).** Ran a Sonnet design critic on the modal ("feels cheap").
+Top hits fixed: native OS-blue checkboxes → branded seagreen `.cf-check` (appearance:none + a CSS
+checkmark); checked rows now tinted with an accent left-stripe so the selection reads at a glance;
+native number spinners suppressed on the ratio inputs; and the real UX bug — an over-allocated source
+(share > its limit, e.g. Entertainment $33.33 vs $25 left) was shown in the same green as a valid share
+— now turns **amber** with a "⚠" and an "only $X available" note. Layout: the source list is bounded
+and scrolls internally (`max-height` + `overflow-y`) so the recurring toggle and the Cancel/Cover
+actions stay visible instead of being pushed below the fold; the "Use full $X" button no longer clips;
+and the "Spread across" instruction became a bold label + muted subtitle.
+
+**Verify.** `e2e/budgets_cover_check.mjs` 9/9 — multi-source split ($50/$50, 3:1 → $75/$25), apply,
+recurring toggle saves (badge), ⋯ removal (confirm clears the badge). gofmt/vet/i18n green.
+
+
 ## 2026-07-01 — Budgets modal polish + delete into a ⋯ menu
 
 Two refinements after screenshotting the new budget modals. **Modal layout:** the forms were using the
