@@ -1,3 +1,18 @@
+## 2026-07-01 — Custom variable names for budgets (+ autosuggest + collision check)
+
+Follow-up to per-budget variables: Cam wanted to control the handle, not just get the name-derived
+slug. Added Budget.VarName; engineenv.BudgetVarBases now prefers slug(VarName) over slug(Name), so a
+budget's variable is stable across renames. Both budget modals get an optional 'Variable name' field:
+- Autosuggest: typing the name fills the var field with the slug until the user edits it (a
+  varTouched flag stops the tracking), so most people never touch it.
+- Live preview of the resolved variable (budget_<slug>_remaining).
+- Collision check (Cam's explicit ask): budgetVarCollision compares the resolved slug against every
+  other budget's resolved slug; on a clash it shows an inline warning AND blocks the save, so two
+  budgets can't silently produce the same handle (which would make formulas ambiguous).
+
+Exported engineenv.BudgetVarSlug so the UI preview/collision logic uses the exact same slugging the
+surface resolves — single source of truth. Tests: VarName-precedence unit test green; live 5/5.
+
 ## 2026-07-01 — Each budget as a reusable engine variable
 
 Cam: "each budget is its own custom field that can be used elsewhere, such as on the dashboard

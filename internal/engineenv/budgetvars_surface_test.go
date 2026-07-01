@@ -67,6 +67,24 @@ func TestAddBudgetVarsSurface(t *testing.T) {
 	}
 }
 
+func TestBudgetVarNameOverridesName(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	budgets := []domain.Budget{
+		{ID: "b1", Name: "Baby & Childcare", VarName: "babycare", Period: domain.PeriodMonthly, Limit: usd(40000)},
+	}
+	vars := Vars(Data{Budgets: budgets, Rates: currency.Rates{Base: "USD"}, Now: now})
+	if _, ok := vars["budget_babycare_limit"]; !ok {
+		t.Error("explicit VarName should drive the variable name (budget_babycare_limit)")
+	}
+	if _, ok := vars["budget_baby_childcare_limit"]; ok {
+		t.Error("name-derived slug should NOT be used when VarName is set")
+	}
+	if vars["budget_babycare_limit"] != 400 {
+		t.Errorf("budget_babycare_limit = %v, want 400", vars["budget_babycare_limit"])
+	}
+}
+
 func TestAddBudgetVarsCollision(t *testing.T) {
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 	usd := func(minor int64) money.Money { return money.New(minor, "USD") }

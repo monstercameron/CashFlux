@@ -118,6 +118,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 
 	// All hooks unconditionally at stable positions (before any branch/return).
 	nameS := ui.UseState(b.Name)
+	varNameS := ui.UseState(b.VarName)
 	limitS := ui.UseState(limitMajor)
 	periodS := ui.UseState(string(b.Period))
 	ownerS := ui.UseState(b.OwnerID)
@@ -138,6 +139,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	errS := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onVarName := ui.UseEvent(func(v string) { varNameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
 	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
@@ -331,6 +333,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			if n := strings.TrimSpace(nameS.Get()); n != "" {
 				bb.Name = n
 			}
+			// Refuse a variable name that collides with another budget's handle.
+			if warn := budgetVarCollision(app, props.BudgetID, varNameS.Get(), nameS.Get()); warn != "" {
+				errS.Set(warn)
+				return
+			}
+			bb.VarName = strings.TrimSpace(varNameS.Get())
 			amt, err := money.ParseMinor(strings.TrimSpace(limitS.Get()), dec)
 			if err != nil || amt <= 0 {
 				errS.Set(uistate.T("budgets.limitRequired"))
@@ -560,6 +568,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+		// Variable name: an optional explicit handle for this budget in formulas/widgets.
+		// Empty falls back to the display name; the resolved variable is previewed live.
+		labeledField(uistate.T("budgets.varNameLabel"),
+			Div(css.Class("cover-amount-block"),
+				Input(css.Class("field"), Attr("id", "budget-edit-varname"), Type("text"),
+					Placeholder(budgetVarPlaceholder(nameS.Get())), Value(varNameS.Get()), OnInput(onVarName)),
+				Span(css.Class("cover-fx-hint"), uistate.T("budgets.varNameHint", budgetVarPreview(varNameS.Get(), nameS.Get()))),
+				If(budgetVarCollision(app, props.BudgetID, varNameS.Get(), nameS.Get()) != "",
+					Span(css.Class("cover-fx-err"), Attr("data-testid", "budget-varname-warn"),
+						budgetVarCollision(app, props.BudgetID, varNameS.Get(), nameS.Get()))),
+			)),
 		labeledField(uistate.T("budgets.limitLabel"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
 		labeledField(uistate.T("budgets.period"),
@@ -825,6 +844,59 @@ func coverCapText(selCount int, totalMinor int64, cur string) string {
 		return ""
 	}
 	return uistate.T("budgets.coverSelectedCap", selCount, fmtMoney(money.New(totalMinor, cur)))
+}
+
+// budgetVarPlaceholder is the auto-derived variable slug for a name, shown as the
+// var-name field's placeholder so the user sees what they'd get by leaving it blank.
+func budgetVarPlaceholder(name string) string {
+	if s := engineenv.BudgetVarSlug(name); s != "" {
+		return s
+	}
+	return uistate.T("budgets.varNamePlaceholder")
+}
+
+// budgetVarPreview renders an example of the resolved variable a budget will expose,
+// e.g. "budget_rent_remaining" — using the explicit var name when set, else the name.
+func budgetVarPreview(varName, name string) string {
+	src := varName
+	if src == "" {
+		src = name
+	}
+	slug := engineenv.BudgetVarSlug(src)
+	if slug == "" {
+		slug = "…"
+	}
+	return "budget_" + slug + "_remaining"
+}
+
+// budgetVarCollision returns a warning when the resolved variable slug for (varName else
+// name) clashes with another budget's variable — so two budgets can't silently produce
+// the same handle. Empty when there's no clash.
+func budgetVarCollision(app *appstate.App, selfID, varName, name string) string {
+	if app == nil {
+		return ""
+	}
+	src := varName
+	if src == "" {
+		src = name
+	}
+	slug := engineenv.BudgetVarSlug(src)
+	if slug == "" {
+		return ""
+	}
+	for _, bb := range app.Budgets() {
+		if bb.ID == selfID {
+			continue
+		}
+		other := bb.VarName
+		if other == "" {
+			other = bb.Name
+		}
+		if engineenv.BudgetVarSlug(other) == slug {
+			return uistate.T("budgets.varNameTaken", bb.Name)
+		}
+	}
+	return ""
 }
 
 // recurringCoverCustom returns the custom-field values stored on a budget's recurring

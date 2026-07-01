@@ -426,6 +426,11 @@ type Budget struct {
 	// correctly falls back to the global method.
 	Methodology string         `json:"methodology,omitempty"`
 	Custom      map[string]any `json:"custom,omitempty"`
+	// VarName is an optional explicit variable name for this budget in the formula/widget
+	// engine. When set, the budget's figures are exposed as budget_<slug(VarName)>_* (e.g.
+	// budget_rent_remaining) instead of the name-derived slug — so a user can pick a short,
+	// stable handle that survives a display-name change. Empty = derive from Name.
+	VarName string `json:"varName,omitempty"`
 	// RecurringCover, when set, is a standing arrangement that re-applies a cover into
 	// this budget at the start of each new period: move AmountMinor of limit into this
 	// budget, split across Sources by weight. Nil = no recurring coverage. JSON-

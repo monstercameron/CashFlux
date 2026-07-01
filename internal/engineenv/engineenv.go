@@ -266,7 +266,13 @@ func BudgetVarBases(budgets []domain.Budget) []BudgetVarBase {
 	used := map[string]bool{}
 	out := make([]BudgetVarBase, 0, len(budgets))
 	for _, b := range budgets {
-		slug := budgetVarSlug(b.Name)
+		// An explicit VarName wins over the display name, so a budget's variable handle is
+		// stable across renames; both are slugged so the result is always formula-safe.
+		src := b.Name
+		if b.VarName != "" {
+			src = b.VarName
+		}
+		slug := budgetVarSlug(src)
 		if slug == "" {
 			continue
 		}
@@ -285,6 +291,10 @@ func BudgetVarBases(budgets []domain.Budget) []BudgetVarBase {
 	}
 	return out
 }
+
+// BudgetVarSlug exposes the slugging used for per-budget variable names, so the UI can
+// preview the handle a name/var-name will produce (must match what the surface resolves).
+func BudgetVarSlug(s string) string { return budgetVarSlug(s) }
 
 // budgetVarSlug turns a budget name into a formula-safe variable segment: lowercase,
 // with every run of non-alphanumeric characters collapsed to a single underscore and
