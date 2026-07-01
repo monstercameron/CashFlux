@@ -6136,6 +6136,17 @@ func registerGenerated() {
 		textAlign("left"),
 		color("var(--text)"),
 	)
+	rule(".smart-tip-pop-title",
+		fontWeight("600"),
+		fontSize("0.82rem"),
+		color("var(--text)"),
+	)
+	rule(".smart-tip-pop-text",
+		margin("0.25rem 0 0"),
+		fontSize("0.78rem"),
+		lineHeight("1.4"),
+		color("var(--text-dim)"),
+	)
 	rule(".add-menu.open-left",
 		left("auto"),
 		right("0"),

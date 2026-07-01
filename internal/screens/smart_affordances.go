@@ -100,21 +100,13 @@ func smartTooltip(props smartTooltipProps) ui.Node {
 	open := ui.UseState(false)
 	wrapID := "smarttip-" + props.ID
 	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
-	// Reuse the .add-menu overlay look but position it as a FIXED popover so it floats
-	// over content — never expanding the stat/loader box it lives in, never clipped by
-	// that box's overflow:hidden, and with a z-index respected against the whole page. It
-	// stays viewport-aware (flips above / clamps horizontally) regardless of the ⓘ's side.
-	uiw.AnchorFixedPopover(open.Get(), wrapID)
+	// Render the explainer as a PORTAL into <body> (not a child of this stat/loader tile):
+	// the only way to guarantee it floats over content — never expanding the box it lives
+	// in, never clipped by that box's overflow:hidden, and painted ABOVE the sibling tiles
+	// below it (a fixed child of the tile would stay trapped in the tile's stacking context
+	// and be covered by the next section). It stays viewport-aware (flips above / clamps).
+	uiw.SmartTipPortal(open.Get(), wrapID, props.Title, props.Text)
 
-	var pop ui.Node = Fragment()
-	if open.Get() {
-		pop = Div(ClassStr("add-menu smart-tip-pop"),
-			Attr("role", "tooltip"),
-			Attr("data-testid", "smart-tip-pop"),
-			Div(ClassStr(tw.Fold(tw.FontSemibold, tw.Text13)), props.Title),
-			P(ClassStr(tw.Fold(tw.Text12, tw.TextDim, tw.Mt1)), props.Text),
-		)
-	}
 	return Span(ClassStr("smart-tip-wrap add-wrap "+tw.Fold(tw.InlineFlex, tw.ItemsCenter)), Attr("id", wrapID),
 		Attr("data-testid", "smart-tip-"+props.ID),
 		uiw.IconButton(uiw.IconButtonProps{
@@ -123,7 +115,6 @@ func smartTooltip(props smartTooltipProps) ui.Node {
 			OnClick: func() { open.Set(!open.Get()) },
 			Class:   "btn-icon-bare " + tw.Fold(tw.TextFaint),
 		}),
-		pop,
 	)
 }
 

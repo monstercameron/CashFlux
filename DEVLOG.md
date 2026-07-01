@@ -1,3 +1,26 @@
+## 2026-07-01 — Smart ⓘ popover: portal to <body> (fix "clips under next section")
+
+Cam: the "overall progress" ⓘ popover "its clipping under the next section that hosts goal metrics
+and add goals buttons." Earlier pass made it a `position:fixed` overlay + z-index tokens, which
+fixed the *overflow* clip but not this one. Root cause is STACKING, not overflow: the fixed popover
+was still a DOM descendant of the summary tile, so it lived in that tile's stacking context and was
+painted below the sibling toolbar tile beneath it. z-index is powerless across sibling stacking
+contexts — no value on the popover can lift it above a later sibling's context.
+
+Fix: PORTAL. `AnchorFixedPopover` → `SmartTipPortal(isOpen, wrapID, title, text)` in internal/ui/
+anchor.go — it creates a plain DOM `<div class="smart-tip-pop add-menu">` (title + text children),
+appends it to `document.body`, and positions it fixed (viewport-relative, since body has no
+transformed ancestor): below the trigger, right-aligned, flipping above / clamping horizontally to
+stay on screen, re-measuring on rAF + resize + capture-phase scroll. Cleanup removes the node and
+releases the JS funcs. Living in <body> escapes BOTH any overflow:hidden ancestor and the tile
+stacking context, so it paints over everything below. smart_affordances.go's smartTooltip drops the
+old GWC `pop` node and just calls SmartTipPortal + keeps DismissPopover for outside-click/Escape.
+Added `.smart-tip-pop-title` / `.smart-tip-pop-text` CSS.
+
+Verify: e2e/test_portal.mjs 5/5 — P1 parent is <body>, P2 fully on-screen, P3 nothing paints over
+it (not covered by the next section), P4 no page errors, P5 node removed on dismiss (no orphan/leak).
+Screenshot confirms it now overlays the gap toward the toolbar cleanly instead of hiding under it.
+
 ## 2026-07-01 — Merge cash figures into progress 'loaders'
 
 Cam: merge the loader and the cash figures — put the text inside the loader; then do it on the

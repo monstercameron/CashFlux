@@ -11,15 +11,17 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
-// AnchorFixedPopover positions an open `.smart-tip-pop` explainer as a FIXED-position
-// overlay next to its trigger wrapper (#wrapID). Unlike AnchorPopover (absolute, which is
-// clipped by any overflow:hidden ancestor and stacks inside that ancestor's context), a
-// fixed popover escapes clipping containers (e.g. the summary "loader" bar) and sits in
-// the viewport's own stacking context, so its z-index is respected globally. It opens
-// below the trigger, right-aligned, and flips above / clamps horizontally to stay on
-// screen; it re-measures on the next frame, on resize, and while scrolling. Pair with
-// DismissPopover on the same wrapID.
-func AnchorFixedPopover(isOpen bool, wrapID string) {
+// SmartTipPortal renders an explainer popover for the trigger wrapper (#wrapID) as a
+// plain DOM node appended to <body> — a PORTAL. This is the only reliable way to make a
+// floating popover both (a) escape any overflow:hidden ancestor (e.g. the summary
+// "loader" bar) and (b) escape the tile's own stacking context, so it paints ABOVE the
+// sibling tiles below it (which otherwise cover it — z-index can't win across sibling
+// stacking contexts). It positions the popover fixed below the trigger, right-aligned,
+// flipping above / clamping horizontally to stay on screen, and re-measures on the next
+// frame, on resize, and while scrolling. Because the node lives in <body> (no transformed
+// ancestor), fixed coordinates are viewport-relative. The node is removed on close.
+// Pair with DismissPopover on wrapID so an outside click / Escape clears the open state.
+func SmartTipPortal(isOpen bool, wrapID, title, text string) {
 	openKey := "closed"
 	if isOpen {
 		openKey = "open"
@@ -33,22 +35,32 @@ func AnchorFixedPopover(isOpen bool, wrapID string) {
 		if !doc.Truthy() {
 			return nil
 		}
+		body := doc.Get("body")
+		if !body.Truthy() {
+			return nil
+		}
+		el := doc.Call("createElement", "div")
+		el.Set("className", "smart-tip-pop add-menu")
+		el.Call("setAttribute", "role", "tooltip")
+		el.Call("setAttribute", "data-testid", "smart-tip-pop")
+		tEl := doc.Call("createElement", "div")
+		tEl.Set("className", "smart-tip-pop-title")
+		tEl.Set("textContent", title)
+		pEl := doc.Call("createElement", "p")
+		pEl.Set("className", "smart-tip-pop-text")
+		pEl.Set("textContent", text)
+		el.Call("appendChild", tEl)
+		el.Call("appendChild", pEl)
+		body.Call("appendChild", el)
+
 		const margin = 8.0
 		reposition := js.FuncOf(func(_ js.Value, _ []js.Value) any {
 			w := doc.Call("getElementById", wrapID)
 			if !w.Truthy() {
 				return nil
 			}
-			pop := w.Call("querySelector", ".smart-tip-pop")
-			if !pop.Truthy() {
-				return nil
-			}
 			tr := w.Call("getBoundingClientRect")
-			style := pop.Get("style")
-			style.Set("position", "fixed")
-			style.Set("right", "auto")
-			style.Set("bottom", "auto")
-			pr := pop.Call("getBoundingClientRect")
+			pr := el.Call("getBoundingClientRect")
 			vw := win.Get("innerWidth").Float()
 			vh := win.Get("innerHeight").Float()
 			pw := pr.Get("width").Float()
@@ -69,26 +81,11 @@ func AnchorFixedPopover(isOpen bool, wrapID string) {
 			if left < margin {
 				left = margin
 			}
-			// A position:fixed element is laid out relative to its nearest ancestor that
-			// establishes a containing block (any transform / filter / perspective — which
-			// our animated cards/tiles carry), NOT the viewport. Subtract that ancestor's
-			// offset so the viewport coords we computed actually land on screen.
-			cbLeft, cbTop := 0.0, 0.0
-			anc := pop.Get("parentElement")
-			for anc.Truthy() {
-				cs := win.Call("getComputedStyle", anc)
-				tf := cs.Call("getPropertyValue", "transform").String()
-				pe := cs.Call("getPropertyValue", "perspective").String()
-				fl := cs.Call("getPropertyValue", "filter").String()
-				if (tf != "" && tf != "none") || (pe != "" && pe != "none") || (fl != "" && fl != "none") {
-					ar := anc.Call("getBoundingClientRect")
-					cbLeft, cbTop = ar.Get("left").Float(), ar.Get("top").Float()
-					break
-				}
-				anc = anc.Get("parentElement")
-			}
-			style.Set("top", fmt.Sprintf("%.0fpx", top-cbTop))
-			style.Set("left", fmt.Sprintf("%.0fpx", left-cbLeft))
+			st := el.Get("style")
+			st.Set("top", fmt.Sprintf("%.0fpx", top))
+			st.Set("left", fmt.Sprintf("%.0fpx", left))
+			st.Set("right", "auto")
+			st.Set("bottom", "auto")
 			return nil
 		})
 		raf := win.Call("requestAnimationFrame", reposition)
@@ -99,6 +96,11 @@ func AnchorFixedPopover(isOpen bool, wrapID string) {
 			win.Call("cancelAnimationFrame", raf)
 			win.Call("removeEventListener", "resize", resizeCb)
 			win.Call("removeEventListener", "scroll", resizeCb, map[string]any{"capture": true})
+			if el.Truthy() {
+				if pn := el.Get("parentNode"); pn.Truthy() {
+					pn.Call("removeChild", el)
+				}
+			}
 			reposition.Release()
 			resizeCb.Release()
 		}
