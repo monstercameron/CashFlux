@@ -383,6 +383,8 @@ var english = Catalog{
 	"applock.statusOnAuto":      "On — a passcode is set; auto-locks after %d min of inactivity.",
 	"applock.statusOff":         "Off — no passcode set.",
 	"applock.forgot":            "Forgot passcode?",
+	"applock.muteMusic":         "🔊 Mute music",
+	"applock.unmuteMusic":       "🔇 Unmute music",
 	"applock.forgotConfirm":     "Forgot your passcode? Your data is encrypted with it and can't be decrypted without it, so resetting erases all CashFlux data on this device — this is the only way to recover. Continue?",
 	"applock.hintLabel":         "Hint (optional)",
 	"applock.hintPlaceholder":   "A reminder (must not contain the passcode)",

@@ -92,11 +92,43 @@ func showAppLockGate() {
 	if gate := doc.Call("getElementById", appLockGateID); !gate.IsNull() && !gate.IsUndefined() {
 		gate.Get("style").Set("display", "grid")
 		refreshLockMeta(doc)
+		refreshLockMute(doc)
 		resetAppLockInput(doc)
 		animateGateIn(gate)
 		return
 	}
 	buildAppLockGate(doc)
+}
+
+// refreshLockMute shows/labels the lock-screen mute button from the live music state:
+// hidden when no tracks are configured, "Mute music" while playing, "Unmute music"
+// while silenced. Called when the gate is built and each time it is shown.
+func refreshLockMute(doc js.Value) {
+	btn := doc.Call("getElementById", "cf-lock-mute")
+	if btn.IsNull() || btn.IsUndefined() {
+		return
+	}
+	size, enabled := 0, false
+	if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() {
+		if st := muzak.Call("state"); st.Truthy() {
+			if s := st.Get("size"); s.Truthy() {
+				size = s.Int()
+			}
+			if e := st.Get("enabled"); e.Truthy() {
+				enabled = e.Bool()
+			}
+		}
+	}
+	if size == 0 {
+		btn.Get("style").Set("display", "none")
+		return
+	}
+	btn.Get("style").Set("display", "")
+	if enabled {
+		btn.Set("textContent", uistate.T("applock.muteMusic"))
+	} else {
+		btn.Set("textContent", uistate.T("applock.unmuteMusic"))
+	}
 }
 
 func resetAppLockInput(doc js.Value) {
@@ -182,8 +214,44 @@ func buildAppLockGate(doc js.Value) {
 	forgot.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
 	card.Call("appendChild", forgot)
 
+	// Mute toggle: silence (or resume) the ambient music from the lock screen without
+	// unlocking, so the app can be locked but quiet. Hidden when no music is set up.
+	muteBtn := doc.Call("createElement", "button")
+	muteBtn.Set("id", "cf-lock-mute")
+	muteBtn.Set("type", "button")
+	muteBtn.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;")
+	muteCb := js.FuncOf(func(js.Value, []js.Value) any {
+		muzak := js.Global().Get("cashfluxMuzak")
+		if !muzak.Truthy() {
+			return nil
+		}
+		enabled := false
+		if st := muzak.Call("state"); st.Truthy() {
+			if e := st.Get("enabled"); e.Truthy() {
+				enabled = e.Bool()
+			}
+		}
+		muzak.Call("setEnabled", !enabled)
+		uistate.PersistMuzakEnabled(!enabled)
+		refreshLockMute(doc)
+		return nil
+	})
+	muteBtn.Call("addEventListener", "click", muteCb)
+	card.Call("appendChild", muteBtn)
+
 	gate.Call("appendChild", card)
 	doc.Get("body").Call("appendChild", gate)
+	refreshLockMute(doc)
+	// The music player may finish initialising (loading its tracks) just after the
+	// gate builds; re-check once shortly after so the mute button appears/labels
+	// correctly even when it wasn't ready at build time.
+	var lateMute js.Func
+	lateMute = js.FuncOf(func(js.Value, []js.Value) any {
+		refreshLockMute(doc)
+		lateMute.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", lateMute, 800)
 	animateGateIn(gate)
 
 	fails := 0
@@ -351,7 +419,25 @@ func refreshLockMeta(doc js.Value) {
 	set("cf-lock-date", now.Call("toLocaleDateString", js.Undefined(),
 		map[string]any{"weekday": "long", "month": "long", "day": "numeric"}).String(), showMeta)
 	dayOrdinal := int(js.Global().Get("Date").Call("now").Float() / 86400000)
-	set("cf-lock-quote", lockquotes.ForIndex(dayOrdinal), !cfg.HideQuotes)
+	set("cf-lock-quote", lockQuoteText(dayOrdinal), !cfg.HideQuotes)
+}
+
+// smartQuoteCode is the SMART-series feature code for the AI "quote of the day".
+const smartQuoteCode = "SMART-QUOTE"
+
+// lockQuoteText picks the lock-screen quote: the Smart+ "quote of the day" engine's
+// latest generated quote when that feature is enabled and has produced one, otherwise
+// the static day-rotating quote. The Smart settings + cached result live in their own
+// browserstore key (cashflux:smart-settings), so they're readable even while the
+// dataset is locked. The engine refreshes the quote daily during normal app use; the
+// lock screen just displays whatever it last produced.
+func lockQuoteText(dayOrdinal int) string {
+	if s := uistate.LoadSmartSettings(); s.IsEnabled(smartQuoteCode) {
+		if q := strings.TrimSpace(s.ResultFor(smartQuoteCode)); q != "" {
+			return q
+		}
+	}
+	return lockquotes.ForIndex(dayOrdinal) // fallback: static, when AI/quote isn't enabled
 }
 
 // wipeAllLocalData removes every cashflux:* entry from the browser store (and any

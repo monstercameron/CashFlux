@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Lock screen: music mute toggle + Smart+ quote-of-the-day verbiage
+
+**What:** Two lock-screen (`applockgate.go`) additions. (1) A mute toggle so music can be silenced
+from the lock screen without unlocking — `refreshLockMute` reads `window.cashfluxMuzak.state()`
+(hidden when `size==0`, "Mute"/"Unmute" label from `enabled`), the click toggles `setEnabled` +
+`PersistMuzakEnabled`. A `setTimeout` re-check after build covers the player finishing track load
+just after the gate appears (the mute button would otherwise be hidden on a cold boot race).
+(2) The bottom quote now uses the Smart+ SMART-QUOTE engine's cached daily quote when that feature is
+enabled, else the static `lockquotes.ForIndex`.
+
+**Why the AI quote works on the lock screen:** the Smart settings + the cached result live in their
+own browserstore key `cashflux:smart-settings` (via `SettingKVGet`), NOT the encrypted dataset — so
+`LoadSmartSettings().ResultFor("SMART-QUOTE")` is readable even while locked. The engine (the
+dashboard's heroQuote) generates the quote daily during normal use; the lock screen just displays
+whatever it last produced, with a static fallback when disabled / never generated.
+
+**Verify:** new `e2e/lockscreen_check.mjs` 5/5 (seeded Smart+ quote shows when enabled, static when
+disabled; mute button present + toggles music off). gofmt/vet/`go test ./...` clean. SW v291→v292.
+
 ## 2026-06-30 — Credential retrieval: copy-to-clipboard behind re-auth, never in the DOM
 
 **What:** Reworked how a stored credential's password is retrieved (user: "add a home page quick
