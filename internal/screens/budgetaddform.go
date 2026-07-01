@@ -23,6 +23,10 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// budgetNewCatSentinel is the category-picker value that means "create a new
+// category" (named after the budget) instead of selecting an existing one.
+const budgetNewCatSentinel = "__new_category__"
+
 // BudgetAddFormProps configures the BudgetAddForm component.
 type BudgetAddFormProps struct {
 	// OnDone is called after a successful add so the caller (e.g. AddHost) can
@@ -57,16 +61,16 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 	}
 
-	// Budget add requires at least one expense category.
-	if len(expenseCats) == 0 {
-		return P(css.Class("empty"), uistate.T("budgets.needCategory"))
-	}
-
-	defaultCat := expenseCats[0].ID
+	// A budget watches a category. By default we create a NEW category named after the
+	// budget, so a transaction can be assigned to it immediately (closing the loop) —
+	// the picker still lets the user attach an existing category instead. This also
+	// means the form works on a fresh install with no categories yet.
+	defaultCat := budgetNewCatSentinel
 
 	name := ui.UseState("")
 	limit := ui.UseState("")
 	catID := ui.UseState(defaultCat)
+	newCatName := ui.UseState("")
 	owner := ui.UseState(domain.GroupOwnerID)
 	period := ui.UseState(string(domain.PeriodMonthly))
 	rollover := ui.UseState(false)
@@ -76,6 +80,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
+	onNewCatName := ui.UseEvent(func(v string) { newCatName.Set(v) })
 	// onCat/onOwner/onPeriod hooks kept for stable hook ordering; SelectInput owns
 	// the change event internally so these handlers are no longer wired to DOM.
 	ui.UseEvent(func(e ui.Event) { catID.Set(e.GetValue()) })
@@ -100,8 +105,29 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("budgets.limitRequired"))
 			return
 		}
-		// One budget per (category, period, owner) — reject duplicates (L40).
-		if budgeting.IsDuplicateBudget(app.Budgets(), catID.Get(), period.Get(), owner.Get(), "") {
+		// Resolve the category: create a new one (named after this budget by default)
+		// when "New category" is selected, otherwise use the chosen existing category so
+		// a transaction can be assigned straight to this budget's category.
+		finalCatID := catID.Get()
+		createdCatName := ""
+		if finalCatID == budgetNewCatSentinel {
+			catName := strings.TrimSpace(newCatName.Get())
+			if catName == "" {
+				catName = strings.TrimSpace(name.Get())
+			}
+			if catName == "" {
+				errMsg.Set(uistate.T("budgets.newCategoryNeedName"))
+				return
+			}
+			nc := domain.Category{ID: id.New(), Name: catName, Kind: domain.KindExpense}
+			if err := app.PutCategory(nc); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			finalCatID = nc.ID
+			createdCatName = catName
+		} else if budgeting.IsDuplicateBudget(app.Budgets(), finalCatID, period.Get(), owner.Get(), "") {
+			// One budget per (category, period, owner) — reject duplicates (L40).
 			errMsg.Set(uistate.T("budgets.duplicateBudget"))
 			return
 		}
@@ -116,31 +142,40 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
-			CategoryID: catID.Get(), Period: domain.Period(period.Get()), Limit: money.New(amt, base),
+			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, base),
 			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
+		uistate.BumpDataRevision() // surface the new budget (and category) immediately
 		// Reset fields.
 		name.Set("")
 		limit.Set("")
 		rollover.Set(false)
 		methodology.Set("")
 		catID.Set(defaultCat)
+		newCatName.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
-		uistate.PostNotice(uistate.T("budgets.addedToast"), false)
+		if createdCatName != "" {
+			uistate.PostNotice(uistate.T("budgets.addedWithCatToast", createdCatName), false)
+		} else {
+			uistate.PostNotice(uistate.T("budgets.addedToast"), false)
+		}
 		if props.OnDone != nil {
 			props.OnDone()
 		}
 	}))
 
-	catOptions := uiw.OptionsFrom(expenseCats,
+	// The picker leads with "➕ Create a new category" (the default), then every existing
+	// expense category, so the common case (a budget for something new) is one step.
+	catOptions := []uiw.SelectOption{{Value: budgetNewCatSentinel, Label: uistate.T("budgets.newCategoryOption")}}
+	catOptions = append(catOptions, uiw.OptionsFrom(expenseCats,
 		func(c domain.Category) string { return c.ID },
 		func(c domain.Category) string { return c.Name },
-		catID.Get())
+		catID.Get())...)
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
 	// Suggest a limit from the selected category's recent monthly spend (D6).
@@ -157,6 +192,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				OnChange:  func(v string) { catID.Set(v) },
 				AriaLabel: uistate.T("budgets.categoryLabel"),
 			})),
+		// When creating a new category, let the user name it (defaults to the budget
+		// name). Assigning a transaction to this category is how it counts to the budget.
+		If(catID.Get() == budgetNewCatSentinel, labeledField(uistate.T("budgets.newCategoryName"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
+				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName)))),
 		// C30: hide the owner picker until members exist (it only offers "Everyone"
 		// otherwise — meaningless in a 0-member household; owner stays shared).
 		If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),
