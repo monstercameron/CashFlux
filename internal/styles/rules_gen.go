@@ -5112,6 +5112,20 @@ func registerGenerated() {
 		gap("0.3rem"),
 		margin("0.35rem 0 0.1rem"),
 	)
+	// A running caption above the source list — "Selected N · splitting $X" — so the
+	// split total reads at a glance without scanning the rows.
+	rule(".cover-selected-cap",
+		display("block"),
+		fontSize("0.75rem"),
+		fontWeight("600"),
+		color("var(--accent)"),
+		textTransform("uppercase"),
+		letterSpacing("0.03em"),
+		margin("0.1rem 0 0"),
+	)
+	rule(".cover-selected-cap.is-empty",
+		display("none"),
+	)
 	// The source list is bounded and scrolls internally, so the recurring toggle and
 	// the Cancel/Cover actions below it stay visible without scrolling the whole modal.
 	rule(".cover-sources",
@@ -5177,10 +5191,22 @@ func registerGenerated() {
 		transition("background 0.15s ease, border-color 0.15s ease"),
 	)
 	// Checked source: tinted with an accent left-stripe so the selection reads at a
-	// glance (critic #5 + highest-leverage change).
+	// glance (critic #5 + highest-leverage change). The checked rows sort to the top, so
+	// a stronger tint + a heavier accent border makes them read as one clustered group.
 	rule(".cover-src-row.is-checked",
-		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
+		borderColor("color-mix(in srgb, var(--accent) 35%, var(--border))"),
 		borderLeftColor("var(--accent)"),
+	)
+	// Consecutive checked rows sit flush (tight cluster); trim the doubled gap between
+	// them so the picked budgets read as one block rather than separate cards.
+	rule(".cover-src-row.is-checked + .cover-src-row.is-checked",
+		marginTop("-0.25rem"),
+	)
+	// The first unchecked row after the checked cluster gets extra breathing room,
+	// separating "the split" from "add another source".
+	rule(".cover-src-row.is-checked + .cover-src-row:not(.is-checked)",
+		marginTop("0.6rem"),
 	)
 	rule(".cover-src-main",
 		display("flex"),

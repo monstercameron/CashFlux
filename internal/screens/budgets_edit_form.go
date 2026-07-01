@@ -420,14 +420,38 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if wtFxS.Get() {
 			spreadSub = uistate.T("budgets.coverWeightFxSub")
 		}
-		// Group checked sources at the top so the active split is visible together
-		// without scrolling past the unchecked budgets (keyed, so rows just reorder).
+		// Keyed single list sorted checked-first, so the picked budgets cluster at the top
+		// (the CSS tints them into one visible group and rules a divider before the rest).
+		// A single keyed list — rather than two — keeps each row's DOM node across a toggle,
+		// so a click never detaches the element being interacted with.
+		selNow := coverSelS.Get()
+		var selCount int
+		var selTotal int64
+		for _, sc := range coverSrcs {
+			if selNow[sc.ID] {
+				selCount++
+				selTotal += shares[sc.ID]
+			}
+		}
 		sortedCoverSrcs := make([]budgetCoverSource, len(coverSrcs))
 		copy(sortedCoverSrcs, coverSrcs)
-		selNow := coverSelS.Get()
 		sort.SliceStable(sortedCoverSrcs, func(i, j int) bool {
 			return selNow[sortedCoverSrcs[i].ID] && !selNow[sortedCoverSrcs[j].ID]
 		})
+		renderSrc := func(sc budgetCoverSource) ui.Node {
+			shareStr, over := "", false
+			if sh, ok := shares[sc.ID]; ok && sh > 0 {
+				shareStr = fmtMoney(money.New(sh, cur))
+				over = sh >= sc.LimitMinor // a share this source can't fully give
+			}
+			return ui.CreateElement(coverSourceRow, coverSourceRowProps{
+				ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
+				Selected: selNow[sc.ID], Weight: effWeights[sc.ID], ShareStr: shareStr,
+				Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)), Max: coverMaxS.Get()[sc.ID],
+				WeightLocked: wtFxS.Get(), OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
+			})
+		}
+		srcKey := func(sc budgetCoverSource) any { return sc.ID }
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.coverHint", coverShortfallStr)),
@@ -468,20 +492,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
 				Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
 			)),
+			// A running "Selected N · splitting $X" caption pinned above the list, so the
+			// split total reads at a glance even as rows scroll. Kept always-present (hidden
+			// when empty) so toggling it never restructures the siblings and forces the keyed
+			// list below to remount — which would detach a row mid-click.
+			Span(ClassStr(coverCapClass(selCount)), coverCapText(selCount, selTotal, cur)),
+			// One keyed list, sorted so the picked budgets cluster at the top; the CSS tints
+			// the checked group and rules a divider before the remaining sources.
 			Div(css.Class("cover-sources"),
-				MapKeyed(sortedCoverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
-					shareStr, over := "", false
-					if sh, ok := shares[sc.ID]; ok && sh > 0 {
-						shareStr = fmtMoney(money.New(sh, cur))
-						over = sh >= sc.LimitMinor // a share this source can't fully give
-					}
-					return ui.CreateElement(coverSourceRow, coverSourceRowProps{
-						ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
-						Selected: coverSelS.Get()[sc.ID], Weight: effWeights[sc.ID], ShareStr: shareStr,
-						Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)), Max: coverMaxS.Get()[sc.ID],
-						WeightLocked: wtFxS.Get(), OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
-					})
-				}),
+				MapKeyed(sortedCoverSrcs, srcKey, renderSrc),
 			),
 			// Repeat this cover automatically at the start of each new period.
 			Label(css.Class("cover-recurring-toggle"),
@@ -766,6 +785,24 @@ func recurringAmountFormula(b domain.Budget) string {
 		return b.RecurringCover.AmountFormula
 	}
 	return ""
+}
+
+// coverCapClass hides the "Selected …" caption when nothing is picked (it stays in the
+// DOM so toggling it never restructures the source list's siblings).
+func coverCapClass(selCount int) string {
+	if selCount == 0 {
+		return "cover-selected-cap is-empty"
+	}
+	return "cover-selected-cap"
+}
+
+// coverCapText is the running "Selected N · splitting $X" caption (empty when nothing
+// is picked, since the span is then hidden).
+func coverCapText(selCount int, totalMinor int64, cur string) string {
+	if selCount == 0 {
+		return ""
+	}
+	return uistate.T("budgets.coverSelectedCap", selCount, fmtMoney(money.New(totalMinor, cur)))
 }
 
 // recurringWeightFormula returns the shared per-source weight formula stored on a

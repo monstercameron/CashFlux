@@ -590,6 +590,8 @@ var english = Catalog{
 	"budgets.coverWeightFxTitle":     "Set every source's ratio from a formula instead of typing numbers",
 	"budgets.coverWeightFxSub":       "Each source's ratio is this formula, evaluated in that budget's own context.",
 	"budgets.coverWeightFxHint":      "Per source, e.g. cf_budget_priority · remaining · limit. Higher result = bigger share.",
+	"budgets.coverSelectedCap":       "Selected %d · splitting %s",
+	"budgets.coverAddMore":           "Add another source",
 	"budgets.coverOnlyAvail":         "only %s available",
 	"budgets.coverRecurring":         "Repeat this cover automatically every period",
 	"budgets.recurringBadge":         "↻ Recurring cover",
