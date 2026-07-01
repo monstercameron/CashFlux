@@ -24,7 +24,17 @@ import (
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
 
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
+	// Secondary actions (Top up, Delete) live in a "⋯" overflow menu so the row stays
+	// uncluttered — matching the /accounts row. Selecting one closes the menu. Escape +
+	// outside-pointerdown dismiss it; AnchorPopover flips it left/up near the edge.
+	menuOpen := ui.UseState(false)
+	menuID := ui.UseId()
+	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
+	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
+	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
+	uiw.AnchorPopover(menuOpen.Get(), menuID)
+
+	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
 			props.OnDrill(s.Budget.CategoryID)
@@ -37,6 +47,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
 	openTopup := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
 
@@ -184,17 +195,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// exact overspend), so Maya can clear the overspend without leaving the screen.
 	isOver := s.State == budgeting.StateOver
 	hasSource := firstSource() != ""
+	menuHidden := ""
+	if !menuOpen.Get() {
+		menuHidden = " hidden-menu"
+	}
 	var coverBtn ui.Node = Fragment()
 	if isOver && hasSource && !covering.Get() {
 		coverBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.coverTitle")), OnClick(startCover), "Cover…")
 	}
 
-	// "Top up…" is offered on budgets that are not over, letting the user raise the
-	// limit proactively before they hit the ceiling (L43). It opens the flip modal.
-	var topupBtn ui.Node = Fragment()
-	if !isOver && !covering.Get() {
-		topupBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
-	}
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
 		srcOpts := make([]uiw.SelectOption, 0, len(props.CoverSources))
@@ -245,12 +254,20 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
 			),
 			// Right group: the row actions, as a fixed, no-wrap cluster so they line up in
-			// a column across rows and never wrap onto a second line.
+			// a column across rows and never wrap onto a second line. Edit is the visible
+			// primary; Top up + the destructive Delete live in the ⋯ menu (like /accounts),
+			// so a misclick can't delete a budget and the row stays uncluttered.
 			Div(css.Class("budget-actions"),
 				coverBtn,
-				topupBtn,
 				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+				Div(css.Class("add-wrap"), Attr("id", menuID),
+					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+						If(!isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")),
+						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
+					),
+				),
 			),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),

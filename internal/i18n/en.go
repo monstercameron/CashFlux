@@ -532,6 +532,8 @@ var english = Catalog{
 	"budgets.hideFormulas":         "Hide metrics",
 	"budgets.addFunds":             "Add funds",
 	"budgets.topupHint":            "Increase %s (currently %s) by:",
+	"budgets.moreActions":          "More actions",
+	"budgets.deleteAction":         "Delete budget",
 	"budgets.formulaTitle":         "Budget metrics",
 	"budgets.formulaHint":          "Compute a metric from your budgets — variables include budgets (count) and any number custom field as cf_budget_<key>.",
 	"budgets.spent":                "Spent",

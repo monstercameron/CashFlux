@@ -81,10 +81,22 @@ try {
   await page.waitForFunction(() => !document.querySelector(".flip-backdrop.show"), { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(300);
 
-  // B10 — Top up opens the flip modal with the amount field.
-  await page.locator(".bento-budgets .budget button:has-text('Top up')").first().click().catch(() => {});
+  // B10 — the ⋯ overflow menu holds Top up + a destructive Delete (moved out of the
+  // standalone ✕ column, like /accounts). Open it and check both items exist.
+  await page.locator(".bento-budgets .budget .add-wrap button[aria-haspopup='menu']").first().click();
+  await page.waitForTimeout(400);
+  const menu = await page.evaluate(() => ({
+    open: !!document.querySelector(".bento-budgets .add-menu:not(.hidden-menu)"),
+    topup: !!document.querySelector('.add-menu:not(.hidden-menu) [data-testid^="budget-topup-btn-"]'),
+    del: !!document.querySelector('.add-menu:not(.hidden-menu) [data-testid^="delete-budget-btn-"]'),
+    noStandaloneX: document.querySelectorAll(".bento-budgets .budget .btn-del").length === 0,
+  }));
+  check("B10 ⋯ menu holds Top up + Delete; no standalone ✕", menu.open && menu.topup && menu.del && menu.noStandaloneX, JSON.stringify(menu));
+
+  // B11 — the menu's Top up opens the flip modal with the amount field.
+  await page.locator('.add-menu:not(.hidden-menu) [data-testid^="budget-topup-btn-"]').first().click();
   await page.waitForTimeout(700);
-  check("B10 Top up opens the flip modal with an amount field", await page.evaluate(() => !!document.getElementById("budget-topup-amt")));
+  check("B11 menu Top up opens the flip modal with an amount field", await page.evaluate(() => !!document.getElementById("budget-topup-amt")));
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(300);
 

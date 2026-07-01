@@ -180,60 +180,58 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 
 	// --- Top-up: a single amount that raises the budget's limit. ---
 	if props.Mode == uistate.BudgetEditModeTopup {
-		return Div(css.Class("acct-edit-form"),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}),
+		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.topupHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)), fmtMoney(b.Limit))),
-			Form(css.Class("form-grid"), OnSubmit(submitTopup),
-				labeledField(uistate.T("budgets.amountToAdd"),
-					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Type("number"),
-						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
-						Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
-				errLine,
-				Div(css.Class("acct-edit-actions"),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.addFunds")),
-					Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				),
+			labeledField(uistate.T("budgets.amountToAdd"),
+				Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
+					Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
+					Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
+			errLine,
+			Div(css.Class("acct-edit-actions"),
+				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.addFunds")),
 			),
 		)
 	}
 
-	// --- Full edit. ---
-	return Div(css.Class("acct-edit-form"),
-		Form(css.Class("form-grid"), OnSubmit(saveEdit),
-			labeledField(uistate.T("common.name"),
-				Input(css.Class("field"), Attr("id", "budget-edit-name"), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
-			labeledField(uistate.T("budgets.limitLabel"),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
-			labeledField(uistate.T("budgets.period"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
-					OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
-				})),
-			labeledField(uistate.T("common.owner"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
-					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
-				})),
-			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
-				Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
-				Span(uistate.T("budgets.rollover")),
-			),
-			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
-			labeledField(uistate.T("budgets.methodLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
-					OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
-				})),
-			// Custom fields: one input per user-defined "budget" field (renders nothing
-			// when there are no defs).
-			MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
-			}),
-			errLine,
-			Div(css.Class("acct-edit-actions"),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			),
+	// --- Full edit. Single-column form (.acct-edit-form) — a clean vertical stack so
+	// the rollover explanation and Method sit full-width beneath their controls, and the
+	// action row's margin-top:auto pins Save/Cancel to the modal's bottom. ---
+	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
+		labeledField(uistate.T("common.name"),
+			Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+		labeledField(uistate.T("budgets.limitLabel"),
+			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
+		labeledField(uistate.T("budgets.period"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
+				OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
+			})),
+		labeledField(uistate.T("common.owner"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
+				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
+			})),
+		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
+			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
+			Span(uistate.T("budgets.rollover")),
+		),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
+		labeledField(uistate.T("budgets.methodLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
+				OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
+			})),
+		// Custom fields: one input per user-defined "budget" field (renders nothing
+		// when there are no defs).
+		MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+			return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
+		}),
+		errLine,
+		Div(css.Class("acct-edit-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
 	)
 }

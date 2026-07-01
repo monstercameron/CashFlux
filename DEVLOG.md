@@ -3,6 +3,21 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-07-01 — Budgets modal polish + delete into a ⋯ menu
+
+Two refinements after screenshotting the new budget modals. **Modal layout:** the forms were using the
+generic 2-column `form-grid`, which looked broken — the rollover explanation landed in the right column
+beside the checkbox, the Method select sat next to the Save/Cancel buttons, and there was a big empty
+band at the bottom. Fix was to use the same single-column `.acct-edit-form` the account editor uses: a
+clean vertical stack, full-width controls, and the `.acct-edit-actions` row's `margin-top:auto` pinning
+Cancel/Save to the bottom (no dead space). Bumped the edit-modal height 600→680px so the actions aren't
+clipped by the taller single-column content, and added autofocus. **Delete → ⋯ menu:** per the ask
+("move the x into a triple-dot submenu like assets"), the standalone `.btn-del` ✕ is gone; the row now
+carries the same `.add-wrap` / `AnchorPopover` / `DismissPopover` overflow menu as the account row, with
+Top up… and a red "Delete budget" as `.add-item danger`. Row actions are now just Edit + ⋯ (plus Cover…
+when over-budget), and a destructive delete is safely tucked behind the menu. `e2e/budgets_widget_check.mjs`
+→ 11/11 (asserts the menu holds both items and no `.btn-del` remains).
+
 ## 2026-07-01 — Budgets Edit + Top up moved to the flip modal (accounts pattern)
 
 **Ask:** make Edit + Top up use the flip modal instead of inline row inputs.
