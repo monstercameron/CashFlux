@@ -250,7 +250,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// stable, column-aligned cluster instead of being pushed around by a long title.
 			Div(css.Class("budget-head-main"),
 				IfElse(s.Budget.CategoryID != "",
-					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
 						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
 						title),
 					Span(css.Class("row-desc"), title)),
