@@ -3,6 +3,35 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-07-01 — Budgets Edit + Top up moved to the flip modal (accounts pattern)
+
+**Ask:** make Edit + Top up use the flip modal instead of inline row inputs.
+
+**What I did:** the same shell-root modal pattern I built for `/accounts`. A new `BudgetEdit{ID,Mode}`
+atom (`internal/uistate/budgetspage.go`) selects which editor is open; `BudgetEditHost`
+(`internal/app/budgetedithost.go`, mounted at the shell root beside `AccountEditHost`) reads it and
+renders a `FlipPanel` (NoFooter) whose body is `BudgetEditForm` (`internal/screens/budgets_edit_form.go`).
+The form has two modes — full edit (name/limit/period/owner/rollover/methodology/custom fields) and
+top-up (one amount that raises the limit) — owns all its state and its own Save/Cancel, and mutates the
+store directly, then calls `OnDone` to clear the atom.
+
+**Two gotchas worth noting.** (1) The atom's `Set`/`Close` helpers must NOT call `state.UseAtom` — that
+panics outside a render. Same fix as the account editor: `UseBudgetEdit()` (called in the host's render)
+captures the atom into a package var, and `SetBudgetEdit`/`CloseBudgetEdit` update the captured
+reference from the click handler. (2) Why shell-root and not in the row: a budget row sits under
+transformed bento/tile ancestors (`.w`/`.card`/app-enter all carry a `transform`), so an in-row
+`position:fixed` modal resolves against the tile, not the viewport, and renders off-centre. At the shell
+root there's no transformed ancestor, so it centers.
+
+**Cleanup:** `BudgetRow` shed a big block of hooks/state (the inline editing + top-up machinery and the
+`focusByID` effect); the Edit/Top up buttons now just call `SetBudgetEdit`. The now-orphaned `OnSave`/
+`OnTopUp` row callbacks were removed from `budgetRowProps`, the list tile, and `buildBudgetRowCallbacks`.
+Cover… stays inline — it's an over-budget-only quick action, not part of the ask.
+
+**Verify:** `e2e/budgets_widget_check.mjs` extended to 10/10 (Edit → modal with `#budget-edit-name` and
+no inline `.form-grid`; Top up → modal with `#budget-topup-amt`). Modal centering confirmed by
+screenshot. gofmt/vet/i18n green.
+
 ## 2026-07-01 — Budgets ported to the widgetized surface host (+ formulas & custom fields)
 
 **Goal:** make `/budgets` structurally match `/accounts` and `/transactions` — a thin surface host

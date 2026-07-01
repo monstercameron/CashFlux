@@ -67,10 +67,26 @@ try {
   await page.waitForTimeout(600);
   check("B8 switching method keeps the surface rendered", await page.evaluate(() => !!document.querySelector(".bento.bento-budgets .stat-grid")));
 
-  // B9 — editing a budget row still works (inline editor opens with fields).
+  // B9 — Edit opens the shell-root FLIP MODAL (not an inline row form), with the
+  // budget edit fields inside it.
   await page.locator(".bento-budgets .budget button:has-text('Edit')").first().click().catch(() => {});
-  await page.waitForTimeout(500);
-  check("B9 row edit opens the inline editor", await page.evaluate(() => !!document.querySelector(".bento-budgets .budget .form-grid")));
+  await page.waitForTimeout(700);
+  const editModal = await page.evaluate(() => ({
+    nameField: !!document.getElementById("budget-edit-name"),
+    inRow: !!document.querySelector(".bento-budgets .budget .form-grid"), // must NOT be inline
+  }));
+  check("B9 Edit opens the flip modal (not inline)", editModal.nameField && !editModal.inRow, JSON.stringify(editModal));
+  // Close the modal (Escape) before the next check.
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForFunction(() => !document.querySelector(".flip-backdrop.show"), { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(300);
+
+  // B10 — Top up opens the flip modal with the amount field.
+  await page.locator(".bento-budgets .budget button:has-text('Top up')").first().click().catch(() => {});
+  await page.waitForTimeout(700);
+  check("B10 Top up opens the flip modal with an amount field", await page.evaluate(() => !!document.getElementById("budget-topup-amt")));
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForTimeout(300);
 
   const pass = results.filter(r => r.ok).length, fail = results.length - pass;
   console.log("\n════════════════════════════════════════════");

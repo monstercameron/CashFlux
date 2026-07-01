@@ -312,7 +312,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
 					CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault,
-					OnDelete: cbs.OnDelete, OnSave: cbs.OnSave, OnCover: cbs.OnCover, OnTopUp: cbs.OnTopUp, OnDrill: viewTransactions,
+					OnDelete: cbs.OnDelete, OnCover: cbs.OnCover, OnDrill: viewTransactions,
 				})
 			},
 		)

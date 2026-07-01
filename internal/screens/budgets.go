@@ -252,9 +252,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 // bump the shared data revision so the whole surface re-renders in step.
 type budgetRowCallbacks struct {
 	OnDelete func(string)
-	OnSave   func(id, name, limit, period, owner, methodology string, rollover bool, custom map[string]any)
 	OnCover  func(toID, fromID, amount string) error
-	OnTopUp  func(id, amount string) error
 }
 
 // buildBudgetRowCallbacks wires the store mutations for BudgetRow, mirroring the
@@ -284,48 +282,6 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 				uistate.BumpDataRevision()
 			})
 		},
-		OnSave: func(budgetID, newName, limitStr, periodStr, ownerID, methodology string, rollover bool, custom map[string]any) {
-			for _, b := range app.Budgets() {
-				if b.ID != budgetID {
-					continue
-				}
-				if n := strings.TrimSpace(newName); n != "" {
-					b.Name = n
-				}
-				amt, err := money.ParseMinor(strings.TrimSpace(limitStr), currency.Decimals(base))
-				if err != nil || amt <= 0 {
-					uistate.PostNotice(uistate.T("budgets.limitRequired"), true)
-					return
-				}
-				b.Limit = money.New(amt, base)
-				if p := domain.Period(periodStr); p.Valid() {
-					b.Period = p
-				}
-				b.OwnerID = ownerID
-				if ownerID == domain.GroupOwnerID {
-					b.Scope = domain.ScopeShared
-				} else {
-					b.Scope = domain.ScopeIndividual
-				}
-				b.Rollover = rollover
-				// Store per-budget methodology override; empty = inherit global.
-				if m := budgeting.Methodology(methodology); m.Valid() {
-					b.Methodology = methodology
-				} else {
-					b.Methodology = ""
-				}
-				// Persist edited custom-field values (nil = leave unchanged).
-				if custom != nil {
-					b.Custom = custom
-				}
-				if err := app.PutBudget(b); err != nil {
-					uistate.PostNotice(err.Error(), true)
-					return
-				}
-				break
-			}
-			uistate.BumpDataRevision()
-		},
 		OnCover: func(toID, fromID, amountStr string) error {
 			amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(base))
 			if err != nil || amt <= 0 {
@@ -336,25 +292,6 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 			}
 			uistate.BumpDataRevision()
 			return nil
-		},
-		OnTopUp: func(toID, amountStr string) error {
-			amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(base))
-			if err != nil || amt <= 0 {
-				return fmt.Errorf("enter an amount greater than zero")
-			}
-			for _, b := range app.Budgets() {
-				if b.ID != toID {
-					continue
-				}
-				b.Limit = money.New(b.Limit.Amount+amt, base)
-				if err := app.PutBudget(b); err != nil {
-					return err
-				}
-				uistate.BumpDataRevision()
-				uistate.PostNotice(uistate.T("budgets.toppedUpToast", fmtMoney(money.New(amt, base))), false)
-				return nil
-			}
-			return fmt.Errorf("budget not found")
 		},
 	}
 }
@@ -378,10 +315,8 @@ type budgetRowProps struct {
 	CoverShortfall  string                // formatted overspend, for the "covers the $X over" hint
 	CoverDefault    string                // major-units default amount to prefill the cover field
 	OnDelete        func(string)
-	OnSave          func(id, name, limit, period, owner, methodology string, rollover bool, custom map[string]any)
 	OnCover         func(toID, fromID, amount string) error
-	OnTopUp         func(id, amount string) error // increase this budget's limit by the entered amount
-	OnDrill         func(categoryID string)       // open Transactions filtered to this budget's category
+	OnDrill         func(categoryID string) // open Transactions filtered to this budget's category
 }
 
 // coverSource is one budget offered as a funding source in a row's "Cover…" picker.

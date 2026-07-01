@@ -9,10 +9,7 @@ import (
 	"strconv"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -26,7 +23,6 @@ import (
 // hooks (declared unconditionally) so the edit toggle never disturbs hook order.
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
-	limitMajor := money.FormatMinor(s.Budget.Limit.Amount, currency.Decimals(s.Budget.Limit.Currency))
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
 	drill := ui.UseEvent(Prevent(func() {
@@ -34,48 +30,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			props.OnDrill(s.Budget.CategoryID)
 		}
 	}))
-	editing := ui.UseState(false)
-	nameS := ui.UseState(s.Budget.Name)
-	limitS := ui.UseState(limitMajor)
-	periodS := ui.UseState(string(s.Budget.Period))
-	ownerS := ui.UseState(s.Budget.OwnerID)
-	rolloverS := ui.UseState(s.Budget.Rollover)
-	methodologyS := ui.UseState(s.Budget.Methodology)
-	// Custom-field edit values (string form, keyed by def key) — seeded from the
-	// budget's stored map so the inline editor round-trips them (ties custom fields to
-	// budgets the same way /accounts does).
-	customEditVals := ui.UseState(customMapToStrings(s.Budget.Custom))
-	onCustomEdit := func(key, value string) {
-		m := customEditVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, val := range m {
-			nm[k] = val
-		}
-		nm[key] = value
-		customEditVals.Set(nm)
-	}
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
-	// onPeriod/onOwner hooks kept for stable hook ordering; SelectInput owns the
-	// change event internally so these handlers are no longer wired to DOM.
-	ui.UseEvent(func(e ui.Event) { periodS.Set(e.GetValue()) })
-	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
-	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
-	startEdit := ui.UseEvent(Prevent(func() {
-		nameS.Set(s.Budget.Name)
-		limitS.Set(limitMajor)
-		periodS.Set(string(s.Budget.Period))
-		ownerS.Set(s.Budget.OwnerID)
-		rolloverS.Set(s.Budget.Rollover)
-		methodologyS.Set(s.Budget.Methodology)
-		customEditVals.Set(customMapToStrings(s.Budget.Custom))
-		editing.Set(true)
+	// Edit and Top up open the shell-root flip modal (BudgetEditHost) rather than an
+	// inline row form: a row sits under transformed bento/tile ancestors, which threw an
+	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured.
+	openEdit := ui.UseEvent(Prevent(func() {
+		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
-	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
-	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), methodologyS.Get(), rolloverS.Get(),
-			customValuesToMap(props.BudgetDefs, customEditVals.Get()))
-		editing.Set(false)
+	openTopup := ui.UseEvent(Prevent(func() {
+		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
 
 	// "Cover…" inline form (L1): move money from another budget to clear an overspend.
@@ -114,92 +76,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverErr.Set("")
 		covering.Set(false)
 	}))
-
-	// "Top up…" inline form (L43): increase this budget's limit by a chosen amount,
-	// available on budgets that are not already over (proactive capacity add).
-	toppingUp := ui.UseState(false)
-	topupAmt := ui.UseState("")
-	topupErr := ui.UseState("")
-	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
-	startTopup := ui.UseEvent(Prevent(func() {
-		topupAmt.Set("")
-		topupErr.Set("")
-		toppingUp.Set(true)
-	}))
-	cancelTopup := ui.UseEvent(Prevent(func() { toppingUp.Set(false) }))
-	submitTopup := ui.UseEvent(Prevent(func() {
-		if err := props.OnTopUp(s.Budget.ID, topupAmt.Get()); err != nil {
-			topupErr.Set(err.Error())
-			return
-		}
-		topupErr.Set("")
-		toppingUp.Set(false)
-	}))
-
-	// Land the cursor in the first field when the inline editor opens (§6.7).
-	editKey := "closed"
-	if editing.Get() {
-		editKey = "open"
-	}
-	ui.UseEffect(func() func() {
-		if editing.Get() {
-			focusByID("budget-edit-" + s.Budget.ID)
-		}
-		return nil
-	}, editKey)
-
-	if editing.Get() {
-		return Div(css.Class("budget"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				labeledField(uistate.T("common.name"),
-					Input(css.Class("field"), Attr("id", "budget-edit-"+s.Budget.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
-				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
-				labeledField(uistate.T("budgets.period"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   periodOptions(periodS.Get()),
-						Selected:  periodS.Get(),
-						OnChange:  func(v string) { periodS.Set(v) },
-						AriaLabel: uistate.T("budgets.period"),
-					})),
-				labeledField(uistate.T("common.owner"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   ownerSelectOptions(props.Members, ownerS.Get()),
-						Selected:  ownerS.Get(),
-						OnChange:  func(v string) { ownerS.Set(v) },
-						AriaLabel: uistate.T("common.owner"),
-					})),
-				// C117: prevent the label from wrapping the checkbox away from its text
-				// at narrow widths (≤1280px). flex-wrap:nowrap keeps checkbox + label
-				// on one line; flex-shrink:0 on the checkbox prevents it from being
-				// squeezed to zero under extreme constraints.
-				Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
-					Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
-					Span(uistate.T("budgets.rollover")),
-				),
-				// C138: explain what rollover actually does, with a concrete example, so it's
-				// not an unexplained checkbox.
-				P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
-				// C118: per-budget methodology override — "Use default" inherits the global
-				// household method; otherwise this budget uses its own chosen method.
-				labeledField(uistate.T("budgets.methodLabel"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   budgetMethodOptions(methodologyS.Get()),
-						Selected:  methodologyS.Get(),
-						OnChange:  func(v string) { methodologyS.Set(v) },
-						AriaLabel: uistate.T("budgets.methodLabel"),
-					})),
-				// Custom fields: one input per user-defined "budget" field, so a numeric
-				// field can then be computed over in the Budget metrics formula tile.
-				// MapKeyed renders nothing when there are no defs, so no guard is needed.
-				MapKeyed(props.BudgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
-				}),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
 
 	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
 
@@ -313,27 +189,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.coverTitle")), OnClick(startCover), "Cover…")
 	}
 
-	// "Top up…" is offered on budgets that are not over, letting the user raise
-	// the limit proactively before they hit the ceiling (L43).
+	// "Top up…" is offered on budgets that are not over, letting the user raise the
+	// limit proactively before they hit the ceiling (L43). It opens the flip modal.
 	var topupBtn ui.Node = Fragment()
-	if !isOver && props.OnTopUp != nil && !toppingUp.Get() && !covering.Get() {
-		topupBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.topupTitle")), OnClick(startTopup), "Top up…")
-	}
-	var topupForm ui.Node = Fragment()
-	if toppingUp.Get() {
-		var topupErrLine ui.Node = Fragment()
-		if topupErr.Get() != "" {
-			topupErrLine = P(css.Class("budget-sub", tw.TextDown), topupErr.Get())
-		}
-		topupForm = Div(css.Class("cover-form"),
-			Span(css.Class("budget-sub"), "Increase this budget's limit by:"),
-			Form(css.Class("form-grid"), OnSubmit(submitTopup),
-				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder("Amount"), Value(topupAmt.Get()), Step("0.01"), OnInput(onTopupAmt)),
-				Button(css.Class("btn btn-primary"), Type("submit"), "Add funds"),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelTopup), uistate.T("action.cancel")),
-			),
-			topupErrLine,
-		)
+	if !isOver && !covering.Get() {
+		topupBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
 	}
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
@@ -389,7 +249,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Div(css.Class("budget-actions"),
 				coverBtn,
 				topupBtn,
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 		),
@@ -409,7 +269,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		effectiveCapLine,
 		envLine,
 		coverForm,
-		topupForm,
 	)
 }
 
