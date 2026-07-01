@@ -22,9 +22,9 @@ const (
 // synchronously at package-init. ensureI18n runs once, on the first T()/Languages
 // call (which happens during the first render, well after browserstore.Init).
 var (
-	i18nOnce    sync.Once
-	bundle      *i18n.Bundle
-	activeLang  i18n.Lang
+	i18nOnce   sync.Once
+	bundle     *i18n.Bundle
+	activeLang i18n.Lang
 )
 
 func ensureI18n() {

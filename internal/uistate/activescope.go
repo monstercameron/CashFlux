@@ -24,8 +24,8 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/CashFlux/internal/scope"
+	"github.com/monstercameron/GoWebComponents/state"
 )
 
 const (
@@ -45,8 +45,8 @@ func UseActiveScope() state.Atom[scope.ReportScope] {
 }
 
 var (
-	capturedActiveScope  state.Atom[scope.ReportScope]
-	activeScopeCaptured  bool
+	capturedActiveScope state.Atom[scope.ReportScope]
+	activeScopeCaptured bool
 )
 
 // SetActiveScope changes the active scope from outside a component render

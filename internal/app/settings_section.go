@@ -86,8 +86,8 @@ type settingsRightProps struct {
 	OnAppearanceLink func()      // closes panel + navigates to /appearance
 	OnDateStyle      uic.Handler // UseEvent
 	OnWeekStart      func(string)
-	OnPayCycleAnchor   func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
-	OnMonthlyIncome    func(string) // sets MonthlyIncomeMinor from a major-unit string (empty = 0)
+	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
+	OnMonthlyIncome  func(string) // sets MonthlyIncomeMinor from a major-unit string (empty = 0)
 	// AI
 	AiOn          bool
 	OnAiToggle    func(bool)

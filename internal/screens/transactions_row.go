@@ -280,11 +280,11 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
 		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
 		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags,
-		// C58-ui: show a small "Split" chip when the transaction has a category
-		// breakdown, so the user can see at a glance which rows are split without
-		// having to open the inline editor.
-		If(t.HasSplits(), Span(css.Class("badge badge-split"), Attr("data-testid", "txn-split-badge"), Attr("title", "Split across categories"), "⑂ Split")),
-		smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID)),
+			// C58-ui: show a small "Split" chip when the transaction has a category
+			// breakdown, so the user can see at a glance which rows are split without
+			// having to open the inline editor.
+			If(t.HasSplits(), Span(css.Class("badge badge-split"), Attr("data-testid", "txn-split-badge"), Attr("title", "Split across categories"), "⑂ Split")),
+			smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID)),
 		Td(css.Class("td-cat"), cat),
 		Td(css.Class("td-acct"), props.Account),
 		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),

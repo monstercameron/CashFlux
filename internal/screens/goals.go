@@ -358,8 +358,8 @@ type goalRowProps struct {
 	// C189/C192: sinking-fund display data (zero values = not a fund / no link).
 	// FundSetAside is the monthly set-aside in minor units (from FundSetAsideMinor).
 	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).
-	FundSetAside        int64
-	LinkedCategoryName  string
+	FundSetAside       int64
+	LinkedCategoryName string
 }
 
 // goalAccountOptions builds the linked-account SelectOptions for a goal, with a

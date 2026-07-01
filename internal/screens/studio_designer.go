@@ -92,7 +92,7 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	// Sort defaults to the initial collection's recommended order (transactions →
 	// newest first) so a fresh list looks intentional; it stays fully overridable.
 	defCol, defDesc := widgetcatalog.DefaultSort("transactions")
-	sortBy := ui.UseState(defCol)            // list sort column ("" = source's natural order)
+	sortBy := ui.UseState(defCol)              // list sort column ("" = source's natural order)
 	sortDir := ui.UseState(sortDirOf(defDesc)) // desc | asc (engine arg gets a "-" prefix for desc)
 	chartIsSeries := ui.UseState(true)
 	blocks := ui.UseState(widgetcatalog.IncomeVsSpendingBlocks())
@@ -147,7 +147,7 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 	applyStarter := func(st widgetcatalog.Starter) {
 		kind.Set(st.Kind)
 		title.Set(st.Title)
-		sub.Set(st.Sub)            // always reset the caption so a starter never inherits stale text
+		sub.Set(st.Sub)                 // always reset the caption so a starter never inherits stale text
 		applyDefaultSort(st.Collection) // a preset adopts its source's recommended sort
 		if st.Formula != "" {
 			formula.Set(st.Formula)
@@ -211,12 +211,12 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 			sortDir.Set(dir)
 		},
 		setSortDir: sortDir.Set,
-		setKind:  func(v string) { kind.Set(v); activeStarter.Set("") }, setTitle: title.Set, setFormula: formula.Set, setFormat: format.Set, setSub: sub.Set,
+		setKind:    func(v string) { kind.Set(v); activeStarter.Set("") }, setTitle: title.Set, setFormula: formula.Set, setFormat: format.Set, setSub: sub.Set,
 		// Changing the data source adopts that collection's default sort — its columns
 		// differ, so this both gives a sensible order and avoids a stale column choice.
 		setCollection: func(v string) { collection.Set(v); applyDefaultSort(v) }, setSeries: series.Set,
-		setChartSrc:   func(v string) { chartIsSeries.Set(v == "series") },
-		setLimit:      limit.Set, setCols: cols.Set, setRows: rows.Set,
+		setChartSrc: func(v string) { chartIsSeries.Set(v == "series") },
+		setLimit:    limit.Set, setCols: cols.Set, setRows: rows.Set,
 		toggleAdvanced: func() {
 			next := !advanced.Get()
 			mols := app.Molecules()

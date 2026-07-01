@@ -307,7 +307,6 @@ func buildActivityFeed(app *appstate.App) []auditlog.Entry {
 	return entries
 }
 
-
 // ─── small helpers (prefixed act* to avoid clashing with other screens) ───────
 
 func actCapitalize(s string) string {

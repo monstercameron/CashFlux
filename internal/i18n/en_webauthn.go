@@ -12,16 +12,16 @@ var webauthnKeys = Catalog{
 	"webauthn.unlockFail":  "Passkey unlock failed — please enter your passcode instead.",
 
 	// Passkey manager modal.
-	"webauthn.setupTitle":   "Passkey",
-	"webauthn.setupDesc":    "Add your fingerprint, face, or device PIN as a faster way to unlock CashFlux. Your passcode always remains as a fallback.",
-	"webauthn.registerBtn":  "Register passkey",
-	"webauthn.removeBtn":    "Remove passkey",
+	"webauthn.setupTitle":    "Passkey",
+	"webauthn.setupDesc":     "Add your fingerprint, face, or device PIN as a faster way to unlock CashFlux. Your passcode always remains as a fallback.",
+	"webauthn.registerBtn":   "Register passkey",
+	"webauthn.removeBtn":     "Remove passkey",
 	"webauthn.removeConfirm": "Remove your passkey registration? You can still unlock with your passcode at any time.",
-	"webauthn.setupOK":      "Passkey registered — you can now unlock with your fingerprint or device PIN.",
-	"webauthn.setupFail":    "Passkey registration failed. Your passcode remains fully functional.",
-	"webauthn.removedOK":    "Passkey removed.",
-	"webauthn.notAvailable": "Passkeys are not supported on this device or browser.",
-	"webauthn.manageBtn":    "Manage passkey",
+	"webauthn.setupOK":       "Passkey registered — you can now unlock with your fingerprint or device PIN.",
+	"webauthn.setupFail":     "Passkey registration failed. Your passcode remains fully functional.",
+	"webauthn.removedOK":     "Passkey removed.",
+	"webauthn.notAvailable":  "Passkeys are not supported on this device or browser.",
+	"webauthn.manageBtn":     "Manage passkey",
 }
 
 func init() {

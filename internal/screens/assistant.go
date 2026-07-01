@@ -10,9 +10,9 @@
 //
 //   - Ask      — the full AI chat surface (delegates to the Insights component)
 //   - Insights — spending highlights, top merchants, monthly trend chart,
-//                anomaly flags, and pinned insights — no chat
+//     anomaly flags, and pinned insights — no chat
 //   - Smart    — the Free-insight cards, AI feature panel, and manage catalog
-//                (delegates to the SmartHub component)
+//     (delegates to the SmartHub component)
 //
 // The route /assistant is NOT registered here; a later rail-regroup commit
 // wires it into screens.All(). Existing /insights and /smart routes remain

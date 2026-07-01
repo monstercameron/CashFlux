@@ -26,7 +26,7 @@ var ruleCondKeys = Catalog{
 	"rulecond.op.gte": "at least (≥)",
 
 	// Condition operator labels (account field).
-	"rulecond.op.is":    "is",
+	"rulecond.op.is":     "is",
 	"rulecond.op.is-not": "is not",
 
 	// Condition operator labels (date field).
@@ -36,16 +36,16 @@ var ruleCondKeys = Catalog{
 	"rulecond.op.in-month": "in month",
 
 	// UI chrome: condition slot labels and helpers.
-	"rulecond.slot1":      "Condition 1",
-	"rulecond.slot2":      "Condition 2",
-	"rulecond.slot3":      "Condition 3",
+	"rulecond.slot1":        "Condition 1",
+	"rulecond.slot2":        "Condition 2",
+	"rulecond.slot3":        "Condition 3",
 	"rulecond.sectionLabel": "Additional conditions (optional, all must match)",
-	"rulecond.valueLabel":  "Value",
-	"rulecond.fieldLabel":  "Field",
-	"rulecond.opLabel":     "Operator",
-	"rulecond.enableLabel": "Use this condition",
-	"rulecond.amountHint":  "Enter amount in cents (e.g. 500 = $5.00)",
-	"rulecond.dateHint":    "Enter date as YYYY-MM-DD (or YYYY-MM for in-month)",
+	"rulecond.valueLabel":   "Value",
+	"rulecond.fieldLabel":   "Field",
+	"rulecond.opLabel":      "Operator",
+	"rulecond.enableLabel":  "Use this condition",
+	"rulecond.amountHint":   "Enter amount in cents (e.g. 500 = $5.00)",
+	"rulecond.dateHint":     "Enter date as YYYY-MM-DD (or YYYY-MM for in-month)",
 }
 
 func init() {

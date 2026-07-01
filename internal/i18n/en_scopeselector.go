@@ -21,13 +21,13 @@ var scopeSelectorKeys = Catalog{
 	// Collapsible individual-account section toggle label.
 	"scope.showAccounts": "Specific accounts",
 	// Saved views panel.
-	"scope.savedViews":                "Saved views",
-	"scope.savedViews.select":         "Apply a saved view…",
-	"scope.savedViews.save":           "Save current as…",
+	"scope.savedViews":                 "Saved views",
+	"scope.savedViews.select":          "Apply a saved view…",
+	"scope.savedViews.save":            "Save current as…",
 	"scope.savedViews.namePlaceholder": "View name",
-	"scope.savedViews.confirm":        "Save",
-	"scope.savedViews.cancel":         "Cancel",
-	"scope.savedViews.delete":         "Delete view",
+	"scope.savedViews.confirm":         "Save",
+	"scope.savedViews.cancel":          "Cancel",
+	"scope.savedViews.delete":          "Delete view",
 }
 
 func init() {

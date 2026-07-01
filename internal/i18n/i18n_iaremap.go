@@ -14,11 +14,11 @@ package i18n
 //     new nav.toolsPlan/nav.toolsData keys shadow them for the rail header display only.
 var iaRemapKeys = Catalog{
 	// /household hub — nav label and page subtitle.
-	"nav.household":    "Household",
+	"nav.household":       "Household",
 	"screen.householdSub": "Members, shared expenses, and per-person views",
 
 	// /studio hub — nav label and page subtitle.
-	"nav.studio":    "Studio",
+	"nav.studio":       "Studio",
 	"screen.studioSub": "Build widgets, manage your dashboard, and custom pages",
 
 	// Tools rail sub-group header labels (updated for the new grouping).

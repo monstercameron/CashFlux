@@ -21,13 +21,13 @@ var setupKeys = Catalog{
 	"setup.confirmCurrency": "Continue",
 
 	// Step 2 — income
-	"setup.step2Label":       "Income",
-	"setup.step2Title":       "Your monthly income",
-	"setup.step2Hint":        "Used for budgeting and safe-to-spend. Leave blank to estimate it from your income transactions.",
-	"setup.incomeLabel":      "Monthly take-home income",
+	"setup.step2Label":        "Income",
+	"setup.step2Title":        "Your monthly income",
+	"setup.step2Hint":         "Used for budgeting and safe-to-spend. Leave blank to estimate it from your income transactions.",
+	"setup.incomeLabel":       "Monthly take-home income",
 	"setup.incomePlaceholder": "e.g. 4,000",
-	"setup.confirmIncome":    "Continue",
-	"setup.skipIncome":       "Skip for now",
+	"setup.confirmIncome":     "Continue",
+	"setup.skipIncome":        "Skip for now",
 
 	// Step 3 — first account
 	"setup.step3Label":          "Account",
@@ -44,15 +44,15 @@ var setupKeys = Catalog{
 	"setup.skipAccount":         "Skip for now",
 
 	// Step 4 — household members (optional)
-	"setup.step4Label":           "Members",
-	"setup.step4Title":           "Add household members",
-	"setup.step4Hint":            "Optional. Add the people who share this household so you can track per-member views later.",
-	"setup.memberNameLabel":      "Member name",
+	"setup.step4Label":            "Members",
+	"setup.step4Title":            "Add household members",
+	"setup.step4Hint":             "Optional. Add the people who share this household so you can track per-member views later.",
+	"setup.memberNameLabel":       "Member name",
 	"setup.memberNamePlaceholder": "e.g. Alex",
-	"setup.memberNameRequired":   "Please enter a name.",
-	"setup.addMember":            "Add member",
-	"setup.membersAlready":       "Your household has %d member(s).",
-	"setup.skipMembers":          "Skip — it's just me",
+	"setup.memberNameRequired":    "Please enter a name.",
+	"setup.addMember":             "Add member",
+	"setup.membersAlready":        "Your household has %d member(s).",
+	"setup.skipMembers":           "Skip — it's just me",
 
 	// Completion
 	"setup.doneTitle":       "You're all set!",

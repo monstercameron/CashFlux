@@ -11,9 +11,9 @@ var txnAbsorbKeys = Catalog{
 	"transactions.importBtn":      "Import",
 	"transactions.importBtnClose": "Close import",
 	// Duplicates panel toggle in the Transactions header.
-	"transactions.dupReviewBtn":    "Review duplicates",
-	"transactions.dupReviewClose":  "Close review",
-	"transactions.dupReviewBadge":  "Review %s",
+	"transactions.dupReviewBtn":   "Review duplicates",
+	"transactions.dupReviewClose": "Close review",
+	"transactions.dupReviewBadge": "Review %s",
 }
 
 func init() {

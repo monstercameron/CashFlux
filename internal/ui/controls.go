@@ -131,15 +131,15 @@ func segmented(props SegmentedProps) uic.Node {
 	args := []any{ID(groupID), css.Class("seg"), Attr("role", "radiogroup"),
 		Div(css.Class("seg-pill"), Attr("aria-hidden", "true")),
 		OnKeyDown(func(e uic.KeyboardEvent) {
-		switch e.GetKey() {
-		case "ArrowLeft", "ArrowUp":
-			e.PreventDefault()
-			move(-1)
-		case "ArrowRight", "ArrowDown":
-			e.PreventDefault()
-			move(1)
-		}
-	})}
+			switch e.GetKey() {
+			case "ArrowLeft", "ArrowUp":
+				e.PreventDefault()
+				move(-1)
+			case "ArrowRight", "ArrowDown":
+				e.PreventDefault()
+				move(1)
+			}
+		})}
 	if props.Label != "" {
 		args = append(args, Attr("aria-label", props.Label))
 	}

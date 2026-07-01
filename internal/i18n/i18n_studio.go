@@ -20,9 +20,9 @@ var studioKeys = Catalog{
 	"studio.createPage": "Create page",
 
 	// My pages panel — row actions
-	"studio.goToPage":        "Go to page",
-	"studio.deletePage":      "Delete page",
-	"studio.deletePageAria":  "Delete page %s",
+	"studio.goToPage":       "Go to page",
+	"studio.deletePage":     "Delete page",
+	"studio.deletePageAria": "Delete page %s",
 
 	// My pages panel — empty state
 	"studio.pagesEmpty": "No custom pages yet. Use Create page above to build your first one.",

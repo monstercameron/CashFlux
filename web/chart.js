@@ -144,7 +144,17 @@
     var yf = tickFormatter(spec.y);
     if (yf) yAxis.tickFormat(yf);
     if (!hideX && !tiny && !narrow) {
-      g.append("g").attr("class", "x-axis").attr("transform", "translate(0," + ih + ")").call(xAxis).call(styleAxis);
+      var gx = g.append("g").attr("class", "x-axis").attr("transform", "translate(0," + ih + ")").call(xAxis).call(styleAxis);
+      // Keep the edge tick labels inside the plot: d3 centers tick text, so a wide
+      // first/last label (e.g. "Jun '26 (so far)") overflows the small side margin
+      // and gets clipped by the card. Anchor the first label to its start and the
+      // last to its end so both stay within bounds.
+      var xticks = gx.selectAll(".tick text");
+      var xn = xticks.size();
+      xticks.each(function (d, i) {
+        if (i === 0) d3.select(this).attr("text-anchor", "start");
+        else if (i === xn - 1) d3.select(this).attr("text-anchor", "end");
+      });
     }
     if (!tiny) {
       g.append("g").attr("class", "y-axis").call(yAxis).call(styleAxis);
