@@ -5179,12 +5179,12 @@ func registerGenerated() {
 	)
 	// Variable-name editor: the input, then a live "Generates budget_<slug>" chip so the
 	// user can see exactly what handle their budget produces as they type.
-	rule(".budget-var-block",
+	rule(".entity-var-block",
 		display("flex"),
 		flexDirection("column"),
 		gap("0.35rem"),
 	)
-	rule(".budget-var-preview",
+	rule(".entity-var-preview",
 		display("flex"),
 		alignItems("center"),
 		flexWrap("wrap"),
@@ -5192,10 +5192,10 @@ func registerGenerated() {
 		fontSize("0.78rem"),
 		color("var(--text-dim)"),
 	)
-	rule(".budget-var-preview-lead",
+	rule(".entity-var-preview-lead",
 		color("var(--text-dim)"),
 	)
-	rule(".budget-var-chip",
+	rule(".entity-var-chip",
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
 		fontSize("0.8rem"),
 		fontWeight("600"),
@@ -5205,7 +5205,7 @@ func registerGenerated() {
 		borderRadius("0.4rem"),
 		padding("0.1rem 0.4rem"),
 	)
-	rule(".budget-var-preview-fields",
+	rule(".entity-var-preview-fields",
 		color("var(--text-faint, var(--text-dim))"),
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
 		fontSize("0.72rem"),

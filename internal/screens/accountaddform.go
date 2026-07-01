@@ -14,7 +14,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -66,8 +65,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	}()
 
 	name := ui.UseState("")
-	varName := ui.UseState("")
-	varTouched := ui.UseState(false)
+	ev := useEntityVarField(accountVarKind, name, "")
 	curr := ui.UseState(baseCur)
 	amount := ui.UseState("0")
 	accType := ui.UseState(string(domain.TypeChecking))
@@ -94,16 +92,6 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	revealCurr := ui.UseState(false)
 	onRevealCurr := ui.UseEvent(Prevent(func() { revealCurr.Set(true) }))
 
-	onName := ui.UseEvent(func(v string) {
-		name.Set(v)
-		if !varTouched.Get() {
-			varName.Set(engineenv.AccountVarSlug(v))
-		}
-	})
-	onVarName := ui.UseEvent(func(v string) {
-		varTouched.Set(true)
-		varName.Set(v)
-	})
 	// onCurr/onType/onOwner hooks kept for stable hook ordering; SelectInput owns the
 	// change event internally, so these event-handler hooks are no longer wired to DOM.
 	ui.UseEvent(func(e ui.Event) { curr.Set(strings.ToUpper(e.GetValue())) })
@@ -141,7 +129,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("accounts.invalidOpening"))
 			return
 		}
-		if warn := accountVarCollision(app.Accounts(), "", varName.Get(), name.Get()); warn != "" {
+		if warn := entityVarCollision(accountVarKind, accountVarEntities(app.Accounts()), "", ev.VarName.Get(), name.Get()); warn != "" {
 			errMsg.Set(warn)
 			return
 		}
@@ -154,7 +142,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), OwnerID: owner.Get(), Scope: scope,
 			Class: typ.Class(), Type: typ, Currency: c,
 			OpeningBalance: money.New(amt, c), BalanceAsOf: time.Now(),
-			VarName: strings.TrimSpace(varName.Get()),
+			VarName: strings.TrimSpace(ev.VarName.Get()),
 		}
 		if typ.Class() == domain.ClassLiability {
 			if cl, e := money.ParseMinor(strings.TrimSpace(creditLimit.Get()), currency.Decimals(c)); e == nil && cl > 0 {
@@ -211,8 +199,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		}
 		// Reset fields.
 		name.Set("")
-		varName.Set("")
-		varTouched.Set(false)
+		ev.Reset()
 		amount.Set("0")
 		creditLimit.Set("")
 		apr.Set("")
@@ -264,12 +251,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// var-name field reads directly under the name rather than in the grid's 2nd column.
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
-				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("acct-err", errMsg.Get())...)...))),
+				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...)...))),
 		// Optional explicit variable name for formulas/widgets (autosuggested from the
 		// name), with a live chip showing the generated handle + a collision warning.
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("accounts.varNameLabel"),
-				accountVarField(app.Accounts(), "", "account-add-varname", "account-add-varname-warn", varName.Get(), name.Get(), onVarName))),
+				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
 		labeledField(uistate.T("accounts.typeLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   typeOptions,

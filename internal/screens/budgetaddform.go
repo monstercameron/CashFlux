@@ -13,7 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -69,8 +68,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	defaultCat := budgetNewCatSentinel
 
 	name := ui.UseState("")
-	varName := ui.UseState("")
-	varTouched := ui.UseState(false) // true once the user edits the var name themselves
+	ev := useEntityVarField(budgetVarKind, name, "")
 	limit := ui.UseState("")
 	catID := ui.UseState(defaultCat)
 	newCatName := ui.UseState("")
@@ -81,18 +79,6 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	customVals := ui.UseState(map[string]string{})
 	errMsg := ui.UseState("")
 
-	// Typing the name auto-suggests a variable slug (until the user edits the var field
-	// themselves), so most people never have to fill it in — it just tracks the name.
-	onName := ui.UseEvent(func(v string) {
-		name.Set(v)
-		if !varTouched.Get() {
-			varName.Set(engineenv.BudgetVarSlug(v))
-		}
-	})
-	onVarName := ui.UseEvent(func(v string) {
-		varTouched.Set(true)
-		varName.Set(v)
-	})
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
 	onNewCatName := ui.UseEvent(func(v string) { newCatName.Set(v) })
 	// onCat/onOwner/onPeriod hooks kept for stable hook ordering; SelectInput owns
@@ -120,7 +106,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			return
 		}
 		// Reject a variable name that collides with an existing budget's handle.
-		if warn := budgetVarCollision(app, "", varName.Get(), name.Get()); warn != "" {
+		if warn := entityVarCollision(budgetVarKind, budgetVarEntities(app.Budgets()), "", ev.VarName.Get(), name.Get()); warn != "" {
 			errMsg.Set(warn)
 			return
 		}
@@ -163,7 +149,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, base),
 			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
-			VarName: strings.TrimSpace(varName.Get()),
+			VarName: strings.TrimSpace(ev.VarName.Get()),
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
@@ -172,7 +158,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		uistate.BumpDataRevision() // surface the new budget (and category) immediately
 		// Reset fields.
 		name.Set("")
-		varName.Set("")
+		ev.Reset()
 		limit.Set("")
 		rollover.Set(false)
 		methodology.Set("")
@@ -209,12 +195,12 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		// second column.
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
-				Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("budget-err", errMsg.Get())...)...))),
+				Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
 		// Optional explicit variable name for formulas/widgets, with a live chip showing
 		// the exact variable generated + a collision warning against other budgets.
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("budgets.varNameLabel"),
-				budgetVarField(app, "", "budget-add-varname", "budget-add-varname-warn", varName.Get(), name.Get(), onVarName))),
+				entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
 		labeledField(uistate.T("budgets.categoryLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   catOptions,

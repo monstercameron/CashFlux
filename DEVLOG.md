@@ -1,3 +1,21 @@
+## 2026-07-01 — Reusable entity var-name library (autosuggest everywhere)
+
+Cam: autosuggest var names, reuse the budget-screen strategy, make it a reusable library. The
+var-name UI had been copy-pasted across budgets and accounts (state+touched flag, autosuggest,
+chip, collision, render). Extracted it all into internal/screens/entityvar.go:
+- useEntityVarField(kind, nameS, initialVar) — one hook owns varS + touched + the autosuggest
+  onName (fills slug(name) until the user edits the field) + onVarName; returns handlers + a Reset.
+- entityVarField renders input + live chip (kind.Prefix_slug_ChipField) + collision warning.
+- entityVarCollision + entityVarKind (budgetVarKind/accountVarKind) config; varEntity adapters.
+All four forms (budget add/edit, account add/edit) now call the library — deleted the duplicated
+budgetVar*/accountVar* helpers, renamed CSS .budget-var-* -> .entity-var-*. Net effect: the EDIT
+forms gained autosuggest (they only seeded before), behaviour is identical across entities, and a
+new entity type is a few lines (a kind + a siblings adapter).
+
+Hooks caveat: useEntityVarField registers 2 UseState + 2 UseEvent, so it's called once at a stable
+position (right after the form's nameS). Tests: budget varname 5/5, account varname 6/6, new edit-
+autosuggest 2/2 (renames autosuggest; a customised field is not clobbered), cover 11/11, native all.
+
 ## 2026-07-01 — Backport per-entity variables + var-name UI to accounts
 
 Cam: backport the formula/custom-value system to accounts — each account should be a variable, and
