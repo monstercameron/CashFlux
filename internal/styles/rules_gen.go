@@ -4583,14 +4583,14 @@ func registerGenerated() {
 	// a pace-tinted accent stripe, and footer actions.
 	rule(".bento-goals .goal-list",
 		display("grid"),
-		gridTemplateColumns("repeat(auto-fill, minmax(340px, 1fr))"),
+		gridTemplateColumns("repeat(auto-fill, minmax(460px, 1fr))"),
 		gap("0.75rem"),
 	)
 	rule(".bento-goals .goal-card",
 		position("relative"),
 		display("flex"),
 		flexDirection("column"),
-		minHeight("196px"),
+		minHeight("288px"),
 		padding("0.9rem 1.15rem 0.85rem"),
 		border("1px solid var(--border)"),
 		borderRadius("14px"),
