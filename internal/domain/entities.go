@@ -437,18 +437,27 @@ type Budget struct {
 	CoveredAt time.Time `json:"coveredAt,omitempty"`
 }
 
-// CoverShare is one source budget's weighted share in a recurring cover.
+// CoverShare is one source budget's weighted share in a recurring cover. Weight is a
+// fixed ratio; WeightFormula, when non-empty, is evaluated in that source budget's
+// context each period instead (so a share can track e.g. cf_budget_priority).
 type CoverShare struct {
-	BudgetID string `json:"budgetId"`
-	Weight   int    `json:"weight"`
+	BudgetID      string `json:"budgetId"`
+	Weight        int    `json:"weight"`
+	WeightFormula string `json:"weightFormula,omitempty"`
 }
 
 // RecurringCover is a per-period, standing cover arrangement stored on the destination
-// budget. Each new period the app moves AmountMinor of limit into the destination,
-// split across Sources in proportion to their weights. LastAppliedPeriod is the start
-// date (YYYY-MM-DD) of the period last covered, so it applies at most once per period.
+// budget. Each new period the app moves an amount of limit into the destination, split
+// across Sources in proportion to their weights. LastAppliedPeriod is the start date
+// (YYYY-MM-DD) of the period last covered, so it applies at most once per period.
+//
+// The amount is AmountMinor (fixed) unless AmountFormula is set, in which case that
+// formula is evaluated in the destination budget's context each period (so e.g.
+// `overspend` re-covers whatever the shortfall is that period). Likewise a source's
+// weight can be a fixed Weight or a per-source WeightFormula.
 type RecurringCover struct {
 	AmountMinor       int64        `json:"amountMinor"`
+	AmountFormula     string       `json:"amountFormula,omitempty"`
 	Sources           []CoverShare `json:"sources"`
 	LastAppliedPeriod string       `json:"lastAppliedPeriod,omitempty"`
 }
