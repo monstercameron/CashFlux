@@ -209,6 +209,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(TxnEditHost),
 		uic.CreateElement(AccountEditHost),
 		uic.CreateElement(BudgetEditHost),
+		uic.CreateElement(GoalEditHost),
 		uic.CreateElement(CredentialVaultHost),
 		uic.CreateElement(DialogHost),
 		// C274: profile-switch modal — "Who's using CashFlux?" device user-switching.

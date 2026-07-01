@@ -76,8 +76,6 @@ type goalRowProps struct {
 	Accounts       []domain.Account
 	Members        []domain.Member
 	OnDelete       func(string)
-	OnContribute   func(domain.Goal, string, bool) // goal, amountStr, postLedger
-	OnSave         func(id, name, target, date, accountID, owner string)
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
 	OnRedirect     func()                        // a completed goal frees its monthly — jump to Allocate (L20)

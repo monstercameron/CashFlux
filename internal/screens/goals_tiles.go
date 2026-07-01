@@ -6,12 +6,9 @@ package screens
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -137,7 +134,6 @@ func goalListWidget(props goalListProps) ui.Node {
 	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
 
 	v := computeGoalView(app, activeMemberID)
-	base := v.Base
 
 	viewAccountTxns := func(accountID string) {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
@@ -175,86 +171,10 @@ func goalListWidget(props goalListProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 	}
-	saveGoal := func(id, newName, targetStr, dateStr, accountID, ownerID string) {
-		for _, g := range app.Goals() {
-			if g.ID != id {
-				continue
-			}
-			if n := strings.TrimSpace(newName); n != "" {
-				g.Name = n
-			}
-			g.AccountID = accountID
-			g.OwnerID = ownerID
-			if ownerID == domain.GroupOwnerID {
-				g.Scope = domain.ScopeShared
-			} else {
-				g.Scope = domain.ScopeIndividual
-			}
-			cur := g.TargetAmount.Currency
-			if cur == "" {
-				cur = base
-			}
-			amt, err := money.ParseMinor(strings.TrimSpace(targetStr), currency.Decimals(cur))
-			if err != nil || amt <= 0 {
-				errMsg.Set(uistate.T("goals.targetRequired"))
-				return
-			}
-			g.TargetAmount = money.New(amt, cur)
-			if ds := strings.TrimSpace(dateStr); ds != "" {
-				d, derr := dateutil.ParseDate(ds)
-				if derr != nil {
-					errMsg.Set(uistate.T("goals.invalidDate"))
-					return
-				}
-				g.TargetDate = d
-			} else {
-				g.TargetDate = time.Time{}
-			}
-			if err := app.PutGoal(g); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			break
-		}
-		errMsg.Set("")
-		uistate.BumpDataRevision()
-	}
-	contribute := func(g domain.Goal, amtStr string, postLedger bool) {
-		cur := g.CurrentAmount.Currency
-		if cur == "" {
-			cur = base
-		}
-		amt, err := money.ParseMinor(strings.TrimSpace(amtStr), currency.Decimals(cur))
-		if err != nil || amt <= 0 {
-			return
-		}
-		beforePct := goalsvc.Percent(g)
-		updatedG := g
-		updatedG.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
-		afterPct := goalsvc.Percent(updatedG)
-		res, err := app.ContributeToGoal(g, money.New(amt, cur), postLedger)
-		if err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		uistate.BumpDataRevision()
-		notice := uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur)))
-		if postLedger && res.TransactionID != "" {
-			notice += " " + uistate.T("goals.contributedLedger")
-		}
-		uistate.PostNotice(notice, false)
-		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
-			uistate.PostNotice(uistate.T(fmt.Sprintf("goals.milestone%d", m)), false)
-		}
-		if res.BecameComplete {
-			uistate.PostNotice(uistate.T("goals.completionPrompt"), false)
-		}
-	}
-
 	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members,
-			OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal,
+			OnDelete:       deleteGoal,
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
 		})
