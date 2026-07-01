@@ -3,6 +3,25 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Clean up account editor modal layouts
+
+**What:** The modal editors looked rough (user: "the layouts are ugly fix them"). Root causes:
+(1) they reused `.form-grid` (`repeat(auto-fit, minmax(150px,1fr))`), which in a ~440px modal
+becomes 2 columns and misaligns fields (Institution ended up beside the "Show advanced fields"
+button); (2) fixed tall heights left dead vertical space; (3) the form's own Save/Cancel plus the
+`FlipPanel` CloseOnly footer meant two action areas.
+
+**Fix:** a dedicated single-column modal form. New `.acct-edit-form` (flex column, `min-height:100%`,
+every field full-width) replaces `.form-grid` in the four editors. New `.acct-edit-actions` action
+row: `margin-top:auto` pushes Save/Cancel to the bottom when the form is short (no dead space) and
+`position:sticky; bottom:0` keeps them visible while a tall form (edit, expanded) scrolls. Added a
+`FlipPanel{NoFooter}` option so the modal doesn't render its own footer — the form owns the actions;
+the header ✕ / Escape / backdrop-click still dismiss via `OnClose`. Heights tuned per mode.
+
+**Verify:** all four editors screenshot clean, centered, single-column with pinned actions; save
+persists (update-value → 275,000 in the row); Escape + Cancel dismiss; gofmt/vet/`go test ./...`
+clean; zero page errors. SW v286→v287.
+
 ## 2026-06-30 — Account editors → centered flip modal (shell-root host)
 
 **What:** Moved the account edit / update-balance / reconcile / transfer forms out of the inline

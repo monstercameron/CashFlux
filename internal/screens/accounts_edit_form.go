@@ -246,7 +246,7 @@ func setBalForm(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBa
 	for _, c := range categories {
 		catOpts = append(catOpts, uiw.SelectOption{Value: c.ID, Label: c.Name})
 	}
-	return Form(css.Class("form-grid"), Attr("id", "acct-setbal-form-"+a.ID),
+	return Form(css.Class("acct-edit-form"), Attr("id", "acct-setbal-form-"+a.ID),
 		Attr("aria-label", uistate.T("accounts.setBalanceFormLabel", a.Name)), OnSubmit(doSetBal),
 		labeledField(uistate.T("accounts.setBalanceAmount"),
 			Input(css.Class("field"), Attr("id", "acct-setbal-"+a.ID), Attr("autofocus", ""),
@@ -258,8 +258,10 @@ func setBalForm(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBa
 				OnChange: func(v string) { setBalCatS.Set(v) }, AriaLabel: uistate.T("accounts.setBalanceCategoryLabel"), TestID: "setbal-cat-select"})),
 		If(isValuationType(a.Type), P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "valuation-manual-note"),
 			uistate.T("accounts.valuationManualNote"))),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("acct-edit-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+		),
 	)
 }
 
@@ -293,8 +295,8 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS u
 	renderTxnRow := func(t domain.Transaction) ui.Node {
 		return ui.CreateElement(ReconcileTxnRow, reconcileTxnRowProps{Txn: t, Currency: a.Currency, OnToggle: onToggleClear})
 	}
-	return Div(Attr("data-testid", "reconcile-statement-mode"),
-		Div(css.Class("form-grid"),
+	return Div(css.Class("acct-edit-form"), Attr("data-testid", "reconcile-statement-mode"),
+		Div(
 			labeledField("Statement balance",
 				Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
 					Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
@@ -313,7 +315,9 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS u
 			Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),
 		If(len(unclearedTxns) == 0 && !result.Reconciled,
 			P(css.Class("muted"), "No uncleared transactions. Adjust the statement balance to match the cleared balance above.")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("acct-edit-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		),
 	)
 }
 
@@ -336,7 +340,7 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 	}
 	sameAcct := fromID != "" && toID != "" && fromID == toID
 	submitDisabled := sameAcct || fromID == "" || toID == ""
-	return Form(css.Class("form-grid"), Attr("id", "acct-transfer-form-"+a.ID),
+	return Form(css.Class("acct-edit-form"), Attr("id", "acct-transfer-form-"+a.ID),
 		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(doTransfer),
 		labeledField(uistate.T("accounts.transferFromLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: fromID, OnChange: func(v string) { xferFromS.Set(v) },
@@ -355,10 +359,12 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 		labeledField(uistate.T("accounts.transferDescLabel"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")),
 				Value(xferDescS.Get()), OnInput(onXferDesc))),
-		IfElse(submitDisabled,
-			Button(css.Class("btn btn-primary"), Type("submit"), Attr("disabled", "disabled"), uistate.T("accounts.transferSubmit")),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit"))),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("acct-edit-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			IfElse(submitDisabled,
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("disabled", "disabled"), uistate.T("accounts.transferSubmit")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit"))),
+		),
 	)
 }
 
@@ -370,7 +376,7 @@ func editForm(a domain.Account, dec int, members []domain.Member, accounts []dom
 	onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler) ui.Node {
 	isLiab := a.Class == domain.ClassLiability
-	return Form(css.Class("form-grid"), OnSubmit(saveEdit),
+	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "acct-edit-"+a.ID), Attr("autofocus", ""), Type("text"),
 				Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
@@ -435,7 +441,9 @@ func editForm(a domain.Account, dec int, members []domain.Member, accounts []dom
 				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
 			}),
 		)),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("acct-edit-actions"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+		),
 	)
 }

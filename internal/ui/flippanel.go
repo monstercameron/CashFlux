@@ -30,6 +30,10 @@ type FlipPanelProps struct {
 	// (e.g. a required field is empty), so an invalid submit can't close the panel
 	// or discard input (L78-T1). OnSave is not invoked while it is true.
 	SaveDisabled bool
+	// NoFooter renders no Save/Cancel/Close footer at all — for panels whose Back body
+	// supplies its own action buttons (so the modal isn't double-chromed). The header
+	// ✕, Escape, and backdrop-click still dismiss via OnClose.
+	NoFooter bool
 }
 
 // FlipPanel is the candidate-C settings overlay shared by both per-widget and
@@ -219,7 +223,10 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		}
 	}
 	var foot uic.Node
-	if props.CloseOnly {
+	if props.NoFooter {
+		// The Back body owns its own actions; render no footer at all.
+		foot = Fragment()
+	} else if props.CloseOnly {
 		// Nothing to save: a single Close button (no Cancel/Save pair).
 		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
 		// (green/primary styling) — so the button reads as "dismiss" not "submit".

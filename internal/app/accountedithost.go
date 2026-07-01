@@ -34,24 +34,27 @@ func AccountEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseAccountEdit() }
 
-	title, width, height := "", "440px", "500px"
+	title, width, height := "", "440px", "480px"
 	switch e.Mode {
 	case uistate.AcctEditModeSetBal:
-		title, width, height = uistate.T("accounts.updateBalance"), "420px", "440px"
+		title, width, height = uistate.T("accounts.updateBalance"), "420px", "360px"
 	case uistate.AcctEditModeReconcile:
 		title, width, height = uistate.T("accounts.reconcileTitle"), "460px", "560px"
 	case uistate.AcctEditModeTransfer:
-		title, width, height = uistate.T("accounts.transferTitle"), "440px", "520px"
+		title, width, height = uistate.T("accounts.transferTitle"), "440px", "540px"
 	default:
-		title, width, height = uistate.T("accounts.editTitle"), "480px", "600px"
+		title, width, height = uistate.T("accounts.editTitle"), "460px", "560px"
 	}
 
+	// NoFooter: the editor form supplies its own Save/Cancel action row, so the modal
+	// isn't double-chromed with a redundant Close footer. The header ✕, Escape, and
+	// backdrop-click still dismiss via OnClose.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     title,
-		Width:     width,
-		Height:    height,
-		CloseOnly: true,
-		OnClose:   closeModal,
-		Back:      uic.CreateElement(screens.AccountEditForm, screens.AccountEditFormProps{AccountID: e.ID, Mode: e.Mode, OnDone: closeModal}),
+		Title:    title,
+		Width:    width,
+		Height:   height,
+		NoFooter: true,
+		OnClose:  closeModal,
+		Back:     uic.CreateElement(screens.AccountEditForm, screens.AccountEditFormProps{AccountID: e.ID, Mode: e.Mode, OnDone: closeModal}),
 	})
 }
