@@ -1,3 +1,28 @@
+## 2026-07-01 — To-do overhaul (commit C: card redesign + goal-link chip)
+
+Design-skill restyle of the task rows into cards, and the goal-linking UX polish that sets up the
+goals double-back. Scoped everything under .bento-todo so the shared .row style (transactions etc.)
+is untouched.
+
+todo.go TaskRow display rewritten: .task-card (rounded, priority left stripe via inset box-shadow:
+tp-high red / tp-med accent / tp-low faint; is-done dims + strikethrough; is-subtask tinted), a custom
+.task-check checkbox (empty rounded box → accent-green fill + check icon when done, role=checkbox),
+.task-title, and a .task-chips wrap of pills: priority (reusing prio-* colors), due (is-overdue red /
+is-today amber / neutral), repeat, notes (truncated + ellipsis), and the linked entity. Link chip is
+now first-class: linkTypeIcon() gives a per-type glyph, linkChipClass() tints it — is-goal gets the
+accent (seagreen) so the goal↔to-do link pops. Actions (Edit + ⋯) fade in on hover
+(.task-card:not(:hover) .task-actions opacity 0; coarse-pointer always visible). Added data-testids
+task-card / task-check-<id> / task-link-<id>.
+
+CSS: a scoped block under .bento-todo (.rows flex column, .task-card + states, .task-check,
+.task-body/.task-title, .task-chip + is-overdue/is-today/is-note/is-muted, .task-link-chip + is-goal,
+.task-actions hover-fade). linkTypeIcon default falls back to icon.Paperclip (icon.Link doesn't exist).
+
+Verify: full go test ./... green; wasm build OK; e2e/todo_flipmodal_check.mjs still 10/10;
+new e2e/todo_redesign_check.mjs 9/9 (cards, priority stripe, is-goal chip with accent border
+rgb(46,139,87), checkbox→done, due-state chips, no errors); screenshot confirms the polished cards +
+green goal chip. Todo overhaul (A/B/C) done — next: double back to goals (interactive checklist steps).
+
 ## 2026-07-01 — To-do overhaul (commit B: widgetize surface-host)
 
 Split the monolithic Todo() into the bento surface-host pattern (todo_widget.go host + init

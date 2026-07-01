@@ -4597,6 +4597,158 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// Redesigned task cards (scoped to /todo so the shared .row style elsewhere is
+	// untouched): each task is a rounded card with a priority-tinted left stripe, a
+	// custom checkbox, a title, and a wrap of pill "chips" (priority / due / repeat /
+	// linked-entity / notes). A linked goal chip is accent-tinted so the goal↔to-do
+	// connection reads at a glance. Row actions fade in on hover.
+	rule(".bento-todo .rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".task-card",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.75rem"),
+		padding("0.7rem 0.85rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("12px"),
+		transition("border-color 0.15s ease, background 0.15s ease, transform 0.15s ease"),
+	)
+	rule(".task-card:hover",
+		borderColor("var(--accent)"),
+		transform("translateY(-1px)"),
+	)
+	rule(".task-card.tp-high",
+		boxShadow("inset 3px 0 0 #ef4444"),
+	)
+	rule(".task-card.tp-med",
+		boxShadow("inset 3px 0 0 var(--accent)"),
+	)
+	rule(".task-card.tp-low",
+		boxShadow("inset 3px 0 0 var(--text-faint)"),
+	)
+	rule(".task-card.is-done",
+		opacity("0.62"),
+	)
+	rule(".task-card.is-subtask",
+		background("var(--bg)"),
+	)
+	rule(".task-check",
+		flex("none"),
+		width("22px"),
+		height("22px"),
+		marginTop("0.1rem"),
+		border("1.5px solid var(--border-strong)"),
+		borderRadius("6px"),
+		background("transparent"),
+		cursor("pointer"),
+		display("grid"),
+		placeItems("center"),
+		color("#04140c"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".task-check:hover",
+		borderColor("var(--accent)"),
+	)
+	rule(".task-check.done",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".task-body",
+		flex("1"),
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	rule(".task-title",
+		fontWeight("600"),
+		color("var(--text)"),
+		lineHeight("1.3"),
+		overflowWrap("anywhere"),
+	)
+	rule(".task-card.is-done .task-title",
+		textDecoration("line-through"),
+		color("var(--text-faint)"),
+	)
+	rule(".task-chips",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+	rule(".task-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		fontSize("0.75rem"),
+		lineHeight("1"),
+		padding("0.24rem 0.55rem"),
+		borderRadius("999px"),
+		background("var(--bg)"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".task-chip.is-overdue",
+		background("#3b0d0d"),
+		color("#fca5a5"),
+		borderColor("#7f1d1d"),
+	)
+	rule(".task-chip.is-today",
+		background("#2a230c"),
+		color("#fcd34d"),
+		borderColor("#854d0e"),
+	)
+	rule(".task-chip.is-note",
+		color("var(--text-faint)"),
+		maxWidth("22rem"),
+		overflow("hidden"),
+		whiteSpace("nowrap"),
+		prop("text-overflow", "ellipsis"),
+	)
+	rule(".task-chip.is-muted",
+		color("var(--text-faint)"),
+	)
+	rule(".task-link-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.35rem"),
+		fontSize("0.75rem"),
+		lineHeight("1"),
+		padding("0.24rem 0.6rem"),
+		borderRadius("999px"),
+		background("var(--bg)"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".task-link-chip:hover",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
+	rule(".task-link-chip.is-goal",
+		background("var(--accent-dim)"),
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+	)
+	rule(".task-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		flex("none"),
+		transition("opacity 0.12s ease"),
+	)
+	rule(".task-card:not(:hover):not(:focus-within) .task-actions",
+		opacity("0"),
+	)
+	ruleMedia("(pointer: coarse)", ".task-card .task-actions",
+		opacity("1"),
+	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,
 	// a pace-tinted accent stripe, and footer actions.

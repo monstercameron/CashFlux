@@ -67,101 +67,134 @@ func TaskRow(props taskRowProps) ui.Node {
 	linkRoute := tasklink.Route(t.RelatedType)
 	goLink := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(linkRoute)) }))
 
-	// Build the row deep-link node (goLink + linkRoute already declared above).
-	var linkNode ui.Node
+	// Build the row deep-link chip (goLink + linkRoute already declared above). The
+	// linked entity is a first-class chip with a per-type icon; a goal link is accent-
+	// tinted so the goal↔to-do connection reads at a glance.
+	var linkNode ui.Node = Fragment()
 	if linkRoute != "" {
 		name, ok := tasklink.EntityName(t.RelatedType, t.RelatedID,
 			props.Accounts, props.Budgets, props.Goals, props.Transactions)
 		if ok {
-			linkLabel := "→ " + name
 			ariaLabel := uistate.T("todo.linkAriaLabel", name)
-			linkNode = Button(css.Class("btn row-meta"), Type("button"),
-				Attr("aria-label", ariaLabel), Title(ariaLabel), OnClick(goLink), linkLabel)
+			linkNode = Button(css.Class("task-link-chip "+linkChipClass(t.RelatedType)), Type("button"),
+				Attr("data-testid", "task-link-"+t.ID), Attr("aria-label", ariaLabel), Title(ariaLabel), OnClick(goLink),
+				uiw.Icon(linkTypeIcon(t.RelatedType), css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(name))
 		} else if t.RelatedID != "" {
 			// Entity was deleted — show a muted note rather than nothing.
-			linkNode = Span(css.Class("row-meta text-muted"), uistate.T("todo.linkRemoved"))
+			linkNode = Span(css.Class("task-chip is-muted"), uistate.T("todo.linkRemoved"))
 		}
 	}
 
 	done := t.Status == domain.StatusDone
-	rowClass := "row"
-	glyph := "☐"
-	if done {
-		rowClass = "row done"
-		glyph = "☑"
-	}
 	plabel, pclass := priorityMeta(t.Priority)
+	cardClass := "task-card tp-" + string(t.Priority)
+	if done {
+		cardClass += " is-done"
+	}
+	if props.Depth > 0 {
+		cardClass += " is-subtask"
+	}
 
-	// Overdue = open task whose due date is before today. Due-today = open task
-	// due on today's date. Flag overdue with danger tone + word "overdue" (colour
-	// + text, not colour alone — B15). Flag due-today with warning tone + "due today"
-	// so Nina can distinguish time-sensitive-now from comfortably-future (G6 D4).
+	// Overdue = open task whose due date is before today. Due-today = open task due on
+	// today's date. Colour + word (not colour alone — B15): red "overdue" / amber
+	// "due today" / neutral future date.
 	todayISO := dateutil.FormatDate(time.Now())
 	overdue := !done && !t.Due.IsZero() && dateutil.FormatDate(t.Due) < todayISO
 	dueToday := !done && !overdue && !t.Due.IsZero() && dateutil.FormatDate(t.Due) == todayISO
-	meta := []ui.Node{Span(ClassStr("badge badge-prio "+pclass), plabel)}
+	chips := []ui.Node{Span(ClassStr("task-chip badge-prio "+pclass), plabel)}
 	if !t.Due.IsZero() {
-		var dueText string
-		dueCls := "row-meta"
+		var dueText, dueCls string
 		switch {
 		case overdue:
-			// Keep the existing "· overdue" literal so the text-down style and word
-			// are unchanged for the danger cue (C52 regression anchor).
-			dueText = uistate.T("todo.due") + " " + pr.FormatDate(t.Due) + " · overdue"
-			dueCls = "row-meta text-down"
+			dueText, dueCls = uistate.T("todo.due")+" "+pr.FormatDate(t.Due)+" · overdue", "task-chip is-overdue"
 		case dueToday:
-			// G6 D4: amber "due today" — distinct from both overdue (red) and future (neutral).
-			dueText = uistate.T("todo.dueToday")
-			dueCls = "row-meta text-warn"
+			dueText, dueCls = uistate.T("todo.dueToday"), "task-chip is-today"
 		default:
-			dueText = uistate.T("todo.due") + " " + pr.FormatDate(t.Due)
+			dueText, dueCls = uistate.T("todo.due")+" "+pr.FormatDate(t.Due), "task-chip"
 		}
-		meta = append(meta, Span(ClassStr(dueCls), dueText))
+		chips = append(chips, Span(ClassStr(dueCls), dueText))
+	}
+	if t.Recurrence != "" {
+		chips = append(chips, Span(ClassStr("task-chip is-recur"), Attr("data-testid", "recur-badge-"+t.ID),
+			uistate.T("todo.recurBadge", taskCadenceLabel(t.Recurrence))))
+	}
+	if linkRoute != "" {
+		chips = append(chips, linkNode)
 	}
 	if t.Notes != "" {
-		// Truncate long notes inline and expose the full text in a tooltip so the
-		// row stays scannable without cutting off information (C52).
-		const maxNoteRune = 80
+		const maxNoteRune = 90
 		noteDisplay := t.Notes
 		if len([]rune(noteDisplay)) > maxNoteRune {
 			noteDisplay = string([]rune(noteDisplay)[:maxNoteRune]) + "…"
 		}
-		meta = append(meta, Span(css.Class("row-meta"), Title(t.Notes), noteDisplay))
-	}
-	if t.Recurrence != "" {
-		recurLabel := taskCadenceLabel(t.Recurrence)
-		meta = append(meta, Span(ClassStr("row-meta badge badge-recur"), Attr("data-testid", "recur-badge-"+t.ID),
-			uistate.T("todo.recurBadge", recurLabel)))
-	}
-	if linkNode != nil {
-		meta = append(meta, linkNode)
+		chips = append(chips, Span(css.Class("task-chip is-note"), Title(t.Notes), noteDisplay))
 	}
 
+	rowArgs := []any{ClassStr(cardClass), Attr("id", t.ID), Attr("data-testid", "task-card")}
 	if props.Depth > 0 {
-		rowClass += " subtask"
+		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*24) + "px"}))
 	}
-	rowArgs := []any{ClassStr(rowClass), Attr("id", t.ID)}
-	if props.Depth > 0 {
-		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*22) + "px"}))
+	// The custom checkbox: an empty rounded box when open, an accent-filled check when done.
+	var checkGlyph ui.Node = Fragment()
+	if done {
+		checkGlyph = uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))
 	}
 	rowArgs = append(rowArgs,
-		Button(css.Class("check"), Type("button"), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), t.Title),
-			Div(css.Class("task-meta"), meta),
+		Button(ClassStr("task-check"+map[bool]string{true: " done", false: ""}[done]), Type("button"),
+			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
+			Attr("data-testid", "task-check-"+t.ID), Title(uistate.T("todo.toggle")), OnClick(toggle), checkGlyph),
+		Div(css.Class("task-body"),
+			Span(css.Class("task-title"), t.Title),
+			Div(css.Class("task-chips"), chips),
 		),
 		// Edit opens the flip modal; the ⋯ menu holds Add sub-task + the destructive Delete.
-		Button(css.Class("btn row-2nd", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Div(css.Class("add-wrap row-2nd"), Attr("id", menuID),
-			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("todo.moreActions")), Attr("aria-label", uistate.T("todo.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-addsub-"+t.ID), OnClick(addSub), uistate.T("todo.addSub")),
-				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-delete-btn-"+t.ID), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uistate.T("action.delete")),
+		Div(css.Class("task-actions"),
+			Button(css.Class("btn row-2nd", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			Div(css.Class("add-wrap"), Attr("id", menuID),
+				Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("todo.moreActions")), Attr("aria-label", uistate.T("todo.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-addsub-"+t.ID), OnClick(addSub), uistate.T("todo.addSub")),
+					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-delete-btn-"+t.ID), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uistate.T("action.delete")),
+				),
 			),
 		),
 	)
 	return Div(rowArgs...)
+}
+
+// linkTypeIcon maps a task's linked-entity type to its glyph for the link chip.
+func linkTypeIcon(rt domain.RelatedType) icon.Name {
+	switch rt {
+	case domain.RelatedGoal:
+		return icon.Goals
+	case domain.RelatedAccount:
+		return icon.Accounts
+	case domain.RelatedBudget:
+		return icon.Budgets
+	case domain.RelatedTransaction:
+		return icon.Transactions
+	default:
+		return icon.Paperclip
+	}
+}
+
+// linkChipClass returns the tint modifier for a task's link chip — a goal link is
+// accent-tinted so the goal↔to-do connection stands out from account/budget/txn links.
+func linkChipClass(rt domain.RelatedType) string {
+	switch rt {
+	case domain.RelatedGoal:
+		return "is-goal"
+	case domain.RelatedAccount:
+		return "is-account"
+	case domain.RelatedBudget:
+		return "is-budget"
+	case domain.RelatedTransaction:
+		return "is-txn"
+	default:
+		return ""
+	}
 }
 
 func priorityMeta(p domain.TaskPriority) (label, class string) {
