@@ -26,7 +26,14 @@ const (
 	GroupCounts   Group = "Counts"
 	GroupCustom   Group = "Custom fields"
 	GroupBudgets  Group = "Budgets"
+	GroupAccounts Group = "Accounts"
 )
+
+// accountFieldMeta labels + documents each per-account metric suffix for the picker.
+var accountFieldMeta = map[string]struct{ Label, Doc string }{
+	"balance": {"balance", "This account's current balance (base currency)."},
+	"cleared": {"cleared", "Balance counting only cleared transactions."},
+}
 
 // budgetFieldMeta labels + documents each per-budget metric suffix for the picker.
 var budgetFieldMeta = map[string]struct{ Label, Doc string }{
@@ -138,6 +145,26 @@ func BudgetMetrics(budgets []domain.Budget) []Metric {
 				Label: base.Budget.Name + " — " + meta.Label,
 				Doc:   meta.Doc,
 				Group: GroupBudgets,
+			})
+		}
+	}
+	return out
+}
+
+// AccountMetrics returns the per-account metrics (balance/cleared) so a specific account
+// can be referenced in a formula or dashboard widget — e.g. account_checking_balance.
+// Built from engineenv's naming so labels always match the variables the surface resolves.
+func AccountMetrics(accounts []domain.Account) []Metric {
+	bases := engineenv.AccountVarBases(accounts)
+	out := make([]Metric, 0, len(bases)*len(engineenv.AccountVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.AccountVarFields {
+			meta := accountFieldMeta[field]
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Account.Name + " — " + meta.Label,
+				Doc:   meta.Doc,
+				Group: GroupAccounts,
 			})
 		}
 	}

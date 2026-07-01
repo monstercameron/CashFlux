@@ -94,6 +94,10 @@ type Account struct {
 	Currency       string      `json:"currency"`
 	OpeningBalance money.Money `json:"openingBalance"`
 	BalanceAsOf    time.Time   `json:"balanceAsOf"`
+	// VarName is an optional explicit variable name for this account in the formula/widget
+	// engine. When set, the account's figures are exposed as account_<slug(VarName)>_* (e.g.
+	// account_checking_balance) instead of the name-derived slug. Empty = derive from Name.
+	VarName string `json:"varName,omitempty"`
 
 	// Liability-only fields.
 	CreditLimit     money.Money `json:"creditLimit,omitempty"`

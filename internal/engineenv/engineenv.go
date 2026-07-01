@@ -203,6 +203,7 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
+	addAccountVars(out, d, major, toBase)
 	return out
 }
 
@@ -295,6 +296,75 @@ func BudgetVarBases(budgets []domain.Budget) []BudgetVarBase {
 // BudgetVarSlug exposes the slugging used for per-budget variable names, so the UI can
 // preview the handle a name/var-name will produce (must match what the surface resolves).
 func BudgetVarSlug(s string) string { return budgetVarSlug(s) }
+
+// addAccountVars exposes each account as its own named variables, so a formula or widget
+// can reference a specific account — e.g. account_checking_balance. Each account
+// contributes, keyed by a slug of its name (or explicit VarName):
+//
+//   - account_<slug>_balance   the account's current balance (major units, base currency)
+//   - account_<slug>_cleared   the balance counting only cleared transactions
+//
+// Balances are FX-converted to the base currency (same as net worth) so accounts in
+// different currencies compare on one scale. Name collisions are disambiguated with a
+// numeric suffix (…_2, …_3) in stable account order.
+func addAccountVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	for _, base := range AccountVarBases(d.Accounts) {
+		a := base.Account
+		if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+			out[base.Prefix+"balance"] = major(toBase(bal.Amount, bal.Currency))
+		}
+		if cl, err := ledger.ClearedBalance(a, d.Transactions); err == nil {
+			out[base.Prefix+"cleared"] = major(toBase(cl.Amount, cl.Currency))
+		}
+	}
+}
+
+// AccountVarFields are the per-account metric suffixes exposed on the surface. Shared
+// with the widget/formula catalog so the picker matches the surface.
+var AccountVarFields = []string{"balance", "cleared"}
+
+// AccountVarBase pairs an account with the disambiguated variable prefix its values are
+// keyed under ("account_<slug>_"). Single source of truth for per-account naming —
+// both the surface builder and the catalog build from it.
+type AccountVarBase struct {
+	Account domain.Account
+	Prefix  string // e.g. "account_checking_"
+}
+
+// AccountVarBases returns one entry per named account, in stable order, with same-name
+// accounts disambiguated by a numeric suffix. Accounts whose name yields no slug are
+// skipped. An explicit VarName wins over the display name (stable across renames).
+func AccountVarBases(accounts []domain.Account) []AccountVarBase {
+	used := map[string]bool{}
+	out := make([]AccountVarBase, 0, len(accounts))
+	for _, a := range accounts {
+		src := a.Name
+		if a.VarName != "" {
+			src = a.VarName
+		}
+		slug := budgetVarSlug(src)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, AccountVarBase{Account: a, Prefix: "account_" + slug + "_"})
+	}
+	return out
+}
+
+// AccountVarSlug exposes the slugging used for per-account variable names, so the UI can
+// preview the handle a name/var-name will produce (must match what the surface resolves).
+func AccountVarSlug(s string) string { return budgetVarSlug(s) }
 
 // budgetVarSlug turns a budget name into a formula-safe variable segment: lowercase,
 // with every run of non-alphanumeric characters collapsed to a single underscore and
