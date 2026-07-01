@@ -4852,20 +4852,18 @@ func registerGenerated() {
 		alignSelf("flex-start"),
 		marginTop("0.1rem"),
 	)
-	// Action row pinned to the bottom of the modal body: margin-top:auto pushes it down
-	// when the form is short (no dead space), and it sits at the natural end (scrolls
-	// with the content) when the form is tall.
+	// Action row at the bottom of the modal body: margin-top:auto pushes it down when
+	// the form is short (no dead space); when the form is taller than the modal it sits
+	// at the natural end and scrolls with the content. NOT sticky — a sticky row
+	// overlaps the flowing fields (the Notes textarea / disclosure) once the form
+	// overflows, which looked broken.
 	rule(".acct-edit-actions",
 		display("flex"),
 		justifyContent("flex-end"),
 		gap("0.5rem"),
 		marginTop("auto"),
 		paddingTop("0.9rem"),
-		paddingBottom("0.2rem"),
 		borderTop("1px solid #2a2a2c"),
-		position("sticky"),
-		bottom("0"),
-		background("#121214"),
 	)
 	rule(".acct-edit-actions .btn",
 		minWidth("104px"),

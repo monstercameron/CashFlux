@@ -43,7 +43,7 @@ func AccountEditHost() uic.Node {
 	case uistate.AcctEditModeTransfer:
 		title, width, height = uistate.T("accounts.transferTitle"), "440px", "540px"
 	default:
-		title, width, height = uistate.T("accounts.editTitle"), "460px", "560px"
+		title, width, height = uistate.T("accounts.editTitle"), "460px", "620px"
 	}
 
 	// NoFooter: the editor form supplies its own Save/Cancel action row, so the modal
