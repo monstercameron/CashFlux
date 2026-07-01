@@ -24,6 +24,14 @@ func registerGenerated() {
 		customProp("--brand", "#7c83ff"),
 		customProp("--danger", "#d8716f"),
 		customProp("--radius", "0px"),
+		// Z-index scale — one place to reason about stacking order. Higher layer wins.
+		customProp("--z-raised", "5"),     // lifted-in-card fills / figs
+		customProp("--z-sticky", "20"),    // sticky headers / action bars
+		customProp("--z-dropdown", "50"),  // row ⋯ menus, selects
+		customProp("--z-overlay", "60"),   // in-page overlays
+		customProp("--z-popover", "2000"), // floating explainers / tooltips (over content)
+		customProp("--z-modal", "3000"),   // flip-panel modals + their backdrop
+		customProp("--z-toast", "4000"),   // toasts / notices (above everything)
 		colorScheme("dark"),
 		customProp("--font-ui", "Inter"),
 		customProp("--font-display", "'Fraunces'"),
@@ -2833,7 +2841,7 @@ func registerGenerated() {
 		left("50%"),
 		bottom("1.25rem"),
 		transform("translateX(-50%)"),
-		zIndex("60"),
+		zIndex("var(--z-toast)"),
 		maxWidth("min(92vw, 32rem)"),
 		display("flex"),
 		alignItems("center"),
@@ -5346,7 +5354,7 @@ func registerGenerated() {
 		opacity("0"),
 		pointerEvents("none"),
 		transition("opacity .28s"),
-		zIndex("50"),
+		zIndex("var(--z-modal)"),
 	)
 	rule(".flip-backdrop.show",
 		opacity("1"),
@@ -6099,7 +6107,7 @@ func registerGenerated() {
 		left("0"),
 		right("auto"),
 		top("calc(100% + 6px)"),
-		zIndex("50"),
+		zIndex("var(--z-dropdown)"),
 		minWidth("210px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
@@ -6109,6 +6117,24 @@ func registerGenerated() {
 		display("flex"),
 		flexDirection("column"),
 		gap("2px"),
+	)
+	// The smart explainer reuses the .add-menu overlay (absolute + edge-flip) but holds
+	// prose, not a button list — so it's a fixed-width block with comfortable padding.
+	rule(".smart-tip-pop.add-menu",
+		position("fixed"),
+		zIndex("var(--z-popover)"),
+		top("auto"),
+		left("auto"),
+		display("block"),
+		width("264px"),
+		maxWidth("min(264px, 80vw)"),
+		padding("0.6rem 0.75rem"),
+		whiteSpace("normal"),
+		cursor("default"),
+		textTransform("none"),
+		letterSpacing("normal"),
+		textAlign("left"),
+		color("var(--text)"),
 	)
 	rule(".add-menu.open-left",
 		left("auto"),
