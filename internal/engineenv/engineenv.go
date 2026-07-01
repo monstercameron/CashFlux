@@ -332,6 +332,59 @@ func addCustomFieldVars(out map[string]float64, d Data, start, end time.Time) {
 	}
 }
 
+// BudgetVars returns the per-budget variable overrides for a formula evaluated in a
+// single budget's CONTEXT (a cover amount is evaluated in the destination's context; a
+// source weight in that source's). It exposes the budget's own spent / limit /
+// remaining / overspend / percent (major units), plus each of its NUMBER custom fields
+// as cf_budget_<key> bound to THIS budget's value (rather than the household sum that
+// Vars folds in). Layer these on top of Vars() with Merge so a cover formula can
+// reference both household aggregates and this budget's own specifics.
+//
+//   - remaining = limit − spent (negative when over)
+//   - overspend = max(0, spent − limit)  (0 when on/under budget)
+//   - percent   = spent / limit × 100     (0 when limit is 0)
+func BudgetVars(b domain.Budget, spentMajor, limitMajor float64, defs []customfields.Def) map[string]float64 {
+	remaining := limitMajor - spentMajor
+	overspend := 0.0
+	if remaining < 0 {
+		overspend = -remaining
+	}
+	percent := 0.0
+	if limitMajor != 0 {
+		percent = spentMajor / limitMajor * 100
+	}
+	out := map[string]float64{
+		"spent":     spentMajor,
+		"limit":     limitMajor,
+		"remaining": remaining,
+		"overspend": overspend,
+		"percent":   percent,
+	}
+	for _, def := range defs {
+		if def.EntityType != "budget" || def.Type != customfields.TypeNumber {
+			continue
+		}
+		if v, ok := numFrom(b.Custom, def.Key); ok {
+			out["cf_budget_"+def.Key] = v
+		}
+	}
+	return out
+}
+
+// Merge returns a new map with over's entries layered on top of base (base is copied
+// first, so neither input is mutated). Used to overlay per-budget context vars on the
+// global surface for a contextual formula evaluation.
+func Merge(base, over map[string]float64) map[string]float64 {
+	out := make(map[string]float64, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range over {
+		out[k] = v
+	}
+	return out
+}
+
 // entityTypeShort maps a custom-field EntityType to the cf_ namespace segment.
 func entityTypeShort(entityType string) string {
 	switch entityType {
