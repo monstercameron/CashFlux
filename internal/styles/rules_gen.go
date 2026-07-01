@@ -4425,7 +4425,8 @@ func registerGenerated() {
 		fontWeight("600"),
 	)
 	rule(".bento-budgets .budget-drill",
-		textDecoration("none"),
+		textDecoration("underline dotted"),
+		textUnderlineOffset("3px"),
 	)
 	rule(".bento-budgets .budget-drill:hover",
 		color("var(--accent)"),
