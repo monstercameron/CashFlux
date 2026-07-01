@@ -607,6 +607,9 @@ func globalSettingsForm() uic.Node {
 		if prefsAtom.Get().RememberAIKey {
 			uistate.PersistAIKey(v)
 		}
+		// A newly configured key can now drive the lock-screen quote-of-the-day —
+		// generate + cache it right away so the user doesn't have to wait for a reload.
+		refreshDailyLockQuote()
 	})
 	onModel := uic.UseEvent(func(e uic.Event) {
 		if a := appstate.Default; a != nil {

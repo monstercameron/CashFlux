@@ -101,5 +101,8 @@ func hydrateFromPasscode(passcode string) {
 		seedMusicFromDataset()
 		initUndo()
 		uistate.BumpDataRevision()
+		// The OpenAI key is now decrypted and available — refresh the lock-screen
+		// quote-of-the-day cache so the next lock shows a fresh AI quote (C: lock quote).
+		refreshDailyLockQuote()
 	})
 }

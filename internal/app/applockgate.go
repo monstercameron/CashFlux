@@ -92,6 +92,9 @@ func showAppLockGate() {
 	if gate := doc.Call("getElementById", appLockGateID); !gate.IsNull() && !gate.IsUndefined() {
 		gate.Get("style").Set("display", "grid")
 		refreshLockMeta(doc)
+		// If a key is remembered on this device it's readable while locked, so try to
+		// refresh the quote now; the result swaps in live when it arrives.
+		refreshDailyLockQuote()
 		refreshLockMute(doc)
 		resetAppLockInput(doc)
 		animateGateIn(gate)
@@ -426,18 +429,20 @@ func refreshLockMeta(doc js.Value) {
 const smartQuoteCode = "SMART-QUOTE"
 
 // lockQuoteText picks the lock-screen quote: the Smart+ "quote of the day" engine's
-// latest generated quote when that feature is enabled and has produced one, otherwise
-// the static day-rotating quote. The Smart settings + cached result live in their own
-// browserstore key (cashflux:smart-settings), so they're readable even while the
-// dataset is locked. The engine refreshes the quote daily during normal app use; the
-// lock screen just displays whatever it last produced.
+// latest generated quote when one exists, otherwise the static day-rotating quote.
+// The Smart settings + cached result live in their own browserstore key
+// (cashflux:smart-settings), so they're readable even while the dataset is locked.
+// refreshDailyLockQuote generates + caches the quote whenever an AI provider is
+// configured (boot/unlock/key-save), so the lock screen just displays whatever it
+// last produced. We show any cached quote unless the user explicitly turned the
+// feature off — the fallback is the static quote when AI isn't configured yet.
 func lockQuoteText(dayOrdinal int) string {
-	if s := uistate.LoadSmartSettings(); s.IsEnabled(smartQuoteCode) {
+	if s := uistate.LoadSmartSettings(); !s.ExplicitOff[smartQuoteCode] {
 		if q := strings.TrimSpace(s.ResultFor(smartQuoteCode)); q != "" {
 			return q
 		}
 	}
-	return lockquotes.ForIndex(dayOrdinal) // fallback: static, when AI/quote isn't enabled
+	return lockquotes.ForIndex(dayOrdinal) // fallback: static, when no AI quote is cached
 }
 
 // wipeAllLocalData removes every cashflux:* entry from the browser store (and any

@@ -824,6 +824,9 @@ func TopBar(props topBarProps) uic.Node {
 			// Music on/off is a direct, always-visible top-bar action (not folded into
 			// the More menu) so it's one click from anywhere.
 			uic.CreateElement(MuzakToggle),
+			// Lock-now button, beside the music toggle — shown only when an app-lock
+			// passcode is set, so the app can be locked in one click from anywhere.
+			uic.CreateElement(LockToggle),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
 			// The "⋯ More" overflow menu sits last, against the right edge.
@@ -992,6 +995,41 @@ func MuzakToggle() uic.Node {
 		OnClick(toggle),
 		ui.Icon(glyph, css.Class(tw.W18px, tw.H18px)),
 	)
+}
+
+// LockToggle is the top-bar lock button (beside the music toggle). One click locks
+// the app — showing the passcode gate — from anywhere. The lock button is only
+// rendered when an app-lock passcode is set (locking is meaningless otherwise),
+// appearing/disappearing live as the lock is added/removed. Same icon-button
+// styling as the music toggle.
+//
+// Structure: a stable wrapper <span> always occupies this slot, and the lock button
+// is conditionally rendered INSIDE it. Returning a bare Fragment when disabled — vs
+// a Button when enabled — makes the component flip between zero and one node, which
+// shifts its position in the reconciler's positional child list (the button ended up
+// at the far right instead of beside the mute toggle). The always-present wrapper
+// pins the slot while still keeping the icon out of the DOM when the lock is off; it
+// is display:none when empty so it contributes no flex gap. The button node (and thus
+// its OnClick hook) is constructed unconditionally — only its inclusion is gated — so
+// the hook stays at a stable position across renders.
+func LockToggle() uic.Node {
+	// Re-render as the shell does (e.g. when Settings closes after enabling/removing
+	// the lock) so the button shows/hides without a reload.
+	_ = uistate.UseDataRevision().Get()
+	enabled := loadAppLock().Enabled
+	lock := func() { showAppLockGate() }
+	lockBtn := Button(ClassStr("muzak-btn"), Type("button"),
+		Attr("title", uistate.T("applock.cmdLock")),
+		Attr("aria-label", uistate.T("applock.cmdLock")),
+		Attr("data-testid", "topbar-lock-btn"),
+		OnClick(lock),
+		ui.Icon(icon.Lock, css.Class(tw.W18px, tw.H18px)),
+	)
+	slot := []any{ClassStr("lock-toggle-slot")}
+	if !enabled {
+		slot = append(slot, Attr("style", "display:none"))
+	}
+	return Span(append(slot, If(enabled, lockBtn))...)
 }
 
 // ResolutionControl is the top bar's time-resolution control. The common case is

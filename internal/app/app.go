@@ -94,6 +94,10 @@ func Run() {
 	// workspace) BEFORE mounting, so the player reads the restored point on init.
 	seedMusicFromDataset()
 	hydrateAIKey()
+	// Populate the lock-screen "quote of the day" cache on boot when unlocked (or
+	// when a remembered on-device key is available while locked), so the lock screen
+	// shows a fresh AI quote next time rather than the static fallback.
+	refreshDailyLockQuote()
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.

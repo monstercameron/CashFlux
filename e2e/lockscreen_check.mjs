@@ -25,16 +25,58 @@ async function setPasscode(p) {
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on("pageerror", (e) => { const m = String(e); if (!m.includes("already exited")) errs.push(m); });
+  // Ensure the dataset has at least one account so the passcode-setup path (which
+  // goes through an account's ⋯ menu) has a row to click — a fresh origin is empty.
+  await page.goto(BASE + "/", { waitUntil: "domcontentloaded" }); await ready(page);
+  if (await page.locator('[data-testid="hero-load-sample"]').count()) {
+    await page.locator('[data-testid="hero-load-sample"]').click(); await page.waitForTimeout(1800);
+  }
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" }); await ready(page);
-  await setPasscode(page);
 
-  // Seed the Smart+ quote-of-the-day (enabled + a cached result) — lives in its own
-  // browserstore key, so it's readable on the lock screen even while locked.
-  await seedIDB(page, "cashflux:smart-settings", JSON.stringify({ enabled: { "SMART-QUOTE": true }, results: { "SMART-QUOTE": "AIQUOTE Beware of little expenses — Benjamin Franklin" } }));
+  // With no passcode set (lock disabled), the lock button must NOT be in the DOM —
+  // only its empty (display:none) wrapper slot holds the position.
+  const k0 = await page.evaluate(() => ({
+    btnInDom: !!document.querySelector('[data-testid="topbar-lock-btn"]'),
+    slotHidden: (() => { const s = document.querySelector(".tb-actions .lock-toggle-slot"); return !!s && getComputedStyle(s).display === "none"; })(),
+  }));
+  check("K0 lock button absent from DOM when the lock is disabled", !k0.btnInDom && k0.slotHidden, JSON.stringify(k0));
+
+  await setPasscode(page);
+  // Dismiss any lingering flip modal/backdrop from the passcode-setup flow so it
+  // doesn't intercept the topbar clicks below.
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForFunction(() => !document.querySelector(".flip-backdrop.show"), { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(400);
+
+  // Top-bar lock button: appears once a passcode is set, sits immediately beside the
+  // music (mute) toggle, and locks the app on click. Checked while unlocked (topbar visible).
+  const tb = await page.evaluate(() => {
+    const acts = document.querySelector(".tb-actions");
+    const kids = acts ? [...acts.children] : [];
+    const mzIdx = kids.findIndex((c) => c.classList.contains("muzak-btn") && !c.getAttribute("data-testid"));
+    // The lock button is conditionally rendered inside its stable wrapper slot.
+    const slotIdx = kids.findIndex((c) => c.classList.contains("lock-toggle-slot"));
+    const slot = slotIdx >= 0 ? kids[slotIdx] : null;
+    const hasLockBtn = !!slot && !!slot.querySelector('[data-testid="topbar-lock-btn"]');
+    return { hasLock: hasLockBtn, adjacent: slotIdx >= 0 && slotIdx === mzIdx + 1, mzIdx, slotIdx };
+  });
+  check("K1 top-bar lock button appears when a passcode is set", tb.hasLock, JSON.stringify(tb));
+  check("K2 lock button sits immediately beside the music toggle", tb.adjacent, JSON.stringify(tb));
+  await page.locator('[data-testid="topbar-lock-btn"]').click(); await page.waitForTimeout(600);
+  check("K3 clicking the lock button locks the app (gate shown)", await page.evaluate(() => !!document.getElementById("cf-applock-input")));
+  // Unlock again so the rest of the checks start from a known (unlocked) state.
+  await page.fill("#cf-applock-input", "7Km9Qz2p"); await page.locator("button:has-text('Unlock')").first().click(); await page.waitForTimeout(1200);
+
+  // Seed a cached Smart+ quote-of-the-day WITHOUT the manual dashboard opt-in — this is
+  // exactly what refreshDailyLockQuote writes after just an AI key is configured. The
+  // cache lives in its own browserstore key, readable on the lock screen while locked.
+  // The fix: the lock screen shows any cached quote (unless explicitly turned off), so
+  // "added a key" surfaces the AI quote instead of the static fallback.
+  await seedIDB(page, "cashflux:smart-settings", JSON.stringify({ enabled: {}, results: { "SMART-QUOTE": "AIQUOTE Beware of little expenses — Benjamin Franklin" } }));
   await page.goto(BASE + "/accounts", { waitUntil: "domcontentloaded" }); await page.waitForTimeout(2200);
   check("L0 lock gate shown on reload (passcode set)", await page.evaluate(() => !!document.getElementById("cf-applock-input")));
   const q1 = await page.evaluate(() => document.getElementById("cf-lock-quote")?.textContent || "");
-  check("L1 lock quote uses the Smart+ quote-of-the-day when enabled", q1.includes("AIQUOTE"), q1.slice(0, 60));
+  check("L1 lock quote shows the cached AI quote-of-the-day (no manual opt-in needed)", q1.includes("AIQUOTE"), q1.slice(0, 60));
 
   // Mute button present + toggles the music.
   const mb = await page.evaluate(() => ({ exists: !!document.getElementById("cf-lock-mute"), size: (window.cashfluxMuzak?.state?.() || {}).size }));

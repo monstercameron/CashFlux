@@ -20,6 +20,7 @@ var curated = []Name{
 	CreditCard, Receipt, Landmark, Filter, Box, Workflow, Scale, Repeat, Calculator,
 	ScanLine, Upload, History, Ban, HelpCircle,
 	Volume, VolumeMute, Bell,
+	Lock,
 	Paperclip,
 	Appearance,
 }
