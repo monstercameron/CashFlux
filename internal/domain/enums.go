@@ -233,6 +233,62 @@ func (p TaskPriority) Valid() bool {
 	}
 }
 
+// GoalKind is what a goal measures its progress by. A goal need not be financial:
+// a checklist goal is driven by its linked to-dos, a milestone is a single
+// done/not-done step, and a habit tracks a streak of recurring check-ins.
+type GoalKind string
+
+const (
+	// GoalKindFinancial is a savings target measured in money (TargetAmount /
+	// CurrentAmount). This is the default: the empty string is treated as
+	// financial for backwards-compatibility with goals created before this field.
+	GoalKindFinancial GoalKind = "financial"
+	// GoalKindChecklist measures progress by its linked to-dos: percent complete =
+	// completed linked tasks / total linked tasks. It has no money target.
+	GoalKindChecklist GoalKind = "checklist"
+	// GoalKindMilestone is a single binary objective — done or not done — with an
+	// optional target date. Completion is recorded in Goal.DoneAt.
+	GoalKindMilestone GoalKind = "milestone"
+	// GoalKindHabit tracks a streak of recurring check-ins toward a target count
+	// (e.g. "log expenses weekly for 12 weeks"); progress = check-ins / HabitTarget.
+	GoalKindHabit GoalKind = "habit"
+)
+
+// AllGoalKinds lists every valid goal kind in display order.
+var AllGoalKinds = []GoalKind{GoalKindFinancial, GoalKindChecklist, GoalKindMilestone, GoalKindHabit}
+
+func (k GoalKind) String() string { return string(k) }
+
+// Valid reports whether k is a known, non-empty goal kind.
+func (k GoalKind) Valid() bool {
+	for _, v := range AllGoalKinds {
+		if v == k {
+			return true
+		}
+	}
+	return false
+}
+
+// Label returns a human-friendly name for the goal kind.
+func (k GoalKind) Label() string {
+	switch k {
+	case GoalKindChecklist:
+		return "Checklist"
+	case GoalKindMilestone:
+		return "Milestone"
+	case GoalKindHabit:
+		return "Habit"
+	default:
+		return "Savings"
+	}
+}
+
+// IsFinancial reports whether the kind tracks money (the default). Non-financial
+// kinds (checklist/milestone/habit) don't use TargetAmount/CurrentAmount.
+func (k GoalKind) IsFinancial() bool {
+	return k == "" || k == GoalKindFinancial
+}
+
 // RelatedType names the kind of entity a task is linked to.
 type RelatedType string
 

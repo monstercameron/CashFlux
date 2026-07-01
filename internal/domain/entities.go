@@ -472,7 +472,11 @@ type RecurringCover struct {
 	Custom            map[string]any `json:"custom,omitempty"` // user-defined "cover" custom fields (metadata on the standing rule)
 }
 
-// Goal is a savings target, individual or shared.
+// Goal is a target the household works toward. By default it is a savings
+// target (Kind financial: TargetAmount / CurrentAmount), but a goal need not be
+// financial — see GoalKind. Any goal, of any kind, may have to-dos linked to it
+// (Task.RelatedType=RelatedGoal, RelatedID=Goal.ID); for a checklist goal those
+// linked to-dos drive its percent complete.
 type Goal struct {
 	ID            string      `json:"id"`
 	Name          string      `json:"name"`
@@ -482,6 +486,20 @@ type Goal struct {
 	CurrentAmount money.Money `json:"currentAmount"`
 	TargetDate    time.Time   `json:"targetDate,omitempty"`
 	AccountID     string      `json:"accountId,omitempty"`
+	// Kind selects how the goal measures progress (financial / checklist /
+	// milestone / habit). The empty string is treated as financial for backwards-
+	// compatibility with goals created before this field. JSON round-trips
+	// automatically; no store migration is needed. See domain.GoalKind.
+	Kind GoalKind `json:"kind,omitempty"`
+	// DoneAt records when a milestone goal was marked complete (zero = not done).
+	// Only meaningful for GoalKindMilestone.
+	DoneAt time.Time `json:"doneAt,omitempty"`
+	// HabitCadence is the expected check-in rhythm for a habit goal (weekly,
+	// monthly, …); HabitTarget is how many check-ins complete it; CheckIns is the
+	// recorded check-in timestamps. Only meaningful for GoalKindHabit.
+	HabitCadence RecurringCadence `json:"habitCadence,omitempty"`
+	HabitTarget  int              `json:"habitTarget,omitempty"`
+	CheckIns     []time.Time      `json:"checkIns,omitempty"`
 	// Archived marks a completed goal as moved to the "Achieved" section.
 	// JSON round-trips automatically; no store schema change is needed.
 	Archived bool `json:"archived,omitempty"`
@@ -502,6 +520,23 @@ type Goal struct {
 	// goal_emergency_remaining) instead of the name-derived slug. Empty = derive from Name.
 	VarName string `json:"varName,omitempty"`
 }
+
+// EffectiveKind returns the goal's kind, resolving the empty zero value to
+// GoalKindFinancial so callers can switch on a concrete kind without special-
+// casing legacy goals stored before the Kind field existed.
+func (g Goal) EffectiveKind() GoalKind {
+	if g.Kind == "" {
+		return GoalKindFinancial
+	}
+	return g.Kind
+}
+
+// IsFinancial reports whether the goal tracks money (its kind is financial or
+// the legacy empty default). Non-financial goals ignore TargetAmount/CurrentAmount.
+func (g Goal) IsFinancial() bool { return g.EffectiveKind().IsFinancial() }
+
+// IsMilestoneDone reports whether a milestone goal has been marked complete.
+func (g Goal) IsMilestoneDone() bool { return !g.DoneAt.IsZero() }
 
 // EarmarkKind identifies what kind of entity an Earmark is targeting.
 const (

@@ -151,7 +151,10 @@ func ValidateBudget(b domain.Budget) Issues {
 	return is
 }
 
-// ValidateGoal checks a goal.
+// ValidateGoal checks a goal. Validation is kind-aware: a financial goal needs a
+// positive money target, a habit needs a positive check-in target, and checklist
+// / milestone goals (whose progress comes from linked to-dos or a manual done
+// flag) require neither. The empty kind is treated as financial.
 func ValidateGoal(g domain.Goal) Issues {
 	var is Issues
 	is.require("name", g.Name)
@@ -159,12 +162,22 @@ func ValidateGoal(g domain.Goal) Issues {
 	if !g.Scope.Valid() {
 		is.add("scope", "is invalid")
 	}
-	if g.TargetAmount.Amount <= 0 {
-		is.add("targetAmount", "must be greater than zero")
+	if g.Kind != "" && !g.Kind.Valid() {
+		is.add("kind", "is invalid")
 	}
-	if g.CurrentAmount.Currency != "" && g.TargetAmount.Currency != "" &&
-		g.CurrentAmount.Currency != g.TargetAmount.Currency {
-		is.add("currentAmount", "currency must match the target amount")
+	switch g.EffectiveKind() {
+	case domain.GoalKindFinancial:
+		if g.TargetAmount.Amount <= 0 {
+			is.add("targetAmount", "must be greater than zero")
+		}
+		if g.CurrentAmount.Currency != "" && g.TargetAmount.Currency != "" &&
+			g.CurrentAmount.Currency != g.TargetAmount.Currency {
+			is.add("currentAmount", "currency must match the target amount")
+		}
+	case domain.GoalKindHabit:
+		if g.HabitTarget <= 0 {
+			is.add("habitTarget", "must be greater than zero")
+		}
 	}
 	return is
 }

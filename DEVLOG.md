@@ -1,3 +1,40 @@
+## 2026-07-01 — Non-financial goal kinds + todo-linked progress (layer 1: model + logic)
+
+Cam: "link 1-n todos to the goals so we can track progress, and goal types dont have to be
+financial, so lets expand a bit." Asked which non-financial kinds → all three: checklist, milestone,
+habit (on top of the existing financial). Building bottom-up per SDLC; this is layer 1 (domain +
+pure logic + tests), UI comes later.
+
+Two nice discoveries scoping it:
+- The 1-n todo↔goal link already exists. Task already has RelatedType/RelatedID and RelatedGoal is a
+  valid RelatedType, so many tasks → one goal needs NO new field. Linking is a query, not a schema
+  change.
+- Financial progress funcs (Percent/IsComplete/Remaining) already take just a Goal; non-financial
+  kinds need the task list, so I kept those untouched and added a parallel kind-aware path.
+
+Domain (internal/domain):
+- enums.go: GoalKind {financial, checklist, milestone, habit} with Valid/String/Label/IsFinancial;
+  "" treated as financial for back-compat.
+- entities.go: Goal gains Kind, DoneAt (milestone completion), HabitCadence/HabitTarget/CheckIns
+  (habit), all json omitempty → round-trips, no store migration. Methods EffectiveKind()/IsFinancial()
+  /IsMilestoneDone().
+- validate.go: ValidateGoal is now kind-aware — financial needs targetAmount>0 (+ currency match),
+  habit needs habitTarget>0, checklist/milestone need neither. (Previously it hard-required a positive
+  money target, which would have rejected every non-financial goal.)
+
+Logic (internal/goals/kinds.go):
+- LinkedTasks(tasks, goalID), TaskCounts → (done,total), ChecklistPercent(done,total) clamped.
+- HabitStreak(g, now): sort check-ins desc, count the consecutive run where gaps ≤ 1.5 cadence steps
+  (cadenceDays table) so ordinary timing drift doesn't break a streak.
+- Progress struct + EvaluateProgress(g, tasks, now): one unified shape across all four kinds
+  (financial reuses Percent/IsComplete; checklist=tasks; milestone=DoneAt→0/100; habit=checkins/target
+  +streak).
+
+Verify: go test ./internal/domain/... ./internal/validate/... ./internal/goals/... green; full
+go test ./... clean. kinds_test.go covers linked-task filtering, counts, checklist/habit percent +
+clamp, streak (single/consecutive/gap-breaks/drift-tolerated/unsorted), and per-kind EvaluateProgress
+(incl. empty checklist = 0%, complete states). Next: engine vars (goal task counts) then UI.
+
 ## 2026-07-01 — Smart ⓘ popover: portal to <body> (fix "clips under next section")
 
 Cam: the "overall progress" ⓘ popover "its clipping under the next section that hosts goal metrics
