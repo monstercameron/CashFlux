@@ -32,8 +32,11 @@ func BudgetEditHost() uic.Node {
 	closeModal := func() { uistate.CloseBudgetEdit() }
 
 	title, width, height := uistate.T("budgets.editTitle"), "460px", "680px"
-	if e.Mode == uistate.BudgetEditModeTopup {
+	switch e.Mode {
+	case uistate.BudgetEditModeTopup:
 		title, width, height = uistate.T("budgets.topupTitle"), "420px", "300px"
+	case uistate.BudgetEditModeCover:
+		title, width, height = uistate.T("budgets.coverModalTitle"), "480px", "600px"
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{

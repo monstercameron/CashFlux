@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -247,12 +246,10 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 }
 
 // budgetRowCallbacks bundles the per-row mutation handlers the list tile hands to each
-// BudgetRow. Errors surface through the global notice/toast (PostNotice) or, for the
-// inline cover/top-up forms, as a returned error the row shows in place. All mutations
-// bump the shared data revision so the whole surface re-renders in step.
+// BudgetRow. The edit / top-up / cover editors now live in the shell-root flip modal
+// (BudgetEditForm) which mutates the store directly, so the row only needs delete.
 type budgetRowCallbacks struct {
 	OnDelete func(string)
-	OnCover  func(toID, fromID, amount string) error
 }
 
 // buildBudgetRowCallbacks wires the store mutations for BudgetRow, mirroring the
@@ -282,17 +279,6 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 				uistate.BumpDataRevision()
 			})
 		},
-		OnCover: func(toID, fromID, amountStr string) error {
-			amt, err := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(base))
-			if err != nil || amt <= 0 {
-				return fmt.Errorf("enter an amount greater than zero")
-			}
-			if err := app.CoverBudget(fromID, toID, money.New(amt, base)); err != nil {
-				return err
-			}
-			uistate.BumpDataRevision()
-			return nil
-		},
 	}
 }
 
@@ -311,18 +297,8 @@ type budgetRowProps struct {
 	EffectiveCap    string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
 	ProratedRest    string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
-	CoverSources    []coverSource         // budgets that can fund a "Cover…" (the row drops itself)
-	CoverShortfall  string                // formatted overspend, for the "covers the $X over" hint
-	CoverDefault    string                // major-units default amount to prefill the cover field
 	OnDelete        func(string)
-	OnCover         func(toID, fromID, amount string) error
 	OnDrill         func(categoryID string) // open Transactions filtered to this budget's category
-}
-
-// coverSource is one budget offered as a funding source in a row's "Cover…" picker.
-type coverSource struct {
-	ID    string
-	Label string
 }
 
 // budgetLeftValue formats a budget's remaining amount for the summary "Left" stat

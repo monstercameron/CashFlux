@@ -293,30 +293,15 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		cbs := buildBudgetRowCallbacks(app, v.Base, v.CatName)
 		budgetDefs := app.CustomFieldDefsFor("budget")
 		members := app.Members()
-		// Source budgets a "Cover…" action can pull from: every budget, labelled with
-		// its remaining room (the row drops itself when building its picker).
-		coverSources := make([]coverSource, 0, len(v.Statuses))
-		for _, s := range v.Statuses {
-			coverSources = append(coverSources, coverSource{
-				ID:    s.Budget.ID,
-				Label: budgetTitle(s.Budget.Name, v.CatName[s.Budget.CategoryID]) + " · " + fmtMoney(s.Remaining) + " left",
-			})
-		}
 		rows := MapKeyed(v.Statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
-				shortfall := budgeting.CoverAmount(s)
-				coverDefault := ""
-				if shortfall.IsPositive() {
-					coverDefault = money.FormatMinor(shortfall.Amount, currency.Decimals(shortfall.Currency))
-				}
 				return ui.CreateElement(BudgetRow, budgetRowProps{
 					Status: s, Category: v.CatName[s.Budget.CategoryID], Members: members, BudgetDefs: budgetDefs,
 					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
-					CoverSources: coverSources, CoverShortfall: fmtMoney(shortfall), CoverDefault: coverDefault,
-					OnDelete: cbs.OnDelete, OnCover: cbs.OnCover, OnDrill: viewTransactions,
+					OnDelete: cbs.OnDelete, OnDrill: viewTransactions,
 				})
 			},
 		)

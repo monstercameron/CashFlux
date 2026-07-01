@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -38,6 +39,10 @@ type BudgetEditFormProps struct {
 func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// Re-render on data mutations so a stale figure can't linger while open.
 	_ = uistate.UseDataRevision().Get()
+	// Resolved for the cover editor's source list (hooks stay unconditional).
+	activeMemberID := uistate.UseActiveMember().Get()
+	vw := uistate.UsePeriod().Get()
+	pr := uistate.UsePrefs().Get()
 
 	app := appstate.Default
 	done := props.OnDone
@@ -71,6 +76,35 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		limitMajor = money.FormatMinor(b.Limit.Amount, dec)
 	}
 
+	// Cover-editor data: the over-budget's shortfall (prefills the amount) and every
+	// other budget that has limit to give, so the user can spread the cover across
+	// several. Computed for every mode so the useState seeds below can read it (cheap;
+	// keeps hooks stable).
+	var coverSrcs []budgetCoverSource
+	coverDefaultStr, coverShortfallStr := "", ""
+	if app != nil {
+		cv := computeBudgetView(app, activeMemberID, vw, pr)
+		for _, s := range cv.Statuses {
+			if s.Budget.ID == props.BudgetID {
+				sf := budgeting.CoverAmount(s)
+				coverShortfallStr = fmtMoney(sf)
+				if sf.IsPositive() {
+					coverDefaultStr = money.FormatMinor(sf.Amount, currency.Decimals(sf.Currency))
+				}
+				continue
+			}
+			if s.Budget.Limit.Amount <= 0 {
+				continue // nothing to give
+			}
+			coverSrcs = append(coverSrcs, budgetCoverSource{
+				ID:          s.Budget.ID,
+				Label:       budgetTitle(s.Budget.Name, cv.CatName[s.Budget.CategoryID]),
+				RemainMinor: s.Remaining.Amount,
+				LimitMinor:  s.Budget.Limit.Amount,
+			})
+		}
+	}
+
 	// All hooks unconditionally at stable positions (before any branch/return).
 	nameS := ui.UseState(b.Name)
 	limitS := ui.UseState(limitMajor)
@@ -80,12 +114,87 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	methodologyS := ui.UseState(b.Methodology)
 	customEditVals := ui.UseState(customMapToStrings(b.Custom))
 	topupAmt := ui.UseState("")
+	coverAmtS := ui.UseState(coverDefaultStr)
+	coverSelS := ui.UseState(map[string]bool{}) // sourceID → checked
+	coverWtS := ui.UseState(map[string]int{})   // sourceID → ratio weight (default 1)
 	errS := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
 	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
+	onCoverAmt := ui.UseEvent(func(v string) { coverAmtS.Set(v) })
+	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
+	// Plain funcs (not hooks) passed down to each per-source row component, so the
+	// checkbox/weight On* handlers live in the row, not in this loop.
+	onToggleSrc := func(sid string) {
+		sel := coverSelS.Get()
+		ns := make(map[string]bool, len(sel)+1)
+		for k, v := range sel {
+			ns[k] = v
+		}
+		ns[sid] = !ns[sid]
+		coverSelS.Set(ns)
+		if ns[sid] { // default a newly-checked source to weight 1 (equal split)
+			w := coverWtS.Get()
+			if w[sid] == 0 {
+				nw := make(map[string]int, len(w)+1)
+				for k, v := range w {
+					nw[k] = v
+				}
+				nw[sid] = 1
+				coverWtS.Set(nw)
+			}
+		}
+	}
+	onWeightSrc := func(sid string, val int) {
+		if val < 0 {
+			val = 0
+		}
+		w := coverWtS.Get()
+		nw := make(map[string]int, len(w)+1)
+		for k, v := range w {
+			nw[k] = v
+		}
+		nw[sid] = val
+		coverWtS.Set(nw)
+	}
+	submitCover := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			done()
+			return
+		}
+		amt, err := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
+		if err != nil || amt <= 0 {
+			errS.Set(uistate.T("budgets.limitRequired"))
+			return
+		}
+		shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get())
+		if len(shares) == 0 {
+			errS.Set(uistate.T("budgets.coverPickSource"))
+			return
+		}
+		// Pre-validate so a partial failure can't leave a half-applied cover: each
+		// source must keep a positive limit after giving its share.
+		for _, sc := range coverSrcs {
+			if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
+				errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
+				return
+			}
+		}
+		for _, sc := range coverSrcs {
+			share, ok := shares[sc.ID]
+			if !ok || share <= 0 {
+				continue
+			}
+			if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
+				errS.Set(err.Error())
+				return
+			}
+		}
+		uistate.BumpDataRevision()
+		done()
+	}))
 	cancel := ui.UseEvent(Prevent(func() { done() }))
 	onCustom := func(key, value string) {
 		m := customEditVals.Get()
@@ -178,6 +287,49 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		errLine = P(css.Class("err"), Attr("role", "alert"), errS.Get())
 	}
 
+	// --- Cover: spread the overspend across one or more source budgets. ---
+	if props.Mode == uistate.BudgetEditModeCover {
+		if len(coverSrcs) == 0 {
+			return Div(css.Class("acct-edit-form"), P(css.Class("empty"), uistate.T("budgets.coverNoSources")))
+		}
+		// Live per-source shares from the current amount + selection + weights.
+		amtMinor, _ := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
+		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get())
+		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+				uistate.T("budgets.coverHint", coverShortfallStr)),
+			labeledField(uistate.T("budgets.amountToMove"),
+				Div(css.Class("cover-amount-row"),
+					Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
+						Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
+						Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt)),
+					If(coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
+						OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
+				)),
+			// Multi-source: check the budgets to pull from (split equally by default);
+			// the ratio input per source lets the split be unequal.
+			Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
+			Div(css.Class("cover-sources"),
+				MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
+					shareStr := ""
+					if sh, ok := shares[sc.ID]; ok && sh > 0 {
+						shareStr = fmtMoney(money.New(sh, cur))
+					}
+					return ui.CreateElement(coverSourceRow, coverSourceRowProps{
+						ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
+						Selected: coverSelS.Get()[sc.ID], Weight: coverWtS.Get()[sc.ID], ShareStr: shareStr,
+						OnToggle: onToggleSrc, OnWeight: onWeightSrc,
+					})
+				}),
+			),
+			errLine,
+			Div(css.Class("acct-edit-actions"),
+				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.coverAction")),
+			),
+		)
+	}
+
 	// --- Top-up: a single amount that raises the budget's limit. ---
 	if props.Mode == uistate.BudgetEditModeTopup {
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
@@ -233,6 +385,94 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
+	)
+}
+
+// budgetCoverSource is one budget offered as a funding source in the cover editor:
+// its id, a display label, its remaining room, and its base limit (used to validate a
+// share can't zero it out).
+type budgetCoverSource struct {
+	ID          string
+	Label       string
+	RemainMinor int64
+	LimitMinor  int64
+}
+
+// splitCoverAmount divides totalMinor across the checked sources in proportion to
+// their weights (an unset/≤0 weight counts as 1, so the default is an equal split),
+// distributing any rounding remainder to the first selected source so the shares sum
+// exactly to totalMinor. Returns nil when nothing is selected or the total ≤ 0.
+func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string]bool, weights map[string]int) map[string]int64 {
+	if totalMinor <= 0 {
+		return nil
+	}
+	var ids []string
+	totalWeight := 0
+	for _, sc := range srcs {
+		if !sel[sc.ID] {
+			continue
+		}
+		w := weights[sc.ID]
+		if w <= 0 {
+			w = 1
+		}
+		ids = append(ids, sc.ID)
+		totalWeight += w
+	}
+	if len(ids) == 0 || totalWeight == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(ids))
+	var assigned int64
+	for _, id := range ids {
+		w := weights[id]
+		if w <= 0 {
+			w = 1
+		}
+		share := totalMinor * int64(w) / int64(totalWeight)
+		out[id] = share
+		assigned += share
+	}
+	if rem := totalMinor - assigned; rem != 0 {
+		out[ids[0]] += rem
+	}
+	return out
+}
+
+// coverSourceRowProps drives one row of the cover editor's source list. On* handlers
+// live here (not in the parent's map loop) per the framework's no-hooks-in-loops rule.
+type coverSourceRowProps struct {
+	ID        string
+	Label     string
+	RemainStr string
+	Selected  bool
+	Weight    int
+	ShareStr  string // formatted amount this source contributes (when selected)
+	OnToggle  func(string)
+	OnWeight  func(string, int)
+}
+
+// coverSourceRow renders a checkbox to include a source budget, and — when checked —
+// a ratio input (default 1) plus the live amount that ratio yields.
+func coverSourceRow(props coverSourceRowProps) ui.Node {
+	onToggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
+	onWeight := ui.UseEvent(func(v string) { n, _ := strconv.Atoi(strings.TrimSpace(v)); props.OnWeight(props.ID, n) })
+	w := props.Weight
+	if props.Selected && w <= 0 {
+		w = 1
+	}
+	return Div(css.Class("cover-src-row"),
+		Label(css.Class("cover-src-main"),
+			Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-src-"+props.ID), OnChange(onToggle)}, checkedAttr(props.Selected)...)...),
+			Span(css.Class("cover-src-name"), props.Label),
+			Span(css.Class("cover-src-remain"), props.RemainStr+" left"),
+		),
+		If(props.Selected, Div(css.Class("cover-src-ratio"),
+			Span(css.Class("cover-src-ratio-label"), uistate.T("budgets.coverRatio")),
+			Input(css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
+				Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)),
+			Span(css.Class("cover-src-share"), props.ShareStr),
+		)),
 	)
 }
 

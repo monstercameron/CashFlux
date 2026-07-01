@@ -53,41 +53,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
 
-	// "Cover…" inline form (L1): move money from another budget to clear an overspend.
-	covering := ui.UseState(false)
-	coverFrom := ui.UseState("")
-	coverAmt := ui.UseState("")
-	coverErr := ui.UseState("")
-	// onCoverFrom hook kept for stable hook ordering; SelectInput owns the change event.
-	ui.UseEvent(func(e ui.Event) { coverFrom.Set(e.GetValue()) })
-	onCoverAmt := ui.UseEvent(func(v string) { coverAmt.Set(v) })
-	firstSource := func() string {
-		for _, src := range props.CoverSources {
-			if src.ID != s.Budget.ID {
-				return src.ID
-			}
-		}
-		return ""
-	}
-	startCover := ui.UseEvent(Prevent(func() {
-		coverFrom.Set(firstSource())
-		coverAmt.Set(props.CoverDefault)
-		coverErr.Set("")
-		covering.Set(true)
-	}))
-	cancelCover := ui.UseEvent(Prevent(func() { covering.Set(false) }))
-	fullCover := ui.UseEvent(Prevent(func() { coverAmt.Set(props.CoverDefault) }))
-	submitCover := ui.UseEvent(Prevent(func() {
-		from := coverFrom.Get()
-		if from == "" {
-			from = firstSource()
-		}
-		if err := props.OnCover(s.Budget.ID, from, coverAmt.Get()); err != nil {
-			coverErr.Set(err.Error())
-			return
-		}
-		coverErr.Set("")
-		covering.Set(false)
+	// "Cover…" opens the shell-root flip modal (BudgetEditHost cover mode), which picks
+	// a source budget + amount and moves the limit — no longer an inline row form.
+	openCover := ui.UseEvent(Prevent(func() {
+		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
 	}))
 
 	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
@@ -192,55 +161,22 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			uistate.T("budgets.proratedRest", props.ProratedRest))
 	}
 
-	// "Cover…" is offered only on an over-budget row that has another budget to
-	// pull from. The inline form picks a source and an amount (prefilled to the
-	// exact overspend), so Maya can clear the overspend without leaving the screen.
+	// "Cover…" is offered on an over-budget row and opens the flip modal (which lists
+	// the other budgets to pull from). Top up is offered when not over.
 	isOver := s.State == budgeting.StateOver
-	hasSource := firstSource() != ""
 	menuHidden := ""
 	if !menuOpen.Get() {
 		menuHidden = " hidden-menu"
 	}
 	var coverBtn ui.Node = Fragment()
-	if isOver && hasSource && !covering.Get() {
-		coverBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.coverTitle")), OnClick(startCover), "Cover…")
+	if isOver {
+		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), "Cover…")
 	}
 	// Top up is a visible card button (the frequent proactive action) on budgets that
 	// aren't over; Edit lives in the ⋯ menu as the lower-frequency action.
 	var topupBtn ui.Node = Fragment()
-	if !isOver && !covering.Get() {
+	if !isOver {
 		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
-	}
-
-	var coverForm ui.Node = Fragment()
-	if covering.Get() {
-		srcOpts := make([]uiw.SelectOption, 0, len(props.CoverSources))
-		for _, src := range props.CoverSources {
-			if src.ID == s.Budget.ID {
-				continue
-			}
-			srcOpts = append(srcOpts, uiw.SelectOption{Value: src.ID, Label: src.Label})
-		}
-		var coverErrLine ui.Node = Fragment()
-		if coverErr.Get() != "" {
-			coverErrLine = P(css.Class("budget-sub", tw.TextDown), coverErr.Get())
-		}
-		coverForm = Div(css.Class("cover-form"),
-			Span(css.Class("budget-sub"), "Cover the "+props.CoverShortfall+" over by moving money from another budget:"),
-			Form(css.Class("form-grid"), OnSubmit(submitCover),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   srcOpts,
-					Selected:  coverFrom.Get(),
-					OnChange:  func(v string) { coverFrom.Set(v) },
-					AriaLabel: "Cover from budget",
-				}),
-				Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder("Amount"), Value(coverAmt.Get()), Step("0.01"), OnInput(onCoverAmt)),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")), OnClick(fullCover), "Full "+props.CoverShortfall),
-				Button(css.Class("btn btn-primary"), Type("submit"), "Cover"),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelCover), uistate.T("action.cancel")),
-			),
-			coverErrLine,
-		)
 	}
 
 	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
@@ -300,7 +236,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine,
 		effectiveCapLine,
 		envLine,
-		coverForm,
 	)
 }
 

@@ -5069,6 +5069,73 @@ func registerGenerated() {
 		paddingTop("0.9rem"),
 		borderTop("1px solid #2a2a2c"),
 	)
+	// Cover editor: amount + full-shortfall button on one line, then a checkbox list of
+	// source budgets, each with a ratio input and its computed share.
+	rule(".cover-amount-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".cover-amount-row .field",
+		flex("1 1 auto"),
+		minWidth("0"),
+	)
+	rule(".cover-spread-label",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".cover-sources",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+	)
+	rule(".cover-src-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+		padding("0.5rem 0.65rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+	)
+	rule(".cover-src-main",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		minWidth("0"),
+		flex("1 1 auto"),
+		cursor("pointer"),
+	)
+	rule(".cover-src-name",
+		fontWeight("600"),
+	)
+	rule(".cover-src-remain",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".cover-src-ratio",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		flexShrink("0"),
+	)
+	rule(".cover-src-ratio-label",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".cover-src-weight",
+		width("64px"),
+	)
+	rule(".cover-src-share",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("600"),
+		color("var(--accent)"),
+		minWidth("64px"),
+		textAlign("right"),
+	)
 	rule(".acct-edit-actions .btn",
 		minWidth("104px"),
 		justifyContent("center"),

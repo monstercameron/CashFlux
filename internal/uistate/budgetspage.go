@@ -17,6 +17,7 @@ const budgetEditAtomID = "budgets:edit"
 const (
 	BudgetEditModeEdit  = "edit"  // full edit form (name/limit/period/owner/rollover/method/custom)
 	BudgetEditModeTopup = "topup" // raise this budget's limit by an entered amount
+	BudgetEditModeCover = "cover" // move limit from another budget to clear an overspend
 )
 
 // BudgetEdit selects the budget + editor a modal should show. A zero value (empty ID)
