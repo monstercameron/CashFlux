@@ -662,6 +662,9 @@ var english = Catalog{
 
 	// Goals screen
 	"goals.add":                "Add goal",
+	"goals.metricsTitle":       "Goal metrics",
+	"goals.metricsShow":        "Goal metrics",
+	"goals.metricsHide":        "Hide metrics",
 	"goals.addGoal":            "+ Add goal",
 	"goals.paceFinal":          "Final stretch",
 	"goals.paceOverdue":        "Past due",

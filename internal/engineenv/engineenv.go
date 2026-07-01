@@ -204,8 +204,85 @@ func computeAtoms(d Data) map[string]float64 {
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
 	addAccountVars(out, d, major, toBase)
+	addGoalVars(out, d, major, toBase)
 	return out
 }
+
+// addGoalVars exposes each goal as its own named variables, so a formula or widget can
+// reference a specific savings goal — e.g. goal_emergency_remaining. Each goal
+// contributes, keyed by a slug of its name (or explicit VarName):
+//
+//   - goal_<slug>_target     the goal's target amount (major units, base currency)
+//   - goal_<slug>_saved      the amount saved so far
+//   - goal_<slug>_remaining  target − saved (0 when reached)
+//   - goal_<slug>_percent    saved ÷ target × 100 (0 when target is 0)
+//
+// Amounts are FX-converted to the base currency. Name collisions are disambiguated with
+// a numeric suffix in stable goal order; archived goals still expose their variables.
+func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	for _, base := range GoalVarBases(d.Goals) {
+		g := base.Goal
+		target := major(toBase(g.TargetAmount.Amount, g.TargetAmount.Currency))
+		saved := major(toBase(g.CurrentAmount.Amount, g.CurrentAmount.Currency))
+		remaining := target - saved
+		if remaining < 0 {
+			remaining = 0
+		}
+		percent := 0.0
+		if target != 0 {
+			percent = saved / target * 100
+		}
+		out[base.Prefix+"target"] = target
+		out[base.Prefix+"saved"] = saved
+		out[base.Prefix+"remaining"] = remaining
+		out[base.Prefix+"percent"] = percent
+	}
+}
+
+// GoalVarFields are the per-goal metric suffixes exposed on the surface. Shared with the
+// widget/formula catalog so the picker matches the surface.
+var GoalVarFields = []string{"target", "saved", "remaining", "percent"}
+
+// GoalVarBase pairs a goal with the disambiguated variable prefix its values are keyed
+// under ("goal_<slug>_"). Single source of truth for per-goal naming.
+type GoalVarBase struct {
+	Goal   domain.Goal
+	Prefix string // e.g. "goal_emergency_"
+}
+
+// GoalVarBases returns one entry per named goal, in stable order, with same-name goals
+// disambiguated by a numeric suffix. Goals whose name yields no slug are skipped. An
+// explicit VarName wins over the display name (stable across renames).
+func GoalVarBases(goals []domain.Goal) []GoalVarBase {
+	used := map[string]bool{}
+	out := make([]GoalVarBase, 0, len(goals))
+	for _, g := range goals {
+		src := g.Name
+		if g.VarName != "" {
+			src = g.VarName
+		}
+		slug := budgetVarSlug(src)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, GoalVarBase{Goal: g, Prefix: "goal_" + slug + "_"})
+	}
+	return out
+}
+
+// GoalVarSlug exposes the slugging used for per-goal variable names (for UI previews).
+func GoalVarSlug(s string) string { return budgetVarSlug(s) }
 
 // addBudgetVars exposes each budget as its own set of named variables, so a formula or
 // dashboard widget can reference a specific budget directly — e.g. budget_groceries_remaining

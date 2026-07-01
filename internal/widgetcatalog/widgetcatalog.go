@@ -27,7 +27,16 @@ const (
 	GroupCustom   Group = "Custom fields"
 	GroupBudgets  Group = "Budgets"
 	GroupAccounts Group = "Accounts"
+	GroupGoals    Group = "Goals"
 )
+
+// goalFieldMeta labels + documents each per-goal metric suffix for the picker.
+var goalFieldMeta = map[string]struct{ Label, Doc string }{
+	"target":    {"target", "The goal's target amount."},
+	"saved":     {"saved", "Amount saved toward the goal so far."},
+	"remaining": {"left", "Target minus saved (0 once reached)."},
+	"percent":   {"% funded", "Saved as a percent of the target."},
+}
 
 // accountFieldMeta labels + documents each per-account metric suffix for the picker.
 var accountFieldMeta = map[string]struct{ Label, Doc string }{
@@ -165,6 +174,26 @@ func AccountMetrics(accounts []domain.Account) []Metric {
 				Label: base.Account.Name + " — " + meta.Label,
 				Doc:   meta.Doc,
 				Group: GroupAccounts,
+			})
+		}
+	}
+	return out
+}
+
+// GoalMetrics returns the per-goal metrics (target/saved/left/%funded) so a specific
+// savings goal can be referenced in a formula or dashboard widget — e.g.
+// goal_emergency_remaining. Built from engineenv's naming so labels match the surface.
+func GoalMetrics(goals []domain.Goal) []Metric {
+	bases := engineenv.GoalVarBases(goals)
+	out := make([]Metric, 0, len(bases)*len(engineenv.GoalVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.GoalVarFields {
+			meta := goalFieldMeta[field]
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Goal.Name + " — " + meta.Label,
+				Doc:   meta.Doc,
+				Group: GroupGoals,
 			})
 		}
 	}

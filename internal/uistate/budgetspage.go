@@ -65,3 +65,7 @@ func CloseBudgetEdit() { SetBudgetEdit(BudgetEdit{}) }
 // their budget aggregates and number-typed budget custom fields (which surface as
 // cf_budget_* variables in the engine).
 func UseBudgetsShowFormulas() state.Atom[bool] { return state.UseAtom(budgetFormulasAtomID, false) }
+
+// UseGoalsShowFormulas returns the shared atom selecting whether the "Goal metrics"
+// formula tile is revealed on /goals — the goals analog of UseBudgetsShowFormulas.
+func UseGoalsShowFormulas() state.Atom[bool] { return state.UseAtom("goals:showFormulas", false) }

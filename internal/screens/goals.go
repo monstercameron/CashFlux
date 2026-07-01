@@ -7,342 +7,68 @@ package screens
 import (
 	"fmt"
 	"sort"
-	"strings"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/router"
-	"github.com/monstercameron/GoWebComponents/state"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Goals lists savings goals with progress, plus an add form and per-row delete.
-func Goals() ui.Node {
-	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
-	}
+// goalView is the shared computed picture of the goals surface — the owner-scoped,
+// partitioned, sorted goal lists plus the headline totals. Both the summary and the
+// list tiles compute it, mirroring computeBudgetView on /budgets.
+type goalView struct {
+	Base        string
+	Accounts    []domain.Account
+	Members     []domain.Member
+	Categories  []domain.Category
+	All         []domain.Goal // owner-visible goals (all sections)
+	Active      []domain.Goal // non-archived, non-fund; sorted most-actionable first
+	Fund        []domain.Goal // sinking funds; alphabetical
+	Achieved    []domain.Goal // archived; alphabetical
+	SavedTotal  money.Money   // Σ saved across active goals (base currency)
+	TargetTotal money.Money   // Σ target across active goals (base currency)
+	OverallPct  int           // combined saved/target percent across active goals
+}
 
-	rev := state.UseAtom("rev:goals", 0)
-	bump := func() { rev.Set(rev.Get() + 1) }
-	// Re-render on a global data-revision bump too, so a goal added via the AddHost
-	// modal (a sibling component that can't touch rev:goals) appears immediately
-	// without a reload (C177/R2).
-	_ = uistate.UseDataRevision().Get()
-
-	// Drill from a goal's linked account to that account's transactions (mirrors
-	// Accounts→Transactions and the budget drill, C30/C50).
-	nav := router.UseNavigate()
-	txFilter := uistate.UseTxFilter()
-	viewAccountTxns := func(accountID string) {
-		f := uistate.TxFilter{Account: accountID}.Normalize()
-		txFilter.Set(f)
-		uistate.PersistTxFilter(f)
-		nav.Navigate(uistate.RoutePath("/transactions"))
-	}
-	// A completed goal frees its monthly contribution — jump to Allocate to put it
-	// to work elsewhere (L20 "what next").
-	redirectToAllocate := func() { nav.Navigate(uistate.RoutePath("/allocate")) }
-
-	// Open the add-goal modal from the card header (G5: discoverable add without
-	// hunting for the FAB quick-add panel).
-	addGoal := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("goal") }))
-
-	// C278: scope the displayed list to the active member when one is selected.
-	// Atom read at a stable top-level hook position; filtering is plain code below.
-	activeMemberID := uistate.UseActiveMember().Get()
-
+// computeGoalView assembles the goalView for the active member view: owner-scoped,
+// partitioned into active / sinking-fund / achieved, sorted, with the headline totals.
+// Pure aggregation over the internal/goals package (no hooks, no mutation).
+func computeGoalView(app *appstate.App, activeMemberID string) goalView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-
-	accounts := app.Accounts()
-	errMsg := ui.UseState("")
-
-	deleteGoal := func(goalID string) {
-		// Guard the destructive delete with a confirm (matches Transactions/Budgets). Previously the
-		// "×" destroyed a goal + its contribution history instantly with no confirm or undo.
-		name := uistate.T("goals.thisGoal")
-		for _, g := range app.Goals() {
-			if g.ID == goalID && g.Name != "" {
-				name = g.Name
-				break
-			}
-		}
-		uistate.ConfirmModal(uistate.T("goals.deleteConfirm", name), true, func(ok bool) {
-			if !ok {
-				return
-			}
-			focusIdx := consumeRowDeleteFocus()
-			if err := app.DeleteGoal(goalID); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			bump()
-			focusRowAfterDelete(".goal-list", "[data-testid^='goal-row-']", focusIdx)
-		})
-	}
-
-	archiveGoal := func(goalID string, archive bool) {
-		if err := app.ArchiveGoal(goalID, archive); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		bump()
-	}
-
-	saveGoal := func(id, newName, targetStr, dateStr, accountID, ownerID string) {
-		for _, g := range app.Goals() {
-			if g.ID != id {
-				continue
-			}
-			if n := strings.TrimSpace(newName); n != "" {
-				g.Name = n
-			}
-			g.AccountID = accountID
-			g.OwnerID = ownerID
-			if ownerID == domain.GroupOwnerID {
-				g.Scope = domain.ScopeShared
-			} else {
-				g.Scope = domain.ScopeIndividual
-			}
-			cur := g.TargetAmount.Currency
-			if cur == "" {
-				cur = base
-			}
-			amt, err := money.ParseMinor(strings.TrimSpace(targetStr), currency.Decimals(cur))
-			if err != nil || amt <= 0 {
-				errMsg.Set(uistate.T("goals.targetRequired"))
-				return
-			}
-			g.TargetAmount = money.New(amt, cur)
-			if ds := strings.TrimSpace(dateStr); ds != "" {
-				d, derr := dateutil.ParseDate(ds)
-				if derr != nil {
-					errMsg.Set(uistate.T("goals.invalidDate"))
-					return
-				}
-				g.TargetDate = d
-			} else {
-				g.TargetDate = time.Time{}
-			}
-			if err := app.PutGoal(g); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			break
-		}
-		errMsg.Set("")
-		bump()
-	}
-
-	contribute := func(g domain.Goal, amtStr string, postLedger bool) {
-		cur := g.CurrentAmount.Currency
-		if cur == "" {
-			cur = base
-		}
-		amt, err := money.ParseMinor(strings.TrimSpace(amtStr), currency.Decimals(cur))
-		if err != nil || amt <= 0 { // reject $0 and negative contributions (L41)
-			return
-		}
-		beforePct := goalsvc.Percent(g)
-		updatedG := g
-		updatedG.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, cur)
-		afterPct := goalsvc.Percent(updatedG)
-		res, err := app.ContributeToGoal(g, money.New(amt, cur), postLedger)
-		if err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		bump()
-		notice := uistate.T("goals.contributedToast", fmtMoney(money.New(amt, cur)))
-		if postLedger && res.TransactionID != "" {
-			notice += " " + uistate.T("goals.contributedLedger")
-		}
-		uistate.PostNotice(notice, false) // L41
-		// Milestone toast: celebrate 25/50/75/100% crossings (L38).
-		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
-			key := fmt.Sprintf("goals.milestone%d", m)
-			uistate.PostNotice(uistate.T(key), false)
-		}
-		// Completion prompt: when the goal just became complete, fire a second
-		// notice prompting the user to archive it (L59 completion lifecycle).
-		if res.BecameComplete {
-			uistate.PostNotice(uistate.T("goals.completionPrompt"), false)
-		}
-	}
-
-	rawGoals := app.Goals()
-	// C278: when a member view is active, show only that member's goals plus
-	// shared (group) goals. ownerVisibleTo keeps group-owned goals visible
-	// to every member view, consistent with the dashboard's scoping convention.
-	allGoals := make([]domain.Goal, 0, len(rawGoals))
-	for _, g := range rawGoals {
+	v := goalView{Base: base, Accounts: app.Accounts(), Members: app.Members(), Categories: app.Categories()}
+	for _, g := range app.Goals() {
 		if ownerVisibleTo(g.OwnerID, activeMemberID) {
-			allGoals = append(allGoals, g)
+			v.All = append(v.All, g)
 		}
 	}
-	categories := app.Categories()
-
-	// Partition into active (non-archived) and achieved (archived).
-	// Active goals are further split into regular goals and sinking funds (C194).
-	var activeGoals, fundGoals, achievedGoals []domain.Goal
-	for _, g := range allGoals {
-		if g.Archived {
-			achievedGoals = append(achievedGoals, g)
-		} else if g.IsSinkingFund {
-			fundGoals = append(fundGoals, g)
-		} else {
-			activeGoals = append(activeGoals, g)
+	for _, g := range v.All {
+		switch {
+		case g.Archived:
+			v.Achieved = append(v.Achieved, g)
+		case g.IsSinkingFund:
+			v.Fund = append(v.Fund, g)
+		default:
+			v.Active = append(v.Active, g)
 		}
 	}
+	// Active: most actionable first (nearest date → highest %); funds/achieved: alpha.
+	sort.SliceStable(v.Active, func(i, j int) bool { return goalsvc.LessForList(v.Active[i], v.Active[j]) })
+	sort.SliceStable(v.Fund, func(i, j int) bool { return v.Fund[i].Name < v.Fund[j].Name })
+	sort.SliceStable(v.Achieved, func(i, j int) bool { return v.Achieved[i].Name < v.Achieved[j].Name })
 
-	// Active list: most actionable first — nearest target date, then highest
-	// percent complete, then name (G5). Surfaces the near-complete / time-pressed
-	// goal so Aaliyah's "what should I fund next?" is answered at the top.
-	sort.SliceStable(activeGoals, func(i, j int) bool {
-		return goalsvc.LessForList(activeGoals[i], activeGoals[j])
-	})
-	// Sinking-fund list: alphabetical.
-	sort.SliceStable(fundGoals, func(i, j int) bool {
-		return fundGoals[i].Name < fundGoals[j].Name
-	})
-	// Achieved list: alphabetical.
-	sort.SliceStable(achievedGoals, func(i, j int) bool {
-		return achievedGoals[i].Name < achievedGoals[j].Name
-	})
-
-	// Combined progress across active goals only (archived goals excluded so they
-	// don't dilute the headline figure). Each goal is converted to the base currency
-	// via the FX table; a missing rate falls back to raw minor units.
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	savedTotalM, targetTotalM := goalsvc.Totals(activeGoals, rates, base, false)
-	overallPct, _ := goalsvc.OverallProgress(activeGoals, false)
-
-	members := app.Members()
-
-	achievedOpen := ui.UseState(true)
-	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
-
-	var achievedSection ui.Node = Fragment()
-	if len(achievedGoals) > 0 {
-		achievedRows := MapKeyed(achievedGoals,
-			func(g domain.Goal) any { return g.ID },
-			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
-			},
-		)
-		achievedSection = uiw.Card(uiw.CardProps{
-			Attrs: []any{Attr("aria-label", uistate.T("goals.achieved"))},
-			Header: H2(css.Class("card-title"),
-				Button(
-					css.Class("btn"),
-					Type("button"),
-					Attr("aria-expanded", fmt.Sprintf("%t", achievedOpen.Get())),
-					Attr("aria-controls", "goals-achieved-list"),
-					OnClick(toggleAchieved),
-					uistate.T("goals.achieved"),
-					Span(css.Class("budget-sub"), uistate.T("goals.achievedCount", len(achievedGoals))),
-				),
-			),
-			Body: If(achievedOpen.Get(),
-				Div(Attr("id", "goals-achieved-list"), achievedRows),
-			),
-		})
-	}
-
-	goalSmartSettings := uistate.LoadSmartSettings()
-	goalSmartPr := uistate.UsePrefs().Get()
-	goalSmartIn := buildSmartInput(app, goalSmartPr.WeekStartWeekday())
-
-	now := time.Now()
-
-	var listBody ui.Node
-	if len(activeGoals) == 0 && len(fundGoals) == 0 {
-		listBody = Fragment(
-			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals}),
-			smartEmptyStateFor(goalSmartSettings, smart.PageGoals, goalSmartIn),
-		)
-	} else {
-		rows := MapKeyed(activeGoals,
-			func(g domain.Goal) any { return g.ID },
-			func(g domain.Goal) ui.Node {
-				return ui.CreateElement(GoalRow, goalRowProps{Goal: g, Accounts: accounts, Members: members, OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal, OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate})
-			},
-		)
-		listBody = Div(css.Class("goal-list"), rows)
-	}
-
-	// C194: sinking-funds section — shown above the regular goals when any exist.
-	// Each fund row reuses GoalRow for full interact functionality, and the
-	// row props carry the pre-computed monthly set-aside and resolved category name.
-	var fundsSection ui.Node = Fragment()
-	if len(fundGoals) > 0 {
-		fundRows := MapKeyed(fundGoals,
-			func(g domain.Goal) any { return g.ID },
-			func(g domain.Goal) ui.Node {
-				setAside := goalsvc.FundSetAsideMinor(g, now)
-				catName := categoryNameByID(categories, g.CategoryID)
-				return ui.CreateElement(GoalRow, goalRowProps{
-					Goal: g, Accounts: accounts, Members: members,
-					OnDelete: deleteGoal, OnContribute: contribute, OnSave: saveGoal,
-					OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
-					FundSetAside: setAside, LinkedCategoryName: catName,
-				})
-			},
-		)
-		fundsSection = uiw.Card(uiw.CardProps{
-			Attrs: []any{Attr("aria-label", uistate.T("goals.fundsSection"))},
-			Header: H2(css.Class("card-title"),
-				uistate.T("goals.fundsSection"),
-				Span(css.Class("budget-sub"), fmt.Sprintf(" · %d", len(fundGoals))),
-			),
-			Body: Div(css.Class("goal-list"), fundRows),
-		})
-	}
-
-	return Div(
-		If(len(allGoals) > 0, Div(css.Class("stat-grid"),
-			stat(uistate.T("goals.savedSoFar"), fmtMoney(savedTotalM), "pos"),
-			stat(uistate.T("goals.totalTarget"), fmtMoney(targetTotalM), ""),
-			// Overall progress is the key goals figure — annotated with a smart explainer
-			// tooltip so users understand what the combined percentage represents.
-			Div(css.Class("stat"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)), Title(uistate.T("goals.overallProgressDef")),
-					uistate.T("goals.overallProgress"),
-					smartTooltipFor(goalSmartSettings, "goal-progress", uistate.T("goals.overallProgress"), uistate.T("smart.tipGoalProgress")),
-				),
-				Div(css.Class("stat-value is-hero"), fmt.Sprintf("%d%%", overallPct)),
-			),
-		)),
-		fundsSection,
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("nav.goals"),
-			HeaderAction: Fragment(
-				smartSectionAction(goalSmartSettings),
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-					Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")),
-					OnClick(addGoal),
-					uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("goals.addGoal"))),
-			),
-			Body: listBody,
-		}),
-		achievedSection,
-	)
+	v.SavedTotal, v.TargetTotal = goalsvc.Totals(v.Active, rates, base, false)
+	v.OverallPct, _ = goalsvc.OverallProgress(v.Active, false)
+	return v
 }
 
 type goalRowProps struct {

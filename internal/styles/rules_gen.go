@@ -4567,6 +4567,17 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// /goals is the same widgetized surface as /budgets: full-width tiles that size to
+	// their content (not the fixed dashboard bento cells).
+	rule(".bento.bento-goals",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-goals > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
 	// --- /budgets visual polish. Scoped to .bento-budgets so the shared .budget /
 	// .bar / .budget-sub styles used on other screens (allocate, goals, reports) stay
 	// untouched. Each budget becomes an elevated meter-card with a state-colored left

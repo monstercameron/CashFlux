@@ -12,7 +12,7 @@ import (
 func TestBudgetVars(t *testing.T) {
 	defs := []customfields.Def{
 		{Key: "priority", EntityType: "budget", Type: customfields.TypeNumber},
-		{Key: "note", EntityType: "budget", Type: customfields.TypeText}, // non-numeric → ignored
+		{Key: "note", EntityType: "budget", Type: customfields.TypeText},       // non-numeric → ignored
 		{Key: "tip", EntityType: "transaction", Type: customfields.TypeNumber}, // wrong entity → ignored
 	}
 	b := domain.Budget{ID: "b1", Custom: map[string]any{"priority": float64(3), "note": "x"}}

@@ -774,6 +774,7 @@ func studioMetricPicker(p studioMetricPickerProps) ui.Node {
 	ms := widgetcatalog.Metrics(p.Defs, p.Molecules)
 	ms = append(ms, widgetcatalog.BudgetMetrics(p.Budgets)...)
 	ms = append(ms, widgetcatalog.AccountMetrics(studioAccounts())...)
+	ms = append(ms, widgetcatalog.GoalMetrics(studioGoals())...)
 	opts := make([]uiw.SelectOption, 0, len(ms))
 	var sel widgetcatalog.Metric
 	for _, m := range ms {
@@ -885,6 +886,15 @@ func studioAccounts() []domain.Account {
 	return appstate.Default.Accounts()
 }
 
+// studioGoals returns the household's goals for the metric pickers (so each goal's
+// variables are offerable), or nil when the app isn't ready.
+func studioGoals() []domain.Goal {
+	if appstate.Default == nil {
+		return nil
+	}
+	return appstate.Default.Goals()
+}
+
 // metricSelectOptions are the metrics as compact value/label options (no description),
 // for inline pickers like a figure block. Per-budget metrics are appended so a specific
 // budget's figures are pickable too.
@@ -892,6 +902,7 @@ func metricSelectOptions(defs []customfields.Def) []widgetcatalog.Option {
 	ms := widgetcatalog.Metrics(defs, nil)
 	ms = append(ms, widgetcatalog.BudgetMetrics(studioBudgets())...)
 	ms = append(ms, widgetcatalog.AccountMetrics(studioAccounts())...)
+	ms = append(ms, widgetcatalog.GoalMetrics(studioGoals())...)
 	out := make([]widgetcatalog.Option, len(ms))
 	for i, m := range ms {
 		out[i] = widgetcatalog.Option{Value: m.Name, Label: m.Label}

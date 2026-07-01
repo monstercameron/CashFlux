@@ -497,6 +497,10 @@ type Goal struct {
 	// them. JSON round-trips automatically; no store migration needed.
 	CategoryID string         `json:"categoryId,omitempty"`
 	Custom     map[string]any `json:"custom,omitempty"`
+	// VarName is an optional explicit variable name for this goal in the formula/widget
+	// engine. When set, the goal's figures are exposed as goal_<slug(VarName)>_* (e.g.
+	// goal_emergency_remaining) instead of the name-derived slug. Empty = derive from Name.
+	VarName string `json:"varName,omitempty"`
 }
 
 // EarmarkKind identifies what kind of entity an Earmark is targeting.
