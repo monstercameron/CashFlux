@@ -3,6 +3,40 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Account editors → centered flip modal (shell-root host)
+
+**What:** Moved the account edit / update-balance / reconcile / transfer forms out of the inline
+`.row-edit` row expander into the shared `FlipPanel` flip modal (user: "use the flip modal for
+updates and edits instead of the ugly inputs").
+
+**First attempt (wrong) + the bug it exposed:** I first wrapped each form in a `FlipPanel` rendered
+*inside* `AccountRow`. It worked functionally but the user reported it "doesn't spawn in viewport
+center." A DOM probe explained why: walking up from `.flip-backdrop`, three ancestors carry a
+`transform` — `.card` and `.w` (`translateY(-5px)` + `will-change:transform`) and the `.app-enter`
+wrapper (identity matrix). Any non-`none` transform makes an element the containing block for a
+`position:fixed` descendant, so the backdrop resolved against the small offset tile, not the
+viewport (measured backdrop rect was `{263,704,1154,792}` instead of `{0,0,1440,1000}`).
+
+**Fix (right):** render the modal from a shell-root host, exactly like `TxnEditHost`. New pieces:
+`uistate.AccountEdit{ID,Mode}` atom (+ `SetAccountEdit`/`CloseAccountEdit`, same capture pattern as
+`SetTxnEdit`); `screens.AccountEditForm` — one component, four modes, owning all the form state and
+its own Save/Cancel; `app.AccountEditHost` — reads the atom, renders `FlipPanel{CloseOnly}` with the
+form as `Back`, mounted in `shell.go` beside `TxnEditHost`. `AccountRow`'s Edit / ⋯-menu actions now
+just set the atom (an `openEditor(mode)` helper); ~460 lines of form machinery deleted from the row.
+After the move the backdrop rect is the full viewport and the panel centre equals the viewport centre.
+
+**Nice side effects of the host pattern:** the form re-mounts fresh on each open, so `useState`
+initializers seed from the account — no explicit `startEdit` seeding step needed. Autofocus is handled
+by `FlipPanel` (`[autofocus]` on the first field). All input ids + data-testids were preserved so DOM
+e2e keep finding the controls.
+
+**Verification:** gofmt/vet/`go test ./...` clean; wasm rc=0; probe confirms viewport centering
+(cx=720,cy=500 on a 1440×1000 viewport); update-value save persists (250,000 appears in the row);
+edit modal autofocuses the pre-filled name; reconcile + transfer modals render; zero page errors;
+accounts_menu 8/0, accounts_edit_adv_disclosure PASS. The two crashing edit e2e
+(reconcile_delta_preview, c73) are the pre-existing localStorage-vs-IndexedDB staleness, not modal
+regressions. SW v285→v286.
+
 ## 2026-06-30 — Widgetize /accounts, tie in custom fields + formulas, fix menu overflow
 
 **What:** Ported /accounts to the widgetized surface-host pattern established by /transactions,

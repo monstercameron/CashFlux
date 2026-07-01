@@ -1409,6 +1409,7 @@ var english = Catalog{
 	"accounts.clearFilters":           "Clear filters",
 	"accounts.removeFilter":           "Remove filter",
 	"accounts.customFieldsLabel":      "Custom fields",
+	"accounts.reconcileTitle":         "Reconcile to statement",
 	"accounts.showFormulas":           "Formulas",
 	"accounts.hideFormulas":           "Hide formulas",
 	"accounts.formulaTitle":           "Account metrics",

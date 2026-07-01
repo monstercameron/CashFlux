@@ -23,6 +23,22 @@ const (
 	acctFilterAtomID   = "accounts:filter"
 	acctTransferAtomID = "accounts:transferOpen"
 	acctFormulasAtomID = "accounts:showFormulas"
+	acctEditAtomID     = "accounts:edit"
+)
+
+// AccountEdit selects the account + editor a modal should show. A zero value (empty
+// ID) means no modal is open. Mode is one of the AcctEditMode* constants.
+type AccountEdit struct {
+	ID   string
+	Mode string
+}
+
+// The account editor modes the shell-mounted host can render.
+const (
+	AcctEditModeEdit      = "edit"      // full inline-edit form
+	AcctEditModeSetBal    = "setbal"    // update balance / value (reconcile-to-target)
+	AcctEditModeReconcile = "reconcile" // reconcile to statement
+	AcctEditModeTransfer  = "transfer"  // transfer between accounts
 )
 
 // AccountsFilter is the cross-tile filter the toolbar writes and the asset/archived
@@ -95,3 +111,31 @@ func UseAcctTransferOpen() state.Atom[bool] { return state.UseAtom(acctTransferA
 // accounts themselves, while power users can compute metrics over their account
 // aggregates (and number-typed custom fields, which surface as cf_acct_* variables).
 func UseAcctShowFormulas() state.Atom[bool] { return state.UseAtom(acctFormulasAtomID, false) }
+
+// UseAccountEdit returns the shared atom selecting which account editor modal is open
+// (the row's action buttons set it; the shell-mounted AccountEditHost reads it and
+// renders the matching form inside a flip modal). It is a shell-root modal — rather
+// than an in-row overlay — so it centers on the viewport regardless of the transformed
+// bento/tile ancestors a row lives under. A zero value closes the modal.
+func UseAccountEdit() state.Atom[AccountEdit] {
+	a := state.UseAtom(acctEditAtomID, AccountEdit{})
+	capturedAcctEdit = a
+	acctEditCaptured = true
+	return a
+}
+
+var (
+	capturedAcctEdit state.Atom[AccountEdit]
+	acctEditCaptured bool
+)
+
+// SetAccountEdit opens the account editor modal (id + mode) from outside a component
+// render; pass a zero AccountEdit to close. No-op until the host has rendered once.
+func SetAccountEdit(e AccountEdit) {
+	if acctEditCaptured {
+		capturedAcctEdit.Set(e)
+	}
+}
+
+// CloseAccountEdit clears the account editor atom (closes any open modal).
+func CloseAccountEdit() { SetAccountEdit(AccountEdit{}) }
