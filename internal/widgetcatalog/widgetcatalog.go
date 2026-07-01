@@ -32,10 +32,15 @@ const (
 
 // goalFieldMeta labels + documents each per-goal metric suffix for the picker.
 var goalFieldMeta = map[string]struct{ Label, Doc string }{
-	"target":    {"target", "The goal's target amount."},
-	"saved":     {"saved", "Amount saved toward the goal so far."},
-	"remaining": {"left", "Target minus saved (0 once reached)."},
-	"percent":   {"% funded", "Saved as a percent of the target."},
+	"target":      {"target", "The goal's target amount (savings goals)."},
+	"saved":       {"saved", "Amount saved toward the goal so far (savings goals)."},
+	"remaining":   {"left", "Target minus saved (0 once reached; savings goals)."},
+	"percent":     {"% funded", "Saved as a percent of the target (savings goals)."},
+	"progress":    {"progress %", "Percent complete, whatever the goal's kind (money, to-dos, milestone, or habit)."},
+	"tasks_done":  {"to-dos done", "Number of the goal's linked to-dos that are done."},
+	"tasks_total": {"to-dos total", "Number of to-dos linked to the goal."},
+	"done":        {"done", "1 when the goal has reached its objective, else 0."},
+	"streak":      {"streak", "Current habit check-in streak (0 for non-habit goals)."},
 }
 
 // accountFieldMeta labels + documents each per-account metric suffix for the picker.

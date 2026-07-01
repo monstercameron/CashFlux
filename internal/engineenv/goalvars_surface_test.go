@@ -42,6 +42,54 @@ func TestAddGoalVarsSurface(t *testing.T) {
 	}
 }
 
+func TestAddGoalVarsKindAware(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	linked := func(id, goalID string, s domain.TaskStatus) domain.Task {
+		return domain.Task{ID: id, Title: id, Status: s, Priority: domain.PriorityMedium,
+			RelatedType: domain.RelatedGoal, RelatedID: goalID}
+	}
+	goals := []domain.Goal{
+		// checklist: 1 of 2 to-dos done → 50% progress
+		{ID: "c1", Name: "Plan Wedding", Kind: domain.GoalKindChecklist},
+		// milestone: marked done → 100% progress, done=1
+		{ID: "m1", Name: "Renew Passport", Kind: domain.GoalKindMilestone, DoneAt: now},
+		// habit: 3 of 6 weekly check-ins, last two consecutive → streak
+		{ID: "h1", Name: "Weekly Review", Kind: domain.GoalKindHabit, HabitCadence: domain.CadenceWeekly, HabitTarget: 6,
+			CheckIns: []time.Time{now, now.AddDate(0, 0, -7), now.AddDate(0, 0, -14)}},
+		// financial with a linked to-do (to-dos count for all kinds; progress stays money-based)
+		{ID: "f1", Name: "New Car", Kind: domain.GoalKindFinancial, TargetAmount: usd(1000000), CurrentAmount: usd(500000)},
+	}
+	tasks := []domain.Task{
+		linked("t1", "c1", domain.StatusDone),
+		linked("t2", "c1", domain.StatusOpen),
+		linked("t3", "f1", domain.StatusOpen),
+	}
+	vars := Vars(Data{Goals: goals, Tasks: tasks, Rates: currency.Rates{Base: "USD"}, Now: now})
+
+	want := map[string]float64{
+		"goal_plan_wedding_progress":     50,
+		"goal_plan_wedding_tasks_done":   1,
+		"goal_plan_wedding_tasks_total":  2,
+		"goal_plan_wedding_done":         0,
+		"goal_renew_passport_progress":   100,
+		"goal_renew_passport_done":       1,
+		"goal_weekly_review_progress":    50, // 3 of 6
+		"goal_weekly_review_streak":      3,
+		"goal_weekly_review_tasks_total": 0, // no linked to-dos
+		"goal_new_car_progress":          50, // money-based
+		"goal_new_car_tasks_total":       1,  // financial goal can still have linked to-dos
+		"goal_new_car_streak":            0,
+	}
+	for name, exp := range want {
+		if got, ok := vars[name]; !ok {
+			t.Errorf("missing surface var %q", name)
+		} else if got != exp {
+			t.Errorf("%s = %v, want %v", name, got, exp)
+		}
+	}
+}
+
 func TestGoalVarBasesCollision(t *testing.T) {
 	goals := []domain.Goal{{ID: "g1", Name: "House"}, {ID: "g2", Name: "House"}}
 	bases := GoalVarBases(goals)

@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 )
@@ -209,16 +210,22 @@ func computeAtoms(d Data) map[string]float64 {
 }
 
 // addGoalVars exposes each goal as its own named variables, so a formula or widget can
-// reference a specific savings goal — e.g. goal_emergency_remaining. Each goal
-// contributes, keyed by a slug of its name (or explicit VarName):
+// reference a specific goal — e.g. goal_emergency_remaining. Each goal contributes,
+// keyed by a slug of its name (or explicit VarName):
 //
-//   - goal_<slug>_target     the goal's target amount (major units, base currency)
-//   - goal_<slug>_saved      the amount saved so far
-//   - goal_<slug>_remaining  target − saved (0 when reached)
-//   - goal_<slug>_percent    saved ÷ target × 100 (0 when target is 0)
+//   - goal_<slug>_target      the goal's target amount (major units, base currency)
+//   - goal_<slug>_saved       the amount saved so far
+//   - goal_<slug>_remaining   target − saved (0 when reached)
+//   - goal_<slug>_percent     saved ÷ target × 100 (financial money %; 0 when target is 0)
+//   - goal_<slug>_progress    KIND-AWARE percent complete (money %, to-do %, milestone 0/100,
+//     or habit check-in %) — the right progress figure whatever the goal kind
+//   - goal_<slug>_tasks_done  number of the goal's linked to-dos that are done
+//   - goal_<slug>_tasks_total number of to-dos linked to the goal (all kinds)
+//   - goal_<slug>_done        1 when the goal has reached its objective, else 0
+//   - goal_<slug>_streak      current habit check-in streak (0 for non-habit goals)
 //
-// Amounts are FX-converted to the base currency. Name collisions are disambiguated with
-// a numeric suffix in stable goal order; archived goals still expose their variables.
+// Money amounts are FX-converted to the base currency. Name collisions are disambiguated
+// with a numeric suffix in stable goal order; archived goals still expose their variables.
 func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
 	for _, base := range GoalVarBases(d.Goals) {
 		g := base.Goal
@@ -232,16 +239,30 @@ func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBa
 		if target != 0 {
 			percent = saved / target * 100
 		}
+		prog := goals.EvaluateProgress(g, d.Tasks, d.Now)
+		// tasks_done/_total are the LITERAL linked to-do counts (any goal can have
+		// linked to-dos), distinct from prog.Done/Total which for a habit/milestone
+		// counts check-ins / the milestone step rather than to-dos.
+		tasksDone, tasksTotal := goals.TaskCounts(d.Tasks, g.ID)
+		done := 0.0
+		if prog.Complete {
+			done = 1
+		}
 		out[base.Prefix+"target"] = target
 		out[base.Prefix+"saved"] = saved
 		out[base.Prefix+"remaining"] = remaining
 		out[base.Prefix+"percent"] = percent
+		out[base.Prefix+"progress"] = float64(prog.Percent)
+		out[base.Prefix+"tasks_done"] = float64(tasksDone)
+		out[base.Prefix+"tasks_total"] = float64(tasksTotal)
+		out[base.Prefix+"done"] = done
+		out[base.Prefix+"streak"] = float64(prog.Streak)
 	}
 }
 
 // GoalVarFields are the per-goal metric suffixes exposed on the surface. Shared with the
 // widget/formula catalog so the picker matches the surface.
-var GoalVarFields = []string{"target", "saved", "remaining", "percent"}
+var GoalVarFields = []string{"target", "saved", "remaining", "percent", "progress", "tasks_done", "tasks_total", "done", "streak"}
 
 // GoalVarBase pairs a goal with the disambiguated variable prefix its values are keyed
 // under ("goal_<slug>_"). Single source of truth for per-goal naming.

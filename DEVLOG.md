@@ -1,3 +1,15 @@
+## 2026-07-01 — Non-financial goal kinds (layer 2: engine variables)
+
+Extended addGoalVars so per-goal engine vars are kind-aware and expose linked to-dos. Kept the four
+money vars (target/saved/remaining/percent) and added: progress (kind-aware % via
+goals.EvaluateProgress), tasks_done/tasks_total (LITERAL linked-todo counts via goals.TaskCounts —
+distinct from prog.Done/Total which for habit/milestone counts check-ins / the milestone step, not
+to-dos), done (complete flag), streak (habit). engineenv now imports internal/goals (no cycle — goals
+doesn't import engineenv). GoalVarFields + widgetcatalog.goalFieldMeta updated so the picker labels
+match the surface. Verify: engineenv + widgetcatalog tests green; new TestAddGoalVarsKindAware covers
+checklist/milestone/habit/financial rows (incl. a financial goal with a linked to-do → tasks_total=1
+but money-based progress). Next: UI (kind selector + linked-todo section + kind-aware cards).
+
 ## 2026-07-01 — Non-financial goal kinds + todo-linked progress (layer 1: model + logic)
 
 Cam: "link 1-n todos to the goals so we can track progress, and goal types dont have to be
