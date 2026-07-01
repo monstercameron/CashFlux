@@ -227,28 +227,32 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		formulasLabel = uistate.T("budgets.hideFormulas")
 	}
 
-	toolbar := Div(css.Class("budgets-toolbar", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.FlexWrap),
-		smartSectionAction(smartSettings),
-		// C112: in-context budget-method picker (standard / zero-based / envelope).
-		Select(css.Class("field", "set-input"), Attr("data-testid", "budgets-method"),
-			Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
-			Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
-			Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
-			Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+	toolbar := Div(css.Class("budgets-toolbar"),
+		// Left: a compact, labelled methodology picker — no longer a full-width bar that
+		// read like a search box (C112: standard / zero-based / envelope).
+		Div(css.Class("budgets-toolbar-method"),
+			Span(css.Class("budgets-toolbar-label"), uistate.T("settings.budgetMethod")),
+			Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-method"),
+				Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+				Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
+				Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+				Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+			),
 		),
-		// C114: one-click 50/30/20 starter template.
-		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "budgets-template-503020"),
-			Title(uistate.T("budgets.tmplTitle")), OnClick(apply503020), uistate.T("budgets.tmpl503020")),
-		// Formulas reveal toggle — surfaces the "Budget metrics" tile (opt-in).
-		Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-			Attr("data-testid", "budgets-toggle-formulas"), Title(uistate.T("budgets.formulaTitle")),
-			OnClick(onToggleFormulas), Text(formulasLabel)),
-		// "+ Add budget" is the page's primary action — give it a solid accent treatment
-		// so it clearly outranks the ghost method/template/metrics controls (critique #5).
-		If(hasBudgets, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
-			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("budgets.addBudget")))),
+		// Right: the actions, uniform-height and right-aligned, with the primary
+		// "+ Add budget" last so it clearly outranks the ghost controls.
+		Div(css.Class("budgets-toolbar-actions"),
+			smartSectionAction(smartSettings),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgets-template-503020"),
+				Title(uistate.T("budgets.tmplTitle")), OnClick(apply503020), uistate.T("budgets.tmpl503020")),
+			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
+				Attr("data-testid", "budgets-toggle-formulas"), Title(uistate.T("budgets.formulaTitle")),
+				OnClick(onToggleFormulas), Text(formulasLabel)),
+			If(hasBudgets, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
+				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("budgets.addBudget")))),
+		),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

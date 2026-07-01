@@ -4489,6 +4489,39 @@ func registerGenerated() {
 	rule(".bento-budgets .stat-value.is-hero",
 		fontSize("2.6rem"),
 	)
+	// Toolbar: a clean single row — a compact labelled method picker on the left and
+	// right-aligned, uniform-height actions. The method select is no longer .field's
+	// full width (which read like a giant search bar and wrapped the buttons below).
+	rule(".bento-budgets .budgets-toolbar",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.6rem 1rem"),
+	)
+	rule(".bento-budgets .budgets-toolbar-method",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		minWidth("0"),
+	)
+	rule(".bento-budgets .budgets-toolbar-label",
+		fontSize("0.8rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".bento-budgets .budgets-method-select",
+		width("auto"),
+		minWidth("210px"),
+		maxWidth("300px"),
+	)
+	rule(".bento-budgets .budgets-toolbar-actions",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+	)
 	rule(".bento-ledger .txn-table",
 		tableLayout("fixed"),
 		width("100%"),
