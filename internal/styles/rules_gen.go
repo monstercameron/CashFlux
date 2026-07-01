@@ -5310,6 +5310,29 @@ func registerGenerated() {
 		fontSize("0.74rem"),
 		color("var(--text-dim)"),
 	)
+	// The ratio-formula toggle carries a small "ratios" label before the ƒx glyph, so it
+	// reads as a distinct control from the amount ƒx button (not a twin).
+	rule(".cover-fx-ratio",
+		gap("0.3rem"),
+	)
+	rule(".cover-fx-ratio-label",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.01em"),
+		textTransform("lowercase"),
+	)
+	// Cover modal fills the panel height and only the SOURCE LIST scrolls — the amount,
+	// spread controls, recurring toggle and the Cover/Cancel actions stay put (no
+	// full-body scroll). The list flexes to absorb the overflow.
+	rule(".acct-edit-form.cover-form",
+		height("100%"),
+		minHeight("0"),
+	)
+	rule(".cover-form .cover-sources",
+		flex("1 1 auto"),
+		minHeight("120px"),
+		maxHeight("none"),
+	)
 	// Variable-name editor: the input, then a live "Generates budget_<slug>" chip so the
 	// user can see exactly what handle their budget produces as they type.
 	rule(".entity-var-block",

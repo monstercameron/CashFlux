@@ -471,7 +471,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			})
 		}
 		srcKey := func(sc budgetCoverSource) any { return sc.ID }
-		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
+		return Form(css.Class("acct-edit-form", "cover-form"), OnSubmit(submitCover),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.coverHint", coverShortfallStr)),
 			// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
@@ -502,10 +502,14 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
 					Span(css.Class("cover-spread-sub"), spreadSub),
 				),
-				Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
-					Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx), "ƒx"),
+				// The "ƒx ratios" toggle only appears once a source is picked (it weights the
+				// selected sources), so the default view has just one ƒx — the amount one —
+				// instead of two identical buttons. Labelled to read as the ratio control.
+				If(selCount > 0, Button(css.Class("btn", "cover-fx-toggle", "cover-fx-ratio"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
+					Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx),
+					Span(css.Class("cover-fx-ratio-label"), uistate.T("budgets.coverWeightFxBtn")), "ƒx")),
 			),
-			If(wtFxS.Get(), Div(css.Class("cover-weight-fx"),
+			If(wtFxS.Get() && selCount > 0, Div(css.Class("cover-weight-fx"),
 				Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
 					Placeholder("cf_budget_priority"), Value(wtFormulaS.Get()), OnInput(onWtFormula)),
 				If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
