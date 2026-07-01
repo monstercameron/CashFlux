@@ -5236,6 +5236,12 @@ func registerGenerated() {
 		color("var(--accent)"),
 		fontWeight("600"),
 	)
+	// One-time "Covered" flag — distinct from the accent recurring badge: a calmer
+	// up/positive tone so continual vs 1x coverage read differently at a glance.
+	rule(".budget-covered",
+		color("var(--up, #54b884)"),
+		fontWeight("600"),
+	)
 	rule(".acct-edit-actions .btn",
 		minWidth("104px"),
 		justifyContent("center"),

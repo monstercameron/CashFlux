@@ -2163,6 +2163,8 @@ func (a *App) CoverBudget(fromID, toID string, amt money.Money) error {
 	if !res.From.Limit.IsPositive() {
 		return fmt.Errorf("%w: %s would have nothing left", budgeting.ErrInsufficientSource, from.Name)
 	}
+	// Stamp the destination so the UI can flag it as covered this period (quick ref).
+	res.To.CoveredAt = time.Now()
 	if err := a.PutBudget(res.From); err != nil {
 		return err
 	}

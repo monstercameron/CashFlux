@@ -50,6 +50,7 @@ type budgetView struct {
 	ProratedRest      map[string]string                // budgetID → even-pace amount left
 	EnvAvail          map[string]string                // budgetID → envelope balance (envelope method)
 	EnvNeg            map[string]bool                  // budgetID → envelope overdrawn
+	Covered           map[string]bool                  // budgetID → received cover money this period
 	EffMethod         map[string]budgeting.Methodology // budgetID → resolved method (override or global)
 	OverCount         int
 	NearCount         int
@@ -113,8 +114,13 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	rollNeg := map[string]bool{}
 	rollEffCap := map[string]string{}
 	proratedRest := map[string]string{}
+	covered := map[string]bool{}
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
+		// Flag budgets that received cover money this period (quick ref on the row).
+		if !b.CoveredAt.IsZero() && !b.CoveredAt.Before(bs) && b.CoveredAt.Before(be) {
+			covered[b.ID] = true
+		}
 		eval := b
 		if b.Rollover {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
@@ -238,7 +244,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	return budgetView{
 		Base: base, Method: method, Statuses: statuses, CatName: catName,
 		PaceOver: paceOver, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap,
-		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EffMethod: effMethod,
+		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, Covered: covered, EffMethod: effMethod,
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
@@ -326,6 +332,7 @@ type budgetRowProps struct {
 	EffectiveCap      string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
 	ProratedRest      string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
+	Covered           bool                  // received one-time cover money this period
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)            // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryID string) // open Transactions filtered to this budget's category

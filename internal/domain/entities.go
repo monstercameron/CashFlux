@@ -431,6 +431,10 @@ type Budget struct {
 	// budget, split across Sources by weight. Nil = no recurring coverage. JSON-
 	// persisted; existing budgets load with nil (no migration needed).
 	RecurringCover *RecurringCover `json:"recurringCover,omitempty"`
+	// CoveredAt is when this budget last received cover money (its limit was topped up
+	// from another budget). The UI shows a "Covered" flag while it falls in the current
+	// period, then it quietly ages out. Zero = never covered.
+	CoveredAt time.Time `json:"coveredAt,omitempty"`
 }
 
 // CoverShare is one source budget's weighted share in a recurring cover.

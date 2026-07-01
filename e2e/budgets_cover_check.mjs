@@ -59,6 +59,11 @@ try {
   });
   check("C6 cover applied: modal closed and baby's limit rose to $420", closed && babyAmt.includes("420.00"), `closed=${closed} amt=${babyAmt}`);
 
+  // C6b — a one-time cover flags the budget "Covered" (not "Recurring").
+  check("C6b one-time cover shows the Covered flag (not Recurring)", await p.evaluate(()=>
+    !!document.querySelector('[data-testid="covered-badge-bud-baby"]') &&
+    !document.querySelector('[data-testid="recurring-badge-bud-baby"]')));
+
   // C7 — recurring: reopen cover, check a source, toggle recurring on, submit → badge.
   await p.locator('[data-testid="budget-cover-btn-bud-baby"]').click();
   await p.waitForTimeout(600);
@@ -68,6 +73,7 @@ try {
   await p.locator('.acct-edit-form button[type="submit"]').click();
   await p.waitForTimeout(1000);
   check("C7 recurring toggle saves a standing cover (badge shows on the row)", await p.evaluate(()=>!!document.querySelector('[data-testid="recurring-badge-bud-baby"]')));
+  check("C7b recurring replaces the one-time Covered flag (mutually exclusive)", await p.evaluate(()=>!document.querySelector('[data-testid="covered-badge-bud-baby"]')));
 
   // C8 — the ⋯ menu offers "Remove recurring coverage".
   const babyRow = p.locator('.bento-budgets .budget', { hasText: 'Baby & Childcare' }).first();

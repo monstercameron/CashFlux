@@ -65,6 +65,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 	}))
 	hasRecurring := s.Budget.RecurringCover != nil
+	// Coverage badge — differentiate continual (recurring) from a one-time cover this
+	// period. Recurring wins (it's inherently covered), so the two never both show.
+	var coverageLine ui.Node = Fragment()
+	if hasRecurring {
+		coverageLine = Span(css.Class("budget-sub", "budget-recurring"), Attr("data-testid", "recurring-badge-"+s.Budget.ID), uistate.T("budgets.recurringBadge"))
+	} else if props.Covered {
+		coverageLine = Span(css.Class("budget-sub", "budget-covered"), Attr("data-testid", "covered-badge-"+s.Budget.ID), uistate.T("budgets.coveredBadge"))
+	}
 
 	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
 
@@ -236,7 +244,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// critique). C124: budgetRemainPhrase yields "$50.00 left"/"$50.00 over" (no
 		// accounting parens).
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period)),
-		If(hasRecurring, Span(css.Class("budget-sub", "budget-recurring"), Attr("data-testid", "recurring-badge-"+s.Budget.ID), uistate.T("budgets.recurringBadge"))),
+		coverageLine,
 		ownerLine,
 		methodLine,
 		customLine,

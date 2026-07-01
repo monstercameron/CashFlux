@@ -584,6 +584,7 @@ var english = Catalog{
 	"budgets.coverOnlyAvail":         "only %s available",
 	"budgets.coverRecurring":         "Repeat this cover automatically every period",
 	"budgets.recurringBadge":         "↻ Recurring cover",
+	"budgets.coveredBadge":           "✓ Covered this period",
 	"budgets.removeRecurring":        "Remove recurring coverage",
 	"budgets.removeRecurringConfirm": "Stop the recurring coverage into %s?",
 	"budgets.topupTitle":             "Increase this budget's limit for the current period",
