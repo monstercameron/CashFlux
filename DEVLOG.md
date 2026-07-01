@@ -1,3 +1,22 @@
+## 2026-07-01 — Each budget as a reusable engine variable
+
+Cam: "each budget is its own custom field that can be used elsewhere, such as on the dashboard
+widgets." Added per-budget variables to engineenv.Vars: for every budget we emit
+budget_<slug>_limit / _spent / _remaining / _over / _percent, spent measured over the budget's OWN
+period (budgeting.PeriodRange, week-start-aware). The slug is a lowercased alnum squash of the
+budget name (Baby & Childcare -> baby_childcare); same-name budgets get _2/_3. Because the whole
+app evaluates formulas/KPIs/widgets against this one surface, the variables now work everywhere —
+dashboard KPI tiles, the formula calculator, Studio widgets, custom pages, workflows.
+
+To keep the picker honest, BudgetVarBases in engineenv is the single source of truth for the
+naming (slug + collision), shared by the surface builder and widgetcatalog.BudgetMetrics, so the
+labels the picker shows always match the names that actually resolve. Wired a new 'Budgets' group
+into the formula builder + the Studio metric pickers.
+
+engineenv importing budgeting is cycle-free (budgeting only depends on domain/currency/money).
+WeekStart defaults to Sunday where prefs aren't threaded; monthly budgets (the common case) don't
+use it. Tests: engineenv budget-vars surface + slug + collision green; live 5/5 on /customize.
+
 ## 2026-07-01 — Cover: per-source ratio formulas (Phase 4c)
 
 Finished the "source weights from formulas" half of the robust-cover ask. Rather than a

@@ -769,7 +769,7 @@ func buildCoverContext(app *appstate.App, weekStart time.Weekday, payCycleAnchor
 	surface := engineenv.Vars(engineenv.Data{
 		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
-		Rates: rates, Now: now, PeriodStart: ms, PeriodEnd: me,
+		Rates: rates, Now: now, PeriodStart: ms, PeriodEnd: me, WeekStart: weekStart,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
 	})
 	return coverformula.Context{

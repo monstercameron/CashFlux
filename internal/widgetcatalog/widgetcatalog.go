@@ -25,7 +25,17 @@ const (
 	GroupActivity Group = "Activity"
 	GroupCounts   Group = "Counts"
 	GroupCustom   Group = "Custom fields"
+	GroupBudgets  Group = "Budgets"
 )
+
+// budgetFieldMeta labels + documents each per-budget metric suffix for the picker.
+var budgetFieldMeta = map[string]struct{ Label, Doc string }{
+	"limit":     {"limit", "This budget's limit for its period."},
+	"spent":     {"spent", "Spent against this budget this period."},
+	"remaining": {"left", "Limit minus spent (negative when overspent)."},
+	"over":      {"overspend", "How far over the limit (0 when within budget)."},
+	"percent":   {"used %", "Spent as a percent of the limit."},
+}
 
 // Metric is one named value a formula can reference, with a friendly label and a
 // one-line description so a casual user can choose the figure they care about.
@@ -109,6 +119,27 @@ func Metrics(defs []customfields.Def, molecules []domain.Molecule) []Metric {
 			Doc:   "Sum of your custom field over its entity.",
 			Group: GroupCustom,
 		})
+	}
+	return out
+}
+
+// BudgetMetrics returns the per-budget metrics (limit/spent/left/overspend/used%) so a
+// specific budget can be referenced in a formula or dashboard widget — e.g.
+// budget_groceries_remaining. Built from engineenv's naming so the labels always match
+// the variables the surface actually resolves. Returns nothing when there are no budgets.
+func BudgetMetrics(budgets []domain.Budget) []Metric {
+	bases := engineenv.BudgetVarBases(budgets)
+	out := make([]Metric, 0, len(bases)*len(engineenv.BudgetVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.BudgetVarFields {
+			meta := budgetFieldMeta[field]
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Budget.Name + " — " + meta.Label,
+				Doc:   meta.Doc,
+				Group: GroupBudgets,
+			})
+		}
 	}
 	return out
 }

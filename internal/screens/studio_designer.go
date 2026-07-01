@@ -616,7 +616,7 @@ func studioDesignerForm(s studioDesignerFormState) ui.Node {
 				tf("Formula", s.formula, "assets - liabilities", "Combine metrics with + − × ÷. Functions: sum, avg, min, max, round, clamp, safediv.", s.setFormula))
 		} else {
 			dataFields = append(dataFields,
-				ui.CreateElement(studioMetricPicker, studioMetricPickerProps{Defs: s.defs, Molecules: s.molecules, Selected: s.formula, OnPick: s.setFormula}))
+				ui.CreateElement(studioMetricPicker, studioMetricPickerProps{Defs: s.defs, Molecules: s.molecules, Budgets: studioBudgets(), Selected: s.formula, OnPick: s.setFormula}))
 		}
 		dataFields = append(dataFields,
 			seg("Show as", s.format, segFrom(widgetcatalog.Formats()), s.setFormat),
@@ -759,6 +759,7 @@ func spanSegOptions() []uiw.SegOption {
 type studioMetricPickerProps struct {
 	Defs      []customfields.Def
 	Molecules []domain.Molecule
+	Budgets   []domain.Budget
 	Selected  string
 	OnPick    func(string)
 }
@@ -771,6 +772,7 @@ type studioMetricPickerProps struct {
 // auditable. Its own component for an isolated hook.
 func studioMetricPicker(p studioMetricPickerProps) ui.Node {
 	ms := widgetcatalog.Metrics(p.Defs, p.Molecules)
+	ms = append(ms, widgetcatalog.BudgetMetrics(p.Budgets)...)
 	opts := make([]uiw.SelectOption, 0, len(ms))
 	var sel widgetcatalog.Metric
 	for _, m := range ms {
@@ -864,10 +866,21 @@ func blockWidthOptions() []widgetcatalog.Option {
 	return []widgetcatalog.Option{{Value: "0", Label: "Full"}, {Value: "1", Label: "1"}, {Value: "2", Label: "2"}, {Value: "3", Label: "3"}, {Value: "4", Label: "4"}}
 }
 
+// studioBudgets returns the household's budgets for the metric pickers (so each budget's
+// variables are offerable), or nil when the app isn't ready.
+func studioBudgets() []domain.Budget {
+	if appstate.Default == nil {
+		return nil
+	}
+	return appstate.Default.Budgets()
+}
+
 // metricSelectOptions are the metrics as compact value/label options (no description),
-// for inline pickers like a figure block.
+// for inline pickers like a figure block. Per-budget metrics are appended so a specific
+// budget's figures are pickable too.
 func metricSelectOptions(defs []customfields.Def) []widgetcatalog.Option {
 	ms := widgetcatalog.Metrics(defs, nil)
+	ms = append(ms, widgetcatalog.BudgetMetrics(studioBudgets())...)
 	out := make([]widgetcatalog.Option, len(ms))
 	for i, m := range ms {
 		out[i] = widgetcatalog.Option{Value: m.Name, Label: m.Label}

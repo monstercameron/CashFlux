@@ -20,8 +20,11 @@ package engineenv
 
 import (
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -46,6 +49,7 @@ type Data struct {
 	Now          time.Time
 	PeriodStart  time.Time
 	PeriodEnd    time.Time
+	WeekStart    time.Weekday // week anchor for per-budget period windows (default Sunday)
 	CustomDefs   []customfields.Def
 	Molecules    []domain.Molecule
 }
@@ -53,23 +57,23 @@ type Data struct {
 // atomNames lists the indivisible variables computeAtoms produces, in a stable
 // order. Each is a reduction over the named fundamental source.
 var atomNames = []string{
-	"assets",       // Σ FX-converted balances of non-archived asset accounts
-	"liabilities",  // Σ magnitudes of non-archived liability-account balances (positive)
-	"liquid_cash",  // Σ balances of non-archived cash-type accounts (checking/debit/savings/cash)
-	"income",        // Σ positive non-transfer transactions in the period
-	"expense",       // Σ |negative non-transfer transactions| in the period (positive)
-	"income_count",  // count of income (positive non-transfer) transactions in the period
-	"expense_count", // count of expense (negative non-transfer) transactions in the period
-	"bills_due",     // Σ bills due before this calendar month-end
-	"goal_needs",    // Σ prorated monthly goal contributions
+	"assets",             // Σ FX-converted balances of non-archived asset accounts
+	"liabilities",        // Σ magnitudes of non-archived liability-account balances (positive)
+	"liquid_cash",        // Σ balances of non-archived cash-type accounts (checking/debit/savings/cash)
+	"income",             // Σ positive non-transfer transactions in the period
+	"expense",            // Σ |negative non-transfer transactions| in the period (positive)
+	"income_count",       // count of income (positive non-transfer) transactions in the period
+	"expense_count",      // count of expense (negative non-transfer) transactions in the period
+	"bills_due",          // Σ bills due before this calendar month-end
+	"goal_needs",         // Σ prorated monthly goal contributions
 	"accounts",           // count of non-archived accounts
 	"asset_accounts",     // count of non-archived asset-class accounts
 	"liability_accounts", // count of non-archived liability-class accounts
 	"transactions",       // count of transactions
-	"members",      // count of members
-	"budgets",      // count of budgets
-	"goals",        // count of goals
-	"tasks",        // count of tasks
+	"members",            // count of members
+	"budgets",            // count of budgets
+	"goals",              // count of goals
+	"tasks",              // count of tasks
 }
 
 // DefaultMolecules are the built-in compound variables, defined as formulas over
@@ -179,26 +183,128 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 
 	out := map[string]float64{
-		"assets":       major(nw.Assets.Amount),
-		"liabilities":  major(nw.Liabilities.Amount),
-		"liquid_cash":  major(liquid.Amount),
-		"income":        major(income.Amount),
-		"expense":       major(expense.Amount),
-		"income_count":  float64(incCount),
-		"expense_count": float64(expCount),
-		"bills_due":     major(billsDue),
-		"goal_needs":    major(goalNeeds),
+		"assets":             major(nw.Assets.Amount),
+		"liabilities":        major(nw.Liabilities.Amount),
+		"liquid_cash":        major(liquid.Amount),
+		"income":             major(income.Amount),
+		"expense":            major(expense.Amount),
+		"income_count":       float64(incCount),
+		"expense_count":      float64(expCount),
+		"bills_due":          major(billsDue),
+		"goal_needs":         major(goalNeeds),
 		"accounts":           float64(active),
 		"asset_accounts":     float64(assetAccts),
 		"liability_accounts": float64(liabAccts),
 		"transactions":       float64(len(d.Transactions)),
-		"members":      float64(len(d.Members)),
-		"budgets":      float64(len(d.Budgets)),
-		"goals":        float64(len(d.Goals)),
-		"tasks":        float64(len(d.Tasks)),
+		"members":            float64(len(d.Members)),
+		"budgets":            float64(len(d.Budgets)),
+		"goals":              float64(len(d.Goals)),
+		"tasks":              float64(len(d.Tasks)),
 	}
 	addCustomFieldVars(out, d, start, end)
+	addBudgetVars(out, d, major)
 	return out
+}
+
+// addBudgetVars exposes each budget as its own set of named variables, so a formula or
+// dashboard widget can reference a specific budget directly — e.g. budget_groceries_remaining
+// or budget_rent_percent. Each budget contributes, keyed by a slug of its name:
+//
+//   - budget_<slug>_limit      the budget's limit (major units, base currency)
+//   - budget_<slug>_spent      spent in the budget's own current period
+//   - budget_<slug>_remaining  limit − spent (may be negative when overspent)
+//   - budget_<slug>_over       overspend = max(0, spent − limit)
+//   - budget_<slug>_percent    spent ÷ limit × 100 (0 when limit is 0)
+//
+// Spent is measured over the budget's OWN period window (monthly/weekly/…), anchored to
+// the caller's week start, so it matches what the Budgets screen shows. Name collisions
+// are disambiguated with a numeric suffix (…_2, …_3) in stable budget order.
+func addBudgetVars(out map[string]float64, d Data, major func(int64) float64) {
+	for _, base := range BudgetVarBases(d.Budgets) {
+		b := base.Budget
+		start, end := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
+		spent := 0.0
+		if s, err := budgeting.Spent(b, d.Transactions, start, end, d.Rates); err == nil {
+			spent = major(s.Amount)
+		}
+		limit := major(b.Limit.Amount)
+		remaining := limit - spent
+		over := 0.0
+		if spent > limit {
+			over = spent - limit
+		}
+		percent := 0.0
+		if limit != 0 {
+			percent = spent / limit * 100
+		}
+		out[base.Prefix+"limit"] = limit
+		out[base.Prefix+"spent"] = spent
+		out[base.Prefix+"remaining"] = remaining
+		out[base.Prefix+"over"] = over
+		out[base.Prefix+"percent"] = percent
+	}
+}
+
+// BudgetVarFields are the per-budget metric suffixes exposed on the surface, so a
+// budget "Groceries" contributes budget_groceries_limit / _spent / _remaining / _over
+// / _percent. Shared with the widget/formula catalog so the picker matches the surface.
+var BudgetVarFields = []string{"limit", "spent", "remaining", "over", "percent"}
+
+// BudgetVarBase pairs a budget with the disambiguated variable prefix its values are
+// keyed under ("budget_<slug>_"). It is the single source of truth for per-budget
+// variable naming — both the surface builder (addBudgetVars) and the discoverability
+// catalog build from it, so the names they show always match the names that resolve.
+type BudgetVarBase struct {
+	Budget domain.Budget
+	Prefix string // e.g. "budget_groceries_"
+}
+
+// BudgetVarBases returns one entry per named budget, in stable order, with same-name
+// budgets disambiguated by a numeric suffix (…_2, …_3). Budgets whose name has no
+// alphanumerics (so no usable slug) are skipped.
+func BudgetVarBases(budgets []domain.Budget) []BudgetVarBase {
+	used := map[string]bool{}
+	out := make([]BudgetVarBase, 0, len(budgets))
+	for _, b := range budgets {
+		slug := budgetVarSlug(b.Name)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, BudgetVarBase{Budget: b, Prefix: "budget_" + slug + "_"})
+	}
+	return out
+}
+
+// budgetVarSlug turns a budget name into a formula-safe variable segment: lowercase,
+// with every run of non-alphanumeric characters collapsed to a single underscore and
+// edges trimmed. "Baby & Childcare" → "baby_childcare".
+func budgetVarSlug(name string) string {
+	var sb strings.Builder
+	prevUnderscore := false
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			sb.WriteRune(r)
+			prevUnderscore = false
+		default:
+			if !prevUnderscore && sb.Len() > 0 {
+				sb.WriteByte('_')
+				prevUnderscore = true
+			}
+		}
+	}
+	return strings.TrimRight(sb.String(), "_")
 }
 
 // Derivation explains how one variable is produced — the audit record. For a
@@ -215,23 +321,23 @@ type Derivation struct {
 
 // atomSources documents each atom's fundamental reduction (for the audit).
 var atomSources = map[string]string{
-	"assets":       "Σ FX-converted balances of non-archived asset accounts",
-	"liabilities":  "Σ magnitudes of non-archived liability-account balances",
-	"liquid_cash":  "Σ balances of non-archived cash-type accounts",
-	"income":        "Σ positive non-transfer transactions in the period",
-	"expense":       "Σ |negative non-transfer transactions| in the period",
-	"income_count":  "count of income transactions in the period",
-	"expense_count": "count of expense transactions in the period",
-	"bills_due":     "Σ bills due before this calendar month-end",
-	"goal_needs":    "Σ prorated monthly goal contributions",
+	"assets":             "Σ FX-converted balances of non-archived asset accounts",
+	"liabilities":        "Σ magnitudes of non-archived liability-account balances",
+	"liquid_cash":        "Σ balances of non-archived cash-type accounts",
+	"income":             "Σ positive non-transfer transactions in the period",
+	"expense":            "Σ |negative non-transfer transactions| in the period",
+	"income_count":       "count of income transactions in the period",
+	"expense_count":      "count of expense transactions in the period",
+	"bills_due":          "Σ bills due before this calendar month-end",
+	"goal_needs":         "Σ prorated monthly goal contributions",
 	"accounts":           "count of non-archived accounts",
 	"asset_accounts":     "count of non-archived asset-class accounts",
 	"liability_accounts": "count of non-archived liability-class accounts",
 	"transactions":       "count of transactions",
-	"members":      "count of members",
-	"budgets":      "count of budgets",
-	"goals":        "count of goals",
-	"tasks":        "count of tasks",
+	"members":            "count of members",
+	"budgets":            "count of budgets",
+	"goals":              "count of goals",
+	"tasks":              "count of tasks",
 }
 
 // Explain returns how name is derived, given the computed vars and the molecule
