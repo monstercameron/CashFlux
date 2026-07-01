@@ -45,3 +45,12 @@ func SetTaskEdit(e TaskEdit) {
 
 // CloseTaskEdit clears the task-editor atom (dismisses the modal).
 func CloseTaskEdit() { SetTaskEdit(TaskEdit{}) }
+
+// UseTodoHideDone is the shared "hide completed tasks" toggle. The widgetized to-do
+// surface splits the controls (toolbar tile) from the list (list tile), so this state
+// lives in an atom both tiles read — mirroring UseGoalsShowFormulas on /goals.
+func UseTodoHideDone() state.Atom[bool] { return state.UseAtom("todo:hideDone", false) }
+
+// UseTodoFilterPrio is the shared lightweight priority filter for the to-do surface
+// ("" = all, or a domain.TaskPriority string). Read by both the toolbar and list tiles.
+func UseTodoFilterPrio() state.Atom[string] { return state.UseAtom("todo:filterPrio", "") }

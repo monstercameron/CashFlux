@@ -4586,6 +4586,17 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// To-do surface: same full-width, auto-height stacked-tile layout as /goals so the
+	// summary / toolbar / list tiles flow top-to-bottom instead of into a fixed grid.
+	rule(".bento.bento-todo",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-todo > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,
 	// a pace-tinted accent stripe, and footer actions.

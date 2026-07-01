@@ -1,3 +1,18 @@
+## 2026-07-01 — To-do overhaul (commit B: widgetize surface-host)
+
+Split the monolithic Todo() into the bento surface-host pattern (todo_widget.go host + init
+register + todoNativeSpec; todo_tiles.go three tile bodies), matching goals/budgets/accounts. Shared
+hide-done + priority-filter state moved to uistate atoms (UseTodoHideDone/UseTodoFilterPrio) so the
+toolbar tile (controls) and list tile (consumer) stay in sync across separate components; mutations
+switched from a local rev atom to uistate.BumpDataRevision(). New todo-summary tile = a done-of-total
+completion "loader" bar (reusing .budget-loader classes) with Open / Overdue(red) / Done% inside.
+Added .bento.bento-todo grid overrides (auto rows, full-width auto-height tiles) + i18n
+(todo.completionLabel/openLabel/overdueLabel/doneLabel). todo.go trimmed to just TaskRow + helpers.
+
+Verify: full go test ./... green; wasm build OK; e2e/todo_flipmodal_check.mjs still 10/10 on the new
+layout; screenshot confirms summary/toolbar/list tiles (goal-link chips like "→ Emergency fund"
+already visible on rows). Next: commit C — redesign the rows into cards + first-class goal-link chip.
+
 ## 2026-07-01 — To-do overhaul (commit A: flip-modal edit + ⋯ menu)
 
 Cam: "lets move to todos and then we'll make a double back to goals." Scoping Q → wants all three:
