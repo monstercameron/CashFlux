@@ -139,3 +139,30 @@ func SetAccountEdit(e AccountEdit) {
 
 // CloseAccountEdit clears the account editor atom (closes any open modal).
 func CloseAccountEdit() { SetAccountEdit(AccountEdit{}) }
+
+const acctCredsAtomID = "accounts:credentials"
+
+// UseAccountCredentials returns the shared atom holding the id of the account whose
+// encrypted-credential modal is open ("" = closed). The row's "Login & credentials"
+// action sets it; the shell-root CredentialVaultHost reads it. Kept separate from the
+// editor atom because the credential modal owns the encrypted vault (crypto lives in
+// the app package, not screens).
+func UseAccountCredentials() state.Atom[string] {
+	a := state.UseAtom(acctCredsAtomID, "")
+	capturedAcctCreds = a
+	acctCredsCaptured = true
+	return a
+}
+
+var (
+	capturedAcctCreds state.Atom[string]
+	acctCredsCaptured bool
+)
+
+// SetAccountCredentials opens (id) or closes ("") the credential modal from outside a
+// component render. No-op until the host has rendered once.
+func SetAccountCredentials(id string) {
+	if acctCredsCaptured {
+		capturedAcctCreds.Set(id)
+	}
+}

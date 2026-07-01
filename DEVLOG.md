@@ -3,6 +3,48 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Account notes + encrypted institution-credential vault (flagged for security review)
+
+**What:** Two account features. Notes: a plain-text `Account.Notes` field (edit-modal textarea +
+row glyph) — trivial because accounts persist as JSON blobs, so it round-trips through the store,
+export, and sync with no migration or validation change. Credentials: a first-pass encrypted vault
+for institution logins, deliberately flagged for a "mega security review."
+
+**Reusing the existing crypto (per the explore).** The codebase already has a real Web Crypto stack —
+`encryptDataset`/`decryptDataset` (AES-GCM-256, PBKDF2 600k) keyed by `activePasscode`, `cryptobox`
+envelopes, and `datasetEncryptionActive()` (lock enabled + unlocked). So the vault didn't invent
+crypto: `credvault.go` just JSON-marshals a `map[accountID]Credential`, runs it through
+`encryptDataset(..., activePasscode, ...)`, and stores the base64 envelope.
+
+**The security-conscious storage decision.** Credentials go in a DEDICATED browserstore key
+(`cashflux:credvault`), NOT the dataset blob. That's the crux: the export/backup/sync paths all
+serialize the *dataset* only, so a separate key is automatically excluded from every one of them —
+credentials never leave the device. Gated behind an app passcode (no passcode ⇒ the modal shows a
+"set a passcode first" gate). The e2e proves it: after saving, the `credvault` ciphertext contains no
+plaintext, and grepping the dataset blob for the secrets finds nothing.
+
+**Architecture (package layering).** The crypto + `activePasscode` live in `internal/app`, and
+`internal/screens` can't import `app` (app imports screens). So the credential UI is a shell-root
+host (`app.CredentialVaultHost`, mounted in shell.go) driven by a `uistate.UseAccountCredentials`
+atom the row sets — same pattern as `AccountEditHost`. The form (`credentialForm`) loads the
+decrypted credential on mount via `UseEffect`, shows it masked with a reveal toggle, and re-encrypts
+on save.
+
+**Two GWC bugs I hit and fixed:** (1) the gate's "Open Settings" button called `uistate.UseSettings()`
+*inside* the click handler — a hook-in-callback that silently breaks (per the UseAtom-render-only
+rule); fixed by capturing the atom in render. (2) The host called `UseEvent` conditionally (only in
+the gate branch), so its hook count varied across renders (closed/gated/open) — a reconciler
+landmine; fixed by hoisting all hooks above every branch.
+
+**Flags for the review:** an "Experimental — not yet security-reviewed" banner on every credential
+modal; a boxed SECURITY notice atop `credvault.go` enumerating the gaps (XSS-while-unlocked, passcode
+strength, passcode-change orphaning, clipboard/reveal leaks, no hardware key); and **SEC-1 [CRITICAL]**
+in TODOS.md.
+
+**Verify:** gofmt/vet/`go test ./...` clean (incl. cryptobox); wasm rc=0; new
+`e2e/accounts_notes_creds_check.mjs` 14/14; accounts_full_check still 38/38; zero page errors.
+SW v287→v288.
+
 ## 2026-06-30 — Clean up account editor modal layouts
 
 **What:** The modal editors looked rough (user: "the layouts are ugly fix them"). Root causes:

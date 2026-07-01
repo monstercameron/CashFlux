@@ -145,6 +145,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	startEdit := ui.UseEvent(Prevent(openEditor(uistate.AcctEditModeEdit)))
 	startReconcile := ui.UseEvent(Prevent(openEditor(uistate.AcctEditModeReconcile)))
 	startTransfer := ui.UseEvent(Prevent(openEditor(uistate.AcctEditModeTransfer)))
+	// The encrypted credential vault opens in its own shell-root modal (CredentialVaultHost).
+	acctCredsAtom := uistate.UseAccountCredentials()
+	startCredentials := ui.UseEvent(Prevent(func() { menuOpen.Set(false); acctCredsAtom.Set(a.ID) }))
 	archLabel, archTitle := uistate.T("accounts.archive"), uistate.T("accounts.archiveTitle")
 	if a.Archived {
 		archLabel, archTitle = uistate.T("accounts.restore"), uistate.T("accounts.restoreTitle")
@@ -206,6 +209,10 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(css.Class("row-main"),
 				Span(css.Class("row-desc"), a.Name,
 					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
+					// A quiet note glyph when the account has notes attached.
+					If(strings.TrimSpace(a.Notes) != "", Span(css.Class("acct-notes-dot", tw.TextDim), Style(map[string]string{"margin-left": "0.4rem"}),
+						Attr("data-testid", "acct-notes-dot-"+a.ID), Attr("aria-label", uistate.T("accounts.notesBadge")), Title(strings.TrimSpace(a.Notes)),
+						uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
@@ -249,6 +256,7 @@ func AccountRow(props accountRowProps) ui.Node {
 						Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
 						uistate.T("accounts.transferAction"))),
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
 				),
 			),

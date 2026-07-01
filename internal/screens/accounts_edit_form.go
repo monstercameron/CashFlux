@@ -118,6 +118,8 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	customEditVals := ui.UseState(customMapToStrings(a.Custom))
+	notesS := ui.UseState(a.Notes)
+	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
@@ -193,6 +195,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			}
 		}
 		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
+		cp.Notes = strings.TrimSpace(notesS.Get())
 		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
 			cp.Custom = customValuesToMap(defs, customEditVals.Get())
 		}
@@ -213,10 +216,10 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		return transferForm(a, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
 		return editForm(a, dec, app.Members(), app.Accounts(), app.CustomFieldDefsFor("account"),
-			nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS,
+			nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
 			editAdvOpen, splitOwnS, sharesMapS, customEditVals,
 			onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
-			onToggleEditAdv, onToggleSplitOwn, onCustomEdit, saveEdit, cancel)
+			onToggleEditAdv, onToggleSplitOwn, onNotes, onCustomEdit, saveEdit, cancel)
 	}
 }
 
@@ -371,9 +374,9 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 // editForm is the full inline-edit editor (name, owner, balances, type-specific
 // attributes, institution, and custom fields).
 func editForm(a domain.Account, dec int, members []domain.Member, accounts []domain.Account, accDefs []customfields.Def,
-	nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS ui.State[string],
+	nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
 	editAdvOpen, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn ui.Handler,
+	onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn, onNotes ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler) ui.Node {
 	isLiab := a.Class == domain.ClassLiability
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
@@ -425,6 +428,11 @@ func editForm(a domain.Account, dec int, members []domain.Member, accounts []dom
 		labeledField(uistate.T("accounts.institution"),
 			uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
 				AriaLabel: uistate.T("accounts.institution"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID})),
+		// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
+		// go in the encrypted credential vault, never here.
+		labeledField(uistate.T("accounts.notes"),
+			uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
+				AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
 		If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
 			IfElse(editAdvOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
 		If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),

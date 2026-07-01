@@ -111,6 +111,11 @@ type Account struct {
 
 	Archived bool           `json:"archived,omitempty"`
 	Custom   map[string]any `json:"custom,omitempty"`
+
+	// Notes is free-text the user attaches to the account (e.g. "joint account with
+	// mum", branch, reminders). Plain text — for secrets/logins use the encrypted
+	// credential vault, never this field (it rides the dataset export + sync).
+	Notes string `json:"notes,omitempty"`
 }
 
 // Category classifies transactions as income or expense; categories may nest.
