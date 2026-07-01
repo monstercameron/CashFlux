@@ -4250,6 +4250,187 @@ func registerGenerated() {
 		fontSize(".72rem"),
 		color("var(--text-faint)"),
 	)
+	// ---- Formula workbench (the reusable FormulaBuilder / "Budget metrics" panel) ----
+	// One cohesive panel: a header, the expression bar with the live result read out
+	// inline, quick presets, a save row, and a dense click-to-insert variable palette.
+	rule(".fb",
+		display("flex"),
+		flexDirection("column"),
+		gap("1.1rem"),
+	)
+	rule(".fb-workbench",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.7rem"),
+	)
+	rule(".fb-head",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+	)
+	rule(".fb-title",
+		fontFamily("var(--font-display), 'Fraunces', serif"),
+		fontSize("1.15rem"),
+		fontWeight("600"),
+		letterSpacing("-0.01em"),
+		color("var(--text)"),
+	)
+	rule(".fb-sub",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	// Expression is the hero: a wide monospace input with the live result to its right.
+	rule(".fb-exprbar",
+		display("flex"),
+		alignItems("stretch"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+	)
+	rule(".fb-expr",
+		flex("1 1 260px"),
+		minHeight("54px"),
+		fontFamily("var(--font-mono, ui-monospace, monospace)"),
+		fontSize("0.95rem"),
+	)
+	rule(".fb-result",
+		display("flex"),
+		alignItems("center"),
+		gap("0.45rem"),
+		flex("0 1 auto"),
+		minWidth("140px"),
+		maxWidth("48%"),
+		padding("0 1.05rem"),
+		borderRadius("10px"),
+		border("1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 9%, transparent)"),
+	)
+	rule(".fb-result-eq",
+		fontSize("1.1rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".fb-result-val",
+		fontFamily("var(--font-display), 'Fraunces', serif"),
+		fontSize("1.55rem"),
+		fontWeight("700"),
+		color("var(--accent)"),
+		fontVariantNumeric("tabular-nums"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	rule(".fb-result.is-empty",
+		borderStyle("dashed"),
+		background("transparent"),
+	)
+	rule(".fb-result.is-empty .fb-result-val",
+		color("var(--text-faint)"),
+	)
+	rule(".fb-result.is-err",
+		borderColor("color-mix(in srgb, var(--danger) 42%, var(--border))"),
+		background("color-mix(in srgb, var(--danger) 9%, transparent)"),
+	)
+	rule(".fb-result-err",
+		color("var(--danger)"),
+		fontSize("0.8rem"),
+		fontWeight("500"),
+		whiteSpace("normal"),
+	)
+	rule(".fb-presets",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+	rule(".fb-presets-lead",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+		marginRight("0.15rem"),
+	)
+	rule(".fb-save",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flexWrap("wrap"),
+	)
+	rule(".fb-save-name",
+		flex("1 1 220px"),
+		maxWidth("360px"),
+	)
+	rule(".fb-save-btn",
+		flexShrink("0"),
+	)
+	rule(".fb-msg",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+	// Palette: dense grid of variable chips, grouped and separated from the workbench by
+	// a hairline. Click a chip to insert its variable into the expression.
+	rule(".fb-palette",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.8rem"),
+		paddingTop("1rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".fb-palette-lead",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".fb-pal-groups",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.9rem"),
+	)
+	rule(".fb-pal-group",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	rule(".fb-pal-title",
+		fontSize("0.68rem"),
+		fontWeight("700"),
+		textTransform("uppercase"),
+		letterSpacing("0.07em"),
+		color("var(--accent)"),
+	)
+	rule(".fb-pal-grid",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fill, minmax(184px, 1fr))"),
+		gap("0.4rem"),
+	)
+	rule(".fb-chip",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("flex-start"),
+		gap("0.1rem"),
+		textAlign("left"),
+		padding("0.5rem 0.7rem"),
+		border("1px solid var(--border)"),
+		borderRadius("9px"),
+		background("var(--bg-elev)"),
+		prop("cursor", "pointer"),
+		transition("border-color .12s ease, background .12s ease, transform .12s ease"),
+	)
+	rule(".fb-chip:hover",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 9%, var(--bg-elev))"),
+		transform("translateY(-1px)"),
+	)
+	rule(".fb-chip-label",
+		fontSize("0.82rem"),
+		fontWeight("600"),
+		color("var(--text)"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		maxWidth("100%"),
+	)
+	rule(".fb-chip-val",
+		fontSize("0.82rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+	)
 	rule(".studio-stage-wrap",
 		position("sticky"),
 		top("16px"),

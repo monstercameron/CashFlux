@@ -374,7 +374,6 @@ func budgetListWidget(props budgetListProps) ui.Node {
 // variable (alongside budget count + the household aggregates), ready to compute over.
 func budgetFormulaWidget(props budgetFormulaProps) ui.Node {
 	body := Div(
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("budgets.formulaHint")),
 		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("budgets.formulaTitle"), ShowSaved: true}),
 	)
 	return uiw.Widget(uiw.WidgetProps{

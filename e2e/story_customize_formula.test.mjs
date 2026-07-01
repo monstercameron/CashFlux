@@ -44,7 +44,7 @@ try {
   // Type an arithmetic expression and check the live result.
   await page.getByPlaceholder("round((income").fill("6 * 7");
   await page.waitForTimeout(400);
-  const result = (await page.locator(".stat-value").first().textContent())?.trim();
+  const result = (await page.locator(".fb-result-val").first().textContent())?.trim();
   if (result !== "42") fail(`formula "6 * 7" should evaluate to 42, got "${result}"`);
 
   // Save the formula and confirm it persists.

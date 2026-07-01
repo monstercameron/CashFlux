@@ -16,7 +16,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/id"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -120,40 +119,43 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 		rev.Set(rev.Get() + 1)
 	}
 
-	// Live result.
-	var resultBody ui.Node
+	// Live result — shown inline beside the expression, not in a separate card.
+	resultCls := "fb-result"
+	var resultNode ui.Node
 	switch e := strings.TrimSpace(expr.Get()); {
 	case e == "":
-		resultBody = P(css.Class("muted"), uistate.T("customize.formulaHint"))
+		resultCls += " is-empty"
+		resultNode = Span(css.Class("fb-result-val"), "—")
 	default:
 		if val, err := formula.Eval(e, formula.Env{Vars: vars}); err != nil {
-			resultBody = P(css.Class("err"), Attr("role", "alert"), err.Error())
+			resultCls += " is-err"
+			resultNode = Span(css.Class("fb-result-err"), Attr("role", "alert"), err.Error())
 		} else {
-			resultBody = Div(css.Class("stat-value"), formatFormulaValue(val))
+			resultNode = Span(css.Class("fb-result-val"), formatFormulaValue(val))
 		}
 	}
 
-	// Grouped metric reference: atoms, molecules (with their atom formula), counts,
-	// custom fields. Click a row to insert it into the expression.
+	// Variable palette: a dense, click-to-insert grid of chips (label + live value),
+	// grouped by category. Replaces the sprawling one-row-per-variable list.
 	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts}
-	refSections := make([]ui.Node, 0, len(groups))
+	palette := make([]ui.Node, 0, len(groups))
 	for _, g := range groups {
-		rows := make([]ui.Node, 0)
+		chips := make([]ui.Node, 0)
 		for _, m := range metrics {
 			if m.Group != g {
 				continue
 			}
-			rows = append(rows, ui.CreateElement(formulaMetricRow, formulaMetricRowProps{
+			chips = append(chips, ui.CreateElement(formulaMetricRow, formulaMetricRowProps{
 				Metric: m, Value: vars[m.Name], OnInsert: insert,
 			}))
 		}
-		if len(rows) == 0 {
+		if len(chips) == 0 {
 			continue
 		}
-		refSections = append(refSections,
-			Div(css.Class("fb-group"),
-				Span(css.Class("fb-group-title"), string(g)),
-				Div(css.Class("rows"), rows),
+		palette = append(palette,
+			Div(css.Class("fb-pal-group"),
+				Span(css.Class("fb-pal-title"), string(g)),
+				Div(css.Class("fb-pal-grid"), chips),
 			),
 		)
 	}
@@ -163,40 +165,44 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 		title = uistate.T("customize.calcTitle")
 	}
 
-	nodes := []ui.Node{
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: title,
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("customize.calcDesc")),
-				Form(css.Class("form-grid"),
-					Label(css.Class("labeled-field"), Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
-						Span(css.Class("muted"), uistate.T("customize.exprLabel")),
-						Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
-					),
-				),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt3, tw.ItemsCenter),
-					Span(css.Class("muted"), uistate.T("customize.try")),
-					ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exSavings"), Expr: "round((income - expense) / income * 100)", OnPick: emit}),
-					ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exSpending"), Expr: "round(expense / income * 100)", OnPick: emit}),
-					ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exGross"), Expr: "assets", OnPick: emit}),
-					ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exOverBudget"), Expr: "if(expense > income, 1, 0)", OnPick: emit}),
-				),
-				Form(css.Class("form-grid", tw.Mt2), OnSubmit(saveFormula),
-					Label(css.Class("labeled-field"), Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
-						Span(css.Class("muted"), uistate.T("customize.nameLabel")),
-						Input(css.Class("field"), Type("text"), Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
-					),
-					Button(css.Class("btn btn-primary"), Type("submit"), Style(map[string]string{"width": "fit-content", "align-self": "flex-end"}), uistate.T("customize.save")),
-				),
-				If(fMsg.Get() != "", P(css.Class("muted"), fMsg.Get())),
+	workbench := Div(css.Class("fb"),
+		// Workbench: the expression is the focal element, with the live result read out
+		// inline to its right — no separate result card.
+		Div(css.Class("fb-workbench"),
+			Div(css.Class("fb-head"),
+				Div(css.Class("fb-title"), title),
+				Span(css.Class("fb-sub"), uistate.T("customize.calcDesc")),
 			),
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{Title: uistate.T("customize.resultTitle"), Body: resultBody}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("customize.varsTitle"),
-			Body:  Fragment(P(css.Class("muted"), uistate.T("customize.varsInsertHint")), Div(css.Class("fb-groups"), refSections)),
-		}),
-	}
+			Div(css.Class("fb-exprbar"),
+				Input(css.Class("field", "fb-expr"), Type("text"), Attr("aria-label", uistate.T("customize.exprLabel")),
+					Placeholder(uistate.T("customize.exprPlaceholder")), Value(expr.Get()), OnInput(onExpr)),
+				Div(ClassStr(resultCls),
+					Span(css.Class("fb-result-eq"), "="),
+					resultNode,
+				),
+			),
+			Div(css.Class("fb-presets"),
+				Span(css.Class("fb-presets-lead"), uistate.T("customize.try")),
+				ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exSavings"), Expr: "round((income - expense) / income * 100)", OnPick: emit}),
+				ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exSpending"), Expr: "round(expense / income * 100)", OnPick: emit}),
+				ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exGross"), Expr: "assets", OnPick: emit}),
+				ui.CreateElement(formulaPreset, formulaPresetProps{Label: uistate.T("customize.exOverBudget"), Expr: "if(expense > income, 1, 0)", OnPick: emit}),
+			),
+			Form(css.Class("fb-save"), OnSubmit(saveFormula),
+				Input(css.Class("field", "fb-save-name"), Type("text"), Attr("aria-label", uistate.T("customize.nameLabel")),
+					Placeholder(uistate.T("customize.savePlaceholder")), Value(fName.Get()), OnInput(onFName)),
+				Button(css.Class("btn btn-primary", "fb-save-btn"), Type("submit"), uistate.T("customize.save")),
+				If(fMsg.Get() != "", Span(css.Class("fb-msg"), fMsg.Get())),
+			),
+		),
+		// Palette below, separated by a hairline.
+		Div(css.Class("fb-palette"),
+			Span(css.Class("fb-palette-lead"), uistate.T("customize.varsInsertHint")),
+			Div(css.Class("fb-pal-groups"), palette),
+		),
+	)
+
+	nodes := []ui.Node{workbench}
 	if props.ShowSaved {
 		nodes = append(nodes, savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula))
 	}
@@ -220,23 +226,18 @@ type formulaMetricRowProps struct {
 	OnInsert func(string)
 }
 
-// formulaMetricRow renders one reference metric: its friendly label (click to insert
-// the variable name), the variable name with — for molecules — its atom formula, and
-// the live value. Its own component (no hooks in loops).
+// formulaMetricRow renders one variable as a compact click-to-insert chip: the friendly
+// label over its live value, with the raw variable name (and, for molecules, its atom
+// formula) in the tooltip. Its own component (no hooks in loops).
 func formulaMetricRow(p formulaMetricRowProps) ui.Node {
 	ins := ui.UseEvent(Prevent(func() { p.OnInsert(p.Metric.Name) }))
-	meta := p.Metric.Name
+	tip := p.Metric.Name
 	if p.Metric.Molecule && p.Metric.Formula != "" {
-		meta = p.Metric.Name + " = " + prettyFormula(p.Metric.Formula)
+		tip = p.Metric.Name + " = " + prettyFormula(p.Metric.Formula)
 	}
-	return Div(css.Class("row"),
-		Div(css.Class("row-main"),
-			Button(css.Class("btn-link row-desc"), Type("button"),
-				Title(uistate.T("customize.insertFormula", p.Metric.Name)),
-				Attr("aria-label", uistate.T("customize.insertShort", p.Metric.Name)),
-				OnClick(ins), p.Metric.Label),
-			Span(css.Class("row-meta fb-meta"), meta),
-		),
-		Span(css.Class("amount fig"), groupThousands(p.Value)),
+	return Button(css.Class("fb-chip"), Type("button"), Title(tip),
+		Attr("aria-label", uistate.T("customize.insertShort", p.Metric.Name)), OnClick(ins),
+		Span(css.Class("fb-chip-label"), p.Metric.Label),
+		Span(css.Class("fb-chip-val"), groupThousands(p.Value)),
 	)
 }
