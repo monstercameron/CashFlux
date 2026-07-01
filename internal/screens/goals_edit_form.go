@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,6 +74,17 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		}
 	}
 
+	// Kind + habit-field initial values (empty when not a habit).
+	kindInit := string(g.EffectiveKind())
+	cadenceInit := string(g.HabitCadence)
+	if cadenceInit == "" {
+		cadenceInit = string(domain.CadenceWeekly)
+	}
+	habitTargetInit := ""
+	if g.HabitTarget > 0 {
+		habitTargetInit = strconv.Itoa(g.HabitTarget)
+	}
+
 	// All hooks unconditionally at stable positions.
 	nameS := ui.UseState(g.Name)
 	targetS := ui.UseState(targetMajor)
@@ -82,10 +94,14 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	contribS := ui.UseState("")
 	postLedgerS := ui.UseState(false)
 	errS := ui.UseState("")
+	kindS := ui.UseState(kindInit)
+	cadenceS := ui.UseState(cadenceInit)
+	habitTargetS := ui.UseState(habitTargetInit)
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	onHabitTarget := ui.UseEvent(func(v string) { habitTargetS.Set(v) })
 	onContrib := ui.UseEvent(func(v string) { contribS.Set(v) })
 	onPostLedger := ui.UseEvent(func(e ui.Event) { postLedgerS.Set(e.IsChecked()) })
 	cancel := ui.UseEvent(Prevent(func() { done() }))
@@ -102,23 +118,42 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			if n := strings.TrimSpace(nameS.Get()); n != "" {
 				gg.Name = n
 			}
-			gg.AccountID = acctS.Get()
 			gg.OwnerID = ownerS.Get()
 			if ownerS.Get() == domain.GroupOwnerID {
 				gg.Scope = domain.ScopeShared
 			} else {
 				gg.Scope = domain.ScopeIndividual
 			}
+			kind := domain.GoalKind(kindS.Get())
+			gg.Kind = kind
 			c := gg.TargetAmount.Currency
 			if c == "" {
 				c = base
 			}
-			amt, err := money.ParseMinor(strings.TrimSpace(targetS.Get()), currency.Decimals(c))
-			if err != nil || amt <= 0 {
-				errS.Set(uistate.T("goals.targetRequired"))
-				return
+			switch kind {
+			case domain.GoalKindFinancial:
+				amt, err := money.ParseMinor(strings.TrimSpace(targetS.Get()), currency.Decimals(c))
+				if err != nil || amt <= 0 {
+					errS.Set(uistate.T("goals.targetRequired"))
+					return
+				}
+				gg.TargetAmount = money.New(amt, c)
+				gg.AccountID = acctS.Get()
+			case domain.GoalKindHabit:
+				n, err := strconv.Atoi(strings.TrimSpace(habitTargetS.Get()))
+				if err != nil || n <= 0 {
+					errS.Set(uistate.T("goals.habitTargetRequired"))
+					return
+				}
+				gg.HabitCadence = domain.RecurringCadence(cadenceS.Get())
+				gg.HabitTarget = n
+				// Non-financial: keep a valid zeroed amount + drop the account link.
+				gg.TargetAmount = money.New(0, c)
+				gg.AccountID = ""
+			default: // checklist / milestone
+				gg.TargetAmount = money.New(0, c)
+				gg.AccountID = ""
 			}
-			gg.TargetAmount = money.New(amt, c)
 			if ds := strings.TrimSpace(dateS.Get()); ds != "" {
 				d, derr := dateutil.ParseDate(ds)
 				if derr != nil {
@@ -217,12 +252,29 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 
 	// --- Full edit. ---
 	_ = pr
+	kind := domain.GoalKind(kindS.Get())
+	financial := kind.IsFinancial()
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "goal-edit-"+g.ID), Attr("autofocus", ""), Type("text"),
 				Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
-		labeledField(uistate.T("goals.targetLabel"),
-			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget))),
+		labeledField(uistate.T("goals.kindLabel"),
+			Div(
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: goalKindOptions(), Selected: kindS.Get(), TestID: "goal-edit-kind",
+					OnChange: func(v string) { kindS.Set(v) }, AriaLabel: uistate.T("goals.kindLabel"),
+				}),
+				Span(css.Class("budget-sub"), goalKindHint(kind)),
+			)),
+		If(financial, labeledField(uistate.T("goals.targetLabel"),
+			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)))),
+		If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-edit-cadence",
+				OnChange: func(v string) { cadenceS.Set(v) }, AriaLabel: uistate.T("goals.habitCadenceLabel"),
+			}))),
+		If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitTargetLabel"),
+			Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-edit-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Value(habitTargetS.Get()), Step("1"), OnInput(onHabitTarget)))),
 		labeledField(uistate.T("goals.dateLabel"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
 		labeledField(uistate.T("goals.owner"),
@@ -230,11 +282,11 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 				Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("goals.owner"),
 			})),
-		labeledField(uistate.T("goals.linked"),
+		If(financial, labeledField(uistate.T("goals.linked"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: goalAccountOptions(app.Accounts(), acctS.Get()), Selected: acctS.Get(),
 				OnChange: func(v string) { acctS.Set(v) }, AriaLabel: uistate.T("goals.linked"),
-			})),
+			}))),
 		errLine,
 		Div(css.Class("acct-edit-actions"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

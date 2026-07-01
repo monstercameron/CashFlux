@@ -1,3 +1,33 @@
+## 2026-07-01 — Non-financial goal kinds (layer 3a: forms + kind-aware cards)
+
+The UI layer. Cam mid-build note: the to-do page isn't updated yet — "just stub the apis and we
+will tackle full implementation later." So I built the goal-KIND side fully (create/edit/see/act on
+all four kinds) and kept the goal↔todo link read-only on the card (checklist shows "N of M steps"
+from goals.TaskCounts); the interactive to-do management + to-do page integration is deferred.
+
+Forms (goaladdform.go, goals_edit_form.go): a "Goal type" SelectInput (goalKindOptions) + a live hint
+(goalKindHint) at the top; kind-conditional fields via If() — financial keeps target/saved/linked
+account/sinking-fund/category, habit reveals cadence (habitCadenceOptions) + "check-ins to finish",
+checklist/milestone drop money. Validation branches by kind (financial→target>0, habit→count>0,
+else none). Non-financial goals are saved with a zeroed base-currency amount so downstream money code
+never sees an empty currency. If()-wrapped SelectInputs are safe because SelectInput wraps a hookless
+component — no hook-order risk. New handler onHabitTarget declared with the other top-level hooks.
+
+Cards (goals_row.go): compute goalsvc.EvaluateProgress(g, props.Tasks, now) and branch every visual —
+card tint + bar-fill class, the in-bar label (money / "N of M steps" / "Done|Not done yet" /
+"N of M check-ins") + percent (hidden for milestone), header chips (financial: pace/monthly/fund;
+habit: 🔥 streak), sub-section (financial keeps the rich remaining/deadline/over-fund/what-next/linked
+copy; others get a compact deadline/complete line), and the primary footer action (Contribute /
+Mark done↔Reopen / Check in). Milestone + habit mutate via new package funcs setMilestoneDone (stamps
+DoneAt) and addHabitCheckIn (copies CheckIns before append, posts the resulting streak). Threaded
+Tasks through goalView + goalRowProps + rowFor. Cards carry data-kind for e2e/CSS.
+
+Verify: full go test ./... green; wasm build OK; deployed to e2e webroot; new
+e2e/goals_kinds_check.mjs 16/16 (picker + hint change, habit field reveal/hide, create checklist/
+milestone/habit, mark-done→"Done"+Reopen, check-in→"1 of 4"+streak chip, no page errors). Screenshot
+confirms four visually-distinct card styles. Next (deferred per Cam): to-do page + interactive linked
+to-dos on checklist cards.
+
 ## 2026-07-01 — Non-financial goal kinds (layer 2: engine variables)
 
 Extended addGoalVars so per-goal engine vars are kind-aware and expose linked to-dos. Kept the four

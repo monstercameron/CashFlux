@@ -27,6 +27,7 @@ type goalView struct {
 	Accounts    []domain.Account
 	Members     []domain.Member
 	Categories  []domain.Category
+	Tasks       []domain.Task // for checklist-goal progress (linked to-do counts)
 	All         []domain.Goal // owner-visible goals (all sections)
 	Active      []domain.Goal // non-archived, non-fund; sorted most-actionable first
 	Fund        []domain.Goal // sinking funds; alphabetical
@@ -44,7 +45,7 @@ func computeGoalView(app *appstate.App, activeMemberID string) goalView {
 	if base == "" {
 		base = "USD"
 	}
-	v := goalView{Base: base, Accounts: app.Accounts(), Members: app.Members(), Categories: app.Categories()}
+	v := goalView{Base: base, Accounts: app.Accounts(), Members: app.Members(), Categories: app.Categories(), Tasks: app.Tasks()}
 	for _, g := range app.Goals() {
 		if ownerVisibleTo(g.OwnerID, activeMemberID) {
 			v.All = append(v.All, g)
@@ -75,6 +76,7 @@ type goalRowProps struct {
 	Goal           domain.Goal
 	Accounts       []domain.Account
 	Members        []domain.Member
+	Tasks          []domain.Task // linked-to-do source for checklist-goal progress
 	OnDelete       func(string)
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
@@ -84,6 +86,41 @@ type goalRowProps struct {
 	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).
 	FundSetAside       int64
 	LinkedCategoryName string
+}
+
+// goalKindOptions builds the goal-type SelectOptions (savings / checklist /
+// milestone / habit) for the add & edit forms.
+func goalKindOptions() []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: string(domain.GoalKindFinancial), Label: uistate.T("goals.kindFinancial")},
+		{Value: string(domain.GoalKindChecklist), Label: uistate.T("goals.kindChecklist")},
+		{Value: string(domain.GoalKindMilestone), Label: uistate.T("goals.kindMilestone")},
+		{Value: string(domain.GoalKindHabit), Label: uistate.T("goals.kindHabit")},
+	}
+}
+
+// goalKindHint returns the one-line explainer shown under the goal-type picker.
+func goalKindHint(k domain.GoalKind) string {
+	switch k {
+	case domain.GoalKindChecklist:
+		return uistate.T("goals.kindChecklistHint")
+	case domain.GoalKindMilestone:
+		return uistate.T("goals.kindMilestoneHint")
+	case domain.GoalKindHabit:
+		return uistate.T("goals.kindHabitHint")
+	default:
+		return uistate.T("goals.kindFinancialHint")
+	}
+}
+
+// habitCadenceOptions builds the check-in rhythm SelectOptions for a habit goal.
+func habitCadenceOptions() []uiw.SelectOption {
+	cs := []domain.RecurringCadence{domain.CadenceWeekly, domain.CadenceBiweekly, domain.CadenceMonthly, domain.CadenceQuarterly, domain.CadenceYearly}
+	out := make([]uiw.SelectOption, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, uiw.SelectOption{Value: string(c), Label: cadenceLabel(c)})
+	}
+	return out
 }
 
 // goalAccountOptions builds the linked-account SelectOptions for a goal, with a

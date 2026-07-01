@@ -173,7 +173,7 @@ func goalListWidget(props goalListProps) ui.Node {
 	}
 	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
-			Goal: g, Accounts: v.Accounts, Members: v.Members,
+			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
 			OnDelete:       deleteGoal,
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
