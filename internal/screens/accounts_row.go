@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -53,6 +54,10 @@ type accountRowProps struct {
 	// pre-loaded by the accounts screen so AccountRow has no store access.
 	// Nil or empty = no history panel rendered.
 	ValuationHistory []domain.BalanceSnapshot
+	// AccountDefs are the user-defined custom-field definitions for the "account"
+	// entity, passed in so the inline editor can render their inputs and the row can
+	// show their values. Empty = no custom fields configured.
+	AccountDefs []customfields.Def
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -123,6 +128,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	// pointerdown. The `.add-backdrop` can't be relied on (fixed inside the topbar's
 	// sticky stacking context, so it doesn't paint over page content). See uiw.DismissPopover.
 	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
+	// Keep the ⋯ menu inside the viewport: the trigger sits near the right edge of the
+	// row, so flip the menu to open leftward / upward when it would otherwise overflow.
+	uiw.AnchorPopover(menuOpen.Get(), menuID)
 
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
@@ -221,6 +229,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	// (not inside the editing block) so hook ordering is stable on every render.
 	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
+	// customEditVals holds the string form-state for the account's custom fields while
+	// editing. Hoisted here (not in the editing block) so hook ordering stays stable.
+	customEditVals := ui.UseState(customMapToStrings(a.Custom))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
@@ -237,6 +248,18 @@ func AccountRow(props accountRowProps) ui.Node {
 	ui.UseEvent(func(e ui.Event) { ownerS.Set(e.GetValue()) })
 	onToggleEditAdv := ui.UseEvent(func() { editAdvOpen.Set(!editAdvOpen.Get()) })
 	onToggleSplitOwn := ui.UseEvent(func() { splitOwnS.Set(!splitOwnS.Get()) })
+	// onCustomEdit is a plain func (not an On* hook) so it is safe to pass as a prop
+	// into the keyed custom-field input loop (the no-On*-in-loop rule). It writes a
+	// fresh copy of the value map so the atom sees a new reference.
+	onCustomEdit := func(key, value string) {
+		m := customEditVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[key] = value
+		customEditVals.Set(nm)
+	}
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(a.Name)
 		balS.Set(money.FormatMinor(a.OpeningBalance.Amount, dec))
@@ -258,6 +281,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		ownerS.Set(a.OwnerID)
 		splitOwnS.Set(len(a.OwnershipShares) > 0)
 		sharesMapS.Set(cloneSharesMap(a.OwnershipShares))
+		customEditVals.Set(customMapToStrings(a.Custom))
 		// Collapse advanced section on open so returning users start from a clean
 		// short form; they can expand again if they need to adjust an advanced field.
 		editAdvOpen.Set(false)
@@ -303,6 +327,11 @@ func AccountRow(props accountRowProps) ui.Node {
 		}
 		// MIA-extend (#445-10): normalise institution name on every save.
 		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
+		// Persist custom-field values (only when defs exist, so a save never wipes an
+		// account's Custom map just because no fields are configured this session).
+		if len(props.AccountDefs) > 0 {
+			cp.Custom = customValuesToMap(props.AccountDefs, customEditVals.Get())
+		}
 		props.OnSave(cp)
 		editing.Set(false)
 	}))
@@ -632,6 +661,16 @@ func AccountRow(props accountRowProps) ui.Node {
 					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
+				// User-defined custom fields for the "account" entity (L18 parity with the
+				// add form): each renders the input matching its type; values save into
+				// cp.Custom above. Rows use CustomFieldInput (which owns its own hook), so
+				// the no-On*-in-loop rule holds.
+				If(len(props.AccountDefs) > 0, Fragment(
+					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
+					MapKeyed(props.AccountDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
+					}),
+				)),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -703,6 +742,11 @@ func AccountRow(props accountRowProps) ui.Node {
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
 				Span(css.Class("row-meta"), meta),
+				// Read-only summary of the account's custom-field values (a compact
+				// "Label: value · …" line), shown only when any are set.
+				If(customSummary(props.AccountDefs, a.Custom) != "",
+					Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
+						customSummary(props.AccountDefs, a.Custom))),
 				// MIA-extend (#445-10): nudge to fill missing institution.
 				If(a.Institution == "" && !a.Archived,
 					Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
@@ -801,7 +845,7 @@ func cloneSharesMap(src map[string]int) map[string]int {
 // field in the fractional-ownership sub-form.
 type ownerShareRowProps struct {
 	Member   domain.Member
-	Share    int    // current percentage (0–100)
+	Share    int                                  // current percentage (0–100)
 	OnChange func(memberID string, valStr string) // plain func — never an On* hook
 }
 

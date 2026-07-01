@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -91,4 +92,65 @@ func customValuesToMap(defs []customfields.Def, vals map[string]string) map[stri
 		return nil
 	}
 	return out
+}
+
+// customMapToStrings renders a typed custom{} map back into the string form-state map
+// the input components edit — the inverse of customValuesToMap (bool → "true"/"false",
+// float → trimmed decimal, anything else → its default string form). Used to seed an
+// inline-edit form from an entity's saved custom values.
+func customMapToStrings(custom map[string]any) map[string]string {
+	out := make(map[string]string, len(custom))
+	for k, v := range custom {
+		switch t := v.(type) {
+		case bool:
+			if t {
+				out[k] = "true"
+			} else {
+				out[k] = "false"
+			}
+		case float64:
+			out[k] = strconv.FormatFloat(t, 'f', -1, 64)
+		case string:
+			out[k] = t
+		default:
+			out[k] = fmt.Sprintf("%v", t)
+		}
+	}
+	return out
+}
+
+// customSummary builds a compact "Label: value" string for an entity's non-empty
+// custom fields, in def order, for a read-only row display. Empty when there are no
+// defs or no values. Bool values render as Yes/No.
+func customSummary(defs []customfields.Def, custom map[string]any) string {
+	if len(defs) == 0 || len(custom) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(defs))
+	for _, d := range defs {
+		v, ok := custom[d.Key]
+		if !ok {
+			continue
+		}
+		var s string
+		switch t := v.(type) {
+		case bool:
+			if t {
+				s = uistate.T("cf.yes")
+			} else {
+				s = uistate.T("cf.no")
+			}
+		case float64:
+			s = strconv.FormatFloat(t, 'f', -1, 64)
+		case string:
+			s = t
+		default:
+			s = fmt.Sprintf("%v", t)
+		}
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		parts = append(parts, d.Label+": "+s)
+	}
+	return strings.Join(parts, " · ")
 }

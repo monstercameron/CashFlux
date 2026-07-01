@@ -77,6 +77,9 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	//     of the `.add-backdrop` stacking (the fixed backdrop doesn't paint over
 	//     page content, so it can't be relied on for outside-clicks).
 	DismissPopover(open.Get(), id, func() { open.Set(false) })
+	// Keep the popover inside the viewport (the ⋯ trigger usually sits near a row's
+	// right edge): flip it left/up when its natural below-right position would overflow.
+	AnchorPopover(open.Get(), id)
 
 	menuHidden := ""
 	if !open.Get() {

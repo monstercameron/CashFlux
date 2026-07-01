@@ -3,6 +3,55 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Widgetize /accounts, tie in custom fields + formulas, fix menu overflow
+
+**What:** Ported /accounts to the widgetized surface-host pattern established by /transactions,
+kept every feature, added a conforming filter toolbar, tied in custom fields + the formula engine,
+and made the ⋯ overflow menu viewport-aware. Built with the frontend-design skill's lens but staying
+inside CashFlux's existing design language (Fraunces/Inter, forest-green accent, dark bento tiles).
+
+**Architecture:** `Accounts()` is now a thin host (`accounts_widget.go`) that assembles a fixed set of
+Native `WidgetSpec`s and renders them via `safeRenderSpec` into `bento bento-accounts`; tile bodies
+live in `accounts_tiles.go`; cross-tile state moved into `uistate/accountspage.go` atoms
+(`AccountsFilter`, transfer-open, show-formulas). The heavy per-account row (`AccountRow`) was already
+a proper component with all its inline editors — reused verbatim; the work was restructuring the host.
+
+**The re-render trap (and fix):** the first cut had the tiles compute from `c.App` but not subscribe
+to anything, so after a mutation the host re-rendered but the engine memoized each tile (same `*App`
+prop) — the "Mark all updated (14 stale)" badge stayed at 14 even though the data changed (the
+dashboard, a separate screen, updated correctly). /transactions doesn't hit this because its table
+reads a host-computed Frame prop that changes. Fix: each data-dependent accounts tile now reads
+`uistate.UseDataRevision().Get()` so a `BumpDataRevision` re-renders it. After this the mark-all
+loopstory went 7/0.
+
+**Test-staleness discovery (not my regression):** two accounts e2e (`accounts_transfer_check`,
+`reconcile_statement_check`) failed reading `localStorage["cashflux:dataset"]` — but the app migrated
+persistence to IndexedDB (`cashflux-kv`) and removes the localStorage original, so that key is empty
+for everyone now (131 e2e files share the assumption). Confirmed by reading IndexedDB directly: 14
+accounts, 2317 txns, 19 uncleared, and the transfer legs really persist there (console showed the two
+`transaction saved` legs). Left those other-authored tests alone; the port is functionally correct.
+
+**Custom fields:** `domain.Account` already had `Custom`, and the add form already rendered account
+custom fields — the inline-edit form was the gap. Added `customEditVals` state (hoisted for stable
+hook order), seeded from `a.Custom` via a new `customMapToStrings`, rendered `CustomFieldInput` per
+def, and saved via `customValuesToMap` (guarded on `len(defs)>0` so a save never wipes Custom). Each
+row shows a read-only `customSummary` line. Verified against the sample data's pre-existing
+"Account number (last 4)" def (edit input + row summary both render).
+
+**Formulas:** an opt-in "Account metrics" tile embeds the reusable `FormulaBuilder`, which evaluates
+against `liveEngineVars` — so it exposes account aggregates AND number custom fields as `cf_acct_*`,
+connecting both features. Gated behind a toolbar toggle to keep the default page focused.
+
+**Menu overflow:** `.add-menu.open-left` existed in CSS but nothing ever set it, so the ⋯ menu (its
+trigger sits near a row's right edge) spilled off-screen. New reusable `ui.AnchorPopover` hook
+measures the menu one frame after it opens and toggles `open-left`/`open-up` (added `open-up` CSS)
+when it would overflow the right/bottom edge; re-measures on resize/scroll. Wired into `AccountRow`
+and the shared `OverflowMenu`. Verified: the menu now reports `open-left open-up` and a rect fully
+inside the viewport.
+
+**Next:** the account custom-field toolbar FILTER (transactions has one) was deliberately deferred —
+edit + display + formula-var exposure cover the ask; a `CustomKey/CustomVal` filter can follow.
+
 ## 2026-06-30 — Move all CSS + tokens from index.html into type-safe Go (`internal/styles`)
 
 **What:** Migrated the entire design system — the three `<style>` blocks in `web/index.html`

@@ -4311,6 +4311,15 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	rule(".bento.bento-accounts",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-accounts > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
 	rule(".bento-ledger .txn-table",
 		tableLayout("fixed"),
 		width("100%"),
@@ -5051,6 +5060,10 @@ func registerGenerated() {
 	rule(".add-menu.open-left",
 		left("auto"),
 		right("0"),
+	)
+	rule(".add-menu.open-up",
+		top("auto"),
+		bottom("calc(100% + 6px)"),
 	)
 	rule(".add-item",
 		textAlign("left"),
