@@ -67,6 +67,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	vars := liveEngineVars(app)
 	metrics := widgetcatalog.Metrics(app.CustomFieldDefs(), app.Molecules())
 	metrics = append(metrics, widgetcatalog.BudgetMetrics(app.Budgets())...)
+	metrics = append(metrics, widgetcatalog.AccountMetrics(app.Accounts())...)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")
@@ -134,7 +135,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 
 	// Grouped metric reference: atoms, molecules (with their atom formula), counts,
 	// custom fields. Click a row to insert it into the expression.
-	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets}
+	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts}
 	refSections := make([]ui.Node, 0, len(groups))
 	for _, g := range groups {
 		rows := make([]ui.Node, 0)

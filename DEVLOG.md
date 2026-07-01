@@ -1,3 +1,21 @@
+## 2026-07-01 — Backport per-entity variables + var-name UI to accounts
+
+Cam: backport the formula/custom-value system to accounts — each account should be a variable, and
+the var name should be repr'd in the new/edit modals. Mirrored the budget work end to end:
+- engineenv.addAccountVars exposes account_<slug>_balance and _cleared (via ledger.Balance /
+  ClearedBalance, FX-converted to base with safespend.ToBaseFunc). AccountVarBases is the single
+  source of truth for naming (slug from VarName||Name, numeric-suffix collisions), shared with
+  widgetcatalog.AccountMetrics (new GroupAccounts) so pickers match what resolves.
+- Account.VarName added; the add + edit modals get a Variable name field (accountVarField): live
+  chip of the generated handle, autosuggest-from-name (add form, varTouched flag), and a collision
+  check that blocks the save. Threaded varNameS/onVarName through the big editForm signature.
+- Account metrics wired into the formula builder + Studio metric pickers.
+- Add-account modal enlarged (560x820) with Name + Variable name full-width (fixed the same 2-col
+  grid awkwardness budgets had).
+
+Tests: engineenv account surface + collision unit tests; live e2e 6/6 (autosuggest, chip, collision,
+account_rainy_day_fund_balance=$500 resolves, Accounts picker group). Reused the .budget-var-* CSS.
+
 ## 2026-07-01 — Custom variable names for budgets (+ autosuggest + collision check)
 
 Follow-up to per-budget variables: Cam wanted to control the handle, not just get the name-derived

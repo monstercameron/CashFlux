@@ -40,6 +40,8 @@ func AddHost() uic.Node {
 	case "account":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("accounts.addTitle"),
+			Width:     "560px",
+			Height:    "820px",
 			CloseOnly: true,
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),

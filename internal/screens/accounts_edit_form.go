@@ -102,6 +102,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		lockISO = dateutil.FormatDate(a.LockUntil)
 	}
 	nameS := ui.UseState(a.Name)
+	varNameS := ui.UseState(a.VarName)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
 	climS := ui.UseState(moneyMajorOrEmpty(a.CreditLimit, dec))
 	aprS := ui.UseState(floatOrEmpty(a.InterestRateAPR))
@@ -121,6 +122,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	notesS := ui.UseState(a.Notes)
 	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+	onVarName := ui.UseEvent(func(v string) { varNameS.Set(v) })
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
 	onApr := ui.UseEvent(func(v string) { aprS.Set(v) })
@@ -160,8 +162,14 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		done()
 	}))
 	saveEdit := ui.UseEvent(Prevent(func() {
+		// Block the save on a variable-name collision; the field already shows the warning
+		// inline (there's no separate error line in this editor).
+		if accountVarCollision(app.Accounts(), a.ID, varNameS.Get(), nameS.Get()) != "" {
+			return
+		}
 		cp := a
 		cp.Name = strings.TrimSpace(nameS.Get())
+		cp.VarName = strings.TrimSpace(varNameS.Get())
 		cp.OwnerID = ownerS.Get()
 		if splitOwnS.Get() {
 			cp.OwnershipShares = cloneSharesMap(sharesMapS.Get())
@@ -216,9 +224,9 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		return transferForm(a, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
 		return editForm(a, dec, app.Members(), app.Accounts(), app.CustomFieldDefsFor("account"),
-			nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
+			nameS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
 			editAdvOpen, splitOwnS, sharesMapS, customEditVals,
-			onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
+			onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
 			onToggleEditAdv, onToggleSplitOwn, onNotes, onCustomEdit, saveEdit, cancel)
 	}
 }
@@ -374,15 +382,18 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 // editForm is the full inline-edit editor (name, owner, balances, type-specific
 // attributes, institution, and custom fields).
 func editForm(a domain.Account, dec int, members []domain.Member, accounts []domain.Account, accDefs []customfields.Def,
-	nameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
+	nameS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
 	editAdvOpen, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn, onNotes ui.Handler,
+	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn, onNotes ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler) ui.Node {
 	isLiab := a.Class == domain.ClassLiability
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "acct-edit-"+a.ID), Attr("autofocus", ""), Type("text"),
 				Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+		// Optional explicit variable name for formulas/widgets, with a live chip + collision warning.
+		labeledField(uistate.T("accounts.varNameLabel"),
+			accountVarField(accounts, a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName)),
 		labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
 				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),
