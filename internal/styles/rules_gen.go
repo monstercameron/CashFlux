@@ -4334,10 +4334,21 @@ func registerGenerated() {
 	// untouched. Each budget becomes an elevated meter-card with a state-colored left
 	// stripe, a prominent gradient progress bar over a visible track (so 0%/low budgets
 	// no longer vanish into the background), and a tinted percent chip. ---
+	// Budget cards lay out in a responsive grid — each a compact 1-column block (several
+	// per row) instead of a full-width bar. auto-fill + minmax keeps them readable and
+	// reflows to fewer columns as the surface narrows.
+	rule(".bento-budgets .budget-grid",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fill, minmax(320px, 1fr))"),
+		gap("0.75rem"),
+	)
 	rule(".bento-budgets .budget",
 		position("relative"),
-		padding("0.85rem 1.15rem 0.95rem"),
-		margin("0.8rem 0"),
+		display("flex"),
+		flexDirection("column"),
+		minHeight("210px"),
+		padding("0.9rem 1.15rem 0.85rem"),
+		margin("0"),
 		border("1px solid var(--border)"),
 		borderRadius("14px"),
 		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
@@ -4371,8 +4382,8 @@ func registerGenerated() {
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
-		flexWrap("nowrap"),
-		gap("0.75rem"),
+		flexWrap("wrap"),
+		gap("0.4rem 0.75rem"),
 		marginBottom("0.55rem"),
 	)
 	rule(".bento-budgets .budget-head-main",
@@ -4382,14 +4393,17 @@ func registerGenerated() {
 		minWidth("0"),
 		flex("1 1 auto"),
 	)
-	// Actions recede at rest so the card reads clean, and come forward on hover/focus.
+	// Actions are the card's footer: pinned to the bottom (margin-top:auto) with a hairline
+	// separator, wrapping within the compact card. Slightly dimmed at rest, full on hover.
 	rule(".bento-budgets .budget-actions",
 		display("flex"),
 		alignItems("center"),
+		flexWrap("wrap"),
 		gap("0.35rem"),
-		flexShrink("0"),
-		whiteSpace("nowrap"),
-		opacity("0.4"),
+		marginTop("auto"),
+		paddingTop("0.7rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 70%, transparent)"),
+		opacity("0.85"),
 		transition("opacity 0.15s ease"),
 	)
 	rule(".bento-budgets .budget:hover .budget-actions, .bento-budgets .budget:focus-within .budget-actions",

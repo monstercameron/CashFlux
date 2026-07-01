@@ -306,7 +306,10 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				})
 			},
 		)
-		body = Div(rows)
+		// Lay the budget cards out in a responsive grid so each is a compact 1-column
+		// block (several per row) rather than a full-width bar — budgets don't need the
+		// whole width, and a grid shows far more at a glance.
+		body = Div(css.Class("budget-grid"), rows)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

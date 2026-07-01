@@ -194,11 +194,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
 	}
 
+	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
+	// card reads top-to-bottom: title → amount → bar → status → actions.
+	actionsRow := Div(css.Class("budget-actions"),
+		// Quick review: jump to /transactions filtered to this budget's category
+		// (the category title is also a drill link, but a labelled button is discoverable).
+		If(s.Budget.CategoryID != "", Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drill),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
+		coverBtn,
+		topupBtn,
+		Div(css.Class("add-wrap"), Attr("id", menuID),
+			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
+				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
+				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
+			),
+		),
+	)
+
 	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
 		Div(css.Class("budget-head"),
-			// Left group: the title (truncates), the spent/limit amount, and the percent
-			// chip. Kept in its own flex box so the action buttons on the right form a
-			// stable, column-aligned cluster instead of being pushed around by a long title.
+			// The title (truncates), the spent/limit amount, and the percent chip.
 			Div(css.Class("budget-head-main"),
 				IfElse(s.Budget.CategoryID != "",
 					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
@@ -211,30 +230,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// A compact percent-used chip, tinted by health state — an at-a-glance focal
 				// figure that complements the bar (capped display, e.g. "112%" when over).
 				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
-			),
-			// Right group: the row actions, as a fixed, no-wrap cluster so they line up in
-			// a column across rows and never wrap onto a second line. Top up (the frequent
-			// action) is a visible card button; Edit + the destructive Delete live in the ⋯
-			// menu (like /accounts), so the row stays uncluttered and a misclick can't
-			// delete a budget.
-			Div(css.Class("budget-actions"),
-				// Quick review: jump to /transactions filtered to this budget's category
-				// (the category title is also a drill link, but a labelled button is
-				// discoverable). Hidden when the budget has no category.
-				If(s.Budget.CategoryID != "", Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-					Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drill),
-					uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
-				coverBtn,
-				topupBtn,
-				Div(css.Class("add-wrap"), Attr("id", menuID),
-					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
-						If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
-						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
-					),
-				),
 			),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
@@ -253,6 +248,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine,
 		effectiveCapLine,
 		envLine,
+		actionsRow,
 	)
 }
 

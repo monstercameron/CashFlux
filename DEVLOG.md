@@ -1,3 +1,14 @@
+## 2026-07-01 — Budgets: grid of compact cards
+
+Cam wanted budgets as 1-wide blocks (not full width) and then taller cards with readjusted details.
+Put the BudgetRow list into a .budget-grid (grid, repeat(auto-fill, minmax(320px,1fr))) so cards
+are ~3 per row. Restructured the card in budgets_row.go to a clean vertical flow: the action
+cluster was pulled out of .budget-head and rendered as the LAST child (actionsRow), so the card
+reads title/amount/% → bar → status lines → footer actions. CSS: .bento-budgets .budget is now a
+flex column with min-height 210px (uniform 'taller' cards; grid stretch equalizes a row), and
+.budget-actions gets margin-top:auto + a hairline top border to pin it as a footer (dimmed at rest,
+full on hover). All action testids preserved. Verify: cover 11/11, budget varname 5/5.
+
 ## 2026-07-01 — Reusable entity var-name library (autosuggest everywhere)
 
 Cam: autosuggest var names, reuse the budget-screen strategy, make it a reusable library. The
