@@ -5092,6 +5092,26 @@ func registerGenerated() {
 		color("var(--text-dim)"),
 		marginTop("0.05rem"),
 	)
+	// Spread header: the "Spread across" titles on the left, the ƒx (ratio-by-formula)
+	// toggle on the right, mirroring the amount block's fixed/formula switch.
+	rule(".cover-spread-head",
+		display("flex"),
+		alignItems("flex-start"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+	)
+	rule(".cover-spread-titles",
+		display("flex"),
+		flexDirection("column"),
+		minWidth("0"),
+	)
+	// The shared ratio formula input + its hint, shown when ƒx weighting is on.
+	rule(".cover-weight-fx",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+		margin("0.35rem 0 0.1rem"),
+	)
 	// The source list is bounded and scrolls internally, so the recurring toggle and
 	// the Cancel/Cover actions below it stay visible without scrolling the whole modal.
 	rule(".cover-sources",

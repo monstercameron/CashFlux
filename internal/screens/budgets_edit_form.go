@@ -131,6 +131,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	coverMaxS := ui.UseState(map[string]bool{})            // sourceID → "use all remaining"
 	amtFxS := ui.UseState(recurringAmountFormula(b) != "") // amount is a formula, not a number
 	amtFormulaS := ui.UseState(recurringAmountFormula(b))
+	wtFxS := ui.UseState(recurringWeightFormula(b) != "") // weights come from a formula, not numbers
+	wtFormulaS := ui.UseState(recurringWeightFormula(b))
 	recurringS := ui.UseState(b.RecurringCover != nil)
 	errS := ui.UseState("")
 
@@ -142,6 +144,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
 	toggleAmtFx := ui.UseEvent(func() { amtFxS.Set(!amtFxS.Get()) })
 	onAmtFormula := ui.UseEvent(func(v string) { amtFormulaS.Set(v) })
+	toggleWtFx := ui.UseEvent(func() { wtFxS.Set(!wtFxS.Get()) })
+	onWtFormula := ui.UseEvent(func(v string) { wtFormulaS.Set(v) })
 	onToggleRecurring := ui.UseEvent(func() { recurringS.Set(!recurringS.Get()) })
 	// Plain funcs (not hooks) passed down to each per-source row component, so the
 	// checkbox/weight On* handlers live in the row, not in this loop.
@@ -225,8 +229,14 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			errS.Set(uistate.T("budgets.limitRequired"))
 			return
 		}
+		// Resolve the ratio weights once (formula-driven or fixed) so the applied split
+		// and the saved recurring shares agree.
+		effWeights := coverWtS.Get()
+		if wtFxS.Get() {
+			effWeights, _ = resolveCoverWeights(app, buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor), coverSrcs, coverSelS.Get(), coverWtS.Get(), wtFormulaS.Get())
+		}
 		if amt > 0 {
-			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get(), coverMaxS.Get())
+			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
 			// Pre-validate so a partial failure can't leave a half-applied cover: each
 			// source must keep a positive limit after giving its share.
 			for _, sc := range coverSrcs {
@@ -254,14 +264,20 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				continue
 			}
 			if recurringS.Get() {
+				wtFormula := ""
+				if wtFxS.Get() {
+					wtFormula = strings.TrimSpace(wtFormulaS.Get())
+				}
 				var srcs []domain.CoverShare
 				for _, sc := range coverSrcs {
 					if coverSelS.Get()[sc.ID] {
-						w := coverWtS.Get()[sc.ID]
+						w := effWeights[sc.ID]
 						if w <= 0 {
 							w = 1
 						}
-						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w})
+						// Store the shared per-source formula (re-evaluated each period in
+						// that source's context) alongside the last-resolved weight as a record.
+						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w, WeightFormula: wtFormula})
 					}
 				}
 				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: start.Format("2006-01-02")}
@@ -392,7 +408,18 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		} else {
 			amtMinor, _ = money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
 		}
-		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get(), coverMaxS.Get())
+		// Effective ratio weights: a per-source formula (evaluated in each source's own
+		// context) or the fixed ratio inputs. The shares + the displayed ratios use these.
+		effWeights := coverWtS.Get()
+		wtFxErr := ""
+		if wtFxS.Get() {
+			effWeights, wtFxErr = resolveCoverWeights(app, coverCtx, coverSrcs, coverSelS.Get(), coverWtS.Get(), wtFormulaS.Get())
+		}
+		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
+		spreadSub := uistate.T("budgets.coverSpreadSub")
+		if wtFxS.Get() {
+			spreadSub = uistate.T("budgets.coverWeightFxSub")
+		}
 		// Group checked sources at the top so the active split is visible together
 		// without scrolling past the unchecked budgets (keyed, so rows just reorder).
 		sortedCoverSrcs := make([]budgetCoverSource, len(coverSrcs))
@@ -425,11 +452,22 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					If(amtFxS.Get(), Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverFormulaHint"))),
 				)),
 			// Multi-source: check the budgets to pull from (split equally by default);
-			// the ratio input per source lets the split be unequal.
-			Div(
-				Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
-				Span(css.Class("cover-spread-sub"), uistate.T("budgets.coverSpreadSub")),
+			// the ratio input per source lets the split be unequal — or drive every
+			// source's ratio from a single formula (ƒx) evaluated in each source's context.
+			Div(css.Class("cover-spread-head"),
+				Div(css.Class("cover-spread-titles"),
+					Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
+					Span(css.Class("cover-spread-sub"), spreadSub),
+				),
+				Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
+					Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx), "ƒx"),
 			),
+			If(wtFxS.Get(), Div(css.Class("cover-weight-fx"),
+				Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
+					Placeholder("cf_budget_priority"), Value(wtFormulaS.Get()), OnInput(onWtFormula)),
+				If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
+				Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
+			)),
 			Div(css.Class("cover-sources"),
 				MapKeyed(sortedCoverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
 					shareStr, over := "", false
@@ -439,9 +477,9 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					}
 					return ui.CreateElement(coverSourceRow, coverSourceRowProps{
 						ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
-						Selected: coverSelS.Get()[sc.ID], Weight: coverWtS.Get()[sc.ID], ShareStr: shareStr,
+						Selected: coverSelS.Get()[sc.ID], Weight: effWeights[sc.ID], ShareStr: shareStr,
 						Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)), Max: coverMaxS.Get()[sc.ID],
-						OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
+						WeightLocked: wtFxS.Get(), OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
 					})
 				}),
 			),
@@ -634,18 +672,19 @@ func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string
 // coverSourceRowProps drives one row of the cover editor's source list. On* handlers
 // live here (not in the parent's map loop) per the framework's no-hooks-in-loops rule.
 type coverSourceRowProps struct {
-	ID          string
-	Label       string
-	RemainStr   string
-	Selected    bool
-	Weight      int
-	ShareStr    string // formatted amount this source contributes (when selected)
-	Over        bool   // this source's share exceeds what it can give
-	AvailStr    string // formatted amount this source can give (its limit)
-	Max         bool   // "use all remaining" — pin this source to its full remaining
-	OnToggle    func(string)
-	OnWeight    func(string, int)
-	OnToggleMax func(string)
+	ID           string
+	Label        string
+	RemainStr    string
+	Selected     bool
+	Weight       int
+	ShareStr     string // formatted amount this source contributes (when selected)
+	Over         bool   // this source's share exceeds what it can give
+	AvailStr     string // formatted amount this source can give (its limit)
+	Max          bool   // "use all remaining" — pin this source to its full remaining
+	WeightLocked bool   // ratio is driven by a formula → the number input is read-only
+	OnToggle     func(string)
+	OnWeight     func(string, int)
+	OnToggleMax  func(string)
 }
 
 // coverSourceRow renders a styled checkbox to include a source budget, and — when
@@ -671,7 +710,9 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 	}
 	weightAttrs := []any{css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
 		Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)}
-	if props.Max {
+	if props.Max || props.WeightLocked {
+		// Pinned to full remaining, or driven by the shared ratio formula — either way the
+		// number isn't hand-edited here.
 		weightAttrs = append(weightAttrs, Attr("disabled", "disabled"))
 	}
 	return Div(css.Class(rowCls),
@@ -725,6 +766,62 @@ func recurringAmountFormula(b domain.Budget) string {
 		return b.RecurringCover.AmountFormula
 	}
 	return ""
+}
+
+// recurringWeightFormula returns the shared per-source weight formula stored on a
+// recurring cover (empty when none). All sources carry the same formula, so the first
+// non-empty one is the modal-level formula to restore.
+func recurringWeightFormula(b domain.Budget) string {
+	if b.RecurringCover == nil {
+		return ""
+	}
+	for _, s := range b.RecurringCover.Sources {
+		if s.WeightFormula != "" {
+			return s.WeightFormula
+		}
+	}
+	return ""
+}
+
+// resolveCoverWeights returns the effective per-source ratio weight for each selected
+// source. When wtFormula is set, each source's weight is that formula evaluated in the
+// source budget's own context (e.g. "cf_budget_priority" weights sources by a custom
+// priority field); otherwise the fixed ratio inputs are used. The second return is the
+// first formula error encountered (for the live preview), if any.
+func resolveCoverWeights(app *appstate.App, ctx coverformula.Context, srcs []budgetCoverSource, sel map[string]bool, fixed map[string]int, wtFormula string) (map[string]int, string) {
+	out := make(map[string]int, len(srcs))
+	formula := strings.TrimSpace(wtFormula)
+	var byID map[string]domain.Budget
+	if formula != "" {
+		byID = make(map[string]domain.Budget, len(app.Budgets()))
+		for _, bb := range app.Budgets() {
+			byID[bb.ID] = bb
+		}
+	}
+	errStr := ""
+	for _, sc := range srcs {
+		if !sel[sc.ID] {
+			continue
+		}
+		if formula != "" {
+			w, err := ctx.Weight(formula, byID[sc.ID])
+			if err != nil {
+				if errStr == "" {
+					errStr = err.Error()
+				}
+				out[sc.ID] = 0
+				continue
+			}
+			out[sc.ID] = w
+			continue
+		}
+		w := fixed[sc.ID]
+		if w <= 0 {
+			w = 1
+		}
+		out[sc.ID] = w
+	}
+	return out, errStr
 }
 
 // budgetCategoryName resolves a category's display name (for the top-up hint), or ""

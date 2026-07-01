@@ -1,3 +1,21 @@
+## 2026-07-01 — Cover: per-source ratio formulas (Phase 4c)
+
+Finished the "source weights from formulas" half of the robust-cover ask. Rather than a
+formula input on every source row (which would crowd an already dense modal), the modal now has a
+single **ƒx** toggle in the *Spread across* header: flip it on and one formula drives *every*
+selected source's ratio, evaluated in that source's own budget context. So `cf_budget_priority`
+weights sources by a custom priority field, `remaining` weights by how much room each has, etc.
+When on, the per-source ratio number inputs go read-only and show the computed weight; the shares
+recompute live. On save, the formula is stamped on every CoverShare (`WeightFormula`) so the boot
+apply re-evaluates it each period (that path already existed from Phase 3). `resolveCoverWeights`
+is the shared resolver used by both the live preview and submit so they can't disagree.
+
+Verify: live test 4/4 — ƒx on shows the shared input; `remaining` makes the two checked sources'
+ratios read-only and equal to their remaining (300 / 25); the $90 splits $83.07 / $6.93 by those
+weights and sums exactly.
+
+Next: Phase 5 — custom fields on the cover config itself (metadata on the recurring rule).
+
 ﻿# CashFlux — Developer Journal
 
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
