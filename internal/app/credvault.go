@@ -18,7 +18,10 @@
 // │   • No hardware-backed key / secure enclave.                                │
 // │   • Changing the passcode orphans the vault (it becomes undecryptable) —    │
 // │     needs a re-encrypt-on-passcode-change hook.                             │
-// │   • Reveal + clipboard copy can leak into screenshots / clipboard managers. │
+// │   • Retrieval is copy-to-clipboard behind a passcode re-auth and the        │
+// │     password is never put in the DOM / shown — but the clipboard still      │
+// │     holds it afterwards (readable by other apps / clipboard managers);      │
+// │     consider an auto-clear-after-N-seconds.                                  │
 // └───────────────────────────────────────────────────────────────────────────┘
 //
 // Design (the safe parts, so the review starts from a sane baseline):

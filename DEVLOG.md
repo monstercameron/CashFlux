@@ -3,6 +3,30 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-06-30 — Credential retrieval: copy-to-clipboard behind re-auth, never in the DOM
+
+**What:** Reworked how a stored credential's password is retrieved (user: "add a home page quick
+link if its set and add a copy to clipboard button behind a app lock when clicked, never show the
+password or add to dom ofcourse"). Before, the modal loaded the plaintext password into a masked
+input with a reveal toggle — so it was in the DOM. Now:
+- The stored password is **never loaded into the DOM**. `storedPw` holds it in wasm memory only
+  (never bound to a `Value()`), `hasPass` drives the UI. The password input is *only* for
+  setting/replacing (empty on save = keep the existing password, preserved without ever surfacing).
+- No reveal toggle.
+- Retrieval = a **"Copy password"** button → `promptReauth` (a raw-DOM passcode overlay layered above
+  the FlipPanel) verifies the app passcode, then — inside that OK click (a user gesture) — calls
+  `clipboardWriteSecret` which passes the password from Go memory to `navigator.clipboard.writeText`,
+  never through a DOM node. Doing the write synchronously in the gesture (the password is already
+  decrypted from load) avoids the "clipboard needs transient activation" trap that an async decrypt
+  would hit.
+- A `safeLoginURL`-checked **"Open login page ↗"** quick link when a login URL is set (non-web schemes
+  like javascript:/data: are dropped).
+
+**Verify:** `e2e/accounts_notes_creds_check.mjs` 22/22 (with clipboard permissions) — password absent
+from the DOM before and after copy, reveal gone, wrong passcode rejected, correct passcode lands the
+exact password on the clipboard, login link points at the URL. Updated the SEC-1 review note: the old
+"reveal/clipboard leak" gap is now just clipboard *persistence* (add auto-clear). SW v290→v291.
+
 ## 2026-06-30 — Account notes + encrypted institution-credential vault (flagged for security review)
 
 **What:** Two account features. Notes: a plain-text `Account.Notes` field (edit-modal textarea +
