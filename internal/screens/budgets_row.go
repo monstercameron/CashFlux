@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -40,6 +41,19 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	ownerS := ui.UseState(s.Budget.OwnerID)
 	rolloverS := ui.UseState(s.Budget.Rollover)
 	methodologyS := ui.UseState(s.Budget.Methodology)
+	// Custom-field edit values (string form, keyed by def key) — seeded from the
+	// budget's stored map so the inline editor round-trips them (ties custom fields to
+	// budgets the same way /accounts does).
+	customEditVals := ui.UseState(customMapToStrings(s.Budget.Custom))
+	onCustomEdit := func(key, value string) {
+		m := customEditVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, val := range m {
+			nm[k] = val
+		}
+		nm[key] = value
+		customEditVals.Set(nm)
+	}
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	// onPeriod/onOwner hooks kept for stable hook ordering; SelectInput owns the
@@ -54,11 +68,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		ownerS.Set(s.Budget.OwnerID)
 		rolloverS.Set(s.Budget.Rollover)
 		methodologyS.Set(s.Budget.Methodology)
+		customEditVals.Set(customMapToStrings(s.Budget.Custom))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), methodologyS.Get(), rolloverS.Get())
+		props.OnSave(s.Budget.ID, nameS.Get(), limitS.Get(), periodS.Get(), ownerS.Get(), methodologyS.Get(), rolloverS.Get(),
+			customValuesToMap(props.BudgetDefs, customEditVals.Get()))
 		editing.Set(false)
 	}))
 
@@ -173,6 +189,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						OnChange:  func(v string) { methodologyS.Set(v) },
 						AriaLabel: uistate.T("budgets.methodLabel"),
 					})),
+				// Custom fields: one input per user-defined "budget" field, so a numeric
+				// field can then be computed over in the Budget metrics formula tile.
+				// MapKeyed renders nothing when there are no defs, so no guard is needed.
+				MapKeyed(props.BudgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+					return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
+				}),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
@@ -225,6 +247,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	var methodLine ui.Node = Fragment()
 	if s.Budget.Methodology != "" {
 		methodLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.methodOverrideRow", budgetMethodLabel(budgeting.ParseMethodology(s.Budget.Methodology))))
+	}
+
+	// Custom-field summary (e.g. "Priority: High · Review: Q3") — shown when the budget
+	// has any user-defined field values, so custom data stays visible on the row.
+	var customLine ui.Node = Fragment()
+	if cs := customSummary(props.BudgetDefs, s.Budget.Custom); cs != "" {
+		customLine = Span(css.Class("budget-sub", tw.TextFaint), cs)
 	}
 
 	// Envelope methodology: show the carried-forward balance under the period row.
@@ -337,18 +366,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		)
 	}
 
-	return Div(css.Class("budget"),
+	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
 		Div(css.Class("budget-head"),
-			IfElse(s.Budget.CategoryID != "",
-				Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
-					Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
-					title),
-				Span(css.Class("row-desc"), title)),
-			Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
-			coverBtn,
-			topupBtn,
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+			// Left group: the title (truncates), the spent/limit amount, and the percent
+			// chip. Kept in its own flex box so the action buttons on the right form a
+			// stable, column-aligned cluster instead of being pushed around by a long title.
+			Div(css.Class("budget-head-main"),
+				IfElse(s.Budget.CategoryID != "",
+					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drill),
+						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
+						title),
+					Span(css.Class("row-desc"), title)),
+				Span(css.Class("budget-amount"), fmtMoney(s.Spent)+" / "+fmtMoney(limit)),
+				// A compact percent-used chip, tinted by health state — an at-a-glance focal
+				// figure that complements the bar (capped display, e.g. "112%" when over).
+				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
+			),
+			// Right group: the row actions, as a fixed, no-wrap cluster so they line up in
+			// a column across rows and never wrap onto a second line.
+			Div(css.Class("budget-actions"),
+				coverBtn,
+				topupBtn,
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+			),
 		),
 		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		// Sub-line split (G4 §8): the primary line carries the at-a-glance signal —
@@ -360,6 +401,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.rowSecondary", s.Budget.Period.Label(), width)),
 		ownerLine,
 		methodLine,
+		customLine,
 		paceLine,
 		proratedLine,
 		rolloverLine,
@@ -368,6 +410,23 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverForm,
 		topupForm,
 	)
+}
+
+// budgetRowStateClass maps a budget's health to the row's visual-state modifier class
+// (the /budgets styles use it for the left accent stripe, the over-tint, and the
+// percent-chip color): over → is-over, near-limit → is-near, pace-trending-over →
+// is-risk, otherwise is-ontrack.
+func budgetRowStateClass(s budgeting.Status, paceOver string) string {
+	switch s.State {
+	case budgeting.StateOver:
+		return "is-over"
+	case budgeting.StateNear:
+		return "is-near"
+	}
+	if paceOver != "" {
+		return "is-risk"
+	}
+	return "is-ontrack"
 }
 
 // budgetMethodLabel returns a short, localized label for a methodology value —

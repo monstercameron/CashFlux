@@ -3,6 +3,90 @@
 Narrative companion to `CHANGELOG.md`. Newest entries first. Capture decisions, trade-offs,
 problems and fixes, and what's next.
 
+## 2026-07-01 — Budgets ported to the widgetized surface host (+ formulas & custom fields)
+
+**Goal:** make `/budgets` structurally match `/accounts` and `/transactions` — a thin surface host
+composing Native engine tiles into a bento grid — while keeping every feature, and tie in formulas +
+custom fields the way the accounts port did.
+
+**Shape.** Four files, mirroring the accounts split: `budgets_widget.go` (the `Budgets()` host + tile
+registration + `budgetNativeSpec`), `budgets_tiles.go` (the summary/toolbar/list/formula tile bodies),
+`budgets.go` (rewritten down to shared logic: `computeBudgetView`, `buildBudgetRowCallbacks`, and the
+formatting helpers the row + add form share), and `budgets_row.go` (BudgetRow, reused — extended for
+custom fields). The old monolithic `Budgets()` (a ~530-line function that computed everything and
+rendered one big `EntityListSection`) is gone.
+
+**The one real design decision — shared computation.** The summary tile needs the roll-up totals and
+banners; the list tile needs the per-budget statuses and annotations; both are the *same* expensive
+evaluation (rollover carry, pace, prorated pace, envelope balances, health sort). Rather than thread
+computed state between sibling tiles (which the engine doesn't make easy), I factored it into one pure
+`computeBudgetView(app, activeMemberID, window, prefs) budgetView` that each tile calls. It takes the
+resolved hook values as plain args (no hooks inside), so calling it from two tiles can't desync hook
+order. Double-computing for ~10 budgets is negligible, and the figures are guaranteed consistent
+because they come from identical inputs. Mutations now bump the global data revision (like accounts)
+instead of a page-local `rev` atom; row errors go through `PostNotice` instead of a screen-local
+`errMsg` state.
+
+**Formulas + custom fields.** Same tie-in as `/accounts`: a toolbar Formulas toggle (`UseBudgetsShowFormulas`)
+reveals a `FormulaBuilder` tile. No engine work was needed — `engineenv.Vars` already exposes the
+budget count and every number-typed *budget* custom field as `cf_budget_<key>`. I also extended
+`BudgetRow` to show a custom-field summary line and edit budget custom fields inline (reusing
+`CustomFieldInput` + `customMapToStrings`/`customValuesToMap`), which meant widening `OnSave` to carry
+the `Custom` map. So budget custom fields now round-trip: created in the add form, shown + edited on
+the row, computed over in the formula tile.
+
+**Verify.** Isolated webroot on :8091 (temp+atomic build, stale `.br`/`.gz` siblings removed).
+`e2e/budgets_widget_check.mjs` 9/9: bento host + composed tiles, all toolbar controls, 8 sample rows,
+Formulas toggle reveals the `cf_budget_` metrics tile, method-switch and inline edit still work. No
+page errors. gofmt/vet clean; budgeting/engineenv/customfields/i18n native tests green.
+
+**Next:** a deeper e2e that defines a budget custom field and asserts the row summary + `cf_budget_`
+evaluation would fully close the custom-field loop (currently proven by compilation + the accounts
+pattern it mirrors). Left uncommitted — shared with concurrent agents' WIP.
+
+## 2026-07-01 — Lock-screen AI quote actually fires from a key; lock button lands beside the mute
+
+**The two reports:** (1) "I added the OpenAI key and I'm still getting the static quote instead of
+quote of the day." (2) The new top-bar lock button rendered at the far right instead of beside the
+music toggle.
+
+**Quote — root cause.** The lock screen can only *display* a quote; while the app is locked the
+encrypted dataset (and with it the OpenAI key) isn't loaded, so nothing can generate there. The old
+design generated the quote only on the dashboard, and only when the user had *manually* opted into
+the SMART-QUOTE feature (an AI-tier, off-by-default toggle). So "added a key" alone never populated
+the cache the lock screen reads → static forever. Fix: a new `refreshDailyLockQuote()`
+(`internal/app/lockquote.go`) generates + caches the daily quote whenever an AI provider is
+configured, decoupled from the dashboard opt-in. It respects an explicit opt-out (`ExplicitOff`),
+skips a fresh same-day cache, guards duplicate dispatch with an in-flight flag, and sources the key
+from the live session **or** the separately stored on-device "remember" key (`cashflux:openai-key`,
+readable while locked — so a remembered key even lets the lock screen refresh its own quote). It's
+wired to fire on boot, on unlock (`onAppUnlocked`), right after the key is saved in Settings, and
+when the gate is shown; on success it writes straight into `#cf-lock-quote` if the gate is already
+up. `lockQuoteText` now shows any cached quote unless the feature is explicitly off (was gated on the
+manual opt-in flag).
+
+**Lock button — root cause (a GWC reconciler quirk).** `LockToggle` returned `Fragment()` when no
+passcode was set and a `Button` once one was — a component that flips between Fragment and content
+shifts position in the reconciler's positional child list, so the button got appended at the end
+(far right, DOM index 5) instead of its declared slot right after the mute (index 2). Fix: keep the
+lock button *conditionally rendered* (absent from the DOM when the lock is off, per Cam's ask) but
+pin its position with an always-present wrapper `<span class="lock-toggle-slot">` — the button is
+rendered inside it via `If(enabled, …)`, and the wrapper is `display:none` when empty so it adds no
+flex gap. The wrapper never flips between zero/one node, so the slot stays put; the button node (and
+its `OnClick` hook) is constructed unconditionally, so the hook position is stable too. Now the
+button is gone from the DOM when disabled and sits at index 2 (beside mute) when enabled.
+
+**Verify.** Isolated webroot on :8091 (built via temp+atomic-move, stale `.br`/`.gz` siblings
+removed — a leftover precompressed sibling from a concurrent agent's build was being served over my
+fresh wasm and failing to instantiate). `e2e/lockscreen_check.mjs` extended to 8/8: K1/K2 lock button
+beside mute + K3 locks on click; L1 a cached quote with no manual opt-in now surfaces; L4 explicit-off
+falls back to static; L2/L3 mute still works. The test now also loads sample data first so the
+passcode-setup path (via an account's ⋯ menu) works on a fresh origin.
+
+**Next:** the real OpenAI round-trip can't be e2e'd headless (needs a live key); the generation path
+mirrors the already-working dashboard `heroQuote` call. Left uncommitted — several touched files
+(`shell.go`, `settings.go`, `applockgate.go`) are shared with concurrent agents' WIP.
+
 ## 2026-06-30 — Lock screen: music mute toggle + Smart+ quote-of-the-day verbiage
 
 **What:** Two lock-screen (`applockgate.go`) additions. (1) A mute toggle so music can be silenced

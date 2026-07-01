@@ -4320,6 +4320,142 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	rule(".bento.bento-budgets",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-budgets > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
+	// --- /budgets visual polish. Scoped to .bento-budgets so the shared .budget /
+	// .bar / .budget-sub styles used on other screens (allocate, goals, reports) stay
+	// untouched. Each budget becomes an elevated meter-card with a state-colored left
+	// stripe, a prominent gradient progress bar over a visible track (so 0%/low budgets
+	// no longer vanish into the background), and a tinted percent chip. ---
+	rule(".bento-budgets .budget",
+		position("relative"),
+		padding("0.95rem 1.1rem"),
+		margin("0.6rem 0"),
+		border("1px solid var(--border)"),
+		borderRadius("14px"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+		boxShadow("inset 3px 0 0 var(--accent)"),
+		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease"),
+	)
+	rule(".bento-budgets .budget:first-child",
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".bento-budgets .budget:hover",
+		borderColor("color-mix(in srgb, var(--accent) 32%, var(--border))"),
+		background("color-mix(in srgb, var(--bg-elev) 82%, transparent)"),
+		transform("translateY(-1px)"),
+		boxShadow("inset 3px 0 0 var(--accent), 0 8px 24px -14px rgba(0,0,0,0.7)"),
+	)
+	rule(".bento-budgets .budget.is-near, .bento-budgets .budget.is-risk",
+		boxShadow("inset 3px 0 0 #f59e0b"),
+	)
+	rule(".bento-budgets .budget.is-near:hover, .bento-budgets .budget.is-risk:hover",
+		boxShadow("inset 3px 0 0 #f59e0b, 0 8px 24px -14px rgba(0,0,0,0.7)"),
+	)
+	rule(".bento-budgets .budget.is-over",
+		background("color-mix(in srgb, var(--danger) 7%, var(--bg-elev))"),
+		boxShadow("inset 3px 0 0 var(--danger)"),
+	)
+	rule(".bento-budgets .budget.is-over:hover",
+		borderColor("color-mix(in srgb, var(--danger) 34%, var(--border))"),
+		boxShadow("inset 3px 0 0 var(--danger), 0 8px 24px -14px rgba(0,0,0,0.7)"),
+	)
+	rule(".bento-budgets .budget-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("nowrap"),
+		gap("0.75rem"),
+		marginBottom("0.1rem"),
+	)
+	rule(".bento-budgets .budget-head-main",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		minWidth("0"),
+		flex("1 1 auto"),
+	)
+	rule(".bento-budgets .budget-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		flexShrink("0"),
+		whiteSpace("nowrap"),
+	)
+	rule(".bento-budgets .budget-actions .btn, .bento-budgets .budget-actions .btn-del",
+		flexShrink("0"),
+		whiteSpace("nowrap"),
+	)
+	rule(".bento-budgets .budget .row-desc",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontWeight("600"),
+		fontSize("1rem"),
+		color("var(--fg, var(--text))"),
+	)
+	rule(".bento-budgets .budget-head-main .budget-amount",
+		flexShrink("0"),
+		marginLeft("auto"),
+	)
+	rule(".bento-budgets .budget-drill",
+		textDecoration("none"),
+	)
+	rule(".bento-budgets .budget-drill:hover",
+		color("var(--accent)"),
+	)
+	rule(".bento-budgets .budget-amount",
+		fontWeight("600"),
+		fontSize("0.95rem"),
+	)
+	rule(".bento-budgets .budget-pct",
+		display("inline-flex"),
+		alignItems("center"),
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("700"),
+		fontSize("0.76rem"),
+		letterSpacing("0.01em"),
+		padding("0.12rem 0.5rem"),
+		borderRadius("999px"),
+		color("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 15%, transparent)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".bento-budgets .budget.is-near .budget-pct, .bento-budgets .budget.is-risk .budget-pct",
+		color("#f59e0b"),
+		background("color-mix(in srgb, #f59e0b 16%, transparent)"),
+	)
+	rule(".bento-budgets .budget.is-over .budget-pct",
+		color("var(--danger)"),
+		background("color-mix(in srgb, var(--danger) 15%, transparent)"),
+	)
+	rule(".bento-budgets .bar",
+		height("10px"),
+		background("color-mix(in srgb, var(--fg, #ffffff) 10%, transparent)"),
+		border("0"),
+		margin("0.7rem 0 0.55rem"),
+	)
+	rule(".bento-budgets .bar-fill",
+		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, #000000), var(--accent))"),
+		boxShadow("0 0 10px -1px color-mix(in srgb, var(--accent) 55%, transparent)"),
+	)
+	rule(".bento-budgets .bar-fill.near",
+		background("linear-gradient(90deg, #d97706, #f59e0b)"),
+		boxShadow("0 0 10px -1px color-mix(in srgb, #f59e0b 50%, transparent)"),
+	)
+	rule(".bento-budgets .bar-fill.over",
+		background("linear-gradient(90deg, color-mix(in srgb, var(--danger) 78%, #000000), var(--danger))"),
+		boxShadow("0 0 10px -1px color-mix(in srgb, var(--danger) 55%, transparent)"),
+	)
 	rule(".bento-ledger .txn-table",
 		tableLayout("fixed"),
 		width("100%"),
