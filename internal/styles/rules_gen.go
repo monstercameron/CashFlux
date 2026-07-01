@@ -4597,157 +4597,198 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
-	// Redesigned task cards (scoped to /todo so the shared .row style elsewhere is
-	// untouched): each task is a rounded card with a priority-tinted left stripe, a
-	// custom checkbox, a title, and a wrap of pill "chips" (priority / due / repeat /
-	// linked-entity / notes). A linked goal chip is accent-tinted so the goal↔to-do
-	// connection reads at a glance. Row actions fade in on hover.
+	// To-do line items — an EDITORIAL AGENDA, not cards. Borderless rows on a hairline
+	// rhythm: a circular check-off ring whose COLOUR encodes priority (red high / accent
+	// medium / faint low — so you scan urgency by the rings, no badges), the title as the
+	// hero, a quiet right-aligned due date (red overdue / amber today), and a single dim
+	// secondary line for repeat / linked entity / notes. A linked goal is the one accent
+	// note in that line. Actions fade in on hover. Scoped to /todo so the shared .row
+	// style elsewhere is untouched.
 	rule(".bento-todo .rows",
 		display("flex"),
 		flexDirection("column"),
-		gap("0.5rem"),
 	)
-	rule(".task-card",
+	rule(".todo-item",
 		display("flex"),
 		alignItems("flex-start"),
-		gap("0.75rem"),
-		padding("0.7rem 0.85rem"),
+		gap("0.85rem"),
+		padding("0.8rem 0.5rem"),
+		borderBottom("1px solid var(--border)"),
+		borderRadius("8px"),
+		transition("background 0.12s ease"),
+	)
+	rule(".todo-item:last-child",
+		borderBottom("0"),
+	)
+	rule(".todo-item:hover",
 		background("var(--bg-elev)"),
-		border("1px solid var(--border)"),
-		borderRadius("12px"),
-		transition("border-color 0.15s ease, background 0.15s ease, transform 0.15s ease"),
 	)
-	rule(".task-card:hover",
-		borderColor("var(--accent)"),
-		transform("translateY(-1px)"),
+	rule(".todo-item.is-done",
+		opacity("0.5"),
 	)
-	rule(".task-card.tp-high",
-		boxShadow("inset 3px 0 0 #ef4444"),
+	rule(".todo-item.is-subtask",
+		paddingLeft("0.5rem"),
+		borderLeft("2px solid var(--border)"),
 	)
-	rule(".task-card.tp-med",
-		boxShadow("inset 3px 0 0 var(--accent)"),
-	)
-	rule(".task-card.tp-low",
-		boxShadow("inset 3px 0 0 var(--text-faint)"),
-	)
-	rule(".task-card.is-done",
-		opacity("0.62"),
-	)
-	rule(".task-card.is-subtask",
-		background("var(--bg)"),
-	)
-	rule(".task-check",
+	// The check-off ritual: a circular ring, coloured by priority; fills accent-green
+	// with a check that pops in on done.
+	rule(".todo-check",
 		flex("none"),
-		width("22px"),
-		height("22px"),
-		marginTop("0.1rem"),
-		border("1.5px solid var(--border-strong)"),
-		borderRadius("6px"),
+		width("24px"),
+		height("24px"),
+		marginTop("0.05rem"),
+		borderRadius("50%"),
+		border("2px solid var(--border-strong)"),
 		background("transparent"),
 		cursor("pointer"),
 		display("grid"),
 		placeItems("center"),
 		color("#04140c"),
-		transition("border-color 0.12s ease, background 0.12s ease"),
+		transition("border-color 0.15s ease, background 0.15s ease, transform 0.15s ease"),
 	)
-	rule(".task-check:hover",
+	rule(".todo-check:hover",
+		transform("scale(1.1)"),
+	)
+	rule(".todo-check.p-high",
+		borderColor("#ef4444"),
+	)
+	rule(".todo-check.p-med",
 		borderColor("var(--accent)"),
 	)
-	rule(".task-check.done",
+	rule(".todo-check.p-low",
+		borderColor("var(--border-strong)"),
+	)
+	rule(".todo-check.is-done",
 		background("var(--accent)"),
 		borderColor("var(--accent)"),
 	)
-	rule(".task-body",
+	rule(".todo-check svg",
+		animation("todo-check-pop 0.2s ease"),
+	)
+	keyframes("todo-check-pop",
+		at("from",
+			opacity("0"),
+			transform("scale(0.3)"),
+		),
+		at("to",
+			opacity("1"),
+			transform("scale(1)"),
+		),
+	)
+	rule(".todo-main",
 		flex("1"),
 		minWidth("0"),
 		display("flex"),
 		flexDirection("column"),
-		gap("0.4rem"),
+		gap("0.28rem"),
 	)
-	rule(".task-title",
-		fontWeight("600"),
+	rule(".todo-headline",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("1rem"),
+	)
+	rule(".todo-title",
+		fontWeight("500"),
+		fontSize("0.98rem"),
 		color("var(--text)"),
-		lineHeight("1.3"),
+		lineHeight("1.35"),
 		overflowWrap("anywhere"),
 	)
-	rule(".task-card.is-done .task-title",
+	rule(".todo-item.is-done .todo-title",
 		textDecoration("line-through"),
 		color("var(--text-faint)"),
 	)
-	rule(".task-chips",
+	rule(".todo-due",
+		flex("none"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+		whiteSpace("nowrap"),
+	)
+	rule(".todo-due.is-overdue",
+		color("#fca5a5"),
+		fontWeight("600"),
+	)
+	rule(".todo-due.is-today",
+		color("#fcd34d"),
+		fontWeight("600"),
+	)
+	rule(".todo-meta",
 		display("flex"),
 		flexWrap("wrap"),
 		alignItems("center"),
 		gap("0.4rem"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
 	)
-	rule(".task-chip",
+	rule(".todo-sep",
+		color("var(--text-faint)"),
+	)
+	rule(".todo-meta-item",
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
-		fontSize("0.75rem"),
-		lineHeight("1"),
-		padding("0.24rem 0.55rem"),
-		borderRadius("999px"),
-		background("var(--bg)"),
-		border("1px solid var(--border)"),
-		color("var(--text-dim)"),
-		fontVariantNumeric("tabular-nums"),
 	)
-	rule(".task-chip.is-overdue",
-		background("#3b0d0d"),
-		color("#fca5a5"),
-		borderColor("#7f1d1d"),
-	)
-	rule(".task-chip.is-today",
-		background("#2a230c"),
-		color("#fcd34d"),
-		borderColor("#854d0e"),
-	)
-	rule(".task-chip.is-note",
+	rule(".todo-meta-note",
 		color("var(--text-faint)"),
-		maxWidth("22rem"),
 		overflow("hidden"),
 		whiteSpace("nowrap"),
+		maxWidth("26rem"),
 		prop("text-overflow", "ellipsis"),
 	)
-	rule(".task-chip.is-muted",
-		color("var(--text-faint)"),
-	)
-	rule(".task-link-chip",
+	// Linked entity → a quiet inline text-link; a goal is the one accent note.
+	rule(".todo-link",
 		display("inline-flex"),
 		alignItems("center"),
-		gap("0.35rem"),
-		fontSize("0.75rem"),
-		lineHeight("1"),
-		padding("0.24rem 0.6rem"),
-		borderRadius("999px"),
-		background("var(--bg)"),
-		border("1px solid var(--border)"),
+		gap("0.3rem"),
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		fontSize("0.8rem"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
-		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
+		transition("color 0.12s ease"),
 	)
-	rule(".task-link-chip:hover",
-		borderColor("var(--accent)"),
+	rule(".todo-link:hover",
 		color("var(--text)"),
+		prop("text-decoration", "underline"),
+		prop("text-underline-offset", "3px"),
 	)
-	rule(".task-link-chip.is-goal",
-		background("var(--accent-dim)"),
-		borderColor("var(--accent)"),
+	rule(".todo-link.is-goal",
 		color("var(--accent)"),
 	)
-	rule(".task-actions",
+	// Actions: hidden until the row is hovered / focused.
+	rule(".todo-actions",
+		flex("none"),
 		display("flex"),
 		alignItems("center"),
-		gap("0.3rem"),
-		flex("none"),
+		gap("0.1rem"),
+		opacity("0"),
 		transition("opacity 0.12s ease"),
 	)
-	rule(".task-card:not(:hover):not(:focus-within) .task-actions",
-		opacity("0"),
-	)
-	ruleMedia("(pointer: coarse)", ".task-card .task-actions",
+	rule(".todo-item:hover .todo-actions, .todo-item:focus-within .todo-actions",
 		opacity("1"),
+	)
+	ruleMedia("(pointer: coarse)", ".todo-actions",
+		opacity("1"),
+	)
+	rule(".todo-icon-btn",
+		background("transparent"),
+		border("0"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		padding("0.35rem"),
+		borderRadius("8px"),
+		display("grid"),
+		placeItems("center"),
+		transition("background 0.12s ease, color 0.12s ease"),
+	)
+	rule(".todo-icon-btn:hover",
+		background("var(--bg)"),
+		color("var(--text)"),
 	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,

@@ -1943,6 +1943,7 @@ var english = Catalog{
 	"todo.openLabel":        "Open",
 	"todo.overdueLabel":     "Overdue",
 	"todo.doneLabel":        "Done",
+	"todo.dueTodayShort":    "Today",
 	"todo.taskPlaceholder":  "Task",
 	"todo.taskLabel":        "Task",
 	"todo.notesEdit":        "Notes",

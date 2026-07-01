@@ -1,3 +1,28 @@
+## 2026-07-01 — To-do line items: editorial agenda redesign (design skill)
+
+Cam: "the line items are disgusting, they dont have to copy the shapes of the other redesign... use
+the claude design skill." Fair — commit C had just mimicked the budgets/goals card+chip shape.
+Redesigned from scratch as an EDITORIAL AGENDA.
+
+Direction: calm, typographic, scannable — borderless rows on a hairline rhythm, NOT cards. Signature:
+PRIORITY IS ENCODED IN THE CIRCULAR CHECK-OFF RING colour (todo-check.p-high red / p-med accent /
+p-low faint) so you scan urgency by the rings, no badges; done fills the ring accent-green with a
+check that pops in (todo-check-pop keyframe). Title is the hero (0.98rem/500). Due date quiet &
+right-aligned on the headline (neutral date / red "Overdue · <date>" / amber "Today"). One dim
+secondary line (todo-meta), middot-separated: repeat · linked-entity · notes — the linked GOAL is the
+lone accent note (.todo-link.is-goal seagreen). Actions icon-only, fade in on hover.
+
+Replaced the .task-card/.task-chip CSS block with a .todo-item block (scoped under .bento-todo);
+rewrote TaskRow markup (todo-item/todo-check/todo-main/todo-headline/todo-title/todo-due/todo-meta/
+todo-link/todo-actions/todo-icon-btn). Dropped the priority pill + due/repeat/link/notes pills. Kept
+data-testid task-card + added data-prio; new i18n todo.dueTodayShort. linkTypeIcon/linkChipClass reused
+for the text-link tint.
+
+Verify: wasm build OK; full go test ./... green; e2e/todo_redesign_check.mjs 9/9 (updated selectors:
+.todo-item rows, .todo-check.p-* ring, .todo-link.is-goal seagreen rgb(46,139,87), circular checkbox
+toggles done, .todo-due.is-overdue/is-today); e2e/todo_flipmodal_check.mjs still 10/10; screenshot
+confirms the calm agenda (red priority rings pop, goal names in seagreen, overdue in red / today amber).
+
 ## 2026-07-01 — To-do overhaul (commit C: card redesign + goal-link chip)
 
 Design-skill restyle of the task rows into cards, and the goal-linking UX polish that sets up the
