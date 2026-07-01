@@ -37,16 +37,18 @@ if (await goalChip.count()) {
   check("T4b goal link is accent-coloured (seagreen)", c.replace(/\s/g, "") === "rgb(46,139,87)", c);
 }
 
-// T5: the circular checkbox toggles the row to done.
+// T5/T6: the circular checkbox toggles the top task done. A completed task sinks below
+// all open ones (and, with pagination, off the first page) — so the top row changes.
+const firstTitle = (await p.locator('.todo-item .todo-title').first().textContent()) || "";
 const firstCheck = p.locator('[data-testid^="task-check-"]').first();
 check("T5 circular checkbox present", await firstCheck.count() >= 1);
-const row = firstCheck.locator('xpath=ancestor::div[contains(@class,"todo-item")]');
-const wasDone = (await row.getAttribute('class') || '').includes('is-done');
 await firstCheck.scrollIntoViewIfNeeded();
 await firstCheck.click({ force: true });
 await p.waitForTimeout(800);
-const doneCount = await p.locator('.todo-item.is-done').count();
-check("T6 toggling the checkbox produces a done row", doneCount >= 1 || wasDone);
+const newFirstTitle = (await p.locator('.todo-item .todo-title').first().textContent()) || "";
+const doneSomewhere = await p.locator('.todo-item.is-done').count();
+check("T6 toggling the checkbox completes the task (it sinks / a done row appears)",
+  newFirstTitle !== firstTitle || doneSomewhere >= 1, `${firstTitle} → ${newFirstTitle}`);
 
 // T7: a due date carries a state modifier (overdue/today) somewhere.
 check("T7 due-state present", await p.locator('.todo-due.is-overdue, .todo-due.is-today').count() >= 1);

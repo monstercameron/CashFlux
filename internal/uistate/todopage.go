@@ -54,3 +54,11 @@ func UseTodoHideDone() state.Atom[bool] { return state.UseAtom("todo:hideDone", 
 // UseTodoFilterPrio is the shared lightweight priority filter for the to-do surface
 // ("" = all, or a domain.TaskPriority string). Read by both the toolbar and list tiles.
 func UseTodoFilterPrio() state.Atom[string] { return state.UseAtom("todo:filterPrio", "") }
+
+// UseTodoSortMode is the shared task ordering for the to-do surface (a tasksort.Mode
+// string: "smart" / "priority" / "az" / "due"). Read by both the toolbar and list tiles.
+func UseTodoSortMode() state.Atom[string] { return state.UseAtom("todo:sortMode", "smart") }
+
+// UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
+// top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.
+func UseTodoPage() state.Atom[int] { return state.UseAtom("todo:page", 1) }

@@ -4790,6 +4790,56 @@ func registerGenerated() {
 		background("var(--bg)"),
 		color("var(--text)"),
 	)
+	// Pager: a quiet footer under the list — a tabular range caption on the left, and
+	// Prev / "Page X of Y" / Next on the right. Matches the calm agenda tone.
+	rule(".todo-pager",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("1rem"),
+		flexWrap("wrap"),
+		marginTop("0.85rem"),
+		paddingTop("0.85rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".todo-pager-range",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".todo-pager-nav",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".todo-pager-page",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+		minWidth("6.5rem"),
+		textAlign("center"),
+	)
+	rule(".todo-page-btn",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		fontSize("0.82rem"),
+		padding("0.35rem 0.7rem"),
+		borderRadius("8px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text)"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".todo-page-btn:hover:not(:disabled)",
+		borderColor("var(--accent)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".todo-page-btn:disabled",
+		opacity("0.4"),
+		cursor("default"),
+	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,
 	// a pace-tinted accent stripe, and footer actions.

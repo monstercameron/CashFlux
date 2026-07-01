@@ -106,18 +106,31 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	hideDone := uistate.UseTodoHideDone()
 	filterPrio := uistate.UseTodoFilterPrio()
+	sortMode := uistate.UseTodoSortMode()
+	page := uistate.UseTodoPage()
 
-	toggleHideDone := ui.UseEvent(Prevent(func() { hideDone.Set(!hideDone.Get()) }))
-	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()) })
+	// Changing the filter or sort resets to the first page so the view can't land on a
+	// now-empty page.
+	toggleHideDone := ui.UseEvent(Prevent(func() { hideDone.Set(!hideDone.Get()); page.Set(1) }))
+	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()); page.Set(1) })
+	onSort := ui.UseEvent(func(e ui.Event) { sortMode.Set(e.GetValue()); page.Set(1) })
 	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
 
 	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
 		hideLabel = uistate.T("todo.showAll")
 	}
+	sm := sortMode.Get()
 
 	toolbar := Div(css.Class("budgets-toolbar"),
 		Div(css.Class("budgets-toolbar-actions"),
+			Select(css.Class("field", "budgets-method-select"), Attr("aria-label", uistate.T("todo.sortLabel")),
+				Attr("data-testid", "todo-sort"), OnChange(onSort),
+				Option(Value("smart"), SelectedIf(sm == "smart"), uistate.T("todo.sortSmart")),
+				Option(Value("priority"), SelectedIf(sm == "priority"), uistate.T("todo.sortPriority")),
+				Option(Value("due"), SelectedIf(sm == "due"), uistate.T("todo.sortDue")),
+				Option(Value("az"), SelectedIf(sm == "az"), uistate.T("todo.sortAZ")),
+			),
 			Select(css.Class("field", "budgets-method-select"), Attr("aria-label", uistate.T("todo.filterPrioLabel")),
 				Attr("data-testid", "todo-filter-prio"), OnChange(onFilterPrio),
 				Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
@@ -149,7 +162,15 @@ func todoListWidget(props todoListProps) ui.Node {
 	app := props.App
 	hideDone := uistate.UseTodoHideDone()
 	filterPrio := uistate.UseTodoFilterPrio()
+	sortMode := uistate.UseTodoSortMode()
+	pageAtom := uistate.UseTodoPage()
 	errMsg := ui.UseState("")
+	prevPage := ui.UseEvent(Prevent(func() {
+		if p := pageAtom.Get(); p > 1 {
+			pageAtom.Set(p - 1)
+		}
+	}))
+	nextPage := ui.UseEvent(Prevent(func() { pageAtom.Set(pageAtom.Get() + 1) }))
 
 	tasks := app.Tasks()
 	accounts := app.Accounts()
@@ -234,7 +255,20 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 		filtered = kept
 	}
-	nodes := tasktree.Flatten(filtered)
+	// Paginate by ROOT task (sub-trees stay together), ordered by the chosen sort mode.
+	const todoPageSize = 20
+	nodes, totalRoots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize)
+	totalPages := (totalRoots + todoPageSize - 1) / todoPageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	curPage := pageAtom.Get()
+	if curPage < 1 {
+		curPage = 1
+	}
+	if curPage > totalPages {
+		curPage = totalPages
+	}
 
 	var listBody ui.Node
 	switch {
@@ -265,12 +299,40 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 	}
 
+	// Pager: shown only when the roots span more than one page. Prev/Next are disabled at
+	// the ends; a range caption ("21–40 of 63") reads in tabular figures.
+	var pager ui.Node = Fragment()
+	if totalPages > 1 {
+		first := (curPage-1)*todoPageSize + 1
+		last := first + todoPageSize - 1
+		if last > totalRoots {
+			last = totalRoots
+		}
+		prevArgs := []any{css.Class("todo-page-btn"), Type("button"), Attr("data-testid", "todo-prev"), Attr("aria-label", uistate.T("todo.pagePrev")), OnClick(prevPage), uiw.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4)), Span(uistate.T("todo.pagePrev"))}
+		if curPage <= 1 {
+			prevArgs = append(prevArgs, Attr("disabled", ""))
+		}
+		nextArgs := []any{css.Class("todo-page-btn"), Type("button"), Attr("data-testid", "todo-next"), Attr("aria-label", uistate.T("todo.pageNext")), OnClick(nextPage), Span(uistate.T("todo.pageNext")), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))}
+		if curPage >= totalPages {
+			nextArgs = append(nextArgs, Attr("disabled", ""))
+		}
+		pager = Div(css.Class("todo-pager"),
+			Span(css.Class("todo-pager-range"), Attr("data-testid", "todo-pager-range"), uistate.T("todo.pageRange", first, last, totalRoots)),
+			Div(css.Class("todo-pager-nav"),
+				Button(prevArgs...),
+				Span(css.Class("todo-pager-page"), uistate.T("todo.pageOf", curPage, totalPages)),
+				Button(nextArgs...),
+			),
+		)
+	}
+
 	body := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("todo.listTitle"),
 		Body: Fragment(
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 			listBody,
 			hiddenDoneNote,
+			pager,
 		),
 	})
 	return uiw.Widget(uiw.WidgetProps{

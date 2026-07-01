@@ -64,6 +64,96 @@ func Flatten(tasks []domain.Task) []Node {
 	return out
 }
 
+// Page returns the flattened render nodes for one page of ROOT tasks — each root
+// followed by its whole descendant sub-tree — so a parent and its sub-tasks always
+// stay together on the same page. Roots (and each sibling group) are ordered by mode.
+//
+// page is 1-based and is clamped into range; a pageSize <= 0 disables paging and
+// returns every node. totalRoots is the number of top-level tasks (for page-count
+// math in the UI). No task is dropped: a task that is present but unreachable from any
+// root (e.g. caught in a parent cycle) is folded in as its own root so it still paginates
+// and renders.
+func Page(tasks []domain.Task, mode tasksort.Mode, page, pageSize int) (nodes []Node, totalRoots int) {
+	present := make(map[string]bool, len(tasks))
+	children := make(map[string][]domain.Task, len(tasks))
+	for _, t := range tasks {
+		present[t.ID] = true
+	}
+	var roots []domain.Task
+	for _, t := range tasks {
+		if t.ParentID == "" || !present[t.ParentID] {
+			roots = append(roots, t)
+		} else {
+			children[t.ParentID] = append(children[t.ParentID], t)
+		}
+	}
+	// Fold cycle-orphans (present but unreachable from any root) into roots so no task
+	// is silently dropped and pagination covers everything.
+	reached := make(map[string]bool, len(tasks))
+	var mark func(id string)
+	mark = func(id string) {
+		if reached[id] {
+			return
+		}
+		reached[id] = true
+		for _, c := range children[id] {
+			mark(c.ID)
+		}
+	}
+	for _, r := range roots {
+		mark(r.ID)
+	}
+	for _, t := range tasks {
+		if !reached[t.ID] {
+			roots = append(roots, t)
+			mark(t.ID)
+		}
+	}
+
+	roots = tasksort.OrderBy(roots, mode)
+	totalRoots = len(roots)
+
+	if pageSize > 0 {
+		totalPages := (totalRoots + pageSize - 1) / pageSize
+		if totalPages < 1 {
+			totalPages = 1
+		}
+		if page < 1 {
+			page = 1
+		}
+		if page > totalPages {
+			page = totalPages
+		}
+		start := (page - 1) * pageSize
+		end := start + pageSize
+		if start > len(roots) {
+			start = len(roots)
+		}
+		if end > len(roots) {
+			end = len(roots)
+		}
+		roots = roots[start:end]
+	}
+
+	out := make([]Node, 0, len(tasks))
+	emitted := make(map[string]bool, len(tasks))
+	var walk func(t domain.Task, depth int)
+	walk = func(t domain.Task, depth int) {
+		if emitted[t.ID] {
+			return
+		}
+		emitted[t.ID] = true
+		out = append(out, Node{Task: t, Depth: depth})
+		for _, c := range tasksort.OrderBy(children[t.ID], mode) {
+			walk(c, depth+1)
+		}
+	}
+	for _, r := range roots {
+		walk(r, 0)
+	}
+	return out, totalRoots
+}
+
 // Descendants returns the ids of every task nested under id (children, grandchildren,
 // …), for cascade delete. The id itself is not included. Cycle-safe.
 func Descendants(tasks []domain.Task, id string) []string {

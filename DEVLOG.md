@@ -1,3 +1,30 @@
+## 2026-07-01 — To-do: sorting + pagination
+
+Cam: "add sorting and pagination." Sorting logic already existed (tasksort.OrderBy: smart/priority/
+az/due) — just wasn't surfaced. Pagination is the interesting bit: the list is a parent/child TREE,
+so you can't paginate flattened nodes (would split a parent from its children). Paginate by ROOT.
+
+Logic (internal/tasktree): new pure Page(tasks, mode, page, pageSize) → (nodes, totalRoots). Builds
+roots (ParentID empty or parent absent), folds cycle-orphans in as roots so nothing is ever dropped,
+orders roots + sibling groups by mode (OrderBy), clamps page into range, slices roots, then walks each
+paged root + its whole subtree. pageSize<=0 = no paging. New page_test.go: subtree stays with its root
+across a page boundary, page clamp (0→1, 99→last), no-paging, mode ordering, cycle-orphan not dropped,
+no input mutation.
+
+UI: uistate atoms UseTodoSortMode ("smart") + UseTodoPage (1). Toolbar tile adds a Sort select (Smart/
+Priority/Due/A–Z); changing sort OR the priority filter OR hide-done resets page→1. List tile calls
+tasktree.Page(filtered, ParseMode(sort), page, 20), computes totalPages/clamped curPage, renders a
+.todo-pager footer (tabular "1–20 of 25" range + ‹Previous · Page X of Y · Next›, buttons disabled at
+the ends via the disabled attr). New i18n (todo.sort*/page*) + pager CSS.
+
+Note: a completed task sinks below all open ones (every mode keeps open-first), so under pagination it
+can move to a later page — correct behaviour; updated todo_redesign_check.mjs T6 to assert the toggled
+task sinks/leaves the top instead of counting done rows on the current page.
+
+Verify: go test ./... green (incl. new tasktree page tests); wasm build OK; new
+e2e/todo_sort_page_check.mjs 11/11 (A–Z ordering, priority floats high up, Next/Prev range + end-disable,
+sort→page1); todo_redesign_check.mjs 9/9; todo_flipmodal_check.mjs 10/10. Screenshot confirms the pager.
+
 ## 2026-07-01 — To-do line items: editorial agenda redesign (design skill)
 
 Cam: "the line items are disgusting, they dont have to copy the shapes of the other redesign... use
