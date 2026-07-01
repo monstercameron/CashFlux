@@ -1,3 +1,27 @@
+## 2026-07-01 — To-do overhaul (commit A: flip-modal edit + ⋯ menu)
+
+Cam: "lets move to todos and then we'll make a double back to goals." Scoping Q → wants all three:
+widgetize + flip-modal edit, goal-linking UX polish, redesign rows/cards. Doing it in commits; this
+is A — swap the inline row edit for a shell-root flip modal (foundation, mirrors the goal editor).
+
+The to-do page was already surprisingly complete (priority/due/notes/entity-link incl. goal /
+recurrence / subtasks-tree / priority filter / deep-links) — just on the OLD inline-edit +
+EntityListSection style. Commit A modernizes the editing interaction:
+- uistate/todopage.go: TaskEdit atom (captured-atom pattern, same as GoalEdit).
+- screens/task_edit_form.go: TaskEditForm — full editor (title/priority/due/notes/repeat/link+entity)
+  as the modal body, self-contained mutation via appstate + BumpDataRevision, .acct-edit-form layout
+  with pinned Cancel/Save. Reuses the existing SelectOption helpers.
+- app/taskedithost.go + shell.go: TaskEditHost mounted at the shell root (beside GoalEditHost),
+  460×580 NoFooter FlipPanel. Shell-root mount = centered (rows sit under transformed tiles).
+- todo.go TaskRow: dropped all inline-edit state/hooks + the editing branch; Edit now just sets the
+  atom; Delete + Add-sub moved into a ⋯ add-menu (so a misclick can't cascade-delete a task tree).
+  Removed the now-dead saveTask closure + OnSave prop + three unused ui.Node <option> helpers
+  (linkTypeOptions/buildEntityOptions/cadenceOptions — code uses the SelectOption variants).
+
+Verify: full go test ./... green; wasm app build OK; new e2e/todo_flipmodal_check.mjs 10/10 (Edit
+opens a centered modal, save reflects on the row, ⋯ holds Add sub + Delete, no errors). Next:
+commit B widgetize the surface, commit C redesign rows + goal-link chip.
+
 ## 2026-07-01 — Non-financial goal kinds (layer 3a: forms + kind-aware cards)
 
 The UI layer. Cam mid-build note: the to-do page isn't updated yet — "just stub the apis and we

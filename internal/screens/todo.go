@@ -6,7 +6,6 @@ package screens
 
 import (
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -126,45 +125,6 @@ func Todo() ui.Node {
 			bump()
 		})
 	}
-	saveTask := func(taskID, newTitle, prio, dueStr, newNotes, relType, relID, recur string) {
-		t, ok := byID[taskID]
-		if !ok {
-			return
-		}
-		if n := strings.TrimSpace(newTitle); n != "" {
-			t.Title = n
-		}
-		if p := domain.TaskPriority(prio); p.Valid() {
-			t.Priority = p
-		}
-		if ds := strings.TrimSpace(dueStr); ds != "" {
-			d, err := dateutil.ParseDate(ds)
-			if err != nil {
-				errMsg.Set(uistate.T("todo.invalidDue"))
-				return
-			}
-			t.Due = d
-		} else {
-			t.Due = time.Time{}
-		}
-		t.Notes = strings.TrimSpace(newNotes)
-		rt := domain.RelatedType(relType)
-		if rt == domain.RelatedNone || rt == "" {
-			t.RelatedType = domain.RelatedNone
-			t.RelatedID = ""
-		} else {
-			t.RelatedType = rt
-			t.RelatedID = relID
-		}
-		t.Recurrence = domain.RecurringCadence(recur)
-		if err := app.PutTask(t); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		errMsg.Set("")
-		bump()
-	}
-
 	// Order + filter, then nest into the parent/child tree (C72). hide-done filters
 	// first so a done parent's open child surfaces as a root (tasktree handles it).
 	// The priority filter runs after the done filter so it cooperates with hide-done:
@@ -194,7 +154,7 @@ func Todo() ui.Node {
 			func(n tasktree.Node) ui.Node {
 				return ui.CreateElement(TaskRow, taskRowProps{
 					Task: n.Task, Depth: n.Depth,
-					OnToggle: toggleTask, OnDelete: deleteTask, OnSave: saveTask, OnAddSub: addSub,
+					OnToggle: toggleTask, OnDelete: deleteTask, OnAddSub: addSub,
 					Accounts: accounts, Budgets: budgets, Goals: goals, Transactions: txns,
 				})
 			},
@@ -263,7 +223,6 @@ type taskRowProps struct {
 	Depth        int // nesting depth (0 = top level) → indentation (C72)
 	OnToggle     func(string)
 	OnDelete     func(string)
-	OnSave       func(id, title, priority, due, notes, relType, relID, recurrence string)
 	OnAddSub     func(parentID string)
 	Accounts     []domain.Account
 	Budgets      []domain.Budget
@@ -276,10 +235,6 @@ type taskRowProps struct {
 // unconditionally so the edit toggle never reorders them.
 func TaskRow(props taskRowProps) ui.Node {
 	t := props.Task
-	dueISO := ""
-	if !t.Due.IsZero() {
-		dueISO = dateutil.FormatDate(t.Due)
-	}
 
 	nav := router.UseNavigate()
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
@@ -290,113 +245,24 @@ func TaskRow(props taskRowProps) ui.Node {
 		}
 	}))
 	pr := uistate.UsePrefs().Get()
-	editing := ui.UseState(false)
-	titleS := ui.UseState(t.Title)
-	prioS := ui.UseState(string(t.Priority))
-	dueS := ui.UseState(dueISO)
-	notesS := ui.UseState(t.Notes)
-	// Inline-edit link state — initialised from the task's persisted values.
-	editLinkType := ui.UseState(string(t.RelatedType))
-	editLinkID := ui.UseState(t.RelatedID)
-	editRecur := ui.UseState(string(t.Recurrence))
-	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
-	// onPrio/onEditLinkType/onEditLinkID/onEditRecur hook slots kept for stable hook
-	// ordering; SelectInput owns the change event internally.
-	ui.UseEvent(func(e ui.Event) { prioS.Set(e.GetValue()) })
-	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
-	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
-	ui.UseEvent(func(e ui.Event) {
-		editLinkType.Set(e.GetValue())
-		editLinkID.Set("")
-	})
-	ui.UseEvent(func(e ui.Event) { editLinkID.Set(e.GetValue()) })
-	ui.UseEvent(func(e ui.Event) { editRecur.Set(e.GetValue()) })
-	startEdit := ui.UseEvent(Prevent(func() {
-		titleS.Set(t.Title)
-		prioS.Set(string(t.Priority))
-		dueS.Set(dueISO)
-		notesS.Set(t.Notes)
-		editLinkType.Set(string(t.RelatedType))
-		editLinkID.Set(t.RelatedID)
-		editRecur.Set(string(t.Recurrence))
-		editing.Set(true)
-	}))
-	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
-	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(t.ID, titleS.Get(), prioS.Get(), dueS.Get(), notesS.Get(),
-			editLinkType.Get(), editLinkID.Get(), editRecur.Get())
-		editing.Set(false)
-	}))
-
-	// Land the cursor in the first field when the inline editor opens (§6.7).
-	editKey := "closed"
-	if editing.Get() {
-		editKey = "open"
+	// Edit opens the shell-root flip modal (TaskEditHost) instead of an inline row form —
+	// the row lives under transformed tile ancestors, so an in-row modal would be off-centre.
+	openEdit := ui.UseEvent(Prevent(func() { uistate.SetTaskEdit(uistate.TaskEdit{ID: t.ID}) }))
+	// The ⋯ actions menu (add sub-task + the destructive delete), so the row stays
+	// uncluttered and a misclick can't delete a task (and its whole sub-tree).
+	menuID := "task-menu-" + t.ID
+	menuOpen := ui.UseState(false)
+	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
+	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
+	menuHidden := ""
+	if !menuOpen.Get() {
+		menuHidden = " hidden-menu"
 	}
-	ui.UseEffect(func() func() {
-		if editing.Get() {
-			focusByID("task-edit-" + t.ID)
-		}
-		return nil
-	}, editKey)
 
-	// Row-display deep-link: declared unconditionally here (before any early
-	// return) so the hook slot never shifts across renders (framework rule).
+	// Row-display deep-link: declared unconditionally here so the hook slot never
+	// shifts across renders (framework rule).
 	linkRoute := tasklink.Route(t.RelatedType)
 	goLink := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(linkRoute)) }))
-
-	if editing.Get() {
-		curEditType := domain.RelatedType(editLinkType.Get())
-		var editEntitySelect ui.Node
-		if curEditType != domain.RelatedNone && curEditType != "" {
-			entityOpts := buildEntitySelectOptions(curEditType, editLinkID.Get(), props.Accounts, props.Budgets, props.Goals, props.Transactions)
-			editEntitySelect = uiw.FormField(uistate.T("todo.linkEntity"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   entityOpts,
-					Selected:  editLinkID.Get(),
-					OnChange:  func(v string) { editLinkID.Set(v) },
-					AriaLabel: uistate.T("todo.linkEntity"),
-				}))
-		}
-		editPrioOpts := []uiw.SelectOption{
-			{Value: string(domain.PriorityHigh), Label: uistate.T("priority.high")},
-			{Value: string(domain.PriorityMedium), Label: uistate.T("priority.medium")},
-			{Value: string(domain.PriorityLow), Label: uistate.T("priority.low")},
-		}
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				Input(css.Class("field field-wide"), Attr("id", "task-edit-"+t.ID), Type("text"), Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle)),
-				uiw.FormField("Priority",
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   editPrioOpts,
-						Selected:  prioS.Get(),
-						OnChange:  func(v string) { prioS.Set(v) },
-						AriaLabel: "Priority",
-					})),
-				uiw.FormField(uistate.T("common.dueDate"),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), Value(dueS.Get()), OnInput(onDue))),
-				Input(css.Class("field field-wide"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes)),
-				uiw.FormField(uistate.T("todo.repeat"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   cadenceSelectOptions(editRecur.Get()),
-						Selected:  editRecur.Get(),
-						OnChange:  func(v string) { editRecur.Set(v) },
-						AriaLabel: uistate.T("todo.repeat"),
-						TestID:    "task-edit-repeat-" + t.ID,
-					})),
-				uiw.FormField(uistate.T("todo.linkTo"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   linkTypeSelectOptions(editLinkType.Get()),
-						Selected:  editLinkType.Get(),
-						OnChange:  func(v string) { editLinkType.Set(v); editLinkID.Set("") },
-						AriaLabel: uistate.T("todo.linkTo"),
-					})),
-				editEntitySelect,
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
 
 	// Build the row deep-link node (goLink + linkRoute already declared above).
 	var linkNode ui.Node
@@ -481,9 +347,16 @@ func TaskRow(props taskRowProps) ui.Node {
 			Span(css.Class("row-desc"), t.Title),
 			Div(css.Class("task-meta"), meta),
 		),
-		Button(css.Class("btn row-2nd"), Type("button"), Title(uistate.T("todo.addSubTitle")), OnClick(addSub), uistate.T("todo.addSub")),
-		Button(css.Class("btn row-2nd", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("todo.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Button(css.Class("btn-del row-2nd"), Type("button"), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		// Edit opens the flip modal; the ⋯ menu holds Add sub-task + the destructive Delete.
+		Button(css.Class("btn row-2nd", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		Div(css.Class("add-wrap row-2nd"), Attr("id", menuID),
+			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("todo.moreActions")), Attr("aria-label", uistate.T("todo.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-addsub-"+t.ID), OnClick(addSub), uistate.T("todo.addSub")),
+				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-delete-btn-"+t.ID), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uistate.T("action.delete")),
+			),
+		),
 	)
 	return Div(rowArgs...)
 }
@@ -496,71 +369,6 @@ func priorityMeta(p domain.TaskPriority) (label, class string) {
 		return uistate.T("priority.low"), "prio-low"
 	default:
 		return uistate.T("priority.medium"), "prio-med"
-	}
-}
-
-// linkTypeOptions builds the <option> list for the "Link to" type selector.
-// selectedVal is the currently-selected RelatedType string.
-func linkTypeOptions(selectedVal string) []ui.Node {
-	none := string(domain.RelatedNone)
-	return []ui.Node{
-		Option(Value(none), SelectedIf(selectedVal == none || selectedVal == ""), uistate.T("todo.linkNone")),
-		Option(Value(string(domain.RelatedAccount)), SelectedIf(selectedVal == string(domain.RelatedAccount)), uistate.T("todo.linkAccount")),
-		Option(Value(string(domain.RelatedBudget)), SelectedIf(selectedVal == string(domain.RelatedBudget)), uistate.T("todo.linkBudget")),
-		Option(Value(string(domain.RelatedGoal)), SelectedIf(selectedVal == string(domain.RelatedGoal)), uistate.T("todo.linkGoal")),
-		Option(Value(string(domain.RelatedTransaction)), SelectedIf(selectedVal == string(domain.RelatedTransaction)), uistate.T("todo.linkTransaction")),
-	}
-}
-
-// buildEntityOptions builds the <option> list for the entity sub-selector that
-// appears when a non-None RelatedType is chosen. The first option is a blank
-// "— Choose —" prompt so users must make an intentional selection.
-func buildEntityOptions(
-	rt domain.RelatedType,
-	selectedID string,
-	accounts []domain.Account,
-	budgets []domain.Budget,
-	goals []domain.Goal,
-	txns []domain.Transaction,
-) []ui.Node {
-	opts := []ui.Node{
-		Option(Value(""), SelectedIf(selectedID == ""), uistate.T("todo.linkEntity")),
-	}
-	switch rt {
-	case domain.RelatedAccount:
-		for _, a := range accounts {
-			opts = append(opts, Option(Value(a.ID), SelectedIf(selectedID == a.ID), a.Name))
-		}
-	case domain.RelatedBudget:
-		for _, b := range budgets {
-			opts = append(opts, Option(Value(b.ID), SelectedIf(selectedID == b.ID), b.Name))
-		}
-	case domain.RelatedGoal:
-		for _, g := range goals {
-			opts = append(opts, Option(Value(g.ID), SelectedIf(selectedID == g.ID), g.Name))
-		}
-	case domain.RelatedTransaction:
-		for _, tx := range txns {
-			label := tx.Payee
-			if label == "" {
-				label = tx.Desc
-			}
-			opts = append(opts, Option(Value(tx.ID), SelectedIf(selectedID == tx.ID), label))
-		}
-	}
-	return opts
-}
-
-// cadenceOptions builds the <option> list for a recurrence cadence selector.
-// selectedVal is the current RecurringCadence string (empty = no repeat).
-func cadenceOptions(selectedVal string) []ui.Node {
-	none := ""
-	return []ui.Node{
-		Option(Value(none), SelectedIf(selectedVal == none), uistate.T("todo.repeatNone")),
-		Option(Value(string(domain.CadenceWeekly)), SelectedIf(selectedVal == string(domain.CadenceWeekly)), uistate.T("todo.repeatWeekly")),
-		Option(Value(string(domain.CadenceMonthly)), SelectedIf(selectedVal == string(domain.CadenceMonthly)), uistate.T("todo.repeatMonthly")),
-		Option(Value(string(domain.CadenceQuarterly)), SelectedIf(selectedVal == string(domain.CadenceQuarterly)), uistate.T("todo.repeatQuarterly")),
-		Option(Value(string(domain.CadenceYearly)), SelectedIf(selectedVal == string(domain.CadenceYearly)), uistate.T("todo.repeatYearly")),
 	}
 }
 
