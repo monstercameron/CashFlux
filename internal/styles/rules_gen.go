@@ -5215,21 +5215,33 @@ func registerGenerated() {
 	rule(".cover-src-ratio",
 		display("flex"),
 		alignItems("center"),
-		gap("0.4rem"),
+		flexWrap("wrap"),
+		gap("0.4rem 0.5rem"),
 		flexShrink("0"),
 	)
 	rule(".cover-src-ratio-label",
 		fontSize("0.78rem"),
 		color("var(--text-dim)"),
 	)
-	// Suppress the native number spinners on the ratio input (critic #2).
-	rule(".cover-src-weight",
-		width("58px"),
-		appearance("textfield"),
+	// Keep the native number spinners on the ratio input so it can be stepped with the
+	// browser up/down arrows (each step fires input → the shares recompute live). Fixed
+	// width so it doesn't stretch to fill the wrapped flex row.
+	rule(".cover-src-ratio .cover-src-weight",
+		width("68px"),
+		flex("0 0 68px"),
 	)
-	rule(".cover-src-weight::-webkit-inner-spin-button, .cover-src-weight::-webkit-outer-spin-button",
-		appearance("none"),
-		margin("0"),
+	rule(".cover-src-weight:disabled",
+		opacity("0.45"),
+	)
+	// "Use all remaining" toggle.
+	rule(".cover-src-maxlabel",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		fontSize("0.76rem"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+		cursor("pointer"),
 	)
 	rule(".cover-src-shares",
 		display("flex"),

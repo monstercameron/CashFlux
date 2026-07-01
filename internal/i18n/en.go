@@ -579,6 +579,8 @@ var english = Catalog{
 	"budgets.coverSpreadLabel":       "Spread across",
 	"budgets.coverSpreadSub":         "Checked budgets split the amount — adjust a ratio for an uneven split.",
 	"budgets.coverRatio":             "Ratio",
+	"budgets.coverUseAll":            "Use all",
+	"budgets.coverUseAllTitle":       "Give this budget's full remaining; the rest is split across the other selected budgets",
 	"budgets.coverPickSource":        "Select at least one budget to cover from.",
 	"budgets.coverSourceShort":       "%s doesn't have enough budget to give its share.",
 	"budgets.coverFormulaTitle":      "Switch between a fixed amount and a formula",

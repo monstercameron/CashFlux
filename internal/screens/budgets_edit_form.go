@@ -127,6 +127,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
 	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
+	coverMaxS := ui.UseState(map[string]bool{})            // sourceID → "use all remaining"
 	amtFxS := ui.UseState(recurringAmountFormula(b) != "") // amount is a formula, not a number
 	amtFormulaS := ui.UseState(recurringAmountFormula(b))
 	recurringS := ui.UseState(b.RecurringCover != nil)
@@ -175,6 +176,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		nw[sid] = val
 		coverWtS.Set(nw)
 	}
+	onToggleMax := func(sid string) {
+		m := coverMaxS.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[sid] = !nm[sid]
+		coverMaxS.Set(nm)
+	}
 	submitCover := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			done()
@@ -215,7 +225,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			return
 		}
 		if amt > 0 {
-			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get())
+			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get(), coverMaxS.Get())
 			// Pre-validate so a partial failure can't leave a half-applied cover: each
 			// source must keep a positive limit after giving its share.
 			for _, sc := range coverSrcs {
@@ -381,7 +391,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		} else {
 			amtMinor, _ = money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
 		}
-		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get())
+		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get(), coverMaxS.Get())
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.coverHint", coverShortfallStr)),
@@ -421,8 +431,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					return ui.CreateElement(coverSourceRow, coverSourceRowProps{
 						ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
 						Selected: coverSelS.Get()[sc.ID], Weight: coverWtS.Get()[sc.ID], ShareStr: shareStr,
-						Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)),
-						OnToggle: onToggleSrc, OnWeight: onWeightSrc,
+						Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)), Max: coverMaxS.Get()[sc.ID],
+						OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
 					})
 				}),
 			),
@@ -507,43 +517,107 @@ type budgetCoverSource struct {
 	LimitMinor  int64
 }
 
-// splitCoverAmount divides totalMinor across the checked sources in proportion to
-// their weights (an unset/≤0 weight counts as 1, so the default is an equal split),
-// distributing any rounding remainder to the first selected source so the shares sum
-// exactly to totalMinor. Returns nil when nothing is selected or the total ≤ 0.
-func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string]bool, weights map[string]int) map[string]int64 {
+// coverMaxGive is the most a source can contribute — its remaining room, capped one
+// cent below its limit so the cover leaves it a positive limit.
+func coverMaxGive(sc budgetCoverSource) int64 {
+	g := sc.RemainMinor
+	if capMax := sc.LimitMinor - 1; g > capMax {
+		g = capMax
+	}
+	if g < 0 {
+		g = 0
+	}
+	return g
+}
+
+// splitCoverAmount divides totalMinor across the checked sources. Sources in `maxed`
+// are pinned to their full remaining (coverMaxGive) and the rest of the amount is
+// split among the remaining (non-maxed) checked sources by weight — so checking "use
+// all remaining" on one source back-fills the ratios of the others. When the pinned
+// sources already meet or exceed the amount, they're scaled down to sum exactly to it
+// and the non-maxed sources get nothing. Any rounding remainder lands on the last
+// recipient so the shares sum exactly to totalMinor. Returns nil when nothing is
+// selected or the total ≤ 0.
+func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string]bool, weights map[string]int, maxed map[string]bool) map[string]int64 {
 	if totalMinor <= 0 {
 		return nil
 	}
-	var ids []string
-	totalWeight := 0
+	byID := map[string]budgetCoverSource{}
+	var maxedIDs, freeIDs []string
 	for _, sc := range srcs {
 		if !sel[sc.ID] {
 			continue
 		}
-		w := weights[sc.ID]
-		if w <= 0 {
-			w = 1
+		byID[sc.ID] = sc
+		if maxed[sc.ID] {
+			maxedIDs = append(maxedIDs, sc.ID)
+		} else {
+			freeIDs = append(freeIDs, sc.ID)
 		}
-		ids = append(ids, sc.ID)
-		totalWeight += w
 	}
-	if len(ids) == 0 || totalWeight == 0 {
+	if len(maxedIDs)+len(freeIDs) == 0 {
 		return nil
 	}
-	out := make(map[string]int64, len(ids))
-	var assigned int64
-	for _, id := range ids {
+	out := make(map[string]int64, len(maxedIDs)+len(freeIDs))
+
+	// Pinned "use all remaining" sources give their full remaining.
+	var pinned int64
+	for _, id := range maxedIDs {
+		g := coverMaxGive(byID[id])
+		out[id] = g
+		pinned += g
+	}
+
+	// Pinned sources already cover the amount → scale them to sum exactly to it.
+	if pinned >= totalMinor {
+		var assigned int64
+		for i, id := range maxedIDs {
+			var share int64
+			if i == len(maxedIDs)-1 {
+				share = totalMinor - assigned
+			} else if pinned > 0 {
+				share = totalMinor * out[id] / pinned
+			}
+			assigned += share
+			out[id] = share
+		}
+		for _, id := range freeIDs {
+			out[id] = 0
+		}
+		return out
+	}
+
+	// Split the remainder across the non-maxed sources by weight.
+	rest := totalMinor - pinned
+	totalWeight := 0
+	for _, id := range freeIDs {
 		w := weights[id]
 		if w <= 0 {
 			w = 1
 		}
-		share := totalMinor * int64(w) / int64(totalWeight)
-		out[id] = share
-		assigned += share
+		totalWeight += w
 	}
-	if rem := totalMinor - assigned; rem != 0 {
-		out[ids[0]] += rem
+	if len(freeIDs) == 0 || totalWeight == 0 {
+		// Nowhere to put the remainder — hand it to a pinned source (best effort).
+		if len(maxedIDs) > 0 {
+			out[maxedIDs[len(maxedIDs)-1]] += rest
+		}
+		return out
+	}
+	var assigned int64
+	for i, id := range freeIDs {
+		w := weights[id]
+		if w <= 0 {
+			w = 1
+		}
+		var share int64
+		if i == len(freeIDs)-1 {
+			share = rest - assigned
+		} else {
+			share = rest * int64(w) / int64(totalWeight)
+		}
+		assigned += share
+		out[id] = share
 	}
 	return out
 }
@@ -551,24 +625,29 @@ func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string
 // coverSourceRowProps drives one row of the cover editor's source list. On* handlers
 // live here (not in the parent's map loop) per the framework's no-hooks-in-loops rule.
 type coverSourceRowProps struct {
-	ID        string
-	Label     string
-	RemainStr string
-	Selected  bool
-	Weight    int
-	ShareStr  string // formatted amount this source contributes (when selected)
-	Over      bool   // this source's share exceeds what it can give
-	AvailStr  string // formatted amount this source can give (its limit)
-	OnToggle  func(string)
-	OnWeight  func(string, int)
+	ID          string
+	Label       string
+	RemainStr   string
+	Selected    bool
+	Weight      int
+	ShareStr    string // formatted amount this source contributes (when selected)
+	Over        bool   // this source's share exceeds what it can give
+	AvailStr    string // formatted amount this source can give (its limit)
+	Max         bool   // "use all remaining" — pin this source to its full remaining
+	OnToggle    func(string)
+	OnWeight    func(string, int)
+	OnToggleMax func(string)
 }
 
 // coverSourceRow renders a styled checkbox to include a source budget, and — when
-// checked — a ratio input (default 1) plus the live amount that ratio yields. When the
-// share exceeds the source's limit it turns amber with an "only $X available" note.
+// checked — a ratio input, a "use all remaining" toggle, and the live amount it yields.
+// Checking "use all remaining" pins the source to its full remaining (the ratio input
+// is then disabled) and back-fills the other selected sources' ratios; an over-limit
+// share turns amber with an "only $X available" note.
 func coverSourceRow(props coverSourceRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
 	onWeight := ui.UseEvent(func(v string) { n, _ := strconv.Atoi(strings.TrimSpace(v)); props.OnWeight(props.ID, n) })
+	onMax := ui.UseEvent(func() { props.OnToggleMax(props.ID) })
 	w := props.Weight
 	if props.Selected && w <= 0 {
 		w = 1
@@ -581,6 +660,11 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 	if props.Over {
 		shareCls += " is-over"
 	}
+	weightAttrs := []any{css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
+		Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)}
+	if props.Max {
+		weightAttrs = append(weightAttrs, Attr("disabled", "disabled"))
+	}
 	return Div(css.Class(rowCls),
 		Label(css.Class("cover-src-main"),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "cover-src-"+props.ID), OnChange(onToggle)}, checkedAttr(props.Selected)...)...),
@@ -589,8 +673,11 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 		),
 		If(props.Selected, Div(css.Class("cover-src-ratio"),
 			Span(css.Class("cover-src-ratio-label"), uistate.T("budgets.coverRatio")),
-			Input(css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
-				Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)),
+			Input(weightAttrs...),
+			Label(css.Class("cover-src-maxlabel"), Title(uistate.T("budgets.coverUseAllTitle")),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "cover-max-"+props.ID), OnChange(onMax)}, checkedAttr(props.Max)...)...),
+				Span(uistate.T("budgets.coverUseAll")),
+			),
 			Div(css.Class("cover-src-shares"),
 				Span(ClassStr(shareCls), If(props.Over, Span(css.Class("cover-src-warn"), "⚠ ")), props.ShareStr),
 				If(props.Over, Span(css.Class("cover-src-avail"), uistate.T("budgets.coverOnlyAvail", props.AvailStr))),
