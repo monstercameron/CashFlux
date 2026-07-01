@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -392,6 +393,14 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			amtMinor, _ = money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
 		}
 		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get(), coverMaxS.Get())
+		// Group checked sources at the top so the active split is visible together
+		// without scrolling past the unchecked budgets (keyed, so rows just reorder).
+		sortedCoverSrcs := make([]budgetCoverSource, len(coverSrcs))
+		copy(sortedCoverSrcs, coverSrcs)
+		selNow := coverSelS.Get()
+		sort.SliceStable(sortedCoverSrcs, func(i, j int) bool {
+			return selNow[sortedCoverSrcs[i].ID] && !selNow[sortedCoverSrcs[j].ID]
+		})
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.coverHint", coverShortfallStr)),
@@ -422,7 +431,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				Span(css.Class("cover-spread-sub"), uistate.T("budgets.coverSpreadSub")),
 			),
 			Div(css.Class("cover-sources"),
-				MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
+				MapKeyed(sortedCoverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
 					shareStr, over := "", false
 					if sh, ok := shares[sc.ID]; ok && sh > 0 {
 						shareStr = fmtMoney(money.New(sh, cur))
