@@ -42,12 +42,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}))
 	// Edit and Top up open the shell-root flip modal (BudgetEditHost) rather than an
 	// inline row form: a row sits under transformed bento/tile ancestors, which threw an
-	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured.
+	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured. Edit is
+	// the lower-frequency action, so it lives in the ⋯ menu (and closes it); Top up is a
+	// visible card button.
 	openEdit := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
 	openTopup := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
 
@@ -203,6 +205,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if isOver && hasSource && !covering.Get() {
 		coverBtn = Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.coverTitle")), OnClick(startCover), "Cover…")
 	}
+	// Top up is a visible card button (the frequent proactive action) on budgets that
+	// aren't over; Edit lives in the ⋯ menu as the lower-frequency action.
+	var topupBtn ui.Node = Fragment()
+	if !isOver && !covering.Get() {
+		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
+	}
 
 	var coverForm ui.Node = Fragment()
 	if covering.Get() {
@@ -254,17 +262,18 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
 			),
 			// Right group: the row actions, as a fixed, no-wrap cluster so they line up in
-			// a column across rows and never wrap onto a second line. Edit is the visible
-			// primary; Top up + the destructive Delete live in the ⋯ menu (like /accounts),
-			// so a misclick can't delete a budget and the row stays uncluttered.
+			// a column across rows and never wrap onto a second line. Top up (the frequent
+			// action) is a visible card button; Edit + the destructive Delete live in the ⋯
+			// menu (like /accounts), so the row stays uncluttered and a misclick can't
+			// delete a budget.
 			Div(css.Class("budget-actions"),
 				coverBtn,
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+				topupBtn,
 				Div(css.Class("add-wrap"), Attr("id", menuID),
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-						If(!isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")),
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
 						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 					),
 				),
