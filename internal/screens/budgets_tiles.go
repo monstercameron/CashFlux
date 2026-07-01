@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -64,16 +66,56 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	if v.TotalSpent > 0 {
 		spentTone = "neg"
 	}
-	statGrid := Div(css.Class("stat-grid"),
-		stat(uistate.T("budgets.spent"), fmtMoney(money.New(v.TotalSpent, v.Base)), spentTone),
-		stat(uistate.T("budgets.budgeted"), fmtMoney(money.New(v.TotalLimit, v.Base)), ""),
-		// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
-		Div(css.Class("stat"),
-			Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-				uistate.T("budgets.left"),
-				smartTooltipFor(smartSettings, "budget-safe", uistate.T("budgets.left"), uistate.T("smart.tipBudgetSafe")),
+	// The summary is a single big "loader" — an overall spent-of-budgeted progress bar
+	// with the spent / budgeted / left figures rendered INSIDE it, so the numbers and the
+	// visual fill read as one unit. The fill grows with spending and turns amber/red as it
+	// nears/exceeds the total; "Left" (safe-to-spend) is the hero figure on the right.
+	leftM := money.New(v.TotalLimit-v.TotalSpent, v.Base)
+	over := v.TotalSpent > v.TotalLimit
+	fillPct := 0
+	if v.TotalLimit > 0 {
+		fillPct = int(v.TotalSpent * 100 / v.TotalLimit)
+	}
+	fillW := fillPct
+	if fillW > 100 {
+		fillW = 100
+	}
+	if fillW < 0 {
+		fillW = 0
+	}
+	fillCls := "budget-loader-fill"
+	switch {
+	case over:
+		fillCls += " is-over"
+	case fillPct >= 85:
+		fillCls += " is-near"
+	}
+	loaderCls := "budget-loader"
+	if over {
+		loaderCls += " is-over"
+	}
+	statGrid := Div(ClassStr(loaderCls),
+		Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(fillW)),
+		Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"),
+		Attr("aria-label", uistate.T("budgets.progressLabel")),
+		Div(ClassStr(fillCls), Attr("style", fmt.Sprintf("width:%d%%", fillW))),
+		Div(css.Class("budget-loader-figs"),
+			Div(css.Class("budget-loader-fig"),
+				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
+				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(v.TotalSpent, v.Base))),
 			),
-			Div(ClassStr("stat-value is-hero "+accentFor(money.New(v.TotalLimit-v.TotalSpent, v.Base))), budgetLeftValue(money.New(v.TotalLimit-v.TotalSpent, v.Base))),
+			Div(css.Class("budget-loader-fig"),
+				Div(css.Class("budget-loader-label"), uistate.T("budgets.budgeted")),
+				Div(css.Class("budget-loader-value"), fmtMoney(money.New(v.TotalLimit, v.Base))),
+			),
+			// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
+			Div(css.Class("budget-loader-fig", "is-right"),
+				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					uistate.T("budgets.left"),
+					smartTooltipFor(smartSettings, "budget-safe", uistate.T("budgets.left"), uistate.T("smart.tipBudgetSafe")),
+				),
+				Div(ClassStr("budget-loader-value is-hero "+accentFor(leftM)), budgetLeftValue(leftM)),
+			),
 		),
 	)
 

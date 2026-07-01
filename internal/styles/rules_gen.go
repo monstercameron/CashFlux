@@ -4334,6 +4334,125 @@ func registerGenerated() {
 	// untouched. Each budget becomes an elevated meter-card with a state-colored left
 	// stripe, a prominent gradient progress bar over a visible track (so 0%/low budgets
 	// no longer vanish into the background), and a tinted percent chip. ---
+	// The summary "loader": a big spent-of-budgeted progress bar with the spent/budgeted/
+	// left figures rendered inside it. The fill sits behind the figures (z-index) and its
+	// width tracks the spent percentage; the figures stay legible over both fill and track.
+	rule(".budget-loader",
+		position("relative"),
+		overflow("hidden"),
+		borderRadius("14px"),
+		border("1px solid var(--border)"),
+		background("color-mix(in srgb, var(--bg-elev) 42%, transparent)"),
+		minHeight("104px"),
+		marginBottom("1rem"),
+	)
+	rule(".budget-loader.is-over",
+		borderColor("color-mix(in srgb, var(--danger) 32%, var(--border))"),
+	)
+	rule(".budget-loader-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		bottom("0"),
+		width("0"),
+		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent), color-mix(in srgb, var(--accent) 15%, transparent))"),
+		borderRight("2px solid color-mix(in srgb, var(--accent) 70%, transparent)"),
+		transition("width 0.45s cubic-bezier(.2,.75,.2,1)"),
+		zIndex("0"),
+	)
+	rule(".budget-loader-fill.is-near",
+		background("linear-gradient(90deg, color-mix(in srgb, #f59e0b 30%, transparent), color-mix(in srgb, #f59e0b 15%, transparent))"),
+		borderRight("2px solid #f59e0b"),
+	)
+	rule(".budget-loader-fill.is-over",
+		background("linear-gradient(90deg, color-mix(in srgb, var(--danger) 34%, transparent), color-mix(in srgb, var(--danger) 18%, transparent))"),
+		borderRight("2px solid var(--danger)"),
+	)
+	rule(".budget-loader-figs",
+		position("relative"),
+		zIndex("1"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("1rem"),
+		minHeight("104px"),
+		padding("0 1.5rem"),
+	)
+	rule(".budget-loader-fig",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.25rem"),
+		minWidth("0"),
+	)
+	rule(".budget-loader-fig.is-right",
+		alignItems("flex-end"),
+		textAlign("right"),
+	)
+	rule(".budget-loader-label",
+		color("var(--text-dim)"),
+		fontSize("0.72rem"),
+		textTransform("uppercase"),
+		letterSpacing("0.06em"),
+	)
+	rule(".budget-loader-value",
+		fontSize("1.45rem"),
+		fontWeight("700"),
+		letterSpacing("-0.015em"),
+		whiteSpace("nowrap"),
+		prop("text-shadow", "0 1px 4px rgba(0,0,0,0.35)"),
+	)
+	rule(".budget-loader-value.is-hero",
+		fontSize("2rem"),
+		fontWeight("800"),
+	)
+	rule(".budget-loader-value.pos",
+		color("var(--money-positive)"),
+	)
+	rule(".budget-loader-value.neg",
+		color("var(--money-negative)"),
+	)
+	// Per-card "loader": a taller progress bar that holds the spent/limit amount (left)
+	// and the percent (right) inside it, so the card header is free for just the title.
+	rule(".bento-budgets .budget-card-loader",
+		position("relative"),
+		overflow("hidden"),
+		height("42px"),
+		margin("0.5rem 0 0.6rem"),
+		borderRadius("10px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".bento-budgets .budget-card-loader .bar-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		bottom("0"),
+		height("100%"),
+		borderRadius("0"),
+		boxShadow("none"),
+		zIndex("0"),
+	)
+	rule(".bento-budgets .budget-card-loader-figs",
+		position("relative"),
+		zIndex("1"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		height("100%"),
+		padding("0 0.75rem"),
+		gap("0.5rem"),
+	)
+	rule(".bento-budgets .budget-card-loader .budget-amount",
+		fontVariantNumeric("tabular-nums"),
+		fontSize("0.92rem"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
+	)
+	rule(".bento-budgets .budget-card-loader .budget-amount .budget-spent",
+		color("var(--fg, var(--text))"),
+		fontWeight("700"),
+	)
 	// Budget cards lay out in a responsive grid — each a compact 1-column block (several
 	// per row) instead of a full-width bar. auto-fill + minmax keeps them readable and
 	// reflows to fewer columns as the surface narrows.

@@ -1,3 +1,17 @@
+## 2026-07-01 — Merge cash figures into progress 'loaders'
+
+Cam: merge the loader and the cash figures — put the text inside the loader; then do it on the
+cards too so the title has more space. Two pieces:
+- Summary: replaced the SPENT/BUDGETED/LEFT stat-grid with a single .budget-loader — an overall
+  spent-of-budgeted bar (fill width = spent/limit, accent → amber >=85% → danger when over) with the
+  three figures absolutely layered ABOVE the fill (z-index) and text-shadow for legibility over both
+  fill and track. LEFT stays the hero on the right.
+- Cards: moved the amount + percent out of the header into a taller .budget-card-loader bar (reusing
+  the bar-fill/near/over classes, made full-height + flush), so budget-head-main now holds only the
+  title — long names get the full line.
+
+Verify: cover 11/11, budget varname 5/5 (V5 flaked once on autosave lag, passed on rerun).
+
 ## 2026-07-01 — Budgets: grid of compact cards
 
 Cam wanted budgets as 1-wide blocks (not full width) and then taller cards with readjusted details.

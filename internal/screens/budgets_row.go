@@ -217,22 +217,27 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
 		Div(css.Class("budget-head"),
-			// The title (truncates), the spent/limit amount, and the percent chip.
+			// The title gets the whole header line now (the spent/limit amount and the
+			// percent moved INTO the bar below), so a long budget name has room to breathe.
 			Div(css.Class("budget-head-main"),
 				IfElse(s.Budget.CategoryID != "",
 					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
 						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
 						title),
 					Span(css.Class("row-desc"), title)),
-				// Spent carries foreground weight; the "/ limit" reads as muted context
-				// (the name is the card's title, the amount is secondary — see styles).
+			),
+		),
+		// The card's "loader": a taller progress bar with the spent/limit amount (left) and
+		// the percent-used (right) rendered inside it, over the fill.
+		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")),
+			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
+			Div(css.Class("budget-card-loader-figs"),
+				// Spent carries foreground weight; the "/ limit" reads as muted context.
 				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(s.Spent)), " / "+fmtMoney(limit)),
-				// A compact percent-used chip, tinted by health state — an at-a-glance focal
-				// figure that complements the bar (capped display, e.g. "112%" when over).
+				// Percent-used, capped for display (e.g. "112%" when over).
 				Span(css.Class("budget-pct"), strconv.Itoa(s.Percent)+"%"),
 			),
 		),
-		Div(css.Class("bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")), Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 		// One quiet metadata line beneath the bar: health status · money left · period.
 		// The old separate "Period · X% used" line is dropped — the bar and the percent
 		// chip already carry the "% used" signal, so it was redundant clutter (design
