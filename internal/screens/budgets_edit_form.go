@@ -134,6 +134,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	wtFxS := ui.UseState(recurringWeightFormula(b) != "") // weights come from a formula, not numbers
 	wtFormulaS := ui.UseState(recurringWeightFormula(b))
 	recurringS := ui.UseState(b.RecurringCover != nil)
+	coverCustomVals := ui.UseState(customMapToStrings(recurringCoverCustom(b))) // "cover" custom fields
 	errS := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
@@ -285,6 +286,9 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					rc.AmountFormula = strings.TrimSpace(amtFormulaS.Get())
 				}
 				rc.AmountMinor = amt // fixed amount, or the last-evaluated value as a record
+				if defs := app.CustomFieldDefsFor("cover"); len(defs) > 0 {
+					rc.Custom = customValuesToMap(defs, coverCustomVals.Get())
+				}
 				nb.RecurringCover = rc
 			} else {
 				nb.RecurringCover = nil
@@ -304,6 +308,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		}
 		nm[key] = value
 		customEditVals.Set(nm)
+	}
+	onCoverCustom := func(key, value string) {
+		m := coverCustomVals.Get()
+		nm := make(map[string]string, len(m)+1)
+		for k, val := range m {
+			nm[k] = val
+		}
+		nm[key] = value
+		coverCustomVals.Set(nm)
 	}
 
 	saveEdit := ui.UseEvent(Prevent(func() {
@@ -507,6 +520,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-recurring"), OnChange(onToggleRecurring)}, checkedAttr(recurringS.Get())...)...),
 				Span(uistate.T("budgets.coverRecurring")),
 			),
+			// Custom fields on the standing rule (metadata like a reason / review-by), shown
+			// only when recurring is on and the household has defined "cover" fields.
+			If(recurringS.Get() && len(app.CustomFieldDefsFor("cover")) > 0,
+				Div(css.Class("cover-custom-fields"),
+					P(css.Class("cover-fx-hint"), uistate.T("budgets.coverCustomHint")),
+					MapKeyed(app.CustomFieldDefsFor("cover"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: coverCustomVals.Get()[d.Key], OnChange: onCoverCustom}))
+					}),
+				)),
 			errLine,
 			Div(css.Class("acct-edit-actions"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
@@ -803,6 +825,15 @@ func coverCapText(selCount int, totalMinor int64, cur string) string {
 		return ""
 	}
 	return uistate.T("budgets.coverSelectedCap", selCount, fmtMoney(money.New(totalMinor, cur)))
+}
+
+// recurringCoverCustom returns the custom-field values stored on a budget's recurring
+// cover rule (nil when there's no rule).
+func recurringCoverCustom(b domain.Budget) map[string]any {
+	if b.RecurringCover == nil {
+		return nil
+	}
+	return b.RecurringCover.Custom
 }
 
 // recurringWeightFormula returns the shared per-source weight formula stored on a

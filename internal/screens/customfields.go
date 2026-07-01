@@ -27,6 +27,7 @@ var cfEntities = []struct{ Value, Key string }{
 	{"account", "nav.accounts"},
 	{"transaction", "nav.transactions"},
 	{"budget", "nav.budgets"},
+	{"cover", "budgets.coverEntityLabel"},
 	{"goal", "nav.goals"},
 	{"member", "nav.members"},
 }

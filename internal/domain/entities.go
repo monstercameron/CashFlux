@@ -456,10 +456,11 @@ type CoverShare struct {
 // `overspend` re-covers whatever the shortfall is that period). Likewise a source's
 // weight can be a fixed Weight or a per-source WeightFormula.
 type RecurringCover struct {
-	AmountMinor       int64        `json:"amountMinor"`
-	AmountFormula     string       `json:"amountFormula,omitempty"`
-	Sources           []CoverShare `json:"sources"`
-	LastAppliedPeriod string       `json:"lastAppliedPeriod,omitempty"`
+	AmountMinor       int64          `json:"amountMinor"`
+	AmountFormula     string         `json:"amountFormula,omitempty"`
+	Sources           []CoverShare   `json:"sources"`
+	LastAppliedPeriod string         `json:"lastAppliedPeriod,omitempty"`
+	Custom            map[string]any `json:"custom,omitempty"` // user-defined "cover" custom fields (metadata on the standing rule)
 }
 
 // Goal is a savings target, individual or shared.

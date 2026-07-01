@@ -592,6 +592,8 @@ var english = Catalog{
 	"budgets.coverWeightFxHint":      "Per source, e.g. cf_budget_priority · remaining · limit. Higher result = bigger share.",
 	"budgets.coverSelectedCap":       "Selected %d · splitting %s",
 	"budgets.coverAddMore":           "Add another source",
+	"budgets.coverEntityLabel":       "Coverage rules",
+	"budgets.coverCustomHint":        "Extra details on this standing cover (define fields under Custom fields → Coverage rules).",
 	"budgets.coverOnlyAvail":         "only %s available",
 	"budgets.coverRecurring":         "Repeat this cover automatically every period",
 	"budgets.recurringBadge":         "↻ Recurring cover",
