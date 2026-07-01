@@ -249,10 +249,13 @@ try {
     await page.waitForTimeout(700);
     const ds1 = await dataset(page);
     check("I2 archive persists (archived count up)", (ds1.accounts || []).filter(a => a.archived).length > (ds0.accounts || []).filter(a => a.archived).length);
-    await page.locator(".bento-accounts .row .btn-del").first().click();
+    // Delete now lives in the ⋯ menu (no standalone ✕ column).
+    await openRowMenu(page, 0);
+    check("I3 delete action in ⋯ menu (no standalone ✕ column)", (await page.locator('.add-menu:not(.hidden-menu) [data-testid^="delete-account-btn-"]').count()) > 0 && (await page.locator(".bento-accounts .row .btn-del").count()) === 0);
+    await page.locator('.add-menu:not(.hidden-menu) [data-testid^="delete-account-btn-"]').first().click();
     await page.waitForTimeout(600);
     const ds2 = await dataset(page);
-    check("I3 delete handled without crash (guard or remove)", typeof (ds2.accounts || []).length === "number");
+    check("I4 delete handled without crash (guard or remove)", typeof (ds2.accounts || []).length === "number");
     await page.close();
   }
 

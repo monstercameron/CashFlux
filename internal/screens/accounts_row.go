@@ -125,7 +125,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// row, so flip the menu to open leftward / upward when it would otherwise overflow.
 	uiw.AnchorPopover(menuOpen.Get(), menuID)
 
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(a.ID) }))
+	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(a.ID) }))
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
@@ -258,9 +258,11 @@ func AccountRow(props accountRowProps) ui.Node {
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+					// Delete moved out of the standalone ✕ column and into the menu as a
+					// destructive item (last, red) so a row's actions are all in one place.
+					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
 				),
 			),
-			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		historyPanel,
 	)

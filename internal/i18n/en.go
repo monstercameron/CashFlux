@@ -1480,6 +1480,7 @@ var english = Catalog{
 	"accounts.markUpdatedTitle":       "Mark balance as checked today",
 	"accounts.editTitle":              "Edit account",
 	"accounts.deleteTitle":            "Delete account",
+	"accounts.deleteAction":           "Delete account",
 	"accounts.deleteHasTxns":          "This account still has transactions. Archive it to keep the history, or move or delete those transactions first.",
 	"accounts.markClearedTitle":       "Mark this transaction cleared",
 

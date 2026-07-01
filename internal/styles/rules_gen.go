@@ -5117,6 +5117,14 @@ func registerGenerated() {
 	rule(".add-item:hover, .add-item:focus-visible",
 		background("var(--hover)"),
 	)
+	// Destructive overflow-menu item (e.g. Delete account): red text, red hover.
+	rule(".add-item.danger",
+		color("var(--cf-neg,#e5807e)"),
+	)
+	rule(".add-item.danger:hover, .add-item.danger:focus-visible",
+		background("#3b1414"),
+		color("#f4a3a1"),
+	)
 	rule(".add-backdrop",
 		position("fixed"),
 		inset("0"),
