@@ -47,6 +47,8 @@ func AddHost() uic.Node {
 	case "budget":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("budgets.add"),
+			Width:     "560px",
+			Height:    "820px",
 			CloseOnly: true,
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),

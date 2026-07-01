@@ -5132,7 +5132,7 @@ func registerGenerated() {
 		display("flex"),
 		flexDirection("column"),
 		gap("0.4rem"),
-		maxHeight("320px"),
+		maxHeight("440px"),
 		overflowY("auto"),
 		paddingRight("0.25rem"),
 		margin("0.15rem 0 0.1rem"),

@@ -36,7 +36,7 @@ func BudgetEditHost() uic.Node {
 	case uistate.BudgetEditModeTopup:
 		title, width, height = uistate.T("budgets.topupTitle"), "420px", "300px"
 	case uistate.BudgetEditModeCover:
-		title, width, height = uistate.T("budgets.coverModalTitle"), "540px", "680px"
+		title, width, height = uistate.T("budgets.coverModalTitle"), "540px", "780px"
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{
