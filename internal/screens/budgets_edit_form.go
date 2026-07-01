@@ -11,9 +11,12 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/coverformula"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -44,6 +47,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
+	var coverPayAnchor time.Time
+	if pr.PayCycleAnchor != "" {
+		if t, e := time.Parse("2006-01-02", pr.PayCycleAnchor); e == nil {
+			coverPayAnchor = t
+		}
+	}
 
 	app := appstate.Default
 	done := props.OnDone
@@ -116,8 +125,10 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	customEditVals := ui.UseState(customMapToStrings(b.Custom))
 	topupAmt := ui.UseState("")
 	coverAmtS := ui.UseState(coverDefaultStr)
-	coverSelS := ui.UseState(map[string]bool{}) // sourceID → checked
-	coverWtS := ui.UseState(map[string]int{})   // sourceID → ratio weight (default 1)
+	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
+	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
+	amtFxS := ui.UseState(recurringAmountFormula(b) != "") // amount is a formula, not a number
+	amtFormulaS := ui.UseState(recurringAmountFormula(b))
 	recurringS := ui.UseState(b.RecurringCover != nil)
 	errS := ui.UseState("")
 
@@ -127,6 +138,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
 	onCoverAmt := ui.UseEvent(func(v string) { coverAmtS.Set(v) })
 	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
+	toggleAmtFx := ui.UseEvent(func() { amtFxS.Set(!amtFxS.Get()) })
+	onAmtFormula := ui.UseEvent(func(v string) { amtFormulaS.Set(v) })
 	onToggleRecurring := ui.UseEvent(func() { recurringS.Set(!recurringS.Get()) })
 	// Plain funcs (not hooks) passed down to each per-source row component, so the
 	// checkbox/weight On* handlers live in the row, not in this loop.
@@ -167,32 +180,59 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			done()
 			return
 		}
-		amt, err := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
-		if err != nil || amt <= 0 {
-			errS.Set(uistate.T("budgets.limitRequired"))
-			return
+		// Resolve the amount: a formula evaluated in this budget's context, else a number.
+		var amt int64
+		if amtFxS.Get() {
+			m, ferr := buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor).AmountMinor(amtFormulaS.Get(), b)
+			if ferr != nil {
+				errS.Set(uistate.T("budgets.coverFormulaErr", ferr.Error()))
+				return
+			}
+			amt = m
+		} else if m, perr := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec); perr == nil {
+			amt = m
 		}
-		shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get())
-		if len(shares) == 0 {
+		if amt < 0 {
+			amt = 0
+		}
+		// Sources are required (that's where the money comes from), whether covering now
+		// or saving a recurring rule.
+		selectedAny := false
+		for _, sc := range coverSrcs {
+			if coverSelS.Get()[sc.ID] {
+				selectedAny = true
+				break
+			}
+		}
+		if !selectedAny {
 			errS.Set(uistate.T("budgets.coverPickSource"))
 			return
 		}
-		// Pre-validate so a partial failure can't leave a half-applied cover: each
-		// source must keep a positive limit after giving its share.
-		for _, sc := range coverSrcs {
-			if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
-				errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
-				return
-			}
+		// A one-time cover needs a positive amount; a recurring rule may evaluate to 0
+		// this period (nothing to cover yet) and still be saved for future periods.
+		if amt == 0 && !recurringS.Get() {
+			errS.Set(uistate.T("budgets.limitRequired"))
+			return
 		}
-		for _, sc := range coverSrcs {
-			share, ok := shares[sc.ID]
-			if !ok || share <= 0 {
-				continue
+		if amt > 0 {
+			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), coverWtS.Get())
+			// Pre-validate so a partial failure can't leave a half-applied cover: each
+			// source must keep a positive limit after giving its share.
+			for _, sc := range coverSrcs {
+				if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
+					errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
+					return
+				}
 			}
-			if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
-				errS.Set(err.Error())
-				return
+			for _, sc := range coverSrcs {
+				share, ok := shares[sc.ID]
+				if !ok || share <= 0 {
+					continue
+				}
+				if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
+					errS.Set(err.Error())
+					return
+				}
 			}
 		}
 		// Save / clear the standing recurring arrangement per the toggle (re-fetch the
@@ -213,7 +253,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w})
 					}
 				}
-				nb.RecurringCover = &domain.RecurringCover{AmountMinor: amt, Sources: srcs, LastAppliedPeriod: start.Format("2006-01-02")}
+				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: start.Format("2006-01-02")}
+				if amtFxS.Get() {
+					rc.AmountFormula = strings.TrimSpace(amtFormulaS.Get())
+				}
+				rc.AmountMinor = amt // fixed amount, or the last-evaluated value as a record
+				nb.RecurringCover = rc
 			} else {
 				nb.RecurringCover = nil
 			}
@@ -320,19 +365,45 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if len(coverSrcs) == 0 {
 			return Div(css.Class("acct-edit-form"), P(css.Class("empty"), uistate.T("budgets.coverNoSources")))
 		}
-		// Live per-source shares from the current amount + selection + weights.
-		amtMinor, _ := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
+		// Effective amount + live preview: in formula mode evaluate the amount formula in
+		// this budget's context; otherwise parse the number. The shares below use it.
+		coverCtx := buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor)
+		var amtMinor int64
+		amtPreview, amtFxErr := "—", ""
+		if amtFxS.Get() {
+			if strings.TrimSpace(amtFormulaS.Get()) != "" {
+				if m, ferr := coverCtx.AmountMinor(amtFormulaS.Get(), b); ferr != nil {
+					amtFxErr = ferr.Error()
+				} else {
+					amtMinor, amtPreview = m, fmtMoney(money.New(m, cur))
+				}
+			}
+		} else {
+			amtMinor, _ = money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
+		}
 		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), coverWtS.Get())
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitCover),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.coverHint", coverShortfallStr)),
+			// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
+			// this budget's context and re-evaluated each period when recurring.
 			labeledField(uistate.T("budgets.amountToMove"),
-				Div(css.Class("cover-amount-row"),
-					Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
-						Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
-						Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt)),
-					If(coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
-						OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
+				Div(css.Class("cover-amount-block"),
+					Div(css.Class("cover-amount-row"),
+						IfElse(amtFxS.Get(),
+							Input(css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
+								Placeholder("overspend"), Value(amtFormulaS.Get()), OnInput(onAmtFormula)),
+							Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
+								Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
+								Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt))),
+						If(!amtFxS.Get() && coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
+							OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
+						Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(amtFxS.Get())),
+							Attr("data-testid", "cover-fx-toggle"), Title(uistate.T("budgets.coverFormulaTitle")), OnClick(toggleAmtFx), "ƒx"),
+					),
+					If(amtFxS.Get() && amtFxErr == "", Span(css.Class("cover-fx-preview"), Attr("data-testid", "cover-fx-preview"), uistate.T("budgets.coverFormulaPreview", amtPreview))),
+					If(amtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", amtFxErr))),
+					If(amtFxS.Get(), Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverFormulaHint"))),
 				)),
 			// Multi-source: check the budgets to pull from (split equally by default);
 			// the ratio input per source lets the split be unequal.
@@ -526,6 +597,38 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 			),
 		)),
 	)
+}
+
+// buildCoverContext assembles the coverformula evaluation context (the global engine
+// surface + the live data) for the cover modal's amount/weight formula previews. Same
+// shape the recurring boot apply builds.
+func buildCoverContext(app *appstate.App, weekStart time.Weekday, payCycleAnchor time.Time) coverformula.Context {
+	now := time.Now()
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	ms, me := dateutil.MonthRange(now)
+	surface := engineenv.Vars(engineenv.Data{
+		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
+		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
+		Rates: rates, Now: now, PeriodStart: ms, PeriodEnd: me,
+		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
+	})
+	return coverformula.Context{
+		Base: surface, Txns: app.Transactions(), Rates: rates, Now: now,
+		WeekStart: weekStart, PayCycleAnchor: payCycleAnchor, Defs: app.CustomFieldDefs(),
+	}
+}
+
+// recurringAmountFormula returns the budget's stored recurring cover amount formula
+// (empty when none).
+func recurringAmountFormula(b domain.Budget) string {
+	if b.RecurringCover != nil {
+		return b.RecurringCover.AmountFormula
+	}
+	return ""
 }
 
 // budgetCategoryName resolves a category's display name (for the top-up hint), or ""

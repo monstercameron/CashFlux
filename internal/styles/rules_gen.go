@@ -5113,6 +5113,36 @@ func registerGenerated() {
 	rule(".cover-amount-row .btn:hover",
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 	)
+	// Amount block: the number/formula row, then a live evaluated preview or hint.
+	rule(".cover-amount-block",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+	)
+	rule(".cover-fx-toggle",
+		flexShrink("0"),
+		fontWeight("700"),
+		minWidth("42px"),
+	)
+	rule(".cover-fx-toggle[aria-pressed=\"true\"]",
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
+	)
+	rule(".cover-fx-preview",
+		fontSize("0.85rem"),
+		fontWeight("600"),
+		color("var(--accent)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".cover-fx-err",
+		fontSize("0.8rem"),
+		color("var(--danger)"),
+	)
+	rule(".cover-fx-hint",
+		fontSize("0.74rem"),
+		color("var(--text-dim)"),
+	)
 	rule(".cover-src-row",
 		display("flex"),
 		alignItems("center"),
