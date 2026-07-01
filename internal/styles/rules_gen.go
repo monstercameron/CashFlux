@@ -4496,14 +4496,15 @@ func registerGenerated() {
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
-		flexWrap("wrap"),
-		gap("0.6rem 1rem"),
+		flexWrap("nowrap"),
+		gap("1rem"),
 	)
 	rule(".bento-budgets .budgets-toolbar-method",
 		display("flex"),
 		alignItems("center"),
 		gap("0.5rem"),
 		minWidth("0"),
+		flexShrink("1"),
 	)
 	rule(".bento-budgets .budgets-toolbar-label",
 		fontSize("0.8rem"),
@@ -4513,13 +4514,14 @@ func registerGenerated() {
 	)
 	rule(".bento-budgets .budgets-method-select",
 		width("auto"),
-		minWidth("210px"),
-		maxWidth("300px"),
+		minWidth("0"),
+		maxWidth("280px"),
 	)
 	rule(".bento-budgets .budgets-toolbar-actions",
 		display("flex"),
 		alignItems("center"),
-		flexWrap("wrap"),
+		flexWrap("nowrap"),
+		flexShrink("0"),
 		gap("0.5rem"),
 	)
 	rule(".bento-ledger .txn-table",
