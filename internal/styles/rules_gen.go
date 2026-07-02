@@ -4826,6 +4826,83 @@ func registerGenerated() {
 		justifyContent("flex-end"),
 		gap("0.35rem"),
 	)
+	// Cohesion pass — lift the reused strategy / credit / loans / payoff-calculator panels
+	// (which lean on the shared stat / table / form / bar primitives) into the debt page's
+	// visual language. Scoped to .bento-debt so nothing else is touched.
+	rule(".bento-debt .card",
+		background("transparent"),
+		border("0"),
+		padding("0"),
+	)
+	rule(".bento-debt .card-title, .bento-debt h2, .bento-debt h3",
+		fontFamily("var(--font-display, \"Fraunces\", serif)"),
+		fontWeight("700"),
+		letterSpacing("-0.01em"),
+	)
+	rule(".bento-debt .muted, .bento-debt .budget-sub",
+		prop("max-width", "72ch"),
+		prop("line-height", "1.5"),
+	)
+	rule(".bento-debt .stat-grid",
+		gap("0.6rem"),
+		marginBottom("0.75rem"),
+		gridTemplateColumns("repeat(auto-fit, minmax(150px, 1fr))"),
+	)
+	rule(".bento-debt .stat",
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		border("1px solid var(--border)"),
+		borderRadius("12px"),
+		padding("0.7rem 0.9rem"),
+	)
+	rule(".bento-debt .stat-value",
+		fontFamily("var(--font-display, \"Fraunces\", serif)"),
+		fontSize("1.5rem"),
+		fontVariantNumeric("tabular-nums"),
+		prop("margin-top", "0.15rem"),
+	)
+	// Inputs: keep single-field forms from stretching edge-to-edge; give fields the elevated
+	// surface treatment so they don't read as bare boxes.
+	rule(".bento-debt .form-grid",
+		gridTemplateColumns("repeat(auto-fit, minmax(180px, 280px))"),
+		justifyContent("start"),
+		gap("0.6rem"),
+	)
+	rule(".bento-debt .field",
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+	)
+	rule(".bento-debt .field:focus",
+		borderColor("var(--accent)"),
+		prop("outline", "none"),
+	)
+	// Progress / burn-down bars match the utilization meter.
+	rule(".bento-debt .bar",
+		height("10px"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+	)
+	rule(".bento-debt .bar-fill",
+		background("var(--accent)"),
+		borderRadius("999px"),
+	)
+	// Tables: quiet uppercase header, tabular figures, hairline rows.
+	rule(".bento-debt .t-body th",
+		fontSize("0.72rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.05em"),
+		color("var(--text-dim)"),
+		fontWeight("600"),
+	)
+	rule(".bento-debt .t-body td",
+		fontVariantNumeric("tabular-nums"),
+	)
+	// Section rhythm: flattened inner cards need their own spacing when stacked in a tile.
+	rule(".bento-debt .card + .card",
+		prop("margin-top", "1rem"),
+	)
 	// To-do surface: same full-width, auto-height stacked-tile layout as /goals so the
 	// summary / toolbar / list tiles flow top-to-bottom instead of into a fixed grid.
 	rule(".bento.bento-todo",

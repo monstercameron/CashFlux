@@ -40,6 +40,17 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up (Cam: "the page needs to be redesigned, looks like shit especially the other lower
+components"): the top (hero + ladder) was polished but the REUSED lower panels (strategy/credit/loans/
+payoff-calc) still rendered in the old plain stat-grid/table/form/EntityListSection style, so the page
+read as two different designs. Fix = a .bento-debt-scoped cohesion pass (no per-component rewrites):
+flatten the redundant inner .card (the tile's own .w is the border/frame), headings + .stat-value in
+Fraunces + tabular, .stat → elevated debt-card surface, .form-grid capped to minmax(180,280) + start-
+justified (single-field forms stopped stretching full width), .field elevated + accent focus, .bar →
+util-meter look, .t-body th uppercase-dim + td tabular, .card+.card rhythm. Screenshot confirms the
+strategy comparison now reads as serif "42 months" cards and the input is right-sized. Same primitives
+underlie credit/loans/payoff-calc so they lift together. Committed separately from the feature.
+
 ## 2026-07-02 — Notifications: widgetized "signal feed" redesign
 
 Cam: widgetize + ⋯ menu + redesign from scratch (design skill). Committed to a severity-driven signal
