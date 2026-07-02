@@ -6,25 +6,27 @@ package screens
 
 import (
 	"fmt"
-	"strconv"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
 // isInvestmentAccount reports whether an account type holds investment positions
-// (brokerage, retirement, or crypto). These are the accounts shown on
-// /investments.
+// (brokerage, retirement, or crypto). These are the accounts shown on /investments.
 func isInvestmentAccount(t domain.AccountType) bool {
 	switch t {
 	case domain.TypeInvestment, domain.TypeRetirement, domain.TypeCrypto:
@@ -46,8 +48,36 @@ func investmentAccountTypeBadge(t domain.AccountType) string {
 	}
 }
 
-// fmtShares formats a float64 shares value trimming unnecessary trailing zeros
-// up to 6 decimal places.
+// securityTypeLabel is the display label for a security type (empty → other).
+func securityTypeLabel(s domain.SecurityType) string {
+	switch s.Normalized() {
+	case domain.SecurityStock:
+		return uistate.T("investments.secStock")
+	case domain.SecurityETF:
+		return uistate.T("investments.secETF")
+	case domain.SecurityMutualFund:
+		return uistate.T("investments.secMutualFund")
+	case domain.SecurityBond:
+		return uistate.T("investments.secBond")
+	case domain.SecurityCrypto:
+		return uistate.T("investments.secCrypto")
+	case domain.SecurityCash:
+		return uistate.T("investments.secCash")
+	default:
+		return uistate.T("investments.secOther")
+	}
+}
+
+// securityTypeOptions builds the security-type picker options.
+func securityTypeOptions() []uiw.SelectOption {
+	out := make([]uiw.SelectOption, 0, len(domain.AllSecurityTypes))
+	for _, s := range domain.AllSecurityTypes {
+		out = append(out, uiw.SelectOption{Value: string(s), Label: securityTypeLabel(s)})
+	}
+	return out
+}
+
+// fmtShares formats a share count, trimming trailing zeros up to 6 decimals.
 func fmtShares(v float64) string {
 	s := fmt.Sprintf("%.6f", v)
 	s = strings.TrimRight(s, "0")
@@ -55,8 +85,7 @@ func fmtShares(v float64) string {
 	return s
 }
 
-// fmtSignedMoney formats a signed minor-unit amount into a display string with
-// symbol. Negative amounts get a "−" prefix.
+// fmtSignedMoney formats a signed minor-unit amount with symbol; negatives get "−".
 func fmtSignedMoney(minor int64, sym string, dec int) string {
 	abs := minor
 	if abs < 0 {
@@ -77,510 +106,203 @@ func gainToneClass(gainMinor int64) string {
 	return "text-up"
 }
 
-// --------------------------------------------------------------------------
-// holdingRowProps is the props bag for a single interactive holding row.
-// Each row is its own component so hooks occupy stable positions — never inside
-// the variable-length holdings loop.
-// --------------------------------------------------------------------------
+// --- shared view -----------------------------------------------------------------
 
-type holdingRowProps struct {
-	H     domain.Holding
-	Sym   string // currency symbol
-	Dec   int    // currency decimal places
-	OnDel func() // callback when user confirms delete
+// investView is the derived render model the investment tiles share: the securities
+// (per-ticker holdings) and their portfolio summary, the "traditional" balance-tracked
+// investment accounts, and the combined total — so every tile reads one consistent model.
+// An account is EITHER securities-tracked (has holdings) OR balance-tracked (traditional);
+// it is never counted both ways, so the total can't double-count.
+type investView struct {
+	Base            string
+	Sym             string
+	Dec             int
+	Securities      []domain.Holding // holdings on active investment accounts, value desc
+	Traditional     []domain.Account // investment accounts with no holdings (balance-tracked)
+	BalByID         map[string]int64 // traditional account balances (base currency)
+	SecSummary      portfolio.Summary
+	TradValueMinor  int64
+	TotalValueMinor int64
+	AllocClass      []portfolio.Weight
+	AllocType       []portfolio.Weight
+	HasAny          bool // any investment account exists at all
 }
 
-// holdingRow renders one holding: name/ticker, shares, current value, cost basis,
-// and gain/loss. Delete is inline; no inline edit (the add form is the edit path).
-func holdingRow(props holdingRowProps) ui.Node {
-	h := props.H
-	ph := portfolio.FromDomain(h)
+// computeInvestView builds the shared model over the live store. Pure (no hooks).
+func computeInvestView(app *appstate.App) investView {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	v := investView{Base: base, Sym: currency.Symbol(base), Dec: currency.Decimals(base), BalByID: map[string]int64{}}
+	txns := app.Transactions()
 
-	valueMinor := portfolio.HoldingValueMinor(ph)
-	gainMinor := portfolio.UnrealizedGainMinor(ph)
-	retPct := portfolio.ReturnPct(ph)
-	tone := gainToneClass(gainMinor)
+	var accts []domain.Account
+	for _, a := range app.Accounts() {
+		if !a.Archived && isInvestmentAccount(a.Type) {
+			accts = append(accts, a)
+		}
+	}
+	v.HasAny = len(accts) > 0
 
-	label := h.Ticker
-	if label == "" {
-		label = h.Name
+	byAccount := map[string][]domain.Holding{}
+	for _, h := range app.Holdings() {
+		byAccount[h.AccountID] = append(byAccount[h.AccountID], h)
 	}
 
-	delHandler := ui.UseEvent(func(_ string) {
-		if props.OnDel != nil {
-			props.OnDel()
-		}
-	})
-
-	nameMeta := h.Name
-	if h.Ticker != "" && h.Ticker != h.Name {
-		nameMeta = h.Name + " (" + h.Ticker + ")"
-	}
-
-	assetTag := If(h.AssetClass != "",
-		Span(css.Class("t-caption", tw.TextFaint), " · "+h.AssetClass),
-	)
-
-	nameCol := Div(css.Class(tw.FlexCol, tw.Gap1),
-		Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), nameMeta),
-		Div(css.Class("t-caption", tw.TextDim),
-			label, assetTag),
-	)
-
-	sharesStr := fmtShares(h.Shares) + " " + uistate.T("investments.shares")
-	costStr := uistate.T("investments.costLabel") + " " + fmtSignedMoney(h.CostBasisMinor, props.Sym, props.Dec)
-
-	valueBlock := Div(css.Class(tw.FlexCol, tw.ItemsEnd, tw.Gap1),
-		Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)),
-			fmtSignedMoney(valueMinor, props.Sym, props.Dec)),
-		Div(css.Class("t-caption", tw.TextDim),
-			sharesStr+" · "+costStr),
-	)
-
-	gainBlock := Div(css.Class(tw.FlexCol, tw.ItemsEnd),
-		Div(ClassStr("t-body "+tw.ColorClass(tone)),
-			fmtSignedMoney(gainMinor, props.Sym, props.Dec)),
-		Div(ClassStr("t-caption "+tw.ColorClass(tone)),
-			fmt.Sprintf("%.2f%%", retPct)),
-	)
-
-	delBtn := Button(
-		css.Class("btn-ghost", "t-caption", tw.TextDim),
-		Attr("aria-label", fmt.Sprintf(uistate.T("investments.deleteHoldingAria"), h.Name)),
-		OnClick(delHandler),
-		uistate.T("investments.deleteHolding"),
-	)
-
-	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap4, tw.Py2),
-		Style(map[string]string{"border-bottom": "1px solid var(--line)"}),
-		Div(css.Class(tw.Flex1), nameCol),
-		valueBlock,
-		gainBlock,
-		delBtn,
-	)
-}
-
-// --------------------------------------------------------------------------
-// addHoldingFormProps is the props for the "Add holding" form, one per account.
-// --------------------------------------------------------------------------
-
-type addHoldingFormProps struct {
-	AccountID string
-	Sym       string
-	Dec       int
-}
-
-// addHoldingForm renders the form for adding a new holding to one account.
-// All UseState/UseEvent calls are at top level of this component for stable hooks.
-func addHoldingForm(props addHoldingFormProps) ui.Node {
-	tickerS := ui.UseState("")
-	nameS := ui.UseState("")
-	sharesS := ui.UseState("")
-	costS := ui.UseState("")
-	priceS := ui.UseState("")
-	classS := ui.UseState("")
-	errS := ui.UseState("")
-
-	onTicker := ui.UseEvent(func(v string) { tickerS.Set(v) })
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-	onShares := ui.UseEvent(func(v string) { sharesS.Set(v) })
-	onCost := ui.UseEvent(func(v string) { costS.Set(v) })
-	onPrice := ui.UseEvent(func(v string) { priceS.Set(v) })
-	onClass := ui.UseEvent(func(v string) { classS.Set(v) })
-
-	onSave := ui.UseEvent(func(_ string) {
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		name := strings.TrimSpace(nameS.Get())
-		if name == "" {
-			errS.Set(uistate.T("investments.nameRequired"))
-			return
-		}
-		sharesF, err := strconv.ParseFloat(strings.TrimSpace(sharesS.Get()), 64)
-		if err != nil || sharesF <= 0 {
-			errS.Set(uistate.T("investments.sharesRequired"))
-			return
-		}
-
-		// Convert major-unit inputs to minor units.
-		mul := int64(1)
-		for i := 0; i < props.Dec; i++ {
-			mul *= 10
-		}
-		costF, err2 := strconv.ParseFloat(strings.TrimSpace(costS.Get()), 64)
-		if err2 != nil || costF < 0 {
-			errS.Set(uistate.T("investments.costRequired"))
-			return
-		}
-		priceF, err3 := strconv.ParseFloat(strings.TrimSpace(priceS.Get()), 64)
-		if err3 != nil || priceF < 0 {
-			errS.Set(uistate.T("investments.priceRequired"))
-			return
-		}
-
-		h := domain.Holding{
-			ID:                        id.NewWithPrefix("hld"),
-			AccountID:                 props.AccountID,
-			Ticker:                    strings.TrimSpace(tickerS.Get()),
-			Name:                      name,
-			Shares:                    sharesF,
-			CostBasisMinor:            int64(costF * float64(mul)),
-			CurrentPriceMinorPerShare: int64(priceF * float64(mul)),
-			AssetClass:                strings.TrimSpace(classS.Get()),
-		}
-		if saveErr := app.PutHolding(h); saveErr != nil {
-			errS.Set(saveErr.Error())
-			return
-		}
-		// Reset form.
-		tickerS.Set("")
-		nameS.Set("")
-		sharesS.Set("")
-		costS.Set("")
-		priceS.Set("")
-		classS.Set("")
-		errS.Set("")
-	})
-
-	sym := props.Sym
-	aid := props.AccountID
-
-	fields := Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap3, tw.Mt3),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-ticker-"+aid),
-				uistate.T("investments.tickerLabel")),
-			Input(css.Class("field"),
-				Attr("id", "hld-ticker-"+aid),
-				Type("text"),
-				Placeholder(uistate.T("investments.tickerPlaceholder")),
-				Value(tickerS.Get()), OnInput(onTicker),
-				Attr("aria-label", uistate.T("investments.tickerLabel"))),
-		),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-name-"+aid),
-				uistate.T("investments.nameLabel")),
-			Input(css.Class("field"),
-				Attr("id", "hld-name-"+aid),
-				Type("text"),
-				Placeholder(uistate.T("investments.namePlaceholder")),
-				Value(nameS.Get()), OnInput(onName),
-				Attr("aria-label", uistate.T("investments.nameLabel"))),
-		),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-shares-"+aid),
-				uistate.T("investments.sharesLabel")),
-			Input(css.Class("field"),
-				Attr("id", "hld-shares-"+aid),
-				Type("number"), Attr("min", "0"), Attr("step", "any"),
-				Placeholder(uistate.T("investments.sharesPlaceholder")),
-				Value(sharesS.Get()), OnInput(onShares),
-				Attr("aria-label", uistate.T("investments.sharesLabel"))),
-		),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-cost-"+aid),
-				fmt.Sprintf(uistate.T("investments.costBasisLabel"), sym)),
-			Input(css.Class("field"),
-				Attr("id", "hld-cost-"+aid),
-				Type("number"), Attr("min", "0"), Attr("step", "any"),
-				Placeholder(fmt.Sprintf(uistate.T("investments.costBasisPlaceholder"), sym)),
-				Value(costS.Get()), OnInput(onCost),
-				Attr("aria-label", fmt.Sprintf(uistate.T("investments.costBasisLabel"), sym))),
-		),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-price-"+aid),
-				fmt.Sprintf(uistate.T("investments.priceLabel"), sym)),
-			Input(css.Class("field"),
-				Attr("id", "hld-price-"+aid),
-				Type("number"), Attr("min", "0"), Attr("step", "any"),
-				Placeholder(fmt.Sprintf(uistate.T("investments.pricePlaceholder"), sym)),
-				Value(priceS.Get()), OnInput(onPrice),
-				Attr("aria-label", fmt.Sprintf(uistate.T("investments.priceLabel"), sym))),
-		),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Label(css.Class("t-caption", tw.TextDim),
-				Attr("for", "hld-class-"+aid),
-				uistate.T("investments.assetClassLabel")),
-			Input(css.Class("field"),
-				Attr("id", "hld-class-"+aid),
-				Type("text"),
-				Placeholder(uistate.T("investments.assetClassPlaceholder")),
-				Value(classS.Get()), OnInput(onClass),
-				Attr("aria-label", uistate.T("investments.assetClassLabel"))),
-		),
-	)
-
-	saveBtn := Button(css.Class("btn-primary", tw.Mt3),
-		OnClick(onSave),
-		uistate.T("investments.addHolding"),
-	)
-
-	var errNode ui.Node = Fragment()
-	if msg := errS.Get(); msg != "" {
-		errNode = P(css.Class("t-caption", tw.TextDown, tw.Mt1), msg)
-	}
-
-	return Div(css.Class("card-inset", tw.Mt3, tw.FlexCol),
-		Div(ClassStr("t-caption "+tw.Fold(tw.FontMedium, tw.TextDim)),
-			uistate.T("investments.addHoldingTitle")),
-		fields,
-		saveBtn,
-		errNode,
-	)
-}
-
-// --------------------------------------------------------------------------
-// investmentAccountCardProps — one investment account card with its holdings.
-// --------------------------------------------------------------------------
-
-type investmentAccountCardProps struct {
-	Account  domain.Account
-	Holdings []domain.Holding
-	Sym      string
-	Dec      int
-}
-
-// investmentAccountCard renders one full account section: header, performance
-// summary (C220), asset-class allocation bars (C221), and holdings list with
-// add form (C219). Each is its own component for stable hooks.
-func investmentAccountCard(props investmentAccountCardProps) ui.Node {
-	a := props.Account
-	holdings := props.Holdings
-	sym := props.Sym
-	dec := props.Dec
-
-	phSlice := portfolio.FromDomainSlice(holdings)
-	summary := portfolio.PortfolioSummary(phSlice)
-	allocation := portfolio.AllocationByAssetClass(phSlice)
-
-	gainTone := gainToneClass(summary.TotalGainMinor)
-
-	// C220 — performance summary tiles (2×2 grid)
-	summaryNode := Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap3, tw.Mb3),
-		Div(css.Class("stat"),
-			Div(css.Class("stat-label"), uistate.T("investments.totalValue")),
-			Div(ClassStr("stat-value"), fmtSignedMoney(summary.TotalValueMinor, sym, dec)),
-		),
-		Div(css.Class("stat"),
-			Div(css.Class("stat-label"), uistate.T("investments.totalCost")),
-			Div(ClassStr("stat-value text-dim"), fmtSignedMoney(summary.TotalCostMinor, sym, dec)),
-		),
-		Div(css.Class("stat"),
-			Div(css.Class("stat-label"), uistate.T("investments.totalGain")),
-			Div(ClassStr("stat-value "+gainTone),
-				fmtSignedMoney(summary.TotalGainMinor, sym, dec)),
-		),
-		Div(css.Class("stat"),
-			Div(css.Class("stat-label"), uistate.T("investments.returnPct")),
-			Div(ClassStr("stat-value "+gainTone),
-				fmt.Sprintf("%.2f%%", summary.ReturnPct)),
-		),
-	)
-
-	// C221 — asset-class allocation bar list
-	var allocationNode ui.Node = Fragment()
-	if len(allocation) > 0 {
-		rows := []any{css.Class(tw.FlexCol, tw.Gap2, tw.Mb3)}
-		for _, w := range allocation {
-			pctStr := fmt.Sprintf("%.1f%%", w.Pct)
-			barPct := w.Pct
-			if barPct > 100 {
-				barPct = 100
+	acctSet := map[string]bool{}
+	for _, a := range accts {
+		acctSet[a.ID] = true
+		if len(byAccount[a.ID]) == 0 {
+			// Traditional: valued by the account's own balance (FX-converted to base).
+			bal, _ := ledger.Balance(a, txns)
+			cv := bal.Amount
+			if c, err := rates.Convert(bal, base); err == nil {
+				cv = c.Amount
 			}
-			label := w.Label
-			if label == "" {
-				label = uistate.T("investments.assetClassOther")
-			}
-			rows = append(rows,
-				Div(css.Class(tw.FlexCol, tw.Gap1),
-					Div(css.Class(tw.Flex, tw.JustifyBetween),
-						Span(css.Class("t-caption", tw.TextDim), label),
-						Span(ClassStr("t-caption "+tw.Fold(tw.FontMedium)+" text-dim"),
-							pctStr+" · "+fmtSignedMoney(w.ValueMinor, sym, dec)),
-					),
-					Div(Style(map[string]string{
-						"background": "var(--line)", "border-radius": "3px", "height": "6px",
-					}),
-						Div(Style(map[string]string{
-							"background":    "var(--up)",
-							"border-radius": "3px",
-							"height":        "6px",
-							"width":         fmt.Sprintf("%.1f%%", barPct),
-						})),
-					),
-				),
-			)
+			v.BalByID[a.ID] = cv
+			v.TradValueMinor += cv
+			v.Traditional = append(v.Traditional, a)
 		}
-		allocationTitle := Div(ClassStr("t-caption "+tw.Fold(tw.FontMedium)+" text-dim "+tw.Fold(tw.Mb2)),
-			uistate.T("investments.allocationTitle"))
-		allocationNode = Div(css.Class(tw.FlexCol), allocationTitle, Div(rows...))
 	}
-
-	// C219 — per-holding rows (each is its own component via ui.CreateElement)
-	var holdingsContent ui.Node
-	if len(holdings) == 0 {
-		holdingsContent = P(css.Class("t-caption", tw.TextDim, tw.Py2),
-			uistate.T("investments.emptyHoldings"))
-	} else {
-		rows := []any{css.Class(tw.FlexCol)}
-		for _, h := range holdings {
-			hCopy := h
-			app := appstate.Default
-			p := holdingRowProps{
-				H:   hCopy,
-				Sym: sym,
-				Dec: dec,
-				OnDel: func() {
-					if app != nil {
-						_ = app.DeleteHolding(hCopy.ID)
-					}
-				},
-			}
-			rows = append(rows, ui.CreateElement(holdingRow, p))
+	// Securities: every holding on an active investment account.
+	for _, h := range app.Holdings() {
+		if acctSet[h.AccountID] {
+			v.Securities = append(v.Securities, h)
 		}
-		holdingsContent = Div(rows...)
 	}
 
-	// Add form — stable component position per account card.
-	formProps := addHoldingFormProps{AccountID: a.ID, Sym: sym, Dec: dec}
+	ph := portfolio.FromDomainSlice(v.Securities)
+	v.SecSummary = portfolio.PortfolioSummary(ph)
+	v.AllocClass = portfolio.AllocationByAssetClass(ph)
+	v.AllocType = portfolio.AllocationBySecurityType(ph)
+	v.TotalValueMinor = v.SecSummary.TotalValueMinor + v.TradValueMinor
 
-	badge := investmentAccountTypeBadge(a.Type)
-
-	// Show total value in the header only if there are holdings.
-	var headerRight ui.Node = Fragment()
-	if len(holdings) > 0 {
-		headerRight = Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)),
-			fmtSignedMoney(summary.TotalValueMinor, sym, dec))
-	}
-
-	header := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb3),
-		Div(css.Class(tw.FlexCol, tw.Gap1),
-			Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), a.Name),
-			Span(css.Class("badge", "t-caption"), badge),
-		),
-		headerRight,
-	)
-
-	return uiw.Card(uiw.CardProps{
-		Body: Div(css.Class(tw.FlexCol),
-			header,
-			If(len(holdings) > 0, summaryNode),
-			If(len(holdings) > 0, allocationNode),
-			holdingsContent,
-			ui.CreateElement(addHoldingForm, formProps),
-		),
+	sort.SliceStable(v.Securities, func(i, j int) bool {
+		return portfolio.HoldingValueMinor(portfolio.FromDomain(v.Securities[i])) >
+			portfolio.HoldingValueMinor(portfolio.FromDomain(v.Securities[j]))
 	})
+	sort.SliceStable(v.Traditional, func(i, j int) bool {
+		return v.BalByID[v.Traditional[i].ID] > v.BalByID[v.Traditional[j].ID]
+	})
+	return v
 }
 
-// --------------------------------------------------------------------------
-// InvestmentsScreen is the /investments page.
+// investOwnerLink is a section's link to the page that owns its data (accounts).
+func investOwnerLink(route, label string) ui.Node {
+	return A(css.Class("debt-owner-link"), Href(uistate.RoutePath(route)),
+		Attr("data-testid", "invest-link-"+route),
+		Span(label),
+		uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+	)
+}
+
+// investSection wraps a tile body with a serif section title + optional owning-page link,
+// reusing the debt-section chrome so /investments matches the rest of the app.
+func investSection(id, title string, action, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if id != "" {
+		args = append(args, Attr("id", id))
+	}
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
+	return Div(args...)
+}
+
+// InvestmentsScreen is the widgetized /investments surface — a thin SURFACE HOST like
+// /debt and /accounts. It builds one engine RenderCtx over the live store and renders a
+// fixed set of native tiles:
 //
-// C219 — holdings list + add/delete per account
-// C220 — performance summary (value, cost, gain/loss, return%)
-// C221 — asset-class allocation breakdown
-// --------------------------------------------------------------------------
-
-// InvestmentsScreen renders the /investments page: per-account holdings list
-// with performance summary and asset-class allocation bars (C219/C220/C221, F30).
+//   - invest-summary     (Native): the portfolio-value hero + gain/return + securities/traditional split
+//   - invest-toolbar     (Native): Add holding, Manage accounts, Portfolio-metrics toggle
+//   - invest-securities  (Native): the per-ticker holdings (with the add-holding form)
+//   - invest-traditional (Native): balance-tracked investment accounts (only when any exist)
+//   - invest-allocation  (Native): asset-class + security-type allocation (only when holdings exist)
+//   - invest-formula     (Native): the opt-in Portfolio-metrics FormulaBuilder (toolbar toggle)
 func InvestmentsScreen() ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
+	formulasAtom := uistate.UseInvestShowFormulas()
 
-	settings := app.Settings()
-	baseCur := settings.BaseCurrency
-	if baseCur == "" {
-		baseCur = "USD"
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
 	}
-	sym := currency.Symbol(baseCur)
-	dec := currency.Decimals(baseCur)
-
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	accounts := app.Accounts()
-	allHoldings := app.Holdings()
-
-	// Filter to active investment accounts.
-	var investAccounts []domain.Account
-	for _, a := range accounts {
-		if !a.Archived && isInvestmentAccount(a.Type) {
-			investAccounts = append(investAccounts, a)
-		}
+	txns := app.Transactions()
+	rctx := widgetrender.RenderCtx{
+		App: app, Accounts: accounts, Txns: txns,
+		ScopedAccounts: accounts, ScopedTxns: txns,
+		Rates: rates, Base: base,
+		Start: time.Time{}, End: time.Now(),
 	}
 
-	// Empty state: no investment accounts at all.
-	if len(investAccounts) == 0 {
-		return uiw.Card(uiw.CardProps{
-			Body: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3),
-				P(ClassStr("t-body "+tw.Fold(tw.FontMedium)), uistate.T("investments.noAccountsTitle")),
-				P(css.Class("t-caption", tw.TextDim), uistate.T("investments.noAccountsBody")),
-			),
-		})
+	v := computeInvestView(app)
+
+	specs := []domain.WidgetSpec{
+		investNativeSpec("invest-summary"),
+		investNativeSpec("invest-toolbar"),
+		investNativeSpec("invest-securities"),
+	}
+	if len(v.Traditional) > 0 {
+		specs = append(specs, investNativeSpec("invest-traditional"))
+	}
+	if len(v.Securities) > 0 {
+		specs = append(specs, investNativeSpec("invest-allocation"))
+	}
+	if formulasAtom.Get() {
+		specs = append(specs, investNativeSpec("invest-formula"))
 	}
 
-	// Build a lookup: accountID → holdings.
-	byAccount := make(map[string][]domain.Holding)
-	for _, h := range allHoldings {
-		byAccount[h.AccountID] = append(byAccount[h.AccountID], h)
-	}
+	return Div(css.Class("bento bento-invest"),
+		MapKeyed(specs,
+			func(sp domain.WidgetSpec) any { return sp.ID },
+			func(sp domain.WidgetSpec) ui.Node {
+				c := rctx
+				c.Spec = sp
+				if node, ok := safeRenderSpec(sp, c); ok {
+					return node
+				}
+				return Fragment()
+			},
+		),
+	)
+}
 
-	// Overall portfolio summary across all investment accounts.
-	var allPH []portfolio.Holding
-	for _, a := range investAccounts {
-		allPH = append(allPH, portfolio.FromDomainSlice(byAccount[a.ID])...)
-	}
-	overallSummary := portfolio.PortfolioSummary(allPH)
-	overallTone := gainToneClass(overallSummary.TotalGainMinor)
+// init registers the investments-surface widget bodies with the engine render registry.
+func init() {
+	R := widgetrender.Register
+	R("invest-summary", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investSummaryWidget, investPanelProps{App: c.App})
+	})
+	R("invest-toolbar", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investToolbarWidget, investPanelProps{App: c.App})
+	})
+	R("invest-securities", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investSecuritiesWidget, investPanelProps{App: c.App})
+	})
+	R("invest-traditional", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investTraditionalWidget, investPanelProps{App: c.App})
+	})
+	R("invest-allocation", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investAllocationWidget, investPanelProps{App: c.App})
+	})
+	R("invest-formula", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investFormulaWidget, investPanelProps{App: c.App})
+	})
+}
 
-	// Overall summary card — only shown when there is at least one holding.
-	var overallCard ui.Node = Fragment()
-	if len(allPH) > 0 {
-		overallCard = uiw.Card(uiw.CardProps{
-			Title: uistate.T("investments.overallTitle"),
-			Body: Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap3),
-				Div(css.Class("stat"),
-					Div(css.Class("stat-label"), uistate.T("investments.totalValue")),
-					Div(ClassStr("stat-value"),
-						fmtSignedMoney(overallSummary.TotalValueMinor, sym, dec)),
-				),
-				Div(css.Class("stat"),
-					Div(css.Class("stat-label"), uistate.T("investments.totalCost")),
-					Div(ClassStr("stat-value text-dim"),
-						fmtSignedMoney(overallSummary.TotalCostMinor, sym, dec)),
-				),
-				Div(css.Class("stat"),
-					Div(css.Class("stat-label"), uistate.T("investments.totalGain")),
-					Div(ClassStr("stat-value "+overallTone),
-						fmtSignedMoney(overallSummary.TotalGainMinor, sym, dec)),
-				),
-				Div(css.Class("stat"),
-					Div(css.Class("stat-label"), uistate.T("investments.returnPct")),
-					Div(ClassStr("stat-value "+overallTone),
-						fmt.Sprintf("%.2f%%", overallSummary.ReturnPct)),
-				),
-			),
-		})
-	}
-
-	// Per-account cards — each is its own component for stable hooks.
-	cards := make([]any, 0, len(investAccounts)+2)
-	cards = append(cards, css.Class(tw.Flex, tw.FlexCol, tw.Gap5))
-	cards = append(cards, overallCard)
-	for _, a := range investAccounts {
-		p := investmentAccountCardProps{
-			Account:  a,
-			Holdings: byAccount[a.ID],
-			Sym:      sym,
-			Dec:      dec,
-		}
-		cards = append(cards, ui.CreateElement(investmentAccountCard, p))
-	}
-
-	return Div(cards...)
+// investNativeSpec builds the seed spec for a Native investments tile (fixed surface).
+func investNativeSpec(id string) domain.WidgetSpec {
+	return domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: id, Kind: domain.KindNative, NativeID: id}
 }

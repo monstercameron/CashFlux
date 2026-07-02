@@ -40,6 +40,28 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 11 (Cam: "move to investments, redesign from scratch as a componentized/widgetized page, have
+the trad investments and add stocks/securities based investments"): SDLC bottom-up.
+DATA: domain SecurityType enum (stock/etf/mutual_fund/bond/crypto/cash/other) + Normalized/Valid, +
+Holding.SecurityType (omitempty, no store migration). portfolio: SecurityType on the compute Holding
+(plain string, keeps package domain-free) + FromDomain map + AllocationBySecurityType. Tests: FromDomain
+maps + normalizes, allocation groups/sorts/pcts, validity.
+MODEL DECISION: an investment account is valued EITHER by its holdings (securities-tracked) OR its
+balance (traditional) — never both → no double-count. Traditional = invest accounts with 0 holdings.
+UI: InvestmentsScreen is now a bento bento-invest surface host (investments.go host+view+helpers,
+investments_tiles.go tiles, investments_row.go components). Tiles: summary (serif portfolio hero +
+securities/traditional split + gain/return/cost chips), toolbar (Add security toggles UseInvestAddOpen,
+Manage accounts, Portfolio-metrics toggle UseInvestShowFormulas), securities (holdingRow cards: sec-type
+badge, ticker chip, shares@price·cost, weight bar, value+toned gain, delete + the reveal add form w/
+account+type pickers), traditional (traditionalRow balance cards), allocation (by type + by class weight
+bars), formula (FormulaBuilder). CSS bento-invest + inv-* (hero glow, cards, sec badges, weight/alloc
+bars) matching the house style. i18n investments.* new keys.
+e2e/investments_check.mjs 21/21 (surface, hero+split+chips, traditional cards, add stock→card+badge+
+value+gain+allocation, securities value non-zero in split, invalid-add error, delete via #cf-dialog-
+confirm, formula reveal, traditional→transactions nav, no errors). NOTE caught by e2e: adding the first
+holding to a balance-tracked account moves it securities-side, so the TOTAL can drop (holding value <
+old balance) — correct per the no-double-count model; asserted securities-value-grew instead.
+
 Follow-up 10 (Cam: "enhance credit health to show demerits + the clearest advice to improve, then add
 a smart+ AI feature to do the analysis with AI"): three phases, SDLC bottom-up.
 PHASE 1 (logic, pure+tested): credithealth gains Demerit/Advice types + deriveDemerits/deriveAdvice.

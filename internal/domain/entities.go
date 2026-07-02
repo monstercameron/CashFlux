@@ -722,4 +722,9 @@ type Holding struct {
 	// AssetClass is a broad category label, e.g. "Stocks", "Bonds", "Cash",
 	// "Crypto", "Real Estate". Empty means unclassified.
 	AssetClass string `json:"assetClass,omitempty"`
+
+	// SecurityType categorizes the position (stock / ETF / mutual fund / bond /
+	// crypto / cash / other), so securities investments read and allocate distinctly.
+	// Empty normalizes to "other"; JSON round-trips with no store migration.
+	SecurityType SecurityType `json:"securityType,omitempty"`
 }

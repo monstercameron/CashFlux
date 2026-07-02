@@ -15,6 +15,7 @@ func FromDomain(h domain.Holding) Holding {
 		CostBasisMinor:            h.CostBasisMinor,
 		CurrentPriceMinorPerShare: h.CurrentPriceMinorPerShare,
 		AssetClass:                h.AssetClass,
+		SecurityType:              string(h.SecurityType.Normalized()),
 	}
 }
 

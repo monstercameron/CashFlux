@@ -4609,6 +4609,218 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// /investments is the same widgetized surface family.
+	rule(".bento.bento-invest",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-invest > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
+	// Summary hero (mirrors the debt hero).
+	rule(".inv-hero",
+		display("flex"),
+		alignItems("flex-end"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("1rem"),
+	)
+	rule(".inv-hero-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+	)
+	rule(".inv-hero-label",
+		fontSize("0.72rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.08em"),
+	)
+	rule(".inv-hero-value",
+		fontSize("2.6rem"),
+		fontWeight("700"),
+		prop("line-height", "1.05"),
+		fontVariantNumeric("tabular-nums"),
+		prop("text-shadow", "0 0 34px color-mix(in srgb, var(--accent) 22%, transparent)"),
+	)
+	rule(".inv-hero-sub",
+		fontSize("0.9rem"),
+		prop("margin-top", "0.1rem"),
+	)
+	rule(".inv-hero-main .debt-owner-link",
+		prop("margin-top", "0.35rem"),
+	)
+	// Holding / traditional cards.
+	rule(".inv-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
+	)
+	rule(".inv-card",
+		position("relative"),
+		display("flex"),
+		alignItems("center"),
+		width("100%"),
+		gap("1rem"),
+		padding("0.9rem 1.25rem"),
+		border("1px solid var(--border)"),
+		borderRadius("14px"),
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		transition("transform 0.16s ease, border-color 0.16s ease"),
+	)
+	rule(".inv-card:hover",
+		borderColor("color-mix(in srgb, var(--accent) 34%, var(--border))"),
+		transform("translateY(-1px)"),
+	)
+	rule(".inv-card-body",
+		flex("1 1 auto"),
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+	)
+	rule(".inv-head",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+	)
+	rule(".inv-name",
+		fontWeight("700"),
+		fontSize("1rem"),
+	)
+	rule(".inv-ticker",
+		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
+		fontSize("0.72rem"),
+		fontWeight("700"),
+		padding("0.05rem 0.4rem"),
+		borderRadius("6px"),
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
+	)
+	rule(".inv-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.45rem"),
+		borderRadius("999px"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+	)
+	rule(".inv-sec-badge",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.05em"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+	)
+	rule(".inv-sec-badge.inv-sec-stock",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+	)
+	rule(".inv-sec-badge.inv-sec-crypto",
+		borderColor("color-mix(in srgb, #f59e0b 45%, var(--border))"),
+		color("color-mix(in srgb, #f59e0b 70%, var(--text))"),
+	)
+	rule(".inv-meta",
+		fontSize("0.8rem"),
+	)
+	rule(".inv-weight",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".inv-weight-track",
+		position("relative"),
+		flex("1 1 auto"),
+		height("6px"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		maxWidth("220px"),
+	)
+	rule(".inv-weight-fill",
+		height("100%"),
+		borderRadius("999px"),
+		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #000), var(--accent))"),
+	)
+	rule(".inv-weight-label",
+		fontSize("0.72rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-side",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("flex-end"),
+		gap("0.2rem"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".inv-value",
+		fontSize("1.2rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-gain",
+		fontSize("0.85rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-gain-pct",
+		fontSize("0.78rem"),
+	)
+	// Allocation columns.
+	rule(".inv-alloc-cols",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(240px, 1fr))"),
+		gap("1rem"),
+	)
+	rule(".inv-alloc-title",
+		fontSize("0.7rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+		marginBottom("0.4rem"),
+	)
+	rule(".inv-alloc-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".inv-alloc-head",
+		display("flex"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+		fontSize("0.82rem"),
+		marginBottom("0.15rem"),
+	)
+	rule(".inv-alloc-label",
+		fontWeight("600"),
+	)
+	rule(".inv-alloc-val",
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-alloc-track",
+		height("8px"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+	)
+	rule(".inv-alloc-fill",
+		height("100%"),
+		borderRadius("999px"),
+		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, #000), var(--accent))"),
+	)
+	rule(".inv-add",
+		marginBottom("0.75rem"),
+	)
 	// Summary hero: the total owed in the display serif beside the engine ratio chips.
 	rule(".debt-hero",
 		display("flex"),

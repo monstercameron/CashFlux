@@ -22,6 +22,9 @@ type Holding struct {
 	CostBasisMinor            int64
 	CurrentPriceMinorPerShare int64
 	AssetClass                string
+	// SecurityType is the position's category (stock/etf/bond/…) as a plain string,
+	// so the pure package stays free of the domain enum. Empty maps to "other".
+	SecurityType string
 }
 
 // HoldingValueMinor returns the current market value of h in minor units,
@@ -132,6 +135,38 @@ func AllocationByAssetClass(hs []Holding) []Weight {
 			pct = float64(v) / float64(total) * 100
 		}
 		weights = append(weights, Weight{Label: cls, ValueMinor: v, Pct: pct})
+	}
+	sort.Slice(weights, func(i, j int) bool {
+		return weights[i].ValueMinor > weights[j].ValueMinor
+	})
+	return weights
+}
+
+// AllocationBySecurityType groups holdings by SecurityType (blank maps to "other"),
+// summing market values, and returns one Weight per type sorted by ValueMinor descending.
+// Pct is each type's share of total portfolio value. Returns nil for an empty slice.
+func AllocationBySecurityType(hs []Holding) []Weight {
+	if len(hs) == 0 {
+		return nil
+	}
+	totals := make(map[string]int64)
+	var total int64
+	for _, h := range hs {
+		st := h.SecurityType
+		if st == "" {
+			st = "other"
+		}
+		v := HoldingValueMinor(h)
+		totals[st] += v
+		total += v
+	}
+	weights := make([]Weight, 0, len(totals))
+	for st, v := range totals {
+		var pct float64
+		if total != 0 {
+			pct = float64(v) / float64(total) * 100
+		}
+		weights = append(weights, Weight{Label: st, ValueMinor: v, Pct: pct})
 	}
 	sort.Slice(weights, func(i, j int) bool {
 		return weights[i].ValueMinor > weights[j].ValueMinor

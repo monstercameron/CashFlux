@@ -62,6 +62,50 @@ var AllAccountTypes = []AccountType{
 
 func (t AccountType) String() string { return string(t) }
 
+// SecurityType is the kind of security a Holding represents, so stocks/securities
+// investments can be categorized (and allocated) distinctly from balance-tracked
+// "traditional" investment accounts. Empty is treated as SecurityOther.
+type SecurityType string
+
+const (
+	SecurityStock      SecurityType = "stock"
+	SecurityETF        SecurityType = "etf"
+	SecurityMutualFund SecurityType = "mutual_fund"
+	SecurityBond       SecurityType = "bond"
+	SecurityCrypto     SecurityType = "crypto"
+	SecurityCash       SecurityType = "cash"
+	SecurityOther      SecurityType = "other"
+)
+
+// AllSecurityTypes lists every valid security type (picker order).
+var AllSecurityTypes = []SecurityType{
+	SecurityStock, SecurityETF, SecurityMutualFund, SecurityBond, SecurityCrypto, SecurityCash, SecurityOther,
+}
+
+func (s SecurityType) String() string { return string(s) }
+
+// Normalized returns the security type, mapping the empty value to SecurityOther.
+func (s SecurityType) Normalized() SecurityType {
+	if s == "" {
+		return SecurityOther
+	}
+	return s
+}
+
+// Valid reports whether s is a known security type (empty is allowed — it means
+// "unspecified" and normalizes to other).
+func (s SecurityType) Valid() bool {
+	if s == "" {
+		return true
+	}
+	for _, v := range AllSecurityTypes {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 // Valid reports whether t is a known account type.
 func (t AccountType) Valid() bool {
 	for _, v := range AllAccountTypes {

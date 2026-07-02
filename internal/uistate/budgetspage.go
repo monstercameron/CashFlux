@@ -76,3 +76,12 @@ func UseGoalsShowFormulas() state.Atom[bool] { return state.UseAtom("goals:showF
 // the debt_* engine variables (owed / APR / utilization / min payment) and the debt
 // aggregate atoms/molecules (credit_utilization, min_payments_total, …).
 func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFormulas", false) }
+
+// UseInvestShowFormulas returns the shared atom for the /investments "Portfolio metrics"
+// formula tile reveal — the investments analog of the other formula toggles.
+func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:showFormulas", false) }
+
+// UseInvestAddOpen returns the shared atom controlling whether the /investments "Add
+// holding" form is revealed (toggled by the toolbar's Add button; read by the securities
+// tile so the form and the button stay in sync across the widgetized surface).
+func UseInvestAddOpen() state.Atom[bool] { return state.UseAtom("invest:addOpen", false) }
