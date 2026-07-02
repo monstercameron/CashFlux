@@ -2677,6 +2677,18 @@ func registerGenerated() {
 		cursor("pointer"),
 		transition("border-color .12s ease, box-shadow .12s ease"),
 	)
+	// Theme the native dropdown option list (Chromium honours these) so an opened
+	// <select> — including the transparent to-do Sort/Show filter pills — reads on the
+	// dark theme instead of falling back to unstyled white-on-white. Uses theme tokens so
+	// it flips correctly on the light theme too.
+	rule("select option",
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+	)
+	rule("select optgroup",
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+	)
 	rule("select:not(.set-input):not(.seg-btn):focus",
 		borderColor("var(--accent)"),
 		boxShadow("0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)"),
