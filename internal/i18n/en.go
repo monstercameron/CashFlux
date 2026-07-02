@@ -1886,6 +1886,7 @@ var english = Catalog{
 	"insights.affordNoData":      "No balance data yet — add an account to get a grounded answer.",
 
 	// Priority (shared)
+	"priority.label":  "Priority",
 	"priority.high":   "High",
 	"priority.medium": "Medium",
 	"priority.low":    "Low",
@@ -1944,6 +1945,11 @@ var english = Catalog{
 	"todo.overdueLabel":     "Overdue",
 	"todo.doneLabel":        "Done",
 	"todo.dueTodayShort":    "Today",
+	"todo.titleLabel":       "Task",
+	"todo.titleRequired":    "Enter what needs doing.",
+	"todo.quickToday":       "Today",
+	"todo.quickWeek":        "In a week",
+	"todo.quickClear":       "Clear",
 	"todo.sortLabel":        "Sort tasks",
 	"todo.sortSmart":        "Smart order",
 	"todo.sortPriority":     "Priority",

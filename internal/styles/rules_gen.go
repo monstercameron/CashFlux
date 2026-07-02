@@ -4840,6 +4840,152 @@ func registerGenerated() {
 		opacity("0.4"),
 		cursor("default"),
 	)
+	// Add-task form — a focused "compose" panel matching the agenda tone. The title is
+	// the hero (a large underline-only field); priority is a SEGMENTED control whose dots
+	// echo the list's check-ring colours; quick chips fill the due date; a sticky bar owns
+	// Cancel + Add.
+	rule(".task-form",
+		display("flex"),
+		flexDirection("column"),
+		gap("1.15rem"),
+		minHeight("100%"),
+	)
+	rule(".task-form-title",
+		width("100%"),
+		background("transparent"),
+		border("0"),
+		borderBottom("2px solid var(--border)"),
+		color("var(--text)"),
+		fontSize("1.3rem"),
+		fontWeight("600"),
+		padding("0.35rem 0.15rem"),
+		prop("outline", "none"),
+		transition("border-color 0.15s ease"),
+	)
+	rule(".task-form-title:focus",
+		borderColor("var(--accent)"),
+	)
+	rule(".task-form-title::placeholder",
+		color("var(--text-faint)"),
+		fontWeight("500"),
+	)
+	rule(".task-field",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+		minWidth("0"),
+	)
+	rule(".task-field-label",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.04em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-dim)"),
+	)
+	rule(".task-form-row",
+		display("grid"),
+		gridTemplateColumns("1fr 1fr"),
+		gap("1rem"),
+	)
+	ruleMedia("(max-width: 520px)", ".task-form-row",
+		gridTemplateColumns("1fr"),
+	)
+	// Segmented priority control.
+	rule(".task-seg",
+		display("inline-flex"),
+		gap("3px"),
+		padding("3px"),
+		background("var(--bg)"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		width("fit-content"),
+	)
+	rule(".task-seg-btn",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.45rem"),
+		padding("0.4rem 0.85rem"),
+		border("0"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		borderRadius("7px"),
+		cursor("pointer"),
+		fontSize("0.85rem"),
+		transition("background 0.12s ease, color 0.12s ease"),
+	)
+	rule(".task-seg-btn:hover",
+		color("var(--text)"),
+	)
+	rule(".task-seg-btn.is-active",
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		boxShadow("0 1px 2px rgba(0,0,0,0.25)"),
+	)
+	rule(".task-seg-dot",
+		width("9px"),
+		height("9px"),
+		borderRadius("50%"),
+		background("var(--border-strong)"),
+		flex("none"),
+	)
+	rule(".task-seg-btn.p-low .task-seg-dot",
+		background("var(--text-faint)"),
+	)
+	rule(".task-seg-btn.p-med .task-seg-dot",
+		background("var(--accent)"),
+	)
+	rule(".task-seg-btn.p-high .task-seg-dot",
+		background("#ef4444"),
+	)
+	// Quick-date chips.
+	rule(".task-quick",
+		display("flex"),
+		gap("0.4rem"),
+		marginTop("0.1rem"),
+	)
+	rule(".task-quick-chip",
+		fontSize("0.76rem"),
+		padding("0.24rem 0.6rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".task-quick-chip:hover",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
+	rule(".task-quick-chip.is-clear",
+		marginLeft("auto"),
+	)
+	rule(".task-form-notes",
+		width("100%"),
+		background("var(--bg)"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		color("var(--text)"),
+		padding("0.55rem 0.65rem"),
+		fontSize("0.9rem"),
+		fontFamily("inherit"),
+		prop("resize", "vertical"),
+	)
+	rule(".task-form-notes:focus",
+		borderColor("var(--accent)"),
+		prop("outline", "none"),
+	)
+	rule(".task-form-actions",
+		display("flex"),
+		justifyContent("flex-end"),
+		gap("0.6rem"),
+		marginTop("auto"),
+		position("sticky"),
+		bottom("0"),
+		paddingTop("0.85rem"),
+		borderTop("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,
 	// a pace-tinted accent stripe, and footer actions.

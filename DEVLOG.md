@@ -1,3 +1,27 @@
+## 2026-07-01 — Add-task form redesigned from scratch
+
+Cam: "the add task section is extremely ugly, redesign from scratch." It was the old form-grid +
+uiw.FormField dropdown-soup. Rebuilt taskAddForm as a focused compose panel matching the editorial
+agenda:
+- Hero title: .task-form-title, a big underline-only field (transparent, 2px bottom border → accent on
+  focus), placeholder "What needs doing?". Added an empty-title guard (todo.titleRequired).
+- Priority: a SEGMENTED control (.task-seg / .task-seg-btn with a .task-seg-dot) whose dots echo the
+  list's check-ring colours — faint low / accent medium / red high — replacing the priority dropdown.
+  Three fixed UseEvent handlers (setLow/Med/High); active segment elevates.
+- Due date: quick chips (Today / In a week / Clear) that set dueStr via dateutil; Clear is right-pushed.
+  Due + Repeat share a 2-col .task-form-row; Link-to (+ entity when chosen) in another.
+- Notes: a real <textarea> (was a single-line input).
+- Sticky .task-form-actions bar owns Cancel + "+ Add task"; AddHost task case switched CloseOnly →
+  NoFooter at 500×620 so the form owns its footer (like the budget/goal editors).
+New i18n (priority.label, todo.titleLabel/titleRequired/quick*). seg() takes a ui.Handler (not
+func(Event)) — UseEvent returns a Handler.
+
+Verify: wasm build OK; full go test ./... green; new e2e/todo_addform_check.mjs 12/12 (hero field,
+3-seg priority w/ Medium default + High-activates, quick-date fill/clear, empty-title guard, add
+persists+closes, Cancel closes, no errors); flipmodal 10/10 / redesign 9/9 / sort_page 11/11 unaffected.
+Screenshot confirms the clean compose panel (red High segment active, green title underline, quick chips,
+sticky Add bar).
+
 ## 2026-07-01 — To-do: sorting + pagination
 
 Cam: "add sorting and pagination." Sorting logic already existed (tasksort.OrderBy: smart/priority/
