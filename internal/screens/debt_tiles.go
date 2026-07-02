@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -40,8 +41,23 @@ func debtSection(id, title string, body ui.Node) ui.Node {
 	return Div(args...)
 }
 
-// debtJumpItem is one jump-nav link. Uses the shared scrollToID (insights.go), which
-// smooth-scrolls the target section into view and briefly highlights it. Its own component so the per-link OnClick hook sits at
+// smoothScrollToSection immediately smooth-scrolls the section with the given id to the top
+// of the viewport. Unlike the shared scrollToID (insights.go), it has no 400ms delay and no
+// highlight flash — a jump-nav click should move the moment it's pressed and land the
+// section heading at the top (scroll-margin-top gives it room under the sticky topbar).
+func smoothScrollToSection(id string) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	el := doc.Call("getElementById", id)
+	if !el.Truthy() {
+		return
+	}
+	el.Call("scrollIntoView", js.ValueOf(map[string]any{"behavior": "smooth", "block": "start"}))
+}
+
+// debtJumpItem is one jump-nav link. Its own component so the per-link OnClick hook sits at
 // a stable position when the parent maps over a variable-length section list.
 type debtJumpProps struct {
 	Label    string
@@ -49,7 +65,7 @@ type debtJumpProps struct {
 }
 
 func debtJumpItem(props debtJumpProps) ui.Node {
-	onClick := ui.UseEvent(Prevent(func() { scrollToID(props.TargetID) }))
+	onClick := ui.UseEvent(Prevent(func() { smoothScrollToSection(props.TargetID) }))
 	return Button(css.Class("debt-jump-link"), Type("button"),
 		Attr("data-testid", "debt-jump-"+props.TargetID), OnClick(onClick), props.Label)
 }

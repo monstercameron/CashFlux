@@ -4954,6 +4954,11 @@ func registerGenerated() {
 	rule(".bento-debt .card + .card",
 		prop("margin-top", "0.75rem"),
 	)
+	// Section anchors leave room under the sticky topbar when a jump-nav link scrolls to
+	// them (block:start would otherwise tuck the heading right against the top edge).
+	rule("#sec-overview, #sec-ladder, #sec-strategy, #sec-credit, #sec-loans, #sec-calculator",
+		prop("scroll-margin-top", "1.25rem"),
+	)
 	// Jump-nav: a row of quick section links in the toolbar so a user can skip to a widget.
 	rule(".debt-jump",
 		display("flex"),
