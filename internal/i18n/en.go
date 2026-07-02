@@ -873,6 +873,7 @@ var english = Catalog{
 	"debt.noDebts":        "No debts — nice.",
 	"debt.manageAccounts": "Manage accounts",
 	"debt.payoffLadder":   "Payoff ladder",
+	"debt.payFirst":       "Pay first",
 	"debt.debtFreeBy":     "Debt-free by %s at current minimums.",
 	// Engine ratio chips (all read from the engine variable surface).
 	"debt.creditUtilization":  "Credit used",

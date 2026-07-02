@@ -71,9 +71,15 @@ func DebtRow(props debtRowProps) ui.Node {
 	if !props.InPayoff {
 		cardCls += " is-excluded"
 	}
+	// The #1 debt in the payoff order is the one to attack first — give the whole card a
+	// focus treatment so the order reads at a glance.
+	focus := props.InPayoff && props.Rank == 1
+	if focus {
+		cardCls += " is-focus"
+	}
 
-	// Payoff-rank medallion — the ladder position (avalanche order). Excluded debts show a
-	// dash instead of a number so the ladder reads only the debts actually in the plan.
+	// Payoff-rank medallion — the ladder position (avalanche/snowball order). Excluded
+	// debts show a dash instead of a number so the ladder reads only the debts in the plan.
 	rankText := "—"
 	if props.InPayoff && props.Rank > 0 {
 		rankText = strconv.Itoa(props.Rank)
@@ -143,6 +149,7 @@ func DebtRow(props debtRowProps) ui.Node {
 				Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
 					uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 				Span(css.Class("debt-name"), a.Name),
+				If(focus, Span(css.Class("debt-focus-tag"), uistate.T("debt.payFirst"))),
 				Span(css.Class("debt-chip debt-type"), uistate.T("acctType."+string(a.Type))),
 				aprChip,
 				If(lender != "", Span(css.Class("debt-meta", tw.TextDim), lender)),

@@ -4676,18 +4676,20 @@ func registerGenerated() {
 		borderColor("color-mix(in srgb, var(--danger) 60%, var(--border))"),
 		background("color-mix(in srgb, var(--danger) 10%, var(--bg-elev))"),
 	)
-	// The payoff ladder: a grid of debt cards.
+	// The payoff ladder: full-width rows stacked in payoff order (a real ladder), so the
+	// sequence reads top-to-bottom.
 	rule(".debt-list",
-		display("grid"),
-		gridTemplateColumns("repeat(auto-fill, minmax(440px, 1fr))"),
-		gap("0.75rem"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
 	)
 	rule(".debt-card",
 		position("relative"),
 		display("flex"),
 		alignItems("center"),
-		gap("0.85rem"),
-		padding("0.85rem 1.1rem 0.85rem 1.35rem"),
+		width("100%"),
+		gap("1rem"),
+		padding("0.9rem 1.25rem 0.9rem 1.35rem"),
 		border("1px solid var(--border)"),
 		borderRadius("14px"),
 		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
@@ -4719,25 +4721,54 @@ func registerGenerated() {
 	rule(".debt-card.debt-band-high .debt-rail",
 		background("var(--danger)"),
 	)
-	// Payoff-rank medallion — the ladder position.
+	// Payoff-rank medallion — the ladder position, emphasized: a large serif numeral so the
+	// order (1, 2, 3 …) is the first thing you read down the ladder.
 	rule(".debt-rank",
 		prop("flex", "0 0 auto"),
 		display("flex"),
 		alignItems("center"),
 		justifyContent("center"),
-		width("2rem"),
-		height("2rem"),
+		width("2.7rem"),
+		height("2.7rem"),
 		borderRadius("999px"),
-		border("1px solid var(--border)"),
+		border("1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
 		background("var(--bg)"),
+		fontFamily("var(--font-display, \"Fraunces\", serif)"),
 		fontWeight("700"),
-		fontSize("0.9rem"),
+		fontSize("1.25rem"),
 		fontVariantNumeric("tabular-nums"),
-		color("var(--text-dim)"),
+		color("var(--text)"),
 	)
 	rule(".debt-card.debt-band-high .debt-rank",
 		borderColor("color-mix(in srgb, var(--danger) 55%, var(--border))"),
 		color("color-mix(in srgb, var(--danger) 78%, var(--text))"),
+	)
+	rule(".debt-card.is-excluded .debt-rank",
+		borderColor("var(--border)"),
+		color("var(--text-dim)"),
+	)
+	// Focus treatment for the #1 debt — the one to attack first.
+	rule(".debt-card.is-focus",
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 9%, var(--bg-elev))"),
+	)
+	rule(".debt-card.is-focus .debt-rank",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
+		color("var(--bg)"),
+		fontWeight("800"),
+	)
+	rule(".debt-focus-tag",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+		background("var(--accent)"),
+		color("var(--bg)"),
 	)
 	rule(".debt-body",
 		flex("1 1 auto"),
