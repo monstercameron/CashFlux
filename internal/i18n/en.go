@@ -1973,7 +1973,7 @@ var english = Catalog{
 	"todo.deleteTitle":      "Delete task",
 	"todo.deleteConfirm":    "Delete \"%s\" and any sub-tasks? This can't be undone.",
 	"todo.thisTask":         "this task",
-	"todo.addSub":           "+ Sub",
+	"todo.addSub":           "Add sub-task",
 	"todo.addSubTitle":      "Add a sub-task",
 	"todo.subtaskPrompt":    "New sub-task",
 	"todo.linkTo":           "Link to",
