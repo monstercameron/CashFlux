@@ -40,6 +40,15 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 5 (Cam: "add headings to the page so a user can quickly jump to the right widget"): added a
+jump-nav. debtSection gained an id param; each tile now anchors sec-overview/sec-ladder/sec-strategy/
+sec-credit/sec-loans/sec-calculator (summary + strategy + calculator tiles wrap their body in an id
+Div). Toolbar leads with a .debt-jump row: "JUMP TO" + pill links, built from the sections that actually
+render (Credit/Loans gated on hasCC/hasLoans). Each link is a debtJumpItem component (own OnClick hook,
+MapKeyed-safe) calling the shared scrollToID (insights.go — reused, not redefined; it smooth-scrolls +
+highlights). e2e J1-J4 (links listed, anchors exist, only-present-sections, click scrolls sec-credit
+1958→210px). 56/56.
+
 Follow-up 4 (Cam: "reeval the other widgets on this page and redesign them for better ux and
 readability"): screenshotted each remaining tile. Summary/toolbar/payoff-calc read fine; the strategy
 panel was the offender — a dense wall duplicating the ladder (debt table, per-debt include toggles,

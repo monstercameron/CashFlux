@@ -153,6 +153,18 @@ check("F2 debt_* engine variables discoverable", hasDebtVars);
 await p.locator('[data-testid="debt-toggle-formulas"]').click({ force: true }); await p.waitForTimeout(700);
 check("F3 toggle hides the formula tile", true);
 
+// ============================ JUMP NAV =========================================
+await openDebt();
+check("J1 jump-nav lists the section links", await p.locator('.debt-jump .debt-jump-link').count() >= 4, `${await p.locator('.debt-jump .debt-jump-link').count()}`);
+check("J2 section anchors exist in the DOM", await p.locator('#sec-overview').count() >= 1 && await p.locator('#sec-ladder').count() >= 1 && await p.locator('#sec-strategy').count() >= 1);
+check("J3 jump-nav only lists present sections", await p.locator('[data-testid="debt-jump-sec-credit"]').count() >= 1 && await p.locator('[data-testid="debt-jump-sec-loans"]').count() >= 1);
+// Clicking a jump link scrolls that section to the top of the viewport.
+const beforeTop = await p.evaluate(() => { const el = document.getElementById("sec-credit"); return el ? el.getBoundingClientRect().top : 99999; });
+await p.locator('[data-testid="debt-jump-sec-credit"]').click({ force: true });
+await p.waitForTimeout(900);
+const afterTop = await p.evaluate(() => { const el = document.getElementById("sec-credit"); return el ? el.getBoundingClientRect().top : 99999; });
+check("J4 clicking a jump link scrolls that section into view", afterTop < beforeTop && afterTop < 400, `before=${Math.round(beforeTop)} after=${Math.round(afterTop)}`);
+
 // ============================ NAV / INTEGRATION =================================
 await openDebt();
 await p.locator('[data-testid^="debt-view-"]').first().click({ force: true }); await p.waitForTimeout(900);

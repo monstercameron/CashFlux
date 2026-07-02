@@ -4954,6 +4954,46 @@ func registerGenerated() {
 	rule(".bento-debt .card + .card",
 		prop("margin-top", "0.75rem"),
 	)
+	// Jump-nav: a row of quick section links in the toolbar so a user can skip to a widget.
+	rule(".debt-jump",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+		marginBottom("0.7rem"),
+		prop("padding-bottom", "0.7rem"),
+		prop("border-bottom", "1px solid var(--border)"),
+	)
+	rule(".debt-jump-label",
+		fontSize("0.68rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.07em"),
+		color("var(--text-dim)"),
+		prop("margin-right", "0.15rem"),
+	)
+	rule(".debt-jump-link",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.2rem 0.7rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+		color("var(--text)"),
+		fontSize("0.8rem"),
+		fontWeight("600"),
+		cursor("pointer"),
+		transition("background 0.15s ease, border-color 0.15s ease, color 0.15s ease"),
+	)
+	rule(".debt-jump-link:hover",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
+		color("color-mix(in srgb, var(--accent) 45%, var(--text))"),
+	)
+	rule(".debt-jump-link:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "2px"),
+	)
 	// Strategy panel: the extra-payment control row (input + one-tap suggestion).
 	rule(".strat-extra",
 		display("flex"),

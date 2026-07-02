@@ -874,6 +874,14 @@ var english = Catalog{
 	"debt.manageAccounts": "Manage accounts",
 	"debt.payoffLadder":   "Payoff ladder",
 	"debt.payFirst":       "Pay first",
+	// Jump-nav (quick links to each section)
+	"debt.jumpTo":         "Jump to",
+	"debt.jumpOverview":   "Overview",
+	"debt.jumpLadder":     "Ladder",
+	"debt.jumpStrategy":   "Strategy",
+	"debt.jumpCredit":     "Credit",
+	"debt.jumpLoans":      "Loans",
+	"debt.jumpCalculator": "Calculator",
 	// Strategy comparison cards
 	"debt.recommended":        "Recommended",
 	"debt.totalInterestLabel": "Total interest",

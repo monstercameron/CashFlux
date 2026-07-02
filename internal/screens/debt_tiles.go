@@ -29,12 +29,29 @@ import (
 
 // debtSection wraps a debt tile's body with a serif section title instead of the boxy
 // EntityListSection card — the tile's own .w frame is the container, so the panels inside
-// (which build their own grouping cards) don't sit in a redundant double frame.
-func debtSection(title string, body ui.Node) ui.Node {
-	return Div(css.Class("debt-section"),
-		If(title != "", H2(css.Class("debt-section-title"), title)),
-		body,
-	)
+// (which build their own grouping cards) don't sit in a redundant double frame. The id is
+// the scroll anchor the jump-nav targets.
+func debtSection(id, title string, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if id != "" {
+		args = append(args, Attr("id", id))
+	}
+	args = append(args, If(title != "", H2(css.Class("debt-section-title"), title)), body)
+	return Div(args...)
+}
+
+// debtJumpItem is one jump-nav link. Uses the shared scrollToID (insights.go), which
+// smooth-scrolls the target section into view and briefly highlights it. Its own component so the per-link OnClick hook sits at
+// a stable position when the parent maps over a variable-length section list.
+type debtJumpProps struct {
+	Label    string
+	TargetID string
+}
+
+func debtJumpItem(props debtJumpProps) ui.Node {
+	onClick := ui.UseEvent(Prevent(func() { scrollToID(props.TargetID) }))
+	return Button(css.Class("debt-jump-link"), Type("button"),
+		Attr("data-testid", "debt-jump-"+props.TargetID), OnClick(onClick), props.Label)
 }
 
 type debtSummaryProps struct{ App *appstate.App }
@@ -206,7 +223,7 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 			Div(css.Class("debt-stat-value", tw.FontDisplay), fmt.Sprintf("%.0f", v.Vars["debt_count"]))),
 	)
 
-	body := Div(css.Class("debt-hero"),
+	body := Div(css.Class("debt-hero"), Attr("id", "sec-overview"),
 		Div(css.Class("debt-hero-main"),
 			Div(css.Class("debt-hero-label", tw.TextDim), uistate.T("debt.totalOwed")),
 			Div(css.Class("debt-hero-value neg", tw.FontDisplay), Attr("data-testid", "debt-total-owed"), fmtMoney(v.TotalOwed)),
@@ -240,6 +257,44 @@ func debtToolbarWidget(props debtToolbarProps) ui.Node {
 		metricsCls += " is-on"
 	}
 
+	// Jump-nav: a row of section links so a user can skip straight to the widget they want
+	// (only the sections that actually render are listed). Each link scrolls its anchor into
+	// view. Built as a variable-length list, so each link is its own hook-owning component.
+	var hasCC, hasLoans, hasDebts bool
+	for _, ac := range props.App.Accounts() {
+		if ac.Archived || ac.Class != domain.ClassLiability {
+			continue
+		}
+		hasDebts = true
+		if ac.Type == domain.TypeCreditCard {
+			hasCC = true
+		}
+		if isInstallmentLoan(ac.Type) {
+			hasLoans = true
+		}
+	}
+	jumps := []debtJumpProps{{uistate.T("debt.jumpOverview"), "sec-overview"}}
+	if hasDebts {
+		jumps = append(jumps,
+			debtJumpProps{uistate.T("debt.jumpLadder"), "sec-ladder"},
+			debtJumpProps{uistate.T("debt.jumpStrategy"), "sec-strategy"})
+		if hasCC {
+			jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpCredit"), "sec-credit"})
+		}
+		if hasLoans {
+			jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpLoans"), "sec-loans"})
+		}
+		jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpCalculator"), "sec-calculator"})
+	}
+	var jumpNav ui.Node = Fragment()
+	if len(jumps) > 1 {
+		jumpNav = Div(css.Class("debt-jump"), Attr("aria-label", uistate.T("debt.jumpTo")),
+			Span(css.Class("debt-jump-label"), uistate.T("debt.jumpTo")),
+			MapKeyed(jumps, func(j debtJumpProps) any { return j.TargetID },
+				func(j debtJumpProps) ui.Node { return ui.CreateElement(debtJumpItem, j) }),
+		)
+	}
+
 	toolbar := Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
 			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
@@ -254,7 +309,7 @@ func debtToolbarWidget(props debtToolbarProps) ui.Node {
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: toolbar,
+		Body: Fragment(jumpNav, toolbar),
 	})
 }
 
@@ -272,7 +327,7 @@ func debtListWidget(props debtListProps) ui.Node {
 	v := computeDebtView(app)
 
 	if len(v.Liabs) == 0 {
-		body := debtSection(uistate.T("debt.whatYouOwe"),
+		body := debtSection("sec-ladder", uistate.T("debt.whatYouOwe"),
 			P(css.Class("empty"), Attr("data-testid", "debt-empty"), uistate.T("debt.noDebts")))
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -311,7 +366,7 @@ func debtListWidget(props debtListProps) ui.Node {
 		})
 	})
 
-	body := debtSection(uistate.T("debt.payoffLadder"), Div(css.Class("debt-list"), rows))
+	body := debtSection("sec-ladder", uistate.T("debt.payoffLadder"), Div(css.Class("debt-list"), rows))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -324,13 +379,13 @@ func debtListWidget(props debtListProps) ui.Node {
 func debtStrategyWidget(props debtPanelProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-strategy", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{}),
+		Body: Div(Attr("id", "sec-strategy"), ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{})),
 	})
 }
 
 // debtCreditWidget hosts the credit-card health panel (shown only when a card exists).
 func debtCreditWidget(props debtPanelProps) ui.Node {
-	body := debtSection(uistate.T("nav.credit"), Fragment(
+	body := debtSection("sec-credit", uistate.T("nav.credit"), Fragment(
 		P(css.Class("muted"), uistate.T("screen.creditSub")),
 		ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
 	))
@@ -342,7 +397,7 @@ func debtCreditWidget(props debtPanelProps) ui.Node {
 
 // debtLoansWidget hosts the installment-loans panel (shown only when a loan exists).
 func debtLoansWidget(props debtPanelProps) ui.Node {
-	body := debtSection(uistate.T("nav.loans"), Fragment(
+	body := debtSection("sec-loans", uistate.T("nav.loans"), Fragment(
 		P(css.Class("muted"), uistate.T("screen.loansSub")),
 		ui.CreateElement(LoansPanel, LoansPanelProps{}),
 	))
@@ -356,7 +411,7 @@ func debtLoansWidget(props debtPanelProps) ui.Node {
 func debtPayoffWidget(props debtPanelProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-payoff", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: ui.CreateElement(PayoffCalculatorPanel, PayoffCalculatorPanelProps{}),
+		Body: Div(Attr("id", "sec-calculator"), ui.CreateElement(PayoffCalculatorPanel, PayoffCalculatorPanelProps{})),
 	})
 }
 
