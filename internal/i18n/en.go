@@ -104,6 +104,7 @@ var english = Catalog{
 	"notifications.snooze":            "Snooze 1 day",
 	"notifications.dismiss":           "Dismiss",
 	"notifications.actions":           "Notification actions",
+	"notifications.openResource":      "Open: %s",
 	"notifications.unread":            "Unread",
 	"notifications.alertsWord":        "Alerts",
 	"notifications.allRead":           "All read",

@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -132,6 +133,12 @@ func notifyRow(props notifyRowProps) ui.Node {
 		readLabel = uistate.T("notifications.markUnread")
 	}
 
+	nav := router.UseNavigate()
+	goResource := ui.UseEvent(Prevent(func() {
+		if it.Route != "" {
+			nav.Navigate(uistate.RoutePath(it.Route))
+		}
+	}))
 	onRead := ui.UseEvent(func() {
 		if props.OnRead != nil {
 			props.OnRead()
@@ -160,12 +167,27 @@ func notifyRow(props notifyRowProps) ui.Node {
 		unreadDot = Span(css.Class("notif-dot"), Attr("aria-label", uistate.T("notifications.unread")))
 	}
 
-	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-"+it.ID),
+	// The badge + body is the navigable region: clicking it jumps to the alerting
+	// resource (a bill → /bills, a budget → /budgets, …). It's a sibling of the actions
+	// so the mark-read / snooze / dismiss buttons don't trigger navigation.
+	mainCls := "notif-main"
+	if it.Route != "" {
+		mainCls += " is-linked"
+	}
+	mainArgs := []any{ClassStr(mainCls)}
+	if it.Route != "" {
+		mainArgs = append(mainArgs,
+			Attr("role", "button"), Attr("tabindex", "0"),
+			Attr("aria-label", uistate.T("notifications.openResource", it.Title)),
+			Attr("data-testid", "notif-open-"+it.ID), OnClick(goResource))
+	}
+	mainArgs = append(mainArgs,
 		Div(css.Class("notif-badge"), Attr("aria-hidden", "true"), uiw.Icon(notifySeverityIcon(sev), css.Class("w-4", "h-4"))),
 		Div(css.Class("notif-body"),
 			Div(css.Class("notif-top"),
 				unreadDot,
 				Span(css.Class("notif-title"), it.Title),
+				If(it.Route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class("w-4", "h-4")))),
 			),
 			If(it.Body != "", P(css.Class("notif-text"), it.Body)),
 			Div(css.Class("notif-foot"),
@@ -174,6 +196,10 @@ func notifyRow(props notifyRowProps) ui.Node {
 				Span(css.Class("notif-time"), props.TimeStr),
 			),
 		),
+	)
+
+	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-"+it.ID),
+		Div(mainArgs...),
 		// Inline, one-click actions (revealed on hover; always shown on touch). No ⋯ menu —
 		// a per-notification menu is an extra click for actions you take constantly.
 		Div(css.Class("notif-actions"),

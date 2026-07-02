@@ -4717,7 +4717,7 @@ func registerGenerated() {
 	rule(".notif",
 		display("flex"),
 		alignItems("flex-start"),
-		gap("0.85rem"),
+		gap("0.6rem"),
 		padding("0.8rem 0.9rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
@@ -4727,6 +4727,37 @@ func registerGenerated() {
 	)
 	rule(".notif:hover",
 		borderColor("var(--border-strong)"),
+	)
+	// The badge + body is a single clickable region that navigates to the alerting
+	// resource; the title lights + a chevron appears on hover when it's linked.
+	rule(".notif-main",
+		flex("1"),
+		minWidth("0"),
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.85rem"),
+	)
+	rule(".notif-main.is-linked",
+		cursor("pointer"),
+		prop("outline", "none"),
+	)
+	rule(".notif-main.is-linked:hover .notif-title",
+		color("var(--accent)"),
+	)
+	rule(".notif-go",
+		flex("none"),
+		marginLeft("auto"),
+		color("var(--text-faint)"),
+		transition("color 0.12s ease, transform 0.12s ease"),
+	)
+	rule(".notif-main.is-linked:hover .notif-go",
+		color("var(--accent)"),
+		transform("translateX(2px)"),
+	)
+	rule(".notif-main.is-linked:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "2px"),
+		borderRadius("8px"),
 	)
 	rule(".notif.is-read",
 		opacity("0.6"),
