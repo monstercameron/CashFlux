@@ -1953,6 +1953,8 @@ var english = Catalog{
 	"todo.quickWeek":        "In a week",
 	"todo.quickClear":       "Clear",
 	"todo.sortLabel":        "Sort tasks",
+	"todo.sortShort":        "Sort",
+	"todo.showShort":        "Show",
 	"todo.sortSmart":        "Smart order",
 	"todo.sortPriority":     "Priority",
 	"todo.sortAZ":           "A–Z",

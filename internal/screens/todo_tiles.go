@@ -122,29 +122,41 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	}
 	sm := sortMode.Get()
 
-	toolbar := Div(css.Class("budgets-toolbar"),
-		Div(css.Class("budgets-toolbar-actions"),
-			Select(css.Class("field", "budgets-method-select"), Attr("aria-label", uistate.T("todo.sortLabel")),
-				Attr("data-testid", "todo-sort"), OnChange(onSort),
-				Option(Value("smart"), SelectedIf(sm == "smart"), uistate.T("todo.sortSmart")),
-				Option(Value("priority"), SelectedIf(sm == "priority"), uistate.T("todo.sortPriority")),
-				Option(Value("due"), SelectedIf(sm == "due"), uistate.T("todo.sortDue")),
-				Option(Value("az"), SelectedIf(sm == "az"), uistate.T("todo.sortAZ")),
+	hideToggleCls := "todo-toggle"
+	if hideDone.Get() {
+		hideToggleCls += " is-on"
+	}
+	// A single compact toolbar row: sort + priority filter as small labelled "pill"
+	// selects (auto-width, not full-width bars), a hide-done toggle, and the primary
+	// Add task pushed to the right.
+	toolbar := Div(css.Class("todo-toolbar"),
+		Div(css.Class("todo-toolbar-controls"),
+			Label(css.Class("todo-ctrl"),
+				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
+				Select(css.Class("todo-select"), Attr("data-testid", "todo-sort"), Attr("aria-label", uistate.T("todo.sortLabel")), OnChange(onSort),
+					Option(Value("smart"), SelectedIf(sm == "smart"), uistate.T("todo.sortSmart")),
+					Option(Value("priority"), SelectedIf(sm == "priority"), uistate.T("todo.sortPriority")),
+					Option(Value("due"), SelectedIf(sm == "due"), uistate.T("todo.sortDue")),
+					Option(Value("az"), SelectedIf(sm == "az"), uistate.T("todo.sortAZ")),
+				),
 			),
-			Select(css.Class("field", "budgets-method-select"), Attr("aria-label", uistate.T("todo.filterPrioLabel")),
-				Attr("data-testid", "todo-filter-prio"), OnChange(onFilterPrio),
-				Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
-				Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
-				Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
-				Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
+			Label(css.Class("todo-ctrl"),
+				Span(css.Class("todo-ctrl-label"), uistate.T("todo.showShort")),
+				Select(css.Class("todo-select"), Attr("data-testid", "todo-filter-prio"), Attr("aria-label", uistate.T("todo.filterPrioLabel")), OnChange(onFilterPrio),
+					Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
+					Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+					Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+					Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
+				),
 			),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
+			Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
 				Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel)),
-			Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("todo.addTask"))),
 		),
+		Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
+			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("todo.addTask"))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "todo-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

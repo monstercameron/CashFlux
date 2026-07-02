@@ -4840,6 +4840,79 @@ func registerGenerated() {
 		opacity("0.4"),
 		cursor("default"),
 	)
+	// To-do toolbar: one compact row — sort + priority filter as small labelled "pill"
+	// selects (auto-width, NOT full-width bars), a hide-done toggle, and Add task pushed
+	// right. Replaces the earlier unstyled full-width stacked selects.
+	rule(".todo-toolbar",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.75rem"),
+		flexWrap("wrap"),
+	)
+	rule(".todo-toolbar-controls",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flexWrap("wrap"),
+	)
+	rule(".todo-ctrl",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		minHeight("38px"),
+		padding("0.35rem 0.6rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("9px"),
+		color("var(--text-faint)"),
+	)
+	rule(".todo-ctrl-label",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".todo-ctrl select.todo-select",
+		width("auto"),
+		minWidth("0"),
+		minHeight("0"),
+		padding("0.1rem 0.3rem 0.1rem 0.1rem"),
+		background("transparent"),
+		border("0"),
+		color("var(--text)"),
+		font("inherit"),
+		fontSize("0.86rem"),
+		fontWeight("500"),
+		cursor("pointer"),
+	)
+	rule(".todo-ctrl select.todo-select:focus, .todo-ctrl select.todo-select:focus-visible",
+		prop("outline", "none"),
+		boxShadow("none"),
+	)
+	rule(".todo-toggle",
+		display("inline-flex"),
+		alignItems("center"),
+		minHeight("38px"),
+		padding("0.35rem 0.85rem"),
+		borderRadius("9px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+		fontSize("0.86rem"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".todo-toggle:hover",
+		color("var(--text)"),
+		borderColor("var(--border-strong)"),
+	)
+	rule(".todo-toggle.is-on",
+		background("var(--accent-dim)"),
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+	)
 	// Add-task "compose slip" — a two-zone editorial modal, NOT a labelled-field stack.
 	// LEFT: a writing zone with a large Fraunces title + notes, and a live priority
 	// "spine" (coloured left edge) that glows faint/green/red with the chosen priority.
