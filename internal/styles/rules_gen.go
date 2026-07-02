@@ -4954,6 +4954,43 @@ func registerGenerated() {
 	rule(".bento-debt .card + .card",
 		prop("margin-top", "0.75rem"),
 	)
+	// Global "back to top" floating button — hidden until #main scrolls down, then fades in
+	// at the bottom-right and smooth-scrolls to the top on click.
+	rule(".cf-scrolltop",
+		position("fixed"),
+		prop("right", "1.25rem"),
+		prop("bottom", "1.25rem"),
+		prop("z-index", "45"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("2.75rem"),
+		height("2.75rem"),
+		borderRadius("999px"),
+		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		cursor("pointer"),
+		prop("opacity", "0"),
+		prop("pointer-events", "none"),
+		transform("translateY(12px)"),
+		boxShadow("0 8px 22px -8px rgba(0,0,0,0.6)"),
+		transition("opacity 0.2s ease, transform 0.2s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease"),
+	)
+	rule(".cf-scrolltop.is-visible",
+		prop("opacity", "1"),
+		prop("pointer-events", "auto"),
+		transform("translateY(0)"),
+	)
+	rule(".cf-scrolltop:hover",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 14%, var(--bg-elev))"),
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+	)
+	rule(".cf-scrolltop:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "2px"),
+	)
 	// Section anchors leave room under the sticky topbar when a jump-nav link scrolls to
 	// them (block:start would otherwise tuck the heading right against the top edge).
 	rule("#sec-overview, #sec-ladder, #sec-strategy, #sec-credit, #sec-loans, #sec-calculator",

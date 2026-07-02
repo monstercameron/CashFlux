@@ -40,6 +40,21 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 7 (Cam: "add a scroll to top button when starting to scroll to jump back up"): made it global
+(every long page benefits), not debt-only. The app scrolls in <main id="main" class="cf-scroll"
+overflow-y-auto> (the topbar is sticky) — body doesn't scroll, which is why earlier fullPage shots
+lied. New ScrollToTopButton (shell.go) mounted in the Shell host list: a fixed bottom-right circular ↑
+(icon.ArrowUp). A uic.UseEffect (run-once dep) attaches a passive scroll listener on #main that toggles
+.is-visible directly via classList when scrollTop>320 — no Go re-render per scroll event — and releases
+the js.Func on unmount. onClick → #main.scrollTo({top:0,behavior:smooth}). CSS: opacity/translateY
+fade, accent border, z-index 45. e2e K1-K5 (exists, hidden at top, reveals after scroll, click→scrollTop
+0, hides again). 61/61.
+
+Follow-up 6 (Cam: "onclick smooth scroll to the section"): the jump links had reused insights.go's
+scrollToID which waits 400ms + centers + flashes (built for chat links). Gave them smoothScrollToSection:
+immediate, block:start, no flash; + scroll-margin-top:1.25rem on the sec-* anchors so headings land
+below the sticky topbar. J4 now 1958→15px. 56/56.
+
 Follow-up 5 (Cam: "add headings to the page so a user can quickly jump to the right widget"): added a
 jump-nav. debtSection gained an id param; each tile now anchors sec-overview/sec-ladder/sec-strategy/
 sec-credit/sec-loans/sec-calculator (summary + strategy + calculator tiles wrap their body in an id

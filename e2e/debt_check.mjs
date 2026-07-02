@@ -173,6 +173,19 @@ await openDebt();
 await p.locator('.bento-debt a[href$="/accounts"]').first().click({ force: true }); await p.waitForTimeout(900);
 check("N2 manage-accounts navigates to /accounts", p.url().endsWith("/accounts"), p.url());
 
+// ============================ SCROLL TO TOP ====================================
+await openDebt();
+const stOpacity = () => p.evaluate(() => { const el = document.getElementById("cf-scrolltop"); return el ? getComputedStyle(el).opacity : "missing"; });
+check("K1 scroll-to-top button exists", await p.locator('[data-testid="scroll-to-top"]').count() === 1);
+check("K2 hidden at the top of the page", (await stOpacity()) === "0");
+await p.evaluate(() => document.getElementById("main").scrollTo(0, 1400));
+await p.waitForTimeout(600);
+check("K3 reveals after scrolling down", (await stOpacity()) === "1");
+await p.locator('[data-testid="scroll-to-top"]').click({ force: true });
+await p.waitForTimeout(900);
+check("K4 clicking it scrolls back to the top", await p.evaluate(() => document.getElementById("main").scrollTop === 0));
+check("K5 hides again once back at the top", (await stOpacity()) === "0");
+
 // ============================ ERROR PROBE =======================================
 check("Z1 no page errors across the whole run", errs.length === 0, errs.slice(0, 4).join(" | "));
 

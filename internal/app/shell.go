@@ -143,6 +143,49 @@ func MobileTabBar(props mobileTabBarProps) uic.Node {
 // Shell renders the candidate-C application chrome: a fixed left rail and an
 // independently scrolling main pane with a sticky top bar, wrapping the active
 // screen's content. (Ported from design/candidate-c.html.)
+// ScrollToTopButton is a global floating "back to top" control. It sits fixed at the
+// bottom-right and reveals itself once the main scroll region (#main) is scrolled down a
+// screenful, then smooth-scrolls back to the top on click. A native scroll listener toggles
+// the .is-visible class directly (no Go re-render per scroll event), set up once on mount and
+// torn down on unmount.
+func ScrollToTopButton() uic.Node {
+	uic.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		main := doc.Call("getElementById", "main")
+		btn := doc.Call("getElementById", "cf-scrolltop")
+		if !main.Truthy() || !btn.Truthy() {
+			return nil
+		}
+		var handler js.Func
+		handler = js.FuncOf(func(js.Value, []js.Value) any {
+			if main.Get("scrollTop").Float() > 320 {
+				btn.Get("classList").Call("add", "is-visible")
+			} else {
+				btn.Get("classList").Call("remove", "is-visible")
+			}
+			return nil
+		})
+		main.Call("addEventListener", "scroll", handler, js.ValueOf(map[string]any{"passive": true}))
+		return func() {
+			main.Call("removeEventListener", "scroll", handler)
+			handler.Release()
+		}
+	}, "cf-scrolltop")
+
+	onClick := uic.UseEvent(Prevent(func() {
+		main := js.Global().Get("document").Call("getElementById", "main")
+		if main.Truthy() {
+			main.Call("scrollTo", js.ValueOf(map[string]any{"top": 0, "behavior": "smooth"}))
+		}
+	}))
+	return Button(css.Class("cf-scrolltop"), Attr("id", "cf-scrolltop"), Type("button"),
+		Attr("data-testid", "scroll-to-top"),
+		Attr("aria-label", uistate.T("app.scrollToTop")), Title(uistate.T("app.scrollToTop")),
+		OnClick(onClick),
+		ui.Icon(icon.ArrowUp, css.Class(tw.W5, tw.H5)),
+	)
+}
+
 func Shell(props ShellProps) uic.Node {
 	// On each route change: set the document title to the active screen (always,
 	// including first load, so tabs/history/screen readers name the page), then
@@ -220,6 +263,8 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(SyncConflictHost),
 		uic.CreateElement(UpgradeSheet),
 		uic.CreateElement(Toast),
+		// Global floating "back to top" button — reveals on scroll, jumps #main to the top.
+		uic.CreateElement(ScrollToTopButton),
 		// Headless SMART proactive digest driver: fires on cadence when opted in,
 		// posting a brief insight summary to the notification feed. Mounted once
 		// here (not in a loop) so its hook depth is always constant.

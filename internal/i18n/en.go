@@ -8,6 +8,7 @@ package i18n
 var english = Catalog{
 	// App + chrome
 	"app.name":           "CashFlux",
+	"app.scrollToTop":    "Back to top",
 	"a11y.skipToContent": "Skip to content",
 	// Local-first trust line (C289 / R34-trust) — the privacy differentiator, surfaced
 	// in the rail footer so it's always visible, not buried in the admin console.
