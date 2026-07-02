@@ -100,17 +100,23 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 		formulasLabel = uistate.T("goals.metricsHide")
 	}
 
-	toolbar := Div(css.Class("budgets-toolbar"),
-		Div(css.Class("budgets-toolbar-actions"),
+	metricsCls := "strip-toggle"
+	if formulasAtom.Get() {
+		metricsCls += " is-on"
+	}
+	// Same compact filter strip as /todo: the Smart action + a "Goal metrics" toggle on
+	// the left, the primary "Add goal" pushed to the right.
+	toolbar := Div(css.Class("filter-strip"),
+		Div(css.Class("filter-strip-controls"),
 			smartSectionAction(smartSettings),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
+			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
 				Attr("data-testid", "goals-toggle-formulas"), Title(uistate.T("goals.metricsTitle")),
 				OnClick(onToggleFormulas), Text(formulasLabel)),
-			Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("goals.addGoal"))),
 		),
+		Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
+			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("goals.addGoal"))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

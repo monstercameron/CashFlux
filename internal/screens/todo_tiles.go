@@ -122,15 +122,15 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	}
 	sm := sortMode.Get()
 
-	hideToggleCls := "todo-toggle"
+	hideToggleCls := "strip-toggle"
 	if hideDone.Get() {
 		hideToggleCls += " is-on"
 	}
-	// A single compact toolbar row: sort + priority filter as small labelled "pill"
+	// A single compact filter strip: sort + priority filter as small labelled "pill"
 	// selects (auto-width, not full-width bars), a hide-done toggle, and the primary
-	// Add task pushed to the right.
-	toolbar := Div(css.Class("todo-toolbar"),
-		Div(css.Class("todo-toolbar-controls"),
+	// Add task pushed to the right. The strip layout is shared with /goals (.filter-strip).
+	toolbar := Div(css.Class("filter-strip"),
+		Div(css.Class("filter-strip-controls"),
 			Label(css.Class("todo-ctrl"),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),

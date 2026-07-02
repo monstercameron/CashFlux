@@ -4922,14 +4922,14 @@ func registerGenerated() {
 	// To-do toolbar: one compact row — sort + priority filter as small labelled "pill"
 	// selects (auto-width, NOT full-width bars), a hide-done toggle, and Add task pushed
 	// right. Replaces the earlier unstyled full-width stacked selects.
-	rule(".todo-toolbar",
+	rule(".filter-strip",
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
 		gap("0.75rem"),
 		flexWrap("wrap"),
 	)
-	rule(".todo-toolbar-controls",
+	rule(".filter-strip-controls",
 		display("flex"),
 		alignItems("center"),
 		gap("0.5rem"),
@@ -4970,7 +4970,7 @@ func registerGenerated() {
 		prop("outline", "none"),
 		boxShadow("none"),
 	)
-	rule(".todo-toggle",
+	rule(".strip-toggle",
 		display("inline-flex"),
 		alignItems("center"),
 		minHeight("38px"),
@@ -4983,11 +4983,11 @@ func registerGenerated() {
 		cursor("pointer"),
 		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
 	)
-	rule(".todo-toggle:hover",
+	rule(".strip-toggle:hover",
 		color("var(--text)"),
 		borderColor("var(--border-strong)"),
 	)
-	rule(".todo-toggle.is-on",
+	rule(".strip-toggle.is-on",
 		background("var(--accent-dim)"),
 		borderColor("var(--accent)"),
 		color("var(--accent)"),
