@@ -4609,6 +4609,258 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// Notifications surface: same full-width, auto-height stacked-tile layout as /todo.
+	rule(".bento.bento-notif",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-notif > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
+	// --- Notifications "signal feed" -------------------------------------------------
+	// Summary tile: a Fraunces hero count + a severity breakdown + the catch-up line.
+	rule(".notif-summary",
+		display("flex"),
+		alignItems("center"),
+		gap("1.5rem"),
+		flexWrap("wrap"),
+	)
+	rule(".notif-summary-lead",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.65rem"),
+	)
+	rule(".notif-summary-count",
+		fontFamily("var(--font-display), 'Fraunces', Georgia, serif"),
+		fontSize("2.3rem"),
+		fontWeight("600"),
+		lineHeight("1"),
+		color("var(--text)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".notif-summary-label",
+		display("flex"),
+		flexDirection("column"),
+	)
+	rule(".notif-summary-word",
+		fontSize("0.95rem"),
+		color("var(--text)"),
+	)
+	rule(".notif-summary-sub",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".notif-summary-sevs",
+		display("flex"),
+		gap("0.5rem"),
+		flexWrap("wrap"),
+		marginLeft("auto"),
+	)
+	rule(".notif-sev-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		padding("0.3rem 0.65rem"),
+		borderRadius("999px"),
+		background("var(--bg)"),
+		border("1px solid var(--border)"),
+		fontSize("0.8rem"),
+	)
+	rule(".notif-sev-dot",
+		width("9px"),
+		height("9px"),
+		borderRadius("50%"),
+		flex("none"),
+	)
+	rule(".notif-sev-chip.sev-critical .notif-sev-dot",
+		background("#ef4444"),
+	)
+	rule(".notif-sev-chip.sev-warning .notif-sev-dot",
+		background("#f59e0b"),
+	)
+	rule(".notif-sev-chip.sev-info .notif-sev-dot",
+		background("var(--accent)"),
+	)
+	rule(".notif-sev-n",
+		fontWeight("600"),
+		color("var(--text)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".notif-sev-name",
+		color("var(--text-dim)"),
+	)
+	rule(".notif-catchup",
+		display("flex"),
+		alignItems("center"),
+		gap("0.45rem"),
+		flexBasis("100%"),
+		marginTop("0.2rem"),
+		fontSize("0.82rem"),
+		color("var(--accent)"),
+	)
+	rule(".notif-catchup-dot",
+		width("7px"),
+		height("7px"),
+		borderRadius("50%"),
+		background("var(--accent)"),
+		flex("none"),
+	)
+	// Feed list + cards. A severity-tinted left rail + a colored icon medallion; unread
+	// items carry a dot and full weight, read items dim.
+	rule(".notif-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".notif",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.85rem"),
+		padding("0.8rem 0.9rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderLeft("3px solid var(--border-strong)"),
+		borderRadius("12px"),
+		transition("border-color 0.12s ease, opacity 0.12s ease"),
+	)
+	rule(".notif:hover",
+		borderColor("var(--border-strong)"),
+	)
+	rule(".notif.is-read",
+		opacity("0.6"),
+	)
+	rule(".notif.sev-critical",
+		borderLeftColor("#ef4444"),
+	)
+	rule(".notif.sev-warning",
+		borderLeftColor("#f59e0b"),
+	)
+	rule(".notif.sev-info",
+		borderLeftColor("var(--accent)"),
+	)
+	rule(".notif-badge",
+		flex("none"),
+		width("34px"),
+		height("34px"),
+		borderRadius("50%"),
+		display("grid"),
+		placeItems("center"),
+		marginTop("0.05rem"),
+	)
+	rule(".notif.sev-critical .notif-badge",
+		background("#3b0d0d"),
+		color("#fca5a5"),
+	)
+	rule(".notif.sev-warning .notif-badge",
+		background("#2a230c"),
+		color("#fcd34d"),
+	)
+	rule(".notif.sev-info .notif-badge",
+		background("var(--accent-dim)"),
+		color("var(--accent)"),
+	)
+	rule(".notif-body",
+		flex("1"),
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+	)
+	rule(".notif-top",
+		display("flex"),
+		alignItems("center"),
+		gap("0.45rem"),
+	)
+	rule(".notif-dot",
+		flex("none"),
+		width("8px"),
+		height("8px"),
+		borderRadius("50%"),
+		background("var(--accent)"),
+	)
+	rule(".notif.sev-critical .notif-dot",
+		background("#ef4444"),
+	)
+	rule(".notif.sev-warning .notif-dot",
+		background("#f59e0b"),
+	)
+	rule(".notif-title",
+		fontWeight("600"),
+		fontSize("0.95rem"),
+		color("var(--text)"),
+		overflowWrap("anywhere"),
+	)
+	rule(".notif.is-read .notif-title",
+		fontWeight("500"),
+	)
+	rule(".notif-text",
+		margin("0"),
+		fontSize("0.85rem"),
+		lineHeight("1.45"),
+		color("var(--text-dim)"),
+		overflowWrap("anywhere"),
+	)
+	rule(".notif-foot",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		fontSize("0.76rem"),
+		color("var(--text-faint)"),
+	)
+	rule(".notif-sev-tag",
+		fontSize("0.68rem"),
+		fontWeight("600"),
+		letterSpacing("0.04em"),
+		prop("text-transform", "uppercase"),
+	)
+	rule(".notif-sev-tag.sev-critical",
+		color("#fca5a5"),
+	)
+	rule(".notif-sev-tag.sev-warning",
+		color("#fcd34d"),
+	)
+	rule(".notif-sev-tag.sev-info",
+		color("var(--accent)"),
+	)
+	rule(".notif-time",
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".notif-clear:hover",
+		borderColor("#7f1d1d"),
+		color("#fca5a5"),
+	)
+	// Inline per-item actions (mark-read / snooze / dismiss) — always visible + one click
+	// each; no ⋯ menu (a menu is an extra click for actions you take constantly). Faint by
+	// default, they brighten on hover.
+	rule(".notif-actions",
+		flex("none"),
+		alignSelf("flex-start"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.1rem"),
+		marginTop("0.05rem"),
+	)
+	rule(".notif-icon-btn",
+		background("transparent"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		padding("0.35rem"),
+		borderRadius("8px"),
+		display("grid"),
+		placeItems("center"),
+		transition("background 0.12s ease, color 0.12s ease, border-color 0.12s ease"),
+	)
+	rule(".notif-icon-btn:hover",
+		background("var(--bg)"),
+		color("var(--text)"),
+	)
+	rule(".notif-icon-btn.notif-dismiss:hover",
+		background("#3b0d0d"),
+		color("#fca5a5"),
+	)
 	// To-do line items — an EDITORIAL AGENDA, not cards. Borderless rows on a hairline
 	// rhythm: a circular check-off ring whose COLOUR encodes priority (red high / accent
 	// medium / faint low — so you scan urgency by the rings, no badges), the title as the

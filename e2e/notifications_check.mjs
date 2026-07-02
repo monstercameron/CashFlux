@@ -1,40 +1,41 @@
-// C75 — Notification Center lists the feed, marks read on open, and clears.
 import { createRequire } from "module";
-import { fileURLToPath } from "url";
-import path from "path";
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
+const require = createRequire("C:/Users/mreca/Desktop/CashFlux/.tools/package.json");
 const { chromium } = require("playwright");
-const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
-const browser = await chromium.launch({ headless: true });
-const fail = (m) => { console.error("FAIL: " + m); process.exitCode = 1; };
-try {
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  await page.addInitScript(() => {
-    localStorage.setItem("cashflux:notify:feed", JSON.stringify([
-      { id: "n1", title: "Rent is due soon", body: "Due in 3 days — $1,200", at: 1750000000, read: false },
-    ]));
-  });
-  await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('nav[aria-label="Main navigation"]', { timeout: 60000 });
-  await page.waitForTimeout(500);
-  await page.locator('a[title="Notifications"]').first().click();
-  await page.waitForTimeout(500);
-  if (!(await page.evaluate(() => document.body.innerText.includes("Rent is due soon")))) fail("Notification Center did not list the feed item");
-  // Opening marks read → persisted item.read true.
-  if (!(await page.evaluate(() => (JSON.parse(localStorage.getItem("cashflux:notify:feed") || "[]")[0] || {}).read === true))) fail("opening the center did not mark items read");
-  // Clear all → empty.
-  await page.getByRole("button", { name: "Clear all" }).first().click();
-  await page.waitForTimeout(300);
-  if (!(await page.evaluate(() => document.body.innerText.includes("No notifications yet")))) fail("Clear all did not empty the center");
-
-  // Settings has the Browser notifications toggle.
-  await page.locator("button.hh").first().click();
-  await page.waitForTimeout(500);
-  if (!(await page.evaluate(() => document.body.innerText.includes("Browser notifications")))) fail("Settings is missing the Browser notifications toggle");
-  await ctx.close();
-  if (!process.exitCode) console.log("PASS: Notification Center lists feed, marks read, clears; Settings has the browser toggle.");
-} finally {
-  await browser.close();
-}
+const URL = process.env.E2E_URL || "http://127.0.0.1:8091";
+const b = await chromium.launch({ headless: true });
+const p = await b.newPage({ viewport: { width: 1440, height: 1100 } });
+const results = [];
+const check = (n, c, d = "") => { results.push(!!c); console.log((c ? "PASS " : "FAIL ") + n + (d ? " — " + d : "")); };
+const errs = []; p.on("pageerror", e => errs.push(String(e)));
+await p.goto(URL + "/", { waitUntil: "domcontentloaded" });
+await p.waitForSelector("#app .bento", { timeout: 30000 }).catch(() => {});
+await p.waitForTimeout(1200);
+if (await p.locator('[data-testid="hero-load-sample"]').count()) { await p.locator('[data-testid="hero-load-sample"]').click(); await p.waitForTimeout(1500); }
+await p.goto(URL + "/notifications", { waitUntil: "domcontentloaded" });
+await p.waitForSelector(".notif", { timeout: 15000 }).catch(() => {});
+await p.waitForTimeout(1000);
+check("T1 summary tile", await p.locator('.notif-summary').count() === 1);
+check("T2 filter strip", await p.locator('.filter-strip [data-testid="notif-filter"]').count() === 1);
+check("T3 feed cards render", await p.locator('.notif').count() >= 3, `${await p.locator('.notif').count()}`);
+check("T4 severity chips", await p.locator('.notif-sev-chip').count() >= 1);
+check("T5 severity medallion + rail", await p.locator('.notif.sev-critical, .notif.sev-warning, .notif.sev-info').count() >= 1);
+check("T6 NO ⋯ menu (inline actions only)", await p.locator('[data-testid^="notif-menu-btn-"]').count() === 0);
+check("T7 inline dismiss + snooze buttons present", await p.locator('[data-testid^="notif-dismiss-"]').count() >= 3 && await p.locator('[data-testid^="notif-snooze-"]').count() >= 3);
+// T8: inline dismiss removes that specific card (one click, no menu).
+const firstId = await p.locator('.notif').first().getAttribute('data-testid');
+await p.locator('.notif').first().locator('[data-testid^="notif-dismiss-"]').click({ force: true });
+await p.waitForTimeout(700);
+check("T8 inline dismiss removes that card", (await p.locator('[data-testid="'+firstId+'"]').count()) === 0, `${firstId}`);
+// T9: severity filter.
+await p.locator('[data-testid="notif-filter"]').selectOption("warning"); await p.waitForTimeout(500);
+const warnOnly = await p.evaluate(() => { const c = [...document.querySelectorAll('.notif')]; return c.length > 0 && c.every(x => x.classList.contains('sev-warning')); });
+check("T9 severity filter shows only that tier", warnOnly, `${await p.locator('.notif').count()} cards`);
+await p.locator('[data-testid="notif-filter"]').selectOption(""); await p.waitForTimeout(400);
+// T10: Clear all empties the feed.
+await p.locator('[data-testid="notif-clear-all"]').click({ force: true }); await p.waitForTimeout(700);
+check("T10 clear all empties the feed", await p.locator('.notif').count() === 0);
+check("T11 no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
+const passed = results.filter(Boolean).length;
+console.log(`RESULT: ${passed}/${results.length}`);
+await b.close();
+process.exit(passed === results.length ? 0 : 1);

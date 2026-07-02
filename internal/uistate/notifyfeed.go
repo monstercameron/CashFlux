@@ -26,6 +26,10 @@ var (
 	notifyFeedCaptured bool
 )
 
+// UseNotifyFilter is the shared severity filter for the Notification Center surface
+// ("" = all, or "critical"/"warning"/"info"). Read by the toolbar + list tiles.
+func UseNotifyFilter() state.Atom[string] { return state.UseAtom("notify:filter", "") }
+
 // UseNotifyFeed returns the shared, persisted Notification Center feed (newest
 // first). The catch-up runner appends to it; the center screen renders it. It also
 // captures the atom so out-of-render code can update it via setNotifyFeed.
@@ -106,6 +110,26 @@ func MarkFeedItemRead(id string, read bool) {
 			cur[i].Read = read
 			changed = true
 			break
+		}
+	}
+	if !changed {
+		return
+	}
+	PersistNotifyFeed(cur)
+	setNotifyFeed(cur)
+}
+
+// MarkAllNotifyRead marks every unread item in the CURRENT persisted feed read (used to
+// clear the rail badge when the center opens). It reads the live store — not a render
+// snapshot — so it never clobbers a snooze/dismiss the user just performed. No-op when
+// everything is already read.
+func MarkAllNotifyRead() {
+	cur := loadNotifyFeed()
+	changed := false
+	for i := range cur {
+		if !cur[i].Read {
+			cur[i].Read = true
+			changed = true
 		}
 	}
 	if !changed {

@@ -1,3 +1,34 @@
+## 2026-07-02 — Notifications: widgetized "signal feed" redesign
+
+Cam: widgetize + ⋯ menu + redesign from scratch (design skill). Committed to a severity-driven signal
+feed. Then Cam: "perhaps the triple dot menu isnt needed for this as it slows the user down, add a
+clear all button" → dropped the per-item ⋯ menu for INLINE always-visible actions (mark-read / snooze
+/ dismiss), kept Clear all in the toolbar.
+
+Structure: NotificationCenter() is now a surface host (bento bento-notif) over notif-summary /
+notif-toolbar / notif-list tiles (notifications_widget.go + notifications_tiles.go). notifications.go
+keeps helpers (severity icon/label/class, relativeTime, load/saveLastSeen) + the redesigned notifyRow.
+Summary: Fraunces hero count + "N unread/all read" + severity chips + catch-up (session-stable seen
+baseline). Toolbar: shared .filter-strip severity filter + Clear all. List: severity-sorted cards.
+Card: severity medallion (icon in a tinted circle) + tinted left rail + unread dot + text sev tag
+(WCAG) + relative time; read dims. uistate: UseNotifyFilter atom + MarkAllNotifyRead.
+
+Two real bugs found + fixed along the way:
+1. The per-item ⋯ menu (KebabMenu) was OCCLUDED — a sibling notif card painted over the open menu
+   (z-index:50 not lifted above siblings) because .notif wasn't in the ":has(open menu) → bump
+   z-index" rule. Mooted by dropping the menu for inline actions.
+2. The FIRST user action after opening no-op'd (second worked): the mark-all-read-on-open effect
+   read a stale render snapshot (feedAtom.Get() in the effect returns render-time value) and, firing
+   a tick after mount, overwrote the snooze/dismiss the user clicked. Fixed with uistate.MarkAllNotifyRead()
+   which marks read off the LIVE persisted feed (loadNotifyFeed) — can't clobber a fresh action.
+Also: inline actions were opacity:0 hover-reveal → force-clicks in tests were unreliable AND it hid the
+fast actions Cam wanted, so made them always-visible bordered icon buttons. Themed <select option> too
+(dropdowns were unstyled) in a prior commit; reused here.
+
+Verify: full go test ./... green; e2e/notifications_check.mjs 11/11 (summary/strip/cards, severity
+medallion+rail, NO ⋯ menu, inline dismiss removes the card, severity filter, clear all, no errors);
+todo/goals e2e unaffected. Screenshots confirm the feed + severity chips + inline actions.
+
 ## 2026-07-01 — /goals: display linked to-dos (the goals double-back)
 
 Cam: "now go back in /goals and display linked todos." The goal card already had props.Tasks (for
