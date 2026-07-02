@@ -176,6 +176,7 @@ func todoListWidget(props todoListProps) ui.Node {
 	filterPrio := uistate.UseTodoFilterPrio()
 	sortMode := uistate.UseTodoSortMode()
 	pageAtom := uistate.UseTodoPage()
+	collapsed := uistate.UseTodoCollapsed()
 	errMsg := ui.UseState("")
 	prevPage := ui.UseEvent(Prevent(func() {
 		if p := pageAtom.Get(); p > 1 {
@@ -267,9 +268,13 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 		filtered = kept
 	}
+	// Direct-children tally (over ALL tasks, ignoring view filters) for the collapsible
+	// parent summary, plus the collapsed set that prunes hidden sub-trees.
+	childStats := tasktree.ChildStats(tasks)
+	collapsedSet := collapsed.Get()
 	// Paginate by ROOT task (sub-trees stay together), ordered by the chosen sort mode.
 	const todoPageSize = 20
-	nodes, totalRoots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize)
+	nodes, totalRoots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
 	totalPages := (totalRoots + todoPageSize - 1) / todoPageSize
 	if totalPages < 1 {
 		totalPages = 1
@@ -289,13 +294,17 @@ func todoListWidget(props todoListProps) ui.Node {
 	case len(nodes) == 0:
 		listBody = P(css.Class("empty"), uistate.T("todo.allDone"))
 	default:
+		toggleCollapse := func(id string) { uistate.ToggleTodoCollapsed(id) }
 		rows := MapKeyed(nodes,
 			func(n tasktree.Node) any { return n.Task.ID },
 			func(n tasktree.Node) ui.Node {
+				st := childStats[n.Task.ID]
 				return ui.CreateElement(TaskRow, taskRowProps{
 					Task: n.Task, Depth: n.Depth,
 					OnToggle: toggleTask, OnDelete: deleteTask, OnAddSub: addSub,
 					Accounts: accounts, Budgets: budgets, Goals: goals, Transactions: txns,
+					ChildTotal: st.Total, ChildDone: st.Done,
+					Collapsed: collapsedSet[n.Task.ID], OnToggleCollapse: toggleCollapse,
 				})
 			},
 		)

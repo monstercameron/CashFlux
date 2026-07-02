@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -31,6 +32,12 @@ type taskRowProps struct {
 	Budgets      []domain.Budget
 	Goals        []domain.Goal
 	Transactions []domain.Transaction
+	// Sub-task summary + collapse (parents only; ChildTotal 0 = leaf). Counts are over
+	// ALL children regardless of the current view filter.
+	ChildTotal       int
+	ChildDone        int
+	Collapsed        bool
+	OnToggleCollapse func(string)
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
@@ -51,17 +58,11 @@ func TaskRow(props taskRowProps) ui.Node {
 	// Edit opens the shell-root flip modal (TaskEditHost) instead of an inline row form —
 	// the row lives under transformed tile ancestors, so an in-row modal would be off-centre.
 	openEdit := ui.UseEvent(Prevent(func() { uistate.SetTaskEdit(uistate.TaskEdit{ID: t.ID}) }))
-	// The ⋯ actions menu (add sub-task + the destructive delete), so the row stays
-	// uncluttered and a misclick can't delete a task (and its whole sub-tree).
-	menuID := "task-menu-" + t.ID
-	menuOpen := ui.UseState(false)
-	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
-	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
-	menuHidden := ""
-	if !menuOpen.Get() {
-		menuHidden = " hidden-menu"
-	}
-
+	toggleCollapse := ui.UseEvent(Prevent(func() {
+		if props.OnToggleCollapse != nil {
+			props.OnToggleCollapse(t.ID)
+		}
+	}))
 	// Row-display deep-link: declared unconditionally here so the hook slot never
 	// shifts across renders (framework rule).
 	linkRoute := tasklink.Route(t.RelatedType)
@@ -136,6 +137,16 @@ func TaskRow(props taskRowProps) ui.Node {
 		}
 		metaParts = append(metaParts, Span(css.Class("todo-meta-note"), Title(t.Notes), noteDisplay))
 	}
+	// Sub-task summary chip (parents only): "N/M" done, leading the meta line — and, when
+	// collapsed, the only hint that hidden work lives under this row.
+	hasKids := props.ChildTotal > 0
+	if hasKids {
+		substat := Span(css.Class("todo-substat"), Attr("data-testid", "task-substat-"+t.ID),
+			Title(uistate.T("todo.subCountTitle", props.ChildDone, props.ChildTotal)),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+			Span(fmt.Sprintf("%d/%d", props.ChildDone, props.ChildTotal)))
+		metaParts = append([]ui.Node{substat}, metaParts...)
+	}
 	var metaLine ui.Node = Fragment()
 	if len(metaParts) > 0 {
 		metaChildren := make([]ui.Node, 0, len(metaParts)*2)
@@ -166,6 +177,24 @@ func TaskRow(props taskRowProps) ui.Node {
 	if props.Depth > 0 {
 		rowArgs = append(rowArgs, Span(css.Class("todo-subarrow"), Attr("aria-hidden", "true"), "↳"))
 	}
+	// Disclosure: parents get a chevron that collapses/expands their sub-tasks; leaves get
+	// an equal-width spacer so every checkbox stays aligned.
+	if hasKids {
+		discloseCls := "todo-disclose"
+		if props.Collapsed {
+			discloseCls += " is-collapsed"
+		}
+		lbl := uistate.T("todo.collapse")
+		if props.Collapsed {
+			lbl = uistate.T("todo.expand")
+		}
+		rowArgs = append(rowArgs, Button(ClassStr(discloseCls), Type("button"),
+			Attr("aria-label", lbl), Attr("aria-expanded", ariaBool(!props.Collapsed)),
+			Attr("data-testid", "task-collapse-"+t.ID), Title(lbl), OnClick(toggleCollapse),
+			uiw.Icon(icon.ChevronRight, css.Class(tw.W35, tw.H35))))
+	} else {
+		rowArgs = append(rowArgs, Span(css.Class("todo-disclose-spacer"), Attr("aria-hidden", "true")))
+	}
 	rowArgs = append(rowArgs,
 		Button(ClassStr("todo-check p-"+string(t.Priority)+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
 			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
@@ -178,17 +207,20 @@ func TaskRow(props taskRowProps) ui.Node {
 			),
 			metaLine,
 		),
-		// Edit opens the flip modal; the ⋯ menu holds Add sub-task + the destructive Delete.
+		// Edit opens the flip modal; the shared ⋯ KebabMenu (viewport-aware) holds Add
+		// sub-task + the destructive Delete.
 		Div(css.Class("todo-actions"),
 			Button(css.Class("todo-icon-btn"), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Attr("aria-label", uistate.T("todo.editTitle")), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
-			Div(css.Class("add-wrap"), Attr("id", menuID),
-				Button(css.Class("todo-icon-btn"), Type("button"), Attr("title", uistate.T("todo.moreActions")), Attr("aria-label", uistate.T("todo.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "task-menu-" + t.ID,
+				AriaLabel:    uistate.T("todo.moreActions"),
+				ToggleTestID: "task-menu-btn-" + t.ID,
+				ToggleClass:  "todo-icon-btn",
+				Items: []ui.Node{
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-addsub-"+t.ID), OnClick(addSub), uistate.T("todo.addSub")),
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "task-delete-btn-"+t.ID), Attr("aria-label", uistate.T("todo.deleteTitle")), Title(uistate.T("todo.deleteTitle")), OnClick(del), uistate.T("action.delete")),
-				),
-			),
+				},
+			}),
 		),
 	)
 	return Div(rowArgs...)

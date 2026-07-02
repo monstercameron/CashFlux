@@ -1,3 +1,36 @@
+## 2026-07-01 — KebabMenu component + collapsible sub-tasks + summary
+
+Cam: "it needs container aware triple dot menu, make that a component" and "subs need to be more
+smoothly integrated visually and needs to be collapsable and have a small summary" — and then, sharply,
+"the sub message triple dot menu also needs to be container aware bro wtf."
+
+Root cause of the last one: the to-do ⋯ menu was hand-rolled (raw .add-wrap/.add-menu, no
+AnchorPopover), unlike accounts/budgets rows which use AnchorPopover+DismissPopover. So it never
+flipped and overflowed the right edge (parent AND sub-task rows).
+
+1) internal/ui/kebabmenu.go — new reusable KebabMenu component. Wraps AnchorPopover (viewport-aware
+   left/up flip) + DismissPopover (Esc/outside-click/menu-roving) + the add-wrap/add-menu/backdrop
+   chrome + the ⋯ toggle. Takes Items []uic.Node (caller builds items with their OWN UseEvent
+   handlers → no On*-in-a-loop). Props: ID (stable wrap id), AriaLabel, WrapClass, ToggleClass,
+   ToggleTestID, Items. Menu closes on any inside click (bubbles to a close handler). Adopted on the
+   to-do row → EVERY ⋯ menu (parent + sub-task) is now container-aware. Verified: sub-task menu
+   openLeft=true, right 1389 ≤ 1440, no overflow.
+
+2) Collapsible sub-tasks: uistate todo:collapsed set (UseTodoCollapsed + ToggleTodoCollapsed, captured
+   pattern). tasktree.Page gained a `collapsed map[string]bool` param — emits a collapsed parent but
+   doesn't descend. Parent rows get a disclosure chevron (rotates when open). New tasktree.ChildStats
+   → per-parent {Total,Done} over ALL tasks (filter-independent); the parent shows a "N/M" summary
+   chip that persists when collapsed.
+
+3) Smoother nesting: is-subtask gets a faint bg tint + accent-dim left rail (+ existing ↳ / smaller
+   check / dim title) so a sub-tree reads as one grouped block.
+
+Verify: full go test ./... green (new tasktree TestPageCollapseHidesSubtree + TestChildStats); wasm
+build OK; e2e/todo_subtask_check.mjs 19/19 (renders nested, indented, ↳, no overflow, summary chip,
+disclosure collapse/expand, parent + sub-task ⋯ menus both flip-left in-viewport); other todo e2e
+unaffected (flipmodal 10/10, redesign 9/9, sort_page 11/11, addform 14/14). Screenshot confirms the
+grouped sub-task block + "1/2" chip + chevron.
+
 ## 2026-07-01 — Add-task modal: editorial "compose slip" (redesign #2, design skill)
 
 Cam: "I asked you to redesign the add task section and it looks the same... take a picture and then

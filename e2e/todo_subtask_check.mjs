@@ -64,6 +64,56 @@ check("T5 has ↳ connector", r.hasArrow);
 check("T6 smaller check ring", r.checkW > 0 && r.checkW <= 21, `${r.checkW}px`);
 check("T7 no horizontal page overflow", !r.hOverflow && r.scrollLeft === 0, JSON.stringify({ sl: r.scrollLeft, ov: r.hOverflow }));
 check("T8 sub-task not clipped off-screen", r.leftOK);
+// --- collapse + summary + container-aware menu ---
+// The parent now shows a "N/M" sub-task summary chip and a disclosure chevron.
+const parentCard = p.locator('.todo-item:not(.is-subtask)').filter({ hasText: "Assemble the crib and changing table" }).first();
+check("T10 parent shows a sub-task summary chip", await parentCard.locator('[data-testid^="task-substat-"]').count() >= 1);
+const disclose = parentCard.locator('[data-testid^="task-collapse-"]').first();
+check("T11 parent has a disclosure toggle", await disclose.count() === 1);
+
+// Collapsing the parent hides the sub-task; expanding shows it again.
+await disclose.scrollIntoViewIfNeeded();
+await disclose.click({ force: true });
+await p.waitForTimeout(500);
+check("T12 collapse hides the sub-task", await p.locator('.todo-item.is-subtask').count() === 0);
+check("T13 parent summary still visible when collapsed", await parentCard.locator('[data-testid^="task-substat-"]').count() >= 1);
+await disclose.click({ force: true });
+await p.waitForTimeout(500);
+check("T14 expand shows the sub-task again", await p.locator('.todo-item.is-subtask').count() === 1);
+
+// Container-aware ⋯ menu: opening it must not push the page into horizontal overflow.
+const kebab = parentCard.locator('[data-testid^="task-menu-btn-"]').first();
+check("T15 kebab menu button present", await kebab.count() === 1);
+await kebab.click({ force: true });
+await p.waitForTimeout(350);
+const menuOv = await p.evaluate(() => ({
+  overflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+  menuRight: (() => { const m = document.querySelector('.add-menu:not(.hidden-menu)'); return m ? Math.round(m.getBoundingClientRect().right) : -1; })(),
+  iw: window.innerWidth,
+}));
+check("T16 open ⋯ menu does not overflow the viewport", !menuOv.overflow && menuOv.menuRight <= menuOv.iw + 1, JSON.stringify(menuOv));
+// close the parent menu
+await p.keyboard.press("Escape").catch(() => {});
+await p.waitForTimeout(200);
+
+// The SUB-TASK's own ⋯ menu must also be container-aware (flip left / stay in view).
+const subKebab = p.locator('.todo-item.is-subtask [data-testid^="task-menu-btn-"]').first();
+check("T17 sub-task has its own ⋯ menu", await subKebab.count() === 1);
+await subKebab.scrollIntoViewIfNeeded();
+await subKebab.click({ force: true });
+await p.waitForTimeout(350);
+const subMenu = await p.evaluate(() => {
+  const m = document.querySelector('.add-menu:not(.hidden-menu)');
+  const rc = m ? m.getBoundingClientRect() : null;
+  return {
+    right: rc ? Math.round(rc.right) : -1,
+    inView: rc ? (rc.right <= window.innerWidth + 1 && rc.left >= -1) : false,
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+    iw: window.innerWidth,
+  };
+});
+check("T18 sub-task ⋯ menu stays inside the viewport (container-aware)", subMenu.inView && !subMenu.overflow, JSON.stringify(subMenu));
+
 check("T9 no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
 
 const passed = results.filter(Boolean).length;

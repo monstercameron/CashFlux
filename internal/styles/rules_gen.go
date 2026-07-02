@@ -4630,8 +4630,12 @@ func registerGenerated() {
 	// with a left guide rail, a leading ↳ connector, a smaller check ring, and a slightly
 	// smaller/dimmer title.
 	rule(".todo-item.is-subtask",
-		borderLeft("2px solid var(--border-strong)"),
+		borderLeft("2px solid var(--accent-dim)"),
+		background("rgba(255,255,255,0.02)"),
 		gap("0.6rem"),
+	)
+	rule(".todo-item.is-subtask:hover",
+		background("var(--bg-elev)"),
 	)
 	rule(".todo-subarrow",
 		flex("none"),
@@ -4640,6 +4644,50 @@ func registerGenerated() {
 		fontSize("1.05rem"),
 		lineHeight("1"),
 		marginRight("-0.15rem"),
+	)
+	// Disclosure chevron on parent rows (collapse/expand sub-tasks) + an equal-width
+	// spacer on leaves so every checkbox lines up. The chevron rotates down when open.
+	rule(".todo-disclose",
+		flex("none"),
+		alignSelf("center"),
+		display("grid"),
+		placeItems("center"),
+		width("22px"),
+		height("22px"),
+		marginTop("0.05rem"),
+		marginLeft("-0.35rem"),
+		padding("0"),
+		background("transparent"),
+		border("0"),
+		borderRadius("6px"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		transition("background 0.12s ease, color 0.12s ease"),
+	)
+	rule(".todo-disclose:hover",
+		background("var(--bg)"),
+		color("var(--text)"),
+	)
+	rule(".todo-disclose svg",
+		transition("transform 0.15s ease"),
+		transform("rotate(90deg)"),
+	)
+	rule(".todo-disclose.is-collapsed svg",
+		transform("rotate(0deg)"),
+	)
+	rule(".todo-disclose-spacer",
+		flex("none"),
+		width("22px"),
+		marginLeft("-0.35rem"),
+	)
+	// Sub-task summary chip on a parent ("2/3"): a quiet pill so a collapsed parent still
+	// shows there's hidden work under it.
+	rule(".todo-substat",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text-dim)"),
 	)
 	rule(".todo-item.is-subtask .todo-check",
 		width("20px"),

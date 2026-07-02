@@ -62,3 +62,40 @@ func UseTodoSortMode() state.Atom[string] { return state.UseAtom("todo:sortMode"
 // UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
 // top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.
 func UseTodoPage() state.Atom[int] { return state.UseAtom("todo:page", 1) }
+
+// capturedTodoCollapsed lets ToggleTodoCollapsed flip a parent's collapse state from a
+// row click handler without calling state.UseAtom outside a render (which panics).
+var (
+	capturedTodoCollapsed state.Atom[map[string]bool]
+	todoCollapsedCaptured bool
+)
+
+// UseTodoCollapsed is the shared set of task IDs whose sub-tasks are collapsed (hidden).
+// The list tile reads it to prune collapsed sub-trees; a parent row's disclosure toggle
+// flips it via ToggleTodoCollapsed. Calling it in a render also captures the atom.
+func UseTodoCollapsed() state.Atom[map[string]bool] {
+	a := state.UseAtom("todo:collapsed", map[string]bool{})
+	capturedTodoCollapsed = a
+	todoCollapsedCaptured = true
+	return a
+}
+
+// ToggleTodoCollapsed collapses/expands a parent task's sub-tasks. Safe from a click
+// handler (uses the captured atom); copies the map so the change is a new value the
+// atom's subscribers see.
+func ToggleTodoCollapsed(id string) {
+	if !todoCollapsedCaptured {
+		return
+	}
+	cur := capturedTodoCollapsed.Get()
+	nm := make(map[string]bool, len(cur)+1)
+	for k, v := range cur {
+		nm[k] = v
+	}
+	if nm[id] {
+		delete(nm, id)
+	} else {
+		nm[id] = true
+	}
+	capturedTodoCollapsed.Set(nm)
+}

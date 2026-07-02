@@ -73,7 +73,11 @@ func Flatten(tasks []domain.Task) []Node {
 // math in the UI). No task is dropped: a task that is present but unreachable from any
 // root (e.g. caught in a parent cycle) is folded in as its own root so it still paginates
 // and renders.
-func Page(tasks []domain.Task, mode tasksort.Mode, page, pageSize int) (nodes []Node, totalRoots int) {
+//
+// collapsed is a set of task IDs whose sub-trees are hidden: a collapsed task is still
+// emitted (so the user sees it and can re-expand), but the walk does not descend into
+// its children. A nil map collapses nothing.
+func Page(tasks []domain.Task, mode tasksort.Mode, page, pageSize int, collapsed map[string]bool) (nodes []Node, totalRoots int) {
 	present := make(map[string]bool, len(tasks))
 	children := make(map[string][]domain.Task, len(tasks))
 	for _, t := range tasks {
@@ -144,6 +148,9 @@ func Page(tasks []domain.Task, mode tasksort.Mode, page, pageSize int) (nodes []
 		}
 		emitted[t.ID] = true
 		out = append(out, Node{Task: t, Depth: depth})
+		if collapsed[t.ID] {
+			return // sub-tree hidden — emit the parent but don't descend
+		}
 		for _, c := range tasksort.OrderBy(children[t.ID], mode) {
 			walk(c, depth+1)
 		}
@@ -152,6 +159,29 @@ func Page(tasks []domain.Task, mode tasksort.Mode, page, pageSize int) (nodes []
 		walk(r, 0)
 	}
 	return out, totalRoots
+}
+
+// ChildStat is the direct-children summary for one task (for a collapsible parent's
+// "N of M done" caption).
+type ChildStat struct{ Total, Done int }
+
+// ChildStats returns, for every task that has at least one direct child, the count of
+// direct children and how many are done. Computed over the full task set (independent of
+// any hide-done / priority view filter) so the caption reflects the true sub-task tally.
+func ChildStats(tasks []domain.Task) map[string]ChildStat {
+	out := map[string]ChildStat{}
+	for _, t := range tasks {
+		if t.ParentID == "" {
+			continue
+		}
+		s := out[t.ParentID]
+		s.Total++
+		if t.Status == domain.StatusDone {
+			s.Done++
+		}
+		out[t.ParentID] = s
+	}
+	return out
 }
 
 // Descendants returns the ids of every task nested under id (children, grandchildren,

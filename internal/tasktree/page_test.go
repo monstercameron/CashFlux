@@ -29,7 +29,7 @@ func TestPagePaginatesRootsKeepingSubtrees(t *testing.T) {
 		task("b2", "rb", "B-child-2"),
 	}
 	// Page 1 (AZ, size 2): roots A, B → A, then B + its two children.
-	nodes, total := Page(tasks, tasksort.ModeAZ, 1, 2)
+	nodes, total := Page(tasks, tasksort.ModeAZ, 1, 2, nil)
 	if total != 3 {
 		t.Fatalf("totalRoots = %d, want 3", total)
 	}
@@ -37,7 +37,7 @@ func TestPagePaginatesRootsKeepingSubtrees(t *testing.T) {
 		t.Fatalf("page1 = %v, want %v (subtree stays with its root)", got, want)
 	}
 	// Page 2: root C only.
-	nodes, _ = Page(tasks, tasksort.ModeAZ, 2, 2)
+	nodes, _ = Page(tasks, tasksort.ModeAZ, 2, 2, nil)
 	if got, want := order(nodes), []string{"rc"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("page2 = %v, want %v", got, want)
 	}
@@ -46,12 +46,12 @@ func TestPagePaginatesRootsKeepingSubtrees(t *testing.T) {
 func TestPageClampsOutOfRange(t *testing.T) {
 	tasks := roots("A", "B", "C")
 	// page 0 clamps to 1.
-	n0, _ := Page(tasks, tasksort.ModeAZ, 0, 2)
+	n0, _ := Page(tasks, tasksort.ModeAZ, 0, 2, nil)
 	if got := order(n0); !reflect.DeepEqual(got, []string{"rA", "rB"}) {
 		t.Fatalf("page 0 = %v, want first page", got)
 	}
 	// page 99 clamps to the last page (C).
-	n9, total := Page(tasks, tasksort.ModeAZ, 99, 2)
+	n9, total := Page(tasks, tasksort.ModeAZ, 99, 2, nil)
 	if total != 3 {
 		t.Fatalf("total = %d, want 3", total)
 	}
@@ -62,7 +62,7 @@ func TestPageClampsOutOfRange(t *testing.T) {
 
 func TestPageNoPagingWhenSizeZero(t *testing.T) {
 	tasks := roots("A", "B", "C", "D")
-	nodes, total := Page(tasks, tasksort.ModeAZ, 1, 0)
+	nodes, total := Page(tasks, tasksort.ModeAZ, 1, 0, nil)
 	if total != 4 || len(nodes) != 4 {
 		t.Fatalf("no-paging: total=%d nodes=%d, want 4/4", total, len(nodes))
 	}
@@ -74,12 +74,12 @@ func TestPageOrdersByMode(t *testing.T) {
 		{ID: "hi", Title: "a-high", Status: domain.StatusOpen, Priority: domain.PriorityHigh},
 	}
 	// Priority mode: high root first regardless of title.
-	nodes, _ := Page(tasks, tasksort.ModePriority, 1, 10)
+	nodes, _ := Page(tasks, tasksort.ModePriority, 1, 10, nil)
 	if got := order(nodes); !reflect.DeepEqual(got, []string{"hi", "lo"}) {
 		t.Fatalf("priority order = %v, want [hi lo]", got)
 	}
 	// AZ mode: a-high before z-low by title.
-	nodes, _ = Page(tasks, tasksort.ModeAZ, 1, 10)
+	nodes, _ = Page(tasks, tasksort.ModeAZ, 1, 10, nil)
 	if got := order(nodes); !reflect.DeepEqual(got, []string{"hi", "lo"}) {
 		t.Fatalf("az order = %v, want [hi lo]", got)
 	}
@@ -93,7 +93,7 @@ func TestPageCycleOrphanNotDropped(t *testing.T) {
 		task("a", "b", "cycle-a"),
 		task("b", "a", "cycle-b"),
 	}
-	nodes, total := Page(tasks, tasksort.ModeSmart, 1, 0)
+	nodes, total := Page(tasks, tasksort.ModeSmart, 1, 0, nil)
 	if len(nodes) != 3 {
 		t.Fatalf("cycle: emitted %d nodes, want 3 (nothing dropped): %v", len(nodes), order(nodes))
 	}
@@ -102,10 +102,47 @@ func TestPageCycleOrphanNotDropped(t *testing.T) {
 	}
 }
 
+func TestPageCollapseHidesSubtree(t *testing.T) {
+	tasks := []domain.Task{
+		task("rb", "", "B"),
+		task("b1", "rb", "B-child-1"),
+		task("b2", "rb", "B-child-2"),
+		task("ra", "", "A"),
+	}
+	full, _ := Page(tasks, tasksort.ModeAZ, 1, 0, nil)
+	if len(full) != 4 {
+		t.Fatalf("expanded: %v, want 4 nodes", order(full))
+	}
+	col, _ := Page(tasks, tasksort.ModeAZ, 1, 0, map[string]bool{"rb": true})
+	if got := order(col); !reflect.DeepEqual(got, []string{"ra", "rb"}) {
+		t.Fatalf("collapsed: %v, want [ra rb] (children hidden, parent kept)", got)
+	}
+}
+
+func TestChildStats(t *testing.T) {
+	done := func(id, parent string) domain.Task {
+		return domain.Task{ID: id, ParentID: parent, Title: id, Status: domain.StatusDone, Priority: domain.PriorityMedium}
+	}
+	tasks := []domain.Task{
+		task("p", "", "parent"),
+		task("c1", "p", "open child"),
+		done("c2", "p"),
+		done("c3", "p"),
+		task("lonely", "", "no kids"),
+	}
+	st := ChildStats(tasks)
+	if st["p"].Total != 3 || st["p"].Done != 2 {
+		t.Fatalf("p stats = %+v, want {3 2}", st["p"])
+	}
+	if _, ok := st["lonely"]; ok {
+		t.Errorf("childless task should have no ChildStat entry")
+	}
+}
+
 func TestPageDoesNotMutateInput(t *testing.T) {
 	tasks := roots("C", "A", "B")
 	before := order2(tasks)
-	Page(tasks, tasksort.ModeAZ, 1, 2)
+	Page(tasks, tasksort.ModeAZ, 1, 2, nil)
 	if got := order2(tasks); !reflect.DeepEqual(got, before) {
 		t.Fatalf("input mutated: %v → %v", before, got)
 	}
