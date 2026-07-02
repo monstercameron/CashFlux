@@ -173,6 +173,19 @@ await openDebt();
 await p.locator('.bento-debt a[href$="/accounts"]').first().click({ force: true }); await p.waitForTimeout(900);
 check("N2 manage-accounts navigates to /accounts", p.url().endsWith("/accounts"), p.url());
 
+// ============================ OWNING-PAGE LINKS ================================
+await openDebt();
+check("O1 sections link to their owning pages", await p.locator('.debt-owner-link').count() >= 5, `${await p.locator('.debt-owner-link').count()}`);
+check("O2 net-worth / allocate / planning links present",
+  await p.locator('.debt-owner-link[href$="/networth"]').count() >= 1
+  && await p.locator('.debt-owner-link[href$="/allocate"]').count() >= 1
+  && await p.locator('.debt-owner-link[href$="/planning"]').count() >= 1);
+check("O3 utilization meters render a value (engine/formula-driven)", await p.locator('.debt-util-track[aria-valuenow]').count() >= 1);
+// Clicking the strategy section's link navigates to the page that owns it (/allocate).
+await p.locator('.debt-owner-link[href$="/allocate"]').first().click({ force: true });
+await p.waitForTimeout(900);
+check("O4 a section link navigates to its owning page", p.url().endsWith("/allocate"), p.url());
+
 // ============================ SCROLL TO TOP ====================================
 await openDebt();
 const stOpacity = () => p.evaluate(() => { const el = document.getElementById("cf-scrolltop"); return el ? getComputedStyle(el).opacity : "missing"; });

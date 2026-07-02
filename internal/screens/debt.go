@@ -213,6 +213,9 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("planning.debtStrategyTitle"),
+		// Allocate owns where spare money goes each month, which is exactly what the extra
+		// payment here feeds — link there.
+		HeaderAction: debtOwnerLink("/allocate", uistate.T("debt.linkAllocate")),
 		// C200: an HTML id anchor so the debt planner is directly linkable
 		// (/planning#debt) and the dedicated /debt route can scroll to it.
 		Attrs: []any{Attr("id", "debt")},

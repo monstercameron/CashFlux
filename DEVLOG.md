@@ -40,6 +40,18 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 8 (Cam: "for each section add useful links to the pages that own the content + make sure the
+widgets are using formulas"): (1) LINKS — debtSection gained an action slot; debtOwnerLink renders a
+quiet anchor to the owning screen. Overview→/networth, ladder→/accounts, strategy→/allocate,
+credit→/accounts(cards), loans→/accounts(loans), calculator→/planning. Strategy + calculator use their
+EntityListSection's HeaderAction (both are debt-only panels now); summary link sits in the hero.
+(2) FORMULAS — the ladder utilization meter now reads engine debt_<slug>_utilization (built prefixByID
+from engineenv.DebtVarBases; util is a currency-independent %, so it equals the owed/limit ratio exactly
+— no display change, but the meter is provably formula-sourced). Summary tile already reads the
+credit_utilization / debt_to_asset_pct molecules + min_payments_total / debt_count / liabilities atoms.
+e2e O1-O4 (6 links, net-worth/allocate/planning present, util meter has aria-valuenow, strategy
+link→/allocate). 65/65.
+
 Follow-up 7 (Cam: "add a scroll to top button when starting to scroll to jump back up"): made it global
 (every long page benefits), not debt-only. The app scrolls in <main id="main" class="cf-scroll"
 overflow-y-auto> (the topbar is sticky) — body doesn't scroll, which is why earlier fullPage shots

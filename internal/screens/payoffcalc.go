@@ -92,7 +92,8 @@ func PayoffCalculatorPanel(_ PayoffCalculatorPanelProps) ui.Node {
 
 	return Div(
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("planning.payoffTitle"),
+			Title:        uistate.T("planning.payoffTitle"),
+			HeaderAction: debtOwnerLink("/planning", uistate.T("debt.linkPlanning")),
 			Body: Fragment(
 				P(css.Class("muted"), uistate.T("planning.payoffDesc")),
 				Form(css.Class("form-grid"),

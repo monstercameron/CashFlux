@@ -4882,6 +4882,32 @@ func registerGenerated() {
 		letterSpacing("-0.01em"),
 		marginBottom("0.15rem"),
 	)
+	// Section header: the serif title on the left, the owning-page link on the right.
+	rule(".debt-section-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.5rem 0.9rem"),
+	)
+	// Owning-page link — a quiet "manage this on its source page" anchor.
+	rule(".debt-owner-link",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.15rem"),
+		fontSize("0.8rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+		prop("text-decoration", "none"),
+		prop("white-space", "nowrap"),
+		transition("color 0.15s ease"),
+	)
+	rule(".debt-owner-link:hover",
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+	)
+	rule(".debt-hero-main .debt-owner-link",
+		prop("margin-top", "0.35rem"),
+	)
 	rule(".debt-section > * + *",
 		prop("margin-top", "0.75rem"),
 	)

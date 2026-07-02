@@ -875,6 +875,13 @@ var english = Catalog{
 	"debt.manageAccounts": "Manage accounts",
 	"debt.payoffLadder":   "Payoff ladder",
 	"debt.payFirst":       "Pay first",
+	// Owning-page section links
+	"debt.linkNetWorth": "Net worth",
+	"debt.linkAccounts": "Manage accounts",
+	"debt.linkCards":    "Manage cards",
+	"debt.linkLoans":    "Manage loans",
+	"debt.linkAllocate": "Allocate payments",
+	"debt.linkPlanning": "Open Planning",
 	// Jump-nav (quick links to each section)
 	"debt.jumpTo":         "Jump to",
 	"debt.jumpOverview":   "Overview",

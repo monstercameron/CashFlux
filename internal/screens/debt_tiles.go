@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -28,16 +29,33 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// debtSection wraps a debt tile's body with a serif section title instead of the boxy
-// EntityListSection card — the tile's own .w frame is the container, so the panels inside
-// (which build their own grouping cards) don't sit in a redundant double frame. The id is
-// the scroll anchor the jump-nav targets.
-func debtSection(id, title string, body ui.Node) ui.Node {
+// debtOwnerLink renders a section's "manage this on its own page" link — a quiet anchor to
+// the screen that owns the section's data (accounts, net worth, allocate, planning), so a
+// user can jump from a read-only debt view to where they edit the underlying records.
+func debtOwnerLink(route, label string) ui.Node {
+	return A(css.Class("debt-owner-link"), Href(uistate.RoutePath(route)),
+		Attr("data-testid", "debt-link-"+route),
+		Span(label),
+		uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+	)
+}
+
+// debtSection wraps a debt tile's body with a serif section title (and an optional
+// owning-page link on the right) instead of the boxy EntityListSection card — the tile's
+// own .w frame is the container, so the panels inside (which build their own grouping cards)
+// don't sit in a redundant double frame. The id is the scroll anchor the jump-nav targets.
+func debtSection(id, title string, action, body ui.Node) ui.Node {
 	args := []any{css.Class("debt-section")}
 	if id != "" {
 		args = append(args, Attr("id", id))
 	}
-	args = append(args, If(title != "", H2(css.Class("debt-section-title"), title)), body)
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
 	return Div(args...)
 }
 
@@ -130,6 +148,14 @@ func computeDebtView(app *appstate.App) debtView {
 	vars := liveEngineVars(app)
 	txns := app.Transactions()
 
+	// Map each debt account to its engine variable prefix (debt_<slug>_) so the card figures
+	// come from the same formula surface the "Debt metrics" builder computes over — the
+	// widgets read the engine, not a parallel inline calc.
+	prefixByID := map[string]string{}
+	for _, dvb := range engineenv.DebtVarBases(app.Accounts()) {
+		prefixByID[dvb.Account.ID] = dvb.Prefix
+	}
+
 	v := debtView{
 		Base: base, Cfg: cfg, Vars: vars,
 		OwedByID: map[string]money.Money{}, UtilByID: map[string]float64{},
@@ -148,7 +174,14 @@ func computeDebtView(app *appstate.App) debtView {
 		v.InPayByID[ac.ID] = ac.IncludedInPayoff()
 		util := -1.0
 		if ac.Type == domain.TypeCreditCard && ac.CreditLimit.Amount > 0 {
-			util = float64(owed.Amount) / float64(ac.CreditLimit.Amount) * 100
+			// Utilization comes from the engine's debt_<slug>_utilization variable (a
+			// currency-independent %, so it matches the owed/limit ratio exactly) — the meter
+			// is formula-driven. Fall back to the direct ratio if the account has no slug.
+			if pfx, ok := prefixByID[ac.ID]; ok {
+				util = vars[pfx+"utilization"]
+			} else {
+				util = float64(owed.Amount) / float64(ac.CreditLimit.Amount) * 100
+			}
 			avail := ac.CreditLimit.Amount - owed.Amount
 			if avail < 0 {
 				avail = 0
@@ -244,6 +277,9 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 			Div(css.Class("debt-hero-label", tw.TextDim), uistate.T("debt.totalOwed")),
 			Div(css.Class("debt-hero-value neg", tw.FontDisplay), Attr("data-testid", "debt-total-owed"), fmtMoney(v.TotalOwed)),
 			freeLine,
+			// The Net worth page owns the assets-vs-liabilities picture the debt-to-asset
+			// chip summarizes — link there.
+			debtOwnerLink("/networth", uistate.T("debt.linkNetWorth")),
 		),
 		chips,
 	)
@@ -344,6 +380,7 @@ func debtListWidget(props debtListProps) ui.Node {
 
 	if len(v.Liabs) == 0 {
 		body := debtSection("sec-ladder", uistate.T("debt.whatYouOwe"),
+			debtOwnerLink("/accounts", uistate.T("debt.linkAccounts")),
 			P(css.Class("empty"), Attr("data-testid", "debt-empty"), uistate.T("debt.noDebts")))
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -382,7 +419,9 @@ func debtListWidget(props debtListProps) ui.Node {
 		})
 	})
 
-	body := debtSection("sec-ladder", uistate.T("debt.payoffLadder"), Div(css.Class("debt-list"), rows))
+	body := debtSection("sec-ladder", uistate.T("debt.payoffLadder"),
+		debtOwnerLink("/accounts", uistate.T("debt.linkAccounts")),
+		Div(css.Class("debt-list"), rows))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -401,7 +440,7 @@ func debtStrategyWidget(props debtPanelProps) ui.Node {
 
 // debtCreditWidget hosts the credit-card health panel (shown only when a card exists).
 func debtCreditWidget(props debtPanelProps) ui.Node {
-	body := debtSection("sec-credit", uistate.T("nav.credit"), Fragment(
+	body := debtSection("sec-credit", uistate.T("nav.credit"), debtOwnerLink("/accounts", uistate.T("debt.linkCards")), Fragment(
 		P(css.Class("muted"), uistate.T("screen.creditSub")),
 		ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
 	))
@@ -413,7 +452,7 @@ func debtCreditWidget(props debtPanelProps) ui.Node {
 
 // debtLoansWidget hosts the installment-loans panel (shown only when a loan exists).
 func debtLoansWidget(props debtPanelProps) ui.Node {
-	body := debtSection("sec-loans", uistate.T("nav.loans"), Fragment(
+	body := debtSection("sec-loans", uistate.T("nav.loans"), debtOwnerLink("/accounts", uistate.T("debt.linkLoans")), Fragment(
 		P(css.Class("muted"), uistate.T("screen.loansSub")),
 		ui.CreateElement(LoansPanel, LoansPanelProps{}),
 	))
