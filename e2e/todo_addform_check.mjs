@@ -26,18 +26,24 @@ await p.waitForTimeout(600);
 const form = p.locator('[data-testid="task-add-form"]');
 check("T1 add-task form opens", await form.count() === 1);
 
-// T2: hero title field + segmented priority control present.
-check("T2 hero title field", await form.locator('.task-form-title').count() === 1);
+// T2: hero (Fraunces) title field + segmented priority control present.
+check("T2 hero title field", await form.locator('.tc-title').count() === 1);
 check("T3 segmented priority present", await form.locator('.task-seg [data-testid^="task-prio-"]').count() === 3);
+// signature: the writing zone's priority "spine" reflects the selected priority.
+check("T3b writing zone carries priority class", await form.locator('.tc-write.p-med').count() === 1);
 // Medium is the default active segment.
 check("T4 medium is default active", (await p.locator('[data-testid="task-prio-med"]').getAttribute('class') || '').includes('is-active'));
 
-// T5: clicking High activates that segment (and deactivates Medium).
+// T5: clicking High activates that segment, deactivates Medium, and tints the spine red.
 await p.locator('[data-testid="task-prio-high"]').click();
 await p.waitForTimeout(200);
-check("T5 High activates on click",
+check("T5 High activates + spine turns high",
   (await p.locator('[data-testid="task-prio-high"]').getAttribute('class') || '').includes('is-active') &&
-  !(await p.locator('[data-testid="task-prio-med"]').getAttribute('class') || '').includes('is-active'));
+  !(await p.locator('[data-testid="task-prio-med"]').getAttribute('class') || '').includes('is-active') &&
+  await p.locator('.tc-write.p-high').count() === 1);
+
+// T5c: the footer live-summary reflects the chosen priority.
+check("T5c live summary shows priority", (await p.locator('[data-testid="task-summary"]').textContent() || '').toLowerCase().includes('high'));
 
 // T6: a quick-date chip fills the due input.
 await p.locator('[data-testid="task-quick-today"]').click();
@@ -69,7 +75,7 @@ check("T10 new task appears in the list", (await p.locator('#app').textContent()
 // T11: reopen + Cancel closes without adding.
 await p.locator('[data-testid="todo-add"]').click();
 await p.waitForTimeout(500);
-await p.locator('.task-form-actions .btn:not(.btn-primary)').first().click();
+await p.locator('.tc-foot-actions .btn:not(.btn-primary)').first().click();
 await p.waitForTimeout(400);
 check("T11 Cancel closes the modal", await p.locator('[data-testid="task-add-form"]').count() === 0);
 

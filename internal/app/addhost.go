@@ -58,11 +58,12 @@ func AddHost() uic.Node {
 			Back:     uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
 		})
 	case "task":
-		// NoFooter: the form owns its own Cancel + Add task bar (pinned to the bottom).
+		// NoFooter: the form is a two-zone "compose slip" that bleeds to the panel edges
+		// and owns its own footer (summary + Cancel + Add).
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:    uistate.T("todo.addTitle"),
-			Width:    "500px",
-			Height:   "620px",
+			Width:    "720px",
+			Height:   "560px",
 			NoFooter: true,
 			OnClose:  close,
 			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close}),

@@ -1947,6 +1947,8 @@ var english = Catalog{
 	"todo.dueTodayShort":    "Today",
 	"todo.titleLabel":       "Task",
 	"todo.titleRequired":    "Enter what needs doing.",
+	"todo.detailsHead":      "Details",
+	"todo.notesCompose":     "Add details, links, anything…",
 	"todo.quickToday":       "Today",
 	"todo.quickWeek":        "In a week",
 	"todo.quickClear":       "Clear",

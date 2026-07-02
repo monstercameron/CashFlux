@@ -1,3 +1,31 @@
+## 2026-07-01 — Add-task modal: editorial "compose slip" (redesign #2, design skill)
+
+Cam: "I asked you to redesign the add task section and it looks the same... take a picture and then
+redesign using the claude design skill." He was right — pass #1 was still a labelled-field stack, just
+prettier. Took a screenshot to ground myself, invoked the design skill, committed to a BOLD structural
+direction, and rebuilt from scratch.
+
+Direction: a two-zone "compose slip" (editorial), not a form. LEFT = writing zone: a large Fraunces
+display-serif title (var(--font-display)) + a borderless notes textarea. RIGHT = a compact Details rail
+(priority / due+quick-chips / repeat / link) — no uppercase-label soup. Footer spans both with a LIVE
+SUMMARY of the slip ("High priority · due Jul 1 · Weekly · Links to") + Cancel + Add.
+
+Signature detail: a live priority SPINE — .tc-write's left edge (inset box-shadow) glows
+faint/seagreen/red as priority changes (p-low/med/high), transitioning smoothly. The slip is tinted by
+its urgency, echoing the list's check-rings.
+
+Impl: taskAddForm markup rewritten to .tc / .tc-main (grid 1.5fr 1fr) / .tc-write(+p-*) / .tc-title
+(Fraunces) / .tc-notes / .tc-rail / .tc-foot(+.tc-summary). Widened modal to 720×560, NoFooter; .tc
+bleeds to the flip .set-body padding (margin -1rem/-1rem/-1.5rem, height calc(100%+2.5rem)). Killed the
+global :focus-visible ring on the borderless title/notes (underline-on-focus instead). Segmented
+control got an .is-rail full-width variant. New i18n todo.detailsHead/notesCompose. seg() live summary
+built in Go from priority/due/repeat/link.
+
+Verify: wasm build OK; full go test ./... green; e2e/todo_addform_check.mjs 14/14 (Fraunces title,
+segmented priority + spine class flips to p-high, live summary shows priority, quick-date fill/clear,
+empty-title guard, add persists+closes, Cancel closes, no errors); flipmodal 10/10 / redesign 9/9 /
+sort_page 11/11 unaffected. Screenshot confirms the serif title, red spine, Details rail, live summary.
+
 ## 2026-07-01 — Add-task form redesigned from scratch
 
 Cam: "the add task section is extremely ugly, redesign from scratch." It was the old form-grid +

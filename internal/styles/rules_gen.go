@@ -4840,54 +4840,141 @@ func registerGenerated() {
 		opacity("0.4"),
 		cursor("default"),
 	)
-	// Add-task form — a focused "compose" panel matching the agenda tone. The title is
-	// the hero (a large underline-only field); priority is a SEGMENTED control whose dots
-	// echo the list's check-ring colours; quick chips fill the due date; a sticky bar owns
-	// Cancel + Add.
-	rule(".task-form",
+	// Add-task "compose slip" — a two-zone editorial modal, NOT a labelled-field stack.
+	// LEFT: a writing zone with a large Fraunces title + notes, and a live priority
+	// "spine" (coloured left edge) that glows faint/green/red with the chosen priority.
+	// RIGHT: a compact Details rail. A footer reads back a live summary + the actions.
+	// The form bleeds to the flip panel's .set-body padding (1rem sides/top, 1.5rem bottom).
+	rule(".tc",
+		margin("-1rem -1rem -1.5rem"),
+		height("calc(100% + 2.5rem)"),
 		display("flex"),
 		flexDirection("column"),
-		gap("1.15rem"),
-		minHeight("100%"),
+		overflow("hidden"),
 	)
-	rule(".task-form-title",
+	rule(".tc-main",
+		display("grid"),
+		gridTemplateColumns("1.5fr 1fr"),
+		flex("1"),
+		minHeight("0"),
+	)
+	// Writing zone + priority spine.
+	rule(".tc-write",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.7rem"),
+		padding("1.5rem 1.5rem 1.3rem"),
+		overflowY("auto"),
+		boxShadow("inset 4px 0 0 var(--border-strong)"),
+		transition("box-shadow 0.25s ease"),
+	)
+	rule(".tc-write.p-low",
+		boxShadow("inset 4px 0 0 var(--text-faint)"),
+	)
+	rule(".tc-write.p-med",
+		boxShadow("inset 4px 0 0 var(--accent)"),
+	)
+	rule(".tc-write.p-high",
+		boxShadow("inset 4px 0 0 #ef4444"),
+	)
+	rule(".tc-title",
 		width("100%"),
 		background("transparent"),
 		border("0"),
-		borderBottom("2px solid var(--border)"),
-		color("var(--text)"),
-		fontSize("1.3rem"),
-		fontWeight("600"),
-		padding("0.35rem 0.15rem"),
+		borderBottom("2px solid transparent"),
 		prop("outline", "none"),
+		color("var(--text)"),
+		fontFamily("var(--font-display), 'Fraunces', Georgia, serif"),
+		fontSize("1.85rem"),
+		fontWeight("500"),
+		lineHeight("1.2"),
+		padding("0 0 0.35rem"),
 		transition("border-color 0.15s ease"),
 	)
-	rule(".task-form-title:focus",
-		borderColor("var(--accent)"),
+	// Kill the global focus-ring box on the borderless hero field — an underline is the
+	// editorial focus indicator instead.
+	rule(".tc-title:focus, .tc-title:focus-visible",
+		prop("outline", "none"),
+		boxShadow("none"),
+		borderBottomColor("var(--accent)"),
 	)
-	rule(".task-form-title::placeholder",
+	rule(".tc-title::placeholder",
 		color("var(--text-faint)"),
-		fontWeight("500"),
+		fontStyle("italic"),
 	)
-	rule(".task-field",
+	rule(".tc-notes",
+		flex("1"),
+		minHeight("4.5rem"),
+		width("100%"),
+		background("transparent"),
+		border("0"),
+		prop("outline", "none"),
+		prop("resize", "none"),
+		color("var(--text-dim)"),
+		fontFamily("inherit"),
+		fontSize("0.94rem"),
+		lineHeight("1.5"),
+	)
+	rule(".tc-notes:focus, .tc-notes:focus-visible",
+		prop("outline", "none"),
+		boxShadow("none"),
+	)
+	rule(".tc-notes::placeholder",
+		color("var(--text-faint)"),
+	)
+	// Details rail (inspector).
+	rule(".tc-rail",
 		display("flex"),
 		flexDirection("column"),
-		gap("0.4rem"),
+		gap("1.1rem"),
+		padding("1.35rem 1.35rem"),
+		background("var(--bg)"),
+		borderLeft("1px solid var(--border)"),
+		overflowY("auto"),
+	)
+	rule(".tc-rail-head",
+		margin("0"),
+		fontFamily("var(--font-display), 'Fraunces', Georgia, serif"),
+		fontSize("1rem"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".tc-rail-row",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.45rem"),
 		minWidth("0"),
 	)
-	rule(".task-field-label",
-		fontSize("0.72rem"),
-		fontWeight("600"),
-		letterSpacing("0.04em"),
-		prop("text-transform", "uppercase"),
+	rule(".tc-rail-label",
+		fontSize("0.76rem"),
+		fontWeight("500"),
 		color("var(--text-dim)"),
 	)
-	rule(".task-form-row",
-		display("grid"),
-		gridTemplateColumns("1fr 1fr"),
+	// Footer — live summary + actions, spanning both zones.
+	rule(".tc-foot",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
 		gap("1rem"),
+		padding("0.85rem 1.5rem"),
+		borderTop("1px solid var(--border)"),
+		background("var(--bg-elev)"),
 	)
-	ruleMedia("(max-width: 520px)", ".task-form-row",
+	rule(".tc-summary",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+		overflow("hidden"),
+		whiteSpace("nowrap"),
+		prop("text-overflow", "ellipsis"),
+	)
+	rule(".tc-foot-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flex("none"),
+	)
+	ruleMedia("(max-width: 620px)", ".tc-main",
 		gridTemplateColumns("1fr"),
 	)
 	// Segmented priority control.
@@ -4895,10 +4982,20 @@ func registerGenerated() {
 		display("inline-flex"),
 		gap("3px"),
 		padding("3px"),
-		background("var(--bg)"),
+		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		borderRadius("10px"),
 		width("fit-content"),
+	)
+	// Rail variant: fill the row, segments share the width equally.
+	rule(".task-seg.is-rail",
+		display("flex"),
+		width("100%"),
+	)
+	rule(".task-seg.is-rail .task-seg-btn",
+		flex("1"),
+		justifyContent("center"),
+		padding("0.4rem 0.3rem"),
 	)
 	rule(".task-seg-btn",
 		display("inline-flex"),
@@ -4959,32 +5056,6 @@ func registerGenerated() {
 	)
 	rule(".task-quick-chip.is-clear",
 		marginLeft("auto"),
-	)
-	rule(".task-form-notes",
-		width("100%"),
-		background("var(--bg)"),
-		border("1px solid var(--border)"),
-		borderRadius("8px"),
-		color("var(--text)"),
-		padding("0.55rem 0.65rem"),
-		fontSize("0.9rem"),
-		fontFamily("inherit"),
-		prop("resize", "vertical"),
-	)
-	rule(".task-form-notes:focus",
-		borderColor("var(--accent)"),
-		prop("outline", "none"),
-	)
-	rule(".task-form-actions",
-		display("flex"),
-		justifyContent("flex-end"),
-		gap("0.6rem"),
-		marginTop("auto"),
-		position("sticky"),
-		bottom("0"),
-		paddingTop("0.85rem"),
-		borderTop("1px solid var(--border)"),
-		background("var(--bg-elev)"),
 	)
 	// Goal cards: a responsive grid of compact cards (like /budgets), each a self-
 	// contained card with a saved-of-target "loader" bar holding the amount + percent,
