@@ -775,6 +775,7 @@ func studioMetricPicker(p studioMetricPickerProps) ui.Node {
 	ms = append(ms, widgetcatalog.BudgetMetrics(p.Budgets)...)
 	ms = append(ms, widgetcatalog.AccountMetrics(studioAccounts())...)
 	ms = append(ms, widgetcatalog.GoalMetrics(studioGoals())...)
+	ms = append(ms, widgetcatalog.DebtMetrics(studioAccounts())...)
 	opts := make([]uiw.SelectOption, 0, len(ms))
 	var sel widgetcatalog.Metric
 	for _, m := range ms {
@@ -903,6 +904,7 @@ func metricSelectOptions(defs []customfields.Def) []widgetcatalog.Option {
 	ms = append(ms, widgetcatalog.BudgetMetrics(studioBudgets())...)
 	ms = append(ms, widgetcatalog.AccountMetrics(studioAccounts())...)
 	ms = append(ms, widgetcatalog.GoalMetrics(studioGoals())...)
+	ms = append(ms, widgetcatalog.DebtMetrics(studioAccounts())...)
 	out := make([]widgetcatalog.Option, len(ms))
 	for i, m := range ms {
 		out[i] = widgetcatalog.Option{Value: m.Name, Label: m.Label}

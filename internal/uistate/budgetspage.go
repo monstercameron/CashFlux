@@ -69,3 +69,10 @@ func UseBudgetsShowFormulas() state.Atom[bool] { return state.UseAtom(budgetForm
 // UseGoalsShowFormulas returns the shared atom selecting whether the "Goal metrics"
 // formula tile is revealed on /goals — the goals analog of UseBudgetsShowFormulas.
 func UseGoalsShowFormulas() state.Atom[bool] { return state.UseAtom("goals:showFormulas", false) }
+
+// UseDebtShowFormulas returns the shared atom selecting whether the "Debt metrics" formula
+// tile is revealed on /debt — the debt analog of UseBudgetsShowFormulas. Opt-in so the
+// default page stays focused on the debts themselves, while power users can compute over
+// the debt_* engine variables (owed / APR / utilization / min payment) and the debt
+// aggregate atoms/molecules (credit_utilization, min_payments_total, …).
+func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFormulas", false) }

@@ -70,6 +70,10 @@ var atomNames = []string{
 	"accounts",           // count of non-archived accounts
 	"asset_accounts",     // count of non-archived asset-class accounts
 	"liability_accounts", // count of non-archived liability-class accounts
+	"debt_count",         // count of non-archived liability accounts (debts)
+	"revolving_balance",  // Σ magnitudes of non-archived credit-card balances (positive)
+	"credit_limit_total", // Σ credit limits of non-archived credit-card accounts
+	"min_payments_total", // Σ minimum monthly payments across non-archived liabilities
 	"transactions",       // count of transactions
 	"members",            // count of members
 	"budgets",            // count of budgets
@@ -86,6 +90,8 @@ func DefaultMolecules() []domain.Molecule {
 		{Name: "cashflow_net", Formula: "income - expense", Doc: "Net cash flow for the period (income minus spending)."},
 		{Name: "savings_rate", Formula: "clamp(safediv(income - expense, income, 0) * 100, -100, 100)", Doc: "Percent of income kept this period."},
 		{Name: "safe_to_spend", Formula: "liquid_cash - max(bills_due, 0) - max(goal_needs, 0)", Doc: "Liquid cash after this month's bills and goal set-asides."},
+		{Name: "credit_utilization", Formula: "clamp(safediv(revolving_balance, credit_limit_total, 0) * 100, 0, 100)", Doc: "Percent of your total credit-card limit you're using (30%+ starts to weigh on a credit score)."},
+		{Name: "debt_to_asset_pct", Formula: "clamp(safediv(liabilities, assets, 0) * 100, 0, 1000)", Doc: "What you owe as a percent of what you own — lower is healthier."},
 	}
 }
 
@@ -170,7 +176,8 @@ func computeAtoms(d Data) map[string]float64 {
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
 	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
 
-	active, assetAccts, liabAccts := 0, 0, 0
+	active, assetAccts, liabAccts, debtCount := 0, 0, 0, 0
+	var revolvingBal, creditLimitTotal, minPaymentsTotal int64
 	for _, a := range d.Accounts {
 		if a.Archived {
 			continue
@@ -178,6 +185,18 @@ func computeAtoms(d Data) map[string]float64 {
 		active++
 		if a.Class == domain.ClassLiability {
 			liabAccts++
+			debtCount++
+			minPaymentsTotal += toBase(a.MinPayment.Amount, a.MinPayment.Currency)
+			if a.Type == domain.TypeCreditCard {
+				creditLimitTotal += toBase(a.CreditLimit.Amount, a.CreditLimit.Currency)
+				if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+					mag := bal.Amount
+					if mag < 0 {
+						mag = -mag
+					}
+					revolvingBal += toBase(mag, bal.Currency)
+				}
+			}
 		} else {
 			assetAccts++
 		}
@@ -196,6 +215,10 @@ func computeAtoms(d Data) map[string]float64 {
 		"accounts":           float64(active),
 		"asset_accounts":     float64(assetAccts),
 		"liability_accounts": float64(liabAccts),
+		"debt_count":         float64(debtCount),
+		"revolving_balance":  major(revolvingBal),
+		"credit_limit_total": major(creditLimitTotal),
+		"min_payments_total": major(minPaymentsTotal),
 		"transactions":       float64(len(d.Transactions)),
 		"members":            float64(len(d.Members)),
 		"budgets":            float64(len(d.Budgets)),
@@ -206,6 +229,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addBudgetVars(out, d, major)
 	addAccountVars(out, d, major, toBase)
 	addGoalVars(out, d, major, toBase)
+	addDebtVars(out, d, major, toBase)
 	return out
 }
 
@@ -464,6 +488,99 @@ func AccountVarBases(accounts []domain.Account) []AccountVarBase {
 // preview the handle a name/var-name will produce (must match what the surface resolves).
 func AccountVarSlug(s string) string { return budgetVarSlug(s) }
 
+// addDebtVars exposes each liability (a debt) as its own named variables, so a formula or
+// widget can reference a specific debt — e.g. debt_visa_utilization or debt_car_loan_apr.
+// Debts are the non-archived liability accounts; each contributes, keyed by a slug of its
+// name (or explicit VarName), the debt-specific figures that the generic account_<slug>_*
+// surface does not carry (APR, minimum payment, credit limit, utilization):
+//
+//   - debt_<slug>_balance      the amount currently owed (positive magnitude, base currency)
+//   - debt_<slug>_apr          the interest rate as an annual percentage (as-entered, e.g. 19.99)
+//   - debt_<slug>_min_payment  the required minimum monthly payment (major units, base currency)
+//   - debt_<slug>_limit        the credit limit (major units, base currency; 0 when not a line of credit)
+//   - debt_<slug>_available    remaining credit = max(0, limit − balance) (0 when no limit)
+//   - debt_<slug>_utilization  balance ÷ limit × 100 (0 when there is no limit)
+//
+// Money amounts are FX-converted to the base currency so debts in different currencies
+// compare on one scale. Name collisions are disambiguated with a numeric suffix in stable
+// account order (same scheme as accounts/goals).
+func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	for _, base := range DebtVarBases(d.Accounts) {
+		a := base.Account
+		var balance float64
+		if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+			mag := bal.Amount
+			if mag < 0 {
+				mag = -mag
+			}
+			balance = major(toBase(mag, bal.Currency))
+		}
+		limit := major(toBase(a.CreditLimit.Amount, a.CreditLimit.Currency))
+		available := 0.0
+		utilization := 0.0
+		if limit > 0 {
+			available = limit - balance
+			if available < 0 {
+				available = 0
+			}
+			utilization = balance / limit * 100
+		}
+		out[base.Prefix+"balance"] = balance
+		out[base.Prefix+"apr"] = a.InterestRateAPR
+		out[base.Prefix+"min_payment"] = major(toBase(a.MinPayment.Amount, a.MinPayment.Currency))
+		out[base.Prefix+"limit"] = limit
+		out[base.Prefix+"available"] = available
+		out[base.Prefix+"utilization"] = utilization
+	}
+}
+
+// DebtVarFields are the per-debt metric suffixes exposed on the surface. Shared with the
+// widget/formula catalog so the picker matches the surface.
+var DebtVarFields = []string{"balance", "apr", "min_payment", "limit", "available", "utilization"}
+
+// DebtVarBase pairs a liability account with the disambiguated variable prefix its values
+// are keyed under ("debt_<slug>_"). Single source of truth for per-debt variable naming —
+// both the surface builder (addDebtVars) and the discoverability catalog build from it.
+type DebtVarBase struct {
+	Account domain.Account
+	Prefix  string // e.g. "debt_visa_"
+}
+
+// DebtVarBases returns one entry per non-archived liability account, in stable order, with
+// same-name debts disambiguated by a numeric suffix. Accounts that are archived, not a
+// liability, or whose name yields no slug are skipped. An explicit VarName wins over the
+// display name (stable across renames).
+func DebtVarBases(accounts []domain.Account) []DebtVarBase {
+	used := map[string]bool{}
+	out := make([]DebtVarBase, 0)
+	for _, a := range accounts {
+		if a.Archived || a.Class != domain.ClassLiability {
+			continue
+		}
+		src := a.Name
+		if a.VarName != "" {
+			src = a.VarName
+		}
+		slug := budgetVarSlug(src)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, DebtVarBase{Account: a, Prefix: "debt_" + slug + "_"})
+	}
+	return out
+}
+
 // budgetVarSlug turns a budget name into a formula-safe variable segment: lowercase,
 // with every run of non-alphanumeric characters collapsed to a single underscore and
 // edges trimmed. "Baby & Childcare" → "baby_childcare".
@@ -511,6 +628,10 @@ var atomSources = map[string]string{
 	"accounts":           "count of non-archived accounts",
 	"asset_accounts":     "count of non-archived asset-class accounts",
 	"liability_accounts": "count of non-archived liability-class accounts",
+	"debt_count":         "count of non-archived liability accounts",
+	"revolving_balance":  "Σ magnitudes of non-archived credit-card balances",
+	"credit_limit_total": "Σ credit limits of non-archived credit-card accounts",
+	"min_payments_total": "Σ minimum monthly payments across non-archived liabilities",
 	"transactions":       "count of transactions",
 	"members":            "count of members",
 	"budgets":            "count of budgets",

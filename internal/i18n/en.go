@@ -867,11 +867,33 @@ var english = Catalog{
 	"planning.totalInterest":            "Total interest",
 	"planning.totalPaid":                "Total paid",
 
-	// Debt screen (/debt — scoped "What you owe" page, FEATURE_MAP §5.7a)
+	// Debt screen (/debt — widgetized payoff-ladder surface, FEATURE_MAP §5.7a)
 	"debt.whatYouOwe":     "What you owe",
 	"debt.totalOwed":      "Total owed",
 	"debt.noDebts":        "No debts — nice.",
-	"debt.manageAccounts": "Manage on Accounts",
+	"debt.manageAccounts": "Manage accounts",
+	"debt.payoffLadder":   "Payoff ladder",
+	"debt.debtFreeBy":     "Debt-free by %s at current minimums.",
+	// Engine ratio chips (all read from the engine variable surface).
+	"debt.creditUtilization":  "Credit used",
+	"debt.minPaymentsMonthly": "Minimums / mo",
+	"debt.debtToAsset":        "Debt vs assets",
+	"debt.debtsCount":         "Debts",
+	// Toolbar
+	"debt.metricsShow":  "Debt metrics",
+	"debt.metricsHide":  "Hide metrics",
+	"debt.metricsTitle": "Compute over your debts — owed, APR, utilization, minimums",
+	"debt.addDebt":      "Add debt",
+	"debt.addDebtTitle": "Add a credit card, loan, or other liability",
+	"debt.formulaHint":  "Reference any debt as debt_<name>_owed / _apr / _utilization / _min_payment, plus credit_utilization and min_payments_total.",
+	// DebtRow
+	"debt.utilizationLabel": "%s%% used · %s available",
+	"debt.utilizationAria":  "%s credit utilization",
+	"debt.minPaymentMeta":   "Min %s/mo",
+	"debt.dueDayMeta":       "Due the %s",
+	"debt.owedAria":         "%s balance owed",
+	"debt.includeInPlan":    "Add to plan",
+	"debt.excludeFromPlan":  "In plan",
 
 	// Recurring cash flows (Planning)
 	"recurring.title":             "Recurring cash flows",

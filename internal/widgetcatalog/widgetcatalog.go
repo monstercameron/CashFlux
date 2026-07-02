@@ -28,7 +28,18 @@ const (
 	GroupBudgets  Group = "Budgets"
 	GroupAccounts Group = "Accounts"
 	GroupGoals    Group = "Goals"
+	GroupDebt     Group = "Debts"
 )
+
+// debtFieldMeta labels + documents each per-debt metric suffix for the picker.
+var debtFieldMeta = map[string]struct{ Label, Doc string }{
+	"balance":     {"owed", "The amount currently owed on this debt (base currency)."},
+	"apr":         {"APR %", "The debt's annual interest rate, as entered."},
+	"min_payment": {"min payment", "The required minimum monthly payment."},
+	"limit":       {"credit limit", "The credit limit (0 for installment loans)."},
+	"available":   {"available", "Remaining credit = limit minus owed (0 when no limit)."},
+	"utilization": {"utilization %", "Owed as a percent of the credit limit (0 when no limit)."},
+}
 
 // goalFieldMeta labels + documents each per-goal metric suffix for the picker.
 var goalFieldMeta = map[string]struct{ Label, Doc string }{
@@ -199,6 +210,27 @@ func GoalMetrics(goals []domain.Goal) []Metric {
 				Label: base.Goal.Name + " — " + meta.Label,
 				Doc:   meta.Doc,
 				Group: GroupGoals,
+			})
+		}
+	}
+	return out
+}
+
+// DebtMetrics returns the per-debt metrics (owed/APR/min payment/limit/available/
+// utilization) so a specific liability can be referenced in a formula or dashboard widget
+// — e.g. debt_visa_utilization. Built from engineenv's naming so labels always match the
+// variables the surface resolves. Returns nothing when there are no debts.
+func DebtMetrics(accounts []domain.Account) []Metric {
+	bases := engineenv.DebtVarBases(accounts)
+	out := make([]Metric, 0, len(bases)*len(engineenv.DebtVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.DebtVarFields {
+			meta := debtFieldMeta[field]
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Account.Name + " — " + meta.Label,
+				Doc:   meta.Doc,
+				Group: GroupDebt,
 			})
 		}
 	}

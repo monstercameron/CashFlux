@@ -4598,6 +4598,234 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// /debt is the widgetized payoff-ladder surface: full-width tiles that size to their
+	// content, the same layout family as /goals and /budgets.
+	rule(".bento.bento-debt",
+		gridTemplateRows("auto"),
+		gridAutoRows("auto"),
+	)
+	rule(".bento.bento-debt > .w",
+		height("auto"),
+		minHeight("0"),
+		overflow("visible"),
+	)
+	// Summary hero: the total owed in the display serif beside the engine ratio chips.
+	rule(".debt-hero",
+		display("flex"),
+		alignItems("flex-end"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("1rem"),
+	)
+	rule(".debt-hero-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+	)
+	rule(".debt-hero-label",
+		fontSize("0.72rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.08em"),
+	)
+	rule(".debt-hero-value",
+		fontSize("2.6rem"),
+		fontWeight("700"),
+		prop("line-height", "1.05"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".debt-hero-value.neg",
+		color("color-mix(in srgb, var(--danger) 78%, var(--text))"),
+	)
+	rule(".debt-hero-sub",
+		fontSize("0.95rem"),
+		color("var(--text-dim)"),
+		prop("margin-top", "0.15rem"),
+	)
+	// Engine ratio chips.
+	rule(".debt-chips",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+	)
+	rule(".debt-stat",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		minWidth("104px"),
+		padding("0.5rem 0.75rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+	)
+	rule(".debt-stat-label",
+		fontSize("0.7rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+	)
+	rule(".debt-stat-value",
+		fontSize("1.15rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	// Band tinting — shared by summary stats and debt cards. Good = seagreen accent,
+	// warn = amber, high = danger. The thresholds live in DebtConfig, not here.
+	rule(".debt-stat.debt-band-warn",
+		borderColor("color-mix(in srgb, #f59e0b 55%, var(--border))"),
+	)
+	rule(".debt-stat.debt-band-high",
+		borderColor("color-mix(in srgb, var(--danger) 60%, var(--border))"),
+		background("color-mix(in srgb, var(--danger) 10%, var(--bg-elev))"),
+	)
+	// The payoff ladder: a grid of debt cards.
+	rule(".debt-list",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fill, minmax(440px, 1fr))"),
+		gap("0.75rem"),
+	)
+	rule(".debt-card",
+		position("relative"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.85rem"),
+		padding("0.85rem 1.1rem 0.85rem 1.35rem"),
+		border("1px solid var(--border)"),
+		borderRadius("14px"),
+		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease"),
+	)
+	rule(".debt-card:hover",
+		borderColor("color-mix(in srgb, var(--accent) 34%, var(--border))"),
+		background("color-mix(in srgb, var(--bg-elev) 85%, transparent)"),
+		transform("translateY(-1px)"),
+	)
+	rule(".debt-card.is-excluded",
+		prop("opacity", "0.62"),
+		prop("border-style", "dashed"),
+	)
+	// The APR/utilization-banded left rail — the at-a-glance "how hot is this debt" cue.
+	rule(".debt-rail",
+		position("absolute"),
+		left("0"),
+		top("0"),
+		bottom("0"),
+		width("5px"),
+		prop("border-top-left-radius", "14px"),
+		prop("border-bottom-left-radius", "14px"),
+		background("var(--accent)"),
+	)
+	rule(".debt-card.debt-band-warn .debt-rail",
+		background("#f59e0b"),
+	)
+	rule(".debt-card.debt-band-high .debt-rail",
+		background("var(--danger)"),
+	)
+	// Payoff-rank medallion — the ladder position.
+	rule(".debt-rank",
+		prop("flex", "0 0 auto"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("2rem"),
+		height("2rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("var(--bg)"),
+		fontWeight("700"),
+		fontSize("0.9rem"),
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text-dim)"),
+	)
+	rule(".debt-card.debt-band-high .debt-rank",
+		borderColor("color-mix(in srgb, var(--danger) 55%, var(--border))"),
+		color("color-mix(in srgb, var(--danger) 78%, var(--text))"),
+	)
+	rule(".debt-body",
+		flex("1 1 auto"),
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+	)
+	rule(".debt-head",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+	)
+	rule(".debt-name",
+		fontWeight("700"),
+		fontSize("1rem"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		prop("max-width", "100%"),
+	)
+	rule(".debt-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.45rem"),
+		borderRadius("999px"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+	)
+	rule(".debt-chip.debt-apr",
+		borderColor("color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+	)
+	// Utilization meter.
+	rule(".debt-util",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+	)
+	rule(".debt-util-track",
+		position("relative"),
+		height("8px"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+	)
+	rule(".debt-util-fill",
+		height("100%"),
+		borderRadius("999px"),
+		background("var(--accent)"),
+		transition("width 0.25s ease"),
+	)
+	rule(".debt-util-fill.debt-util-warn",
+		background("#f59e0b"),
+	)
+	rule(".debt-util-fill.debt-util-high",
+		background("var(--danger)"),
+	)
+	rule(".debt-util-label",
+		fontSize("0.72rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".debt-meta",
+		fontSize("0.78rem"),
+	)
+	rule(".debt-side",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("flex-end"),
+		gap("0.4rem"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".debt-owed",
+		fontSize("1.2rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+		color("color-mix(in srgb, var(--danger) 72%, var(--text))"),
+	)
+	rule(".debt-actions",
+		display("flex"),
+		flexWrap("wrap"),
+		justifyContent("flex-end"),
+		gap("0.35rem"),
+	)
 	// To-do surface: same full-width, auto-height stacked-tile layout as /goals so the
 	// summary / toolbar / list tiles flow top-to-bottom instead of into a fixed grid.
 	rule(".bento.bento-todo",

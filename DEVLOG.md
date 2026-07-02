@@ -1,3 +1,45 @@
+## 2026-07-02 — /debt: widgetized, engine-driven, config-driven payoff ladder
+
+Cam: "do /debt and widgetize, componentize, formula-ize, custom field-ize the debts page, use the
+claude design skill to redesign from scratch." Mid-build he added the load-bearing constraint: "make
+sure nothing is hard coded, create an engine and use configs, and formulas." Same thread as the
+notifications route-config work — he wants derivations as engine data and tunables as persisted config,
+not inline Go.
+
+Architecture (bottom-up per SDLC):
+1. ENGINE (engineenv, pure + tested). Per-debt vars debt_<slug>_{balance,apr,min_payment,limit,
+   available,utilization} over non-archived liabilities (mirrors addAccountVars/addGoalVars). New
+   aggregate atoms debt_count / revolving_balance / credit_limit_total / min_payments_total. Two
+   default MOLECULES (formulas, data): credit_utilization = clamp(safediv(revolving_balance,
+   credit_limit_total,0)*100,0,100); debt_to_asset_pct = clamp(safediv(liabilities,assets,0)*100,...).
+   DebtVarFields/DebtVarBase/DebtVarBases as the single naming source. Native test asserts the surface
+   (owed/apr/util, aggregates, molecule) + that assets/archived don't leak.
+2. CATALOG. widgetcatalog.DebtMetrics + GroupDebt "Debts"; wired into the FormulaBuilder picker +
+   studio designer, so debt vars are discoverable.
+3. CONFIG (uistate.DebtConfig, persisted like notifyroutes). Bands (warn 30 / high 75), default
+   strategy+extra, mortgage-excluded. UtilizationBand(pct)→good/warn/high. Unmarshal-onto-defaults so a
+   partial stored config keeps sane values; guards band ordering + strategy enum. SetDebtConfig setter.
+   The tiles read bands from here — no baked cutoffs.
+4. UI. DebtPlanner is now a surface host (bento bento-debt) over native tiles (debt_widget.go +
+   debt_tiles.go): summary (Fraunces total-owed from the engine "liabilities" atom via majorMoney +
+   debt-free date + engine ratio chips), toolbar (Debt-metrics formula toggle + Manage accounts + Add
+   debt), payoff-ladder list. DebtRow (debt_row.go) = card with a payoff-rank medallion (avalanche
+   order from payoff.BuildPlan at the config strategy/extra), an APR/utilization-banded left rail,
+   a utilization meter for revolving credit (banded via config), min-payment/due-day meta, the shared
+   account custom-field summary (custom-field-ize = debts are accounts), owed in serif, and an
+   include-in-plan toggle. Reused strategy/credit/loans/payoff panels as tiles; opt-in FormulaBuilder
+   tile (UseDebtShowFormulas atom). Deleted the old hand-rolled DebtPlanner from debt.go (kept the
+   shared DebtStrategyPanel).
+
+Design (skill): "payoff ladder" — rank medallions + heat-banded rails (seagreen→amber→danger by APR/
+utilization) as the signature, cohesive with the goals/budgets bento serif aesthetic. Screenshot
+confirms: Rewards Card 68% → amber rail+meter, Travel Card 18% → seagreen, mortgage auto-excluded
+(dashed, dimmed, "Add to plan") from the config default.
+
+Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface host, engine chips,
+ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
+in-plan toggle, view→/transactions, no errors).
+
 ## 2026-07-02 — Notifications: widgetized "signal feed" redesign
 
 Cam: widgetize + ⋯ menu + redesign from scratch (design skill). Committed to a severity-driven signal
