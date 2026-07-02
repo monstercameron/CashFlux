@@ -4908,8 +4908,102 @@ func registerGenerated() {
 	rule(".debt-hero-main .debt-owner-link",
 		prop("margin-top", "0.35rem"),
 	)
+	rule(".debt-owner-link svg",
+		transition("transform 0.15s ease"),
+	)
+	rule(".debt-owner-link:hover svg",
+		transform("translateX(2px)"),
+	)
 	rule(".debt-section > * + *",
 		prop("margin-top", "0.75rem"),
+	)
+
+	// ---- A little life: depth, accent moments, and orchestrated motion (design pass) ----
+	// Signature detail — a seagreen tick before every section title, tying the page together.
+	rule(".debt-section-title, .bento-debt .card-title",
+		prop("border-left", "3px solid var(--accent)"),
+		prop("padding-left", "0.6rem"),
+	)
+	// Hero: a soft glow under the total-owed figure gives the number presence + atmosphere.
+	rule(".debt-hero-value.neg",
+		prop("text-shadow", "0 0 34px color-mix(in srgb, var(--danger) 30%, transparent)"),
+	)
+	// Ratio chips: a faint top-lit gradient for depth + a lift on hover so they feel alive.
+	rule(".debt-stat",
+		prop("background", "linear-gradient(180deg, color-mix(in srgb, var(--bg-elev) 60%, transparent), color-mix(in srgb, var(--bg-elev) 35%, transparent))"),
+		transition("transform 0.15s ease, border-color 0.15s ease"),
+	)
+	rule(".debt-stat:hover",
+		transform("translateY(-2px)"),
+		borderColor("color-mix(in srgb, var(--accent) 35%, var(--border))"),
+	)
+	// Utilization meters read as lit bars (gradient) rather than flat fills.
+	rule(".debt-util-fill",
+		prop("background", "linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #000) 0%, var(--accent) 100%)"),
+	)
+	rule(".debt-util-fill.debt-util-warn",
+		prop("background", "linear-gradient(90deg, color-mix(in srgb, #f59e0b 65%, #000) 0%, #f59e0b 100%)"),
+	)
+	rule(".debt-util-fill.debt-util-high",
+		prop("background", "linear-gradient(90deg, color-mix(in srgb, var(--danger) 65%, #000) 0%, var(--danger) 100%)"),
+	)
+	// The APR/utilization rail fades along its length for a softer, more crafted edge.
+	rule(".debt-rail",
+		prop("background", "linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 55%, transparent))"),
+	)
+	rule(".debt-card.debt-band-warn .debt-rail",
+		prop("background", "linear-gradient(180deg, #f59e0b, color-mix(in srgb, #f59e0b 55%, transparent))"),
+	)
+	rule(".debt-card.debt-band-high .debt-rail",
+		prop("background", "linear-gradient(180deg, var(--danger), color-mix(in srgb, var(--danger) 55%, transparent))"),
+	)
+	// Focus (the debt to pay first) + the recommended strategy get a soft accent glow.
+	rule(".debt-card.is-focus",
+		boxShadow("0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 10px 34px -14px color-mix(in srgb, var(--accent) 55%, transparent)"),
+	)
+	rule(".strat-card.is-winner",
+		boxShadow("0 10px 34px -16px color-mix(in srgb, var(--accent) 55%, transparent)"),
+	)
+	rule(".debt-card.is-focus .debt-rank",
+		boxShadow("0 0 16px -2px color-mix(in srgb, var(--accent) 65%, transparent)"),
+	)
+	// Strategy comparison cards lift on hover.
+	rule(".strat-card",
+		transition("transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease"),
+	)
+	rule(".strat-card:hover",
+		transform("translateY(-2px)"),
+	)
+	// A gentle pulse ring on the "Pay first" / "Recommended" badges draws the eye to the
+	// single most important call to action without shouting.
+	keyframes("debt-badge-pulse",
+		at("0%", boxShadow("0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent)")),
+		at("70%", boxShadow("0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent)")),
+		at("100%", boxShadow("0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)")),
+	)
+	rule(".debt-focus-tag, .strat-badge",
+		animation("debt-badge-pulse 2.6s ease-out infinite"),
+	)
+	// Cards reveal in a quick staggered cascade down the ladder on load.
+	keyframes("debt-card-in",
+		at("from", opacity("0"), transform("translateY(9px)")),
+		at("to", opacity("1"), transform("none")),
+	)
+	rule(".debt-list .debt-card",
+		animation("debt-card-in 0.42s var(--wonder-ease-out, cubic-bezier(0.22,1,0.36,1)) both"),
+	)
+	rule(".debt-list .debt-card:nth-child(2)", prop("animation-delay", "0.05s"))
+	rule(".debt-list .debt-card:nth-child(3)", prop("animation-delay", "0.1s"))
+	rule(".debt-list .debt-card:nth-child(4)", prop("animation-delay", "0.15s"))
+	rule(".debt-list .debt-card:nth-child(5)", prop("animation-delay", "0.2s"))
+	rule(".debt-list .debt-card:nth-child(6)", prop("animation-delay", "0.25s"))
+	rule(".debt-list .debt-card:nth-child(n+7)", prop("animation-delay", "0.3s"))
+	// Respect users who prefer less motion: no cascade, no badge pulse.
+	ruleMedia("(prefers-reduced-motion: reduce)", ".debt-list .debt-card",
+		animation("none"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".debt-focus-tag, .strat-badge",
+		animation("none"),
 	)
 	rule(".bento-debt .card-title, .bento-debt h2, .bento-debt h3",
 		fontFamily("var(--font-display, \"Fraunces\", serif)"),

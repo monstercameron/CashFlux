@@ -40,6 +40,17 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 9 (Cam: "the widgets look boring, use the design skill to add a little life"): a CSS-only
+design pass over the debt widgets — refined direction (depth + accent moments + orchestrated motion) on
+the existing base, not a redesign. Signature: a 3px seagreen border-left tick on every section title
+(.debt-section-title + .bento-debt .card-title). Depth: red text-shadow glow under .debt-hero-value.neg;
+top-lit gradient on .debt-stat chips + hover lift; gradient (not flat) .debt-util-fill and .debt-rail.
+Accent moments: soft accent box-shadow halo on .debt-card.is-focus + .strat-card.is-winner + a glow on
+the focus rank medallion; debt-badge-pulse keyframe (expanding ring) on .debt-focus-tag/.strat-badge.
+Motion: debt-card-in fade-up cascade with nth-child stagger delays (0-0.3s) on ladder cards; owner-link
+svg translateX on hover; strat-card hover lift. All gated under prefers-reduced-motion (cascade + pulse
+off). Build clean, e2e 65/65 (animations don't touch selectors), go test green.
+
 Follow-up 8 (Cam: "for each section add useful links to the pages that own the content + make sure the
 widgets are using formulas"): (1) LINKS — debtSection gained an action slot; debtOwnerLink renders a
 quiet anchor to the owning screen. Overview→/networth, ladder→/accounts, strategy→/allocate,
