@@ -4626,9 +4626,28 @@ func registerGenerated() {
 	rule(".todo-item.is-done",
 		opacity("0.5"),
 	)
+	// A nested sub-task reads clearly as a child: indented (inline margin-left by depth),
+	// with a left guide rail, a leading ↳ connector, a smaller check ring, and a slightly
+	// smaller/dimmer title.
 	rule(".todo-item.is-subtask",
-		paddingLeft("0.5rem"),
-		borderLeft("2px solid var(--border)"),
+		borderLeft("2px solid var(--border-strong)"),
+		gap("0.6rem"),
+	)
+	rule(".todo-subarrow",
+		flex("none"),
+		alignSelf("center"),
+		color("var(--text-faint)"),
+		fontSize("1.05rem"),
+		lineHeight("1"),
+		marginRight("-0.15rem"),
+	)
+	rule(".todo-item.is-subtask .todo-check",
+		width("20px"),
+		height("20px"),
+	)
+	rule(".todo-item.is-subtask .todo-title",
+		fontSize("0.92rem"),
+		color("var(--text-dim)"),
 	)
 	// The check-off ritual: a circular ring, coloured by priority; fills accent-green
 	// with a check that pops in on done.

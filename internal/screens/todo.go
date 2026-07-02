@@ -157,7 +157,14 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	rowArgs := []any{ClassStr(itemClass), Attr("id", t.ID), Attr("data-testid", "task-card"), Attr("data-prio", string(t.Priority))}
 	if props.Depth > 0 {
-		rowArgs = append(rowArgs, Style(map[string]string{"margin-left": strconv.Itoa(props.Depth*26) + "px"}))
+		// Indent via padding (border-box) — NOT margin-left, which pushes the full-width
+		// row past its container and scrolls the whole page sideways.
+		rowArgs = append(rowArgs, Style(map[string]string{"padding-left": strconv.Itoa(12+props.Depth*24) + "px"}))
+	}
+	// A leading connector glyph makes a nested sub-task unmistakable as a child of the
+	// row above it (paired with the indent + left guide rail in CSS).
+	if props.Depth > 0 {
+		rowArgs = append(rowArgs, Span(css.Class("todo-subarrow"), Attr("aria-hidden", "true"), "↳"))
 	}
 	rowArgs = append(rowArgs,
 		Button(ClassStr("todo-check p-"+string(t.Priority)+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
