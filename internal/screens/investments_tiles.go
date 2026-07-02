@@ -6,10 +6,14 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/chartspec"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -65,6 +69,143 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 		ID: "invest-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// --- invest-growth ---------------------------------------------------------------
+
+// growthCutoffs returns the timeline points (and their captions) for the growth chart over
+// the given window: weekly points for a 1-month view, monthly points for 6/12 months. The
+// last cutoff is now+1 day so today's activity is included in the final value.
+func growthCutoffs(now time.Time, months int) ([]time.Time, []string) {
+	if months <= 1 {
+		cs := make([]time.Time, 0, 5)
+		labels := make([]string, 0, 5)
+		for i := 4; i >= 1; i-- {
+			d := now.AddDate(0, 0, -7*i)
+			cs = append(cs, d)
+			labels = append(labels, d.Format("Jan 2"))
+		}
+		cs = append(cs, now.AddDate(0, 0, 1))
+		labels = append(labels, now.Format("Jan 2"))
+		return cs, labels
+	}
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	cs := make([]time.Time, 0, months+1)
+	labels := make([]string, 0, months+1)
+	for i := months; i >= 0; i-- {
+		m := first.AddDate(0, -i, 0)
+		cs = append(cs, m)
+		labels = append(labels, m.Format("Jan"))
+	}
+	cs[len(cs)-1] = now.AddDate(0, 0, 1)
+	labels[len(labels)-1] = now.Format("Jan")
+	return cs, labels
+}
+
+// investGrowthWidget charts the investment portfolio's value over time with a 1M / 6M / 1Y
+// window toggle. The series is the investment accounts' recorded value at each point (via
+// the ledger), so it reflects contributions and value updates — the honest growth history.
+func investGrowthWidget(props investPanelProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	monthsAtom := uistate.UseInvestGrowthMonths()
+	set1 := ui.UseEvent(Prevent(func() { monthsAtom.Set(1) }))
+	set6 := ui.UseEvent(Prevent(func() { monthsAtom.Set(6) }))
+	set12 := ui.UseEvent(Prevent(func() { monthsAtom.Set(12) }))
+	months := monthsAtom.Get()
+	if months != 1 && months != 6 && months != 12 {
+		months = 12
+	}
+
+	app := props.App
+	v := computeInvestView(app)
+	if !v.HasAny {
+		return Fragment()
+	}
+	base := v.Base
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	var investAccts []domain.Account
+	for _, a := range app.Accounts() {
+		if !a.Archived && isInvestmentAccount(a.Type) {
+			investAccts = append(investAccts, a)
+		}
+	}
+	now := time.Now()
+	cutoffs, labels := growthCutoffs(now, months)
+	series, _ := ledger.NetWorthSeries(investAccts, app.Transactions(), cutoffs, rates)
+
+	pts := make([]chartspec.Point, len(series))
+	valueLabels := make([]string, len(series))
+	for i, m := range series {
+		pts[i] = chartspec.Point{X: float64(i), Y: currency.MajorFromMinor(m.Amount, base), Label: labels[i]}
+		valueLabels[i] = fmtSignedMoney(m.Amount, v.Sym, v.Dec)
+	}
+
+	var startV, endV int64
+	if len(series) > 0 {
+		startV = series[0].Amount
+		endV = series[len(series)-1].Amount
+	}
+	delta := endV - startV
+	deltaPct := 0.0
+	if startV != 0 {
+		d := delta
+		s := startV
+		if s < 0 {
+			s = -s
+		}
+		deltaPct = float64(d) / float64(s) * 100
+	}
+	tone := gainToneClass(delta)
+	arrow := "▲"
+	if delta < 0 {
+		arrow = "▼"
+	}
+	yFmt := ".2~s"
+	if v.Sym == "$" {
+		yFmt = "$.2~s"
+	}
+
+	segToggle := Div(css.Class("inv-seg"), Attr("role", "group"), Attr("aria-label", uistate.T("investments.growthWindow")),
+		Button(ClassStr("inv-seg-btn"+isActive(months == 1)), Type("button"), Attr("data-testid", "invest-growth-1m"),
+			Attr("aria-pressed", ariaBool(months == 1)), OnClick(set1), uistate.T("investments.win1m")),
+		Button(ClassStr("inv-seg-btn"+isActive(months == 6)), Type("button"), Attr("data-testid", "invest-growth-6m"),
+			Attr("aria-pressed", ariaBool(months == 6)), OnClick(set6), uistate.T("investments.win6m")),
+		Button(ClassStr("inv-seg-btn"+isActive(months == 12)), Type("button"), Attr("data-testid", "invest-growth-12m"),
+			Attr("aria-pressed", ariaBool(months == 12)), OnClick(set12), uistate.T("investments.win12m")),
+	)
+
+	head := Div(css.Class("inv-growth-head"),
+		Div(css.Class("inv-growth-vals"),
+			Span(css.Class("inv-growth-now", tw.FontDisplay), fmtSignedMoney(endV, v.Sym, v.Dec)),
+			Span(ClassStr("inv-growth-delta "+tw.ColorClass(tone)),
+				fmt.Sprintf("%s %s (%+.1f%%)", arrow, fmtSignedMoney(delta, v.Sym, v.Dec), deltaPct)),
+		),
+		segToggle,
+	)
+
+	chart := uiw.Chart(uiw.ChartProps{
+		Spec: chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{
+			{Name: uistate.T("investments.portfolioValue"), Color: "#2e8b57", Points: pts},
+		}, Y: chartspec.Axis{Format: yFmt}},
+		Height: "240px", CurrencySymbol: v.Sym,
+		Label: uistate.T("investments.growthChartLabel"),
+	})
+	_ = valueLabels
+
+	body := investSection("sec-growth", uistate.T("investments.growthTitle"), Fragment(),
+		Div(css.Class("inv-growth"), head, chart))
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "invest-growth", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: body,
+	})
+}
+
+// isActive returns the " is-active" class suffix when on is true (for the segmented toggle).
+func isActive(on bool) string {
+	if on {
+		return " is-active"
+	}
+	return ""
 }
 
 // --- invest-toolbar --------------------------------------------------------------

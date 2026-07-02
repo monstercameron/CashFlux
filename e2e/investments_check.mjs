@@ -32,6 +32,21 @@ check("T3 portfolio-metrics toggle", await p.locator('[data-testid="invest-toggl
 check("T4 traditional (balance-tracked) accounts render", await p.locator('[data-testid^="invtrad-"]').count() >= 1, `${await p.locator('[data-testid^="invtrad-"]').count()}`);
 check("T5 net-worth owner link on the hero", await p.locator('.debt-owner-link[href$="/networth"]').count() >= 1);
 
+// Growth chart + configurable 1M/6M/1Y window.
+check("G1 growth chart tile present", await p.locator('.inv-growth').count() === 1);
+check("G2 1M/6M/1Y window toggle (3 segments)", await p.locator('.inv-seg-btn').count() === 3, `${await p.locator('.inv-seg-btn').count()}`);
+check("G3 chart renders (svg)", await p.locator('.inv-growth svg').count() >= 1);
+check("G4 current value + delta shown", await p.locator('.inv-growth-now').count() >= 1 && await p.locator('.inv-growth-delta').count() >= 1);
+check("G5 default window is 1Y", await p.locator('[data-testid="invest-growth-12m"][aria-pressed="true"]').count() >= 1);
+const delta12 = (await p.locator('.inv-growth-delta').first().textContent().catch(() => "")) || "";
+await p.locator('[data-testid="invest-growth-6m"]').click({ force: true }); await p.waitForTimeout(700);
+check("G6 toggling 6M activates that window", await p.locator('[data-testid="invest-growth-6m"][aria-pressed="true"]').count() >= 1);
+const delta6 = (await p.locator('.inv-growth-delta').first().textContent().catch(() => "")) || "";
+check("G7 changing the window re-scales the trend (delta differs)", delta6 !== delta12, `${delta12.trim()} → ${delta6.trim()}`);
+await p.locator('[data-testid="invest-growth-1m"]').click({ force: true }); await p.waitForTimeout(600);
+check("G8 1M window is selectable + chart survives", await p.locator('[data-testid="invest-growth-1m"][aria-pressed="true"]').count() >= 1 && await p.locator('.inv-growth svg').count() >= 1);
+await p.locator('[data-testid="invest-growth-12m"]').click({ force: true }); await p.waitForTimeout(500);
+
 // Add a stock security → securities + allocation appear.
 await p.locator('[data-testid="invest-add"]').click({ force: true }); await p.waitForTimeout(500);
 check("A1 add-security form reveals", await p.locator('[data-testid="invest-add-form"]').count() === 1);

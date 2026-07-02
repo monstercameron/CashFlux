@@ -85,3 +85,7 @@ func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:sho
 // holding" form is revealed (toggled by the toolbar's Add button; read by the securities
 // tile so the form and the button stay in sync across the widgetized surface).
 func UseInvestAddOpen() state.Atom[bool] { return state.UseAtom("invest:addOpen", false) }
+
+// UseInvestGrowthMonths returns the shared atom for the /investments growth-chart window in
+// months (1, 6, or 12; default 12), toggled by the chart's segmented 1M/6M/1Y control.
+func UseInvestGrowthMonths() state.Atom[int] { return state.UseAtom("invest:growthMonths", 12) }

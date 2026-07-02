@@ -40,6 +40,16 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 12 (Cam: "show growth over time on a graph, configurable 1/6/12 month scaling, design well"):
+new invest-growth tile (placed right under the summary). UseInvestGrowthMonths int atom (1/6/12, default
+12). growthCutoffs(now, months): monthly points for 6/12, weekly for 1; last cutoff now+1d so today
+counts. Series = ledger.NetWorthSeries over the investment accounts at each cutoff (honest recorded
+value — contributions + value updates), plotted as a chartspec.Area with a seagreen fill via uiw.Chart.
+Header: current value (serif) + toned ▲/▼ delta ($ + %) computed first→last; a .inv-seg segmented
+1M/6M/1Y toggle (3 explicit buttons, is-active accent pill, aria-pressed). CSS .inv-growth/.inv-seg.
+Sample has real growth (~$30k→$34k/12mo). e2e G1-G8 (tile, 3 segments, svg, value+delta, default 1Y,
+6M activates + delta re-scales $3480→$1370, 1M survives). 29/29.
+
 Follow-up 11 (Cam: "move to investments, redesign from scratch as a componentized/widgetized page, have
 the trad investments and add stocks/securities based investments"): SDLC bottom-up.
 DATA: domain SecurityType enum (stock/etf/mutual_fund/bond/crypto/cash/other) + Normalized/Valid, +

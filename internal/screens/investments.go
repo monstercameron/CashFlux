@@ -251,6 +251,7 @@ func InvestmentsScreen() ui.Node {
 
 	specs := []domain.WidgetSpec{
 		investNativeSpec("invest-summary"),
+		investNativeSpec("invest-growth"),
 		investNativeSpec("invest-toolbar"),
 		investNativeSpec("invest-securities"),
 	}
@@ -284,6 +285,9 @@ func init() {
 	R := widgetrender.Register
 	R("invest-summary", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investSummaryWidget, investPanelProps{App: c.App})
+	})
+	R("invest-growth", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investGrowthWidget, investPanelProps{App: c.App})
 	})
 	R("invest-toolbar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investToolbarWidget, investPanelProps{App: c.App})

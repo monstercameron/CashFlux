@@ -2568,8 +2568,15 @@ var english = Catalog{
 	"investments.noAccountsTitle":       "No investment accounts found",
 	"investments.noAccountsBody":        "Add an Investment, Retirement, or Crypto account to track your holdings here.",
 	// Widgetized surface (redesign)
-	"investments.portfolioValue":    "Portfolio value",
-	"investments.splitLine":         "%s in securities · %s traditional",
+	"investments.portfolioValue": "Portfolio value",
+	"investments.splitLine":      "%s in securities · %s traditional",
+	// Growth chart
+	"investments.growthTitle":       "Portfolio growth",
+	"investments.growthWindow":      "Growth window",
+	"investments.growthChartLabel":  "Investment portfolio value over time",
+	"investments.win1m":             "1M",
+	"investments.win6m":             "6M",
+	"investments.win12m":            "1Y",
 	"investments.securitiesTitle":   "Securities",
 	"investments.traditionalTitle":  "Traditional investments",
 	"investments.byType":            "By security type",

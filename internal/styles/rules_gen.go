@@ -4821,6 +4821,70 @@ func registerGenerated() {
 	rule(".inv-add",
 		marginBottom("0.75rem"),
 	)
+	// Growth chart: a header with the current value + a toned delta, a segmented window
+	// toggle on the right, and the area chart below.
+	rule(".inv-growth",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
+	)
+	rule(".inv-growth-head",
+		display("flex"),
+		alignItems("flex-end"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.75rem"),
+	)
+	rule(".inv-growth-vals",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.6rem"),
+	)
+	rule(".inv-growth-now",
+		fontSize("1.8rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-growth-delta",
+		fontSize("0.9rem"),
+		fontWeight("600"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".inv-seg",
+		display("inline-flex"),
+		padding("0.2rem"),
+		gap("0.15rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+	)
+	rule(".inv-seg-btn",
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		minWidth("2.6rem"),
+		padding("0.25rem 0.7rem"),
+		borderRadius("999px"),
+		border("0"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.8rem"),
+		fontWeight("700"),
+		cursor("pointer"),
+		transition("background 0.15s ease, color 0.15s ease"),
+	)
+	rule(".inv-seg-btn:hover",
+		color("var(--text)"),
+	)
+	rule(".inv-seg-btn.is-active",
+		background("var(--accent)"),
+		color("var(--bg)"),
+	)
+	rule(".inv-seg-btn:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "2px"),
+	)
 	// Summary hero: the total owed in the display serif beside the engine ratio chips.
 	rule(".debt-hero",
 		display("flex"),
