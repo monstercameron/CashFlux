@@ -20,6 +20,13 @@ import (
 // timestamp of the last time the user viewed the Notification Center (C271).
 const notifyLastSeenKey = "cashflux:notify:lastSeen"
 
+// routeForNotify resolves a notification's link from the persisted route config
+// (uistate.NotifyRoutes — a store-backed, runtime-editable table, defaults seeded on
+// first read), matched by the item's ID prefix. Empty = not clickable.
+func routeForNotify(it uistate.FeedItem) string {
+	return uistate.RouteForNotifyID(it.ID)
+}
+
 // notifySeverityRank orders severities for the prioritized feed: critical above
 // warning above everything else (info / reminders). Higher = more urgent.
 func notifySeverityRank(sev string) int {
@@ -133,10 +140,11 @@ func notifyRow(props notifyRowProps) ui.Node {
 		readLabel = uistate.T("notifications.markUnread")
 	}
 
+	route := routeForNotify(it)
 	nav := router.UseNavigate()
 	goResource := ui.UseEvent(Prevent(func() {
-		if it.Route != "" {
-			nav.Navigate(uistate.RoutePath(it.Route))
+		if route != "" {
+			nav.Navigate(uistate.RoutePath(route))
 		}
 	}))
 	onRead := ui.UseEvent(func() {
@@ -171,11 +179,11 @@ func notifyRow(props notifyRowProps) ui.Node {
 	// resource (a bill → /bills, a budget → /budgets, …). It's a sibling of the actions
 	// so the mark-read / snooze / dismiss buttons don't trigger navigation.
 	mainCls := "notif-main"
-	if it.Route != "" {
+	if route != "" {
 		mainCls += " is-linked"
 	}
 	mainArgs := []any{ClassStr(mainCls)}
-	if it.Route != "" {
+	if route != "" {
 		mainArgs = append(mainArgs,
 			Attr("role", "button"), Attr("tabindex", "0"),
 			Attr("aria-label", uistate.T("notifications.openResource", it.Title)),
@@ -187,7 +195,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 			Div(css.Class("notif-top"),
 				unreadDot,
 				Span(css.Class("notif-title"), it.Title),
-				If(it.Route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class("w-4", "h-4")))),
+				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class("w-4", "h-4")))),
 			),
 			If(it.Body != "", P(css.Class("notif-text"), it.Body)),
 			Div(css.Class("notif-foot"),

@@ -20,10 +20,6 @@ type FeedItem struct {
 	Read         bool   `json:"read,omitempty"`
 	Severity     string `json:"severity,omitempty"`     // "info" | "warning" | "critical"; empty = info
 	SnoozedUntil int64  `json:"snoozedUntil,omitempty"` // unix seconds; zero = not snoozed (C268)
-	// Route is the in-app path the notification links to (its alerting resource — e.g. a
-	// bill-due item → /bills, a budget alert → /budgets). Empty = not clickable. Set by
-	// runNotifyCatchUp from the source event; JSON round-trips, no store migration needed.
-	Route string `json:"route,omitempty"`
 }
 
 // NewSinceLastSeen returns the subset of items whose At timestamp is strictly

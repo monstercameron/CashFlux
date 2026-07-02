@@ -29,6 +29,25 @@ Verify: full go test ./... green; e2e/notifications_check.mjs 11/11 (summary/str
 medallion+rail, NO ⋯ menu, inline dismiss removes the card, severity filter, clear all, no errors);
 todo/goals e2e unaffected. Screenshots confirm the feed + severity chips + inline actions.
 
+### Follow-up — notification links: config, not hardcoded
+
+Cam, on the render-side route table: "make this a config and not hard coded, stop being lazy." Fair —
+a Go slice/map literal is still compiled-in behaviour, not config. Two literals existed: the render's
+`notifyRouteByPrefix` (prefix→route) and the catch-up runner's `eventRouteConfig` (event→route), plus a
+`FeedItem.Route` field carrying the runner's choice into persistence. Three sources for one decision.
+
+Collapsed to one real config. New `internal/uistate/notifyroutes.go`: `NotifyRoute{Prefix, Route}`,
+`NotifyRoutes()` reads a JSON `[{prefix,route}]` table from the SQLite app KV (`cashflux:notify:routes`)
+falling back to seed defaults when unset/blank, `SetNotifyRoutes` persists an override (empty ⇒ back to
+defaults), and `RouteForNotifyID(id)` matches an item's ID prefix against it. So a route change is a KV
+write, no recompile — genuinely data now. Render's `routeForNotify` is a one-line delegate to it;
+deleted `notifyRouteByPrefix`, `eventRouteConfig`/`routeForEvent`, the runner's `Route:` assignment, and
+the `FeedItem.Route` field (persisted items ignore the now-absent JSON key — no migration). Single source
+of truth = the persisted config, keyed by the rule-ID prefix the item already carries.
+
+Verify: go build (wasm) clean; go test ./... green; e2e/notifications_check.mjs 13/13 — clicking a bill
+notification still opens /bills, now driven by the config not a literal.
+
 ## 2026-07-01 — /goals: display linked to-dos (the goals double-back)
 
 Cam: "now go back in /goals and display linked todos." The goal card already had props.Tasks (for

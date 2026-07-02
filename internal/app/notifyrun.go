@@ -109,7 +109,6 @@ func runNotifyCatchUp() {
 			Body:     n.Body,
 			At:       n.At.Unix(),
 			Severity: severityString(n.Severity),
-			Route:    routeForEvent(n.Event),
 		}
 	}
 	uistate.PrependNotifyFeed(feed)
@@ -123,24 +122,6 @@ func runNotifyCatchUp() {
 	// PostNotice (not the UseNotice hook) — boot context, see CurrentPrefs note above.
 	uistate.PostNotice(msg, false)
 }
-
-// eventRouteConfig is the single, data-driven source of truth for where each notification
-// event links to (the resource it alerts about). It's a config table, not a switch, so a
-// new event → destination mapping is one line here and nothing else changes. An event
-// absent from the map (or mapped to "") produces a non-clickable notification.
-var eventRouteConfig = map[notify.Event]string{
-	notify.EventBillDue:          "/bills",
-	notify.EventBudgetThreshold:  "/budgets",
-	notify.EventGoalMilestone:    "/goals",
-	notify.EventStaleBalance:     "/accounts",
-	notify.EventLowBalance:       "/accounts",
-	notify.EventLargeTransaction: "/transactions",
-	notify.EventPaycheckLanded:   "/transactions",
-	notify.EventDigest:           "/reports",
-}
-
-// routeForEvent looks up a notification event's link in the eventRouteConfig table.
-func routeForEvent(ev notify.Event) string { return eventRouteConfig[ev] }
 
 // postBrowserNotifications posts OS/browser notifications for the emitted items
 // when the user has enabled them and granted permission (C75 browser channel).
