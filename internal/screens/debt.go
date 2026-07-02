@@ -13,8 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -57,20 +55,6 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	var payoffLiabs []domain.Account // liabilities with a balance, for the include toggles
-	for _, a := range app.Accounts() {
-		if a.Archived || a.Class != domain.ClassLiability {
-			continue
-		}
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			continue
-		}
-		if bal.Abs().Amount <= 0 {
-			continue
-		}
-		payoffLiabs = append(payoffLiabs, a)
-	}
 	// C195: FX-convert each included debt to the base currency. A EUR balance
 	// must not be summed into a USD plan as raw cents. AggregateDebts handles
 	// IncludedInPayoff + Abs + conversion, and reports currencies missing a rate
@@ -111,43 +95,9 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 			uistate.T("planning.debtMissingRate", strings.Join(missingDebtRates, ", ")))
 	}
 
-	// Per-liability include/exclude toggles (each ToggleRow is its own component,
-	// so the per-row hook is safe inside this loop).
-	var includeToggles []ui.Node
-	for _, a := range payoffLiabs {
-		acc := a
-		includeToggles = append(includeToggles, uiw.ToggleRow(uiw.ToggleRowProps{
-			Label: acc.Name,
-			On:    acc.IncludedInPayoff(),
-			OnChange: func(on bool) {
-				next := acc
-				v := on
-				next.IncludeInPayoff = &v
-				if err := app.PutAccount(next); err != nil {
-					return
-				}
-				rev.Set(rev.Get() + 1)
-			},
-		}))
-	}
-
-	// C201: per-liability APR + minimum-payment editors, so the plan's key
-	// inputs can be tuned right here instead of detouring to /accounts. Each
-	// row is its own component (ui.CreateElement), so the per-row hooks are
-	// isolated even though one is rendered per liability in this loop.
-	var rateEditRows []ui.Node
-	for _, a := range payoffLiabs {
-		acc := a
-		rateEditRows = append(rateEditRows, ui.CreateElement(debtRateRow, debtRateRowProps{
-			Acc: acc,
-			OnSave: func(next domain.Account) {
-				if err := app.PutAccount(next); err != nil {
-					return
-				}
-				rev.Set(rev.Get() + 1)
-			},
-		}))
-	}
+	// Per-debt inclusion and APR/minimum editing now live on the payoff-ladder cards
+	// (the in-plan toggle + Edit), so the strategy panel no longer duplicates them — it
+	// stays focused on the snowball-vs-avalanche decision.
 
 	var body ui.Node
 	switch {
@@ -239,49 +189,23 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 					}),
 				)
 			}
-			// C196: a per-debt detail table so the balances, APRs, and minimum
-			// payments feeding the plan are visible — not hidden inside the
-			// totals. Display-only rows (no per-row handlers), so a loop is safe.
-			debtRows := make([]ui.Node, 0, len(debts))
-			for _, d := range debts {
-				apr := "—"
-				if d.AprPercent > 0 {
-					apr = fmt.Sprintf("%.2f%%", d.AprPercent)
-				}
-				minPay := "—"
-				if d.MinPayment > 0 {
-					minPay = fmtMoney(money.New(d.MinPayment, base))
-				}
-				debtRows = append(debtRows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
-					Td(css.Class(tw.Py25), d.Name),
-					Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), fmtMoney(money.New(d.Balance, base))),
-					Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), apr),
-					Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)), minPay),
-				))
-			}
-			debtTable := Div(Style(map[string]string{"margin-top": "0.6rem", "overflow-x": "auto"}),
-				Table(css.Class("t-body", tw.WFull),
-					Thead(Tr(css.Class(tw.BorderB, tw.BorderLine70),
-						Th(css.Class(tw.TextLeft, tw.Py25, tw.TextDim), uistate.T("planning.debtColName")),
-						Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColBalance")),
-						Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColApr")),
-						Th(css.Class(tw.TextRight, tw.Py25, tw.TextDim), uistate.T("planning.debtColMin")),
-					)),
-					Tbody(debtRows),
-				),
-			)
+			// Which method wins: fewer months, then less interest. At $0 extra they tie
+			// (neither wins), so no card is badged and the "add an extra amount" hint shows.
+			snowWins := snow.Months < aval.Months || (snow.Months == aval.Months && snow.TotalInterest < aval.TotalInterest)
+			avalWins := aval.Months < snow.Months || (aval.Months == snow.Months && aval.TotalInterest < snow.TotalInterest)
 			body = Div(
-				Div(css.Class("stat-grid"),
-					stat(uistate.T("planning.snowball"), uistate.T("planning.strategyMonths", snow.Months), ""),
-					stat(uistate.T("planning.avalanche"), uistate.T("planning.strategyMonths", aval.Months), ""),
+				// The snowball-vs-avalanche decision, side by side: months (the headline),
+				// total interest, and debt-free date, with the better method badged.
+				Div(css.Class("strat-compare"),
+					strategyCard(uistate.T("planning.snowball"), snow.Months, money.New(snow.TotalInterest, base), snowDate, snowWins),
+					strategyCard(uistate.T("planning.avalanche"), aval.Months, money.New(aval.TotalInterest, base), avalDate, avalWins),
 				),
-				debtTable,
-				P(css.Class("budget-sub", tw.FontDisplay), "Debt-free by "+snowDate+" (snowball) · "+avalDate+" (avalanche)."),
-				P(css.Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.snowball"), fmtMoney(money.New(snow.TotalInterest, base)))),
-				P(css.Class("muted"), uistate.T("planning.strategyInterest", uistate.T("planning.avalanche"), fmtMoney(money.New(aval.TotalInterest, base)))),
-				P(css.Class("muted"), "Payoff order: "+strings.Join(orderParts, " → ")),
 				rec,
 				explain,
+				If(len(orderParts) > 0, Div(css.Class("strat-order"),
+					Span(css.Class("strat-order-label", tw.TextDim), uistate.T("debt.payoffOrderLabel")),
+					P(css.Class("strat-order-seq"), strings.Join(orderParts, "  →  ")),
+				)),
 				burnChart,
 			)
 		}
@@ -294,36 +218,50 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		Attrs: []any{Attr("id", "debt")},
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("planning.debtStrategyHint")),
-			Form(css.Class("form-grid"),
-				labeledField(uistate.T("planning.debtStrategyExtra", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
-			),
-			// C202: the default ($0 extra) state ties snowball and avalanche, which
-			// reads as "broken" unless explained. With 2+ debts, always say why
-			// they match and how to make them diverge; offer a one-click suggested
-			// extra when one is available. (A single debt ties inherently — no hint.)
-			If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 1,
-				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-					Span(css.Class("muted"), uistate.T("planning.debtTieHint")),
-					If(payoff.SuggestedExtra(debts) > 0,
-						Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
-							OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
-							"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo"),
-					),
-				),
+			// The one control that drives the whole comparison: an optional extra monthly
+			// payment, with a one-click "sensible amount" suggestion beside it (shown only
+			// while the field is empty, so the plans can be made to diverge in one tap).
+			Div(css.Class("strat-extra"),
+				labeledField(uistate.T("planning.debtStrategyExtra", base),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("data-testid", "strat-extra"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
+				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 1 && payoff.SuggestedExtra(debts) > 0,
+					Button(css.Class("btn strat-try"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
+						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
+						"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo")),
 			),
 			body,
 			rateWarn,
 			progressNode,
-			If(len(includeToggles) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				P(css.Class("budget-sub"), "Include in payoff plan (a mortgage is excluded by default):"),
-				Div(includeToggles),
-			)),
-			If(len(rateEditRows) > 0, Div(Style(map[string]string{"margin-top": "0.6rem"}),
-				P(css.Class("budget-sub"), uistate.T("planning.debtEditHeading")),
-				Div(rateEditRows),
-			)),
 		),
 	})
+}
+
+// strategyCard renders one side of the snowball-vs-avalanche comparison: the method name
+// (with a "Recommended" badge on the winner), the months-to-clear headline in the display
+// serif, and the total interest + debt-free date beneath. The winner card is accent-tinted
+// so the better method is obvious at a glance.
+func strategyCard(name string, months int, interest money.Money, freeDate string, winner bool) ui.Node {
+	cls := "strat-card"
+	if winner {
+		cls += " is-winner"
+	}
+	return Div(ClassStr(cls),
+		Div(css.Class("strat-card-head"),
+			Span(css.Class("strat-card-name"), name),
+			If(winner, Span(css.Class("strat-badge"), uistate.T("debt.recommended"))),
+		),
+		Div(css.Class("strat-card-months", tw.FontDisplay), uistate.T("planning.strategyMonths", months)),
+		Div(css.Class("strat-card-stats"),
+			Div(css.Class("strat-card-stat"),
+				Span(css.Class("strat-card-stat-label", tw.TextDim), uistate.T("debt.totalInterestLabel")),
+				Span(css.Class("strat-card-stat-value", tw.FontDisplay), fmtMoney(interest)),
+			),
+			Div(css.Class("strat-card-stat"),
+				Span(css.Class("strat-card-stat-label", tw.TextDim), uistate.T("debt.debtFreeLabel")),
+				Span(css.Class("strat-card-stat-value", tw.FontDisplay), freeDate),
+			),
+		),
+	)
 }
 
 // DebtPlanner now lives in debt_widget.go as a widgetized surface host; the shared

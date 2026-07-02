@@ -40,6 +40,24 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 4 (Cam: "reeval the other widgets on this page and redesign them for better ux and
+readability"): screenshotted each remaining tile. Summary/toolbar/payoff-calc read fine; the strategy
+panel was the offender — a dense wall duplicating the ladder (debt table, per-debt include toggles,
+per-debt APR/min editors) plus two identical "56 months" boxes and prose lines. Redesign: DebtStrategyPanel
+is debt-page-only now (planning doesn't use it), so freely rebuilt. New strategyCard(name, months,
+interest, freeDate, winner) renders the snowball/avalanche decision as two cards — months in the serif,
+total interest + debt-free beneath, winner badged "Recommended" + accent-tinted (winner = fewer months,
+then less interest; $0-extra usually already favors avalanche on interest, so it badges rather than
+faking a tie). Kept the savings line, added a clean .strat-order sequence, kept burn-down + progress.
+Deleted the debt table, the include toggles, the APR/min editors (all now on the ladder card: in-plan
+toggle + Edit), the payoffLiabs loop, and the now-orphaned debtRateRow in planning.go. Extra input is one
+right-sized .strat-extra control + the Try button. e2e updated (ST5 table→cards, ST7 toggles→Recommended
+badge, ST3 tie→"comparison resolved") → 52/52.
+
+Follow-up 3 (Cam: "make payoff-ladder widgets full width + emphasize order"): ladder went 2-col grid →
+single full-width column; rank medallion = big Fraunces numeral; #1 debt is_focus (accent-filled
+medallion + accent border/tint + "Pay first" tag). 51/51 held.
+
 Follow-up 2 (Cam: "are you looking at the lower parts? looks ugly" + "extensively e2e all features and
 negative test cases"): screenshotted each lower tile individually (the page scrolls in an inner
 container, so fullPage/scrollTo(body) had been lying — element.screenshot per tile is the reliable

@@ -33,46 +33,6 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// debtRateRowProps configures one debtRateRow.
-type debtRateRowProps struct {
-	Acc    domain.Account
-	OnSave func(domain.Account) // called with the edited account on commit
-}
-
-// debtRateRow is a per-liability inline editor for APR and minimum payment, so
-// the payoff plan's key inputs can be tuned from the planner without a trip to
-// /accounts (C201). It is rendered via ui.CreateElement so its hooks are
-// isolated when one row is created per liability in a loop. Edits commit on blur.
-func debtRateRow(props debtRateRowProps) ui.Node {
-	acc := props.Acc
-	dec := currency.Decimals(acc.Currency)
-	aprStr := ui.UseState(strconv.FormatFloat(acc.InterestRateAPR, 'f', -1, 64))
-	minStr := ui.UseState(money.FormatMinor(acc.MinPayment.Amount, dec))
-	onApr := ui.UseEvent(func(v string) { aprStr.Set(v) })
-	onMin := ui.UseEvent(func(v string) { minStr.Set(v) })
-	commit := func() {
-		next := acc
-		if f, err := strconv.ParseFloat(strings.TrimSpace(aprStr.Get()), 64); err == nil && f >= 0 {
-			next.InterestRateAPR = f
-		}
-		if m, err := money.ParseMinor(strings.TrimSpace(minStr.Get()), dec); err == nil && m >= 0 {
-			next.MinPayment = money.New(m, acc.Currency)
-		}
-		if props.OnSave != nil {
-			props.OnSave(next)
-		}
-	}
-	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-		Span(css.Class("muted"), Style(map[string]string{"min-width": "9rem"}), acc.Name),
-		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
-			Title(uistate.T("planning.debtEditApr")), Attr("aria-label", uistate.T("planning.debtEditAprAria", acc.Name)),
-			Attr("placeholder", uistate.T("planning.debtEditApr")), Value(aprStr.Get()), OnInput(onApr), OnBlur(func() { commit() })),
-		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
-			Title(uistate.T("planning.debtEditMin")), Attr("aria-label", uistate.T("planning.debtEditMinAria", acc.Name)),
-			Attr("placeholder", uistate.T("planning.debtEditMin")), Value(minStr.Get()), OnInput(onMin), OnBlur(func() { commit() })),
-	)
-}
-
 // Planning hosts the debt-payoff calculator: enter a balance, APR, and monthly
 // payment to see months-to-zero, total interest, and total paid (via the pure
 // internal/payoff engine). The projection updates live as you type.

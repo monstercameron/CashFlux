@@ -4954,6 +4954,104 @@ func registerGenerated() {
 	rule(".bento-debt .card + .card",
 		prop("margin-top", "0.75rem"),
 	)
+	// Strategy panel: the extra-payment control row (input + one-tap suggestion).
+	rule(".strat-extra",
+		display("flex"),
+		alignItems("flex-end"),
+		flexWrap("wrap"),
+		gap("0.6rem"),
+		marginBottom("0.9rem"),
+	)
+	rule(".strat-extra .field",
+		width("14rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+	)
+	// Snowball vs avalanche — a clear two-up decision with the winner badged.
+	rule(".strat-compare",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(220px, 1fr))"),
+		gap("0.75rem"),
+	)
+	rule(".strat-card",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		padding("1rem 1.15rem"),
+		border("1px solid var(--border)"),
+		borderRadius("14px"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+	)
+	rule(".strat-card.is-winner",
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 9%, var(--bg-elev))"),
+	)
+	rule(".strat-card-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+	)
+	rule(".strat-card-name",
+		fontSize("0.72rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.07em"),
+		color("var(--text-dim)"),
+	)
+	rule(".strat-badge",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+		background("var(--accent)"),
+		color("var(--bg)"),
+	)
+	rule(".strat-card-months",
+		fontSize("1.85rem"),
+		fontWeight("700"),
+		prop("line-height", "1.1"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".strat-card-stats",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.25rem 1.25rem"),
+		prop("margin-top", "0.25rem"),
+	)
+	rule(".strat-card-stat",
+		display("flex"),
+		flexDirection("column"),
+	)
+	rule(".strat-card-stat-label",
+		fontSize("0.66rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.05em"),
+	)
+	rule(".strat-card-stat-value",
+		fontSize("0.98rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	// Payoff order — a readable sequence line, not buried in prose.
+	rule(".strat-order",
+		prop("margin-top", "0.5rem"),
+	)
+	rule(".strat-order-label",
+		fontSize("0.7rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+	)
+	rule(".strat-order-seq",
+		prop("margin", "0.15rem 0 0"),
+		prop("line-height", "1.6"),
+		color("var(--text)"),
+	)
 	// Per-card utilization rows read as separated line-items inside the breakdown card,
 	// and the inline credit-limit editor input no longer sprawls edge-to-edge.
 	rule(".bento-debt .credit-card-item + .credit-card-item",

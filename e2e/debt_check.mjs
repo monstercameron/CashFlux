@@ -80,21 +80,24 @@ await openDebt();
 const strat = p.locator("#debt");
 check("ST1 strategy panel present", await strat.count() >= 1);
 check("ST2 snowball + avalanche shown", await p.getByText(/snowball/i).count() >= 1 && await p.getByText(/avalanche/i).count() >= 1);
-// $0 extra → the two strategies tie; a tie hint is shown (negative/edge case).
-const tieHint = await p.getByText(/tie|match|add an extra/i).count() >= 1;
-check("ST3 (neg) $0 extra shows the snowball==avalanche tie hint", tieHint);
+// $0 extra edge case: the comparison must still resolve clearly — either a Recommended
+// badge / savings line (when one method already wins on interest) or an explicit tie hint —
+// never a blank/broken side-by-side.
+const resolved = (await strat.locator('.strat-badge').count() >= 1)
+  || (await p.getByText(/less in interest|match|add an extra|tie/i).count() >= 1);
+check("ST3 (neg) $0 extra resolves the comparison (badge or hint)", resolved);
 // Suggested-extra quick button fills the input and the plans diverge.
 const tryBtn = p.getByRole("button", { name: /try \$/i }).first();
 if (await tryBtn.count()) { await tryBtn.click({ force: true }); await p.waitForTimeout(1000); }
 const extraInput = strat.locator('input[type="number"]').first();
 const extraVal = await extraInput.inputValue().catch(() => "");
 check("ST4 suggested-extra button fills the extra field", parseFloat(extraVal) > 0, extraVal);
-check("ST5 per-debt strategy table renders", await strat.locator("table").count() >= 1 || await p.getByText(/payoff order/i).count() >= 1);
-// Manually set a large extra → months should be finite and the burn-down chart renders.
+check("ST5 snowball vs avalanche comparison cards", await strat.locator('.strat-card').count() === 2, `${await strat.locator('.strat-card').count()}`);
+check("ST5b payoff-order sequence shown", await strat.locator('.strat-order-seq').count() >= 1);
+// Manually set a large extra → the two methods diverge; a winner gets badged Recommended.
 await extraInput.fill("1000"); await p.waitForTimeout(1200);
 check("ST6 large extra keeps a viable plan (months shown)", await p.getByText(/month/i).count() >= 1);
-// Per-liability include toggles + APR/min editors are present.
-check("ST7 include-in-plan toggles present", await p.getByText(/include in payoff/i).count() >= 1 || await strat.locator('input[type="checkbox"], [role="switch"]').count() >= 1);
+check("ST7 the better method is badged Recommended", await strat.locator('.strat-card.is-winner, .strat-badge').count() >= 1);
 
 // ============================ CREDIT HEALTH =====================================
 const credit = tileWith("Credit health");
