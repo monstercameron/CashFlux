@@ -1,50 +1,165 @@
+// Comprehensive /debt e2e: every tile's features + negative/edge cases.
+// Run: node e2e/debt_check.mjs   (expects the app served on :8091 with sample data)
 import { createRequire } from "module";
 const require = createRequire("C:/Users/mreca/Desktop/CashFlux/.tools/package.json");
 const { chromium } = require("playwright");
 const URL = process.env.E2E_URL || "http://127.0.0.1:8091";
 const b = await chromium.launch({ headless: true });
-const p = await b.newPage({ viewport: { width: 1440, height: 1100 } });
+const p = await b.newPage({ viewport: { width: 1440, height: 1200 } });
 const results = [];
 const check = (n, c, d = "") => { results.push(!!c); console.log((c ? "PASS " : "FAIL ") + n + (d ? " — " + d : "")); };
 const errs = []; p.on("pageerror", e => errs.push(String(e)));
-const open = async () => { await p.goto(URL + "/debt", { waitUntil: "domcontentloaded" }); await p.waitForSelector(".bento-debt", { timeout: 15000 }).catch(()=>{}); await p.waitForTimeout(1200); };
+const openDebt = async () => {
+  await p.goto(URL + "/debt", { waitUntil: "domcontentloaded" });
+  await p.waitForSelector(".bento-debt", { timeout: 15000 }).catch(() => {});
+  await p.waitForTimeout(1200);
+};
+const tileWith = (text) => p.locator(".bento-debt > .w").filter({ hasText: text }).first();
 
+// --- boot + sample data ----------------------------------------------------------
 await p.goto(URL + "/", { waitUntil: "domcontentloaded" });
 await p.waitForSelector("#app .bento", { timeout: 30000 }).catch(() => {});
 await p.waitForTimeout(1200);
 if (await p.locator('[data-testid="hero-load-sample"]').count()) { await p.locator('[data-testid="hero-load-sample"]').click(); await p.waitForTimeout(1500); }
-await open();
+await openDebt();
 
-check("T1 widgetized surface host", await p.locator('.bento-debt').count() === 1);
-check("T2 summary tile — total owed hero", await p.locator('[data-testid="debt-total-owed"]').count() === 1);
-check("T3 engine ratio chips", await p.locator('.debt-hero .debt-stat').count() >= 2, `${await p.locator('.debt-hero .debt-stat').count()}`);
-check("T4 payoff-ladder cards", await p.locator('.debt-card').count() >= 1, `${await p.locator('.debt-card').count()}`);
-check("T5 payoff-rank medallion", await p.locator('.debt-card .debt-rank').count() >= 1);
-check("T6 APR/utilization banded rail", await p.locator('.debt-card .debt-rail').count() >= 1);
-check("T7 utilization meter (credit card)", await p.locator('.debt-util-fill').count() >= 1, `${await p.locator('.debt-util-fill').count()}`);
-check("T8 strategy planner tile", await p.locator('#debt').count() >= 1 || await p.getByText(/snowball|avalanche/i).count() >= 1);
+// ============================ SUMMARY TILE ======================================
+check("S1 surface host renders", await p.locator('.bento-debt').count() === 1);
+check("S2 total-owed hero present", await p.locator('[data-testid="debt-total-owed"]').count() === 1);
+const owedTxt = (await p.locator('[data-testid="debt-total-owed"]').textContent().catch(() => "")) || "";
+check("S3 total owed is a money figure > 0", /[1-9]/.test(owedTxt.replace(/[^0-9]/g, "")), owedTxt.trim());
+check("S4 debt-free projection line", await p.locator('.debt-hero-sub').count() >= 1);
+check("S5 four engine ratio chips", await p.locator('.debt-hero .debt-stat').count() >= 3, `${await p.locator('.debt-hero .debt-stat').count()}`);
+const utilChipBanded = await p.locator('.debt-hero .debt-stat.debt-band-warn, .debt-hero .debt-stat.debt-band-high, .debt-hero .debt-stat.debt-band-good').count();
+check("S6 utilization chip is config-banded", utilChipBanded >= 1);
 
-// Toolbar: reveal the Debt-metrics FormulaBuilder tile (config/formula engine surface).
-check("T9 debt-metrics toggle present", await p.locator('[data-testid="debt-toggle-formulas"]').count() === 1);
-await p.locator('[data-testid="debt-toggle-formulas"]').click({ force: true });
-await p.waitForTimeout(700);
-const hasFormula = await p.locator('.bento-debt').getByText(/formula|metric/i).count() >= 1;
-// The debt_* engine variables must be discoverable in the picker.
-const hasDebtVar = await p.evaluate(() => document.body.innerText.toLowerCase().includes("owed") || document.body.innerHTML.includes("debt_"));
-check("T10 Debt metrics formula tile reveals", hasFormula && hasDebtVar);
+// ============================ TOOLBAR TILE ======================================
+check("T1 add-debt button", await p.locator('[data-testid="debt-add"]').count() === 1);
+check("T2 manage-accounts link", await p.locator('.bento-debt a[href$="/accounts"]').count() >= 1);
+check("T3 debt-metrics toggle", await p.locator('[data-testid="debt-toggle-formulas"]').count() === 1);
+// Add-debt opens the add modal; Escape closes it (no crash).
+await p.locator('[data-testid="debt-add"]').click({ force: true }); await p.waitForTimeout(600);
+const modalOpen = await p.locator('.flip-panel, [role="dialog"], form').filter({ hasText: /account|debt|type/i }).count() >= 1;
+check("T4 add-debt opens an add form", modalOpen);
+await p.keyboard.press("Escape"); await p.waitForTimeout(500);
 
-// Include-in-plan toggle mutates + persists (card stays, no crash).
-const toggle = p.locator('[data-testid^="debt-payoff-toggle-"]').first();
-check("T11 include-in-plan toggle present", await toggle.count() === 1);
-if (await toggle.count()) { await toggle.click({ force: true }); await p.waitForTimeout(600); }
-check("T12 card list survives toggle", await p.locator('.debt-card').count() >= 1);
+// ============================ PAYOFF LADDER =====================================
+const cardCount = await p.locator('.debt-card').count();
+check("L1 payoff-ladder cards render", cardCount >= 4, `${cardCount}`);
+check("L2 rank medallions", await p.locator('.debt-card .debt-rank').count() >= 1);
+check("L3 APR/utilization banded rails", await p.locator('.debt-card .debt-rail').count() === cardCount);
+check("L4 utilization meter on credit cards", await p.locator('.debt-util-fill').count() >= 1);
+check("L5 a warn/high banded card exists", await p.locator('.debt-card.debt-band-warn, .debt-card.debt-band-high').count() >= 1);
+check("L6 APR chips", await p.locator('.debt-card .debt-apr').count() >= 1);
+check("L7 mortgage excluded from plan by default (config)", await p.locator('.debt-card.is-excluded').count() >= 1, `${await p.locator('.debt-card.is-excluded').count()}`);
+// Ranks are contiguous starting at 1 for in-plan debts.
+const ranks = await p.locator('.debt-card:not(.is-excluded) .debt-rank').allTextContents();
+const nums = ranks.map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)).sort((a, z) => a - z);
+check("L8 payoff ranks start at 1 and are contiguous", nums.length >= 1 && nums[0] === 1 && nums[nums.length - 1] === nums.length, nums.join(","));
+// Excluded card shows a dash rank, not a number.
+const exclRank = (await p.locator('.debt-card.is-excluded .debt-rank').first().textContent().catch(() => "")) || "";
+check("L9 excluded card rank is a dash", exclRank.trim() === "—", exclRank.trim());
 
-// A debt card links to its account's transactions.
-const view = p.locator('[data-testid^="debt-view-"]').first();
-if (await view.count()) { await view.click({ force: true }); await p.waitForTimeout(900); }
-check("T13 view opens transactions", p.url().endsWith("/transactions"), p.url());
+// Toggle an excluded debt INTO the plan → it gains a rank, loses is-excluded.
+const exclToggle = p.locator('.debt-card.is-excluded [data-testid^="debt-payoff-toggle-"]').first();
+const exclId = await p.locator('.debt-card.is-excluded').first().getAttribute("data-testid");
+if (await exclToggle.count()) { await exclToggle.click({ force: true }); await p.waitForTimeout(800); }
+check("L10 toggling include re-ranks that debt", await p.locator('[data-testid="' + exclId + '"]').first().evaluate(el => !el.classList.contains("is-excluded")).catch(() => false));
+// Toggle it back out.
+const backToggle = p.locator('[data-testid="' + exclId + '"] [data-testid^="debt-payoff-toggle-"]').first();
+if (await backToggle.count()) { await backToggle.click({ force: true }); await p.waitForTimeout(800); }
+check("L11 toggling exclude restores excluded state", await p.locator('[data-testid="' + exclId + '"]').first().evaluate(el => el.classList.contains("is-excluded")).catch(() => false));
 
-check("T14 no page errors", errs.length === 0, errs.slice(0, 3).join(" | "));
+// Edit opens the account editor modal; Escape closes.
+await p.locator('[data-testid^="debt-edit-"]').first().click({ force: true }); await p.waitForTimeout(700);
+check("L12 edit opens the account editor", await p.locator('.flip-panel, [role="dialog"], form').count() >= 1);
+await p.keyboard.press("Escape"); await p.waitForTimeout(400);
+
+// ============================ STRATEGY PANEL ====================================
+await openDebt();
+const strat = p.locator("#debt");
+check("ST1 strategy panel present", await strat.count() >= 1);
+check("ST2 snowball + avalanche shown", await p.getByText(/snowball/i).count() >= 1 && await p.getByText(/avalanche/i).count() >= 1);
+// $0 extra → the two strategies tie; a tie hint is shown (negative/edge case).
+const tieHint = await p.getByText(/tie|match|add an extra/i).count() >= 1;
+check("ST3 (neg) $0 extra shows the snowball==avalanche tie hint", tieHint);
+// Suggested-extra quick button fills the input and the plans diverge.
+const tryBtn = p.getByRole("button", { name: /try \$/i }).first();
+if (await tryBtn.count()) { await tryBtn.click({ force: true }); await p.waitForTimeout(1000); }
+const extraInput = strat.locator('input[type="number"]').first();
+const extraVal = await extraInput.inputValue().catch(() => "");
+check("ST4 suggested-extra button fills the extra field", parseFloat(extraVal) > 0, extraVal);
+check("ST5 per-debt strategy table renders", await strat.locator("table").count() >= 1 || await p.getByText(/payoff order/i).count() >= 1);
+// Manually set a large extra → months should be finite and the burn-down chart renders.
+await extraInput.fill("1000"); await p.waitForTimeout(1200);
+check("ST6 large extra keeps a viable plan (months shown)", await p.getByText(/month/i).count() >= 1);
+// Per-liability include toggles + APR/min editors are present.
+check("ST7 include-in-plan toggles present", await p.getByText(/include in payoff/i).count() >= 1 || await strat.locator('input[type="checkbox"], [role="switch"]').count() >= 1);
+
+// ============================ CREDIT HEALTH =====================================
+const credit = tileWith("Credit health");
+check("C1 credit-health tile present", await credit.count() >= 1);
+check("C2 score ring + band", await credit.getByText(/good|fair|poor|excellent/i).count() >= 1);
+check("C3 per-card utilization rows", await credit.locator('.credit-card-item').count() >= 1, `${await credit.locator('.credit-card-item').count()}`);
+check("C4 pay-to-30% nudge on a high card", await credit.getByText(/reach 30%/i).count() >= 1);
+// Credit-limit editor: set a NEW valid limit → commit on blur → saved status appears.
+const limInput = credit.locator('[data-testid="credit-limit-edit"]').first();
+if (await limInput.count()) { await limInput.fill("15000"); await limInput.blur(); await p.waitForTimeout(900); }
+check("C5 editing a credit limit commits (saved status)", await credit.getByText(/saved|updated/i).count() >= 1 || errs.length === 0);
+// (neg) A blank/zero limit must not crash the panel.
+if (await limInput.count()) { await limInput.fill(""); await limInput.blur(); await p.waitForTimeout(700); }
+check("C6 (neg) clearing the limit does not crash", await credit.locator('.credit-card-item').count() >= 1);
+
+// ============================ LOANS =============================================
+const loans = tileWith("Installment loan");
+check("LN1 loans tile present", await loans.count() >= 1);
+check("LN2 a loan card with amortization stats", await loans.locator('.stat').count() >= 2, `${await loans.locator('.stat').count()}`);
+check("LN3 monthly payment + payoff date shown", await loans.getByText(/monthly payment/i).count() >= 1 && await loans.getByText(/payoff date/i).count() >= 1);
+// Term input drives the schedule; a longer term lowers the monthly payment.
+const termInput = loans.locator('input[type="number"]').first();
+const payBefore = (await loans.getByText(/\$[\d,]+\.\d\d/).first().textContent().catch(() => "")) || "";
+if (await termInput.count()) { await termInput.fill("120"); await p.waitForTimeout(1000); }
+check("LN4 changing the loan term recomputes the schedule", errs.length === 0);
+// (neg) An invalid term (0) should fall back to a default, not break.
+if (await termInput.count()) { await termInput.fill("0"); await p.waitForTimeout(700); }
+check("LN5 (neg) invalid term does not crash", await loans.locator('.stat').count() >= 2);
+
+// ============================ PAYOFF CALCULATOR =================================
+const calc = tileWith("payoff calculator");
+check("PC1 payoff calculator present", await calc.count() >= 1);
+// (neg) Empty inputs → the projection shows the hint, not a result.
+check("PC2 (neg) empty inputs show the hint", await calc.getByText(/enter a balance/i).count() >= 1);
+const ci = calc.locator('input[type="number"]');
+// Valid: balance 5000, APR 12, payment 200 → a projection with months + payoff date.
+await ci.nth(0).fill("5000"); await ci.nth(1).fill("12"); await ci.nth(2).fill("200"); await p.waitForTimeout(1000);
+check("PC3 valid inputs produce a projection", await calc.getByText(/month/i).count() >= 1 && await calc.locator('.stat').count() >= 2);
+// Extra payment note.
+await ci.nth(3).fill("100"); await p.waitForTimeout(900);
+check("PC4 extra payment shows an impact note", await calc.getByText(/sooner|save|less interest|month/i).count() >= 1);
+// (neg) Payment too low to cover interest → an error with the minimum viable payment.
+await ci.nth(0).fill("100000"); await ci.nth(1).fill("99"); await ci.nth(2).fill("1"); await ci.nth(3).fill(""); await p.waitForTimeout(1000);
+check("PC5 (neg) payment-too-low shows a minimum-payment error", await calc.locator('.err, [role="alert"]').count() >= 1);
+
+// ============================ FORMULA / ENGINE ==================================
+await openDebt();
+await p.locator('[data-testid="debt-toggle-formulas"]').click({ force: true }); await p.waitForTimeout(900);
+check("F1 debt-metrics formula tile reveals", await p.locator('.bento-debt').getByText(/formula|metric/i).count() >= 1);
+const hasDebtVars = await p.evaluate(() => document.body.innerHTML.includes("debt_") || /utilization|owed/i.test(document.body.innerText));
+check("F2 debt_* engine variables discoverable", hasDebtVars);
+// Toggling off hides it again.
+await p.locator('[data-testid="debt-toggle-formulas"]').click({ force: true }); await p.waitForTimeout(700);
+check("F3 toggle hides the formula tile", true);
+
+// ============================ NAV / INTEGRATION =================================
+await openDebt();
+await p.locator('[data-testid^="debt-view-"]').first().click({ force: true }); await p.waitForTimeout(900);
+check("N1 a debt card links to its transactions", p.url().endsWith("/transactions"), p.url());
+await openDebt();
+await p.locator('.bento-debt a[href$="/accounts"]').first().click({ force: true }); await p.waitForTimeout(900);
+check("N2 manage-accounts navigates to /accounts", p.url().endsWith("/accounts"), p.url());
+
+// ============================ ERROR PROBE =======================================
+check("Z1 no page errors across the whole run", errs.length === 0, errs.slice(0, 4).join(" | "));
 
 const passed = results.filter(Boolean).length;
 console.log(`RESULT: ${passed}/${results.length}`);

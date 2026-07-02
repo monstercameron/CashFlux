@@ -27,6 +27,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// debtSection wraps a debt tile's body with a serif section title instead of the boxy
+// EntityListSection card — the tile's own .w frame is the container, so the panels inside
+// (which build their own grouping cards) don't sit in a redundant double frame.
+func debtSection(title string, body ui.Node) ui.Node {
+	return Div(css.Class("debt-section"),
+		If(title != "", H2(css.Class("debt-section-title"), title)),
+		body,
+	)
+}
+
 type debtSummaryProps struct{ App *appstate.App }
 type debtToolbarProps struct{ App *appstate.App }
 type debtListProps struct{ App *appstate.App }
@@ -262,10 +272,8 @@ func debtListWidget(props debtListProps) ui.Node {
 	v := computeDebtView(app)
 
 	if len(v.Liabs) == 0 {
-		body := uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("debt.whatYouOwe"),
-			Body:  P(css.Class("empty"), Attr("data-testid", "debt-empty"), uistate.T("debt.noDebts")),
-		})
+		body := debtSection(uistate.T("debt.whatYouOwe"),
+			P(css.Class("empty"), Attr("data-testid", "debt-empty"), uistate.T("debt.noDebts")))
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 			Body: body,
@@ -303,10 +311,7 @@ func debtListWidget(props debtListProps) ui.Node {
 		})
 	})
 
-	body := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("debt.payoffLadder"),
-		Body:  Div(css.Class("debt-list"), rows),
-	})
+	body := debtSection(uistate.T("debt.payoffLadder"), Div(css.Class("debt-list"), rows))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -325,13 +330,10 @@ func debtStrategyWidget(props debtPanelProps) ui.Node {
 
 // debtCreditWidget hosts the credit-card health panel (shown only when a card exists).
 func debtCreditWidget(props debtPanelProps) ui.Node {
-	body := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("nav.credit"),
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("screen.creditSub")),
-			ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
-		),
-	})
+	body := debtSection(uistate.T("nav.credit"), Fragment(
+		P(css.Class("muted"), uistate.T("screen.creditSub")),
+		ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
+	))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-credit", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -340,13 +342,10 @@ func debtCreditWidget(props debtPanelProps) ui.Node {
 
 // debtLoansWidget hosts the installment-loans panel (shown only when a loan exists).
 func debtLoansWidget(props debtPanelProps) ui.Node {
-	body := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("nav.loans"),
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("screen.loansSub")),
-			ui.CreateElement(LoansPanel, LoansPanelProps{}),
-		),
-	})
+	body := debtSection(uistate.T("nav.loans"), Fragment(
+		P(css.Class("muted"), uistate.T("screen.loansSub")),
+		ui.CreateElement(LoansPanel, LoansPanelProps{}),
+	))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-loans", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

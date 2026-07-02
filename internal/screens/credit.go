@@ -287,7 +287,7 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSa
 		AccountID: cu.AccountID, Currency: acctCur, LimitMinor: cu.LimitMinor, OnSave: onSaveLimit,
 	})
 
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, meta, nudge, trendPanel, limitEditor)
+	return Div(css.Class("credit-card-item "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap1)), head, bar, meta, nudge, trendPanel, limitEditor)
 }
 
 // creditLimitEditorProps drives the inline credit-limit editor (C211).

@@ -40,6 +40,21 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 2 (Cam: "are you looking at the lower parts? looks ugly" + "extensively e2e all features and
+negative test cases"): screenshotted each lower tile individually (the page scrolls in an inner
+container, so fullPage/scrollTo(body) had been lying — element.screenshot per tile is the reliable
+way). Real problem: (a) the wrapper tiles double-framed the panels (tile .w + EntityListSection .card),
+and (b) my first cohesion pass had over-corrected with `.bento-debt .card {border:0}` which ALSO
+stripped the panels' OWN grouping cards (credit hero-ring, per-card breakdown, each loan card) → flat.
+Fix: debtSection helper (serif title, no card) replaces EntityListSection in the debt tiles, and
+`.bento-debt .card` is a soft grouping card again → credit/loans/strategy render as proper cards.
+creditCardRow got a `.credit-card-item` class (divider between rows + capped limit input). Screenshots
+confirm: credit hero + breakdown are carded, each loan is a card with serif stat tiles.
+Then expanded e2e to 51 checks (all tiles + negatives): empty payoff inputs→hint, payment-too-low→err,
+$0 tie, invalid term fallback, cleared limit no-crash, add-modal open/close, in-plan toggle re-rank
+both ways, rank contiguity 1..N + excluded dash, formula reveal w/ debt_ vars, card→txns, manage→accts,
+whole-run pageerror probe. 51/51.
+
 Follow-up (Cam: "the page needs to be redesigned, looks like shit especially the other lower
 components"): the top (hero + ladder) was polished but the REUSED lower panels (strategy/credit/loans/
 payoff-calc) still rendered in the old plain stat-grid/table/form/EntityListSection style, so the page

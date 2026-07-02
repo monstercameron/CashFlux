@@ -4827,12 +4827,32 @@ func registerGenerated() {
 		gap("0.35rem"),
 	)
 	// Cohesion pass — lift the reused strategy / credit / loans / payoff-calculator panels
-	// (which lean on the shared stat / table / form / bar primitives) into the debt page's
-	// visual language. Scoped to .bento-debt so nothing else is touched.
+	// into the debt page's visual language. Scoped to .bento-debt. The debt tiles drop the
+	// redundant EntityListSection frame (see debtSection) so the only .card left is a
+	// panel's own grouping card (the credit hero ring, the per-card breakdown, …); style
+	// those as soft grouping cards — elevated surface, hairline border, no heavy shadow.
 	rule(".bento-debt .card",
-		background("transparent"),
-		border("0"),
-		padding("0"),
+		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
+		border("1px solid var(--border)"),
+		borderRadius("12px"),
+		padding("0.95rem 1.1rem"),
+		marginBottom("0"),
+		prop("box-shadow", "none"),
+	)
+	rule(".bento-debt .card:hover",
+		transform("none"),
+		prop("box-shadow", "none"),
+	)
+	// A debt tile's section title (serif) + a comfortable gap above the body.
+	rule(".debt-section-title",
+		fontFamily("var(--font-display, \"Fraunces\", serif)"),
+		fontWeight("700"),
+		fontSize("1.05rem"),
+		letterSpacing("-0.01em"),
+		marginBottom("0.15rem"),
+	)
+	rule(".debt-section > * + *",
+		prop("margin-top", "0.75rem"),
 	)
 	rule(".bento-debt .card-title, .bento-debt h2, .bento-debt h3",
 		fontFamily("var(--font-display, \"Fraunces\", serif)"),
@@ -4899,9 +4919,24 @@ func registerGenerated() {
 	rule(".bento-debt .t-body td",
 		fontVariantNumeric("tabular-nums"),
 	)
-	// Section rhythm: flattened inner cards need their own spacing when stacked in a tile.
+	// Grouping cards inside a debt tile get vertical rhythm when stacked.
 	rule(".bento-debt .card + .card",
-		prop("margin-top", "1rem"),
+		prop("margin-top", "0.75rem"),
+	)
+	// Per-card utilization rows read as separated line-items inside the breakdown card,
+	// and the inline credit-limit editor input no longer sprawls edge-to-edge.
+	rule(".bento-debt .credit-card-item + .credit-card-item",
+		prop("margin-top", "0.9rem"),
+		prop("padding-top", "0.9rem"),
+		prop("border-top", "1px solid var(--border)"),
+	)
+	rule(".bento-debt .credit-card-item .field, .bento-debt .credit-card-item input",
+		prop("max-width", "13rem"),
+	)
+	rule(".bento-debt .credit-card-item .labeled-field",
+		prop("flex-direction", "row"),
+		alignItems("center"),
+		gap("0.5rem"),
 	)
 	// To-do surface: same full-width, auto-height stacked-tile layout as /goals so the
 	// summary / toolbar / list tiles flow top-to-bottom instead of into a fixed grid.
