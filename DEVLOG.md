@@ -40,6 +40,26 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 10 (Cam: "enhance credit health to show demerits + the clearest advice to improve, then add
+a smart+ AI feature to do the analysis with AI"): three phases, SDLC bottom-up.
+PHASE 1 (logic, pure+tested): credithealth gains Demerit/Advice types + deriveDemerits/deriveAdvice.
+Demerits = per-scored-factor point cost (renormWeights × (100−factorScore)) for utilization/on-time/age,
+plus per-card callouts (over-limit >100, hot >50) + missing-limit; sorted by PointsLost desc. Advice =
+per-card pay-down to 30% (PayMinor=Target30, ImpactPts = proxy delta if that card drops to 30% via
+utilPayImpact), on-time coaching, add-limit; sorted by ImpactPts desc. Kinds are enums; the UI formats
+sentences (keeps the package i18n-free). Tests: hot+no-limit+on-time-miss case asserts kinds/order/pay
+amount; healthy case asserts no pay-down/on-time advice.
+PHASE 2 (UI): CreditHealthPanel renders "What's holding your score back" (demerits, −N pts chips, amber
+alert icon) + "How to improve" (advice, +N pts chips, accent up-arrow) via creditDemeritText/
+creditAdviceText. New .credit-list/.credit-item/.credit-pts CSS.
+PHASE 3 (Smart+ AI, SMART-A11): reused the existing AI framework — smartai.CreditAnalysis prompt (grounded
+in the on-screen figures, personalize-don't-invent), catalog ai() entry (PageAccounts, RuleCore), the
+implemented map flag, an aiSpec case, creditContextString (score/util/demerits/advice snapshot), and
+creditAINode which renders smartAIFeatureNode gated on IsEnabled+aiProviderConfigured (opt-in; quiet
+"needs a provider" hint when enabled sans key; nothing when off — UsePrefs called unconditionally for
+stable hook order). e2e C4a-C4g (demerits list + −pts chip + worded target, advice list + +pts chip +
+concrete "Pay $" action, AI opt-in hidden by default). 72/72; go test ./... green.
+
 Follow-up 9 (Cam: "the widgets look boring, use the design skill to add a little life"): a CSS-only
 design pass over the debt widgets — refined direction (depth + accent moments + orchestrated motion) on
 the existing base, not a redesign. Signature: a 3px seagreen border-left tick on every section title

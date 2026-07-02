@@ -105,6 +105,16 @@ check("C1 credit-health tile present", await credit.count() >= 1);
 check("C2 score ring + band", await credit.getByText(/good|fair|poor|excellent/i).count() >= 1);
 check("C3 per-card utilization rows", await credit.locator('.credit-card-item').count() >= 1, `${await credit.locator('.credit-card-item').count()}`);
 check("C4 pay-to-30% nudge on a high card", await credit.getByText(/reach 30%/i).count() >= 1);
+// Demerits: what's dragging the score down, with a point-cost chip.
+check("C4a demerits card lists what's hurting the score", await credit.locator('[data-testid="credit-demerits"] .credit-item').count() >= 1, `${await credit.locator('[data-testid="credit-demerits"] .credit-item').count()}`);
+check("C4b a demerit shows a point-cost (−N pts) chip", await credit.locator('.credit-pts-down').count() >= 1);
+check("C4c overall-utilization demerit is worded with a target", await credit.getByText(/aim for under 30%/i).count() >= 1);
+// Advice: the clearest, prioritized fix, with an impact chip.
+check("C4d advice card gives the clearest fix", await credit.locator('[data-testid="credit-advice"] .credit-item').count() >= 1, `${await credit.locator('[data-testid="credit-advice"] .credit-item').count()}`);
+check("C4e advice shows an impact (+N pts) chip", await credit.locator('.credit-pts-up').count() >= 1);
+check("C4f top advice is a concrete pay-down action", await credit.locator('[data-testid="credit-advice"]').getByText(/Pay \$/).count() >= 1);
+// Smart+ AI analysis is opt-in: absent by default (no dead control).
+check("C4g Smart+ AI analysis is opt-in (hidden until enabled)", await credit.locator('[data-testid="credit-ai"]').count() === 0);
 // Credit-limit editor: set a NEW valid limit → commit on blur → saved status appears.
 const limInput = credit.locator('[data-testid="credit-limit-edit"]').first();
 if (await limInput.count()) { await limInput.fill("15000"); await limInput.blur(); await p.waitForTimeout(900); }

@@ -19,6 +19,8 @@
 package credithealth
 
 import (
+	"math"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -42,11 +44,11 @@ const Disclaimer = "This is a local estimate based on your data — not a FICO s
 type UtilBand string
 
 const (
-	BandUtilBest   UtilBand = "Best"   // 0–10 %
-	BandUtilGood   UtilBand = "Good"   // 11–30 %
-	BandUtilFair   UtilBand = "Fair"   // 31–50 %
-	BandUtilPoor   UtilBand = "Poor"   // 51–80 %
-	BandUtilWorst  UtilBand = "Worst"  // >80 %
+	BandUtilBest   UtilBand = "Best"    // 0–10 %
+	BandUtilGood   UtilBand = "Good"    // 11–30 %
+	BandUtilFair   UtilBand = "Fair"    // 31–50 %
+	BandUtilPoor   UtilBand = "Poor"    // 51–80 %
+	BandUtilWorst  UtilBand = "Worst"   // >80 %
 	BandUtilNoData UtilBand = "No data" // no credit limit set
 )
 
@@ -210,8 +212,176 @@ type Result struct {
 	// Band is the qualitative tier for ProxyScore.
 	Band Band
 
+	// Demerits are the factors dragging the proxy score down, most costly first.
+	Demerits []Demerit
+
+	// Advice is the prioritized, concrete actions to raise the score, most impactful first.
+	Advice []Advice
+
 	// Disclaimer must be displayed alongside any user-facing credit-health presentation.
 	Disclaimer string
+}
+
+// DemeritKind classifies a factor pulling the proxy score down.
+type DemeritKind string
+
+const (
+	DemeritUtilization  DemeritKind = "utilization"      // aggregate revolving utilization is high
+	DemeritCardUtil     DemeritKind = "card-utilization" // a single card is running hot (>50%)
+	DemeritOnTime       DemeritKind = "on-time"          // missed the on-time-payment window recently
+	DemeritAge          DemeritKind = "age"              // thin card history
+	DemeritOverLimit    DemeritKind = "over-limit"       // a card is over its limit (>100%)
+	DemeritMissingLimit DemeritKind = "missing-limit"    // cards with no limit — utilization can't be assessed
+)
+
+// Demerit is one factor dragging the score down. Kind selects the message; the caller
+// formats the sentence (with i18n + money). PointsLost is an approximate share of the
+// 100-point scale this factor is costing (0 for structural/informational demerits). Pct
+// carries the relevant percentage (utilization) or a count (missing-limit). AccountID/Name
+// are set for per-card demerits.
+type Demerit struct {
+	Kind       DemeritKind
+	PointsLost int
+	Pct        int
+	AccountID  string
+	Name       string
+}
+
+// AdviceKind classifies a concrete improvement action.
+type AdviceKind string
+
+const (
+	AdviceLowerUtilization AdviceKind = "lower-utilization" // pay a card down to a target utilization
+	AdviceOnTime           AdviceKind = "on-time"           // pay near the due date / set autopay
+	AdviceAddLimit         AdviceKind = "add-limit"         // enter a card's credit limit so it can be tracked
+)
+
+// Advice is one prioritized, concrete step to raise the score. ImpactPts is the estimated
+// proxy points gained if followed. PayMinor is the suggested payment (utilization advice)
+// and TargetPct the utilization it reaches; both zero for non-payment advice.
+type Advice struct {
+	Kind      AdviceKind
+	ImpactPts int
+	PayMinor  int64
+	TargetPct int
+	AccountID string
+	Name      string
+}
+
+// renormWeights returns the base proxy weights (util 0.55, on-time 0.30, age 0.15)
+// renormalized over only the available factors, so a factor's share of the 100-point scale
+// reflects what's actually being measured.
+func renormWeights(hasUtil, hasOnTime, hasAge bool) (wUtil, wOnTime, wAge float64) {
+	var t float64
+	if hasUtil {
+		t += 0.55
+	}
+	if hasOnTime {
+		t += 0.30
+	}
+	if hasAge {
+		t += 0.15
+	}
+	if t == 0 {
+		return 0, 0, 0
+	}
+	if hasUtil {
+		wUtil = 0.55 / t
+	}
+	if hasOnTime {
+		wOnTime = 0.30 / t
+	}
+	if hasAge {
+		wAge = 0.15 / t
+	}
+	return
+}
+
+// deriveDemerits builds the "what's dragging your score down" list: a point cost per
+// scored factor (utilization / on-time / age), plus per-card callouts (over-limit, a single
+// hot card) and the "cards missing a limit" note. Sorted by point cost, most costly first.
+func deriveDemerits(cards []CardUtil, agg AggUtil, onTime, age int) []Demerit {
+	wu, wo, wa := renormWeights(agg.UtilPct >= 0, onTime >= 0, age >= 0)
+	var out []Demerit
+	if agg.UtilPct >= 0 {
+		if lost := int(math.Round(wu * float64(100-utilScore(agg.UtilPct)))); lost > 0 {
+			out = append(out, Demerit{Kind: DemeritUtilization, PointsLost: lost, Pct: agg.UtilPct})
+		}
+	}
+	if onTime >= 0 {
+		if lost := int(math.Round(wo * float64(100-onTime))); lost > 0 {
+			out = append(out, Demerit{Kind: DemeritOnTime, PointsLost: lost})
+		}
+	}
+	if age >= 0 {
+		if lost := int(math.Round(wa * float64(100-age))); lost > 0 {
+			out = append(out, Demerit{Kind: DemeritAge, PointsLost: lost})
+		}
+	}
+	// Per-card callouts — specific cards that stand out (informational, no separate points).
+	for _, c := range cards {
+		switch {
+		case c.UtilPct > 100:
+			out = append(out, Demerit{Kind: DemeritOverLimit, AccountID: c.AccountID, Name: c.Name, Pct: c.UtilPct})
+		case c.UtilPct > 50:
+			out = append(out, Demerit{Kind: DemeritCardUtil, AccountID: c.AccountID, Name: c.Name, Pct: c.UtilPct})
+		}
+	}
+	if agg.CardsMissingLimit > 0 {
+		out = append(out, Demerit{Kind: DemeritMissingLimit, Pct: agg.CardsMissingLimit})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].PointsLost > out[j].PointsLost })
+	return out
+}
+
+// deriveAdvice builds the prioritized "how to improve" list: the concrete pay-down that
+// gets each hot card to 30% (with the estimated points it recovers), building on-time
+// history, and entering any missing credit limit. Sorted by estimated impact, biggest first.
+func deriveAdvice(cards []CardUtil, agg AggUtil, onTime, age, proxy int) []Advice {
+	var out []Advice
+	for _, c := range cards {
+		if c.UtilPct > 30 && c.Target30Minor > 0 {
+			out = append(out, Advice{
+				Kind: AdviceLowerUtilization, ImpactPts: utilPayImpact(c, agg, onTime, age, proxy, 30),
+				PayMinor: c.Target30Minor, TargetPct: 30, AccountID: c.AccountID, Name: c.Name,
+			})
+		}
+	}
+	if onTime >= 0 && onTime < 100 {
+		_, wo, _ := renormWeights(agg.UtilPct >= 0, true, age >= 0)
+		out = append(out, Advice{Kind: AdviceOnTime, ImpactPts: int(math.Round(wo * float64(100-onTime)))})
+	}
+	for _, c := range cards {
+		if c.UtilPct < 0 { // no limit set — can't be tracked
+			out = append(out, Advice{Kind: AdviceAddLimit, AccountID: c.AccountID, Name: c.Name})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].ImpactPts > out[j].ImpactPts })
+	return out
+}
+
+// utilPayImpact estimates the proxy-point gain from paying one card down to targetPct, by
+// recomputing the aggregate utilization (and thus the proxy) with that card's balance
+// reduced to targetPct of its limit.
+func utilPayImpact(c CardUtil, agg AggUtil, onTime, age, proxy, targetPct int) int {
+	if agg.TotalLimitMinor <= 0 {
+		return 0
+	}
+	owed := c.BalanceMinor
+	if owed < 0 {
+		owed = -owed
+	}
+	newCardOwed := c.LimitMinor * int64(targetPct) / 100
+	newTotal := agg.TotalBalanceMinor - owed + newCardOwed
+	if newTotal < 0 {
+		newTotal = 0
+	}
+	newPct := int(newTotal * 100 / agg.TotalLimitMinor)
+	gain := computeProxy(newPct, onTime, age) - proxy
+	if gain < 0 {
+		gain = 0
+	}
+	return gain
 }
 
 // Evaluate runs the deterministic credit-health model and returns a Result.
@@ -244,6 +414,8 @@ func Evaluate(in Inputs) Result {
 		AgeScore:    ageScore,
 		ProxyScore:  proxyScore,
 		Band:        bandFor(proxyScore),
+		Demerits:    deriveDemerits(cardUtils, agg, onTimeScore, ageScore),
+		Advice:      deriveAdvice(cardUtils, agg, onTimeScore, ageScore, proxyScore),
 		Disclaimer:  Disclaimer,
 	}
 }

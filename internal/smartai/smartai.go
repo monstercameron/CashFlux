@@ -25,6 +25,7 @@ var implemented = map[string]bool{
 	"SMART-A3":    true, // account name/type cleanup
 	"SMART-A5":    true, // natural-language account Q&A
 	"SMART-A10":   true, // account health explanation
+	"SMART-A11":   true, // AI credit-health analysis (demerits + advice)
 	"SMART-T1":    true, // auto-categorization
 	"SMART-T3":    true, // natural-language search
 	"SMART-T5":    true, // merchant name cleanup
@@ -127,6 +128,20 @@ const healthSystem = "You are a finance assistant. Given the accounts and balanc
 // AccountHealth builds the SMART-A10 request from an account/balance snapshot.
 func AccountHealth(accountContext string) Request {
 	return Request{System: healthSystem, User: "Accounts:\n" + strings.TrimSpace(accountContext)}
+}
+
+// creditSystem frames SMART-A11: a personalized read of the local credit-health proxy.
+const creditSystem = "You are a concise credit-health coach inside a budgeting app. You are given a LOCAL " +
+	"credit-health estimate (not a FICO score): an overall score/band, per-card utilization, the factors " +
+	"dragging it down, and the app's suggested actions. Give a short, personalized read: name the ONE or TWO " +
+	"things hurting the score most, then the single highest-impact action to take next, using the actual numbers " +
+	"and card names. Be specific and encouraging. Two or three short sentences, plain English, no lists, no " +
+	"disclaimers (the app shows its own)."
+
+// CreditAnalysis builds the SMART-A11 request from a pre-formatted snapshot of the credit-
+// health result (score, per-card utilization, demerits, and suggested actions).
+func CreditAnalysis(creditContext string) Request {
+	return Request{System: creditSystem, User: "Credit-health estimate:\n" + strings.TrimSpace(creditContext)}
 }
 
 // quoteSystem frames SMART-QUOTE: one real, ATTRIBUTED quote about money fitting

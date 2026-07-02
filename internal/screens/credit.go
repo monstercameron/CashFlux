@@ -13,8 +13,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/credithealth"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -436,6 +438,50 @@ func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
 		Body:  Div(cardRows...),
 	})
 
+	// Demerits — the factors dragging the score down, most costly first (C-credit demerits).
+	var demeritsCard ui.Node = Fragment()
+	if len(r.Demerits) > 0 {
+		items := []any{css.Class("credit-list")}
+		for _, d := range r.Demerits {
+			var chip ui.Node = Fragment()
+			if d.PointsLost > 0 {
+				chip = Span(css.Class("credit-pts credit-pts-down"), uistate.T("credit.ptsDown", d.PointsLost))
+			}
+			items = append(items, Div(css.Class("credit-item"),
+				Span(css.Class("credit-item-icon is-down"), Attr("aria-hidden", "true"),
+					uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+				Span(css.Class("credit-item-text"), creditDemeritText(d)),
+				chip,
+			))
+		}
+		demeritsCard = uiw.Card(uiw.CardProps{Title: uistate.T("credit.demeritsTitle"),
+			TestID: "credit-demerits", Body: Div(items...)})
+	}
+
+	// Advice — the clearest, prioritized actions to raise the score, biggest impact first.
+	var adviceCard ui.Node = Fragment()
+	if len(r.Advice) > 0 {
+		items := []any{css.Class("credit-list")}
+		for _, a := range r.Advice {
+			var chip ui.Node = Fragment()
+			if a.ImpactPts > 0 {
+				chip = Span(css.Class("credit-pts credit-pts-up"), uistate.T("credit.ptsUp", a.ImpactPts))
+			}
+			items = append(items, Div(css.Class("credit-item"),
+				Span(css.Class("credit-item-icon is-up"), Attr("aria-hidden", "true"),
+					uiw.Icon(icon.ArrowUpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+				Span(css.Class("credit-item-text"), creditAdviceText(a, base)),
+				chip,
+			))
+		}
+		adviceCard = uiw.Card(uiw.CardProps{Title: uistate.T("credit.improveTitle"),
+			TestID: "credit-advice", Body: Div(items...)})
+	}
+
+	// Optional Smart+ AI analysis (SMART-A11) — a deeper, personalized read, shown only when
+	// the feature is enabled and an inference provider is configured (see creditAINode).
+	aiCard := creditAINode()
+
 	// Missing-limit note (if any cards lack a limit).
 	var missingNote ui.Node = Fragment()
 	if r.Agg.CardsMissingLimit > 0 {
@@ -449,7 +495,110 @@ func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
 	disclaimer := P(css.Class("t-caption", tw.TextFaint), r.Disclaimer)
 
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5),
-		hero, breakdown, missingNote, disclaimer)
+		hero, demeritsCard, adviceCard, aiCard, breakdown, missingNote, disclaimer)
+}
+
+// creditDemeritText renders one demerit as a plain-English sentence (i18n).
+func creditDemeritText(d credithealth.Demerit) string {
+	switch d.Kind {
+	case credithealth.DemeritUtilization:
+		return uistate.T("credit.demeritUtil", d.Pct)
+	case credithealth.DemeritCardUtil:
+		return uistate.T("credit.demeritCardUtil", d.Name, d.Pct)
+	case credithealth.DemeritOnTime:
+		return uistate.T("credit.demeritOnTime")
+	case credithealth.DemeritAge:
+		return uistate.T("credit.demeritAge")
+	case credithealth.DemeritOverLimit:
+		return uistate.T("credit.demeritOverLimit", d.Name, d.Pct)
+	case credithealth.DemeritMissingLimit:
+		return uistate.T("credit.demeritMissingLimit", d.Pct)
+	}
+	return ""
+}
+
+// creditAdviceText renders one advice item as an imperative sentence (i18n), formatting any
+// suggested payment in the base currency.
+func creditAdviceText(a credithealth.Advice, base string) string {
+	switch a.Kind {
+	case credithealth.AdviceLowerUtilization:
+		return uistate.T("credit.adviceLowerUtil", fmtMoney(money.New(a.PayMinor, base)), a.Name, a.TargetPct)
+	case credithealth.AdviceOnTime:
+		return uistate.T("credit.adviceOnTime")
+	case credithealth.AdviceAddLimit:
+		return uistate.T("credit.adviceAddLimit", a.Name)
+	}
+	return ""
+}
+
+// creditContextString builds the compact, hook-free snapshot the SMART-A11 AI analysis is
+// grounded in: the proxy score/band, per-card utilization, the demerits, and the suggested
+// actions — the same deterministic figures shown on screen, so the model only personalizes
+// and prioritizes them (never invents numbers).
+func creditContextString(app *appstate.App) string {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	r := credithealth.Evaluate(buildCreditInputs(app, time.Now()))
+	var b strings.Builder
+	fmt.Fprintf(&b, "Overall score: %d/100 (%s)\n", r.ProxyScore, r.Band)
+	if r.Agg.UtilPct >= 0 {
+		fmt.Fprintf(&b, "Overall utilization: %d%%\n", r.Agg.UtilPct)
+	}
+	if len(r.Cards) > 0 {
+		b.WriteString("Cards:\n")
+		for _, c := range r.Cards {
+			if c.UtilPct >= 0 {
+				fmt.Fprintf(&b, "- %s: %d%% utilization\n", c.Name, c.UtilPct)
+			} else {
+				fmt.Fprintf(&b, "- %s: no limit set\n", c.Name)
+			}
+		}
+	}
+	if len(r.Demerits) > 0 {
+		b.WriteString("Dragging it down:\n")
+		for _, d := range r.Demerits {
+			fmt.Fprintf(&b, "- %s\n", creditDemeritText(d))
+		}
+	}
+	if len(r.Advice) > 0 {
+		b.WriteString("Suggested actions:\n")
+		for _, a := range r.Advice {
+			fmt.Fprintf(&b, "- %s\n", creditAdviceText(a, base))
+		}
+	}
+	return b.String()
+}
+
+// creditAINode renders the opt-in Smart+ AI credit analysis (SMART-A11): a deeper,
+// personalized read of the demerits + advice. It appears only when the feature is enabled
+// and an inference provider is configured; enabled-without-provider shows a quiet hint, and
+// off shows nothing (opt-in, never a dead control). UsePrefs is called unconditionally so
+// hook order is stable if the feature is toggled.
+func creditAINode() ui.Node {
+	pr := uistate.UsePrefs().Get()
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	const code = "SMART-A11"
+	settings := uistate.LoadSmartSettings()
+	if !settings.IsEnabled(code) || settings.IsMuted(code) {
+		return Fragment()
+	}
+	backendAI := pr.Normalize().BackendActive()
+	if !aiProviderConfigured(app, backendAI) {
+		return uiw.Card(uiw.CardProps{Title: uistate.T("credit.aiTitle"), TestID: "credit-ai",
+			Body: P(css.Class("t-caption", tw.TextDim), uistate.T("smart.aiNeedsProvider"))})
+	}
+	f, ok := smart.ByCode(code)
+	if !ok {
+		return Fragment()
+	}
+	conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+	return uiw.Card(uiw.CardProps{Title: uistate.T("credit.aiTitle"), TestID: "credit-ai",
+		Body: smartAIFeatureNode(f, conn)})
 }
 
 // CreditScreen is the /credit route — a thin shell rendering CreditHealthPanel.

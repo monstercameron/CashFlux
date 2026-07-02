@@ -216,6 +216,11 @@ func aiSpec(code string) (aiFeatureSpec, bool) {
 			build: func(app *appstate.App, _ string) smartai.Request {
 				return smartai.AccountHealth(accountContextString(app))
 			}}, true
+	case "SMART-A11":
+		return aiFeatureSpec{title: uistate.T("credit.aiTitle"), btnLabel: uistate.T("credit.aiBtn"),
+			build: func(app *appstate.App, _ string) smartai.Request {
+				return smartai.CreditAnalysis(creditContextString(app))
+			}}, true
 	case "SMART-G4":
 		return aiFeatureSpec{input: true, title: uistate.T("smart.goalTitle"), placeholder: uistate.T("smart.goalPlaceholder"),
 			build: func(app *appstate.App, q string) smartai.Request {

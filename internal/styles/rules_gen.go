@@ -5074,6 +5074,56 @@ func registerGenerated() {
 	rule(".bento-debt .card + .card",
 		prop("margin-top", "0.75rem"),
 	)
+	// Credit-health demerits ("what's holding you back") + advice ("how to improve") lists:
+	// scannable rows with a leading factor icon and a point-impact chip on the right.
+	rule(".credit-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.55rem"),
+	)
+	rule(".credit-item",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.55rem"),
+	)
+	rule(".credit-item-icon",
+		display("inline-flex"),
+		prop("flex", "0 0 auto"),
+		marginTop("0.1rem"),
+	)
+	rule(".credit-item-icon.is-down",
+		color("color-mix(in srgb, #f59e0b 70%, var(--text))"),
+	)
+	rule(".credit-item-icon.is-up",
+		color("var(--accent)"),
+	)
+	rule(".credit-item-text",
+		flex("1 1 auto"),
+		minWidth("0"),
+		fontSize("0.9rem"),
+		prop("line-height", "1.45"),
+	)
+	rule(".credit-pts",
+		prop("flex", "0 0 auto"),
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		fontSize("0.72rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+		border("1px solid var(--border)"),
+	)
+	rule(".credit-pts-down",
+		color("color-mix(in srgb, var(--danger) 78%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--danger) 40%, var(--border))"),
+		background("color-mix(in srgb, var(--danger) 8%, transparent)"),
+	)
+	rule(".credit-pts-up",
+		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+	)
 	// Global "back to top" floating button — hidden until #main scrolls down, then fades in
 	// at the bottom-right and smooth-scrolls to the top on click.
 	rule(".cf-scrolltop",

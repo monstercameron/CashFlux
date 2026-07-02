@@ -88,7 +88,7 @@ func TestSingleCard25Pct(t *testing.T) {
 func TestCardNoLimit(t *testing.T) {
 	// Card with no CreditLimit → UtilPct == -1, counted in CardsMissingLimit.
 	card := makeCard("c2", "Store Card", 0, -1, 0, 0) // no limit
-	card.BalanceAsOf = time.Time{}                     // zero
+	card.BalanceAsOf = time.Time{}                    // zero
 	balances := map[string]int64{"c2": -5000}
 
 	res := credithealth.Evaluate(credithealth.Inputs{
@@ -324,5 +324,111 @@ func TestBandMapping(t *testing.T) {
 	})
 	if res2.Band != credithealth.BandPoor {
 		t.Errorf("Expected Poor band for 95%% util-only, got %s (score=%d)", res2.Band, res2.ProxyScore)
+	}
+}
+
+// ---- Demerits & advice tests ----
+
+func findDemerit(ds []credithealth.Demerit, k credithealth.DemeritKind) (credithealth.Demerit, bool) {
+	for _, d := range ds {
+		if d.Kind == k {
+			return d, true
+		}
+	}
+	return credithealth.Demerit{}, false
+}
+
+func findAdvice(as []credithealth.Advice, k credithealth.AdviceKind) (credithealth.Advice, bool) {
+	for _, a := range as {
+		if a.Kind == k {
+			return a, true
+		}
+	}
+	return credithealth.Advice{}, false
+}
+
+func TestDemeritsAndAdvice(t *testing.T) {
+	// A hot card (90% util, over 30 and over 50), a card with no limit, no on-time
+	// payments (so on-time misses), aged ~5 years.
+	hot := makeCard("hot", "Rewards", 1000000, 60, 15, 0) // $10,000 limit
+	noLimit := makeCard("nl", "Store Card", 0, 60, 0, 0)  // no limit
+	res := credithealth.Evaluate(credithealth.Inputs{
+		Accounts: []domain.Account{hot, noLimit},
+		Balances: map[string]int64{"hot": -900000, "nl": -20000}, // owe $9,000 / $200
+		Now:      baseNow,
+	})
+
+	// Demerits: aggregate utilization, the hot card, missing-limit, and on-time misses.
+	if _, ok := findDemerit(res.Demerits, credithealth.DemeritUtilization); !ok {
+		t.Error("expected a utilization demerit")
+	}
+	if d, ok := findDemerit(res.Demerits, credithealth.DemeritCardUtil); !ok || d.AccountID != "hot" {
+		t.Errorf("expected a hot-card demerit for 'hot', got %+v (ok=%v)", d, ok)
+	}
+	if d, ok := findDemerit(res.Demerits, credithealth.DemeritMissingLimit); !ok || d.Pct != 1 {
+		t.Errorf("expected a missing-limit demerit for 1 card, got %+v (ok=%v)", d, ok)
+	}
+	if _, ok := findDemerit(res.Demerits, credithealth.DemeritOnTime); !ok {
+		t.Error("expected an on-time demerit (no payments near due date)")
+	}
+	// Demerits sorted by point cost, most costly first.
+	for i := 1; i < len(res.Demerits); i++ {
+		if res.Demerits[i-1].PointsLost < res.Demerits[i].PointsLost {
+			t.Errorf("demerits not sorted by PointsLost desc: %+v", res.Demerits)
+			break
+		}
+	}
+
+	// Advice: pay the hot card to 30% ($9,000 - 30%*$10,000 = $6,000), build on-time
+	// history, and add the missing limit.
+	pay, ok := findAdvice(res.Advice, credithealth.AdviceLowerUtilization)
+	if !ok {
+		t.Fatal("expected a lower-utilization advice")
+	}
+	if pay.AccountID != "hot" || pay.PayMinor != 600000 || pay.TargetPct != 30 {
+		t.Errorf("pay-down advice wrong: %+v (want hot / 600000 / 30)", pay)
+	}
+	if pay.ImpactPts <= 0 {
+		t.Errorf("pay-down advice should have a positive impact, got %d", pay.ImpactPts)
+	}
+	if _, ok := findAdvice(res.Advice, credithealth.AdviceOnTime); !ok {
+		t.Error("expected on-time advice")
+	}
+	al, ok := findAdvice(res.Advice, credithealth.AdviceAddLimit)
+	if !ok || al.AccountID != "nl" {
+		t.Errorf("expected add-limit advice for 'nl', got %+v (ok=%v)", al, ok)
+	}
+	// The highest-impact advice leads; add-limit (impact 0) is not first.
+	if res.Advice[0].Kind == credithealth.AdviceAddLimit {
+		t.Error("add-limit (0 impact) should not be the top advice")
+	}
+	for i := 1; i < len(res.Advice); i++ {
+		if res.Advice[i-1].ImpactPts < res.Advice[i].ImpactPts {
+			t.Errorf("advice not sorted by ImpactPts desc: %+v", res.Advice)
+			break
+		}
+	}
+}
+
+func TestHealthyCardNoDemerits(t *testing.T) {
+	// A well-managed card: 8% utilization, on-time every month, aged ~7 years.
+	card := makeCard("c1", "Visa", 1000000, 84, 15, 0) // $10,000 limit, 7yr old
+	txns := []domain.Transaction{
+		makeTxn("c1", time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC), -80000),
+		makeTxn("c1", time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC), -80000),
+		makeTxn("c1", time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC), -80000),
+	}
+	res := credithealth.Evaluate(credithealth.Inputs{
+		Accounts:     []domain.Account{card},
+		Balances:     map[string]int64{"c1": -80000}, // 8% util
+		Transactions: txns,
+		Now:          baseNow,
+	})
+	// No pay-down advice (already under 30%) and no on-time advice (paid every month).
+	if _, ok := findAdvice(res.Advice, credithealth.AdviceLowerUtilization); ok {
+		t.Error("healthy card should not get pay-down advice")
+	}
+	if _, ok := findAdvice(res.Advice, credithealth.AdviceOnTime); ok {
+		t.Error("on-time card should not get on-time advice")
 	}
 }

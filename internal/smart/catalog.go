@@ -68,6 +68,7 @@ var catalog = []Feature{
 	rule("SMART-A7", PageAccounts, "Recurring-charge detection", "Group recurring debits per account and flag price increases or new ones."),
 	rule("SMART-A8", PageAccounts, "Low-balance / overdraft forecast", "Project each account forward and warn before it dips below zero."),
 	ai("SMART-A10", PageAccounts, "Account health score", "A 0–100 health score per account, explained in plain language.", true, tokClassifyIn, tokClassifyOut),
+	ai("SMART-A11", PageAccounts, "AI credit-health analysis", "A personalized read of your credit-health estimate — the biggest demerits and the highest-impact fix.", true, tokLanguageIn, tokLanguageOut),
 
 	// ── Transactions ──────────────────────────────────────────────────────────
 	ai("SMART-T1", PageTransactions, "Auto-categorization", "Assign a category from merchant, amount, and your history. Learns from corrections.", true, tokClassifyIn, tokClassifyOut),
