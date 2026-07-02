@@ -5328,6 +5328,104 @@ func registerGenerated() {
 	rule(".bento-goals .goal-sub",
 		marginTop("0"),
 	)
+	// Linked to-dos ("steps") on a goal card: a compact checklist between the sub-line and
+	// the footer. A hairline separates it; the list scrolls if it grows so cards stay bounded.
+	rule(".goal-todos",
+		marginTop("0.6rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 70%, transparent)"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	rule(".goal-todos-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+	)
+	rule(".goal-todos-title",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-dim)"),
+	)
+	rule(".goal-todos-count",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".goal-todos-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		maxHeight("9rem"),
+		overflowY("auto"),
+	)
+	rule(".goal-todos-empty",
+		margin("0"),
+		fontSize("0.82rem"),
+		color("var(--text-faint)"),
+	)
+	rule(".goal-todo",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		padding("0.25rem 0.15rem"),
+		borderRadius("6px"),
+	)
+	rule(".goal-todo:hover",
+		background("var(--bg)"),
+	)
+	rule(".goal-todo-check",
+		flex("none"),
+		width("18px"),
+		height("18px"),
+		borderRadius("50%"),
+		border("1.5px solid var(--border-strong)"),
+		background("transparent"),
+		cursor("pointer"),
+		display("grid"),
+		placeItems("center"),
+		color("#04140c"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".goal-todo-check:hover",
+		borderColor("var(--accent)"),
+	)
+	rule(".goal-todo-check.is-done",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".goal-todo-title",
+		fontSize("0.86rem"),
+		color("var(--text)"),
+		overflowWrap("anywhere"),
+	)
+	rule(".goal-todo-title.is-done",
+		textDecoration("line-through"),
+		color("var(--text-faint)"),
+	)
+	rule(".goal-todo-add",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		alignSelf("flex-start"),
+		marginTop("0.1rem"),
+		padding("0.25rem 0.5rem"),
+		background("transparent"),
+		border("1px dashed var(--border)"),
+		borderRadius("7px"),
+		color("var(--text-dim)"),
+		fontSize("0.8rem"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, color 0.12s ease"),
+	)
+	rule(".goal-todo-add:hover",
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+	)
 	// --- /budgets visual polish. Scoped to .bento-budgets so the shared .budget /
 	// .bar / .budget-sub styles used on other screens (allocate, goals, reports) stay
 	// untouched. Each budget becomes an elevated meter-card with a state-colored left

@@ -7,12 +7,14 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -63,16 +65,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	markDone := ui.UseEvent(Prevent(func() { setMilestoneDone(g.ID, true) }))
 	markUndone := ui.UseEvent(Prevent(func() { setMilestoneDone(g.ID, false) }))
 	checkIn := ui.UseEvent(Prevent(func() { addHabitCheckIn(g.ID) }))
-	// The ⋯ actions menu (archive + the destructive delete), so the card footer stays
-	// uncluttered and a misclick can't delete a goal.
-	menuID := "goal-menu-" + g.ID
-	menuOpen := ui.UseState(false)
-	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
-	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
-	menuHidden := ""
-	if !menuOpen.Get() {
-		menuHidden = " hidden-menu"
-	}
+	// Add a linked to-do ("step") to this goal (drives checklist progress).
+	openAddStep := ui.UseEvent(Prevent(func() { addGoalStep(g.ID) }))
+	// toggleTodo flips a linked to-do's done state (plain closure, passed to each
+	// GoalTodoItem child which owns its own click hook — no On* in a loop here).
+	toggleTodo := func(taskID string) { toggleGoalTodo(taskID) }
 
 	now := time.Now()
 	kind := g.EffectiveKind()
@@ -248,6 +245,39 @@ func GoalRow(props goalRowProps) ui.Node {
 			Attr("data-testid", "goal-archive-"+g.ID), OnClick(doArchive), uistate.T("goals.archive"))
 	}
 
+	// Linked to-dos ("steps"): the tasks joined to this goal. Shown whenever the goal has
+	// any, and always for a checklist goal (where the steps ARE the progress) so it offers
+	// the add-step CTA even when empty. Each item toggles done live (updating progress);
+	// checklist goals get a "+ add step" affordance.
+	linked := goalsvc.LinkedTasks(props.Tasks, g.ID)
+	stepsDone, stepsTotal := goalsvc.TaskCounts(props.Tasks, g.ID)
+	var todosSection ui.Node = Fragment()
+	if len(linked) > 0 || kind == domain.GoalKindChecklist {
+		var items []ui.Node
+		for _, lt := range linked {
+			items = append(items, ui.CreateElement(GoalTodoItem, goalTodoProps{Task: lt, OnToggle: toggleTodo}))
+		}
+		var body ui.Node
+		if len(items) == 0 {
+			body = P(css.Class("goal-todos-empty"), uistate.T("goals.noSteps"))
+		} else {
+			body = Div(css.Class("goal-todos-list"), items)
+		}
+		var addBtn ui.Node = Fragment()
+		if !g.Archived && kind == domain.GoalKindChecklist {
+			addBtn = Button(css.Class("goal-todo-add"), Type("button"), Attr("data-testid", "goal-addstep-"+g.ID), OnClick(openAddStep),
+				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("goals.addStep")))
+		}
+		todosSection = Div(css.Class("goal-todos"), Attr("data-testid", "goal-todos-"+g.ID),
+			Div(css.Class("goal-todos-head"),
+				Span(css.Class("goal-todos-title"), uistate.T("goals.todosHead")),
+				Span(css.Class("goal-todos-count"), fmt.Sprintf("%d/%d", stepsDone, stepsTotal)),
+			),
+			body,
+			addBtn,
+		)
+	}
+
 	return Div(ClassStr("goal-card "+cardState),
 		Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
 		// Header: the goal name on its own line, with kind-appropriate chips.
@@ -267,21 +297,104 @@ func GoalRow(props goalRowProps) ui.Node {
 			),
 		),
 		subSection,
-		// Footer: the primary kind action + Edit open the flip modal; the ⋯ menu holds
-		// archive + the destructive delete.
+		todosSection,
+		// Footer: the primary kind action + Edit open the flip modal; the shared
+		// viewport-aware ⋯ KebabMenu holds archive + the destructive delete.
 		Div(css.Class("goal-card-actions"),
 			primaryAction,
 			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-edit-btn-"+g.ID), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
-			Div(css.Class("add-wrap"), Attr("id", menuID),
-				Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("goals.moreActions")), Attr("aria-label", uistate.T("goals.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "goal-menu-" + g.ID,
+				AriaLabel:    uistate.T("goals.moreActions"),
+				ToggleTestID: "goal-menu-btn-" + g.ID,
+				Items: []ui.Node{
 					archiveItem,
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),
-				),
-			),
+				},
+			}),
 		),
 	)
+}
+
+// goalTodoProps drives a single linked-to-do row on a goal card.
+type goalTodoProps struct {
+	Task     domain.Task
+	OnToggle func(string)
+}
+
+// GoalTodoItem renders one linked to-do (a goal "step") with a small toggle check and its
+// title. It owns its own click hook so the parent card can Map over a variable number of
+// them without registering On* inside a loop.
+func GoalTodoItem(props goalTodoProps) ui.Node { return ui.CreateElement(goalTodoItem, props) }
+
+func goalTodoItem(props goalTodoProps) ui.Node {
+	t := props.Task
+	done := t.Status == domain.StatusDone
+	toggle := ui.UseEvent(Prevent(func() {
+		if props.OnToggle != nil {
+			props.OnToggle(t.ID)
+		}
+	}))
+	checkCls := "goal-todo-check"
+	titleCls := "goal-todo-title"
+	if done {
+		checkCls += " is-done"
+		titleCls += " is-done"
+	}
+	var glyph ui.Node = Fragment()
+	if done {
+		glyph = uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))
+	}
+	return Div(css.Class("goal-todo"),
+		Button(ClassStr(checkCls), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
+			Attr("data-testid", "goal-todo-check-"+t.ID), Title(uistate.T("todo.toggle")), OnClick(toggle), glyph),
+		Span(css.Class(titleCls), t.Title),
+	)
+}
+
+// toggleGoalTodo flips a linked to-do's done state — completing routes through
+// CompleteTask (so a recurring step spawns its successor), reopening is a plain status
+// flip. Bumps the data revision so the goal's progress + checklist figures refresh.
+func toggleGoalTodo(taskID string) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	for _, t := range app.Tasks() {
+		if t.ID != taskID {
+			continue
+		}
+		if t.Status == domain.StatusDone {
+			t.Status = domain.StatusOpen
+			_ = app.PutTask(t)
+		} else {
+			_ = app.CompleteTask(taskID, id.New(), time.Now())
+		}
+		uistate.BumpDataRevision()
+		return
+	}
+}
+
+// addGoalStep prompts for a title and adds a to-do linked to the goal (a checklist
+// "step"): a Task with RelatedType=goal / RelatedID=goalID.
+func addGoalStep(goalID string) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	uistate.PromptModal(uistate.T("goals.addStepPrompt"), "", func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		t := domain.Task{
+			ID: id.New(), Title: name, Status: domain.StatusOpen, Priority: domain.PriorityMedium,
+			Source: domain.SourceManual, RelatedType: domain.RelatedGoal, RelatedID: goalID,
+		}
+		if err := app.PutTask(t); err == nil {
+			uistate.BumpDataRevision()
+		}
+	})
 }
 
 // setMilestoneDone marks a milestone goal complete (done=true, stamping DoneAt) or

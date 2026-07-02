@@ -1,3 +1,25 @@
+## 2026-07-01 — /goals: display linked to-dos (the goals double-back)
+
+Cam: "now go back in /goals and display linked todos." The goal card already had props.Tasks (for
+checklist progress), so rendering the linked to-dos was mostly view work.
+
+goals_row.go: compute goalsvc.LinkedTasks(props.Tasks, g.ID) + TaskCounts; render a .goal-todos block
+(TO-DOS head + "N/M" count, a scrollable list, empty-state copy) between the sub-line and footer. Each
+row is a new GoalTodoItem component (owns its own toggle hook → no On*-in-a-loop when the parent Maps
+over N of them); toggling calls the new package func toggleGoalTodo (CompleteTask/PutTask +
+BumpDataRevision → progress refreshes live). Shown whenever a goal has linked to-dos, and always for a
+checklist goal (which also gets a dashed "Add step" button → addGoalStep: PromptModal → PutTask with
+RelatedGoal/RelatedID). Also migrated the goal card's hand-rolled ⋯ menu to the shared uiw.KebabMenu
+(container-aware, removes the menuID/menuOpen/toggle/close/hidden boilerplate).
+
+CSS: .goal-todos / -head / -title / -count / -list (max-height 9rem, scroll) / .goal-todo /
+.goal-todo-check (small ring, accent when done) / .goal-todo-title (strike when done) / .goal-todo-add
+(dashed). i18n goals.todosHead/noSteps/addStep/addStepPrompt.
+
+Verify: full go test ./... green; wasm build OK; new e2e/goals_todos_check.mjs 7/7 (sections + rows,
+0/1 count, done step struck, toggle → 1/1 live, no errors); goals_kinds_check.mjs 16/16 (⋯ migration
+intact). Screenshot: Baby fund shows TO-DOS 1/3 (one struck), Emergency fund 0/1.
+
 ## 2026-07-01 — KebabMenu component + collapsible sub-tasks + summary
 
 Cam: "it needs container aware triple dot menu, make that a component" and "subs need to be more
