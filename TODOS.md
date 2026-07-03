@@ -3171,11 +3171,13 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   `subs.netPriceUp|Down` were never defined, so `T(key, amt)` Sprintf'd the key itself →
   "subs.netPriceUp%!(EXTRA string=$134.60)". Keys added (en_uxsweep.go). MEASURED live: the card
   now reads "Recent changes add up to about $134.60/mo more."; covered by the C335 guard test.
-- [ ] **C337 [MAJOR][BUG] Money renders without thousands separators on /investments and /credit.**
-  /investments: "$33720.00", "$22200.00", "$3420.00", "$8100.00" (every figure). /credit:
-  "$8190.56 of $12000.00 limit" and "Pay $4590.56" — while the card directly above prints
-  "$4,590.56" (same number, two formats, one page). Route all money display through the shared
-  formatter; grep for `%.2f`-style money prints.
+- [x] **C337 ✅ DONE (2026-07-03) — Money without thousands separators on /investments + /credit.**
+  Root cause: `fmtMinorAmount` (credit.go) — the local minor-units formatter shared by /credit,
+  /investments (`fmtSignedMoney`), /loans, and /duplicates — skipped grouping while everything else
+  goes through `money.FormatAccounting`. It now wraps its output in the existing `money.Group`.
+  MEASURED live: /investments "$33,720.00", /credit "$8,190.56 of $12,000.00", /loans "$26,840.00";
+  probe found 0 ungrouped ≥5-digit money strings on all three routes; 0 page errors; native tests +
+  wasm build green.
 - [ ] **C338 [MAJOR][BUG] Setup wizard defaults to "AUD — A$"** (first-alphabetical) even when the
   active dataset base is USD ("Your household · USD base" in the same viewport), and the step rail
   pre-checks "✓ Account / ✓ Members" on entry. Default from prefs/current base (locale fallback),

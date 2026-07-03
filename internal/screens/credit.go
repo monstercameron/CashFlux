@@ -330,11 +330,14 @@ func creditLimitEditor(props creditLimitEditorProps) ui.Node {
 	)
 }
 
-// fmtMinorAmount formats minor-unit integer cents into a decimal display string
-// without a symbol (the symbol is prepended by callers).
+// fmtMinorAmount formats minor-unit integer cents into a comma-grouped decimal
+// display string without a symbol (the symbol is prepended by callers) — the
+// same grouping every other money figure gets via money.FormatAccounting, so
+// /credit, /investments, /loans, and /duplicates figures no longer render
+// "$33720.00" beside a "$4,590.56" from the shared formatter (C337).
 func fmtMinorAmount(minor int64, decimals int) string {
 	if decimals == 0 {
-		return fmt.Sprintf("%d", minor)
+		return money.Group(fmt.Sprintf("%d", minor))
 	}
 	div := int64(1)
 	for i := 0; i < decimals; i++ {
@@ -345,7 +348,7 @@ func fmtMinorAmount(minor int64, decimals int) string {
 	if frac < 0 {
 		frac = -frac
 	}
-	return fmt.Sprintf("%d.%0*d", whole, decimals, frac)
+	return money.Group(fmt.Sprintf("%d.%0*d", whole, decimals, frac))
 }
 
 // CreditHealthPanelProps configures CreditHealthPanel. No external props are

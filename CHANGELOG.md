@@ -17,6 +17,10 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **Money figures on /investments, /credit, /loans, /duplicates now comma-group thousands
+  (C337, 2026-07-03):** those pages' shared local formatter (`fmtMinorAmount`) skipped grouping, so
+  "$33720.00" rendered beside a "$4,590.56" produced by the app-wide `money.FormatAccounting` — on
+  the same page. It now routes through `money.Group`.
 - **Raw i18n keys no longer render in the UI + a guard test (C335/C336, 2026-07-03):** the nav rail
   showed "nav.setup", the /setup wizard hero showed "setup.welcomeTitle/Body" and its account step
   referenced a nonexistent `accounts.type*` key family, /subscriptions printed

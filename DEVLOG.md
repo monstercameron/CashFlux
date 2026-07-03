@@ -1,3 +1,12 @@
+## 2026-07-03 — C337: one local formatter was the entire "no commas" bug
+
+The sweep flagged "$33720.00" on /investments and "$8190.56 of $12000.00" on /credit — right next
+to a correctly-grouped "$4,590.56" on the same page. Tracing both led to a single shared local
+helper, `fmtMinorAmount` in credit.go (also feeding /loans and /duplicates via `fmtSignedMoney`),
+which formatted minor units without the comma grouping that `money.FormatAccounting` gives every
+other figure. `money.Group` already existed; the fix is two wrapped return paths. Live probe after:
+0 ungrouped ≥5-digit money strings across all three routes, 0 page errors.
+
 ## 2026-07-03 — C335/C336: the raw-i18n-key family, killed at the root
 
 First fixes off the sweep. The interesting part wasn't the keys — it was the *class*: `T()` returns
