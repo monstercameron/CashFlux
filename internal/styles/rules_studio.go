@@ -16,6 +16,17 @@ func registerStudioSurface() {
 		prop("min-height", "0"),
 		prop("overflow", "visible"),
 	)
+	// The Smart surface shares the studio rules file: host grid + auto-height
+	// tiles (the section cards render as bare grid children).
+	rule(".bento.bento-smart",
+		prop("grid-template-rows", "auto"),
+		prop("grid-auto-rows", "auto"),
+	)
+	rule(".bento.bento-smart > .w",
+		prop("height", "auto"),
+		prop("min-height", "0"),
+		prop("overflow", "visible"),
+	)
 	// Molecule rows: pin content left (the shared .row chrome centers children)
 	// and let the formula block + editor stretch the full row width.
 	rule(".bento-studio .row",

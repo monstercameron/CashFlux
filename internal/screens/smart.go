@@ -5,7 +5,8 @@
 package screens
 
 import (
-	"github.com/monstercameron/CashFlux/internal/appstate"
+	"fmt"
+
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
@@ -24,82 +25,10 @@ import (
 // cost labels — Free (on-device, $0) or AI (billed per call). Everything is
 // opt-in; nothing runs or costs anything until the user turns it on.
 func SmartHub() ui.Node {
-	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
-	}
-	_ = uistate.UseDataRevision().Get() // re-render on data or settings change
-
-	pr := uistate.UsePrefs().Get()
-	weekStart := pr.WeekStartWeekday()
-	backendAI := pr.Normalize().BackendActive()
-	hasProvider := aiProviderConfigured(app, backendAI)
-	conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
-
-	settings := uistate.LoadSmartSettings()
-	insights := runSmart(app, weekStart, settings)
-
-	// Count what's enabled, split by tier, to choose the right empty states.
-	var freeEnabled, aiEnabled int
-	for _, code := range settings.EnabledCodes() {
-		if smartengine.HasEngine(code) {
-			freeEnabled++
-		} else if smartai.Implemented(code) {
-			aiEnabled++
-		}
-	}
-
-	activeTab := ui.UseState("insights")
-
-	onInsightsTab := ui.UseEvent(func() { activeTab.Set("insights") })
-	onManageTab := ui.UseEvent(func() { activeTab.Set("manage") })
-
-	tab := activeTab.Get()
-
-	insightsBtnCls := "btn btn-sm btn-ghost"
-	manageBtnCls := "btn btn-sm btn-ghost"
-	if tab == "insights" {
-		insightsBtnCls = "btn btn-sm"
-	} else {
-		manageBtnCls = "btn btn-sm"
-	}
-
-	tabBar := Div(ClassStr(tw.Fold(tw.Flex, tw.Gap2, tw.BorderB, tw.BorderLine, tw.Pb2, tw.Mb2)),
-		Attr("role", "tablist"),
-		Button(css.Class(insightsBtnCls), Type("button"),
-			Attr("role", "tab"),
-			Attr("aria-selected", boolAttrStr(tab == "insights")),
-			Attr("data-testid", "smart-tab-insights"),
-			OnClick(onInsightsTab),
-			uistate.T("smart.tabInsights"),
-		),
-		Button(css.Class(manageBtnCls), Type("button"),
-			Attr("role", "tab"),
-			Attr("aria-selected", boolAttrStr(tab == "manage")),
-			Attr("data-testid", "smart-tab-manage"),
-			OnClick(onManageTab),
-			uistate.T("smart.tabManage"),
-		),
-	)
-
-	var tabContent ui.Node
-	if tab == "manage" {
-		tabContent = Fragment(
-			smartManageSection(settings, hasProvider),
-		)
-	} else {
-		tabContent = Fragment(
-			smartInsightsSection(insights, freeEnabled, freeEnabled+aiEnabled > 0),
-			smartAISection(settings, conn, hasProvider),
-			SmartDigestSection(settings),
-		)
-	}
-
-	return Div(ClassStr(tw.Fold(tw.Flex, tw.FlexCol, tw.Gap4)),
-		Attr("data-testid", "smart-hub"),
-		tabBar,
-		tabContent,
-	)
+	// The redesigned surface: one flattened bento (hero + feed + AI/digest +
+	// catalog) — no nested tabs. Kept as the registered name both the /smart
+	// route and the /assistant Smart tab reference.
+	return SmartSurface()
 }
 
 // insightsPagerProps carries the capped insight list into the pager component.
@@ -207,10 +136,17 @@ func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled 
 	default:
 		smart.SortInsights(insights)
 		capped := smart.CapPerRule(insights, 3)
-		body = ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped})
+		// Wrapped in a plain Div: a bare component as the card's direct child
+		// mounts AFTER its header sibling in the DOM (GWC component-sibling
+		// ordering quirk), which rendered the "Your insights" title at the
+		// card's bottom.
+		body = Div(ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped}))
 	}
 	return uiw.Card(uiw.CardProps{
-		Header: smartBrandHeader(uistate.T("smart.insightsTitle"), false, nil),
+		// "Findings" — deliberately NOT "insights" (review: the AI-narrative
+		// pinned insights on the other tabs are a different concept; one word
+		// per concept).
+		Header: smartBrandHeader(uistate.T("smart.findingsTitle"), false, nil),
 		TestID: "smart-insights",
 		Body:   body,
 	})
@@ -248,14 +184,71 @@ func smartManageSection(settings smart.Settings, hasProvider bool) ui.Node {
 		TestID: "smart-manage",
 		Body: Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap2)),
 			P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)), uistate.T("smart.manageHint")),
-			Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap3)),
+			Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap1)),
+				// Each page's features fold behind an accordion header carrying its
+				// enabled/total count — sixty-plus toggles as one flat wall
+				// overwhelmed the page (review P1). Controlled per-group components
+				// (not <details>) so a toggle's re-render can't snap groups shut.
 				MapKeyed(pagesWithImplemented(),
 					func(p smart.Page) any { return string(p) },
-					func(p smart.Page) ui.Node { return smartPageGroup(p, settings, hasProvider) },
+					func(p smart.Page) ui.Node {
+						feats := implementedFeaturesForPage(p)
+						enabled := 0
+						for _, f := range feats {
+							if settings.IsEnabled(f.Code) {
+								enabled++
+							}
+						}
+						return ui.CreateElement(smartCatalogGroup, smartCatalogGroupProps{
+							Page: p, Enabled: enabled, Total: len(feats),
+							Settings: settings, HasProvider: hasProvider,
+						})
+					},
 				),
 			),
 		),
 	})
+}
+
+type smartCatalogGroupProps struct {
+	Page        smart.Page
+	Enabled     int
+	Total       int
+	Settings    smart.Settings
+	HasProvider bool
+}
+
+// smartCatalogOpen remembers which catalog groups are expanded for the whole
+// session (a package-level map, not component state — toggling a feature bumps
+// the data revision and can remount the surface, which would otherwise snap
+// every group shut mid-interaction).
+var smartCatalogOpen = map[string]bool{}
+
+// smartCatalogGroup renders one page's feature group behind a collapsible
+// header (page name + enabled/total). Its own component so the toggle hook
+// sits at a stable position; the open state lives in smartCatalogOpen.
+func smartCatalogGroup(p smartCatalogGroupProps) ui.Node {
+	rev := ui.UseState(0)
+	open := smartCatalogOpen[string(p.Page)]
+	tog := ui.UseEvent(Prevent(func() {
+		smartCatalogOpen[string(p.Page)] = !smartCatalogOpen[string(p.Page)]
+		rev.Set(rev.Get() + 1)
+	}))
+	caret := "▸"
+	if open {
+		caret = "▾"
+	}
+	return Div(
+		Button(css.Class("fb-pal-head"), Type("button"),
+			Attr("aria-expanded", ariaBool(open)),
+			Attr("data-testid", "smart-group-"+string(p.Page)),
+			OnClick(tog),
+			Span(css.Class("fb-pal-caret"), caret),
+			Span(css.Class("fb-pal-title"), p.Page.Label()),
+			Span(css.Class("fb-pal-count"), fmt.Sprintf("%d / %d", p.Enabled, p.Total)),
+		),
+		If(open, smartPageGroup(p.Page, p.Settings, p.HasProvider)),
+	)
 }
 
 // smartManageControls renders the global SMART controls in the manage header: the

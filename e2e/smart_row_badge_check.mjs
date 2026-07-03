@@ -62,6 +62,10 @@ async function goto(page, route, sel) {
     // it fires whenever an account has 2+ recurring charge patterns (very common with
     // the Hartley sample dataset which has 48 months of recurring debits).
     await goto(page, "/smart", '[data-testid="smart-hub"]');
+    // Open all catalog accordions so feature rows are reachable on the
+    // flattened surface.
+    for (const g of await page.$$('[data-testid^="smart-group-"]')) { await g.click(); }
+    await page.waitForTimeout(400);
 
     // Ensure density is Standard (badges need ≥ Standard)
     await page.selectOption('[data-testid="smart-density"]', "standard");

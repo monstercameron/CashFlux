@@ -76,6 +76,9 @@ type Data struct {
 	// payday + the keep floor, from prefs + BillsSmartConfig), surfaced as the
 	// bills_* schedule variables via the billsched optimizer.
 	BillsSmart BillsSmartData
+	// Smart holds the Smart layer's enabled-feature counts (from the persisted
+	// Smart settings), surfaced as the smart_* variables.
+	Smart SmartCounts
 }
 
 // BillsSmartData is the smart-schedule input the wasm layer feeds in. Empty
@@ -313,6 +316,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addHealthVars(out, d)
 	addCreditVars(out, d, major, toBase)
 	addAssistantVars(out, d, major)
+	addSmartVars(out, d)
 	return out
 }
 

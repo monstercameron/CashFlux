@@ -1,3 +1,31 @@
+## 2026-07-03 — Smart tab: nested tabs die; the agent leads with findings
+
+Cam: "redesign /assistant agent first and also redesign all the tabs with claude design skill, use
+formulas and custom fields where applicable, use bento, widgets, reusable components and theme
+tokens" (+ follow-up: "dont forget the ask and smart pages"). Ask + Insights were the concurrent
+agent's fresh redesigns; the gap was the Smart tab — nested Insights/Manage tabs inside a hub tab,
+card stacks, no hero, no variables.
+
+Built: one flattened bento surface. Adversarial review then rewired the hero: it originally led
+with "66 features watching" — the reviewer's best line of the day was that nobody opens a findings
+feed to admire how many rules are running, so the FINDINGS count leads and the watcher tally is a
+chip. Same review drove the findings/insights terminology split, the per-page accordion catalog
+(60+ toggles were "an infinite toggle wall bolted onto a content page"), the digest moving beside
+the catalog, and the cross-tab contradiction fix (Insights-tab "All clear" vs Smart-tab missed-
+payment findings — the all-clear now scopes itself). Its Ask-tab findings (no hero grammar, pinned
+rail lacks a cross-link) are the NEXT pass, per Cam's follow-up.
+
+Two framework lessons: (1) a bare ui.CreateElement as a Card's direct child mounts AFTER its
+header sibling in the DOM — the feed's title rendered at the card's bottom; wrap components in a
+plain Div when siblings matter (e2e-guarded). (2) Accordion open-state as component-local UseState
+dies on data-revision REMOUNTS (every toggle bumps the revision) — a session-level package map
+survives; the old smart e2e whack-a-moled until that landed.
+
+Also: the smart_* posture variables (counts fed from the same liveSmartCounts the hero reads), and
+the pre-existing smart e2e updated for the sample now seeding features on (from-zero specs begin
+with Disable all). The :8091 zombie-server saga from earlier hit again mid-pass — deployed wasm
+"not rendering" was a stale listener rooted at web/; memory updated with the diagnosis recipe.
+
 ## 2026-07-03 — Studio Formulas: the palette gets doors; molecules get an editor
 
 Cam: "next work on the studio, start with the formula tab, use widgets, components and theme

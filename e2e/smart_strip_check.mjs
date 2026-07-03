@@ -38,6 +38,10 @@ async function goto(page, route, waitSel) {
   await page.waitForSelector(waitSel, { timeout: 20000 });
   await dismissOverlay(page);
   await page.waitForTimeout(700);
+  if (route === "/smart") {
+    for (const g of await page.$$('[data-testid^="smart-group-"]')) { await g.click(); }
+    await page.waitForTimeout(400);
+  }
 }
 
 (async () => {
@@ -55,10 +59,15 @@ async function goto(page, route, waitSel) {
 
     // Enable SMART-B8 on the hub.
     await goto(page, "/smart", '[data-testid="smart-hub"]');
+
+    // The sample dataset now showcases Smart with many features pre-enabled;
+    // this spec tests the FROM-ZERO opt-in story, so start from a clean slate.
+    await page.locator('[data-testid="smart-disable-all"]').click({ force: true }).catch(() => {});
+    await page.waitForTimeout(800);
     const b8 = page.locator('[data-testid="smart-feature-SMART-B8"]');
     ok(await b8.count() > 0, "SMART-B8 toggle present on the hub");
     await b8.locator('button, input, [role="switch"]').first().click();
-    await page.waitForTimeout(2500); // let the opt-in autosave flush
+    await page.waitForTimeout(4800); // let the opt-in autosave flush (dataset ticker ~4s)
 
     // /budgets → inline strip with a card.
     await goto(page, "/budgets", "#cf-page-view");

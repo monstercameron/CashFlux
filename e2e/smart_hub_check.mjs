@@ -40,6 +40,10 @@ async function dismissOverlay(page) {
 async function gotoSmart(page) {
   await page.goto(BASE + "/smart", { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-testid="smart-hub"]', { timeout: 20000 });
+  // The catalog groups fold behind accordions on the flattened surface — open
+  // them all so feature rows are reachable.
+  for (const g of await page.$$('[data-testid^="smart-group-"]')) { await g.click(); }
+  await page.waitForTimeout(400);
   await dismissOverlay(page);
 }
 
@@ -78,6 +82,11 @@ async function gotoSmart(page) {
     // A Free row and an AI row both exist somewhere (honest tiering).
     const anyAITier = await page.locator('[data-testid="smart-manage"]').innerText();
     ok(/Free/.test(anyAITier), "catalog shows Free tier labels");
+
+    // The sample dataset now showcases Smart with many features pre-enabled;
+    // this spec tests the FROM-ZERO opt-in story, so start from a clean slate.
+    await page.locator('[data-testid="smart-disable-all"]').first().click();
+    await page.waitForTimeout(800);
 
     // Nothing enabled yet → onboarding, no cards.
     ok(await page.locator('[data-testid="smart-card"]').count() === 0, "no insight cards before opting in");
@@ -118,6 +127,9 @@ async function gotoSmart(page) {
     // The A5 (account Q&A) row is an AI feature: its badge must show the AI tier,
     // a per-use cost, and — with no provider configured in this fresh context —
     // a "needs a provider" hint. This is the cost-transparency promise for AI.
+    // Re-open the catalog accordions (a data-revision remount can reset them).
+    for (const g of await page.$$('[data-testid^="smart-group-"][aria-expanded="false"]')) { await g.click(); }
+    await page.waitForTimeout(400);
     const a5Row = page.locator('[data-testid="smart-feature-SMART-A5"]');
     ok(await a5Row.count() > 0, "SMART-A5 (AI) toggle row present");
     const a5Text = await a5Row.innerText();

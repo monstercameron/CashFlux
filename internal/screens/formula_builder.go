@@ -46,7 +46,7 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
 		Alloc: liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
-		BillsSmart: liveBillsSmartData(app),
+		BillsSmart: liveBillsSmartData(app), Smart: liveSmartCounts(),
 	})
 }
 
@@ -153,6 +153,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.HealthMetrics()...)
 	metrics = append(metrics, widgetcatalog.CreditMetrics()...)
 	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
+	metrics = append(metrics, widgetcatalog.SmartMetrics()...)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")
