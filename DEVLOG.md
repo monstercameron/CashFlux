@@ -1,3 +1,27 @@
+## 2026-07-03 — /planning: "Add plan" moved into a flip modal
+
+Cam: "saving and spending plan add plan needs to be inside a flip modal." The saved-scenarios tile
+had an inline add form crammed under the scenario list; moved it into a `PlanAddForm` component
+rendered in a FlipPanel, opened by an "Add plan" button in the scenario section header.
+
+Design decision — modal host: the established pattern is a shell-root host (tiles carry transforms
+that break `position:fixed`), but `shell.go` was full of the concurrent /recurring agent's
+uncommitted host-mount lines (RecurringEditHost / SubsPrefsHost), and committing it by path would
+have entangled their WIP. So instead the FlipPanel is rendered inline from `Planning()` as a *sibling
+of the bento* (not inside a tile) with a local `UseState` open flag — no `shell.go` edit, no shared
+atom, and because the trigger button and the modal live in the same component the open/close
+re-render is direct and reliable (no cross-tree MapKeyed staleness). Verified centring by screenshot.
+
+`PlanAddForm` is self-contained (own name/horizon/account-prefill/start/monthly/once-amount/month
+state + validation), calls `app.PutPlan` + `BumpDataRevision` and stays open with a confirmation flash
+so several plans can be added in a row; Cancel/X/backdrop call `OnDone` to close. `Planning()` already
+subscribes to `UseDataRevision`, so the private `plRev` counter was dropped (delete now bumps the
+revision too). Updated `planning_check.mjs` etc. to open the modal before filling plan fields.
+
+Concurrency: committed only my files by path (planning.go, plan_add_modal.go, en.go, logs);
+build-verified in an isolated `git worktree` at the commit so the other agent's broken in-progress
+recurring files didn't taint the check.
+
 ## 2026-07-03 — /recurring: full-hub bento redesign, flow identity vars, interconnects
 
 Cam: "do the redesign for the recurring page now" (+ follow-ups: cover Bills/Subscriptions tabs too;

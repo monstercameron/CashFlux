@@ -65,33 +65,47 @@ check("F4 a monthly-spending trim adds a scenario note", (await p.locator("#sec-
 await trimIn.fill(""); await trimIn.dispatchEvent("input");
 await p.waitForTimeout(300);
 
-// --- scenarios: add a healthy plan ---
+// --- scenarios: the add form is a flip modal opened from the section header ---
 await p.locator("#sec-scenarios").scrollIntoViewIfNeeded().catch(() => {});
-await p.locator("#plan-add").fill("Steady Saver");
-const scNums = p.locator('#sec-scenarios input[type="number"]');
+const openAddModal = async () => {
+  if (await p.locator('[data-testid="plan-add-form"]').count() === 0) {
+    await p.locator('[data-testid="plan-add-open"]').click({ force: true });
+    await p.waitForSelector('[data-testid="plan-add-form"]', { timeout: 6000 }).catch(() => {});
+    await p.waitForTimeout(700); // past the 550ms flip
+  }
+};
+check("SC0 the scenarios tile has an 'Add plan' trigger (no inline form)", await p.locator('[data-testid="plan-add-open"]').count() === 1 && await p.locator('[data-testid="plan-add-form"]').count() === 0);
+await openAddModal();
+check("SC0b clicking 'Add plan' opens the flip modal", await p.locator('[data-testid="plan-add-form"]').count() === 1);
+const modal = p.locator('[data-testid="plan-add-form"]');
+const scNums = modal.locator('input[type="number"]'); // [0]=horizon [1]=start [2]=monthly [3]=once-amt [4]=once-month
+await modal.locator("#plan-add").fill("Steady Saver");
 await scNums.nth(0).fill("12"); // horizon
-// start + monthly are later number inputs; fill start=5000, monthly=+300
-await scNums.nth(1).fill("5000");
-await scNums.nth(2).fill("300");
-await p.locator('#sec-scenarios button[type="submit"]').click({ force: true });
+await scNums.nth(1).fill("5000"); // start
+await scNums.nth(2).fill("300"); // monthly
+await modal.locator('button[type="submit"]').click({ force: true });
 await p.waitForTimeout(700);
 check("SC1 adding a plan appends a scenario row", await p.locator("#sec-scenarios .plan-scenario").count() >= 1, `${await p.locator("#sec-scenarios .plan-scenario").count()} rows`);
 check("SC2 the plan row shows a projected end + a sparkline", /[0-9]/.test(await p.locator("#sec-scenarios").innerText()) && await p.locator("#sec-scenarios svg").count() >= 1);
 
-// (neg) a nameless plan errors.
-await p.locator("#plan-add").fill("");
-await p.locator('#sec-scenarios button[type="submit"]').click({ force: true });
+// (neg) a nameless plan errors — the modal stays open after a successful add, so clear the name.
+await modal.locator("#plan-add").fill("");
+await modal.locator('button[type="submit"]').click({ force: true });
 await p.waitForTimeout(400);
-check("SC3 (neg) adding a plan with no name shows an error", (await p.locator("#sec-scenarios").innerText()).toLowerCase().includes("name") || await p.locator("#sec-scenarios .err, #sec-scenarios [role=alert]").count() >= 1);
+check("SC3 (neg) adding a plan with no name shows an error", (await modal.innerText()).toLowerCase().includes("name") || await modal.locator(".err, [role=alert]").count() >= 1);
 
 // (neg) a depleting plan flags a runway danger.
-await p.locator("#plan-add").fill("Burn Down");
+await modal.locator("#plan-add").fill("Burn Down");
 await scNums.nth(0).fill("12");
 await scNums.nth(1).fill("1000");
 await scNums.nth(2).fill("-500");
-await p.locator('#sec-scenarios button[type="submit"]').click({ force: true });
+await modal.locator('button[type="submit"]').click({ force: true });
 await p.waitForTimeout(700);
 check("SC4 (neg) a depleting plan flags a runway-danger indicator", await p.locator(".plan-runway--danger").count() >= 1 && await p.locator(".plan-runway__text").count() >= 1);
+// close the modal before moving on (backdrop/X) so it doesn't overlay later interactions.
+await p.locator('[data-testid="plan-add-cancel"]').click({ force: true }).catch(() => {});
+await p.waitForTimeout(500);
+check("SC4b cancel closes the add modal", await p.locator('[data-testid="plan-add-form"]').count() === 0);
 
 // --- compare a saved plan on the forecast chart ---
 await open();

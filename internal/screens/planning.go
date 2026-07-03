@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/forecast"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
@@ -116,101 +115,18 @@ func Planning() ui.Node {
 		return nil
 	}, planPersistKey)
 
-	// plRev triggers a re-render of Planning() when plans are added or removed,
-	// causing app.Plans() to be re-read without explicit dependency tracking.
-	plRev := ui.UseState(0)
-
-	// What-if plans: a starting balance projected over a horizon under a steady
-	// monthly change (a recurring PlanItem). Persisted via appstate, projected
-	// through internal/planning.
-	plName := ui.UseState("")
-	plHorizon := ui.UseState("12")
-	plStart := ui.UseState("")
-	// plAccount prefills the starting balance from a chosen account's current
-	// balance; selecting one overwrites plStart with the account's balance in
-	// minor units formatted as a major-unit decimal (L27 enhancement).
-	plAccount := ui.UseState("")
-	plMonthly := ui.UseState("")
-	plOnceAmt := ui.UseState("")
-	plOnceMonth := ui.UseState("")
-	plErr := ui.UseState("")
-	onPlName := ui.UseEvent(func(v string) { plName.Set(v) })
-	onPlHorizon := ui.UseEvent(func(v string) { plHorizon.Set(v) })
-	onPlStart := ui.UseEvent(func(v string) { plStart.Set(v) })
-	onPlMonthly := ui.UseEvent(func(v string) { plMonthly.Set(v) })
-	onPlOnceAmt := ui.UseEvent(func(v string) { plOnceAmt.Set(v) })
-	onPlOnceMonth := ui.UseEvent(func(v string) { plOnceMonth.Set(v) })
-	// onPlAccount prefills the starting balance from a chosen account's balance.
-	// Selecting an account calculates its current balance via the ledger and sets
-	// plStart so the user doesn't need to look it up manually (L27 enhancement).
-	onPlAccount := ui.UseEvent(func(e ui.Event) {
-		aid := e.GetValue()
-		plAccount.Set(aid)
-		if app == nil || aid == "" {
-			return
-		}
-		for _, a := range app.Accounts() {
-			if a.ID != aid {
-				continue
-			}
-			if bal, err := ledger.Balance(a, app.Transactions()); err == nil {
-				plStart.Set(money.FormatMinor(bal.Abs().Amount, currency.Decimals(a.Currency)))
-			}
-			return
-		}
-	})
-	addPlan := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			return
-		}
-		name := strings.TrimSpace(plName.Get())
-		if name == "" {
-			plErr.Set(uistate.T("plans.nameRequired"))
-			return
-		}
-		horizon, herr := strconv.Atoi(strings.TrimSpace(plHorizon.Get()))
-		if herr != nil || horizon <= 0 {
-			plErr.Set(uistate.T("plans.horizonRequired"))
-			return
-		}
-		// Start balance and monthly change are optional; blank means 0.
-		start, _ := money.ParseMinor(strings.TrimSpace(plStart.Get()), currency.Decimals(base))
-		monthly, _ := money.ParseMinor(strings.TrimSpace(plMonthly.Get()), currency.Decimals(base))
-		p := domain.Plan{ID: id.New(), Name: name, HorizonMonths: horizon, StartBalance: start}
-		if monthly != 0 {
-			p.Items = append(p.Items, domain.PlanItem{
-				ID: id.New(), Label: uistate.T("plans.monthlyLabel"), Kind: domain.PlanItemRecurring, Amount: monthly,
-			})
-		}
-		// Optional one-time amount in a chosen month (e.g. a bonus or big expense).
-		// Only added when both an amount and an in-horizon month are given.
-		onceAmt, _ := money.ParseMinor(strings.TrimSpace(plOnceAmt.Get()), currency.Decimals(base))
-		onceMonth, monthErr := strconv.Atoi(strings.TrimSpace(plOnceMonth.Get()))
-		if onceAmt != 0 && strings.TrimSpace(plOnceMonth.Get()) != "" {
-			if monthErr != nil || onceMonth < 1 || onceMonth > horizon {
-				plErr.Set(uistate.T("plans.onceMonthRange"))
-				return
-			}
-			p.Items = append(p.Items, domain.PlanItem{
-				ID: id.New(), Label: uistate.T("plans.onceLabel"), Kind: domain.PlanItemOneTime, Amount: onceAmt, Month: onceMonth,
-			})
-		}
-		if err := app.PutPlan(p); err != nil {
-			plErr.Set(err.Error())
-			return
-		}
-		plName.Set("")
-		plStart.Set("")
-		plMonthly.Set("")
-		plOnceAmt.Set("")
-		plOnceMonth.Set("")
-		plErr.Set("")
-		plRev.Set(plRev.Get() + 1)
-	}))
+	// planAddOpen drives the "Add plan" FlipPanel modal (PlanAddForm). It is local state
+	// (not a shell-root atom) so the trigger button and the modal share it directly and the
+	// re-render is reliable; the FlipPanel renders as a sibling of the bento (not inside a
+	// tile), so no tile transform breaks its position:fixed centring. Adds/deletes re-render
+	// Planning() via UseDataRevision (subscribed above), so no manual revision counter.
+	planAddOpen := ui.UseState(false)
+	openPlanAdd := ui.UseEvent(Prevent(func() { planAddOpen.Set(true) }))
+	closePlanAdd := func() { planAddOpen.Set(false) }
 	deletePlan := func(pid string) {
 		if app != nil {
 			_ = app.DeletePlan(pid)
-			plRev.Set(plRev.Get() + 1)
+			uistate.BumpDataRevision()
 		}
 	}
 
@@ -590,17 +506,12 @@ func Planning() ui.Node {
 	plansCard := Fragment()
 	if app != nil {
 		plans := app.Plans()
-		// Account prefill options: any non-archived account lets the user seed the
-		// plan's starting balance from its current ledger balance (L27 enhancement).
-		plAcctOpts := []ui.Node{Option(Value(""), SelectedIf(plAccount.Get() == ""), uistate.T("plans.prefillNone"))}
-		for _, a := range app.Accounts() {
-			if a.Archived {
-				continue
-			}
-			plAcctOpts = append(plAcctOpts, Option(Value(a.ID), SelectedIf(plAccount.Get() == a.ID), a.Name))
-		}
+		// The add-plan form lives in a FlipPanel modal (PlanAddForm) opened from the
+		// section-header "Add plan" button; the tile itself is just the scenario list.
+		addAction := Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+			Attr("data-testid", "plan-add-open"), OnClick(openPlanAdd), uistate.T("plans.add"))
 		list := IfElse(len(plans) == 0,
-			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("plans.empty"), CTALabel: uistate.T("plans.add"), FocusID: "plan-add"}),
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("plans.empty"), Icon: icon.Planning}),
 			Div(css.Class("rows"), MapKeyed(plans,
 				func(p domain.Plan) any { return p.ID },
 				func(p domain.Plan) ui.Node {
@@ -608,27 +519,7 @@ func Planning() ui.Node {
 				},
 			)),
 		)
-		plansCard = planTile("plan-scenarios", planSection("sec-scenarios", uistate.T("plans.title"), Fragment(),
-			Fragment(
-				P(css.Class("muted"), uistate.T("plans.hint")),
-				Form(css.Class("form-grid"), OnSubmit(addPlan),
-					Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
-					labeledField(uistate.T("plans.horizonPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Value(plHorizon.Get()), Step("1"), OnInput(onPlHorizon))),
-					// Account prefill: selecting an account fills the start-balance input
-					// from that account's current balance so the user doesn't look it up.
-					Label(css.Class("field-label"), uistate.T("plans.prefillAccount"),
-						Select(css.Class("field"), Attr("aria-label", uistate.T("plans.prefillAccount")),
-							Attr("data-testid", "plan-prefill-account"), OnChange(onPlAccount), plAcctOpts),
-					),
-					labeledField(uistate.T("plans.startPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plStart.Get()), Step("0.01"), OnInput(onPlStart))),
-					labeledField(uistate.T("plans.monthlyPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plMonthly.Get()), Step("0.01"), OnInput(onPlMonthly))),
-					labeledField(uistate.T("plans.onceAmtPlaceholder", base), Input(css.Class("field"), Type("number"), Value(plOnceAmt.Get()), Step("0.01"), OnInput(onPlOnceAmt))),
-					labeledField(uistate.T("plans.onceMonthPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", plHorizon.Get()), Value(plOnceMonth.Get()), Step("1"), OnInput(onPlOnceMonth))),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("plans.add")),
-				),
-				errText("plan-err", plErr.Get()),
-				list,
-			)))
+		plansCard = planTile("plan-scenarios", planSection("sec-scenarios", uistate.T("plans.title"), addAction, list))
 	}
 
 	// C168: lead with the near-term liquid cash-flow section (runway/safe-to-spend),
@@ -661,7 +552,21 @@ func Planning() ui.Node {
 			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("planning.metricsTitle"), ShowSaved: true}),
 		)))
 	}
-	return Div(css.Class("bento bento-planning"), tiles)
+	// The add-scenario form lives in a FlipPanel modal rendered as a sibling of the bento
+	// (not inside a tile) so no tile transform breaks its position:fixed centring. It mounts
+	// only while open; OnClose / the form's OnDone clear planAddOpen to dismiss it.
+	var addModal ui.Node = Fragment()
+	if planAddOpen.Get() {
+		addModal = uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:    uistate.T("plans.addTitle"),
+			Width:    "560px",
+			Height:   "min(90vh, 620px)",
+			NoFooter: true,
+			OnClose:  closePlanAdd,
+			Back:     ui.CreateElement(PlanAddForm, PlanAddFormProps{OnDone: closePlanAdd}),
+		})
+	}
+	return Fragment(Div(css.Class("bento bento-planning"), tiles), addModal)
 }
 
 // planMetricsLabel is the plan-metrics toggle label.

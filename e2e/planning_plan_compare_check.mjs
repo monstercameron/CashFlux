@@ -43,6 +43,13 @@ const browser = await chromium.launch({ headless: true });
 const fail = (m) => { console.error("FAIL: " + m); process.exitCode = 1; };
 
 async function addPlan(page, name, horizon, start, monthly) {
+  // The add-plan form is a flip modal; open it from the section header if it isn't
+  // already open (it stays open after a successful add, so subsequent calls skip this).
+  if ((await page.locator('[data-testid="plan-add-form"]').count()) === 0) {
+    await page.locator('[data-testid="plan-add-open"]').click();
+    await page.waitForSelector('[data-testid="plan-add-form"]', { timeout: 10000 });
+    await page.waitForTimeout(700); // past the 550ms flip
+  }
   const planForm = page.locator('form', {
     has: page.locator('button[type="submit"]:has-text("Add plan")'),
   });

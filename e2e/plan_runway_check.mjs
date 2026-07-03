@@ -36,9 +36,11 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  // Wait for the plan add-form to be present.
-  await page.waitForSelector('input[placeholder*="Plan name"]', { timeout: 60000 });
-  await page.waitForTimeout(400);
+  // The add-plan form is now a flip modal — open it from the scenarios section header.
+  await page.waitForSelector('[data-testid="plan-add-open"]', { timeout: 60000 });
+  await page.locator('[data-testid="plan-add-open"]').click();
+  await page.waitForSelector('[data-testid="plan-add-form"]', { timeout: 10000 });
+  await page.waitForTimeout(700); // past the 550ms flip
 
   // Scope ALL inputs to the plan add-form (the one with the "Add plan" submit).
   // The page also has a "Can I afford it?" section with its own step="0.01"
