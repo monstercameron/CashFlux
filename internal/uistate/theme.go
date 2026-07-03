@@ -5,6 +5,7 @@
 package uistate
 
 import (
+	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -12,6 +13,30 @@ import (
 )
 
 const themeStoreID = "cashflux:theme"
+
+// CurrentAccent returns the active theme's accent from the --accent custom property
+// written on the document root — the single source of truth for the accent, whichever
+// system (the theme engine's ApplyTheme or the legacy prefs swatch) last wrote it. Both
+// set it as an INLINE style, so we read the inline declaration directly rather than via
+// getComputedStyle: reading the computed style forces a synchronous reflow, and doing that
+// on every chart render noticeably slowed re-renders (it delayed unrelated re-render-driven
+// DOM updates past their expected window). Charts rendered through the D3 layer paint the
+// color into SVG stroke/fill attributes (where CSS var() can't resolve), so they need this
+// resolved value. Falls back to the default seagreen when unset or the DOM is unavailable.
+func CurrentAccent() string {
+	root := js.Global().Get("document").Get("documentElement")
+	if root.IsNull() || root.IsUndefined() {
+		return "#2e8b57"
+	}
+	style := root.Get("style")
+	if style.IsNull() || style.IsUndefined() {
+		return "#2e8b57"
+	}
+	if v := strings.TrimSpace(style.Call("getPropertyValue", "--accent").String()); v != "" {
+		return v
+	}
+	return "#2e8b57"
+}
 
 // LoadTheme returns the active appearance theme. If the user has saved a custom
 // theme it is loaded from localStorage; otherwise the theme is migrated from the

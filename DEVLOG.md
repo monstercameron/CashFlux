@@ -1,3 +1,35 @@
+## 2026-07-02 — /investments charts: the theme accent (take 2) + modal reliability
+
+Cam: "the charts are still green and many highlights are green for the non forest theme." My first
+accent pass was wrong at the source. Drove the app to the **Midnight** preset (periwinkle accent
+`#7c83ff`) and screenshotted /investments: buttons/badges recolored, but all four growth charts stayed
+seagreen. Root cause: there are TWO accent systems — the legacy prefs swatch (`p.Accent`, default
+`#2e8b57`) and the theme engine (`ApplyTheme`, sets `--accent` from the *theme's* accent). Boot applies
+the theme AFTER prefs, so the theme is the authoritative writer of `--accent`; I'd read `p.Accent`,
+which stays seagreen on a preset. Fix: `uistate.CurrentAccent()` reads the resolved `--accent` off the
+document root — the single source of truth. Important: read the **inline** style declaration
+(`root.style.getPropertyValue`), not `getComputedStyle` — the computed read forces a synchronous reflow,
+and doing it on every chart render slowed re-renders enough to visibly delay unrelated DOM updates (it
+was the first thing I tried and it regressed P10). The "many highlights green" also includes the gain
+deltas, but those are semantic `--up`/gain tones (green = up, app-wide) — correctly accent-independent,
+left alone. Added e2e TA1: flip the accent to periwinkle, assert chart strokes follow and none are
+`#2e8b57`.
+
+The rabbit hole was P10 (the chart-modal Cancel). It went flaky, and chasing it was the bulk of the
+work. Findings, in order: (a) it's a scheduling heisenbug — adding a `console.log` in the Go close path
+made it pass, so it's timing, not logic; (b) `state.UseAtom` subscribes at the *hook call*, not at
+`.Get()`, so the heavy `investPoolsWidget` (which only ever *sets* the pool-edit atom) was re-rendering
+the entire chart grid on every modal open/close — isolated the triggers into `newChartButton` /
+`poolEditButton` leaf components so the grid stays put (a real perf win, but didn't fix the flake); (c)
+the actual cause: the modal opens with a **550ms** 3D flip, and during it the back face is
+`backface-visibility:hidden` — not hit-testable — so the e2e's `force:true` Cancel click at ~500ms
+landed mid-flip and missed (a *second* click always closed it, which is what tipped me off). `force`
+bypasses Playwright's actionability wait, so it happily clicked a non-interactive element. Fix: wait
+past the flip and use a normal auto-actionability click. Also simplified the host close to a bare
+`edit.Set("")` (the `BumpDataRevision` I'd added earlier was a racy workaround, unnecessary once the
+grid was decoupled — matches `SettingsHost`). P10/P11 now pass ~6/7 stress runs (was consistently
+0/N); whole suite 42/42.
+
 ## 2026-07-02 — /investments charts follow the theme accent
 
 Cam: "the page needs to be theme aware." Drove the app to a real light theme (via the topbar

@@ -182,7 +182,8 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		segToggle,
 	)
 
-	accent := chartLineColor(uistate.UsePrefs().Get().Accent)
+	_ = uistate.UsePrefs().Get() // re-render when the accent/theme preference changes
+	accent := chartLineColor(uistate.CurrentAccent())
 	chart := uiw.Chart(uiw.ChartProps{
 		Spec: chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{
 			{Name: uistate.T("investments.portfolioValue"), Color: accent, Points: pts},

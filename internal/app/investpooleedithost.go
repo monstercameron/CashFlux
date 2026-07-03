@@ -24,10 +24,12 @@ func InvestPoolEditHost() uic.Node {
 	if pid == "" {
 		return Fragment()
 	}
-	closeModal := func() {
-		edit.Set("")
-		uistate.BumpDataRevision()
-	}
+	// Clear the atom only — the host subscribes to it, so the set re-renders the host to
+	// Fragment and unmounts the FlipPanel (exactly how InvestAddHost / SettingsHost close).
+	// This is reliable because the only other subscribers to this atom are the tiny leaf
+	// trigger buttons (newChartButton / poolEditButton), not the heavy pools grid — so the
+	// close doesn't have to wait behind an expensive chart re-render.
+	closeModal := func() { edit.Set("") }
 	title := uistate.T("investments.newPoolTitle")
 	if pid != "new" {
 		title = uistate.T("investments.editPoolTitle")

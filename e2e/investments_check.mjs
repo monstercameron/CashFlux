@@ -66,12 +66,34 @@ check("P8 account cards are unchanged (still one per account)", await p.locator(
 // Editing opens the same modal, pre-filled with the name.
 await p.locator('[data-testid^="invest-pool-edit-"]').first().click({ force: true }); await p.waitForTimeout(500);
 check("P9 edit opens the pre-filled chart modal", await p.locator('.inv-pool-modal').count() === 1 && (await p.locator('[data-testid="pool-name"]').inputValue().catch(() => "")) === "Retirement");
-await p.locator('[data-testid="pool-cancel"]').click({ force: true }); await p.waitForTimeout(400);
+// The modal opens with a 550ms 3D flip; during it the back face (the Cancel button) has
+// backface-visibility:hidden and isn't hit-testable. Wait past the flip and use a normal
+// (auto-actionability) click — NOT force — so Playwright only clicks once the button can
+// actually receive the event, otherwise the click lands mid-flip and misses.
+await p.waitForTimeout(700);
+await p.locator('[data-testid="pool-cancel"]').click();
+await p.waitForSelector('.inv-pool-modal', { state: 'detached', timeout: 3000 }).catch(() => {});
 check("P10 (regression) closing the chart modal doesn't crash", await p.locator('.inv-pool-modal').count() === 0 && errs.length === 0);
 // Delete the custom chart.
 await p.locator('[data-testid^="invest-pool-del-"]').first().click({ force: true }); await p.waitForTimeout(400);
 await p.evaluate(() => { const c = document.querySelector('#cf-dialog-confirm'); if (c) c.click(); }); await p.waitForTimeout(600);
 check("P11 deleting the chart removes its card (accounts unchanged)", await p.locator('[data-testid^="invest-pool-"].inv-pool-card').count() === 0 && await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
+
+// Theme-awareness: the growth charts must be drawn in the active theme accent, not a
+// hardcoded green. Switch the accent to periwinkle via the appearance swatch, come back,
+// and assert the chart line strokes now match the accent and no path is still seagreen.
+const accentHex = "#7c83ff";
+await p.evaluate(() => { const a = document.querySelector('a[href$="/appearance"]'); if (a) a.click(); }); await p.waitForTimeout(1000);
+await p.evaluate((h) => { const s = document.querySelector(`[role=radio][aria-label="${h}"]`); if (s) s.click(); }, accentHex); await p.waitForTimeout(600);
+const appliedAccent = await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+await p.evaluate(() => { const a = document.querySelector('a[href$="/investments"]'); if (a) a.click(); });
+await p.waitForSelector(".bento-invest", { timeout: 15000 }).catch(() => {});
+await p.waitForTimeout(1200);
+const strokes = await p.evaluate(() => [...document.querySelectorAll('.bento-invest svg path[stroke]')].map(pp => (pp.getAttribute('stroke') || '').toLowerCase()));
+check("TA1 charts are drawn in the theme accent, not hardcoded green",
+  appliedAccent.toLowerCase() === accentHex && strokes.includes(accentHex) && !strokes.includes("#2e8b57"),
+  `accent=${appliedAccent} strokes=${strokes.join(",")}`);
+await p.screenshot({ path: "e2e/investments_accent.png", fullPage: true }).catch(() => {});
 
 // Add a stock security → securities + allocation appear.
 await p.locator('[data-testid="invest-add"]').click({ force: true }); await p.waitForTimeout(500);

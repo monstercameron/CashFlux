@@ -97,6 +97,35 @@ func growthCard(testid string, header ui.Node, series []money.Money, labels []st
 	)
 }
 
+// --- modal trigger buttons (isolated subscribers) --------------------------------
+//
+// The pool-edit atom drives the create/edit-chart flip modal. Its trigger buttons are
+// their OWN leaf components so that ONLY they (not the heavy pools grid or the per-chart
+// cards) subscribe to the atom. Opening/closing the modal then re-renders just these tiny
+// buttons plus the modal host — never the growth charts (each a NetWorthSeries computation).
+// Before this split, every modal open/close rebuilt the whole grid, and that expensive
+// re-render raced the host's close and left the modal intermittently open (P10 flake).
+
+// newChartButton is the "New chart" toolbar button.
+func newChartButton() ui.Node {
+	poolEdit := uistate.UseInvestPoolEditID()
+	open := ui.UseEvent(Prevent(func() { poolEdit.Set("new") }))
+	return Button(css.Class("btn btn-sm btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "invest-new-pool"), Title(uistate.T("investments.newChartTitle")), OnClick(open),
+		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("investments.newChart")))
+}
+
+type poolEditButtonProps struct{ PoolID string }
+
+// poolEditButton is one custom-chart card's edit (pencil) control.
+func poolEditButton(props poolEditButtonProps) ui.Node {
+	poolEdit := uistate.UseInvestPoolEditID()
+	edit := ui.UseEvent(Prevent(func() { poolEdit.Set(props.PoolID) }))
+	return Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+props.PoolID),
+		Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(edit),
+		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3)))
+}
+
 // --- pool (custom chart) card ----------------------------------------------------
 
 type investPoolChipProps struct {
@@ -115,8 +144,6 @@ type investPoolChipProps struct {
 // exposes (for use elsewhere), and edit/delete actions.
 func investPoolCard(props investPoolChipProps) ui.Node {
 	p := props.Pool
-	poolEdit := uistate.UseInvestPoolEditID()
-	edit := ui.UseEvent(Prevent(func() { poolEdit.Set(p.ID) }))
 	del := ui.UseEvent(Prevent(func() {
 		uistate.ConfirmModal(uistate.T("investments.deletePoolConfirm", p.Name), true, func(ok bool) {
 			if ok {
@@ -132,9 +159,7 @@ func investPoolCard(props investPoolChipProps) ui.Node {
 			Span(css.Class("inv-pool-name"), p.Name),
 			Span(css.Class("inv-pool-count", tw.TextDim), uistate.T("investments.poolCount", props.Members)),
 			Div(css.Class("inv-pool-actions"),
-				Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+p.ID),
-					Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(edit),
-					uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+				ui.CreateElement(poolEditButton, poolEditButtonProps{PoolID: p.ID}),
 				Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-del-"+p.ID),
 					Attr("aria-label", uistate.T("investments.deletePool")), Title(uistate.T("investments.deletePool")), OnClick(del),
 					uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
@@ -328,8 +353,6 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 	if months != 1 && months != 6 && months != 12 {
 		months = 12
 	}
-	poolEdit := uistate.UseInvestPoolEditID()
-	newPool := ui.UseEvent(Prevent(func() { poolEdit.Set("new") }))
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
 	onView := func(accountID string) {
@@ -339,7 +362,8 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	accent := chartLineColor(uistate.UsePrefs().Get().Accent)
+	_ = uistate.UsePrefs().Get() // re-render when the accent/theme preference changes
+	accent := chartLineColor(uistate.CurrentAccent())
 	investAccts := investAccountsOf(app)
 	pools := uistate.InvestPools()
 	now := time.Now()
@@ -377,11 +401,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 		}))
 	}
 
-	newChartBtn := Button(css.Class("btn btn-sm btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "invest-new-pool"), Title(uistate.T("investments.newChartTitle")), OnClick(newPool),
-		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("investments.newChart")))
-
-	body := investSection("sec-pools", uistate.T("investments.poolsTitle"), newChartBtn, Fragment(
+	body := investSection("sec-pools", uistate.T("investments.poolsTitle"), ui.CreateElement(newChartButton), Fragment(
 		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.poolsHint")),
 		Div(gridArgs...),
 	))
