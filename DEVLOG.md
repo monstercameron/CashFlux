@@ -40,6 +40,22 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 13 (Cam: "graphs for each investment pool or account + link accounts into a pool" → then
+corrected: "a pool is a group of accounts, this makes no sense — I want EACH ACCOUNT to have the growth
+chart, and custom pools group accounts + give a custom field name to use elsewhere"):
+First pass got the model wrong (pool cards replaced account cards, assignment in a separate list).
+Rebuilt to Cam's spec: EVERY investment account gets its own growth card (name + type + pool selector +
+value + delta + area chart); pools are a custom grouping managed in a pools bar (chip per pool w/ value +
+rename/delete), and — the key ask — each pool exposes a pool_<slug>_value ENGINE VARIABLE usable
+elsewhere. Wiring: engineenv.PoolDef + Data.Pools + addPoolVars (sum member account balances→base) +
+PoolVarBases/Fields; livePoolDefs (uistate config→PoolDef) into liveEngineVars; widgetcatalog.PoolMetrics
++ GroupPools into the FormulaBuilder picker + studio. Persisted config uistate.InvestPool (KV
+cashflux:invest:pools) + Add/Rename/Delete/AssignAccountToPool/PoolForAccount. The pool chip shows the
+literal variable name (pool_retirement_value, mono accent) so users know what to type. Charts share the
+UseInvestGrowthMonths window. engineenv poolvars test (pool_retirement_value=28000, collision suffix).
+e2e P1-P8 rewritten: per-account charts, selector per account, pool chip + variable name, accounts KEEP
+charts after pooling, delete. 37/37; go test ./... green.
+
 Follow-up 12 (Cam: "show growth over time on a graph, configurable 1/6/12 month scaling, design well"):
 new invest-growth tile (placed right under the summary). UseInvestGrowthMonths int atom (1/6/12, default
 12). growthCutoffs(now, months): monthly points for 6/12, weekly for 1; last cutoff now+1d so today

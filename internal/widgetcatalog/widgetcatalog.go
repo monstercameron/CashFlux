@@ -29,6 +29,7 @@ const (
 	GroupAccounts Group = "Accounts"
 	GroupGoals    Group = "Goals"
 	GroupDebt     Group = "Debts"
+	GroupPools    Group = "Pools"
 )
 
 // debtFieldMeta labels + documents each per-debt metric suffix for the picker.
@@ -231,6 +232,25 @@ func DebtMetrics(accounts []domain.Account) []Metric {
 				Label: base.Account.Name + " — " + meta.Label,
 				Doc:   meta.Doc,
 				Group: GroupDebt,
+			})
+		}
+	}
+	return out
+}
+
+// PoolMetrics returns the per-pool combined-value metric (pool_<slug>_value) so a custom
+// account group can be referenced by name in a formula or dashboard widget. Built from
+// engineenv's naming so labels always match the variables the surface resolves.
+func PoolMetrics(pools []engineenv.PoolDef) []Metric {
+	bases := engineenv.PoolVarBases(pools)
+	out := make([]Metric, 0, len(bases)*len(engineenv.PoolVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.PoolVarFields {
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Pool.Name + " — value",
+				Doc:   "Combined current value of the accounts in this pool.",
+				Group: GroupPools,
 			})
 		}
 	}

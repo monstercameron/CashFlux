@@ -261,6 +261,7 @@ func InvestmentsScreen() ui.Node {
 	if len(v.Securities) > 0 {
 		specs = append(specs, investNativeSpec("invest-allocation"))
 	}
+	specs = append(specs, investNativeSpec("invest-pools"))
 	if formulasAtom.Get() {
 		specs = append(specs, investNativeSpec("invest-formula"))
 	}
@@ -300,6 +301,9 @@ func init() {
 	})
 	R("invest-allocation", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investAllocationWidget, investPanelProps{App: c.App})
+	})
+	R("invest-pools", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investPoolsWidget, investPanelProps{App: c.App})
 	})
 	R("invest-formula", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investFormulaWidget, investPanelProps{App: c.App})

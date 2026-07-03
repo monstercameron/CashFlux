@@ -53,6 +53,17 @@ type Data struct {
 	WeekStart    time.Weekday // week anchor for per-budget period windows (default Sunday)
 	CustomDefs   []customfields.Def
 	Molecules    []domain.Molecule
+	// Pools are user-defined groups of accounts (see the investments page); each becomes a
+	// pool_<slug>_value engine variable so a group's combined value is usable in formulas.
+	Pools []PoolDef
+}
+
+// PoolDef is a named group of account IDs, passed in from the wasm layer (which holds the
+// persisted pool config), so the pure engine can expose a pool's combined value.
+type PoolDef struct {
+	Name       string
+	VarName    string
+	AccountIDs []string
 }
 
 // atomNames lists the indivisible variables computeAtoms produces, in a stable
@@ -230,6 +241,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addAccountVars(out, d, major, toBase)
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase)
+	addPoolVars(out, d, major, toBase)
 	return out
 }
 
@@ -328,6 +340,75 @@ func GoalVarBases(goals []domain.Goal) []GoalVarBase {
 
 // GoalVarSlug exposes the slugging used for per-goal variable names (for UI previews).
 func GoalVarSlug(s string) string { return budgetVarSlug(s) }
+
+// addPoolVars exposes each account pool as a pool_<slug>_value variable: the combined
+// current balance of its member accounts (FX-converted to base), so a custom group like
+// "Retirement" (401k + Roth IRA) can be referenced by name in any formula or widget.
+func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	if len(d.Pools) == 0 {
+		return
+	}
+	byID := make(map[string]domain.Account, len(d.Accounts))
+	for _, a := range d.Accounts {
+		byID[a.ID] = a
+	}
+	for _, base := range PoolVarBases(d.Pools) {
+		var total int64
+		for _, aid := range base.Pool.AccountIDs {
+			a, ok := byID[aid]
+			if !ok || a.Archived {
+				continue
+			}
+			if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+				total += toBase(bal.Amount, bal.Currency)
+			}
+		}
+		out[base.Prefix+"value"] = major(total)
+	}
+}
+
+// PoolVarFields are the per-pool metric suffixes exposed on the surface.
+var PoolVarFields = []string{"value"}
+
+// PoolVarBase pairs a pool with the disambiguated variable prefix its values are keyed
+// under ("pool_<slug>_"). Single source of truth for per-pool variable naming.
+type PoolVarBase struct {
+	Pool   PoolDef
+	Prefix string // e.g. "pool_retirement_"
+}
+
+// PoolVarBases returns one entry per named pool, in stable order, with same-name pools
+// disambiguated by a numeric suffix. An explicit VarName wins over the display name.
+func PoolVarBases(pools []PoolDef) []PoolVarBase {
+	used := map[string]bool{}
+	out := make([]PoolVarBase, 0, len(pools))
+	for _, p := range pools {
+		src := p.Name
+		if p.VarName != "" {
+			src = p.VarName
+		}
+		slug := budgetVarSlug(src)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, PoolVarBase{Pool: p, Prefix: "pool_" + slug + "_"})
+	}
+	return out
+}
+
+// PoolVarSlug exposes the slugging used for per-pool variable names (for UI previews).
+func PoolVarSlug(s string) string { return budgetVarSlug(s) }
 
 // addBudgetVars exposes each budget as its own set of named variables, so a formula or
 // dashboard widget can reference a specific budget directly — e.g. budget_groceries_remaining

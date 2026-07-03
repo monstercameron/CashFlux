@@ -47,6 +47,27 @@ await p.locator('[data-testid="invest-growth-1m"]').click({ force: true }); awai
 check("G8 1M window is selectable + chart survives", await p.locator('[data-testid="invest-growth-1m"][aria-pressed="true"]').count() >= 1 && await p.locator('.inv-growth svg').count() >= 1);
 await p.locator('[data-testid="invest-growth-12m"]').click({ force: true }); await p.waitForTimeout(500);
 
+// Every account has its own growth chart; pools are a custom grouping exposing a variable.
+check("P1 account-growth & pools section", await p.locator('#sec-pools').count() >= 1);
+const acctCards = await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count();
+check("P2 every account has its own growth chart", acctCards >= 1 && await p.locator('.inv-pool-card svg').count() >= acctCards, `${acctCards} account cards`);
+check("P3 each account card has a pool selector", await p.locator('[data-testid^="invest-assign-"]').count() === acctCards, `${await p.locator('[data-testid^="invest-assign-"]').count()} vs ${acctCards}`);
+// Create a pool → a chip appears exposing a pool_<name>_value variable.
+await p.locator('[data-testid="invest-new-pool"]').click({ force: true }); await p.waitForTimeout(400);
+await p.locator('#cf-dialog-input').fill("Retirement");
+await p.locator('#cf-dialog-confirm').click(); await p.waitForTimeout(600);
+check("P4 the new pool chip appears", await p.locator('.inv-pool-chip').count() >= 1);
+check("P5 the pool exposes a pool_<name>_value variable name", ((await p.locator('.inv-pool-var').first().textContent().catch(() => "")) || "").includes("pool_"));
+// Assign two accounts → they KEEP their own charts (pools don't merge accounts away).
+const asgn = await p.locator('[data-testid^="invest-assign-"]').all();
+if (asgn.length >= 2) { await asgn[0].selectOption({ label: "Retirement" }); await p.waitForTimeout(400); await asgn[1].selectOption({ label: "Retirement" }); await p.waitForTimeout(600); }
+check("P6 accounts keep their own charts after pooling", await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
+check("P7 the pool chip shows its combined value", ((await p.locator('.inv-pool-chip-val').first().textContent().catch(() => "")) || "").replace(/[^0-9]/g, "").length > 0);
+// Delete the pool.
+await p.locator('[data-testid^="invest-pool-del-"]').first().click({ force: true }); await p.waitForTimeout(400);
+await p.evaluate(() => { const c = document.querySelector('#cf-dialog-confirm'); if (c) c.click(); }); await p.waitForTimeout(600);
+check("P8 deleting the pool removes its chip (accounts unchanged)", await p.locator('.inv-pool-chip').count() === 0 && await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
+
 // Add a stock security → securities + allocation appear.
 await p.locator('[data-testid="invest-add"]').click({ force: true }); await p.waitForTimeout(500);
 check("A1 add-security form reveals", await p.locator('[data-testid="invest-add-form"]').count() === 1);
