@@ -40,6 +40,19 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 15 (Cam: "new pool needs to be a flip modal + list the accounts you want to pool"):
+Replaced the name-only PromptModal with a real flip modal that names AND picks accounts. New
+UseInvestPoolEditID atom ("" closed / "new" / pool id). InvestPoolForm (screens): name field +
+poolAccountToggle checkable rows (each its own component for the click hook; selection held in a
+map[string]bool UseState, toggle copies+sets a new map) over investAccountsOf; Save → UpsertInvestPool
+(new: id.NewWithPrefix; edit: same id) → OnDone; edit pre-fills name + checked from the existing pool.
+New uistate.UpsertInvestPool(id,name,accountIDs) (one-pool-per-account: strips selected accts from other
+pools). app/investpooleedithost.go: FlipPanel driven by the atom (title New/Edit, 480x560), mounted in
+Shell. Pool chip pencil → set atom=id (edit); New-pool button → set atom="new". Removed the now-dead
+AddInvestPool/RenameInvestPool. CSS pool-acct-toggle checklist (accent-tinted when checked). e2e P4-P11
+rewritten: modal opens listing accounts, check marks aria-checked, save creates chip+variable, accounts
+keep charts, edit pre-fills, cancel no-crash guard, delete. 41/41; go test green.
+
 Follow-up 14 (Cam: "add-new should use a well-designed flip modal + cancelling add-security crashed:
 GoUseAtom called outside component context"): the crash was addHoldingForm's Cancel calling
 uistate.UseInvestAddOpen() (a HOOK) inside the click handler — classic hook-outside-component. Fix +

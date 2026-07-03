@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -97,14 +98,8 @@ type investPoolChipProps struct {
 // name it exposes (pool_<slug>_value) for use elsewhere, and rename/delete actions.
 func investPoolChip(props investPoolChipProps) ui.Node {
 	p := props.Pool
-	rename := ui.UseEvent(Prevent(func() {
-		uistate.PromptModal(uistate.T("investments.renamePoolPrompt"), p.Name, func(n string) {
-			if strings.TrimSpace(n) != "" {
-				uistate.RenameInvestPool(p.ID, n)
-				uistate.BumpDataRevision()
-			}
-		})
-	}))
+	poolEdit := uistate.UseInvestPoolEditID()
+	rename := ui.UseEvent(Prevent(func() { poolEdit.Set(p.ID) }))
 	del := ui.UseEvent(Prevent(func() {
 		uistate.ConfirmModal(uistate.T("investments.deletePoolConfirm", p.Name), true, func(ok bool) {
 			if ok {
@@ -120,8 +115,8 @@ func investPoolChip(props investPoolChipProps) ui.Node {
 			Span(css.Class("inv-pool-chip-val", tw.TextDim), fmtSignedMoney(props.ValueMinor, props.Sym, props.Dec)),
 		),
 		Span(css.Class("inv-pool-var"), Title(uistate.T("investments.poolVarHint")), varName),
-		Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-rename-"+p.ID),
-			Attr("aria-label", uistate.T("investments.renamePool")), Title(uistate.T("investments.renamePool")), OnClick(rename),
+		Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+p.ID),
+			Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(rename),
 			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
 		Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-del-"+p.ID),
 			Attr("aria-label", uistate.T("investments.deletePool")), Title(uistate.T("investments.deletePool")), OnClick(del),
@@ -162,6 +157,138 @@ func investAccountGraphCard(props investAccountGraphCardProps) ui.Node {
 	return growthCard("invest-acct-"+a.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base)
 }
 
+// --- pool editor flip modal ------------------------------------------------------
+
+type poolAccountToggleProps struct {
+	Account  domain.Account
+	Checked  bool
+	OnToggle func(string)
+}
+
+// poolAccountToggle is one checkable account row in the pool editor. Its own component so
+// the per-row click hook is stable inside the account list.
+func poolAccountToggle(props poolAccountToggleProps) ui.Node {
+	a := props.Account
+	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(a.ID) }))
+	cls := "pool-acct-toggle"
+	if props.Checked {
+		cls += " is-checked"
+	}
+	var checkMark ui.Node = Fragment()
+	if props.Checked {
+		checkMark = uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4))
+	}
+	return Button(ClassStr(cls), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", ariaBool(props.Checked)),
+		Attr("data-testid", "pool-acct-"+a.ID), OnClick(toggle),
+		Span(css.Class("pool-acct-check"), Attr("aria-hidden", "true"), checkMark),
+		Span(css.Class("pool-acct-name"), a.Name),
+		Span(css.Class("inv-chip inv-class"), investmentAccountTypeBadge(a.Type)),
+	)
+}
+
+// InvestPoolFormProps configures the create/edit-pool modal form.
+type InvestPoolFormProps struct {
+	ID     string // "new" (or "") to create, else the pool id to edit
+	OnDone func()
+}
+
+// InvestPoolForm is the create/edit-pool flip-modal body: a name field and a checkable list
+// of the investment accounts to include in the pool. Saving upserts the pool (an account
+// belongs to one pool, so selecting it here moves it out of any other) and closes.
+func InvestPoolForm(props InvestPoolFormProps) ui.Node {
+	app := appstate.Default
+	var accounts []domain.Account
+	if app != nil {
+		accounts = investAccountsOf(app)
+	}
+	isNew := props.ID == "" || props.ID == "new"
+	var existing uistate.InvestPool
+	if !isNew {
+		for _, p := range uistate.InvestPools() {
+			if p.ID == props.ID {
+				existing = p
+				break
+			}
+		}
+	}
+
+	nameS := ui.UseState(existing.Name)
+	initSel := map[string]bool{}
+	for _, aid := range existing.AccountIDs {
+		initSel[aid] = true
+	}
+	selS := ui.UseState(initSel)
+	errS := ui.UseState("")
+	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
+
+	toggle := func(aid string) {
+		cur := selS.Get()
+		next := make(map[string]bool, len(cur)+1)
+		for k, val := range cur {
+			next[k] = val
+		}
+		if next[aid] {
+			delete(next, aid)
+		} else {
+			next[aid] = true
+		}
+		selS.Set(next)
+	}
+
+	save := ui.UseEvent(Prevent(func() {
+		name := strings.TrimSpace(nameS.Get())
+		if name == "" {
+			errS.Set(uistate.T("investments.poolNameRequired"))
+			return
+		}
+		var ids []string
+		for _, a := range accounts {
+			if selS.Get()[a.ID] {
+				ids = append(ids, a.ID)
+			}
+		}
+		pid := props.ID
+		if isNew {
+			pid = id.NewWithPrefix("pool")
+		}
+		uistate.UpsertInvestPool(pid, name, ids)
+		uistate.BumpDataRevision()
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
+	cancel := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
+
+	toggles := MapKeyed(accounts, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
+		return ui.CreateElement(poolAccountToggle, poolAccountToggleProps{Account: a, Checked: selS.Get()[a.ID], OnToggle: toggle})
+	})
+
+	saveLabel := uistate.T("investments.createPool")
+	if !isNew {
+		saveLabel = uistate.T("investments.savePool")
+	}
+
+	return Div(css.Class("inv-pool-modal"),
+		Form(css.Class("inv-pool-modal-form"), OnSubmit(save),
+			labeledField(uistate.T("investments.poolNameLabel"),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "pool-name"), Attr("autofocus", "true"),
+					Placeholder(uistate.T("investments.poolNamePlaceholder")), Value(nameS.Get()), OnInput(onName))),
+			Div(css.Class("pool-acct-list-label", tw.TextDim), uistate.T("investments.poolPickAccounts")),
+			If(len(accounts) == 0, P(css.Class("empty"), uistate.T("investments.noAccountsBody"))),
+			Div(css.Class("pool-acct-list"), toggles),
+			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "pool-save"), saveLabel),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "pool-cancel"), OnClick(cancel), uistate.T("action.cancel")),
+			),
+		),
+	)
+}
+
 // --- the tile --------------------------------------------------------------------
 
 // investPoolsWidget shows a growth graph for EVERY investment account, plus a "pools" bar
@@ -179,14 +306,8 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 	if months != 1 && months != 6 && months != 12 {
 		months = 12
 	}
-	newPool := ui.UseEvent(Prevent(func() {
-		uistate.PromptModal(uistate.T("investments.newPoolPrompt"), "", func(name string) {
-			if strings.TrimSpace(name) != "" {
-				uistate.AddInvestPool(id.NewWithPrefix("pool"), name)
-				uistate.BumpDataRevision()
-			}
-		})
-	}))
+	poolEdit := uistate.UseInvestPoolEditID()
+	newPool := ui.UseEvent(Prevent(func() { poolEdit.Set("new") }))
 
 	investAccts := investAccountsOf(app)
 	pools := uistate.InvestPools()

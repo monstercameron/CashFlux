@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Create/edit an investment pool in a flip modal with an account checklist (2026-07-02):** "New pool" now opens a proper shell-root **flip modal** (`InvestPoolEditHost`) with a name field and a **checkable list of your investment accounts to include** — instead of the bare name prompt. The pool chip's pencil opens the same modal pre-filled (name + checked members) for editing. Saving upserts the pool (an account belongs to one pool, so checking it here moves it there). Persistence via the new `uistate.UpsertInvestPool`.
+
 ### Fixed
 - **Add-security is now a shell-root flip modal; cancelling no longer crashes (2026-07-02):** The "Add a holding" form moved from an inline reveal in the securities tile to a proper centered **flip modal** (a new shell-root `InvestAddHost`, so `position:fixed` centres against the viewport rather than a transformed bento tile). This also fixes a runtime panic (`GoUseAtom called outside component context`) — the old Cancel button called `UseInvestAddOpen()` (a hook) inside its click handler; the modal form now closes via an `OnDone` callback captured at render. Saving adds the holding and keeps the modal open with an "Added ✓" flash so several can be entered in a row.
 

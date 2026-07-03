@@ -46,33 +46,6 @@ func SetInvestPools(pools []InvestPool) {
 	}
 }
 
-// AddInvestPool appends a new pool with the given id + name (name trimmed; no-op if blank).
-func AddInvestPool(id, name string) {
-	name = strings.TrimSpace(name)
-	if id == "" || name == "" {
-		return
-	}
-	pools := InvestPools()
-	pools = append(pools, InvestPool{ID: id, Name: name})
-	SetInvestPools(pools)
-}
-
-// RenameInvestPool renames the pool with the given id (no-op if blank/unknown).
-func RenameInvestPool(id, name string) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return
-	}
-	pools := InvestPools()
-	for i := range pools {
-		if pools[i].ID == id {
-			pools[i].Name = name
-			SetInvestPools(pools)
-			return
-		}
-	}
-}
-
 // DeleteInvestPool removes the pool with the given id (its accounts become ungrouped).
 func DeleteInvestPool(id string) {
 	pools := InvestPools()
@@ -103,6 +76,42 @@ func AssignAccountToPool(accountID, poolID string) {
 		if pools[i].ID == poolID {
 			pools[i].AccountIDs = append(pools[i].AccountIDs, accountID)
 		}
+	}
+	SetInvestPools(pools)
+}
+
+// UpsertInvestPool creates or updates a pool with the given id, name, and member accounts.
+// Because an account belongs to at most one pool, the selected accounts are removed from any
+// other pool first. A blank name is a no-op.
+func UpsertInvestPool(id, name string, accountIDs []string) {
+	name = strings.TrimSpace(name)
+	if id == "" || name == "" {
+		return
+	}
+	sel := make(map[string]bool, len(accountIDs))
+	for _, a := range accountIDs {
+		sel[a] = true
+	}
+	pools := InvestPools()
+	found := false
+	for i := range pools {
+		if pools[i].ID == id {
+			pools[i].Name = name
+			pools[i].AccountIDs = append([]string(nil), accountIDs...)
+			found = true
+			continue
+		}
+		// Strip any of the selected accounts from other pools (one pool per account).
+		kept := pools[i].AccountIDs[:0:0]
+		for _, aid := range pools[i].AccountIDs {
+			if !sel[aid] {
+				kept = append(kept, aid)
+			}
+		}
+		pools[i].AccountIDs = kept
+	}
+	if !found {
+		pools = append(pools, InvestPool{ID: id, Name: name, AccountIDs: append([]string(nil), accountIDs...)})
 	}
 	SetInvestPools(pools)
 }
