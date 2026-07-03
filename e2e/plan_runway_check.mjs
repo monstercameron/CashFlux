@@ -57,10 +57,10 @@ try {
   // Poll until a plan card with the plan name appears. The sample seeds its own
   // plans, so scope every assertion to OUR plan's card (the ancestor row of the
   // row-desc carrying the unique name) rather than a global .first().
-  const nameSpan = page.locator(`.row-desc`, { hasText: PLAN_NAME });
+  const nameSpan = page.locator(`.plan-scenario-name`, { hasText: PLAN_NAME });
   await nameSpan.waitFor({ state: "attached", timeout: 15000 });
   // The plan card is the nearest ancestor that also holds the runway readout.
-  const card = page.locator('.row', { has: page.locator(`.row-desc`, { hasText: PLAN_NAME }) }).first();
+  const card = page.locator('.plan-scenario', { has: page.locator(`.plan-scenario-name`, { hasText: PLAN_NAME }) }).first();
   await card.waitFor({ state: "attached", timeout: 5000 });
   await page.waitForTimeout(300);
 
