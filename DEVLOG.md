@@ -1,3 +1,20 @@
+## 2026-07-03 — C335/C336: the raw-i18n-key family, killed at the root
+
+First fixes off the sweep. The interesting part wasn't the keys — it was the *class*: `T()` returns
+the key itself on a miss (and Sprintf's any args into it, hence /subscriptions' literal
+"subs.netPriceUp%!(EXTRA string=$134.60)"), so every missing key ships silently as UI text. A
+PowerShell diff of `uistate.T("…")` literals vs the en tables found 12 missing, not 3: the two
+/setup hero keys and nav.setup Cam could see, PLUS the wizard's entire account-type picker
+(referenced a nonexistent `accounts.type*` family — switched to the existing `acctType.*` keys
+instead of adding duplicates), dashboard.heroTitle (widget registry name), common.loading, and —
+found by the new guard test, invisible in screenshots — two Settings **aria-labels** that screen
+readers heard as raw keys with a format error. The durable piece is
+`internal/i18n/keycoverage_test.go`: a native source-scan test (T-literals + the screens.go
+registry's Label/Title/Subtitle fields, concat-safe so `T("acctType."+kind)` dynamic keys don't
+false-positive) that fails `go test` on any future missing key. Verified live on the isolated
+:8123 build: rail "Set up", wizard "Welcome to CashFlux", subs "Recent changes add up to about
+$134.60/mo more.", 0 page errors.
+
 ## 2026-07-03 — World-class UX sweep: all 42 routes × sample + empty, findings filed as C335–C360
 
 Cam asked for a full-app review ("explore all the pages … UX/usability/helpfulness/quality … I want

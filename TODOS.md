@@ -3156,15 +3156,21 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   "period just started" framing + show last period's outcome until ~day 5.
 
 ### High-visibility bugs (fix-now class)
-- [ ] **C335 [MAJOR][BUG] Raw i18n keys render in the shell + setup wizard.** The rail shows
-  "nav.setup" (System group) and /setup's hero card literally shows "setup.welcomeTitle" /
-  "setup.welcomeBody" — the first-run funnel greets users with key names. Keys missing from
-  `internal/i18n` (confirmed: no `nav.setup`, `setup.welcomeTitle|Body` in the en tables). Add the
-  keys AND a native guard test that scans `uistate.T("...")` literals in internal/screens+app
-  against the en table so a missing key fails `go test`.
-- [ ] **C336 [MAJOR][BUG] /subscriptions renders a raw Go format-verb error:**
-  "subs.netPriceUp%!(EXTRA string=$134.60)" above "Recent price changes" — an i18n key missing
-  (or %s-less template) fed to Sprintf. Fix the key/template + audit siblings.
+- [x] **C335 ✅ DONE (2026-07-03) — Raw i18n keys render in the shell + setup wizard.** Root cause:
+  `T()` falls back to returning the key itself, and 12 referenced keys were missing. Fixed via
+  `internal/i18n/en_uxsweep.go` (nav.setup, setup.welcomeTitle/Body, dashboard.heroTitle,
+  common.loading, settings.freshnessAria/fxRateAria) + setup.go's account-type options switched to
+  the EXISTING `acctType.*` keys (they referenced a nonexistent `accounts.type*` family — the
+  wizard's account step showed 6 raw keys too). **Guard shipped:** `keycoverage_test.go` scans
+  internal/screens+app for `uistate.T("…")` literals + the screens.go registry Label/Title/Subtitle
+  fields against the merged English catalog (concat-safe regex; dynamic-key limitation documented) —
+  it immediately caught 2 MORE live bugs (the settings aria-labels, which read as raw keys + a
+  format error to screen readers). MEASURED live: rail shows "Set up", /setup shows "Welcome to
+  CashFlux", 0 page errors; `go test ./internal/i18n` green; wasm build rc=0.
+- [x] **C336 ✅ DONE (2026-07-03) — /subscriptions raw format-verb error.** Same root cause as C335:
+  `subs.netPriceUp|Down` were never defined, so `T(key, amt)` Sprintf'd the key itself →
+  "subs.netPriceUp%!(EXTRA string=$134.60)". Keys added (en_uxsweep.go). MEASURED live: the card
+  now reads "Recent changes add up to about $134.60/mo more."; covered by the C335 guard test.
 - [ ] **C337 [MAJOR][BUG] Money renders without thousands separators on /investments and /credit.**
   /investments: "$33720.00", "$22200.00", "$3420.00", "$8100.00" (every figure). /credit:
   "$8190.56 of $12000.00 limit" and "Pay $4590.56" — while the card directly above prints
