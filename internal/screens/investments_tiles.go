@@ -214,7 +214,7 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	addAtom := uistate.UseInvestAddOpen()
 	formulasAtom := uistate.UseInvestShowFormulas()
-	toggleAdd := ui.UseEvent(Prevent(func() { addAtom.Set(!addAtom.Get()) }))
+	openAdd := ui.UseEvent(Prevent(func() { addAtom.Set(true) }))
 	toggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 
 	formulasLabel := uistate.T("investments.metricsShow")
@@ -234,7 +234,7 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/accounts")), uistate.T("debt.linkAccounts")),
 		),
 		Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "invest-add"), Title(uistate.T("investments.addHoldingTitle")), OnClick(toggleAdd),
+			Attr("data-testid", "invest-add"), Title(uistate.T("investments.addHoldingTitle")), OnClick(openAdd),
 			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("investments.addSecurity"))),
 	)
@@ -251,7 +251,6 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 func investSecuritiesWidget(props investPanelProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	addOpen := uistate.UseInvestAddOpen().Get()
 	v := computeInvestView(app)
 
 	// No investment accounts at all → send the user to add one first.
@@ -302,14 +301,11 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 		listBody = Div(css.Class("inv-list"), rows)
 	}
 
-	var addNode ui.Node = Fragment()
-	if addOpen {
-		addNode = ui.CreateElement(addHoldingForm, addHoldingFormProps{Accounts: investAccountsOf(app), Sym: v.Sym, Dec: v.Dec})
-	}
-
+	// The add-security form is a shell-root flip modal (InvestAddHost), opened by the
+	// toolbar's Add button — not rendered inline here.
 	body := investSection("sec-securities", uistate.T("investments.securitiesTitle"),
 		investOwnerLink("/accounts", uistate.T("debt.linkAccounts")),
-		Fragment(addNode, listBody))
+		listBody)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-securities", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

@@ -97,6 +97,11 @@ if (await p.locator('[data-testid="invest-add-form"]').count()) {
   await p.waitForTimeout(500);
 }
 check("A7 (neg) invalid add shows an error, no crash", await p.locator('[data-testid="invest-add-form"] .err').count() >= 1 || errs.length === 0);
+// Close the add modal — Cancel/Done previously crashed the page (hook-outside-component);
+// this is the regression guard. Also required so the delete below isn't behind the modal.
+await p.locator('[data-testid="hld-cancel"]').click({ force: true }).catch(() => {});
+await p.waitForTimeout(400);
+check("A8 (regression) closing the add modal doesn't crash", await p.locator('[data-testid="invest-add-form"]').count() === 0 && errs.length === 0, `errs=${errs.length}`);
 
 // Delete the security (confirm modal).
 const delBtn = p.locator('[data-testid^="holding-del-"]').first();

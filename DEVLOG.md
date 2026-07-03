@@ -40,6 +40,19 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 14 (Cam: "add-new should use a well-designed flip modal + cancelling add-security crashed:
+GoUseAtom called outside component context"): the crash was addHoldingForm's Cancel calling
+uistate.UseInvestAddOpen() (a HOOK) inside the click handler — classic hook-outside-component. Fix +
+the modal ask together: converted the inline add form to a shell-root flip modal. addHoldingForm →
+exported InvestAddForm(InvestAddFormProps{OnDone}) — reads accounts/base itself, Cancel calls OnDone
+(captured prop, no hook), Save adds + resets + keeps open with an "Added ✓" flash (enter several).
+New app/investaddhost.go: InvestAddHost reads UseInvestAddOpen, renders uiw.FlipPanel (Title/Width 560/
+Height 440/NoFooter/OnClose=set-false) with InvestAddForm; mounted in Shell beside the other hosts
+(shell root so position:fixed centres — tiles carry transforms that break it). Toolbar Add now SETS
+true (opens) instead of toggling; removed the inline form + addOpen from investSecuritiesWidget.
+e2e A1-A8 updated incl. A8 regression guard (open→fill→save keeps open + Added flash→Cancel closes w/
+0 errors). 38/38; go test ./... green.
+
 Follow-up 13 (Cam: "graphs for each investment pool or account + link accounts into a pool" → then
 corrected: "a pool is a group of accounts, this makes no sense — I want EACH ACCOUNT to have the growth
 chart, and custom pools group accounts + give a custom field name to use elsewhere"):

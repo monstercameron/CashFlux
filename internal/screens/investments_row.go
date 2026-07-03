@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -144,16 +145,30 @@ func traditionalRow(props traditionalRowProps) ui.Node {
 
 // --- add-holding form ------------------------------------------------------------
 
-type addHoldingFormProps struct {
-	Accounts []domain.Account // investment accounts to pick from
-	Sym      string
-	Dec      int
+// InvestAddFormProps configures the add-security modal form.
+type InvestAddFormProps struct {
+	OnDone func() // called to close the modal (Cancel / backdrop / after nothing)
 }
 
-// addHoldingForm is the single "Add a security" form for the widgetized page: pick the
-// investment account and the security type, then enter ticker/name/shares/cost/price. Its
-// own component so its many input hooks sit at stable positions.
-func addHoldingForm(props addHoldingFormProps) ui.Node {
+// InvestAddForm is the "Add a security" form shown inside the shell-root flip modal
+// (InvestAddHost): pick the investment account + security type, then enter ticker / name /
+// shares / cost / price. Saving adds the holding and clears the fields so several can be
+// entered in a row (with a brief confirmation); Cancel calls OnDone to close. Its own
+// component so its many input hooks sit at stable positions, and it reads the accounts +
+// base currency itself so the host stays a thin wrapper.
+func InvestAddForm(props InvestAddFormProps) ui.Node {
+	app := appstate.Default
+	base := "USD"
+	var accounts []domain.Account
+	if app != nil {
+		if b := app.Settings().BaseCurrency; b != "" {
+			base = b
+		}
+		accounts = investAccountsOf(app)
+	}
+	sym := currency.Symbol(base)
+	dec := currency.Decimals(base)
+
 	acctS := ui.UseState("")
 	typeS := ui.UseState(string(domain.SecurityStock))
 	tickerS := ui.UseState("")
@@ -163,6 +178,7 @@ func addHoldingForm(props addHoldingFormProps) ui.Node {
 	priceS := ui.UseState("")
 	classS := ui.UseState("")
 	errS := ui.UseState("")
+	savedS := ui.UseState("")
 
 	onTicker := ui.UseEvent(func(v string) { tickerS.Set(v) })
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
@@ -173,8 +189,8 @@ func addHoldingForm(props addHoldingFormProps) ui.Node {
 
 	// Default the account to the first one when unset.
 	acct := acctS.Get()
-	if acct == "" && len(props.Accounts) > 0 {
-		acct = props.Accounts[0].ID
+	if acct == "" && len(accounts) > 0 {
+		acct = accounts[0].ID
 	}
 
 	onSave := ui.UseEvent(Prevent(func() {
@@ -198,7 +214,7 @@ func addHoldingForm(props addHoldingFormProps) ui.Node {
 			return
 		}
 		mul := int64(1)
-		for range props.Dec {
+		for range dec {
 			mul *= 10
 		}
 		costF, err2 := strconv.ParseFloat(strings.TrimSpace(costS.Get()), 64)
@@ -234,15 +250,19 @@ func addHoldingForm(props addHoldingFormProps) ui.Node {
 		priceS.Set("")
 		classS.Set("")
 		errS.Set("")
+		savedS.Set(fmt.Sprintf(uistate.T("investments.addedFlash"), name))
 	}))
-	closeForm := ui.UseEvent(Prevent(func() { uistate.UseInvestAddOpen().Set(false) }))
+	cancel := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
 
-	acctOpts := make([]uiw.SelectOption, 0, len(props.Accounts))
-	for _, a := range props.Accounts {
+	acctOpts := make([]uiw.SelectOption, 0, len(accounts))
+	for _, a := range accounts {
 		acctOpts = append(acctOpts, uiw.SelectOption{Value: a.ID, Label: a.Name})
 	}
 
-	sym := props.Sym
 	form := Form(css.Class("inv-add-form"), OnSubmit(onSave),
 		Div(css.Class("form-grid"),
 			labeledField(uistate.T("investments.accountLabel"),
@@ -273,10 +293,11 @@ func addHoldingForm(props addHoldingFormProps) ui.Node {
 					Placeholder(uistate.T("investments.assetClassPlaceholder")), Value(classS.Get()), OnInput(onClass))),
 		),
 		If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+		If(errS.Get() == "" && savedS.Get() != "", P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), savedS.Get())),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "hld-save"), uistate.T("investments.addHolding")),
-			Button(css.Class("btn"), Type("button"), OnClick(closeForm), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "hld-cancel"), OnClick(cancel), uistate.T("investments.doneAdding")),
 		),
 	)
-	return Div(css.Class("card-inset inv-add"), Attr("data-testid", "invest-add-form"), form)
+	return Div(css.Class("inv-add-modal"), Attr("data-testid", "invest-add-form"), form)
 }

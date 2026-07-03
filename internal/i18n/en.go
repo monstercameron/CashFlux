@@ -2597,6 +2597,8 @@ var english = Catalog{
 	"investments.byClass":           "By asset class",
 	"investments.addSecurity":       "Add security",
 	"investments.addAccount":        "Add account",
+	"investments.doneAdding":        "Done",
+	"investments.addedFlash":        "Added %s ✓",
 	"investments.accountLabel":      "Account",
 	"investments.accountRequired":   "Pick an account for this security.",
 	"investments.securityTypeLabel": "Security type",
