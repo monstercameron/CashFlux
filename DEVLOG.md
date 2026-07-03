@@ -24,6 +24,16 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C355: the audit feed spoke undosnap, not English
+
+Two small /activity fixes. The feed's entity inference picked the ChangeSet's dominant collection,
+and undosnap stores scalar dataset fields in synthetic "_meta:…" collections — so a settings-KV
+write surfaced verbatim as "Added 3 _meta:settingsState records". inferEntryFields now skips
+`_meta:*` buckets when a real entity collection is present and singularize humanizes an
+internal-only change to "settings". Also the aside rendered date and actor as adjacent spans with
+no gap ("May 26, 2026Marcus Hartley") — a literal " · " separator now sits between them. Probe:
+no `_meta` text on /activity, no run-on, 0 page errors.
+
 ## 2026-07-03 — C338: the AUD wizard default was a selected-attribute-vs-property bug
 
 The setup wizard showed "AUD — A$" on a USD household. The state code was innocent — it already

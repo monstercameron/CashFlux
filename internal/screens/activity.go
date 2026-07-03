@@ -120,7 +120,9 @@ func activityRow(props activityRowProps) ui.Node {
 		),
 		Div(css.Class("row-aside"),
 			Span(css.Class("row-meta", tw.TextFaint), timeLabel),
-			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), actorLabel)),
+			// The " · " keeps the date and actor from running together as one
+			// string ("May 26, 2026Marcus Hartley") — the aside has no gap (C355).
+			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), " · "+actorLabel)),
 			If(showUndo,
 				Button(
 					css.Class("btn btn-xs"),

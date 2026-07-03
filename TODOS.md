@@ -3187,9 +3187,12 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   `setup-currency` inputValue == "USD" on a USD dataset; 0 page errors; wasm build rc=0. (The
   pre-checked "✓ Account / ✓ Members" step dots are by design — the wizard resumes from existing
   data, matching the dashboard checklist's "pick up where you left off".)
-- [ ] **C355 [MINOR][BUG] /activity leaks internals + runs date into actor.** "Added 3
-  _meta:settingsState records" appears in the user-facing feed, and rows render
-  "May 26, 2026Marcus Hartley" (no separator). Filter `_meta:*` audit records; fix the separator.
+- [x] **C355 ✅ DONE (2026-07-03) — /activity leaked internals + ran date into actor.** Audit
+  entries now describe a change by its dominant REAL collection (the `_meta:*` scalar buckets —
+  settings KV, schema version — are skipped when picking, and humanize to "settings" when a change
+  touches only them), so "Added 3 _meta:settingsState records" reads "Added 3 settings records";
+  and the row aside gained a " · " separator ("May 26, 2026 · Marcus Hartley"). MEASURED live:
+  /activity shows no `_meta` text, no date+actor run-on; 0 page errors; wasm build rc=0.
 - [ ] **C356 [MINOR][BUG] Smart insights fire on an empty dataset.** Fresh "Start fresh" store
   shows "Liquid cash is very low — your spendable cash is $0.00" on the dashboard and /budgets.
   Balance/cash rules need an any-data-at-all guard.

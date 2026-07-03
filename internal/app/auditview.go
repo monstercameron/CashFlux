@@ -24,6 +24,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
@@ -96,10 +97,23 @@ func inferEntryFields(cs history.ChangeSet) (action, entityType, entityID string
 		opCount[c.Op]++
 		collCount[c.Collection]++
 	}
+	// Pick the dominant collection, preferring real entity collections over the
+	// internal "_meta:*" scalar buckets (settings KV, schema version, …) so a
+	// mixed change is described by what the user actually touched (C355).
 	domColl, domCount := "", 0
 	for coll, n := range collCount {
+		if strings.HasPrefix(coll, "_meta:") {
+			continue
+		}
 		if n > domCount {
 			domColl, domCount = coll, n
+		}
+	}
+	if domColl == "" { // change touched only internal buckets
+		for coll, n := range collCount {
+			if n > domCount {
+				domColl, domCount = coll, n
+			}
 		}
 	}
 	entityType = singularize(domColl)
@@ -162,6 +176,11 @@ func singularize(coll string) string {
 	default:
 		if coll == "" {
 			return "record"
+		}
+		// Internal scalar buckets ("_meta:settingsState", "_meta:schemaVersion",
+		// …) must never leak their raw names into the user-facing feed (C355).
+		if strings.HasPrefix(coll, "_meta:") {
+			return "settings"
 		}
 		return coll
 	}

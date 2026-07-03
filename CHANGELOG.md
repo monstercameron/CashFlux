@@ -20,6 +20,11 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **/activity no longer leaks internal record names or runs the date into the actor
+  (C355, 2026-07-03):** audit summaries preferred whatever collection dominated a change — including
+  the internal `_meta:*` scalar buckets — so users saw "Added 3 _meta:settingsState records"; the
+  feed now describes changes by their real entity collection (internal-only changes humanize to
+  "settings"), and the row aside gained a separator ("May 26, 2026 · Marcus Hartley").
 - **Setup wizard selects now preselect the real current values (C338, 2026-07-03):** the currency
   dropdown showed "AUD — A$" (first alphabetical) instead of the household's base currency because
   setup.go marked options with the parse-time `selected` attribute, which the reconciled DOM
