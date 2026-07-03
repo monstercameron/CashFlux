@@ -1360,6 +1360,17 @@ func (a *App) PutMolecule(m domain.Molecule) error {
 	return a.store.PutMolecule(m)
 }
 
+// DeleteMolecule removes a persisted compound-variable row by name. For an
+// overridden built-in this RESTORES the default definition (Molecules layers
+// DefaultMolecules under the persisted set); for a user-created molecule it
+// removes it entirely. Returns whether a persisted row existed.
+func (a *App) DeleteMolecule(name string) (bool, error) {
+	if strings.TrimSpace(name) == "" {
+		return false, fmt.Errorf("appstate: molecule name is required")
+	}
+	return a.store.DeleteMolecule(name)
+}
+
 // DeleteCustomPage removes a user-authored page.
 func (a *App) DeleteCustomPage(id string) error {
 	if err := a.roleGuard(); err != nil {

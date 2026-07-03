@@ -1,3 +1,36 @@
+## 2026-07-03 — Studio Formulas: the palette gets doors; molecules get an editor
+
+Cam: "next work on the studio, start with the formula tab, use widgets, components and theme
+tokens, and do a ux review." Two threads converged here: the formula tab was the natural bento
+target, AND two prior adversarial reviews had flagged the shared FormulaBuilder's palette as "an
+undifferentiated wall of ~350 truncated chips" — plus my own /health and /credit copy promised
+"edit health_score under Formulas" while NO molecule editor existed anywhere. This pass closed all
+three.
+
+Palette: search (rank-ordered — label-prefix beats the thirty health_*_weight atoms when you type
+"health") + collapsible groups derived FROM the metrics (the hand-maintained group list had
+silently hidden the Assistant group — the derived list also ends the recurring both-agents-edit-
+the-same-line contention on that slice forever) + closed groups carry two example labels, not just
+a count. Controlled accordion (per-group component owns the toggle hook; native <details> would
+snap shut on every expression keystroke since the vdom re-renders).
+
+Molecule editor: every compound variable with provenance tag / live value / doc / formula,
+in-place editing with live draft preview, the point-of-action "live definition" warning (review
+P1: a normal green Save on an app-wide definition had no guardrail), PutMolecule validation
+surfaced as the error text, reset-to-default via the new appstate.DeleteMolecule (round-trip
+tested: override → layered → delete → default restored), and a create form (name-shape +
+taken-name checks against the live vars map so a custom molecule can't shadow an atom).
+
+UX review applied: group examples, search prominence ("Search 347 variables…" + wider), the
+saved-formulas scope sentence (its P1: two save concepts, zero explanation), the serif fb-title.
+Declined for now: per-molecule affected-pages list (needs reverse-dependency indexing), compound-
+variable list filtering (7 rows today). Note: the studio CHANGELOG entry rode along in the
+concurrent agent's i18n-sweep commit (both logs were staged together); the code ships here.
+
+e2e studio_formulas_check.mjs 20/20 — keystone: edit health_score in Studio → /health hero renders
+the EDITED definition → reset restores the built-in (needed the 4.6s autosave-ticker wait before
+the cross-page reload; also .fb-pal-title is CSS-uppercased, so innerText assertions must be /i).
+
 ## 2026-07-03 — i18n sweep, second pass: "every page AND component"
 
 Cam asked whether the sweep really checked EVERY page and component — honest answer was no, and

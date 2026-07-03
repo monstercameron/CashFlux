@@ -253,3 +253,54 @@ func TestTransactionsCSVAndImport(t *testing.T) {
 		t.Errorf("date/cleared/tags not mapped: %+v", imported)
 	}
 }
+
+// TestMoleculeOverrideRoundTrip: overriding a built-in molecule (e.g. re-weighting
+// health_score) persists, layers over the default in Molecules(), and deleting the
+// override RESTORES the default definition — the contract the Studio formula tab's
+// compound-variable editor builds on.
+func TestMoleculeOverrideRoundTrip(t *testing.T) {
+	a := newApp(t, false)
+
+	defaultFormula := ""
+	for _, m := range a.Molecules() {
+		if m.Name == "health_score" {
+			defaultFormula = m.Formula
+		}
+	}
+	if defaultFormula == "" {
+		t.Fatal("health_score built-in molecule missing")
+	}
+
+	custom := domain.Molecule{Name: "health_score", Formula: "clamp(health_savings, 0, 100)", Doc: "savings-only"}
+	if err := a.PutMolecule(custom); err != nil {
+		t.Fatalf("PutMolecule override: %v", err)
+	}
+	got := ""
+	for _, m := range a.Molecules() {
+		if m.Name == "health_score" {
+			got = m.Formula
+		}
+	}
+	if got != custom.Formula {
+		t.Fatalf("override not layered: got %q", got)
+	}
+
+	// Invalid formulas are rejected before persisting.
+	if err := a.PutMolecule(domain.Molecule{Name: "bad", Formula: "1 + ("}); err == nil {
+		t.Fatal("invalid formula should be rejected")
+	}
+
+	existed, err := a.DeleteMolecule("health_score")
+	if err != nil || !existed {
+		t.Fatalf("DeleteMolecule: existed=%v err=%v", existed, err)
+	}
+	got = ""
+	for _, m := range a.Molecules() {
+		if m.Name == "health_score" {
+			got = m.Formula
+		}
+	}
+	if got != defaultFormula {
+		t.Fatalf("delete should restore the default, got %q", got)
+	}
+}

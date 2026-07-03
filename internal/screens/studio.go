@@ -90,10 +90,10 @@ func studioBuilderPanel(_ studioBuilderPanelProps) ui.Node { return VisualBuilde
 
 type studioFormulasPanelProps struct{}
 
-// studioFormulasPanel embeds the formula/compound-variable editor (Customize) as a
-// Studio tab, isolated so its hooks are scoped to this component. Grouping formulas
+// studioFormulasPanel embeds the formula/compound-variable surface as a Studio
+// tab, isolated so its hooks are scoped to this component. Grouping formulas
 // with the widget designer keeps every "what to measure" tool in one place.
-func studioFormulasPanel(_ studioFormulasPanelProps) ui.Node { return Customize() }
+func studioFormulasPanel(_ studioFormulasPanelProps) ui.Node { return StudioFormulas() }
 
 type studioFieldsPanelProps struct{}
 

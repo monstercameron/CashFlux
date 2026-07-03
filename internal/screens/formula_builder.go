@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/id"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
 	"github.com/monstercameron/GoWebComponents/css"
@@ -158,6 +161,26 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	rev := ui.UseState(0)
 	_ = rev.Get()
 
+	// Palette navigation: a search box (filters by label, variable name, or doc)
+	// and per-group accordions. A nil openGroups map means the default posture
+	// (first group open); once the user toggles, the map is authoritative.
+	search := ui.UseState("")
+	onSearch := ui.UseEvent(func(v string) { search.Set(v) })
+	openGroups := ui.UseState[map[string]bool](nil)
+	toggleGroup := func(g string) {
+		cur := openGroups.Get()
+		next := make(map[string]bool, len(cur)+1)
+		for k, v := range cur {
+			next[k] = v
+		}
+		if cur == nil && len(metrics) > 0 {
+			// Materialize the default posture so the first toggle behaves as seen.
+			next[string(metrics[0].Group)] = true
+		}
+		next[g] = !next[g]
+		openGroups.Set(next)
+	}
+
 	emit := func(v string) {
 		expr.Set(v)
 		if props.OnChange != nil {
@@ -218,29 +241,99 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 		}
 	}
 
-	// Variable palette: a dense, click-to-insert grid of chips (label + live value),
-	// grouped by category. Replaces the sprawling one-row-per-variable list.
-	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate, widgetcatalog.GroupPlanning, widgetcatalog.GroupRecurring, widgetcatalog.GroupReports, widgetcatalog.GroupNetWorth, widgetcatalog.GroupHealth, widgetcatalog.GroupCredit}
-	palette := make([]ui.Node, 0, len(groups))
-	for _, g := range groups {
-		chips := make([]ui.Node, 0)
+	// Variable palette: click-to-insert chips (label + live value). Groups are
+	// DERIVED from the metrics themselves in first-appearance order — the old
+	// hand-maintained group list silently dropped any group someone forgot to
+	// add (the Assistant group was invisible here for exactly that reason).
+	var groups []widgetcatalog.Group
+	seenGroup := map[widgetcatalog.Group]bool{}
+	for _, m := range metrics {
+		if !seenGroup[m.Group] {
+			seenGroup[m.Group] = true
+			groups = append(groups, m.Group)
+		}
+	}
+
+	q := strings.ToLower(strings.TrimSpace(search.Get()))
+	// matchRank orders search results by how directly they answer the query:
+	// label-prefix hits first, then label hits, then name hits, then doc hits —
+	// so "health" leads with Health Score, not thirty internal weight atoms.
+	matchRank := func(m widgetcatalog.Metric) int {
+		label, name, doc := strings.ToLower(m.Label), strings.ToLower(m.Name), strings.ToLower(m.Doc)
+		switch {
+		case strings.HasPrefix(label, q):
+			return 0
+		case strings.Contains(label, q):
+			return 1
+		case strings.Contains(name, q):
+			return 2
+		case strings.Contains(doc, q):
+			return 3
+		}
+		return -1
+	}
+
+	var palette []ui.Node
+	if q != "" {
+		// Searching: one flat grid of every match across all groups, best first.
+		type ranked struct {
+			m    widgetcatalog.Metric
+			rank int
+		}
+		var hits []ranked
 		for _, m := range metrics {
-			if m.Group != g {
-				continue
+			if r := matchRank(m); r >= 0 {
+				hits = append(hits, ranked{m, r})
 			}
+		}
+		sort.SliceStable(hits, func(i, j int) bool { return hits[i].rank < hits[j].rank })
+		var chips []ui.Node
+		for _, h := range hits {
 			chips = append(chips, ui.CreateElement(formulaMetricRow, formulaMetricRowProps{
-				Metric: m, Value: vars[m.Name], OnInsert: insert,
+				Metric: h.m, Value: vars[h.m.Name], OnInsert: insert,
 			}))
 		}
 		if len(chips) == 0 {
-			continue
-		}
-		palette = append(palette,
-			Div(css.Class("fb-pal-group"),
-				Span(css.Class("fb-pal-title"), string(g)),
+			palette = append(palette, P(css.Class("empty"), uistate.T("customize.searchEmpty", search.Get())))
+		} else {
+			palette = append(palette, Div(css.Class("fb-pal-group"),
+				Span(css.Class("fb-pal-title"), uistate.T("customize.searchResults", len(chips))),
 				Div(css.Class("fb-pal-grid"), chips),
-			),
-		)
+			))
+		}
+	} else {
+		// Browsing: one accordion per group (first open by default) so the
+		// palette reads as a table of contents, not a wall of chips.
+		for gi, g := range groups {
+			var chips []ui.Node
+			for _, m := range metrics {
+				if m.Group != g {
+					continue
+				}
+				chips = append(chips, ui.CreateElement(formulaMetricRow, formulaMetricRowProps{
+					Metric: m, Value: vars[m.Name], OnInsert: insert,
+				}))
+			}
+			if len(chips) == 0 {
+				continue
+			}
+			open := gi == 0
+			if om := openGroups.Get(); om != nil {
+				open = om[string(g)]
+			}
+			// Two example labels tell a closed group's story better than a bare
+			// count ("Activity — Income, Spending … 81" instead of "ACTIVITY 81").
+			var examples []string
+			for _, m := range metrics {
+				if m.Group == g && len(examples) < 2 {
+					examples = append(examples, m.Label)
+				}
+			}
+			palette = append(palette, ui.CreateElement(formulaPalGroup, formulaPalGroupProps{
+				Title: string(g), Count: len(chips), Open: open, OnToggle: toggleGroup, Chips: chips,
+				Examples: strings.Join(examples, ", "),
+			}))
+		}
 	}
 
 	title := props.Title
@@ -277,10 +370,24 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 				Button(css.Class("btn btn-primary", "fb-save-btn"), Type("submit"), uistate.T("customize.save")),
 				If(fMsg.Get() != "", Span(css.Class("fb-msg"), fMsg.Get())),
 			),
+			// The scope sentence that separates the page's two save concepts: saved
+			// formulas are personal notes; compound variables (edited in the tile
+			// below on the Studio surface) are live definitions the app computes from.
+			P(css.Class("t-caption", tw.TextFaint), uistate.T("customize.savedScopeHint")),
 		),
-		// Palette below, separated by a hairline.
+		// Palette below, separated by a hairline: a search box beside the hint,
+		// then the group accordions (or the flat search results).
 		Div(css.Class("fb-palette"),
-			Span(css.Class("fb-palette-lead"), uistate.T("customize.varsInsertHint")),
+			Div(css.Class("fb-pal-toolbar"),
+				Input(css.Class("field", "fb-pal-search"), Type("search"),
+					Attr("data-testid", "fb-search"),
+					Attr("aria-label", uistate.T("customize.searchLabel")),
+					// The placeholder carries the scale ("search 350+ variables") so the
+					// box reads as the palette's doorway, not another form field.
+					Placeholder(uistate.T("customize.searchPlaceholderN", len(metrics))),
+					Value(search.Get()), OnInput(onSearch)),
+				Span(css.Class("fb-palette-lead"), uistate.T("customize.varsInsertHint")),
+			),
 			Div(css.Class("fb-pal-groups"), palette),
 		),
 	)
@@ -290,6 +397,39 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 		nodes = append(nodes, savedFormulasCard(app.Formulas(), vars, loadFormula, deleteFormula))
 	}
 	return Fragment(nodes)
+}
+
+type formulaPalGroupProps struct {
+	Title    string
+	Count    int
+	Open     bool
+	OnToggle func(string)
+	Chips    []ui.Node
+	Examples string // first labels inside, shown while collapsed
+}
+
+// formulaPalGroup is one collapsible palette group: a toggle header carrying
+// the group name + its variable count, and the chip grid when open. Its own
+// component so the toggle hook sits at a stable position (groups render in a
+// variable-length loop).
+func formulaPalGroup(p formulaPalGroupProps) ui.Node {
+	tog := ui.UseEvent(Prevent(func() { p.OnToggle(p.Title) }))
+	caret := "▸"
+	if p.Open {
+		caret = "▾"
+	}
+	return Div(css.Class("fb-pal-group"),
+		Button(css.Class("fb-pal-head"), Type("button"),
+			Attr("aria-expanded", ariaBool(p.Open)),
+			Attr("data-testid", "fb-group-"+p.Title),
+			OnClick(tog),
+			Span(css.Class("fb-pal-caret"), caret),
+			Span(css.Class("fb-pal-title"), p.Title),
+			If(!p.Open && p.Examples != "", Span(css.Class("fb-pal-examples"), p.Examples+", …")),
+			Span(css.Class("fb-pal-count"), fmt.Sprintf("%d", p.Count)),
+		),
+		If(p.Open, Div(css.Class("fb-pal-grid"), p.Chips)),
+	)
 }
 
 type formulaPresetProps struct {

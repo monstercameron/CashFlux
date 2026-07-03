@@ -22,5 +22,7 @@ func Customize() ui.Node {
 	if appstate.Default == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	return FormulaCalculator()
+	// The route body is the same surface as the Studio "Formulas" tab: the
+	// searchable workbench plus the compound-variable editor.
+	return StudioFormulas()
 }
