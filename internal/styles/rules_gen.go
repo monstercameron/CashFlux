@@ -5086,6 +5086,11 @@ func registerGenerated() {
 		prop("font-size", "2rem"),
 		prop("line-height", "1.05"),
 	)
+	// The runway Safe-to-spend hero sits above the secondary stat grid; its bottom margin
+	// matches the grid gutter so the vertical gap equals the gap between the cards.
+	rule(".plan-runway-hero",
+		prop("margin-bottom", "0.9rem"),
+	)
 	rule(".bento-planning .form-grid",
 		prop("margin-top", "0.6rem"),
 	)

@@ -555,9 +555,10 @@ func Planning() ui.Node {
 				_ = s2sTone
 				_ = lowDate
 				rwBody = Div(
-					// Hero: Safe to spend is the runway's headline answer (matches the forecast
-					// tile's hero + chip pattern), the secondary figures demoted to a chip row.
-					Div(css.Class("stat"),
+					// Safe-to-spend is the runway's headline (its bottom margin matches the grid
+					// gutter so the gap to the secondary figures is uniform); the secondary stats
+					// stretch across the row below.
+					Div(css.Class("stat plan-runway-hero"),
 						Div(css.Class("stat-label", tw.TextDim), uistate.T("planning.safeToSpend")),
 						Div(ClassStr("stat-value is-hero "+tw.Fold(tw.FontDisplay)+" "+accentFor(money.New(planSafeToSpend, base))), fmtMoney(money.New(planSafeToSpend, base))),
 					),
