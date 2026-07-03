@@ -341,6 +341,13 @@ func registerRecurringSurface() {
 		prop("margin-top", "0.5rem"),
 		prop("line-height", "1.4"),
 	)
+	rule(".bills-smart-bucket-head",
+		prop("margin-top", "0.6rem"),
+		prop("font-weight", "600"),
+		prop("font-size", "0.82rem"),
+		prop("border-bottom", "1px solid var(--border)"),
+		prop("padding-bottom", "0.25rem"),
+	)
 	rule(".bills-smart-modal",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),

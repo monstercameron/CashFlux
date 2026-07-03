@@ -299,7 +299,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		chips := Div(css.Class("debt-chips"),
 			recurStatChip(uistate.T("bills.smartChipLoadRaw"), fmtMoney(money.New(maxPeriodLoad(res.Raw.Loads), base)), ""),
 			planChip,
-			recurStatChip(uistate.T("bills.smartChipMoves"), fmt.Sprintf("%d", len(res.Moves)), ""),
+			recurStatChip(uistate.T("bills.smartChipMoves"), fmt.Sprintf("%d", len(res.AheadByID)), ""),
 			recurStatChip(uistate.T("bills.smartChipLow"), fmtMoney(money.New(res.Raw.Low, base)), lowTone(res.Raw.Low)),
 		)
 		lowNote := P(css.Class("muted"), Attr("data-testid", "bills-smart-lownote"),
@@ -309,19 +309,38 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		if len(res.Moves) == 0 {
 			planBody = P(css.Class("muted"), Attr("data-testid", "bills-smart-even"), uistate.T("bills.smartAlreadyEven"))
 		} else {
+			// The plan reads as PAYDAY BUCKETS — "pay these on the 1st, these on
+			// the 15th" — because that's the product: scattered due dates
+			// consolidated onto paydays with balanced totals. Moves arrive sorted
+			// by pay-on date, so grouping is a linear walk.
 			rows := []any{css.Class("bills-smart-moves"), Attr("data-testid", "bills-smart-moves")}
-			for _, mv := range res.Moves {
-				rows = append(rows, Div(css.Class("bills-smart-move"),
-					Span(css.Class("rec-tag"), uistate.T("bills.smartPayAhead")),
-					Span(css.Class("bills-smart-move-text"),
-						uistate.T("bills.smartMoveLine", mv.Item.Name, mv.PayOn.Format("Jan 2"), mv.Item.Due.Format("Jan 2"))),
-					Span(css.Class("bills-smart-move-amt", tw.TextDim), fmtMoney(money.New(mv.Item.Amount, base))),
-				))
+			for i := 0; i < len(res.Moves); {
+				j, total := i, int64(0)
+				for ; j < len(res.Moves) && res.Moves[j].PayOn.Equal(res.Moves[i].PayOn); j++ {
+					total += res.Moves[j].Item.Amount
+				}
+				rows = append(rows, Div(css.Class("bills-smart-bucket-head"),
+					uistate.T("bills.smartBucketHead", res.Moves[i].PayOn.Format("Mon, Jan 2"), j-i, fmtMoney(money.New(total, base)))))
+				for ; i < j; i++ {
+					mv := res.Moves[i]
+					moveCls := "bills-smart-move"
+					var tag ui.Node = Fragment()
+					if mv.CycleAhead {
+						moveCls += " is-ahead"
+						tag = Span(css.Class("rec-tag"), Title(uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))
+					}
+					rows = append(rows, Div(ClassStr(moveCls),
+						tag,
+						Span(css.Class("bills-smart-move-text"),
+							uistate.T("bills.smartMoveLine", mv.Item.Name, mv.PayOn.Format("Jan 2"), mv.Item.Due.Format("Jan 2"))),
+						Span(css.Class("bills-smart-move-amt", tw.TextDim), fmtMoney(money.New(mv.Item.Amount, base))),
+					))
+				}
 			}
 			movesHint := uistate.T("bills.smartMovesHint", fmtMoney(money.New(res.EvenGainMinor, base)))
 			if res.EvenGainMinor == 0 {
-				// Real moves with no headline gain: the heaviest paycheck is an
-				// immovable stack, but the plan still spreads what CAN move.
+				// Real consolidation with no headline gain: the heaviest paycheck
+				// is an immovable stack, but the buckets still get organized.
 				movesHint = uistate.T("bills.smartMovesEven")
 			}
 			planBody = Fragment(

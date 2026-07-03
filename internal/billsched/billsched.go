@@ -3,14 +3,17 @@
 // Package billsched aligns WHEN bills get paid with the pay cycle. Two honest,
 // distinct levers:
 //
-//  1. PAY-AHEAD (the smart schedule): a due date is a deadline, not an
-//     instruction — you can always pay EARLIER. Paying earlier can never raise
-//     the minimum of the balance curve (the cash just leaves sooner), so the
-//     pay-ahead objective is NOT the low point: it is evening the load each
-//     paycheck carries, so every check covers its own bills and no check is
-//     "free" (the one people overspend). Constraint: the plan never pushes the
-//     projected low below the raw schedule's low (or below the configured keep
-//     floor), and never schedules after the due date.
+//  1. CONSOLIDATION (the smart schedule): a due date is a deadline, not an
+//     instruction — you can always pay EARLIER. The plan moves every movable
+//     bill ONTO a payday at or before its due date, so scattered due dates
+//     become clean per-paycheck buckets ("pay these on the 1st, these on the
+//     15th"), balanced so every check carries a similar load and no check is
+//     "free" (the one people overspend). Some bills necessarily jump into an
+//     earlier paycheck than the one their due date belongs to — those are the
+//     true PAY-AHEAD moves (Move.CycleAhead), fronted once; after that the
+//     schedule repeats on the same cadence. Constraint: the plan never pushes
+//     the projected low below the raw schedule's low (or below the configured
+//     keep floor), and never schedules after the due date.
 //
 //  2. BILLER-SIDE SUGGESTIONS: moving a due date LATER — just past a payday —
 //     is what genuinely lifts the low point, and only the biller can do it.
@@ -37,10 +40,14 @@ type Item struct {
 }
 
 // Move pairs an item with its recommended pay-on date (strictly before Due —
-// unmoved items are not reported as moves).
+// unmoved items are not reported as moves). CycleAhead marks the moves that
+// jump the payment into an EARLIER pay period than the one the due date
+// belongs to — real "pay ahead" money the user fronts once; a move within the
+// due date's own period is just consolidation onto that period's payday.
 type Move struct {
-	Item  Item
-	PayOn time.Time
+	Item       Item
+	PayOn      time.Time
+	CycleAhead bool
 }
 
 // PeriodLoad is the billed total assigned to one pay period (the span from a
@@ -81,6 +88,9 @@ type Result struct {
 	// PayOnByID maps every item ID to its scheduled date under the smart plan
 	// (= Due for unmoved items), so callers can render the full schedule.
 	PayOnByID map[string]time.Time
+	// AheadByID marks the occurrence IDs whose payment jumps a pay cycle ahead
+	// (see Move.CycleAhead), so views can flag exactly those rows.
+	AheadByID map[string]bool
 }
 
 // Paydays generates the paydays covering [from, from+horizonDays] from a known
@@ -154,8 +164,22 @@ func clampDay(y int, m time.Month, day int, loc *time.Location) time.Time {
 	return time.Date(y, m, day, 0, 0, 0, 0, loc)
 }
 
+// midnight canonicalizes a time to its calendar day at UTC midnight. Callers
+// mix locations (liability due dates are built in local time, parsed anchors
+// are UTC), and comparing midnights across locations makes "same day" read as
+// "before" — a bill due ON a payday would be reported as a move the views then
+// disagree about. Everything inside this package compares canonical days.
 func midnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// canonDays maps a payday list onto canonical UTC calendar days.
+func canonDays(ts []time.Time) []time.Time {
+	out := make([]time.Time, len(ts))
+	for i, t := range ts {
+		out[i] = midnight(t)
+	}
+	return out
 }
 
 func dedupe(ts []time.Time) []time.Time {
@@ -178,6 +202,7 @@ func dedupe(ts []time.Time) []time.Time {
 // returned unchanged (nothing to align to).
 func Optimize(startLiquid int64, items []Item, paydays []time.Time, incomePerPayday int64, from time.Time, horizonDays int, minKeep int64) Result {
 	from = midnight(from)
+	paydays = canonDays(paydays)
 	assign := map[string]time.Time{}
 	for _, it := range items {
 		assign[it.ID] = clampToWindow(it.Due, from, horizonDays)
@@ -212,60 +237,84 @@ func Optimize(startLiquid int64, items []Item, paydays []time.Time, incomePerPay
 		return movable[i].ID < movable[j].ID
 	})
 
-	// Two greedy passes: the second lets early placements re-settle. Each item
-	// takes the candidate payday (≤ due; paying ON a payday is safe because
-	// income credits before same-day bills) that most evens the heaviest
-	// pay-period load — staying as late as possible on ties — subject to the
-	// low-point floor.
+	// CONSOLIDATION: every movable item lands ON a payday (never after its due
+	// date; paying ON a payday is safe because income credits before same-day
+	// bills), and the buckets are balanced — two greedy passes, heaviest items
+	// first, each taking the eligible payday that most evens the pay-period
+	// loads (staying as late as possible on ties), subject to the low-point
+	// floor. The plan's output is "pay these on the 1st, these on the 15th" —
+	// scattered due dates become per-paycheck buckets. An item keeps its due
+	// date only when no payday precedes it (due before the first payday) or
+	// when every payday placement would push the balance below the floor (cash
+	// too tight to front anything).
 	for pass := 0; pass < 2; pass++ {
 		for _, it := range movable {
 			due := clampToWindow(it.Due, from, horizonDays)
-			candidates := []time.Time{due}
+			var candidates []time.Time
 			for _, p := range paydays {
 				if !p.After(due) && !p.Before(from) {
 					candidates = append(candidates, p)
 				}
 			}
-			best := assign[it.ID]
-			bestM := simulate(startLiquid, items, assign, paydays, incomePerPayday, from, horizonDays)
+			if len(candidates) == 0 {
+				continue
+			}
+			bestSet := false
+			var best time.Time
+			var bestM Metrics
 			for _, c := range candidates {
-				if c.Equal(best) {
-					continue
-				}
 				prev := assign[it.ID]
 				assign[it.ID] = c
 				m := simulate(startLiquid, items, assign, paydays, incomePerPayday, from, horizonDays)
-				if m.Low >= floor && evener(m, bestM, c, best) {
-					best, bestM = c, m
-				} else {
-					assign[it.ID] = prev
+				assign[it.ID] = prev
+				if m.Low < floor {
+					continue
 				}
+				if !bestSet || evener(m, bestM, c, best) {
+					best, bestM, bestSet = c, m, true
+				}
+			}
+			if bestSet {
+				assign[it.ID] = best
 			}
 		}
 	}
 
 	res.Smart = simulate(startLiquid, items, assign, paydays, incomePerPayday, from, horizonDays)
 	res.PayOnByID = assign
-	// Keep the plan only when it genuinely evens the paycheck loads — compared
-	// as the whole sorted load vector, not just the single global max: over a
-	// multi-month horizon two months can BOTH have a heavy paycheck, and evening
-	// one of them is real progress even when the other's stack can't move (e.g.
-	// it's all autopay). Otherwise report no moves — the honest "you're already
-	// even" answer.
-	if !lessLoads(res.Smart.Loads, raw.Loads) {
-		for _, it := range items {
-			res.PayOnByID[it.ID] = clampToWindow(it.Due, from, horizonDays)
-		}
-		res.Smart = raw
-	} else {
-		res.EvenGainMinor = maxLoad(raw.Loads) - maxLoad(res.Smart.Loads)
-		for _, it := range items {
-			if p := res.PayOnByID[it.ID]; it.Movable && p.Before(clampToWindow(it.Due, from, horizonDays)) {
-				res.Moves = append(res.Moves, Move{Item: it, PayOn: p})
+	res.AheadByID = map[string]bool{}
+	if g := maxLoad(raw.Loads) - maxLoad(res.Smart.Loads); g > 0 {
+		res.EvenGainMinor = g
+	}
+	// periodOf: the latest payday on-or-before a date — the paycheck a date
+	// "belongs" to. A move is CycleAhead when it pays from an EARLIER paycheck
+	// than the due date's own (fronted money), as opposed to consolidating onto
+	// the due date's own period's payday.
+	periodOf := func(t time.Time) time.Time {
+		anchor := from
+		for _, p := range paydays {
+			if !p.After(t) && !p.Before(from) && p.After(anchor) {
+				anchor = p
 			}
 		}
-		sort.SliceStable(res.Moves, func(i, j int) bool { return res.Moves[i].PayOn.Before(res.Moves[j].PayOn) })
+		return anchor
 	}
+	for _, it := range items {
+		due := clampToWindow(it.Due, from, horizonDays)
+		if p := res.PayOnByID[it.ID]; it.Movable && p.Before(due) {
+			ahead := p.Before(periodOf(due))
+			res.Moves = append(res.Moves, Move{Item: it, PayOn: p, CycleAhead: ahead})
+			if ahead {
+				res.AheadByID[it.ID] = true
+			}
+		}
+	}
+	sort.SliceStable(res.Moves, func(i, j int) bool {
+		if !res.Moves[i].PayOn.Equal(res.Moves[j].PayOn) {
+			return res.Moves[i].PayOn.Before(res.Moves[j].PayOn)
+		}
+		return res.Moves[i].Item.ID < res.Moves[j].Item.ID
+	})
 	res.Suggestions = Suggest(startLiquid, items, paydays, incomePerPayday, from, horizonDays)
 	return res
 }
@@ -297,11 +346,6 @@ func loadVector(loads []PeriodLoad) []int64 {
 	}
 	sort.Slice(v, func(i, j int) bool { return v[i] > v[j] })
 	return v
-}
-
-// lessLoads reports whether load set a is strictly more even than b.
-func lessLoads(a, b []PeriodLoad) bool {
-	return lessVector(loadVector(a), loadVector(b))
 }
 
 // lessVector is the lexicographic order on sorted-descending load vectors: a
@@ -340,6 +384,7 @@ func Suggest(startLiquid int64, items []Item, paydays []time.Time, incomePerPayd
 		return nil
 	}
 	from = midnight(from)
+	paydays = canonDays(paydays)
 	assign := map[string]time.Time{}
 	for _, it := range items {
 		assign[it.ID] = clampToWindow(it.Due, from, horizonDays)

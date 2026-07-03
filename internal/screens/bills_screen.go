@@ -166,6 +166,35 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		}
 		return b.DueDate
 	}
+	// Every occurrence in the plan window, shared by the pay-ahead cadence check,
+	// the extra plan rows, and the calendar.
+	occAll := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil)
+	// prevOccDue maps an occurrence ID to the SAME bill's immediately-prior
+	// occurrence due date in the window (occurrences arrive date-sorted).
+	prevOccDue := map[string]time.Time{}
+	{
+		last := map[string]time.Time{}
+		for _, b := range occAll {
+			k := b.AccountID + "|" + b.Name
+			if p, ok := last[k]; ok {
+				prevOccDue[billItemID(b)] = p
+			}
+			last[k] = b.DueDate
+		}
+	}
+	// aheadTagFor: flag only the payments the plan fronts a pay CYCLE early —
+	// and only until the cadence is established (this occurrence unpaid AND the
+	// prior occurrence not already paid). Per Cam: "flagged until you did it
+	// once, and recurring bills acknowledge that you already paid ahead."
+	aheadTagFor := func(b bills.Bill, isPaid bool) bool {
+		if !viewSmart || isPaid || !smartPlan.Res.AheadByID[billItemID(b)] {
+			return false
+		}
+		if prev, ok := prevOccDue[billItemID(b)]; ok && app.OccurrencePaid(b.AccountID, prev) {
+			return false
+		}
+		return true
+	}
 
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).
@@ -243,6 +272,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate), IsPaid: isPaid,
 			PayOn: payOn, PayOnLabel: pr.FormatDate(payOn),
 			PlanActive: viewSmart && !sameDay(payOn, b.DueDate),
+			AheadTag:   aheadTagFor(b, isPaid),
 		})
 	}
 
@@ -256,7 +286,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		for _, b := range allUpcoming {
 			first[billItemID(b)] = true
 		}
-		for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil) {
+		for _, b := range occAll {
 			if first[billItemID(b)] {
 				continue // each bill's next occurrence is already listed above
 			}
@@ -268,11 +298,13 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			if err != nil {
 				amt = money.New(b.Amount.Amount, base)
 			}
+			isPaid := app.OccurrencePaid(b.AccountID, b.DueDate)
 			billRows = append(billRows, billRowData{
 				Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate),
-				IsPaid: app.OccurrencePaid(b.AccountID, b.DueDate),
+				IsPaid: isPaid,
 				PayOn:  payOn, PayOnLabel: pr.FormatDate(payOn),
 				PlanActive: true,
+				AheadTag:   aheadTagFor(b, isPaid),
 			})
 		}
 		// The plan view lists by when you PAY (the actionable order), not by
@@ -382,7 +414,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		// (every repeat in the window, out to whatever month is displayed) — with
 		// only each bill's next occurrence, a paged-forward month would show
 		// nothing and pay-ahead's cross-month move would be invisible.
-		occ := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil)
+		occ := occAll
 		calBills := occ
 		ghost := map[string]int{}
 		// ahead marks the pay-on dates carrying MOVED payments, so those dots get
@@ -528,6 +560,11 @@ type billRowData struct {
 	PayOn      time.Time   // the smart schedule's pay-on date (= due when unmoved)
 	PayOnLabel string      // pre-formatted pay-on date
 	PlanActive bool        // the smart view is on AND this bill's pay-on differs from its due
+	// AheadTag: show the "Pay ahead" flag — the plan fronts this payment a pay
+	// cycle early AND the user hasn't established the cadence yet (per Cam: the
+	// flag stays "until you did it once"; once this or the prior occurrence is
+	// marked paid, the revised cadence is just the schedule).
+	AheadTag bool
 }
 
 // sameDay reports whether two times fall on the same calendar date.
@@ -583,7 +620,13 @@ func BillRow(props billRowProps) ui.Node {
 	if d.IsPaid {
 		metaCls = "row-meta"
 	}
-	return Div(css.Class("row"), Attr("data-due", activeDate.Format("2006-01-02")),
+	// data-plan-move lets tooling (and the e2e) count rows the plan re-dated,
+	// independent of the pay-ahead flag (which only marks cycle-ahead moves).
+	rowArgs := []any{css.Class("row"), Attr("data-due", activeDate.Format("2006-01-02"))}
+	if d.PlanActive {
+		rowArgs = append(rowArgs, Attr("data-plan-move", "1"))
+	}
+	return Div(append(rowArgs,
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), d.Bill.Name,
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, d.Bill.AccountID),
@@ -592,8 +635,10 @@ func BillRow(props billRowProps) ui.Node {
 			// C154: surface autopay so the user knows this bill is charged automatically
 			// (no manual payment needed — just keep funds available).
 			If(d.Bill.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "bill-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
-			// Smart-schedule tag: this bill is planned to be paid ahead of its due date.
-			If(d.PlanActive, Span(css.Class("rec-tag"), Attr("data-testid", "bill-payahead"), Attr("title", uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))),
+			// Smart-schedule tag: this payment jumps a pay CYCLE ahead (fronted
+			// money, until the cadence is established) — consolidation onto the due
+			// date's own payday carries no flag, just the pay-on meta.
+			If(d.AheadTag, Span(css.Class("rec-tag"), Attr("data-testid", "bill-payahead"), Attr("title", uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))),
 			// C154: paid chip — visible when this occurrence is marked paid.
 			If(d.IsPaid, Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"), Attr("title", uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))),
 		),
@@ -608,7 +653,7 @@ func BillRow(props billRowProps) ui.Node {
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
 		),
-	)
+	)...)
 }
 
 // billUrgencyTone maps days-until-due to a tone class: danger when due today or

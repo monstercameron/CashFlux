@@ -1,3 +1,30 @@
+## 2026-07-03 — Smart pay schedule: rebuilt to Cam's bucket model (third iteration)
+
+Cam spelled out the mental model the feature had been approximating: paydays are the buckets —
+"if I get paid the 1st and 15th then the revised due dates are the first and 15th… it organizes
+them into 2 buckets and balances out the payments"; pay-ahead is the flagged exception (a payment
+fronted into an earlier paycheck), flagged only "until you did it once"; after that the cadence is
+just the schedule. The previous optimizer moved a bill only when it improved load-evenness, leaving
+everything else scattered — technically defensible, visually and conceptually not a "plan".
+
+Rebuilt: Optimize now CONSOLIDATES — every movable item takes an eligible payday (≤ due, floor-
+guarded, evener-balanced, latest-on-ties); due dates are kept only when no payday precedes them or
+every placement would breach the low floor. `Move.CycleAhead` + `Result.AheadByID` mark exactly the
+cross-paycheck moves; the list flags only those (and suppresses the flag once this or the prior
+occurrence is marked paid — the cadence-established rule); the modal renders payday bucket groups
+with per-bucket totals; `bills_paid_ahead` counts cycle-ahead payments.
+
+The rebuild surfaced a real timezone bug: liability dues are built in local time, payday anchors
+parse as UTC — mixed-location midnight comparisons made "due ON a payday" read as a move (the modal
+listed "pay Jul 17 (due Jul 17)" and the list disagreed, 21 vs 20 rows). billsched now canonicalizes
+every date to a UTC calendar day at entry; regression test pins it.
+
+Measured (sample data): plan-view July collapses onto exactly the paydays — Jul 3 ×7, Jul 17 ×5,
+Jul 31 ×7 accent dots, ghosts on the vacated 5th/15th/20th/22nd — 28 payments grouped, 3 flagged
+pay-ahead, heaviest check $4,107 → $3,437. e2e 61/61 (SM8a/SM9/SM9b new); screenshot-verified on
+the dev server. Note: my engineenv bills_paid_ahead edit rode into the concurrent agent's networth
+commit (whole-file add) — committed, not lost; no action needed.
+
 ## 2026-07-03 — /networth: from a single card to a balance-sheet bento surface
 
 Cam: "move onto /networth next" (same treatment: formulas, custom values, widgets, componentize,

@@ -135,14 +135,66 @@ func TestOptimizeNeverMovesAutopay(t *testing.T) {
 	}
 }
 
-func TestOptimizeAlreadySmoothIsANoOp(t *testing.T) {
+func TestOptimizeConsolidatesOntoPaydays(t *testing.T) {
+	// The plan's whole point: scattered due dates become per-paycheck buckets.
+	// A bill due the 2nd pays on the 1st's payday; one due the 20th pays on the
+	// 15th's; one already ON a payday stays (no move reported for it).
 	from := date(2026, 7, 1)
 	paydays := []time.Time{date(2026, 7, 1), date(2026, 7, 15)}
-	// One small bill right after a payday: nothing to improve.
-	items := []Item{{ID: "b", Name: "Bill", Amount: 5000, Due: date(2026, 7, 2), Movable: true}}
+	items := []Item{
+		{ID: "a", Name: "A", Amount: 5000, Due: date(2026, 7, 2), Movable: true},
+		{ID: "b", Name: "B", Amount: 5000, Due: date(2026, 7, 20), Movable: true},
+		{ID: "c", Name: "C", Amount: 5000, Due: date(2026, 7, 15), Movable: true},
+	}
 	res := Optimize(500000, items, paydays, 100000, from, 30, 0)
-	if len(res.Moves) != 0 || res.EvenGainMinor != 0 {
-		t.Fatalf("smooth schedule should be a no-op, got moves=%v gain=%d", res.Moves, res.EvenGainMinor)
+	if got := res.PayOnByID["a"]; !got.Equal(date(2026, 7, 1)) {
+		t.Errorf("a should consolidate onto the Jul 1 payday, got %s", got)
+	}
+	if got := res.PayOnByID["b"]; !got.Equal(date(2026, 7, 15)) {
+		t.Errorf("b should consolidate onto the Jul 15 payday, got %s", got)
+	}
+	if got := res.PayOnByID["c"]; !got.Equal(date(2026, 7, 15)) {
+		t.Errorf("c already sits on a payday and must stay, got %s", got)
+	}
+	if len(res.Moves) != 2 {
+		t.Fatalf("want 2 moves (a and b), got %d: %v", len(res.Moves), res.Moves)
+	}
+	// Neither move jumps a pay cycle: each pays from the paycheck its due date
+	// already belongs to — consolidation, not fronted money.
+	for _, mv := range res.Moves {
+		if mv.CycleAhead {
+			t.Errorf("%s consolidates within its own pay period — must not be CycleAhead", mv.Item.ID)
+		}
+	}
+}
+
+func TestOptimizeFlagsCycleAheadMoves(t *testing.T) {
+	// A bill due Aug 5 belongs to the Jul 31 paycheck (latest payday <= due).
+	// If balancing pays it from Jul 17's check instead, that's fronted money —
+	// flagged CycleAhead; paying it ON Jul 31 would not be.
+	from := date(2026, 7, 3)
+	paydays := []time.Time{date(2026, 7, 3), date(2026, 7, 17), date(2026, 7, 31), date(2026, 8, 14), date(2026, 8, 28)}
+	items := []Item{
+		// Heavy immovable bill already in the Jul 31 period forces the Aug 5
+		// bill off that paycheck.
+		{ID: "rent", Name: "Rent", Amount: 90000, Due: date(2026, 8, 1), Movable: false},
+		{ID: "hoa", Name: "HOA", Amount: 40000, Due: date(2026, 8, 5), Movable: true},
+	}
+	res := Optimize(1000000, items, paydays, 100000, from, 60, 0)
+	p, ok := res.PayOnByID["hoa"]
+	if !ok || p.After(date(2026, 8, 5)) {
+		t.Fatalf("hoa must pay on or before its due date, got %s", p)
+	}
+	if p.Before(date(2026, 7, 31)) != res.AheadByID["hoa"] {
+		t.Errorf("AheadByID must mark exactly the cross-period placement: payOn=%s ahead=%v", p, res.AheadByID["hoa"])
+	}
+	if !p.Before(date(2026, 7, 31)) {
+		t.Fatalf("balancing should push hoa off the rent-heavy Jul 31 check, got %s", p)
+	}
+	for _, mv := range res.Moves {
+		if mv.Item.ID == "hoa" && !mv.CycleAhead {
+			t.Error("hoa jumps into an earlier paycheck — must be CycleAhead")
+		}
 	}
 }
 
@@ -233,5 +285,23 @@ func TestOptimizeKeepsMovesWhenGlobalMaxIsImmovable(t *testing.T) {
 		if !mv.Item.Movable {
 			t.Errorf("moved an immovable item: %v", mv)
 		}
+	}
+}
+
+func TestOptimizeSameCalendarDayAcrossLocationsIsNotAMove(t *testing.T) {
+	// Regression: liability due dates are built in LOCAL time while parsed
+	// anchors/paydays are UTC. A bill due ON a payday (same calendar day,
+	// different locations) must not be reported as a move — mixed-location
+	// midnights made "Jul 17 local" read as after "Jul 17 UTC".
+	loc := time.FixedZone("EDT", -4*60*60)
+	from := time.Date(2026, 7, 3, 0, 0, 0, 0, loc)
+	paydays := []time.Time{date(2026, 7, 3), date(2026, 7, 17)} // UTC midnights
+	items := []Item{{ID: "loan", Name: "Loan", Amount: 5000, Due: time.Date(2026, 7, 17, 0, 0, 0, 0, loc), Movable: true}}
+	res := Optimize(500000, items, paydays, 100000, from, 30, 0)
+	if len(res.Moves) != 0 {
+		t.Fatalf("a bill due ON a payday must not be a move, got %v", res.Moves)
+	}
+	if got := res.PayOnByID["loan"]; got.Format("2006-01-02") != "2026-07-17" {
+		t.Errorf("pay-on must stay the due day, got %s", got)
 	}
 }

@@ -202,14 +202,22 @@ await p.locator('[data-testid="bills-smart-adv"]').click(); await p.waitForTimeo
 await p.locator('[data-testid="bills-smart-explain"]').click(); await p.waitForTimeout(600);
 check("SM7 (neg) AI explain without a key shows an error, no crash", await p.locator('[data-testid="bills-smart-form"] [role=alert]').count() >= 1 && errs.length === 0);
 const moveCount = await p.locator('[data-testid="bills-smart-moves"] .bills-smart-move').count();
+const aheadCount = await p.locator('[data-testid="bills-smart-moves"] .bills-smart-move.is-ahead').count();
+// Consolidation reads as PAYDAY BUCKETS in the preview: "Pay on <payday> — N bill(s) · $X".
+if (moveCount > 0) {
+  check("SM8a the plan groups moves into payday buckets", (await p.locator(".bills-smart-bucket-head").count()) >= 1 && /Pay on .+ · \$/.test(await p.locator(".bills-smart-bucket-head").first().innerText()), await p.locator(".bills-smart-bucket-head").first().innerText().catch(() => ""));
+} else {
+  check("SM8a the plan groups moves into payday buckets", true, "no moves in this dataset — skipped");
+}
 // Use the plan: enables it, flips the views to the pay-on plan, closes the modal.
 await p.locator('[data-testid="bills-smart-use"]').click();
 await p.waitForSelector('[data-testid="bills-smart-form"]', { state: "detached", timeout: 3000 }).catch(() => {});
 await p.waitForTimeout(500);
 check("SM8 Use-this-plan closes the modal and turns the plan on", await p.locator('[data-testid="bills-smart-form"]').count() === 0 && await p.locator('[data-testid="bills-view-smart"][aria-checked="true"]').count() === 1);
-check("SM9 pay-on plan view tags moved bills", (await p.locator('[data-testid="bill-payahead"]').count()) === moveCount, `${moveCount} moves`);
+check("SM9 every plan-moved row is re-dated in the list", (await p.locator("[data-plan-move]").count()) === moveCount, `${moveCount} moves`);
+check("SM9b only cycle-ahead payments carry the Pay-ahead flag", (await p.locator('[data-testid="bill-payahead"]').count()) === aheadCount, `${aheadCount} cycle-ahead of ${moveCount} moves`);
 if (moveCount > 0) {
-  check("SM10 a moved bill's meta reads 'pay X · due Y'", /pay .+ · due /.test(await p.locator('[data-testid="bill-payahead"]').first().locator("..").innerText()));
+  check("SM10 a moved bill's meta reads 'pay X · due Y'", /pay .+ · due /.test(await p.locator("[data-plan-move]").first().innerText()));
 } else {
   check("SM10 a moved bill's meta reads 'pay X · due Y'", true, "no moves in this dataset — skipped");
 }
@@ -236,9 +244,9 @@ if (moveCount > 0) {
   check("SM14 moved bills leave their raw-due ghosts visible in the window", true, "no moves in this dataset — skipped");
 }
 await p.locator('[data-testid="cal-today"]').click(); await p.waitForTimeout(500);
-// Flip back to raw dates: the tags clear.
+// Flip back to raw dates: the re-dated rows and tags clear.
 await p.locator('[data-testid="bills-view-raw"]').click(); await p.waitForTimeout(700);
-check("SM11 raw view clears the pay-ahead tags", await p.locator('[data-testid="bill-payahead"]').count() === 0);
+check("SM11 raw view clears the plan re-dating and tags", await p.locator("[data-plan-move]").count() === 0 && await p.locator('[data-testid="bill-payahead"]').count() === 0);
 // Turn it off from the modal: the summary reverts and the view toggle disappears.
 await p.locator('[data-testid="bills-smart-open"]').click(); await p.waitForTimeout(800);
 await p.locator('[data-testid="bills-smart-off"]').click();
