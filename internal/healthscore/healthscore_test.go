@@ -520,7 +520,7 @@ func TestSteps_CarryKey(t *testing.T) {
 // molecule over the factor variables.
 func TestWeightFormulaIdentity(t *testing.T) {
 	cases := []Inputs{
-		{}, // nothing applicable → NoData, all weights zero
+		{},                                    // nothing applicable → NoData, all weights zero
 		{HasIncome: true, SavingsRatePct: 12}, // one factor → still NoData
 		{HasIncome: true, SavingsRatePct: 12, HasLiquidData: true, EmergencyMonths: 2.4},
 		{HasIncome: true, SavingsRatePct: -8, HasLiquidData: true, EmergencyMonths: 0.5,
@@ -543,6 +543,39 @@ func TestWeightFormulaIdentity(t *testing.T) {
 		formula = clampPct(formula)
 		if formula != r.Score {
 			t.Errorf("case %d: formula identity gives %d, Evaluate gives %d", i, formula, r.Score)
+		}
+	}
+}
+
+// TestTargetMet asserts the met/unmet flag tracks the STATED target semantics
+// (raw inputs), not the 0-100 score.
+func TestTargetMet(t *testing.T) {
+	in := Inputs{
+		HasIncome: true, SavingsRatePct: 20,
+		HasLiquidData: true, EmergencyMonths: 2.9,
+		HasLiabilities: true, ObligationRatioPct: 35,
+		HasBudgets: true, BudgetAdherencePct: 100,
+		HasCredit: true, AggUtilizationPct: 30,
+		HasNWTrend: true, NWTrendPct: 5.0,
+	}
+	want := map[string]bool{
+		"savings":     true,  // 20 >= 20
+		"emergency":   false, // 2.9 < 3
+		"debt":        true,  // 35 < 36
+		"budget":      true,  // 100
+		"utilization": false, // 30 is not under 30
+		"nw-trend":    true,  // 5.0 >= 5
+	}
+	for _, f := range Evaluate(in).Factors {
+		if got := f.TargetMet; got != want[f.Key] {
+			t.Errorf("%s TargetMet = %v, want %v", f.Key, got, want[f.Key])
+		}
+	}
+	// No liabilities → the debt target is met by definition.
+	in.HasLiabilities = false
+	for _, f := range Evaluate(in).Factors {
+		if f.Key == "debt" && !f.TargetMet {
+			t.Errorf("debt with no liabilities should be TargetMet")
 		}
 	}
 }

@@ -103,8 +103,12 @@ type Factor struct {
 	// round(Σ Score×Weight) − penalty, clamped to 0–100, reproduces Result.Score
 	// exactly. This is what lets the score live as a real formula over the factor
 	// variables in the engine surface (see engineenv's health_score molecule).
-	Weight     float64
-	Target     string // plain-English goal, e.g. "20% or more"
+	Weight float64
+	Target string // plain-English goal, e.g. "20% or more"
+	// TargetMet reports whether the CURRENT VALUE satisfies the stated Target
+	// (computed from the raw inputs, not the score), so the UI can fuse value and
+	// target into one met/unmet statement instead of showing parallel numbers.
+	TargetMet  bool
 	Applicable bool
 }
 
@@ -140,6 +144,7 @@ type factorDef struct {
 	applicable         bool
 	rawScore           int
 	value              string
+	targetMet          bool
 }
 
 // Weight allocation (must sum to 1.0 when all factors are applicable):
@@ -166,32 +171,38 @@ func Evaluate(in Inputs) Result {
 		{
 			key: "savings", label: "Savings rate", target: "20% or more", weight: 0.25,
 			applicable: in.HasIncome, rawScore: savingsScore(in.SavingsRatePct),
-			value: fmt.Sprintf("%d%%", in.SavingsRatePct),
+			value:     fmt.Sprintf("%d%%", in.SavingsRatePct),
+			targetMet: in.SavingsRatePct >= 20,
 		},
 		{
 			key: "emergency", label: "Emergency fund", target: "3–6 months", weight: 0.25,
 			applicable: in.HasLiquidData, rawScore: emergencyScore(in.EmergencyMonths),
-			value: fmt.Sprintf("%.1f mo", in.EmergencyMonths),
+			value:     fmt.Sprintf("%.1f mo", in.EmergencyMonths),
+			targetMet: in.EmergencyMonths >= 3,
 		},
 		{
 			key: "debt", label: "Debt payments", target: "under 36% of income", weight: 0.20,
 			applicable: in.HasIncome, rawScore: obligationScore(in.ObligationRatioPct, in.HasLiabilities),
-			value: obligationValue(in.ObligationRatioPct, in.HasLiabilities),
+			value:     obligationValue(in.ObligationRatioPct, in.HasLiabilities),
+			targetMet: !in.HasLiabilities || in.ObligationRatioPct < 36,
 		},
 		{
 			key: "budget", label: "Budget adherence", target: "100% on track", weight: 0.10,
 			applicable: in.HasBudgets, rawScore: clampPct(in.BudgetAdherencePct),
-			value: fmt.Sprintf("%d%%", clampPct(in.BudgetAdherencePct)),
+			value:     fmt.Sprintf("%d%%", clampPct(in.BudgetAdherencePct)),
+			targetMet: clampPct(in.BudgetAdherencePct) >= 100,
 		},
 		{
 			key: "utilization", label: "Credit utilization", target: "under 30%", weight: 0.10,
 			applicable: in.HasCredit, rawScore: utilizationScore(in.AggUtilizationPct),
-			value: fmt.Sprintf("%d%%", clampPct(in.AggUtilizationPct)),
+			value:     fmt.Sprintf("%d%%", clampPct(in.AggUtilizationPct)),
+			targetMet: in.AggUtilizationPct < 30,
 		},
 		{
 			key: "nw-trend", label: "Net-worth trend", target: "growing 5% or more", weight: 0.10,
 			applicable: in.HasNWTrend, rawScore: nwTrendScore(in.NWTrendPct),
-			value: fmt.Sprintf("%.1f%%", in.NWTrendPct),
+			value:     fmt.Sprintf("%.1f%%", in.NWTrendPct),
+			targetMet: in.NWTrendPct >= 5.0,
 		},
 	}
 
@@ -212,7 +223,7 @@ func Evaluate(in Inputs) Result {
 	}
 
 	for _, d := range defs {
-		f := Factor{Key: d.key, Label: d.label, Value: d.value, Target: d.target, Applicable: d.applicable}
+		f := Factor{Key: d.key, Label: d.label, Value: d.value, Target: d.target, TargetMet: d.targetMet, Applicable: d.applicable}
 		if d.applicable {
 			f.Score = d.rawScore
 			if applWeight > 0 {

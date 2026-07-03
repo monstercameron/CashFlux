@@ -284,31 +284,35 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 		act = Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "hf-act-"+f.Key),
 			Attr("aria-label", uistate.T("health.stepOpen", f.Label)), OnClick(open), uistate.T("health.act"))
 	}
+	// ONE number story per tile: the current value fused with its target into a
+	// single met/unmet statement, and the meter as the only score visual. The
+	// internal 0-100 score, the weight share, and the variable identity are
+	// formula plumbing — they live inside the "How it's scored" disclosure.
+	var targetLine ui.Node
+	if f.TargetMet {
+		targetLine = Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("data-testid", "hf-met-"+f.Key),
+			uistate.T("health.onTarget", f.Target))
+	} else {
+		targetLine = Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "hf-unmet-"+f.Key),
+			uistate.T("health.target", f.Target))
+	}
 	return hltSection("sec-hf-"+f.Key, f.Label, nil, Fragment(
 		Div(css.Class("hlt-factor-head"),
 			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("health.target", f.Target)),
+			targetLine,
 		),
 		uiw.ProgressBar(uiw.ProgressBarProps{Percent: meterPct, Tone: healthBarTone(f.Score)}),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mt1),
-			Span(css.Class("t-caption", tw.TextFaint), fmt.Sprintf("%d / 100", f.Score)),
-			Span(css.Class("t-caption", tw.TextFaint), uistate.T("health.contribution", f.ContributionPct)),
-		),
 		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
-		// The exact scoring curve folds behind a quiet disclosure so the tile leads
-		// with one paragraph, not two.
 		Details(css.Class("hlt-curve"),
 			Summary(uistate.T("health.curveSummary")),
 			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".curve")),
-		),
-		// Footer: the factor's addressable identity beside its call to action.
-		Div(css.Class("hlt-factor-foot"),
+			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", f.Score, f.ContributionPct)),
 			Div(css.Class("hlt-varchip"), Attr("data-testid", "hf-var-"+f.Key),
 				Title(uistate.T("health.varChipTitle")),
 				Code(varName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", f.Score)),
 			),
-			act,
 		),
+		Div(css.Class("hlt-factor-foot"), Span(), act),
 	))
 }
 

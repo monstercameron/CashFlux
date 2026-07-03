@@ -40,14 +40,15 @@ const factorKeys = ["savings", "emergency", "debt", "budget", "utilization", "nw
 let tileCount = 0;
 for (const k of factorKeys) { if (await p.locator(`#sec-hf-${k}`).count()) tileCount++; }
 check("F1 all six factor tiles render", tileCount === 6, `${tileCount}/6`);
-check("F2 factor tiles carry meters + contribution shares", await p.locator(".bento-health .pb, .bento-health [role=progressbar], .bento-health .progress").count() >= 4 || /of your score/.test(await p.locator(".bento-health").innerText()));
-check("F3 each applicable factor shows its live variable chip", await p.locator('[data-testid^="hf-var-"]').count() >= 4, `${await p.locator('[data-testid^="hf-var-"]').count()} chips`);
-const chipTxt = (await p.locator('[data-testid="hf-var-savings"]').innerText().catch(() => "")) || "";
-check("F4 the chip pairs the variable name with its live value", /health_savings/.test(chipTxt) && /\d/.test(chipTxt), chipTxt.trim());
-// The exact scoring curve folds behind a per-tile "How it's scored" disclosure.
+// One number story per tile: the value fuses with its target into a met/unmet line.
+check("F2 tiles fuse value + target into one met/unmet line", await p.locator('[data-testid^="hf-met-"], [data-testid^="hf-unmet-"]').count() >= 4, `${await p.locator('[data-testid^="hf-met-"], [data-testid^="hf-unmet-"]').count()} lines`);
+check("F2b the internal 0-100 score is NOT visible until disclosed", !/\d+ \/ 100/.test(await p.locator("#sec-hf-savings").innerText()));
+check("F3 each applicable factor carries its variable chip (inside the disclosure)", await p.locator('[data-testid^="hf-var-"]').count() >= 4, `${await p.locator('[data-testid^="hf-var-"]').count()} chips`);
 await p.locator("#sec-hf-savings .hlt-curve summary").click({ force: true }).catch(() => {});
 await p.waitForTimeout(200);
-check("F5 tiles explain WHY + the scoring curve behind its disclosure", /Scored 0/.test(await p.locator("#sec-hf-savings").innerText()) && /engine of everything else/.test(await p.locator("#sec-hf-savings").innerText()));
+const chipTxt = (await p.locator('[data-testid="hf-var-savings"]').innerText().catch(() => "")) || "";
+check("F4 the disclosed chip pairs the variable name with its live value", /health_savings/.test(chipTxt) && /\d/.test(chipTxt), chipTxt.trim());
+check("F5 tiles explain WHY + the scoring curve + weight behind the disclosure", /Scored 0/.test(await p.locator("#sec-hf-savings").innerText()) && /engine of everything else/.test(await p.locator("#sec-hf-savings").innerText()) && /counts for \d+%/.test(await p.locator("#sec-hf-savings").innerText()));
 
 // The formula builder evaluates health_score to the SAME number the ring shows.
 await p.locator('[data-testid="health-toggle-formulas"]').click({ force: true });

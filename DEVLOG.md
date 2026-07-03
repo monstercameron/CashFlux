@@ -1,3 +1,20 @@
+## 2026-07-03 — /health tiles: five numbers → one story (Cam's confusion report)
+
+Cam: "the targets and the 0-100/100 make me confused, ux review the cells why they have so many
+stats and numbers to track." He's right — each tile stacked the domain value (31%), the target
+(20%), the internal score ("100 / 100"), the weight ("25% of your score"), and the chip's
+duplicate (· 100): five numbers, three scales, and the score/weight are formula plumbing, not
+reading material. The confusion was structural: the meter is in SCORE units while the headline
+value is in DOMAIN units, so "43% → 0/100" read as a contradiction.
+
+Fix: one number story per tile. The value fuses with its target into a single met/unmet line —
+"✓ On target — 20% or more" (up-toned) vs "Target: under 36% of income" (dim) — computed in the
+MODEL (healthscore.Factor.TargetMet from raw inputs, table-tested incl. the no-debt met-by-
+definition case) so the UI never re-derives thresholds. The meter stays as the only score visual;
+the exact score + weight sentence and the health_* variable chip moved INSIDE the "How it's
+scored" disclosure, so the addressable/auditable layer is intact one click down. e2e now asserts
+the surface carries NO bare "N / 100" (F2b) and the chips live in the disclosure. 17/17.
+
 ## 2026-07-03 — /assistant goes agent-first
 
 Cam: "focus on the /assistant page next, make it agent first." The bones were already agentic — a
