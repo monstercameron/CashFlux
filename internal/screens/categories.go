@@ -278,6 +278,15 @@ func Categories() ui.Node {
 		incomeFlats = visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get()))
 	}
 
+	// catTreeRows adapts a keyed tree list to the EntityListSection Rows slot:
+	// nil when empty (so the EmptyState CTA renders), else the MapKeyed list.
+	catTreeRows := func(flats []categorytree.Flat, render func(categorytree.Flat) ui.Node) []ui.Node {
+		if len(flats) == 0 {
+			return nil
+		}
+		return MapKeyed(flats, flatKey, render)
+	}
+
 	return Div(
 		reassignPanel,
 		// Visual category map (GI2): moved first so it's visible on arrival
@@ -286,15 +295,19 @@ func Categories() ui.Node {
 			Title: "Category map",
 			Body:  categoryMapGrid(categorytree.Build(cats)),
 		})),
+		// The two tree lists use the primitive's Rows slot (nil when empty so the
+		// EmptyState CTA renders) instead of a hand-rolled Div(.rows) scaffold.
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title:        uistate.T("categories.expenseTitle"),
 			HeaderAction: Fragment(sortToggleBtn(), addCatBtn()),
-			Body:         IfElse(len(expenseList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(expenseFlats, flatKey, renderFlat))),
+			Rows:         catTreeRows(expenseFlats, renderFlat),
+			EmptyState:   ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}),
 		}),
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title:        uistate.T("categories.incomeTitle"),
 			HeaderAction: addCatBtn(),
-			Body:         IfElse(len(incomeList) == 0, ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}), Div(css.Class("rows"), MapKeyed(incomeFlats, flatKey, renderFlat))),
+			Rows:         catTreeRows(incomeFlats, renderFlat),
+			EmptyState:   ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}),
 		}),
 	)
 }

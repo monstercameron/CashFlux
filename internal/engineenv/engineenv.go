@@ -294,6 +294,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addRecurringVars(out, d, major, toBase)
 	addBillsSmartVars(out, d, major, toBase)
 	addReportsVars(out, d, major)
+	addNetWorthVars(out, d, major, toBase)
 	return out
 }
 
@@ -304,7 +305,7 @@ var BillsSmartVarNames = []string{
 	"bills_check_load_raw",   // the heaviest pay period's billed total under raw dates
 	"bills_check_load_smart", // …and under the pay-ahead smart schedule
 	"bills_even_gain",        // how much lighter the heaviest paycheck gets (raw − smart)
-	"bills_paid_ahead",       // number of bill payments the smart schedule pays ahead
+	"bills_paid_ahead",       // payments the plan fronts a pay cycle ahead (CycleAhead moves)
 	"bills_suggest_gain",     // the best single biller-side shift's low-point gain
 }
 
@@ -348,7 +349,7 @@ func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64
 	out["bills_check_load_raw"] = major(maxLoad(res.Raw.Loads))
 	out["bills_check_load_smart"] = major(maxLoad(res.Smart.Loads))
 	out["bills_even_gain"] = major(res.EvenGainMinor)
-	out["bills_paid_ahead"] = float64(len(res.Moves))
+	out["bills_paid_ahead"] = float64(len(res.AheadByID))
 	var bestSuggest int64
 	if len(res.Suggestions) > 0 {
 		bestSuggest = res.Suggestions[0].LowGainMinor

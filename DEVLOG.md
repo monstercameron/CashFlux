@@ -1,3 +1,39 @@
+## 2026-07-03 — /networth: from a single card to a balance-sheet bento surface
+
+Cam: "move onto /networth next" (same treatment: formulas, custom values, widgets, componentize,
+theme vars, design skill, adversarial review, e2e) — and mid-build: "don't use worktrees," so this
+shipped as a direct by-path commit from the primary tree (the two contended files —
+engineenv.go/formula_builder.go — carried only my additive lines at commit time; the standing plan
+if they're entangled again is to WAIT for the other agent's commit, not reconstruct).
+
+Bottom-up: `engineenv.addNetWorthVars` (new file; month-to-date change + asset-class composition +
+liquid share, all from existing Data fields — the type→bucket mapping is shared verbatim with the
+UI so the tile and the variables can't drift; `Names` extended via init(); native tests).
+`widgetcatalog/networth.go` + `uistate.NetWorthConfig{TrendMonths}` (6/12/24, persisted). Then the
+surface: hero (serif figure + MTD delta pill + chips incl. a danger-toning debt-to-asset ratio),
+horizon toolbar, accent trend with a serif takeaway and "Now" appended as the final series point
+(otherwise the takeaway said "now $114,005" while the hero read $116,845 — the old series ended at
+the month boundary), the own/owe composition pair, and by-account contribution rows.
+
+Findings fixed along the way: the shared NW panel's trend stroke was hardcoded #7c83ff purple
+(now the theme accent — this also recolors the Reports NW tab); the sample condo was TypeOther so
+"Property & vehicles" never appeared (sample.go → TypeProperty); the screenlint rows-ratchet
+tripped (my 3 new lists) — resolved honestly by porting the categories screen's two tree lists onto
+the `EntityListSection.Rows`/`EmptyState` slots, netting the count back under baseline.
+
+Adversarial review (one Sonnet agent, 3 screenshots) → applied: bar-scale hint on By-account,
+"Accounts 14" chip swapped for debt-to-asset, verbatim type-meta dedupe (Mortgage/Mortgage). Its
+"watermark bleeding through the chart" P1 was diagnosed as the boot splash captured mid-fade by
+the screenshot timing (hideBoot's 700ms display:none fallback is correct) — not a product bug. Its
+FormulaBuilder wall-of-chips P1 is real but framework-wide (the shared picker), out of this page's
+scope — flagged here for a future pass. The billsched test failure in this suite run is the
+concurrent agent's uncommitted WIP, not this work.
+
+e2e: new `networth_check.mjs` 19/19 (horizon persists a reload past the 4s autosave ticker; wiped
+dataset → add-account CTA not a blank page; down-toned owe bars; parens liabilities);
+`networth_grid_verify.mjs` rewritten from the retired `.reports-grid` contract to the bento
+span-2 contract (side-by-side at 1440, stacked at 700, NW panel full-width above).
+
 ## 2026-07-03 — Smart pay schedule: making the plan's work VISIBLE (Cam's second report)
 
 Cam: "I clicked the use this plan and nothing changes, none of the dates on the calendar got

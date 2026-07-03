@@ -21,6 +21,7 @@ func Register() {
 	registerGenerated()
 	registerRecurringSurface()
 	registerReportsSurface()
+	registerNetWorthSurface()
 	inject(Build())
 }
 
