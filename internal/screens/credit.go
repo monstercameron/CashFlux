@@ -68,7 +68,7 @@ func buildUtilTrend(app *appstate.App, accountID string, limitMinor int64) []uti
 
 // buildCreditInputs derives the credithealth.Inputs from live app data.
 // It computes current balances for every credit-card account via ledger.Balance
-// (matching the same pattern used by buildHealthInputs in health.go).
+// (matching the same pattern used by liveHealthInputs in health.go).
 func buildCreditInputs(app *appstate.App, now time.Time) credithealth.Inputs {
 	accounts := app.Accounts()
 	txns := app.Transactions()

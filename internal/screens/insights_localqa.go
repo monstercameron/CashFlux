@@ -162,10 +162,10 @@ func (s *insightsQASource) TopGoal() (name string, currentMinor, targetMinor int
 	return bestName, bestCurrent, bestTarget, true
 }
 
-// HealthScore delegates to healthscore.Evaluate, re-using buildHealthInputs
+// HealthScore delegates to healthscore.Evaluate, re-using liveHealthInputs
 // from health.go (same package — no extra import needed).
 func (s *insightsQASource) HealthScore() (score int, band string, ok bool) {
-	in := buildHealthInputs(s.app, s.now)
+	in := liveHealthInputs(s.app, s.now)
 	result := healthscore.Evaluate(in)
 	if result.Band == healthscore.BandNoData {
 		return 0, "", false

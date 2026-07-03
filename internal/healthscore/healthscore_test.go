@@ -512,3 +512,37 @@ func TestSteps_CarryKey(t *testing.T) {
 		}
 	}
 }
+
+// TestWeightFormulaIdentity guards the contract the engine surface builds on:
+// for ANY inputs, round(Σ Score×Weight) − (15 if NegativeCashFlow) clamped to
+// 0–100 must reproduce Result.Score exactly — including the NoData case, where
+// every Weight is zero. This is what lets health_score live as a real formula
+// molecule over the factor variables.
+func TestWeightFormulaIdentity(t *testing.T) {
+	cases := []Inputs{
+		{}, // nothing applicable → NoData, all weights zero
+		{HasIncome: true, SavingsRatePct: 12}, // one factor → still NoData
+		{HasIncome: true, SavingsRatePct: 12, HasLiquidData: true, EmergencyMonths: 2.4},
+		{HasIncome: true, SavingsRatePct: -8, HasLiquidData: true, EmergencyMonths: 0.5,
+			HasLiabilities: true, ObligationRatioPct: 41, HasBudgets: true, BudgetAdherencePct: 55,
+			HasCredit: true, AggUtilizationPct: 72, HasNWTrend: true, NWTrendPct: -6.2},
+		{HasIncome: true, SavingsRatePct: 25, HasLiquidData: true, EmergencyMonths: 7,
+			HasLiabilities: false, HasBudgets: true, BudgetAdherencePct: 100,
+			HasCredit: true, AggUtilizationPct: 5, HasNWTrend: true, NWTrendPct: 11},
+	}
+	for i, in := range cases {
+		r := Evaluate(in)
+		var weighted float64
+		for _, f := range r.Factors {
+			weighted += float64(f.Score) * f.Weight
+		}
+		formula := int(math.Round(weighted))
+		if r.NegativeCashFlow {
+			formula -= negativeCashFlowPenalty
+		}
+		formula = clampPct(formula)
+		if formula != r.Score {
+			t.Errorf("case %d: formula identity gives %d, Evaluate gives %d", i, formula, r.Score)
+		}
+	}
+}

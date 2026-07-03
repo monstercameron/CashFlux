@@ -9,13 +9,9 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
-	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -25,141 +21,22 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// healthLookbackMonths is the trailing window used to derive savings rate, average
-// monthly spending, and monthly income — three full months, excluding the current
-// partial month so a mid-month dip doesn't distort the score.
-const healthLookbackMonths = 3
-
-// buildHealthInputs derives the financial-health signals from the live store,
-// reusing the existing tested ledger/reports primitives. Every factor carries an
-// applicability flag so the model can drop what doesn't apply (e.g. no cards) and
-// re-normalize, rather than penalizing a household for something it doesn't have.
-func buildHealthInputs(app *appstate.App, now time.Time) healthscore.Inputs {
-	accounts := app.Accounts()
-	txns := app.Transactions()
+// liveHealthInputs derives the financial-health signals through the SINGLE
+// shared pure derivation (engineenv.HealthInputs) — the same one the health_*
+// engine variables and the health_score formula molecule are computed from —
+// so the page, the dashboard tile, and the formula surface can never disagree.
+func liveHealthInputs(app *appstate.App, now time.Time) healthscore.Inputs {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-
-	var in healthscore.Inputs
-
-	// Trailing three full months (exclude the current partial month).
-	curMonth := dateutil.MonthStart(now)
-	start := dateutil.AddMonths(curMonth, -healthLookbackMonths)
-	flow, err := reports.IncomeVsExpense(txns, start, curMonth, rates)
-	hasFlow := err == nil && (flow.Income > 0 || flow.Expense > 0)
-
-	monthlyIncome := int64(0)
-	avgMonthlySpend := int64(0)
-	if hasFlow {
-		monthlyIncome = flow.Income / healthLookbackMonths
-		avgMonthlySpend = flow.Expense / healthLookbackMonths
-		if flow.Income > 0 {
-			in.HasIncome = true
-			in.SavingsRatePct = ledger.SavingsRate(flow.Income, flow.Expense)
-		}
-	}
-
-	// Emergency fund: liquid cash ÷ average monthly spending.
-	if avgMonthlySpend > 0 {
-		if liquid, lerr := ledger.LiquidBalance(accounts, txns, rates); lerr == nil {
-			in.HasLiquidData = true
-			in.EmergencyMonths = float64(liquid.Amount) / float64(avgMonthlySpend)
-		}
-	}
-
-	// Debt payments vs income: Σ liability minimum payments ÷ monthly income.
-	// Applicable whenever there's income; zero debt scores 100 (handled in the model).
-	if in.HasIncome {
-		var minSum int64
-		anyLiab := false
-		for _, a := range accounts {
-			if a.Archived || !a.Type.IsLiability() {
-				continue
-			}
-			anyLiab = true
-			conv, cerr := currency.ConvertBetween(a.MinPayment.Amount, a.MinPayment.Currency, base, rates)
-			if cerr != nil {
-				conv = a.MinPayment.Amount
-			}
-			minSum += conv
-		}
-		in.HasLiabilities = anyLiab
-		if monthlyIncome > 0 {
-			in.ObligationRatioPct = int(minSum * 100 / monthlyIncome)
-		}
-	}
-
-	// Budget adherence: share of budgets within their limit this period. Mirrors
-	// the dashboard's budget evaluation (rollup over sub-categories, current period).
-	if budgets := app.Budgets(); len(budgets) > 0 {
-		cats := app.Categories()
-		weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
-		total, within := 0, 0
-		for _, b := range budgets {
-			bs, be := budgeting.PeriodRange(b.Period, now, weekStart)
-			st, berr := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
-			if berr != nil {
-				continue
-			}
-			total++
-			if st.State != budgeting.StateOver {
-				within++
-			}
-		}
-		if total > 0 {
-			in.HasBudgets = true
-			in.BudgetAdherencePct = within * 100 / total
-		}
-	}
-
-	// Aggregate credit utilization: Σ card balances ÷ Σ card limits.
-	var balSum, limitSum int64
-	for _, a := range accounts {
-		if a.Archived || a.CreditLimit.Amount <= 0 {
-			continue
-		}
-		bal, berr := ledger.Balance(a, txns)
-		if berr != nil {
-			continue
-		}
-		owed := bal.Amount
-		if owed < 0 {
-			owed = -owed
-		}
-		ob, cerr := currency.ConvertBetween(owed, bal.Currency, base, rates)
-		if cerr != nil {
-			ob = owed
-		}
-		ol, cerr := currency.ConvertBetween(a.CreditLimit.Amount, a.CreditLimit.Currency, base, rates)
-		if cerr != nil {
-			ol = a.CreditLimit.Amount
-		}
-		balSum += ob
-		limitSum += ol
-	}
-	if limitSum > 0 {
-		in.HasCredit = true
-		if pct, ok := ledger.Utilization(balSum, limitSum); ok {
-			in.AggUtilizationPct = pct
-		}
-	}
-
-	// Net-worth trend: the trailing six-month change as a percentage, derived from
-	// the same ledger.NetWorthSeries the dashboard's net-worth chart uses (so the
-	// health factor and the chart agree). A meaningful percentage needs a positive
-	// starting net worth; a zero or negative baseline leaves the factor inapplicable
-	// (the model then excludes it and re-normalizes the remaining weights).
-	const healthNWTrendMonths = 6
-	nwStart := dateutil.AddMonths(curMonth, -healthNWTrendMonths)
-	if series, nwErr := ledger.NetWorthSeries(accounts, txns, []time.Time{nwStart, now}, rates); nwErr == nil && len(series) == 2 && series[0].Amount > 0 {
-		in.HasNWTrend = true
-		in.NWTrendPct = float64(series[1].Amount-series[0].Amount) / float64(series[0].Amount) * 100
-	}
-
-	return in
+	return engineenv.HealthInputs(engineenv.Data{
+		Accounts: app.Accounts(), Transactions: app.Transactions(),
+		Budgets: app.Budgets(), Categories: app.Categories(),
+		WeekStart: uistate.LoadPrefs().WeekStartWeekday(),
+		Rates:     currency.Rates{Base: base, Rates: app.Settings().FXRates},
+		Now:       now,
+	})
 }
 
 // healthHue maps a 0–100 score to a continuous red→amber→green hue (HSL), so the
@@ -283,7 +160,7 @@ func healthWidgetNode(struct{}) ui.Node {
 
 	now := time.Now()
 	month := now.Format("2006-01")
-	in := buildHealthInputs(app, now)
+	in := liveHealthInputs(app, now)
 	r := healthscore.Evaluate(in)
 
 	trend := uistate.UseHealthTrend().Get()
@@ -338,9 +215,110 @@ func healthWidgetNode(struct{}) ui.Node {
 	})
 }
 
-// HealthScreen is the full /health page: the score ring, a per-factor breakdown
-// (value, contribution to the score, and a bar), the prioritized next steps, and a
-// privacy note. Everything is computed locally from the user's own data.
+// hltTile wraps a tile body in the shared Widget chrome at an explicit bento
+// column placement ("1 / span 4" full-width, "span 2" for a half-width pair).
+func hltTile(tid, col string, body ui.Node) ui.Node {
+	return uiw.Widget(uiw.WidgetProps{
+		ID: tid, Title: "", GridColumn: col, Draggable: false, Resizable: false, Preview: true,
+		Body: body,
+	})
+}
+
+// hltSection wraps a tile body with the shared serif section-title chrome.
+func hltSection(sid, title string, action, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if sid != "" {
+		args = append(args, Attr("id", sid))
+	}
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
+	return Div(args...)
+}
+
+// healthFactorVarName mirrors engineenv's factor-key → variable mapping for the
+// per-factor variable chips (the "addressable" identity of each factor).
+func healthFactorVarName(key string) string {
+	if key == "nw-trend" {
+		return "health_trend"
+	}
+	return "health_" + key
+}
+
+// healthFactorTileProps drives one factor tile: the model factor plus its act
+// route; its own component so the drill OnClick hook sits at a stable position.
+type healthFactorTileProps struct {
+	Factor healthscore.Factor
+	Route  string
+	OnOpen func()
+}
+
+// healthFactorTile renders one factor in depth: the current value vs its
+// target, the 0–100 score meter, its exact contribution share, WHY the factor
+// matters, the plain-English scoring curve, its live engine-variable identity,
+// and an "Act on this" drill to the screen where the user improves it.
+func healthFactorTile(p healthFactorTileProps) ui.Node {
+	open := ui.UseEvent(Prevent(func() { p.OnOpen() }))
+	f := p.Factor
+	varName := healthFactorVarName(f.Key)
+
+	if !f.Applicable {
+		return hltSection("sec-hf-"+f.Key, f.Label, nil, Fragment(
+			P(css.Class("empty"), Attr("data-testid", "hf-na-"+f.Key), uistate.T("health.notApplicable")),
+			P(css.Class("muted"), uistate.T("health.f."+f.Key+".why")),
+		))
+	}
+
+	// A zero score still renders a visible sliver so the meter reads as an
+	// intentional "0", not an unloaded bar.
+	meterPct := f.Score
+	if meterPct == 0 {
+		meterPct = 2
+	}
+	var act ui.Node = Fragment()
+	if p.Route != "" {
+		act = Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "hf-act-"+f.Key),
+			Attr("aria-label", uistate.T("health.stepOpen", f.Label)), OnClick(open), uistate.T("health.act"))
+	}
+	return hltSection("sec-hf-"+f.Key, f.Label, nil, Fragment(
+		Div(css.Class("hlt-factor-head"),
+			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
+			Span(css.Class("t-caption", tw.TextDim), uistate.T("health.target", f.Target)),
+		),
+		uiw.ProgressBar(uiw.ProgressBarProps{Percent: meterPct, Tone: healthBarTone(f.Score)}),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mt1),
+			Span(css.Class("t-caption", tw.TextFaint), fmt.Sprintf("%d / 100", f.Score)),
+			Span(css.Class("t-caption", tw.TextFaint), uistate.T("health.contribution", f.ContributionPct)),
+		),
+		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
+		// The exact scoring curve folds behind a quiet disclosure so the tile leads
+		// with one paragraph, not two.
+		Details(css.Class("hlt-curve"),
+			Summary(uistate.T("health.curveSummary")),
+			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".curve")),
+		),
+		// Footer: the factor's addressable identity beside its call to action.
+		Div(css.Class("hlt-factor-foot"),
+			Div(css.Class("hlt-varchip"), Attr("data-testid", "hf-var-"+f.Key),
+				Title(uistate.T("health.varChipTitle")),
+				Code(varName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", f.Score)),
+			),
+			act,
+		),
+	))
+}
+
+// HealthScreen is the full /health page, a widgetized bento surface: the hero
+// (score ring + band + delta + the score's FORMULA identity — the headline is
+// the health_score molecule, auditable and even re-weightable under Formulas),
+// six in-depth factor tiles (value vs target, meter, contribution, why, the
+// scoring curve in plain English, the live variable chip, and an act drill),
+// the prioritized focus-next steps, the monthly score history, and an opt-in
+// FormulaBuilder. Everything is computed locally from the user's own data.
 func HealthScreen() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -349,61 +327,132 @@ func HealthScreen() ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	nav := router.UseNavigate()
 
+	showFormulas := ui.UseState(false)
+	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+
 	now := time.Now()
 	month := now.Format("2006-01")
-	in := buildHealthInputs(app, now)
+	in := liveHealthInputs(app, now)
 	r := healthscore.Evaluate(in)
 	trend := uistate.UseHealthTrend().Get()
 	prior, hasPrior := uistate.PriorHealthScore(trend, month)
 
-	// Hero: ring + band + delta.
-	hero := uiw.Card(uiw.CardProps{Body: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5),
-		healthRing(r, 150),
-		Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
-			Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(r.Band))), string(r.Band)),
-			healthDeltaLine(r.Score, prior, hasPrior),
-			If(r.NegativeCashFlow,
-				Div(ClassStr("t-caption "+tw.ColorClass("text-down")), Style(map[string]string{"margin-top": "6px"}),
-					"⚠ You're spending more than you earn right now")),
-		),
-	)})
+	// The score's formula identity: the health_score molecule as persisted (a user
+	// edit under Formulas travels here too — the page reads what the engine reads).
+	scoreFormula := ""
+	for _, m := range app.Molecules() {
+		if m.Name == "health_score" {
+			scoreFormula = m.Formula
+			break
+		}
+	}
 
-	// Per-factor breakdown.
-	rows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap4)}
+	// ── Hero tile: ring + band + delta + the formula identity. ──────────────────
+	metricsCls := "strip-toggle"
+	metricsLabel := uistate.T("health.metricsShow")
+	if showFormulas.Get() {
+		metricsCls += " is-on"
+		metricsLabel = uistate.T("health.metricsHide")
+	}
+	metricsBtn := Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
+		Attr("data-testid", "health-toggle-formulas"), Title(uistate.T("health.metricsTitle")),
+		OnClick(toggleFormulas), Text(metricsLabel))
+	hero := hltTile("hlt-hero", "1 / span 4", hltSection("sec-health-hero", uistate.T("health.title"), metricsBtn,
+		Fragment(
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5, tw.FlexWrap),
+				healthRing(r, 150),
+				Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
+					Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(r.Band))), string(r.Band)),
+					healthDeltaLine(r.Score, prior, hasPrior),
+					If(r.NegativeCashFlow,
+						Div(ClassStr("t-caption "+tw.ColorClass("text-down")), Style(map[string]string{"margin-top": "6px"}),
+							uistate.T("health.deficitWarning"))),
+				),
+			),
+			// The score IS a formula: the live molecule folds behind a quiet
+			// disclosure so the hero stays glanceable, one click from the audit.
+			If(scoreFormula != "", Details(css.Class("hlt-formula"), Attr("data-testid", "health-formula"),
+				Summary(css.Class("t-caption", tw.TextDim), uistate.T("health.formulaTitle")),
+				Code(css.Class("hlt-formula-code"), "health_score = "+scoreFormula),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.formulaNote")),
+			)),
+		)))
+
+	// ── Factor tiles (span 2, three rows). ───────────────────────────────────────
+	var tiles []ui.Node
+	tiles = append(tiles, hero)
 	for _, f := range r.Factors {
-		rows = append(rows, healthFactorRow(f))
+		route := healthStepRoute(f.Key)
+		tiles = append(tiles, hltTile("hlt-"+f.Key, "span 2",
+			ui.CreateElement(healthFactorTile, healthFactorTileProps{
+				Factor: f, Route: route,
+				OnOpen: func() {
+					if route != "" {
+						nav.Navigate(uistate.RoutePath(route))
+					}
+				},
+			})))
 	}
-	breakdown := uiw.Card(uiw.CardProps{
-		Title: "What goes into your score",
-		Body:  Div(rows...),
-	})
 
-	// Prioritized steps — each is a drill-down to the screen where the user acts on
-	// it (R52: decision → action), routed by the step's stable Key.
-	stepNodes := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap3)}
-	for _, s := range r.Steps {
-		route := healthStepRoute(s.Key)
-		stepNodes = append(stepNodes, ui.CreateElement(healthStepRow, healthStepRowProps{
-			Factor: s.Factor, Action: s.Action, Target: s.Target, Route: route,
-			OnOpen: func() {
-				if route != "" {
-					nav.Navigate(uistate.RoutePath(route))
-				}
-			},
-		}))
-	}
-	var steps ui.Node = Fragment()
+	// ── Focus-next steps (drill rows) + the privacy note. ───────────────────────
 	if len(r.Steps) > 0 {
-		steps = uiw.Card(uiw.CardProps{
-			Title: "Where to focus next",
-			Body:  Div(stepNodes...),
-		})
+		stepNodes := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap3)}
+		for _, s := range r.Steps {
+			route := healthStepRoute(s.Key)
+			stepNodes = append(stepNodes, ui.CreateElement(healthStepRow, healthStepRowProps{
+				Factor: s.Factor, Action: s.Action, Target: s.Target, Route: route,
+				OnOpen: func() {
+					if route != "" {
+						nav.Navigate(uistate.RoutePath(route))
+					}
+				},
+			}))
+		}
+		tiles = append(tiles, hltTile("hlt-steps", "1 / span 4",
+			hltSection("sec-health-steps", uistate.T("health.stepsTitle"), nil, Fragment(
+				Div(stepNodes...),
+				P(css.Class("t-caption", tw.TextFaint, tw.Mt2), uistate.T("health.privacy")),
+			))))
 	}
 
-	privacy := P(css.Class("t-caption", tw.TextFaint),
-		"Calculated on your device from your own data — never uploaded or shared.")
+	// ── Monthly score history (when at least two snapshots exist). ──────────────
+	if len(trend) >= 2 {
+		vals := make([]float64, len(trend))
+		labels := make([]string, len(trend))
+		valueLabels := make([]string, len(trend))
+		for i, s := range trend {
+			vals[i] = float64(s.Score)
+			if t, err := time.Parse("2006-01", s.Month); err == nil {
+				labels[i] = t.Format("Jan")
+			}
+			valueLabels[i] = fmt.Sprintf("%d · %s", s.Score, s.Band)
+		}
+		delta := trend[len(trend)-1].Score - trend[0].Score
+		takeaway := uistate.T("health.historyFlat", trend[len(trend)-1].Score)
+		if delta > 0 {
+			takeaway = uistate.T("health.historyUp", delta, len(trend))
+		} else if delta < 0 {
+			takeaway = uistate.T("health.historyDown", -delta, len(trend))
+		}
+		tiles = append(tiles, hltTile("hlt-history", "1 / span 4",
+			hltSection("sec-health-history", uistate.T("health.historyTitle"), nil, Fragment(
+				P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "health-history-takeaway"), takeaway),
+				uiw.AreaChart(uiw.AreaChartProps{
+					Values: vals, Stroke: chartLineColor(uistate.CurrentAccent()), GradientID: "hlt-history",
+					Label: uistate.T("health.historyTitle"), Labels: labels, ValueLabels: valueLabels,
+				}),
+			))))
+	}
 
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5), hero, breakdown, steps, privacy)
+	// ── Opt-in metrics tile: the score's variables in the FormulaBuilder. ────────
+	if showFormulas.Get() {
+		tiles = append(tiles, hltTile("hlt-formula-builder", "1 / span 4", Fragment(
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("health.formulaHint")),
+			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("health.metricsShow"), Initial: "health_score", ShowSaved: true}),
+		)))
+	}
+
+	return Div(css.Class("bento bento-health"), tiles)
 }
 
 // healthStepRoute maps a health-factor key to the screen where the user acts on
@@ -451,28 +500,6 @@ func healthStepRow(p healthStepRowProps) ui.Node {
 		Type("button"), Attr("data-testid", "health-step"),
 		Attr("aria-label", uistate.T("health.stepOpen", p.Factor)),
 		OnClick(open), body)
-}
-
-// healthFactorRow renders one factor in the /health breakdown: its label + value, a
-// score bar, its contribution share, and target. Inapplicable factors render as a
-// calm "not applicable" line so the user understands why it's excluded.
-func healthFactorRow(f healthscore.Factor) ui.Node {
-	if !f.Applicable {
-		return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-			Span(ClassStr("t-body "+tw.Fold(tw.FontMedium)), f.Label),
-			Span(css.Class("t-caption", tw.TextFaint), "Not applicable to you"),
-		)
-	}
-	head := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-		Span(ClassStr("t-body "+tw.Fold(tw.FontMedium)), f.Label),
-		Span(ClassStr("t-body "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
-	)
-	bar := uiw.ProgressBar(uiw.ProgressBarProps{Percent: f.Score, Tone: healthBarTone(f.Score)})
-	sub := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mt1),
-		Span(css.Class("t-caption", tw.TextFaint), fmt.Sprintf("%d%% of your score", f.ContributionPct)),
-		Span(css.Class("t-caption", tw.TextDim), "Target: "+f.Target),
-	)
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), head, bar, sub)
 }
 
 // healthBandForScore mirrors the model's banding for per-factor tone (the model

@@ -44,6 +44,11 @@ const minApplicable = 2
 // when the rest of the picture is strong. Subtracted after the weighted average.
 const negativeCashFlowPenalty = 15
 
+// NegativeCashFlowPenalty exposes the deficit deduction so the engine surface's
+// health_penalty atom (and the health_score formula molecule built on it) uses
+// the model's own constant rather than duplicating it.
+const NegativeCashFlowPenalty = negativeCashFlowPenalty
+
 // Inputs are the pre-derived signals, one per factor, each paired with a flag for
 // whether that factor applies to this household. A factor that doesn't apply (e.g.
 // no credit cards) is dropped and its weight redistributed — it is NOT scored zero.
@@ -91,8 +96,16 @@ type Factor struct {
 	Value           string // human display of the current value, e.g. "12%", "2.3 mo"
 	Score           int    // 0–100
 	ContributionPct int    // this factor's weight share of the overall score (post re-normalize)
-	Target          string // plain-English goal, e.g. "20% or more"
-	Applicable      bool
+	// Weight is the EXACT post-renormalization weight fraction this factor's score
+	// is multiplied by in the overall average (ContributionPct is its rounded
+	// display twin). Zero when the factor is inapplicable — and zero for every
+	// factor in the BandNoData case — so
+	// round(Σ Score×Weight) − penalty, clamped to 0–100, reproduces Result.Score
+	// exactly. This is what lets the score live as a real formula over the factor
+	// variables in the engine surface (see engineenv's health_score molecule).
+	Weight     float64
+	Target     string // plain-English goal, e.g. "20% or more"
+	Applicable bool
 }
 
 // Step is one prioritized, plain-English action drawn from the weakest factors.
@@ -204,6 +217,12 @@ func Evaluate(in Inputs) Result {
 			f.Score = d.rawScore
 			if applWeight > 0 {
 				f.ContributionPct = int(math.Round(d.weight / applWeight * 100))
+				// Exact weight only when a real score will be produced; in the
+				// NoData case every weight is zero so the formula identity
+				// (round(Σ Score×Weight) − penalty) also lands on 0.
+				if applCount >= minApplicable {
+					f.Weight = d.weight / applWeight
+				}
 			}
 		} else {
 			f.Value = "—"

@@ -49,7 +49,10 @@ type Data struct {
 	Goals        []domain.Goal
 	Tasks        []domain.Task
 	Recurring    []domain.Recurring
-	Rates        currency.Rates
+	// Categories are the household's category tree — needed by variables that
+	// evaluate budgets with sub-category rollup (the health_* factor atoms).
+	Categories []domain.Category
+	Rates      currency.Rates
 	Now          time.Time
 	PeriodStart  time.Time
 	PeriodEnd    time.Time
@@ -146,6 +149,13 @@ func DefaultMolecules() []domain.Molecule {
 		{Name: "safe_to_spend", Formula: "liquid_cash - max(bills_due, 0) - max(goal_needs, 0)", Doc: "Liquid cash after this month's bills and goal set-asides."},
 		{Name: "credit_utilization", Formula: "clamp(safediv(revolving_balance, credit_limit_total, 0) * 100, 0, 100)", Doc: "Percent of your total credit-card limit you're using (30%+ starts to weigh on a credit score)."},
 		{Name: "debt_to_asset_pct", Formula: "clamp(safediv(liabilities, assets, 0) * 100, 0, 1000)", Doc: "What you owe as a percent of what you own — lower is healthier."},
+		// The financial-health score IS this formula: each health_* factor is a 0–100
+		// atom scored in Go (internal/healthscore), each _weight atom is that factor's
+		// exact share after inapplicable factors are dropped and re-normalized, and
+		// health_penalty is the flat deficit deduction. Because it's a molecule, the
+		// derivation is auditable (Explain) and a household can even re-weight its own
+		// score by editing this formula — the /health page reads THIS value.
+		{Name: "health_score", Formula: "clamp(round(health_savings*health_savings_weight + health_emergency*health_emergency_weight + health_debt*health_debt_weight + health_budget*health_budget_weight + health_utilization*health_utilization_weight + health_trend*health_trend_weight) - health_penalty, 0, 100)", Doc: "Your 0–100 financial-health score — the weighted blend of the six factor scores, minus a penalty when spending exceeds income."},
 	}
 }
 
@@ -295,6 +305,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addBillsSmartVars(out, d, major, toBase)
 	addReportsVars(out, d, major)
 	addNetWorthVars(out, d, major, toBase)
+	addHealthVars(out, d)
 	return out
 }
 

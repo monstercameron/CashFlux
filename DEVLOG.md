@@ -1,3 +1,35 @@
+## 2026-07-03 — /health: the score becomes a live formula (atoms + molecule)
+
+Cam: "move onto /health page, make sure you generate the health out of formula and make sure its
+indepth and addressible." The atoms/molecules architecture was built for exactly this ask, so the
+structural move is: the six factor scores + their EXACT post-renormalization weights become
+health_* ATOMS (scored in Go by the untouched internal/healthscore model), and the headline becomes
+a MOLECULE — `health_score = clamp(round(Σ factor×weight) − health_penalty, 0, 100)` — so the
+number the page shows is literally a formula's value: auditable, addressable in any
+formula/widget, and re-weightable (molecules persist by name; editing health_score under Formulas
+reshapes your own scoring and the page follows, because it reads the molecule).
+
+Parity engineering: healthscore.Factor gains `Weight` (zero when inapplicable AND all-zero in the
+<2-applicable NoData case so the formula also lands on 0); a guard test in healthscore proves
+round(Σ Score×Weight) − penalty ≡ Evaluate for arbitrary inputs; engineenv tests prove the molecule
+through the full Vars() pipeline equals Evaluate (incl. the deficit-penalty path); and the e2e's
+ruthless check evaluates `health_score` in the LIVE FormulaBuilder and asserts it equals the ring
+figure (73 == 73 on sample data). Input assembly deduplicated: buildHealthInputs (wasm screen)
+became pure engineenv.HealthInputs — one derivation for the page, dashboard tile, insights local
+Q&A, and the variables. engineenv.Data gained Categories (the budget factor's rollup needs the
+tree; liveEngineVars now passes Categories + WeekStart).
+
+The page: hero (ring + band + delta + the folded live-formula block), six factor tiles (serif
+value toned by score, target, meter — zero renders a red sliver so it reads scored-not-broken —
+score + exact share, why-paragraph, curve behind a "How it's scored" disclosure, footer = variable
+chip + "Act on this" drill), focus-next steps, score-history trend once ≥2 monthly snapshots, and
+an opt-in FormulaBuilder seeded with health_score. Adversarial review (one Sonnet agent) drove the
+disclosure folds, zero-sliver, footer CTA, and left-aligned steps; its "raw dollar numerators on
+each factor" P3 is a good future pass (needs HealthInputs to also export the raw sums).
+
+e2e: new health_check.mjs 16/16 (formula text names all six factors + penalty; builder-vs-ring
+equality; act drills navigate; wiped dataset reads "Not enough data"); r52_health_steps still green.
+
 ## 2026-07-03 — Smart pay schedule: rebuilt to Cam's bucket model (third iteration)
 
 Cam spelled out the mental model the feature had been approximating: paydays are the buckets —
