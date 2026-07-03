@@ -87,6 +87,17 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C346: the invisible liabilities hand-off
+
+The sweep's probe proved /accounts renders zero liability rows — no Mortgage, no credit cards —
+while its own summary counts all 14 accounts and "Mark all updated (14 accounts stale)" includes
+rows the page never shows. Reading the code, that's a deliberate IA choice (liabilities live on
+/debt; the Liabilities stat links there), but it was executed invisibly: an unmarked stat-link is
+not an explanation, and a search for "Mortgage" just came up empty. The asset list now ends with a
+plain stub — "Liabilities (6) — managed in Debt payoff →" (owner-scoped count, credit-card icon,
+`acct-liabilities-stub`) — so the hand-off is stated where the user is looking. Verified live:
+renders with the right count, click lands on /debt, 0 page errors.
+
 ## 2026-07-03 — C341 (partial): "No change this month" was the same UTC lesson
 
 With the C339 lens on, the accounts summary's "No change this month" (vs the dashboard's

@@ -3244,11 +3244,12 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   needs $1,840/mo but only ~$462/mo is realistically free" — yet the card says On track at
   $1,840/mo). Fold free-cash-flow feasibility into the pace badge (On track / Tight / At risk) so
   the badge and the Smart strip can't disagree.
-- [ ] **C346 [MAJOR][UX] /accounts hides all 6 liability accounts** with only an unmarked
-  stat-link to /debt: page search can't find "Mortgage", "Mark all updated (14 accounts stale)"
-  counts rows the page won't render, and nothing says where liabilities live. Add a visible
-  "Liabilities (6) — managed in Debt payoff →" section stub (or collapsed liability rows with
-  Update balance), and make the stat-link look like a link.
+- [x] **C346 ✅ DONE (2026-07-03) — /accounts now names its liability hand-off.** The asset-list
+  tile ends with a visible stub — "Liabilities (6) — managed in Debt payoff →" (owner-scoped,
+  non-archived count; `data-testid="acct-liabilities-stub"`) — linking to /debt, so the page no
+  longer silently hides 6 accounts its own summary counts. MEASURED live: stub renders with the
+  correct count, click navigates to /debt; 0 page errors; i18n guard green; wasm build rc=0.
+  (Follow-on if wanted: collapsed liability rows with Update-balance inline instead of a stub.)
 - [ ] **C353 [MINOR][UX] /allocate criterion meters read as literal finance numbers:** "Pay down
   Mortgage — RETURN 27%" (a 4.1% APR), "RETURN 100%" on the card. They're normalized scores;
   label them as scores (no % on abstract axes) or show the real APR/yield beside the score.

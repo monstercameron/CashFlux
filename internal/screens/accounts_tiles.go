@@ -605,9 +605,32 @@ func acctListWidget(props acctListProps) ui.Node {
 		HeaderAction: smartSectionAction(smartSettings),
 		Body:         bodyContent,
 	})
+
+	// C346: liability accounts are deliberately managed on /debt, but that
+	// hand-off was invisible — this page listed only assets while its summary
+	// counted all 14 accounts, and a search for "Mortgage" found nothing with
+	// no explanation. A compact stub names the liabilities that live elsewhere
+	// and links through to the Debt payoff page.
+	liabCount := 0
+	for _, ac := range accounts {
+		if ac.Class == domain.ClassLiability && !ac.Archived && ownerVisibleTo(ac.OwnerID, activeMemberID) {
+			liabCount++
+		}
+	}
+	liabStub := If(liabCount > 0,
+		Div(css.Class(tw.Mt3),
+			A(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+				Href(uistate.RoutePath("/debt")),
+				Attr("data-testid", "acct-liabilities-stub"),
+				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				uistate.T("accounts.liabilitiesStub", liabCount),
+			),
+		),
+	)
+
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: section,
+		Body: Div(section, liabStub),
 	})
 }
 

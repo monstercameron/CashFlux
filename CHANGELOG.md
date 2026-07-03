@@ -26,6 +26,10 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **/accounts names its liability hand-off (C346, 2026-07-03):** the page deliberately lists only
+  assets (liabilities are managed on /debt) but nothing said so — search couldn't find "Mortgage"
+  and the summary counted accounts the list never showed; the asset list now ends with a
+  "Liabilities (N) — managed in Debt payoff →" stub linking to /debt.
 - **/accounts month-to-date net-worth delta agrees with the dashboard (C341 partial,
   2026-07-03):** the accounts summary built its month boundary in local time, excluding
   first-of-month (UTC-midnight) transactions and reporting "No change this month" while the

@@ -34,6 +34,10 @@ var uxSweepKeys = Catalog{
 	// currency codes.
 	"settings.freshnessAria": "Days before %s balances count as stale",
 	"settings.fxRateAria":    "Exchange rate from %s to %s",
+
+	// /accounts hand-off stub for the liability accounts that live on /debt
+	// (C346). %d = liability account count.
+	"accounts.liabilitiesStub": "Liabilities (%d) — managed in Debt payoff →",
 }
 
 func init() {
