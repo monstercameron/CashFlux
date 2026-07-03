@@ -5152,6 +5152,10 @@ func registerGenerated() {
 		prop("gap", "0.2rem"),
 		prop("flex", "0 0 auto"),
 	)
+	rule(".plan-scenario-menu",
+		prop("flex", "0 0 auto"),
+		prop("margin-top", "-0.15rem"),
+	)
 	rule(".plan-scenario-end",
 		prop("font-size", "1.35rem"),
 		prop("font-weight", "700"),

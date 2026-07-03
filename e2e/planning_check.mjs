@@ -122,7 +122,11 @@ if (await compareSel.count()) {
 // --- delete a scenario ---
 await p.locator("#sec-scenarios").scrollIntoViewIfNeeded().catch(() => {});
 const rowsBefore = await p.locator("#sec-scenarios .plan-scenario").count();
-await p.locator("#sec-scenarios .plan-scenario .btn-del").first().click({ force: true });
+// Delete now lives in the ⋯ overflow menu — open it, then click the delete item.
+await p.locator('#sec-scenarios [data-testid^="plan-menu-"]').first().click({ force: true });
+await p.waitForTimeout(300);
+check("SC5a the scenario ⋯ menu exposes a delete item (no bare X button)", await p.locator('#sec-scenarios [data-testid^="plan-del-"]').first().isVisible().catch(() => false) && await p.locator("#sec-scenarios .btn-del").count() === 0);
+await p.locator('#sec-scenarios [data-testid^="plan-del-"]').first().click({ force: true });
 await p.evaluate(() => { const c = document.querySelector("#cf-dialog-confirm"); if (c) c.click(); }).catch(() => {});
 await p.waitForTimeout(600);
 check("SC5 deleting a scenario removes its row", await p.locator("#sec-scenarios .plan-scenario").count() < rowsBefore || rowsBefore === 0, `${rowsBefore} → ${await p.locator("#sec-scenarios .plan-scenario").count()}`);

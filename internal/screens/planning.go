@@ -719,6 +719,9 @@ func PlanRow(props planRowProps) ui.Node {
 		stroke = "#d8716f"
 	}
 
+	// Delete handler for the ⋯ overflow menu (a stable hook position — not in a loop).
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
+
 	// Runway readout: how long does the balance last before crossing zero?
 	runwayMo, depletes := planning.RunwayMonths(p)
 	var runwayNode ui.Node = Fragment()
@@ -741,9 +744,16 @@ func PlanRow(props planRowProps) ui.Node {
 				Span(ClassStr("plan-scenario-end "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(endToneCls)), fmtMoney(end)),
 				runwayNode,
 			),
-			uiw.DeleteButton(uiw.DeleteButtonProps{
-				AriaLabel: uistate.T("plans.deleteTitle"), Title: uistate.T("plans.deleteTitle"),
-				TestID: "plan-del-" + p.ID, OnClick: func() { props.OnDelete(p.ID) },
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "plan-menu-" + p.ID,
+				AriaLabel:    uistate.T("plans.moreActions"),
+				ToggleTestID: "plan-menu-" + p.ID,
+				WrapClass:    "plan-scenario-menu",
+				Items: []ui.Node{
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "plan-del-"+p.ID), Title(uistate.T("plans.deleteTitle")),
+						OnClick(del), uistate.T("plans.delete")),
+				},
 			}),
 		),
 		If(len(vals) > 1, Div(css.Class("plan-scenario-chart"),

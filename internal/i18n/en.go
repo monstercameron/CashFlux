@@ -988,6 +988,8 @@ var english = Catalog{
 	"plans.rowMeta":              "%d months · start %s · %s/mo",
 	"plans.projected":            "Projected %s",
 	"plans.deleteTitle":          "Delete this plan",
+	"plans.delete":               "Delete plan",
+	"plans.moreActions":          "Plan actions",
 	"plans.runwayMonths":         "Money lasts ~%s months",
 	"plans.runwayDanger":         "Balance crosses zero",
 	"plans.staysPositive":        "Stays positive through %d months",

@@ -1,3 +1,13 @@
+## 2026-07-03 — /planning: scenario delete → ⋯ overflow menu
+
+Cam: "on the savings plans mode the delete x into a triple dot menu." Swapped the bare
+`uiw.DeleteButton` on each `.plan-scenario` card for the shared `uiw.KebabMenu` (⋯) carrying
+a single "Delete plan" item — same overflow pattern as the allocate/goals/to-do rows. Added a
+stable `del` UseEvent in PlanRow (not in a loop) for the item handler, kept the `plan-del-<id>`
+testid on the menu item so the delete path stays findable, and added `.plan-scenario-menu`
+(flex 0 0 auto) so the ⋯ sits where the ✕ did. Updated planning_check.mjs SC5 to open the menu
+first + assert no bare `.btn-del` remains.
+
 ## 2026-07-03 — /planning: "Add plan" moved into a flip modal
 
 Cam: "saving and spending plan add plan needs to be inside a flip modal." The saved-scenarios tile
