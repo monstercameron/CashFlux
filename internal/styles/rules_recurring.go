@@ -246,6 +246,31 @@ func registerRecurringSurface() {
 		prop("top", "0.75rem"),
 		prop("align-self", "start"),
 	)
+	// Give the calendar a real share of the two-column row (it used to sit at its
+	// natural width), and scale its grid up so dates read at a glance.
+	ruleMedia("(min-width: 1024px)", ".bills-layout > :first-child",
+		prop("flex", "1 1 52%"),
+		prop("min-width", "0"),
+	)
+	ruleMedia("(min-width: 1024px)", ".bills-cal-sticky",
+		prop("flex", "1 1 48%"),
+		prop("min-width", "24rem"),
+	)
+	rule(".bills-cal-sticky .cal-grid",
+		prop("gap", "6px"),
+	)
+	rule(".bills-cal-sticky .cal-cell",
+		prop("min-height", "76px"),
+		prop("border-radius", "10px"),
+		prop("padding", "7px 9px"),
+	)
+	rule(".bills-cal-sticky .cal-day",
+		prop("font-size", "0.95rem"),
+	)
+	rule(".bills-cal-sticky .cal-head",
+		prop("font-size", "0.72rem"),
+		prop("padding", "4px 0"),
+	)
 	// Hover-linked calendar date: hovering a bill row outlines its due-date cell.
 	rule(".cal-cell.cal-hl",
 		prop("outline", "2px solid var(--accent)"),
