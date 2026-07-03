@@ -5098,6 +5098,80 @@ func registerGenerated() {
 	rule(".plan-inline-field .field",
 		prop("font-variant-numeric", "tabular-nums"),
 	)
+	// Saved what-if scenario cards.
+	rule(".bento-planning .rows",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.6rem"),
+	)
+	rule(".plan-scenario",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.5rem"),
+		prop("padding", "0.85rem 1rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "14px"),
+		prop("background", "color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		prop("transition", "border-color 0.15s ease"),
+	)
+	rule(".plan-scenario:hover",
+		prop("border-color", "color-mix(in srgb, var(--accent) 30%, var(--border))"),
+	)
+	rule(".plan-scenario-head",
+		prop("display", "flex"),
+		prop("align-items", "flex-start"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+	)
+	rule(".plan-scenario-title",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+		prop("min-width", "0"),
+		prop("flex", "1 1 auto"),
+	)
+	rule(".plan-scenario-name",
+		prop("font-weight", "700"),
+		prop("font-size", "1rem"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".plan-scenario-meta",
+		prop("font-size", "0.8rem"),
+	)
+	rule(".plan-scenario-figs",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("align-items", "flex-end"),
+		prop("gap", "0.2rem"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".plan-scenario-end",
+		prop("font-size", "1.35rem"),
+		prop("font-weight", "700"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("line-height", "1.05"),
+	)
+	rule(".plan-scenario-runway",
+		prop("font-size", "0.72rem"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.25rem"),
+	)
+	rule(".plan-scenario-runway.is-danger",
+		prop("padding", "0.05rem 0.45rem"),
+		prop("border-radius", "999px"),
+		prop("background", "color-mix(in srgb, var(--danger) 14%, transparent)"),
+	)
+	// Constrain the projected sparkline so it reads as a compact card chart (the AreaChart is a
+	// full-width component that otherwise renders 120px tall and swamps the row).
+	rule(".plan-scenario-chart",
+		prop("width", "100%"),
+	)
+	rule(".plan-scenario-chart svg",
+		prop("height", "52px"),
+	)
 	rule(".bento.bento-allocate",
 		prop("grid-template-rows", "auto"),
 		prop("grid-auto-rows", "auto"),

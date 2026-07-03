@@ -69,7 +69,7 @@ await scNums.nth(1).fill("5000");
 await scNums.nth(2).fill("300");
 await p.locator('#sec-scenarios button[type="submit"]').click({ force: true });
 await p.waitForTimeout(700);
-check("SC1 adding a plan appends a scenario row", await p.locator("#sec-scenarios .row").count() >= 1, `${await p.locator("#sec-scenarios .row").count()} rows`);
+check("SC1 adding a plan appends a scenario row", await p.locator("#sec-scenarios .plan-scenario").count() >= 1, `${await p.locator("#sec-scenarios .plan-scenario").count()} rows`);
 check("SC2 the plan row shows a projected end + a sparkline", /[0-9]/.test(await p.locator("#sec-scenarios").innerText()) && await p.locator("#sec-scenarios svg").count() >= 1);
 
 // (neg) a nameless plan errors.
@@ -101,11 +101,11 @@ if (await compareSel.count()) {
 
 // --- delete a scenario ---
 await p.locator("#sec-scenarios").scrollIntoViewIfNeeded().catch(() => {});
-const rowsBefore = await p.locator("#sec-scenarios .row").count();
-await p.locator("#sec-scenarios .row .btn-del").first().click({ force: true });
+const rowsBefore = await p.locator("#sec-scenarios .plan-scenario").count();
+await p.locator("#sec-scenarios .plan-scenario .btn-del").first().click({ force: true });
 await p.evaluate(() => { const c = document.querySelector("#cf-dialog-confirm"); if (c) c.click(); }).catch(() => {});
 await p.waitForTimeout(600);
-check("SC5 deleting a scenario removes its row", await p.locator("#sec-scenarios .row").count() < rowsBefore || rowsBefore === 0, `${rowsBefore} → ${await p.locator("#sec-scenarios .row").count()}`);
+check("SC5 deleting a scenario removes its row", await p.locator("#sec-scenarios .plan-scenario").count() < rowsBefore || rowsBefore === 0, `${rowsBefore} → ${await p.locator("#sec-scenarios .plan-scenario").count()}`);
 
 // --- metrics FormulaBuilder (custom values) ---
 await p.locator('[data-testid="planning-toggle-formulas"]').click({ force: true });

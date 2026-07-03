@@ -779,7 +779,6 @@ type planRowProps struct {
 // no-hooks-in-loops rule.
 func PlanRow(props planRowProps) ui.Node {
 	p := props.Plan
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
 	end := money.New(planning.EndBalance(p), props.Base)
 	monthly := money.New(planning.MonthlyNet(p), props.Base)
 	meta := uistate.T("plans.rowMeta", p.HorizonMonths, fmtMoney(money.New(p.StartBalance, props.Base)), fmtMoney(monthly))
@@ -791,45 +790,46 @@ func PlanRow(props planRowProps) ui.Node {
 	for i, v := range curve {
 		vals[i] = float64(v)
 	}
-	stroke := "#2e8b57"
-	if planning.EndBalance(p) < p.StartBalance {
+	// Tone the projected figure + sparkline by whether the plan ends up (accent) or down (red)
+	// vs. its starting balance.
+	up := planning.EndBalance(p) >= p.StartBalance
+	endToneCls := "text-up"
+	stroke := chartLineColor(uistate.CurrentAccent())
+	if !up {
+		endToneCls = "text-down"
 		stroke = "#d8716f"
 	}
 
 	// Runway readout: how long does the balance last before crossing zero?
 	runwayMo, depletes := planning.RunwayMonths(p)
+	var runwayNode ui.Node = Fragment()
+	if depletes {
+		runwayNode = Span(css.Class("plan-scenario-runway is-danger plan-runway--danger"), Attr("role", "status"), Attr("aria-label", uistate.T("plans.runwayDanger")),
+			Span(css.Class("plan-runway__badge"), "⚠"),
+			Span(css.Class("plan-runway__text text-down"), uistate.T("plans.runwayMonths", strconv.FormatFloat(runwayMo, 'f', 1, 64))),
+		)
+	} else if p.HorizonMonths > 0 {
+		runwayNode = Span(css.Class("plan-scenario-runway is-ok", tw.TextDim), uistate.T("plans.staysPositive", p.HorizonMonths))
+	}
 
-	return Div(css.Class("row"),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), p.Name),
-			Span(css.Class("row-meta"), meta),
-		),
-		If(len(vals) > 1, uiw.AreaChart(uiw.AreaChartProps{
-			Values: vals, Stroke: stroke, GradientID: "cf-plan-" + p.ID,
-			Width: 120, Height: 28, Label: uistate.T("plans.chartLabel", fmtMoney(end)),
-		})),
-		Span(ClassStr("amount fig "+figTone(end)), uistate.T("plans.projected", fmtMoney(end))),
-		// Runway indicator: shown only when the balance depletes within the horizon.
-		// Uses both colour (text-down) and text so the warning is not colour-alone (a11y).
-		IfElse(depletes,
-			Span(
-				css.Class("plan-runway plan-runway--danger"),
-				Attr("role", "status"),
-				Attr("aria-label", uistate.T("plans.runwayDanger")),
-				Span(css.Class("plan-runway__badge"), "⚠"),
-				Span(
-					css.Class("plan-runway__text text-down"),
-					uistate.T("plans.runwayMonths", strconv.FormatFloat(runwayMo, 'f', 1, 64)),
-				),
+	return Div(css.Class("plan-scenario"), Attr("data-testid", "plan-"+p.ID), Attr("role", "listitem"),
+		Div(css.Class("plan-scenario-head"),
+			Div(css.Class("plan-scenario-title"),
+				Span(css.Class("plan-scenario-name"), p.Name),
+				Span(css.Class("plan-scenario-meta", tw.TextDim), meta),
 			),
-			If(p.HorizonMonths > 0,
-				Span(
-					css.Class("plan-runway plan-runway--ok"),
-					uistate.T("plans.staysPositive", p.HorizonMonths),
-				),
+			Div(css.Class("plan-scenario-figs"),
+				Span(ClassStr("plan-scenario-end "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(endToneCls)), fmtMoney(end)),
+				runwayNode,
 			),
+			uiw.DeleteButton(uiw.DeleteButtonProps{
+				AriaLabel: uistate.T("plans.deleteTitle"), Title: uistate.T("plans.deleteTitle"),
+				TestID: "plan-del-" + p.ID, OnClick: func() { props.OnDelete(p.ID) },
+			}),
 		),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("plans.deleteTitle")), Title(uistate.T("plans.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		If(len(vals) > 1, Div(css.Class("plan-scenario-chart"),
+			uiw.AreaChart(uiw.AreaChartProps{Values: vals, Stroke: stroke, GradientID: "cf-plan-" + p.ID, Label: uistate.T("plans.chartLabel", fmtMoney(end))}),
+		)),
 	)
 }
 
