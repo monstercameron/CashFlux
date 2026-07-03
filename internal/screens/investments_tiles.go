@@ -182,9 +182,10 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		segToggle,
 	)
 
+	accent := chartLineColor(uistate.UsePrefs().Get().Accent)
 	chart := uiw.Chart(uiw.ChartProps{
 		Spec: chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{
-			{Name: uistate.T("investments.portfolioValue"), Color: "#2e8b57", Points: pts},
+			{Name: uistate.T("investments.portfolioValue"), Color: accent, Points: pts},
 		}, Y: chartspec.Axis{Format: yFmt}},
 		Height: "240px", CurrencySymbol: v.Sym,
 		Label: uistate.T("investments.growthChartLabel"),

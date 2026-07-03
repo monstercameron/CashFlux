@@ -44,8 +44,19 @@ func growthFigures(series []money.Money) (cur, delta int64, pct float64) {
 	return
 }
 
-// miniAreaChart renders a compact seagreen area chart for a growth series.
-func miniAreaChart(series []money.Money, labels []string, base, sym string) ui.Node {
+// chartLineColor returns the color to draw growth charts in: the user's theme accent (so the
+// charts track the active theme instead of a fixed hue), falling back to the default seagreen
+// when no accent is configured. The D3 renderer paints this into SVG stroke/fill attributes,
+// so it must be a resolved color value (not a CSS var()).
+func chartLineColor(accent string) string {
+	if accent = strings.TrimSpace(accent); accent != "" {
+		return accent
+	}
+	return "#2e8b57"
+}
+
+// miniAreaChart renders a compact area chart for a growth series, stroked in the theme accent.
+func miniAreaChart(series []money.Money, labels []string, base, sym, accent string) ui.Node {
 	pts := make([]chartspec.Point, len(series))
 	for i, m := range series {
 		lbl := ""
@@ -59,14 +70,14 @@ func miniAreaChart(series []money.Money, labels []string, base, sym string) ui.N
 		yFmt = "$.2~s"
 	}
 	return uiw.Chart(uiw.ChartProps{
-		Spec:   chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{{Color: "#2e8b57", Points: pts}}, Y: chartspec.Axis{Format: yFmt}},
+		Spec:   chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{{Color: chartLineColor(accent), Points: pts}}, Y: chartspec.Axis{Format: yFmt}},
 		Height: "120px", CurrencySymbol: sym, Label: uistate.T("investments.growthChartLabel"),
 	})
 }
 
 // growthCard renders a growth card: a header (name + any controls), the current value + a
-// toned delta, and a mini area chart.
-func growthCard(testid string, header ui.Node, series []money.Money, labels []string, sym string, dec int, base string) ui.Node {
+// toned delta, and a mini area chart drawn in the theme accent.
+func growthCard(testid string, header ui.Node, series []money.Money, labels []string, sym string, dec int, base, accent string) ui.Node {
 	cur, delta, pct := growthFigures(series)
 	tone := gainToneClass(delta)
 	arrow := "▲"
@@ -82,7 +93,7 @@ func growthCard(testid string, header ui.Node, series []money.Money, labels []st
 					fmt.Sprintf("%s %s (%+.1f%%)", arrow, fmtSignedMoney(delta, sym, dec), pct)),
 			),
 		),
-		miniAreaChart(series, labels, base, sym),
+		miniAreaChart(series, labels, base, sym, accent),
 	)
 }
 
@@ -96,6 +107,7 @@ type investPoolChipProps struct {
 	Sym     string
 	Dec     int
 	Base    string
+	Accent  string
 }
 
 // investPoolCard renders one pool as a CUSTOM CHART card: an aggregated growth chart of its
@@ -131,7 +143,7 @@ func investPoolCard(props investPoolChipProps) ui.Node {
 		Span(css.Class("inv-pool-var"), Title(uistate.T("investments.poolVarHint")), varName),
 	)
 	return Div(css.Class("inv-chart-card"),
-		growthCard("invest-pool-"+p.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base))
+		growthCard("invest-pool-"+p.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base, props.Accent))
 }
 
 // --- per-account growth card -----------------------------------------------------
@@ -143,6 +155,7 @@ type investAccountCardProps struct {
 	Sym     string
 	Dec     int
 	Base    string
+	Accent  string
 	OnView  func(string)
 }
 
@@ -163,7 +176,7 @@ func investAccountCard(props investAccountCardProps) ui.Node {
 			Attr("aria-label", uistate.T("accounts.viewTitle")), Title(uistate.T("nav.transactions")), OnClick(view),
 			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
-	return growthCard("invest-acct-"+a.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base)
+	return growthCard("invest-acct-"+a.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base, props.Accent)
 }
 
 // --- pool editor flip modal ------------------------------------------------------
@@ -326,6 +339,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
+	accent := chartLineColor(uistate.UsePrefs().Get().Accent)
 	investAccts := investAccountsOf(app)
 	pools := uistate.InvestPools()
 	now := time.Now()
@@ -347,7 +361,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 	for _, a := range investAccts {
 		ac := a
 		gridArgs = append(gridArgs, ui.CreateElement(investAccountCard, investAccountCardProps{
-			Account: ac, Series: seriesFor([]domain.Account{ac}), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base, OnView: onView,
+			Account: ac, Series: seriesFor([]domain.Account{ac}), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base, Accent: accent, OnView: onView,
 		}))
 	}
 	for _, p := range pools {
@@ -359,7 +373,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 			}
 		}
 		gridArgs = append(gridArgs, ui.CreateElement(investPoolCard, investPoolChipProps{
-			Pool: pc, Members: len(members), Series: seriesFor(members), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base,
+			Pool: pc, Members: len(members), Series: seriesFor(members), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base, Accent: accent,
 		}))
 	}
 

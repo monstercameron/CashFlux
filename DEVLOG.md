@@ -1,3 +1,24 @@
+## 2026-07-02 — /investments charts follow the theme accent
+
+Cam: "the page needs to be theme aware." Drove the app to a real light theme (via the topbar
+theme-toggle, then in-app nav so the async pref persist didn't get clobbered by a full reload) and
+screenshot both light + a periwinkle-accent run. Finding: the page's CSS is already fully
+token-based (`var(--bg/--text/--border/--accent)`), and the theme engine writes the whole token set
+as *inline* styles on `<html>` — so the surface, cards, and modal all adapt to light/dark and custom
+palettes correctly. The one thing that didn't: the growth charts were stroked in a hardcoded
+`#2e8b57`, so with a non-seagreen accent they were the only green thing on an otherwise-recolored
+page.
+
+Fix: thread the live accent (`uistate.UsePrefs().Get().Accent`) into the chart series color, via a
+small `chartLineColor(accent)` helper (falls back to seagreen when unset). Read it once in the two
+tile components that own hooks — `investGrowthWidget` (the big portfolio chart) and `investPoolsWidget`
+(which passes it down through `investAccountCardProps`/`investPoolChipProps` → `growthCard` →
+`miniAreaChart`). Had to pass a *resolved* color, not `var(--accent)`: these charts render through the
+D3 `cashfluxRenderChart` JS, which sets SVG stroke/fill *attributes* where CSS custom properties don't
+resolve (widget_builder.go already does this — passes `v.Accent` as a value). Verified: swap the accent
+to `#7c83ff` and all four growth charts repaint periwinkle; gain/return chips stay green (they're
+semantic ± tones, `tw.ColorClass`, correctly accent-independent). e2e 41/41, no default-accent change.
+
 ## 2026-07-02 — /investments: single-account charts + pools as custom aggregated charts
 
 Cam refined the pools model twice. First: pools shouldn't *replace* the account cards — every account
