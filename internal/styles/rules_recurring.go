@@ -330,6 +330,17 @@ func registerRecurringSurface() {
 		prop("font-weight", "600"),
 		prop("margin-top", "0.15rem"),
 	)
+	// A payment the plan moved onto this payday: accent-filled with a ring so it
+	// cannot be mistaken for an ordinary due-date dot.
+	rule(".cal-dot--payahead",
+		prop("background", "var(--accent)"),
+		prop("box-shadow", "0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent)"),
+	)
+	rule(".bills-cal-legend",
+		prop("font-size", "0.75rem"),
+		prop("margin-top", "0.5rem"),
+		prop("line-height", "1.4"),
+	)
 	rule(".bills-smart-modal",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),

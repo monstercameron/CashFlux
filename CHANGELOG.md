@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Smart pay schedule's work is now visible on the calendar (2026-07-03):** Cam's follow-up: "I clicked use this plan and nothing changes, none of the dates on the calendar got rearranged." Reproduced on the live build with sample data: the plan made **7 moves** ($1,147 off the heaviest paycheck) yet the July calendar showed one indistinguishable new dot and zero ghosts — because (1) most moves pull NEXT month's bills onto this month's paydays, and the vacated due dates' hollow ghosts only rendered on in-month cells of the *other* month's grid, and (2) a moved-in payment rendered as an ordinary due-date dot, indistinguishable from a bill that was always due that day. Now: pay-on dates carrying moved payments get an **accent pay-ahead dot** (ring + accent fill, title "N payment(s) the plan moved to this payday"), **ghosts render on out-of-month cells too** (Aug 1's vacated slot shows in July's trailing cells), and a **legend under the calendar** explains the vocabulary in both views ("accent dots are payments moved onto a payday; hollow dots are the raw due dates they left"). Verified visually on the dev server: July shows the Jul 17 payday carrying 7 moved payments accent-ringed with Aug 1's ghost beside it; August shows 5 ghosts on the vacated dates. e2e grown to 59 checks (SM15 accent dots ≥1 when moves exist; SM16 legend present); full suite 59/59.
+
 ### Added
 - **World-class UX sweep across all 42 routes (2026-07-03):** full-app visual/UX review (sample +
   true-empty passes, full-height captures, console-error probe — 0 errors on 84 loads). Evidence in

@@ -385,6 +385,12 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		occ := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil)
 		calBills := occ
 		ghost := map[string]int{}
+		// ahead marks the pay-on dates carrying MOVED payments, so those dots get
+		// a distinct treatment — a plan whose moves all pull NEXT month's bills
+		// onto this month's paydays otherwise reads as "nothing changed" (the new
+		// dot looks like any ordinary due date, and the vacated dates are in the
+		// other month's grid).
+		ahead := map[string]int{}
 		if viewSmart {
 			calBills = make([]bills.Bill, len(occ))
 			for i, b := range occ {
@@ -393,6 +399,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 				calBills[i] = moved
 				if !sameDay(moved.DueDate, b.DueDate) {
 					ghost[b.DueDate.Format("2006-01-02")]++
+					ahead[moved.DueDate.Format("2006-01-02")]++
 				}
 			}
 		} else if smartCfg.Enabled && hasAnchor {
@@ -402,8 +409,19 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 				}
 			}
 		}
+		var legend ui.Node = Fragment()
+		if smartCfg.Enabled && hasAnchor {
+			key := "bills.calLegendRaw"
+			if viewSmart {
+				key = "bills.calLegendSmart"
+			}
+			legend = P(css.Class("muted bills-cal-legend"), Attr("data-testid", "bills-cal-legend"), uistate.T(key))
+		}
 		calendarSection = recurSection("sec-bills-calendar", uistate.T("bills.calendar", monthLabel(dispMonth)), nav,
-			billsCalendar(bills.MonthCalendar(calBills, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, ghost))
+			Fragment(
+				billsCalendar(bills.MonthCalendar(calBills, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, ghost, ahead),
+				legend,
+			))
 	}
 
 	return Div(css.Class("bento bento-recurring"),
@@ -429,7 +447,10 @@ func monthLabel(t time.Time) string { return t.Format("January 2006") }
 
 // billsCalendar renders the month grid: weekday headers plus a cell per day,
 // dimming out-of-month days, outlining today, and dotting days with bills due.
-func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, ghost map[string]int) ui.Node {
+// ghost marks the inactive schedule's dates (hollow markers); ahead marks pay-on
+// dates carrying payments the smart plan MOVED there (accent treatment) so a
+// pulled-forward payment is distinguishable from an ordinary due date.
+func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, ghost, ahead map[string]int) ui.Node {
 	todayKey := now.Format("2006-01-02")
 	args := []any{css.Class("cal-grid")}
 	for i := 0; i < 7; i++ {
@@ -466,6 +487,12 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 				default:
 					dotCls += " cal-dot--soon"
 				}
+				if n := ahead[day.Date.Format("2006-01-02")]; n > 0 {
+					// This day carries payments the plan moved here — accent it and
+					// say so, or the plan's work is indistinguishable from a due date.
+					dotCls += " cal-dot--payahead"
+					names = uistate.T("bills.aheadTitle", n) + " — " + names
+				}
 				if len(day.Bills) > 1 {
 					// Render the count inside the dot so a busy day reads at a glance.
 					dot = Span(ClassStr(dotCls+" cal-dot--count"), Attr("title", names), Attr("aria-label", names), strconv.Itoa(len(day.Bills)))
@@ -474,9 +501,12 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 				}
 			}
 			// Ghost marker: the inactive schedule (raw deadline vs smart plan) has a
-			// bill on this day — hollow so it reads as "the other view".
+			// bill on this day — hollow so it reads as "the other view". Rendered on
+			// out-of-month cells too: a cross-month pay-ahead's vacated due date is
+			// usually in NEXT month's leading/trailing cells, and hiding it there is
+			// exactly what made the plan look like it did nothing.
 			var ghostDot ui.Node = Fragment()
-			if n := ghost[day.Date.Format("2006-01-02")]; n > 0 && day.InMonth {
+			if n := ghost[day.Date.Format("2006-01-02")]; n > 0 {
 				ghostDot = Span(css.Class("cal-dot cal-dot--ghost"), Attr("title", uistate.T("bills.ghostTitle", n)), Attr("aria-label", uistate.T("bills.ghostTitle", n)))
 			}
 			args = append(args, Div(ClassStr(cls), Attr("data-date", day.Date.Format("2006-01-02")),

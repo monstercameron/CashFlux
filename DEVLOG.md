@@ -1,3 +1,29 @@
+## 2026-07-03 — Smart pay schedule: making the plan's work VISIBLE (Cam's second report)
+
+Cam: "I clicked the use this plan and nothing changes, none of the dates on the calendar got
+rearranged for optimizations." This time the engine was fine — the e2e's testid checks passed while
+the *visual* story was broken. Reproduced on the live dev server (:8080, fresh profile, sample
+data): 7 moves, $1,147 off the heaviest paycheck… and the July calendar showed exactly one
+ordinary-looking new dot and zero ghosts. Three legibility failures compounding:
+
+1. Cross-month pay-aheads (the common case) vacate NEXT month's due dates — and ghosts only
+   rendered on in-month cells, so July never showed what August gave up. Ghosts now render on
+   out-of-month cells too.
+2. A moved-in payment rendered as a normal due-date dot. A payday that picks up 7 payments looked
+   identical to a day with one ordinary bill. New `.cal-dot--payahead` treatment (accent fill +
+   ring, count, title "N payment(s) the plan moved to this payday") — the calendar now has three
+   distinguishable marks: due, paid-ahead, other-schedule.
+3. Nothing explained the vocabulary. A legend renders under the calendar in both views.
+
+Lesson recorded: e2e testid assertions can all pass while the user sees "nothing changed" — for
+visual features, verify the *visible delta* (screenshot or counted visual marks), not just presence.
+SM15/SM16 now assert the accent dots + legend; measured July: Jul 17 payday accent-ringed carrying
+7, Aug 1 ghost in the trailing cells; August: 5 ghosts. 59/59.
+
+Also per Cam (2026-07-03): no worktrees in this repo — all agents work the shared tree directly.
+(Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
+stale working copy committed whole-file; restored below. Code files were audited and are intact.)
+
 ## 2026-07-03 — C337: one local formatter was the entire "no commas" bug
 
 The sweep flagged "$33720.00" on /investments and "$8190.56 of $12000.00" on /credit — right next
@@ -89,6 +115,27 @@ no error, handler never runs; only re-opening the menu fixes it) — reproduced 
 filed as C334, and both e2e paths now retry via close→reopen. Three e2e runs: 57/57, 56/57 (S1 boot
 timeout under the concurrent agent's build load — served wasm verified byte-identical to a fresh
 build), 57/57.
+
+## 2026-07-03 — Smart pay schedule: the plan now works across months (Cam's bug report)
+
+Cam, rightly angry: "after selecting adjust plan, it doesn't tune the bill payments for the plan to
+work… we don't see those double payments in the current month and when I go to the next month I
+don't see the adjusted bill dates — are you even testing it?" He was right on both counts: the e2e
+never paged the calendar past the current month, and the feature couldn't have worked there.
+
+**Root cause 1 — bills were single occurrences.** `bills.UpcomingAll` returns each bill's next due
+date, once. Next month's occurrence of a monthly bill literally did not exist as data, so the
+optimizer could never pull it onto this month's payday — the "double payment" Cam expected was
+unrepresentable. New pure `bills.OccurrencesWithin(accounts, recurring, now, until)` projects every
+occurrence in the window. **Root cause 2 — fixed 30-day horizon vs a calendar that pages months:**
+the plan now covers `engineenv.BillsSmartHorizonDays` (60) and the bills tab extends it to the
+displayed month. **Root cause 3 — optimizer deadlock:** `evener()` only accepted moves improving
+the single global max load, so two heavy months deadlocked and reverted to "already even"; the
+objective and the keep/revert honesty check now compare the sorted-descending load vector
+lexicographically (2 regression tests). The plan view lists pulled-forward occurrences as tagged
+pay-ahead rows sorted by pay-on; the calendar renders occurrences in both views. Sample plan: 1
+move → 6, heaviest paycheck $4,127 → $3,125. SM13/SM14 now page the calendar to next month with
+the plan on. Kebab-menu stale-handler race (~1/8) reproduced and filed as C334.
 
 ## 2026-07-03 — /reports: full bento redesign, report_* engine vars, scope-selector rescue
 

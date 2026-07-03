@@ -213,6 +213,15 @@ if (moveCount > 0) {
 } else {
   check("SM10 a moved bill's meta reads 'pay X · due Y'", true, "no moves in this dataset — skipped");
 }
+// The plan's work must be VISIBLE on the calendar: moved-in payments get the
+// accent pay-ahead treatment (an ordinary-looking dot on a payday reads as
+// "nothing changed"), and a legend explains the vocabulary.
+if (moveCount > 0) {
+  check("SM15 moved-in payments get the accent pay-ahead dot", (await p.locator(".cal-dot--payahead").count()) >= 1, `${await p.locator(".cal-dot--payahead").count()} accent dots`);
+} else {
+  check("SM15 moved-in payments get the accent pay-ahead dot", true, "no moves in this dataset — skipped");
+}
+check("SM16 the calendar legend explains the plan's dots", await p.locator('[data-testid="bills-cal-legend"]').count() === 1);
 // The plan must survive paging the calendar to NEXT month: monthly bills'
 // occurrences exist there (the projection), and a moved bill leaves a hollow
 // ghost on its raw due date somewhere in the window. This is exactly the path
