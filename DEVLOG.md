@@ -60,6 +60,18 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C356: insights that alarm an empty wallet
+
+The sweep's empty pass showed a fresh "Start fresh" store greeting the user with "Liquid cash is
+very low — your spendable cash is $0.00". Root: SMART-B8 deliberately surfaces a low-balance
+warning instead of staying silent under the safe-to-spend floor — right instinct for a real
+near-empty wallet, wrong on a dataset with no accounts at all. Added a `len(in.Accounts) == 0 →
+nil` guard; the verify probe then surfaced a second empty-firer the screenshots had missed —
+SMART-AL1 recommending the balanced profile because "your finances look steady" (steady like a
+vacuum). Same guard there. Two new table tests; the two existing AL1 tests that implicitly relied
+on an account-less "steady situation" now carry the checking account they always meant. The Smart
+strip is now genuinely empty on a fresh store.
+
 ## 2026-07-03 — C355: the audit feed spoke undosnap, not English
 
 Two small /activity fixes. The feed's entity inference picked the ChangeSet's dominant collection,

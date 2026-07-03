@@ -26,6 +26,15 @@ func TestB8SafeToSpend(t *testing.T) {
 	}
 }
 
+func TestB8EmptyDatasetSaysNothing(t *testing.T) {
+	// A brand-new dataset (no accounts at all) must not warn "liquid cash is
+	// very low — $0.00": there is nothing to be low on yet (C356).
+	in := baseInput()
+	if got := b8SafeToSpend(in); len(got) != 0 {
+		t.Fatalf("empty dataset should produce no insight, got %+v", got)
+	}
+}
+
 func TestB8TightMonthWarns(t *testing.T) {
 	in := baseInput()
 	in.Accounts = []domain.Account{acct("a", "Checking", domain.TypeChecking, 10000, ref)} // $100

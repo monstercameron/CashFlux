@@ -50,14 +50,26 @@ func TestAL1SuggestsDebtForHighAPR(t *testing.T) {
 
 func TestAL1BalancedWhenSteady(t *testing.T) {
 	in := baseInput()
+	// A steady situation still requires SOME data — an account to read.
+	in.Accounts = []domain.Account{acct("chk", "Checking", domain.TypeChecking, 300000, ref)}
 	got := al1SuggestedProfile(in)
 	if len(got) != 1 || got[0].Key != "SMART-AL1:balanced" {
 		t.Fatalf("want balanced profile, got %+v", got)
 	}
 }
 
+func TestAL1EmptyDatasetSaysNothing(t *testing.T) {
+	// A brand-new dataset (no accounts) has no situation to read — "your
+	// finances look steady" would be a non-fact (C356).
+	in := baseInput()
+	if got := al1SuggestedProfile(in); len(got) != 0 {
+		t.Fatalf("empty dataset should produce no profile suggestion, got %+v", got)
+	}
+}
+
 func TestAL1SafetyForThinEmergency(t *testing.T) {
-	in := baseInput().withBaseline(0, 200000)                                            // $2000/mo essentials
+	in := baseInput().withBaseline(0, 200000) // $2000/mo essentials
+	in.Accounts = []domain.Account{acct("chk", "Checking", domain.TypeChecking, 300000, ref)}
 	in.Goals = []domain.Goal{goal("ef", "Emergency Fund", 1200000, 100000, time.Time{})} // 0.5 months
 	got := al1SuggestedProfile(in)
 	if len(got) != 1 || got[0].Key != "SMART-AL1:safety" {

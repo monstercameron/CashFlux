@@ -23,6 +23,10 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **Smart insights stay quiet on a brand-new empty dataset (C356, 2026-07-03):** a fresh
+  "Start fresh" store warned "Liquid cash is very low — $0.00" (SMART-B8) and suggested
+  'the "balanced" profile… your finances look steady' (SMART-AL1) with zero accounts to read;
+  both rules now say nothing until at least one account exists.
 - **/activity no longer leaks internal record names or runs the date into the actor
   (C355, 2026-07-03):** audit summaries preferred whatever collection dominated a change — including
   the internal `_meta:*` scalar buckets — so users saw "Added 3 _meta:settingsState records"; the

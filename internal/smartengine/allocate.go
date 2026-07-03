@@ -54,6 +54,12 @@ const (
 // SMART-AL1 — Auto-suggested profile. Recommends the allocation weight profile
 // that best fits the user's current situation, with a one-line reason.
 func al1SuggestedProfile(in Input) []smart.Insight {
+	// With no accounts there is no "situation" to read yet — suggesting the
+	// balanced profile on a brand-new empty dataset ("your finances look
+	// steady") is a non-fact; stay quiet until data exists (C356).
+	if len(in.Accounts) == 0 {
+		return nil
+	}
 	profile, why := suggestProfile(in)
 	if profile == "" {
 		return nil

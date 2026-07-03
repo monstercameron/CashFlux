@@ -3193,9 +3193,13 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   touches only them), so "Added 3 _meta:settingsState records" reads "Added 3 settings records";
   and the row aside gained a " · " separator ("May 26, 2026 · Marcus Hartley"). MEASURED live:
   /activity shows no `_meta` text, no date+actor run-on; 0 page errors; wasm build rc=0.
-- [ ] **C356 [MINOR][BUG] Smart insights fire on an empty dataset.** Fresh "Start fresh" store
-  shows "Liquid cash is very low — your spendable cash is $0.00" on the dashboard and /budgets.
-  Balance/cash rules need an any-data-at-all guard.
+- [x] **C356 ✅ DONE (2026-07-03) — Smart insights fired on an empty dataset.** Two rules alarmed a
+  brand-new store: SMART-B8 ("Liquid cash is very low — $0.00", dashboard + /budgets) and SMART-AL1
+  ('The "balanced" profile fits your situation — your finances look steady', found by the verify
+  probe). Both now return nothing when `len(in.Accounts) == 0` (there is nothing to be low ON and
+  no situation to read). 2 new table tests + 2 existing AL1 tests given the account they implied.
+  MEASURED live post-"Start fresh": the Smart strip renders nothing on / and /budgets; 0 page
+  errors; `go test ./internal/smartengine` green; wasm build rc=0.
 
 ### Sample dataset (the demo is the first impression)
 - [ ] **C349 [MAJOR][SAMPLE] Sample timestamps are absolute and now ~4 years stale**, so first-run

@@ -95,6 +95,12 @@ const (
 // SMART-B8 — Safe-to-spend indicator. One glanceable number: liquid cash minus
 // the bills still due this month and this month's remaining goal contributions.
 func b8SafeToSpend(in Input) []smart.Insight {
+	// A brand-new dataset has no accounts at all — "your spendable cash is
+	// $0.00" is an alarming non-fact there, not a warning. Say nothing until
+	// the user has any account to be low ON (C356).
+	if len(in.Accounts) == 0 {
+		return nil
+	}
 	liquid := totalLiquidBase(in)
 	billsLeft := in.billsRestOfMonthBase()
 	goalNeeds := in.goalMonthlyNeedsBase()
