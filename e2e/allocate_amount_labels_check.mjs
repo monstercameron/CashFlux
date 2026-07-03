@@ -24,12 +24,13 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".labeled-field", { timeout: 60000 });
+  await page.waitForSelector(".bento-allocate", { timeout: 60000 });
 
-  // The emergency-buffer / cap-per-destination inputs live behind the Advanced disclosure
-  // (a redesign UX change), so open it before asserting their labels are present.
-  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
-  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
+  // The emergency-buffer / cap-per-destination inputs (and their labeled-field labels) live in
+  // the "Adjust strategy" flip modal (a redesign UX change), so open it first.
+  const edit = page.locator('[data-testid="allocate-edit-strategy"]');
+  if (await edit.count()) { await edit.click({ force: true }); await page.waitForTimeout(600); }
+  await page.waitForSelector(".labeled-field", { timeout: 10000 }).catch(() => {});
 
   // Visible labeled-field labels for the two advanced amount inputs.
   const texts = (await page.locator(".labeled-field span").allInnerTexts()).map((t) => t.trim());

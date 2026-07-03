@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -17,10 +18,11 @@ import (
 )
 
 type allocDestRowProps struct {
-	R         allocate.Ranked
-	Rank      int    // 1-based priority position
-	Amount    string // suggested amount (empty when no amount entered)
-	OnExclude func(string)
+	R            allocate.Ranked
+	Rank         int    // 1-based priority position
+	Amount       string // suggested amount (empty when no amount entered)
+	OnExclude    func(string)
+	OnViewSource func(route string) // navigate to where this destination's value lives
 }
 
 // allocDestRow renders one ranked destination as a card: a priority medallion, the name, a
@@ -33,6 +35,21 @@ func allocDestRow(props allocDestRowProps) ui.Node {
 	excl := ui.UseEvent(Prevent(func() {
 		if props.OnExclude != nil {
 			props.OnExclude(r.Candidate.ID)
+		}
+	}))
+	// Where this destination's value lives: a goal → /goals, a debt (interest-bearing
+	// liability) → the debt page, any other account → /accounts. The ⋯ menu links there so the
+	// user can jump from "put $X here" to the record the figure comes from.
+	sourceRoute, sourceLabel := "/accounts", uistate.T("allocate.viewAccount")
+	switch {
+	case strings.HasPrefix(r.Candidate.ID, "goal:"):
+		sourceRoute, sourceLabel = "/goals", uistate.T("allocate.viewGoal")
+	case r.Candidate.DebtReduction:
+		sourceRoute, sourceLabel = "/debt", uistate.T("allocate.viewDebt")
+	}
+	viewSource := ui.UseEvent(Prevent(func() {
+		if props.OnViewSource != nil {
+			props.OnViewSource(sourceRoute)
 		}
 	}))
 	scorePct := int(r.Score*100 + 0.5)
@@ -86,6 +103,8 @@ func allocDestRow(props allocDestRowProps) ui.Node {
 			ToggleTestID: "alloc-menu-" + r.Candidate.ID,
 			WrapClass:    "alloc-dest-menu",
 			Items: []ui.Node{
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "alloc-source-"+r.Candidate.ID), OnClick(viewSource), sourceLabel),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "alloc-exclude-"+r.Candidate.ID), Title(uistate.T("allocate.excludeTitle")),
 					OnClick(excl), uistate.T("allocate.exclude")),

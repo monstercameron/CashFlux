@@ -30,16 +30,19 @@ function parseCents(s) {
  * render, then read all the per-row amounts and the kept-back notice.
  */
 async function checkInvariant(page, amount, reserve) {
-  // Fill amount input.
-  const amountInput = page.locator('input[placeholder*="Amount to allocate"]').first();
+  // Fill the amount (the hero input on the main surface).
+  const amountInput = page.locator('[data-testid="allocate-amount"]').first();
   await amountInput.fill(String(amount));
   await amountInput.dispatchEvent("input");
 
-  // Fill reserve input (may be 0). Lives behind the Advanced disclosure.
+  // The reserve input lives in the "Adjust strategy" flip modal — open it, fill, close.
+  await page.locator('[data-testid="allocate-edit-strategy"]').click({ force: true });
+  await page.waitForTimeout(400);
   const reserveInput = page.locator('input[placeholder*="Emergency buffer"]').first();
   await reserveInput.fill(String(reserve));
   await reserveInput.dispatchEvent("input");
-
+  await page.waitForTimeout(200);
+  await page.locator('[data-testid="allocate-strategy-done"]').click({ force: true });
   await page.waitForTimeout(500);
 
   // Each destination card with an allocated amount renders it in .alloc-dest-amount.
@@ -78,10 +81,6 @@ try {
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(500);
-
-  // The reserve input lives behind the Advanced disclosure — open it once up front.
-  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
-  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
 
   // Cases: [amount, reserve]
   const cases = [

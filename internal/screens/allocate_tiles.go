@@ -100,7 +100,7 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 				Span(css.Class("alloc-amount-affix", tw.FontDisplay), Attr("aria-hidden", "true"), currency.Symbol(base)),
 				Input(css.Class("alloc-amount-input", tw.FontDisplay), Type("number"), Attr("min", "0"), Step("0.01"),
 					Attr("data-testid", "allocate-amount"), Attr("aria-label", "Amount to allocate"),
-					Placeholder(uistate.T("allocate.amountPlaceholder", base)), Value(props.AmountStr), OnInput(props.OnAmount)),
+					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), Value(props.AmountStr), OnInput(props.OnAmount)),
 			),
 			nudge,
 			kept,
@@ -110,100 +110,45 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 	return allocTile("alloc-hero", body)
 }
 
-// --- alloc-controls --------------------------------------------------------------
+// --- alloc-strategy (compact summary; edited in the flip modal) ------------------
 
-type allocControlsProps struct {
+type allocStrategyProps struct {
 	View             allocView
 	Profile          string
 	Mode             string
-	ReserveStr       string
-	MaxPerStr        string
-	WeightsOpen      bool
+	ReserveMinor     int64
+	MaxPerMinor      int64
 	ShowFormulas     bool
-	SavedOpts        []uiw.SelectOption
-	WReturns         string
-	WStability       string
-	WLiquidity       string
-	WDebt            string
-	WGoal            string
-	ProfName         string
-	ProfMsg          string
-	OnProfile        any
-	OnMode           any
-	OnReserve        any
-	OnMaxPer         any
-	OnToggleWeights  any
+	OnEditStrategy   any
 	OnToggleFormulas any
-	OnWReturns       any
-	OnWStability     any
-	OnWLiquidity     any
-	OnWDebt          any
-	OnWGoal          any
-	OnProfName       any
-	OnSaveProfile    any
-	OnDeleteProfile  any
 }
 
-// allocControlsTile holds the strategy controls: the split mode + ranking profile, an advanced
-// disclosure (emergency buffer, per-destination cap, criterion-weight tuning, save-as-profile),
-// a portfolio-metrics toggle, and a link to the accounts that own the destinations.
-func allocControlsTile(props allocControlsProps) ui.Node {
+// allocStrategyTile is the compact strategy summary on the main surface: the active profile +
+// split mode (and any buffer/cap) as read-only chips, an "Adjust strategy" button that opens the
+// flip modal where they're edited, a plan-metrics toggle, and a Manage-accounts link.
+func allocStrategyTile(props allocStrategyProps) ui.Node {
 	base := props.View.Base
-
-	profOpts := []any{
-		Option(Value("balanced"), SelectedIf(props.Profile == "balanced"), uistate.T("allocate.balanced")),
-		Option(Value("returns"), SelectedIf(props.Profile == "returns"), uistate.T("allocate.maxReturns")),
-		Option(Value("safety"), SelectedIf(props.Profile == "safety"), uistate.T("allocate.safety")),
-		Option(Value("debt"), SelectedIf(props.Profile == "debt"), uistate.T("allocate.debt")),
-		Option(Value("goals"), SelectedIf(props.Profile == "goals"), uistate.T("allocate.goals")),
-	}
-	for _, o := range props.SavedOpts {
-		profOpts = append(profOpts, Option(Value(o.Value), SelectedIf(props.Profile == o.Value), o.Label))
-	}
 
 	metricsCls := "strip-toggle"
 	if props.ShowFormulas {
 		metricsCls += " is-on"
 	}
 
-	controls := Div(css.Class("form-grid"),
-		labeledField(uistate.T("allocate.modeLabel"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("allocate.modeLabel")), Attr("data-testid", "allocate-mode"), OnChange(props.OnMode),
-				Option(Value("weighted"), SelectedIf(props.Mode == "weighted"), uistate.T("allocate.modeWeighted")),
-				Option(Value("fill"), SelectedIf(props.Mode == "fill"), uistate.T("allocate.modeFillToTarget")),
-			)),
-		labeledField(uistate.T("allocate.profileLabel"),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("allocate.profileLabel")), OnChange(props.OnProfile), profOpts)),
+	chips := []any{css.Class("alloc-strategy-chips")}
+	chips = append(chips,
+		allocStrategyChip(uistate.T("allocate.profileLabel"), allocProfileLabel(props.Profile)),
+		allocStrategyChip(uistate.T("allocate.modeLabel"), allocModeLabel(props.Mode)),
 	)
+	if props.ReserveMinor > 0 {
+		chips = append(chips, allocStrategyChip(uistate.T("allocate.reserveFieldLabel"), fmtMoney(money.New(props.ReserveMinor, base))))
+	}
+	if props.MaxPerMinor > 0 {
+		chips = append(chips, allocStrategyChip(uistate.T("allocate.maxPerFieldLabel"), fmtMoney(money.New(props.MaxPerMinor, base))))
+	}
 
-	advanced := Fragment(
-		Div(css.Class("form-grid"),
-			labeledField(uistate.T("allocate.reserveFieldLabel"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", "Emergency buffer"),
-					Placeholder(uistate.T("allocate.reservePlaceholder", base)), Value(props.ReserveStr), OnInput(props.OnReserve))),
-			labeledField(uistate.T("allocate.maxPerFieldLabel"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", "Cap per destination"),
-					Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)),
-					Value(props.MaxPerStr), OnInput(props.OnMaxPer))),
-		),
-		Div(css.Class("alloc-weights"),
-			Div(css.Class("alloc-weights-label", tw.TextDim), uistate.T("allocate.weightsLabel")),
-			Div(css.Class("form-grid alloc-weights-grid"),
-				allocWeightField(uistate.T("allocate.critReturns"), props.WReturns, props.OnWReturns),
-				allocWeightField(uistate.T("allocate.critStability"), props.WStability, props.OnWStability),
-				allocWeightField(uistate.T("allocate.critLiquidity"), props.WLiquidity, props.OnWLiquidity),
-				allocWeightField(uistate.T("allocate.critDebt"), props.WDebt, props.OnWDebt),
-				allocWeightField(uistate.T("allocate.critGoal"), props.WGoal, props.OnWGoal),
-			),
-			Div(css.Class("alloc-save-profile"),
-				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("allocate.profileNameLabel")),
-					Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(props.ProfName), OnInput(props.OnProfName)),
-				Button(css.Class("btn btn-sm"), Type("button"), OnClick(props.OnSaveProfile), uistate.T("allocate.saveProfile")),
-				If(len(props.SavedOpts) > 0, Button(css.Class("btn btn-sm"), Type("button"), OnClick(props.OnDeleteProfile), uistate.T("allocate.deleteProfile"))),
-			),
-			If(props.ProfMsg != "", P(css.Class("muted"), props.ProfMsg)),
-		),
-	)
+	editBtn := Button(css.Class("btn btn-sm", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "allocate-edit-strategy"), OnClick(props.OnEditStrategy),
+		uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("allocate.adjustStrategy")))
 
 	toolbar := Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
@@ -212,20 +157,31 @@ func allocControlsTile(props allocControlsProps) ui.Node {
 				OnClick(props.OnToggleFormulas), Text(allocMetricsLabel(props.ShowFormulas))),
 			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/accounts")), uistate.T("debt.linkAccounts")),
 		),
-		Button(css.Class("btn disclosure-toggle"), Type("button"), Attr("aria-expanded", ariaBool(props.WeightsOpen)),
-			Attr("data-testid", "allocate-advanced-toggle"), OnClick(props.OnToggleWeights),
-			Text(uistate.T("allocate.advancedToggle")),
-			IfElse(props.WeightsOpen, uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO)), uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4, tw.ShrinkO)))),
 	)
 
-	body := allocSection("sec-strategy", uistate.T("allocate.profileTitle"), Fragment(),
+	body := allocSection("sec-strategy", uistate.T("allocate.profileTitle"), editBtn,
 		Fragment(
 			P(css.Class("muted"), uistate.T("allocate.profileDesc")),
-			controls,
+			Div(chips...),
 			toolbar,
-			If(props.WeightsOpen, advanced),
 		))
 	return allocTile("alloc-controls", body)
+}
+
+// allocStrategyChip is one read-only "label: value" summary chip.
+func allocStrategyChip(label, value string) ui.Node {
+	return Span(css.Class("alloc-strategy-chip"),
+		Span(css.Class("alloc-strategy-chip-label", tw.TextDim), label),
+		Span(css.Class("alloc-strategy-chip-val"), value),
+	)
+}
+
+// allocModeLabel is the display label for a split mode.
+func allocModeLabel(mode string) string {
+	if mode == "fill" {
+		return uistate.T("allocate.modeFillToTarget")
+	}
+	return uistate.T("allocate.modeWeighted")
 }
 
 // allocWeightField is one criterion weight input (a small number field with a caption).
@@ -247,6 +203,7 @@ type allocPlanProps struct {
 	View         allocView
 	AmountFor    func(string) string
 	OnExclude    func(string)
+	OnViewSource func(route string)
 	ExcludedRows []ui.Node
 }
 
@@ -262,7 +219,8 @@ func allocPlanTile(props allocPlanProps) ui.Node {
 		cards = append(cards, css.Class("alloc-plan-list"))
 		for i, r := range v.Ranked {
 			cards = append(cards, ui.CreateElement(allocDestRow, allocDestRowProps{
-				R: r, Rank: i + 1, Amount: props.AmountFor(r.Candidate.ID), OnExclude: props.OnExclude,
+				R: r, Rank: i + 1, Amount: props.AmountFor(r.Candidate.ID),
+				OnExclude: props.OnExclude, OnViewSource: props.OnViewSource,
 			}))
 		}
 		listBody = Div(cards...)

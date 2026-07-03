@@ -16,7 +16,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -89,6 +88,22 @@ func allocProfiles() map[string]allocate.Weights {
 	}
 }
 
+// allocResolveWeights returns the criterion weights for a profile key: a saved profile's stored
+// weights, a built-in preset, or the balanced default.
+func allocResolveWeights(app *appstate.App, sel string) allocate.Weights {
+	if strings.HasPrefix(sel, "saved:") {
+		for _, p := range app.AllocProfiles() {
+			if "saved:"+p.ID == sel {
+				return allocate.Weights{Returns: p.Returns, Stability: p.Stability, Liquidity: p.Liquidity, DebtReduction: p.DebtReduction, GoalProgress: p.GoalProgress}
+			}
+		}
+	}
+	if w, ok := allocProfiles()[sel]; ok {
+		return w
+	}
+	return allocProfiles()["balanced"]
+}
+
 // allocView is the derived render model every allocate tile shares: the ranked destinations,
 // the split plan for the entered amount, and the headline figures. Built once per render.
 type allocView struct {
@@ -150,13 +165,9 @@ func Allocate() ui.Node {
 	nav := router.UseNavigate()
 	goToSettings := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/settings")) }))
 
-	// --- plan inputs (persisted via AllocConfig) ---
+	// --- amount (local to the hero; persisted via AllocConfig) ---
 	amountStr := ui.UseState(seedAmount)
-	reserveStr := ui.UseState(seedReserve)
-	maxPerStr := ui.UseState(seedMaxPer)
 	onAmount := ui.UseEvent(func(v string) { amountStr.Set(v) })
-	onReserve := ui.UseEvent(func(v string) { reserveStr.Set(v) })
-	onMaxPer := ui.UseEvent(func(v string) { maxPerStr.Set(v) })
 
 	// Income pre-fill nudge.
 	incomeNudgeDismissed := ui.UseState(false)
@@ -170,60 +181,35 @@ func Allocate() ui.Node {
 
 	activeMemberID := uistate.UseActiveMember().Get()
 
-	// --- profile + weights ---
-	profile := ui.UseState(cfg.Profile)
-	mode := ui.UseState(cfg.Mode)
-	onMode := ui.UseEvent(func(e ui.Event) { mode.Set(e.GetValue()) })
-	weightsOpen := ui.UseState(false)
-	toggleWeights := ui.UseEvent(Prevent(func() { weightsOpen.Set(!weightsOpen.Get()) }))
-	showFormulas := ui.UseState(false)
-	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
-
-	wReturns := ui.UseState("1")
-	wStability := ui.UseState("1")
-	wLiquidity := ui.UseState("1")
-	wDebt := ui.UseState("1")
-	wGoal := ui.UseState("1")
-	profName := ui.UseState("")
-	profMsg := ui.UseState("")
-	setWeights := func(w allocate.Weights) {
+	// --- strategy (shared atoms: edited in the AllocProfileHost flip modal) ---
+	profile := uistate.UseAllocProfileSel()
+	mode := uistate.UseAllocModeSel()
+	reserveAtom := uistate.UseAllocReserveStr()
+	maxPerAtom := uistate.UseAllocMaxPerStr()
+	wReturns := uistate.UseAllocWReturns()
+	wStability := uistate.UseAllocWStability()
+	wLiquidity := uistate.UseAllocWLiquidity()
+	wDebt := uistate.UseAllocWDebt()
+	wGoal := uistate.UseAllocWGoal()
+	// Seed the buffer/cap/weights once from the persisted plan + active profile (the screen has
+	// the base-currency precision the atoms can't compute themselves).
+	seeded := uistate.UseAllocSeeded()
+	if !seeded.Get() {
+		reserveAtom.Set(seedReserve)
+		maxPerAtom.Set(seedMaxPer)
+		w := allocResolveWeights(app, profile.Get())
 		wReturns.Set(trimWeight(w.Returns))
 		wStability.Set(trimWeight(w.Stability))
 		wLiquidity.Set(trimWeight(w.Liquidity))
 		wDebt.Set(trimWeight(w.DebtReduction))
 		wGoal.Set(trimWeight(w.GoalProgress))
+		seeded.Set(true)
 	}
-	resolveWeights := func(sel string) allocate.Weights {
-		if strings.HasPrefix(sel, "saved:") {
-			for _, p := range app.AllocProfiles() {
-				if "saved:"+p.ID == sel {
-					return allocate.Weights{Returns: p.Returns, Stability: p.Stability, Liquidity: p.Liquidity, DebtReduction: p.DebtReduction, GoalProgress: p.GoalProgress}
-				}
-			}
-		}
-		if w, ok := allocProfiles()[sel]; ok {
-			return w
-		}
-		return allocProfiles()["balanced"]
-	}
-	// Weights are seeded once from the active profile on first mount.
-	weightsSeeded := ui.UseState(false)
-	if !weightsSeeded.Get() {
-		setWeights(resolveWeights(profile.Get()))
-		weightsSeeded.Set(true)
-	}
-	onProfile := ui.UseEvent(func(e ui.Event) {
-		sel := e.GetValue()
-		profile.Set(sel)
-		setWeights(resolveWeights(sel))
-		profMsg.Set("")
-	})
-	onWReturns := ui.UseEvent(func(v string) { wReturns.Set(v) })
-	onWStability := ui.UseEvent(func(v string) { wStability.Set(v) })
-	onWLiquidity := ui.UseEvent(func(v string) { wLiquidity.Set(v) })
-	onWDebt := ui.UseEvent(func(v string) { wDebt.Set(v) })
-	onWGoal := ui.UseEvent(func(v string) { wGoal.Set(v) })
-	onProfName := ui.UseEvent(func(v string) { profName.Set(v) })
+
+	showFormulas := ui.UseState(false)
+	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+	profileOpen := uistate.UseAllocProfileOpen()
+	openStrategy := ui.UseEvent(Prevent(func() { profileOpen.Set(true) }))
 
 	excluded := ui.UseState(map[string]bool{})
 	toggleExclude := func(cid string) {
@@ -252,7 +238,7 @@ func Allocate() ui.Node {
 	v := computeAllocView(app, computeAllocInput{
 		Base: base, Dec: dec, Rates: rates, ActiveMember: activeMemberID,
 		Mode: mode.Get(), Excluded: excluded.Get(), MonthIncome: monthIncome, Weights: weights,
-		AmountStr: amountStr.Get(), ReserveStr: reserveStr.Get(), MaxPerStr: maxPerStr.Get(),
+		AmountStr: amountStr.Get(), ReserveStr: reserveAtom.Get(), MaxPerStr: maxPerAtom.Get(),
 	})
 
 	// Persist the plan whenever a plan input changes, so alloc_* variables stay live. Silent
@@ -272,36 +258,6 @@ func Allocate() ui.Node {
 		}
 		return fmtMoney(money.New(v.PlanByID[cid], base))
 	}
-
-	// --- save / delete profile ---
-	saveProfile := ui.UseEvent(Prevent(func() {
-		name := strings.TrimSpace(profName.Get())
-		if name == "" {
-			profMsg.Set(uistate.T("allocate.profileNameRequired"))
-			return
-		}
-		p := domain.AllocationProfile{
-			ID: id.New(), Name: name, Returns: weights.Returns, Stability: weights.Stability,
-			Liquidity: weights.Liquidity, DebtReduction: weights.DebtReduction, GoalProgress: weights.GoalProgress,
-		}
-		if err := app.PutAllocProfile(p); err != nil {
-			profMsg.Set(err.Error())
-			return
-		}
-		profName.Set("")
-		profile.Set("saved:" + p.ID)
-		profMsg.Set(uistate.T("allocate.profileSaved"))
-	}))
-	deleteProfile := ui.UseEvent(Prevent(func() {
-		sel := profile.Get()
-		if !strings.HasPrefix(sel, "saved:") {
-			return
-		}
-		_ = app.DeleteAllocProfile(strings.TrimPrefix(sel, "saved:"))
-		profile.Set("balanced")
-		setWeights(allocProfiles()["balanced"])
-		profMsg.Set("")
-	}))
 
 	// --- AI narrative ---
 	aiKey := settings.OpenAIKey
@@ -434,11 +390,6 @@ func Allocate() ui.Node {
 		}
 	}
 
-	savedOpts := make([]uiw.SelectOption, 0)
-	for _, p := range app.AllocProfiles() {
-		savedOpts = append(savedOpts, uiw.SelectOption{Value: "saved:" + p.ID, Label: p.Name})
-	}
-
 	// Excluded → restore chips.
 	var excludedRows []ui.Node
 	for _, c := range v.Candidates {
@@ -455,21 +406,15 @@ func Allocate() ui.Node {
 			ShowIncomeNudge: showIncomeNudge, MonthIncome: monthIncome,
 			OnPrefillIncome: prefillIncome, OnDismissIncome: dismissIncomeNudge,
 		}),
-		ui.CreateElement(allocControlsTile, allocControlsProps{
+		ui.CreateElement(allocStrategyTile, allocStrategyProps{
 			View: v, Profile: profile.Get(), Mode: mode.Get(),
-			ReserveStr: reserveStr.Get(), MaxPerStr: maxPerStr.Get(),
-			WeightsOpen: weightsOpen.Get(), ShowFormulas: showFormulas.Get(),
-			SavedOpts: savedOpts,
-			WReturns:  wReturns.Get(), WStability: wStability.Get(), WLiquidity: wLiquidity.Get(),
-			WDebt: wDebt.Get(), WGoal: wGoal.Get(), ProfName: profName.Get(), ProfMsg: profMsg.Get(),
-			OnProfile: onProfile, OnMode: onMode, OnReserve: onReserve, OnMaxPer: onMaxPer,
-			OnToggleWeights: toggleWeights, OnToggleFormulas: toggleFormulas,
-			OnWReturns: onWReturns, OnWStability: onWStability, OnWLiquidity: onWLiquidity,
-			OnWDebt: onWDebt, OnWGoal: onWGoal, OnProfName: onProfName,
-			OnSaveProfile: saveProfile, OnDeleteProfile: deleteProfile,
+			ReserveMinor: v.ReserveMinor, MaxPerMinor: v.MaxPerMinor,
+			ShowFormulas:   showFormulas.Get(),
+			OnEditStrategy: openStrategy, OnToggleFormulas: toggleFormulas,
 		}),
 		ui.CreateElement(allocPlanTile, allocPlanProps{
 			View: v, AmountFor: amountFor, OnExclude: toggleExclude, ExcludedRows: excludedRows,
+			OnViewSource: func(route string) { nav.Navigate(uistate.RoutePath(route)) },
 		}),
 		ui.CreateElement(allocExplainTile, allocExplainProps{
 			HasRanked: len(v.Ranked) > 0, AiResult: aiResult.Get(), AiLoading: aiLoading.Get(),

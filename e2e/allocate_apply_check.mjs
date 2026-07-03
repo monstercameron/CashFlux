@@ -61,7 +61,7 @@ try {
   const earmarksBefore = (before.earmarks || []).length;
 
   // Enter an amount (100.00 in whatever the base currency is).
-  const amountInput = page.locator('input[placeholder*="Amount to allocate"]').first();
+  const amountInput = page.locator('[data-testid="allocate-amount"]').first();
   await amountInput.fill("100");
   await amountInput.dispatchEvent("input");
   await page.waitForTimeout(300);

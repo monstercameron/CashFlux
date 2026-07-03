@@ -3,7 +3,7 @@
 //
 // Selectors used:
 //   [data-testid="allocate-mode"]   — the allocation-mode <select>
-//   input[placeholder*="Amount to allocate"]  — the amount input
+//   [data-testid="allocate-amount"]  — the amount input
 //   input[placeholder*="Keep back"]           — the reserve input
 //   .budget .budget-amount.fig               — per-row amount+score spans
 //   p.muted:has-text("Kept back:")           — the kept-back notice
@@ -40,26 +40,23 @@ try {
   await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(500);
 
-  // The reserve input lives behind the Advanced disclosure — open it.
-  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
-  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
-
-  // --- Switch to fill-to-target mode ---
-  const modeSelect = page.locator('[data-testid="allocate-mode"]');
-  await modeSelect.selectOption("fill");
-  await page.waitForTimeout(300);
-
-  // --- Enter an allocation amount ---
+  // --- Enter the amount (hero input on the main surface) ---
   const amount = 500;
   const reserve = 50;
-  const amountInput = page.locator('input[placeholder*="Amount to allocate"]').first();
+  const amountInput = page.locator('[data-testid="allocate-amount"]').first();
   await amountInput.fill(String(amount));
   await amountInput.dispatchEvent("input");
 
+  // --- The split mode + reserve live in the "Adjust strategy" flip modal ---
+  await page.locator('[data-testid="allocate-edit-strategy"]').click({ force: true });
+  await page.waitForTimeout(400);
+  await page.locator('[data-testid="allocate-mode"]').selectOption("fill");
+  await page.waitForTimeout(200);
   const reserveInput = page.locator('input[placeholder*="Emergency buffer"]').first();
   await reserveInput.fill(String(reserve));
   await reserveInput.dispatchEvent("input");
-
+  await page.waitForTimeout(200);
+  await page.locator('[data-testid="allocate-strategy-done"]').click({ force: true });
   await page.waitForTimeout(500);
 
   // --- Assert sum(plan rows) + keptBack == entered amount ---

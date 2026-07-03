@@ -1,3 +1,30 @@
+## 2026-07-03 — /allocate: strategy flip modal + top-section polish + source links
+
+Three follow-ups from Cam after the /allocate redesign.
+
+1. "allocate profile should be a flip modal." Moved the whole strategy block (split mode, ranking
+   profile, buffer, cap, the 5 criterion weights, save/delete profile) into a shell-root FlipPanel
+   (`AllocProfileHost`, mounted in shell.go beside the invest hosts). The hard part: a shell-root modal
+   is a separate component tree from the main surface, so the strategy state had to move from the
+   controller's local UseState into shared ATOMS (`internal/uistate/allocstate.go`: profile/mode seed
+   from AllocConfig; buffer/cap/weights seeded once by the screen via an `alloc:seeded` flag because it
+   has the base-currency precision). Both the controller and the modal form (`AllocProfileForm`) read
+   and write those atoms, so the ranked plan re-ranks LIVE behind the open modal. The main surface now
+   shows a compact `allocStrategyTile` (profile/mode summary chips + "Adjust strategy" button + metrics
+   toggle + manage-accounts link).
+2. "refine the top section, get the sizing right." The hero amount input was 2.6rem with a long
+   "Amount to allocate ($)" placeholder that clipped inside the 22rem field. Switched the placeholder to
+   a clean "0.00" (the "AMOUNT TO PUT TO WORK" caption already says what it is), dropped to 2.4rem, and
+   sized the field `min(100%, 15rem)` so it sits neatly beside the figure chips. Decoupled the e2e amount
+   selector from the placeholder (→ the `allocate-amount` testid) so the placeholder is free to change.
+3. "for each allocation, add a button to get to the value source." Each destination card's ⋯ menu gains
+   a "View source" item that routes by candidate type — goal → /goals, interest-bearing debt → /debt,
+   any other account → /accounts.
+
+e2e churn from the modal: mode + reserve are no longer inline, so determinism / fill-to-target / amount-
+labels open "Adjust strategy" first (fill amount on the hero, then open the modal for mode/reserve, then
+Done). Whole allocate suite stays green.
+
 ## 2026-07-03 — /allocate: widgetized, engine-driven redesign from scratch
 
 Cam: "do the allocate page now, redesign using the widgets/custom values/bento grid/theme aware

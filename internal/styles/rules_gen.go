@@ -5093,29 +5093,31 @@ func registerGenerated() {
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
-	// The amount field is the centrepiece: a big serif figure with an accent underline.
+	// The amount field is the centrepiece: a serif figure with an accent underline, sized to sit
+	// comfortably beside the figure chips (a short "0.00" placeholder — the label says the rest).
 	rule(".alloc-amount-field",
 		prop("display", "inline-flex"),
-		prop("align-items", "center"),
-		prop("gap", "0.15rem"),
-		prop("border-bottom", "2px solid color-mix(in srgb, var(--accent) 55%, var(--border))"),
-		prop("padding", "0.05rem 0.1rem 0.35rem"),
-		prop("max-width", "22rem"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.2rem"),
+		prop("border-bottom", "2px solid color-mix(in srgb, var(--accent) 50%, var(--border))"),
+		prop("padding", "0.1rem 0.15rem 0.3rem"),
+		prop("width", "min(100%, 15rem)"),
 		prop("transition", "border-color 0.16s ease"),
 	)
 	rule(".alloc-amount-field:focus-within",
 		prop("border-bottom-color", "var(--accent)"),
 	)
 	rule(".alloc-amount-affix",
-		prop("font-size", "2rem"),
+		prop("font-size", "1.6rem"),
 		prop("font-weight", "700"),
 		prop("color", "var(--text-dim)"),
 		prop("line-height", "1"),
+		prop("flex", "0 0 auto"),
 	)
 	rule(".alloc-amount-input",
-		prop("font-size", "2.6rem"),
+		prop("font-size", "2.4rem"),
 		prop("font-weight", "700"),
-		prop("line-height", "1.05"),
+		prop("line-height", "1.1"),
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("width", "100%"),
 		prop("min-width", "0"),
@@ -5124,6 +5126,10 @@ func registerGenerated() {
 		prop("background", "transparent"),
 		prop("color", "var(--text)"),
 		prop("padding", "0"),
+	)
+	rule(".alloc-amount-input::placeholder",
+		prop("color", "var(--text-faint)"),
+		prop("opacity", "1"),
 	)
 	rule(".alloc-income-nudge",
 		prop("display", "flex"),
@@ -5350,6 +5356,38 @@ func registerGenerated() {
 		prop("border-radius", "12px"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 		prop("border", "1px solid var(--border)"),
+	)
+	// Strategy summary chips (read-only; the modal edits them).
+	rule(".alloc-strategy-chips",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.5rem"),
+		prop("margin", "0.25rem 0 0.75rem"),
+	)
+	rule(".alloc-strategy-chip",
+		prop("display", "inline-flex"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.4rem"),
+		prop("padding", "0.35rem 0.7rem"),
+		prop("border-radius", "999px"),
+		prop("border", "1px solid var(--border)"),
+		prop("background", "color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+	)
+	rule(".alloc-strategy-chip-label",
+		prop("font-size", "0.66rem"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.05em"),
+	)
+	rule(".alloc-strategy-chip-val",
+		prop("font-weight", "700"),
+		prop("font-size", "0.88rem"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	// Strategy flip-modal body.
+	rule(".alloc-profile-form",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.75rem"),
 	)
 	// Summary hero: the total owed in the display serif beside the engine ratio chips.
 	rule(".debt-hero",

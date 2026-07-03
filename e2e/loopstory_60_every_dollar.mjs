@@ -192,7 +192,7 @@ try {
   }
 
   // Enter the amount to allocate
-  const amtInput = await page.$('input[placeholder*="Amount to allocate"]');
+  const amtInput = await page.$('[data-testid="allocate-amount"]');
   if (amtInput) {
     await amtInput.fill(ALLOC_AMOUNT);
     await amtInput.dispatchEvent("input");
