@@ -105,44 +105,6 @@ func holdingRow(props holdingRowProps) ui.Node {
 	)
 }
 
-// --- traditional (balance-tracked) account row -----------------------------------
-
-type traditionalRowProps struct {
-	Account domain.Account
-	Balance int64 // base-currency minor units
-	Sym     string
-	Dec     int
-	OnView  func(string)
-}
-
-// traditionalRow renders one balance-tracked investment account (no itemized securities):
-// its name + type badge, and its current value on the right.
-func traditionalRow(props traditionalRowProps) ui.Node {
-	a := props.Account
-	view := ui.UseEvent(Prevent(func() {
-		if props.OnView != nil {
-			props.OnView(a.ID)
-		}
-	}))
-	return Div(css.Class("inv-card inv-trad"), Attr("data-testid", "invtrad-"+a.ID), Attr("role", "listitem"),
-		Div(css.Class("inv-card-body"),
-			Div(css.Class("inv-head"),
-				Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
-					uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-				Span(css.Class("inv-name"), a.Name),
-				Span(css.Class("inv-chip inv-class"), investmentAccountTypeBadge(a.Type)),
-			),
-			If(strings.TrimSpace(a.Institution) != "", Div(css.Class("inv-meta", tw.TextDim), a.Institution)),
-		),
-		Div(css.Class("inv-side"),
-			Span(css.Class("inv-value", tw.FontDisplay), fmtSignedMoney(props.Balance, props.Sym, props.Dec)),
-			Button(css.Class("btn btn-sm btn-ghost"), Type("button"), Attr("data-testid", "invtrad-view-"+a.ID),
-				Title(uistate.T("accounts.viewTitle")), OnClick(view),
-				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		),
-	)
-}
-
 // --- add-holding form ------------------------------------------------------------
 
 // InvestAddFormProps configures the add-security modal form.

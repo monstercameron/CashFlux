@@ -20,7 +20,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -321,37 +320,6 @@ func investAccountsOf(app *appstate.App) []domain.Account {
 		}
 	}
 	return out
-}
-
-// --- invest-traditional ----------------------------------------------------------
-
-// investTraditionalWidget is the balance-tracked investment accounts tile — the "traditional"
-// investments (a retirement account or brokerage you track as one value, not per security).
-func investTraditionalWidget(props investPanelProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
-	app := props.App
-	nav := router.UseNavigate()
-	txFilter := uistate.UseTxFilter()
-	v := computeInvestView(app)
-	if len(v.Traditional) == 0 {
-		return Fragment()
-	}
-	onView := func(accountID string) {
-		f := uistate.TxFilter{Account: accountID}.Normalize()
-		txFilter.Set(f)
-		uistate.PersistTxFilter(f)
-		nav.Navigate(uistate.RoutePath("/transactions"))
-	}
-	rows := MapKeyed(v.Traditional, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
-		return ui.CreateElement(traditionalRow, traditionalRowProps{Account: a, Balance: v.BalByID[a.ID], Sym: v.Sym, Dec: v.Dec, OnView: onView})
-	})
-	body := investSection("sec-traditional", uistate.T("investments.traditionalTitle"),
-		investOwnerLink("/accounts", uistate.T("debt.linkAccounts")),
-		Div(css.Class("inv-list"), rows))
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "invest-traditional", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: body,
-	})
 }
 
 // --- invest-allocation -----------------------------------------------------------

@@ -29,7 +29,7 @@ check("S5 gain/return/cost chips", await p.locator('.inv-hero .debt-stat').count
 check("T1 add-security button", await p.locator('[data-testid="invest-add"]').count() === 1);
 check("T2 manage-accounts link", await p.locator('.bento-invest a[href$="/accounts"]').count() >= 1);
 check("T3 portfolio-metrics toggle", await p.locator('[data-testid="invest-toggle-formulas"]').count() === 1);
-check("T4 traditional (balance-tracked) accounts render", await p.locator('[data-testid^="invtrad-"]').count() >= 1, `${await p.locator('[data-testid^="invtrad-"]').count()}`);
+check("T4 single account list (no separate 'traditional' section)", await p.locator('#sec-traditional').count() === 0 && await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() >= 1, `${await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count()} account cards`);
 check("T5 net-worth owner link on the hero", await p.locator('.debt-owner-link[href$="/networth"]').count() >= 1);
 
 // Growth chart + configurable 1M/6M/1Y window.
@@ -122,11 +122,11 @@ await open();
 await p.locator('[data-testid="invest-toggle-formulas"]').click({ force: true }); await p.waitForTimeout(700);
 check("F1 portfolio-metrics formula tile reveals", await p.locator('.bento-invest').getByText(/formula|metric/i).count() >= 1);
 
-// Nav: traditional account → transactions.
+// Nav: an account card's view button → transactions.
 await open();
-const view = p.locator('[data-testid^="invtrad-view-"]').first();
+const view = p.locator('[data-testid^="invest-acct-view-"]').first();
 if (await view.count()) { await view.click({ force: true }); await p.waitForTimeout(800); }
-check("N1 a traditional account links to its transactions", p.url().endsWith("/transactions"), p.url());
+check("N1 an account card links to its transactions", p.url().endsWith("/transactions"), p.url());
 
 check("Z1 no page errors across the run", errs.length === 0, errs.slice(0, 4).join(" | "));
 

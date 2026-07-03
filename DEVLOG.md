@@ -40,6 +40,15 @@ Verify: wasm build clean; go test ./... green; e2e/debt_check.mjs 14/14 (surface
 ladder cards+medallions+rails, util meter, metrics toggle reveals the formula tile w/ debt_ vars,
 in-plan toggle, view→/transactions, no errors).
 
+Follow-up 16 (Cam: "why is there an account list AND an account graph section, combine them"): the
+"Traditional investments" tile (balance rows) duplicated the per-account growth cards (both list the
+same accounts). Removed invest-traditional entirely (tile + register + spec + traditionalRow component);
+the invest-pools tile IS the account list now — retitled "Accounts". Preserved the traditional tile's
+only unique affordance by adding a view-transactions icon button to each account card (OnView →
+router.UseNavigate + TxFilter, wired in investPoolsWidget; .inv-acct-view margin-left auto). computeInvestView
+still computes TradValueMinor for the summary split line. e2e T4 (no #sec-traditional + account cards)
++ N1 (invest-acct-view→/transactions) updated. 41/41; go test green.
+
 Follow-up 15 (Cam: "new pool needs to be a flip modal + list the accounts you want to pool"):
 Replaced the name-only PromptModal with a real flip modal that names AND picks accounts. New
 UseInvestPoolEditID atom ("" closed / "new" / pool id). InvestPoolForm (screens): name field +

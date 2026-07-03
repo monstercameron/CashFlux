@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **/investments: merged the two account sections into one (2026-07-02):** The separate "Traditional investments" list was redundant with the per-account growth cards (both listed the same accounts). Removed it — the **"Accounts"** section is now the single account list: every investment account as one card with its name, type, a **view-transactions** button, a pool selector, its value + delta, and its own growth chart.
 - **Create/edit an investment pool in a flip modal with an account checklist (2026-07-02):** "New pool" now opens a proper shell-root **flip modal** (`InvestPoolEditHost`) with a name field and a **checkable list of your investment accounts to include** — instead of the bare name prompt. The pool chip's pencil opens the same modal pre-filled (name + checked members) for editing. Saving upserts the pool (an account belongs to one pool, so checking it here moves it there). Persistence via the new `uistate.UpsertInvestPool`.
 
 ### Fixed

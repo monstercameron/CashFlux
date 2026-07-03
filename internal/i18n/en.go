@@ -2578,8 +2578,8 @@ var english = Catalog{
 	"investments.win6m":            "6M",
 	"investments.win12m":           "1Y",
 	// Pools (grouping accounts) + per-group graphs
-	"investments.poolsTitle":          "Account growth & pools",
-	"investments.poolsHint":           "Every account has its own growth chart. Group accounts into a named pool to combine them — each pool exposes a pool_<name>_value variable you can use in formulas and widgets.",
+	"investments.poolsTitle":          "Accounts",
+	"investments.poolsHint":           "Every investment account, with its own growth chart. Group accounts into a named pool to combine them — each pool exposes a pool_<name>_value variable you can use in formulas and widgets.",
 	"investments.poolsBarLabel":       "Pools",
 	"investments.poolVarHint":         "Use this variable name in formulas and dashboard widgets.",
 	"investments.newPool":             "New pool",

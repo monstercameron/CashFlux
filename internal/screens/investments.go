@@ -255,12 +255,11 @@ func InvestmentsScreen() ui.Node {
 		investNativeSpec("invest-toolbar"),
 		investNativeSpec("invest-securities"),
 	}
-	if len(v.Traditional) > 0 {
-		specs = append(specs, investNativeSpec("invest-traditional"))
-	}
 	if len(v.Securities) > 0 {
 		specs = append(specs, investNativeSpec("invest-allocation"))
 	}
+	// The accounts tile (per-account growth cards + pool grouping) is the single account
+	// list — it covers every investment account, so there is no separate "traditional" list.
 	specs = append(specs, investNativeSpec("invest-pools"))
 	if formulasAtom.Get() {
 		specs = append(specs, investNativeSpec("invest-formula"))
@@ -295,9 +294,6 @@ func init() {
 	})
 	R("invest-securities", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investSecuritiesWidget, investPanelProps{App: c.App})
-	})
-	R("invest-traditional", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(investTraditionalWidget, investPanelProps{App: c.App})
 	})
 	R("invest-allocation", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investAllocationWidget, investPanelProps{App: c.App})

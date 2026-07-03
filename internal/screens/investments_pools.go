@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -135,20 +136,30 @@ type investAccountGraphCardProps struct {
 	Sym         string
 	Dec         int
 	Base        string
+	OnView      func(string)
 }
 
-// investAccountGraphCard is one account's growth card: name + type badge + a pool selector
-// (to group it), then the value/delta and its own growth chart. Every account gets one.
+// investAccountGraphCard is one account's card in the single account list: name + type badge
+// + a "view transactions" link, a pool selector (to group it), then the value/delta and its
+// own growth chart. Every investment account gets one — this IS the account list.
 func investAccountGraphCard(props investAccountGraphCardProps) ui.Node {
 	a := props.Account
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("investments.ungrouped")}}
 	for _, p := range props.Pools {
 		opts = append(opts, uiw.SelectOption{Value: p.ID, Label: p.Name})
 	}
+	view := ui.UseEvent(Prevent(func() {
+		if props.OnView != nil {
+			props.OnView(a.ID)
+		}
+	}))
 	header := Div(css.Class("inv-acct-head"),
 		Div(css.Class("inv-pool-title-row"),
 			Span(css.Class("inv-pool-name"), a.Name),
 			Span(css.Class("inv-chip inv-class"), investmentAccountTypeBadge(a.Type)),
+			Button(css.Class("btn btn-sm btn-ghost inv-acct-view"), Type("button"), Attr("data-testid", "invest-acct-view-"+a.ID),
+				Attr("aria-label", uistate.T("accounts.viewTitle")), Title(uistate.T("nav.transactions")), OnClick(view),
+				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 		),
 		uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: props.CurrentPool, Class: "inv-acct-pool",
 			OnChange:  func(v string) { uistate.AssignAccountToPool(a.ID, v); uistate.BumpDataRevision() },
@@ -308,6 +319,14 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 	}
 	poolEdit := uistate.UseInvestPoolEditID()
 	newPool := ui.UseEvent(Prevent(func() { poolEdit.Set("new") }))
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	onView := func(accountID string) {
+		f := uistate.TxFilter{Account: accountID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 
 	investAccts := investAccountsOf(app)
 	pools := uistate.InvestPools()
@@ -365,6 +384,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 		return ui.CreateElement(investAccountGraphCard, investAccountGraphCardProps{
 			Account: a, Pools: pools, CurrentPool: poolOf[a.ID],
 			Series: seriesFor([]domain.Account{a}), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base,
+			OnView: onView,
 		})
 	})
 

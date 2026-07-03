@@ -4954,6 +4954,9 @@ func registerGenerated() {
 		flexDirection("column"),
 		gap("0.3rem"),
 	)
+	rule(".inv-acct-view",
+		prop("margin-left", "auto"),
+	)
 	rule(".inv-acct-head .field.inv-acct-pool, .inv-acct-head select",
 		prop("align-self", "flex-start"),
 		width("auto"),
