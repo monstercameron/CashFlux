@@ -787,13 +787,20 @@ func Insights() ui.Node {
 	// pr is already declared above (UsePrefs hook at stable position).
 	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday())
 
-	// Pinned insights, newest first.
+	// Pinned insights, newest first. The rail copy cross-links to the Insights
+	// tab where the same pins live beside the full briefing (hub-review P2: two
+	// identical cards with no affordance tying them together).
 	pins := app.SavedInsights()
 	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
+	hubTab := uistate.UseAssistantTab()
+	openInsightsTab := ui.UseEvent(Prevent(func() { hubTab.Set("insights") }))
 	pinnedCard := Fragment()
 	if len(pins) > 0 {
 		pinnedCard = uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("insights.pinnedTitle"),
+			HeaderAction: Button(css.Class("btn-link", "t-caption"), Type("button"),
+				Attr("data-testid", "assistant-see-insights"),
+				OnClick(openInsightsTab), uistate.T("assistant.seeAllInsights")),
 			Rows: MapKeyed(pins,
 				func(p domain.SavedInsight) any { return p.ID },
 				func(p domain.SavedInsight) ui.Node {
@@ -862,7 +869,16 @@ func Insights() ui.Node {
 		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
 	}
 	inputRow := Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
-		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
+		// The placeholder tells the truth about the current mode (review: "tell me
+		// what to do" overpromised agentic action a keyless session can't deliver).
+		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")),
+			Placeholder(func() string {
+				if noAI {
+					return uistate.T("insights.askPlaceholderKeyless")
+				}
+				return uistate.T("insights.askPlaceholder")
+			}()),
+			Value(input.Get()), OnInput(onInput)),
 		trailing,
 	)
 	composer := inputRow
@@ -904,14 +920,18 @@ func Insights() ui.Node {
 	// only the button's visibility is gated here.
 	advancedLabel := uistate.T("insights.showAdvanced")
 	advancedExpanded := "false"
+	advancedCaret := " ▸"
 	if advancedOpen.Get() {
 		advancedLabel = uistate.T("insights.hideAdvanced")
 		advancedExpanded = "true"
+		advancedCaret = " ▾"
 	}
 	pillFaint := pill + " " + tw.Fold(tw.TextFaint)
 	chatControls := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
 		Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), Attr("data-testid", "assistant-advanced"), OnClick(toggleAdvanced), Span(advancedLabel)),
+		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), Attr("data-testid", "assistant-advanced"),
+			Title(uistate.T("insights.advancedTitle")), OnClick(toggleAdvanced),
+			Span(advancedLabel), Span(css.Class(tw.TextFaint), advancedCaret)),
 		If(advancedOpen.Get(),
 			Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-edit-prompt"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
 		),

@@ -38,6 +38,7 @@ var assistantKeys = Catalog{
 	"assistant.viewTransactions": "View transactions",
 
 	// Tile empty states — each says something useful instead of vanishing.
+	"assistant.seeAllInsights":  "See all in Insights →",
 	"assistant.flaggedClear":    "No anomalies in your recent activity. (Bill and goal findings live on the Smart tab.)",
 	"assistant.highlightsEmpty": "No big category shifts this month.",
 	"assistant.merchantsEmpty":  "No spending in the last 90 days yet.",

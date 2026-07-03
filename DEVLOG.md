@@ -1,3 +1,28 @@
+## 2026-07-03 — Ask tab: cohesion, an honest keyless composer, and a real cross-link
+
+Cam's follow-up: "dont forget the ask and smart pages also claude design skill redesign them and ux
+review them aswell." Smart shipped in the prior commit with its review; this pass is Ask. The hub
+review's Ask findings (no hero grammar; duplicate pinned card with no affordance) + a dedicated
+Ask-tab adversarial review drove the work.
+
+Deliberate scope: Ask stays a conversation cockpit, NOT a bento stats surface — the agent-first
+intent (the other agent's build) is right; what it lacked was the hub's typography grammar and
+honesty at the keyless edge. Serif accent-tick titles came via scoped CSS on the existing layout
+(zero structural risk). The 68vh cockpit experiment stranded a 500px void under a two-message
+thread — the reviewer called it a broken-looking state — settled at a 46vh floor with the thread
+flexing.
+
+The tab state became a uistate atom (UseAssistantTab) so the rail's pinned card can switch the hub
+to the Insights tab in place — the first cross-tab affordance in the hub. Keyless honesty: the
+composer placeholder is now conditional (keyless copy stops promising "tell me what to do"), and
+the Advanced pill got a caret + tooltip. Declined from the review: dimming sample-thread bubbles
+(sample marking is a systemic question, not an Ask-tab patch) and disabling Send keyless (keyless
+Send actually works for the fixed question set — the copy fix was the honest one, not a gate).
+
+assistant_check 23/23; cross-link probed. One CSS lesson: flexing a card body to anchor a composer
+stretches every block child — the keyless Settings button went full-width until pinned with
+align-self.
+
 ## 2026-07-03 — Smart tab: nested tabs die; the agent leads with findings
 
 Cam: "redesign /assistant agent first and also redesign all the tabs with claude design skill, use

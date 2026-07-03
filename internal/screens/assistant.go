@@ -56,7 +56,9 @@ func Assistant() ui.Node {
 // Tab defaults to "ask" on first mount so returning users land in the AI
 // chat straight away.
 func AssistantHub() ui.Node {
-	activeTab := ui.UseState("ask")
+	// The active tab is a shared atom so surfaces inside a tab can move the
+	// user to a sibling (the Ask rail's "See all in Insights" cross-link).
+	activeTab := uistate.UseAssistantTab()
 
 	tabBar := Div(css.Class(tw.Mt2, tw.Mb3),
 		uiw.Segmented(uiw.SegmentedProps{

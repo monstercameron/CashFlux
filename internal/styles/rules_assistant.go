@@ -118,4 +118,35 @@ func registerAssistantSurface() {
 		prop("color", "var(--up, #54b884)"),
 		prop("font-size", "0.95rem"),
 	)
+
+	// ── Ask-tab cohesion pass (hub review): the conversation cockpit joins the
+	// design system — serif accent-tick titles like every redesigned surface,
+	// and the chat card fills the viewport so the composer doesn't strand a
+	// void beneath a short thread. ─────────────────────────────────────────────
+	rule(".asst-layout .card-title",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "1.15rem"),
+		prop("font-weight", "600"),
+		prop("border-left", "3px solid var(--accent)"),
+		prop("padding-left", "0.6rem"),
+	)
+	rule(".asst-main > .card",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("min-height", "46vh"),
+	)
+	rule(".asst-main > .card > div:last-child",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("flex", "1"),
+	)
+	rule(".asst-thread",
+		prop("flex", "1"),
+		prop("min-height", "0"),
+	)
+	// The flexed body stretches block children; action buttons keep their
+	// natural width.
+	rule(".asst-main > .card > div:last-child > .btn",
+		prop("align-self", "flex-start"),
+	)
 }
