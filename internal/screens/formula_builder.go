@@ -148,6 +148,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.ReportsMetrics()...)
 	metrics = append(metrics, widgetcatalog.NetWorthMetrics()...)
 	metrics = append(metrics, widgetcatalog.HealthMetrics()...)
+	metrics = append(metrics, widgetcatalog.CreditMetrics()...)
 	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
 
 	expr := ui.UseState(props.Initial)
@@ -219,7 +220,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 
 	// Variable palette: a dense, click-to-insert grid of chips (label + live value),
 	// grouped by category. Replaces the sprawling one-row-per-variable list.
-	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate, widgetcatalog.GroupPlanning, widgetcatalog.GroupRecurring, widgetcatalog.GroupReports, widgetcatalog.GroupNetWorth, widgetcatalog.GroupHealth}
+	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate, widgetcatalog.GroupPlanning, widgetcatalog.GroupRecurring, widgetcatalog.GroupReports, widgetcatalog.GroupNetWorth, widgetcatalog.GroupHealth, widgetcatalog.GroupCredit}
 	palette := make([]ui.Node, 0, len(groups))
 	for _, g := range groups {
 		chips := make([]ui.Node, 0)

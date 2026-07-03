@@ -82,6 +82,11 @@ func utilBandFor(pct int) UtilBand {
 //	>80 % → 0
 //
 // TODO: dedupe with healthscore when a shared thresholds package is added.
+// UtilScore exposes the utilization factor's 0–100 scoring curve (0 when pct is
+// the no-limit -1 sentinel) so the engine surface's credit_util_score atom and
+// the formula-identity tests use the model's own curve.
+func UtilScore(pct int) int { return utilScore(pct) }
+
 func utilScore(pct int) int {
 	if pct < 0 {
 		return 0
@@ -208,6 +213,14 @@ type Result struct {
 	// only the factors with available data (util, on-time, age).
 	// Weights before re-normalization: util=0.55, on-time=0.30, age=0.15.
 	ProxyScore int
+
+	// Weights are the EXACT normalized factor weights ProxyScore was computed
+	// with (zero for a missing on-time/age factor; utilization always counts,
+	// scoring 0 when no card has a limit). floor(Σ score×weight), clamped,
+	// reproduces ProxyScore exactly — which lets the score live as a formula
+	// over the credit_* variables in the engine surface (the credit_proxy
+	// molecule). Guarded by TestProxyWeightsFormulaIdentity.
+	Weights ProxyWeights
 
 	// Band is the qualitative tier for ProxyScore.
 	Band Band
@@ -413,6 +426,7 @@ func Evaluate(in Inputs) Result {
 		OnTimeScore: onTimeScore,
 		AgeScore:    ageScore,
 		ProxyScore:  proxyScore,
+		Weights:     proxyWeights(onTimeScore, ageScore),
 		Band:        bandFor(proxyScore),
 		Demerits:    deriveDemerits(cardUtils, agg, onTimeScore, ageScore),
 		Advice:      deriveAdvice(cardUtils, agg, onTimeScore, ageScore, proxyScore),
@@ -614,30 +628,45 @@ func monthsBetween(from, to time.Time) int {
 // A signal with score == -1 is excluded; remaining weights are re-normalized to
 // sum to 1 before weighting. Returns 0 when no signal is available.
 func computeProxy(utilPct, onTime, ageScore int) int {
-	type factor struct {
-		score  int
-		weight float64
+	w := proxyWeights(onTime, ageScore)
+	weighted := float64(utilScore(utilPct)) * w.Util
+	if onTime >= 0 {
+		weighted += float64(onTime) * w.OnTime
 	}
+	if ageScore >= 0 {
+		weighted += float64(ageScore) * w.Age
+	}
+	return clamp(int(weighted))
+}
 
-	factors := []factor{
-		{utilScore(utilPct), 0.55},
-		{onTime, 0.30},
-		{ageScore, 0.15},
-	}
+// ProxyWeights are the normalized factor weights behind ProxyScore. Utilization
+// is always present (a card-less or limit-less household scores it 0 rather
+// than dropping it); on-time and age carry zero weight when their -1 sentinel
+// says there isn't enough data, with the remainder re-normalized.
+type ProxyWeights struct {
+	Util, OnTime, Age float64
+}
 
-	var totalWeight float64
-	var weighted float64
-	for _, f := range factors {
-		if f.score < 0 {
-			continue
-		}
-		totalWeight += f.weight
-		weighted += float64(f.score) * f.weight
+// proxyWeights re-normalizes the raw weights (util 0.55 / on-time 0.30 /
+// age 0.15) over the available factors. The weighted sum is evaluated in this
+// normalized form — factor score × normalized weight, floored — precisely so
+// the credit_proxy formula molecule reproduces it bit-for-bit.
+func proxyWeights(onTime, ageScore int) ProxyWeights {
+	t := 0.55
+	if onTime >= 0 {
+		t += 0.30
 	}
-	if totalWeight == 0 {
-		return 0
+	if ageScore >= 0 {
+		t += 0.15
 	}
-	return clamp(int(weighted / totalWeight))
+	w := ProxyWeights{Util: 0.55 / t}
+	if onTime >= 0 {
+		w.OnTime = 0.30 / t
+	}
+	if ageScore >= 0 {
+		w.Age = 0.15 / t
+	}
+	return w
 }
 
 // clamp restricts v to [0, 100].

@@ -24,6 +24,7 @@ func Register() {
 	registerNetWorthSurface()
 	registerHealthSurface()
 	registerAssistantSurface()
+	registerCreditSurface()
 	inject(Build())
 }
 

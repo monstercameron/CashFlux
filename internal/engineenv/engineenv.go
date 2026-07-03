@@ -156,6 +156,11 @@ func DefaultMolecules() []domain.Molecule {
 		// derivation is auditable (Explain) and a household can even re-weight its own
 		// score by editing this formula — the /health page reads THIS value.
 		{Name: "health_score", Formula: "clamp(round(health_savings*health_savings_weight + health_emergency*health_emergency_weight + health_debt*health_debt_weight + health_budget*health_budget_weight + health_utilization*health_utilization_weight + health_trend*health_trend_weight) - health_penalty, 0, 100)", Doc: "Your 0–100 financial-health score — the weighted blend of the six factor scores, minus a penalty when spending exceeds income."},
+		// The credit-health proxy IS this formula, like health_score above: three
+		// credit_* factor atoms scored in Go (internal/credithealth) blended by
+		// their exact normalized weights. floor (not round) mirrors the model's
+		// truncation. The /credit page reads THIS value.
+		{Name: "credit_proxy", Formula: "clamp(floor(credit_util_score*credit_util_weight + credit_ontime_score*credit_ontime_weight + credit_age_score*credit_age_weight), 0, 100)", Doc: "Your 0–100 credit-health estimate — utilization, on-time payments, and account age blended by weight. A local proxy, not a FICO score."},
 	}
 }
 
@@ -306,6 +311,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addReportsVars(out, d, major)
 	addNetWorthVars(out, d, major, toBase)
 	addHealthVars(out, d)
+	addCreditVars(out, d, major, toBase)
 	return out
 }
 

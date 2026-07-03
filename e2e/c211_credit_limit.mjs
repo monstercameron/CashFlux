@@ -4,7 +4,7 @@ import path from "path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.join(__dirname, "..", ".tools", "package.json"));
 const { chromium } = require("playwright");
-const BASE="http://127.0.0.1:8099";
+const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
 const browser = await chromium.launch({ headless: true });
 let failed=0; const fail=m=>{console.error("FAIL: "+m);failed++;process.exitCode=1;}; const pass=m=>console.log("PASS: "+m);
 const errs=[];
@@ -16,6 +16,9 @@ try{
   await p.waitForSelector("#app",{timeout:60000}); await p.waitForTimeout(4500);
   await p.evaluate(()=>{history.pushState({},"","/credit");window.dispatchEvent(new PopStateEvent("popstate"));});
   await p.waitForTimeout(1600);
+  // The editors fold behind per-card "Edit limit" disclosures on the bento surface — open them all.
+  await p.evaluate(()=>{document.querySelectorAll(".credit-card-item details").forEach(d=>{d.open=true;});});
+  await p.waitForTimeout(200);
   const editors=await p.$$('[data-testid="credit-limit-edit"]');
   if(editors.length>0) pass(editors.length+" inline credit-limit editor(s) present on /credit"); else { fail("no credit-limit editor found"); }
   // capture the first card's utilization %, change its limit, confirm util recomputes

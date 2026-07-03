@@ -432,3 +432,51 @@ func TestHealthyCardNoDemerits(t *testing.T) {
 		t.Error("on-time card should not get on-time advice")
 	}
 }
+
+// TestProxyWeightsFormulaIdentity guards the engine-surface contract: for ANY
+// inputs, floor(utilScore×W.Util + onTime×W.OnTime + age×W.Age) clamped to
+// 0–100 reproduces ProxyScore exactly — including the missing-factor cases
+// (zero weights) and the no-limit case (utilization scored 0, still weighted).
+func TestProxyWeightsFormulaIdentity(t *testing.T) {
+	now := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
+	asOf := time.Date(2022, 3, 1, 0, 0, 0, 0, time.UTC)
+	card := func(id string, limit int64, due int, hasAsOf bool) domain.Account {
+		a := domain.Account{ID: id, Type: domain.TypeCreditCard, Currency: "USD", DueDayOfMonth: due}
+		if limit > 0 {
+			a.CreditLimit = money.New(limit, "USD")
+		}
+		if hasAsOf {
+			a.BalanceAsOf = asOf
+		}
+		return a
+	}
+	clamp := func(v int) int {
+		if v < 0 {
+			return 0
+		}
+		if v > 100 {
+			return 100
+		}
+		return v
+	}
+	cases := []credithealth.Inputs{
+		{Now: now}, // no cards at all
+		{Now: now, Accounts: []domain.Account{card("a", 0, 0, false)}}, // card, no limit/due/age
+		{Now: now, Accounts: []domain.Account{card("a", 100000, 15, true)}, Balances: map[string]int64{"a": -25000}},
+		{Now: now, Accounts: []domain.Account{card("a", 100000, 0, true), card("b", 50000, 15, false)},
+			Balances: map[string]int64{"a": -90000, "b": -10000}},
+	}
+	for i, in := range cases {
+		r := credithealth.Evaluate(in)
+		weighted := float64(credithealth.UtilScore(r.Agg.UtilPct)) * r.Weights.Util
+		if r.OnTimeScore >= 0 {
+			weighted += float64(r.OnTimeScore) * r.Weights.OnTime
+		}
+		if r.AgeScore >= 0 {
+			weighted += float64(r.AgeScore) * r.Weights.Age
+		}
+		if got := clamp(int(weighted)); got != r.ProxyScore {
+			t.Errorf("case %d: formula identity gives %d, ProxyScore is %d", i, got, r.ProxyScore)
+		}
+	}
+}

@@ -1,3 +1,31 @@
+## 2026-07-03 — /credit: the proxy becomes a live formula; legacy cards → bento
+
+Cam: "keep going" — /credit was the highest-value un-redesigned page (a money page, the target of
+/health's utilization drill, still legacy uiw.Card stacks). Same architecture as /health: the three
+credithealth factors (utilization 0.55 / on-time 0.30 / age 0.15, renormalized) become credit_*
+atoms with EXACT weights, and the headline becomes the credit_proxy MOLECULE.
+
+The parity trap this time: computeProxy divided by the weight total ONCE at the end and TRUNCATED
+(int()), while a formula must evaluate score×normalized-weight terms — different float association
+could flip a floor() at integer boundaries. Fixed by refactoring computeProxy itself to the
+normalized-weights order (proxyWeights + Σ score×w, floor) so model and molecule share the same
+arithmetic bit-for-bit. Preserved quirk: utilization is ALWAYS weighted (utilScore(-1)=0 for a
+limit-less household — it scores 0 rather than being dropped); worth revisiting as a modeling
+question someday, but parity means preserving it today.
+
+The page reuses /health's tile grammar (hltTile/hltSection/hlt-* CSS + the one-story pattern from
+Cam's "too many numbers" feedback — met/unmet line, value meter, plumbing behind "How it's
+scored"). The utilization tile is full-width (it's over half the score and carries the per-card
+rows: bars, band chips, pay-to-30 nudges, the C211 inline limit editor, balance-history trends).
+CreditHealthPanel (embedded on /debt) untouched.
+
+e2e credit_check.mjs 17/17 — builder-evaluates-credit_proxy == ring (55==55), limit edit re-scores
+58%→32% live (gotcha: the editor commits on BLUR, not Enter), card-less negative shows CTA +
+disclaimer. c211_credit_limit + credit_ring_a11y kept green (BASE now honors E2E_URL). The
+key-coverage failure in the full suite is the other agent's in-flight i18n sweep (dashboard/split/
+accounts keys), not this work. The :8091 e2e server died mid-session; restarted via
+`go run e2e/serve.go <webroot> 8091`.
+
 ## 2026-07-03 — /health tiles: five numbers → one story (Cam's confusion report)
 
 Cam: "the targets and the 0-100/100 make me confused, ux review the cells why they have so many
