@@ -11,7 +11,9 @@ const require = createRequire(path.join(__dirname, "..", ".tools", "package.json
 const { chromium } = require("playwright");
 
 const BASE = process.env.E2E_URL || "http://127.0.0.1:8099";
-const EXCLUDE = 'button[title="Leave this out of the suggestions"]';
+const CARD = '.alloc-dest'; // one ranked destination card
+const MENU = '[data-testid^="alloc-menu-"]'; // the per-card ⋯ overflow toggle
+const EXCLUDE_ITEM = '[data-testid^="alloc-exclude-"]'; // the Exclude menu item
 const RESTORE = 'button[title="Bring this back into the suggestions"]';
 
 const browser = await chromium.launch({ headless: true });
@@ -34,20 +36,22 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(EXCLUDE, { timeout: 60000 });
+  await page.waitForSelector(CARD, { timeout: 60000 });
 
-  const activeBefore = await page.locator(EXCLUDE).count();
+  const activeBefore = await page.locator(CARD).count();
   const excludedBefore = await page.locator(RESTORE).count();
-  if (activeBefore < 2) fail(`expected at least 2 ranked suggestions, got ${activeBefore}`);
+  if (activeBefore < 2) fail(`expected at least 2 ranked destination cards, got ${activeBefore}`);
 
-  // Exclude the top suggestion.
-  await page.locator(EXCLUDE).first().click();
-  if (!(await waitForCount(EXCLUDE, page, activeBefore - 1))) fail(`active suggestions should drop to ${activeBefore - 1}`);
+  // Exclude the top suggestion via its ⋯ overflow menu.
+  await page.locator(MENU).first().click();
+  await page.waitForTimeout(200);
+  await page.locator(EXCLUDE_ITEM).first().click();
+  if (!(await waitForCount(CARD, page, activeBefore - 1))) fail(`active cards should drop to ${activeBefore - 1}`);
   if ((await page.locator(RESTORE).count()) !== excludedBefore + 1) fail("excluding should add a restorable item");
 
   // Restore it.
   await page.locator(RESTORE).first().click();
-  if (!(await waitForCount(EXCLUDE, page, activeBefore))) fail(`restoring should bring active suggestions back to ${activeBefore}`);
+  if (!(await waitForCount(CARD, page, activeBefore))) fail(`restoring should bring active cards back to ${activeBefore}`);
   if ((await page.locator(RESTORE).count()) !== excludedBefore) fail("restoring should clear the restorable item");
 
   if (errors.length) fail("page errors: " + errors.join(" | "));

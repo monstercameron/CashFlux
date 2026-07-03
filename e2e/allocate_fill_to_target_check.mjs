@@ -37,8 +37,12 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".budget", { timeout: 60000 });
+  await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(500);
+
+  // The reserve input lives behind the Advanced disclosure — open it.
+  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
+  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
 
   // --- Switch to fill-to-target mode ---
   const modeSelect = page.locator('[data-testid="allocate-mode"]');
@@ -52,17 +56,15 @@ try {
   await amountInput.fill(String(amount));
   await amountInput.dispatchEvent("input");
 
-  const reserveInput = page.locator('input[placeholder*="Keep back"]').first();
+  const reserveInput = page.locator('input[placeholder*="Emergency buffer"]').first();
   await reserveInput.fill(String(reserve));
   await reserveInput.dispatchEvent("input");
 
   await page.waitForTimeout(500);
 
   // --- Assert sum(plan rows) + keptBack == entered amount ---
-  const headTexts = await page.locator(".budget .budget-amount.fig").allInnerTexts();
-  const rowAmounts = headTexts
-    .filter((t) => t.includes("·"))
-    .map((t) => parseCents(t.split("·")[0].trim()));
+  const headTexts = await page.locator(".alloc-dest .alloc-dest-amount").allInnerTexts();
+  const rowAmounts = headTexts.map((t) => parseCents(t)).filter((c) => c > 0);
 
   const sumRows = rowAmounts.reduce((a, b) => a + b, 0);
 
@@ -89,16 +91,16 @@ try {
   }
 
   // --- Assert that any goal row's allocation does not exceed its remaining ---
-  // Goal rows are identified by ".budget" rows that contain "Goal ·" in their label.
-  const goalRows = await page.locator(".budget").all();
+  // Goal destination cards are identified by a name containing "Goal".
+  const goalRows = await page.locator(".alloc-dest").all();
   for (const row of goalRows) {
-    const nameText = await row.locator(".row-desc").first().innerText().catch(() => "");
+    const nameText = await row.locator(".alloc-dest-name").first().innerText().catch(() => "");
     if (!nameText.toLowerCase().includes("goal")) continue;
 
-    const amtText = await row.locator(".budget-amount.fig").first().innerText().catch(() => "");
-    if (!amtText.includes("·")) continue; // no amount allocated
+    const amtText = await row.locator(".alloc-dest-amount").first().innerText().catch(() => "");
+    if (!amtText) continue; // no amount allocated
 
-    const allocated = parseCents(amtText.split("·")[0].trim());
+    const allocated = parseCents(amtText);
 
     // We cannot read the server-side remaining directly from the DOM, so we
     // assert only that the allocated amount is non-negative and that the sum

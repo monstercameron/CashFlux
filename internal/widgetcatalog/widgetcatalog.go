@@ -30,7 +30,28 @@ const (
 	GroupGoals    Group = "Goals"
 	GroupDebt     Group = "Debts"
 	GroupPools    Group = "Pools"
+	GroupAllocate Group = "Allocate"
 )
+
+// allocMetricMeta labels the fixed allocate-plan variables for the picker.
+var allocMetricMeta = []struct{ Name, Label, Doc string }{
+	{"alloc_amount", "Amount to allocate", "The total you're putting to work this round."},
+	{"alloc_reserve", "Reserve kept back", "Amount held back from the split as an emergency buffer."},
+	{"alloc_max_per", "Per-destination cap", "The most any single destination may receive (0 = uncapped)."},
+	{"alloc_allocatable", "Allocatable", "Amount minus reserve — what actually gets split."},
+	{"alloc_reserved_pct", "Reserved %", "Reserve as a percent of the amount to allocate."},
+	{"alloc_destination_count", "Eligible destinations", "How many places qualify to receive money (accounts, debts, goals)."},
+}
+
+// AllocMetrics exposes the allocate-plan variables (addAllocVars) in the formula picker under
+// the Allocate group, so a plan figure can be dropped into a formula or dashboard widget.
+func AllocMetrics() []Metric {
+	out := make([]Metric, 0, len(allocMetricMeta))
+	for _, m := range allocMetricMeta {
+		out = append(out, Metric{Name: m.Name, Label: m.Label, Doc: m.Doc, Group: GroupAllocate})
+	}
+	return out
+}
 
 // debtFieldMeta labels + documents each per-debt metric suffix for the picker.
 var debtFieldMeta = map[string]struct{ Label, Doc string }{

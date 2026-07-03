@@ -56,6 +56,18 @@ type Data struct {
 	// Pools are user-defined groups of accounts (see the investments page); each becomes a
 	// pool_<slug>_value engine variable so a group's combined value is usable in formulas.
 	Pools []PoolDef
+	// Alloc holds the persisted allocate-page plan (amount to put to work + split controls),
+	// surfaced as the alloc_* engine variables so a plan figure is usable in formulas/widgets.
+	Alloc AllocData
+}
+
+// AllocData is the allocate-page plan the wasm layer feeds in (from the persisted AllocConfig),
+// so the pure engine can expose the plan as variables. Amounts are minor units of the base
+// currency.
+type AllocData struct {
+	AmountMinor  int64
+	ReserveMinor int64
+	MaxPerMinor  int64
 }
 
 // PoolDef is a named group of account IDs, passed in from the wasm layer (which holds the
@@ -114,6 +126,7 @@ var Names = func() []string {
 	for _, m := range DefaultMolecules() {
 		out = append(out, m.Name)
 	}
+	out = append(out, AllocVarNames...)
 	return out
 }()
 
@@ -242,7 +255,61 @@ func computeAtoms(d Data) map[string]float64 {
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase)
 	addPoolVars(out, d, major, toBase)
+	addAllocVars(out, d, major)
 	return out
+}
+
+// AllocVarNames are the fixed allocate-plan variables addAllocVars exposes, in a stable order.
+var AllocVarNames = []string{
+	"alloc_amount",            // total the user is putting to work (major units, base currency)
+	"alloc_reserve",           // amount held back from the split (emergency buffer)
+	"alloc_max_per",           // per-destination cap (0 = uncapped)
+	"alloc_allocatable",       // amount − reserve, floored at 0 (what actually gets split)
+	"alloc_reserved_pct",      // reserve ÷ amount × 100 (0 when amount is 0)
+	"alloc_destination_count", // eligible places to put money (asset accounts + interest-bearing debts + goals)
+}
+
+// addAllocVars exposes the persisted allocate plan as fixed alloc_* variables, so a plan figure
+// (how much you're allocating, what you're holding back, how many destinations qualify) can be
+// referenced in a formula or dashboard widget. Derived purely from Data — amounts from the
+// plan config, the destination count from the eligible accounts/goals.
+func addAllocVars(out map[string]float64, d Data, major func(int64) float64) {
+	amount := major(d.Alloc.AmountMinor)
+	reserve := major(d.Alloc.ReserveMinor)
+	allocatable := max(d.Alloc.AmountMinor-d.Alloc.ReserveMinor, 0)
+	reservedPct := 0.0
+	if d.Alloc.AmountMinor > 0 {
+		reservedPct = float64(d.Alloc.ReserveMinor) / float64(d.Alloc.AmountMinor) * 100
+		if reservedPct < 0 {
+			reservedPct = 0
+		}
+		if reservedPct > 100 {
+			reservedPct = 100
+		}
+	}
+	// Eligible destinations: non-archived asset accounts + interest-bearing liabilities +
+	// non-archived goals — the same universe the allocate ranker draws from.
+	destinations := 0
+	for _, a := range d.Accounts {
+		if a.Archived {
+			continue
+		}
+		if a.Class == domain.ClassLiability {
+			if a.InterestRateAPR > 0 {
+				destinations++
+			}
+			continue
+		}
+		destinations++
+	}
+	destinations += len(d.Goals)
+
+	out["alloc_amount"] = amount
+	out["alloc_reserve"] = reserve
+	out["alloc_max_per"] = major(d.Alloc.MaxPerMinor)
+	out["alloc_allocatable"] = major(allocatable)
+	out["alloc_reserved_pct"] = reservedPct
+	out["alloc_destination_count"] = float64(destinations)
 }
 
 // addGoalVars exposes each goal as its own named variables, so a formula or widget can

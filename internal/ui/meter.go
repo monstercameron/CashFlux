@@ -23,8 +23,8 @@ type MeterBarProps struct {
 	// Label is the accessible name (aria-label) describing what is measured
 	// (e.g. "Savings rate"). Required for screen-reader clarity.
 	Label string
-	// Tone is the fill color token ("bg-up","bg-warn","bg-down","bg-dim","bg-fg");
-	// default "bg-up". Shared with ProgressBar's tone vocabulary.
+	// Tone is the fill color token ("bg-up","bg-warn","bg-down","bg-dim","bg-fg","bg-accent");
+	// default "bg-up". "bg-accent" tracks the theme accent. Shared with ProgressBar's vocab.
 	Tone string
 	// Class holds extra spacing tokens for the track ("mt-1.5","mt-2").
 	Class string
@@ -83,6 +83,8 @@ func meterToneRule(tone string) css.Rule {
 		return tw.BgDim
 	case "bg-fg":
 		return tw.BgFg
+	case "bg-accent":
+		return tw.BgAccent
 	default:
 		return tw.BgUp
 	}

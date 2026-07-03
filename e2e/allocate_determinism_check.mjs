@@ -35,20 +35,16 @@ async function checkInvariant(page, amount, reserve) {
   await amountInput.fill(String(amount));
   await amountInput.dispatchEvent("input");
 
-  // Fill reserve input (may be 0).
+  // Fill reserve input (may be 0). Lives behind the Advanced disclosure.
   const reserveInput = page.locator('input[placeholder*="Emergency buffer"]').first();
   await reserveInput.fill(String(reserve));
   await reserveInput.dispatchEvent("input");
 
   await page.waitForTimeout(500);
 
-  // Collect per-row amounts from the "budget-amount fig" spans that contain
-  // both an amount and a "·" separator (i.e. a plan row with an allocated amount).
-  const headTexts = await page.locator(".budget .budget-amount.fig").allInnerTexts();
-  // Each headRight is formatted as "$AMT · SCORE%" when an amount is present.
-  const rowAmounts = headTexts
-    .filter((t) => t.includes("·"))
-    .map((t) => parseCents(t.split("·")[0].trim()));
+  // Each destination card with an allocated amount renders it in .alloc-dest-amount.
+  const headTexts = await page.locator(".alloc-dest .alloc-dest-amount").allInnerTexts();
+  const rowAmounts = headTexts.map((t) => parseCents(t)).filter((c) => c > 0);
 
   // Sum of all row amounts.
   const sumRows = rowAmounts.reduce((a, b) => a + b, 0);
@@ -80,8 +76,12 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".budget", { timeout: 60000 });
+  await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(500);
+
+  // The reserve input lives behind the Advanced disclosure — open it once up front.
+  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
+  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
 
   // Cases: [amount, reserve]
   const cases = [

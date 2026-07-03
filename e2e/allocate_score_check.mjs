@@ -24,24 +24,25 @@ try {
   page.on("pageerror", (e) => errors.push(String(e)));
 
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".budget", { timeout: 60000 });
+  await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(400);
 
-  const rows = await page.locator(".budget").count();
-  if (rows === 0) fail("expected at least one allocate suggestion row");
+  const rows = await page.locator(".alloc-dest").count();
+  if (rows === 0) fail("expected at least one ranked destination card");
 
-  // No sub-line should be the old "Score NN%" duplicate, nor a standalone " · ".
-  const subs = (await page.locator(".budget .budget-sub").allInnerTexts()).map((t) => t.trim());
-  if (subs.some((t) => /^Score\b/.test(t))) fail(`a "Score …" duplicate sub-line is still rendered: ${JSON.stringify(subs)}`);
-  if (subs.some((t) => t === "·" || t === "")) fail("a hand-rolled separator/empty sub-line is still present");
-  if (!subs.some((t) => /^returns\b/.test(t))) fail(`the breakdown sub-line is missing (saw: ${JSON.stringify(subs)})`);
+  // The score appears once, in the card head (.alloc-dest-score), as a percent.
+  const score = (await page.locator(".alloc-dest .alloc-dest-score").first().innerText()) || "";
+  if (!/%/.test(score)) fail(`the destination head should show the score percent, got "${score}"`);
 
-  // The score still appears once, in the row head.
-  const head = (await page.locator(".budget .budget-amount").first().innerText()) || "";
-  if (!/%/.test(head)) fail(`the head should still show the score percent, got "${head}"`);
+  // The breakdown is a set of labelled criterion chips (Return / Stability / Liquidity) —
+  // not a duplicated "Score …" line.
+  const chips = await page.locator(".alloc-dest .alloc-dest-chip").count();
+  if (chips < 1) fail("the criterion breakdown chips are missing");
+  const chipText = (await page.locator(".alloc-dest .alloc-dest-breakdown").first().innerText()).toLowerCase();
+  if (!/return|stability|liquidity/.test(chipText)) fail(`the breakdown chips are missing their criterion labels (saw: ${JSON.stringify(chipText)})`);
 
   if (errors.length) fail("page errors: " + errors.join(" | "));
-  if (!process.exitCode) console.log(`PASS: allocate rows show the score once (head "${head.trim()}", breakdown sub-line only).`);
+  if (!process.exitCode) console.log(`PASS: destination cards show the score once (head "${score.trim()}") plus a criterion breakdown.`);
 } finally {
   await browser.close();
 }

@@ -1,3 +1,45 @@
+## 2026-07-03 — /allocate: widgetized, engine-driven redesign from scratch
+
+Cam: "do the allocate page now, redesign using the widgets/custom values/bento grid/theme aware
+css/componentize/and a claude design skill redesign." Same treatment as /debt and /investments.
+
+Architecture (bottom-up per SDLC):
+1. CONFIG + ENGINE (the "custom values"). Persisted `uistate.AllocConfig` (amount / reserve / max-per /
+   profile / mode) — so the plan survives a reload AND feeds the engine. `engineenv.addAllocVars`
+   exposes fixed `alloc_amount` / `alloc_reserve` / `alloc_max_per` / `alloc_allocatable` /
+   `alloc_reserved_pct` / `alloc_destination_count` (added to `Names`, tested). Kept it honest — the
+   vars are the plan inputs + eligible-destination count from `Data`, not a re-run of the distribute
+   logic in the engine. Catalog `AllocMetrics` + a new `GroupAllocate`, wired into the FormulaBuilder.
+2. VIEW MODEL. `computeAllocView` (pure) builds candidates (asset accounts / interest-bearing debts /
+   unfinished goals) → ranks under the weights → splits the entered amount — lifted verbatim from the
+   old screen so the ranking/split/apply logic (and its 8 e2e) is unchanged.
+3. UI. A controller `Allocate()` owns the interconnected state (amount → ranking → split → apply) and
+   lays out `bento bento-allocate` tiles as child components fed the model + callbacks. Chose the
+   props-driven controller over the registry+atoms surface-host pattern here because allocate's state
+   is tightly coupled (amount drives the plan drives apply); 13 cross-tile atoms would have been
+   fragile. Tiles: hero (amount input + income nudge + figures), controls (mode/profile + Advanced
+   disclosure + metrics toggle), plan (ranked cards), why (algo summary + AI), apply (confirm/undo),
+   formula. Persist to AllocConfig via a UseEffect keyed on the plan values (silent — no data-revision
+   bump), so alloc_* stays live without a re-render storm.
+4. DESIGN + THEME. New `bento-allocate` CSS, all token-based (var(--accent/--bg-elev/--border/…)). The
+   #1 destination gets the accent focus treatment (filled medallion + tint + glow) like the debt
+   ladder. Score meters use the standard `uiw.MeterBar` — added a theme-aware `bg-accent` tone to
+   MeterBar/ProgressBar so a standard gauge tracks the accent (verified periwinkle on Midnight:
+   score-bar fill == --accent). Delete/exclude went into a standard `KebabMenu` ⋯ per Cam's follow-up
+   ("move the x button into a triple dot menu"), matching the goal-card / to-do rows.
+
+The e2e were the fiddly part: the redesign changed the DOM, so the 8 allocate tests needed selector
+updates (`.budget` → `.alloc-dest`, `.budget-amount.fig` "$X · N%" → separate `.alloc-dest-amount` +
+`.alloc-dest-score`, reserve input now behind the Advanced disclosure → open it first, exclude now in a
+⋯ menu → open it first). Preserved the load-bearing contract so most survived: amount placeholder still
+contains "Amount to allocate", the reserve keeps "Emergency buffer", the "Kept back:" p.muted line, the
+`allocate-mode` native `<select>` (so `selectOption` still works), and the `income-nudge*` /
+`allocate-apply-btn` testids. score / amount-labels / determinism / fill-to-target / income / story all
+PASS; the determinism invariant (sum(rows)+keptBack == amount) holds to the cent. `apply_check` fails on
+`localStorage["cashflux:dataset"]` being empty — the known pre-existing IndexedDB-migration issue, not a
+redesign regression (the `.budget`→`.alloc-dest` fix got it past the selector). `ai_settings_link` skips
+gracefully when its context has no seeded candidates.
+
 ## 2026-07-03 — /investments: standard components audit
 
 Cam: "for /investments, make sure they are standard components if feasible." Audited the page against

@@ -40,7 +40,15 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
+		Alloc: liveAllocData(),
 	})
+}
+
+// liveAllocData converts the persisted allocate plan into engine AllocData, so the alloc_*
+// variables reflect the current plan wherever a formula is evaluated.
+func liveAllocData() engineenv.AllocData {
+	c := uistate.AllocConfigGet()
+	return engineenv.AllocData{AmountMinor: c.AmountMinor, ReserveMinor: c.ReserveMinor, MaxPerMinor: c.MaxPerMinor}
 }
 
 // livePoolDefs converts the persisted investment-pool config into engine PoolDefs, so each
@@ -81,6 +89,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.GoalMetrics(app.Goals())...)
 	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
 	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
+	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")
@@ -151,7 +160,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 
 	// Variable palette: a dense, click-to-insert grid of chips (label + live value),
 	// grouped by category. Replaces the sprawling one-row-per-variable list.
-	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools}
+	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate}
 	palette := make([]ui.Node, 0, len(groups))
 	for _, g := range groups {
 		chips := make([]ui.Node, 0)

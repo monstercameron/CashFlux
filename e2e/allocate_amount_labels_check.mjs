@@ -26,39 +26,30 @@ try {
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".labeled-field", { timeout: 60000 });
 
-  // Collect all visible labeled-field span texts on the page.
-  const texts = (await page.locator(".labeled-field span").allInnerTexts()).map(
-    (t) => t.trim()
-  );
+  // The emergency-buffer / cap-per-destination inputs live behind the Advanced disclosure
+  // (a redesign UX change), so open it before asserting their labels are present.
+  const adv = page.locator('[data-testid="allocate-advanced-toggle"]');
+  if (await adv.count()) { await adv.click({ force: true }); await page.waitForTimeout(300); }
 
-  for (const want of [
-    "Amount to allocate",
-    "Emergency buffer",
-    "Cap per destination",
-  ]) {
+  // Visible labeled-field labels for the two advanced amount inputs.
+  const texts = (await page.locator(".labeled-field span").allInnerTexts()).map((t) => t.trim());
+  for (const want of ["Emergency buffer", "Cap per destination"]) {
     if (!texts.includes(want)) {
-      fail(`allocate form should show a visible "${want}" label (saw: ${texts.join(", ")})`);
+      fail(`allocate advanced form should show a visible "${want}" label (saw: ${texts.join(", ")})`);
     }
   }
 
-  // Each input also carries an aria-label matching its visible label.
-  for (const label of [
-    "Amount to allocate",
-    "Emergency buffer",
-    "Cap per destination",
-  ]) {
-    if (
-      (await page.locator(`input[aria-label="${label}"]`).count()) === 0
-    ) {
+  // Every amount input carries an aria-label (the hero amount is labelled via its caption +
+  // aria-label rather than a labeled-field).
+  for (const label of ["Amount to allocate", "Emergency buffer", "Cap per destination"]) {
+    if ((await page.locator(`input[aria-label="${label}"]`).count()) === 0) {
       fail(`input missing aria-label="${label}"`);
     }
   }
 
   if (errors.length) fail("page errors: " + errors.join(" | "));
   if (!process.exitCode)
-    console.log(
-      "PASS: allocate amount/reserve/max-per inputs have visible labels + aria-labels."
-    );
+    console.log("PASS: allocate amount/reserve/max-per inputs have accessible labels.");
 } finally {
   await browser.close();
 }

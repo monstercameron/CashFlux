@@ -51,7 +51,7 @@ try {
 
   // Navigate to the Allocate screen (routed under /planning in the nav).
   await page.goto(BASE + "/allocate", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".budget", { timeout: 60000 });
+  await page.waitForSelector(".alloc-dest", { timeout: 60000 });
   await page.waitForTimeout(500);
 
   // Record pre-apply state (wait for the seed to persist with at least one goal).
