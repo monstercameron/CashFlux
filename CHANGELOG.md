@@ -26,6 +26,10 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **/accounts month-to-date net-worth delta agrees with the dashboard (C341 partial,
+  2026-07-03):** the accounts summary built its month boundary in local time, excluding
+  first-of-month (UTC-midnight) transactions and reporting "No change this month" while the
+  dashboard hero showed the real delta; it now uses the same `dateutil.MonthStart` UTC boundary.
 - **Dates no longer render a day early on the ledger and dashboard (C339, 2026-07-03):** Frame
   pipelines carry transaction/bill dates as epoch seconds of UTC-midnight calendar dates, but the
   widgetized consumers rebuilt them with `time.Unix(sec, 0)` — local time — so west of UTC the

@@ -87,6 +87,16 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C341 (partial): "No change this month" was the same UTC lesson
+
+With the C339 lens on, the accounts summary's "No change this month" (vs the dashboard's
+"▲ $2,840.00 this month") stopped being mysterious: acctSummaryWidget built its month-to-date
+boundary as `time.Date(y, m, 1, …, nowTS.Location())` — local Jul 1 00:00 = Jul 1 04:00Z, which
+lands AFTER the Jul-1-00:00Z transactions, so the whole month's activity fell outside the window.
+Switched to `dateutil.MonthStart` (the UTC boundary the dashboard hero already used); both now say
+$2,840. Reports/networth still print a third figure ($1,350.43) from their own seam — left open on
+C341 for the reports lane (that surface is mid-churn by another agent).
+
 ## 2026-07-03 — C339: the day-early ledger — time.Unix speaks local, the data speaks UTC
 
 The sweep's flagship data-trust finding — the same paycheck reading "Jun 30" on /transactions but

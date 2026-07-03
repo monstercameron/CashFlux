@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -266,8 +267,13 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
 	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st.
+	// The boundary must be UTC midnight (dateutil.MonthStart), not the local
+	// month start: txn dates are UTC-midnight calendar dates, so a local
+	// boundary (Jul 1 00:00-04:00 = Jul 1 04:00Z) excluded first-of-month
+	// transactions and this tile said "No change this month" while the
+	// dashboard hero (already UTC) showed the real delta (C341).
 	nowTS := time.Now()
-	monthStart := time.Date(nowTS.Year(), nowTS.Month(), 1, 0, 0, 0, 0, nowTS.Location())
+	monthStart := dateutil.MonthStart(nowTS)
 	var nwDelta money.Money
 	haveDelta := false
 	if series, err := ledger.NetWorthSeries(accounts, txns, []time.Time{monthStart, nowTS.AddDate(0, 0, 1)}, props.Rates); err == nil && len(series) == 2 {
