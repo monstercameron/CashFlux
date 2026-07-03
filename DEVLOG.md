@@ -1,4 +1,25 @@
-## 2026-07-03 — Smart pay schedule: the plan now works across months (Cam's bug report)
+## 2026-07-03 — World-class UX sweep: all 42 routes × sample + empty, findings filed as C335–C360
+
+Cam asked for a full-app review ("explore all the pages … UX/usability/helpfulness/quality … I want
+to make this a world class financial planning app"), with page review via images. Method: isolated
+webroot + wasm build on :8123 (never touching `web/bin` — concurrent agents active), a Playwright
+sweep of all 42 registered routes twice — the first-run auto-seeded **sample** pass, then a "Start
+fresh" **empty** pass — with full-page-height captures (the shell scrolls inside `#main`, so
+fullPage screenshots lie; the sweep grows the viewport to `#main.scrollHeight` instead). Evidence in
+`e2e/ux-audit-2026-07-03/` (85 files); **0 console/page errors across all 84 route loads**.
+
+Headline: pages are individually much calmer/richer than the 06-26 audit — the gap to world-class
+is now **cross-page number agreement + period labeling + dedup/grouping + a sample dataset that
+undermines the demo**. The worst single suspect is a ledger↔reports **date off-by-one** (paycheck
+is "Jun 30" in the ledger, "Jul 1" in reports — which is why three pages claim $4,700 income "this
+month" on Jul 3). Other fix-now finds: raw i18n keys on the rail + setup wizard (`nav.setup`,
+`setup.welcomeTitle/Body` missing from the en tables), a raw Go format-verb error on
+/subscriptions ("subs.netPriceUp%!(EXTRA string=$134.60)"), money without thousands separators on
+/investments + /credit, /bills double-listing liability obligations (recurring flow + ✦ liability
+bill), net-worth month delta disagreeing three ways across pages, /notifications flooding 14
+identical staleness warnings ungrouped, and subscription detection claiming "97% of spending".
+All filed with evidence as **C335–C360** (TODOS.md §V), grouped: cross-page data-trust, fix-now
+bugs, sample-dataset credibility, helpfulness/decision quality, page composition/IA.
 
 Cam, rightly angry: "after selecting adjust plan, it doesn't tune the bill payments for the plan to
 work… we don't see those double payments in the current month and when I go to the next month I

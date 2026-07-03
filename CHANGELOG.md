@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **World-class UX sweep across all 42 routes (2026-07-03):** full-app visual/UX review (sample +
+  true-empty passes, full-height captures, console-error probe — 0 errors on 84 loads). Evidence in
+  `e2e/ux-audit-2026-07-03/`; 26 findings filed as **C335–C360** in TODOS.md §V — cross-page
+  data-trust (ledger↔reports date off-by-one, three different net-worth month deltas, /bills
+  double-counting liability obligations), fix-now bugs (raw i18n keys on the rail + /setup, a raw
+  format-verb error on /subscriptions, thousands-separator-less money on /investments + /credit),
+  sample-dataset credibility (4-year-stale timestamps), and grouping/IA gaps (/notifications flood,
+  subscription over-detection, /accounts' invisible liabilities hand-off).
+
 ### Fixed
 - **Smart pay schedule now actually reschedules across months (2026-07-03):** Cam's report: after "Use this plan" the current month never showed the pay-ahead double payments and paging the calendar to next month showed no adjusted dates. Two root causes. (1) **Bills existed as single occurrences** — `bills.UpcomingAll` yields one NEXT due date per bill, so *next month's occurrence of a monthly bill wasn't in the data at all* and could never be pulled onto this month's payday; new pure `bills.OccurrencesWithin` projects EVERY occurrence in a window (liabilities monthly by due-day with month-end clamping, recurrings stepped by cadence, bounded; 4 new tests) and the scheduler/calendar/engine-vars all consume it. (2) **The plan horizon was a fixed 30 days from today** while the calendar pages months — bills in the displayed month beyond the window had no pay-on mapping; the standard window is now 60 days (`engineenv.BillsSmartHorizonDays`, this month + next) and the bills tab extends it to cover whatever month the calendar is paged to, recomputing as you page. Also fixed a real optimizer deadlock the longer window exposed: the greedy pass only accepted a move that improved the single GLOBAL heaviest-paycheck figure, so with a heavy paycheck in BOTH months no single move ever qualified and the whole plan reverted to "already even" — the objective now compares the whole sorted load vector lexicographically (lighter heaviest, then second-heaviest, …), and the final keep/revert honesty check does the same, so evening one month counts even when the other month's stack is immovable autopay (2 new regression tests; the status/hint copy has an honest "spread the load evenly" variant when the headline max can't move). The plan view now also lists pulled-forward future occurrences as their own pay-ahead-tagged rows sorted by pay-on date (the "double payment" month is visible in the list, hero totals stay raw), and the calendar renders occurrences in both views with ghosts for the inactive schedule. On sample data the plan went from 1 move to 6 (heaviest paycheck $4,127 → $3,125). Verify: `go test ./...` + `e2e/recurring_check.mjs` grown to 57 checks — **SM13/SM14 page the calendar to next month with the plan on** (occurrences render; moved bills' raw-due ghosts visible) — the path that shipped untested. Also hardened the two flaky e2e paths (delete-confirm, menu deep-link) against a real ~1/8 stale kebab-menu-item handler race, filed as **C334** in TODOS.md.
 

@@ -1,0 +1,426 @@
+{
+  "sample": {
+    "/": {
+      "title": "Dashboard · CashFlux",
+      "height": 2499,
+      "errors": []
+    },
+    "/transactions": {
+      "title": "Transactions · CashFlux",
+      "height": 1649,
+      "errors": []
+    },
+    "/accounts": {
+      "title": "Accounts · CashFlux",
+      "height": 1589,
+      "errors": []
+    },
+    "/budgets": {
+      "title": "Budgets · CashFlux",
+      "height": 1530,
+      "errors": []
+    },
+    "/goals": {
+      "title": "Goals · CashFlux",
+      "height": 1720,
+      "errors": []
+    },
+    "/todo": {
+      "title": "To-do · CashFlux",
+      "height": 1772,
+      "errors": []
+    },
+    "/notifications": {
+      "title": "Notifications · CashFlux",
+      "height": 3521,
+      "errors": []
+    },
+    "/debt": {
+      "title": "Debt payoff · CashFlux",
+      "height": 5349,
+      "errors": []
+    },
+    "/investments": {
+      "title": "Investments · CashFlux",
+      "height": 1195,
+      "errors": []
+    },
+    "/allocate": {
+      "title": "Allocate · CashFlux",
+      "height": 3069,
+      "errors": []
+    },
+    "/planning": {
+      "title": "Planning · CashFlux",
+      "height": 2308,
+      "errors": []
+    },
+    "/recurring": {
+      "title": "Bills & recurring · CashFlux",
+      "height": 3623,
+      "errors": []
+    },
+    "/reports": {
+      "title": "Reports · CashFlux",
+      "height": 2223,
+      "errors": []
+    },
+    "/networth": {
+      "title": "Net worth · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/health": {
+      "title": "Financial health · CashFlux",
+      "height": 1337,
+      "errors": []
+    },
+    "/assistant": {
+      "title": "Assistant · CashFlux",
+      "height": 1000,
+      "errors": []
+    },
+    "/customize": {
+      "title": "Formulas · CashFlux",
+      "height": 4127,
+      "errors": []
+    },
+    "/fields": {
+      "title": "Custom fields · CashFlux",
+      "height": 1280,
+      "errors": []
+    },
+    "/studio": {
+      "title": "Studio · CashFlux",
+      "height": 1248,
+      "errors": []
+    },
+    "/workflows": {
+      "title": "Workflows · CashFlux",
+      "height": 2063,
+      "errors": []
+    },
+    "/household": {
+      "title": "Household · CashFlux",
+      "height": 1150,
+      "errors": []
+    },
+    "/categories": {
+      "title": "Categories · CashFlux",
+      "height": 2799,
+      "errors": []
+    },
+    "/rules": {
+      "title": "Rules · CashFlux",
+      "height": 1998,
+      "errors": []
+    },
+    "/artifacts": {
+      "title": "Artifacts · CashFlux",
+      "height": 4267,
+      "errors": []
+    },
+    "/activity": {
+      "title": "Activity · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/appearance": {
+      "title": "Appearance · CashFlux",
+      "height": 1258,
+      "errors": []
+    },
+    "/help": {
+      "title": "Help · CashFlux",
+      "height": 1122,
+      "errors": []
+    },
+    "/about": {
+      "title": "About · CashFlux",
+      "height": 1138,
+      "errors": []
+    },
+    "/setup": {
+      "title": "Set up CashFlux · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/credit": {
+      "title": "Credit health · CashFlux",
+      "height": 1221,
+      "errors": []
+    },
+    "/loans": {
+      "title": "Loans · CashFlux",
+      "height": 2043,
+      "errors": []
+    },
+    "/bills": {
+      "title": "Bills · CashFlux",
+      "height": 1389,
+      "errors": []
+    },
+    "/subscriptions": {
+      "title": "Subscriptions · CashFlux",
+      "height": 3132,
+      "errors": []
+    },
+    "/insights": {
+      "title": "Insights · CashFlux",
+      "height": 1920,
+      "errors": []
+    },
+    "/smart": {
+      "title": "Smart · CashFlux",
+      "height": 1620,
+      "errors": []
+    },
+    "/members": {
+      "title": "Members · CashFlux",
+      "height": 1102,
+      "errors": []
+    },
+    "/split": {
+      "title": "Split a bill · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/widget-builder": {
+      "title": "Widget builder · CashFlux",
+      "height": 1046,
+      "errors": []
+    },
+    "/widget-manager": {
+      "title": "Widget manager · CashFlux",
+      "height": 1650,
+      "errors": []
+    },
+    "/documents": {
+      "title": "Documents · CashFlux",
+      "height": 1738,
+      "errors": []
+    },
+    "/duplicates": {
+      "title": "Duplicates · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/plans": {
+      "title": "Plans · CashFlux",
+      "height": 1040,
+      "errors": []
+    }
+  },
+  "empty": {
+    "/": {
+      "title": "Dashboard · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/transactions": {
+      "title": "Transactions · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/accounts": {
+      "title": "Accounts · CashFlux",
+      "height": 1060,
+      "errors": []
+    },
+    "/budgets": {
+      "title": "Budgets · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/goals": {
+      "title": "Goals · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/todo": {
+      "title": "To-do · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/notifications": {
+      "title": "Notifications · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/debt": {
+      "title": "Debt payoff · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/investments": {
+      "title": "Investments · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/allocate": {
+      "title": "Allocate · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/planning": {
+      "title": "Planning · CashFlux",
+      "height": 1438,
+      "errors": []
+    },
+    "/recurring": {
+      "title": "Bills & recurring · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/reports": {
+      "title": "Reports · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/networth": {
+      "title": "Net worth · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/health": {
+      "title": "Financial health · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/assistant": {
+      "title": "Assistant · CashFlux",
+      "height": 1493,
+      "errors": []
+    },
+    "/customize": {
+      "title": "Formulas · CashFlux",
+      "height": 1681,
+      "errors": []
+    },
+    "/fields": {
+      "title": "Custom fields · CashFlux",
+      "height": 1087,
+      "errors": []
+    },
+    "/studio": {
+      "title": "Studio · CashFlux",
+      "height": 1199,
+      "errors": []
+    },
+    "/workflows": {
+      "title": "Workflows · CashFlux",
+      "height": 1366,
+      "errors": []
+    },
+    "/household": {
+      "title": "Household · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/categories": {
+      "title": "Categories · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/rules": {
+      "title": "Rules · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/artifacts": {
+      "title": "Artifacts · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/activity": {
+      "title": "Activity · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/appearance": {
+      "title": "Appearance · CashFlux",
+      "height": 1209,
+      "errors": []
+    },
+    "/help": {
+      "title": "Help · CashFlux",
+      "height": 1073,
+      "errors": []
+    },
+    "/about": {
+      "title": "About · CashFlux",
+      "height": 1089,
+      "errors": []
+    },
+    "/setup": {
+      "title": "Set up CashFlux · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/credit": {
+      "title": "Credit health · CashFlux",
+      "height": 1000,
+      "errors": []
+    },
+    "/loans": {
+      "title": "Loans · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/bills": {
+      "title": "Bills · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/subscriptions": {
+      "title": "Subscriptions · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/insights": {
+      "title": "Insights · CashFlux",
+      "height": 1437,
+      "errors": []
+    },
+    "/smart": {
+      "title": "Smart · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/members": {
+      "title": "Members · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/split": {
+      "title": "Split a bill · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/widget-builder": {
+      "title": "Widget builder · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/widget-manager": {
+      "title": "Widget manager · CashFlux",
+      "height": 1601,
+      "errors": []
+    },
+    "/documents": {
+      "title": "Documents · CashFlux",
+      "height": 1272,
+      "errors": []
+    },
+    "/duplicates": {
+      "title": "Duplicates · CashFlux",
+      "height": 1040,
+      "errors": []
+    },
+    "/plans": {
+      "title": "Plans · CashFlux",
+      "height": 1040,
+      "errors": []
+    }
+  }
+}

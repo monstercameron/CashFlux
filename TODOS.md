@@ -3114,3 +3114,141 @@ Verified CONFIRMED (file:line + go test green) and marked completed:
 ## Framework/runtime defects (found via e2e flake forensics)
 
 - [ ] **C334 [MAJOR]** Kebab/popover menu-item clicks intermittently no-op (~1/8 measured). Repro: open a `.rec-flow` card's ⋯ menu and click "View transactions" in a loop — one round in ~8 the item is visible, the click dispatches (no Playwright error, no page error, no console error), and the handler simply never runs (no navigation; for delete items, no confirm dialog). Re-clicking the SAME rendered item never recovers; closing and re-opening the menu always fixes it — so the popover's item nodes can end up with a stale/unwired handler for the lifetime of that open. Suspect the GWC event re-wiring during the open-render (KebabMenu open.Set → re-render → items rebuilt) racing the caller's UseEvent registration. Affects every ⋯ menu in the app (to-do, goals, allocate, recurring, plans). Workaround baked into e2e (`recurring_check.mjs` confirmDelete + I3 retry loops: Escape → re-open → re-click). Fix belongs in internal/ui/kebabmenu.go or upstream GWC event wiring — instrument which handler id the stale item carries vs the registry.
+
+## V. World-class visual/UX sweep — 2026-07-03 (all 42 routes × sample + empty, isolated build) ★
+
+Evidence: `e2e/ux-audit-2026-07-03/{sample,empty}/*.png` (+ `report.json` — full-height captures,
+console-error capture per route: **0 console/page errors across all 84 loads**). Method: isolated
+webroot/wasm on :8123, first-run auto-seeded sample pass, then "Start fresh" → true-empty pass.
+Lenses: UX/polish, feature depth vs best-in-class, helpfulness/guidance, data trust. Cross-checked
+against R35–R72 so these are NEW findings (or newly concrete regressions), not re-files.
+
+Overall read: pages are individually far calmer and richer than the 06-26 audit (heroes, takeaway
+sentences, hover-reveal actions, hubs). What now separates this from world-class is **cross-page
+number agreement, period labeling, dedup/grouping, and a sample dataset that undermines the demo.**
+
+### Cross-page data-trust (the #1 theme — numbers must agree)
+- [ ] **C339 [MAJOR][DATA-TRUST] Ledger↔reports date attribution off-by-one.** The same
+  transactions are "Jun 30, 2026" on /transactions but "Jul 1, 2026" on /reports (Biggest
+  deposits/expenses show Paycheck/Mortgage/HOA as Jul 1) and are counted in the Jul 2026 period.
+  This one seam-level date bug (suspect UTC-vs-local parse/format) is why on Jul 3 /budgets says
+  "Income this month: $4,700.00", /allocate says "You earned $4,700.00 this month", and /household
+  splits $4,700 "this period". Root-cause in the reports/dateutil seam; ship with a regression test
+  (a txn dated last-day-of-month must land in that month everywhere).
+- [ ] **C341 [MAJOR][DATA-TRUST] Net-worth month delta disagrees three ways.** Dashboard hero
+  "▲ $2,840.00 this month" vs /accounts summary "No change this month" vs /reports + /networth
+  "▲ $1,350.43". Same question, three answers, all in the first viewport of money pages. One
+  canonical month-to-date delta computed in one pure seam, one shared label.
+- [ ] **C342 [MINOR][DATA-TRUST] Savings rate 60% (dashboard KPI) vs 31% (/health factor)** with
+  no window label on either. Label the window ("June" / "3-mo avg") or unify the computation.
+- [ ] **C340 [MAJOR][DATA-TRUST] /bills double-counts liability obligations.** Liability-derived
+  bills AND recurring flows list the same payment twice ("Student loan payment · $320 · Jul 5" +
+  "Priya's Student Loan ✦ · $320 · Jul 5"; both car payments likewise), inflating "Total due soon
+  $8,814.00", Upcoming-bills counts, and the calendar badges. Link the recurring flow to its
+  liability account (or dedupe on amount+date+account) and show one row with a "covers ✦" note.
+- [ ] **C343 [MAJOR][UX] The global period control doesn't visibly scope pages.** Top bar says
+  "Jul 2026" while /transactions shows all 2,320 rows ("1–25 of 2320") and several pages mix
+  windows ("this month", "this period", trailing-3-mo) without saying which. Decide which surfaces
+  obey the period picker, and stamp every money figure's window in its label (§R65 storytelling).
+- [ ] **C344 [MAJOR][UX] Early-period distortions read as broken.** On day 3 of a period: /budgets
+  shows every card "$0.00 / 0% / On track", /reports announces "Spending is down 66% versus the
+  previous period", /health scores "Budget adherence 100%". Pro-rate comparisons, or add explicit
+  "period just started" framing + show last period's outcome until ~day 5.
+
+### High-visibility bugs (fix-now class)
+- [ ] **C335 [MAJOR][BUG] Raw i18n keys render in the shell + setup wizard.** The rail shows
+  "nav.setup" (System group) and /setup's hero card literally shows "setup.welcomeTitle" /
+  "setup.welcomeBody" — the first-run funnel greets users with key names. Keys missing from
+  `internal/i18n` (confirmed: no `nav.setup`, `setup.welcomeTitle|Body` in the en tables). Add the
+  keys AND a native guard test that scans `uistate.T("...")` literals in internal/screens+app
+  against the en table so a missing key fails `go test`.
+- [ ] **C336 [MAJOR][BUG] /subscriptions renders a raw Go format-verb error:**
+  "subs.netPriceUp%!(EXTRA string=$134.60)" above "Recent price changes" — an i18n key missing
+  (or %s-less template) fed to Sprintf. Fix the key/template + audit siblings.
+- [ ] **C337 [MAJOR][BUG] Money renders without thousands separators on /investments and /credit.**
+  /investments: "$33720.00", "$22200.00", "$3420.00", "$8100.00" (every figure). /credit:
+  "$8190.56 of $12000.00 limit" and "Pay $4590.56" — while the card directly above prints
+  "$4,590.56" (same number, two formats, one page). Route all money display through the shared
+  formatter; grep for `%.2f`-style money prints.
+- [ ] **C338 [MAJOR][BUG] Setup wizard defaults to "AUD — A$"** (first-alphabetical) even when the
+  active dataset base is USD ("Your household · USD base" in the same viewport), and the step rail
+  pre-checks "✓ Account / ✓ Members" on entry. Default from prefs/current base (locale fallback),
+  and make step checks reflect wizard progress, not pre-existing data.
+- [ ] **C355 [MINOR][BUG] /activity leaks internals + runs date into actor.** "Added 3
+  _meta:settingsState records" appears in the user-facing feed, and rows render
+  "May 26, 2026Marcus Hartley" (no separator). Filter `_meta:*` audit records; fix the separator.
+- [ ] **C356 [MINOR][BUG] Smart insights fire on an empty dataset.** Fresh "Start fresh" store
+  shows "Liquid cash is very low — your spendable cash is $0.00" on the dashboard and /budgets.
+  Balance/cash rules need an any-data-at-all guard.
+
+### Sample dataset (the demo is the first impression)
+- [ ] **C349 [MAJOR][SAMPLE] Sample timestamps are absolute and now ~4 years stale**, so first-run
+  shows "It's been 1464 days since the balance was confirmed" ×14 in /notifications, "4y+" chips on
+  the dashboard Freshness tile, OUT OF DATE/STALE badges on every /accounts row, and a 17-month-old
+  "Charged after cancellation" alert. Generate sample dates relative to today (now−3d…now−45d) so
+  the demo looks healthy forever.
+- [ ] **C350 [MINOR][SAMPLE] Sample story doesn't add up:** goal "saved" totals exceed the linked
+  account ($19.1k of goals linked to a $3,480 HYSA); "Pay off Priya's student loan" ($34k target,
+  $25k to go) vs the ladder's $18,640 balance; "Joint" accounts not owned by the household (Net
+  worth by member: "Group (shared) $0.00"); all spending "(unassigned)" in Spending-by-member;
+  car-payment transfer pairs sit as two Uncategorized Manual rows. Make the demo dataset one
+  coherent household (it's also what every screenshot/reviewer sees).
+- [ ] **C351 [MINOR][SAMPLE] Sample content tone:** "Cigarettes" (weekly, 240-txn "Guilty
+  pleasures"), "TSLA — expired worthless". Neutral/aspirational demo content lands better in
+  screenshots, reviews, and first-runs.
+
+### Helpfulness / decision quality
+- [ ] **C345 [MAJOR][UX] /notifications is an ungrouped flood:** 14 near-identical "needs an
+  update" warnings + 8 "due soon" + 3 "large charge" as flat, same-weight cards, not sorted by
+  urgency ("due in 2 days" renders below "due in 14 days"), every one stamped "just now" (generated
+  on boot). Group by kind with a count + expand, order by urgency, keep the digest card. (The
+  digest already proves the grouping concept.)
+- [ ] **C347 [MAJOR][UX] Subscription detection over-claims.** HOA dues, "Household & shopping",
+  Gas, Pharmacy, Cigarettes are counted as subscriptions → "Monthly subscriptions $1,807.50 /
+  SHARE OF SPENDING 97%", and the price tracker reports variable spend as hikes ("Date night went
+  up 9%"). Separate true fixed-price subscriptions from detected recurring *spend* (two sections or
+  a confidence tier + the existing "Not a subscription" action), and scope price-change alerts to
+  fixed-price flows.
+- [ ] **C352 [MAJOR][UX] Goals "On track" badge contradicts the feasibility insight** ("Baby fund
+  needs $1,840/mo but only ~$462/mo is realistically free" — yet the card says On track at
+  $1,840/mo). Fold free-cash-flow feasibility into the pace badge (On track / Tight / At risk) so
+  the badge and the Smart strip can't disagree.
+- [ ] **C346 [MAJOR][UX] /accounts hides all 6 liability accounts** with only an unmarked
+  stat-link to /debt: page search can't find "Mortgage", "Mark all updated (14 accounts stale)"
+  counts rows the page won't render, and nothing says where liabilities live. Add a visible
+  "Liabilities (6) — managed in Debt payoff →" section stub (or collapsed liability rows with
+  Update balance), and make the stat-link look like a link.
+- [ ] **C353 [MINOR][UX] /allocate criterion meters read as literal finance numbers:** "Pay down
+  Mortgage — RETURN 27%" (a 4.1% APR), "RETURN 100%" on the card. They're normalized scores;
+  label them as scores (no % on abstract axes) or show the real APR/yield beside the score.
+- [ ] **C354 [MINOR][UX] Credit-health 55/100 shows "Good" + a green ring** (/credit and /debt)
+  next to "−38 pts" utilization drag; /health separately shows 73 "Good". Calibrate label/color
+  bands (≤60 = amber "Needs work") and name the two scores distinctly ("Financial health" vs
+  "Credit habits") so two green "Good" rings can't mean 73 and 55.
+
+### Page composition / IA (new, concrete — beyond open R-items)
+- [ ] **C348 [MINOR][UX] /subscriptions triple-lists the same rows** (main list, price changes,
+  renewing soon) with 4 same-weight buttons per row at rest (~64 resting controls). Hover-reveal
+  secondary actions (R47 pattern already used on /transactions) and cross-link sections.
+- [ ] **C357 [MINOR][UX] /rules quick-add ships placeholder condition labels** — literal
+  "Condition 1 / Condition 2 / Condition 3" with unthemed native checkboxes — and the bottom "Rule
+  order" flowchart duplicates the drag-list above it. Real, plain-English condition labels; themed
+  checkboxes; one ordering surface. (Also: sample rule 'Contains "streaming"' matches 0 txns.)
+- [ ] **C358 [MINOR][UX] /planning plan cards tell the wrong story at a glance:** a *savings* plan
+  ("House down payment in 3 years", start $19,000, $400/mo) renders as a huge red slab ending
+  "($25,100.00) · Money lasts ~35.6 months". Sign conventions/labels need "Starts $X → ends $Y by
+  <date>"; red reserved for depletion; axis or reference line on the area chart.
+- [ ] **C359 [MINOR][IA] Page-job overlaps to sharpen:** /networth is two KPI rows + a 2-bar chart
+  with a dead middle (adds nothing over /reports NW tab + /accounts hero — give it per-owner/
+  per-account composition + history table, or fold it); /assistant vs /insights are near-duplicates
+  with the chat (the page's job) *below* merchant stats; /credit duplicates /debt§Credit health
+  verbatim. Document each page's unique question (R58) or fold into the hub.
+- [ ] **C360 [MINOR][UX] Sweep polish batch:** /plans is unstyled prose with no side-by-side plan
+  comparison; /split running-balance rows repeat the amount twice ("Marcus Hartley owes $32.00 …
+  $32.00"); /recurring shows raw formula-slug chips (`recurring_gym_membership_monthly`) on every
+  row at rest, "Post due now (0)" while a row is flagged OVERDUE, and weekly flows chipped "/mo";
+  /investments hero shows "RETURN 0.00% · GAIN/LOSS $0.00" beside "▲ +11.5%" growth (hide
+  securities KPIs when there are no holdings) and says "add your first position below" when the
+  button is above; dashboard "Spending breakdown" renders a single 100% bar (early-period, C344);
+  /categories chip-map duplicates the list below it; /documents CSV import defaults its target
+  account to "Marcus's 401(k)" (first-alphabetical — default to last-used/checking).
