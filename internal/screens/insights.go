@@ -25,7 +25,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights/localqa"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -1700,49 +1699,6 @@ func highlightText(a insights.Anomaly, base string) string {
 	return uistate.T(key, a.Category, pct, deltaStr, current, baseline)
 }
 
-// monthlySpendingChart builds the last 6 months of total expense outflow from
-// txns and renders a labelled area-chart card for /insights (C230). Returns an
-// empty node when there are fewer than 2 data points (nothing to trend).
-func monthlySpendingChart(txns []domain.Transaction, base string, rates currency.Rates) ui.Node {
-	const buckets = 6
-	curMonth := dateutil.MonthStart(time.Now())
-	bounds := make([]time.Time, buckets+1)
-	for k := 0; k <= buckets; k++ {
-		bounds[k] = dateutil.AddMonths(curMonth, k-buckets)
-	}
-	flows, err := reports.IncomeExpenseSeries(txns, bounds, rates)
-	if err != nil || len(flows) < 2 {
-		return Fragment()
-	}
-	vals := make([]float64, len(flows))
-	for i, f := range flows {
-		// Expense is a non-negative minor-unit amount (per PeriodFlow contract);
-		// the chart rises as spending grows (higher bar = more spent that month).
-		vals[i] = float64(f.Expense)
-	}
-	// x-axis month abbreviations and per-point hover labels.
-	labels := make([]string, 0, len(vals))
-	valLabels := make([]string, 0, len(vals))
-	for i := range vals {
-		labels = append(labels, bounds[i].Format("Jan"))
-		valLabels = append(valLabels, fmtMoney(money.New(int64(vals[i]), base)))
-	}
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("insights.spendTrendTitle"),
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("insights.spendTrendHint")),
-			uiw.AreaChart(uiw.AreaChartProps{
-				Values:      vals,
-				Stroke:      "#e05c5c",
-				GradientID:  "cf-insights-spend",
-				Label:       uistate.T("insights.spendTrendTitle"),
-				Labels:      labels,
-				ValueLabels: valLabels,
-			}),
-		),
-	})
-}
-
 // highlightTone is the green/red text class for an anomaly's direction (up in
 // spending is red, down is green).
 func highlightTone(a insights.Anomaly) string {
@@ -1800,54 +1756,6 @@ func insightsMerchantRow(props insightsMerchantRowProps) ui.Node {
 			Span(css.Class("muted", tw.Text12, tw.Ml1), txLabel),
 		),
 	)
-}
-
-// topMerchantsSpendCard aggregates expense transactions over the last 90 days
-// by payee/merchant (using Payee; falling back to Desc when Payee is empty),
-// then renders the top 7 as a labelled card with drill-through to /transactions.
-// Returns an empty node when there are no qualifying merchants. Each row is its
-// own component to keep OnClick hooks at stable positions (C229).
-func topMerchantsSpendCard(txns []domain.Transaction, base string, rates currency.Rates, onDrill func(name string)) ui.Node {
-	const maxRows = 7
-
-	// Delegate the 90-day trailing aggregation to the pure reports package.
-	summaries, err := reports.TopPayeesTrailing(txns, 90, time.Now(), rates, maxRows)
-	if err != nil || len(summaries) == 0 {
-		return Fragment()
-	}
-
-	// Map pure aggregation results into the local rendering type.
-	merchants := make([]merchantSpend, len(summaries))
-	for i, s := range summaries {
-		merchants[i] = merchantSpend{Name: s.Name, Total: s.Amount, Count: s.Count}
-	}
-
-	rows := MapKeyed(merchants,
-		func(m merchantSpend) any { return m.Name },
-		func(m merchantSpend) ui.Node {
-			rank := 0
-			for i, ms := range merchants {
-				if ms.Name == m.Name {
-					rank = i + 1
-					break
-				}
-			}
-			return ui.CreateElement(insightsMerchantRow, insightsMerchantRowProps{
-				Merchant: m,
-				Base:     base,
-				Rank:     rank,
-				OnDrill:  onDrill,
-			})
-		},
-	)
-
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("insights.topMerchantsTitle"),
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("insights.topMerchantsHint")),
-			Div(css.Class("insight-list"), rows),
-		),
-	})
 }
 
 // affordCardText builds the inner HTML for a grounded affordability answer card.

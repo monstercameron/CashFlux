@@ -7,6 +7,28 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **/assistant Insights tab rebuilt as the agent's briefing — a widgetized bento surface (2026-07-03):**
+  the flat card stack (merchants, trend, flags, pins) becomes a designed briefing in the app's
+  redesigned-page pattern: a **hero tile** with the month-to-date spend in the display serif, a
+  pace delta pill (vs what you'd spent by this same day last month — the honest like-for-like
+  baseline, clamped at month edges), an agent-voiced brief line ("You've spent $X so far this
+  month. Dining is doing most of the pushing." — the pace judgment lives only in the pill so the
+  two never repeat a figure), and figure chips (last month in full, top merchant, flagged count —
+  danger-toned when non-zero); a **toolbar** (custom-values toggle + reports/transactions drills);
+  the **attention pair** — Flagged activity (anomaly detectors, with a designed ✓ all-clear state
+  instead of vanishing) and Spending highlights (category shifts, calm empty state); the
+  **spending trend** now tracking the theme accent (was hardcoded `#e05c5c`) with a serif takeaway
+  vs the six-month average; the **merchants + pinned pair**; and an opt-in **FormulaBuilder tile**.
+  The briefing figures are new `assistant_*` engine variables (`assistant_spend_mtd` / `_prev` /
+  `_pace` / `_pace_delta`, `assistant_highlights`, `assistant_top_merchant`) computed by the SAME
+  exported helpers the tiles render from (`engineenv.AssistantSpendStory` / `AssistantHighlights`),
+  so a formula figure always matches the page; they appear in the picker under a new Assistant
+  group (`widgetcatalog.AssistantMetrics`). No-account datasets get the add-account empty CTA.
+  The two now-orphaned /insights card builders (`monthlySpendingChart`, `topMerchantsSpendCard`)
+  were removed. Verify: `go test ./...` (3 new assistantvars surface tests incl. the day-one pace
+  edge) + new `e2e/assistant_briefing_check.mjs` (13 checks: grid + 7 tiles, hero figures, all-clear,
+  takeaway, formula reveal + ASSISTANT picker group, merchant drill-through, empty state) 13/13 +
+  the existing `e2e/assistant_check.mjs` 23/23, dark and light themes screenshot-reviewed.
 - **i18n coverage sweep + hardcoded-English ratchet (C361/C362, 2026-07-03):** an AST scan of every
   display position (element children incl. concatenations and Sprintf formats, Title/Placeholder
   props, aria-labels, Title:/Label:/Detail: struct fields) found **428** user-facing strings

@@ -16,6 +16,42 @@ var assistantKeys = Catalog{
 	"assistant.tabAsk":        "Ask",
 	"assistant.tabInsights":   "Insights",
 	"assistant.tabSmart":      "Smart",
+
+	// The Insights briefing surface — hero tile.
+	"assistant.heroTitle":       "This month",
+	"assistant.heroAsOf":        "Spending through %s",
+	"assistant.paceAhead":       "%s ahead of last month's pace",
+	"assistant.paceBehind":      "%s behind last month's pace",
+	"assistant.paceTitle":       "Compared with what you had spent by this same day last month",
+	"assistant.briefQuiet":      "No spending recorded yet this month.",
+	"assistant.briefSpent":      "You've spent %s so far this month.",
+	"assistant.briefPush":       "%s is doing most of the pushing.",
+	"assistant.chipLastMonth":   "Last month in full",
+	"assistant.chipTopMerchant": "Top merchant · %s",
+	"assistant.chipFlagged":     "Flagged activity",
+
+	// Toolbar.
+	"assistant.metricsShow":      "Custom values",
+	"assistant.metricsHide":      "Hide custom values",
+	"assistant.metricsTitle":     "Build your own figure from the briefing's variables",
+	"assistant.viewReports":      "See full reports",
+	"assistant.viewTransactions": "View transactions",
+
+	// Tile empty states — each says something useful instead of vanishing.
+	"assistant.flaggedClear":    "All clear — nothing unusual in your recent activity.",
+	"assistant.highlightsEmpty": "No big category shifts this month.",
+	"assistant.merchantsEmpty":  "No spending in the last 90 days yet.",
+	"assistant.pinnedEmpty":     "Nothing pinned yet — pin an answer from Ask and it will stay here.",
+	"assistant.trendEmpty":      "Once a couple of months of spending are recorded, the trend appears here.",
+
+	// Trend takeaway.
+	"assistant.trendAbove": "%s came in %s above your six-month average.",
+	"assistant.trendBelow": "%s came in %s below your six-month average.",
+	"assistant.trendEven":  "%s landed right on your six-month average.",
+
+	// Formula tile + whole-surface empty state.
+	"assistant.formulaHint": "These briefing figures are also formula variables (assistant_…) — build your own metric from them.",
+	"assistant.emptyData":   "Add an account and a few transactions first — the briefing works best with real data.",
 }
 
 func init() {

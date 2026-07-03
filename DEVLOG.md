@@ -1,3 +1,45 @@
+## 2026-07-03 — /assistant Insights becomes the agent's briefing (bento + widgets + formulas)
+
+Cam asked for the assistant page redesigned with the design skill: bento grid, widgets, formulas,
+theme tokens, UX-reviewed before done. The Ask tab had just gone agent-first (4aebdfd1), so the
+target was the Insights data tab — still a flat stack of four cards with a hardcoded red chart.
+
+**Concept: the briefing.** The tab now answers "what happened, what changed, what needs attention"
+in one glance, in the same visual language as /networth //health //credit: hero (serif figure +
+delta pill + chips), toolbar, attention pair, trend + takeaway, detail pair, opt-in FormulaBuilder.
+Decisions worth remembering:
+
+- **The pace baseline is same-elapsed-days, not last-month-total.** "MTD vs last month's total" is
+  the easy compare and it's dishonest mid-month. `AssistantSpendStory` compares against last month
+  through the same day count (clamped to the month edge for 31st-vs-30-day cases; day-one compares
+  one day to one day — surface-tested).
+- **Judgment lives in exactly one place.** First render had the pill ("▲ $1,421 ahead of pace") and
+  the serif brief repeating the same figure in the same breath — caught in the screenshot review.
+  Now the pill carries ahead/behind; the brief states what was spent and, when a rising category
+  exists, what's doing the pushing.
+- **Empty tiles say something instead of vanishing.** The old cards returned `Fragment()` when
+  empty, so a quiet month looked broken. Flagged activity gets a ✓ all-clear stamp (absence of
+  trouble is information); highlights/merchants/pins get calm one-line empties; a no-account
+  dataset gets the add-account CTA.
+- **Page ↔ variables share one derivation.** `assistant_*` vars are computed by the same exported
+  engineenv helpers the tiles call (AssistantSpendStory / AssistantHighlights), the /networth
+  convention taken one step further (shared code, not just shared bucket maps). Deliberately did
+  NOT run the smartengine inside `engineenv.Vars` for a flagged-count variable — Vars is hot and
+  that would run 26 rule engines per evaluation; the tile computes the count in-render instead.
+
+**Concurrency notes:** `formula_builder.go` stays uncommitted here — my one-line
+`AssistantMetrics()` append is entangled with the palette-rewrite WIP another session owns (their
+rewrite also derives picker groups from metrics, which is what actually surfaces the Assistant
+group — my earlier hand-list edit got clobbered by their write, harmlessly). `engineenv.go`'s
+diff was exactly my one wiring line, so it ships here. Found (not fixed, pre-existing): the
+command-palette "Toggle theme" panics `GoUseAtom called outside component context` and kills the
+wasm app — reproduced on the dashboard with no assistant involvement; needs its own ticket. Light
+theme was verified by seeding `localStorage cashflux:prefs {"theme":"light"}` pre-boot (the
+browserstore migration picks it up) since the palette toggle crash blocks the interactive path.
+
+Verify: `go test ./...` green; `e2e/assistant_briefing_check.mjs` 13/13; `e2e/assistant_check.mjs`
+23/23; dark + light + empty + formulas-open states screenshot-reviewed (two review iterations).
+
 ## 2026-07-03 — i18n sweep: 428 strings were invisible to the language setting (C361/C362)
 
 Cam: "do another review and make sure every page is using i18n eng translations and not hardcoded

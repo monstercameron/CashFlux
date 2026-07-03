@@ -312,6 +312,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addNetWorthVars(out, d, major, toBase)
 	addHealthVars(out, d)
 	addCreditVars(out, d, major, toBase)
+	addAssistantVars(out, d, major)
 	return out
 }
 

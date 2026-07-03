@@ -85,4 +85,37 @@ func registerAssistantSurface() {
 		prop("padding", "0.75rem 0.9rem 0.25rem"),
 		prop("opacity", "0.75"),
 	)
+
+	// ── The Insights briefing bento surface ──────────────────────────────────
+	// Host grid: natural tile heights (the shared .bento fixes row heights for
+	// the reconfigurable dashboard; a reading surface flows instead).
+	rule(".bento.bento-assistant",
+		prop("grid-template-rows", "auto"),
+		prop("grid-auto-rows", "auto"),
+	)
+	rule(".bento.bento-assistant > .w",
+		prop("height", "auto"),
+		prop("min-height", "0"),
+		prop("overflow", "visible"),
+	)
+	// Flagged-activity all-clear state: a calm, positive stamp — the absence of
+	// trouble is information, so the tile says so instead of vanishing.
+	rule(".ast-clear",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.75rem"),
+		prop("padding", "1rem 0.25rem"),
+	)
+	rule(".ast-clear-mark",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "center"),
+		prop("width", "2rem"),
+		prop("height", "2rem"),
+		prop("flex", "0 0 auto"),
+		prop("border-radius", "50%"),
+		prop("border", "1px solid var(--up, #54b884)"),
+		prop("color", "var(--up, #54b884)"),
+		prop("font-size", "0.95rem"),
+	)
 }
