@@ -53,7 +53,7 @@ func genericListWidget(p genericListProps) ui.Node {
 
 	if fr.Rows == 0 {
 		return Div(css.Class(tw.Flex, tw.FlexCol, tw.MinH0),
-			P(css.Class("empty t-body", tw.TextDim), "No data yet."))
+			P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noDataYet")))
 	}
 
 	labelCol, hasLabel := frameLabelCol(fr)
@@ -199,9 +199,9 @@ func listPager(p listPagerProps) ui.Node {
 		nextCls += " is-disabled"
 	}
 	return Div(css.Class("studio-list-pager"),
-		Button(css.Class(prevCls), Type("button"), Attr("aria-label", "Previous page"), Attr("aria-disabled", boolStr(atStart)), OnClick(prev), uiw.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
+		Button(css.Class(prevCls), Type("button"), Attr("aria-label", uistate.T("pager.previous")), Attr("aria-disabled", boolStr(atStart)), OnClick(prev), uiw.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
 		Span(css.Class("t-caption", tw.TextDim), fmt.Sprintf("%d of %d", p.Page+1, p.Total)),
-		Button(css.Class(nextCls), Type("button"), Attr("aria-label", "Next page"), Attr("aria-disabled", boolStr(atEnd)), OnClick(next), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
+		Button(css.Class(nextCls), Type("button"), Attr("aria-label", uistate.T("pager.next")), Attr("aria-disabled", boolStr(atEnd)), OnClick(next), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
 	)
 }
 

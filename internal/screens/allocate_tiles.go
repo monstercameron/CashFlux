@@ -99,7 +99,7 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 			Div(css.Class("alloc-amount-field"),
 				Span(css.Class("alloc-amount-affix", tw.FontDisplay), Attr("aria-hidden", "true"), currency.Symbol(base)),
 				Input(css.Class("alloc-amount-input", tw.FontDisplay), Type("number"), Attr("min", "0"), Step("0.01"),
-					Attr("data-testid", "allocate-amount"), Attr("aria-label", "Amount to allocate"),
+					Attr("data-testid", "allocate-amount"), Attr("aria-label", uistate.T("allocate.heroLabel")),
 					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), Value(props.AmountStr), OnInput(props.OnAmount)),
 			),
 			nudge,

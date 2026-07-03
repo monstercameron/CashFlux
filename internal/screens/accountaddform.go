@@ -361,7 +361,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				ListID:      "inst-list-add",
 			})),
 		If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
-			IfElse(advOpen.Get(), Text("Hide advanced fields"), Text("Show advanced fields")))),
+			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced"))))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 			Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),

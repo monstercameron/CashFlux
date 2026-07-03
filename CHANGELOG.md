@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **i18n coverage sweep + hardcoded-English ratchet (C361/C362, 2026-07-03):** an AST scan of every
+  display position (element children incl. concatenations and Sprintf formats, Title/Placeholder
+  props, aria-labels, Title:/Label:/Detail: struct fields) found **428** user-facing strings
+  bypassing the i18n catalog. First tranche converted — screens **211→126**, app chrome **17→0**
+  (dashboard tiles, /split, /accounts reconcile + forms, /health, /debt, /documents review,
+  /categories, /rules, smart digest, budget card actions, toast/period-picker/date-format/backend
+  settings) with byte-identical English values in `internal/i18n/en_i18nsweep.go`, so rendered
+  output and e2e text matchers are unchanged. A permanent **one-way ratchet test**
+  (`internal/screenlint/i18n_hardcoded_test.go`) now fails `go test` on any NEW hardcoded copy
+  (per-directory baselines that may only fall; brand names exempt via allowlist). The logic-layer
+  gap is filed as C362: smartengine (160) and widgetcatalog (42) bake English at generation time —
+  and notifications persist it pre-formatted — needing a key+args architecture.
 - **/credit rebuilt: the proxy score IS a formula — one-story factor tiles (2026-07-03):** The credit-health page moved from a stack of legacy cards to the bento pattern, with the same structural upgrade as /health: **the headline is now literally a formula molecule** — `credit_proxy = clamp(floor(Σ factor×weight), 0, 100)` in `DefaultMolecules`, over 8 new `credit_*` atoms (the utilization / on-time / account-age factor scores AND their exact normalized weights, plus the actionable `credit_pay_to_30` / `credit_pay_to_10` totals) — auditable on the hero behind a disclosure, referenceable in any formula or dashboard widget, and re-weightable under Formulas. To make the identity exact, `credithealth.computeProxy` was refactored to the normalized-weights evaluation order (same truncation, same always-weighted utilization — a limit-less household still scores that factor 0 rather than dropping it) and `Result` gains the exact `Weights` (guard test: floor(Σ score×weight) reproduces `ProxyScore` for arbitrary inputs, incl. missing-factor cases). The input assembly is shared pure code (`engineenv.CreditInputs`). **The page**: a hero tile (ring + band + aggregate utilization + the required not-a-FICO disclaimer + the folded formula), a full-width **Card utilization** tile (the dominant 55% factor: value+target fused into one met/unmet line, a value meter, and every card's detail rows — utilization bar, balance-of-limit, band chip, "Pay $X to reach 30%" nudge, the inline limit editor (C211), and the balance-history trend when snapshots exist), **On-time payments** and **Account age** factor tiles in the one-story style (score value + plain-language status; curve/weight/variable chip behind "How it's scored"), the **holding-back / improve** pair with point-cost and point-gain chips, the optional Smart+ AI read, and an opt-in FormulaBuilder seeded with `credit_proxy`. The embedded `CreditHealthPanel` (used on /debt) is unchanged. Verify: `go test ./...` (identity guards in credithealth + engineenv, incl. pay-down-target math) + a new `e2e/credit_check.mjs` (17 checks — evaluating `credit_proxy` in the live FormulaBuilder equals the ring figure exactly; editing a limit re-scores utilization live 58%→32%; negatives: card-less dataset shows the CTA + disclaimer) + the c211 limit-edit and ring-a11y e2e (now `E2E_URL`-parametrized) all green.
 
 ### Changed

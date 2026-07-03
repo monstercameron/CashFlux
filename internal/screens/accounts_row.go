@@ -251,7 +251,7 @@ func AccountRow(props accountRowProps) ui.Node {
 				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
-					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), "Reconcile to statement")),
+					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
 						uistate.T("accounts.transferAction"))),
@@ -294,7 +294,7 @@ func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
 		Button(css.Class("btn"), Type("button"),
 			Attr("data-testid", "reconcile-txn-clear-btn"),
 			Title(uistate.T("accounts.markClearedTitle")),
-			OnClick(toggle), "Mark cleared"),
+			OnClick(toggle), uistate.T("transactions.markCleared")),
 	)
 }
 

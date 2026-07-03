@@ -118,35 +118,35 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 		var remainderLine ui.Node
 		switch {
 		case reconciled:
-			remainderLine = P(css.Class("muted"), "Lines add up to the total — ready to import as one transaction.")
+			remainderLine = P(css.Class("muted"), uistate.T("documents.linesReconciled"))
 		case residErr != nil:
-			remainderLine = P(css.Class("err"), Attr("role", "alert"), "Check the amounts — one couldn't be read as a number.")
+			remainderLine = P(css.Class("err"), Attr("role", "alert"), uistate.T("documents.linesUnreadable"))
 		default:
 			off := resid
 			if off < 0 {
 				off = -off
 			}
 			remainderLine = P(css.Class("err"), Attr("role", "alert"),
-				"Lines are off from the total by "+fmtMoney(money.New(off, recCur))+" — adjust the lines or the total to import.")
+				uistate.T("documents.linesOffBy", fmtMoney(money.New(off, recCur))))
 		}
 
 		importBtn := []any{css.Class("btn btn-primary"), Type("submit")}
 		if !reconciled {
 			importBtn = append(importBtn, Attr("disabled", "disabled"))
 		}
-		importBtn = append(importBtn, "Import receipt")
+		importBtn = append(importBtn, uistate.T("documents.importReceipt"))
 
 		footer = Div(
 			Div(css.Class("form-grid"),
 				Input(css.Class("field"), Type("text"),
 					Attr("aria-label", uistate.T("documents.storeName")),
-					Placeholder("Store name (optional)"),
+					Placeholder(uistate.T("documents.storeNamePh")),
 					Value(props.ReceiptMerchant),
 					OnInput(props.OnReceiptMerchant),
 				),
 				Input(css.Class("field"), Type("text"),
 					Attr("aria-label", uistate.T("documents.receiptTotal")),
-					Placeholder("Receipt total"),
+					Placeholder(uistate.T("documents.receiptTotal")),
 					Value(props.ReceiptTotal),
 					OnInput(props.OnReceiptTotal),
 				),
@@ -207,12 +207,12 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 			// a "Start over" escape hatch so they are never stuck with stale rows.
 			If(dupCount > 0,
 				Div(css.Class("notice notice-warn", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-					Span(plural(dupCount, "row")+" of "+plural(len(rows), "row")+" already imported — will be skipped."),
+					Span(uistate.T("documents.rowsAlreadyImported", plural(dupCount, "row"), plural(len(rows), "row"))),
 				),
 			),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),
 				Button(css.Class("btn btn-sm"), Type("button"), OnClick(props.ClearDraft),
-					"Start over"),
+					uistate.T("documents.startOver")),
 			),
 			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
 			props.Toggle,

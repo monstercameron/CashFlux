@@ -419,7 +419,7 @@ func NetWorth() ui.Node {
 	var excludesNote ui.Node = Fragment()
 	if len(nwRes.MissingCurrencies) > 0 {
 		excludesNote = P(css.Class("err"), Attr("role", "alert"),
-			"Net worth excludes "+plural(len(nwRes.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nwRes.MissingCurrencies, ", ")+". Add it in Settings to include them.")
+			uistate.T("accounts.nwExcludes", plural(len(nwRes.ExcludedAccounts), "account"), strings.Join(nwRes.MissingCurrencies, ", ")))
 	}
 	heroTile := nwTile("nw-hero", "1 / span 4", nwSection("sec-nw-hero", uistate.T("dashboard.netWorth"), nil,
 		Div(css.Class("rpt-hero"),
@@ -444,7 +444,7 @@ func NetWorth() ui.Node {
 	toolbar := nwTile("nw-toolbar", "1 / span 4", Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
 			uiw.Segmented(uiw.SegmentedProps{
-				Label:    "Trend horizon",
+				Label:    uistate.T("networth.trendHorizon"),
 				Selected: horizon.Get(),
 				OnSelect: func(v string) { horizon.Set(v) },
 				Options: []uiw.SegOption{

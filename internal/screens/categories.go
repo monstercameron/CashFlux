@@ -292,7 +292,7 @@ func Categories() ui.Node {
 		// Visual category map (GI2): moved first so it's visible on arrival
 		// without scrolling past the full expense/income lists (C70/C63 tree view).
 		If(len(cats) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "Category map",
+			Title: uistate.T("categories.mapTitle"),
 			Body:  categoryMapGrid(categorytree.Build(cats)),
 		})),
 		// The two tree lists use the primitive's Rows slot (nil when empty so the
@@ -507,7 +507,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 				// there are any (matches the Accounts/Members drill pattern).
 				IfElse(props.TxnCount > 0,
 					Button(css.Class("btn-link cat-usage"), Type("button"), Title(uistate.T("categories.viewTxnsTitle")), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
-					Span(css.Class(tw.TextFaint), Text("No transactions"))),
+					Span(css.Class(tw.TextFaint), Text(uistate.T("categories.noTransactions")))),
 			),
 		),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),

@@ -1,3 +1,35 @@
+## 2026-07-03 — i18n sweep: 428 strings were invisible to the language setting (C361/C362)
+
+Cam: "do another review and make sure every page is using i18n eng translations and not hardcoded
+into the page or businesslogic." Built an AST scanner (go/parser over display positions — element
+children including `+`-concatenations and Sprintf formats, Title/Placeholder/Alt props,
+aria-label/title attrs, and Title:/Label:/Detail:-style struct fields; `T(...)` calls opaque) and
+found **428** hardcoded user-facing strings: 211 in internal/screens, 17 in internal/app, 160 in
+internal/smartengine, 42 in internal/widgetcatalog (healthscore/credithealth/attention/notify/
+subscriptions/billsched/widgetsource are clean — they return data, not copy).
+
+Three deliverables. (1) **The ratchet**: the scanner now lives as
+`internal/screenlint/i18n_hardcoded_test.go`, a one-way per-directory baseline test in the native
+lane — any NEW hardcoded copy fails `go test`; converting strings lets you lower the baseline.
+Brand/product literals ("CashFlux", "GPT-5.4 mini", "Alt + %d") are exempt via an explicit
+allowlist rather than fake baseline debt. (2) **First conversion tranche**: screens 211→126, app
+17→0 — the everyday pages (dashboard tiles, split, accounts reconcile, health, debt, documents
+review, categories, rules, smart digest, budgets card actions, app chrome). Every catalog value is
+byte-identical to the literal it replaced, so English output and e2e text matchers are untouched —
+verified live (converted pages render the same copy, no raw-key leaks, 0 page errors; the two
+probe "misses" were contextual: View-steps lives on the dashboard tile, and sample data already has
+payoff tracking active so /debt shows Paid-off/Reset instead of Start-tracking). Remaining 126 are
+the power-tool surfaces (theme editor, studio, widget builder) + churning reports/transactions —
+inventoried in C361. (3) **The architecture ticket (C362)**: smartengine bakes insight copy at
+generation time and notifications PERSIST the formatted English (IndexedDB holds "Your paycheck
+landed — $4,700.00" as a string), so history can never re-translate; the fix is key+args on
+Insight/notification records, formatted at render time — designed in the ticket, not rushed here.
+
+One process burn worth recording: bulk-replacing in a Go file with PowerShell `Get-Content -Raw`
+mangled every non-ASCII char (PS 5.1 reads BOM-less UTF-8 as ANSI) — caught by mojibake in the next
+read, reverted via git (own uncommitted file), redone with the Edit tool. Don't shell-rewrite Go
+sources on Windows.
+
 ## 2026-07-03 — /credit: the proxy becomes a live formula; legacy cards → bento
 
 Cam: "keep going" — /credit was the highest-value un-redesigned page (a money page, the target of

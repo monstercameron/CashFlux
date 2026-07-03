@@ -193,10 +193,10 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			}),
 		),
 		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.dateFormat")), Title(uistate.T("settings.dateFormat")), OnChange(p.OnDateStyle),
-			Option(Value(string(prefs.DateISO)), SelectedIf(p.Pr.DateStyle == prefs.DateISO), "2026-06-05  (ISO)"),
-			Option(Value(string(prefs.DateUS)), SelectedIf(p.Pr.DateStyle == prefs.DateUS), "06/05/2026  (US)"),
-			Option(Value(string(prefs.DateEU)), SelectedIf(p.Pr.DateStyle == prefs.DateEU), "05/06/2026  (European)"),
-			Option(Value(string(prefs.DateLong)), SelectedIf(p.Pr.DateStyle == prefs.DateLong), "Jun 5, 2026  (Long)"),
+			Option(Value(string(prefs.DateISO)), SelectedIf(p.Pr.DateStyle == prefs.DateISO), uistate.T("settings.dateOptISO")),
+			Option(Value(string(prefs.DateUS)), SelectedIf(p.Pr.DateStyle == prefs.DateUS), uistate.T("settings.dateOptUS")),
+			Option(Value(string(prefs.DateEU)), SelectedIf(p.Pr.DateStyle == prefs.DateEU), uistate.T("settings.dateOptEU")),
+			Option(Value(string(prefs.DateLong)), SelectedIf(p.Pr.DateStyle == prefs.DateLong), uistate.T("settings.dateOptLong")),
 		),
 		// C128: pay-cycle anchor — a known payday date used to align every-2-weeks
 		// budget periods to the user's actual pay cycle instead of the fixed epoch.
@@ -272,8 +272,8 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
 		// keeps the app fully local even with a server saved, so an unreachable
 		// backend never throws websocket errors the user can't dismiss.
-		ui.ToggleRow(ui.ToggleRowProps{Label: "Connect to a backend (sync + AI proxy)", On: p.BackendOn, OnChange: p.OnBackendToggle}),
-		If(!p.BackendOn, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), "Backend off — the app stays fully local; no sync or proxy connections are made.")),
+		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.backendToggle"), On: p.BackendOn, OnChange: p.OnBackendToggle}),
+		If(!p.BackendOn, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendOffHint"))),
 		If(p.BackendOn, Fragment(
 			ui.Segmented(ui.SegmentedProps{
 				Label: uistate.T("settings.serverMode"),

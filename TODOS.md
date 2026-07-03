@@ -3284,3 +3284,38 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   button is above; dashboard "Spending breakdown" renders a single 100% bar (early-period, C344);
   /categories chip-map duplicates the list below it; /documents CSV import defaults its target
   account to "Marcus's 401(k)" (first-alphabetical — default to last-used/checking).
+
+### i18n coverage sweep — 2026-07-03 (Cam: "make sure every page is using i18n eng translations")
+Method: an AST scanner over display positions (element children incl. `+`-concatenations and
+Sprintf formats, Title/Placeholder/Alt props, aria-label/title attrs, Title:/Label:/Detail:-style
+struct fields), now living permanently as the **one-way ratchet test**
+`internal/screenlint/i18n_hardcoded_test.go` (per-directory baselines that may only fall; run with
+-v to list findings; brand/product names exempt via an explicit allowlist).
+
+- [ ] **C361 [MAJOR][I18N] UI layer: 428 hardcoded user-facing strings found; first tranche
+  converted (screens 211→126, app 17→0).** ✅ DONE this pass: dashboard tiles (empty states, chart
+  series/axis names, error boundary), /split (all 11), /accounts reconcile flow + add/edit advanced
+  toggles + FX-exclusion notice (also /networth's copy), /health (delta lines, targets, weakest,
+  no-data), /debt (progress tracking, strategy-match, burn-down labels, Try-extra), /documents
+  draft review (reconcile lines, placeholders, Start over, Import receipt), smart digest row +
+  section, /categories, /rules order card, budget Cover…/Top up…, /help checklist + changelog +
+  offline, app chrome (toast Dismiss, period picker Week/Month/Quarter/Year, tile color, date-format
+  options, backend toggle) — every value byte-identical to the literal it replaced (rendered English
+  and e2e text matchers unchanged), keys in `internal/i18n/en_i18nsweep.go`. REMAINING (126, held by
+  the ratchet): the power-tool surfaces — theme_editor (27), studio_designer (27), widget_builder
+  (21), plus reports_screen chart labels (11, churning surface), transactions (15 incl. the
+  documents CSV-import copy), workflows, dashboards' remaining Name: fields — convert file-by-file
+  and lower `../screens` in i18n_hardcoded_test.go each time.
+- [ ] **C362 [MAJOR][I18N][ARCH] Logic packages bake English at generation time — needs the
+  key+args architecture.** `internal/smartengine` (160 findings: every insight Title/Detail/action
+  Label across ~84 SMART features) and `internal/widgetcatalog` (42: widget/column/chart labels)
+  build user-facing copy as Go string concatenations in pure packages with no language context; the
+  notification feed then PERSISTS the pre-formatted English (e.g. "Your paycheck landed — $4,700.00"
+  sits formatted in IndexedDB), so a language switch can never re-translate history. Design needed:
+  insights/notifications carry `Key string` + `Args []any` (formatted via the i18n bundle at RENDER
+  time; persisted entries store key+args, formatting on read), or the engines accept an injected
+  translator func. widgetcatalog can reuse the registry's existing NameKey pattern
+  (`dashboard.heroTitle` precedent). The ratchet holds `../smartengine` at 160 and
+  `../widgetcatalog` at 42 until this lands; healthscore/credithealth/attention/notify/
+  subscriptions/billsched/widgetsource are already at 0 (they return data, not copy — keep it that
+  way; band/label words like credithealth's "Good" surface via UI-side keys).

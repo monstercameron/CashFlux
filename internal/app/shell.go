@@ -1174,10 +1174,10 @@ func ResolutionControl() uic.Node {
 			ui.Segmented(ui.SegmentedProps{
 				Label: uistate.T("resolution.granularity"), // C318: name the radiogroup
 				Options: []ui.SegOption{
-					{Value: string(period.Week), Label: "Week"},
-					{Value: string(period.Month), Label: "Month"},
-					{Value: string(period.Quarter), Label: "Quarter"},
-					{Value: string(period.Year), Label: "Year"},
+					{Value: string(period.Week), Label: uistate.T("period.week")},
+					{Value: string(period.Month), Label: uistate.T("period.month")},
+					{Value: string(period.Quarter), Label: uistate.T("period.quarter")},
+					{Value: string(period.Year), Label: uistate.T("period.year")},
 				},
 				Selected: string(w.Res),
 				OnSelect: func(v string) {

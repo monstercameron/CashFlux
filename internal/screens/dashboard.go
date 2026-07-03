@@ -86,7 +86,7 @@ func safeRender(id string, ctx widgetrender.RenderCtx) (node ui.Node, ok bool) {
 			slog.Error("dashboard widget render panicked", "id", id, "recover", rec)
 			node, ok = uiw.Widget(uiw.WidgetProps{
 				ID: id, Title: id,
-				Body: P(css.Class("empty", tw.TextDim), "This widget couldn't load."),
+				Body: P(css.Class("empty", tw.TextDim), uistate.T("dashboard.widgetLoadFailed")),
 			}), true
 		}
 	}()
@@ -105,7 +105,7 @@ func safeRenderSpec(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) (node ui
 			slog.Error("dashboard widget render panicked", "id", spec.ID, "recover", rec)
 			node, ok = uiw.Widget(uiw.WidgetProps{
 				ID: spec.ID, Title: spec.ID,
-				Body: P(css.Class("empty", tw.TextDim), "This widget couldn't load."),
+				Body: P(css.Class("empty", tw.TextDim), uistate.T("dashboard.widgetLoadFailed")),
 			}), true
 		}
 	}()
@@ -211,7 +211,7 @@ func frameValueCol(fr domain.Frame) (domain.Field, bool) {
 // genericListBody renders a Frame as label/value rows.
 func genericListBody(fr domain.Frame, base string) ui.Node {
 	if fr.Rows == 0 {
-		return P(css.Class("empty t-body", tw.TextDim), "No data yet.")
+		return P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noDataYet"))
 	}
 	labelCol, hasLabel := frameLabelCol(fr)
 	valCol, _ := frameValueCol(fr)
@@ -234,7 +234,7 @@ func genericListBody(fr domain.Frame, base string) ui.Node {
 // list when neither shape is present.
 func genericChartBody(fr domain.Frame, base string) ui.Node {
 	if fr.Rows == 0 {
-		return P(css.Class("empty t-body", tw.TextDim), "No data yet.")
+		return P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noDataYet"))
 	}
 	valCol, hasVal := frameValueCol(fr)
 	if !hasVal {
@@ -279,7 +279,7 @@ func genericChartBody(fr domain.Frame, base string) ui.Node {
 	}
 	spec := chartspec.Spec{
 		Kind:   kind,
-		Series: []chartspec.Series{{Name: "Value", Points: pts}},
+		Series: []chartspec.Series{{Name: uistate.T("dashboard.seriesValue"), Points: pts}},
 		Y:      chartspec.Axis{Format: yFmt},
 	}
 	return uiw.Chart(uiw.ChartProps{Spec: spec, Height: "100%", Class: "trend-chart"})
@@ -1385,8 +1385,8 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	}
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,
-		Series: []chartspec.Series{{Name: "Net worth", Points: pts}}, // empty Color → theme accent
-		X:      chartspec.Axis{Label: "Time"},
+		Series: []chartspec.Series{{Name: uistate.T("dashboard.netWorth"), Points: pts}}, // empty Color → theme accent
+		X:      chartspec.Axis{Label: uistate.T("dashboard.axisTime")},
 		Y:      chartspec.Axis{Format: yFmt},
 	}
 	if !showXAxis {
@@ -1399,11 +1399,11 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		),
 		Div(css.Class("trend-expanded"),
 			Div(css.Class("trend-stat"),
-				Span(css.Class("t-caption", tw.TextFaint), "Change"),
+				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendChange")),
 				Span(ClassStr("fig t-body "+deltaTone), deltaLabel),
 			),
 			Div(css.Class("trend-stat"),
-				Span(css.Class("t-caption", tw.TextFaint), "Range"),
+				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendRange")),
 				Span(css.Class("fig t-body", tw.TextDim), rangeLabel),
 			),
 		),
@@ -1487,7 +1487,7 @@ func accountsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	var body ui.Node
 	bodyCls := ""
 	if len(cells) == 0 {
-		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No accounts yet.", Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
+		body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.noAccountsYet"), Label: uistate.T("dashboard.addAccount"), Path: "/accounts"})
 	} else {
 		body = Div(css.Class("t-body", tw.Grid, tw.GridCols3, tw.Gap4), cells)
 		if widgetDisplay(c.Spec, "scroll") != "cap" {
@@ -1544,7 +1544,7 @@ func todoWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	if len(openOrdered) == 0 && !(showCompleted && len(doneTasks) > 0) {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "todo", Title: uistate.T("nav.todo"), Draggable: true, Resizable: true, GridColumn: "2", GridRow: "5",
-			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "Nothing to do — nice.", Label: uistate.T("dashboard.addTodo"), Path: "/todo"}),
+			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.nothingToDo"), Label: uistate.T("dashboard.addTodo"), Path: "/todo"}),
 		})
 	}
 
@@ -1683,7 +1683,7 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	if len(list) == 0 {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "goals", Title: uistate.T("nav.goals"), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
-			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No goals yet.", Label: uistate.T("dashboard.addGoal"), Path: "/goals"}),
+			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.noGoalsYet"), Label: uistate.T("dashboard.addGoal"), Path: "/goals"}),
 		})
 	}
 	g := list[0]
@@ -1729,7 +1729,7 @@ func budgetsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	if fr.Rows == 0 {
 		if len(app.Budgets()) == 0 {
 			// Genuinely no budgets — offer to add one in context.
-			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: "No budgets yet.", Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
+			body = ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.noBudgetsYet"), Label: uistate.T("dashboard.addBudget"), Path: "/budgets"})
 		} else {
 			// Budgets exist but none match the at-risk filter — not an add case.
 			body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noBudgetAlerts"))

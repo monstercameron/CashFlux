@@ -185,13 +185,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 	var coverBtn ui.Node = Fragment()
 	if isOver {
-		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), "Cover…")
+		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))
 	}
 	// Top up is a visible card button (the frequent proactive action) on budgets that
 	// aren't over; Edit lives in the ⋯ menu as the lower-frequency action.
 	var topupBtn ui.Node = Fragment()
 	if !isOver {
-		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), "Top up…")
+		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the

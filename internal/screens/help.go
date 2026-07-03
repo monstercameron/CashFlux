@@ -58,10 +58,10 @@ func setupChecklistBody() ui.Node {
 
 	steps := []step{
 		{currencyLink, currencySet},
-		{Span(css.Class("t-body", tw.TextDim), "Add an account"), len(app.Accounts()) > 0},
-		{Span(css.Class("t-body", tw.TextDim), "Record a transaction"), len(app.Transactions()) > 0},
-		{Span(css.Class("t-body", tw.TextDim), "Set a budget"), len(app.Budgets()) > 0},
-		{Span(css.Class("t-body", tw.TextDim), "Set a savings goal"), len(app.Goals()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.addAccount")), len(app.Accounts()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.recordTxn")), len(app.Transactions()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.setBudget")), len(app.Budgets()) > 0},
+		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.setGoal")), len(app.Goals()) > 0},
 		{membersLink, len(app.Members()) >= 2},
 	}
 	rows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
@@ -110,7 +110,7 @@ func whatsNewBody() ui.Node {
 	body = append(body, P(css.Class("t-caption", tw.Mt1),
 		A(Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/CHANGELOG.md"),
 			Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
-			css.Class(tw.Underline, tw.HoverTextFg), "See the full changelog →")))
+			css.Class(tw.Underline, tw.HoverTextFg), uistate.T("help.fullChangelog"))))
 	return Div(body...)
 }
 
@@ -177,7 +177,7 @@ func helpSections() []helpSection {
 			"An optional passcode lock (Settings) keeps the app's screens behind a code and can encrypt your data at rest.")},
 		{"help-support", "Support & feedback", 2, supportBody()},
 		{"help-offline", "Works offline", 2, P(css.Class("t-body", tw.TextDim),
-			"Everything here works offline — CashFlux runs entirely in your browser.")},
+			uistate.T("help.worksOfflineBody"))},
 	}
 }
 

@@ -116,16 +116,16 @@ func healthRing(r healthscore.Result, size int) ui.Node {
 // or a calm baseline note when there's no earlier reading.
 func healthDeltaLine(score int, prior int, hasPrior bool) ui.Node {
 	if !hasPrior {
-		return Div(css.Class("t-caption", tw.TextFaint), "First reading — we'll track your trend from here")
+		return Div(css.Class("t-caption", tw.TextFaint), uistate.T("health.firstReading"))
 	}
 	d := score - prior
 	switch {
 	case d > 0:
-		return Div(ClassStr("t-caption "+tw.ColorClass("text-up")), fmt.Sprintf("▲ %d since last month", d))
+		return Div(ClassStr("t-caption "+tw.ColorClass("text-up")), uistate.T("health.deltaUp", d))
 	case d < 0:
-		return Div(ClassStr("t-caption "+tw.ColorClass("text-down")), fmt.Sprintf("▼ %d since last month", -d))
+		return Div(ClassStr("t-caption "+tw.ColorClass("text-down")), uistate.T("health.deltaDown", -d))
 	default:
-		return Div(css.Class("t-caption", tw.TextDim), "No change since last month")
+		return Div(css.Class("t-caption", tw.TextDim), uistate.T("health.deltaFlat"))
 	}
 }
 
@@ -186,13 +186,13 @@ func healthWidgetNode(struct{}) ui.Node {
 	if r.Band == healthscore.BandNoData {
 		right = Div(css.Class(tw.Flex1),
 			Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-dim")), string(healthscore.BandNoData)),
-			P(css.Class("t-caption", tw.TextFaint, tw.Mt1), "Add income, accounts, or budgets to see your score"),
+			P(css.Class("t-caption", tw.TextFaint, tw.Mt1), uistate.T("health.noDataHint")),
 		)
 	} else {
 		weakLine := Fragment()
 		if w, ok := weakestApplicable(r); ok {
 			weakLine = Div(css.Class("t-caption", tw.TextDim, tw.Mt2),
-				Span(css.Class(tw.TextFaint), "Weakest: "),
+				Span(css.Class(tw.TextFaint), uistate.T("health.weakestLabel")),
 				Text(w.Label+" "+w.Value+" → "+w.Target))
 		}
 		right = Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
@@ -200,7 +200,7 @@ func healthWidgetNode(struct{}) ui.Node {
 			healthDeltaLine(r.Score, prior, hasPrior),
 			weakLine,
 			Div(css.Class(tw.Mt2),
-				Button(css.Class("btn-link"), OnClick(openSteps), "View steps →")),
+				Button(css.Class("btn-link"), OnClick(openSteps), uistate.T("health.viewSteps"))),
 		)
 	}
 
@@ -495,7 +495,7 @@ func healthStepRow(p healthStepRowProps) ui.Node {
 	body := Fragment(
 		Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), p.Factor),
 		Div(css.Class("t-caption", tw.TextDim), p.Action),
-		Div(css.Class("t-caption", tw.TextFaint), "Target: "+p.Target),
+		Div(css.Class("t-caption", tw.TextFaint), uistate.T("health.targetLabel", p.Target)),
 	)
 	if p.Route == "" {
 		return Div(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1), body)

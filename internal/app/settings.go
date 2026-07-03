@@ -381,14 +381,14 @@ func widgetColorRow(props widgetColorRowProps) uic.Node {
 		val = "#7c83ff"
 	}
 	return Div(css.Class("toggle-row"),
-		Span("Tile color"),
+		Span(uistate.T("settings.tileColor")),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", "Tile color"), Value(val), OnChange(on)),
+			Input(Type("color"), Style(map[string]string{"width": "2rem", "height": "1.6rem", "padding": "0", "border": "none", "background": "none"}), Attr("aria-label", uistate.T("settings.tileColor")), Value(val), OnChange(on)),
 			If(props.Current != "", Button(css.Class("btn"), Type("button"), OnClick(func() {
 				if props.OnSet != nil {
 					props.OnSet("")
 				}
-			}), "Clear")),
+			}), uistate.T("action.clear"))),
 		),
 	)
 }

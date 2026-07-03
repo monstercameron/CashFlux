@@ -301,7 +301,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 			),
 		),
 		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
-			"Net worth excludes "+plural(len(nw.ExcludedAccounts), "account")+" — no exchange rate for "+strings.Join(nw.MissingCurrencies, ", ")+". Add it in Settings to include them.")),
+			uistate.T("accounts.nwExcludes", plural(len(nw.ExcludedAccounts), "account"), strings.Join(nw.MissingCurrencies, ", ")))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

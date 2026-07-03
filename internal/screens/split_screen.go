@@ -252,10 +252,10 @@ func Split() ui.Node {
 	var memberControls ui.Node = Fragment()
 	if len(members) > 1 {
 		memberControls = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(css.Class("btn"), Type("button"), OnClick(selectAll), "Select all"),
+			Button(css.Class("btn"), Type("button"), OnClick(selectAll), uistate.T("split.selectAll")),
 			// "Clear" is the destructive (deselect-all) counterpart to the additive
 			// "Select all" — a ghost-danger style distinguishes the two (G12 §2).
-			Button(css.Class("btn btn-ghost-danger"), Type("button"), OnClick(clearAll), "Clear"),
+			Button(css.Class("btn btn-ghost-danger"), Type("button"), OnClick(clearAll), uistate.T("split.clear")),
 		)
 	}
 
@@ -285,12 +285,12 @@ func Split() ui.Node {
 		// selected members but hasn't chosen who paid — so Priya sees where the result
 		// will appear before she completes the form (G12 §5).
 		If(len(ids) > 0 && amt > 0 && payerS.Get() == "",
-			P(css.Class("muted"), "Pick who paid to see who owes whom."),
+			P(css.Class("muted"), uistate.T("split.pickPayerHint")),
 		),
 		// "This split" — ephemeral card; only visible when a payer + members + amount are
 		// all set. Title distinguishes it from the persisted "Running balance" card (G12 §7).
 		If(len(owes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "This split",
+			Title: uistate.T("split.thisSplit"),
 			Body: Fragment(
 				Div(css.Class("rows"), owes),
 				// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
@@ -298,11 +298,11 @@ func Split() ui.Node {
 					Source: mermaid.FromSettleUp(transfers,
 						func(id string) string { return nameByID[id] },
 						func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }),
-					Label: "Who owes whom",
+					Label: uistate.T("split.whoOwesWhom"),
 					Class: tw.Fold(tw.Mt2),
 				}),
 				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-					Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("split.saveSplitTitle")), OnClick(saveSplit), "Save split"),
+					Button(css.Class("btn btn-primary"), Type("button"), Title(uistate.T("split.saveSplitTitle")), OnClick(saveSplit), uistate.T("split.saveSplit")),
 					Button(css.Class("btn"), Type("button"), Title(uistate.T("split.downloadCsvTitle")), OnClick(func() {
 						nm := func(id string) string { return nameByID[id] }
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
@@ -315,19 +315,19 @@ func Split() ui.Node {
 		// titled "Running balance" to distinguish it from the ephemeral "This split" card
 		// above (G12 §7 item 19; G12 §1 item 3 empty-state).
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "Running balance",
+			Title: uistate.T("split.runningBalance"),
 			Body: Fragment(
-				P(css.Class("muted"), "Running balance across every saved split."),
+				P(css.Class("muted"), uistate.T("split.runningBalanceHint")),
 				If(len(net) == 0,
-					P(css.Class("muted"), "Add a shared expense to see who owes whom."),
+					P(css.Class("muted"), uistate.T("split.runningBalanceEmpty")),
 				),
 				If(len(net) > 0, Fragment(
 					Div(css.Class("rows"), netRows),
 					If(len(netRows) > 0 && len(ledgerRows) > 0, Div(
-						P(css.Class("budget-sub"), "Simplest way to square up:"),
+						P(css.Class("budget-sub"), uistate.T("split.squareUpHint")),
 						Div(css.Class("rows"), ledgerRows),
 					)),
-					If(len(netRows) == 0, P(css.Class("muted"), "All settled up — nobody owes anybody.")),
+					If(len(netRows) == 0, P(css.Class("muted"), uistate.T("split.allSettled"))),
 				)),
 			),
 		}),

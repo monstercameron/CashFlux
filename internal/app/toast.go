@@ -149,7 +149,7 @@ func Toast() uic.Node {
 	return Div(ClassStr(cls), Attr("role", role), Attr("aria-live", live),
 		Span(css.Class("toast-msg"), n.Text),
 		If(showUndo, uic.CreateElement(toastUndoButton, toastUndoProps{Atom: atom})),
-		Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", "Dismiss"), Attr("aria-label", "Dismiss"),
+		Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", uistate.T("action.dismiss")), Attr("aria-label", uistate.T("action.dismiss")),
 			OnClick(func() { atom.Set(n.Cleared()) }), "×"),
 	)
 }

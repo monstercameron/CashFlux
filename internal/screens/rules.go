@@ -252,12 +252,12 @@ func Rules() ui.Node {
 		suggestCard,
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
 		If(len(rs) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: "Rule order",
+			Title: uistate.T("rules.orderTitle"),
 			Body: Fragment(
-				P(css.Class("muted"), "First match wins, top to bottom."),
+				P(css.Class("muted"), uistate.T("rules.orderHint")),
 				uiw.Mermaid(uiw.MermaidProps{
 					Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
-					Label:  "Rule precedence chain",
+					Label:  uistate.T("rules.precedenceLabel"),
 				}),
 			),
 		})),

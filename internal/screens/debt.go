@@ -74,15 +74,15 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 			w = 100
 		}
 		progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-			P(css.Class("budget-sub", tw.FontDisplay), "Paid off "+fmtMoney(money.New(prog.PaidOff, base))+" of "+fmtMoney(money.New(prog.Baseline, base))+" ("+strconv.Itoa(prog.Percent)+"%) since "+since.Format("Jan 2, 2006")+"."),
+			P(css.Class("budget-sub", tw.FontDisplay), uistate.T("debt.paidOffSince", fmtMoney(money.New(prog.PaidOff, base)), fmtMoney(money.New(prog.Baseline, base)), prog.Percent, since.Format("Jan 2, 2006"))),
 			Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
-			Button(css.Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), "Reset progress"),
+			Button(css.Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), uistate.T("debt.resetProgress")),
 		)
 	} else if len(debts) > 0 {
 		owed := currentOwed
 		progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.snapshotTitle")),
-				OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), "Start tracking progress"),
+				OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), uistate.T("debt.startTracking")),
 		)
 	}
 
@@ -137,7 +137,7 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 			// or a single debt) the side-by-side is meaningless — explain why (L5).
 			explain := Fragment()
 			if snow.Months == aval.Months && snow.TotalInterest == aval.TotalInterest {
-				explain = P(css.Class("budget-sub"), "Snowball and avalanche match here — add an extra monthly amount above to see them diverge.")
+				explain = P(css.Class("budget-sub"), uistate.T("debt.strategiesMatch"))
 			}
 			// A calendar debt-free date reads better than a bare month count
 			// (L5), plus a "cleared by <month>" beside each debt in the order.
@@ -178,14 +178,14 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 					yFmt = "$.3~s"
 				}
 				burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					P(css.Class("budget-sub"), "Balance burn-down to zero:"),
+					P(css.Class("budget-sub"), uistate.T("debt.burnDownHeading")),
 					uiw.Chart(uiw.ChartProps{
 						Spec: chartspec.Spec{Kind: chartspec.Line, Series: []chartspec.Series{
 							{Name: uistate.T("planning.avalanche"), Points: mkBurnPts(aval.Schedule)},
 							{Name: uistate.T("planning.snowball"), Points: mkBurnPts(snow.Schedule)},
 						}, Y: chartspec.Axis{Format: yFmt}},
 						Height: "150px",
-						Label:  "Debt balance falling to zero — avalanche vs snowball over " + strconv.Itoa(aval.Months) + " months",
+						Label:  uistate.T("debt.burnDownChartLabel", aval.Months),
 					}),
 				)
 			}
@@ -230,7 +230,7 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 1 && payoff.SuggestedExtra(debts) > 0,
 					Button(css.Class("btn strat-try"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
 						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
-						"Try "+fmtMoney(money.New(payoff.SuggestedExtra(debts), base))+"/mo")),
+						uistate.T("debt.tryExtra", fmtMoney(money.New(payoff.SuggestedExtra(debts), base))))),
 			),
 			body,
 			rateWarn,
