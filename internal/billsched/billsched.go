@@ -246,9 +246,13 @@ func Optimize(startLiquid int64, items []Item, paydays []time.Time, incomePerPay
 
 	res.Smart = simulate(startLiquid, items, assign, paydays, incomePerPayday, from, horizonDays)
 	res.PayOnByID = assign
-	// Keep the plan only when it genuinely lightens the heaviest paycheck;
-	// otherwise report no moves — the honest "you're already even" answer.
-	if maxLoad(res.Smart.Loads) >= maxLoad(raw.Loads) {
+	// Keep the plan only when it genuinely evens the paycheck loads — compared
+	// as the whole sorted load vector, not just the single global max: over a
+	// multi-month horizon two months can BOTH have a heavy paycheck, and evening
+	// one of them is real progress even when the other's stack can't move (e.g.
+	// it's all autopay). Otherwise report no moves — the honest "you're already
+	// even" answer.
+	if !lessLoads(res.Smart.Loads, raw.Loads) {
 		for _, it := range items {
 			res.PayOnByID[it.ID] = clampToWindow(it.Due, from, horizonDays)
 		}
@@ -267,16 +271,63 @@ func Optimize(startLiquid int64, items []Item, paydays []time.Time, incomePerPay
 }
 
 // evener reports whether metrics a (with candidate date da) beat metrics b
-// (holding date db) for the pay-ahead objective: a lighter heaviest pay period,
-// then a higher low point, then the later date (keep money longer).
+// (holding date db) for the pay-ahead objective: a more even load spread
+// (lexicographically smaller sorted-descending load vector — lighter heaviest
+// period, then lighter second-heaviest, …), then a higher low point, then the
+// later date (keep money longer). Comparing the whole vector rather than the
+// single max is what lets the greedy pass even out month B while month A still
+// holds the global maximum — otherwise a two-heavy-month horizon deadlocks
+// (no single move improves the max, so no move is ever accepted).
 func evener(a, b Metrics, da, db time.Time) bool {
-	if la, lb := maxLoad(a.Loads), maxLoad(b.Loads); la != lb {
-		return la < lb
+	if av, bv := loadVector(a.Loads), loadVector(b.Loads); !vectorsEqual(av, bv) {
+		return lessVector(av, bv)
 	}
 	if a.Low != b.Low {
 		return a.Low > b.Low
 	}
 	return da.After(db)
+}
+
+// loadVector returns the period totals sorted descending — the canonical shape
+// for "how even is this schedule".
+func loadVector(loads []PeriodLoad) []int64 {
+	v := make([]int64, len(loads))
+	for i, l := range loads {
+		v[i] = l.Total
+	}
+	sort.Slice(v, func(i, j int) bool { return v[i] > v[j] })
+	return v
+}
+
+// lessLoads reports whether load set a is strictly more even than b.
+func lessLoads(a, b []PeriodLoad) bool {
+	return lessVector(loadVector(a), loadVector(b))
+}
+
+// lessVector is the lexicographic order on sorted-descending load vectors: a
+// beats b when its first differing (heaviest-first) entry is smaller. A missing
+// trailing entry counts as zero, so fewer loaded periods beats more.
+func lessVector(a, b []int64) bool {
+	n := len(a)
+	if len(b) > n {
+		n = len(b)
+	}
+	at := func(v []int64, i int) int64 {
+		if i < len(v) {
+			return v[i]
+		}
+		return 0
+	}
+	for i := 0; i < n; i++ {
+		if av, bv := at(a, i), at(b, i); av != bv {
+			return av < bv
+		}
+	}
+	return false
+}
+
+func vectorsEqual(a, b []int64) bool {
+	return !lessVector(a, b) && !lessVector(b, a)
 }
 
 // Suggest finds biller-side due-date shifts that lift the projected low point:

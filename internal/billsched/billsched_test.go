@@ -167,3 +167,71 @@ func TestOptimizeOverdueBillPayableToday(t *testing.T) {
 		t.Errorf("overdue bill should be scheduled today (%s), got %s", from, got)
 	}
 }
+
+func TestOptimizeEvensBothMonthsOverA60DayHorizon(t *testing.T) {
+	// Regression: two bills stacked on one paycheck in July AND two more in
+	// August. No single move improves the GLOBAL max load, so a max-only
+	// objective deadlocks and reports "already even" — the sorted-load-vector
+	// objective must split both months.
+	from := date(2026, 7, 1)
+	paydays := []time.Time{
+		date(2026, 7, 1), date(2026, 7, 15), date(2026, 7, 29),
+		date(2026, 8, 12), date(2026, 8, 26),
+	}
+	items := []Item{
+		{ID: "jul-a", Name: "Rent", Amount: 50000, Due: date(2026, 7, 28), Movable: true},
+		{ID: "jul-b", Name: "Power", Amount: 50000, Due: date(2026, 7, 28), Movable: true},
+		{ID: "aug-a", Name: "Rent", Amount: 50000, Due: date(2026, 8, 28), Movable: true},
+		{ID: "aug-b", Name: "Power", Amount: 50000, Due: date(2026, 8, 28), Movable: true},
+	}
+	res := Optimize(1000000, items, paydays, 100000, from, 60, 0)
+	if got := maxLoad(res.Smart.Loads); got != 50000 {
+		t.Errorf("heaviest paycheck under the plan = %d, want 50000 (both months split)", got)
+	}
+	if res.EvenGainMinor != 50000 {
+		t.Errorf("EvenGainMinor = %d, want 50000", res.EvenGainMinor)
+	}
+	if len(res.Moves) < 2 {
+		t.Fatalf("want pay-ahead moves in both months, got %d: %v", len(res.Moves), res.Moves)
+	}
+	// At least one move must pull an AUGUST occurrence onto an earlier payday —
+	// the cross-month pay-ahead the feature exists for.
+	crossMonth := false
+	for _, mv := range res.Moves {
+		if mv.Item.Due.Month() == time.August && mv.PayOn.Before(mv.Item.Due) {
+			crossMonth = true
+		}
+	}
+	if !crossMonth {
+		t.Errorf("no August occurrence was paid ahead: %v", res.Moves)
+	}
+}
+
+func TestOptimizeKeepsMovesWhenGlobalMaxIsImmovable(t *testing.T) {
+	// July's stack is all-autopay (immovable, holds the global max); August's
+	// stack can move. Evening August is real progress and must be kept even
+	// though the global max cannot improve — EvenGainMinor is honestly 0.
+	from := date(2026, 7, 1)
+	paydays := []time.Time{
+		date(2026, 7, 1), date(2026, 7, 15), date(2026, 7, 29),
+		date(2026, 8, 12), date(2026, 8, 26),
+	}
+	items := []Item{
+		{ID: "jul-a", Name: "Rent", Amount: 50000, Due: date(2026, 7, 28), Movable: false},
+		{ID: "jul-b", Name: "Power", Amount: 50000, Due: date(2026, 7, 28), Movable: false},
+		{ID: "aug-a", Name: "Water", Amount: 40000, Due: date(2026, 8, 28), Movable: true},
+		{ID: "aug-b", Name: "Trash", Amount: 40000, Due: date(2026, 8, 28), Movable: true},
+	}
+	res := Optimize(1000000, items, paydays, 100000, from, 60, 0)
+	if len(res.Moves) < 1 {
+		t.Fatalf("August's movable stack should still be evened, got no moves")
+	}
+	if res.EvenGainMinor != 0 {
+		t.Errorf("EvenGainMinor = %d, want 0 (the global max is the immovable July stack)", res.EvenGainMinor)
+	}
+	for _, mv := range res.Moves {
+		if !mv.Item.Movable {
+			t.Errorf("moved an immovable item: %v", mv)
+		}
+	}
+}

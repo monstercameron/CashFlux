@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"syscall/js"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -144,8 +146,17 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 	// Smart pay schedule (billsched): computed once, shared with the modal so the
 	// rows/calendar and the plan preview always agree. The engine runs regardless
 	// (its figures feed the bills_* variables); the config decides whether the
-	// views use it.
-	smartPlan := computeBillsSmart(app, now)
+	// views use it. The plan window is the standard 60 days (this month + next),
+	// extended to cover whatever month the calendar is paged forward to — so a
+	// bill shown in a future month always has its pay-on mapping.
+	planUntil := now.AddDate(0, 0, engineenv.BillsSmartHorizonDays)
+	if off := calMonthOffset.Get(); off > 0 {
+		// Last day of the displayed month.
+		if mEnd := dateutil.AddMonths(dateutil.MonthStart(now), off+1).AddDate(0, 0, -1); mEnd.After(planUntil) {
+			planUntil = mEnd
+		}
+	}
+	smartPlan := computeBillsSmart(app, now, planUntil)
 	smartCfg := smartPlan.Cfg
 	hasAnchor := smartPlan.HasAnchor
 	viewSmart := smartCfg.Enabled && smartCfg.ViewSmart && hasAnchor
@@ -233,6 +244,40 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			PayOn: payOn, PayOnLabel: pr.FormatDate(payOn),
 			PlanActive: viewSmart && !sameDay(payOn, b.DueDate),
 		})
+	}
+
+	// In the pay-on plan view, LATER occurrences pulled onto an earlier payday
+	// become their own rows, tagged pay-ahead — the "double payment" month
+	// (this month's bill plus next month's paid early) is visible in the list,
+	// not implied. The hero's Total-due stays the raw window (those amounts are
+	// due next month; the plan only changes when they get paid).
+	if viewSmart {
+		first := make(map[string]bool, len(allUpcoming))
+		for _, b := range allUpcoming {
+			first[billItemID(b)] = true
+		}
+		for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil) {
+			if first[billItemID(b)] {
+				continue // each bill's next occurrence is already listed above
+			}
+			payOn := payOnFor(b)
+			if sameDay(payOn, b.DueDate) {
+				continue // unmoved future occurrence — next month's business
+			}
+			amt, err := rates.Convert(b.Amount, base)
+			if err != nil {
+				amt = money.New(b.Amount.Amount, base)
+			}
+			billRows = append(billRows, billRowData{
+				Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate),
+				IsPaid: app.OccurrencePaid(b.AccountID, b.DueDate),
+				PayOn:  payOn, PayOnLabel: pr.FormatDate(payOn),
+				PlanActive: true,
+			})
+		}
+		// The plan view lists by when you PAY (the actionable order), not by
+		// the raw deadline.
+		sort.SliceStable(billRows, func(i, j int) bool { return billRows[i].PayOn.Before(billRows[j].PayOn) })
 	}
 
 	// Cadence-correct yearly total: annualize each obligation by its own cadence,
@@ -333,12 +378,16 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		)
 		// The grid shows the ACTIVE schedule (smart pay-on dates when that view is
 		// on); the inactive schedule's dates render as hollow ghost markers so the
-		// plan and the deadline are always both visible.
-		calBills := allUpcoming
+		// plan and the deadline are always both visible. It renders OCCURRENCES
+		// (every repeat in the window, out to whatever month is displayed) — with
+		// only each bill's next occurrence, a paged-forward month would show
+		// nothing and pay-ahead's cross-month move would be invisible.
+		occ := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, planUntil)
+		calBills := occ
 		ghost := map[string]int{}
 		if viewSmart {
-			calBills = make([]bills.Bill, len(allUpcoming))
-			for i, b := range allUpcoming {
+			calBills = make([]bills.Bill, len(occ))
+			for i, b := range occ {
 				moved := b
 				moved.DueDate = payOnFor(b)
 				calBills[i] = moved
@@ -347,7 +396,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 				}
 			}
 		} else if smartCfg.Enabled && hasAnchor {
-			for _, b := range allUpcoming {
+			for _, b := range occ {
 				if p := payOnFor(b); !sameDay(p, b.DueDate) {
 					ghost[p.Format("2006-01-02")]++
 				}

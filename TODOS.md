@@ -3110,3 +3110,7 @@ Verified CONFIRMED (file:line + go test green) and marked completed:
 
 ### Still OPEN — shipped but short of AC:
 - [ ] [C123][MINOR] Quick-Add Save reachable via scrolling body, but `.set-foot` (web/index.html:2021) still lacks the explicit `flex-shrink:0` the ticket implied — add it as a defensive guard.
+
+## Framework/runtime defects (found via e2e flake forensics)
+
+- [ ] **C334 [MAJOR]** Kebab/popover menu-item clicks intermittently no-op (~1/8 measured). Repro: open a `.rec-flow` card's ⋯ menu and click "View transactions" in a loop — one round in ~8 the item is visible, the click dispatches (no Playwright error, no page error, no console error), and the handler simply never runs (no navigation; for delete items, no confirm dialog). Re-clicking the SAME rendered item never recovers; closing and re-opening the menu always fixes it — so the popover's item nodes can end up with a stale/unwired handler for the lifetime of that open. Suspect the GWC event re-wiring during the open-render (KebabMenu open.Set → re-render → items rebuilt) racing the caller's UseEvent registration. Affects every ⋯ menu in the app (to-do, goals, allocate, recurring, plans). Workaround baked into e2e (`recurring_check.mjs` confirmDelete + I3 retry loops: Escape → re-open → re-click). Fix belongs in internal/ui/kebabmenu.go or upstream GWC event wiring — instrument which handler id the stale item carries vs the registry.

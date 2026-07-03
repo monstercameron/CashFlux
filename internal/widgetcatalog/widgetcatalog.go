@@ -37,7 +37,7 @@ const (
 
 // billsSmartMeta labels the smart-bill-schedule variables for the picker.
 var billsSmartMeta = []struct{ Name, Label, Doc string }{
-	{"bills_low_raw", "Bills: projected low (raw)", "The lowest projected liquid balance over the next 30 days under the raw due dates."},
+	{"bills_low_raw", "Bills: projected low (raw)", "The lowest projected liquid balance over the next 60 days under the raw due dates."},
 	{"bills_check_load_raw", "Bills: heaviest paycheck (raw)", "The most any single pay period owes under the raw due dates."},
 	{"bills_check_load_smart", "Bills: heaviest paycheck (smart)", "The most any single pay period owes under the pay-ahead smart schedule."},
 	{"bills_even_gain", "Bills: paycheck-evening gain", "How much lighter the heaviest paycheck gets under the smart schedule."},

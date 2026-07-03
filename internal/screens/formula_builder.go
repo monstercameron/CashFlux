@@ -46,17 +46,25 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 	})
 }
 
-// liveBillsSmartData builds the smart-bill-schedule inputs: paydays projected from
-// the prefs pay-cycle anchor + the configured frequency, the expected net income
-// per payday (recurring money-in scaled to the cycle), and the keep floor.
+// liveBillsSmartData builds the smart-bill-schedule inputs for the engine
+// variables' fixed 60-day window; views that page further use
+// liveBillsSmartHorizon directly.
 func liveBillsSmartData(app *appstate.App) engineenv.BillsSmartData {
+	return liveBillsSmartHorizon(app, engineenv.BillsSmartHorizonDays)
+}
+
+// liveBillsSmartHorizon builds the smart-bill-schedule inputs: paydays projected
+// from the prefs pay-cycle anchor + the configured frequency out to horizonDays,
+// the expected net income per payday (recurring money-in scaled to the cycle),
+// and the keep floor.
+func liveBillsSmartHorizon(app *appstate.App, horizonDays int) engineenv.BillsSmartData {
 	cfg := uistate.BillsSmartConfigGet()
 	out := engineenv.BillsSmartData{MinKeepMinor: cfg.MinKeepMinor}
 	anchor, err := time.Parse("2006-01-02", uistate.LoadPrefs().PayCycleAnchor)
 	if err != nil {
 		return out // no anchor configured — smart figures fall back to raw
 	}
-	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, time.Now(), 30)
+	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, time.Now(), horizonDays)
 	var monthlyIn int64
 	for _, r := range app.Recurring() {
 		if me := r.MonthlyEquivalent(); me > 0 {

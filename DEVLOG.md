@@ -1,3 +1,48 @@
+## 2026-07-03 — Smart pay schedule: the plan now works across months (Cam's bug report)
+
+Cam, rightly angry: "after selecting adjust plan, it doesn't tune the bill payments for the plan to
+work… we don't see those double payments in the current month and when I go to the next month I
+don't see the adjusted bill dates — are you even testing it?" He was right on both counts: the e2e
+never paged the calendar past the current month, and the feature couldn't have worked there.
+
+**Root cause 1 — bills were single occurrences.** `bills.UpcomingAll` returns each bill's next due
+date, once. Next month's occurrence of a monthly bill literally did not exist as data, so the
+optimizer could never pull it onto this month's payday — the "double payment" Cam expected was
+unrepresentable. New pure `bills.OccurrencesWithin(accounts, recurring, now, until)` projects every
+occurrence in the window (liability statements monthly by due-day, clamped — Jan 31 → Feb 28 → Mar
+31 round-trips correctly; recurrings stepped by cadence with a defensive bound). Occurrence identity
+is (account, date, name), which the plan's PayOnByID already keyed by, so first occurrences stay
+compatible with the one-per-bill list.
+
+**Root cause 2 — fixed 30-day horizon vs a calendar that pages months.** The plan is now computed
+over `engineenv.BillsSmartHorizonDays` (60 — this month + next), and the bills tab extends `until`
+to the end of whatever month the calendar is paged to (recomputes on page, it's render-path state).
+Paydays project to the same horizon (`liveBillsSmartHorizon`).
+
+**Root cause 3 — the longer window exposed an optimizer deadlock.** `evener()` accepted a move only
+if it improved the single global max load; with July AND August each holding a heavy paycheck, no
+single move improves the global max → no move is ever accepted → the honesty check reverts to
+"already even". The objective is now the lexicographic order on the sorted-descending load vector
+(lighter heaviest, then second-heaviest, …), and the keep/revert check compares the same vector —
+so evening August counts while July's immovable autopay stack still holds the max (EvenGainMinor
+honestly 0 there; status/hint copy gained a "spread the load evenly" variant). Two regression tests
+pin both behaviours.
+
+**Views:** the calendar renders occurrences in both views (a paged-forward month isn't empty
+anymore) with ghost dots for the inactive schedule; the plan view adds pulled-forward future
+occurrences to the LIST as pay-ahead-tagged rows sorted by pay-on date — the double-payment month is
+visible, while the hero's Total-due stays the raw window (those amounts are due next month; the plan
+changes when they're paid, not what's owed).
+
+**Testing debt paid:** SM13/SM14 now page the calendar to next month with the plan on (occurrence
+dots ≥1; moved bills' raw-due ghosts visible — measured 3 ghosts in August on sample data). Sample
+plan went from 1 move to 6, heaviest paycheck $4,127 → $3,125. Separately, forensics on the D1/I3
+flakes found a real product race: a kebab-menu item's handler goes stale ~1/8 of opens (click lands,
+no error, handler never runs; only re-opening the menu fixes it) — reproduced outside the harness,
+filed as C334, and both e2e paths now retry via close→reopen. Three e2e runs: 57/57, 56/57 (S1 boot
+timeout under the concurrent agent's build load — served wasm verified byte-identical to a fresh
+build), 57/57.
+
 ## 2026-07-03 — /reports: full bento redesign, report_* engine vars, scope-selector rescue
 
 Cam: "redesign the reporting page /reports, use formulas, custom values, widgets, componentize,

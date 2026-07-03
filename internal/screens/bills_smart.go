@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -38,24 +39,29 @@ type billsSmartPlan struct {
 	Base      string
 }
 
-// computeBillsSmart runs the billsched optimizer over the next 30 days of bills
-// against the configured pay cycle — shared by the bills tab (rows + calendar)
-// and the smart-schedule modal, so both always agree.
-func computeBillsSmart(app *appstate.App, now time.Time) billsSmartPlan {
+// computeBillsSmart runs the billsched optimizer over every bill OCCURRENCE in
+// [now, until] (each repeat of each bill in the window — paying next month's
+// occurrence on this month's payday is the whole feature) against the
+// configured pay cycle — shared by the bills tab (rows + calendar) and the
+// smart-schedule modal, so both always agree. The standard window is
+// engineenv.BillsSmartHorizonDays; the bills tab extends `until` to cover
+// whatever month the calendar is paged to.
+func computeBillsSmart(app *appstate.App, now, until time.Time) billsSmartPlan {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	cfg := uistate.BillsSmartConfigGet()
-	in := liveBillsSmartData(app)
+	horizonDays := int(until.Sub(now).Hours() / 24)
+	if minDays := engineenv.BillsSmartHorizonDays; horizonDays < minDays {
+		horizonDays, until = minDays, now.AddDate(0, 0, minDays)
+	}
+	in := liveBillsSmartHorizon(app, horizonDays)
 
-	end := now.AddDate(0, 0, 30)
-	var items []billsched.Item
-	for _, b := range bills.UpcomingAll(app.Accounts(), app.Recurring(), now) {
-		if b.DueDate.After(end) {
-			continue
-		}
+	occurrences := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, until)
+	items := make([]billsched.Item, 0, len(occurrences))
+	for _, b := range occurrences {
 		amt, err := rates.Convert(b.Amount, base)
 		if err != nil {
 			amt = money.New(b.Amount.Amount, base)
@@ -68,7 +74,7 @@ func computeBillsSmart(app *appstate.App, now time.Time) billsSmartPlan {
 	return billsSmartPlan{
 		Cfg:       cfg,
 		HasAnchor: len(in.Paydays) > 0,
-		Res:       billsched.Optimize(liquid.Amount, items, in.Paydays, in.IncomePerPayday, now, 30, in.MinKeepMinor),
+		Res:       billsched.Optimize(liquid.Amount, items, in.Paydays, in.IncomePerPayday, now, horizonDays, in.MinKeepMinor),
 		Base:      base,
 	}
 }
@@ -97,9 +103,12 @@ func billsSmartSummaryTile(props billsSmartSummaryProps) ui.Node {
 	btnLabel := uistate.T("bills.smartSetUp")
 	if plan.Cfg.Enabled && plan.HasAnchor {
 		btnLabel = uistate.T("bills.smartAdjust")
-		if len(plan.Res.Moves) > 0 {
+		switch {
+		case len(plan.Res.Moves) > 0 && plan.Res.EvenGainMinor > 0:
 			status = uistate.T("bills.smartStatusOn", len(plan.Res.Moves), fmtMoney(money.New(plan.Res.EvenGainMinor, plan.Base)))
-		} else {
+		case len(plan.Res.Moves) > 0:
+			status = uistate.T("bills.smartStatusOnEven", len(plan.Res.Moves))
+		default:
 			status = uistate.T("bills.smartAlreadyEven")
 		}
 	}
@@ -191,7 +200,8 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
-	plan := computeBillsSmart(app, time.Now())
+	now := time.Now()
+	plan := computeBillsSmart(app, now, now.AddDate(0, 0, engineenv.BillsSmartHorizonDays))
 	base := plan.Base
 	dec := currency.Decimals(base)
 	res := plan.Res
@@ -217,7 +227,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		aiErr.Set("")
 		aiResult.Set("")
 		var b strings.Builder
-		fmt.Fprintf(&b, "Heaviest paycheck: %s raw vs %s smart. Bills paid ahead: %d. Projected 30-day low: %s.\n",
+		fmt.Fprintf(&b, "Heaviest paycheck: %s raw vs %s smart. Bill payments paid ahead: %d. Projected 60-day low: %s.\n",
 			fmtMoney(money.New(maxPeriodLoad(res.Raw.Loads), base)), fmtMoney(money.New(maxPeriodLoad(res.Smart.Loads), base)),
 			len(res.Moves), fmtMoney(money.New(res.Raw.Low, base)))
 		for i, mv := range res.Moves {
@@ -308,8 +318,14 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 					Span(css.Class("bills-smart-move-amt", tw.TextDim), fmtMoney(money.New(mv.Item.Amount, base))),
 				))
 			}
+			movesHint := uistate.T("bills.smartMovesHint", fmtMoney(money.New(res.EvenGainMinor, base)))
+			if res.EvenGainMinor == 0 {
+				// Real moves with no headline gain: the heaviest paycheck is an
+				// immovable stack, but the plan still spreads what CAN move.
+				movesHint = uistate.T("bills.smartMovesEven")
+			}
 			planBody = Fragment(
-				P(css.Class("muted"), uistate.T("bills.smartMovesHint", fmtMoney(money.New(res.EvenGainMinor, base)))),
+				P(css.Class("muted"), movesHint),
 				Div(rows...),
 			)
 		}

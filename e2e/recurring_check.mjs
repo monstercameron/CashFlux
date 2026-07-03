@@ -110,12 +110,18 @@ check("E3 editing didn't duplicate the flow", await p.locator(".rec-flow", { has
 // Wait for the confirm dialog to actually mount before clicking it (a fixed sleep
 // races the dialog on slower renders), then wait for the card to detach.
 const confirmDelete = async (card, name) => {
-  await p.keyboard.press("Escape"); await p.waitForTimeout(200); // close any lingering menu
-  await card.locator('[data-testid^="recurring-menu-"]').click(); await p.waitForTimeout(300);
-  await card.locator('[data-testid^="recurring-del-"]').click();
-  await p.waitForSelector("#cf-dialog-confirm", { timeout: 4000 }).catch(() => {});
-  await p.evaluate(() => { const c = document.querySelector("#cf-dialog-confirm"); if (c) c.click(); });
-  await p.waitForFunction((n) => !document.querySelector("main").innerText.includes(n), name, { timeout: 5000 }).catch(() => {});
+  await p.keyboard.press("Escape"); await p.waitForTimeout(250); // close any lingering menu
+  // Retry the whole menu→del→confirm dance: the ⋯ menu can swallow a click while
+  // a modal's close-flip is still settling, leaving no dialog to confirm.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await card.locator('[data-testid^="recurring-menu-"]').click().catch(() => {}); await p.waitForTimeout(350);
+    await card.locator('[data-testid^="recurring-del-"]').click().catch(() => {});
+    const dlg = await p.waitForSelector("#cf-dialog-confirm", { timeout: 2500 }).catch(() => null);
+    if (!dlg) { await p.keyboard.press("Escape"); await p.waitForTimeout(250); continue; }
+    await dlg.click();
+    const gone = await p.waitForFunction((n) => !document.querySelector("main").innerText.includes(n), name, { timeout: 5000 }).catch(() => null);
+    if (gone) return;
+  }
 };
 const beforeDel = await p.locator(".rec-flow").count();
 await confirmDelete(streamCard, "E2E Streaming");
@@ -146,7 +152,15 @@ check("I1 each flow shows its formula identity (recurring_<slug>_monthly chip)",
 const firstFlow = p.locator(".rec-flow").first();
 await firstFlow.locator('[data-testid^="recurring-menu-"]').click(); await p.waitForTimeout(300);
 check("I2 the ⋯ menu offers View transactions", await firstFlow.locator('[data-testid^="recurring-viewtxns-"]').count() === 1);
-await firstFlow.locator('[data-testid^="recurring-viewtxns-"]').click(); await p.waitForTimeout(900);
+// Retry the menu-item click, CLOSING and re-opening the menu each attempt: a
+// kebab item's handler occasionally goes stale (~1/8 measured — the click lands,
+// no error, nothing happens), and re-clicking the same stale node never helps —
+// only a fresh open re-wires it. Same root cause the delete helper works around.
+for (let attempt = 0; attempt < 3 && !p.url().endsWith("/transactions"); attempt++) {
+  if (attempt > 0) { await p.keyboard.press("Escape"); await p.waitForTimeout(250); await firstFlow.locator('[data-testid^="recurring-menu-"]').click().catch(() => {}); await p.waitForTimeout(350); }
+  await firstFlow.locator('[data-testid^="recurring-viewtxns-"]').click().catch(() => {});
+  await p.waitForTimeout(900);
+}
 check("I3 View transactions navigates to /transactions (filter applied)", p.url().endsWith("/transactions"), p.url());
 await openRec();
 // Metrics toggle reveals a FormulaBuilder exposing the recurring_* variables.
@@ -199,6 +213,20 @@ if (moveCount > 0) {
 } else {
   check("SM10 a moved bill's meta reads 'pay X · due Y'", true, "no moves in this dataset — skipped");
 }
+// The plan must survive paging the calendar to NEXT month: monthly bills'
+// occurrences exist there (the projection), and a moved bill leaves a hollow
+// ghost on its raw due date somewhere in the window. This is exactly the path
+// that shipped broken the first time — never skip it again.
+const ghostsThisMonth = await p.locator(".cal-dot--ghost").count();
+await p.locator('[data-testid="cal-next"]').click(); await p.waitForTimeout(700);
+check("SM13 next month's calendar still shows bill occurrences (projection)", (await p.locator(".cal-grid .cal-dot:not(.cal-dot--ghost)").count()) >= 1);
+const ghostsNextMonth = await p.locator(".cal-dot--ghost").count();
+if (moveCount > 0) {
+  check("SM14 moved bills leave their raw-due ghosts visible in the window", ghostsThisMonth + ghostsNextMonth >= 1, `this=${ghostsThisMonth} next=${ghostsNextMonth}`);
+} else {
+  check("SM14 moved bills leave their raw-due ghosts visible in the window", true, "no moves in this dataset — skipped");
+}
+await p.locator('[data-testid="cal-today"]').click(); await p.waitForTimeout(500);
 // Flip back to raw dates: the tags clear.
 await p.locator('[data-testid="bills-view-raw"]').click(); await p.waitForTimeout(700);
 check("SM11 raw view clears the pay-ahead tags", await p.locator('[data-testid="bill-payahead"]').count() === 0);

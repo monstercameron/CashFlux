@@ -300,27 +300,30 @@ func computeAtoms(d Data) map[string]float64 {
 // BillsSmartVarNames are the fixed smart-bill-schedule variables addBillsSmartVars
 // exposes — the schedule as referenceable figures.
 var BillsSmartVarNames = []string{
-	"bills_low_raw",          // projected 30-day low under the raw due dates (major units)
+	"bills_low_raw",          // projected 60-day low under the raw due dates (major units)
 	"bills_check_load_raw",   // the heaviest pay period's billed total under raw dates
 	"bills_check_load_smart", // …and under the pay-ahead smart schedule
 	"bills_even_gain",        // how much lighter the heaviest paycheck gets (raw − smart)
-	"bills_paid_ahead",       // number of bills the smart schedule pays ahead
+	"bills_paid_ahead",       // number of bill payments the smart schedule pays ahead
 	"bills_suggest_gain",     // the best single biller-side shift's low-point gain
 }
 
-// addBillsSmartVars runs the billsched optimizer over the next 30 days of bills
-// (liability minimum payments + expense recurrings) against the configured pay
-// cycle, exposing the schedule as engine variables. With no paydays configured
-// the raw and smart figures coincide and the gains are 0.
+// BillsSmartHorizonDays is the smart-schedule planning window: this month plus
+// the next, so paying next month's occurrence on one of this month's paydays —
+// the whole point of pay-ahead — is representable. Views that page the calendar
+// further extend their own horizon; the engine variables use this fixed window.
+const BillsSmartHorizonDays = 60
+
+// addBillsSmartVars runs the billsched optimizer over the next 60 days of bill
+// OCCURRENCES (every repeat of each liability minimum payment + expense
+// recurring in the window, not just each bill's next due) against the
+// configured pay cycle, exposing the schedule as engine variables. With no
+// paydays configured the raw and smart figures coincide and the gains are 0.
 func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
-	const horizonDays = 30
-	upcoming := bills.UpcomingAll(d.Accounts, d.Recurring, d.Now)
-	items := make([]billsched.Item, 0, len(upcoming))
-	end := d.Now.AddDate(0, 0, horizonDays)
-	for _, b := range upcoming {
-		if b.DueDate.After(end) {
-			continue
-		}
+	const horizonDays = BillsSmartHorizonDays
+	occurrences := bills.OccurrencesWithin(d.Accounts, d.Recurring, d.Now, d.Now.AddDate(0, 0, horizonDays))
+	items := make([]billsched.Item, 0, len(occurrences))
+	for _, b := range occurrences {
 		items = append(items, billsched.Item{
 			ID:      b.AccountID + "|" + b.DueDate.Format("2006-01-02") + "|" + b.Name,
 			Name:    b.Name,
