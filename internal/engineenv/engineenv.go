@@ -293,6 +293,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)
 	addBillsSmartVars(out, d, major, toBase)
+	addReportsVars(out, d, major)
 	return out
 }
 

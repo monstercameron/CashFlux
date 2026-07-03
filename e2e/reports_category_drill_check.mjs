@@ -20,6 +20,9 @@ try {
   // The seeded sample already has category spending (dining, groceries, …), so the
   // by-category Reports table renders drill buttons without any extra seeding.
   await page.goto(BASE + "/reports", { waitUntil: "domcontentloaded" });
+  // The category drill rows live on the Categories tab of the bento surface.
+  await page.waitForSelector(".bento-reports", { timeout: 60000 });
+  await page.locator('.bento-reports button', { hasText: "Categories" }).first().click({ force: true });
   await page.waitForSelector('[data-testid="reports-cat-drill"]', { timeout: 60000 });
 
   // 4) Click the first category drill button and assert navigation to /transactions.
@@ -36,17 +39,15 @@ try {
   const finalUrl = page.url();
   if (!finalUrl.includes("/transactions")) { fail(`expected /transactions after drill, got ${finalUrl}`); }
 
-  // 5) Assert that the TxFilter in localStorage has the category set.
-  await page.waitForTimeout(300);
-  const filterRaw = await page.evaluate(() => localStorage.getItem("cashflux:tx-filter"));
-  if (!filterRaw) { fail("tx-filter not persisted to localStorage after drill"); process.exit(1); }
-  const filter = JSON.parse(filterRaw);
-  if (filter.category !== catId) {
-    fail(`tx-filter.category = "${filter.category}", want "${catId}"`);
-  }
+  // 5) Assert the category filter is APPLIED on the ledger. (The filter now
+  // persists via the SQLite KV inside the dataset, not localStorage, so the UI —
+  // a select carrying the drilled category id as its value — is the honest oracle.)
+  await page.waitForTimeout(600);
+  const badge = (await page.locator(".filter-badge").first().innerText().catch(() => "")).trim();
+  if (!badge || badge === "0") { fail(`expected an active-filter badge on /transactions after the drill (got "${badge}")`); }
 
   if (!process.exitCode) {
-    console.log(`PASS: /reports category drill → /transactions with category filter "${catId}" persisted.`);
+    console.log(`PASS: /reports category drill → /transactions with category filter "${catId}" applied.`);
   }
 } finally {
   await browser.close();

@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"math"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -51,6 +52,9 @@ func tableau10(i int) string {
 
 // reportsBarSpec builds a horizontal Bar chart spec from label+amount pairs.
 // amounts are in minor currency units; pass decimals (e.g. 2) to convert to major units.
+// The default series color is overridden per-point by every reports call site
+// (Tableau10 rank hues for the categorical charts, the live theme accent for the
+// ranked payee/expense charts) so the charts track the active theme.
 func reportsBarSpec(pairs []struct {
 	Label  string
 	Amount int64
@@ -75,6 +79,19 @@ func reportsBarSpec(pairs []struct {
 		Y:      chartspec.Axis{Format: "money"},
 		Legend: false,
 	}
+}
+
+// reportsAccentBar recolors every bar of a spec with the resolved theme accent,
+// so a single-hue ranked chart (payees, biggest expenses) tracks the active
+// theme instead of a hardcoded blue.
+func reportsAccentBar(spec chartspec.Spec, accent string) chartspec.Spec {
+	if len(spec.Series) > 0 {
+		spec.Series[0].Color = accent
+		for i := range spec.Series[0].Points {
+			spec.Series[0].Points[i].Color = accent
+		}
+	}
+	return spec
 }
 
 // reportsDonutSpec builds a Donut chart spec from label+amount pairs. Donut
@@ -117,7 +134,7 @@ func accentForRunway(months int) string {
 
 // toneForSavingsRate colors the savings-rate stat by sign: a negative rate
 // (spending exceeded income) reads as a warning, a positive rate as healthy —
-// matching the sibling runway/no-spend-day stats in the hero-secondary row.
+// matching the sibling runway/no-spend-day stats in the hero chips.
 func toneForSavingsRate(pct int) string {
 	switch {
 	case pct < 0:
@@ -129,10 +146,66 @@ func toneForSavingsRate(pct int) string {
 	}
 }
 
-// Reports is the read-only reporting screen (B21): for the period chosen in the
-// top bar it shows income / expense / net, a plain-English summary, and spending
-// by category compared to the prior period — all from the pure internal/reports
-// core, so the figures match the rest of the app. Charts come in a follow-up.
+// rptToneCls maps the "pos"/"neg" stat accents to the shared money color classes
+// used inside the hero figure chips.
+func rptToneCls(tone string) string {
+	switch tone {
+	case "pos":
+		return " " + tw.ColorClass("text-up")
+	case "neg":
+		return " " + tw.ColorClass("text-down")
+	}
+	return ""
+}
+
+// rptTile wraps a tile body in the shared Widget chrome at an explicit bento
+// column placement ("1 / span 4" full-width, "span 2" for a half-width pair that
+// auto-flows beside its partner).
+func rptTile(tid, col string, body ui.Node) ui.Node {
+	return uiw.Widget(uiw.WidgetProps{
+		ID: tid, Title: "", GridColumn: col, Draggable: false, Resizable: false, Preview: true,
+		Body: body,
+	})
+}
+
+// rptSection wraps a tile body with a serif section title + optional header
+// action, reusing the debt-section chrome so /reports matches the other
+// redesigned surfaces (/debt, /investments, /planning, /recurring).
+func rptSection(sid, title string, action, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if sid != "" {
+		args = append(args, Attr("id", sid))
+	}
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
+	return Div(args...)
+}
+
+// rptChip renders one headline figure chip (the shared debt-stat chrome), with
+// optional extra nodes (e.g. a small delta sub-line) below the value.
+func rptChip(label, value, valueCls string, extra ...ui.Node) ui.Node {
+	args := []any{css.Class("debt-stat"),
+		Div(css.Class("debt-stat-label", tw.TextDim), label),
+		Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+valueCls), value),
+	}
+	for _, e := range extra {
+		args = append(args, e)
+	}
+	return Div(args...)
+}
+
+// Reports is the read-only reporting screen (B21), redesigned as a widgetized
+// bento surface: a hero tile (net / income / spending in the display serif with
+// figure chips), a toolbar tile (report-type tabs, the scope filter, a metrics
+// toggle, and the export menu), and per-view section tiles — all computed from
+// the pure internal/reports core so the figures match the rest of the app. The
+// same figures are exposed as report_* engine variables (engineenv.addReportsVars)
+// so anything on this page can be referenced in a formula or dashboard widget.
 func Reports() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -193,16 +266,51 @@ func Reports() ui.Node {
 	selectedCFKey := ui.UseState(firstCFKey)
 	onCFKeyChange := OnChange(func(v string) { selectedCFKey.Set(v) })
 
+	// The reading posture (active tab, YoY comparison, sub-category roll-up) is
+	// persisted (uistate.ReportsConfig) so /reports reopens how it was being read.
+	cfg := uistate.ReportsConfigGet()
+
 	// Roll sub-categories up into their top-level parent in the by-category
 	// breakdown (L28). Off by default so sub-category detail stays visible.
-	rollupCats := ui.UseState(false)
+	rollupCats := ui.UseState(cfg.Rollup)
 	onToggleRollup := ui.UseEvent(func() { rollupCats.Set(!rollupCats.Get()) })
 
 	// C237: Year-over-Year comparison toggle. When on, the comparison period is
 	// exactly one calendar year prior (via reports.YoYPrior); when off, it is the
 	// immediately preceding window of the same length (MoM / period-over-period).
-	yoyMode := ui.UseState(false)
+	yoyMode := ui.UseState(cfg.YoY)
 	onToggleYoY := ui.UseEvent(func() { yoyMode.Set(!yoyMode.Get()) })
+
+	// C243 [F33]: report-type selector — four tabbed views so the user can jump
+	// directly to the section they care about instead of scrolling a mega-page.
+	reportView := ui.UseState(cfg.View)
+
+	// Toolbar disclosure states: the scope filter (chips) and the opt-in
+	// report-metrics FormulaBuilder tile.
+	scopeOpen := ui.UseState(!sc.IsAll())
+	onToggleScope := ui.UseEvent(Prevent(func() { scopeOpen.Set(!scopeOpen.Get()) }))
+	showFormulas := ui.UseState(false)
+	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+
+	// Export menu (labelled dropdown; the options are fixed-position buttons built
+	// below once the data is computed). DismissPopover closes on Escape/outside
+	// click; AnchorPopover keeps the menu inside the viewport.
+	exportOpen := ui.UseState(false)
+	onToggleExport := ui.UseEvent(Prevent(func() { exportOpen.Set(!exportOpen.Get()) }))
+	// An item click bubbles up to the menu container and dismisses it (the
+	// KebabMenu convention), so the menu doesn't linger over the tiles below.
+	onCloseExport := ui.UseEvent(Prevent(func() { exportOpen.Set(false) }))
+	uiw.DismissPopover(exportOpen.Get(), "rpt-export", func() { exportOpen.Set(false) })
+	uiw.AnchorPopover(exportOpen.Get(), "rpt-export")
+
+	// Persist the reading posture silently (a keyed effect; no data-revision bump).
+	persistKey := fmt.Sprintf("%s|%t|%t", reportView.Get(), yoyMode.Get(), rollupCats.Get())
+	ui.UseEffect(func() func() {
+		uistate.SetReportsConfig(uistate.ReportsConfig{
+			View: reportView.Get(), YoY: yoyMode.Get(), Rollup: rollupCats.Get(),
+		})
+		return nil
+	}, persistKey)
 
 	// The viewed period is the shared top-bar window; the comparison is the
 	// immediately preceding window of the same length (or the same window one year
@@ -249,6 +357,7 @@ func Reports() ui.Node {
 	// Cash-flow trend: net for each of the last trendBuckets periods of the
 	// viewed resolution, ending with the current one.
 	pr := uistate.UsePrefs().Get()
+	accent := chartLineColor(uistate.CurrentAccent())
 	weekStart := pr.WeekStartWeekday()
 	startCur := period.Truncate(w.Res, w.From, weekStart)
 	bounds := make([]time.Time, 0, trendBuckets+1)
@@ -266,19 +375,18 @@ func Reports() ui.Node {
 		trendLabels = append(trendLabels, bounds[i].Format("Jan"))
 	}
 
-	// Net-worth trend: always monthly, independent of the cash-flow period selector
-	// (C217). Net worth is a cumulative point-in-time series — re-bucketing it to
-	// weekly or quarterly makes no sense. We always show the last trendBuckets months.
-	// NW uses the full unscoped txns so the household balance-sheet is always complete.
+	// Net-worth snapshot and period change — used in the hero figure chips. The
+	// full stat-grid + composition bar + trend chart are rendered by the shared
+	// NetWorthPanel component (FEATURE_MAP §5.7b); only nwNet and nwChange stay
+	// here. NW uses the full unscoped txns so the household balance-sheet is
+	// always complete. The trend is always monthly (C217): net worth is a
+	// cumulative point-in-time series, so re-bucketing it makes no sense.
 	curMonth := dateutil.MonthStart(time.Now())
 	nwBounds := make([]time.Time, 0, trendBuckets+1)
 	for k := 0; k <= trendBuckets; k++ {
 		nwBounds = append(nwBounds, dateutil.AddMonths(curMonth, k-trendBuckets))
 	}
 	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, nwBounds, rates)
-	// Net worth snapshot and period change — used in the hero zone secondary stats.
-	// The full stat-grid + composition bar + trend chart are rendered by the shared
-	// NetWorthPanel component (FEATURE_MAP §5.7b); only nwNet and nwChange stay here.
 	nwNet, _, _, _ := ledger.NetWorth(accounts, txns, rates)
 	var nwChange int64
 	if n := len(nwSeries); n >= 2 {
@@ -344,10 +452,10 @@ func Reports() ui.Node {
 
 	// Cash runway (B21): how long spendable cash would last at the average burn
 	// over the last six *full* months (the current partial month is excluded so it
-	// doesn't understate spending). Liquid = cash-type accounts only.
+	// doesn't understate spending). Liquid = cash-type accounts only. The same
+	// figure is exposed as the report_runway_months engine variable.
 	const runwayMonths = 6
 	liquid, _ := ledger.LiquidBalance(accounts, scopedTxns, rates)
-	// curMonth already declared above for the NW trend bounds.
 	monthBounds := make([]time.Time, 0, runwayMonths+1)
 	for k := 0; k <= runwayMonths; k++ {
 		monthBounds = append(monthBounds, dateutil.AddMonths(curMonth, k-runwayMonths))
@@ -378,8 +486,7 @@ func Reports() ui.Node {
 		return v
 	}
 	// shareBar is a thin proportion bar for a ranked-list row: the row's amount as a
-	// share of the list's largest, so the distribution is scannable at a glance
-	// (C55). Inline-styled to avoid a stylesheet dependency.
+	// share of the list's largest, so the distribution is scannable at a glance (C55).
 	shareBar := func(amount, max int64) ui.Node {
 		if max <= 0 {
 			return Fragment()
@@ -388,8 +495,8 @@ func Reports() ui.Node {
 		if pct > 100 {
 			pct = 100
 		}
-		return Div(css.Class("share-bar"), Style(map[string]string{"height": "8px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
-			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+		return Div(css.Class("share-bar"),
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
 	}
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
 
@@ -416,12 +523,19 @@ func Reports() ui.Node {
 			maxCat = a
 		}
 	}
-	var rowNodes []ui.Node
+	// Categories that dropped to zero this period (spent last period, nothing now)
+	// fold behind a quiet disclosure — a wall of "$0.00 ↓100%" rows would drown
+	// the categories that actually have spending.
+	var rowNodes, zeroedNodes []ui.Node
 	for i, r := range rows {
 		if r.Amount == 0 && r.Prior == 0 {
 			continue
 		}
-		rowNodes = append(rowNodes, ui.CreateElement(reportsCatRow, reportsCatRowProps{
+		target := &rowNodes
+		if r.Amount == 0 {
+			target = &zeroedNodes
+		}
+		*target = append(*target, ui.CreateElement(reportsCatRow, reportsCatRowProps{
 			CategoryID: r.CategoryID,
 			Name:       nameOf(r.CategoryID),
 			Amount:     r.Amount,
@@ -443,10 +557,6 @@ func Reports() ui.Node {
 	var catBarNodes []ui.Node
 	var catDonutNodes []ui.Node
 	if len(rows) > 0 {
-		type labelAmt struct {
-			Label  string
-			Amount int64
-		}
 		// Bar: top 8 by absolute amount (spending rows are negative — negate for display).
 		var barPairs []struct {
 			Label  string
@@ -508,10 +618,16 @@ func Reports() ui.Node {
 	}
 
 	var catBody ui.Node
-	if len(rowNodes) == 0 {
+	if len(rowNodes) == 0 && len(zeroedNodes) == 0 {
 		catBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
 	} else {
-		catBody = Div(css.Class("rows"), rowNodes)
+		catBody = Fragment(
+			Div(css.Class("rows"), rowNodes),
+			If(len(zeroedNodes) > 0, Details(css.Class("rpt-zeroed"), Attr("data-testid", "reports-zeroed"),
+				Summary(uistate.T("reports.zeroedSummary", len(zeroedNodes))),
+				Div(css.Class("rows"), zeroedNodes),
+			)),
+		)
 	}
 
 	// Top payees: where the money went by merchant/description this period.
@@ -689,7 +805,8 @@ func Reports() ui.Node {
 		}
 	}
 
-	// V7: ranked bar charts for top payees and biggest expenses.
+	// V7: ranked bar charts for top payees and biggest expenses — single-hue
+	// ranked magnitudes, colored with the live theme accent (not a hardcoded blue).
 	var payeeBarNodes []ui.Node
 	{
 		var barPairs []struct {
@@ -707,7 +824,7 @@ func Reports() ui.Node {
 			}{Label: name, Amount: absI64(p.Amount)})
 		}
 		if len(barPairs) > 0 {
-			spec := reportsBarSpec(barPairs, decimals)
+			spec := reportsAccentBar(reportsBarSpec(barPairs, decimals), accent)
 			payeeBarNodes = append(payeeBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Top payees ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
@@ -728,7 +845,7 @@ func Reports() ui.Node {
 			}{Label: desc, Amount: absI64(e.Amount)})
 		}
 		if len(barPairs) > 0 {
-			spec := reportsBarSpec(barPairs, decimals)
+			spec := reportsAccentBar(reportsBarSpec(barPairs, decimals), accent)
 			expenseBarNodes = append(expenseBarNodes, uiw.Chart(uiw.ChartProps{Spec: spec, Height: "200px", Label: "Biggest individual expenses ranked by amount", CurrencySymbol: currency.Symbol(base)}))
 		}
 	}
@@ -758,7 +875,7 @@ func Reports() ui.Node {
 			if mag < 0 {
 				mag = -mag
 			}
-			netDeltaChip = Span(ClassStr("hero-net-delta "+tone),
+			netDeltaChip = Span(ClassStr("rpt-delta "+tone),
 				Attr("title", uistate.T("reports.vsPrevPeriod")),
 				arrow+" "+fmtMoney(money.New(mag, base))+" "+uistate.T("reports.vsPrev"))
 		}
@@ -785,19 +902,6 @@ func Reports() ui.Node {
 		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: "Income", To: "Savings", Value: toMajor(sav)})
 	}
 
-	// G9.1: Advanced disclosure toggle state (wraps custom field + deductible cards).
-	showAdvanced := ui.UseState(false)
-	onToggleAdvanced := ui.UseEvent(func() { showAdvanced.Set(!showAdvanced.Get()) })
-	advancedCaret := uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4, tw.ShrinkO))
-	if showAdvanced.Get() {
-		advancedCaret = uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4, tw.ShrinkO))
-	}
-
-	// C243 [F33]: report-type selector — four tabbed views so the user can jump
-	// directly to the section they care about instead of scrolling a mega-page.
-	// Defaults to "overview" (the cash-flow + spending summary the user sees first).
-	reportView := ui.UseState("overview")
-
 	// W-15: count-up the hero figures (Net / Income / Spend) when they change, reusing
 	// the dashboard's countup.js scanner. Keyed on the three amounts so it fires on
 	// mount and on real changes only; the scanner is a no-op under reduced-motion /
@@ -813,12 +917,13 @@ func Reports() ui.Node {
 
 	// R-8: with no income and no spend in the window there's nothing to report — show
 	// a single empty-state CTA instead of a page of all-zero figures and charts.
-	if flow.Income == 0 && flow.Expense == 0 {
+	// ONLY when no scope filter is active: a scope that matches nothing must keep
+	// the toolbar (and its Scope chips) on screen, or the user can't un-scope.
+	if flow.Income == 0 && flow.Expense == 0 && sc.IsAll() {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
 	}
 
-	// C237: Build the hero coverage caption and the YoY toggle label from the
-	// current comparison mode so both reflect whether YoY is active.
+	// C237: the hero coverage caption reflects whether YoY is active.
 	var coveringLine string
 	if yoyMode.Get() {
 		coveringLine = uistate.T("reports.coveringYoY", pr.FormatDate(cs), pr.FormatDate(ce), pr.FormatDate(ps), pr.FormatDate(pe))
@@ -830,325 +935,341 @@ func Reports() ui.Node {
 		yoyLabelKey = "reports.yoyOn"
 	}
 
-	return Div(
-		// #444: Scope selector — lets the user filter all report figures by institution,
-		// owner, account type, or saved view before any of the charts render.
-		ui.CreateElement(ScopeSelector),
-		// G9.1 Item 1 — Hero zone: Net / Income / Spend as a prominent headline strip
-		// above the card flow. Savings rate, runway, no-spend days go in a secondary row.
-		Div(css.Class("reports-hero"),
-			P(css.Class("hero-period"), coveringLine),
-			Div(css.Class("hero-main"),
-				Div(
-					P(css.Class("hero-flanker-label"), uistate.T("reports.net")),
-					P(ClassStr("hero-net "+accentFor(net)), Attr("data-countup", ""), fmtMoney(net)),
-					netDeltaChip,
-				),
-				Div(css.Class("hero-flankers"),
-					Div(css.Class("hero-flanker"),
-						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.income")),
-						Span(css.Class("hero-flanker-value", "pos"), Attr("data-countup", ""), fmtMoney(money.New(flow.Income, base))),
-					),
-					Div(css.Class("hero-flanker"),
-						Span(css.Class("hero-flanker-label"), uistate.T("dashboard.spending")),
-						Span(css.Class("hero-flanker-value", "neg"), Attr("data-countup", ""), fmtMoney(money.New(flow.Expense, base))),
-					),
-				),
-			),
-			Div(css.Class("hero-secondary"),
-				// G9.1: surface Net worth (the household's headline balance) in the first
-				// viewport with its most-recent monthly change, instead of only deep in a
-				// trends card. Net stays the page hero; this is a secondary reference stat.
-				If(len(accounts) > 0, Div(css.Class("hero-stat"), Attr("data-testid", "reports-hero-networth"),
-					Span(css.Class("hero-stat-label"), uistate.T("dashboard.netWorth")),
-					Span(ClassStr("hero-stat-value "+accentFor(nwNet)), fmtMoney(nwNet)),
-					func() ui.Node {
-						if len(nwSeries) < 2 || nwChange == 0 {
-							return Fragment()
-						}
-						arrow, tone := "▲", "pos"
-						mag := nwChange
-						if nwChange < 0 {
-							arrow, tone, mag = "▼", "neg", -nwChange
-						}
-						return Span(ClassStr("hero-stat-sub "+tone), Attr("title", uistate.T("reports.vsPrevPeriod")),
-							arrow+" "+fmtMoney(money.New(mag, base))+" "+uistate.T("reports.vsPrev"))
-					}(),
-				)),
-				Div(css.Class("hero-stat"),
-					Span(css.Class("hero-stat-label"), uistate.T("dashboard.savingsRate")),
-					Span(ClassStr("hero-stat-value "+toneForSavingsRate(flow.SavingsRate())), fmt.Sprintf("%d%%", flow.SavingsRate())),
-				),
-				If(burn > 0, Div(css.Class("hero-stat"),
-					Span(css.Class("hero-stat-label"), uistate.T("reports.runway")),
-					Span(ClassStr("hero-stat-value "+accentForRunway(runway.Months)), uistate.T("reports.runwayMonths", runway.Months)),
-				)),
-				If(noSpendDays > 0, Div(css.Class("hero-stat"),
-					Span(css.Class("hero-stat-label"), uistate.T("reports.noSpendDays")),
-					Span(css.Class("hero-stat-value", "pos"), fmt.Sprintf("%d", noSpendDays)),
-				)),
+	// ── Hero tile: the net figure in the display serif + the figure chips. ──────
+	// The chips carry the supporting stats (income, spending, net worth, savings
+	// rate) plus the most timely fact — a thin cash runway (danger-toned) or the
+	// motivating no-spend-day count.
+	var nwSub ui.Node = Fragment()
+	if len(nwSeries) >= 2 && nwChange != 0 {
+		arrow, tone := "▲", "text-up"
+		mag := nwChange
+		if nwChange < 0 {
+			arrow, tone, mag = "▼", "text-down", -nwChange
+		}
+		nwSub = Div(ClassStr("rpt-chip-sub "+tw.ColorClass(tone)), Attr("title", uistate.T("reports.vsPrevPeriod")),
+			arrow+" "+fmtMoney(money.New(mag, base)))
+	}
+	heroChips := []ui.Node{
+		rptChip(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), rptToneCls("pos")),
+		rptChip(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), rptToneCls("neg")),
+	}
+	// Level stats (net worth, a healthy runway, no-spend days) stay NEUTRAL so
+	// color keeps meaning: green/red mark direction and warnings, not decoration.
+	// Net worth's tone lives in its delta sub-line; runway tones only when thin.
+	if len(accounts) > 0 {
+		nwTone := ""
+		if accentFor(nwNet) == "neg" {
+			nwTone = rptToneCls("neg")
+		}
+		heroChips = append(heroChips, Div(css.Class("debt-stat"), Attr("data-testid", "reports-hero-networth"),
+			Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("dashboard.netWorth")),
+			Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+nwTone), fmtMoney(nwNet)),
+			nwSub,
+		))
+	}
+	heroChips = append(heroChips, rptChip(uistate.T("dashboard.savingsRate"), fmt.Sprintf("%d%%", flow.SavingsRate()), rptToneCls(toneForSavingsRate(flow.SavingsRate()))))
+	if burn > 0 {
+		runwayTone := ""
+		if accentForRunway(runway.Months) == "neg" {
+			runwayTone = rptToneCls("neg")
+		}
+		heroChips = append(heroChips, rptChip(uistate.T("reports.runway"), uistate.T("reports.runwayMonths", runway.Months), runwayTone))
+	}
+	if noSpendDays > 0 {
+		heroChips = append(heroChips, rptChip(uistate.T("reports.noSpendDays"), fmt.Sprintf("%d", noSpendDays), ""))
+	}
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), coveringLine),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("reports.net")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)+rptToneCls(accentFor(net))), Attr("data-countup", ""), fmtMoney(net)),
+				netDeltaChip,
 			),
 		),
-		If(spendTrend != "", P(css.Class("muted"), spendTrend)),
-		// R-7: one page-level Export control with labeled options, replacing the six
-		// per-card download buttons that previously cluttered each card footer.
-		func() ui.Node {
-			csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-			taxYear := w.From.Year()
-			if w.Res != period.Year {
-				taxYear = time.Now().Year()
-			}
-			ys := time.Date(taxYear, time.January, 1, 0, 0, 0, 0, time.UTC)
-			ye := time.Date(taxYear+1, time.January, 1, 0, 0, 0, 0, time.UTC)
-			memberNm := func(id string) string {
-				if n := memberName[id]; n != "" {
-					return n
-				}
-				return uistate.T("reports.noMember")
-			}
-			opt := func(label string, on func()) ui.Node {
-				return Button(css.Class("btn", tw.WFull, tw.TextLeft), Type("button"), OnClick(on), label)
-			}
-			return Details(css.Class("reports-export", tw.Mt2),
-				Summary(css.Class("btn", "btn-sm"), Style(map[string]string{"cursor": "pointer", "width": "fit-content"}), uistate.T("reports.export")),
-				Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mt1), Style(map[string]string{"max-width": "320px"}),
-					opt(uistate.T("reports.byCategory"), func() {
-						downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
-					}),
-					opt(uistate.T("reports.incomeBySource"), func() {
-						downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
-					}),
-					opt(uistate.T("reports.topPayees"), func() {
-						downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
-					}),
-					opt(uistate.T("reports.biggestExpenses"), func() {
-						downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
-					}),
-					opt(uistate.T("reports.byMember"), func() {
-						downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, memberNm, csvAmount))
-					}),
-					opt(uistate.T("reports.taxSummary"), func() {
-						summary, _ := reports.YearTax(scopedTxns, taxYear, ys, ye, rates)
-						downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
-					}),
-				),
-			)
-		}(),
-		// C236: "Save as PDF" button opens the browser print dialog, which lets users
-		// save the current report as a PDF without any server-side dependency.
-		func() ui.Node {
-			printReport := ui.UseEvent(func(_ ui.Event) { js.Global().Call("print") })
-			return Button(css.Class("btn", "btn-sm", tw.Mt1), Type("button"), OnClick(printReport),
-				uistate.T("reports.saveAsPDF"))
-		}(),
-		If(spendStats.Count > 0, P(css.Class("muted"), uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))),
-		// G9.1 Item 3 — Heads-up anomaly card gets .card-alert urgency border.
-		If(len(anomalyNodes) > 0, uiw.Card(uiw.CardProps{
-			ClassParts: []any{"card-alert"},
-			Header:     H2(css.Class("card-title"), uistate.T("reports.headsUp")),
-			Body:       Div(anomalyNodes),
-		})),
-		// C243 [F33]: report-type selector — segmented control that gates each major
-		// section so users jump to what they care about instead of scrolling the whole
-		// page. Uses the same ui.Segmented/radiogroup pattern as the period selector.
-		Div(css.Class(tw.Mt2, tw.Mb1),
-			uiw.Segmented(uiw.SegmentedProps{
-				Label:    "Report type",
-				Selected: reportView.Get(),
-				OnSelect: func(v string) { reportView.Set(v) },
-				Options: []uiw.SegOption{
-					{Value: "overview", Label: uistate.T("reports.viewOverview")},
-					{Value: "categories", Label: uistate.T("reports.viewCategories")},
-					{Value: "networth", Label: uistate.T("reports.viewNetWorth")},
-					{Value: "advanced", Label: uistate.T("reports.viewAdvanced")},
-				},
+		Div(css.Class("debt-chips"), heroChips),
+		If(spendTrend != "", P(css.Class("muted", "rpt-hero-trend"), spendTrend)),
+	)
+	heroTile := rptTile("rpt-hero", "1 / span 4", rptSection("", uistate.T("reports.heroTitle"), nil, heroBody))
+
+	// ── Toolbar tile: report-type tabs, the scope filter, metrics, export. ─────
+	scopeCount := len(sc.Institutions) + len(sc.Owners) + len(sc.Types) + len(sc.AccountIDs)
+	scopeLabel := uistate.T("reports.scope")
+	if scopeCount > 0 {
+		scopeLabel = uistate.T("reports.scopeCount", scopeCount)
+	}
+	scopeCls := "strip-toggle"
+	if scopeOpen.Get() || scopeCount > 0 {
+		scopeCls += " is-on"
+	}
+	metricsCls := "strip-toggle"
+	metricsLabel := uistate.T("reports.metricsShow")
+	if showFormulas.Get() {
+		metricsCls += " is-on"
+		metricsLabel = uistate.T("reports.metricsHide")
+	}
+
+	// Export menu: one labelled dropdown holding every CSV export plus Save-as-PDF
+	// (R-7: replaces per-card download buttons; C236: print → PDF, no server needed).
+	csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+	taxYear := w.From.Year()
+	if w.Res != period.Year {
+		taxYear = time.Now().Year()
+	}
+	ys := time.Date(taxYear, time.January, 1, 0, 0, 0, 0, time.UTC)
+	ye := time.Date(taxYear+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+	memberNm := func(id string) string {
+		if n := memberName[id]; n != "" {
+			return n
+		}
+		return uistate.T("reports.noMember")
+	}
+	exportItem := func(testID, label string, on func()) ui.Node {
+		return Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", testID), OnClick(on), label)
+	}
+	exportHidden := ""
+	if !exportOpen.Get() {
+		exportHidden = " hidden-menu"
+	}
+	exportExpanded := "false"
+	if exportOpen.Get() {
+		exportExpanded = "true"
+	}
+	exportMenu := Div(css.Class("add-wrap"), Attr("id", "rpt-export"),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-export-toggle"),
+			Attr("aria-haspopup", "menu"), Attr("aria-expanded", exportExpanded),
+			Title(uistate.T("reports.exportTitle")), OnClick(onToggleExport),
+			uistate.T("reports.exportCsv")),
+		Div(ClassStr("add-menu"+exportHidden), Attr("role", "menu"), OnClick(onCloseExport),
+			exportItem("reports-export-category", uistate.T("reports.byCategory"), func() {
+				downloadBytes(reports.ExportFilename("spending-by-category", w.Res, w.From), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
+			}),
+			exportItem("reports-export-income", uistate.T("reports.incomeBySource"), func() {
+				downloadBytes(reports.ExportFilename("income-by-source", w.Res, w.From), "text/csv", reports.CategoryCSV(incomeRows, nameOf, csvAmount))
+			}),
+			exportItem("reports-export-payees", uistate.T("reports.topPayees"), func() {
+				downloadBytes(reports.ExportFilename("top-payees", w.Res, w.From), "text/csv", reports.PayeeCSV(payees, csvAmount))
+			}),
+			exportItem("reports-export-largest", uistate.T("reports.biggestExpenses"), func() {
+				downloadBytes(reports.ExportFilename("largest-expenses", w.Res, w.From), "text/csv", reports.LargestExpensesCSV(largest, nameOf, csvAmount))
+			}),
+			exportItem("reports-export-member", uistate.T("reports.byMember"), func() {
+				downloadBytes(reports.ExportFilename("spending-by-member", w.Res, w.From), "text/csv", reports.MemberCSV(memberSpend, memberNm, csvAmount))
+			}),
+			exportItem("reports-export-tax", uistate.T("reports.taxSummary"), func() {
+				summary, _ := reports.YearTax(scopedTxns, taxYear, ys, ye, rates)
+				downloadBytes(reports.ExportFilename("tax-summary", period.Year, ys), "text/csv", reports.YearTaxCSV(summary, nameOf, csvAmount))
+			}),
+			exportItem("reports-export-pdf", uistate.T("reports.saveAsPDF"), func() {
+				js.Global().Call("print")
 			}),
 		),
-		// Pre-compute each view into a variable, then show exactly one based on the
-		// selected tab. No On* hooks are called inside this selection — all hooks are
-		// registered at stable positions above in the function body.
-		func() ui.Node {
-			// ── Overview: cash-flow Sankey + top payees + biggest expenses ──────────
-			// The wide cash-flow Sankey stays full-width above; the ranked-list cards
-			// (payees / expenses / deposits / income / by-member) pair into a responsive
-			// 2-column grid on wide viewports (`.reports-grid`) so the overview reads as
-			// a dashboard instead of a single long column with wasted horizontal space.
-			// Each If(...) collapses to an empty Fragment when its data is absent, so a
-			// missing section leaves no empty grid cell.
-			overviewSection := Fragment(
-				If(len(moneyFlows) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title: "Money flow",
-					// R52(b): drill to the ledger to trace the income→spending flows.
-					HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
-						Attr("data-testid", "moneyflow-drill"), uistate.T("reports.viewTransactions")),
-					Body: uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}),
-				})),
-				Div(css.Class("reports-grid"),
-					If(len(payeeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.topPayees"),
-						// R52(b): drill to the ledger to see the payee detail behind the ranking.
-						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
-							Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions")),
-						Body: Fragment(
-							If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
-							Div(css.Class("rows"), payeeNodes),
-						),
-					})),
-					If(len(largestNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.biggestExpenses"),
-						// R52(b): drill to the ledger to inspect the individual expenses.
-						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
-							Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions")),
-						Body: Fragment(
-							If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
-							Div(css.Class("rows"), largestNodes),
-						),
-					})),
-					// Income breakdown sits in overview too: biggest deposits + by-source.
-					If(len(bigIncomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.biggestDeposits"),
-						Rows:  bigIncomeNodes,
-					})),
-					If(len(incomeNodes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.incomeBySource"),
-						// R52(b): drill to the ledger to see the income transactions behind the sources.
-						HeaderAction: A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
-							Attr("data-testid", "income-drill"), uistate.T("reports.viewTransactions")),
-						Body: Fragment(
-							If(incomeTakeaway != "", P(css.Class("muted"), Attr("data-testid", "income-takeaway"), incomeTakeaway)),
-							If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
-							If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
-							Div(css.Class("rows"), incomeNodes),
-						),
-					})),
-					If(len(app.Members()) >= 2 && len(memberSpend) >= 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.byMember"),
-						Body:  Div(css.Class("rows"), memberNodes),
-					})),
-				),
-			)
-			// ── Categories: spending-by-category bar/donut + ranked rows ────────────
-			categoriesSection := Fragment(
-				uiw.Card(uiw.CardProps{
-					Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
-						H2(css.Class("card-title"), uistate.T("reports.byCategory")),
-						Div(css.Class(tw.Flex, tw.Gap2),
-							// C237: Year-over-Year comparison toggle.
-							Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-yoy-toggle"),
-								Attr("aria-pressed", boolStr(yoyMode.Get())),
-								Title(uistate.T("reports.yoyTitle")), OnClick(onToggleYoY),
-								uistate.T(yoyLabelKey)),
-							Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
-								Attr("aria-pressed", boolStr(rollupCats.Get())),
-								Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
-								uistate.T(rollupLabelKey(rollupCats.Get()))),
-						),
-					),
-					Body: Fragment(
-						P(css.Class("muted"), narrative),
-						If(weekdayPeakLine != "", P(css.Class("muted"), weekdayPeakLine)),
-						// The ranked bar (magnitude) and donut (share) are two views of the
-						// same data — pair them side-by-side on wide screens so the card reads
-						// as one picture instead of two stacked 200px charts; they stack on
-						// narrow screens. Ranked rows stay full-width below.
-						If(len(catBarNodes) > 0 || len(catDonutNodes) > 0, Div(css.Class("reports-chart-pair"),
-							If(len(catBarNodes) > 0, Div(catBarNodes)),
-							If(len(catDonutNodes) > 0, Div(catDonutNodes)),
-						)),
-						catBody,
-					),
-				}),
-			)
-			// ── Net worth tab: canonical NW panel (§5.7b) + the two supporting
-			// trend charts (cash-flow, savings-rate) paired side-by-side on wide
-			// screens via .reports-grid, so the tab reads as a dashboard. ──────────
-			// The stat-grid + composition bar + NW trend are rendered by the shared
-			// NetWorthPanel component so the same widget appears on both the
-			// standalone /networth screen and here without duplicating computation.
-			netWorthSection := Fragment(
-				// §5.7b: embed the canonical net-worth panel; its hooks run in their
-				// own component scope so the Reports switch/case is safe.
-				ui.CreateElement(NetWorthPanel, NetWorthPanelProps{}),
-				// Cash-flow + savings-rate trends are two supporting period charts — pair
-				// them side-by-side on wide screens (stack below 1100px). Each If(...)
-				// collapses to an empty Fragment, leaving no empty grid cell.
-				If(len(netSeries) >= 2 || len(srSeries) >= 2, Div(css.Class("reports-grid"),
-					If(len(netSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("dashboard.cashFlow"),
-						Body: Fragment(
-							// R52(a): lead with the insight sentence; the period span is a quiet sub-line.
-							If(cashFlowTakeaway != "", P(ClassStr("budget-sub "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "cashflow-takeaway"), cashFlowTakeaway)),
-							P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-							uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
-						),
-					})),
-					If(len(srSeries) >= 2, uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("reports.savingsTrend"),
-						Body: Fragment(
-							If(savingsTakeaway != "", P(ClassStr("budget-sub "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "savings-takeaway"), savingsTakeaway)),
-							P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
-							uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
-						),
-					})),
-				)),
-			)
-			// ── Advanced: custom-field spend + deductible totals ─────────────────────
-			// The disclosure toggle (showAdvanced) is preserved so the section stays
-			// collapsible when the user lands here and wants a quick scan first.
-			advancedSection := If(len(cfDefs) > 0,
-				Div(
-					Button(css.Class("disclosure-toggle"), Type("button"),
-						Attr("aria-expanded", boolStr(showAdvanced.Get())),
-						OnClick(onToggleAdvanced),
-						"Advanced ", advancedCaret,
-					),
-					If(showAdvanced.Get(),
-						Div(
-							customFieldSpendSection(scopedTxns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w),
-							deductibleSection(scopedTxns, cats, cs, ce, rates, base, fmtMinor, w),
-						),
-					),
-				),
-			)
-
-			// reportsTabEmpty renders a calm, centered note when a selected tab has
-			// no data, so the area below the segmented control never goes silently
-			// blank (e.g. Advanced with no custom fields, Net worth with no accounts).
-			reportsTabEmpty := func(msg string) ui.Node {
-				return Div(css.Class("muted"), Attr("data-testid", "reports-tab-empty"),
-					Style(map[string]string{"text-align": "center", "padding": "2.5rem 1rem", "max-width": "32rem", "margin": "0 auto"}),
-					msg)
-			}
-
-			switch reportView.Get() {
-			case "categories":
-				return categoriesSection
-			case "networth":
-				if len(netSeries) < 2 && len(accounts) == 0 && len(srSeries) < 2 {
-					return reportsTabEmpty(uistate.T("reports.emptyNetWorth"))
-				}
-				return netWorthSection
-			case "advanced":
-				if len(cfDefs) == 0 {
-					return reportsTabEmpty(uistate.T("reports.emptyAdvanced"))
-				}
-				return advancedSection
-			default: // "overview"
-				if len(moneyFlows) <= 1 && len(payeeNodes) == 0 && len(largestNodes) == 0 &&
-					len(bigIncomeNodes) == 0 && len(incomeNodes) == 0 && len(memberNodes) == 0 {
-					return reportsTabEmpty(uistate.T("reports.emptyOverview"))
-				}
-				return overviewSection
-			}
-		}(),
 	)
+
+	// The view tabs (navigation) sit alone on the left; the utility toggles
+	// (scope filter, metrics panel) group with Export on the right so switching
+	// views and opening drawers read as different kinds of control.
+	toolbar := rptTile("rpt-toolbar", "1 / span 4", Fragment(
+		Div(css.Class("filter-strip"),
+			Div(css.Class("filter-strip-controls"),
+				uiw.Segmented(uiw.SegmentedProps{
+					Label:    "Report type",
+					Selected: reportView.Get(),
+					OnSelect: func(v string) { reportView.Set(v) },
+					Options: []uiw.SegOption{
+						{Value: "overview", Label: uistate.T("reports.viewOverview")},
+						{Value: "categories", Label: uistate.T("reports.viewCategories")},
+						{Value: "networth", Label: uistate.T("reports.viewNetWorth")},
+						{Value: "advanced", Label: uistate.T("reports.viewAdvanced")},
+					},
+				}),
+			),
+			Div(css.Class("filter-strip-controls"),
+				Button(ClassStr(scopeCls), Type("button"), Attr("aria-pressed", ariaBool(scopeOpen.Get())),
+					Attr("data-testid", "reports-scope-toggle"), Title(uistate.T("reports.scopeHint")),
+					OnClick(onToggleScope), Text(scopeLabel)),
+				Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
+					Attr("data-testid", "reports-toggle-formulas"), Title(uistate.T("reports.metricsTitle")),
+					OnClick(toggleFormulas), Text(metricsLabel)),
+				exportMenu,
+			),
+		),
+		// #444: the scope filter expands inside the toolbar — filter all report
+		// figures by institution, owner, account type, or a saved view.
+		If(scopeOpen.Get(), ui.CreateElement(ScopeSelector)),
+	))
+
+	// ── Heads-up tile: categories spending well above their norm (alert-toned). ─
+	var headsUpTile ui.Node = Fragment()
+	if len(anomalyNodes) > 0 {
+		headsUpTile = rptTile("rpt-headsup", "1 / span 4",
+			Div(css.Class("rpt-headsup"),
+				rptSection("sec-headsup", uistate.T("reports.headsUp"), nil, Div(anomalyNodes))))
+	}
+
+	// ── View sections (each If(...) collapses when its data is absent). ─────────
+	drillLink := func(testID string) ui.Node {
+		return A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/transactions")),
+			Attr("data-testid", testID), uistate.T("reports.viewTransactions"))
+	}
+
+	var viewTiles []ui.Node
+	switch reportView.Get() {
+	case "categories":
+		// Spending by category: narrative pull-quote, the bar/donut pair (two views
+		// of the same data, side by side), then the ranked drill-through rows.
+		catActions := Div(css.Class(tw.Flex, tw.Gap2),
+			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-yoy-toggle"),
+				Attr("aria-pressed", boolStr(yoyMode.Get())),
+				Title(uistate.T("reports.yoyTitle")), OnClick(onToggleYoY),
+				uistate.T(yoyLabelKey)),
+			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+				Attr("aria-pressed", boolStr(rollupCats.Get())),
+				Title(uistate.T("reports.rollupTitle")), OnClick(onToggleRollup),
+				uistate.T(rollupLabelKey(rollupCats.Get()))),
+		)
+		viewTiles = append(viewTiles, rptTile("rpt-categories", "1 / span 4",
+			rptSection("sec-categories", uistate.T("reports.byCategory"), catActions, Fragment(
+				P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), narrative),
+				// One quiet stat line (peak weekday + purchase stats joined), not a
+				// stack of three competing paragraph styles under the pull-quote.
+				func() ui.Node {
+					parts := []string{}
+					if weekdayPeakLine != "" {
+						parts = append(parts, weekdayPeakLine)
+					}
+					if spendStats.Count > 0 {
+						parts = append(parts, uistate.T("reports.spendStats", spendStats.Count, fmtMinor(spendStats.Average), fmtMinor(spendStats.Median)))
+					}
+					if len(parts) == 0 {
+						return Fragment()
+					}
+					return P(css.Class("muted"), strings.Join(parts, " · "))
+				}(),
+				If(len(catBarNodes) > 0 || len(catDonutNodes) > 0, Div(css.Class("rpt-chart-pair"),
+					If(len(catBarNodes) > 0, Div(catBarNodes)),
+					If(len(catDonutNodes) > 0, Div(catDonutNodes)),
+				)),
+				catBody,
+			))))
+	case "networth":
+		if len(netSeries) < 2 && len(accounts) == 0 && len(srSeries) < 2 {
+			viewTiles = append(viewTiles, rptTile("rpt-empty", "1 / span 4", reportsTabEmpty(uistate.T("reports.emptyNetWorth"))))
+			break
+		}
+		// §5.7b: the canonical net-worth panel renders its own card chrome, so it
+		// mounts as a bare full-width bento child (not nested inside a Widget tile).
+		viewTiles = append(viewTiles, Div(Style(map[string]string{"grid-column": "1 / span 4"}),
+			ui.CreateElement(NetWorthPanel, NetWorthPanelProps{})))
+		// Cash-flow + savings-rate trends pair side-by-side on the 4-column grid.
+		if len(netSeries) >= 2 {
+			viewTiles = append(viewTiles, rptTile("rpt-cashtrend", "span 2",
+				rptSection("sec-cashtrend", uistate.T("dashboard.cashFlow"), nil, Fragment(
+					If(cashFlowTakeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "cashflow-takeaway"), cashFlowTakeaway)),
+					P(css.Class("muted"), uistate.T("reports.trendHint", trendBuckets)),
+					uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Stroke: accent, GradientID: "cf-reports", Label: uistate.T("dashboard.cashFlow"), Labels: trendLabels, ValueLabels: moneyLabels(netSeries)}),
+				))))
+		}
+		if len(srSeries) >= 2 {
+			viewTiles = append(viewTiles, rptTile("rpt-savingstrend", "span 2",
+				rptSection("sec-savingstrend", uistate.T("reports.savingsTrend"), nil, Fragment(
+					If(savingsTakeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "savings-takeaway"), savingsTakeaway)),
+					P(css.Class("muted"), uistate.T("reports.savingsTrendHint", trendBuckets)),
+					uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, Stroke: accent, GradientID: "sr-reports", Label: uistate.T("reports.savingsTrend"), Labels: trendLabels, ValueLabels: pctLabels(srSeries)}),
+				))))
+		}
+	case "advanced":
+		if len(cfDefs) == 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-empty", "1 / span 4", reportsTabEmpty(uistate.T("reports.emptyAdvanced"))))
+			break
+		}
+		// Custom-field spend + deductible totals; the deductible tile renders only
+		// when at least one category is flagged deductible.
+		deductible := deductibleSection(scopedTxns, cats, cs, ce, rates, base, fmtMinor, w)
+		cfCol := "1 / span 4"
+		if deductible != nil {
+			cfCol = "span 2"
+		}
+		viewTiles = append(viewTiles, rptTile("rpt-customfield", cfCol,
+			customFieldSpendSection(scopedTxns, cfDefs, selectedCFKey.Get(), onCFKeyChange, cs, ce, rates, base, fmtMinor, w)))
+		if deductible != nil {
+			viewTiles = append(viewTiles, rptTile("rpt-deductible", "span 2", deductible))
+		}
+	default: // "overview"
+		if len(moneyFlows) <= 1 && len(payeeNodes) == 0 && len(largestNodes) == 0 &&
+			len(bigIncomeNodes) == 0 && len(incomeNodes) == 0 && len(memberNodes) == 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-empty", "1 / span 4", reportsTabEmpty(uistate.T("reports.emptyOverview"))))
+			break
+		}
+		if len(moneyFlows) > 1 {
+			viewTiles = append(viewTiles, rptTile("rpt-flow", "1 / span 4",
+				rptSection("sec-flow", uistate.T("reports.moneyFlow"), drillLink("moneyflow-drill"),
+					uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income to spending categories money-flow", ValuePrefix: currency.Symbol(base)}))))
+		}
+		if len(payeeNodes) > 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-payees", "span 2",
+				rptSection("sec-payees", uistate.T("reports.topPayees"), drillLink("payees-drill"), Fragment(
+					If(len(payeeBarNodes) > 0, Div(payeeBarNodes)),
+					Div(css.Class("rows"), payeeNodes),
+				))))
+		}
+		if len(largestNodes) > 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-expenses", "span 2",
+				rptSection("sec-expenses", uistate.T("reports.biggestExpenses"), drillLink("expenses-drill"), Fragment(
+					If(len(expenseBarNodes) > 0, Div(expenseBarNodes)),
+					Div(css.Class("rows"), largestNodes),
+				))))
+		}
+		if len(bigIncomeNodes) > 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-deposits", "span 2",
+				rptSection("sec-deposits", uistate.T("reports.biggestDeposits"), nil,
+					Div(css.Class("rows"), bigIncomeNodes))))
+		}
+		if len(incomeNodes) > 0 {
+			viewTiles = append(viewTiles, rptTile("rpt-income", "span 2",
+				rptSection("sec-income", uistate.T("reports.incomeBySource"), drillLink("income-drill"), Fragment(
+					If(incomeTakeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "income-takeaway"), incomeTakeaway)),
+					If(len(incomeBarNodes) > 0, Div(incomeBarNodes)),
+					If(len(incomeDonutNodes) > 0, Div(incomeDonutNodes)),
+					Div(css.Class("rows"), incomeNodes),
+				))))
+		}
+		if len(app.Members()) >= 2 && len(memberSpend) >= 1 {
+			viewTiles = append(viewTiles, rptTile("rpt-member", "1 / span 4",
+				rptSection("sec-member", uistate.T("reports.byMember"), nil,
+					Div(css.Class("rows"), memberNodes))))
+		}
+	}
+
+	// ── Opt-in report-metrics FormulaBuilder tile: every figure on this page is a
+	// live report_* engine variable, buildable into formulas and widgets. ────────
+	tiles := []ui.Node{heroTile, toolbar, headsUpTile}
+	tiles = append(tiles, viewTiles...)
+	if showFormulas.Get() {
+		tiles = append(tiles, rptTile("rpt-formula", "1 / span 4", Fragment(
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("reports.formulaHint")),
+			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("reports.metricsShow"), ShowSaved: true}),
+		)))
+	}
+
+	return Div(css.Class("bento bento-reports"), tiles)
 }
 
-// customFieldSpendSection renders the "Spending by <field>" card: a field
-// selector, a ranked list of value→amount rows, and a CSV download button.
-// It is extracted to keep the main Reports function readable and to isolate the
-// per-field OnChange hook (called at a single stable render position, not in a
-// loop).
+// reportsTabEmpty renders a calm, centered note when a selected tab has no
+// data, so the area below the toolbar never goes silently blank (e.g. Advanced
+// with no custom fields, Net worth with no accounts).
+func reportsTabEmpty(msg string) ui.Node {
+	return Div(css.Class("muted"), Attr("data-testid", "reports-tab-empty"),
+		Style(map[string]string{"text-align": "center", "padding": "2.5rem 1rem", "max-width": "32rem", "margin": "0 auto"}),
+		msg)
+}
+
+// customFieldSpendSection renders the "Spending by <field>" section body: a
+// field selector, a ranked list of value→amount rows, and a CSV download
+// button. It is extracted to keep the main Reports function readable and to
+// isolate the per-field OnChange hook (called at a single stable render
+// position, not in a loop).
 func customFieldSpendSection(
 	txns []domain.Transaction,
 	defs []customfields.Def,
@@ -1170,6 +1291,18 @@ func customFieldSpendSection(
 	}
 
 	cfRows, _ := reports.ByCustomField(txns, activeDef.Key, start, end, rates)
+
+	// When nothing in the period actually carries a value for this field, the
+	// grouper degenerates to a single "(no value) — 100%" bar that reads like a
+	// real insight. Show an honest empty state instead (the field selector stays
+	// so the user can try another field).
+	allUnvalued := len(cfRows) > 0
+	for _, r := range cfRows {
+		if r.Value != "" {
+			allUnvalued = false
+			break
+		}
+	}
 
 	// Field selector options — built outside of a loop hook (no On* here).
 	var fieldOpts []ui.Node
@@ -1198,8 +1331,8 @@ func customFieldSpendSection(
 		if pct > 100 {
 			pct = 100
 		}
-		bar := Div(Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
-			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+		bar := Div(css.Class("share-bar", "share-bar-thin"),
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), label), bar),
 			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
@@ -1207,25 +1340,26 @@ func customFieldSpendSection(
 	}
 
 	var body ui.Node
-	if len(rowNodes) == 0 {
+	switch {
+	case allUnvalued:
+		body = P(css.Class("empty"), Attr("data-testid", "cf-unvalued"), uistate.T("reports.customFieldUnvalued", activeDef.Label))
+	case len(rowNodes) == 0:
 		body = P(css.Class("empty"), uistate.T("reports.empty"))
-	} else {
+	default:
 		body = Div(css.Class("rows"), rowNodes)
 	}
 
 	sectionLabel := uistate.T("reports.byCustomField", activeDef.Label)
 	selectorLabel := uistate.T("reports.customFieldSelectLabel")
 
-	return uiw.Card(uiw.CardProps{
-		TestID: "customfield-spend-section",
-		Header: H2(css.Class("card-title"), sectionLabel),
-		Body: Fragment(
+	return Div(Attr("data-testid", "customfield-spend-section"),
+		rptSection("sec-customfield", sectionLabel, nil, Fragment(
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Py1),
 				Label(Attr("for", "cf-field-select"), selectorLabel),
 				Select(css.Class("field"), Attr("id", "cf-field-select"), Attr("aria-label", selectorLabel), Attr("data-testid", "cf-field-select"), onKeyChange, fieldOpts),
 			),
 			body,
-			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+			If(!allUnvalued && len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 				Button(css.Class("btn"), Type("button"),
 					Attr("data-testid", "cf-download-csv"),
 					Title(uistate.T("reports.customFieldDownloadTitle")),
@@ -1238,8 +1372,7 @@ func customFieldSpendSection(
 					uistate.T("reports.downloadCsv"),
 				),
 			)),
-		),
-	})
+		)))
 }
 
 // reportsCatRowProps carries the display data and drill callback for one
@@ -1273,7 +1406,8 @@ func reportsCatRow(props reportsCatRowProps) ui.Node {
 	case props.PriorZero:
 		// C238: category had spend this period but zero in the prior period — show
 		// "new" instead of hiding the badge entirely (can't divide by zero for a %).
-		delta = Span(ClassStr("row-meta "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" "+tw.ColorClass("text-down")),
+		// Neutral-toned: it's metadata, and red stays reserved for negative money.
+		delta = Span(ClassStr("row-meta rpt-new-tag "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.TextDim)),
 			Text(uistate.T("reports.new")))
 	case props.HasDelta && props.Amount != props.Prior:
 		tone, arrow := "text-down", icon.ArrowUp
@@ -1307,9 +1441,10 @@ func reportsCatRow(props reportsCatRowProps) ui.Node {
 }
 
 // reportsCatShareBar is the category-row proportion bar (R-10): like the generic
-// shareBar but each rank gets a distinct hue derived from its index via an inline
-// --cat-idx var, so the ranked categories read as a color-coded set rather than a
-// wall of identical accent bars. 47° steps spread the wheel without close repeats.
+// shareBar but each rank gets a distinct hue. Color each row by its rank with
+// the SAME Tableau10 palette the sibling bar chart and donut use, so a category
+// reads as one hue across all three views in the card (e.g. Mortgage is blue
+// everywhere) instead of three palettes (G9.1a).
 func reportsCatShareBar(amount, max int64, idx int) ui.Node {
 	if max <= 0 {
 		return Fragment()
@@ -1321,13 +1456,9 @@ func reportsCatShareBar(amount, max int64, idx int) ui.Node {
 	if pct > 100 {
 		pct = 100
 	}
-	// Color each row by its rank with the SAME Tableau10 palette the sibling bar
-	// chart and donut use, so a category reads as one hue across all three views in
-	// the card (e.g. Mortgage is blue everywhere) instead of three palettes (G9.1a).
-	return Div(css.Class("share-bar"), Style(map[string]string{"height": "8px", "max-width": "100%",
-		"margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
-		Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct),
-			"background": tableau10(idx), "border-radius": "999px"})))
+	return Div(css.Class("share-bar"),
+		Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct),
+			"background": tableau10(idx)})))
 }
 
 // rollupLabelKey is the i18n key for the by-category roll-up toggle's label,
@@ -1339,11 +1470,11 @@ func rollupLabelKey(on bool) string {
 	return "reports.rollupOff"
 }
 
-// deductibleSection renders the "Deductible totals" card (L16/L58): a ranked
-// list of deductible-flagged categories with their expense totals for the
-// period, a headline total, and a CSV export.  Returns an empty fragment when
-// no categories are marked deductible, so the section stays invisible until the
-// user sets up at least one deductible category.
+// deductibleSection renders the "Deductible totals" section body (L16/L58): a
+// ranked list of deductible-flagged categories with their expense totals for
+// the period, a headline total, and a CSV export. Returns nil when no
+// categories are marked deductible, so the tile stays invisible until the user
+// sets up at least one deductible category.
 func deductibleSection(
 	txns []domain.Transaction,
 	cats []domain.Category,
@@ -1363,7 +1494,7 @@ func deductibleSection(
 		}
 	}
 	if !hasDeductible {
-		return Fragment()
+		return nil
 	}
 
 	summary, _ := reports.DeductibleTotals(txns, cats, start, end, rates)
@@ -1389,8 +1520,8 @@ func deductibleSection(
 		if pct > 100 {
 			pct = 100
 		}
-		bar := Div(Style(map[string]string{"height": "4px", "max-width": "100%", "margin-top": "0.3rem", "background": "var(--border)", "border-radius": "999px", "overflow": "hidden"}),
-			Div(Style(map[string]string{"height": "100%", "width": fmt.Sprintf("%d%%", pct), "background": "var(--accent)", "border-radius": "999px"})))
+		bar := Div(css.Class("share-bar", "share-bar-thin"),
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), bar),
 			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
@@ -1404,10 +1535,8 @@ func deductibleSection(
 		body = Div(css.Class("rows"), rowNodes)
 	}
 
-	return uiw.Card(uiw.CardProps{
-		TestID: "deductible-section",
-		Header: H2(css.Class("card-title"), uistate.T("reports.deductibleTitle")),
-		Body: Fragment(
+	return Div(Attr("data-testid", "deductible-section"),
+		rptSection("sec-deductible", uistate.T("reports.deductibleTitle"), nil, Fragment(
 			P(css.Class("muted"), uistate.T("reports.deductibleHint")),
 			If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
 			body,
@@ -1423,6 +1552,5 @@ func deductibleSection(
 					uistate.T("reports.downloadCsv"),
 				),
 			)),
-		),
-	})
+		)))
 }

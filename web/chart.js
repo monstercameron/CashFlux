@@ -135,9 +135,20 @@
     var xf = tickFormatter(spec.x);
     if (xf) xAxis.tickFormat(xf);
     else if (Object.keys(labelsByX).length) {
+      // Labeled points (bar categories, trend months): tick EXACTLY on the
+      // labeled x positions instead of letting d3 pick fractional ticks that
+      // each round to the nearest label — with few points that duplicated the
+      // same name across neighbouring ticks ("Mortgage Mortgage HOA dues HOA
+      // dues"). Thin evenly when there are more labels than fit.
+      var labelXs = Object.keys(labelsByX).map(Number).sort(function (a, b) { return a - b; });
+      var maxTicks = narrow ? 4 : 8;
+      var step = Math.max(1, Math.ceil(labelXs.length / maxTicks));
+      xAxis.tickValues(labelXs.filter(function (_, i) { return i % step === 0; }));
       xAxis.tickFormat(function (d) {
-        var nearest = Math.round(d);
-        return labelsByX[nearest] || "";
+        var lbl = labelsByX[d] || "";
+        // Ellipsize long category/payee names so neighbouring ticks don't collide
+        // (each bar keeps its full name in the native hover tooltip).
+        return lbl.length > 14 ? lbl.slice(0, 13) + "…" : lbl;
       });
     }
     var yAxis = d3.axisLeft(y).ticks(tiny ? 0 : (narrow ? 3 : 4)).tickSizeOuter(0);

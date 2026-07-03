@@ -20,6 +20,7 @@ func Register() {
 	resetSheet()
 	registerGenerated()
 	registerRecurringSurface()
+	registerReportsSurface()
 	inject(Build())
 }
 

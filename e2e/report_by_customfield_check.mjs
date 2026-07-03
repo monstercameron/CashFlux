@@ -37,8 +37,11 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
 
-  // Navigate to /reports and wait for the main reports content.
+  // Navigate to /reports; the custom-field grouper lives on the Advanced tab of
+  // the redesigned bento surface.
   await page.goto(BASE + "/reports", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".bento-reports", { timeout: 60000 });
+  await page.locator('.bento-reports button', { hasText: "Advanced" }).first().click({ force: true });
   await page.waitForSelector("[data-testid='customfield-spend-section']", {
     timeout: 60000,
   });

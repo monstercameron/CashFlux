@@ -1,3 +1,46 @@
+## 2026-07-03 — /reports: full bento redesign, report_* engine vars, scope-selector rescue
+
+Cam: "redesign the reporting page /reports, use formulas, custom values, widgets, componentize,
+theme vars, claude design skill redesign, and ux optimize via an adversarial sub agent."
+
+Bottom-up per the SDLC: `engineenv.addReportsVars` first (new reportsvars.go — 12 `report_*`
+variables all derivable from the existing Data fields via the pure internal/reports core, so NO new
+Data plumbing; `Names` extended via an init() in the same file; native surface tests incl. an
+always-present guarantee so formulas never hit undefined vars). `widgetcatalog.ReportsMetrics` +
+`GroupReports` live in a NEW widgetcatalog file (zero edits to the contended widgetcatalog.go).
+Persisted `uistate.ReportsConfig` (tab/YoY/rollup) so the reading posture survives reloads. Then the
+screen: `bento bento-reports` host reusing the debt-section chrome, hero (serif Net + delta pill +
+figure chips), toolbar (tabs left; Scope/metrics/Export right after the reviewer called out
+nav-vs-action confusion), per-view tiles with span-2 pairing, accent-not-blue ranked bars,
+i18n via the en_reportsurface.go init-merge file and CSS via rules_reports.go + a one-line
+install.go hook (the recurring agent's contention-avoiding patterns).
+
+Found and fixed along the way: the **#444 ScopeSelector had NO CSS at all** (scope-* classes were
+never styled — the top of /reports was a raw text soup of chip labels); the **R-8 empty-state early
+return trapped a scoped-to-nothing user** (it swallowed the toolbar, so the scope couldn't be
+cleared — now the early return only fires with no scope active); **chart.js x-ticks** (d3 fractional
+ticks each rounding to the nearest label → "Mortgage Mortgage HOA dues HOA dues" under every bar
+chart app-wide; now tickValues land exactly on labeled points, thinned + ellipsized); and **an open
+dropdown's menu was unclickable** because the NEXT transformed tile painted over it (z-index :has()
+rule + close-on-item-click).
+
+Adversarial review (one Sonnet agent over 5 screenshots) drove: the toolbar regrouping, an honest
+empty state for the custom-field grouper (was a misleading "(no value) 100%" bar), the neutral "new"
+tag (red stays for negative money), calmer hero-chip tones (levels neutral, warnings toned), one
+merged stat line under the narrative pull-quote, and the zeroed-categories disclosure (a wall of
+"$0.00 ↓100%" rows folded behind a summary line). Kept: the serif hero, the NW chart, the disclosure.
+
+Verify: `go test ./...`; new `e2e/reports_check.mjs` 27/27 (incl. negatives: un-scope trap, Escape
+closes the export menu, posture persistence past the 4s autosave ticker, real download filename
+assertions); rollup/drill/customfield contract e2e updated for the tabbed surface (drill's
+localStorage oracle was stale — the filter persists via SQLite KV now, so it asserts the
+/transactions filter badge instead). year_view/csv_consistency/export_filename/deductible stay in
+the known pre-existing fresh-profile/IndexedDB-staleness family.
+
+Concurrency: the bills agent was live in engineenv.go/formula_builder.go the whole time; my edits
+there are 3 additive lines total, committed via the isolated-worktree HEAD+mine reconstruction
+(commit only my hunks, never their WIP; no --amend on shared main).
+
 ## 2026-07-03 — Smart+ pay schedule (bills): billsched engine + flip modal + engine vars
 
 Cam asked whether reorganizing bill payment dates around pay frequency helps budget balance, then

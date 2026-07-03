@@ -146,7 +146,7 @@ func registerGenerated() {
 	ruleMedia("print", ".cf-shell, main, main.cf-scroll, #cf-page-view, .bento, .card-alert, .w, .bento .w",
 		background("#fff !important"),
 	)
-	ruleMedia("print", "aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner, .scope-banner,\n        .app-banner, .toast, .reso-control, .home-hero-actions, .reports-export,\n        input, select, textarea,\n        \n        button:not(.btn-link),\n        .txn-table .td-actions, .txn-table th.td-actions,\n        .txn-table .td-select, .txn-table th.td-select",
+	ruleMedia("print", "aside.rail, .rail, .topbar, .mobile-tabbar, .skip-link, .sample-banner, .scope-banner,\n        .app-banner, .toast, .reso-control, .home-hero-actions, .filter-strip, .scope-selector,\n        input, select, textarea,\n        \n        button:not(.btn-link),\n        .txn-table .td-actions, .txn-table th.td-actions,\n        .txn-table .td-select, .txn-table th.td-select",
 		display("none !important"),
 	)
 	ruleMedia("print", ".cf-shell",
@@ -1439,64 +1439,11 @@ func registerGenerated() {
 		fontWeight("600"),
 		letterSpacing("-0.01em"),
 	)
-	rule(".reports-hero",
-		marginBottom("1rem"),
-		padding("1.25rem"),
-		background("var(--bg-card)"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius)"),
-	)
-	rule(".hero-period",
-		fontSize("0.825rem"),
-		fontWeight("500"),
-		color("var(--text-dim)"),
-		margin("0 0 0.6rem"),
-	)
 	rule(".hero-main",
 		display("flex"),
 		alignItems("baseline"),
 		gap("1.5rem"),
 		flexWrap("wrap"),
-	)
-	rule(".hero-net",
-		fontSize("2.5rem"),
-		fontWeight("800"),
-		lineHeight("1.1"),
-		fontVariantNumeric("tabular-nums"),
-		whiteSpace("nowrap"),
-		letterSpacing("-0.025em"),
-	)
-	rule(".hero-net.pos",
-		color("var(--money-positive)"),
-	)
-	rule(".hero-net.neg",
-		color("var(--money-negative)"),
-	)
-	rule(".hero-net-delta",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.25rem"),
-		marginTop("0.2rem"),
-		fontSize("0.8rem"),
-		fontWeight("600"),
-		fontVariantNumeric("tabular-nums"),
-	)
-	rule(".hero-net-delta.pos",
-		color("var(--money-positive)"),
-	)
-	rule(".hero-net-delta.neg",
-		color("var(--money-negative)"),
-	)
-	rule(".hero-flankers",
-		display("flex"),
-		gap("1.25rem"),
-		alignItems("baseline"),
-		flexWrap("wrap"),
-	)
-	rule(".hero-flanker",
-		display("flex"),
-		flexDirection("column"),
-		gap("0.1rem"),
 	)
 	rule(".hero-flanker-label",
 		fontSize("0.75rem"),
@@ -1504,45 +1451,6 @@ func registerGenerated() {
 		textTransform("uppercase"),
 		letterSpacing("0.05em"),
 		color("var(--text-dim)"),
-	)
-	rule(".hero-flanker-value",
-		fontSize("1.75rem"),
-		fontWeight("700"),
-		fontVariantNumeric("tabular-nums"),
-		whiteSpace("nowrap"),
-		letterSpacing("-0.015em"),
-	)
-	rule(".hero-flanker-value.pos",
-		color("var(--money-positive)"),
-	)
-	rule(".hero-flanker-value.neg",
-		color("var(--money-negative)"),
-	)
-	rule(".hero-secondary",
-		display("flex"),
-		gap("1.25rem"),
-		flexWrap("wrap"),
-		marginTop("0.75rem"),
-		paddingTop("0.75rem"),
-		borderTop("1px solid var(--border)"),
-	)
-	rule(".reports-grid",
-		display("grid"),
-		gridTemplateColumns("1fr"),
-		gap("1rem"),
-		alignItems("start"),
-	)
-	ruleMedia("(min-width: 1100px)", ".reports-grid",
-		gridTemplateColumns("1fr 1fr"),
-	)
-	rule(".reports-chart-pair",
-		display("grid"),
-		gridTemplateColumns("1fr"),
-		gap("1rem"),
-		alignItems("start"),
-	)
-	ruleMedia("(min-width: 900px)", ".reports-chart-pair",
-		gridTemplateColumns("1fr 1fr"),
 	)
 	rule(".hero-stat",
 		display("flex"),
@@ -9958,12 +9866,6 @@ func registerGenerated() {
 	)
 	rule(".stat-value.pos",
 		color("var(--money-positive) !important"),
-	)
-	rule(".share-bar",
-		height("8px !important"),
-	)
-	rule(".share-bar > div",
-		height("8px !important"),
 	)
 	rule(".budget-amount",
 		fontVariantNumeric("tabular-nums"),
