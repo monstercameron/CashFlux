@@ -47,31 +47,31 @@ await p.locator('[data-testid="invest-growth-1m"]').click({ force: true }); awai
 check("G8 1M window is selectable + chart survives", await p.locator('[data-testid="invest-growth-1m"][aria-pressed="true"]').count() >= 1 && await p.locator('.inv-growth svg').count() >= 1);
 await p.locator('[data-testid="invest-growth-12m"]').click({ force: true }); await p.waitForTimeout(500);
 
-// Every account has its own growth chart; pools are a custom grouping exposing a variable.
-check("P1 account-growth & pools section", await p.locator('#sec-pools').count() >= 1);
+// Each account tracks a single account (no dropdown); custom charts aggregate accounts.
+check("P1 accounts & charts section", await p.locator('#sec-pools').count() >= 1);
 const acctCards = await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count();
-check("P2 every account has its own growth chart", acctCards >= 1 && await p.locator('.inv-pool-card svg').count() >= acctCards, `${acctCards} account cards`);
-check("P3 each account card has a pool selector", await p.locator('[data-testid^="invest-assign-"]').count() === acctCards, `${await p.locator('[data-testid^="invest-assign-"]').count()} vs ${acctCards}`);
-// Create a pool via the flip modal: a name field + a checkable list of accounts.
+check("P2 every account has its own single-account chart", acctCards >= 1 && await p.locator('.inv-pool-card svg').count() >= acctCards, `${acctCards} account cards`);
+check("P3 (fix) account cards have NO pool dropdown", await p.locator('[data-testid^="invest-assign-"]').count() === 0);
+// Create a custom chart via the flip modal: a name field + a checkable list of accounts.
 await p.locator('[data-testid="invest-new-pool"]').click({ force: true }); await p.waitForTimeout(500);
-check("P4 New-pool opens a flip modal listing the accounts", await p.locator('.inv-pool-modal').count() === 1 && await p.locator('[data-testid^="pool-acct-"]').count() >= 2, `${await p.locator('[data-testid^="pool-acct-"]').count()} account toggles`);
+check("P4 New-chart opens a flip modal listing the accounts", await p.locator('.inv-pool-modal').count() === 1 && await p.locator('[data-testid^="pool-acct-"]').count() >= 2, `${await p.locator('[data-testid^="pool-acct-"]').count()} account toggles`);
 await p.locator('[data-testid="pool-name"]').fill("Retirement");
 const toggles = await p.locator('[data-testid^="pool-acct-"]').all();
 await toggles[0].click({ force: true }); await toggles[1].click({ force: true }); await p.waitForTimeout(200);
 check("P5 checking an account marks it included", (await toggles[0].getAttribute("aria-checked")) === "true");
 await p.locator('[data-testid="pool-save"]').click({ force: true }); await p.waitForTimeout(700);
-check("P6 saving creates the pool chip + its pool_<name>_value variable", await p.locator('.inv-pool-chip').count() >= 1 && ((await p.locator('.inv-pool-var').first().textContent().catch(() => "")) || "").includes("pool_"));
-check("P7 accounts keep their own charts after pooling", await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
-check("P8 the pool chip shows its combined value", ((await p.locator('.inv-pool-chip-val').first().textContent().catch(() => "")) || "").replace(/[^0-9]/g, "").length > 0);
+check("P6 saving adds a custom-chart card exposing pool_<name>_value", await p.locator('[data-testid^="invest-pool-"].inv-pool-card').count() >= 1 && ((await p.locator('.inv-pool-var').first().textContent().catch(() => "")) || "").includes("pool_"));
+check("P7 the custom chart has its own aggregated graph (svg)", await p.locator('.inv-chart-card svg').count() >= 1);
+check("P8 account cards are unchanged (still one per account)", await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
 // Editing opens the same modal, pre-filled with the name.
 await p.locator('[data-testid^="invest-pool-edit-"]').first().click({ force: true }); await p.waitForTimeout(500);
-check("P9 edit opens the pre-filled pool modal", await p.locator('.inv-pool-modal').count() === 1 && (await p.locator('[data-testid="pool-name"]').inputValue().catch(() => "")) === "Retirement");
+check("P9 edit opens the pre-filled chart modal", await p.locator('.inv-pool-modal').count() === 1 && (await p.locator('[data-testid="pool-name"]').inputValue().catch(() => "")) === "Retirement");
 await p.locator('[data-testid="pool-cancel"]').click({ force: true }); await p.waitForTimeout(400);
-check("P10 (regression) closing the pool modal doesn't crash", await p.locator('.inv-pool-modal').count() === 0 && errs.length === 0);
-// Delete the pool.
+check("P10 (regression) closing the chart modal doesn't crash", await p.locator('.inv-pool-modal').count() === 0 && errs.length === 0);
+// Delete the custom chart.
 await p.locator('[data-testid^="invest-pool-del-"]').first().click({ force: true }); await p.waitForTimeout(400);
 await p.evaluate(() => { const c = document.querySelector('#cf-dialog-confirm'); if (c) c.click(); }); await p.waitForTimeout(600);
-check("P11 deleting the pool removes its chip (accounts unchanged)", await p.locator('.inv-pool-chip').count() === 0 && await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
+check("P11 deleting the chart removes its card (accounts unchanged)", await p.locator('[data-testid^="invest-pool-"].inv-pool-card').count() === 0 && await p.locator('[data-testid^="invest-acct-"].inv-pool-card').count() === acctCards);
 
 // Add a stock security → securities + allocation appear.
 await p.locator('[data-testid="invest-add"]').click({ force: true }); await p.waitForTimeout(500);

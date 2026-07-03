@@ -86,21 +86,25 @@ func growthCard(testid string, header ui.Node, series []money.Money, labels []st
 	)
 }
 
-// --- pool chip (create/manage a group; shows its variable name) -------------------
+// --- pool (custom chart) card ----------------------------------------------------
 
 type investPoolChipProps struct {
-	Pool       uistate.InvestPool
-	ValueMinor int64
-	Sym        string
-	Dec        int
+	Pool    uistate.InvestPool
+	Members int // count of member accounts
+	Series  []money.Money
+	Labels  []string
+	Sym     string
+	Dec     int
+	Base    string
 }
 
-// investPoolChip renders one pool in the pools bar: its name + combined value, the variable
-// name it exposes (pool_<slug>_value) for use elsewhere, and rename/delete actions.
-func investPoolChip(props investPoolChipProps) ui.Node {
+// investPoolCard renders one pool as a CUSTOM CHART card: an aggregated growth chart of its
+// member accounts, with the pool name, its member count, the pool_<slug>_value variable it
+// exposes (for use elsewhere), and edit/delete actions.
+func investPoolCard(props investPoolChipProps) ui.Node {
 	p := props.Pool
 	poolEdit := uistate.UseInvestPoolEditID()
-	rename := ui.UseEvent(Prevent(func() { poolEdit.Set(p.ID) }))
+	edit := ui.UseEvent(Prevent(func() { poolEdit.Set(p.ID) }))
 	del := ui.UseEvent(Prevent(func() {
 		uistate.ConfirmModal(uistate.T("investments.deletePoolConfirm", p.Name), true, func(ok bool) {
 			if ok {
@@ -110,60 +114,54 @@ func investPoolChip(props investPoolChipProps) ui.Node {
 		})
 	}))
 	varName := "pool_" + engineenv.PoolVarSlug(p.Name) + "_value"
-	return Div(css.Class("inv-pool-chip"), Attr("data-testid", "invest-pool-"+p.ID),
-		Div(css.Class("inv-pool-chip-main"),
-			Span(css.Class("inv-pool-chip-name"), p.Name),
-			Span(css.Class("inv-pool-chip-val", tw.TextDim), fmtSignedMoney(props.ValueMinor, props.Sym, props.Dec)),
+	header := Div(css.Class("inv-acct-head"),
+		Div(css.Class("inv-pool-title-row"),
+			Span(css.Class("inv-chart-tag"), uistate.T("investments.poolTag")),
+			Span(css.Class("inv-pool-name"), p.Name),
+			Span(css.Class("inv-pool-count", tw.TextDim), uistate.T("investments.poolCount", props.Members)),
+			Div(css.Class("inv-pool-actions"),
+				Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+p.ID),
+					Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(edit),
+					uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+				Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-del-"+p.ID),
+					Attr("aria-label", uistate.T("investments.deletePool")), Title(uistate.T("investments.deletePool")), OnClick(del),
+					uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+			),
 		),
 		Span(css.Class("inv-pool-var"), Title(uistate.T("investments.poolVarHint")), varName),
-		Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+p.ID),
-			Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(rename),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
-		Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-del-"+p.ID),
-			Attr("aria-label", uistate.T("investments.deletePool")), Title(uistate.T("investments.deletePool")), OnClick(del),
-			uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
 	)
+	return Div(css.Class("inv-chart-card"),
+		growthCard("invest-pool-"+p.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base))
 }
 
-// --- per-account growth card (with a pool selector) ------------------------------
+// --- per-account growth card -----------------------------------------------------
 
-type investAccountGraphCardProps struct {
-	Account     domain.Account
-	Pools       []uistate.InvestPool
-	CurrentPool string
-	Series      []money.Money
-	Labels      []string
-	Sym         string
-	Dec         int
-	Base        string
-	OnView      func(string)
+type investAccountCardProps struct {
+	Account domain.Account
+	Series  []money.Money
+	Labels  []string
+	Sym     string
+	Dec     int
+	Base    string
+	OnView  func(string)
 }
 
-// investAccountGraphCard is one account's card in the single account list: name + type badge
-// + a "view transactions" link, a pool selector (to group it), then the value/delta and its
-// own growth chart. Every investment account gets one — this IS the account list.
-func investAccountGraphCard(props investAccountGraphCardProps) ui.Node {
+// investAccountCard is one account's card: name + type badge + a "view transactions" link,
+// its value/delta, and its own single-account growth chart. No pool selector — pool
+// membership is managed only when creating/editing a pool (custom chart).
+func investAccountCard(props investAccountCardProps) ui.Node {
 	a := props.Account
-	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("investments.ungrouped")}}
-	for _, p := range props.Pools {
-		opts = append(opts, uiw.SelectOption{Value: p.ID, Label: p.Name})
-	}
 	view := ui.UseEvent(Prevent(func() {
 		if props.OnView != nil {
 			props.OnView(a.ID)
 		}
 	}))
-	header := Div(css.Class("inv-acct-head"),
-		Div(css.Class("inv-pool-title-row"),
-			Span(css.Class("inv-pool-name"), a.Name),
-			Span(css.Class("inv-chip inv-class"), investmentAccountTypeBadge(a.Type)),
-			Button(css.Class("btn btn-sm btn-ghost inv-acct-view"), Type("button"), Attr("data-testid", "invest-acct-view-"+a.ID),
-				Attr("aria-label", uistate.T("accounts.viewTitle")), Title(uistate.T("nav.transactions")), OnClick(view),
-				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		),
-		uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: props.CurrentPool, Class: "inv-acct-pool",
-			OnChange:  func(v string) { uistate.AssignAccountToPool(a.ID, v); uistate.BumpDataRevision() },
-			AriaLabel: fmt.Sprintf(uistate.T("investments.assignAria"), a.Name), TestID: "invest-assign-" + a.ID}),
+	header := Div(css.Class("inv-pool-title-row"),
+		Span(css.Class("inv-pool-name"), a.Name),
+		Span(css.Class("inv-chip inv-class"), investmentAccountTypeBadge(a.Type)),
+		Button(css.Class("btn btn-sm btn-ghost inv-acct-view"), Type("button"), Attr("data-testid", "invest-acct-view-"+a.ID),
+			Attr("aria-label", uistate.T("accounts.viewTitle")), Title(uistate.T("nav.transactions")), OnClick(view),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
 	return growthCard("invest-acct-"+a.ID, header, props.Series, props.Labels, props.Sym, props.Dec, props.Base)
 }
@@ -330,12 +328,6 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 
 	investAccts := investAccountsOf(app)
 	pools := uistate.InvestPools()
-	poolOf := map[string]string{}
-	for _, p := range pools {
-		for _, aid := range p.AccountIDs {
-			poolOf[aid] = p.ID
-		}
-	}
 	now := time.Now()
 	cutoffs, labels := growthCutoffs(now, months)
 	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
@@ -344,58 +336,40 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 		s, _ := ledger.NetWorthSeries(accts, txns, cutoffs, rates)
 		return s
 	}
-	// A pool's combined current value (base-currency balance sum of its member accounts).
 	acctByID := map[string]domain.Account{}
 	for _, a := range investAccts {
 		acctByID[a.ID] = a
 	}
-	poolValue := func(p uistate.InvestPool) int64 {
-		var total int64
-		for _, aid := range p.AccountIDs {
-			a, ok := acctByID[aid]
-			if !ok {
-				continue
-			}
-			if bal, err := ledger.Balance(a, txns); err == nil {
-				if c, cerr := rates.Convert(bal, v.Base); cerr == nil {
-					total += c.Amount
-				} else {
-					total += bal.Amount
-				}
+
+	// One card per account (its own single-account chart) followed by one card per pool (a
+	// custom chart aggregating its member accounts).
+	gridArgs := []any{css.Class("inv-pool-grid")}
+	for _, a := range investAccts {
+		ac := a
+		gridArgs = append(gridArgs, ui.CreateElement(investAccountCard, investAccountCardProps{
+			Account: ac, Series: seriesFor([]domain.Account{ac}), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base, OnView: onView,
+		}))
+	}
+	for _, p := range pools {
+		pc := p
+		var members []domain.Account
+		for _, aid := range pc.AccountIDs {
+			if a, ok := acctByID[aid]; ok {
+				members = append(members, a)
 			}
 		}
-		return total
+		gridArgs = append(gridArgs, ui.CreateElement(investPoolCard, investPoolChipProps{
+			Pool: pc, Members: len(members), Series: seriesFor(members), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base,
+		}))
 	}
 
-	// Pools bar: a chip per pool + the New-pool action.
-	var poolsBar ui.Node = Fragment()
-	if len(pools) > 0 {
-		chips := MapKeyed(pools, func(p uistate.InvestPool) any { return p.ID }, func(p uistate.InvestPool) ui.Node {
-			return ui.CreateElement(investPoolChip, investPoolChipProps{Pool: p, ValueMinor: poolValue(p), Sym: v.Sym, Dec: v.Dec})
-		})
-		poolsBar = Div(css.Class("inv-pools-bar"),
-			Span(css.Class("inv-pools-bar-label", tw.TextDim), uistate.T("investments.poolsBarLabel")),
-			chips,
-		)
-	}
+	newChartBtn := Button(css.Class("btn btn-sm btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "invest-new-pool"), Title(uistate.T("investments.newChartTitle")), OnClick(newPool),
+		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("investments.newChart")))
 
-	// One growth card per account (always), with its pool selector.
-	cards := MapKeyed(investAccts, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
-		return ui.CreateElement(investAccountGraphCard, investAccountGraphCardProps{
-			Account: a, Pools: pools, CurrentPool: poolOf[a.ID],
-			Series: seriesFor([]domain.Account{a}), Labels: labels, Sym: v.Sym, Dec: v.Dec, Base: v.Base,
-			OnView: onView,
-		})
-	})
-
-	newPoolBtn := Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "invest-new-pool"), Title(uistate.T("investments.newPool")), OnClick(newPool),
-		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("investments.newPool")))
-
-	body := investSection("sec-pools", uistate.T("investments.poolsTitle"), newPoolBtn, Fragment(
+	body := investSection("sec-pools", uistate.T("investments.poolsTitle"), newChartBtn, Fragment(
 		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.poolsHint")),
-		poolsBar,
-		Div(css.Class("inv-pool-grid"), cards),
+		Div(gridArgs...),
 	))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-pools", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

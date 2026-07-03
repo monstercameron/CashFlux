@@ -1,3 +1,33 @@
+## 2026-07-02 — /investments: single-account charts + pools as custom aggregated charts
+
+Cam refined the pools model twice. First: pools shouldn't *replace* the account cards — every account
+keeps its own growth chart, pools are additive named aggregates. Then the clincher: "the charts in the
+widgets and each account's card only track the singular account, so they don't need the drop down, but
+the user can create a custom chart that makes a pool and the pool can have 1+ accounts aggregated."
+
+So the redesign:
+- **Removed the per-account pool dropdown.** Each account card is now a pure single-account chart
+  (`investAccountCard` → `growthCard`), header = name + type badge + view-transactions. Deleted the
+  dead pool-selector plumbing (`AssignAccountToPool`/`PoolForAccount`/`AddInvestPool`/`RenameInvestPool`).
+- **Pools became "custom charts."** `investPoolCard` is an accent-outlined card with a "Chart" badge,
+  member count, the *aggregated* area chart (member accounts' summed ledger series), edit/delete, and
+  its `pool_<slug>_value` engine variable. Shown *alongside* (after) the account cards, not replacing.
+- **Overlap allowed.** `UpsertInvestPool` no longer strips an account from other pools — a pool is now
+  an independent chart definition, so an account can feed several charts.
+- **Both add flows are shell-root flip modals.** Add-security (`InvestAddHost`, bool atom) and
+  new/edit-chart (`InvestPoolEditHost`, id atom "" | "new" | poolID) mount at the shell root so
+  `position:fixed` centres on the viewport (bento tiles carry transforms). The add-security crash
+  (`GoUseAtom called outside component context`) is gone because Cancel now calls an `OnDone` closure
+  captured at render, not a hook.
+
+The one non-obvious bug: the chart modal's **Cancel didn't close** (P10/P11 red) while Save did. Both
+call the host's `closeModal` = `edit.Set("")`, and the *identical* pattern works for the add modal. The
+difference: Save also called `uistate.BumpDataRevision()` first. The bare atom `.Set("")` wasn't
+re-rendering the shell-root host in this nesting (the FlipPanel wrapping the pool form with its MapKeyed
+account toggles), so the host never fell through to `Fragment()`. Fix: `closeModal` now bumps the data
+revision alongside the atom set, forcing the host to re-render and unmount the panel. → `e2e/investments_check.mjs`
+41/41.
+
 ## 2026-07-02 — /debt: widgetized, engine-driven, config-driven payoff ladder
 
 Cam: "do /debt and widgetize, componentize, formula-ize, custom field-ize the debts page, use the

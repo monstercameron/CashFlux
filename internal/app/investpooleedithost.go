@@ -24,7 +24,10 @@ func InvestPoolEditHost() uic.Node {
 	if pid == "" {
 		return Fragment()
 	}
-	closeModal := func() { edit.Set("") }
+	closeModal := func() {
+		edit.Set("")
+		uistate.BumpDataRevision()
+	}
 	title := uistate.T("investments.newPoolTitle")
 	if pid != "new" {
 		title = uistate.T("investments.editPoolTitle")

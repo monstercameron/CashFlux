@@ -4957,6 +4957,24 @@ func registerGenerated() {
 	rule(".inv-acct-view",
 		prop("margin-left", "auto"),
 	)
+	// A custom-chart (pool) card is accent-outlined and carries a small "Chart" tag so it
+	// reads as an aggregate distinct from the single-account cards beside it.
+	rule(".inv-chart-card .inv-pool-card",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 6%, var(--bg-elev))"),
+	)
+	rule(".inv-chart-tag",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.45rem"),
+		borderRadius("999px"),
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+		background("var(--accent)"),
+		color("var(--bg)"),
+	)
 	rule(".inv-acct-head .field.inv-acct-pool, .inv-acct-head select",
 		prop("align-self", "flex-start"),
 		width("auto"),

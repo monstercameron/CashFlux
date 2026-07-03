@@ -80,50 +80,23 @@ func AssignAccountToPool(accountID, poolID string) {
 	SetInvestPools(pools)
 }
 
-// UpsertInvestPool creates or updates a pool with the given id, name, and member accounts.
-// Because an account belongs to at most one pool, the selected accounts are removed from any
-// other pool first. A blank name is a no-op.
+// UpsertInvestPool creates or updates a pool (a custom aggregated chart) with the given id,
+// name, and member accounts. Pools are independent chart definitions, so an account may
+// appear in more than one pool. A blank name is a no-op.
 func UpsertInvestPool(id, name string, accountIDs []string) {
 	name = strings.TrimSpace(name)
 	if id == "" || name == "" {
 		return
 	}
-	sel := make(map[string]bool, len(accountIDs))
-	for _, a := range accountIDs {
-		sel[a] = true
-	}
 	pools := InvestPools()
-	found := false
 	for i := range pools {
 		if pools[i].ID == id {
 			pools[i].Name = name
 			pools[i].AccountIDs = append([]string(nil), accountIDs...)
-			found = true
-			continue
+			SetInvestPools(pools)
+			return
 		}
-		// Strip any of the selected accounts from other pools (one pool per account).
-		kept := pools[i].AccountIDs[:0:0]
-		for _, aid := range pools[i].AccountIDs {
-			if !sel[aid] {
-				kept = append(kept, aid)
-			}
-		}
-		pools[i].AccountIDs = kept
 	}
-	if !found {
-		pools = append(pools, InvestPool{ID: id, Name: name, AccountIDs: append([]string(nil), accountIDs...)})
-	}
+	pools = append(pools, InvestPool{ID: id, Name: name, AccountIDs: append([]string(nil), accountIDs...)})
 	SetInvestPools(pools)
-}
-
-// PoolForAccount returns the id of the pool an account belongs to, or "" when ungrouped.
-func PoolForAccount(accountID string) string {
-	for _, p := range InvestPools() {
-		for _, id := range p.AccountIDs {
-			if id == accountID {
-				return p.ID
-			}
-		}
-	}
-	return ""
 }
