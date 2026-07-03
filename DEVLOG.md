@@ -1,3 +1,57 @@
+## 2026-07-03 — /recurring: full-hub bento redesign, flow identity vars, interconnects
+
+Cam: "do the redesign for the recurring page now" (+ follow-ups: cover Bills/Subscriptions tabs too;
+list items should deep-link to their homes with filters applied and "support custom values and
+formulas and have a solid identity"; detection prefs + new-entity forms always in flip modals; the
+bills list should scroll with a sticky calendar, and hovering a bill should light up its date).
+Concurrency note: another agent was live in the repo (planning redesign), so all recurring work went
+into NEW files where possible (en_recurringsurface.go via the i18n init-merge pattern;
+rules_recurring.go + a one-line registerRecurringSurface() hook in install.go — avoiding the
+contended en.go/rules_gen.go entirely), and the engine files were only touched after the planning
+work landed in ac63e301.
+
+Architecture (bottom-up):
+1. ENGINE. `addRecurringVars` (engineenv, tested): fixed `recurring_monthly_in/out/net` +
+   `recurring_count` aggregates and per-flow `recurring_<slug>_monthly` / `_amount` — the flow's
+   SOLID IDENTITY on the formula surface (slug disambiguation mirrors pools/plans; FX-converted).
+   Catalog `RecurringMetrics` + GroupRecurring; wired into the FormulaBuilder picker. The card shows
+   its identity chip (recurring_gym_membership_monthly), and the surface computes VarPrefixByID in
+   STORE order before the display sort so the shown name always equals the engine name.
+2. SCHEDULED SURFACE. `computeRecurView` (pure): monthly-equivalent totals, derived due dates for
+   the next 30 days (cap 8/flow so a stale NextDue can't flood; overdue flagged), detected-but-
+   unplanned charges (liability payments filtered). Tiles: hero / toolbar / next-30-days / flow
+   cards / detected / opt-in FormulaBuilder. Add+edit in a shell-root FlipPanel (RecurringEditHost,
+   "" | "new" | rid atom; bare-atom close per the P10 lesson) with a Money in/out Segmented instead
+   of the old "type a negative number" convention.
+3. ADVERSARIAL DESIGN PASS (sonnet subagent, 10 findings — all high/med applied): share meters went
+   accent→neutral bg-dim (green beside a red outflow figure read as a contradiction); the hero's
+   duplicate in/out sub-line became an Overdue/Next-due chip; "Scheduled flows"→"All recurring
+   flows" (one vocabulary); the ambiguous 1m/3m/1y cadence badge became a repeat icon (cadence is
+   already spelled out in the meta); Post due gained its action count + accent outline when >0;
+   same-day schedule rows share one date medallion (ghost class); the modal date field went
+   full-width; Account/Category labelled "(optional)"; auto-post disabled with a hint until an
+   account is linked (and never persisted on without one).
+4. INTERCONNECTS. Card ⋯ menu: View transactions (TxFilter{Account, Category}, Text fallback —
+   filter atom captured at render, not in the handler), View budget (only when the category is
+   budgeted), View account, Edit, Delete (ConfirmModal).
+5. BILLS + SUBSCRIPTIONS CHROME. Both panels kept their logic but joined the surface: rec-hero
+   heroes + debt-chips, recurSection titles (no EntityListSection double-card), .rec-cardrows card
+   rows. Bills: the list scrolls (.bills-scroll, 62vh) beside a sticky calendar, and a delegated
+   document-level mouseover listener toggles .cal-hl on the matching [data-date] cell from a row's
+   [data-due] — the back-to-top pattern, zero Go re-renders per hover. Subscriptions: detection
+   preferences moved into a flip modal (SubsPrefsHost); its save handlers now BumpDataRevision so
+   the list behind the modal recomputes live (the panel previously relied on same-tree re-renders).
+
+e2e: new `recurring_check.mjs` (42 checks, pos+neg: hero math to the cent, share-meter bounds,
+empty-label/zero-amount/cancel negatives, edit-no-duplicate, prefs persistence across reopen,
+hover-highlight on/off) — delete flaked twice on the confirm-dialog race until the helper waited for
+#cf-dialog-confirm to mount and the name to leave the DOM (plus an Escape before reopening a menu).
+The stale story test (still pointed at /planning, read pre-IDB localStorage) was repointed at the
+modal flow with reload-survival as the persistence proof. bills_markpaid/custompage_bills_source/
+recurring_task e2e fail for PRE-EXISTING reasons (a[title="Bills"] nav link gone since the IA remap;
+localStorage seeding dead post-IDB) — not touched. Midnight-theme check: cadence tag + identity chip
+track the accent.
+
 ## 2026-07-03 — /planning: widgetized bento redesign + custom values + adversarial design pass
 
 Cam: "lets move into planning next, remember custom values, formulas, componenets, style tokens,

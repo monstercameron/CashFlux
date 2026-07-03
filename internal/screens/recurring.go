@@ -2,20 +2,23 @@
 
 //go:build js && wasm
 
-// Package screens — recurring.go holds the /recurring route and the
-// RecurringManagerPanel component extracted from Planning() (FEATURE_MAP §5.7a).
-// Moving the panel here gives /recurring a real scoped screen and lets Planning
-// embed the same component without duplicating logic or hooks.
+// Package screens — recurring.go holds the /recurring route: a three-tab hub
+// (Scheduled / Bills / Subscriptions, FEATURE_MAP §5.3) whose Scheduled tab is a
+// widgetized bento surface over the recurring cash-flow schedule. Adding/editing
+// a flow happens in a shell-root flip modal (RecurringEditHost + RecurringForm).
 package screens
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
@@ -24,253 +27,440 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// RecurringManagerPanelProps holds configuration for RecurringManagerPanel.
-// Currently the panel reads all state from appstate.Default, so no props are
-// needed; the struct exists so call sites pass RecurringManagerPanelProps{} and
-// future props can be added without altering existing callers.
-type RecurringManagerPanelProps struct{}
+// recurCadence localizes a recurring cadence (local to the recurring surface so it
+// has no dependency on other screens' helpers).
+func recurCadence(c domain.RecurringCadence) string {
+	switch c {
+	case domain.CadenceWeekly:
+		return uistate.T("recurring.cadenceWeekly")
+	case domain.CadenceBiweekly:
+		return uistate.T("recurring.cadenceBiweekly")
+	case domain.CadenceSemimonthly:
+		return uistate.T("recurring.cadenceSemimonthly")
+	case domain.CadenceQuarterly:
+		return uistate.T("recurring.cadenceQuarterly")
+	case domain.CadenceYearly:
+		return uistate.T("recurring.cadenceYearly")
+	default:
+		return uistate.T("recurring.cadenceMonthly")
+	}
+}
 
-// RecurringManagerPanel is the self-contained recurring cash-flow manager: the
-// add-form (label/amount/cadence/account/category/first-due/autopost/autopay),
-// auto-detected charges section, monthly-total note, per-row inline-edit list,
-// and "Post due" action. It owns all its own hooks so it can be embedded at
-// multiple call sites (Planning and /recurring) with isolated state per mount.
-func RecurringManagerPanel(p RecurringManagerPanelProps) ui.Node {
-	app := appstate.Default
-	base := "USD"
-	if app != nil {
-		if b := app.Settings().BaseCurrency; b != "" {
-			base = b
+// recurOccurrence is one concrete due date derived from a flow's schedule.
+type recurOccurrence struct {
+	R       domain.Recurring
+	Date    time.Time
+	Overdue bool
+}
+
+// recurView is the derived render model every Scheduled-tab tile shares. Pure —
+// built once per render from the live store.
+type recurView struct {
+	Base        string
+	Dec         int
+	Flows       []domain.Recurring // sorted soonest-due first
+	MonthlyIn   int64              // Σ positive monthly equivalents
+	MonthlyOut  int64              // Σ |negative| monthly equivalents (positive figure)
+	MonthlyNet  int64
+	Upcoming    []recurOccurrence // overdue + next 30 days, sorted by date
+	UpcomingIn  int64
+	UpcomingOut int64
+	Detected    []subscriptions.Subscription // in history, not yet planned
+	// VarPrefixByID maps a flow ID to its engine-variable prefix ("recurring_<slug>_")
+	// — the flow's stable formula identity. Computed over the flows in STORE order
+	// (the same order the engine disambiguates in), so the name shown on a card is
+	// exactly the name the formula surface exposes.
+	VarPrefixByID map[string]string
+	// BudgetedCats holds the category IDs that have a budget, so a flow can offer a
+	// "View budget" jump when its category is budgeted.
+	BudgetedCats map[string]bool
+}
+
+// computeRecurView builds the shared model: monthly-equivalent totals, the derived
+// due dates for the next 30 days (overdue included, capped per flow so a stale
+// schedule can't flood the list), and the detected-but-unplanned charges.
+func computeRecurView(app *appstate.App, now time.Time) recurView {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	v := recurView{Base: base, Dec: currency.Decimals(base)}
+
+	v.Flows = append(v.Flows, app.Recurring()...)
+	// Formula identities are disambiguated in store order (matching the engine) —
+	// capture them BEFORE the display sort so a card shows the exact variable name
+	// the formula surface exposes.
+	v.VarPrefixByID = map[string]string{}
+	for _, b := range engineenv.RecurringVarBases(v.Flows) {
+		v.VarPrefixByID[b.Recurring.ID] = b.Prefix
+	}
+	v.BudgetedCats = map[string]bool{}
+	for _, bg := range app.Budgets() {
+		if bg.CategoryID != "" {
+			v.BudgetedCats[bg.CategoryID] = true
 		}
 	}
+	sort.SliceStable(v.Flows, func(i, j int) bool { return v.Flows[i].NextDue.Before(v.Flows[j].NextDue) })
 
-	// === Hooks — all unconditional (GWC rule) ===
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	cutoff := today.AddDate(0, 0, 30)
+	for _, r := range v.Flows {
+		me := r.MonthlyEquivalent()
+		if me >= 0 {
+			v.MonthlyIn += me
+		} else {
+			v.MonthlyOut += -me
+		}
+		v.MonthlyNet += me
 
-	// Revision counter: any write operation increments this, causing the panel to
-	// re-render and re-read app.Recurring() so the list stays in sync.
-	rev := ui.UseState(0)
-	rLabel := ui.UseState("")
-	rAmount := ui.UseState("")
-	rCadence := ui.UseState(string(domain.CadenceMonthly))
-	rAccount := ui.UseState("")
-	rCategory := ui.UseState("")
-	rAutopost := ui.UseState(false)
-	rAutopay := ui.UseState(false) // C157
-	rNextDue := ui.UseState("")    // C149: first due date (blank = today)
-	rErr := ui.UseState("")
-	postMsg := ui.UseState("")
-	onRLabel := ui.UseEvent(func(v string) { rLabel.Set(v) })
-	onRAmount := ui.UseEvent(func(v string) { rAmount.Set(v) })
-	onRNextDue := ui.UseEvent(func(v string) { rNextDue.Set(v) })
-	onRCadence := ui.UseEvent(func(e ui.Event) { rCadence.Set(e.GetValue()) })
-	onRAccount := ui.UseEvent(func(e ui.Event) { rAccount.Set(e.GetValue()) })
-	onRCategory := ui.UseEvent(func(e ui.Event) { rCategory.Set(e.GetValue()) })
-	addRecurring := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			return
-		}
-		label := strings.TrimSpace(rLabel.Get())
-		if label == "" {
-			rErr.Set(uistate.T("recurring.labelRequired"))
-			return
-		}
-		amt, err := money.ParseMinor(strings.TrimSpace(rAmount.Get()), currency.Decimals(base))
-		if err != nil || amt == 0 {
-			rErr.Set(uistate.T("recurring.amountRequired"))
-			return
-		}
-		// C149: honor the chosen first-due date; blank/invalid falls back to today.
-		nextDue := time.Now()
-		if s := strings.TrimSpace(rNextDue.Get()); s != "" {
-			if d, derr := dateutil.ParseDate(s); derr == nil {
-				nextDue = d
+		// Walk the schedule from NextDue to the cutoff. Cap iterations so a NextDue
+		// far in the past (many missed occurrences) can't generate an unbounded list.
+		d := r.NextDue
+		for i := 0; i < 8 && !d.After(cutoff); i++ {
+			occ := recurOccurrence{R: r, Date: d, Overdue: d.Before(today)}
+			v.Upcoming = append(v.Upcoming, occ)
+			if r.Amount.Amount >= 0 {
+				v.UpcomingIn += r.Amount.Amount
+			} else {
+				v.UpcomingOut += -r.Amount.Amount
 			}
-		}
-		r := domain.Recurring{
-			ID: id.New(), Label: label, Amount: money.New(amt, base),
-			Cadence: domain.RecurringCadence(rCadence.Get()), NextDue: nextDue,
-			AccountID: rAccount.Get(), CategoryID: rCategory.Get(), Autopost: rAutopost.Get(), Autopay: rAutopay.Get(),
-		}
-		if err := app.PutRecurring(r); err != nil {
-			rErr.Set(err.Error())
-			return
-		}
-		rLabel.Set("")
-		rAmount.Set("")
-		rAutopost.Set(false)
-		rAutopay.Set(false)
-		rNextDue.Set("")
-		rErr.Set("")
-		rev.Set(rev.Get() + 1)
-	}))
-	deleteRecurring := func(rid string) {
-		if app != nil {
-			_ = app.DeleteRecurring(rid)
-			rev.Set(rev.Get() + 1)
+			d = r.Cadence.Next(d)
 		}
 	}
+	sort.SliceStable(v.Upcoming, func(i, j int) bool { return v.Upcoming[i].Date.Before(v.Upcoming[j].Date) })
 
-	// C147: one-click "add to plan" for an auto-detected recurring charge. Builds a
-	// domain.Recurring from the detected subscription (charges are expenses → stored
-	// negative, matching the sign convention) and persists it, then refreshes.
-	addDetected := func(s subscriptions.Subscription) {
-		if app == nil {
-			return
-		}
-		nextDue := s.NextRenewal
-		if nextDue.IsZero() {
-			nextDue = time.Now()
-		}
-		r := domain.Recurring{
-			ID: id.New(), Label: s.Name, Amount: money.New(-s.Amount, base),
-			Cadence: domain.RecurringCadence(string(s.Cadence)), NextDue: nextDue,
-		}
-		if err := app.PutRecurring(r); err == nil {
-			rev.Set(rev.Get() + 1)
-		}
+	// Detected charges not already planned (and not liability payments, which would
+	// double-count a loan/card autopay).
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	existing := map[string]bool{}
+	for _, r := range v.Flows {
+		existing[strings.ToLower(strings.TrimSpace(r.Label))] = true
 	}
-	// C153: inline-edit a recurring. The row builds the edited Recurring (preserving
-	// ID/NextDue/Autopost) and hands it here to persist.
-	editRecurring := func(r domain.Recurring) {
-		if app == nil {
-			return
+	detected, _ := subscriptions.Detect(app.Transactions(), rates, 3)
+	for _, s := range detected {
+		if existing[strings.ToLower(strings.TrimSpace(s.Name))] {
+			continue
 		}
-		if err := app.PutRecurring(r); err != nil {
-			return
+		if subscriptions.IsLiabilityPayment(s, app.Transactions(), app.Accounts()) {
+			continue
 		}
-		rev.Set(rev.Get() + 1)
+		v.Detected = append(v.Detected, s)
 	}
+	return v
+}
+
+// recurTile wraps a tile body in the shared Widget chrome + the full-width bento column.
+func recurTile(tid string, body ui.Node) ui.Node {
+	return uiw.Widget(uiw.WidgetProps{
+		ID: tid, Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: body,
+	})
+}
+
+// recurSection wraps a tile body with a serif section title + optional action, reusing
+// the debt-section chrome so /recurring matches the other redesigned surfaces.
+func recurSection(sid, title string, action, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if sid != "" {
+		args = append(args, Attr("id", sid))
+	}
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
+	return Div(args...)
+}
+
+// recurStatChip renders one headline figure (reuses the debt-stat chrome).
+func recurStatChip(label, value, valueCls string) ui.Node {
+	return Div(css.Class("debt-stat"),
+		Div(css.Class("debt-stat-label", tw.TextDim), label),
+		Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+valueCls), value),
+	)
+}
+
+// addRecurringButton is the tiny isolated subscriber that opens the add-flow modal
+// (only it + the host re-render on open/close, never the surface tiles).
+func addRecurringButton() ui.Node {
+	edit := uistate.UseRecurringEditID()
+	open := ui.UseEvent(Prevent(func() { edit.Set("new") }))
+	return Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "recurring-add"), Title(uistate.T("recurring.addFlowTitle")), OnClick(open),
+		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("recurring.addFlow")))
+}
+
+// recurScheduledSurface is the Scheduled tab: a bento host of tiles over the shared
+// view model — hero (monthly net + figures), toolbar (post due / add), the next-30-days
+// schedule, the flow cards, and any detected-but-unplanned charges.
+func recurScheduledSurface() ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	_ = uistate.UseDataRevision().Get()
+
+	postMsg := ui.UseState("")
 	postDue := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			return
-		}
 		n, err := app.PostDueRecurring(time.Now())
 		if err != nil {
 			postMsg.Set(err.Error())
 			return
 		}
 		postMsg.Set(uistate.T("recurring.posted", plural(n, "transaction")))
-		rev.Set(rev.Get() + 1)
+		uistate.BumpDataRevision()
 	}))
 
-	// === Rendering (nil-guarded) ===
-
-	if app == nil {
-		return Fragment()
-	}
-
-	cadenceOpts := []ui.Node{
-		Option(Value(string(domain.CadenceWeekly)), SelectedIf(rCadence.Get() == string(domain.CadenceWeekly)), uistate.T("recurring.cadenceWeekly")),
-		Option(Value(string(domain.CadenceBiweekly)), SelectedIf(rCadence.Get() == string(domain.CadenceBiweekly)), uistate.T("recurring.cadenceBiweekly")),
-		Option(Value(string(domain.CadenceMonthly)), SelectedIf(rCadence.Get() == string(domain.CadenceMonthly)), uistate.T("recurring.cadenceMonthly")),
-		Option(Value(string(domain.CadenceSemimonthly)), SelectedIf(rCadence.Get() == string(domain.CadenceSemimonthly)), uistate.T("recurring.cadenceSemimonthly")),
-		Option(Value(string(domain.CadenceQuarterly)), SelectedIf(rCadence.Get() == string(domain.CadenceQuarterly)), uistate.T("recurring.cadenceQuarterly")),
-		Option(Value(string(domain.CadenceYearly)), SelectedIf(rCadence.Get() == string(domain.CadenceYearly)), uistate.T("recurring.cadenceYearly")),
-	}
-	acctOpts := []ui.Node{Option(Value(""), SelectedIf(rAccount.Get() == ""), uistate.T("recurring.noAccount"))}
-	for _, ac := range app.Accounts() {
-		acctOpts = append(acctOpts, Option(Value(ac.ID), SelectedIf(rAccount.Get() == ac.ID), ac.Name))
-	}
-	catOpts := []ui.Node{Option(Value(""), SelectedIf(rCategory.Get() == ""), uistate.T("recurring.noCategory"))}
-	for _, c := range app.Categories() {
-		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(rCategory.Get() == c.ID), c.Name))
-	}
-	recs := app.Recurring()
-	var monthlyTotal int64
-	for _, r := range recs {
-		monthlyTotal += r.MonthlyEquivalent()
-	}
-
-	// C147: surface auto-detected recurring charges that aren't in the plan yet,
-	// ungated (the SMART-P1 insight only fires when Smart is enabled, off by
-	// default — so detection never reached most users). Each detected charge gets
-	// a one-click "Add to plan". Already-planned labels and liability payments
-	// (loan/card autopay — would double-count) are filtered out.
-	detRates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	existingLabels := map[string]bool{}
-	for _, r := range recs {
-		existingLabels[strings.ToLower(strings.TrimSpace(r.Label))] = true
-	}
-	detected, _ := subscriptions.Detect(app.Transactions(), detRates, 3)
-	var detectedRows []ui.Node
-	for _, s := range detected {
-		if existingLabels[strings.ToLower(strings.TrimSpace(s.Name))] {
-			continue
+	nav := router.UseNavigate()
+	showFormulas := ui.UseState(false)
+	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+	onViewAccount := func(string) { nav.Navigate(uistate.RoutePath("/accounts")) }
+	// onViewTxns jumps to /transactions pre-filtered to where this flow's money
+	// actually moves: its linked account and/or category, falling back to a text
+	// match on the flow's label when neither is linked. The filter atom is captured
+	// at render (hooks can't run inside a click handler).
+	txFilter := uistate.UseTxFilter()
+	onViewTxns := func(r domain.Recurring) {
+		f := uistate.TxFilter{Account: r.AccountID, Category: r.CategoryID}
+		if r.AccountID == "" && r.CategoryID == "" {
+			f.Text = r.Label
 		}
-		if subscriptions.IsLiabilityPayment(s, app.Transactions(), app.Accounts()) {
-			continue
+		nf := f.Normalize()
+		txFilter.Set(nf)
+		uistate.PersistTxFilter(nf)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+	onViewBudget := func(domain.Recurring) { nav.Navigate(uistate.RoutePath("/budgets")) }
+	edit := uistate.UseRecurringEditID()
+	onEdit := func(rid string) { edit.Set(rid) }
+	onDelete := func(rid string) {
+		name := ""
+		for _, r := range app.Recurring() {
+			if r.ID == rid {
+				name = r.Label
+				break
+			}
 		}
-		sub := s // capture per-iteration value for the row's OnAdd closure
-		detectedRows = append(detectedRows, ui.CreateElement(detectedRecurringRow, detectedRecurringRowProps{
-			Name:    sub.Name,
-			Monthly: uistate.T("recurring.detectedMonthly", fmtMoney(money.New(sub.MonthlyAmount(), base)), cadenceLabel(domain.RecurringCadence(string(sub.Cadence)))),
-			OnAdd:   func() { addDetected(sub) },
-		}))
+		uistate.ConfirmModal(uistate.T("recurring.deleteConfirm", name), true, func(ok bool) {
+			if ok {
+				_ = app.DeleteRecurring(rid)
+				uistate.BumpDataRevision()
+			}
+		})
 	}
-	detectedSection := Fragment()
-	if len(detectedRows) > 0 {
-		detectedSection = Div(css.Class("detected-recurring", tw.Mt2), Attr("data-testid", "detected-recurring"),
-			P(css.Class("row-desc"), uistate.T("recurring.detectedTitle", plural(len(detectedRows), "charge"))),
-			P(css.Class("muted"), uistate.T("recurring.detectedHint")),
-			Div(css.Class("rows"), detectedRows),
-		)
+	v := computeRecurView(app, time.Now())
+
+	// One-click "add to plan" for a detected charge (charges are expenses → stored
+	// negative, matching the sign convention).
+	onAddDetected := func(s subscriptions.Subscription) {
+		nextDue := s.NextRenewal
+		if nextDue.IsZero() {
+			nextDue = time.Now()
+		}
+		r := domain.Recurring{
+			ID: id.New(), Label: s.Name, Amount: money.New(-s.Amount, v.Base),
+			Cadence: domain.RecurringCadence(string(s.Cadence)), NextDue: nextDue,
+		}
+		if err := app.PutRecurring(r); err == nil {
+			uistate.BumpDataRevision()
+		}
 	}
-	totalNote := Fragment()
-	if len(recs) > 0 {
-		totalNote = P(css.Class("muted"), uistate.T("recurring.monthlyTotal", fmtMoney(money.New(monthlyTotal, base))))
+
+	// How many auto-post flows are actually due — the Post-due button carries the
+	// count so the action's scope is visible before clicking.
+	dueNow := 0
+	for _, r := range v.Flows {
+		if r.Autopost && !r.NextDue.After(time.Now()) {
+			dueNow++
+		}
 	}
-	list := IfElse(len(recs) == 0,
-		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("recurring.empty"), CTALabel: uistate.T("recurring.add"), FocusID: "recurring-add"}),
-		Div(css.Class("rows"), MapKeyed(recs,
-			func(r domain.Recurring) any { return r.ID },
-			func(r domain.Recurring) ui.Node {
-				return ui.CreateElement(RecurringRow, recurringRowProps{Recurring: r, Accounts: app.Accounts(), Categories: app.Categories(), Base: base, OnDelete: deleteRecurring, OnSave: editRecurring})
-			},
-		)),
-	)
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("recurring.title"),
-		// C156: HTML id anchor so /recurring route and /planning#recurring are directly linkable.
-		Attrs: []any{Attr("id", "recurring")},
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("recurring.hint")),
-			Form(css.Class("form-grid"), OnSubmit(addRecurring),
-				Input(append([]any{css.Class("field"), Attr("id", "recurring-add"), Type("text"), Placeholder(uistate.T("recurring.labelPlaceholder")), Value(rLabel.Get()), OnInput(onRLabel)}, errAttrs("refi-err", rErr.Get())...)...),
-				labeledField(uistate.T("recurring.amountPlaceholder", base), Input(css.Class("field"), Type("number"), Value(rAmount.Get()), Step("0.01"), OnInput(onRAmount))),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Title(uistate.T("recurring.cadence")), OnChange(onRCadence), cadenceOpts),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), Title(uistate.T("recurring.account")), OnChange(onRAccount), acctOpts),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), Title(uistate.T("recurring.category")), OnChange(onRCategory), catOpts),
-				// C149: first-due date (blank = today).
-				labeledField(uistate.T("recurring.nextDueLabel"), Input(css.Class("field"), Type("date"), Attr("data-testid", "recurring-nextdue"), Attr("aria-label", uistate.T("recurring.nextDueLabel")), Value(rNextDue.Get()), OnInput(onRNextDue))),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("recurring.add")),
-			),
-			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopost"), On: rAutopost.Get(), OnChange: func(v bool) { rAutopost.Set(v) }}),
-			uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: rAutopay.Get(), OnChange: func(v bool) { rAutopay.Set(v) }}), // C157
-			errText("refi-err", rErr.Get()),
-			totalNote,
-			detectedSection,
-			list,
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Button(css.Class("btn"), Type("button"), Title(uistate.T("recurring.postDueTitle")), OnClick(postDue), uistate.T("recurring.postDue")),
-				If(postMsg.Get() != "", Span(css.Class("muted"), postMsg.Get())),
-			),
-		),
-	})
+
+	tiles := []ui.Node{
+		recurHeroTile(v),
+		recurToolbarTile(postMsg.Get(), dueNow, showFormulas.Get(), postDue, toggleFormulas),
+		recurUpcomingTile(v),
+		recurFlowsTile(v, recurFlowActions{
+			OnEdit: onEdit, OnDelete: onDelete,
+			OnViewAccount: onViewAccount, OnViewTxns: onViewTxns, OnViewBudget: onViewBudget,
+		}),
+	}
+	if len(v.Detected) > 0 {
+		tiles = append(tiles, recurDetectedTile(v, onAddDetected))
+	}
+	if showFormulas.Get() {
+		tiles = append(tiles, recurTile("recur-formula", Fragment(
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("recurring.formulaHint")),
+			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("recurring.metricsTitle"), ShowSaved: true}),
+		)))
+	}
+	return Div(css.Class("bento bento-recurring"), tiles)
 }
 
-// RecurringHubProps holds configuration for RecurringHub. The struct exists so
-// call sites pass RecurringHubProps{} and future props can be added without
-// altering existing callers.
+// recurFlowActions bundles the per-flow callbacks a card can invoke.
+type recurFlowActions struct {
+	OnEdit        func(string)
+	OnDelete      func(string)
+	OnViewAccount func(string)
+	OnViewTxns    func(domain.Recurring)
+	OnViewBudget  func(domain.Recurring)
+}
+
+// recurHeroTile is the headline: the net monthly figure in the display serif beside
+// the figure chips. The in/out split lives ONLY in the chips (no duplicate sub-line);
+// the fourth chip is the most timely fact — the overdue count when anything is
+// overdue (danger-toned), else the next due date.
+func recurHeroTile(v recurView) ui.Node {
+	net := money.New(v.MonthlyNet, v.Base)
+	tone := " " + tw.ColorClass("text-up")
+	if v.MonthlyNet < 0 {
+		tone = " " + tw.ColorClass("text-down")
+	}
+
+	overdue := 0
+	var nextDue time.Time
+	for _, occ := range v.Upcoming {
+		if occ.Overdue {
+			overdue++
+		} else if nextDue.IsZero() {
+			nextDue = occ.Date
+		}
+	}
+	var timelyChip ui.Node = Fragment()
+	switch {
+	case overdue > 0:
+		timelyChip = recurStatChip(uistate.T("recurring.figOverdue"), fmt.Sprintf("%d", overdue), " "+tw.ColorClass("text-down"))
+	case !nextDue.IsZero():
+		timelyChip = recurStatChip(uistate.T("recurring.figNextDue"), nextDue.Format("Jan 2"), "")
+	}
+
+	body := Div(css.Class("rec-hero"), Attr("id", "sec-overview"),
+		Div(css.Class("rec-hero-main"),
+			Div(css.Class("rec-hero-label", tw.TextDim), uistate.T("recurring.heroLabel")),
+			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+tone), Attr("data-testid", "recurring-net"), fmtMoney(net)),
+		),
+		Div(css.Class("debt-chips"),
+			recurStatChip(uistate.T("recurring.figIn"), fmtMoney(money.New(v.MonthlyIn, v.Base)), " "+tw.ColorClass("text-up")),
+			recurStatChip(uistate.T("recurring.figOut"), fmtMoney(money.New(v.MonthlyOut, v.Base)), " "+tw.ColorClass("text-down")),
+			recurStatChip(uistate.T("recurring.figFlows"), fmt.Sprintf("%d", len(v.Flows)), ""),
+			timelyChip,
+		),
+	)
+	return recurTile("recur-hero", recurSection("", uistate.T("recurring.title"), nil,
+		Fragment(P(css.Class("muted"), uistate.T("recurring.overviewHint")), body)))
+}
+
+// recurToolbarTile holds the actions: Post due (labelled with how many auto-post
+// flows it will act on, and accent-outlined when that's non-zero so the timely
+// action has real affordance), the schedule-metrics toggle, and Add recurring.
+func recurToolbarTile(postedMsg string, dueNow int, showFormulas bool, onPostDue, onToggleFormulas any) ui.Node {
+	postCls := "btn"
+	if dueNow > 0 {
+		postCls += " rec-postdue-hot"
+	}
+	metricsCls := "strip-toggle"
+	metricsLabel := uistate.T("recurring.metricsShow")
+	if showFormulas {
+		metricsCls += " is-on"
+		metricsLabel = uistate.T("recurring.metricsHide")
+	}
+	toolbar := Div(css.Class("filter-strip"),
+		Div(css.Class("filter-strip-controls"),
+			Button(ClassStr(postCls), Type("button"), Attr("data-testid", "recurring-post-due"),
+				Title(uistate.T("recurring.postDueTitle")), OnClick(onPostDue),
+				fmt.Sprintf("%s (%d)", uistate.T("recurring.postDue"), dueNow)),
+			Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas)),
+				Attr("data-testid", "recurring-toggle-formulas"), Title(uistate.T("recurring.metricsTitle")),
+				OnClick(onToggleFormulas), Text(metricsLabel)),
+			If(postedMsg != "", Span(css.Class("muted"), Attr("data-testid", "recurring-post-msg"), Attr("role", "status"), postedMsg)),
+		),
+		ui.CreateElement(addRecurringButton),
+	)
+	return recurTile("recur-toolbar", toolbar)
+}
+
+// recurUpcomingTile lists every derived due date in the next 30 days (overdue first).
+func recurUpcomingTile(v recurView) ui.Node {
+	const maxRows = 10
+	var body ui.Node
+	if len(v.Upcoming) == 0 {
+		body = P(css.Class("empty"), Attr("data-testid", "recurring-upcoming-none"), uistate.T("recurring.upcomingNone"))
+	} else {
+		rows := []any{css.Class("rec-up-list"), Attr("role", "list")}
+		prevDay := ""
+		for i, occ := range v.Upcoming {
+			if i >= maxRows {
+				rows = append(rows, P(css.Class("muted rec-up-more"), uistate.T("recurring.upcomingMore", len(v.Upcoming)-maxRows)))
+				break
+			}
+			// Same-day rows share one date medallion: only the first of a day shows it
+			// (the rest carry a ghost spacer), so the date isn't re-stamped per line.
+			day := occ.Date.Format("2006-01-02")
+			rows = append(rows, recurUpcomingRow(occ, day != prevDay))
+			prevDay = day
+		}
+		body = Fragment(
+			P(css.Class("muted rec-up-meta"), Attr("data-testid", "recurring-upcoming-meta"),
+				uistate.T("recurring.upcomingMeta", plural(len(v.Upcoming), "payment"),
+					fmtMoney(money.New(v.UpcomingOut, v.Base)), fmtMoney(money.New(v.UpcomingIn, v.Base)))),
+			Div(rows...),
+		)
+	}
+	return recurTile("recur-upcoming", recurSection("sec-upcoming", uistate.T("recurring.upcomingTitle"), nil,
+		Fragment(P(css.Class("muted"), uistate.T("recurring.upcomingHint")), body)))
+}
+
+// recurFlowsTile is the schedule itself: one card per flow.
+func recurFlowsTile(v recurView, acts recurFlowActions) ui.Node {
+	var body ui.Node
+	if len(v.Flows) == 0 {
+		body = Div(css.Class("rec-empty"), Attr("data-testid", "recurring-empty"),
+			P(css.Class("muted"), uistate.T("recurring.empty")),
+			ui.CreateElement(addRecurringButton),
+		)
+	} else {
+		body = Div(css.Class("rec-flow-list"), Attr("role", "list"), MapKeyed(v.Flows,
+			func(r domain.Recurring) any { return r.ID },
+			func(r domain.Recurring) ui.Node {
+				return ui.CreateElement(recurFlowCard, recurFlowCardProps{
+					R: r, Base: v.Base, OutTotal: v.MonthlyOut,
+					VarPrefix: v.VarPrefixByID[r.ID], HasBudget: r.CategoryID != "" && v.BudgetedCats[r.CategoryID],
+					Actions: acts,
+				})
+			}))
+	}
+	return recurTile("recur-flows", recurSection("sec-flows", uistate.T("recurring.flowsTitle"), nil,
+		Fragment(P(css.Class("muted"), uistate.T("recurring.flowsHint")), body)))
+}
+
+// recurDetectedTile surfaces repeating charges found in history but not yet planned.
+func recurDetectedTile(v recurView, onAdd func(subscriptions.Subscription)) ui.Node {
+	rows := []any{css.Class("rec-detected-list"), Attr("data-testid", "detected-recurring")}
+	for _, s := range v.Detected {
+		sub := s
+		rows = append(rows, ui.CreateElement(recurDetectedRow, recurDetectedRowProps{
+			Name:  sub.Name,
+			Meta:  uistate.T("recurring.detectedMonthly", fmtMoney(money.New(sub.MonthlyAmount(), v.Base)), recurCadence(domain.RecurringCadence(string(sub.Cadence)))),
+			OnAdd: func() { onAdd(sub) },
+		}))
+	}
+	return recurTile("recur-detected", recurSection("sec-detected",
+		uistate.T("recurring.detectedTitle", plural(len(v.Detected), "charge")), nil,
+		Fragment(P(css.Class("muted"), uistate.T("recurring.detectedHint")), Div(rows...))))
+}
+
+// RecurringHubProps holds configuration for RecurringHub (empty today; the struct
+// exists so future props can be added without altering callers).
 type RecurringHubProps struct{}
 
-// RecurringHub is a registered component that owns the three-tab /recurring hub
-// (FEATURE_MAP §5.3): Scheduled (RecurringManagerPanel), Bills (BillsPanel), and
-// Subscriptions (SubscriptionsPanel). Each tab body is a separate ui.CreateElement
-// call — hooks are isolated inside each child component, so tab switching is
-// hook-safe regardless of which panels have been rendered previously.
+// RecurringHub owns the three-tab /recurring hub (FEATURE_MAP §5.3): Scheduled (the
+// redesigned bento surface), Bills, and Subscriptions. Each tab body is its own
+// component so hooks stay isolated across tab switches.
 func RecurringHub(p RecurringHubProps) ui.Node {
 	activeTab := ui.UseState("scheduled")
 
@@ -282,7 +472,7 @@ func RecurringHub(p RecurringHubProps) ui.Node {
 	case "subscriptions":
 		content = ui.CreateElement(SubscriptionsPanel, SubscriptionsPanelProps{})
 	default:
-		content = ui.CreateElement(RecurringManagerPanel, RecurringManagerPanelProps{})
+		content = ui.CreateElement(recurScheduledSurface)
 	}
 
 	return Div(
@@ -292,9 +482,9 @@ func RecurringHub(p RecurringHubProps) ui.Node {
 				Selected: tab,
 				OnSelect: func(v string) { activeTab.Set(v) },
 				Options: []uiw.SegOption{
-					{Value: "scheduled", Label: uistate.T("recurring.tabScheduled")},
-					{Value: "bills", Label: uistate.T("recurring.tabBills")},
-					{Value: "subscriptions", Label: uistate.T("recurring.tabSubscriptions")},
+					{Value: "scheduled", Label: uistate.T("recurring.tabScheduled"), TestID: "recurring-tab-scheduled"},
+					{Value: "bills", Label: uistate.T("recurring.tabBills"), TestID: "recurring-tab-bills"},
+					{Value: "subscriptions", Label: uistate.T("recurring.tabSubscriptions"), TestID: "recurring-tab-subscriptions"},
 				},
 			}),
 		),
@@ -303,10 +493,6 @@ func RecurringHub(p RecurringHubProps) ui.Node {
 }
 
 // Recurring is the /recurring route — the dedicated "Money that repeats" page.
-// It renders RecurringHub, which provides a three-tab view: Scheduled (the
-// cash-flow manager), Bills, and Subscriptions (FEATURE_MAP §5.3/§5.7b).
-// The shell provides the heading and subtitle from the route registry
-// (nav.recurring / screen.recurringSub); RecurringHub owns all content.
 func Recurring() ui.Node {
 	return ui.CreateElement(RecurringHub, RecurringHubProps{})
 }

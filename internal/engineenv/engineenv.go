@@ -144,6 +144,7 @@ var Names = func() []string {
 	}
 	out = append(out, AllocVarNames...)
 	out = append(out, PlanningVarNames...)
+	out = append(out, RecurringVarNames...)
 	return out
 }()
 
@@ -274,7 +275,81 @@ func computeAtoms(d Data) map[string]float64 {
 	addPoolVars(out, d, major, toBase)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
+	addRecurringVars(out, d, major, toBase)
 	return out
+}
+
+// RecurringVarNames are the fixed recurring-schedule aggregates addRecurringVars exposes.
+var RecurringVarNames = []string{
+	"recurring_monthly_in",  // Σ positive monthly equivalents (major units, base currency)
+	"recurring_monthly_out", // Σ |negative| monthly equivalents (positive figure)
+	"recurring_monthly_net", // in − out
+	"recurring_count",       // number of scheduled flows
+}
+
+// RecurringVarFields are the per-flow metric suffixes exposed on the surface.
+var RecurringVarFields = []string{"monthly", "amount"}
+
+// RecurringVarBase pairs a recurring flow with the disambiguated variable prefix its
+// values are keyed under ("recurring_<slug>_"). Single source of truth for per-flow
+// variable naming — the flow's stable identity on the formula surface.
+type RecurringVarBase struct {
+	Recurring domain.Recurring
+	Prefix    string
+}
+
+// RecurringVarBases returns one entry per flow, in stable order, same-name flows
+// disambiguated with a numeric suffix.
+func RecurringVarBases(recs []domain.Recurring) []RecurringVarBase {
+	used := map[string]bool{}
+	out := make([]RecurringVarBase, 0, len(recs))
+	for _, r := range recs {
+		slug := budgetVarSlug(r.Label)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, RecurringVarBase{Recurring: r, Prefix: "recurring_" + slug + "_"})
+	}
+	return out
+}
+
+// RecurringVarSlug exposes the slugging used for per-flow variable names (for UI previews).
+func RecurringVarSlug(s string) string { return budgetVarSlug(s) }
+
+// addRecurringVars exposes the recurring schedule as engine variables: the fixed
+// monthly aggregates (in/out/net/count) plus, per flow, recurring_<slug>_monthly
+// (its signed monthly equivalent) and recurring_<slug>_amount (its signed
+// per-occurrence amount). Money is FX-converted to the base currency, major units.
+func addRecurringVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	var in, outflow int64
+	for _, r := range d.Recurring {
+		me := toBase(r.MonthlyEquivalent(), r.Amount.Currency)
+		if me >= 0 {
+			in += me
+		} else {
+			outflow += -me
+		}
+	}
+	out["recurring_monthly_in"] = major(in)
+	out["recurring_monthly_out"] = major(outflow)
+	out["recurring_monthly_net"] = major(in - outflow)
+	out["recurring_count"] = float64(len(d.Recurring))
+	for _, base := range RecurringVarBases(d.Recurring) {
+		r := base.Recurring
+		out[base.Prefix+"monthly"] = major(toBase(r.MonthlyEquivalent(), r.Amount.Currency))
+		out[base.Prefix+"amount"] = major(toBase(r.Amount.Amount, r.Amount.Currency))
+	}
 }
 
 // PlanningVarNames are the fixed planning-policy variables addPlanningVars exposes.

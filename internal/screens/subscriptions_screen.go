@@ -7,7 +7,6 @@ package screens
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -78,9 +77,9 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 
 	pr := uistate.UsePrefs().Get()
 	notice := uistate.UseNotice()
-
-	// C166: session state for the detection preferences panel (open/closed toggle).
-	prefsOpen := ui.UseState(false)
+	// Re-render when the detection preferences change from the flip modal (a
+	// separate component tree — its saves bump the data revision).
+	_ = uistate.UseDataRevision().Get()
 
 	// --- Cancel-candidates multi-select (L12) ---
 	// Session state: map of sub Name → selected. All mutations copy-on-write so
@@ -137,16 +136,6 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	}
 	bulkCancelEvt := ui.UseEvent(Prevent(doBulkCancel))
 
-	togglePrefs := ui.UseEvent(Prevent(func() { prefsOpen.Set(!prefsOpen.Get()) }))
-
-	// C166: detection-sensitivity control — how many times a charge must repeat
-	// before it counts as a subscription. Saves immediately (same pattern as the
-	// ignore toggles) so the list recomputes.
-	onMinOccur := ui.UseEvent(func(e ui.Event) {
-		n, _ := strconv.Atoi(e.GetValue())
-		uistate.SaveSubsDetectPrefs(uistate.LoadSubsDetectPrefs().WithMinOccurrences(n))
-	})
-
 	// insightsNav is the cross-link handler wired to the footer "Spending analysis"
 	// button; registered unconditionally so hook count is stable.
 	insightsNav := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/insights")) })
@@ -171,18 +160,6 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	for _, ac := range allAccts {
 		acctTypeByID[ac.ID] = string(ac.Type)
 	}
-
-	// Build a set of account types that actually appear in transactions (for the
-	// preference panel — we only show options that are relevant to the dataset).
-	acctTypesInUse := make(map[string]bool, 8)
-	for _, t := range allTxns {
-		if typ, ok := acctTypeByID[t.AccountID]; ok && typ != "" {
-			acctTypesInUse[typ] = true
-		}
-	}
-
-	// Load all categories for the preference panel's category filter list.
-	allCats := app.Categories()
 
 	// Apply detection preferences: exclude transactions from ignored categories
 	// or account types before running detection.
@@ -537,14 +514,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		},
 	)
 
-	// C166: build the detection preferences panel. Collect account types present in
-	// the dataset (for the type checkboxes) and sort categories alphabetically for
-	// a scannable list. Each checkbox row is its own component so hooks stay stable.
+	// C166: the detection preferences live in a flip modal (SubsPrefsHost); the tab
+	// keeps a compact trigger button whose label carries the active-filter count.
 	activeFilterCount := len(detectPrefs.IgnoredCategoryIDs) + len(detectPrefs.IgnoredAccountTypes)
 	prefsToggleLabel := uistate.T("subs.detectPrefsShow")
-	if prefsOpen.Get() {
-		prefsToggleLabel = uistate.T("subs.detectPrefsHide")
-	}
 	if activeFilterCount > 0 {
 		badge := uistate.T("subs.detectActiveFilters", activeFilterCount)
 		if activeFilterCount > 1 {
@@ -552,123 +525,44 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 		prefsToggleLabel += " (" + badge + ")"
 	}
-
-	// Ordered account types: only include types that actually appear in
-	// transactions so the list stays relevant.
-	orderedAcctTypes := make([]string, 0, len(domain.AllAccountTypes))
-	for _, typ := range domain.AllAccountTypes {
-		if acctTypesInUse[string(typ)] {
-			orderedAcctTypes = append(orderedAcctTypes, string(typ))
-		}
-	}
-
-	// Category rows: iterate allCats in their store-defined order (already sorted
-	// by the store). Only show expense categories (subscription detection only runs
-	// on expenses, so income categories are irrelevant).
-	expenseCats := make([]domain.Category, 0, len(allCats))
-	for _, c := range allCats {
-		if c.Kind == domain.KindExpense && c.ParentID == "" {
-			expenseCats = append(expenseCats, c)
-		}
-	}
-
-	// catFilterSection is pre-computed because If() only takes 2 args (no else branch).
-	var catFilterSection ui.Node
-	if len(expenseCats) == 0 {
-		catFilterSection = P(css.Class("row-meta"), uistate.T("subs.detectCategoriesNone"))
-	} else {
-		catFilterSection = Div(css.Class(tw.Fold(tw.Mt2)),
-			Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectCategoriesLabel")),
-			Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2)),
-				MapKeyed(expenseCats,
-					func(c domain.Category) any { return "cat|" + c.ID },
-					func(c domain.Category) ui.Node {
-						return ui.CreateElement(SubsDetectCatRow, subsDetectCatRowProps{
-							CatID:   c.ID,
-							Label:   c.Name,
-							Ignored: detectPrefs.HasIgnoredCategory(c.ID),
-						})
-					},
-				),
-			),
-		)
-	}
-
-	detectPrefsPanel := Section(
-		css.Class("card"),
-		Attr("data-testid", "subs-detect-prefs"),
-		Div(css.Class(tw.Fold(tw.Flex, tw.ItemsCenter, tw.JustifyBetween)),
-			Button(
-				css.Class("btn btn-sm"),
-				Type("button"),
-				Attr("data-testid", "subs-detect-prefs-toggle"),
-				Attr("aria-expanded", fmt.Sprintf("%v", prefsOpen.Get())),
-				OnClick(togglePrefs),
-				prefsToggleLabel,
-			),
+	detectPrefsPanel := Div(css.Class("filter-strip"),
+		Div(css.Class("filter-strip-controls"),
+			ui.CreateElement(subsPrefsButton, subsPrefsButtonProps{Label: prefsToggleLabel}),
 		),
-		If(prefsOpen.Get(), Fragment(
-			P(css.Class("row-meta "+tw.Fold(tw.Mt1, tw.Mb2)), uistate.T("subs.detectPrefsDesc")),
-			// C166: detection sensitivity — minimum repeat count to qualify as a sub.
-			Div(css.Class(tw.Fold(tw.Mt2, tw.Mb1)),
-				Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectSensitivityLabel")),
-				Select(css.Class("field"), Attr("data-testid", "subs-detect-min-occur"),
-					Attr("aria-label", uistate.T("subs.detectSensitivityLabel")), OnChange(onMinOccur),
-					Option(Value("2"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 2), uistate.T("subs.detectSens2")),
-					Option(Value("3"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 3), uistate.T("subs.detectSens3")),
-					Option(Value("4"), SelectedIf(detectPrefs.MinOccurrencesOrDefault() == 4), uistate.T("subs.detectSens4")),
-				),
-			),
-			// Account-type checkboxes (fixed set, no loop — rendered inline).
-			If(len(orderedAcctTypes) > 0, Div(css.Class(tw.Fold(tw.Mt2, tw.Mb1)),
-				Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)), uistate.T("subs.detectAccountTypesLabel")),
-				Div(css.Class(tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap2)),
-					MapKeyed(orderedAcctTypes,
-						func(typ string) any { return "accttype|" + typ },
-						func(typ string) ui.Node {
-							return ui.CreateElement(SubsDetectAcctTypeRow, subsDetectAcctTypeRowProps{
-								AcctType: typ,
-								Label:    uistate.T("acctType." + typ),
-								Ignored:  detectPrefs.HasIgnoredAccountType(typ),
-							})
-						},
-					),
-				),
-			)),
-			// Category checkboxes — each row is its own component (variable-length loop rule).
-			// If() is 2-arg only, so compute the section node before the panel definition.
-			catFilterSection,
-		)),
 	)
 
-	return Div(
-		If(len(lateCharges) > 0, Section(
+	// The subscriptions tab shares the recurring surface chrome: a bento host with
+	// the monthly-burden hero + chips, then each section as a tile.
+	subsHero := Div(css.Class("rec-hero"),
+		Div(css.Class("rec-hero-main"),
+			Div(css.Class("rec-hero-label "+tw.Fold(tw.TextDim, tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+				uistate.T("subs.monthlyBurden"),
+				smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
+			),
+			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
+		),
+		Div(css.Class("debt-chips"),
+			recurStatChip(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
+			recurStatChip(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
+			shareStat,
+		),
+	)
+
+	return Div(css.Class("bento bento-recurring"),
+		If(len(lateCharges) > 0, recurTile("subs-late", Section(
 			css.Class("card"),
 			Attr("role", "alert"),
 			Attr("aria-live", "polite"),
 			Style(map[string]string{"border-left": "4px solid var(--color-danger, #ef4444)"}),
 			H2(css.Class("card-title "+tw.ColorClass("text-down")),
 				uistate.T("subs.lateChargesTitle")),
-			Div(css.Class("rows"), lateChargeRows),
-		)),
-		detectPrefsPanel,
-		If(len(subs) > 0, Div(css.Class("stat-grid"),
-			// Monthly burden is the key subscriptions figure — tooltip explains how it's calculated.
-			Div(css.Class("stat"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					uistate.T("subs.monthlyBurden"),
-					smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
-				),
-				Div(css.Class("stat-value is-hero "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
-			),
-			stat(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
-			stat(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
-			shareStat,
-		)),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("nav.subscriptions"),
+			Div(css.Class("rows rec-cardrows"), lateChargeRows),
+		))),
+		recurTile("subs-prefs", detectPrefsPanel),
+		If(len(subs) > 0, recurTile("subs-hero", subsHero)),
+		recurTile("subs-list", recurSection("sec-subs", uistate.T("nav.subscriptions"),
 			// CSV export and smart section action share the header (G10 §7).
-			HeaderAction: Fragment(
+			Fragment(
 				smartSectionAction(subSmartSettings),
 				If(len(subs) > 0,
 					Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.downloadCsvTitle")),
@@ -678,28 +572,26 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						}), uistate.T("subs.downloadCsv")),
 				),
 			),
-			Body: Fragment(
+			Fragment(
 				body,
 				savingsSummary,
 			),
-		}),
-		If(len(changes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("subs.priceChangesTitle"),
-			Body: Fragment(
+		)),
+		If(len(changes) > 0, recurTile("subs-changes", recurSection("sec-subs-changes", uistate.T("subs.priceChangesTitle"), nil,
+			Fragment(
 				// Net summary line (G10 §5): "Your subscriptions cost $X more/less
 				// per month than they did recently" — instant context before the
 				// per-row detail.
 				netChangeSummary(netChangeDelta, base),
-				Div(css.Class("rows"), changeRows),
+				Div(css.Class("rows rec-cardrows"), changeRows),
 			),
-		})),
-		If(len(soon) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("subs.renewingSoon"),
+		))),
+		If(len(soon) > 0, recurTile("subs-soon", recurSection("sec-subs-soon", uistate.T("subs.renewingSoon"), nil,
 			// Renewing-soon rows reuse the full SubscriptionRow so each imminent
 			// renewal is actionable in place (remind / cancel) — not a stripped
 			// read-only card (C56). The cancelledOn lookup, selection state, and
 			// all callbacks are wired identically to the main list.
-			Rows: MapKeyed(soon,
+			Div(css.Class("rows rec-cardrows"), MapKeyed(soon,
 				func(s subscriptions.Subscription) any { return "soon|" + s.Name + "|" + fmt.Sprint(s.Amount) },
 				func(s subscriptions.Subscription) ui.Node {
 					cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]
@@ -726,13 +618,12 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						SmartByEntity:  subByEntity,
 					})
 				},
-			),
-		})),
-		If(len(ignoredSubs) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("subs.ignoredTitle"),
-			Body: Fragment(
+			)),
+		))),
+		If(len(ignoredSubs) > 0, recurTile("subs-ignored", recurSection("sec-subs-ignored", uistate.T("subs.ignoredTitle"), nil,
+			Fragment(
 				P(css.Class("row-meta"), uistate.T("subs.ignoredDesc")),
-				Div(css.Class("rows"), MapKeyed(ignoredSubs,
+				Div(css.Class("rows rec-cardrows"), MapKeyed(ignoredSubs,
 					func(s subscriptions.Subscription) any { return "ignored|" + s.Name },
 					func(s subscriptions.Subscription) ui.Node {
 						return ui.CreateElement(IgnoredSubscriptionRow, ignoredSubRowProps{
@@ -743,12 +634,12 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 					},
 				)),
 			),
-		})),
+		))),
 		// C253: cross-link to /insights so users know where to find the broader
 		// per-category spending anomaly highlights (which live on the Insights screen
 		// under "Spending highlights"). Reduces fragmentation: /subscriptions covers
 		// the recurring-charge view; /insights covers the per-category trend view.
-		P(css.Class("muted "+tw.Fold(tw.Text12, tw.Mt2)),
+		recurTile("subs-links", P(css.Class("muted "+tw.Fold(tw.Text12)),
 			Text(uistate.T("subs.seeSpendingAnalysis")+" · "),
 			Button(ClassStr("btn-link "+tw.Fold(tw.Text12)),
 				Type("button"),
@@ -757,7 +648,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				OnClick(insightsNav),
 				uistate.T("nav.insights"),
 			),
-		),
+		)),
 	)
 }
 
@@ -1102,6 +993,7 @@ func SubsDetectCatRow(props subsDetectCatRowProps) ui.Node {
 	onChange := ui.UseEvent(func(e ui.Event) {
 		p := uistate.LoadSubsDetectPrefs()
 		uistate.SaveSubsDetectPrefs(p.WithCategoryToggled(id))
+		uistate.BumpDataRevision() // the panel behind the modal recomputes live
 	})
 	return Label(
 		css.Class(tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" detect-pref-label"),
@@ -1139,6 +1031,7 @@ func SubsDetectAcctTypeRow(props subsDetectAcctTypeRowProps) ui.Node {
 	onChange := ui.UseEvent(func(e ui.Event) {
 		p := uistate.LoadSubsDetectPrefs()
 		uistate.SaveSubsDetectPrefs(p.WithAccountTypeToggled(typ))
+		uistate.BumpDataRevision() // the panel behind the modal recomputes live
 	})
 	return Label(
 		css.Class(tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)+" detect-pref-label"),

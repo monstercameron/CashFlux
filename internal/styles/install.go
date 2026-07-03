@@ -19,6 +19,7 @@ import "syscall/js"
 func Register() {
 	resetSheet()
 	registerGenerated()
+	registerRecurringSurface()
 	inject(Build())
 }
 

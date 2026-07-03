@@ -21,18 +21,49 @@ import (
 type Group string
 
 const (
-	GroupCore     Group = "Core money"
-	GroupActivity Group = "Activity"
-	GroupCounts   Group = "Counts"
-	GroupCustom   Group = "Custom fields"
-	GroupBudgets  Group = "Budgets"
-	GroupAccounts Group = "Accounts"
-	GroupGoals    Group = "Goals"
-	GroupDebt     Group = "Debts"
-	GroupPools    Group = "Pools"
-	GroupAllocate Group = "Allocate"
-	GroupPlanning Group = "Planning"
+	GroupCore      Group = "Core money"
+	GroupActivity  Group = "Activity"
+	GroupCounts    Group = "Counts"
+	GroupCustom    Group = "Custom fields"
+	GroupBudgets   Group = "Budgets"
+	GroupAccounts  Group = "Accounts"
+	GroupGoals     Group = "Goals"
+	GroupDebt      Group = "Debts"
+	GroupPools     Group = "Pools"
+	GroupAllocate  Group = "Allocate"
+	GroupPlanning  Group = "Planning"
+	GroupRecurring Group = "Recurring"
 )
+
+// recurringFixedMeta labels the fixed recurring-schedule aggregates for the picker.
+var recurringFixedMeta = []struct{ Name, Label, Doc string }{
+	{"recurring_monthly_in", "Recurring money in / mo", "What your scheduled income flows add up to per month."},
+	{"recurring_monthly_out", "Recurring money out / mo", "What your scheduled bills and subscriptions add up to per month."},
+	{"recurring_monthly_net", "Recurring net / mo", "Scheduled money in minus money out, per month."},
+	{"recurring_count", "Scheduled flows", "How many recurring flows are on the schedule."},
+}
+
+// recurringFieldMeta labels each per-flow metric suffix.
+var recurringFieldMeta = map[string]struct{ Label, Doc string }{
+	"monthly": {"monthly equivalent", "What this flow adds up to per month, whatever its cadence (signed)."},
+	"amount":  {"amount per occurrence", "The flow's signed amount each time it occurs."},
+}
+
+// RecurringMetrics exposes the recurring-schedule aggregates + each flow's identity
+// variables (addRecurringVars) in the formula picker under the Recurring group.
+func RecurringMetrics(recs []domain.Recurring) []Metric {
+	out := make([]Metric, 0, len(recurringFixedMeta)+len(recs)*len(engineenv.RecurringVarFields))
+	for _, m := range recurringFixedMeta {
+		out = append(out, Metric{Name: m.Name, Label: m.Label, Doc: m.Doc, Group: GroupRecurring})
+	}
+	for _, base := range engineenv.RecurringVarBases(recs) {
+		for _, field := range engineenv.RecurringVarFields {
+			meta := recurringFieldMeta[field]
+			out = append(out, Metric{Name: base.Prefix + field, Label: base.Recurring.Label + " — " + meta.Label, Doc: meta.Doc, Group: GroupRecurring})
+		}
+	}
+	return out
+}
 
 // planningFixedMeta labels the fixed planning-policy variables for the picker.
 var planningFixedMeta = []struct{ Name, Label, Doc string }{

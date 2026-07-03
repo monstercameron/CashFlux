@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -66,6 +67,56 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 
 	notice := uistate.UseNotice()
 	rev := uistate.UseDataRevision()
+
+	// Hovering a bill row highlights its due date on the calendar — a delegated
+	// native listener that toggles a class directly (no per-hover Go re-render,
+	// same pattern as the back-to-top button). Rows carry data-due, calendar cells
+	// carry data-date; the listener lives on document so it survives re-renders,
+	// and the cleanup runs on unmount.
+	ui.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		if !doc.Truthy() {
+			return nil
+		}
+		setHl := func(due string, on bool) {
+			if due == "" {
+				return
+			}
+			cell := doc.Call("querySelector", `.cal-cell[data-date="`+due+`"]`)
+			if !cell.Truthy() {
+				return
+			}
+			if on {
+				cell.Get("classList").Call("add", "cal-hl")
+			} else {
+				cell.Get("classList").Call("remove", "cal-hl")
+			}
+		}
+		dueOf := func(args []js.Value) string {
+			if len(args) == 0 {
+				return ""
+			}
+			t := args[0].Get("target")
+			if !t.Truthy() || t.Get("closest").IsUndefined() {
+				return ""
+			}
+			row := t.Call("closest", "[data-due]")
+			if !row.Truthy() {
+				return ""
+			}
+			return row.Call("getAttribute", "data-due").String()
+		}
+		over := js.FuncOf(func(_ js.Value, args []js.Value) any { setHl(dueOf(args), true); return nil })
+		out := js.FuncOf(func(_ js.Value, args []js.Value) any { setHl(dueOf(args), false); return nil })
+		doc.Call("addEventListener", "mouseover", over)
+		doc.Call("addEventListener", "mouseout", out)
+		return func() {
+			doc.Call("removeEventListener", "mouseover", over)
+			doc.Call("removeEventListener", "mouseout", out)
+			over.Release()
+			out.Release()
+		}
+	}, true)
 
 	// === Rendering (nil-guarded) ===
 	if app == nil {
@@ -195,7 +246,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 	if len(billRows) == 0 {
 		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("bills.empty"), CTALabel: uistate.T("bills.addFirst"), Href: "/accounts"})
 	} else {
-		body = Div(css.Class("rows"), rows)
+		body = Div(css.Class("rows rec-cardrows bills-scroll"), Attr("data-testid", "bills-scroll"), rows)
 	}
 
 	nextDue := "—"
@@ -211,62 +262,65 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		toggleLabel = fmt.Sprintf("Show all (%d)", len(allUpcoming))
 	}
 
-	// bills-layout: stacked by default; two-column (list left, calendar right) at
-	// ≥1024 px via CSS so the calendar is visible alongside the list (G11 follow-up).
-	return Div(
-		If(len(upcoming) > 0, Div(css.Class("stat-grid"),
-			// Total due is the key bills figure — tooltip explains what it covers.
-			Div(css.Class("stat"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					uistate.T("bills.totalDue"),
-					smartTooltipFor(billSmartSettings, "bills-due", uistate.T("bills.totalDue"), uistate.T("smart.tipBillsDue")),
-				),
-				Div(css.Class("stat-value is-hero "+tw.ColorClass("text-down")), fmtMoney(money.New(total, base))),
+	// The bills tab shares the recurring surface chrome: a bento host with a hero
+	// tile (Total due in the display serif + the annual/count/next-due chips) over a
+	// list+calendar tile (two-column at ≥1024 px via .bills-layout).
+	hero := Div(css.Class("rec-hero"),
+		Div(css.Class("rec-hero-main"),
+			Div(css.Class("rec-hero-label "+tw.Fold(tw.TextDim, tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+				uistate.T("bills.totalDue"),
+				smartTooltipFor(billSmartSettings, "bills-due", uistate.T("bills.totalDue"), uistate.T("smart.tipBillsDue")),
 			),
-			stat(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
-			stat(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
-			stat(uistate.T("bills.nextDue"), nextDue, ""),
-		)),
-		Div(css.Class("bills-layout"),
-			uiw.EntityListSection(uiw.EntityListSectionProps{
-				Title:        uistate.T("nav.bills"),
-				HeaderAction: smartSectionAction(billSmartSettings),
-				Body: Fragment(
-					body,
-					Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-						If(len(allUpcoming) > 0,
-							Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggleShowAll), toggleLabel),
-						),
-						If(len(upcoming) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
-							csvAmount := func(m money.Money) string {
-								c, err := rates.Convert(m, base)
-								if err != nil {
-									c = money.New(m.Amount, base)
-								}
-								return money.FormatMinor(c.Amount, currency.Decimals(base))
-							}
-							downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
-						}), uistate.T("bills.downloadCsv"))),
-					),
-				),
-			}),
-			If(len(allUpcoming) > 0, func() ui.Node {
-				dispMonth := dateutil.AddMonths(dateutil.MonthStart(now), calMonthOffset.Get())
-				nav := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap1),
-					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-prev"),
-						Attr("aria-label", uistate.T("bills.calPrev")), Title(uistate.T("bills.calPrev")), OnClick(calPrev), "◀"),
-					If(calMonthOffset.Get() != 0, Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-today"),
-						OnClick(calToday), uistate.T("bills.calThisMonth"))),
-					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-next"),
-						Attr("aria-label", uistate.T("bills.calNext")), Title(uistate.T("bills.calNext")), OnClick(calNext), "▶"),
-				)
-				return uiw.EntityListSection(uiw.EntityListSectionProps{
-					Title:        uistate.T("bills.calendar", monthLabel(dispMonth)),
-					HeaderAction: nav,
-					Body:         billsCalendar(bills.MonthCalendar(allUpcoming, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now),
-				})
-			}()),
+			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), fmtMoney(money.New(total, base))),
 		),
+		Div(css.Class("debt-chips"),
+			recurStatChip(uistate.T("bills.annualCost"), fmtMoney(money.New(annual, base)), ""),
+			recurStatChip(uistate.T("bills.count"), fmt.Sprintf("%d", len(upcoming)), ""),
+			recurStatChip(uistate.T("bills.nextDue"), nextDue, ""),
+		),
+	)
+
+	listSection := recurSection("sec-bills", uistate.T("nav.bills"), smartSectionAction(billSmartSettings),
+		Fragment(
+			body,
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				If(len(allUpcoming) > 0,
+					Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggleShowAll), toggleLabel),
+				),
+				If(len(upcoming) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("bills.downloadCsvTitle")), OnClick(func() {
+					csvAmount := func(m money.Money) string {
+						c, err := rates.Convert(m, base)
+						if err != nil {
+							c = money.New(m.Amount, base)
+						}
+						return money.FormatMinor(c.Amount, currency.Decimals(base))
+					}
+					downloadBytes("bills.csv", "text/csv", bills.CSV(upcoming, csvAmount))
+				}), uistate.T("bills.downloadCsv"))),
+			),
+		))
+
+	calendarSection := Fragment()
+	if len(allUpcoming) > 0 {
+		dispMonth := dateutil.AddMonths(dateutil.MonthStart(now), calMonthOffset.Get())
+		nav := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap1),
+			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-prev"),
+				Attr("aria-label", uistate.T("bills.calPrev")), Title(uistate.T("bills.calPrev")), OnClick(calPrev), "◀"),
+			If(calMonthOffset.Get() != 0, Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-today"),
+				OnClick(calToday), uistate.T("bills.calThisMonth"))),
+			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-next"),
+				Attr("aria-label", uistate.T("bills.calNext")), Title(uistate.T("bills.calNext")), OnClick(calNext), "▶"),
+		)
+		calendarSection = recurSection("sec-bills-calendar", uistate.T("bills.calendar", monthLabel(dispMonth)), nav,
+			billsCalendar(bills.MonthCalendar(allUpcoming, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now))
+	}
+
+	return Div(css.Class("bento bento-recurring"),
+		If(len(upcoming) > 0, recurTile("bills-hero", hero)),
+		recurTile("bills-main", Div(css.Class("bills-layout"),
+			listSection,
+			Div(css.Class("bills-cal-sticky"), calendarSection),
+		)),
 	)
 }
 
@@ -327,7 +381,7 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 					dot = Span(ClassStr(dotCls), Attr("title", names), Attr("aria-label", names))
 				}
 			}
-			args = append(args, Div(ClassStr(cls),
+			args = append(args, Div(ClassStr(cls), Attr("data-date", day.Date.Format("2006-01-02")),
 				Span(css.Class("cal-day"), strconv.Itoa(day.Date.Day())),
 				dot,
 			))
@@ -387,7 +441,7 @@ func BillRow(props billRowProps) ui.Node {
 	if d.IsPaid {
 		metaCls = "row-meta"
 	}
-	return Div(css.Class("row"),
+	return Div(css.Class("row"), Attr("data-due", d.Bill.DueDate.Format("2006-01-02")),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), d.Bill.Name,
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, d.Bill.AccountID),
