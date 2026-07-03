@@ -3144,6 +3144,12 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   "▲ $2,840.00 this month" vs /accounts summary "No change this month" vs /reports + /networth
   "▲ $1,350.43". Same question, three answers, all in the first viewport of money pages. One
   canonical month-to-date delta computed in one pure seam, one shared label.
+  **PARTIAL 2026-07-03:** the /accounts half was the C339 class — its month boundary was built in
+  LOCAL time (excluding the Jul-1-00:00Z transactions → "No change this month") while the dashboard
+  hero already used `dateutil.MonthStart` (UTC); accounts_tiles now uses the same boundary.
+  MEASURED live: dashboard "▲ $2,840.00 this month" == /accounts "+$2,840.00 this month".
+  REMAINING: /reports + /networth report "▲ $1,350.43" for the same question — a different
+  definition in the reports seam (actively churning surface) — unify or label its window.
 - [ ] **C342 [MINOR][DATA-TRUST] Savings rate 60% (dashboard KPI) vs 31% (/health factor)** with
   no window label on either. Label the window ("June" / "3-mo avg") or unify the computation.
 - [ ] **C340 [MAJOR][DATA-TRUST] /bills double-counts liability obligations.** Liability-derived
