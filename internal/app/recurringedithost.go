@@ -39,6 +39,26 @@ func RecurringEditHost() uic.Node {
 	})
 }
 
+// BillsSmartHost is the shell-root flip modal for the smart pay schedule: the
+// two setup questions (payday + frequency), the live plan preview from the
+// deterministic billsched engine, and the Use-plan / Turn-off decision. Driven
+// by the bills:smartOpen atom; bare-atom close.
+func BillsSmartHost() uic.Node {
+	open := uistate.UseBillsSmartOpen()
+	if !open.Get() {
+		return Fragment()
+	}
+	closeModal := func() { open.Set(false) }
+	return uiw.FlipPanel(uiw.FlipPanelProps{
+		Title:    uistate.T("bills.smartTitle"),
+		Width:    "620px",
+		Height:   "min(90vh, 720px)",
+		NoFooter: true,
+		OnClose:  closeModal,
+		Back:     uic.CreateElement(screens.BillsSmartForm, screens.BillsSmartFormProps{OnDone: closeModal}),
+	})
+}
+
 // SubsPrefsHost is the shell-root flip modal for the subscription-detection
 // preferences (sensitivity + account-type/category ignore filters), driven by the
 // subs:prefsOpen atom. Every control inside saves immediately, so the modal has a

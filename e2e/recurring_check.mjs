@@ -171,6 +171,44 @@ check("B1a the bills list scrolls in place + the calendar is sticky", await p.lo
   await p.locator("#sec-bills h2").first().hover().catch(() => {}); await p.waitForTimeout(250);
   check("B1c un-hovering clears the highlight", await p.locator(".cal-cell.cal-hl").count() === 0);
 }
+// --- smart pay schedule (Smart+ bill scheduling, in a flip modal) ---
+check("SM1 compact smart-schedule tile (status + one button)", await p.locator("#sec-bills-smart").count() === 1 && await p.locator('[data-testid="bills-smart-open"]').count() === 1 && (await p.locator('[data-testid="bills-smart-status"]').innerText()).length > 0);
+await p.locator('[data-testid="bills-smart-open"]').click(); await p.waitForTimeout(800);
+check("SM2 Set up opens the flip modal with the two questions", await p.locator('[data-testid="bills-smart-form"]').count() === 1 && await p.locator('[data-testid="bills-smart-anchor"]').count() === 1 && await p.locator('[data-testid="bills-freq-biweekly"]').count() === 1);
+check("SM3 (neg) without an anchor there is no plan and no Use button", await p.locator('[data-testid="bills-smart-noanchor"]').count() === 1 && await p.locator('[data-testid="bills-smart-use"]').count() === 0);
+await p.locator('[data-testid="bills-smart-anchor"]').fill("2026-07-03"); await p.waitForTimeout(1000);
+const smChips = await p.locator('[data-testid="bills-smart-form"] .debt-stat-value').allInnerTexts();
+check("SM4 answering the payday computes the live preview (4 chips + plan/even verdict)", smChips.length === 4 && (await p.locator('[data-testid="bills-smart-moves"]').count()) + (await p.locator('[data-testid="bills-smart-even"]').count()) >= 1, smChips.join(" | "));
+check("SM5 heaviest-check invariant (plan ≤ now)", cents(smChips[1]) <= cents(smChips[0]), `${smChips[0]} → ${smChips[1]}`);
+check("SM6a UX copy: use-hint + low-note + suggestion state are present", await p.locator('[data-testid="bills-smart-usehint"]').count() === 1 && await p.locator('[data-testid="bills-smart-lownote"]').count() === 1 && (await p.locator('[data-testid="bills-smart-suggests"]').count()) + (await p.locator('[data-testid="bills-smart-nosuggest"]').count()) === 1);
+await p.locator('[data-testid="bills-smart-adv"]').click(); await p.waitForTimeout(300);
+check("SM6 the schedule's engine variables live under Advanced (bills_even_gain)", await p.locator('[data-testid="bills-smart-vars"]').count() === 1 && (await p.locator('[data-testid="bills-smart-form"]').innerText()).includes("bills_even_gain"));
+await p.locator('[data-testid="bills-smart-adv"]').click(); await p.waitForTimeout(300);
+// (neg) AI explain without a key → a clear error inside the modal, no crash.
+await p.locator('[data-testid="bills-smart-explain"]').click(); await p.waitForTimeout(600);
+check("SM7 (neg) AI explain without a key shows an error, no crash", await p.locator('[data-testid="bills-smart-form"] [role=alert]').count() >= 1 && errs.length === 0);
+const moveCount = await p.locator('[data-testid="bills-smart-moves"] .bills-smart-move').count();
+// Use the plan: enables it, flips the views to the pay-on plan, closes the modal.
+await p.locator('[data-testid="bills-smart-use"]').click();
+await p.waitForSelector('[data-testid="bills-smart-form"]', { state: "detached", timeout: 3000 }).catch(() => {});
+await p.waitForTimeout(500);
+check("SM8 Use-this-plan closes the modal and turns the plan on", await p.locator('[data-testid="bills-smart-form"]').count() === 0 && await p.locator('[data-testid="bills-view-smart"][aria-checked="true"]').count() === 1);
+check("SM9 pay-on plan view tags moved bills", (await p.locator('[data-testid="bill-payahead"]').count()) === moveCount, `${moveCount} moves`);
+if (moveCount > 0) {
+  check("SM10 a moved bill's meta reads 'pay X · due Y'", /pay .+ · due /.test(await p.locator('[data-testid="bill-payahead"]').first().locator("..").innerText()));
+} else {
+  check("SM10 a moved bill's meta reads 'pay X · due Y'", true, "no moves in this dataset — skipped");
+}
+// Flip back to raw dates: the tags clear.
+await p.locator('[data-testid="bills-view-raw"]').click(); await p.waitForTimeout(700);
+check("SM11 raw view clears the pay-ahead tags", await p.locator('[data-testid="bill-payahead"]').count() === 0);
+// Turn it off from the modal: the summary reverts and the view toggle disappears.
+await p.locator('[data-testid="bills-smart-open"]').click(); await p.waitForTimeout(800);
+await p.locator('[data-testid="bills-smart-off"]').click();
+await p.waitForSelector('[data-testid="bills-smart-form"]', { state: "detached", timeout: 3000 }).catch(() => {});
+await p.waitForTimeout(500);
+check("SM12 Turn-off disables the plan (view toggle gone, no tags)", await p.locator('[data-testid="bills-view-smart"]').count() === 0 && await p.locator('[data-testid="bill-payahead"]').count() === 0);
+
 await p.locator('[data-testid="recurring-tab-subscriptions"]').click(); await p.waitForTimeout(900);
 check("B2 Subscriptions tab renders", errs.length === 0);
 // Detection preferences live in a flip modal.

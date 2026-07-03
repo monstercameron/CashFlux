@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -41,7 +42,43 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
 		Alloc: liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
+		BillsSmart: liveBillsSmartData(app),
 	})
+}
+
+// liveBillsSmartData builds the smart-bill-schedule inputs: paydays projected from
+// the prefs pay-cycle anchor + the configured frequency, the expected net income
+// per payday (recurring money-in scaled to the cycle), and the keep floor.
+func liveBillsSmartData(app *appstate.App) engineenv.BillsSmartData {
+	cfg := uistate.BillsSmartConfigGet()
+	out := engineenv.BillsSmartData{MinKeepMinor: cfg.MinKeepMinor}
+	anchor, err := time.Parse("2006-01-02", uistate.LoadPrefs().PayCycleAnchor)
+	if err != nil {
+		return out // no anchor configured — smart figures fall back to raw
+	}
+	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, time.Now(), 30)
+	var monthlyIn int64
+	for _, r := range app.Recurring() {
+		if me := r.MonthlyEquivalent(); me > 0 {
+			monthlyIn += me
+		}
+	}
+	out.IncomePerPayday = monthlyIn * 12 / int64(payPeriodsPerYear(cfg.PayFrequency))
+	return out
+}
+
+// payPeriodsPerYear maps a pay frequency to its yearly period count.
+func payPeriodsPerYear(freq string) int {
+	switch freq {
+	case "weekly":
+		return 52
+	case "semimonthly":
+		return 24
+	case "monthly":
+		return 12
+	default: // biweekly
+		return 26
+	}
 }
 
 // livePlanningData converts the persisted planning config into engine PlanningData, so the
@@ -99,6 +136,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
 	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
 	metrics = append(metrics, widgetcatalog.RecurringMetrics(app.Recurring())...)
+	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")

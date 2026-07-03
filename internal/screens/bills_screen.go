@@ -141,6 +141,21 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		upcoming = filtered
 	}
 
+	// Smart pay schedule (billsched): computed once, shared with the modal so the
+	// rows/calendar and the plan preview always agree. The engine runs regardless
+	// (its figures feed the bills_* variables); the config decides whether the
+	// views use it.
+	smartPlan := computeBillsSmart(app, now)
+	smartCfg := smartPlan.Cfg
+	hasAnchor := smartPlan.HasAnchor
+	viewSmart := smartCfg.Enabled && smartCfg.ViewSmart && hasAnchor
+	payOnFor := func(b bills.Bill) time.Time {
+		if p, ok := smartPlan.Res.PayOnByID[billItemID(b)]; ok {
+			return p
+		}
+		return b.DueDate
+	}
+
 	// remind creates a to-do dated to the bill's due date, so a "pay this" task
 	// surfaces in time (B22, via the existing to-do system).
 	remind := func(b bills.Bill, shown money.Money, dueLabel string) {
@@ -212,7 +227,12 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		}
 		total += amt.Amount
 		isPaid := app.OccurrencePaid(b.AccountID, b.DueDate)
-		billRows = append(billRows, billRowData{Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate), IsPaid: isPaid})
+		payOn := payOnFor(b)
+		billRows = append(billRows, billRowData{
+			Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate), IsPaid: isPaid,
+			PayOn: payOn, PayOnLabel: pr.FormatDate(payOn),
+			PlanActive: viewSmart && !sameDay(payOn, b.DueDate),
+		})
 	}
 
 	// Cadence-correct yearly total: annualize each obligation by its own cadence,
@@ -311,12 +331,35 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "cal-next"),
 				Attr("aria-label", uistate.T("bills.calNext")), Title(uistate.T("bills.calNext")), OnClick(calNext), "▶"),
 		)
+		// The grid shows the ACTIVE schedule (smart pay-on dates when that view is
+		// on); the inactive schedule's dates render as hollow ghost markers so the
+		// plan and the deadline are always both visible.
+		calBills := allUpcoming
+		ghost := map[string]int{}
+		if viewSmart {
+			calBills = make([]bills.Bill, len(allUpcoming))
+			for i, b := range allUpcoming {
+				moved := b
+				moved.DueDate = payOnFor(b)
+				calBills[i] = moved
+				if !sameDay(moved.DueDate, b.DueDate) {
+					ghost[b.DueDate.Format("2006-01-02")]++
+				}
+			}
+		} else if smartCfg.Enabled && hasAnchor {
+			for _, b := range allUpcoming {
+				if p := payOnFor(b); !sameDay(p, b.DueDate) {
+					ghost[p.Format("2006-01-02")]++
+				}
+			}
+		}
 		calendarSection = recurSection("sec-bills-calendar", uistate.T("bills.calendar", monthLabel(dispMonth)), nav,
-			billsCalendar(bills.MonthCalendar(allUpcoming, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now))
+			billsCalendar(bills.MonthCalendar(calBills, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, ghost))
 	}
 
 	return Div(css.Class("bento bento-recurring"),
 		If(len(upcoming) > 0, recurTile("bills-hero", hero)),
+		ui.CreateElement(billsSmartSummaryTile, billsSmartSummaryProps{Plan: smartPlan}),
 		recurTile("bills-main", Div(css.Class("bills-layout"),
 			listSection,
 			Div(css.Class("bills-cal-sticky"), calendarSection),
@@ -337,7 +380,7 @@ func monthLabel(t time.Time) string { return t.Format("January 2006") }
 
 // billsCalendar renders the month grid: weekday headers plus a cell per day,
 // dimming out-of-month days, outlining today, and dotting days with bills due.
-func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time) ui.Node {
+func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, ghost map[string]int) ui.Node {
 	todayKey := now.Format("2006-01-02")
 	args := []any{css.Class("cal-grid")}
 	for i := 0; i < 7; i++ {
@@ -381,22 +424,35 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 					dot = Span(ClassStr(dotCls), Attr("title", names), Attr("aria-label", names))
 				}
 			}
+			// Ghost marker: the inactive schedule (raw deadline vs smart plan) has a
+			// bill on this day — hollow so it reads as "the other view".
+			var ghostDot ui.Node = Fragment()
+			if n := ghost[day.Date.Format("2006-01-02")]; n > 0 && day.InMonth {
+				ghostDot = Span(css.Class("cal-dot cal-dot--ghost"), Attr("title", uistate.T("bills.ghostTitle", n)), Attr("aria-label", uistate.T("bills.ghostTitle", n)))
+			}
 			args = append(args, Div(ClassStr(cls), Attr("data-date", day.Date.Format("2006-01-02")),
 				Span(css.Class("cal-day"), strconv.Itoa(day.Date.Day())),
 				dot,
+				ghostDot,
 			))
 		}
 	}
 	return Div(args...)
 }
 
-// billRowData is one bill plus its display-ready amount and date.
+// billRowData is one bill plus its display-ready amount and dates.
 type billRowData struct {
-	Bill     bills.Bill
-	Shown    money.Money // amount converted to the base currency
-	DueLabel string      // pre-formatted due date
-	IsPaid   bool        // C154: whether this occurrence has been marked paid
+	Bill       bills.Bill
+	Shown      money.Money // amount converted to the base currency
+	DueLabel   string      // pre-formatted raw due date
+	IsPaid     bool        // C154: whether this occurrence has been marked paid
+	PayOn      time.Time   // the smart schedule's pay-on date (= due when unmoved)
+	PayOnLabel string      // pre-formatted pay-on date
+	PlanActive bool        // the smart view is on AND this bill's pay-on differs from its due
 }
+
+// sameDay reports whether two times fall on the same calendar date.
+func sameDay(a, b time.Time) bool { return a.Format("2006-01-02") == b.Format("2006-01-02") }
 
 type billRowProps struct {
 	Data         billRowData
@@ -428,6 +484,13 @@ func BillRow(props billRowProps) ui.Node {
 		}
 	}))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
+	activeDate := d.Bill.DueDate
+	if d.PlanActive {
+		// Smart view: lead with the plan's pay-on date; the raw due date stays
+		// visible as the deadline.
+		meta = uistate.T("bills.payOnMeta", d.PayOnLabel, d.DueLabel)
+		activeDate = d.PayOn
+	}
 	// Urgency tone so an imminent bill stands out at a glance (C57): danger when
 	// due today/past, warn within three days. The "due today / in N days" wording
 	// carries the meaning too, so it's colour + text (B15).
@@ -441,7 +504,7 @@ func BillRow(props billRowProps) ui.Node {
 	if d.IsPaid {
 		metaCls = "row-meta"
 	}
-	return Div(css.Class("row"), Attr("data-due", d.Bill.DueDate.Format("2006-01-02")),
+	return Div(css.Class("row"), Attr("data-due", activeDate.Format("2006-01-02")),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), d.Bill.Name,
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, d.Bill.AccountID),
@@ -450,6 +513,8 @@ func BillRow(props billRowProps) ui.Node {
 			// C154: surface autopay so the user knows this bill is charged automatically
 			// (no manual payment needed — just keep funds available).
 			If(d.Bill.Autopay, Span(css.Class("pill", tw.TextDim), Attr("data-testid", "bill-autopay"), Attr("title", uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
+			// Smart-schedule tag: this bill is planned to be paid ahead of its due date.
+			If(d.PlanActive, Span(css.Class("rec-tag"), Attr("data-testid", "bill-payahead"), Attr("title", uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))),
 			// C154: paid chip — visible when this occurrence is marked paid.
 			If(d.IsPaid, Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"), Attr("title", uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))),
 		),

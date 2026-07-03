@@ -281,6 +281,66 @@ func registerRecurringSurface() {
 	rule(".cal-cell",
 		prop("transition", "background 0.12s ease"),
 	)
+	// Ghost marker: the inactive bills schedule (raw deadline vs smart plan) —
+	// hollow, so it reads as "the other view", never as a live due dot.
+	rule(".cal-dot--ghost",
+		prop("background", "transparent"),
+		prop("border", "1.5px dashed color-mix(in srgb, var(--accent) 60%, var(--border))"),
+	)
+
+	// Smart pay schedule tile (bills tab).
+	rule(".bills-smart-moves, .bills-smart-suggests",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.4rem"),
+		prop("margin-top", "0.5rem"),
+	)
+	rule(".bills-smart-move",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.6rem"),
+		prop("padding", "0.5rem 0.75rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "10px"),
+		prop("background", "color-mix(in srgb, var(--bg-elev) 42%, transparent)"),
+	)
+	rule(".bills-smart-move.is-suggest",
+		prop("border-style", "dashed"),
+		prop("border-color", "color-mix(in srgb, var(--accent) 40%, var(--border))"),
+	)
+	rule(".rec-tag-suggest",
+		prop("border-color", "color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		prop("color", "color-mix(in srgb, var(--accent) 60%, var(--text))"),
+	)
+	rule(".bills-smart-move-text",
+		prop("flex", "1 1 auto"),
+		prop("min-width", "0"),
+		prop("font-size", "0.9rem"),
+	)
+	rule(".bills-smart-move-amt",
+		prop("flex", "0 0 auto"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("font-weight", "600"),
+	)
+	rule(".bills-smart-keep",
+		prop("max-width", "10rem"),
+	)
+	rule(".bills-smart-delta",
+		prop("font-size", "0.72rem"),
+		prop("font-weight", "600"),
+		prop("margin-top", "0.15rem"),
+	)
+	rule(".bills-smart-modal",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.75rem"),
+	)
+	rule(".bills-smart-setup",
+		prop("display", "grid"),
+		prop("grid-template-columns", "minmax(11rem, 14rem) 1fr"),
+		prop("gap", "0.75rem"),
+		prop("align-items", "end"),
+	)
 	rule(".rec-flow-figs",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),

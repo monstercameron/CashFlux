@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -67,6 +69,19 @@ type Data struct {
 	// Planning holds the persisted planning-page policy (runway buffer/horizon, forecast
 	// horizon), surfaced as the runway_* / forecast_horizon variables.
 	Planning PlanningData
+	// BillsSmart holds the smart-bill-schedule inputs (paydays + expected income per
+	// payday + the keep floor, from prefs + BillsSmartConfig), surfaced as the
+	// bills_* schedule variables via the billsched optimizer.
+	BillsSmart BillsSmartData
+}
+
+// BillsSmartData is the smart-schedule input the wasm layer feeds in. Empty
+// Paydays means "pay cycle not configured" — the variables still exist but the
+// smart figures equal the raw ones.
+type BillsSmartData struct {
+	Paydays         []time.Time
+	IncomePerPayday int64
+	MinKeepMinor    int64
 }
 
 // PlanningData is the persisted planning policy the wasm layer feeds in (from PlanningConfig), so
@@ -145,6 +160,7 @@ var Names = func() []string {
 	out = append(out, AllocVarNames...)
 	out = append(out, PlanningVarNames...)
 	out = append(out, RecurringVarNames...)
+	out = append(out, BillsSmartVarNames...)
 	return out
 }()
 
@@ -276,7 +292,64 @@ func computeAtoms(d Data) map[string]float64 {
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)
+	addBillsSmartVars(out, d, major, toBase)
 	return out
+}
+
+// BillsSmartVarNames are the fixed smart-bill-schedule variables addBillsSmartVars
+// exposes — the schedule as referenceable figures.
+var BillsSmartVarNames = []string{
+	"bills_low_raw",          // projected 30-day low under the raw due dates (major units)
+	"bills_check_load_raw",   // the heaviest pay period's billed total under raw dates
+	"bills_check_load_smart", // …and under the pay-ahead smart schedule
+	"bills_even_gain",        // how much lighter the heaviest paycheck gets (raw − smart)
+	"bills_paid_ahead",       // number of bills the smart schedule pays ahead
+	"bills_suggest_gain",     // the best single biller-side shift's low-point gain
+}
+
+// addBillsSmartVars runs the billsched optimizer over the next 30 days of bills
+// (liability minimum payments + expense recurrings) against the configured pay
+// cycle, exposing the schedule as engine variables. With no paydays configured
+// the raw and smart figures coincide and the gains are 0.
+func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	const horizonDays = 30
+	upcoming := bills.UpcomingAll(d.Accounts, d.Recurring, d.Now)
+	items := make([]billsched.Item, 0, len(upcoming))
+	end := d.Now.AddDate(0, 0, horizonDays)
+	for _, b := range upcoming {
+		if b.DueDate.After(end) {
+			continue
+		}
+		items = append(items, billsched.Item{
+			ID:      b.AccountID + "|" + b.DueDate.Format("2006-01-02") + "|" + b.Name,
+			Name:    b.Name,
+			Amount:  toBase(b.Amount.Amount, b.Amount.Currency),
+			Due:     b.DueDate,
+			Movable: !b.Autopay,
+		})
+	}
+	liquid, _ := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
+	res := billsched.Optimize(liquid.Amount, items, d.BillsSmart.Paydays, d.BillsSmart.IncomePerPayday, d.Now, horizonDays, d.BillsSmart.MinKeepMinor)
+
+	maxLoad := func(loads []billsched.PeriodLoad) int64 {
+		var m int64
+		for _, l := range loads {
+			if l.Total > m {
+				m = l.Total
+			}
+		}
+		return m
+	}
+	out["bills_low_raw"] = major(res.Raw.Low)
+	out["bills_check_load_raw"] = major(maxLoad(res.Raw.Loads))
+	out["bills_check_load_smart"] = major(maxLoad(res.Smart.Loads))
+	out["bills_even_gain"] = major(res.EvenGainMinor)
+	out["bills_paid_ahead"] = float64(len(res.Moves))
+	var bestSuggest int64
+	if len(res.Suggestions) > 0 {
+		bestSuggest = res.Suggestions[0].LowGainMinor
+	}
+	out["bills_suggest_gain"] = major(bestSuggest)
 }
 
 // RecurringVarNames are the fixed recurring-schedule aggregates addRecurringVars exposes.

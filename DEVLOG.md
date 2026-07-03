@@ -1,3 +1,41 @@
+## 2026-07-03 — Smart+ pay schedule (bills): billsched engine + flip modal + engine vars
+
+Cam asked whether reorganizing bill payment dates around pay frequency helps budget balance, then
+approved it as a Smart+ feature with a raw/smart date toggle — "make sure to use formulas and
+custom values so can be referenced later." Two follow-ups shaped the UI: "move the smart plan into
+a flip modal" and "it's a bit challenging to understand why it needs so many inputs — UX test it
+and refine it."
+
+**Engine honesty first.** The initial optimizer draft assumed paying bills ahead could lift the
+projected low balance — it can't: money leaving *earlier* can only lower (or match) the minimum
+of the balance curve. Restructured around that: pay-ahead's objective is **paycheck-load evenness**
+(minimize the heaviest pay period's billed total) under a hard floor constraint (never below the
+raw schedule's low, or the optional keep-floor), reverting to raw when no genuine improvement
+exists; actual low-point *gains* only come from **biller-side due-date shifts** (`Suggest()` — due
+dates just before a payday moved to payday+1), which is also the only lever for autopay bills.
+`internal/billsched` is pure Go, 10 tests.
+
+**Inputs pruned to two.** The modal asks only "a payday you know" + pay frequency; income per
+payday is derived from recurring money-in (no third input), and the keep-floor hides under
+Advanced. Config persists as `uistate.BillsSmartConfig`; the anchor reuses `prefs.PayCycleAnchor`.
+
+**Adversarial UX pass** (subagent on screenshots) found: "Use this plan" was a black box (added a
+plain line — display/reminder dates only, no money moves, reversible), raw `bills_even_gain`-style
+tokens sat in the primary view (moved under Advanced as labelled "Formula variables"), the intro
+promised biller suggestions the preview never showed when empty (explicit empty state), "Heaviest
+check" read as bank jargon (→ "Heaviest paycheck (today/with plan)" with the −$X delta *on the
+chip*, kept as a separate span so the e2e's numeric invariant still parses the bare value), and the
+30-day-low chip was orphaned (a note ties it to the floor guarantee).
+
+**Two concurrency lessons re-confirmed:** the served wasm in the shared webroot was silently
+overwritten by the concurrent Reports agent's build mid-e2e (redeploy before every run), and at
+commit time `engineenv.go` / `formula_builder.go` carried both workstreams' hunks — staged only
+mine via a filtered `git apply --cached` patch (their `addReportsVars` call / `ReportsMetrics`
+append / `GroupReports` stay uncommitted with their files).
+
+`recurring_check.mjs` grew to 55 checks (SM1–SM12); flakes observed on I3/D1 are pre-existing
+timing races, each green on rerun; final run 55/55. Native tests + wasm vet clean.
+
 ## 2026-07-03 — /planning: scenario delete → ⋯ overflow menu
 
 Cam: "on the savings plans mode the delete x into a triple dot menu." Swapped the bare

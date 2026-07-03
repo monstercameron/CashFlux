@@ -15,3 +15,7 @@ func UseRecurringEditID() state.Atom[string] { return state.UseAtom("recurring:e
 // UseSubsPrefsOpen drives the subscription-detection preferences flip modal
 // (SubsPrefsHost): true = open. Same isolation rationale as UseRecurringEditID.
 func UseSubsPrefsOpen() state.Atom[bool] { return state.UseAtom("subs:prefsOpen", false) }
+
+// UseBillsSmartOpen drives the smart-pay-schedule flip modal (BillsSmartHost):
+// true = open. Same isolation rationale as the other modal atoms.
+func UseBillsSmartOpen() state.Atom[bool] { return state.UseAtom("bills:smartOpen", false) }

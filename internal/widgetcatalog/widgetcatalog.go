@@ -35,6 +35,26 @@ const (
 	GroupRecurring Group = "Recurring"
 )
 
+// billsSmartMeta labels the smart-bill-schedule variables for the picker.
+var billsSmartMeta = []struct{ Name, Label, Doc string }{
+	{"bills_low_raw", "Bills: projected low (raw)", "The lowest projected liquid balance over the next 30 days under the raw due dates."},
+	{"bills_check_load_raw", "Bills: heaviest paycheck (raw)", "The most any single pay period owes under the raw due dates."},
+	{"bills_check_load_smart", "Bills: heaviest paycheck (smart)", "The most any single pay period owes under the pay-ahead smart schedule."},
+	{"bills_even_gain", "Bills: paycheck-evening gain", "How much lighter the heaviest paycheck gets under the smart schedule."},
+	{"bills_paid_ahead", "Bills: paid ahead", "How many bills the smart schedule pays ahead of their due date."},
+	{"bills_suggest_gain", "Bills: best due-date shift gain", "The low-point improvement from the best single biller-side due-date change."},
+}
+
+// BillsSmartMetrics exposes the smart-bill-schedule variables (addBillsSmartVars)
+// in the formula picker under the Recurring group.
+func BillsSmartMetrics() []Metric {
+	out := make([]Metric, 0, len(billsSmartMeta))
+	for _, m := range billsSmartMeta {
+		out = append(out, Metric{Name: m.Name, Label: m.Label, Doc: m.Doc, Group: GroupRecurring})
+	}
+	return out
+}
+
 // recurringFixedMeta labels the fixed recurring-schedule aggregates for the picker.
 var recurringFixedMeta = []struct{ Name, Label, Doc string }{
 	{"recurring_monthly_in", "Recurring money in / mo", "What your scheduled income flows add up to per month."},
