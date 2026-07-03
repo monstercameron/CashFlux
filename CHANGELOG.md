@@ -26,6 +26,13 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **Dates no longer render a day early on the ledger and dashboard (C339, 2026-07-03):** Frame
+  pipelines carry transaction/bill dates as epoch seconds of UTC-midnight calendar dates, but the
+  widgetized consumers rebuilt them with `time.Unix(sec, 0)` — local time — so west of UTC the
+  Jul 1 paycheck showed "Jun 30" on /transactions and the dashboard while /reports (correctly)
+  said Jul 1, and month labels could shift a whole month. All five calendar-date reconstruction
+  sites now append `.UTC()`; the ledger, dashboard recent-transactions, upcoming-bill dates, and
+  trend/cash-flow month labels now agree with reports everywhere on Earth.
 - **Smart insights stay quiet on a brand-new empty dataset (C356, 2026-07-03):** a fresh
   "Start fresh" store warned "Liquid cash is very low — $0.00" (SMART-B8) and suggested
   'the "balanced" profile… your finances look steady' (SMART-AL1) with zero accounts to read;

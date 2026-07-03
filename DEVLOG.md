@@ -87,6 +87,24 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C339: the day-early ledger — time.Unix speaks local, the data speaks UTC
+
+The sweep's flagship data-trust finding — the same paycheck reading "Jun 30" on /transactions but
+"Jul 1" on /reports — turned out to be the *ledger's* bug, not reports': the ticket's suspicion was
+inverted. Chased it from prefs.FormatDate (innocent — formats in the time's own zone) through the
+IndexedDB blob (raw `"date":"2026-07-01T00:00:00Z"` — storage innocent) to the actual renderer:
+the widgetized /transactions table isn't transactions_row.go at all but txnFrameRow, whose date
+cell rebuilds the Frame pipeline's epoch-seconds date with `time.Unix(sec, 0)` — and time.Unix
+returns LOCAL time. UTC-midnight calendar date − 4h = the previous evening, hence a day early for
+everyone west of Greenwich, and the correct "income this month: $4,700" claims looked broken
+against the mislabeled ledger. Same pattern in four dashboard sites (trend labels, upcoming bills,
+cash-flow month labels — where a month-START boundary renders as the previous MONTH — and recent
+transactions); all five now `.UTC()`. Notifications' time.Unix stays local on purpose (real
+wall-clock arrival timestamps). Interesting convergence: the pay-schedule agent independently hit
+the same class today in billsched (local due dates vs UTC anchors) — UTC-midnight discipline at
+every reconstruction seam is the repo-wide rule now. Verified live on a UTC-4 machine: ledger and
+reports both say Jul 1.
+
 ## 2026-07-03 — C356: insights that alarm an empty wallet
 
 The sweep's empty pass showed a fresh "Start fresh" store greeting the user with "Liquid cash is

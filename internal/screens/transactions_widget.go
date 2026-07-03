@@ -406,7 +406,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		}
 		return txnFrameRowProps{
 			ID:         rid,
-			Date:       time.Unix(int64(dateCol.Num(i)), 0).Format("Jan 2, 2006"),
+			// .UTC() is load-bearing: txn dates are UTC-midnight calendar dates
+			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
+			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
+			// while /reports showed Jul 1 for the same transaction (C339).
+			Date:       time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
 			Amount:     fmtMoney(amt),
 			AmtTone:    figTone(amt),
 			Desc:       desc,

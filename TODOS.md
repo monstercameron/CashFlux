@@ -3128,13 +3128,18 @@ sentences, hover-reveal actions, hubs). What now separates this from world-class
 number agreement, period labeling, dedup/grouping, and a sample dataset that undermines the demo.**
 
 ### Cross-page data-trust (the #1 theme — numbers must agree)
-- [ ] **C339 [MAJOR][DATA-TRUST] Ledger↔reports date attribution off-by-one.** The same
-  transactions are "Jun 30, 2026" on /transactions but "Jul 1, 2026" on /reports (Biggest
-  deposits/expenses show Paycheck/Mortgage/HOA as Jul 1) and are counted in the Jul 2026 period.
-  This one seam-level date bug (suspect UTC-vs-local parse/format) is why on Jul 3 /budgets says
-  "Income this month: $4,700.00", /allocate says "You earned $4,700.00 this month", and /household
-  splits $4,700 "this period". Root-cause in the reports/dateutil seam; ship with a regression test
-  (a txn dated last-day-of-month must land in that month everywhere).
+- [x] **C339 ✅ DONE (2026-07-03) — Ledger↔reports date off-by-one.** Root cause INVERTED the
+  ticket's suspicion: **reports were right; the widgetized surfaces were wrong.** Frame pipelines
+  carry dates as epoch seconds of UTC-midnight calendar dates (`widgetsource` uses `t.Date.Unix()`),
+  and the consumers rebuilt them with `time.Unix(sec, 0)` — which returns LOCAL time — so west of
+  UTC every date rendered a day early: the Jul 1 paycheck showed "Jun 30" on /transactions and the
+  dashboard, month labels could shift a whole month ("Jul" boundary → "Jun"), and correct "income
+  this month: $4,700" claims looked wrong against the mislabeled ledger. Fixed all five calendar-
+  date reconstruction sites with `.UTC()` (transactions_widget row date; dashboard trend-series
+  labels, upcoming-bill dates, cash-flow month labels, recent-txn dates); notifications' `time.Unix`
+  is a real wall-clock arrival timestamp and correctly stays local. MEASURED live (UTC-4 machine):
+  ledger row now "Jul 1, 2026" == /reports "Jul 1, 2026"; 0 page errors; wasm build rc=0. (The
+  remaining "which window is 'this month'?" labeling gaps stay open as C343.)
 - [ ] **C341 [MAJOR][DATA-TRUST] Net-worth month delta disagrees three ways.** Dashboard hero
   "▲ $2,840.00 this month" vs /accounts summary "No change this month" vs /reports + /networth
   "▲ $1,350.43". Same question, three answers, all in the first viewport of money pages. One

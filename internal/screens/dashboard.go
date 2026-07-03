@@ -256,7 +256,10 @@ func genericChartBody(fr domain.Frame, base string) ui.Node {
 	if isSeries {
 		kind = chartspec.Area
 		for i := 0; i < fr.Rows; i++ {
-			pts[i] = chartspec.Point{X: float64(i), Y: scale(valCol.Num(i)), Label: time.Unix(int64(tCol.Num(i)), 0).Format("Jan '06")}
+			// .UTC(): series timestamps are UTC calendar boundaries; local-zone
+			// reconstruction shifts a month-start label to the previous month
+			// west of UTC (C339).
+			pts[i] = chartspec.Point{X: float64(i), Y: scale(valCol.Num(i)), Label: time.Unix(int64(tCol.Num(i)), 0).UTC().Format("Jan '06")}
 		}
 	} else {
 		labelCol, hasLabel := frameLabelCol(fr)
@@ -1036,7 +1039,9 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 				dueTone = "text-warn"
 			}
 			amt := money.New(amtCol.Int64(i), curCol.Str(i))
-			when := time.Unix(int64(dueCol.Num(i)), 0)
+			// .UTC(): due dates are UTC-midnight calendar dates; local-zone
+			// reconstruction shows them a day early west of UTC (C339).
+			when := time.Unix(int64(dueCol.Num(i)), 0).UTC()
 			rows = append(rows, Div(css.Class(tw.Flex, tw.JustifyBetween),
 				Span(nameCol.Str(i)),
 				Span(ClassStr(dueTone), pr.FormatDate(when)),
@@ -1226,7 +1231,9 @@ func cashFlowFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	var maxv int64 = 1
 	for i := 0; i < fr.Rows; i++ {
 		mb := monthBar{
-			label:   time.Unix(int64(tCol.Num(i)), 0).Format("Jan"),
+			// .UTC(): month-bucket boundaries are UTC; local-zone reconstruction
+			// mislabels the month west of UTC (C339).
+			label:   time.Unix(int64(tCol.Num(i)), 0).UTC().Format("Jan"),
 			income:  incCol.Int64(i),
 			expense: expCol.Int64(i),
 		}
@@ -1361,7 +1368,8 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		// Labels come from the Frame's t column (unix seconds per cutoff).
 		label := ""
 		if ts := int64(tCol.Num(i)); ts != 0 {
-			label = trendPointLabel(time.Unix(ts, 0), months)
+			// .UTC(): cutoffs are UTC month boundaries (C339).
+			label = trendPointLabel(time.Unix(ts, 0).UTC(), months)
 		}
 		// C215: the final cutoff is next-month-start, so it captures the current
 		// month's data "so far" — label it as the current month + "(so far)" instead
@@ -1780,7 +1788,9 @@ func recentFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		rows := make([]ui.Node, 0, fr.Rows)
 		for i := 0; i < fr.Rows; i++ {
 			amt := money.New(amtCol.Int64(i), curCol.Str(i))
-			when := time.Unix(int64(dateCol.Num(i)), 0)
+			// .UTC(): txn dates are UTC-midnight calendar dates; local-zone
+			// reconstruction rendered them a day early west of UTC (C339).
+			when := time.Unix(int64(dateCol.Num(i)), 0).UTC()
 			rows = append(rows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
 				Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16, tw.Truncate), when.Format("Jan 2")),
 				Td(css.Class(tw.Py25), descCol.Str(i)),
