@@ -1,3 +1,32 @@
+## 2026-07-03 — /assistant goes agent-first
+
+Cam: "focus on the /assistant page next, make it agent first." The bones were already agentic — a
+22-tool loop (reads, approval-gated writes, calculator, web) lived in chat_agent.go — but the UI
+told the opposite story: the Ask tab opened on Top-merchants/trend/pins cards with the chat below
+the fold behind an "Ask a question" scroll shortcut. Classic chat-widget-in-a-dashboard.
+
+Restructured Insights() in place (all hooks untouched — only the returned tree and dead card
+computations changed): `.asst-layout` two-column grid, conversation left/dominant (60vh thread,
+composer above the fold), rail right (observations = anomaly detectors + spending highlights, pins,
+saved conversations as a vertical pill list). Empty thread = agent intro (Ask/Do/Estimate capability
+rows in the existing rec-tag vocabulary). The merchants/trend cards were duplicates of the hub's
+Insights tab and left the chat surface entirely.
+
+Adversarial review (sonnet, screenshots) top findings applied: (1) the keyless example transcript
+used the real bubble styles — a first-run user couldn't tell demo answers from their own figures;
+now dashed+dimmed in a labelled frame. (2) The no-key ground truth (fixed deterministic question
+set vs full agent) lived in footer microcopy — now a single callout inside the intro with the
+Settings CTA, and the two other key pitches on the same screen were removed. (3) Static starter
+chips replayed unchanged after real exchanges — now empty-thread only. (4) The placeholder now
+echoes all three taught verbs. Skipped as out-of-page-scope: sample-banner chroma, global "Everyone"
+scope labelling, conversation-aware follow-up chips (needs model support — a real backlog item).
+
+e2e/assistant_check.mjs: 23 checks, all deterministic without an AI key — localqa answers "what is
+my net worth?" from the real dataset ($ figure asserted), the exchange persists to the rail and
+restores after New chat, empty-send no-ops, an unanswerable question raises the key CTA as a
+role=alert, Advanced→Edit-prompt opens/Escape-closes the flip modal, and the hub's other two tabs
+round-trip intact. 23/23.
+
 ## 2026-07-03 — /health: the score becomes a live formula (atoms + molecule)
 
 Cam: "move onto /health page, make sure you generate the health out of formula and make sure its

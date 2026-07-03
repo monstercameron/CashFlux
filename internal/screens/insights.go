@@ -777,23 +777,11 @@ func Insights() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
+	// The agent-first surface keeps the CHAT as the page; highlights and anomaly
+	// findings become the rail's "what I noticed" observations. (The merchants
+	// table and trend chart live on the hub's Insights tab — they were duplicated
+	// here and buried the conversation.)
 	highlights := spendingHighlights(scopedTxns, app.Categories(), base, rates, viewCategoryTransactions)
-
-	// C229: top-merchants card — drill-through sets a text/search filter on the
-	// merchant name so the transactions list shows only that payee's rows. The
-	// txFilterAtom is already registered at a stable position above.
-	viewMerchantTransactions := func(merchantName string) {
-		f := uistate.TxFilter{Text: merchantName}.Normalize()
-		txFilterAtom.Set(f)
-		uistate.PersistTxFilter(f)
-		nav.Navigate(uistate.RoutePath("/transactions"))
-	}
-	topMerchantsCard := topMerchantsSpendCard(scopedTxns, base, rates, viewMerchantTransactions)
-
-	// C230: monthly spending time-series chart — 6 months of expense outflow as an
-	// area sparkline. Computed once here (pure data, no hooks) and rendered in a
-	// labelled card between the highlights and anomaly sections.
-	spendTrendCard := monthlySpendingChart(scopedTxns, base, rates)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
@@ -836,7 +824,7 @@ func Insights() ui.Node {
 	// The conversation thread scrolls inside a bounded region so the composer below it
 	// stays on screen no matter how long the conversation grows (the thread scrolls,
 	// the input doesn't move). Auto-scroll keeps the newest message in view.
-	thread := Div(Attr("id", "cf-chat-thread"), css.Class(tw.Flex, tw.FlexCol, tw.Gap3, tw.Mb3, tw.OverflowYAuto, tw.MaxH55vh, tw.Pr1),
+	thread := Div(Attr("id", "cf-chat-thread"), ClassStr("asst-thread "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap3, tw.Mb3, tw.OverflowYAuto, tw.Pr1)),
 		MapKeyed(convo,
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
@@ -866,13 +854,13 @@ func Insights() ui.Node {
 		// C246: show a Send button on the no-key path so mouse/touch users can
 		// submit via click rather than only via Enter. Same aria-label as the
 		// keyed Send button (insights.send) for consistent screen-reader semantics.
-		trailing = Button(css.Class("btn btn-primary"), Type("button"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uistate.T("insights.send"))
+		trailing = Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uistate.T("insights.send"))
 	case loading.Get():
 		trailing = Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))
 	default:
 		// C249: give the send button an explicit accessible name and mark the leading
 		// icon decorative so screen readers announce just "Send".
-		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
+		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
 	}
 	inputRow := Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
 		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")), Placeholder(uistate.T("insights.askPlaceholder")), Value(input.Get()), OnInput(onInput)),
@@ -880,24 +868,20 @@ func Insights() ui.Node {
 	)
 	composer := inputRow
 	if noAI {
-		composer = Fragment(inputRow, keyHintNode())
+		// The full key explainer shows under the composer only mid-conversation;
+		// on an empty thread the agent intro's callout is the single CTA.
+		composer = Fragment(inputRow, If(len(turns.Get()) > 0, keyHintNode()))
 	}
 
-	// Starter chips (L8, C231): show them whenever the Ask input is empty, regardless
-	// of whether any conversation history exists. Returning users benefit from the quick
-	// prompts just as much as new ones — hiding them after the first message was wrong.
+	// Starter chips (L8, C231): shown on an EMPTY thread only (with an empty Ask
+	// box). Replaying the same fixed chips after real exchanges read as a bot
+	// ignoring the conversation — an agent's follow-ups should come from the
+	// thread itself, and until they can, showing none is more honest.
 	// Tapping a chip FILLS the Ask box (doesn't send) so the user can review/edit first.
 	chips := Fragment()
-	if len(starters) > 0 && input.Get() == "" {
+	if len(starters) > 0 && input.Get() == "" && empty {
 		fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
-		// When a conversation is already in progress, add a compact section label so
-		// the chips row has context and doesn't look like a continuation of the thread.
-		var chipsLabel ui.Node = Fragment()
-		if !empty {
-			chipsLabel = P(css.Class("muted", tw.Text12, tw.Mb1), uistate.T("insights.suggestedQuestions"))
-		}
 		chips = Div(css.Class(tw.Mb2),
-			chipsLabel,
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
 				MapKeyed(starters,
 					func(q string) any { return q },
@@ -909,14 +893,14 @@ func Insights() ui.Node {
 		)
 	}
 
-	// Conversation switcher: a "New chat" button plus a pill per saved chat (the
-	// switcher row is always present so its New-chat hook stays at a stable position).
+	// Chat header controls (New chat, the Advanced expander with Edit prompt) —
+	// the saved-conversation pills moved to the rail so the thread stays the page.
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
 	// chat-pill pins a --border outline so the New-chat / Edit-prompt pills stay
 	// visible in light mode (the BorderBlack10 tint vanished on white) (G13).
 	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.HoverBgBlack03) + " chat-pill"
-	// C251: "Edit prompt" lives inside an "Advanced" expander so the switcher bar
+	// C251: "Edit prompt" lives inside an "Advanced" expander so the header bar
 	// stays clean for everyday use. The openPrompt hook is always registered above;
 	// only the button's visibility is gated here.
 	advancedLabel := uistate.T("insights.showAdvanced")
@@ -926,19 +910,31 @@ func Insights() ui.Node {
 		advancedExpanded = "true"
 	}
 	pillFaint := pill + " " + tw.Fold(tw.TextFaint)
-	switcher := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
-		Button(ClassStr(pill), Type("button"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), OnClick(toggleAdvanced), Span(advancedLabel)),
+	chatControls := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
+		Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
+		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), Attr("data-testid", "assistant-advanced"), OnClick(toggleAdvanced), Span(advancedLabel)),
 		If(advancedOpen.Get(),
-			Button(ClassStr(pill), Type("button"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
-		),
-		MapKeyed(convs,
-			func(c domain.Conversation) any { return c.ID },
-			func(c domain.Conversation) ui.Node {
-				return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
-			},
+			Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-edit-prompt"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
 		),
 	)
+	// Rail: the saved conversations as a vertical list.
+	railConvs := Fragment()
+	if len(convs) > 0 {
+		railConvs = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("assistant.conversations"),
+			Body: Fragment(
+				Div(css.Class("asst-convs"), Attr("data-testid", "assistant-convs"),
+					MapKeyed(convs,
+						func(c domain.Conversation) any { return c.ID },
+						func(c domain.Conversation) ui.Node {
+							return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+						},
+					),
+				),
+				P(css.Class("muted", tw.Text12, tw.Mt2), uistate.T("assistant.railHint")),
+			),
+		})
+	}
 
 	// Backend/OpenAI mode toggle — only meaningful when a backend is configured;
 	// otherwise the chat always uses the direct OpenAI provider.
@@ -964,24 +960,22 @@ func Insights() ui.Node {
 
 	noData := len(accounts) == 0 && len(txns) == 0
 
-	// C234: compact top-of-page affordance — visible immediately on load, before
-	// spending highlights and pinned insights push the chat box below the fold.
-	// Clicking scrolls to and focuses the chat input so the user lands in the Ask
-	// section without manually scrolling. Hidden when noData (no point asking yet).
-	askShortcut := Fragment()
-	if !noData {
-		askShortcut = Div(css.Class(tw.Flex, tw.Mb2),
-			Button(css.Class("btn", tw.MlAuto), Type("button"),
-				Attr("aria-label", uistate.T("insights.askNow")),
-				OnClick(func() {
-					scrollToID("ask")
-					focusByID("cf-chat-input")
-				}),
-				uiw.Icon(icon.Sparkles, css.Class(tw.W4, tw.H4, tw.Mr2)),
-				uistate.T("insights.askNow"),
-			),
-		)
-	}
+	// Agent intro (empty thread): an agent-voiced welcome that leads with what it
+	// can DO — read the real figures, make approval-gated changes, estimate with
+	// math + web — so a first-time user meets an agent, not a search box.
+	agentIntro := Div(css.Class("asst-intro"), Attr("data-testid", "assistant-intro"),
+		Div(ClassStr("asst-intro-title "+tw.Fold(tw.FontDisplay)), uistate.T("assistant.introTitle")),
+		P(css.Class("muted"), uistate.T("assistant.introBody")),
+		Div(css.Class("asst-intro-cap"), Span(css.Class("rec-tag"), uistate.T("assistant.capAskTag")), Span(uistate.T("assistant.capAsk"))),
+		Div(css.Class("asst-intro-cap"), Span(css.Class("rec-tag"), uistate.T("assistant.capDoTag")), Span(uistate.T("assistant.capDo"))),
+		Div(css.Class("asst-intro-cap"), Span(css.Class("rec-tag"), uistate.T("assistant.capEstimateTag")), Span(uistate.T("assistant.capEstimate"))),
+		// Keyless: the crucial fact (fixed question set now, full agent with a key)
+		// lives HERE, where attention lands — not in footer microcopy.
+		If(noAI, Div(css.Class("asst-key-callout"), Attr("data-testid", "assistant-key-callout"),
+			Span(uistate.T("assistant.keyCallout")),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+		)),
+	)
 
 	// MIA-extend (#445-9): when the user has an active scope show a compact
 	// muted chip so they know the figures below are filtered. Because screens
@@ -1002,6 +996,36 @@ func Insights() ui.Node {
 		)
 	}
 
+	// The AGENT-FIRST layout: the conversation IS the page (left, dominant), and
+	// the rail (right) carries the agent's periphery — its observations
+	// (anomalies + spending highlights), pinned insights, saved conversations.
+	chatSection := uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("assistant.agentTitle"),
+		// C234: id="ask" anchor keeps any existing deep-link (#ask) working.
+		Attrs: []any{Attr("id", "ask"), Attr("data-testid", "assistant-chat")},
+		Body: Fragment(
+			chatControls,
+			backendToggle,
+			If(empty, agentIntro),
+			// C248: show static example Q→A conversations for keyless users so they
+			// can preview the assistant's value before adding a key. Shown only when
+			// no AI is configured AND the thread is empty.
+			If(noAI && empty, exampleConversationsNode()),
+			If(!empty, thread),
+			// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
+			// own component so the Approve/Decline handlers re-attach cleanly each time
+			// it mounts (the no-On*-in-conditional rule).
+			If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
+				Preview:   approvalPreview,
+				OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
+				OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+			})),
+			chips,
+			composer,
+			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+		),
+	})
+
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
 		// user knows to add an account before asking questions. The chat section is still
@@ -1018,51 +1042,16 @@ func Insights() ui.Node {
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
 		scopeNotice,
-		// C234: "Ask a question" shortcut button — shown at the top so the entry
-		// point is above-the-fold even when highlights and pins push the chat down.
-		askShortcut,
-		highlights,
-		// C229: top merchants by spend — payee-level breakdown over the last 90 days.
-		topMerchantsCard,
-		// C230: monthly spending time-series chart — shows the last 6 months of
-		// expense outflow so the user can see their spending trend at a glance.
-		spendTrendCard,
-		// C252: four anomaly-type detector findings (duplicates, spikes, missing
-		// charges, balance anomalies) — shown unconditionally, no Smart gate.
-		flagged,
-		// Pinned insights sit ABOVE the chat as quick references, so the conversation
-		// thread below has room to grow.
-		pinnedCard,
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("insights.chatTitle"),
-			// C234: id="ask" anchor lets the top shortcut button and any deep-link
-			// (#ask) scroll directly to the chat box.
-			Attrs: []any{Attr("id", "ask")},
-			Body: Fragment(
-				switcher,
-				// C251: reassure users that chats are persisted locally so they can
-				// return to a conversation later without worrying about losing it.
-				P(css.Class("muted", tw.Text12, tw.Mb2), uistate.T("insights.savedOnDevice")),
-				backendToggle,
-				If(empty, P(css.Class("muted"), uistate.T("insights.chatHint"))),
-				// C248: show static example Q→A conversations for keyless users so they
-				// can preview the assistant's value before adding a key. Shown only when
-				// no AI is configured AND the thread is empty.
-				If(noAI && empty, exampleConversationsNode()),
-				If(!empty, thread),
-				// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
-				// own component so the Approve/Decline handlers re-attach cleanly each time
-				// it mounts (the no-On*-in-conditional rule).
-				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
-					Preview:   approvalPreview,
-					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
-					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
-				})),
-				chips,
-				composer,
-				If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+		Div(css.Class("asst-layout"), Attr("data-testid", "assistant-layout"),
+			Div(css.Class("asst-main"), chatSection),
+			Div(css.Class("asst-rail"), Attr("data-testid", "assistant-rail"),
+				// The agent's observations: anomaly findings + spending highlights.
+				flagged,
+				highlights,
+				pinnedCard,
+				railConvs,
 			),
-		}),
+		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
 		If(promptOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
@@ -1146,7 +1135,7 @@ type convPillProps struct {
 func ConversationPill(p convPillProps) ui.Node {
 	pick := ui.UseEvent(Prevent(func() { p.OnPick(p.C.ID) }))
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.C.ID) }))
-	cls := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border) + " "
+	cls := "conv-pill " + tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border) + " "
 	if p.Active {
 		cls += tw.Fold(tw.BgSky15, tw.BorderSky40)
 	} else {
@@ -1484,14 +1473,18 @@ func exampleConversationsNode() ui.Node {
 			),
 		)
 	}
-	return Div(css.Class(tw.Mt3, tw.Mb2),
+	// The demo transcript must be visually DISTINCT from a live thread (dashed
+	// container, dimmed bubbles) — reusing the real bubble style verbatim made a
+	// keyless first-run read scripted answers as their own figures.
+	return Div(css.Class("asst-examples", tw.Mt3, tw.Mb2), Attr("data-testid", "assistant-examples"),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2),
 			Span(css.Class(tw.Text12, tw.FontSemibold, tw.TextFaint), uistate.T("insights.examplesLabel")),
 			Span(css.Class(tw.Text11, tw.TextFaint), "·"),
 			Span(css.Class(tw.Text12, tw.TextFaint), uistate.T("insights.examplesHint")),
 		),
 		Div(rows...),
-		P(css.Class("muted", tw.Text11, tw.Mt1), uistate.T("insights.examplesNotice")),
+		// (The add-a-key CTA lives once, in the agent intro — repeating it here
+		// made the keyless screen pitch the key three separate times.)
 	)
 }
 
