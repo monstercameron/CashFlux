@@ -20,6 +20,11 @@ and every commit updates this file under `Unreleased`.
   subscription over-detection, /accounts' invisible liabilities hand-off).
 
 ### Fixed
+- **Setup wizard selects now preselect the real current values (C338, 2026-07-03):** the currency
+  dropdown showed "AUD — A$" (first alphabetical) instead of the household's base currency because
+  setup.go marked options with the parse-time `selected` attribute, which the reconciled DOM
+  ignores; the currency, week-start, and account-type selects now use the framework's `SelectedIf`
+  property option like every other screen.
 - **Money figures on /investments, /credit, /loans, /duplicates now comma-group thousands
   (C337, 2026-07-03):** those pages' shared local formatter (`fmtMinorAmount`) skipped grouping, so
   "$33720.00" rendered beside a "$4,590.56" produced by the app-wide `money.FormatAccounting` — on

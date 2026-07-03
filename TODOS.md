@@ -3178,10 +3178,15 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   MEASURED live: /investments "$33,720.00", /credit "$8,190.56 of $12,000.00", /loans "$26,840.00";
   probe found 0 ungrouped ≥5-digit money strings on all three routes; 0 page errors; native tests +
   wasm build green.
-- [ ] **C338 [MAJOR][BUG] Setup wizard defaults to "AUD — A$"** (first-alphabetical) even when the
-  active dataset base is USD ("Your household · USD base" in the same viewport), and the step rail
-  pre-checks "✓ Account / ✓ Members" on entry. Default from prefs/current base (locale fallback),
-  and make step checks reflect wizard progress, not pre-existing data.
+- [x] **C338 ✅ DONE (2026-07-03) — Setup wizard showed "AUD — A$" instead of the base currency.**
+  The wizard's state already defaulted to `Settings().BaseCurrency` (USD fallback); the bug was the
+  option markup: setup.go was the only screen using `Attr("selected", "")`, which sets the
+  parse-time default-selected *attribute* the reconciled DOM ignores — so the browser showed the
+  first option (AUD alphabetically). All three setup selects (currency, week-start, account type)
+  now use the framework's `SelectedIf` property option like every other screen. MEASURED live:
+  `setup-currency` inputValue == "USD" on a USD dataset; 0 page errors; wasm build rc=0. (The
+  pre-checked "✓ Account / ✓ Members" step dots are by design — the wizard resumes from existing
+  data, matching the dashboard checklist's "pick up where you left off".)
 - [ ] **C355 [MINOR][BUG] /activity leaks internals + runs date into actor.** "Added 3
   _meta:settingsState records" appears in the user-facing feed, and rows render
   "May 26, 2026Marcus Hartley" (no separator). Filter `_meta:*` audit records; fix the separator.

@@ -241,10 +241,12 @@ func SetupWizard() ui.Node {
 						func(c string) ui.Node {
 							sym := currency.Symbol(c)
 							label := fmt.Sprintf("%s — %s", c, sym)
-							if c == curVal {
-								return Option(Value(c), Attr("selected", ""), label)
-							}
-							return Option(Value(c), label)
+							// SelectedIf sets the DOM selected *property*; the
+							// bare attribute only marks default-selectedness at
+							// parse time, so the reconciled <select> ignored it
+							// and the browser showed the first option (AUD)
+							// instead of the household's base currency (C338).
+							return Option(Value(c), SelectedIf(c == curVal), label)
 						},
 					),
 				),
@@ -478,16 +480,10 @@ func setupStepDots(p setup.Progress, activeStep int) ui.Node {
 
 // weekOption renders a single <option> for the week-start selector.
 func weekOption(v prefs.WeekStart, selected, label string) ui.Node {
-	if string(v) == selected {
-		return Option(Value(string(v)), Attr("selected", ""), label)
-	}
-	return Option(Value(string(v)), label)
+	return Option(Value(string(v)), SelectedIf(string(v) == selected), label)
 }
 
 // acctTypeOption renders a single <option> for the account-type selector.
 func acctTypeOption(v domain.AccountType, selected, label string) ui.Node {
-	if string(v) == selected {
-		return Option(Value(string(v)), Attr("selected", ""), label)
-	}
-	return Option(Value(string(v)), label)
+	return Option(Value(string(v)), SelectedIf(string(v) == selected), label)
 }

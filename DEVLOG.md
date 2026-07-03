@@ -24,6 +24,18 @@ Also per Cam (2026-07-03): no worktrees in this repo — all agents work the sha
 (Process note: commit 12539dd0 unintentionally dropped this feature's previous devlog entry — a
 stale working copy committed whole-file; restored below. Code files were audited and are intact.)
 
+## 2026-07-03 — C338: the AUD wizard default was a selected-attribute-vs-property bug
+
+The setup wizard showed "AUD — A$" on a USD household. The state code was innocent — it already
+defaulted to `Settings().BaseCurrency` — but setup.go was the only screen in the app marking
+options with `Attr("selected", "")`, the parse-time default-selected *attribute*, which the
+reconciled DOM ignores; with nothing actually selected the browser shows the first option, and
+currency.Codes() starts at AUD. Switched all three wizard selects (currency, week-start, account
+type) to the framework's `SelectedIf` property option — the idiom every other select already uses
+(wsswitcher, settings_section). Probe: `setup-currency` inputValue == "USD". Left the pre-checked
+step dots alone deliberately: the wizard resuming from existing data is the dashboard checklist's
+"pick up where you left off" behavior, not a bug.
+
 ## 2026-07-03 — C337: one local formatter was the entire "no commas" bug
 
 The sweep flagged "$33720.00" on /investments and "$8190.56 of $12000.00" on /credit — right next
