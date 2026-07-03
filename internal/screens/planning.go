@@ -33,6 +33,30 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
+// planTile wraps a tile body in the shared Widget chrome + the full-width bento column.
+func planTile(id string, body ui.Node) ui.Node {
+	return uiw.Widget(uiw.WidgetProps{
+		ID: id, Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true, Body: body,
+	})
+}
+
+// planSection wraps a tile body with a serif section title + optional action, reusing the
+// debt-section chrome so /planning matches /debt, /investments, and /allocate.
+func planSection(id, title string, action, body ui.Node) ui.Node {
+	args := []any{css.Class("debt-section")}
+	if id != "" {
+		args = append(args, Attr("id", id))
+	}
+	if title != "" {
+		args = append(args, Div(css.Class("debt-section-head"),
+			H2(css.Class("debt-section-title"), title),
+			If(action != nil, action),
+		))
+	}
+	args = append(args, body)
+	return Div(args...)
+}
+
 // Planning hosts the debt-payoff calculator: enter a balance, APR, and monthly
 // payment to see months-to-zero, total interest, and total paid (via the pure
 // internal/payoff engine). The projection updates live as you type.
@@ -45,6 +69,22 @@ func Planning() ui.Node {
 		}
 	}
 
+	_ = uistate.UseDataRevision().Get()
+	_ = uistate.UsePrefs().Get() // re-render when the accent/theme changes
+	accent := chartLineColor(uistate.CurrentAccent())
+	dec := currency.Decimals(base)
+	cfg := uistate.PlanningConfigGet()
+	seedMinor := func(m int64) string {
+		if m > 0 {
+			return money.FormatMinor(m, dec)
+		}
+		return ""
+	}
+
+	// showFormulas reveals the opt-in planning-metrics FormulaBuilder tile.
+	showFormulas := ui.UseState(false)
+	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+
 	trimStr := ui.UseState("")
 	onTrim := ui.UseEvent(func(v string) { trimStr.Set(v) })
 	// compareID is the ID of the saved plan whose projection curve is overlaid on
@@ -55,15 +95,26 @@ func Planning() ui.Node {
 	// "Can I afford it?" — a purchase amount checked against projected cash (L8).
 	afAmount := ui.UseState("")
 	afMonths := ui.UseState("")
-	afReserve := ui.UseState("")
+	afReserve := ui.UseState(seedMinor(cfg.AffordReserveMinor))
 	onAfAmount := ui.UseEvent(func(v string) { afAmount.Set(v) })
 	onAfMonths := ui.UseEvent(func(v string) { afMonths.Set(v) })
 	onAfReserve := ui.UseEvent(func(v string) { afReserve.Set(v) })
 
 	// Cash runway: a daily projection of liquid balance against scheduled recurring
 	// cash flows, flagging the day it dips below a buffer (L13).
-	rwBuffer := ui.UseState("")
+	rwBuffer := ui.UseState(seedMinor(cfg.RunwayBufferMinor))
 	onRwBuffer := ui.UseEvent(func(v string) { rwBuffer.Set(v) })
+
+	// Persist the runway buffer + affordability reserve so they survive a reload and feed the
+	// runway_buffer engine variable. Silent (no data-revision bump) — a keyed effect.
+	planPersistKey := rwBuffer.Get() + "|" + afReserve.Get()
+	ui.UseEffect(func() func() {
+		pc := uistate.PlanningConfigGet()
+		pc.RunwayBufferMinor, _ = money.ParseMinor(strings.TrimSpace(rwBuffer.Get()), dec)
+		pc.AffordReserveMinor, _ = money.ParseMinor(strings.TrimSpace(afReserve.Get()), dec)
+		uistate.SetPlanningConfig(pc)
+		return nil
+	}, planPersistKey)
 
 	// plRev triggers a re-render of Planning() when plans are added or removed,
 	// causing app.Plans() to be re-read without explicit dependency tracking.
@@ -208,7 +259,7 @@ func Planning() ui.Node {
 		if currency.Symbol(base) == "$" {
 			yFmt = "$.3~s"
 		}
-		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Points: toPoints(series)}}
+		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Color: accent, Points: toPoints(series)}}
 		// Calendar X-axis labels (G7 §7 / L61): the chart's X values are month indices
 		// 0..12, which read as opaque "0 · 2 · 4 …". Attach a real month label to each
 		// baseline point ("Jul 2026"); chart.js renders point labels as X ticks when no
@@ -273,10 +324,8 @@ func Planning() ui.Node {
 			Legend: len(chartSeries) > 1,
 		}
 		planSmartSettings := uistate.LoadSmartSettings()
-		forecastCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title:        uistate.T("planning.forecastTitle"),
-			HeaderAction: smartSectionAction(planSmartSettings),
-			Body: Fragment(
+		forecastCard = planTile("plan-forecast", planSection("sec-forecast", uistate.T("planning.forecastTitle"), smartSectionAction(planSmartSettings),
+			Fragment(
 				// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
 				// display-weight figure so Dev's primary question ("where will I be?") is
 				// answerable at glance-speed, before parsing the chart or the hint sentence.
@@ -308,8 +357,7 @@ func Planning() ui.Node {
 				),
 				trimNote,
 				compareNote,
-			),
-		})
+			)))
 	}
 
 	// C141: compute safe-to-spend once at top-level so both the runway card (the
@@ -376,9 +424,8 @@ func Planning() ui.Node {
 			)
 		}
 
-		affordCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("planning.affordTitle"),
-			Body: Fragment(
+		affordCard = planTile("plan-afford", planSection("sec-afford", uistate.T("planning.affordTitle"), Fragment(),
+			Fragment(
 				P(css.Class("muted"), uistate.T("planning.affordHint")),
 				Form(css.Class("form-grid"),
 					labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afAmount.Get()), Step("0.01"), OnInput(onAfAmount))),
@@ -386,8 +433,7 @@ func Planning() ui.Node {
 					labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(afReserve.Get()), Step("0.01"), OnInput(onAfReserve))),
 				),
 				afBody,
-			),
-		})
+			)))
 	}
 
 	// Cash runway (L13): project liquid balance over the next 60 days against the
@@ -473,8 +519,9 @@ func Planning() ui.Node {
 				// C172: render the per-day balance curve (it was computed but never shown —
 				// only summary stats were). A line over the 60-day horizon, X = day index.
 				dayPts := make([]chartspec.Point, len(proj.Daily))
+				rwStart := time.Now()
 				for i, d := range proj.Daily {
-					dayPts[i] = chartspec.Point{X: float64(d.Day), Y: currency.MajorFromMinor(d.Balance, base)}
+					dayPts[i] = chartspec.Point{X: float64(d.Day), Y: currency.MajorFromMinor(d.Balance, base), Label: rwStart.AddDate(0, 0, d.Day).Format("Jan 2")}
 				}
 				rwYFmt := ".3~s"
 				if currency.Symbol(base) == "$" {
@@ -482,7 +529,7 @@ func Planning() ui.Node {
 				}
 				rwSpec := chartspec.Spec{
 					Kind:   chartspec.Line,
-					Series: []chartspec.Series{{Name: uistate.T("planning.runwayTitle"), Points: dayPts}},
+					Series: []chartspec.Series{{Name: uistate.T("planning.runwayTitle"), Color: accent, Points: dayPts}},
 					Y:      chartspec.Axis{Format: rwYFmt},
 				}
 				// C141: surface Safe to spend as the headline tile in the runway
@@ -492,34 +539,38 @@ func Planning() ui.Node {
 				if planSafeToSpend < 0 {
 					s2sTone = "neg"
 				}
+				_ = s2sTone
+				_ = lowDate
 				rwBody = Div(
+					// Hero: Safe to spend is the runway's headline answer (matches the forecast
+					// tile's hero + chip pattern), the secondary figures demoted to a chip row.
+					Div(css.Class("stat"),
+						Div(css.Class("stat-label", tw.TextDim), uistate.T("planning.safeToSpend")),
+						Div(ClassStr("stat-value is-hero "+tw.Fold(tw.FontDisplay)+" "+accentFor(money.New(planSafeToSpend, base))), fmtMoney(money.New(planSafeToSpend, base))),
+					),
 					Div(css.Class("stat-grid"),
-						stat(uistate.T("planning.safeToSpend"), fmtMoney(money.New(planSafeToSpend, base)), s2sTone),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
 						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
 						paydayStat,
 					),
 					verdict,
-					// C173: the low-point line carries the date; tone it (danger) when the
-					// balance actually dips negative so it reads as a warning, not a muted
-					// footnote. Stays muted when the low-point is comfortably positive.
-					P(ClassStr(runwayLowClass(lowTone)), uistate.T("planning.runwayLow", fmtMoney(money.New(proj.MinBalance, base)), lowDate)),
-					// C172: the daily balance curve over the horizon.
+					// The daily balance curve over the horizon (date-labelled X axis).
 					uiw.Chart(uiw.ChartProps{Spec: rwSpec, Height: "160px", Label: uistate.T("planning.runwayChartLabel")}),
 				)
 			}
 		}
 
-		runwayCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("planning.runwayTitle"),
-			Body: Fragment(
+		runwayCard = planTile("plan-runway", planSection("sec-runway", uistate.T("planning.runwayTitle"), Fragment(),
+			Fragment(
 				P(css.Class("muted"), uistate.T("planning.runwayHint")),
-				Form(css.Class("form-grid"),
-					labeledField(uistate.T("planning.runwayBufferPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
-				),
 				rwBody,
-			),
-		})
+				// Controls after results (consistent with the other tiles); a compact,
+				// placeholdered buffer input rather than a full-width empty box.
+				Div(css.Class("plan-inline-field"),
+					labeledField(uistate.T("planning.runwayBufferPlaceholder", base),
+						Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder("500"), Value(rwBuffer.Get()), Step("0.01"), OnInput(onRwBuffer))),
+				),
+			)))
 	}
 
 	plansCard := Fragment()
@@ -543,9 +594,8 @@ func Planning() ui.Node {
 				},
 			)),
 		)
-		plansCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("plans.title"),
-			Body: Fragment(
+		plansCard = planTile("plan-scenarios", planSection("sec-scenarios", uistate.T("plans.title"), Fragment(),
+			Fragment(
 				P(css.Class("muted"), uistate.T("plans.hint")),
 				Form(css.Class("form-grid"), OnSubmit(addPlan),
 					Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("plans.namePlaceholder")), Value(plName.Get()), OnInput(onPlName)}, errAttrs("plan-err", plErr.Get())...)...),
@@ -564,8 +614,7 @@ func Planning() ui.Node {
 				),
 				errText("plan-err", plErr.Get()),
 				list,
-			),
-		})
+			)))
 	}
 
 	// C168: lead with the near-term liquid cash-flow section (runway/safe-to-spend),
@@ -573,12 +622,40 @@ func Planning() ui.Node {
 	// actionable. forecastCard is demoted below affordability and runway.
 	// The recurring cash-flow manager lives at /recurring (RecurringManagerPanel in
 	// recurring.go, FEATURE_MAP §5.7a) — it is not embedded here.
-	return Div(
-		runwayCard,
-		affordCard,
-		forecastCard,
-		plansCard,
-	)
+	// Toolbar tile: a plan-metrics toggle + a link to the recurring cash-flow manager (which
+	// owns the schedule the runway projects against).
+	metricsCls := "strip-toggle"
+	if showFormulas.Get() {
+		metricsCls += " is-on"
+	}
+	toolbar := planTile("plan-toolbar", Div(css.Class("filter-strip"),
+		Div(css.Class("filter-strip-controls"),
+			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
+				Attr("data-testid", "planning-toggle-formulas"), Title(uistate.T("planning.metricsTitle")),
+				OnClick(toggleFormulas), Text(planMetricsLabel(showFormulas.Get()))),
+			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/recurring")), uistate.T("planning.manageRecurring")),
+			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/networth")), uistate.T("debt.linkNetWorth")),
+		),
+	))
+
+	// C168: lead with the near-term liquid runway, then affordability, the 12-month forecast,
+	// and the saved what-if scenarios. Widgetized bento surface (like /debt, /investments).
+	tiles := []ui.Node{toolbar, runwayCard, affordCard, forecastCard, plansCard}
+	if showFormulas.Get() {
+		tiles = append(tiles, planTile("plan-formula", Fragment(
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("planning.formulaHint")),
+			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("planning.metricsTitle"), ShowSaved: true}),
+		)))
+	}
+	return Div(css.Class("bento bento-planning"), tiles)
+}
+
+// planMetricsLabel is the plan-metrics toggle label.
+func planMetricsLabel(on bool) string {
+	if on {
+		return uistate.T("planning.metricsHide")
+	}
+	return uistate.T("planning.metricsShow")
 }
 
 type recurringRowProps struct {
@@ -781,15 +858,6 @@ func detectedRecurringRow(props detectedRecurringRowProps) ui.Node {
 }
 
 // cadenceLabel localizes a recurring cadence.
-// runwayLowClass styles the runway low-point line: muted when the low-point stays
-// positive, danger + semibold when it dips negative so it reads as a warning (C173).
-func runwayLowClass(tone string) string {
-	if tone == "neg" {
-		return "t-body " + tw.ColorClass("text-down") // danger color = salient vs muted gray
-	}
-	return "muted"
-}
-
 func cadenceLabel(c domain.RecurringCadence) string {
 	switch c {
 	case domain.CadenceWeekly:

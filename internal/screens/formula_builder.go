@@ -40,8 +40,15 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
-		Alloc: liveAllocData(),
+		Alloc: liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
 	})
+}
+
+// livePlanningData converts the persisted planning config into engine PlanningData, so the
+// runway_* / forecast_horizon variables reflect the current policy wherever a formula runs.
+func livePlanningData() engineenv.PlanningData {
+	c := uistate.PlanningConfigGet()
+	return engineenv.PlanningData{RunwayBufferMinor: c.RunwayBufferMinor, RunwayDays: c.RunwayDays, ForecastMonths: c.ForecastMonths}
 }
 
 // liveAllocData converts the persisted allocate plan into engine AllocData, so the alloc_*
@@ -90,6 +97,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
 	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
 	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
+	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")
@@ -160,7 +168,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 
 	// Variable palette: a dense, click-to-insert grid of chips (label + live value),
 	// grouped by category. Replaces the sprawling one-row-per-variable list.
-	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate}
+	groups := []widgetcatalog.Group{widgetcatalog.GroupCore, widgetcatalog.GroupActivity, widgetcatalog.GroupCounts, widgetcatalog.GroupCustom, widgetcatalog.GroupBudgets, widgetcatalog.GroupAccounts, widgetcatalog.GroupGoals, widgetcatalog.GroupDebt, widgetcatalog.GroupPools, widgetcatalog.GroupAllocate, widgetcatalog.GroupPlanning}
 	palette := make([]ui.Node, 0, len(groups))
 	for _, g := range groups {
 		chips := make([]ui.Node, 0)

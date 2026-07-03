@@ -34,11 +34,11 @@ try {
 
   // Navigate to the planning screen.
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('section.card', { timeout: 60000 });
-  await page.waitForTimeout(600);
+  await page.waitForSelector('.bento-planning', { timeout: 60000 });
+  await page.waitForTimeout(800);
 
-  // 1. The forecast card must be present.
-  const forecastCard = page.locator('section.card', { hasText: "Net worth in 12 months" });
+  // 1. The forecast tile must be present (widgetized bento surface: #sec-forecast).
+  const forecastCard = page.locator('#sec-forecast');
   if ((await forecastCard.count()) === 0) {
     fail("forecast card ('Net worth in 12 months') not found on /planning");
     process.exit(1);

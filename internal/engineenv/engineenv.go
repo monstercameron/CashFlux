@@ -32,6 +32,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/planning"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 )
 
@@ -59,6 +60,21 @@ type Data struct {
 	// Alloc holds the persisted allocate-page plan (amount to put to work + split controls),
 	// surfaced as the alloc_* engine variables so a plan figure is usable in formulas/widgets.
 	Alloc AllocData
+	// Plans are the user's saved what-if scenarios (the planning page); each becomes
+	// plan_<slug>_end / _monthly / _runway engine variables so a scenario's projection is
+	// usable in a formula or dashboard widget.
+	Plans []domain.Plan
+	// Planning holds the persisted planning-page policy (runway buffer/horizon, forecast
+	// horizon), surfaced as the runway_* / forecast_horizon variables.
+	Planning PlanningData
+}
+
+// PlanningData is the persisted planning policy the wasm layer feeds in (from PlanningConfig), so
+// the pure engine can expose it as variables. Amounts are minor units of the base currency.
+type PlanningData struct {
+	RunwayBufferMinor int64
+	RunwayDays        int
+	ForecastMonths    int
 }
 
 // AllocData is the allocate-page plan the wasm layer feeds in (from the persisted AllocConfig),
@@ -127,6 +143,7 @@ var Names = func() []string {
 		out = append(out, m.Name)
 	}
 	out = append(out, AllocVarNames...)
+	out = append(out, PlanningVarNames...)
 	return out
 }()
 
@@ -256,7 +273,73 @@ func computeAtoms(d Data) map[string]float64 {
 	addDebtVars(out, d, major, toBase)
 	addPoolVars(out, d, major, toBase)
 	addAllocVars(out, d, major)
+	addPlanningVars(out, d, major)
 	return out
+}
+
+// PlanningVarNames are the fixed planning-policy variables addPlanningVars exposes.
+var PlanningVarNames = []string{
+	"runway_buffer",    // cash-runway liquidity floor (major units, base currency)
+	"runway_days",      // cash-runway projection horizon in days
+	"forecast_horizon", // net-worth forecast horizon in months
+}
+
+// PlanVarFields are the per-plan metric suffixes exposed on the surface.
+var PlanVarFields = []string{"end", "monthly", "runway"}
+
+// PlanVarBase pairs a plan with the disambiguated variable prefix its values are keyed under
+// ("plan_<slug>_"). Single source of truth for per-plan variable naming.
+type PlanVarBase struct {
+	Plan   domain.Plan
+	Prefix string
+}
+
+// PlanVarBases returns one entry per saved plan, in stable order, same-name plans disambiguated.
+func PlanVarBases(plans []domain.Plan) []PlanVarBase {
+	used := map[string]bool{}
+	out := make([]PlanVarBase, 0, len(plans))
+	for _, p := range plans {
+		slug := budgetVarSlug(p.Name)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, PlanVarBase{Plan: p, Prefix: "plan_" + slug + "_"})
+	}
+	return out
+}
+
+// PlanVarSlug exposes the slugging used for per-plan variable names (for UI previews).
+func PlanVarSlug(s string) string { return budgetVarSlug(s) }
+
+// addPlanningVars exposes the planning policy + each saved what-if plan as engine variables:
+// runway_buffer / runway_days / forecast_horizon from the config, and per plan
+// plan_<slug>_end (projected end-of-horizon balance, major units), plan_<slug>_monthly (net
+// monthly change), plan_<slug>_runway (months until the balance depletes, 0 if it never does).
+func addPlanningVars(out map[string]float64, d Data, major func(int64) float64) {
+	out["runway_buffer"] = major(d.Planning.RunwayBufferMinor)
+	out["runway_days"] = float64(d.Planning.RunwayDays)
+	out["forecast_horizon"] = float64(d.Planning.ForecastMonths)
+	for _, base := range PlanVarBases(d.Plans) {
+		p := base.Plan
+		out[base.Prefix+"end"] = major(planning.EndBalance(p))
+		out[base.Prefix+"monthly"] = major(planning.MonthlyNet(p))
+		months, depletes := planning.RunwayMonths(p)
+		if !depletes {
+			months = 0
+		}
+		out[base.Prefix+"runway"] = months
+	}
 }
 
 // AllocVarNames are the fixed allocate-plan variables addAllocVars exposes, in a stable order.

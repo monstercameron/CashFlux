@@ -5064,6 +5064,40 @@ func registerGenerated() {
 		prop("outline-offset", "1px"),
 	)
 	// ---- /allocate: widgetized "put money to work" surface ----
+	// ---- /planning: widgetized runway + forecast + afford + scenarios surface ----
+	rule(".bento.bento-planning",
+		prop("grid-template-rows", "auto"),
+		prop("grid-auto-rows", "auto"),
+	)
+	rule(".bento.bento-planning > .w",
+		prop("height", "auto"),
+		prop("min-height", "0"),
+		prop("overflow", "visible"),
+	)
+	// The planning tiles reuse the debt section chrome + stat grid; give the lead figures a
+	// touch more presence and keep the forms tidy on the wide bento column.
+	rule(".bento-planning .stat-grid",
+		prop("display", "grid"),
+		prop("grid-template-columns", "repeat(auto-fit, minmax(9rem, 1fr))"),
+		prop("gap", "0.9rem"),
+		prop("margin-bottom", "0.5rem"),
+	)
+	rule(".bento-planning .stat-value.is-hero",
+		prop("font-size", "2rem"),
+		prop("line-height", "1.05"),
+	)
+	rule(".bento-planning .form-grid",
+		prop("margin-top", "0.6rem"),
+	)
+	// A single control after results (e.g. the runway buffer / forecast trim) shouldn't claim
+	// the full grid width like the multi-input forms do — cap it so it reads as one field.
+	rule(".plan-inline-field",
+		prop("margin-top", "0.75rem"),
+		prop("max-width", "14rem"),
+	)
+	rule(".plan-inline-field .field",
+		prop("font-variant-numeric", "tabular-nums"),
+	)
 	rule(".bento.bento-allocate",
 		prop("grid-template-rows", "auto"),
 		prop("grid-auto-rows", "auto"),

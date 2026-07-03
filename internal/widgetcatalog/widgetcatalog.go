@@ -31,7 +31,38 @@ const (
 	GroupDebt     Group = "Debts"
 	GroupPools    Group = "Pools"
 	GroupAllocate Group = "Allocate"
+	GroupPlanning Group = "Planning"
 )
+
+// planningFixedMeta labels the fixed planning-policy variables for the picker.
+var planningFixedMeta = []struct{ Name, Label, Doc string }{
+	{"runway_buffer", "Runway buffer", "The liquidity floor the cash runway warns below."},
+	{"runway_days", "Runway horizon (days)", "How many days ahead the cash runway projects."},
+	{"forecast_horizon", "Forecast horizon (months)", "How many months ahead the net-worth forecast projects."},
+}
+
+// planFieldMeta labels each per-plan metric suffix.
+var planFieldMeta = map[string]struct{ Label, Doc string }{
+	"end":     {"projected end balance", "The plan's balance at the end of its horizon."},
+	"monthly": {"monthly change", "The plan's net monthly change."},
+	"runway":  {"runway (months)", "Months until the plan's balance depletes (0 if it never does)."},
+}
+
+// PlanningMetrics exposes the planning-policy variables + each saved what-if plan's projection
+// (addPlanningVars) in the formula picker under the Planning group.
+func PlanningMetrics(plans []domain.Plan) []Metric {
+	out := make([]Metric, 0, len(planningFixedMeta)+len(plans)*len(engineenv.PlanVarFields))
+	for _, m := range planningFixedMeta {
+		out = append(out, Metric{Name: m.Name, Label: m.Label, Doc: m.Doc, Group: GroupPlanning})
+	}
+	for _, base := range engineenv.PlanVarBases(plans) {
+		for _, field := range engineenv.PlanVarFields {
+			meta := planFieldMeta[field]
+			out = append(out, Metric{Name: base.Prefix + field, Label: base.Plan.Name + " — " + meta.Label, Doc: meta.Doc, Group: GroupPlanning})
+		}
+	}
+	return out
+}
 
 // allocMetricMeta labels the fixed allocate-plan variables for the picker.
 var allocMetricMeta = []struct{ Name, Label, Doc string }{

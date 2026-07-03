@@ -78,7 +78,7 @@ try {
 
   // 3. Reload /planning and verify new UI elements.
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector('section.card', { timeout: 60000 });
+  await page.waitForSelector('.bento-planning', { timeout: 60000 });
   await page.waitForTimeout(600);
 
   // I4: prefill-account select must be present in the plan form.

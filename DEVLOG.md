@@ -1,3 +1,37 @@
+## 2026-07-03 — /planning: widgetized bento redesign + custom values + adversarial design pass
+
+Cam: "lets move into planning next, remember custom values, formulas, componenets, style tokens,
+widgets, bento grid, claude code design skill redesign, adversarial subagent for design UX high qual,
+and e2e pos and neg test." The full treatment on the biggest of the four pages (808-line screen, 5 logic
+packages, 8 e2e).
+
+1. ENGINE + CONFIG (custom values). Persisted `uistate.PlanningConfig` (runway buffer/days, forecast
+   months, afford reserve). `engineenv.addPlanningVars` exposes fixed `runway_buffer` / `runway_days` /
+   `forecast_horizon` AND per-plan `plan_<slug>_end` / `_monthly` / `_runway` (from `domain.Plan` via the
+   pure planning package — engineenv now imports it) — the same "user-created records become variables"
+   pattern as the investment pools. `widgetcatalog.PlanningMetrics` + a new `GroupPlanning`, wired into
+   the FormulaBuilder. Tested (`planningvars_surface_test.go`).
+2. UI. Transformed the 4 stacked `EntityListSection` cards into a `bento bento-planning` host of native
+   tiles (`planTile` + `planSection` debt-section chrome), added a toolbar tile (metrics toggle + manage-
+   recurring/net-worth links) + an opt-in FormulaBuilder tile. Charts (forecast baseline + runway daily)
+   now stroke in the theme accent. Buffer/reserve seed from PlanningConfig and persist via a keyed effect.
+3. ADVERSARIAL DESIGN PASS. Ran a sequential Sonnet design-critic subagent (per the never-parallel rule)
+   with the app's design language + a detailed page description; it returned a ranked, concrete critique.
+   Applied the top fixes: the cash-runway tile had three equal-weight stats and no hero → promoted
+   Safe-to-spend to a display-serif hero with the other two demoted to chips (matching the forecast tile);
+   the buffer input was a full-width empty box ABOVE the figures → moved it below the results, capped to
+   14rem, gave it a "500" placeholder; the runway chart showed day indices (0/20/40) while the forecast
+   chart two tiles down showed real dates → gave the runway chart Jan-2 date labels; dropped a redundant
+   low-point sentence (the figure was stated three times). Verified each with screenshots.
+
+e2e: fixed the two tests that located the forecast card by the old `section.card` (EntityListSection) →
+`#sec-forecast` / `.bento-planning`; wrote `planning_check.mjs` (23 checks, pos + neg). All green.
+
+Concurrency note: another agent is mid-redesign of /recurring in the SAME internal/screens package (their
+recurring_form.go / recurring_rows.go / recurringedithost.go / shell.go+recurring.go edits) — which also
+corrupted the shared web/bin/main.wasm mid-build once (re-deployed atomically to my scratchpad webroot).
+Committed ONLY my planning files by path; left theirs untouched.
+
 ## 2026-07-03 — /allocate: strategy flip modal + top-section polish + source links
 
 Three follow-ups from Cam after the /allocate redesign.
