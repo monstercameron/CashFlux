@@ -530,7 +530,7 @@ func MemberRow(props memberRowProps) ui.Node {
 						OnChange:  func(v string) { defAcctS.Set(v) },
 						AriaLabel: uistate.T("members.prefDefaultAccount"),
 					})),
-				labeledField("Role",
+				labeledField(uistate.T("members.roleLabel"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   memberRoleOptions(),
 						Selected:  roleS.Get(),

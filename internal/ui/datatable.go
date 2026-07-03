@@ -259,19 +259,19 @@ func dtPager(props dtPagerProps) ui.Node {
 		}))
 	}
 	sizeBtns = append(sizeBtns, ui.CreateElement(pagerSizeBtn, pagerSizeBtnProps{
-		Size: AllPageSize, Label: "All", Active: props.PageSize < 0, OnPick: props.OnPageSize,
+		Size: AllPageSize, Label: uistate.T("ui.table.all"), Active: props.PageSize < 0, OnPick: props.OnPageSize,
 	}))
 
 	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.prevPage")), OnClick(onPrev)}
 	if props.Page <= 1 {
 		prevArgs = append(prevArgs, Attr("disabled", "disabled"))
 	}
-	prevArgs = append(prevArgs, "Prev")
+	prevArgs = append(prevArgs, uistate.T("ui.table.prev"))
 	nextArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.nextPage")), OnClick(onNext)}
 	if props.Page >= totalPages {
 		nextArgs = append(nextArgs, Attr("disabled", "disabled"))
 	}
-	nextArgs = append(nextArgs, "Next")
+	nextArgs = append(nextArgs, uistate.T("ui.table.next"))
 
 	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
 	groupArgs := []any{css.Class("pager-sizes"), Attr("role", "group"), Attr("aria-label", uistate.T("ui.table.rowsPerPage"))}
@@ -284,7 +284,7 @@ func dtPager(props dtPagerProps) ui.Node {
 		Button(prevArgs...),
 		Span(css.Class("muted data-pos"), pos),
 		Button(nextArgs...),
-		Span(css.Class("muted data-pager-label"), "Rows per page"),
+		Span(css.Class("muted data-pager-label"), uistate.T("ui.table.rowsPerPage")),
 		Div(groupArgs...),
 	)
 }

@@ -120,6 +120,20 @@ var i18nSweepKeys = Catalog{
 	"budgets.coverBtn": "Cover…",
 	"budgets.topupBtn": "Top up…",
 
+	// Shared component library (second sweep pass — components + helpers).
+	"ui.table.all":  "All",
+	"ui.table.prev": "Prev",
+	"ui.table.next": "Next",
+	"ui.kbdHint":    "Enter to save · Esc to cancel",
+
+	// Field labels previously passed as bare helper args.
+	"members.roleLabel":   "Role",
+	"todo.priorityLabel":  "Priority",
+	"smart.digestHeading": "Digest",
+
+	// Global settings panel title (uistate.Global target).
+	"settings.panelTitle": "Settings",
+
 	// Settings.
 	"settings.tileColor":      "Tile color",
 	"settings.dateOptISO":     "2026-06-05  (ISO)",

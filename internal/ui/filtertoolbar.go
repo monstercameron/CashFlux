@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -143,7 +144,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 			Attr("role", "region"), Attr("aria-label", props.FiltersTitle),
 			Div(css.Class("filter-inline-header"),
 				H3(css.Class("filter-inline-title"), props.FiltersTitle),
-				Button(css.Class("set-close"), Type("button"), Attr("title", "Close"),
+				Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")),
 					OnClick(func() { open.Set(false) }), "✕"),
 			),
 			Div(css.Class("filter-inline-body"), props.FilterFields),

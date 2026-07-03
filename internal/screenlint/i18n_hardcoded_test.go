@@ -42,6 +42,17 @@ var i18nBaselines = map[string]int{
 	// first conversion tranche brought screens 211→126 and app 17→0.
 	"../screens": 126,
 	"../app":     0,
+	// Shared component library + UI-adjacent packages (second sweep pass —
+	// Cam: "every page AND component"). widgetregistry's 2 are the preset
+	// content-layout templates persisted into user specs (C362 class:
+	// translate at spec-creation time, not render time).
+	"../ui":             0,
+	"../uistate":        0,
+	"../widgetrender":   0,
+	"../widgetregistry": 2,
+	"../pages":          0,
+	"../mermaid":        0,
+	"../chartspec":      0,
 	// Logic packages that produce user-facing copy (C362: these need the
 	// key+args architecture — insights/notifications currently bake English
 	// at generation time, and notification copy is persisted pre-formatted).
@@ -67,7 +78,13 @@ var i18nElementFuncs = map[string]bool{
 	"Tr": true, "Table": true, "Form": true, "Fieldset": true,
 }
 
-var i18nPropFuncs = map[string]bool{"Title": true, "Placeholder": true, "Alt": true}
+// i18nPropFuncs are calls whose FIRST string arg is user-visible: display prop
+// options plus the screens' local label helpers (labeledField et al) — the
+// helper-argument blind spot the second sweep pass closed.
+var i18nPropFuncs = map[string]bool{
+	"Title": true, "Placeholder": true, "Alt": true,
+	"labeledField": true, "withFieldLabel": true, "smartBrandHeader": true,
+}
 
 var i18nDisplayFields = map[string]bool{
 	"Title": true, "Subtitle": true, "Label": true, "Detail": true, "Message": true,

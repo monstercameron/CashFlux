@@ -7,6 +7,7 @@ package ui
 import (
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -110,7 +111,7 @@ func inlineEditForm(props InlineEditFormProps) uic.Node {
 			}
 		}), cancelLabel),
 		// Discoverability hint for the keyboard path (§6.6).
-		Span(css.Class("kbd-hint"), "Enter to save · Esc to cancel"),
+		Span(css.Class("kbd-hint"), uistate.T("ui.kbdHint")),
 	)
 	if props.ExtraContent != nil {
 		formArgs = append(formArgs, props.ExtraContent)

@@ -34,7 +34,7 @@ func Widget(id, title string) SettingsTarget {
 
 // Global builds a target that opens the global settings panel.
 func Global() SettingsTarget {
-	return SettingsTarget{Kind: "global", Title: "Settings"}
+	return SettingsTarget{Kind: "global", Title: T("settings.panelTitle")}
 }
 
 const dataRevAtomID = "data:revision"

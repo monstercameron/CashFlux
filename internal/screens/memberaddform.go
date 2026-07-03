@@ -98,7 +98,7 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 				Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("members.color"),
 				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor))),
-			labeledField("Role",
+			labeledField(uistate.T("members.roleLabel"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options:   memberRoleOptions(),
 					Selected:  roleS.Get(),

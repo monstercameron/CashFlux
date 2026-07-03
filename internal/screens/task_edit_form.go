@@ -143,7 +143,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 		labeledField(uistate.T("todo.taskLabel"),
 			Input(css.Class("field"), Attr("id", "task-edit-"+t.ID), Attr("autofocus", ""), Type("text"),
 				Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle))),
-		labeledField("Priority",
+		labeledField(uistate.T("todo.priorityLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: prioOpts, Selected: prioS.Get(),
 				OnChange: func(v string) { prioS.Set(v) }, AriaLabel: "Priority",

@@ -6,7 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **i18n sweep second pass — components + helper args (C361, 2026-07-03):** the first pass missed
+  four surfaces; all closed. The shared component library `internal/ui` now translates its own
+  copy (DataTable pager All/Prev/Next/Rows-per-page, FlipPanel Close/Cancel/Save, FilterToolbar
+  close, InlineEditForm "Enter to save · Esc to cancel") and `uistate.Global()`'s "Settings" title;
+  the four literal label-helper call sites (labeledField "Role"×2/"Priority", smartBrandHeader
+  "Digest") moved to keys; the ratchet's scanner now checks label-helper first-args and covers
+  seven more packages (ui/uistate/widgetrender/widgetregistry/pages/mermaid/chartspec — all at 0
+  except widgetregistry's 2 persisted preset templates, filed under C362). Pre-wasm boot copy in
+  web/index.html is documented in C361 as needing its own mechanism.
+
 ### Added
+- **Studio → Formulas rebuilt: a searchable workbench + the compound-variable editor (2026-07-03):** The formula tab (and the /customize route, which shares the surface) becomes a bento pairing of two tiles. **The workbench** — the shared FormulaBuilder used across the app — got its long-flagged palette overhaul: the ~350 variables now sit behind a **search box** ("Search 347 variables…", ranked so label matches beat the internal weight atoms) and **collapsible groups** that read as a table of contents — each closed group shows two example labels plus its count ("Budgets — Baby & Childcare limit, … 40") instead of a wall of chips, with Core money's five curated figures open by default. Groups are now **derived from the metrics themselves** rather than a hand-maintained list — which had silently hidden the Assistant group (and would have hidden every future one). The workbench title joins the serif accent-tick design system, and a scope sentence separates the page's two save concepts ("Saved formulas are your personal calculations — they don't change how the app computes anything"). **The compound-variable editor is new** — and it's the missing half of the "score IS a formula" story: every molecule (net_worth, savings_rate, safe_to_spend, credit_utilization, health_score, credit_proxy, …) renders with its provenance tag (built-in / edited / yours), live value, plain-English doc, and exact formula — **editable in place** with a live draft preview, a point-of-action warning ("⚠ Live definition — saving changes every page and widget that uses health_score, immediately"), save-with-validation (unparseable formulas are rejected with the error shown), **reset-to-default** for overridden built-ins (appstate gains `DeleteMolecule`; deleting an override restores the default — round-trip tested), delete for custom ones, and a **new-compound-variable form** (name-shape validation + taken-name rejection against the live variable surface). An adversarial UX review drove the group examples, search prominence + ranking, the scope sentence, the live-definition guardrail, and the serif title. Verify: `go test ./...` (molecule override/reset round-trip in appstate) + a new `e2e/studio_formulas_check.mjs` — 20 checks whose keystone proves addressability end-to-end: edit `health_score` in Studio → **/health's hero renders the edited definition** → reset restores the built-in; negatives cover invalid formulas, taken names, and search misses.
+
 - **/assistant Insights tab rebuilt as the agent's briefing — a widgetized bento surface (2026-07-03):**
   the flat card stack (merchants, trend, flags, pins) becomes a designed briefing in the app's
   redesigned-page pattern: a **hero tile** with the month-to-date spend in the display serif, a

@@ -201,7 +201,7 @@ func SmartDigestSection(settings smart.Settings) ui.Node {
 	}
 
 	return uiw.Card(uiw.CardProps{
-		Header: smartBrandHeader("Digest", false, nil),
+		Header: smartBrandHeader(uistate.T("smart.digestHeading"), false, nil),
 		TestID: "smart-digest-section",
 		Body: Div(ClassStr(tw.Fold(tw.FlexCol, tw.Gap2)),
 			P(ClassStr(tw.Fold(tw.Text13, tw.TextDim)),

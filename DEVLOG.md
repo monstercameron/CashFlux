@@ -1,3 +1,23 @@
+## 2026-07-03 — i18n sweep, second pass: "every page AND component"
+
+Cam asked whether the sweep really checked EVERY page and component — honest answer was no, and
+naming the gaps found real strings in all four of them. (1) The **shared component library**
+(`internal/ui`) was never scanned: DataTable's pager (All/Prev/Next/"Rows per page"), FlipPanel's
+Close/Cancel/Save footers, FilterToolbar's close title, InlineEditForm's "Enter to save · Esc to
+cancel" — the ironic part being some of these sat NEXT to already-translated aria-labels on the
+same element. All converted (no import cycle: internal/ui already imports uistate). (2) The
+**helper-argument blind spot**: strings passed positionally to label helpers — labeledField("Role")
+×2, labeledField("Priority"), smartBrandHeader("Digest") — invisible to a display-position scanner;
+the ratchet now checks those helpers' first args so the class can't come back. (3) **Seven more
+packages** joined the ratchet (uistate/widgetrender/widgetregistry/pages/mermaid/chartspec/ui) —
+mostly clean because components are prop-driven, but uistate.Global() hardcoded its "Settings"
+title, and widgetregistry's spotlight preset bakes "This month" + a template line INTO the user's
+persisted widget spec (the C362 persisted-copy class — translate at spec-creation, ratchet holds it
+at 2). (4) **web/index.html pre-wasm boot copy** ("Getting your money in order…", "Install
+CashFlux") structurally can't use the Go bundle — documented in C361 as needing a
+navigator.language inline map or post-mount relabel. Verified live: pager + labels render identical
+English, zero raw-key leaks, zero page errors; all baselines exact with no slack.
+
 ## 2026-07-03 — /assistant Insights becomes the agent's briefing (bento + widgets + formulas)
 
 Cam asked for the assistant page redesigned with the design skill: bento grid, widgets, formulas,

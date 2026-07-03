@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/ui"
@@ -231,15 +232,15 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
 		// (green/primary styling) — so the button reads as "dismiss" not "submit".
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn close"), Type("button"), OnClick(save), "Close"),
+			Button(css.Class("set-btn close"), Type("button"), OnClick(save), uistate.T("action.close")),
 		)
 	} else {
-		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), "Save"}
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), uistate.T("action.save")}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), "Cancel"),
+			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(saveArgs...),
 		)
 	}
@@ -260,7 +261,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 						// GM4-17: tabindex="-1" removes the close button from the Tab order so
 						// initial focus lands on the first form control (a setting), not the ×
 						// button. The button remains fully mouse/click accessible.
-						Button(css.Class("set-close"), Type("button"), Attr("title", "Close"), Attr("tabindex", "-1"),
+						Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("tabindex", "-1"),
 							OnClick(func() {
 								if onClose != nil {
 									onClose()

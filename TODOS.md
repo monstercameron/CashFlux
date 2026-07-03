@@ -3306,6 +3306,18 @@ struct fields), now living permanently as the **one-way ratchet test**
   (21), plus reports_screen chart labels (11, churning surface), transactions (15 incl. the
   documents CSV-import copy), workflows, dashboards' remaining Name: fields — convert file-by-file
   and lower `../screens` in i18n_hardcoded_test.go each time.
+  **SECOND PASS (same day, Cam: "every page AND component"):** closed the coverage gaps the first
+  pass missed — (a) the shared component library `internal/ui` (DataTable pager All/Prev/Next/
+  Rows-per-page, FlipPanel Close/Cancel/Save, FilterToolbar close, InlineEditForm kbd hint) +
+  `uistate.Global()`'s "Settings" title, all → catalog keys; (b) the helper-argument blind spot —
+  the scanner now checks the FIRST string arg of labeledField/withFieldLabel/smartBrandHeader
+  (fixed the 4 live sites: Role ×2, Priority, Digest); (c) the ratchet now covers 7 more dirs
+  (ui/uistate/widgetrender/widgetregistry/pages/mermaid/chartspec — all 0 except widgetregistry 2,
+  see below). VERIFIED live: pager/labels render identical English, no raw-key leaks, 0 errors.
+  Remaining known non-ratchet surfaces: `web/index.html` pre-wasm boot copy ("Getting your money in
+  order…", "Install CashFlux", the install-hint aria) — can't use the Go bundle before wasm loads;
+  needs a navigator.language-keyed inline map or post-mount relabeling. help.go's FAQ corpus is
+  plain-arg strings to its local section builder (not yet in the scanner's helper list).
 - [ ] **C362 [MAJOR][I18N][ARCH] Logic packages bake English at generation time — needs the
   key+args architecture.** `internal/smartengine` (160 findings: every insight Title/Detail/action
   Label across ~84 SMART features) and `internal/widgetcatalog` (42: widget/column/chart labels)
@@ -3318,4 +3330,7 @@ struct fields), now living permanently as the **one-way ratchet test**
   (`dashboard.heroTitle` precedent). The ratchet holds `../smartengine` at 160 and
   `../widgetcatalog` at 42 until this lands; healthscore/credithealth/attention/notify/
   subscriptions/billsched/widgetsource are already at 0 (they return data, not copy — keep it that
-  way; band/label words like credithealth's "Good" surface via UI-side keys).
+  way; band/label words like credithealth's "Good" surface via UI-side keys). Also in this class:
+  `widgetregistry`'s "spotlight" preset content-layout templates ("This month", the Net/saved
+  template line) are PERSISTED into the user's widget spec at creation — translate at
+  spec-instantiation time (ratchet holds `../widgetregistry` at 2).
