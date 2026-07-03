@@ -117,13 +117,18 @@ func newChartButton() ui.Node {
 
 type poolEditButtonProps struct{ PoolID string }
 
-// poolEditButton is one custom-chart card's edit (pencil) control.
+// poolEditButton is one custom-chart card's edit (pencil) control. It still owns the
+// pool-edit atom subscription (so only this leaf, not the whole grid, re-renders on modal
+// open/close) but renders the standard IconButton.
 func poolEditButton(props poolEditButtonProps) ui.Node {
 	poolEdit := uistate.UseInvestPoolEditID()
-	edit := ui.UseEvent(Prevent(func() { poolEdit.Set(props.PoolID) }))
-	return Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-edit-"+props.PoolID),
-		Attr("aria-label", uistate.T("investments.editPool")), Title(uistate.T("investments.editPool")), OnClick(edit),
-		uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W3, tw.H3)))
+	return uiw.IconButton(uiw.IconButtonProps{
+		Icon:    icon.Pencil,
+		Label:   uistate.T("investments.editPool"),
+		Class:   "btn-sm btn-ghost",
+		TestID:  "invest-pool-edit-" + props.PoolID,
+		OnClick: func() { poolEdit.Set(props.PoolID) },
+	})
 }
 
 // --- pool (custom chart) card ----------------------------------------------------
@@ -144,14 +149,14 @@ type investPoolChipProps struct {
 // exposes (for use elsewhere), and edit/delete actions.
 func investPoolCard(props investPoolChipProps) ui.Node {
 	p := props.Pool
-	del := ui.UseEvent(Prevent(func() {
+	del := func() {
 		uistate.ConfirmModal(uistate.T("investments.deletePoolConfirm", p.Name), true, func(ok bool) {
 			if ok {
 				uistate.DeleteInvestPool(p.ID)
 				uistate.BumpDataRevision()
 			}
 		})
-	}))
+	}
 	varName := "pool_" + engineenv.PoolVarSlug(p.Name) + "_value"
 	header := Div(css.Class("inv-acct-head"),
 		Div(css.Class("inv-pool-title-row"),
@@ -160,9 +165,12 @@ func investPoolCard(props investPoolChipProps) ui.Node {
 			Span(css.Class("inv-pool-count", tw.TextDim), uistate.T("investments.poolCount", props.Members)),
 			Div(css.Class("inv-pool-actions"),
 				ui.CreateElement(poolEditButton, poolEditButtonProps{PoolID: p.ID}),
-				Button(css.Class("inv-pool-chip-btn"), Type("button"), Attr("data-testid", "invest-pool-del-"+p.ID),
-					Attr("aria-label", uistate.T("investments.deletePool")), Title(uistate.T("investments.deletePool")), OnClick(del),
-					uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+				uiw.DeleteButton(uiw.DeleteButtonProps{
+					AriaLabel: uistate.T("investments.deletePool"),
+					Title:     uistate.T("investments.deletePool"),
+					TestID:    "invest-pool-del-" + p.ID,
+					OnClick:   del,
+				}),
 			),
 		),
 		Span(css.Class("inv-pool-var"), Title(uistate.T("investments.poolVarHint")), varName),

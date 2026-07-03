@@ -44,6 +44,8 @@ func focusRadioAt(groupID string, index int) {
 type SegOption struct {
 	Value string
 	Label string
+	// TestID is an optional data-testid on the option's button, for e2e selectors.
+	TestID string
 }
 
 // SegmentedProps configures a Segmented control.
@@ -150,6 +152,7 @@ func segmented(props SegmentedProps) uic.Node {
 				return uic.CreateElement(segButton, segButtonProps{
 					Value:    o.Value,
 					Label:    o.Label,
+					TestID:   o.TestID,
 					Active:   o.Value == selected,
 					TabStop:  o.Value == selected || (!anySelected && o.Value == firstVal),
 					OnSelect: onSelect,
@@ -163,6 +166,7 @@ func segmented(props SegmentedProps) uic.Node {
 type segButtonProps struct {
 	Value    string
 	Label    string
+	TestID   string
 	Active   bool
 	TabStop  bool // the single roving Tab stop in the radiogroup
 	OnSelect func(value string)
@@ -184,7 +188,7 @@ func segButton(props segButtonProps) uic.Node {
 	if props.TabStop {
 		tabidx = "0"
 	}
-	return Button(
+	args := []any{
 		ClassStr(cls),
 		Type("button"),
 		Attr("role", "radio"),
@@ -195,8 +199,12 @@ func segButton(props segButtonProps) uic.Node {
 				onSelect(value)
 			}
 		}),
-		props.Label,
-	)
+	}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	args = append(args, props.Label)
+	return Button(args...)
 }
 
 // StepperPillProps configures a StepperPill.

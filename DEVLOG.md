@@ -1,3 +1,28 @@
+## 2026-07-03 — /investments: standard components audit
+
+Cam: "for /investments, make sure they are standard components if feasible." Audited the page against
+the `internal/ui` primitive library. It was already ~90% standard (Widget, Chart, Card, SelectInput,
+FlipPanel, FormulaBuilder, EmptyStateCTA, the shared filter-strip). Swapped the remaining clear cases:
+- **Growth window toggle → `uiw.Segmented`.** It was hand-built `.inv-seg` buttons with an `isActive`
+  helper and three `UseEvent` handlers; Segmented is the standard (8 other screens use it) and brings a
+  sliding pill + ARIA radiogroup + arrow-key nav for free. Dropped the 3 handlers (Segmented owns its
+  own click hooks) and the `isActive` helper.
+- **Delete buttons → `uiw.DeleteButton`** (holding + custom-chart), **edit pencil → `uiw.IconButton`.**
+
+Two shared components lacked a `data-testid` passthrough the e2e needs, so added an optional `TestID`
+field to `SegOption` and `IconButtonProps` (additive; `DeleteButton` already had one). Chose testid
+passthrough over selecting-by-label in the e2e — stable across i18n. The Segmented switch changed the
+window buttons from `aria-pressed` to `aria-checked` (radiogroup), so updated G5/G6/G8 and G2
+(`.inv-seg-btn` → `.seg-btn`). Deleted the dead `.inv-seg*` / `.inv-pool-chip-btn` CSS.
+
+Deliberately left bespoke, with reasons: the security-type/asset-class **badges** (there is no
+Badge/Chip/Pill primitive to swap to); the compact **weight/allocation gauges** (they're inline accent
+bars — `MeterBar` is a full-width block gauge with semantic tone tokens, so a swap would change layout
+AND repaint them green, undoing the recent theme-accent fix); the **summary hero** (it intentionally
+reuses the `/debt` `debt-chips`/`debt-stat` chrome for cross-page cohesion). Verified visually (Segmented
+pill, DeleteButton ×, IconButton pencil all render clean on a holding card + a Retirement chart card) and
+`e2e/investments_check.mjs` 42/42, `go test ./...` green.
+
 ## 2026-07-02 — /investments charts: the theme accent (take 2) + modal reliability
 
 Cam: "the charts are still green and many highlights are green for the non forest theme." My first

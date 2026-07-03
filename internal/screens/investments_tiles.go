@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -107,9 +108,6 @@ func growthCutoffs(now time.Time, months int) ([]time.Time, []string) {
 func investGrowthWidget(props investPanelProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	monthsAtom := uistate.UseInvestGrowthMonths()
-	set1 := ui.UseEvent(Prevent(func() { monthsAtom.Set(1) }))
-	set6 := ui.UseEvent(Prevent(func() { monthsAtom.Set(6) }))
-	set12 := ui.UseEvent(Prevent(func() { monthsAtom.Set(12) }))
 	months := monthsAtom.Get()
 	if months != 1 && months != 6 && months != 12 {
 		months = 12
@@ -164,14 +162,22 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		yFmt = "$.2~s"
 	}
 
-	segToggle := Div(css.Class("inv-seg"), Attr("role", "group"), Attr("aria-label", uistate.T("investments.growthWindow")),
-		Button(ClassStr("inv-seg-btn"+isActive(months == 1)), Type("button"), Attr("data-testid", "invest-growth-1m"),
-			Attr("aria-pressed", ariaBool(months == 1)), OnClick(set1), uistate.T("investments.win1m")),
-		Button(ClassStr("inv-seg-btn"+isActive(months == 6)), Type("button"), Attr("data-testid", "invest-growth-6m"),
-			Attr("aria-pressed", ariaBool(months == 6)), OnClick(set6), uistate.T("investments.win6m")),
-		Button(ClassStr("inv-seg-btn"+isActive(months == 12)), Type("button"), Attr("data-testid", "invest-growth-12m"),
-			Attr("aria-pressed", ariaBool(months == 12)), OnClick(set12), uistate.T("investments.win12m")),
-	)
+	// Standard Segmented control (role=radiogroup, sliding pill, keyboard nav) for the
+	// 1M / 6M / 1Y window — same primitive the rest of the app uses for time-resolution.
+	segToggle := uiw.Segmented(uiw.SegmentedProps{
+		Label:    uistate.T("investments.growthWindow"),
+		Selected: strconv.Itoa(months),
+		Options: []uiw.SegOption{
+			{Value: "1", Label: uistate.T("investments.win1m"), TestID: "invest-growth-1m"},
+			{Value: "6", Label: uistate.T("investments.win6m"), TestID: "invest-growth-6m"},
+			{Value: "12", Label: uistate.T("investments.win12m"), TestID: "invest-growth-12m"},
+		},
+		OnSelect: func(v string) {
+			if n, err := strconv.Atoi(v); err == nil {
+				monthsAtom.Set(n)
+			}
+		},
+	})
 
 	head := Div(css.Class("inv-growth-head"),
 		Div(css.Class("inv-growth-vals"),
@@ -199,14 +205,6 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		ID: "invest-growth", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
-}
-
-// isActive returns the " is-active" class suffix when on is true (for the segmented toggle).
-func isActive(on bool) string {
-	if on {
-		return " is-active"
-	}
-	return ""
 }
 
 // --- invest-toolbar --------------------------------------------------------------

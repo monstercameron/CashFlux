@@ -118,6 +118,8 @@ type IconButtonProps struct {
 	Class string
 	// Danger styles the button as a destructive action (.btn-del).
 	Danger bool
+	// TestID is an optional data-testid attribute for e2e selectors.
+	TestID string
 }
 
 // IconButton renders an accessible icon-only button. It is its own component
@@ -136,7 +138,7 @@ func iconButton(props IconButtonProps) uic.Node {
 		cls += " " + props.Class
 	}
 	onClick := props.OnClick
-	return Button(
+	args := []any{
 		ClassStr(cls),
 		Type("button"),
 		Attr("aria-label", props.Label),
@@ -146,8 +148,12 @@ func iconButton(props IconButtonProps) uic.Node {
 				onClick()
 			}
 		}),
-		Icon(props.Icon, css.Class(tw.W4, tw.H4)),
-	)
+	}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	args = append(args, Icon(props.Icon, css.Class(tw.W4, tw.H4)))
+	return Button(args...)
 }
 
 // ---------------------------------------------------------------------------

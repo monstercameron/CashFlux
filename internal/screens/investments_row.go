@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -43,12 +42,6 @@ func holdingRow(props holdingRowProps) ui.Node {
 	gainMinor := portfolio.UnrealizedGainMinor(ph)
 	retPct := portfolio.ReturnPct(ph)
 	tone := gainToneClass(gainMinor)
-
-	del := ui.UseEvent(Prevent(func() {
-		if props.OnDelete != nil {
-			props.OnDelete(h.ID)
-		}
-	}))
 
 	name := h.Name
 	if name == "" {
@@ -97,10 +90,16 @@ func holdingRow(props holdingRowProps) ui.Node {
 				Span(fmtSignedMoney(gainMinor, props.Sym, props.Dec)),
 				Span(css.Class("inv-gain-pct"), fmt.Sprintf(" (%.2f%%)", retPct)),
 			),
-			Button(css.Class("btn btn-sm btn-ghost"), Type("button"), Attr("data-testid", "holding-del-"+h.ID),
-				Attr("aria-label", fmt.Sprintf(uistate.T("investments.deleteHoldingAria"), name)),
-				Title(uistate.T("investments.deleteHolding")), OnClick(del),
-				uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+			uiw.DeleteButton(uiw.DeleteButtonProps{
+				AriaLabel: fmt.Sprintf(uistate.T("investments.deleteHoldingAria"), name),
+				Title:     uistate.T("investments.deleteHolding"),
+				TestID:    "holding-del-" + h.ID,
+				OnClick: func() {
+					if props.OnDelete != nil {
+						props.OnDelete(h.ID)
+					}
+				},
+			}),
 		),
 	)
 }

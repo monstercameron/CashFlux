@@ -4851,40 +4851,6 @@ func registerGenerated() {
 		fontWeight("600"),
 		fontVariantNumeric("tabular-nums"),
 	)
-	rule(".inv-seg",
-		display("inline-flex"),
-		padding("0.2rem"),
-		gap("0.15rem"),
-		borderRadius("999px"),
-		border("1px solid var(--border)"),
-		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
-	)
-	rule(".inv-seg-btn",
-		display("inline-flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		minWidth("2.6rem"),
-		padding("0.25rem 0.7rem"),
-		borderRadius("999px"),
-		border("0"),
-		background("transparent"),
-		color("var(--text-dim)"),
-		fontSize("0.8rem"),
-		fontWeight("700"),
-		cursor("pointer"),
-		transition("background 0.15s ease, color 0.15s ease"),
-	)
-	rule(".inv-seg-btn:hover",
-		color("var(--text)"),
-	)
-	rule(".inv-seg-btn.is-active",
-		background("var(--accent)"),
-		color("var(--bg)"),
-	)
-	rule(".inv-seg-btn:focus-visible",
-		prop("outline", "2px solid var(--accent)"),
-		prop("outline-offset", "2px"),
-	)
 	// Pools bar: chips for each custom group, each showing its value + variable name.
 	rule(".inv-pools-bar",
 		display("flex"),
@@ -4931,22 +4897,6 @@ func registerGenerated() {
 		borderRadius("6px"),
 		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
 		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
-	)
-	rule(".inv-pool-chip-btn",
-		display("inline-flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		width("1.5rem"),
-		height("1.5rem"),
-		borderRadius("999px"),
-		border("0"),
-		background("transparent"),
-		color("var(--text-dim)"),
-		cursor("pointer"),
-	)
-	rule(".inv-pool-chip-btn:hover",
-		color("var(--text)"),
-		background("color-mix(in srgb, var(--text) 10%, transparent)"),
 	)
 	// Per-account card header: title row + a pool selector beneath it.
 	rule(".inv-acct-head",
