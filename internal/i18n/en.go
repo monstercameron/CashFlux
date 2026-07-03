@@ -781,6 +781,8 @@ var english = Catalog{
 	"planning.snapshotTitle":     "Snapshot today's balances to track how much you pay off over time",
 	"planning.fillSensibleTitle": "Fill a sensible extra to compare snowball vs avalanche",
 	"planning.forecastTitle":     "Net worth in 12 months",
+	"planning.runwayBalanceSeries": "Balance",
+	"planning.runwayBufferSeries":  "Warning level",
 	"planning.metricsTitle":      "Planning metrics",
 	"planning.metricsShow":       "Plan metrics",
 	"planning.metricsHide":       "Hide metrics",

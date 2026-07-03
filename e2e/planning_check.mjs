@@ -31,6 +31,12 @@ check("R1 cash-runway section + Safe-to-spend hero figure", await p.locator("#se
 const heroTxt = (await p.locator("#sec-runway .stat-value.is-hero").first().innerText()) || "";
 check("R2 the runway hero is a money figure", /[0-9]/.test(heroTxt), heroTxt.trim());
 check("R3 runway daily-balance chart renders (svg)", await p.locator("#sec-runway svg").count() >= 1);
+// (neg) a warning buffer above the projected low → a breach warning + a threshold line on the chart.
+const rwBuf = p.locator('#sec-runway input[type="number"]').first();
+await rwBuf.fill("99999999"); await rwBuf.dispatchEvent("input"); await p.waitForTimeout(600);
+check("R4 (neg) a buffer above the low flags a breach + a chart threshold line", await p.locator('[data-testid="runway-breach"]').count() >= 1 && /warning level/i.test(await p.locator("#sec-runway").innerText()), (await p.locator('[data-testid="runway-breach"]').first().innerText().catch(() => "")).slice(0, 50));
+await rwBuf.fill(""); await rwBuf.dispatchEvent("input"); await p.waitForTimeout(400);
+check("R5 clearing the buffer removes the breach + threshold line", await p.locator('[data-testid="runway-breach"]').count() === 0 && !/warning level/i.test(await p.locator("#sec-runway").innerText()));
 
 // --- afford (positive + negative) ---
 check("AF1 afford section is inert until an amount is entered", await p.locator("#sec-afford").count() === 1 && /enter a purchase/i.test(await p.locator("#sec-afford").innerText()));

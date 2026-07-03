@@ -527,10 +527,23 @@ func Planning() ui.Node {
 				if currency.Symbol(base) == "$" {
 					rwYFmt = "$.3~s"
 				}
+				rwSeries := []chartspec.Series{{Name: uistate.T("planning.runwayBalanceSeries"), Color: accent, Points: dayPts}}
+				// When a warning buffer is set, overlay it as a flat amber threshold line so the
+				// user can see where their floor sits against the projected balance — the input
+				// now has a visible effect (the balance dipping under it is the breach).
+				if buffer > 0 {
+					bufMajor := currency.MajorFromMinor(buffer, base)
+					bufPts := make([]chartspec.Point, len(dayPts))
+					for i, dp := range dayPts {
+						bufPts[i] = chartspec.Point{X: dp.X, Y: bufMajor, Label: dp.Label}
+					}
+					rwSeries = append(rwSeries, chartspec.Series{Name: uistate.T("planning.runwayBufferSeries"), Color: "#e0a93b", Points: bufPts})
+				}
 				rwSpec := chartspec.Spec{
 					Kind:   chartspec.Line,
-					Series: []chartspec.Series{{Name: uistate.T("planning.runwayTitle"), Color: accent, Points: dayPts}},
+					Series: rwSeries,
 					Y:      chartspec.Axis{Format: rwYFmt},
+					Legend: len(rwSeries) > 1,
 				}
 				// C141: surface Safe to spend as the headline tile in the runway
 				// section (which is now the page lead per C168), matching the
