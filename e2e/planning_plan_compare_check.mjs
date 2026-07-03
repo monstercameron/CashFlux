@@ -69,7 +69,7 @@ try {
 
   // 1. Navigate to /planning.
   await page.goto(BASE + "/planning", { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('input[placeholder*="Plan name"]', { timeout: 60000 });
+  await page.waitForSelector('[data-testid="plan-add-open"]', { timeout: 60000 });
   await page.waitForTimeout(500);
 
   // 2. Add two plans.
@@ -83,18 +83,28 @@ try {
   if (!bodyAfterAdd.includes(PLAN_B)) fail(`Plan B ("${PLAN_B}") not found after add`);
   else console.log(`  PASS: plan B "${PLAN_B}" added`);
 
-  // 3. Reload /planning and verify new UI elements.
+  // 3. Reload /planning and verify new UI elements. Wait past the 4s dataset-autosave
+  // ticker first so the just-added plans are flushed to IndexedDB before the reload
+  // reboots wasm from storage (an 800ms wait races the ticker and loses them).
+  await page.waitForTimeout(4600);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector('.bento-planning', { timeout: 60000 });
   await page.waitForTimeout(600);
 
-  // I4: prefill-account select must be present in the plan form.
+  // I4: prefill-account select must be present in the plan form (now inside the add
+  // flip modal — open it, assert the select, then close it so it doesn't overlay the
+  // compare picker interaction below).
+  await page.locator('[data-testid="plan-add-open"]').click();
+  await page.waitForSelector('[data-testid="plan-add-form"]', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(700);
   const prefillSel = page.locator('[data-testid="plan-prefill-account"]');
   if ((await prefillSel.count()) === 0) {
     fail("I4: 'Prefill start from account' select ([data-testid=\"plan-prefill-account\"]) not found in plan add-form");
   } else {
     console.log("  PASS I4: plan-prefill-account select present");
   }
+  await page.locator('[data-testid="plan-add-cancel"]').click({ force: true }).catch(() => {});
+  await page.waitForTimeout(500);
 
   // I1: compare-with select must be present now that plans exist.
   const compareSel = page.locator('[data-testid="plan-compare-select"]');

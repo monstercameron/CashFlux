@@ -560,7 +560,7 @@ func Planning() ui.Node {
 		addModal = uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:    uistate.T("plans.addTitle"),
 			Width:    "560px",
-			Height:   "min(90vh, 620px)",
+			Height:   "min(90vh, 520px)",
 			NoFooter: true,
 			OnClose:  closePlanAdd,
 			Back:     ui.CreateElement(PlanAddForm, PlanAddFormProps{OnDone: closePlanAdd}),
