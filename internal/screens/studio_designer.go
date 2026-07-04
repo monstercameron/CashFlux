@@ -139,6 +139,9 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 		next = append(next, item)
 		layoutAtom.Set(next)
 		uistate.PersistItems(next)
+		// Deliberate durable act, often followed by an immediate navigation —
+		// flush the dataset rather than racing the autosave tick.
+		uistate.RequestPersist()
 		published.Set(true)
 		status.Set("“" + title.Get() + "” is on your dashboard.")
 	}
@@ -479,12 +482,18 @@ type studioSelectFieldProps struct {
 
 func studioSelectField(p studioSelectFieldProps) ui.Node {
 	so := make([]uiw.SelectOption, len(p.Options))
+	selLabel := ""
 	for i, o := range p.Options {
 		so[i] = uiw.SelectOption{Value: o.Value, Label: o.Label}
+		if o.Value == p.Value {
+			selLabel = o.Label
+		}
 	}
 	sel := uiw.SelectInput(uiw.SelectInputProps{Options: so, Selected: p.Value, OnChange: p.OnChange, AriaLabel: p.Label})
 	if p.Compact {
-		return Label(css.Class("field-label field-compact"), sel)
+		// The compact variant can render narrow enough to truncate its selected
+		// option; the full text stays reachable as a hover title.
+		return Label(css.Class("field-label field-compact"), Attr("title", selLabel), sel)
 	}
 	return Label(css.Class("field-label"), Span(css.Class("studio-label"), p.Label), sel)
 }
@@ -896,6 +905,24 @@ func studioGoals() []domain.Goal {
 	return appstate.Default.Goals()
 }
 
+// studioAllMetrics returns the full grouped metric catalog — engine metrics +
+// custom fields + molecules + per-budget/account/goal/debt figures — for any
+// picker that wants group labels and plain-English docs (the Design tab's
+// metric picker and the Build tab's Figure node share it).
+func studioAllMetrics() []widgetcatalog.Metric {
+	var defs []customfields.Def
+	var mols []domain.Molecule
+	if appstate.Default != nil {
+		defs, mols = appstate.Default.CustomFieldDefs(), appstate.Default.Molecules()
+	}
+	ms := widgetcatalog.Metrics(defs, mols)
+	ms = append(ms, widgetcatalog.BudgetMetrics(studioBudgets())...)
+	ms = append(ms, widgetcatalog.AccountMetrics(studioAccounts())...)
+	ms = append(ms, widgetcatalog.GoalMetrics(studioGoals())...)
+	ms = append(ms, widgetcatalog.DebtMetrics(studioAccounts())...)
+	return ms
+}
+
 // metricSelectOptions are the metrics as compact value/label options (no description),
 // for inline pickers like a figure block. Per-budget metrics are appended so a specific
 // budget's figures are pickable too.
@@ -954,6 +981,22 @@ func studioBlockRow(props studioBlockRowProps) ui.Node {
 				Span(css.Class("studio-microlabel"), "Format"),
 				ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: "Format", Compact: true, Value: verb, Options: widgetcatalog.FigureFormats(), OnChange: setVerb}),
 			),
+		}
+		// The same plain-English description (and, for molecules, the atom-built
+		// formula) the Single-figure picker shows — the compound mode shouldn't
+		// explain LESS than the simple one.
+		for _, m := range studioAllMetrics() {
+			if m.Name != metric {
+				continue
+			}
+			doc := m.Doc
+			if m.Molecule && m.Formula != "" {
+				doc = strings.TrimSpace(doc + "  Built from atoms: " + prettyFormula(m.Formula))
+			}
+			if doc != "" {
+				shows = append(shows, Span(css.Class("studio-hint studio-block-doc"), doc))
+			}
+			break
 		}
 	case domain.BlockText:
 		setText := func(v string) { nb := b; nb.Text = v; props.OnChange(nb) }

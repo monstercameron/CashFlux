@@ -21,7 +21,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -197,14 +196,14 @@ const vbStyleCSS = `
 .vb-danger:hover{background:color-mix(in srgb, var(--danger,#dc2626) 10%, transparent)}
 .vb-status{font-size:.8rem;color:var(--accent,#3b82f6)}
 .vb-main{display:flex;gap:.8rem;flex:1;min-height:0}
-.vb-palette{width:180px;flex:0 0 180px;overflow:auto;display:flex;flex-direction:column;gap:.3rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent)}
+.vb-palette{width:180px;flex:0 0 180px;overflow:auto;display:flex;flex-direction:column;gap:.3rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--text,#e5e7eb) 2.5%, transparent)}
 .vb-pane-title{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--accent,#3b82f6);margin-bottom:.25rem}
 .vb-pal-group{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;opacity:.5;margin-top:.6rem}
 .vb-pal-btn{text-align:left;padding:.32rem .55rem;border-radius:7px;border:1px solid var(--border,#2a2a2d);background:none;color:inherit;cursor:pointer;font-size:12px}
 .vb-pal-btn:hover{border-color:var(--accent,#3b82f6);color:var(--accent,#3b82f6)}
 .vb-canvas-scroll{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--border,#2a2a2d);background:var(--bg,#0e0e10);cursor:grab}
 .vb-canvas-scroll:active{cursor:grabbing}
-.vb-canvas-scroll .wb-canvas{background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px;will-change:transform}
+.vb-canvas-scroll .wb-canvas{background-image:radial-gradient(circle, color-mix(in srgb, var(--text-dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px;will-change:transform}
 .wb-zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:5px;z-index:5}
 .wb-zoom-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border,#2a2a2d);background:var(--bg-elev,#1a1a1d);color:inherit;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .wb-zoom-btn:hover{border-color:var(--accent,#3b82f6)}
@@ -214,18 +213,20 @@ const vbStyleCSS = `
 .wb-node:hover{border-color:color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--border,#3a3a3d))}
 .wb-wire{transition:stroke .1s ease}
 .wb-wire:hover{stroke:var(--accent,#3b82f6)!important; stroke-width:3.5!important}
-.wb-port-row:hover{color:var(--fg,#e5e7eb)!important}
+.wb-port-row:hover{color:var(--text,#e5e7eb)!important}
 .vb-dock{width:352px;flex:0 0 352px;display:flex;flex-direction:column;gap:.8rem;min-height:0}
-.vb-inspector{flex:1 1 auto;min-height:130px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent)}
+.vb-inspector{flex:1 1 auto;min-height:130px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--text,#e5e7eb) 2.5%, transparent)}
 .vb-insp-section{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;opacity:.55;margin-top:.5rem}
 .vb-insp-actions{display:flex;gap:.4rem;margin-top:.5rem}
 .vb-previewpane{display:flex;flex-direction:column;gap:.45rem;flex:0 0 auto}
 .vb-preview-head{display:flex;align-items:baseline;gap:.7rem}
 .vb-preview-title{font-family:var(--font-display,'Fraunces',serif);font-size:1.05rem;font-weight:600;border-left:3px solid var(--accent,#3b82f6);padding-left:.55rem}
 .vb-preview-hint{font-size:.72rem;opacity:.5}
+.vb-metric-doc{font-size:.72rem;opacity:.65;line-height:1.4}
+.vb-metric-formula{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.68rem;color:var(--accent,#3b82f6);background:color-mix(in srgb, var(--accent,#3b82f6) 8%, transparent);border-radius:6px;padding:.3rem .45rem;line-height:1.4;word-break:break-word}
 .vb .wb-field{display:flex;flex-direction:column;gap:.2rem}
-.vb .wb-field-label{font-size:12px;color:var(--dim,#9ca3af)}
-.vb .wb-stage{display:flex;align-items:flex-start;justify-content:flex-start;padding:.55rem;border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent);max-height:330px;overflow:auto}
+.vb .wb-field-label{font-size:12px;color:var(--text-dim,#9ca3af)}
+.vb .wb-stage{display:flex;align-items:flex-start;justify-content:flex-start;padding:.55rem;border-radius:14px;background:color-mix(in srgb, var(--text,#e5e7eb) 2.5%, transparent);max-height:330px;overflow:auto}
 .vb .wtitle{font-family:var(--font-display,'Fraunces',serif);font-weight:600}
 .vb .wb-tile .wbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 /* D3 reads the container's measured height; guarantee one so charts never collapse to
@@ -478,6 +479,11 @@ func VisualBuilder() ui.Node {
 		}
 		layoutAtom.Set(next)
 		uistate.PersistItems(next)
+		// Publishing is a deliberate, durable act that is often followed straight
+		// away by a navigation or reload — flush the dataset now instead of
+		// letting the 4s autosave tick race the unload (the same C2 hatch the
+		// sample loader uses).
+		uistate.RequestPersist()
 		published.Set("Published “" + name + "” to your dashboard.")
 	})
 	saveCard := ui.UseEvent(func() {
@@ -488,6 +494,7 @@ func VisualBuilder() ui.Node {
 		lib := vbLoadCards()
 		lib[name] = sized(g)
 		vbSaveCards(lib)
+		uistate.RequestPersist()
 		rev.Set(rev.Get() + 1)
 	})
 	loadCard := ui.UseEvent(func(e ui.Event) {
@@ -506,6 +513,7 @@ func VisualBuilder() ui.Node {
 		if _, ok := lib[name]; ok {
 			delete(lib, name)
 			vbSaveCards(lib)
+			uistate.RequestPersist()
 			rev.Set(rev.Get() + 1)
 		}
 	})
@@ -598,6 +606,15 @@ func VisualBuilder() ui.Node {
 
 // ---- data + eval context ------------------------------------------------------
 
+// vbVarsMemo caches the engine variable surface briefly: computing it walks
+// pools, plans, and the smart passes over the whole ledger, and the builder
+// re-renders on every keystroke and stepper click — recomputing per render
+// made the whole tab lag. Data edits still show up within half a second.
+var vbVarsMemo struct {
+	at   time.Time
+	vars map[string]float64
+}
+
 // vbVariableSurface is the FULL engine variable surface (atoms + molecules +
 // custom fields + per-budget/goal/smart figures) over the current month — the
 // same surface the dashboard engine and the Design tab use, so a Figure or
@@ -608,7 +625,12 @@ func vbVariableSurface() map[string]float64 {
 	if app == nil {
 		return map[string]float64{}
 	}
-	return liveEngineVars(app)
+	if vbVarsMemo.vars != nil && time.Since(vbVarsMemo.at) < 500*time.Millisecond {
+		return vbVarsMemo.vars
+	}
+	vbVarsMemo.vars = liveEngineVars(app)
+	vbVarsMemo.at = time.Now()
+	return vbVarsMemo.vars
 }
 
 // vbStringSurface exposes named string values a source.scalar (text) node can bind —
@@ -1062,29 +1084,10 @@ func vbOpOpts() [][2]string {
 func vbParamSchema(kind string) []vbParam {
 	switch kind {
 	case cardgraph.KindSourceScalar:
-		opts := [][2]string{}
-		seen := map[string]bool{}
-		for _, n := range engineenv.SortedNames() {
-			seen[n] = true
-			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
-		}
-		// The LIVE surface's extra names — cf_* custom-field values, per-budget /
-		// per-goal / per-account figures, smart_* posture — so every variable a
-		// formula can evaluate is also pickable here, not just typeable.
-		extra := []string{}
-		for n := range vbVariableSurface() {
-			if !seen[n] {
-				extra = append(extra, n)
-			}
-		}
-		sort.Strings(extra)
-		for _, n := range extra {
-			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
-		}
-		// Named text surfaces (e.g. the net-worth month-over-month subline) so a KPI's
-		// "sub" line can clone the dashboard's assets tile verbatim.
-		opts = append(opts, [2]string{"net_worth_sub", "net worth subline"})
-		return []vbParam{{"name", "Figure", "select", opts}}
+		// Rendered by vbMetricField: the grouped, documented, filterable metric
+		// picker — the same catalog the Design tab's picker draws from, plus the
+		// live surface's raw extras (cf_* custom fields, smart_*, per-plan …).
+		return []vbParam{{"name", "Figure", "metric", nil}}
 	case cardgraph.KindSourceDataset:
 		return []vbParam{{"which", "Dataset", "select", [][2]string{{"transactions", "Transactions"}, {"accounts", "Accounts"}, {"budgets", "Budgets"}, {"goals", "Goals"}, {"tasks", "Tasks"}, {"bills", "Bills"}, {"net_worth_series", "Net worth (6-mo series)"}}}}
 	case cardgraph.KindLiteralColor:
@@ -1486,7 +1489,7 @@ func vbCanvas(g cardgraph.Graph, selected cardgraph.NodeID, onSelect func(cardgr
 		}
 		d := fmt.Sprintf("M %.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f", x1, y1, x1+dx, y1, x2-dx, y2, x2, y2)
 		wires = append(wires, Path(css.Class("wb-wire"), Attr("d", d), Attr("fill", "none"),
-			Attr("stroke", "var(--dim,#6b7280)"), Attr("stroke-width", "2.5"), Attr("stroke-linecap", "round"),
+			Attr("stroke", "var(--text-dim,#6b7280)"), Attr("stroke-width", "2.5"), Attr("stroke-linecap", "round"),
 			Attr("data-from", string(e.From.Node)), Attr("data-to", string(e.To.Node)), Attr("data-toport", e.To.Port),
 			Style(map[string]string{"pointer-events": "stroke", "cursor": "pointer"})))
 	}
@@ -1605,7 +1608,7 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 		"left": strconv.FormatFloat(p.X, 'f', 0, 64) + "px", "top": strconv.FormatFloat(p.Y, 'f', 0, 64) + "px",
 		"position": "absolute", "width": "176px", "box-sizing": "border-box",
 		"border-radius": "10px", "cursor": "grab", "background": "var(--bg-elev,#1a1a1d)",
-		"border": "1.5px solid var(--line,#3a3a3d)",
+		"border": "1.5px solid var(--border,#3a3a3d)",
 	}
 	if p.Selected {
 		style["border-color"] = "var(--accent,#3b82f6)"
@@ -1621,8 +1624,8 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 	}
 
 	// Header: kind label + variable name.
-	header := Div(css.Class("wb-node-head"), Style(map[string]string{"padding": "0.4rem 0.6rem", "border-bottom": "1px solid var(--line,#2a2a2d)"}),
-		Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "10px", "text-transform": "uppercase", "letter-spacing": "0.05em", "color": "var(--faint,#9ca3af)", "display": "block"}), head),
+	header := Div(css.Class("wb-node-head"), Style(map[string]string{"padding": "0.4rem 0.6rem", "border-bottom": "1px solid var(--border,#2a2a2d)"}),
+		Span(css.Class("wb-node-kind"), Style(map[string]string{"font-size": "10px", "text-transform": "uppercase", "letter-spacing": "0.05em", "color": "var(--text-faint,#9ca3af)", "display": "block"}), head),
 		Span(css.Class("wb-node-val"), Style(map[string]string{"font-size": "13px", "font-weight": "600", "white-space": "nowrap", "overflow": "hidden", "text-overflow": "ellipsis", "display": "block"}), sub),
 	)
 
@@ -1632,8 +1635,8 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 	for _, pn := range p.InPorts {
 		dot := Span(css.Class("wb-port wb-port-in"), Attr("data-node", string(p.ID)), Attr("data-port", pn), Attr("data-dir", "in"), Attr("aria-hidden", "true"),
 			Style(map[string]string{"position": "absolute", "left": "-7px", "top": "50%", "transform": "translateY(-50%)",
-				"width": "13px", "height": "13px", "border-radius": "999px", "background": "var(--bg,#0e0e10)", "border": "2px solid var(--dim,#6b7280)"}))
-		rows = append(rows, Div(css.Class("wb-port-row"), Style(map[string]string{"position": "relative", "padding": "0.25rem 0.6rem", "font-size": "11px", "color": "var(--dim,#9ca3af)"}),
+				"width": "13px", "height": "13px", "border-radius": "999px", "background": "var(--bg,#0e0e10)", "border": "2px solid var(--text-dim,#6b7280)"}))
+		rows = append(rows, Div(css.Class("wb-port-row"), Style(map[string]string{"position": "relative", "padding": "0.25rem 0.6rem", "font-size": "11px", "color": "var(--text-dim,#9ca3af)"}),
 			dot, Span(pn)))
 	}
 	// Output port: a dot on the right edge, vertically centered. It is the wire SOURCE
@@ -1648,6 +1651,171 @@ func vbNodeBox(p vbNodeBoxProps) ui.Node {
 				"width": "13px", "height": "13px", "border-radius": "999px", "background": "var(--accent,#3b82f6)", "border": "2px solid var(--accent,#3b82f6)", "cursor": "crosshair"})))
 	}
 	return Div(args...)
+}
+
+// vbColumnKeys names the props on a data-shaping node that reference a column
+// of its wired input collection — candidates for a schema-fed dropdown.
+func vbColumnKeys(kind string) map[string]bool {
+	switch kind {
+	case cardgraph.KindFilter, cardgraph.KindAggregate:
+		return map[string]bool{"col": true}
+	case cardgraph.KindGroupBy:
+		return map[string]bool{"group": true, "value": true}
+	case cardgraph.KindRule:
+		return map[string]bool{"textcol": true, "amountcol": true}
+	}
+	return nil
+}
+
+// vbUpstreamColumns resolves the column names available to a data-shaping
+// node: it walks the node's "in" wiring upstream — through shape-preserving
+// filter/rule steps — to the nearest source.dataset and returns that
+// collection's columns. Unwired chains, unknown datasets, and reshaping steps
+// (group-by changes the columns) return nil; the caller falls back to a
+// free-text field.
+func vbUpstreamColumns(g cardgraph.Graph, id cardgraph.NodeID) []string {
+	cur := id
+	for hops := 0; hops < 12; hops++ {
+		var from cardgraph.NodeID
+		for _, e := range g.Edges {
+			if e.To.Node == cur && e.To.Port == "in" {
+				from = e.From.Node
+			}
+		}
+		if from == "" {
+			return nil
+		}
+		advanced := false
+		for _, n := range g.Nodes {
+			if n.ID != from {
+				continue
+			}
+			switch n.Kind {
+			case cardgraph.KindSourceDataset:
+				which := strings.TrimSpace(n.Props["which"])
+				c, ok := vbDatasets()[which]
+				if !ok {
+					return nil
+				}
+				out := make([]string, 0, len(c.Cols))
+				for _, col := range c.Cols {
+					out = append(out, col.Name)
+				}
+				return out
+			case cardgraph.KindFilter, cardgraph.KindRule:
+				cur, advanced = n.ID, true
+			default:
+				return nil
+			}
+			break
+		}
+		if !advanced {
+			return nil
+		}
+	}
+	return nil
+}
+
+type vbMetricFieldProps struct {
+	Value string
+	OnSet func(string)
+}
+
+// vbMetricField is the Figure node's variable picker: the grouped metric
+// catalog ("Group · Label") with a type-ahead filter, the selected metric's
+// plain-English description, and — for molecules — the atom-built formula, so
+// the canvas explains figures as well as the Design tab's picker does. Raw
+// live-surface variables the catalog doesn't label (plan/what-if figures,
+// engine internals) stay reachable under "Advanced". Its own component so the
+// filter state and hooks are isolated.
+func vbMetricField(p vbMetricFieldProps) ui.Node {
+	q := ui.UseState("")
+	onQ := ui.UseEvent(func(v string) { q.Set(v) })
+	onSel := ui.UseEvent(func(e ui.Event) {
+		if p.OnSet != nil {
+			p.OnSet(e.GetValue())
+		}
+	})
+
+	needle := strings.ToLower(strings.TrimSpace(q.Get()))
+	match := func(parts ...string) bool {
+		if needle == "" {
+			return true
+		}
+		for _, s := range parts {
+			if strings.Contains(strings.ToLower(s), needle) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var opts []ui.Node
+	seen := map[string]bool{}
+	selDoc, selFormula := "", ""
+	haveCurrent := p.Value == ""
+	for _, m := range studioAllMetrics() {
+		if seen[m.Name] {
+			continue
+		}
+		seen[m.Name] = true
+		if m.Name == p.Value {
+			selDoc = m.Doc
+			if m.Molecule {
+				selFormula = m.Formula
+			}
+		}
+		if !match(m.Name, m.Label, string(m.Group)) && m.Name != p.Value {
+			continue
+		}
+		if m.Name == p.Value {
+			haveCurrent = true
+		}
+		opts = append(opts, Option(Value(m.Name), SelectedIf(m.Name == p.Value), string(m.Group)+" · "+m.Label))
+	}
+	var extras []string
+	for n := range vbVariableSurface() {
+		if !seen[n] {
+			extras = append(extras, n)
+		}
+	}
+	sort.Strings(extras)
+	for _, n := range extras {
+		lbl := "Advanced · " + strings.ReplaceAll(n, "_", " ")
+		if !match(n, lbl) && n != p.Value {
+			continue
+		}
+		if n == p.Value {
+			haveCurrent = true
+		}
+		opts = append(opts, Option(Value(n), SelectedIf(n == p.Value), lbl))
+	}
+	// Named text surfaces (the net-worth month-over-month subline) so a KPI's
+	// "sub" line can clone the dashboard's assets tile verbatim.
+	if match("net_worth_sub", "net worth subline") || p.Value == "net_worth_sub" {
+		if p.Value == "net_worth_sub" {
+			haveCurrent = true
+		}
+		opts = append(opts, Option(Value("net_worth_sub"), SelectedIf(p.Value == "net_worth_sub"), "Text · net worth subline"))
+	}
+	// The current value always stays visible/selected even when the filter
+	// would hide it — a filtered select must never LOOK re-bound.
+	if !haveCurrent {
+		opts = append([]ui.Node{Option(Value(p.Value), SelectedIf(true), strings.ReplaceAll(p.Value, "_", " "))}, opts...)
+	}
+
+	kids := []any{ClassStr("wb-field"),
+		Span(css.Class("wb-field-label"), "Figure"),
+		Input(css.Class("set-input"), Type("search"), Placeholder("Filter metrics…"), Attr("aria-label", "Filter metrics"), Value(q.Get()), OnInput(onQ)),
+		Select(css.Class("set-input"), Attr("aria-label", "Figure"), OnChange(onSel), opts),
+	}
+	if selDoc != "" {
+		kids = append(kids, Span(css.Class("vb-metric-doc"), selDoc))
+	}
+	if selFormula != "" {
+		kids = append(kids, Span(css.Class("vb-metric-formula"), "Built from atoms:  "+prettyFormula(selFormula)))
+	}
+	return Div(kids...)
 }
 
 func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgraph.Issue,
@@ -1677,13 +1845,36 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 		ui.CreateElement(vbTextField, vbTextFieldProps{Label: "Name (variable)", Value: node.Var, Placeholder: "e.g. income",
 			OnSet: func(v string) { setVar(node.ID, v) }}),
 	}
-	// Params
+	// Params. Column-referencing props on data-shaping nodes become dropdowns
+	// of the wired dataset's real fields — nobody should have to KNOW that the
+	// transactions collection calls its category column "category".
+	upstreamCols := vbUpstreamColumns(g, node.ID)
+	colKeys := vbColumnKeys(node.Kind)
 	for _, pm := range vbParamSchema(node.Kind) {
 		pm := pm
-		if pm.Kind == "select" {
+		switch {
+		case pm.Kind == "metric":
+			children = append(children, ui.CreateElement(vbMetricField, vbMetricFieldProps{Value: node.Props[pm.Key],
+				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
+		case colKeys[pm.Key] && len(upstreamCols) > 0:
+			cur := node.Props[pm.Key]
+			opts := [][2]string{{"", "— pick a column —"}}
+			found := cur == ""
+			for _, c := range upstreamCols {
+				opts = append(opts, [2]string{c, c})
+				if c == cur {
+					found = true
+				}
+			}
+			if !found {
+				opts = append(opts, [2]string{cur, cur + " (not in source)"})
+			}
+			children = append(children, ui.CreateElement(vbSelectField, vbSelectFieldProps{Label: pm.Label, Value: cur, Opts: opts,
+				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
+		case pm.Kind == "select":
 			children = append(children, ui.CreateElement(vbSelectField, vbSelectFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Opts: pm.Opts,
 				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
-		} else {
+		default:
 			children = append(children, ui.CreateElement(vbTextField, vbTextFieldProps{Label: pm.Label, Value: node.Props[pm.Key], Numeric: pm.Kind == "number", Color: pm.Kind == "color",
 				OnSet: func(v string) { setProp(node.ID, pm.Key, v) }}))
 		}
@@ -1875,7 +2066,7 @@ func vbRenderViz(v *cardgraph.VizBlock, format string, rows int) ui.Node {
 		return Span(Style(st), v.Text)
 	case "progress":
 		fillW := strconv.FormatFloat(v.Pct*100, 'f', 1, 64) + "%"
-		track := map[string]string{"width": "100%", "height": "10px", "border-radius": "999px", "background": "color-mix(in srgb, var(--dim,#6b7280) 25%, transparent)", "overflow": "hidden", "margin-top": "0.4rem"}
+		track := map[string]string{"width": "100%", "height": "10px", "border-radius": "999px", "background": "color-mix(in srgb, var(--text-dim,#6b7280) 25%, transparent)", "overflow": "hidden", "margin-top": "0.4rem"}
 		fill := map[string]string{"width": fillW, "height": "100%", "background": vbAccentOr(v.Accent, "var(--accent,#3b82f6)")}
 		if v.Tone == "up" {
 			fill["background"] = "var(--up,#16a34a)"

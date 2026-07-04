@@ -152,7 +152,18 @@ func StudioFormulas() ui.Node {
 	workbench := stuTile("stu-workbench", "1 / span 4",
 		FormulaBuilder(FormulaBuilderProps{ShowSaved: true}))
 
-	return Div(css.Class("bento bento-studio"), workbench, molTile)
+	// The studio masthead every sibling tab opens with (eyebrow + serif title
+	// + lede), so the hub reads as one surface.
+	masthead := Div(css.Class("wman-head"),
+		Span(css.Class("studio-eyebrow"), uistate.T("wman.eyebrow")),
+		H2(css.Class("studio-design-title"), uistate.T("stuh.formulasTitle")),
+		P(css.Class("studio-design-sub"), uistate.T("stuh.formulasLede")),
+	)
+
+	return Div(css.Class("stu-deck"),
+		masthead,
+		Div(css.Class("bento bento-studio"), workbench, molTile),
+	)
 }
 
 type studioMoleculeRowProps struct {

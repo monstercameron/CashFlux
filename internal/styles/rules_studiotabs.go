@@ -56,7 +56,7 @@ func registerStudioTabs() {
 		prop("gap", "0.9rem"),
 		prop("align-items", "center"),
 		prop("padding", "0.5rem 0.35rem"),
-		prop("border-bottom", "1px solid color-mix(in srgb, var(--fg) 8%, transparent)"),
+		prop("border-bottom", "1px solid color-mix(in srgb, var(--text) 8%, transparent)"),
 		prop("border-radius", "8px"),
 		prop("transition", "background 400ms ease"),
 	)
@@ -152,7 +152,7 @@ func registerStudioTabs() {
 		prop("padding", "0.6rem"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "12px"),
-		prop("background", "color-mix(in srgb, var(--fg) 2.5%, transparent)"),
+		prop("background", "color-mix(in srgb, var(--text) 2.5%, transparent)"),
 	)
 	rule(".wman-map-tile",
 		prop("display", "flex"),
@@ -160,7 +160,7 @@ func registerStudioTabs() {
 		prop("padding", "0.3rem 0.4rem"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "7px"),
-		prop("background", "color-mix(in srgb, var(--fg) 5%, transparent)"),
+		prop("background", "color-mix(in srgb, var(--text) 5%, transparent)"),
 		prop("color", "inherit"),
 		prop("cursor", "pointer"),
 		prop("overflow", "hidden"),
@@ -189,6 +189,14 @@ func registerStudioTabs() {
 		prop("font-size", "0.74rem"),
 		prop("opacity", "0.55"),
 		prop("margin", "0"),
+	)
+
+	// ── Formulas / Custom fields tabs: the shared masthead wrapper ───────────────
+	rule(".stu-deck",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "1.5rem"),
+		prop("margin-top", "1rem"),
 	)
 
 	// ── Pages: the page registry + composer rail ─────────────────────────────────
@@ -227,7 +235,7 @@ func registerStudioTabs() {
 		prop("gap", "0.9rem"),
 		prop("align-items", "center"),
 		prop("padding", "0.8rem 0.2rem"),
-		prop("border-bottom", "1px solid color-mix(in srgb, var(--fg) 8%, transparent)"),
+		prop("border-bottom", "1px solid color-mix(in srgb, var(--text) 8%, transparent)"),
 	)
 	rule(".spg-row-top",
 		prop("display", "flex"),
@@ -297,6 +305,29 @@ func registerStudioTabs() {
 	)
 	rule(".spg-create",
 		prop("align-self", "stretch"),
+	)
+
+	// Registry-row ⋯ menus open leftward: their trigger sits at the row's right
+	// edge beside an adjacent rail column, and the default left-aligned menu
+	// would spill 210px over the composer (AnchorPopover only flips at viewport
+	// edges, not sibling columns). Same for the /fields registry rows.
+	rule(".spg-row .add-menu, .fld-row .add-menu",
+		prop("left", "auto"),
+		prop("right", "0"),
+	)
+
+	// Design tab, Custom-layout block editor: the compact selects were the
+	// narrowest controls on the busiest row and truncated mid-word ("Figure
+	// (a me…"). Let the Shows cell wrap so each control keeps a readable
+	// minimum width, and give the per-block doc line the full row.
+	rule(".studio-block-shows",
+		prop("flex-wrap", "wrap"),
+	)
+	rule(".studio-block-shows > *",
+		prop("flex", "1 1 8.5rem"),
+	)
+	rule(".studio-block-doc",
+		prop("flex", "1 1 100%"),
 	)
 
 	// Sections below the fold (tile style studio) speak the serif accent-tick
