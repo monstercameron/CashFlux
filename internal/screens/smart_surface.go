@@ -79,56 +79,62 @@ func SmartSurface() ui.Node {
 	smart.SortInsights(insights)
 	findings := len(smart.CapPerRule(insights, 3))
 
-	// ── Hero: what the agent FOUND leads (review: nobody opens a findings feed
-	// to admire how many rules are running); the watcher count is a chip. ────────
+	// ── Bespoke masthead (built from scratch — NO bento tile, NO astSection): a
+	// serif kicker, the big FINDINGS count leading (nobody opens a findings feed to
+	// admire how many rules run), the agent's voice line, quiet inline posture
+	// metrics, and the on-device promise as fine print. Keeps #sec-smart-hero and
+	// the smt-hero-* testids so the count/voice/metrics stay addressable. ─────────
 	heroTone := ""
 	if findings > 0 {
 		heroTone = " " + tw.ColorClass("text-warn")
 	}
-	chips := []ui.Node{
-		rptChip(uistate.T("smart.chipWatching"), fmt.Sprintf("%d", counts.FreeOn+counts.AIOn), ""),
-		rptChip(uistate.T("smart.chipAI"), fmt.Sprintf("%d", counts.AIOn), ""),
-		rptChip(uistate.T("smart.chipDensity"), uistate.T("smart.density."+string(density)), ""),
+	// Label BEFORE value so the metric reads "Watching 66" in the DOM.
+	metric := func(label, value string) ui.Node {
+		return Div(css.Class("smt-metric"),
+			Span(css.Class("smt-metric-label"), label),
+			Span(css.Class("smt-metric-value", tw.FontDisplay), value),
+		)
 	}
-	hero := astTile("smt-hero", "1 / span 4", astSection("sec-smart-hero", uistate.T("smart.heroTitle"), nil,
-		Div(css.Class("rpt-hero"),
-			P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("smart.heroEyebrow")),
-			Div(css.Class("rpt-hero-main"),
-				Div(
-					Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)+heroTone), Attr("data-testid", "smt-hero-count"),
-						fmt.Sprintf("%d", findings)),
-					Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("smart.heroLabel")),
-				),
-			),
-			P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "smt-hero-voice"),
-				smartHeroVoice(counts, findings)),
-			Div(css.Class("debt-chips"), chips),
-		)))
+	masthead := Div(css.Class("smt-masthead"), Attr("id", "sec-smart-hero"),
+		Span(css.Class("smt-kicker"), uistate.T("smart.heroTitle")),
+		Div(css.Class("smt-headline"),
+			Div(ClassStr("smt-count "+tw.Fold(tw.FontDisplay)+heroTone), Attr("data-testid", "smt-hero-count"),
+				fmt.Sprintf("%d", findings)),
+			Div(css.Class("smt-count-label", tw.TextDim), uistate.T("smart.heroLabel")),
+		),
+		P(ClassStr("smt-voice "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "smt-hero-voice"),
+			smartHeroVoice(counts, findings)),
+		Div(css.Class("smt-metrics"),
+			metric(uistate.T("smart.chipWatching"), fmt.Sprintf("%d", counts.FreeOn+counts.AIOn)),
+			metric(uistate.T("smart.chipAI"), fmt.Sprintf("%d", counts.AIOn)),
+			metric(uistate.T("smart.chipDensity"), uistate.T("smart.density."+string(density))),
+		),
+		P(css.Class("smt-fine", tw.TextDim), uistate.T("smart.heroEyebrow")),
+	)
 
-	// ── The proven sections, flattened onto one surface as bento children. ──────
+	// ── The proven sections, stacked as bespoke blocks on one editorial surface.
+	// They still return their EntityListSection/Card internals (toggles, pager,
+	// cadence, density dial intact); the .smt-deck scoped CSS dissolves the card
+	// chrome so they read as bespoke sections, not stacked tiles. ────────────────
 	var freeEnabled int
 	for _, code := range settings.EnabledCodes() {
 		if smartengine.HasEngine(code) {
 			freeEnabled++
 		}
 	}
-	span := func(col string, n ui.Node) ui.Node {
-		return Div(Style(map[string]string{"grid-column": col}), n)
+	blocks := []ui.Node{
+		masthead,
+		smartInsightsSection(insights, freeEnabled, counts.FreeOn+counts.AIOn > 0),
 	}
-	tiles := []ui.Node{
-		hero,
-		span("1 / span 4", smartInsightsSection(insights, freeEnabled, counts.FreeOn+counts.AIOn > 0)),
-	}
-	// AI feature outputs are content — they follow the feed; the digest is
-	// config, so it rides with the catalog at the bottom (review: a scheduling
-	// widget wedged between content and content read as an orphan).
+	// AI feature outputs are content — they follow the feed; the digest is config,
+	// so it rides with the catalog at the bottom.
 	if counts.AIOn > 0 {
-		tiles = append(tiles, span("1 / span 4", smartAISection(settings, conn, hasProvider)))
+		blocks = append(blocks, smartAISection(settings, conn, hasProvider))
 	}
-	tiles = append(tiles,
-		span("1 / span 4", smartManageSection(settings, hasProvider)),
-		span("1 / span 4", SmartDigestSection(settings)),
+	blocks = append(blocks,
+		smartManageSection(settings, hasProvider),
+		SmartDigestSection(settings),
 	)
 
-	return Div(css.Class("bento bento-smart"), Attr("data-testid", "smart-hub"), tiles)
+	return Div(css.Class("smt-deck"), Attr("data-testid", "smart-hub"), blocks)
 }

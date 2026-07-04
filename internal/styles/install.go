@@ -26,6 +26,7 @@ func Register() {
 	registerAssistantSurface()
 	registerCreditSurface()
 	registerStudioSurface()
+	registerSmartSurface()
 	inject(Build())
 }
 

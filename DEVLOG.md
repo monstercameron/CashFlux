@@ -1,3 +1,26 @@
+## 2026-07-03 — Smart tab: same from-scratch treatment as Ask
+
+Cam, immediately after the Ask rebuild: "need redesign the smart tab." Applied the lesson without
+being told twice — the Smart tab was the shared kit (`bento bento-smart` + `astTile`/`astSection`
+hero + `rptChip` chips + bordered `.smart-card` boxes), so I tore out the shell and built a bespoke
+`.smt-deck` editorial surface:
+
+- A from-scratch masthead: seagreen "SMART FEATURES" kicker → big findings count → serif voice line
+  on an accent spine → inline posture metrics (overline label + display value) → on-device fine
+  print → hairline. No bento tile.
+- The findings feed sheds the bordered/shadowed box. Trick worth remembering: the generated
+  `.smart-card` uses `border/border-radius !important`, so to dissolve it I used HIGHER SPECIFICITY
+  (`.smt-deck .smart-card`, 0,2,0 vs 0,1,0) with my own `!important`, and re-declared the severity
+  left-tick colors at 0,3,0 (`.smt-deck .smart-card[data-severity=…]`) so they survive. Result: an
+  editorial row — severity tick + bottom hairline, no card.
+- Catalog / AI / digest keep their `uiw.Card` internals (toggles, pager, cadence, density dial), but
+  `.smt-deck .card { chrome:none }` dissolves the skin — same dissolve-the-card move as the Ask aside.
+
+Testids/ids all preserved, so the only e2e edit was swapping the `.bento-smart` selector for
+`.smt-deck` (S1). `smart_surface_check.mjs` 13/13, `assistant_check.mjs` 23/23, suite green. The
+`.smart-card` box still stands everywhere else it's used (dashboard digest, inline strips) — the
+override is scoped to `.smt-deck` only.
+
 ## 2026-07-03 — Ask tab, sixth pass: from scratch, for real this time
 
 Cam, blunt: "the assistant looks like dog shit… redesign from scratch, STOP reusing the old

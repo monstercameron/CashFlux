@@ -24,11 +24,11 @@ if (await p.locator('[data-testid="hero-load-sample"]').count()) { await p.locat
 await p.goto(URL + "/assistant", { waitUntil: "domcontentloaded" });
 await p.waitForTimeout(2000);
 await p.locator('button, [role="radio"]', { hasText: "Smart" }).first().click({ force: true });
-await p.waitForSelector(".bento-smart", { timeout: 15000 }).catch(() => {});
+await p.waitForSelector(".smt-deck", { timeout: 15000 }).catch(() => {});
 await p.waitForTimeout(1500);
 
 // --- flattened surface + hero ---
-check("S1 the Smart tab is one flattened bento surface (no nested tabs)", await p.locator(".bento-smart").count() === 1 && (await p.locator('[data-testid="smart-tab-insights"]').count()) === 0);
+check("S1 the Smart tab is one flattened bespoke surface (no nested tabs)", await p.locator(".smt-deck").count() === 1 && (await p.locator('[data-testid="smart-tab-insights"]').count()) === 0);
 const heroFindings = parseInt((await p.locator('[data-testid="smt-hero-count"]').innerText().catch(() => "-1")).trim(), 10);
 check("H1 hero leads with the FINDINGS count (not the admin watcher tally)", heroFindings >= 0 && /findings worth a look/i.test(await p.locator("#sec-smart-hero").innerText()), `${heroFindings}`);
 check("H2 the agent voice line reads as a sentence", /I've found|All quiet|Nothing is switched on/.test((await p.locator('[data-testid="smt-hero-voice"]').innerText().catch(() => "")) || ""));
