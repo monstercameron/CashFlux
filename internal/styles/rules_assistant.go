@@ -135,18 +135,85 @@ func registerAssistantSurface() {
 		prop("flex-direction", "column"),
 		prop("min-height", "46vh"),
 	)
-	rule(".asst-main > .card > div:last-child",
-		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("flex", "1"),
-	)
+	// EntityListSection flattens fragments, so the thread/composer/keynote are
+	// DIRECT card children — the thread alone flexes to anchor the composer.
 	rule(".asst-thread",
 		prop("flex", "1"),
 		prop("min-height", "0"),
 	)
-	// The flexed body stretches block children; action buttons keep their
+	// The flexed card stretches block children; action buttons keep their
 	// natural width.
-	rule(".asst-main > .card > div:last-child > .btn",
+	rule(".asst-main > .card > .btn",
 		prop("align-self", "flex-start"),
+	)
+	rule(".asst-keynote",
+		prop("flex", "0 0 auto"),
+	)
+
+	// ── The conversation itself, restyled (Cam: "still looks dated"). The agent
+	// speaks in the house voice — an accent-ruled editorial column, no gray SMS
+	// blob; the user's words sit in a quiet accent-tinted pill; the composer is
+	// the elevated centerpiece. ────────────────────────────────────────────────
+	rule(".asst-msg-user",
+		prop("background", "color-mix(in srgb, var(--accent) 12%, transparent)"),
+		prop("border", "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
+		prop("border-radius", "14px 14px 4px 14px"),
+		prop("padding", "0.55rem 0.9rem"),
+	)
+	rule(".asst-msg-agent",
+		prop("border-left", "2px solid color-mix(in srgb, var(--accent) 55%, transparent)"),
+		prop("padding", "0.1rem 0 0.1rem 0.95rem"),
+	)
+	rule(".asst-msg-agent .md",
+		prop("line-height", "1.65"),
+	)
+	rule(".asst-msg-speaker",
+		prop("font-size", "0.66rem"),
+		prop("letter-spacing", "0.09em"),
+		prop("text-transform", "uppercase"),
+		prop("color", "var(--accent)"),
+		prop("opacity", "0.85"),
+		prop("margin-bottom", "0.25rem"),
+	)
+	rule(".asst-thinking",
+		prop("font-style", "italic"),
+	)
+	rule(".asst-composer",
+		prop("background", "var(--bg-elev)"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "14px"),
+		prop("padding", "0.45rem 0.45rem 0.45rem 0.9rem"),
+		prop("transition", "border-color 140ms ease, box-shadow 140ms ease"),
+	)
+	rule(".asst-composer:focus-within",
+		prop("border-color", "color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		prop("box-shadow", "0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent)"),
+	)
+	rule(".asst-composer .field",
+		prop("background", "transparent"),
+		prop("border", "none"),
+		prop("box-shadow", "none"),
+		prop("outline", "none"),
+		prop("font-size", "0.95rem"),
+	)
+	rule(".asst-keynote",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+		prop("margin-top", "0.75rem"),
+		prop("padding", "0.65rem 0.9rem"),
+		prop("border", "1px dashed var(--border)"),
+		prop("border-radius", "12px"),
+	)
+	rule(".asst-keynote-text p",
+		prop("margin", "0 0 0.2rem"),
+		prop("font-size", "0.82rem"),
+		prop("color", "var(--fg)"),
+		prop("opacity", "0.85"),
+	)
+	rule(".asst-keynote .btn",
+		prop("flex", "0 0 auto"),
+		prop("align-self", "center"),
 	)
 }

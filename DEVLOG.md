@@ -1,3 +1,21 @@
+## 2026-07-03 — Ask tab, third pass: the conversation itself gets designed
+
+Cam: "the ask tabs still looks dated." Correct — the cohesion pass restyled titles and spacing but
+left the bones: gray SMS bubbles, a bare input row, a paragraph-wall key hint. This pass redesigns
+the conversation surface in the house style: the agent's replies are BUBBLE-LESS — a ✦ AGENT
+micro-label over an accent-ruled editorial column (the same left-rule motif as the app's
+pull-quotes), user messages in an accent-tinted pill with an asymmetric corner, the composer as an
+elevated focal field with an accent focus ring, the key hint as a compact dashed keynote, and the
+chat controls folded into the section header.
+
+Gotcha that bit twice today: EntityListSection FLATTENS Fragment bodies, so `.card >
+div:last-child` selectors grab whatever content node happens to be last (the keynote ballooned
+into a stretched flex column before the fix). Targeting semantic classes (.asst-thread flexes; the
+rest size naturally) is the durable pattern.
+
+assistant_check 23/23, briefing 13/13. Markup diffs kept minimal (semantic classes + two moved
+nodes) so the other agent's chat logic — turns, retry, approval, history cycling — is untouched.
+
 ## 2026-07-03 — Ask tab: cohesion, an honest keyless composer, and a real cross-link
 
 Cam's follow-up: "dont forget the ask and smart pages also claude design skill redesign them and ux

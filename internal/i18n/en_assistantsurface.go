@@ -27,6 +27,7 @@ var assistantSurfaceKeys = Catalog{
 	// Composer, agent-voiced (overrides the en.go placeholder) — echoes all
 	// three verbs the intro just taught.
 	"insights.askPlaceholder":        "Ask, tell me what to do, or have me estimate something…",
+	"assistant.speaker":              "✦ Agent",
 	"insights.askPlaceholderKeyless": "Ask about your money — add a key in Settings to unlock the full agent…",
 	"insights.advancedTitle":         "Model backend and the agent's editable system prompt",
 }

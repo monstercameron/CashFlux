@@ -147,13 +147,15 @@ func Insights() ui.Node {
 	// C247: enrich the no-key gate with cost/where-to-get/privacy context so users
 	// understand BYOK before navigating away to Settings.
 	keyHintNode := func() ui.Node {
-		return Div(
-			P(css.Class("muted"), uistate.T("insights.keyHint")),
-			P(css.Class("muted", tw.Text13), uistate.T("insights.keyGateContext"),
-				" ", A(Attr("href", "https://platform.openai.com/api-keys"), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"), uistate.T("insights.keyGateLink")),
-				".",
+		return Div(css.Class("asst-keynote"), Attr("data-testid", "assistant-keynote"),
+			Div(css.Class("asst-keynote-text"),
+				P(uistate.T("insights.keyHint")),
+				P(css.Class(tw.Text12, tw.TextFaint), uistate.T("insights.keyGateContext"),
+					" ", A(Attr("href", "https://platform.openai.com/api-keys"), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"), uistate.T("insights.keyGateLink")),
+					".",
+				),
 			),
-			Button(css.Class("btn btn-primary", tw.Mt1), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
 		)
 	}
 
@@ -844,7 +846,7 @@ func Insights() ui.Node {
 			},
 		),
 		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
-			Div(css.Class("insights-thinking", tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
+			Div(css.Class("insights-thinking asst-msg-agent asst-thinking", tw.MaxW85, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
 		)),
 	)
 
@@ -868,7 +870,7 @@ func Insights() ui.Node {
 		// icon decorative so screen readers announce just "Send".
 		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
 	}
-	inputRow := Div(css.Class(tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
+	inputRow := Div(css.Class("asst-composer", tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
 		// The placeholder tells the truth about the current mode (review: "tell me
 		// what to do" overpromised agentic action a keyless session can't deliver).
 		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")),
@@ -1020,10 +1022,12 @@ func Insights() ui.Node {
 	// (anomalies + spending highlights), pinned insights, saved conversations.
 	chatSection := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("assistant.agentTitle"),
+		// The chat controls ride the section header (one calm line: serif title
+		// left, quiet pills right) instead of stacking a second toolbar row.
+		HeaderAction: chatControls,
 		// C234: id="ask" anchor keeps any existing deep-link (#ask) working.
 		Attrs: []any{Attr("id", "ask"), Attr("data-testid", "assistant-chat")},
 		Body: Fragment(
-			chatControls,
 			backendToggle,
 			If(empty, agentIntro),
 			// C248: show static example Q→A conversations for keyless users so they
@@ -1197,7 +1201,7 @@ func UserBubble(p userBubbleProps) ui.Node {
 	}))
 	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsEnd),
-		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgSky10, tw.Px35, tw.Py2, tw.Text14, tw.WhitespacePreWrap), p.Text),
+		Div(css.Class("asst-msg-user", tw.MaxW85, tw.Text14, tw.WhitespacePreWrap), p.Text),
 		Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
@@ -1260,7 +1264,8 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 	}
 	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
-		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py25),
+		Div(css.Class("asst-msg-agent", tw.MaxW85),
+			Div(css.Class("asst-msg-speaker"), uistate.T("assistant.speaker")),
 			// marked fills this element via the effect above.
 			Div(Attr("id", mdID), css.Class("md insights-answer", tw.Text14)),
 		),
