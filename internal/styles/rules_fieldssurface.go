@@ -189,7 +189,7 @@ func registerFieldsSurface() {
 		prop("opacity", "0.85"),
 	)
 	rule(".fld-row + .fld-row",
-		prop("border-top", "1px solid color-mix(in srgb, var(--fg) 8%, transparent)"),
+		prop("border-top", "1px solid color-mix(in srgb, var(--text) 8%, transparent)"),
 	)
 	rule(".fld-type",
 		prop("font-family", mono),

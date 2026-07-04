@@ -48,7 +48,7 @@ func healthHue(score int) int { return score * 13 / 10 } // 0 â†’ 0 (red), 100 â
 // grey for the "not enough data" state.
 func healthColor(r healthscore.Result) string {
 	if r.Band == healthscore.BandNoData {
-		return "var(--dim, #6b7280)"
+		return "var(--text-dim)"
 	}
 	return fmt.Sprintf("hsl(%d, 64%%, 52%%)", healthHue(r.Score))
 }

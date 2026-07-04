@@ -259,7 +259,7 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSa
 					Style(map[string]string{"min-width": "4.5rem"}), p.date),
 				Div(css.Class("util-trend-track"),
 					Style(map[string]string{
-						"flex": "1", "background": "var(--line, #2a2a2d)",
+						"flex": "1", "background": "var(--border)",
 						"border-radius": "2px", "height": "6px", "overflow": "hidden",
 					}),
 					Div(css.Class(tone, "util-trend-bar"),

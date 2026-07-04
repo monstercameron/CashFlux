@@ -2843,7 +2843,7 @@ func registerGenerated() {
 	)
 	rule(".budget-amount",
 		fontVariantNumeric("tabular-nums"),
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".budget-sub",
@@ -2873,7 +2873,7 @@ func registerGenerated() {
 	)
 	rule(".split-summary",
 		fontWeight("600"),
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 		marginTop("0.4rem"),
 	)
 	rule(".cadence-badge",
@@ -3935,7 +3935,7 @@ func registerGenerated() {
 		padding("13px 14px"),
 		border("1px solid var(--border)"),
 		borderRadius("13px"),
-		background("#121214"),
+		background("var(--bg-card)"),
 		color("var(--text)"),
 		cursor("pointer"),
 		transition("border-color .12s, background .12s, transform .08s"),
@@ -3946,7 +3946,7 @@ func registerGenerated() {
 	)
 	rule(".studio-type-card.is-selected",
 		borderColor("var(--accent)"),
-		background("color-mix(in srgb, var(--accent) 12%, #121214)"),
+		background("color-mix(in srgb, var(--accent) 12%, var(--bg-card))"),
 		boxShadow("inset 0 0 0 1px var(--accent)"),
 	)
 	rule(".studio-type-icon",
@@ -3994,7 +3994,7 @@ func registerGenerated() {
 		padding("9px 11px"),
 		border("1px solid var(--border)"),
 		borderRadius("11px"),
-		background("#121214"),
+		background("var(--bg-card)"),
 	)
 	rule(".studio-block-row .field-compact",
 		minWidth("0"),
@@ -4051,7 +4051,7 @@ func registerGenerated() {
 		display("grid"),
 		placeItems("center"),
 		borderRadius("7px"),
-		background("#1a1a1d"),
+		background("var(--bg-elev)"),
 		color("var(--text-faint)"),
 		fontSize(".72rem"),
 		fontWeight("700"),
@@ -4067,7 +4067,7 @@ func registerGenerated() {
 		gap("3px"),
 	)
 	rule(".btn-icon, .studio-block-move",
-		background("#1a1a1d"),
+		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		borderRadius("7px"),
 		color("var(--text-dim)"),
@@ -4382,7 +4382,7 @@ func registerGenerated() {
 	rule(".studio-stage",
 		borderRadius("14px"),
 		padding("14px"),
-		background("linear-gradient(0deg, color-mix(in srgb, var(--accent) 4%, transparent), transparent),\n          repeating-linear-gradient(0deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),\n          repeating-linear-gradient(90deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),\n          #0e0e10"),
+		background("linear-gradient(0deg, color-mix(in srgb, var(--accent) 4%, transparent), transparent),\n          repeating-linear-gradient(0deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),\n          repeating-linear-gradient(90deg, transparent, transparent 37px, color-mix(in srgb, var(--text) 5%, transparent) 37px, color-mix(in srgb, var(--text) 5%, transparent) 38px),\n          var(--bg)"),
 		border("1px solid var(--border)"),
 		minHeight("180px"),
 		display("grid"),
@@ -4430,7 +4430,7 @@ func registerGenerated() {
 		padding(".36rem .8rem"),
 		border("1px solid color-mix(in srgb, var(--accent) 22%, var(--border))"),
 		borderRadius("999px"),
-		background("#15151a"),
+		background("var(--bg-elev)"),
 		color("var(--text)"),
 		cursor("pointer"),
 		transition("border-color .12s, color .12s, background .12s"),
@@ -4442,14 +4442,14 @@ func registerGenerated() {
 	rule(".studio-starter.is-active",
 		borderColor("var(--accent)"),
 		color("var(--text)"),
-		background("color-mix(in srgb, var(--accent) 14%, #121214)"),
+		background("color-mix(in srgb, var(--accent) 14%, var(--bg-card))"),
 	)
 	rule(".studio-verb",
 		fontSize(".72rem"),
 		padding(".2rem .5rem"),
 		border("1px solid var(--border)"),
 		borderRadius("7px"),
-		background("#121214"),
+		background("var(--bg-card)"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
 		fontFamily("var(--font-mono, monospace)"),
@@ -7073,7 +7073,7 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 		fontWeight("700"),
 		fontSize("1.05rem"),
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 	)
 	// The loader: a taller progress bar holding the amount (left) + percent (right).
 	rule(".bento-goals .goal-card-loader",
@@ -7113,7 +7113,7 @@ func registerGenerated() {
 		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
 	)
 	rule(".bento-goals .goal-card-loader .budget-amount .budget-spent",
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 		fontWeight("700"),
 	)
 	rule(".bento-goals .goal-card-loader .budget-pct",
@@ -7356,7 +7356,7 @@ func registerGenerated() {
 		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
 	)
 	rule(".bento-budgets .budget-card-loader .budget-amount .budget-spent",
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 		fontWeight("700"),
 	)
 	// Budget cards lay out in a responsive grid — each a compact 1-column block (several
@@ -7447,7 +7447,7 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 		fontWeight("700"),
 		fontSize("1.05rem"),
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 	)
 	// The spent/limit amount is secondary context: muted, tabular, pushed right of the
 	// title; only the spent figure carries foreground weight.
@@ -7460,7 +7460,7 @@ func registerGenerated() {
 		color("var(--text-dim)"),
 	)
 	rule(".bento-budgets .budget-amount .budget-spent",
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 		fontWeight("600"),
 	)
 	rule(".bento-budgets .budget-drill",
@@ -7498,7 +7498,7 @@ func registerGenerated() {
 	// track so even a 0%/low budget reads at a glance.
 	rule(".bento-budgets .bar",
 		height("16px"),
-		background("color-mix(in srgb, var(--fg, #ffffff) 9%, transparent)"),
+		background("color-mix(in srgb, var(--text) 9%, transparent)"),
 		border("0"),
 		borderRadius("8px"),
 		margin("0 0 0.5rem"),
@@ -8123,7 +8123,7 @@ func registerGenerated() {
 		display("block"),
 		fontSize("0.9rem"),
 		fontWeight("600"),
-		color("var(--fg, var(--text))"),
+		color("var(--text)"),
 	)
 	rule(".cover-spread-sub",
 		display("block"),
@@ -8318,7 +8318,7 @@ func registerGenerated() {
 		height("17px"),
 		flexShrink("0"),
 		margin("0"),
-		border("1.5px solid color-mix(in srgb, var(--fg, #ffffff) 34%, transparent)"),
+		border("1.5px solid color-mix(in srgb, var(--text) 34%, transparent)"),
 		borderRadius("4px"),
 		background("transparent"),
 		cursor("pointer"),
@@ -9133,7 +9133,7 @@ func registerGenerated() {
 		gap(".5rem"),
 		textAlign("left"),
 		background("transparent"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("9px"),
 		padding(".3rem .6rem"),
 		cursor("pointer"),
@@ -9147,7 +9147,7 @@ func registerGenerated() {
 	)
 	rule(".attention-item:hover",
 		background("color-mix(in srgb, var(--accent,#3b82f6) 8%, transparent)"),
-		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--line,#e5e7eb))"),
+		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--border))"),
 	)
 	rule(".attention-item:focus-visible",
 		outline("2px solid var(--accent,#3b82f6)"),
@@ -9176,7 +9176,7 @@ func registerGenerated() {
 		color("var(--warn,#d97706)"),
 	)
 	rule(".attention-item.is-info .attention-dot",
-		color("var(--dim,#6b7280)"),
+		color("var(--text-dim)"),
 	)
 	rule(".wm .card + .card",
 		marginTop("14px"),
@@ -9191,7 +9191,7 @@ func registerGenerated() {
 		width("1px"),
 		alignSelf("stretch"),
 		minHeight("20px"),
-		background("var(--line,#e5e7eb)"),
+		background("var(--border)"),
 		margin("0 .2rem"),
 	)
 	rule(".wm-table-wrap",
@@ -9226,7 +9226,7 @@ func registerGenerated() {
 		fontWeight("600"),
 	)
 	rule(".wm-row.is-hidden .wm-name",
-		color("var(--dim,#6b7280)"),
+		color("var(--text-dim)"),
 		textDecoration("line-through"),
 	)
 	rule(".wm-row.is-hidden td:not(.wm-cell-name)",
@@ -9243,7 +9243,7 @@ func registerGenerated() {
 	rule(".wm-step",
 		display("inline-flex"),
 		alignItems("stretch"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("8px"),
 		overflow("hidden"),
 	)
@@ -9270,9 +9270,9 @@ func registerGenerated() {
 		alignItems("center"),
 		justifyContent("center"),
 		fontSize("12px"),
-		color("var(--dim,#6b7280)"),
-		borderLeft("1px solid var(--line,#e5e7eb)"),
-		borderRight("1px solid var(--line,#e5e7eb)"),
+		color("var(--text-dim)"),
+		borderLeft("1px solid var(--border)"),
+		borderRight("1px solid var(--border)"),
 		padding("0 .2rem"),
 	)
 	rule(".wm-reorder",
@@ -9313,7 +9313,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		width("28px"),
 		height("28px"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("8px"),
 		background("transparent"),
 		cursor("pointer"),
@@ -9323,7 +9323,7 @@ func registerGenerated() {
 	)
 	rule(".wm-arrow:hover:not(:disabled)",
 		background("color-mix(in srgb, var(--accent,#3b82f6) 10%, transparent)"),
-		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--line,#e5e7eb))"),
+		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--border))"),
 	)
 	rule(".wm-arrow:disabled",
 		opacity(".3"),
@@ -9356,7 +9356,7 @@ func registerGenerated() {
 	)
 	rule(".wm-style-label",
 		fontSize("13px"),
-		color("var(--dim,#6b7280)"),
+		color("var(--text-dim)"),
 	)
 	rule(".wm-style-color",
 		display("inline-flex"),
@@ -9367,7 +9367,7 @@ func registerGenerated() {
 		width("2rem"),
 		height("1.7rem"),
 		padding("0"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("6px"),
 		background("none"),
 		cursor("pointer"),
@@ -9375,11 +9375,11 @@ func registerGenerated() {
 	rule(".wm-clear",
 		width("1.4rem"),
 		height("1.4rem"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("5px"),
 		background("transparent"),
 		cursor("pointer"),
-		color("var(--dim,#6b7280)"),
+		color("var(--text-dim)"),
 		lineHeight("1"),
 		fontSize("13px"),
 	)
@@ -9401,7 +9401,7 @@ func registerGenerated() {
 		fontSize("11px"),
 		textTransform("uppercase"),
 		letterSpacing(".06em"),
-		color("var(--faint,#9ca3af)"),
+		color("var(--text-faint)"),
 	)
 	rule(".wm-preview-tile",
 		position("static !important"),
@@ -9420,7 +9420,7 @@ func registerGenerated() {
 		padding("1.5rem"),
 		borderRadius("12px"),
 		background("var(--bg,#0e0e10)"),
-		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px)"),
+		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--text-dim) 22%, transparent) 1px, transparent 1px)"),
 		backgroundSize("16px 16px"),
 		overflow("auto"),
 	)
@@ -9440,9 +9440,9 @@ func registerGenerated() {
 		minHeight("128px"),
 		padding("1.5rem 1rem"),
 		borderRadius("12px"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		background("var(--bg,#0e0e10)"),
-		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px)"),
+		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--text-dim) 22%, transparent) 1px, transparent 1px)"),
 		backgroundSize("16px 16px"),
 		overflowX("auto"),
 	)
@@ -9459,11 +9459,11 @@ func registerGenerated() {
 		textAlign("left"),
 		color("inherit"),
 		background("var(--bg-elev,#1a1a1d)"),
-		border("1.5px solid var(--line,#e5e7eb)"),
+		border("1.5px solid var(--border)"),
 		transition("border-color .12s ease, box-shadow .12s ease, transform .12s ease"),
 	)
 	rule(".wb-node:hover",
-		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--line,#e5e7eb))"),
+		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--border))"),
 	)
 	rule(".wb-node.is-active",
 		borderColor("var(--accent,#3b82f6)"),
@@ -9473,12 +9473,12 @@ func registerGenerated() {
 		fontSize("11px"),
 		textTransform("uppercase"),
 		letterSpacing(".06em"),
-		color("var(--faint,#9ca3af)"),
+		color("var(--text-faint)"),
 	)
 	rule(".wb-node-val",
 		fontSize("14px"),
 		fontWeight("600"),
-		color("var(--fg,#e5e7eb)"),
+		color("var(--text)"),
 	)
 	rule(".wb-port",
 		position("absolute"),
@@ -9487,7 +9487,7 @@ func registerGenerated() {
 		height("9px"),
 		borderRadius("999px"),
 		background("var(--bg,#0e0e10)"),
-		border("1.5px solid var(--dim,#6b7280)"),
+		border("1.5px solid var(--text-dim)"),
 		transform("translateY(-50%)"),
 	)
 	rule(".wb-port-in",
@@ -9503,7 +9503,7 @@ func registerGenerated() {
 		position("relative"),
 		flex("0 0 2.75rem"),
 		height("2px"),
-		background("var(--line,#e5e7eb)"),
+		background("var(--border)"),
 	)
 	rule(".wb-edge::after",
 		content("\"\""),
@@ -9513,7 +9513,7 @@ func registerGenerated() {
 		transform("translateY(-50%)"),
 		borderTop("5px solid transparent"),
 		borderBottom("5px solid transparent"),
-		borderLeft("7px solid var(--line,#e5e7eb)"),
+		borderLeft("7px solid var(--border)"),
 	)
 	rule(".muzak-btn, .notify-btn, .add-btn",
 		display("inline-flex"),
@@ -9537,7 +9537,7 @@ func registerGenerated() {
 		transition("background .12s ease, color .12s ease, opacity .12s ease, transform var(--wonder-dur-fast) var(--wonder-ease)"),
 	)
 	rule(".muzak-btn.is-off",
-		color("var(--faint,#9ca3af)"),
+		color("var(--text-faint)"),
 		opacity(".7"),
 	)
 	rule(".muzak-btn.relative",
@@ -9575,7 +9575,7 @@ func registerGenerated() {
 		background("transparent"),
 		border("0"),
 		cursor("pointer"),
-		color("var(--dim,#6b7280)"),
+		color("var(--text-dim)"),
 		fontSize("15px"),
 		lineHeight("1"),
 	)
@@ -9604,7 +9604,7 @@ func registerGenerated() {
 		zIndex("1"),
 		width("min(28rem,100%)"),
 		background("var(--bg-card,#fff)"),
-		border("1px solid var(--line,#e5e7eb)"),
+		border("1px solid var(--border)"),
 		borderRadius("14px"),
 		boxShadow("0 12px 40px rgba(0,0,0,.3)"),
 		padding("1.25rem 1.25rem 1rem"),
@@ -9639,12 +9639,12 @@ func registerGenerated() {
 		filter("brightness(1.08)"),
 	)
 	rule(".row.subtask",
-		borderLeft("2px solid var(--line,#e5e7eb)"),
+		borderLeft("2px solid var(--border)"),
 	)
 	rule(".rule-grip",
 		display("inline-flex"),
 		alignItems("center"),
-		color("var(--faint,#9ca3af)"),
+		color("var(--text-faint)"),
 		cursor("grab"),
 		flex("none"),
 		marginRight(".25rem"),

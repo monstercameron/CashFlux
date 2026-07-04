@@ -39,7 +39,7 @@ func scoreRingNode(pct float64, ringColor string, size int, ariaLabel string, ce
 		Attr("role", "img"), Attr("aria-label", ariaLabel),
 		// Faint full track.
 		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
-			Attr("fill", "none"), Attr("stroke", "var(--line, #2a2a2d)"), Attr("stroke-width", "10")),
+			Attr("fill", "none"), Attr("stroke", "var(--border)"), Attr("stroke-width", "10")),
 		// Score arc — starts at 12 o'clock (rotate -90), rounded cap, animates length.
 		Circle(Attr("cx", "60"), Attr("cy", "60"), Attr("r", "52"),
 			Attr("fill", "none"), Attr("stroke", ringColor), Attr("stroke-width", "10"),

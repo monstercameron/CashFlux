@@ -210,8 +210,8 @@ func registerAssistantSurface() {
 		prop("line-height", "1.65"),
 		prop("min-width", "0"),
 		prop("flex", "1"),
-		prop("background", "color-mix(in srgb, var(--fg) 4%, transparent)"),
-		prop("border", "1px solid color-mix(in srgb, var(--fg) 7%, transparent)"),
+		prop("background", "color-mix(in srgb, var(--text) 4%, transparent)"),
+		prop("border", "1px solid color-mix(in srgb, var(--text) 7%, transparent)"),
 		prop("border-radius", "4px 14px 14px 14px"),
 		prop("padding", "0.7rem 0.95rem"),
 	)
@@ -344,7 +344,7 @@ func registerAssistantSurface() {
 	rule(".ask-status",
 		prop("font-size", "0.72rem"),
 		prop("letter-spacing", "0.04em"),
-		prop("color", "var(--fg)"),
+		prop("color", "var(--text)"),
 		prop("opacity", "0.6"),
 	)
 	rule(".ask-head-actions",
@@ -355,7 +355,7 @@ func registerAssistantSurface() {
 	rule(".ask-main .chat-console",
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "16px"),
-		prop("background", "color-mix(in srgb, var(--fg) 2.5%, transparent)"),
+		prop("background", "color-mix(in srgb, var(--text) 2.5%, transparent)"),
 		prop("height", "auto"),
 		prop("max-height", "calc(100vh - 15rem)"),
 		prop("min-height", "20rem"),
@@ -392,7 +392,7 @@ func registerAssistantSurface() {
 		prop("font-weight", "600"),
 		prop("border-left", "3px solid var(--accent)"),
 		prop("padding-left", "0.55rem"),
-		prop("color", "var(--fg)"),
+		prop("color", "var(--text)"),
 	)
 	rule(".ask-note-link",
 		prop("font-size", "0.72rem"),
@@ -412,7 +412,7 @@ func registerAssistantSurface() {
 	)
 	rule(".ask-note-hint",
 		prop("font-size", "0.72rem"),
-		prop("color", "var(--fg)"),
+		prop("color", "var(--text)"),
 		prop("opacity", "0.5"),
 		prop("margin", "0.45rem 0 0"),
 	)
