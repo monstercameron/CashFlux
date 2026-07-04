@@ -47,7 +47,7 @@ async function navToWorkflows(page) {
     if (await fallback.count() > 0) await fallback.click();
     else await page.goto(BASE + "/workflows", { waitUntil: "domcontentloaded" });
   }
-  await page.waitForSelector(".card", { timeout: 30000 });
+  await page.waitForSelector(".wf-deck", { timeout: 30000 });
   await page.waitForTimeout(1200);
 }
 
@@ -247,37 +247,40 @@ async function auditLightContrast(page) {
 // Build a workflow and get dry-run result
 // ---------------------------------------------------------------
 async function buildWorkflow(page, label) {
+  // The builder lives in the composer rail (.wf-composer); positional selectors
+  // are scoped there so the savings quick-start panels' fields don't shadow them.
+  const comp = page.locator(".wf-composer");
+
   // Fill name
-  const nameInput = page.locator('input.field').first();
+  const nameInput = comp.locator('input.field').first();
   if (await nameInput.count() > 0) {
     await nameInput.fill(`Monthly check ${label}`);
     await page.waitForTimeout(200);
   }
 
   // Set trigger to "When a transaction is added" (second option)
-  const triggerSelect = page.locator('select.field').first();
+  const triggerSelect = comp.locator('select.field').first();
   if (await triggerSelect.count() > 0) {
     await triggerSelect.selectOption({ index: 1 });
     await page.waitForTimeout(200);
   }
 
   // Fill condition
-  const conditionInput = page.locator('input.field').nth(1);
+  const conditionInput = comp.locator('input.field').nth(1);
   if (await conditionInput.count() > 0) {
     await conditionInput.fill("expense > 100");
     await page.waitForTimeout(200);
   }
 
-  // The action kind select is in the second form-grid
-  // Default is "Create a task" — just fill the action text
-  const actionTextInput = page.locator('input.field').nth(2);
+  // The action kind select defaults to "Create a task" — just fill the action text
+  const actionTextInput = comp.locator('input.field').nth(2);
   if (await actionTextInput.count() > 0) {
     await actionTextInput.fill("Review large expense");
     await page.waitForTimeout(200);
   }
 
   // Click "Add action"
-  const addBtn = page.locator('button').filter({ hasText: /add action/i }).first();
+  const addBtn = comp.locator('button').filter({ hasText: /add action/i }).first();
   if (await addBtn.count() > 0) {
     await addBtn.click();
     await page.waitForTimeout(400);

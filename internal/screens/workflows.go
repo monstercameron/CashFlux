@@ -13,7 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -26,10 +25,14 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Workflows is the automation manager: create automations (a trigger, an optional
-// condition formula, and write-safe actions), enable/disable them, run them now or
-// preview them with a dry run, and review the run history. Planning is the pure
-// internal/workflow engine; applying effects + recording runs is appstate.
+// Workflows is the automation manager, rebuilt as a from-scratch "automations
+// desk" (2026-07-04): a masthead, the three savings quick-starts as a panel
+// band (C183/C184/C185/C188 — still the most likely first action), then the
+// automation registry (ledger rows: status dot, name, trigger · condition ·
+// actions, dry-run-first controls, ⋯ menu with a two-step delete) beside the
+// workflow composer whose footprint reads the draft back in plain English.
+// Planning is the pure internal/workflow engine; applying effects + recording
+// runs is appstate — mechanics unchanged.
 func Workflows() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -40,45 +43,107 @@ func Workflows() ui.Node {
 	refresh := func() { rev.Set(rev.Get() + 1) }
 
 	wfs := app.Workflows()
-	var rows []ui.Node
-	for _, w := range wfs {
-		rows = append(rows, ui.CreateElement(workflowRow, workflowRowProps{Workflow: w, Refresh: refresh}))
-	}
-	listBody := P(css.Class("empty"), uistate.T("workflows.empty"))
-	if len(rows) > 0 {
-		listBody = Div(css.Class("rows"), rows)
-	}
-	// Count badge on the "Your workflows" heading so Raj can see the list size at a
-	// glance, consistent with Accounts / Goals / Transactions (G19).
-	yoursTitle := uistate.T("workflows.yours")
-	if n := len(wfs); n > 0 {
-		yoursTitle += "  " + strconv.Itoa(n)
+	rows := MapKeyed(wfs,
+		func(w workflow.Workflow) any { return w.ID },
+		func(w workflow.Workflow) ui.Node {
+			return ui.CreateElement(workflowRow, workflowRowProps{Workflow: w, Refresh: refresh})
+		},
+	)
+	var registryBody ui.Node = P(css.Class("wf-empty"), uistate.T("wfs.emptyRegistry"))
+	if len(wfs) > 0 {
+		registryBody = Div(css.Class("wf-rows"), rows)
 	}
 
-	return Div(
-		// C188: savings automations framing + PYF template (C185) come first so
-		// the user's most likely first action is visible before the general
-		// workflow builder, which is a lower-level tool.
-		ui.CreateElement(pyfForm, pyfFormProps{Refresh: refresh}),
-		// C184: Surplus-sweep config card sits in the same "Savings automations"
-		// area, immediately after pay-yourself-first, so both auto-save templates
-		// are discoverable in one place.
-		ui.CreateElement(sweepForm, sweepFormProps{Refresh: refresh}),
-		// C183: Round-up savings card follows the sweep card so all three
-		// automated savings features are grouped together in one discoverable
-		// section.
-		ui.CreateElement(roundUpForm, roundUpFormProps{Refresh: refresh}),
-		ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: yoursTitle,
-			Body:  listBody,
-		}),
-		ui.CreateElement(workflowHistory, workflowHistoryProps{}),
+	masthead := Div(css.Class("wman-head"),
+		Span(css.Class("studio-eyebrow"), uistate.T("wfs.eyebrow")),
+		H2(css.Class("studio-design-title"), uistate.T("wfs.title")),
+		P(css.Class("studio-design-sub"), uistate.T("wfs.lede")),
+	)
+
+	// Savings quick-starts: the three auto-save templates as one panel band.
+	quick := Div(css.Class("wf-quick"),
+		H3(css.Class("wf-sec-title"), uistate.T("workflows.savingsTitle")),
+		P(css.Class("wf-sec-lede"), uistate.T("workflows.savingsDesc")),
+		Div(css.Class("wf-quick-grid"),
+			ui.CreateElement(pyfForm, pyfFormProps{Refresh: refresh}),
+			ui.CreateElement(sweepForm, sweepFormProps{Refresh: refresh}),
+			ui.CreateElement(roundUpForm, roundUpFormProps{Refresh: refresh}),
+		),
+	)
+
+	registryHead := Div(css.Class("wf-sec-head"),
+		H3(css.Class("wf-sec-title"), uistate.T("workflows.yours")),
+		If(len(wfs) > 0, Span(css.Class("wf-count"), strconv.Itoa(len(wfs)))),
+	)
+
+	return Div(css.Class("wf-deck"),
+		masthead,
+		quick,
+		Div(css.Class("wf-grid"),
+			Div(css.Class("wf-main"),
+				registryHead,
+				registryBody,
+				ui.CreateElement(workflowHistory, workflowHistoryProps{}),
+			),
+			Div(css.Class("wf-aside"),
+				ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
+			),
+		),
 	)
 }
 
 // pyfFormProps passes the refresh callback into the pay-yourself-first form.
 type pyfFormProps struct{ Refresh func() }
+
+// pyfEntry summarizes one pay-yourself-first workflow for the quick-start
+// panel's "Already set up" block.
+type pyfEntry struct {
+	From, To, Amount, Cadence string
+	FromID, ToID              string
+	Cad                       domain.RecurringCadence
+	Enabled                   bool
+}
+
+// pyfActive lists the existing pay-yourself-first workflows — scheduled
+// single-transfer workflows minted by the quick-start, recognized by their
+// "pyf:"-prefixed transfer dedupe key — INCLUDING disabled ones, so the panel
+// reflects what's already set up instead of presenting an eternally blank
+// form, and so a duplicate of a merely-off transfer (which would silently
+// double the money moved once re-enabled) can be caught at save.
+func pyfActive(app *appstate.App, dec int) []pyfEntry {
+	names := map[string]string{}
+	for _, ac := range app.Accounts() {
+		names[ac.ID] = ac.Name
+	}
+	nameOf := func(id string) string {
+		if n := names[id]; n != "" {
+			return n
+		}
+		return id
+	}
+	var out []pyfEntry
+	for _, w := range app.Workflows() {
+		if len(w.Actions) != 1 {
+			continue
+		}
+		a := w.Actions[0]
+		if a.Kind != workflow.ActionTransfer || !strings.HasPrefix(a.DedupeKey, "pyf:") {
+			continue
+		}
+		cadLabel := uistate.T("workflows.pyfCadenceMonthly")
+		if w.Trigger.Cadence == domain.CadenceWeekly {
+			cadLabel = uistate.T("workflows.pyfCadenceWeekly")
+		}
+		out = append(out, pyfEntry{
+			From: nameOf(a.TransferFromAccountID), To: nameOf(a.TransferToAccountID),
+			Amount:  money.FormatMinor(a.TransferAmount, dec),
+			Cadence: cadLabel,
+			FromID:  a.TransferFromAccountID, ToID: a.TransferToAccountID, Cad: w.Trigger.Cadence,
+			Enabled: w.Enabled,
+		})
+	}
+	return out
+}
 
 // pyfForm is the savings automations section (C188) with the pay-yourself-first
 // template (C185). It creates a scheduled ActionTransfer workflow so money moves
@@ -106,11 +171,17 @@ func pyfForm(props pyfFormProps) ui.Node {
 	cadence := ui.UseState(string(domain.CadenceMonthly))
 	msg := ui.UseState("")
 	success := ui.UseState(false)
+	// When a PYF transfer is already running, the panel opens as an "Already
+	// running" summary; the form stays a click away behind "Add another".
+	showForm := ui.UseState(false)
 
 	onFrom := ui.UseEvent(func(e ui.Event) { fromID.Set(e.GetValue()); msg.Set(""); success.Set(false) })
 	onTo := ui.UseEvent(func(e ui.Event) { toID.Set(e.GetValue()); msg.Set(""); success.Set(false) })
 	onAmt := ui.UseEvent(func(v string) { amtStr.Set(v); msg.Set(""); success.Set(false) })
 	onCadence := ui.UseEvent(func(e ui.Event) { cadence.Set(e.GetValue()) })
+	onShowForm := ui.UseEvent(Prevent(func() { showForm.Set(true); msg.Set(""); success.Set(false) }))
+
+	active := pyfActive(app, dec)
 
 	save := func() {
 		app := appstate.Default
@@ -134,17 +205,31 @@ func pyfForm(props pyfFormProps) ui.Node {
 			return
 		}
 		cad := domain.RecurringCadence(cadence.Get())
+		// Refuse a duplicate on the same route + schedule: a second scheduled
+		// workflow would silently double the money moved — and a duplicate of a
+		// merely-OFF transfer would do the same the day it's re-enabled.
+		for _, e := range pyfActive(app, dec) {
+			if e.FromID == from && e.ToID == to && e.Cad == cad {
+				if e.Enabled {
+					msg.Set(uistate.T("wfs.pyfDuplicate"))
+				} else {
+					msg.Set(uistate.T("wfs.pyfDuplicateOff"))
+				}
+				return
+			}
+		}
 		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
 			msg.Set(err.Error())
 			return
 		}
-		// Reset form on success.
+		// Reset form on success and fold back to the summary.
 		fromID.Set("")
 		toID.Set("")
 		amtStr.Set("")
 		cadence.Set(string(domain.CadenceMonthly))
 		msg.Set("")
 		success.Set(true)
+		showForm.Set(false)
 		if props.Refresh != nil {
 			props.Refresh()
 		}
@@ -168,48 +253,70 @@ func pyfForm(props pyfFormProps) ui.Node {
 
 	amtPlaceholder := uistate.T("workflows.pyfAmount", base)
 
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("workflows.savingsTitle"),
-		Body: Fragment(
-			// C188 framing: tell the user why this section exists before showing
-			// a form, so it doesn't appear as just another workflow builder.
-			P(css.Class("muted"), uistate.T("workflows.savingsDesc")),
-			Hr(css.Class(tw.Mt2)),
-			// Pay-yourself-first template.
-			P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.pyfTitle")),
-			P(css.Class("muted"), uistate.T("workflows.pyfDesc")),
-			Div(css.Class("form-grid", tw.Mt2),
-				Select(css.Class("field"),
-					Attr("aria-label", uistate.T("workflows.pyfFrom")),
-					OnChange(onFrom),
-					fromOpts,
-				),
-				Select(css.Class("field"),
-					Attr("aria-label", uistate.T("workflows.pyfTo")),
-					OnChange(onTo),
-					toOpts,
-				),
-				Input(css.Class("field"),
-					Attr("placeholder", amtPlaceholder),
-					Attr("aria-label", amtPlaceholder),
-					Attr("inputmode", "decimal"),
-					Value(amtStr.Get()),
-					OnInput(onAmt),
-				),
-				Select(css.Class("field"),
-					Attr("aria-label", uistate.T("workflows.pyfCadence")),
-					OnChange(onCadence),
-					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.pyfCadenceWeekly")),
-					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.pyfCadenceMonthly")),
-				),
-			),
-			If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
-			If(success.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.pyfCreated"))),
-			Div(css.Class(tw.Mt2),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.pyfSave")),
+	// "Already set up" summary — one line per PYF transfer, OFF ones dimmed.
+	activeLines := make([]ui.Node, 0, len(active))
+	for _, e := range active {
+		lineCls := "wf-active-line"
+		dotCls := "wf-dot"
+		if !e.Enabled {
+			lineCls += " is-off"
+			dotCls += " is-off"
+		}
+		activeLines = append(activeLines, Div(ClassStr(lineCls),
+			Span(ClassStr(dotCls), Attr("aria-hidden", "true")),
+			Span(e.From+" → "+e.To+" · "+e.Amount+" "+base+" · "+e.Cadence),
+			If(!e.Enabled, Span(css.Class("wman-hidden-tag"), uistate.T("wfs.disabledTag"))),
+		))
+	}
+	activeBlock := Div(append([]any{css.Class("wf-active"), Attr("data-testid", "pyf-active"),
+		Span(css.Class("fld-foot-title"), uistate.T("wfs.pyfActiveTitle"))},
+		append(anyNodes(activeLines), P(css.Class("wf-hint"), uistate.T("wfs.pyfActiveHint")))...)...)
+
+	formVisible := len(active) == 0 || showForm.Get()
+	form := Fragment(
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.pyfFrom")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.pyfFrom")), OnChange(onFrom), fromOpts),
+		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.pyfTo")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.pyfTo")), OnChange(onTo), toOpts),
+		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), amtPlaceholder),
+			Input(css.Class("field"), Attr("placeholder", amtPlaceholder), Attr("aria-label", amtPlaceholder),
+				Attr("inputmode", "decimal"), Value(amtStr.Get()), OnInput(onAmt)),
+		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.pyfCadence")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.pyfCadence")), OnChange(onCadence),
+				Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.pyfCadenceWeekly")),
+				Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.pyfCadenceMonthly")),
 			),
 		),
-	})
+	)
+
+	return Div(css.Class("wf-quick-panel"),
+		H4(css.Class("wf-panel-title"), uistate.T("workflows.pyfTitle")),
+		P(css.Class("wf-panel-desc"), uistate.T("workflows.pyfDesc")),
+		If(len(active) > 0, activeBlock),
+		If(formVisible, form),
+		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
+		If(success.Get(), P(css.Class("ok"), Attr("role", "status"), uistate.T("workflows.pyfCreated"))),
+		IfElse(formVisible,
+			Button(css.Class("btn wf-panel-save"), Type("button"), OnClick(save), uistate.T("workflows.pyfSave")),
+			Button(css.Class("data-btn wf-panel-save"), Type("button"), Attr("data-testid", "pyf-add-another"), OnClick(onShowForm), uistate.T("wfs.pyfAddAnother")),
+		),
+	)
+}
+
+// anyNodes widens a []ui.Node into []any for variadic element construction.
+func anyNodes(ns []ui.Node) []any {
+	out := make([]any, len(ns))
+	for i, n := range ns {
+		out[i] = n
+	}
+	return out
 }
 
 // sweepFormProps passes the refresh callback into the surplus-sweep config card.
@@ -332,13 +439,10 @@ func sweepForm(_ sweepFormProps) ui.Node {
 
 	bufPlaceholder := uistate.T("workflows.sweepBuffer", base)
 
-	return Fragment(
-		Hr(css.Class(tw.Mt2)),
-		// Surplus-sweep section title + description.
-		P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.sweepTitle")),
-		P(css.Class("muted"), uistate.T("workflows.sweepDesc")),
-		// Enable toggle.
-		Div(css.Class("toggle-row", tw.Mt2),
+	return Div(css.Class("wf-quick-panel"),
+		H4(css.Class("wf-panel-title"), uistate.T("workflows.sweepTitle")),
+		P(css.Class("wf-panel-desc"), uistate.T("workflows.sweepDesc")),
+		Div(css.Class("wf-panel-enable"),
 			Label(css.Class("checkbox-label"),
 				Input(
 					Type("checkbox"),
@@ -349,32 +453,22 @@ func sweepForm(_ sweepFormProps) ui.Node {
 				Text(" "+uistate.T("workflows.sweepEnable")),
 			),
 		),
-		// Account + buffer inputs (always visible so the user can configure
-		// before enabling — identical UX pattern to the PYF form above).
-		Div(css.Class("form-grid", tw.Mt2),
-			Select(css.Class("field"),
-				Attr("aria-label", uistate.T("workflows.sweepFrom")),
-				OnChange(onFrom),
-				fromOpts,
-			),
-			Select(css.Class("field"),
-				Attr("aria-label", uistate.T("workflows.sweepTo")),
-				OnChange(onTo),
-				toOpts,
-			),
-			Input(css.Class("field"),
-				Attr("placeholder", bufPlaceholder),
-				Attr("aria-label", bufPlaceholder),
-				Attr("inputmode", "decimal"),
-				Value(bufStr.Get()),
-				OnInput(onBuf),
-			),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.sweepFrom")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.sweepFrom")), OnChange(onFrom), fromOpts),
 		),
-		If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
-		If(saved.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.sweepSaved"))),
-		Div(css.Class(tw.Mt2),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.sweepSave")),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.sweepTo")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.sweepTo")), OnChange(onTo), toOpts),
 		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), bufPlaceholder),
+			Input(css.Class("field"), Attr("placeholder", bufPlaceholder), Attr("aria-label", bufPlaceholder),
+				Attr("inputmode", "decimal"), Value(bufStr.Get()), OnInput(onBuf)),
+		),
+		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
+		If(saved.Get(), P(css.Class("ok"), Attr("role", "status"), uistate.T("workflows.sweepSaved"))),
+		Button(css.Class("btn wf-panel-save"), Type("button"), OnClick(save), uistate.T("workflows.sweepSave")),
 	)
 }
 
@@ -489,13 +583,10 @@ func roundUpForm(_ roundUpFormProps) ui.Node {
 		toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(toID.Get() == ac.ID), label))
 	}
 
-	return Fragment(
-		Hr(css.Class(tw.Mt2)),
-		// Round-up section title + description.
-		P(css.Class("row-desc", tw.Mt2), uistate.T("workflows.roundUpTitle")),
-		P(css.Class("muted"), uistate.T("workflows.roundUpDesc")),
-		// Enable toggle.
-		Div(css.Class("toggle-row", tw.Mt2),
+	return Div(css.Class("wf-quick-panel"),
+		H4(css.Class("wf-panel-title"), uistate.T("workflows.roundUpTitle")),
+		P(css.Class("wf-panel-desc"), uistate.T("workflows.roundUpDesc")),
+		Div(css.Class("wf-panel-enable"),
 			Label(css.Class("checkbox-label"),
 				Input(
 					Type("checkbox"),
@@ -506,31 +597,25 @@ func roundUpForm(_ roundUpFormProps) ui.Node {
 				Text(" "+uistate.T("workflows.roundUpEnable")),
 			),
 		),
-		// Account + granularity inputs.
-		Div(css.Class("form-grid", tw.Mt2),
-			Select(css.Class("field"),
-				Attr("aria-label", uistate.T("workflows.roundUpFrom")),
-				OnChange(onFrom),
-				fromOpts,
-			),
-			Select(css.Class("field"),
-				Attr("aria-label", uistate.T("workflows.roundUpTo")),
-				OnChange(onTo),
-				toOpts,
-			),
-			Select(css.Class("field"),
-				Attr("aria-label", uistate.T("workflows.roundUpGran")),
-				OnChange(onGran),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.roundUpFrom")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.roundUpFrom")), OnChange(onFrom), fromOpts),
+		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.roundUpTo")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.roundUpTo")), OnChange(onTo), toOpts),
+		),
+		Label(css.Class("fld-field"),
+			Span(css.Class("fld-lbl"), uistate.T("workflows.roundUpGran")),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.roundUpGran")), OnChange(onGran),
 				Option(Value("100"), SelectedIf(granStr.Get() == "100"), uistate.T("workflows.roundUpGranDollar")),
 				Option(Value("500"), SelectedIf(granStr.Get() == "500"), uistate.T("workflows.roundUpGranFive")),
 				Option(Value("1000"), SelectedIf(granStr.Get() == "1000"), uistate.T("workflows.roundUpGranTen")),
 			),
 		),
-		If(msg.Get() != "", P(css.Class("err", tw.Mt1), Attr("role", "alert"), msg.Get())),
-		If(saved.Get(), P(css.Class("ok", tw.Mt1), Attr("role", "status"), uistate.T("workflows.roundUpSaved"))),
-		Div(css.Class(tw.Mt2),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.roundUpSave")),
-		),
+		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
+		If(saved.Get(), P(css.Class("ok"), Attr("role", "status"), uistate.T("workflows.roundUpSaved"))),
+		Button(css.Class("btn wf-panel-save"), Type("button"), OnClick(save), uistate.T("workflows.roundUpSave")),
 	)
 }
 
@@ -681,81 +766,122 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		}
 	}
 
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("workflows.create"),
-		Body: Fragment(
-			Div(css.Class("form-grid"),
-				Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName)),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
-					Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
-					Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
-					Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
-					Option(Value(string(workflow.TriggerBudgetExceeded)), SelectedIf(trigger.Get() == string(workflow.TriggerBudgetExceeded)), uistate.T("workflows.triggerBudgetExceeded")),
-					Option(Value(string(workflow.TriggerGoalReached)), SelectedIf(trigger.Get() == string(workflow.TriggerGoalReached)), uistate.T("workflows.triggerGoalReached")),
-					Option(Value(string(workflow.TriggerBillDue)), SelectedIf(trigger.Get() == string(workflow.TriggerBillDue)), uistate.T("workflows.triggerBillDue")),
-				),
-				If(trigger.Get() == string(workflow.TriggerScheduled),
-					Select(css.Class("field"), OnChange(onCadence),
-						Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
-						Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
-						Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
-						Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
-					),
-				),
-			),
-			// Condition input in its own full-width row so it has room to breathe and
-			// isn't truncated to ~10 chars inside a 3-column form-grid cell (GI3).
-			Div(css.Class("form-grid", tw.Mt1),
-				Input(css.Class("field", "field-wide"), Attr("placeholder", uistate.T("workflows.condition")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition)),
-			),
-			// Inline variable reference for the condition formula (C65). Lists every
-			// available variable with a click-to-insert button so users don't need to
-			// memorise the names. Each variable is its own component (condVarButton) so
-			// its OnClick hook never runs inside a variable-length loop (framework rule).
-			// Transaction-context variables are only injected when the trigger is
-			// "transaction added"; all four are always shown here as reference since users
-			// can test conditions with "run now" on any trigger.
-			Div(css.Class(tw.Mt2),
-				P(css.Class("muted"), uistate.T("workflows.conditionHint")),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15, tw.Mt1),
-					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_abs", Desc: uistate.T("workflows.varTxnAbs"), OnInsert: insertVar}),
-					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_amount", Desc: uistate.T("workflows.varTxnAmount"), OnInsert: insertVar}),
-					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
-					ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
-				),
-				P(css.Class("muted", tw.Mt1), uistate.T("workflows.conditionExamples")),
-			),
-			// Action builder. A small "Actions" sub-label and a light divider visually
-			// separate the workflow identity section (name/trigger/condition) from the
-			// action-builder section (what it will do), so Raj doesn't process them as
-			// one undifferentiated block (G19 spacing fix).
-			Hr(css.Class(tw.Mt2)),
-			P(css.Class("muted"), "Actions"),
-			Div(css.Class("form-grid", tw.Mt1),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
-					Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
-					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
-					Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
-					Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
-					Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
-					Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
-					Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
-					Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
-				),
-				paramControl,
-				// btn-sm: "Add action" is a staging step, not the primary save — giving it
-				// full-column width made it visually heavier than "Save workflow" (G19).
-				Button(css.Class("btn btn-sm"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
-			),
-			// mt-3 + "rows" wrapper gives the staged list a clear visual gap so it reads
-			// as "what will be done" rather than a continuation of the action inputs (G19).
-			If(len(staged) > 0, Div(css.Class("rows", tw.Mt3), staged)),
-			If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
-			Div(css.Class(tw.Mt2),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("workflows.save")),
-			),
+	// The footprint: read the draft back as one plain-English sentence so the
+	// user can check their automation before saving it.
+	when := uistate.T("wfs.whenManual")
+	switch workflow.TriggerKind(trigger.Get()) {
+	case workflow.TriggerTxnAdded:
+		when = uistate.T("wfs.whenTxn")
+	case workflow.TriggerScheduled:
+		switch domain.RecurringCadence(cadence.Get()) {
+		case domain.CadenceWeekly:
+			when = uistate.T("wfs.whenWeekly")
+		case domain.CadenceQuarterly:
+			when = uistate.T("wfs.whenQuarterly")
+		case domain.CadenceYearly:
+			when = uistate.T("wfs.whenYearly")
+		default:
+			when = uistate.T("wfs.whenMonthly")
+		}
+	case workflow.TriggerBudgetExceeded:
+		when = uistate.T("wfs.whenBudget")
+	case workflow.TriggerGoalReached:
+		when = uistate.T("wfs.whenGoal")
+	case workflow.TriggerBillDue:
+		when = uistate.T("wfs.whenBill")
+	}
+	footActs := append([]workflow.Action(nil), actions.Get()...)
+	if a, ok := buildDraft(); ok {
+		footActs = append(footActs, a)
+	}
+	sentence := when
+	rawCond := ""
+	if c := strings.TrimSpace(condition.Get()); c != "" {
+		// Plain English wherever the condition can be confidently translated;
+		// the raw formula stays visible beneath as the auditable form.
+		if eng, ok := wfCondEnglish(c); ok {
+			sentence += ", " + uistate.T("wfs.ifPart", eng)
+			rawCond = c
+		} else {
+			sentence += ", " + uistate.T("wfs.ifPart", c)
+		}
+	}
+	footKids := []any{css.Class("fld-foot"),
+		Span(css.Class("fld-foot-title"), uistate.T("wfs.footTitle")),
+	}
+	if len(footActs) == 0 {
+		footKids = append(footKids, P(css.Class("fld-foot-line"), sentence+" "+uistate.T("wfs.thenNothing")))
+	} else {
+		footKids = append(footKids, P(css.Class("fld-foot-line"), sentence+", "+uistate.T("wfs.thenPart")))
+		for _, a := range footActs {
+			footKids = append(footKids, P(css.Class("fld-foot-line"), "• "+actionLabel(a)))
+		}
+	}
+	if rawCond != "" {
+		footKids = append(footKids, Span(css.Class("wf-foot-raw"), rawCond))
+	}
+
+	fld := func(lbl string, control ui.Node) ui.Node {
+		return Label(css.Class("fld-field"), Span(css.Class("fld-lbl"), lbl), control)
+	}
+
+	return Div(css.Class("wf-composer"), Attr("data-testid", "wf-composer"),
+		H3(css.Class("wf-comp-title"), uistate.T("workflows.create")),
+		P(css.Class("wf-comp-lede"), uistate.T("wfs.compLede")),
+		fld(uistate.T("workflows.name"),
+			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName))),
+		fld(uistate.T("workflows.triggerLabel"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
+				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
+				Option(Value(string(workflow.TriggerTxnAdded)), SelectedIf(trigger.Get() == string(workflow.TriggerTxnAdded)), uistate.T("workflows.triggerTxn")),
+				Option(Value(string(workflow.TriggerScheduled)), SelectedIf(trigger.Get() == string(workflow.TriggerScheduled)), uistate.T("workflows.triggerScheduled")),
+				Option(Value(string(workflow.TriggerBudgetExceeded)), SelectedIf(trigger.Get() == string(workflow.TriggerBudgetExceeded)), uistate.T("workflows.triggerBudgetExceeded")),
+				Option(Value(string(workflow.TriggerGoalReached)), SelectedIf(trigger.Get() == string(workflow.TriggerGoalReached)), uistate.T("workflows.triggerGoalReached")),
+				Option(Value(string(workflow.TriggerBillDue)), SelectedIf(trigger.Get() == string(workflow.TriggerBillDue)), uistate.T("workflows.triggerBillDue")),
+			)),
+		If(trigger.Get() == string(workflow.TriggerScheduled),
+			fld(uistate.T("wfs.cadence"),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.cadence")), OnChange(onCadence),
+					Option(Value(string(domain.CadenceWeekly)), SelectedIf(cadence.Get() == string(domain.CadenceWeekly)), uistate.T("workflows.cadenceWeekly")),
+					Option(Value(string(domain.CadenceMonthly)), SelectedIf(cadence.Get() == string(domain.CadenceMonthly)), uistate.T("workflows.cadenceMonthly")),
+					Option(Value(string(domain.CadenceQuarterly)), SelectedIf(cadence.Get() == string(domain.CadenceQuarterly)), uistate.T("workflows.cadenceQuarterly")),
+					Option(Value(string(domain.CadenceYearly)), SelectedIf(cadence.Get() == string(domain.CadenceYearly)), uistate.T("workflows.cadenceYearly")),
+				)),
 		),
-	})
+		fld(uistate.T("workflows.conditionLabel"),
+			Input(css.Class("field"), Attr("placeholder", uistate.T("wfs.condPlaceholder")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition))),
+		// Inline variable reference for the condition formula (C65): every variable
+		// as a click-to-insert chip, each its own component (condVarButton) so its
+		// OnClick hook never runs inside a variable-length loop (framework rule).
+		Div(css.Class("wf-cond-help"),
+			P(css.Class("wf-hint"), uistate.T("workflows.conditionHint")),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_abs", Desc: uistate.T("workflows.varTxnAbs"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_amount", Desc: uistate.T("workflows.varTxnAmount"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
+				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
+			),
+			P(css.Class("wf-hint"), uistate.T("workflows.conditionExamples")),
+		),
+		Div(css.Class("wf-actions-head"), Span(css.Class("fld-lbl"), uistate.T("wfs.actionsHead"))),
+		fld(uistate.T("workflows.actionTypeLabel"),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
+				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
+				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
+				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
+				Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
+				Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
+				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
+				Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
+				Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
+			)),
+		Div(css.Class("wf-param"), paramControl),
+		Button(css.Class("btn btn-sm wf-addaction"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
+		If(len(staged) > 0, Div(css.Class("wf-staged"), staged)),
+		Div(footKids...),
+		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
+		Button(css.Class("btn btn-primary wf-save"), Type("button"), OnClick(save), uistate.T("workflows.save")),
+	)
 }
 
 type workflowRowProps struct {
@@ -763,18 +889,29 @@ type workflowRowProps struct {
 	Refresh  func()
 }
 
-// workflowRow is one workflow with its controls (enable, run, dry-run, delete) and
-// an inline area showing the last run's planned/applied effects. Its own component
-// so the action hooks and the result state stay stable across the list.
+// workflowRow is one automation's ledger row: a status dot, the name, its
+// trigger · condition · action summary, dry-run-first controls, and a ⋯ menu
+// (enable/disable, edit, diagram, delete behind a two-step inline confirm).
+// The last run's planned/applied effects show beneath. Its own component so
+// the action hooks and the result state stay stable across the list.
 func workflowRow(props workflowRowProps) ui.Node {
 	w := props.Workflow
 	last := ui.UseState((*workflow.Run)(nil))
 	showDiagram := ui.UseState(false)
 	editing := ui.UseState(false)
+	confirming := ui.UseState(false)
 	editName := ui.UseState(w.Name)
 	editCond := ui.UseState(w.Condition)
 	onEditName := ui.UseEvent(func(v string) { editName.Set(v) })
 	onEditCond := ui.UseEvent(func(v string) { editCond.Set(v) })
+	ask := ui.UseEvent(Prevent(func() {
+		confirming.Set(true)
+		fldFocusSoon("#wf-keep-" + w.ID)
+	}))
+	keep := ui.UseEvent(Prevent(func() {
+		confirming.Set(false)
+		fldFocusSoon("#wf-menu-" + w.ID + " button")
+	}))
 	startEdit := ui.UseEvent(Prevent(func() {
 		editName.Set(w.Name)
 		editCond.Set(w.Condition)
@@ -842,60 +979,98 @@ func workflowRow(props workflowRowProps) ui.Node {
 	if w.Enabled {
 		enableLabel = uistate.T("workflows.disable")
 	}
+	diagramLabel := uistate.T("wfs.diagramShow")
+	if showDiagram.Get() {
+		diagramLabel = uistate.T("wfs.diagramHide")
+	}
 
 	var result ui.Node = Fragment()
 	if r := last.Get(); r != nil {
 		if !r.Matched && !r.DryRun {
-			result = P(css.Class("muted", tw.Mt1), uistate.T("workflows.noMatch"))
+			result = P(css.Class("wf-result-quiet"), uistate.T("workflows.noMatch"))
 		} else if !r.Matched && r.DryRun {
-			result = P(css.Class("muted", tw.Mt1), uistate.T("workflows.dryNoMatch"))
+			result = P(css.Class("wf-result-quiet"), uistate.T("workflows.dryNoMatch"))
 		} else {
 			var lines []ui.Node
 			for _, e := range r.Effects {
-				lines = append(lines, Div(css.Class("row-meta"), "• "+e.Summary))
+				lines = append(lines, Div(css.Class("wf-result-line"), "• "+e.Summary))
 			}
 			head := uistate.T("workflows.applied")
 			if r.DryRun {
 				head = uistate.T("workflows.wouldDo")
 			}
-			result = Div(css.Class(tw.Mt1), P(css.Class("row-meta"), head), Div(lines))
+			result = Div(css.Class("wf-result"), Span(css.Class("wf-result-head"), head), Div(lines))
 		}
 	}
 
-	return Div(css.Class("row-edit"),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.FlexWrap),
-			Div(css.Class("row-main"),
-				Div(css.Class("row-desc"), w.Name),
-				Div(css.Class("row-meta"), triggerLabel(w.Trigger.Kind)+conditionSuffix(w.Condition)+" · "+actionsLabel(len(w.Actions))),
+	rowCls := "wf-row"
+	if !w.Enabled {
+		rowCls += " is-off"
+	}
+
+	dot := Span(css.Class("wf-dot"), Attr("aria-hidden", "true"))
+	condPart := Fragment()
+	if w.Condition != "" {
+		// Plain English where translatable (raw formula kept as the hover title);
+		// otherwise the raw expression in mono.
+		if eng, ok := wfCondEnglish(w.Condition); ok {
+			condPart = Fragment(Span(css.Class("wf-meta-sep"), " · "),
+				Span(Attr("title", w.Condition), uistate.T("wfs.ifPart", eng)))
+		} else {
+			condPart = Fragment(Span(css.Class("wf-meta-sep"), " · "), Span(css.Class("wf-cond"), "if "+w.Condition))
+		}
+	}
+
+	return Div(ClassStr(rowCls),
+		Div(css.Class("wf-row-head"),
+			dot,
+			Div(css.Class("wf-row-main"),
+				Div(css.Class("wf-row-top"),
+					Span(css.Class("wf-name"), w.Name),
+					If(!w.Enabled, Span(css.Class("wman-hidden-tag"), uistate.T("wfs.disabledTag"))),
+				),
+				Div(css.Class("wf-meta"),
+					Span(triggerLabel(w.Trigger.Kind)),
+					condPart,
+					Span(css.Class("wf-meta-sep"), " · "),
+					Span(actionsLabel(len(w.Actions))),
+				),
 			),
-			Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
-				// "Dry run" is the safe exploratory action and gets the primary accent so
-				// Raj's first instinct is simulation, not live execution (G19 hierarchy fix).
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
-				// "Run now" is the live-execution action; neutral weight signals it is the
-				// deliberate, secondary step after previewing the dry run.
-				Button(css.Class("btn"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow")),
-				Button(css.Class("btn"), Type("button"), OnClick(toggle), enableLabel),
-				Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("action.edit")), Title(uistate.T("action.edit")), OnClick(startEdit), uistate.T("action.edit")),
-				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")), Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+			Div(css.Class("wf-row-actions"),
+				// Dry run first — simulation is the safe default instinct (G19).
+				Button(css.Class("data-btn wf-dry"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
+				// Run now only while the workflow is ON: the engine would happily
+				// fire a disabled workflow manually, and "off but still runnable
+				// live" is a trap for something that moves money. Re-enable first.
+				If(w.Enabled,
+					Button(css.Class("data-btn"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow"))),
+				If(!confirming.Get(),
+					uiw.KebabMenu(uiw.KebabMenuProps{
+						ID:           "wf-menu-" + w.ID,
+						ToggleTestID: "wf-menu-btn-" + w.ID,
+						Items: []ui.Node{
+							Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(toggle), enableLabel),
+							Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(startEdit), uistate.T("action.edit")),
+							Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(func() { showDiagram.Set(!showDiagram.Get()) }), diagramLabel),
+							Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "wf-delete-btn-"+w.ID), OnClick(ask), uistate.T("action.delete")),
+						},
+					})),
 			),
 		),
+		If(confirming.Get(), Div(css.Class("fld-confirm"), Attr("role", "alert"),
+			Span(css.Class("fld-confirm-msg"), uistate.T("wfs.deleteWarn")),
+			Button(css.Class("fld-confirm-del"), Type("button"), OnClick(del), uistate.T("wfs.deleteYes")),
+			Button(css.Class("fld-confirm-keep"), Type("button"), Attr("id", "wf-keep-"+w.ID), OnClick(keep), uistate.T("fld.deleteNo")),
+		)),
 		result,
-		// A Mermaid flowchart of this workflow: trigger → condition → actions (C70).
-		// Collapsed by default (GI3): 4 workflows rendered ~2000px of diagrams and
-		// buried the run-history card. Each row owns its own showDiagram state so the
-		// toggle never runs inside a loop (framework hook rule).
-		Div(css.Class(tw.Mt1),
-			Button(css.Class("btn"), Type("button"), OnClick(func() { showDiagram.Set(!showDiagram.Get()) }),
-				IfElse(showDiagram.Get(), Text("Hide diagram"), Text("Show diagram")),
-			),
-			If(showDiagram.Get(),
-				uiw.Mermaid(uiw.MermaidProps{
-					Source: mermaid.FromWorkflow(w),
-					Class:  tw.Fold(tw.Mt2),
-					Label:  "Flowchart of " + w.Name,
-				}),
-			),
+		// A Mermaid flowchart of this workflow: trigger → condition → actions (C70),
+		// collapsed behind the ⋯ menu (GI3: four open diagrams once buried the page).
+		If(showDiagram.Get(),
+			uiw.Mermaid(uiw.MermaidProps{
+				Source: mermaid.FromWorkflow(w),
+				Class:  tw.Fold(tw.Mt2),
+				Label:  "Flowchart of " + w.Name,
+			}),
 		),
 	)
 }
@@ -923,18 +1098,99 @@ func workflowHistory(_ workflowHistoryProps) ui.Node {
 		if name == "" {
 			name = uistate.T("workflows.deleted")
 		}
-		rows = append(rows, Div(css.Class("row"),
-			Span(css.Class("row-desc"), name),
-			Span(css.Class("row-meta"), r.At+" · "+strconv.Itoa(len(r.Effects))+" "+uistate.T("workflows.effectsWord")),
+		// Human date (per the user's date-format preference), not raw RFC3339 —
+		// with the time of day when it carries information (same-day runs would
+		// otherwise be indistinguishable; midnight-stamped runs skip the noise).
+		when := r.At
+		if t, err := time.Parse(time.RFC3339, r.At); err == nil {
+			when = uistate.LoadPrefs().FormatDate(t)
+			if lt := t.Local(); lt.Hour() != 0 || lt.Minute() != 0 {
+				when += " " + lt.Format("3:04 PM")
+			}
+		}
+		effWord := uistate.T("workflows.effectsWord")
+		if len(r.Effects) == 1 {
+			effWord = uistate.T("wfs.effectWord")
+		}
+		rows = append(rows, Div(css.Class("wf-hist-row"),
+			Span(css.Class("wf-hist-name"), name),
+			Span(css.Class("wf-hist-meta"), when+" · "+strconv.Itoa(len(r.Effects))+" "+effWord),
 		))
 	}
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("workflows.history"),
-		Rows:  rows,
-	})
+	return Div(css.Class("wf-history"),
+		Div(css.Class("wf-sec-head"), H3(css.Class("wf-sec-title"), uistate.T("workflows.history"))),
+		Div(css.Class("wf-hist-rows"), rows),
+	)
 }
 
 // --- label helpers ---
+
+// wfCondEnglish renders a supported single-clause condition formula as plain
+// English ("the amount is over 200", `the payee contains "uber"`) so the
+// composer footprint and registry rows don't ask users to decode code. It is
+// deliberately conservative: compound formulas (&&/||), unknown variables, and
+// anything ambiguous return ok=false and the caller falls back to the raw
+// expression.
+func wfCondEnglish(cond string) (string, bool) {
+	c := strings.TrimSpace(cond)
+	if c == "" || strings.Contains(c, "&&") || strings.Contains(c, "||") {
+		return "", false
+	}
+	subject := map[string]string{
+		"txn_abs":      uistate.T("wfs.subjAbs"),
+		"txn_amount":   uistate.T("wfs.subjAmount"),
+		"txn_payee":    uistate.T("wfs.subjPayee"),
+		"txn_category": uistate.T("wfs.subjCategory"),
+	}
+	if strings.HasPrefix(c, "contains(") && strings.HasSuffix(c, ")") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(c, "contains("), ")")
+		parts := strings.SplitN(inner, ",", 2)
+		if len(parts) == 2 {
+			s, ok := subject[strings.TrimSpace(parts[0])]
+			val := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+			if ok && val != "" && !strings.ContainsAny(val, `"'(),`) {
+				return uistate.T("wfs.condContains", s, val), true
+			}
+		}
+		return "", false
+	}
+	for _, op := range []string{">=", "<=", "==", "!=", ">", "<"} {
+		i := strings.Index(c, op)
+		if i <= 0 {
+			continue
+		}
+		v := strings.TrimSpace(c[:i])
+		rhs := strings.TrimSpace(c[i+len(op):])
+		s, ok := subject[v]
+		if !ok || rhs == "" || strings.ContainsAny(rhs, "<>=&|()") {
+			return "", false
+		}
+		if v == "txn_amount" && rhs == "0" {
+			switch op {
+			case "<":
+				return uistate.T("wfs.condMoneyOut"), true
+			case ">":
+				return uistate.T("wfs.condMoneyIn"), true
+			}
+		}
+		rhs = strings.Trim(rhs, `"'`)
+		switch op {
+		case ">":
+			return uistate.T("wfs.condOver", s, rhs), true
+		case ">=":
+			return uistate.T("wfs.condAtLeast", s, rhs), true
+		case "<":
+			return uistate.T("wfs.condUnder", s, rhs), true
+		case "<=":
+			return uistate.T("wfs.condAtMost", s, rhs), true
+		case "==":
+			return uistate.T("wfs.condIs", s, rhs), true
+		default: // !=
+			return uistate.T("wfs.condIsNot", s, rhs), true
+		}
+	}
+	return "", false
+}
 
 func actionLabel(a workflow.Action) string {
 	switch a.Kind {
@@ -984,13 +1240,6 @@ func triggerLabel(k workflow.TriggerKind) string {
 	default:
 		return uistate.T("workflows.triggerManual")
 	}
-}
-
-func conditionSuffix(cond string) string {
-	if cond == "" {
-		return ""
-	}
-	return " · if " + cond
 }
 
 type stagedActionRowProps struct {

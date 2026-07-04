@@ -1,3 +1,31 @@
+## 2026-07-04 — /workflows rebuilt as the automations desk (critique loop: 2 rounds to SHIP)
+
+Same recipe as the studio pages: from-scratch `.wf-deck` (masthead → savings quick-start band →
+registry + history beside the composer rail), then the adversarial loop.
+
+The design's signature is the composer footprint reading the draft back in plain English —
+and the critic's best round-1 catch was that it DIDN'T: the condition stayed raw code
+("if txn_abs > 200") inside an allegedly plain-English sentence. `wfCondEnglish` now translates
+the supported single-clause forms ("if the amount is over 200", "if money is going out"),
+keeps the raw formula as a mono auditable aside, and falls back verbatim on anything compound —
+conservative on purpose, so it never lies.
+
+The other high was a REAL money bug shape: the pay-yourself-first quick-start reset to a blank
+form after every save and `CreatePayYourselfFirstWorkflow` never checks for an existing one — a
+returning user could stack identical scheduled transfers without noticing. The panel now opens
+as an "Already set up" summary (disabled ones dimmed with an Off tag), hides the form behind
+"Add another", and refuses a same-route+schedule duplicate — including of a merely-OFF one,
+which would silently double the transfer the day it's re-enabled. Also closed: Run now fired
+DISABLED workflows manually (the engine doesn't check Enabled; the button now hides on OFF
+rows), "1 effects", and raw RFC3339 timestamps in history (now the user's date format + time
+when non-midnight).
+
+Round 2: SHIP. Its remaining notes applied (route-based duplicate copy, OFF entries in the
+summary/guard, shorter condition placeholder, history time-of-day, softened summary copy so it
+doesn't promise more than row-Edit delivers). Next / backlog: row Edit only covers name +
+condition — editing a transfer amount means delete + re-create (now safely guarded); full
+trigger/action editing is the open follow-up.
+
 ## 2026-07-04 — Studio critique loop: three rounds to SHIP (all six tabs, both themes)
 
 The adversarial loop over the whole Studio hub ran three rounds and finished at SHIP.
