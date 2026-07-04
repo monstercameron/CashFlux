@@ -10,7 +10,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/pages"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -108,10 +107,12 @@ func studioManagerPanel(_ studioManagerPanelProps) ui.Node { return WidgetManage
 
 type studioPagesPanelProps struct{}
 
-// studioPagesPanel lists all user-authored custom pages and provides inline create,
-// navigate, and delete management. It is its own component so its hooks (UseState,
-// UseEvent × 2, UseNavigate) are isolated; each page row is a further isolated
-// component (studioPageRow) to satisfy the no-hooks-in-loops rule.
+// studioPagesPanel is the Studio "My pages" surface, rebuilt as a bespoke page
+// registry: each page a ledger row (serif name, mono address, widget count,
+// Open link, ⋯ menu whose delete runs a two-step inline confirm — a page takes
+// its widgets and layout with it), beside a composer rail whose live footprint
+// previews the address the page will get. Its hooks are isolated here; each row
+// is a further isolated component (studioPageRow) per the no-hooks-in-loops rule.
 func studioPagesPanel(_ studioPagesPanelProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -126,7 +127,6 @@ func studioPagesPanel(_ studioPagesPanelProps) ui.Node {
 	_ = version.Get()
 	bump := func() { version.Set(version.Get() + 1) }
 
-	// Inline "New page" form state.
 	newName := ui.UseState("")
 	onNewName := ui.UseEvent(func(v string) { newName.Set(v) })
 
@@ -155,42 +155,84 @@ func studioPagesPanel(_ studioPagesPanelProps) ui.Node {
 	all := app.CustomPages()
 	ordered := pages.Ordered(all)
 
-	var rowNodes []ui.Node
-	for _, pg := range ordered {
-		pg := pg // capture loop variable
-		rowNodes = append(rowNodes, ui.CreateElement(studioPageRow, studioPageRowProps{
-			Page: pg,
-			OnDelete: func() {
-				if app != nil {
-					_ = app.DeleteCustomPage(pg.ID)
-					bump()
-				}
-			},
-		}))
+	rows := MapKeyed(ordered,
+		func(pg domain.CustomPage) any { return pg.ID },
+		func(pg domain.CustomPage) ui.Node {
+			return ui.CreateElement(studioPageRow, studioPageRowProps{
+				Page: pg,
+				OnDelete: func() {
+					if app != nil {
+						_ = app.DeleteCustomPage(pg.ID)
+						bump()
+					}
+				},
+			})
+		},
+	)
+
+	countStr := uistate.T("spg.countNone")
+	switch {
+	case len(ordered) == 1:
+		countStr = uistate.T("spg.countOne")
+	case len(ordered) > 1:
+		countStr = uistate.T("spg.countMany", len(ordered))
 	}
 
-	// Create-page form: title + form together in one section.
-	formSection := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("studio.tabPages"),
-		Body: Form(css.Class("form-grid"), OnSubmit(createPage),
-			Input(css.Class("field"), Type("text"), Attr("id", "studio-new-page"),
-				Attr("aria-label", uistate.T("studio.pageName")),
-				Placeholder(uistate.T("studio.pageName")),
-				Value(newName.Get()), OnInput(onNewName)),
-			Button(css.Class("btn btn-primary"), Type("submit"),
+	masthead := Div(css.Class("wman-head"),
+		Span(css.Class("studio-eyebrow"), uistate.T("spg.eyebrow")),
+		H2(css.Class("studio-design-title"), uistate.T("spg.title")),
+		P(css.Class("studio-design-sub"), uistate.T("spg.lede")),
+	)
+
+	var registry ui.Node
+	if len(ordered) == 0 {
+		registry = P(css.Class("spg-empty"), uistate.T("spg.empty"))
+	} else {
+		registry = Div(css.Class("spg-rows"), rows)
+	}
+
+	// Composer: name → live address footprint → create.
+	trimmed := strings.TrimSpace(newName.Get())
+	slugPreview := ""
+	if trimmed != "" {
+		slugPreview = "/p/" + pages.UniqueSlug(trimmed, all, "")
+	}
+	composer := Div(css.Class("spg-composer"), Attr("data-testid", "pages-composer"),
+		H3(css.Class("spg-comp-title"), uistate.T("spg.compTitle")),
+		P(css.Class("spg-comp-lede"), uistate.T("spg.compLede")),
+		Form(css.Class("spg-form"), OnSubmit(createPage),
+			Label(css.Class("fld-field"),
+				Span(css.Class("fld-lbl"), uistate.T("studio.pageName")),
+				Input(css.Class("field"), Type("text"), Attr("id", "studio-new-page"),
+					Attr("aria-label", uistate.T("studio.pageName")),
+					Placeholder(uistate.T("spg.namePlaceholder")),
+					Value(newName.Get()), OnInput(onNewName)),
+			),
+			Div(css.Class("fld-foot"),
+				Span(css.Class("fld-foot-title"), uistate.T("spg.footTitle")),
+				If(slugPreview != "",
+					P(css.Class("fld-foot-line"), uistate.T("spg.livesAt"), " ",
+						Span(css.Class("spg-slug"), slugPreview))),
+				P(css.Class("fld-foot-line"), uistate.T("spg.footHint")),
+			),
+			Button(css.Class("btn btn-primary spg-create"), Type("submit"),
 				uistate.T("studio.createPage")),
 		),
-	})
+	)
 
-	// Pages list: nil Rows → EntityListSection renders the EmptyState instead.
-	listSection := uiw.EntityListSection(uiw.EntityListSectionProps{
-		EmptyState: ui.CreateElement(EmptyStateCTA, emptyCTAProps{
-			Message: uistate.T("studio.pagesEmpty"),
-		}),
-		Rows: rowNodes, // nil when no pages → triggers EmptyState
-	})
-
-	return Fragment(formSection, listSection)
+	return Div(css.Class("spg"),
+		masthead,
+		Div(css.Class("spg-grid"),
+			Div(css.Class("spg-main"),
+				Div(css.Class("spg-reg-head"),
+					Span(css.Class("wman-aside-label"), uistate.T("spg.registryKicker")),
+					Span(css.Class("wman-count"), countStr),
+				),
+				registry,
+			),
+			composer,
+		),
+	)
 }
 
 type studioPageRowProps struct {
@@ -198,31 +240,66 @@ type studioPageRowProps struct {
 	OnDelete func()
 }
 
-// studioPageRow renders one custom-page row: the page name, its slug as meta, a
-// navigation link, and a delete button. Its own component so the delete UseEvent
-// hook sits at a stable position outside any loop.
+// studioPageRow renders one page's registry row: serif name, monospace address,
+// widget count, an Open link, and a ⋯ menu whose destructive item opens a
+// two-step inline confirm (the page's widgets and layout go with it). Its own
+// component so its hooks sit at stable positions outside any loop.
 func studioPageRow(props studioPageRowProps) ui.Node {
 	pg := props.Page
+	confirming := ui.UseState(false)
+	ask := ui.UseEvent(Prevent(func() {
+		confirming.Set(true)
+		fldFocusSoon("#spg-keep-" + pg.ID)
+	}))
+	keep := ui.UseEvent(Prevent(func() {
+		confirming.Set(false)
+		fldFocusSoon("#spg-menu-" + pg.ID + " button")
+	}))
 	del := ui.UseEvent(Prevent(func() {
 		if props.OnDelete != nil {
 			props.OnDelete()
 		}
 	}))
-	return Div(css.Class("row"),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), pg.Name),
-			Span(css.Class("row-meta"), "/p/"+pg.Slug),
+
+	widgets := uistate.T("spg.widgetsNone")
+	switch {
+	case len(pg.Widgets) == 1:
+		widgets = uistate.T("spg.widgetsOne")
+	case len(pg.Widgets) > 1:
+		widgets = uistate.T("spg.widgetsMany", len(pg.Widgets))
+	}
+
+	return Div(css.Class("spg-row"),
+		Div(css.Class("spg-row-main"),
+			Div(css.Class("spg-row-top"),
+				Span(css.Class("spg-name"), pg.Name),
+				If(pg.Hidden, Span(css.Class("wman-hidden-tag"), uistate.T("wman.hiddenTag"))),
+			),
+			Div(css.Class("spg-row-sub"),
+				Span(css.Class("spg-slug"), "/p/"+pg.Slug),
+				Span(css.Class("spg-meta"), widgets),
+			),
 		),
-		A(css.Class("btn", "btn-sm"),
+		A(css.Class("spg-open"),
 			Href(uistate.RoutePath("/p/"+pg.Slug)),
 			Attr("aria-label", uistate.T("studio.goToPage")),
-			uistate.T("studio.goToPage"),
+			uistate.T("spg.open"),
 		),
-		Button(css.Class("btn-del"), Type("button"),
-			Attr("aria-label", uistate.T("studio.deletePageAria", pg.Name)),
-			Title(uistate.T("studio.deletePage")),
-			OnClick(del),
-			uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4)),
-		),
+		If(!confirming.Get(),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "spg-menu-" + pg.ID,
+				ToggleTestID: "spg-menu-btn-" + pg.ID,
+				Items: []ui.Node{
+					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "spg-delete-btn-"+pg.ID),
+						Attr("aria-label", uistate.T("studio.deletePageAria", pg.Name)),
+						OnClick(ask), uistate.T("studio.deletePage")),
+				},
+			})),
+		If(confirming.Get(), Div(css.Class("fld-confirm"), Attr("role", "alert"),
+			Span(css.Class("fld-confirm-msg"), uistate.T("spg.deleteWarn")),
+			Button(css.Class("fld-confirm-del"), Type("button"), OnClick(del), uistate.T("spg.deleteYes")),
+			Button(css.Class("fld-confirm-keep"), Type("button"), Attr("id", "spg-keep-"+pg.ID), OnClick(keep), uistate.T("fld.deleteNo")),
+		)),
 	)
 }

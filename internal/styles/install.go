@@ -28,6 +28,7 @@ func Register() {
 	registerStudioSurface()
 	registerSmartSurface()
 	registerFieldsSurface()
+	registerStudioTabs()
 	inject(Build())
 }
 

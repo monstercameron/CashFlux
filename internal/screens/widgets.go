@@ -5,10 +5,11 @@
 package screens
 
 import (
-	"sort"
 	"strconv"
 	"strings"
+	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -158,34 +159,39 @@ func boolAttr(b bool) string {
 
 const dashMaxColSpan, dashMaxRowSpan = 4, 3
 
-// WidgetManager governs the dashboard's widgets in one place: show/hide each tile,
-// resize it, reorder it, and control the overall arrangement. Every change writes
-// the same shared atoms the dashboard reads (layout items + hidden set), so the
-// dashboard reflects edits live. Styling, presets, and duplication land in later
-// phases.
+// wmanFlash scrolls the ledger row for a widget into view and flashes it — the
+// landing action for the board-map tiles, so a click on the map always answers
+// "where is this widget's row?".
+func wmanFlash(id string) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	el := doc.Call("querySelector", `[data-wmrow="`+id+`"]`)
+	if !el.Truthy() {
+		return
+	}
+	el.Call("scrollIntoView", map[string]any{"behavior": "smooth", "block": "center"})
+	el.Get("classList").Call("add", "is-flash")
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		cb.Release()
+		el.Get("classList").Call("remove", "is-flash")
+		return nil
+	})
+	js.Global().Call("setTimeout", cb, 1400)
+}
+
+// WidgetManager is the Studio "Manage widgets" surface (and /widget-manager):
+// a from-scratch arrangement deck — the widget ledger (visibility, size, order)
+// beside a live, true-to-span board map of the dashboard, with the tile style
+// studio beneath. Every change writes the same shared atoms the dashboard reads
+// (layout items + hidden set + per-widget config), so edits apply live.
 func WidgetManager() ui.Node {
 	itemsAtom := uistate.UseLayoutItems()
 	hiddenAtom := uistate.UseHiddenWidgets()
 	list := itemsAtom.Get()
 	hidden := hiddenAtom.Get()
-
-	// Table sort state — defaults to the live dashboard order so reorder reads
-	// naturally; sorting by another column is a view aid (it doesn't change the
-	// layout, which the up/down controls own).
-	sortKey := ui.UseState("order")
-	sortDir := ui.UseState("asc")
-	onSort := func(key string) {
-		if sortKey.Get() == key {
-			if sortDir.Get() == "asc" {
-				sortDir.Set("desc")
-			} else {
-				sortDir.Set("asc")
-			}
-			return
-		}
-		sortKey.Set(key)
-		sortDir.Set("asc")
-	}
 
 	setItems := func(next []dashlayout.Item) {
 		itemsAtom.Set(next)
@@ -205,40 +211,25 @@ func WidgetManager() ui.Node {
 		setHidden(next)
 	})
 
-	// Build view models carrying each widget's true layout index, then sort a copy
-	// for display. Reorder/resize always act on the layout index, not the row's
-	// position in a sorted view.
-	type rowVM struct {
-		Item dashlayout.Item
-		Idx  int
-	}
-	vms := make([]rowVM, len(list))
-	for i, it := range list {
-		vms[i] = rowVM{Item: it, Idx: i}
-	}
-	sk, dir := sortKey.Get(), sortDir.Get()
-	sort.SliceStable(vms, func(a, b int) bool {
-		c := 0
-		switch sk {
-		case "name":
-			c = strings.Compare(strings.ToLower(widgetDisplayName(vms[a].Item.ID)), strings.ToLower(widgetDisplayName(vms[b].Item.ID)))
-		case "visible":
-			c = boolKey(hidden.IsHidden(vms[a].Item.ID)) - boolKey(hidden.IsHidden(vms[b].Item.ID)) // visible first
-		case "size":
-			c = spanArea(vms[a].Item) - spanArea(vms[b].Item)
-		default: // "order"
-			c = vms[a].Idx - vms[b].Idx
+	hiddenCount := 0
+	for _, it := range list {
+		if hidden.IsHidden(it.ID) {
+			hiddenCount++
 		}
-		if dir == "desc" {
-			return c > 0
-		}
-		return c < 0
-	})
+	}
 
-	rows := MapKeyed(vms,
-		func(v rowVM) any { return v.Item.ID },
-		func(v rowVM) ui.Node {
-			it, idx := v.Item, v.Idx
+	// The ledger always reads in live dashboard order — the order IS the thing
+	// being edited, so a sortable table view would only obscure it.
+	rows := MapKeyed(list,
+		func(it dashlayout.Item) any { return it.ID },
+		func(it dashlayout.Item) ui.Node {
+			idx := 0
+			for i := range list {
+				if list[i].ID == it.ID {
+					idx = i
+					break
+				}
+			}
 			return ui.CreateElement(widgetManagerRow, widgetManagerRowProps{
 				Item:        it,
 				Index:       idx,
@@ -252,48 +243,75 @@ func WidgetManager() ui.Node {
 		},
 	)
 
-	return Div(css.Class("wm"),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetManager.layoutTitle")),
-			Body: Fragment(
-				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.layoutHint")),
-				Div(css.Class("wm-toolbar"),
-					DashboardLayoutControls(),
-					Span(css.Class("wm-sep"), Attr("aria-hidden", "true")),
-					Button(css.Class("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
-					Button(css.Class("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
-				),
-			),
+	// The board map: every widget at its true span on a 4-column grid, in live
+	// order — hidden tiles ghost out. Clicking a tile finds its ledger row.
+	mapTiles := MapKeyed(list,
+		func(it dashlayout.Item) any { return it.ID },
+		func(it dashlayout.Item) ui.Node {
+			return ui.CreateElement(wmanMapTile, wmanMapTileProps{
+				Item: it, Name: widgetDisplayName(it.ID), Hidden: hidden.IsHidden(it.ID),
+			})
+		},
+	)
+
+	masthead := Div(css.Class("wman-head"),
+		Span(css.Class("studio-eyebrow"), uistate.T("wman.eyebrow")),
+		H2(css.Class("studio-design-title"), uistate.T("wman.title")),
+		P(css.Class("studio-design-sub"), uistate.T("wman.lede")),
+	)
+
+	toolbar := Div(css.Class("wman-toolbar"),
+		DashboardLayoutControls(),
+		Button(css.Class("data-btn"), Type("button"), OnClick(showAll), uistate.T("widgetManager.showAll")),
+		Button(css.Class("data-btn"), Type("button"), OnClick(hideAll), uistate.T("widgetManager.hideAll")),
+		Span(css.Class("wman-count"), uistate.T("wman.visibleCount", len(list)-hiddenCount, len(list))),
+	)
+
+	board := Div(css.Class("wman-aside"),
+		Span(css.Class("wman-aside-label"), uistate.T("wman.mapLabel")),
+		Div(css.Class("wman-map"), Attr("role", "list"), Attr("aria-label", uistate.T("wman.mapLabel")), mapTiles),
+		P(css.Class("wman-map-hint"), uistate.T("wman.mapHint")),
+	)
+
+	return Div(css.Class("wman"),
+		masthead,
+		Div(css.Class("wman-grid"),
+			Div(css.Class("wman-main"), toolbar, Div(css.Class("wman-ledger"), rows)),
+			board,
+		),
+		Div(css.Class("wman-section"),
+			H3(css.Class("wman-section-title"), uistate.T("widgetManager.styleTitle")),
+			P(css.Class("wman-section-lede"), uistate.T("widgetManager.styleHint")),
+			ui.CreateElement(tileStyleEditor, struct{}{}),
+		),
+	)
+}
+
+type wmanMapTileProps struct {
+	Item   dashlayout.Item
+	Name   string
+	Hidden bool
+}
+
+// wmanMapTile is one board-map tile: a button spanning the widget's true
+// columns/rows that jumps to (and flashes) the widget's ledger row. Its own
+// component so the click hook is stable per tile.
+func wmanMapTile(p wmanMapTileProps) ui.Node {
+	itID := p.Item.ID
+	jump := ui.UseEvent(Prevent(func() { wmanFlash(itID) }))
+	c, r := clampSpan(p.Item.ColSpan, dashMaxColSpan), clampSpan(p.Item.RowSpan, dashMaxRowSpan)
+	cls := "wman-map-tile"
+	if p.Hidden {
+		cls += " is-hidden"
+	}
+	return Button(ClassStr(cls), Type("button"), Attr("role", "listitem"),
+		Attr("title", p.Name), Attr("aria-label", uistate.T("wman.jumpTo", p.Name)),
+		Style(map[string]string{
+			"grid-column": "span " + strconv.Itoa(c),
+			"grid-row":    "span " + strconv.Itoa(r),
 		}),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetManager.widgetsTitle")),
-			// Scroll wrapper (scoped to this table only — not the shared DataTable):
-			// the 4-column wm-table has a ~404px min-width and clipped its "Order"
-			// column on phones. wm-table has no sticky header, so a horizontal-scroll
-			// container is safe here (unlike .txn-table). See web/index.html .wm-table-wrap.
-			Body: Div(css.Class("wm-table-wrap"),
-				uiw.DataTable(uiw.DataTableProps{
-					Class: "wm-table",
-					Columns: []uiw.Column{
-						{Label: uistate.T("widgetManager.colWidget"), SortKey: "name"},
-						{Label: uistate.T("widgetManager.visible"), SortKey: "visible", Class: "wm-col-vis"},
-						{Label: uistate.T("widgetManager.colSize"), SortKey: "size", Class: "wm-col-size"},
-						{Label: uistate.T("widgetManager.colOrder"), SortKey: "order", Class: "wm-col-order"},
-					},
-					Body:   rows,
-					Sort:   sk,
-					Dir:    dir,
-					OnSort: onSort,
-				}),
-			),
-		}),
-		uiw.Card(uiw.CardProps{
-			Header: H3(css.Class("card-title"), uistate.T("widgetManager.styleTitle")),
-			Body: Fragment(
-				P(css.Class("t-body", tw.TextDim, tw.Mb3), uistate.T("widgetManager.styleHint")),
-				ui.CreateElement(tileStyleEditor, struct{}{}),
-			),
-		}),
+		OnClick(jump),
+		Span(css.Class("wman-map-name"), p.Name),
 	)
 }
 
@@ -449,24 +467,6 @@ func styleSelectRow(p styleSelectProps) ui.Node {
 	)
 }
 
-func boolKey(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func spanArea(it dashlayout.Item) int {
-	c, r := it.ColSpan, it.RowSpan
-	if c < 1 {
-		c = 1
-	}
-	if r < 1 {
-		r = 1
-	}
-	return c * r
-}
-
 type widgetManagerRowProps struct {
 	Item        dashlayout.Item
 	Index       int
@@ -478,9 +478,11 @@ type widgetManagerRowProps struct {
 	OnResize    func(col, row int)
 }
 
-// widgetManagerRow is one widget's table row: name, a visibility switch, size
-// steppers, and reorder controls. Its own component so the several event hooks
-// stay at stable positions across the list (the On* loop gotcha).
+// widgetManagerRow is one widget's ledger row: live order number, name (+ a
+// Hidden tag), size steppers (value at rest, steppers on hover/focus — §8.4
+// row-action density), reorder arrows, and the visibility switch. Its own
+// component so the several event hooks stay at stable positions across the
+// list (the On* loop gotcha). Carries data-wmrow so the board map can find it.
 func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 	it := props.Item
 	col, row := it.ColSpan, it.RowSpan
@@ -499,32 +501,18 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 		}
 	}
 
-	nameClass := "wm-name"
-	if props.Hidden {
-		nameClass += " is-hidden"
-	}
-
-	rowClass := "wm-row"
+	rowClass := "wm-row wman-row"
 	if props.Hidden {
 		rowClass += " is-hidden"
 	}
 
-	return Tr(ClassStr(rowClass),
-		Td(css.Class("wm-cell-name"), Span(ClassStr(nameClass), widgetDisplayName(it.ID))),
-		Td(css.Class("wm-col-vis"),
-			uiw.Toggle(uiw.ToggleProps{
-				On:    !props.Hidden,
-				Label: uistate.T("widgetManager.visible"),
-				OnChange: func(bool) {
-					if props.OnToggleVis != nil {
-						props.OnToggleVis()
-					}
-				},
-			}),
+	return Div(ClassStr(rowClass), Attr("data-wmrow", it.ID), Attr("tabindex", "-1"),
+		Span(css.Class("wman-ord"), Textf("%d", props.Index+1)),
+		Div(css.Class("wman-id"),
+			Span(css.Class("wm-name"), widgetDisplayName(it.ID)),
+			If(props.Hidden, Span(css.Class("wman-hidden-tag"), uistate.T("wman.hiddenTag"))),
 		),
-		Td(css.Class("wm-col-size"),
-			// §8.4 row-action density: the size VALUE shows at rest; the resize steppers
-			// overlay it (grid-stacked, no layout shift) and reveal on row hover/focus.
+		Div(css.Class("wm-col-size"),
 			Div(css.Class("wm-stack"),
 				Span(css.Class("wm-static"), Attr("aria-hidden", "true"), Textf("%d×%d", col, row)),
 				Div(css.Class("wm-size"),
@@ -535,25 +523,29 @@ func widgetManagerRow(props widgetManagerRowProps) ui.Node {
 				),
 			),
 		),
-		Td(css.Class("wm-col-order"),
-			Div(css.Class("wm-stack"),
-				Span(css.Class("wm-static"), Attr("aria-hidden", "true"), Textf("%d", props.Index+1)),
-				Div(css.Class("wm-reorder"),
-					Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
-						DisabledIf(props.Index == 0), OnClick(func() {
-							if props.OnUp != nil {
-								props.OnUp()
-							}
-						}), "↑"),
-					Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
-						DisabledIf(props.Index >= props.Total-1), OnClick(func() {
-							if props.OnDown != nil {
-								props.OnDown()
-							}
-						}), "↓"),
-				),
-			),
+		Div(css.Class("wm-reorder wman-reorder"),
+			Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveUp")),
+				DisabledIf(props.Index == 0), OnClick(func() {
+					if props.OnUp != nil {
+						props.OnUp()
+					}
+				}), "↑"),
+			Button(css.Class("wm-arrow"), Type("button"), Attr("aria-label", uistate.T("widgetManager.moveDown")),
+				DisabledIf(props.Index >= props.Total-1), OnClick(func() {
+					if props.OnDown != nil {
+						props.OnDown()
+					}
+				}), "↓"),
 		),
+		uiw.Toggle(uiw.ToggleProps{
+			On:    !props.Hidden,
+			Label: uistate.T("widgetManager.visible"),
+			OnChange: func(bool) {
+				if props.OnToggleVis != nil {
+					props.OnToggleVis()
+				}
+			},
+		}),
 	)
 }
 
@@ -599,13 +591,26 @@ var widgetManagerTitleKeys = map[string]string{
 	"bills":           "dashboard.upcomingBills",
 	"freshness":       "dashboard.freshness",
 	"highlight":       "dashboard.highlight",
+	"kpi-safetospend": "dashboard.safeToSpend",
 }
 
-// widgetDisplayName resolves a widget id to its human title, falling back to the
-// raw id for anything unmapped (e.g. a future duplicated instance).
+// widgetDisplayName resolves a widget id to its human title: the built-in
+// registry first, then a published builder card's own name ("wb:<name>"), then
+// a Studio-designed widget's spec title ("us:<id>"), falling back to the raw
+// id only for something truly unknown.
 func widgetDisplayName(id string) string {
 	if key, ok := widgetManagerTitleKeys[id]; ok {
 		return uistate.T(key)
+	}
+	if name, ok := strings.CutPrefix(id, vbCardPrefix); ok {
+		return name
+	}
+	if strings.HasPrefix(id, userSpecPrefix) && appstate.Default != nil {
+		for _, p := range appstate.Default.Placements("dashboard") {
+			if p.ID == id && p.Spec.Title != "" {
+				return p.Spec.Title
+			}
+		}
 	}
 	return id
 }
