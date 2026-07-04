@@ -1,3 +1,40 @@
+## 2026-07-04 — Studio tabs rebuilt (Manage / Pages / Build) + the countup bug
+
+Cam's goal: redesign every Studio tab except Formulas and Custom fields, with the adversarial
+critique loop, judged on "can build widgets with ease and extreme high config and quality" —
+then mid-flight: "the build a widget page needs to be able to build any of the widgets in the
+dashboard from scratch via formulas and custom values, even the styling as well."
+
+**Manage** → an arrangement deck: widget ledger (live order, hover-revealed steppers kept from
+§8.4, phone-wrap layout) beside a **live board map** — the dashboard in miniature at true spans,
+hidden tiles ghosted; click a tile → its row scrolls + flashes. The map is the piece that makes
+"2×2, order 6" mean something. **Pages** → a page registry (serif names, mono addresses, real
+widget counts, ⋯ delete with the two-step confirm) + a composer with a live address footprint —
+the fields-tab language, deliberately. **Build** → masthead + intent-grouped command bar
+(Publish is THE primary; Delete is a danger ghost), and the workspace re-architected: inspector
++ live preview dock in the right rail so the canvas keeps full height (before, the preview row
+squashed the canvas to ~140px).
+
+**The countup bug was the find of the day.** The builder e2e failed on styled-kpi/dual-kpi —
+presets that render fine in isolation. Repro'd the exact preset sequence: after a KPI→KPI
+switch, the tile's `.fig` and caption were REPLACED by bare text. Root cause: `countup.js`
+tweens hold a raw DOM node for ~600ms; GWC's reconciler had morphed that node into the NEW
+KPI's wrapper, and the stale tween's final frame did `el.textContent = …` — wiping the new
+children. Every KPI surface that re-renders mid-tween was exposed, not just the builder.
+Fix: a cancellation token per tween + bail when the node is superseded/detached/morphed.
+
+**Parity work:** the builder's variable surface silently omitted custom fields, persisted
+molecules, and all the per-entity/smart figures (it built its own partial `engineenv.Data`).
+Now it calls the same `liveEngineVars` as the Design tab — and the Figure picker lists the
+LIVE surface (284 vars on sample data, `cf_*` included), not the static atom list. Seven
+dashboard-parity presets added (safe-to-spend, savings-rate %, health 0–100, budget meter,
+budgets/to-do/bills lists) so every dashboard widget class has a buildable recipe. e2e:
+builder/manager/style/scroll suites all green after moving their dead rail-link navigation to
+route pushes and their localStorage layout/config reads to UI-state assertions (that data
+lives in the SQLite dataset now — pre-existing staleness, same class as the IDB memo).
+
+Next: the adversarial critique loop over all four tabs (incl. the already-bespoke Design tab).
+
 ## 2026-07-04 — /fields follow-up: delete × → shared ⋯ menu
 
 Cam right after the ship: "use triple dot menus for the delete x button." Swapped the row's bare

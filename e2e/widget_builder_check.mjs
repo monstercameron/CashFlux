@@ -23,7 +23,9 @@ try {
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
   await page.evaluate(() => { localStorage.removeItem("cashflux:wb-graph"); localStorage.removeItem("cashflux:wb-canvas-pos"); });
   await page.waitForSelector(".bento", { timeout: 60000 });
-  await page.locator('a[title="Widget builder"]').first().click();
+  // The builder left the nav rail in the IA remap (it lives under /studio now);
+  // navigate to its route directly.
+  await page.evaluate(() => { history.pushState({}, "", "/widget-builder"); dispatchEvent(new PopStateEvent("popstate")); });
   await page.waitForSelector(".vb-main", { timeout: 15000 });
   await page.waitForTimeout(500);
 
@@ -245,7 +247,7 @@ try {
   // 8b) Publish a SECOND custom card (a KPI), RESIZED to 4 wide × 1 tall → it must
   // coexist with the first AND honor its chosen size on the dashboard (Cam: tiles
   // "don't respect the multiple widget sizes"). Default is 2×2: widen twice, shorten once.
-  await page.locator('a[title="Widget builder"]').first().click();
+  await page.evaluate(() => { history.pushState({}, "", "/widget-builder"); dispatchEvent(new PopStateEvent("popstate")); });
   await page.waitForSelector(".vb-main", { timeout: 10000 });
   await page.locator('.vb-toolbar select').first().selectOption("networth");
   await page.waitForTimeout(300);
@@ -290,7 +292,7 @@ try {
 
   // 8d) Reload the resized card in the builder → the W/H steppers restore to 4 / 1
   // (size persists with the saved card, not just the published layout item).
-  await page.locator('a[title="Widget builder"]').first().click();
+  await page.evaluate(() => { history.pushState({}, "", "/widget-builder"); dispatchEvent(new PopStateEvent("popstate")); });
   await page.waitForSelector(".vb-main", { timeout: 10000 });
   await page.locator('select[aria-label="My cards"]').selectOption("my kpi");
   await page.waitForTimeout(400);

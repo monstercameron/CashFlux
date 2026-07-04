@@ -183,37 +183,50 @@ const vbDragShimJS = `
 // even if index.html is reverted by a parallel effort. (Node boxes + wires also carry
 // inline styles; this covers the surrounding panes.)
 const vbStyleCSS = `
-.vb{display:flex;flex-direction:column;gap:.75rem;height:calc(100vh - 120px);min-height:560px}
-.vb-toolbar{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
-.vb-tool-label{font-weight:600;font-size:14px}
+.vb{display:flex;flex-direction:column;gap:.8rem;height:calc(100vh - 165px);min-height:620px;margin-top:1rem}
+.vb-head{display:flex;flex-direction:column;gap:.15rem}
+.vb-title{font-family:var(--font-display,'Fraunces',serif);font-size:1.6rem;font-weight:600;letter-spacing:-.01em;margin:0}
+.vb-sub{font-size:.85rem;opacity:.65}
+.vb-toolbar{display:flex;align-items:center;gap:1.5rem;row-gap:.6rem;flex-wrap:wrap;padding-bottom:.85rem;border-bottom:1px solid var(--border,#2a2a2d)}
+.vb-group{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.vb-group-label{font-size:.62rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;opacity:.5;margin-right:.2rem;white-space:nowrap}
+.vb-toolbar .set-input{width:auto;min-width:9.5rem;max-width:12rem}
 .vb-sep{flex:1}
-.vb-main{display:flex;gap:.6rem;flex:1;min-height:0}
-.vb-palette{width:170px;flex:0 0 170px;overflow:auto;display:flex;flex-direction:column;gap:.25rem;padding:.5rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
-.vb-pane-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint,#9ca3af);margin-bottom:.25rem}
-.vb-pal-group{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.5rem}
-.vb-pal-btn{text-align:left;padding:.3rem .5rem;border-radius:7px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);color:inherit;cursor:pointer;font-size:12px}
-.vb-pal-btn:hover{border-color:var(--accent,#3b82f6)}
-.vb-canvas-scroll{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:10px;border:1px solid var(--line,#2a2a2d);background:var(--bg,#0e0e10);cursor:grab}
+.vb-publish{padding:.4rem .9rem;font-size:.82rem}
+.vb-danger{color:var(--danger,#dc2626);border-color:color-mix(in srgb, var(--danger,#dc2626) 45%, var(--border,#2a2a2d))}
+.vb-danger:hover{background:color-mix(in srgb, var(--danger,#dc2626) 10%, transparent)}
+.vb-status{font-size:.8rem;color:var(--accent,#3b82f6)}
+.vb-main{display:flex;gap:.8rem;flex:1;min-height:0}
+.vb-palette{width:180px;flex:0 0 180px;overflow:auto;display:flex;flex-direction:column;gap:.3rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent)}
+.vb-pane-title{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--accent,#3b82f6);margin-bottom:.25rem}
+.vb-pal-group{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;opacity:.5;margin-top:.6rem}
+.vb-pal-btn{text-align:left;padding:.32rem .55rem;border-radius:7px;border:1px solid var(--border,#2a2a2d);background:none;color:inherit;cursor:pointer;font-size:12px}
+.vb-pal-btn:hover{border-color:var(--accent,#3b82f6);color:var(--accent,#3b82f6)}
+.vb-canvas-scroll{flex:1;min-width:0;position:relative;overflow:hidden;border-radius:14px;border:1px solid var(--border,#2a2a2d);background:var(--bg,#0e0e10);cursor:grab}
 .vb-canvas-scroll:active{cursor:grabbing}
 .vb-canvas-scroll .wb-canvas{background-image:radial-gradient(circle, color-mix(in srgb, var(--dim,#6b7280) 22%, transparent) 1px, transparent 1px);background-size:16px 16px;will-change:transform}
 .wb-zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:5px;z-index:5}
-.wb-zoom-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line,#2a2a2d);background:var(--bg-elev,#1a1a1d);color:inherit;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.wb-zoom-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border,#2a2a2d);background:var(--bg-elev,#1a1a1d);color:inherit;cursor:pointer;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .wb-zoom-btn:hover{border-color:var(--accent,#3b82f6)}
 .wb-port{transition:transform .1s ease, border-color .1s ease, box-shadow .1s ease; z-index:2}
 .wb-port-out{cursor:crosshair}
 .wb-port:hover{border-color:var(--accent,#3b82f6)!important; box-shadow:0 0 0 4px color-mix(in srgb, var(--accent,#3b82f6) 22%, transparent)}
-.wb-node:hover{border-color:color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--line,#3a3a3d))}
+.wb-node:hover{border-color:color-mix(in srgb, var(--accent,#3b82f6) 45%, var(--border,#3a3a3d))}
 .wb-wire{transition:stroke .1s ease}
 .wb-wire:hover{stroke:var(--accent,#3b82f6)!important; stroke-width:3.5!important}
 .wb-port-row:hover{color:var(--fg,#e5e7eb)!important}
-.vb-inspector{width:250px;flex:0 0 250px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.6rem;border:1px solid var(--line,#2a2a2d);border-radius:10px;background:var(--bg-elev,#161618)}
-.vb-insp-section{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9ca3af);margin-top:.4rem}
+.vb-dock{width:352px;flex:0 0 352px;display:flex;flex-direction:column;gap:.8rem;min-height:0}
+.vb-inspector{flex:1 1 auto;min-height:130px;overflow:auto;display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent)}
+.vb-insp-section{font-size:.6rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;opacity:.55;margin-top:.5rem}
 .vb-insp-actions{display:flex;gap:.4rem;margin-top:.5rem}
-.vb-previewpane{display:flex;flex-direction:column;gap:.35rem}
+.vb-previewpane{display:flex;flex-direction:column;gap:.45rem;flex:0 0 auto}
+.vb-preview-head{display:flex;align-items:baseline;gap:.7rem}
+.vb-preview-title{font-family:var(--font-display,'Fraunces',serif);font-size:1.05rem;font-weight:600;border-left:3px solid var(--accent,#3b82f6);padding-left:.55rem}
+.vb-preview-hint{font-size:.72rem;opacity:.5}
 .vb .wb-field{display:flex;flex-direction:column;gap:.2rem}
 .vb .wb-field-label{font-size:12px;color:var(--dim,#9ca3af)}
-.vb .wb-stage{display:flex;align-items:center;justify-content:center;padding:1rem;border-radius:10px;background:var(--bg,#0e0e10);max-height:360px;overflow:auto}
-.vb .wtitle{font-family:'Fraunces',serif;font-weight:600}
+.vb .wb-stage{display:flex;align-items:flex-start;justify-content:flex-start;padding:.55rem;border-radius:14px;background:color-mix(in srgb, var(--fg,#e5e7eb) 2.5%, transparent);max-height:330px;overflow:auto}
+.vb .wtitle{font-family:var(--font-display,'Fraunces',serif);font-weight:600}
 .vb .wb-tile .wbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 /* D3 reads the container's measured height; guarantee one so charts never collapse to
    0px in an auto-height tile body (preview pane or a freshly-published card). */
@@ -527,36 +540,57 @@ func VisualBuilder() ui.Node {
 	span := func(n int) string { return strconv.Itoa(n*vbCellPx+(n-1)*vbGapPx) + "px" }
 
 	return Div(css.Class("vb"),
-		// Toolbar
-		Div(css.Class("vb-toolbar"),
-			Span(css.Class("vb-tool-label"), "Widget builder"),
-			vbSelectRaw("Preset", "", append([][2]string{{"", "Load a preset…"}}, vbPresetOptions()...), loadPreset),
-			vbSelectRaw("My cards", "", append([][2]string{{"", "My cards…"}}, vbCardOptions()...), loadCard),
-			Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", "Card name"),
-				Attr("aria-label", "Card name"), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
-			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), "Save"),
-			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), "Publish ▸ dashboard"),
-			Button(css.Class("data-btn"), Type("button"), OnClick(deleteCard), "Delete"),
-			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-undo"), OnClick(undo), "↶ Undo"),
-			Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-redo"), OnClick(redo), "↷ Redo"),
-			Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
-			If(published.Get() != "", Span(css.Class("t-caption"), Style(map[string]string{"color": "var(--up,#16a34a)"}), published.Get())),
-			Span(css.Class("vb-sep")),
-			wmStepper("W", col.Get(), "Narrower", "Wider", func() { setCol(clampSpan(col.Get()-1, 4)) }, func() { setCol(clampSpan(col.Get()+1, 4)) }),
-			wmStepper("H", row.Get(), "Shorter", "Taller", func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
+		// Masthead: the studio eyebrow + serif title language the sibling tabs use.
+		Div(css.Class("vb-head"),
+			Span(css.Class("studio-eyebrow"), uistate.T("wman.eyebrow")),
+			H2(css.Class("vb-title"), uistate.T("vbld.title")),
+			Span(css.Class("vb-sub"), uistate.T("vbld.lede")),
 		),
-		// Three-pane: palette | canvas | inspector
+		// Command bar: intent-grouped — load something, work this card, drive the
+		// canvas — with Publish as the one primary action.
+		Div(css.Class("vb-toolbar"),
+			Div(css.Class("vb-group"),
+				Span(css.Class("vb-group-label"), uistate.T("vbld.startFrom")),
+				vbSelectRaw("Preset", "", append([][2]string{{"", "Load a preset…"}}, vbPresetOptions()...), loadPreset),
+				vbSelectRaw("My cards", "", append([][2]string{{"", "My cards…"}}, vbCardOptions()...), loadCard),
+			),
+			Div(css.Class("vb-group"),
+				Span(css.Class("vb-group-label"), uistate.T("vbld.thisCard")),
+				Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", "Card name"),
+					Attr("aria-label", "Card name"), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), "Save"),
+				Button(css.Class("btn btn-primary vb-publish"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), "Publish → dashboard"),
+				Button(css.Class("data-btn vb-danger"), Type("button"), Attr("title", uistate.T("vbld.deleteTitle")), Attr("aria-label", uistate.T("vbld.deleteTitle")), OnClick(deleteCard), "Delete"),
+			),
+			Span(css.Class("vb-sep")),
+			Div(css.Class("vb-group"),
+				Span(css.Class("vb-group-label"), uistate.T("vbld.canvas")),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-undo"), OnClick(undo), "↶ Undo"),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-redo"), OnClick(redo), "↷ Redo"),
+				Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
+				wmStepper("W", col.Get(), "Narrower", "Wider", func() { setCol(clampSpan(col.Get()-1, 4)) }, func() { setCol(clampSpan(col.Get()+1, 4)) }),
+				wmStepper("H", row.Get(), "Shorter", "Taller", func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
+			),
+		),
+		If(published.Get() != "", Div(css.Class("vb-status"), Attr("role", "status"), published.Get())),
+		// Workspace: palette | canvas | right dock (inspector over the live
+		// preview) — the canvas keeps the full workspace height and the preview
+		// stays in view while wiring.
 		Div(css.Class("vb-main"),
 			vbPalette(addNode),
 			vbCanvas(g, selected.Get(), func(id cardgraph.NodeID) { selected.Set(id) }),
-			vbInspector(g, selected.Get(), issues, setProp, setVar, setRoot, deleteNode, wireInput),
-		),
-		// Live preview
-		Div(css.Class("vb-previewpane"),
-			Span(css.Class("vb-tool-label"), "Live preview"),
-			Div(css.Class("wb-stage"),
-				Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(col.Get()), "height": span(row.Get())}),
-					vbRenderTile(res, g, row.Get())),
+			Div(css.Class("vb-dock"),
+				vbInspector(g, selected.Get(), issues, setProp, setVar, setRoot, deleteNode, wireInput),
+				Div(css.Class("vb-previewpane"),
+					Div(css.Class("vb-preview-head"),
+						Span(css.Class("vb-preview-title"), "Live preview"),
+						Span(css.Class("vb-preview-hint"), uistate.T("vbld.previewHint")),
+					),
+					Div(css.Class("wb-stage"),
+						Div(css.Class("w wb-tile"), Style(map[string]string{"width": span(col.Get()), "height": span(row.Get())}),
+							vbRenderTile(res, g, row.Get())),
+					),
+				),
 			),
 		),
 	)
@@ -564,20 +598,17 @@ func VisualBuilder() ui.Node {
 
 // ---- data + eval context ------------------------------------------------------
 
+// vbVariableSurface is the FULL engine variable surface (atoms + molecules +
+// custom fields + per-budget/goal/smart figures) over the current month — the
+// same surface the dashboard engine and the Design tab use, so a Figure or
+// Formula node here can reference every variable a published widget can,
+// including cf_* custom-field values and user-edited molecules.
 func vbVariableSurface() map[string]float64 {
 	app := appstate.Default
 	if app == nil {
 		return map[string]float64{}
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	return engineenv.Vars(engineenv.Data{
-		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
-		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
-		Rates: currency.Rates{Base: base, Rates: app.Settings().FXRates}, Now: time.Now(),
-	})
+	return liveEngineVars(app)
 }
 
 // vbStringSurface exposes named string values a source.scalar (text) node can bind —
@@ -1032,7 +1063,22 @@ func vbParamSchema(kind string) []vbParam {
 	switch kind {
 	case cardgraph.KindSourceScalar:
 		opts := [][2]string{}
+		seen := map[string]bool{}
 		for _, n := range engineenv.SortedNames() {
+			seen[n] = true
+			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
+		}
+		// The LIVE surface's extra names — cf_* custom-field values, per-budget /
+		// per-goal / per-account figures, smart_* posture — so every variable a
+		// formula can evaluate is also pickable here, not just typeable.
+		extra := []string{}
+		for n := range vbVariableSurface() {
+			if !seen[n] {
+				extra = append(extra, n)
+			}
+		}
+		sort.Strings(extra)
+		for _, n := range extra {
 			opts = append(opts, [2]string{n, strings.ReplaceAll(n, "_", " ")})
 		}
 		// Named text surfaces (e.g. the net-worth month-over-month subline) so a KPI's
@@ -1271,6 +1317,92 @@ func vbPresets() map[string]cardgraph.Graph {
 		Root: "st",
 		Cols: 4, Rows: 1,
 	}
+
+	// ── Dashboard-parity presets: every remaining dashboard widget class as a
+	// from-scratch recipe (scalar/molecule → viz, dataset → list, meter). Each is
+	// a teaching graph the user can reshape with formulas and custom values. ──────
+
+	// Safe to spend — the safe_to_spend molecule as a hero KPI.
+	p["safetospend"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "safe_to_spend"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Safe to spend", "format": "currency", "tone": "auto", "hero": "true"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 1,
+	}
+
+	// Savings rate — the savings_rate molecule as a percent KPI.
+	p["savings-rate"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "savings_rate"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Savings rate", "format": "percent", "tone": "auto"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 1,
+	}
+
+	// Health score — the auditable health_score molecule as a 0–100 KPI.
+	p["health-score"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "health_score"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizKPI, Props: map[string]string{"title": "Financial health", "format": "number", "tone": ""}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "value"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 1,
+	}
+
+	// Budget meter — spending against income as a progress bar (swap either
+	// scalar for a per-budget or custom-field figure to meter anything).
+	p["budget-meter"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "expense"}, Pos: cardgraph.Point{X: 40, Y: 30}},
+			{ID: "n2", Kind: cardgraph.KindSourceScalar, Props: map[string]string{"name": "income"}, Pos: cardgraph.Point{X: 40, Y: 190}},
+			{ID: "n3", Kind: cardgraph.KindVizProgress, Props: map[string]string{"title": "Spent of income", "format": "currency"}, Pos: cardgraph.Point{X: 360, Y: 90}},
+		},
+		Edges: []cardgraph.Edge{
+			{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n3", Port: "value"}},
+			{From: cardgraph.PortRef{Node: "n2", Port: "out"}, To: cardgraph.PortRef{Node: "n3", Port: "max"}},
+		},
+		Root: "n3",
+		Cols: 2, Rows: 1,
+	}
+
+	// Budgets list — the budgets dataset as a table.
+	p["budgets-list"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "budgets"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Budgets", "limit": "8"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 2,
+	}
+
+	// To-do list — the tasks dataset as a table.
+	p["todo-list"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "tasks"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "To-do", "limit": "8"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 2,
+	}
+
+	// Upcoming bills — the bills dataset as a table.
+	p["bills-list"] = cardgraph.Graph{
+		Nodes: []cardgraph.Node{
+			{ID: "n1", Kind: cardgraph.KindSourceDataset, Props: map[string]string{"which": "bills"}, Pos: cardgraph.Point{X: 40, Y: 40}},
+			{ID: "n2", Kind: cardgraph.KindVizList, Props: map[string]string{"title": "Upcoming bills", "limit": "8"}, Pos: cardgraph.Point{X: 340, Y: 40}},
+		},
+		Edges: []cardgraph.Edge{{From: cardgraph.PortRef{Node: "n1", Port: "out"}, To: cardgraph.PortRef{Node: "n2", Port: "in"}}},
+		Root:  "n2",
+		Cols:  2, Rows: 2,
+	}
 	return p
 }
 
@@ -1283,7 +1415,14 @@ func vbPresetOptions() [][2]string {
 		{"assets-card", "Assets + monthly change (KPI)"},
 		{"liabilities", "Liabilities (KPI)"},
 		{"accounts-count", "Account count (KPI)"},
+		{"safetospend", "Safe to spend (KPI)"},
+		{"savings-rate", "Savings rate (%)"},
+		{"health-score", "Financial health (0–100)"},
 		{"cashflow", "Cash flow (income − spending)"},
+		{"budget-meter", "Budget meter (progress)"},
+		{"budgets-list", "Budgets (list)"},
+		{"todo-list", "To-do (list)"},
+		{"bills-list", "Upcoming bills (list)"},
 		{"spend-by-cat", "Spending by category (bar)"},
 		{"spend-trend", "Spending trend (line)"},
 		{"spend-donut", "Spending breakdown (donut)"},
