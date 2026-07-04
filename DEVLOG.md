@@ -1,3 +1,34 @@
+## 2026-07-04 — Studio critique loop: three rounds to SHIP (all six tabs, both themes)
+
+The adversarial loop over the whole Studio hub ran three rounds and finished at SHIP.
+
+**Round 1 (ITERATE, 3 high + 3 medium):** the highs were all Build-tab guidance/theming — light-mode
+node text at ~1.1:1 contrast, the Figure picker as 284 raw names, and blind free-text column fields
+on the data-shaping nodes. Fixed: the picker became the grouped/documented catalog with a type-ahead
+filter + doc/atoms lines; Filter/Group-by/Aggregate/Rule column fields became dropdowns of the wired
+dataset's REAL schema (resolved by walking "in" wiring upstream to the nearest Dataset node);
+mediums: block-editor truncation + hover titles, pages/fields ⋯ menus opening leftward, Figure
+blocks getting the same doc trail as the simple picker.
+
+**Round 2 (ITERATE, 2 high):** the critic caught that my light-theme fix treated symptoms — the real
+disease lived in rules_gen.go: (1) 41 references to UNDEFINED tokens (--fg/--line/--dim/--faint)
+whose dark fallbacks applied in BOTH themes, and (2) the Design tab's hardcoded dark hexes under
+theme-resolving text. Both killed at the root: mechanical token replacement across rules_gen + the
+three inline-styled screens, and every studio background tokenized (--bg-card/--bg-elev/--bg). The
+lesson worth keeping: `var(--token, fallback)` with an undefined token is a LANDMINE — it looks
+theme-aware and never is.
+
+**The other find:** re-verifying surfaced a real data-loss race — publish a card, reload fast, lose
+it (4s autosave ticker + pagehide IndexedDB write not committing during unload). Publish/Save/Delete
+now call uistate.RequestPersist() (the C2 hatch). widget_builder_check reproduced it
+deterministically and now guards it. Also fixed the loop's final low: deleting a published card now
+removes its layout item instead of leaving a phantom row in Manage.
+
+**Round 3: SHIP** — token class verified extinct by grep + computed-contrast probes (~14:1 where it
+was 1.1:1), and the newly-mastheaded Formulas/Custom-fields tabs (Cam's mid-loop ask) passed the
+same bar. Perf note: the builder's full-surface variable computation (pools/plans/smart) was
+recomputing per keystroke; memoized at 500ms.
+
 ## 2026-07-04 — Studio tabs rebuilt (Manage / Pages / Build) + the countup bug
 
 Cam's goal: redesign every Studio tab except Formulas and Custom fields, with the adversarial

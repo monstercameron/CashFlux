@@ -513,6 +513,21 @@ func VisualBuilder() ui.Node {
 		if _, ok := lib[name]; ok {
 			delete(lib, name)
 			vbSaveCards(lib)
+			// A published card's layout item goes with it — otherwise the
+			// dashboard silently drops the tile but the Manage ledger and board
+			// map keep listing a phantom widget.
+			id := vbCardPrefix + name
+			cur := layoutAtom.Get()
+			next := make([]dashlayout.Item, 0, len(cur))
+			for _, it := range cur {
+				if it.ID != id {
+					next = append(next, it)
+				}
+			}
+			if len(next) != len(cur) {
+				layoutAtom.Set(next)
+				uistate.PersistItems(next)
+			}
 			uistate.RequestPersist()
 			rev.Set(rev.Get() + 1)
 		}
