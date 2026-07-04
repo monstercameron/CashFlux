@@ -1,3 +1,14 @@
+## 2026-07-04 — /fields follow-up: delete × → shared ⋯ menu
+
+Cam right after the ship: "use triple dot menus for the delete x button." Swapped the row's bare
+`btn-del` × for the shared `uiw.KebabMenu` (viewport-aware AnchorPopover + DismissPopover — the
+same ⋯ every entity row uses), with a single danger "Delete custom field" item that opens the
+existing two-step inline confirm. Focus choreography updated: `fldFocusSoon` generalized from
+getElementById to querySelector so "Keep it" can hand focus back to the menu's toggle
+(`#fld-menu-<id> button`). Bonus consistency: rows now read as one action grammar with the rest
+of the app, and the destructive path is a deliberate two-click journey (⋯ → Delete custom field →
+confirm). gwc dev's hot rebuild handled the deploy; interaction suite green against :8080.
+
 ## 2026-07-04 — /fields rebuilt as a schema ledger (+ adversarial critique loop)
 
 Cam's goal: redesign the fields page, studying how the redesigned pages were built and how

@@ -12,11 +12,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -58,14 +56,15 @@ func cfEntityLabel(value string) string {
 	return value
 }
 
-// fldFocusSoon focuses the element with the given id on the next tick — after
-// the render that mounts/unmounts it has committed — so keyboard focus follows
-// the delete-confirm swap instead of being dumped to <body>.
-func fldFocusSoon(id string) {
+// fldFocusSoon focuses the first element matching the given selector on the
+// next tick — after the render that mounts/unmounts it has committed — so
+// keyboard focus follows the delete-confirm swap instead of being dumped to
+// <body>.
+func fldFocusSoon(selector string) {
 	var cb js.Func
 	cb = js.FuncOf(func(js.Value, []js.Value) any {
 		cb.Release()
-		el := js.Global().Get("document").Call("getElementById", id)
+		el := js.Global().Get("document").Call("querySelector", selector)
 		if el.Truthy() {
 			el.Call("focus")
 		}
@@ -355,19 +354,21 @@ type customFieldRowProps struct {
 // CustomFieldRow is a per-definition spec line: boxed type tag, label
 // (+ required marker), then a sub-line with the monospace key, the cf_*
 // formula chip a number field feeds, and choice options. The chip lives in
-// the sub-line (not its own grid track) so delete buttons stay ruled-column
-// aligned whether or not a row has a formula variable. Deleting is a
-// two-step inline confirm — field data on existing records and any formulas
-// using the variable go with it, so it never fires off a single click.
+// the sub-line (not its own grid track) so the trailing ⋯ menus stay
+// ruled-column aligned whether or not a row has a formula variable. Actions
+// live in the shared viewport-aware KebabMenu; its destructive "Delete custom
+// field" item opens a two-step inline confirm — field data on existing
+// records and any formulas using the variable go with it, so deletion never
+// fires off a single click.
 func CustomFieldRow(props customFieldRowProps) ui.Node {
 	confirming := ui.UseState(false)
 	ask := ui.UseEvent(Prevent(func() {
 		confirming.Set(true)
-		fldFocusSoon("fld-keep-" + props.Def.ID) // land on the safe choice
+		fldFocusSoon("#fld-keep-" + props.Def.ID) // land on the safe choice
 	}))
 	keep := ui.UseEvent(Prevent(func() {
 		confirming.Set(false)
-		fldFocusSoon("fld-del-" + props.Def.ID) // hand focus back to the ×
+		fldFocusSoon("#fld-menu-" + props.Def.ID + " button") // hand focus back to the ⋯
 	}))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(props.Def.ID) }))
 	d := props.Def
@@ -393,7 +394,13 @@ func CustomFieldRow(props customFieldRowProps) ui.Node {
 			),
 		),
 		If(!confirming.Get(),
-			Button(css.Class("btn-del"), Type("button"), Attr("id", "fld-del-"+d.ID), Attr("aria-label", uistate.T("cf.deleteTitle")), Title(uistate.T("cf.deleteTitle")), OnClick(ask), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4)))),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "fld-menu-" + d.ID,
+				ToggleTestID: "fld-menu-btn-" + d.ID,
+				Items: []ui.Node{
+					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "fld-delete-btn-"+d.ID), OnClick(ask), uistate.T("cf.deleteTitle")),
+				},
+			})),
 		If(confirming.Get(), Div(css.Class("fld-confirm"), Attr("role", "alert"),
 			Span(css.Class("fld-confirm-msg"), warn),
 			Button(css.Class("fld-confirm-del"), Type("button"), OnClick(del), uistate.T("fld.deleteYes")),
