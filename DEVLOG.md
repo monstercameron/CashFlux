@@ -1,3 +1,41 @@
+## 2026-07-04 — /fields rebuilt as a schema ledger (+ adversarial critique loop)
+
+Cam's goal: redesign the fields page, studying how the redesigned pages were built and how
+formulas/custom fields flow — and run an adversarial subagent critique loop until it's happy.
+
+**Research first paid off.** The load-bearing discovery was in `internal/engineenv`: number custom
+fields become real engine variables (`cf_<entity>_<key>` via `entityTypeShort`), and
+`engineenv.CustomFieldVar(def)` maps a Def to its variable. That's the page's story — a field isn't
+a row in a settings list, it's a thing that *goes places* (entity forms, reports grouping, the
+formula surface). The whole design hangs off making that flow visible.
+
+**The design.** From-scratch `.fld-deck` (the ask/smt lesson — no bento/EntityListSection/form-grid
+kit): left = the **Field registry**, a ruled ledger of populated entity groups (Fraunces titles,
+count pills, "Add another") whose rows are spec lines — boxed mono type tag, label + REQUIRED
+marker, then `key` + the accent `cf_*` chip + choice options in one sub-line. Right = a **sticky
+composer** with labeled controls and the signature piece: a live **"What this field will do"**
+footprint that rewrites itself as you type (forms it appears on / reports grouping / requiredness
+consequence / the exact formula variable it will create). Empty entities compress into one
+"Nothing yet on [chips]" line — dashed open-slot chips that pre-select the entity and focus the
+key input. A fresh install reads as one quiet invitation, not six empty cards.
+
+**The critique loop worked.** Round 1 (Sonnet, adversarial, screenshots + code): ITERATE — two
+highs I'd genuinely missed: (1) the old single-click destructive delete survived my redesign
+untouched — it strips data off existing records and silently breaks formulas; now a two-step
+inline confirm (`role="alert"`, focus to "Keep it", handed back on cancel) that names the breaking
+`cf_*` variable; (2) my per-row grid put the formula chip in its own `auto` track, so delete ×s
+would zigzag in mixed-type groups — chip moved into the sub-line (conceptually right anyway: key
+and variable are one artifact), × is the only trailing track. Plus: empty-group wall → the chip
+line; "Define one" on populated groups → "Add another"; footprint silent about Required → new
+line; hover-only key-format tooltip → persistent visible hint. Round 2: **SHIP**, with a11y/polish
+notes (focus management, alert role, warning in normal fg with danger reserved for the button,
+dropped the now-duplicate tooltip) — applied.
+
+Also en route: `verify_fields_split.mjs` had a stale /customize assertion ("Available variables" —
+a heading the searchable variable palette replaced in 4366ae87); updated to the palette's
+click-to-insert hint. Left alone: the other agent's dirty files and the L53 loopstory (pre-existing
+IDB-staleness class). Next: /household and /rules are still on the old kit.
+
 ## 2026-07-03 — Smart tab: same from-scratch treatment as Ask
 
 Cam, immediately after the Ask rebuild: "need redesign the smart tab." Applied the lesson without

@@ -36,7 +36,9 @@ try {
   await page.waitForTimeout(700);
   let body = await page.locator("main").innerText();
   ok(/Formula calculator/.test(body), "/customize shows the Formula calculator");
-  ok(/Available variables/.test(body), "/customize shows Available variables");
+  // The variable palette replaced the "Available variables" heading (4366ae87);
+  // its click-to-insert hint is the stable marker now.
+  ok(/Click a variable to insert/.test(body), "/customize shows the variable palette");
   ok(!/Add a custom field/.test(body), "/customize does NOT show the custom-fields manager");
   const cUrl = page.url();
   ok(/\/customize$/.test(cUrl), `/customize URL is correct (${cUrl})`);
