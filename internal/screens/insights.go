@@ -146,16 +146,14 @@ func Insights() ui.Node {
 	// use so the two placements get independent button nodes.
 	// C247: enrich the no-key gate with cost/where-to-get/privacy context so users
 	// understand BYOK before navigating away to Settings.
+	// Mid-conversation, the keyless fact is a slim one-line strip — not a 4-line
+	// essay stacked under the composer competing with it. The full pitch (cost,
+	// privacy, where-to-get) lives once in the empty-thread intro callout.
 	keyHintNode := func() ui.Node {
-		return Div(css.Class("asst-keynote"), Attr("data-testid", "assistant-keynote"),
-			Div(css.Class("asst-keynote-text"),
-				P(uistate.T("insights.keyHint")),
-				P(css.Class(tw.Text12, tw.TextFaint), uistate.T("insights.keyGateContext"),
-					" ", A(Attr("href", "https://platform.openai.com/api-keys"), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"), uistate.T("insights.keyGateLink")),
-					".",
-				),
-			),
-			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
+		return Div(css.Class("asst-keystrip"), Attr("data-testid", "assistant-keynote"),
+			Span(css.Class("asst-keystrip-dot"), Attr("aria-hidden", "true")),
+			Span(css.Class(tw.Text12, tw.TextDim), uistate.T("insights.keyHint")),
+			Button(css.Class("btn-link", tw.Text12), Type("button"), OnClick(func() { nav.Navigate(uistate.RoutePath("/settings")) }), uistate.T("nav.settings")),
 		)
 	}
 
@@ -552,13 +550,22 @@ func Insights() ui.Node {
 		return nil
 	}, "cf-insights-init")
 
-	// Auto-scroll the thread to the bottom whenever a message is added or the
+	// Auto-scroll the canvas to the bottom whenever a message is added or the
 	// "thinking" indicator toggles, so a freshly spawned bubble stays in view.
+	// On an EMPTY thread we must NOT scroll to the end — the empty state leads
+	// with the greeting hero (and, keyless, a demo transcript beneath it), so
+	// scrolling to the bottom would land the user on the demo tail as if it were
+	// a real conversation. Leave the canvas at the top so the greeting shows first.
 	scrollSig := strconv.Itoa(len(turns.Get()))
 	if loading.Get() {
 		scrollSig += "|L"
 	}
-	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, scrollSig)
+	ui.UseEffect(func() func() {
+		if len(turns.Get()) > 0 {
+			scrollChatToEnd()
+		}
+		return nil
+	}, scrollSig)
 
 	// Composer keyboard: Enter sends (Shift+Enter ignored), Up/Down cycle prior messages
 	// (shell-style). A raw document keydown listener (so it gets NATIVE events — the
@@ -789,27 +796,39 @@ func Insights() ui.Node {
 	// pr is already declared above (UsePrefs hook at stable position).
 	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday())
 
-	// Pinned insights, newest first. The rail copy cross-links to the Insights
-	// tab where the same pins live beside the full briefing (hub-review P2: two
-	// identical cards with no affordance tying them together).
+	// Pinned insights, newest first. The rail shows a SCANNABLE PREVIEW — the three
+	// most recent, each clamped to a couple of lines — and cross-links to the
+	// Insights tab where the full list lives beside the briefing (hub-review P2:
+	// the rail was a wall of full-length AI paragraphs; the whole set belongs on
+	// the roomier Insights tab, not stacked in a sidebar column).
 	pins := app.SavedInsights()
 	sort.Slice(pins, func(i, j int) bool { return pins[i].CreatedAt.After(pins[j].CreatedAt) })
+	railPins := pins
+	if len(railPins) > 3 {
+		railPins = railPins[:3]
+	}
 	hubTab := uistate.UseAssistantTab()
 	openInsightsTab := ui.UseEvent(Prevent(func() { hubTab.Set("insights") }))
+	// Bespoke aside group (NOT a card): a small serif label with an accent tick, a
+	// "see all" link, and the clamped pin previews — margin notes, not tiles.
 	pinnedCard := Fragment()
 	if len(pins) > 0 {
-		pinnedCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("insights.pinnedTitle"),
-			HeaderAction: Button(css.Class("btn-link", "t-caption"), Type("button"),
-				Attr("data-testid", "assistant-see-insights"),
-				OnClick(openInsightsTab), uistate.T("assistant.seeAllInsights")),
-			Rows: MapKeyed(pins,
-				func(p domain.SavedInsight) any { return p.ID },
-				func(p domain.SavedInsight) ui.Node {
-					return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
-				},
+		pinnedCard = Div(css.Class("ask-note"),
+			Div(css.Class("ask-note-head"),
+				Span(css.Class("ask-note-label"), uistate.T("insights.pinnedTitle")),
+				Button(css.Class("ask-note-link"), Type("button"),
+					Attr("data-testid", "assistant-see-insights"),
+					OnClick(openInsightsTab), uistate.T("assistant.seeAllInsights")),
 			),
-		})
+			Div(css.Class("ask-note-body"),
+				MapKeyed(railPins,
+					func(p domain.SavedInsight) any { return p.ID },
+					func(p domain.SavedInsight) ui.Node {
+						return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
+					},
+				),
+			),
+		)
 	}
 
 	convo := turns.Get()
@@ -829,10 +848,10 @@ func Insights() ui.Node {
 		return nil
 	}
 
-	// The conversation thread scrolls inside a bounded region so the composer below it
-	// stays on screen no matter how long the conversation grows (the thread scrolls,
-	// the input doesn't move). Auto-scroll keeps the newest message in view.
-	thread := Div(Attr("id", "cf-chat-thread"), ClassStr("asst-thread "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap3, tw.Mb3, tw.OverflowYAuto, tw.Pr1)),
+	// The conversation is a plain flex column; the SINGLE scroller is the canvas
+	// (.chat-scroll) that wraps it, so the composer below stays put while history
+	// scrolls. Auto-scroll keeps the newest message in view.
+	thread := Div(Attr("id", "cf-chat-thread"), css.Class("chat-thread", tw.Flex, tw.FlexCol, tw.Gap4),
 		MapKeyed(convo,
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
@@ -932,7 +951,7 @@ func Insights() ui.Node {
 		advancedCaret = " ▾"
 	}
 	pillFaint := pill + " " + tw.Fold(tw.TextFaint)
-	chatControls := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mb3, tw.ItemsCenter),
+	chatControls := Div(css.Class("ask-head-actions", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
 		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), Attr("data-testid", "assistant-advanced"),
 			Title(uistate.T("insights.advancedTitle")), OnClick(toggleAdvanced),
@@ -941,23 +960,21 @@ func Insights() ui.Node {
 			Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-edit-prompt"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
 		),
 	)
-	// Rail: the saved conversations as a vertical list.
+	// Bespoke aside group: the saved conversations as a quiet vertical index.
 	railConvs := Fragment()
 	if len(convs) > 0 {
-		railConvs = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("assistant.conversations"),
-			Body: Fragment(
-				Div(css.Class("asst-convs"), Attr("data-testid", "assistant-convs"),
-					MapKeyed(convs,
-						func(c domain.Conversation) any { return c.ID },
-						func(c domain.Conversation) ui.Node {
-							return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
-						},
-					),
+		railConvs = Div(css.Class("ask-note"),
+			Span(css.Class("ask-note-label"), uistate.T("assistant.conversations")),
+			Div(css.Class("ask-note-body", "asst-convs"), Attr("data-testid", "assistant-convs"),
+				MapKeyed(convs,
+					func(c domain.Conversation) any { return c.ID },
+					func(c domain.Conversation) ui.Node {
+						return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+					},
 				),
-				P(css.Class("muted", tw.Text12, tw.Mt2), uistate.T("assistant.railHint")),
 			),
-		})
+			P(css.Class("ask-note-hint"), uistate.T("assistant.railHint")),
+		)
 	}
 
 	// Backend/OpenAI mode toggle — only meaningful when a backend is configured;
@@ -1020,21 +1037,30 @@ func Insights() ui.Node {
 		)
 	}
 
-	// The AGENT CONSOLE — built from scratch (no card): a slim identity bar, a
-	// full-height scrolling canvas with the conversation set in a document
-	// measure, and a docked composer the content scrolls beneath. The rail keeps
-	// the agent's periphery. All chat state/handlers are untouched.
+	// The AGENT CONSOLE — a canvas with real depth: a scrolling region whose
+	// content is BOTTOM-ANCHORED (a short thread sits just above the composer, the
+	// slack sits above it as natural scrollback — never a void between the last
+	// reply and the input), a centered warm hero on an empty thread, and a docked
+	// composer the content scrolls beneath. The rail keeps the agent's periphery.
+	// All chat state/handlers are untouched.
 	statusCls, statusKey := "chat-status-dot is-live", "assistant.statusLive"
 	if noAI {
 		statusCls, statusKey = "chat-status-dot is-local", "assistant.statusLocal"
 	}
+	// The empty-thread hero: greeting + capabilities + starter tiles (+ the keyless
+	// demo transcript), grouped as one unit. The console is content-height, so a
+	// short thread never strands a void — no bottom/top anchoring needed.
+	heroBlock := Div(css.Class("asst-hero"),
+		agentIntro,
+		chips,
+		// C248: static example Q→A pairs preview the assistant for keyless users.
+		If(noAI, exampleConversationsNode()),
+	)
 	chatConsole := Div(css.Class("chat-console"), Attr("data-testid", "assistant-chat"),
-		Div(css.Class("chat-scroll"),
+		Div(css.Class("chat-scroll"), Attr("id", "cf-chat-scroll"),
 			Div(css.Class("chat-measure"),
 				backendToggle,
-				If(empty, Fragment(agentIntro, chips)),
-				// C248: static example Q→A pairs preview the assistant for keyless users.
-				If(noAI && empty, exampleConversationsNode()),
+				If(empty, heroBlock),
 				If(!empty, thread),
 				// Approval card: a mutating tool is paused waiting for the user's yes/no.
 				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
@@ -1053,23 +1079,24 @@ func Insights() ui.Node {
 		),
 	)
 
-	// The Ask surface in the app's own language: a bento host, the conversation
-	// as a Widget tile with the serif accent-tick section head (the SAME chrome
-	// as /health, /smart, /reports), the agent's periphery as rail cards in the
-	// fourth column. The status line rides as the hero eyebrow.
-	chatTile := uiw.Widget(uiw.WidgetProps{
-		ID: "ask-chat", Title: "", GridColumn: "1 / span 3", GridRow: "1 / span 4",
-		Draggable: false, Resizable: false, Preview: true,
-		Body: astSection("sec-ask", uistate.T("assistant.agentTitle"), chatControls,
-			Fragment(
-				P(css.Class("rpt-hero-eyebrow", tw.TextDim, "chat-status-line"),
-					Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
-					Span(uistate.T(statusKey)),
-				),
-				chatConsole,
-			)),
-	})
-	rail := func(n ui.Node) ui.Node { return Div(Style(map[string]string{"grid-column": "4"}), n) }
+	// The Ask surface — a BESPOKE deck built from scratch (no bento host, no Widget
+	// tile, no card rail): a dominant conversation column with its own slim header
+	// bar (live/on-device status + the serif agent name on the left, New chat /
+	// Advanced as quiet ghost actions on the right) over the content-height canvas,
+	// and a quiet "margin notes" aside — chrome-less typographic groups, not tiles —
+	// for the agent's periphery and saved chats.
+	askHead := Div(css.Class("ask-head"),
+		Div(css.Class("ask-head-id"),
+			Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
+			H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
+			Span(css.Class("ask-status"), uistate.T(statusKey)),
+		),
+		chatControls,
+	)
+	askMain := Div(css.Class("ask-main"),
+		askHead,
+		chatConsole,
+	)
 
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
@@ -1087,11 +1114,11 @@ func Insights() ui.Node {
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
 		scopeNotice,
-		Div(css.Class("bento bento-ask"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
-			chatTile,
-			// The agent's observations + periphery: anomaly findings, spending
-			// highlights, pins, saved conversations.
-			rail(Div(Attr("data-testid", "assistant-rail"), flagged, highlights, pinnedCard, railConvs)),
+		Div(css.Class("ask-deck"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
+			askMain,
+			// The agent's periphery as quiet margin notes: anomaly findings,
+			// spending highlights, pins, saved conversations.
+			Div(css.Class("ask-aside"), Attr("data-testid", "assistant-rail"), flagged, highlights, pinnedCard, railConvs),
 		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
@@ -1329,16 +1356,17 @@ func reasoningModel(model string) bool {
 	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
 }
 
-// scrollChatToEnd scrolls the bounded thread container to its bottom (only the
-// container, never the page), so the latest message stays in view. The scroll is
-// deferred via setTimeout so it runs AFTER the bubbles' Markdown innerHTML has been
-// filled (each bubble renders in its own effect, growing scrollHeight) — otherwise
-// an on-load resume would scroll a still-empty container and land at the top.
+// scrollChatToEnd scrolls the bounded canvas (#cf-chat-scroll — the single
+// scroller wrapping the thread) to its bottom (only the container, never the
+// page), so the latest message stays in view. The scroll is deferred via
+// setTimeout so it runs AFTER the bubbles' Markdown innerHTML has been filled
+// (each bubble renders in its own effect, growing scrollHeight) — otherwise an
+// on-load resume would scroll a still-empty container and land at the top.
 func scrollChatToEnd() {
 	var cb js.Func
 	cb = js.FuncOf(func(js.Value, []js.Value) any {
 		cb.Release()
-		el := js.Global().Get("document").Call("getElementById", "cf-chat-thread")
+		el := js.Global().Get("document").Call("getElementById", "cf-chat-scroll")
 		if el.Truthy() {
 			el.Set("scrollTop", el.Get("scrollHeight"))
 		}

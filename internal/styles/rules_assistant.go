@@ -4,37 +4,23 @@
 
 package styles
 
-// registerAssistantSurface holds the agent-first /assistant chat surface rules:
-// a two-column layout (the conversation is the page; observations, saved chats
-// and pins live in a side rail), the taller thread region, the agent intro, and
-// the rail's vertical conversation list. Registered from Register() after the
-// generated rules so these win equal-specificity ties.
+// registerAssistantSurface holds the agent-first /assistant Ask surface: a bento
+// host whose dominant tile is the conversation CANVAS (a recessed, bottom-anchored
+// scrolling region with a centered hero on an empty thread and a docked composer),
+// plus the empty-thread hero, the agent/user message treatments, and the rail's
+// vertical conversation list. Registered from Register() after the generated rules
+// so these win equal-specificity ties.
 func registerAssistantSurface() {
-	rule(".asst-layout",
-		prop("display", "grid"),
-		prop("grid-template-columns", "minmax(0, 2fr) minmax(0, 1fr)"),
-		prop("gap", "1rem"),
-		prop("align-items", "start"),
-	)
-	ruleMedia("(max-width: 1023px)", ".asst-layout",
-		prop("grid-template-columns", "minmax(0, 1fr)"),
-	)
-	rule(".asst-rail",
+	// ── Empty-thread hero: a calm, centered welcome that leads with what the agent
+	// can DO, in the display serif the app's heroes use. ────────────────────────
+	rule(".asst-hero",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
-		prop("gap", "1rem"),
-		prop("min-width", "0"),
+		prop("gap", "0.4rem"),
+		prop("padding", "0.5rem 0"),
 	)
-	// The conversation thread owns the page's height: tall, scrolling in place,
-	// with the composer pinned below it.
-	rule(".asst-thread",
-		prop("max-height", "60vh"),
-		prop("min-height", "12rem"),
-	)
-	// Agent intro (empty thread): a calm welcome that leads with what the agent
-	// can DO, in the display serif the app's heroes use.
 	rule(".asst-intro",
-		prop("padding", "1rem 0.25rem 0.5rem"),
+		prop("padding", "0.25rem 0.25rem 0.5rem"),
 	)
 	rule(".asst-intro-title",
 		prop("font-size", "1.35rem"),
@@ -52,18 +38,8 @@ func registerAssistantSurface() {
 		prop("flex", "0 0 auto"),
 		prop("margin-top", "0.1rem"),
 	)
-	// Rail conversation list: a vertical stack of the existing chat pills.
-	rule(".asst-convs",
-		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("gap", "0.4rem"),
-		prop("align-items", "flex-start"),
-	)
-	rule(".asst-convs .conv-pill",
-		prop("max-width", "100%"),
-	)
-	// Keyless callout inside the intro: the single place the key pitch lives on
-	// an empty thread.
+	// Keyless callout inside the intro: the single place the full key pitch lives
+	// on an empty thread (cost, privacy, where-to-get).
 	rule(".asst-key-callout",
 		prop("display", "flex"),
 		prop("align-items", "center"),
@@ -86,9 +62,20 @@ func registerAssistantSurface() {
 		prop("opacity", "0.75"),
 	)
 
-	// ── The Insights briefing bento surface ──────────────────────────────────
-	// Host grid: natural tile heights (the shared .bento fixes row heights for
-	// the reconfigurable dashboard; a reading surface flows instead).
+	// Rail conversation list: a vertical stack of the existing chat pills.
+	rule(".asst-convs",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.4rem"),
+		prop("align-items", "flex-start"),
+	)
+	rule(".asst-convs .conv-pill",
+		prop("max-width", "100%"),
+	)
+
+	// ── The Insights briefing bento surface (the sibling "Insights" tab) ────────
+	// Host grid: natural tile heights (the shared .bento fixes row heights for the
+	// reconfigurable dashboard; a reading surface flows instead).
 	rule(".bento.bento-assistant",
 		prop("grid-template-rows", "auto"),
 		prop("grid-auto-rows", "auto"),
@@ -119,60 +106,16 @@ func registerAssistantSurface() {
 		prop("font-size", "0.95rem"),
 	)
 
-	// ── Ask-tab cohesion pass (hub review): the conversation cockpit joins the
-	// design system — serif accent-tick titles like every redesigned surface,
-	// and the chat card fills the viewport so the composer doesn't strand a
-	// void beneath a short thread. ─────────────────────────────────────────────
-	rule(".asst-layout .card-title",
-		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
-		prop("font-weight", "600"),
-		prop("border-left", "3px solid var(--accent)"),
-		prop("padding-left", "0.6rem"),
-	)
-	// EntityListSection flattens fragments, so the thread/composer/keynote are
-	// DIRECT card children — the thread alone flexes to anchor the composer.
-	rule(".asst-thread",
-		prop("flex", "1"),
-		prop("min-height", "0"),
-	)
-	// The flexed card stretches block children; action buttons keep their
-	// natural width.
-	rule(".asst-main > .card > .btn",
-		prop("align-self", "flex-start"),
-	)
-	rule(".asst-keynote",
-		prop("flex", "0 0 auto"),
-	)
-
-	// ── The conversation itself, restyled (Cam: "still looks dated"). The agent
-	// speaks in the house voice — an accent-ruled editorial column, no gray SMS
-	// blob; the user's words sit in a quiet accent-tinted pill; the composer is
-	// the elevated centerpiece. ────────────────────────────────────────────────
+	// ── Message treatments ──────────────────────────────────────────────────────
+	// The user's words: a quiet accent-tinted pill, asymmetric radius pointing at
+	// the sender's side.
 	rule(".asst-msg-user",
 		prop("background", "color-mix(in srgb, var(--accent) 12%, transparent)"),
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
 		prop("border-radius", "14px 14px 4px 14px"),
 		prop("padding", "0.55rem 0.9rem"),
 	)
-	rule(".asst-msg-agent",
-		prop("border-left", "2px solid color-mix(in srgb, var(--accent) 55%, transparent)"),
-		prop("padding", "0.1rem 0 0.1rem 0.95rem"),
-	)
-	rule(".asst-msg-agent .md",
-		prop("line-height", "1.65"),
-	)
-	rule(".asst-msg-speaker",
-		prop("font-size", "0.66rem"),
-		prop("letter-spacing", "0.09em"),
-		prop("text-transform", "uppercase"),
-		prop("color", "var(--accent)"),
-		prop("opacity", "0.85"),
-		prop("margin-bottom", "0.25rem"),
-	)
-	rule(".asst-thinking",
-		prop("font-style", "italic"),
-	)
+	// The composer: the elevated centerpiece.
 	rule(".asst-composer",
 		prop("background", "var(--bg-elev)"),
 		prop("border", "1px solid var(--border)"),
@@ -191,29 +134,27 @@ func registerAssistantSurface() {
 		prop("outline", "none"),
 		prop("font-size", "0.95rem"),
 	)
-	rule(".asst-keynote",
+	// The keyless truth, mid-conversation: a slim one-line strip (the full pitch
+	// lives once in the empty-thread intro callout).
+	rule(".asst-keystrip",
 		prop("display", "flex"),
 		prop("align-items", "center"),
-		prop("justify-content", "space-between"),
-		prop("gap", "1rem"),
-		prop("margin-top", "0.75rem"),
-		prop("padding", "0.65rem 0.9rem"),
-		prop("border", "1px dashed var(--border)"),
-		prop("border-radius", "12px"),
+		prop("gap", "0.5rem"),
+		prop("flex-wrap", "wrap"),
+		prop("margin-top", "0.6rem"),
+		prop("padding", "0.35rem 0.2rem 0"),
 	)
-	rule(".asst-keynote-text p",
-		prop("margin", "0 0 0.2rem"),
-		prop("font-size", "0.82rem"),
-		prop("color", "var(--fg)"),
-		prop("opacity", "0.85"),
-	)
-	rule(".asst-keynote .btn",
+	rule(".asst-keystrip-dot",
+		prop("width", "7px"),
+		prop("height", "7px"),
+		prop("border-radius", "50%"),
 		prop("flex", "0 0 auto"),
-		prop("align-self", "center"),
+		prop("background", "var(--warn, #d9a23f)"),
 	)
 
-	// ── The agent console (from-scratch Ask surface): identity bar, scrolling
-	// canvas with a document measure, docked composer. ─────────────────────────
+	// ── The agent console ───────────────────────────────────────────────────────
+	// A flex column: a scrolling canvas that fills the height and a docked composer
+	// pinned below it.
 	rule(".chat-console",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
@@ -224,56 +165,28 @@ func registerAssistantSurface() {
 		prop("border-radius", "var(--radius)"),
 		prop("overflow", "hidden"),
 	)
-	rule(".chat-head",
-		prop("display", "flex"),
-		prop("align-items", "center"),
-		prop("justify-content", "space-between"),
-		prop("gap", "0.75rem"),
-		prop("padding", "0.8rem 1.1rem"),
-		prop("border-bottom", "1px solid var(--border)"),
-		prop("flex", "0 0 auto"),
-	)
-	rule(".chat-head-id",
-		prop("display", "flex"),
-		prop("align-items", "baseline"),
-		prop("gap", "0.6rem"),
-	)
-	rule(".chat-title",
-		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
-		prop("font-weight", "600"),
-		prop("margin", "0"),
-	)
-	rule(".chat-status",
-		prop("font-size", "0.72rem"),
-		prop("letter-spacing", "0.04em"),
-	)
-	rule(".chat-status-dot",
-		prop("width", "8px"),
-		prop("height", "8px"),
-		prop("border-radius", "50%"),
-		prop("align-self", "center"),
-		prop("flex", "0 0 auto"),
-	)
-	rule(".chat-status-dot.is-live",
-		prop("background", "var(--accent)"),
-		prop("box-shadow", "0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)"),
-	)
-	rule(".chat-status-dot.is-local",
-		prop("background", "var(--warn, #d9a23f)"),
-	)
+	// The scroll region sizes to its CONTENT (flex-basis auto) so a short thread
+	// leaves no void — the console shrinks to fit and the composer sits right
+	// beneath the last reply. Only when the content exceeds the console's
+	// max-height does this shrink and scroll.
 	rule(".chat-scroll",
-		prop("flex", "1"),
+		prop("flex", "1 1 auto"),
 		prop("min-height", "0"),
 		prop("overflow-y", "auto"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
 		prop("padding", "1.4rem 1.1rem 0.8rem"),
 	)
+	// The reading measure, horizontally centered within the canvas.
 	rule(".chat-measure",
-		prop("max-width", "46rem"),
-		prop("margin", "0 auto"),
 		prop("width", "100%"),
+		prop("max-width", "46rem"),
+		prop("margin-left", "auto"),
+		prop("margin-right", "auto"),
 	)
-	// Agent rows: an accent avatar in a gutter, editorial text beside it.
+	// Agent rows: an accent avatar in a gutter, an editorial reply on a soft raised
+	// surface (mirrors the user pill's radius on the opposite corner) so the answer
+	// — the whole point of the page — reads as designed, not raw text in a void.
 	rule(".chat-row-agent",
 		prop("display", "flex"),
 		prop("gap", "0.8rem"),
@@ -296,6 +209,11 @@ func registerAssistantSurface() {
 	rule(".chat-agent-body",
 		prop("line-height", "1.65"),
 		prop("min-width", "0"),
+		prop("flex", "1"),
+		prop("background", "color-mix(in srgb, var(--fg) 4%, transparent)"),
+		prop("border", "1px solid color-mix(in srgb, var(--fg) 7%, transparent)"),
+		prop("border-radius", "4px 14px 14px 14px"),
+		prop("padding", "0.7rem 0.95rem"),
 	)
 	rule(".chat-thinking",
 		prop("font-style", "italic"),
@@ -341,7 +259,28 @@ func registerAssistantSurface() {
 		prop("filter", "brightness(1.1)"),
 		prop("transform", "translateY(-1px)"),
 	)
-	// Starter prompts as inviting tiles (they render inside the intro hero).
+	// Status dot on the hero eyebrow above the canvas.
+	rule(".chat-status-line",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.45rem"),
+		prop("margin", "0 0 0.35rem"),
+	)
+	rule(".chat-status-dot",
+		prop("width", "8px"),
+		prop("height", "8px"),
+		prop("border-radius", "50%"),
+		prop("align-self", "center"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".chat-status-dot.is-live",
+		prop("background", "var(--accent)"),
+		prop("box-shadow", "0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)"),
+	)
+	rule(".chat-status-dot.is-local",
+		prop("background", "var(--warn, #d9a23f)"),
+	)
+	// Starter prompts as inviting tiles (they render inside the hero).
 	rule(".chip-suggest",
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "12px"),
@@ -359,52 +298,168 @@ func registerAssistantSurface() {
 		prop("font-size", "1.9rem"),
 	)
 
-	// ── The Ask bento: the console lives INSIDE a Widget tile now, so it sheds
-	// its own chrome; the rail cards stack in the fourth column. ────────────────
-	rule(".bento.bento-ask",
-		prop("grid-template-rows", "auto"),
-		prop("grid-auto-rows", "auto"),
+	// ── The Ask DECK — a bespoke, from-scratch layout (NO bento host, NO Widget
+	// tile, NO card rail): a dominant conversation column with its own header bar
+	// over the content-height canvas, and a quiet "margin notes" aside for the
+	// agent's periphery. ────────────────────────────────────────────────────────
+	rule(".ask-deck",
+		prop("display", "grid"),
+		prop("grid-template-columns", "minmax(0, 1fr) 19rem"),
+		prop("gap", "1.75rem"),
+		prop("align-items", "start"),
 	)
-	rule(".bento.bento-ask > .w",
-		prop("height", "auto"),
-		prop("min-height", "0"),
-		prop("overflow", "visible"),
+	ruleMedia("(max-width: 1100px)", ".ask-deck",
+		prop("grid-template-columns", "minmax(0, 1fr)"),
 	)
-	rule(".bento-ask .chat-console",
-		prop("border", "none"),
-		prop("background", "transparent"),
-		prop("border-radius", "0"),
-		prop("height", "calc(100vh - 17rem)"),
-		prop("min-height", "30rem"),
+	rule(".ask-main",
+		prop("min-width", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
 	)
-	rule(".bento-ask .chat-scroll",
-		prop("padding", "0.9rem 0.2rem 0.8rem"),
-	)
-	rule(".bento-ask .chat-dock",
-		prop("padding", "0.7rem 0.2rem 0.2rem"),
-	)
-	rule(".chat-status-line",
-		prop("display", "inline-flex"),
+	// The header bar: status dot + serif agent name on the left, quiet ghost
+	// actions on the right, a hairline rule beneath.
+	rule(".ask-head",
+		prop("display", "flex"),
 		prop("align-items", "center"),
-		prop("gap", "0.45rem"),
-		prop("margin", "0 0 0.35rem"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+		prop("flex-wrap", "wrap"),
+		prop("padding-bottom", "0.85rem"),
+		prop("margin-bottom", "0.9rem"),
+		prop("border-bottom", "1px solid var(--border)"),
 	)
-	// Rail cards keep the serif title language inside the bento.
-	rule(".bento-ask .card-title",
+	rule(".ask-head-id",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.6rem"),
+		prop("min-width", "0"),
+	)
+	rule(".ask-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.05rem"),
+		prop("font-size", "1.5rem"),
+		prop("font-weight", "600"),
+		prop("letter-spacing", "-0.01em"),
+		prop("margin", "0"),
+	)
+	rule(".ask-status",
+		prop("font-size", "0.72rem"),
+		prop("letter-spacing", "0.04em"),
+		prop("color", "var(--fg)"),
+		prop("opacity", "0.6"),
+	)
+	rule(".ask-head-actions",
+		prop("flex", "0 0 auto"),
+	)
+	// The canvas: content-height (grows with the conversation up to a viewport cap,
+	// so a short thread strands no void) recessed reading surface.
+	rule(".ask-main .chat-console",
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "16px"),
+		prop("background", "color-mix(in srgb, var(--fg) 2.5%, transparent)"),
+		prop("height", "auto"),
+		prop("max-height", "calc(100vh - 15rem)"),
+		prop("min-height", "20rem"),
+	)
+	rule(".ask-main .chat-dock",
+		prop("background", "none"),
+	)
+
+	// ── The aside as quiet MARGIN NOTES — chrome-less typographic groups, not
+	// tiles. Any legacy .card that lands here (the two detector groups) sheds its
+	// card skin and adopts the same bespoke group language. ─────────────────────
+	rule(".ask-aside",
+		prop("min-width", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "1.6rem"),
+		prop("padding-top", "0.15rem"),
+	)
+	rule(".ask-note",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.5rem"),
+	)
+	rule(".ask-note-head",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.6rem"),
+	)
+	// Group label + the dissolved card titles share one serif accent-tick language.
+	rule(".ask-note-label, .ask-aside .card-title",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "0.95rem"),
 		prop("font-weight", "600"),
 		prop("border-left", "3px solid var(--accent)"),
-		prop("padding-left", "0.6rem"),
+		prop("padding-left", "0.55rem"),
+		prop("color", "var(--fg)"),
 	)
-	rule(".bento-ask [data-testid='assistant-rail'] > .card",
-		prop("margin-bottom", "1rem"),
+	rule(".ask-note-link",
+		prop("font-size", "0.72rem"),
+		prop("color", "var(--accent)"),
+		prop("white-space", "nowrap"),
+		prop("background", "none"),
+		prop("border", "none"),
+		prop("padding", "0"),
+		prop("cursor", "pointer"),
 	)
-	rule(".bento-ask [data-testid='assistant-rail'] .card-head",
+	rule(".ask-note-link:hover",
+		prop("text-decoration", "underline"),
+	)
+	rule(".ask-note-body",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+	)
+	rule(".ask-note-hint",
+		prop("font-size", "0.72rem"),
+		prop("color", "var(--fg)"),
+		prop("opacity", "0.5"),
+		prop("margin", "0.45rem 0 0"),
+	)
+	// Dissolve any legacy card chrome inside the aside.
+	rule(".ask-aside .card",
+		prop("background", "none"),
+		prop("border", "none"),
+		prop("box-shadow", "none"),
+		prop("border-radius", "0"),
+		prop("padding", "0"),
+	)
+	rule(".ask-aside .card-head",
+		prop("padding", "0"),
+		prop("margin-bottom", "0.5rem"),
 		prop("flex-wrap", "wrap"),
 		prop("row-gap", "0.2rem"),
 	)
-	rule(".bento-ask [data-testid='assistant-rail'] .btn-link",
+	// Calm, index-like rows: hairline separators, quieter type, tight rhythm.
+	rule(".ask-aside .row",
+		prop("padding", "0.55rem 0"),
+		prop("border", "none"),
+	)
+	rule(".ask-aside .ask-note-body > .row + .row",
+		prop("border-top", "1px solid var(--border)"),
+	)
+	rule(".ask-aside .insight-row",
+		prop("padding-block", "0.4rem"),
+	)
+	rule(".ask-aside .insights-answer",
+		prop("font-size", "0.82rem"),
+		prop("line-height", "1.5"),
+	)
+	rule(".ask-aside .insights-answer.line-clamp-3",
+		prop("display", "-webkit-box"),
+		prop("-webkit-box-orient", "vertical"),
+		prop("-webkit-line-clamp", "2"),
+		prop("line-clamp", "2"),
+		prop("overflow", "hidden"),
+	)
+	rule(".ask-aside .insights-answer.line-clamp-3 p",
+		prop("margin", "0"),
+	)
+	rule(".ask-aside .row-meta",
+		prop("font-size", "0.68rem"),
+		prop("opacity", "0.55"),
+	)
+	rule(".ask-aside .btn-link",
 		prop("white-space", "nowrap"),
 	)
 }

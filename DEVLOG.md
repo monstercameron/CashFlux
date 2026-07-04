@@ -1,3 +1,35 @@
+## 2026-07-03 — Ask tab, sixth pass: from scratch, for real this time
+
+Cam, blunt: "the assistant looks like dog shit… redesign from scratch, STOP reusing the old
+design." The through-line of his frustration across the last few passes was that I kept re-housing
+the console back into the shared kit — bento host, Widget tile, EntityListSection card rail — and
+calling it a redesign. That kit IS what he means by "the old design." So this pass deletes the
+wrapper entirely and builds a bespoke layout:
+
+- `.ask-deck` — a plain CSS grid (conversation column + 19rem aside), not `.bento`.
+- `.ask-head` — a bespoke header bar: status dot + serif "Your agent" + inline on-device/live
+  status on the left, New chat / Advanced as ghost pills on the right, hairline beneath. No
+  astSection, no tile.
+- `.ask-aside` — "margin notes," not cards: accent-tick serif labels, hairline-separated 2-line
+  pin previews, a quiet Conversations index. The two detector groups still come back as
+  `EntityListSection` `.card`s (only used here; not worth refactoring their internals), so scoped
+  CSS *dissolves* the card skin inside `.ask-aside` — same bespoke language, no double structure.
+
+Two real bugs fixed on the way, both about EMPTINESS (his "weird bottom gap"):
+1. The canvas was a fixed ~630px box, so a 2-message thread stranded a huge void. Fix: the console
+   is content-height (`height:auto; max-height: calc(100vh - 15rem)`), and `.chat-scroll` uses
+   `flex: 1 1 auto` (basis auto, NOT the `flex:1`/basis-0 that collapses in an auto-height parent).
+   Short thread → console shrinks to fit, composer hugs the last reply. Long thread → caps + scrolls.
+2. On an empty thread, the mount-time auto-scroll-to-end skipped past the greeting and landed on the
+   keyless demo tail (read as a real conversation). Fix: suppress the scroll when the thread is empty.
+
+Every testid/hook/id survived (assistant-layout/-chat/-rail, cf-chat-thread/-scroll, the components'
+own hooks), so `assistant_check.mjs` stayed 23/23 through the whole teardown.
+
+Lesson, sharper than last time: when the ask is "from scratch," reusing the design SYSTEM is the
+thing being rejected — the components ARE the old look. Build the page's own vocabulary; borrow only
+the raw mechanics (the message bubbles, the markdown renderer, the state), never the chrome.
+
 ## 2026-07-03 — Ask tab, fifth pass: same components as everyone else
 
 Cam (rightly exasperated): "look at the widgets and components from the other pages and use the
