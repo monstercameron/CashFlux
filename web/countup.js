@@ -128,7 +128,19 @@
 
     var startTime = null;
 
+    // Cancellation token: a re-render can REUSE this DOM node as a different
+    // element (the framework reconciler morphs nodes in place) or a newer scan
+    // can start a fresh tween on it. Writing el.textContent from a stale
+    // animation would then WIPE the node's new children (observed: a KPI's
+    // .fig/caption replaced by bare text after switching builder presets).
+    // The newest animation owns the node; anything else must stop silently.
+    var token = {};
+    el.__cfCountup = token;
+
     function step(ts) {
+      if (el.__cfCountup !== token || !el.isConnected || !el.hasAttribute('data-countup')) {
+        return; // superseded, detached, or morphed into a non-countup node
+      }
       if (startTime === null) startTime = ts;
       var elapsed = ts - startTime;
       var progress = Math.min(elapsed / durationMs, 1);
