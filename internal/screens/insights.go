@@ -846,7 +846,10 @@ func Insights() ui.Node {
 			},
 		),
 		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
-			Div(css.Class("insights-thinking asst-msg-agent asst-thinking", tw.MaxW85, tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
+			Div(css.Class("chat-row-agent"),
+				Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
+				Div(css.Class("insights-thinking chat-thinking", tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
+			),
 		)),
 	)
 
@@ -862,13 +865,13 @@ func Insights() ui.Node {
 		// C246: show a Send button on the no-key path so mouse/touch users can
 		// submit via click rather than only via Enter. Same aria-label as the
 		// keyed Send button (insights.send) for consistent screen-reader semantics.
-		trailing = Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uistate.T("insights.send"))
+		trailing = Button(css.Class("chat-send"), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), Title(uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4)))
 	case loading.Get():
 		trailing = Button(css.Class("btn"), Type("button"), OnClick(cancelAI), uistate.T("insights.cancel"))
 	default:
 		// C249: give the send button an explicit accessible name and mark the leading
 		// icon decorative so screen readers announce just "Send".
-		trailing = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4), Attr("aria-hidden", "true")), Span(uistate.T("insights.send")))
+		trailing = Button(css.Class("chat-send"), Type("button"), Attr("data-testid", "assistant-send"), Attr("aria-label", uistate.T("insights.send")), Title(uistate.T("insights.send")), OnClick(onSubmit), uiw.Icon(icon.ArrowUp, css.Class(tw.W4, tw.H4)))
 	}
 	inputRow := Div(css.Class("asst-composer", tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
 		// The placeholder tells the truth about the current mode (review: "tell me
@@ -1017,37 +1020,46 @@ func Insights() ui.Node {
 		)
 	}
 
-	// The AGENT-FIRST layout: the conversation IS the page (left, dominant), and
-	// the rail (right) carries the agent's periphery — its observations
-	// (anomalies + spending highlights), pinned insights, saved conversations.
-	chatSection := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("assistant.agentTitle"),
-		// The chat controls ride the section header (one calm line: serif title
-		// left, quiet pills right) instead of stacking a second toolbar row.
-		HeaderAction: chatControls,
-		// C234: id="ask" anchor keeps any existing deep-link (#ask) working.
-		Attrs: []any{Attr("id", "ask"), Attr("data-testid", "assistant-chat")},
-		Body: Fragment(
-			backendToggle,
-			If(empty, agentIntro),
-			// C248: show static example Q→A conversations for keyless users so they
-			// can preview the assistant's value before adding a key. Shown only when
-			// no AI is configured AND the thread is empty.
-			If(noAI && empty, exampleConversationsNode()),
-			If(!empty, thread),
-			// Approval card: a mutating tool is paused waiting for the user's yes/no. Its
-			// own component so the Approve/Decline handlers re-attach cleanly each time
-			// it mounts (the no-On*-in-conditional rule).
-			If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
-				Preview:   approvalPreview,
-				OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
-				OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
-			})),
-			chips,
-			composer,
-			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+	// The AGENT CONSOLE — built from scratch (no card): a slim identity bar, a
+	// full-height scrolling canvas with the conversation set in a document
+	// measure, and a docked composer the content scrolls beneath. The rail keeps
+	// the agent's periphery. All chat state/handlers are untouched.
+	statusCls, statusKey := "chat-status-dot is-live", "assistant.statusLive"
+	if noAI {
+		statusCls, statusKey = "chat-status-dot is-local", "assistant.statusLocal"
+	}
+	chatSection := Div(css.Class("chat-console"), Attr("id", "ask"), Attr("data-testid", "assistant-chat"),
+		Div(css.Class("chat-head"),
+			Div(css.Class("chat-head-id"),
+				Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
+				H2(css.Class("chat-title"), uistate.T("assistant.agentTitle")),
+				Span(css.Class("chat-status", tw.TextFaint), uistate.T(statusKey)),
+			),
+			chatControls,
 		),
-	})
+		Div(css.Class("chat-scroll"),
+			Div(css.Class("chat-measure"),
+				backendToggle,
+				If(empty, Fragment(agentIntro, chips)),
+				// C248: static example Q→A pairs preview the assistant for keyless users.
+				If(noAI && empty, exampleConversationsNode()),
+				If(!empty, thread),
+				// Approval card: a mutating tool is paused waiting for the user's yes/no.
+				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
+					Preview:   approvalPreview,
+					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
+					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+				})),
+				If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+			),
+		),
+		Div(css.Class("chat-dock"),
+			Div(css.Class("chat-measure"),
+				composer,
+				P(css.Class("chat-dock-hint", tw.TextFaint), uistate.T("assistant.composerHint")),
+			),
+		),
+	)
 
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
@@ -1264,10 +1276,10 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 	}
 	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
-		Div(css.Class("asst-msg-agent", tw.MaxW85),
-			Div(css.Class("asst-msg-speaker"), uistate.T("assistant.speaker")),
+		Div(css.Class("chat-row-agent"),
+			Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
 			// marked fills this element via the effect above.
-			Div(Attr("id", mdID), css.Class("md insights-answer", tw.Text14)),
+			Div(Attr("id", mdID), css.Class("md insights-answer chat-agent-body", tw.Text14)),
 		),
 		// Actions sit UNDER the bubble, revealed when the bubble is hovered/focused.
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
@@ -1489,11 +1501,14 @@ func exampleConversationsNode() ui.Node {
 		rows = append(rows,
 			// User bubble: right-aligned via MlAuto, sky tint — mirrors the real chat.
 			Div(css.Class(tw.Flex, tw.JustifyStart, tw.Mb2),
-				Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgSky10, tw.Px35, tw.Py2, tw.Text13, tw.WhitespacePreWrap, tw.MlAuto), p.q),
+				Div(css.Class("asst-msg-user", tw.MaxW85, tw.Text13, tw.WhitespacePreWrap, tw.MlAuto), p.q),
 			),
 			// Assistant bubble: left-aligned, neutral tint — mirrors the real chat.
 			Div(css.Class(tw.Flex, tw.JustifyStart, tw.Mb2),
-				Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.BgBlack04, tw.Px35, tw.Py2, tw.Text13), p.a),
+				Div(css.Class("chat-row-agent", tw.MaxW85),
+					Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
+					Div(css.Class("chat-agent-body", tw.Text13), p.a),
+				),
 			),
 		)
 	}

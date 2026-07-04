@@ -130,11 +130,6 @@ func registerAssistantSurface() {
 		prop("border-left", "3px solid var(--accent)"),
 		prop("padding-left", "0.6rem"),
 	)
-	rule(".asst-main > .card",
-		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("min-height", "46vh"),
-	)
 	// EntityListSection flattens fragments, so the thread/composer/keynote are
 	// DIRECT card children — the thread alone flexes to anchor the composer.
 	rule(".asst-thread",
@@ -215,5 +210,152 @@ func registerAssistantSurface() {
 	rule(".asst-keynote .btn",
 		prop("flex", "0 0 auto"),
 		prop("align-self", "center"),
+	)
+
+	// ── The agent console (from-scratch Ask surface): identity bar, scrolling
+	// canvas with a document measure, docked composer. ─────────────────────────
+	rule(".chat-console",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("height", "calc(100vh - 12.5rem)"),
+		prop("min-height", "34rem"),
+		prop("background", "var(--bg-card)"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius)"),
+		prop("overflow", "hidden"),
+	)
+	rule(".chat-head",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.75rem"),
+		prop("padding", "0.8rem 1.1rem"),
+		prop("border-bottom", "1px solid var(--border)"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".chat-head-id",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.6rem"),
+	)
+	rule(".chat-title",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "1.15rem"),
+		prop("font-weight", "600"),
+		prop("margin", "0"),
+	)
+	rule(".chat-status",
+		prop("font-size", "0.72rem"),
+		prop("letter-spacing", "0.04em"),
+	)
+	rule(".chat-status-dot",
+		prop("width", "8px"),
+		prop("height", "8px"),
+		prop("border-radius", "50%"),
+		prop("align-self", "center"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".chat-status-dot.is-live",
+		prop("background", "var(--accent)"),
+		prop("box-shadow", "0 0 6px color-mix(in srgb, var(--accent) 70%, transparent)"),
+	)
+	rule(".chat-status-dot.is-local",
+		prop("background", "var(--warn, #d9a23f)"),
+	)
+	rule(".chat-scroll",
+		prop("flex", "1"),
+		prop("min-height", "0"),
+		prop("overflow-y", "auto"),
+		prop("padding", "1.4rem 1.1rem 0.8rem"),
+	)
+	rule(".chat-measure",
+		prop("max-width", "46rem"),
+		prop("margin", "0 auto"),
+		prop("width", "100%"),
+	)
+	// Agent rows: an accent avatar in a gutter, editorial text beside it.
+	rule(".chat-row-agent",
+		prop("display", "flex"),
+		prop("gap", "0.8rem"),
+		prop("align-items", "flex-start"),
+	)
+	rule(".chat-avatar",
+		prop("flex", "0 0 auto"),
+		prop("width", "1.7rem"),
+		prop("height", "1.7rem"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "center"),
+		prop("border-radius", "50%"),
+		prop("border", "1px solid color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		prop("color", "var(--accent)"),
+		prop("font-size", "0.8rem"),
+		prop("margin-top", "0.1rem"),
+		prop("background", "color-mix(in srgb, var(--accent) 8%, transparent)"),
+	)
+	rule(".chat-agent-body",
+		prop("line-height", "1.65"),
+		prop("min-width", "0"),
+	)
+	rule(".chat-thinking",
+		prop("font-style", "italic"),
+	)
+	rule(".chat-thinking::after",
+		prop("content", "'…'"),
+		prop("animation", "chat-ellipsis 1.4s infinite steps(4)"),
+		prop("display", "inline-block"),
+		prop("width", "1.2em"),
+		prop("text-align", "left"),
+	)
+	keyframes("chat-ellipsis",
+		at("0%", prop("clip-path", "inset(0 100% 0 0)")),
+		at("100%", prop("clip-path", "inset(0 -0.2em 0 0)")),
+	)
+	// The dock: content scrolls beneath; a soft fade sells the depth.
+	rule(".chat-dock",
+		prop("flex", "0 0 auto"),
+		prop("padding", "0.7rem 1.1rem 0.9rem"),
+		prop("border-top", "1px solid var(--border)"),
+		prop("background", "linear-gradient(to top, var(--bg-card) 75%, color-mix(in srgb, var(--bg-card) 40%, transparent))"),
+	)
+	rule(".chat-dock-hint",
+		prop("margin", "0.4rem 0.2rem 0"),
+		prop("font-size", "0.7rem"),
+		prop("letter-spacing", "0.02em"),
+	)
+	rule(".chat-send",
+		prop("flex", "0 0 auto"),
+		prop("width", "2.4rem"),
+		prop("height", "2.4rem"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "center"),
+		prop("border-radius", "50%"),
+		prop("border", "none"),
+		prop("background", "var(--accent)"),
+		prop("color", "var(--accent-fg, #08120c)"),
+		prop("cursor", "pointer"),
+		prop("transition", "transform 120ms ease, filter 120ms ease"),
+	)
+	rule(".chat-send:hover",
+		prop("filter", "brightness(1.1)"),
+		prop("transform", "translateY(-1px)"),
+	)
+	// Starter prompts as inviting tiles (they render inside the intro hero).
+	rule(".chip-suggest",
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "12px"),
+		prop("padding", "0.6rem 0.9rem"),
+		prop("background", "var(--bg-elev)"),
+		prop("text-align", "left"),
+		prop("transition", "border-color 130ms ease, transform 130ms ease"),
+	)
+	rule(".chip-suggest:hover",
+		prop("border-color", "color-mix(in srgb, var(--accent) 50%, var(--border))"),
+		prop("transform", "translateY(-1px)"),
+	)
+	// The intro hero scales up inside the console canvas.
+	rule(".chat-measure .asst-intro-title",
+		prop("font-size", "1.9rem"),
 	)
 }

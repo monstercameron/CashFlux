@@ -1,3 +1,23 @@
+## 2026-07-03 — Ask tab, fourth pass: an actual console, built from scratch
+
+Cam, after three incremental passes: "yeah redesign the ask tab or the chat area from scratch." He
+was right to push — restyling a card kept it a card. The from-scratch structure: identity bar
+(status dot + serif name + honest mode line + pills), a full-height scrolling canvas with the
+thread in a centered document measure, and a docked composer with a circular accent send. The
+agent's replies get a circled ✦ avatar gutter; the keyless demo pairs and the thinking indicator
+speak the same language; starter prompts became bordered tiles inside the hero.
+
+Two ops notes. First, judge viewport-sized layouts at a REAL viewport — the 2200px-tall screenshot
+made the console look broken when it was correct at 1440×900. Second, Cam watches :8080 (gwc dev
+on web/bin) — earlier today three shipped commits were invisible to him because my builds went to
+the isolated :8091 webroot; web/bin deploy is now part of the ship ritual (memory:
+cashflux-deploy-to-web-bin).
+
+assistant_check 23/23. The briefing suite's E1 (wipe → expect empty state) flakes on the
+first-run sample-seeding timing — it failed before the console work began, passed once mid-day,
+and fails again now with no relevant diff; flagged for the briefing owner rather than patched
+blind from here.
+
 ## 2026-07-03 — Ask tab, third pass: the conversation itself gets designed
 
 Cam: "the ask tabs still looks dated." Correct — the cohesion pass restyled titles and spacing but
