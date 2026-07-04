@@ -1028,15 +1028,7 @@ func Insights() ui.Node {
 	if noAI {
 		statusCls, statusKey = "chat-status-dot is-local", "assistant.statusLocal"
 	}
-	chatSection := Div(css.Class("chat-console"), Attr("id", "ask"), Attr("data-testid", "assistant-chat"),
-		Div(css.Class("chat-head"),
-			Div(css.Class("chat-head-id"),
-				Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
-				H2(css.Class("chat-title"), uistate.T("assistant.agentTitle")),
-				Span(css.Class("chat-status", tw.TextFaint), uistate.T(statusKey)),
-			),
-			chatControls,
-		),
+	chatConsole := Div(css.Class("chat-console"), Attr("data-testid", "assistant-chat"),
 		Div(css.Class("chat-scroll"),
 			Div(css.Class("chat-measure"),
 				backendToggle,
@@ -1061,6 +1053,24 @@ func Insights() ui.Node {
 		),
 	)
 
+	// The Ask surface in the app's own language: a bento host, the conversation
+	// as a Widget tile with the serif accent-tick section head (the SAME chrome
+	// as /health, /smart, /reports), the agent's periphery as rail cards in the
+	// fourth column. The status line rides as the hero eyebrow.
+	chatTile := uiw.Widget(uiw.WidgetProps{
+		ID: "ask-chat", Title: "", GridColumn: "1 / span 3", GridRow: "1 / span 4",
+		Draggable: false, Resizable: false, Preview: true,
+		Body: astSection("sec-ask", uistate.T("assistant.agentTitle"), chatControls,
+			Fragment(
+				P(css.Class("rpt-hero-eyebrow", tw.TextDim, "chat-status-line"),
+					Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
+					Span(uistate.T(statusKey)),
+				),
+				chatConsole,
+			)),
+	})
+	rail := func(n ui.Node) ui.Node { return Div(Style(map[string]string{"grid-column": "4"}), n) }
+
 	return Div(
 		// When there is no financial data yet, show a guided empty state so a first-time
 		// user knows to add an account before asking questions. The chat section is still
@@ -1077,15 +1087,11 @@ func Insights() ui.Node {
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
 		scopeNotice,
-		Div(css.Class("asst-layout"), Attr("data-testid", "assistant-layout"),
-			Div(css.Class("asst-main"), chatSection),
-			Div(css.Class("asst-rail"), Attr("data-testid", "assistant-rail"),
-				// The agent's observations: anomaly findings + spending highlights.
-				flagged,
-				highlights,
-				pinnedCard,
-				railConvs,
-			),
+		Div(css.Class("bento bento-ask"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
+			chatTile,
+			// The agent's observations + periphery: anomaly findings, spending
+			// highlights, pins, saved conversations.
+			rail(Div(Attr("data-testid", "assistant-rail"), flagged, highlights, pinnedCard, railConvs)),
 		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).

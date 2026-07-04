@@ -358,4 +358,53 @@ func registerAssistantSurface() {
 	rule(".chat-measure .asst-intro-title",
 		prop("font-size", "1.9rem"),
 	)
+
+	// ── The Ask bento: the console lives INSIDE a Widget tile now, so it sheds
+	// its own chrome; the rail cards stack in the fourth column. ────────────────
+	rule(".bento.bento-ask",
+		prop("grid-template-rows", "auto"),
+		prop("grid-auto-rows", "auto"),
+	)
+	rule(".bento.bento-ask > .w",
+		prop("height", "auto"),
+		prop("min-height", "0"),
+		prop("overflow", "visible"),
+	)
+	rule(".bento-ask .chat-console",
+		prop("border", "none"),
+		prop("background", "transparent"),
+		prop("border-radius", "0"),
+		prop("height", "calc(100vh - 17rem)"),
+		prop("min-height", "30rem"),
+	)
+	rule(".bento-ask .chat-scroll",
+		prop("padding", "0.9rem 0.2rem 0.8rem"),
+	)
+	rule(".bento-ask .chat-dock",
+		prop("padding", "0.7rem 0.2rem 0.2rem"),
+	)
+	rule(".chat-status-line",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.45rem"),
+		prop("margin", "0 0 0.35rem"),
+	)
+	// Rail cards keep the serif title language inside the bento.
+	rule(".bento-ask .card-title",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "1.05rem"),
+		prop("font-weight", "600"),
+		prop("border-left", "3px solid var(--accent)"),
+		prop("padding-left", "0.6rem"),
+	)
+	rule(".bento-ask [data-testid='assistant-rail'] > .card",
+		prop("margin-bottom", "1rem"),
+	)
+	rule(".bento-ask [data-testid='assistant-rail'] .card-head",
+		prop("flex-wrap", "wrap"),
+		prop("row-gap", "0.2rem"),
+	)
+	rule(".bento-ask [data-testid='assistant-rail'] .btn-link",
+		prop("white-space", "nowrap"),
+	)
 }

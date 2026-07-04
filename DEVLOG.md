@@ -1,3 +1,20 @@
+## 2026-07-03 — Ask tab, fifth pass: same components as everyone else
+
+Cam (rightly exasperated): "look at the widgets and components from the other pages and use the
+current redesign language to redesign the ask page." The from-scratch console was structurally
+right but visually a ONE-OFF — its own card, its own head — while every other redesigned page
+speaks Widget-tile + astSection + accent-tick serif. This pass re-houses the console in exactly
+those parts: bento host, the chat as a span-3 Widget tile with the astSection head (chatControls
+as the section action, the status line as the rpt-hero-eyebrow), the rail cards in column 4 with
+the serif-tick card titles. The console internals are untouched; only the shell changed.
+
+Lesson worth keeping: "redesign" on this codebase means COMPOSE FROM THE ESTABLISHED PARTS first
+— astTile/astSection/rptChip/bento — and only invent new chrome for what the parts genuinely
+can't express (the scroll canvas, avatar gutter, and docked composer earned their new classes;
+the card and header did not).
+
+assistant_check 23/23; suite green; deployed to web/bin for :8080.
+
 ## 2026-07-03 — Ask tab, fourth pass: an actual console, built from scratch
 
 Cam, after three incremental passes: "yeah redesign the ask tab or the chat area from scratch." He
