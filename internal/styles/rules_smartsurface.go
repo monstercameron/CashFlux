@@ -12,12 +12,12 @@ package styles
 // the generated rules so these win equal-specificity ties (and beat the
 // !important .smart-card box via higher specificity).
 func registerSmartSurface() {
-	// ── The deck: one editorial column. ─────────────────────────────────────────
+	// ── The deck: one editorial column that fills the content width like every
+	// other page (reports/health .bento are max-width:none). No arbitrary cap. ───
 	rule(".smt-deck",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 		prop("gap", "2rem"),
-		prop("max-width", "60rem"),
 	)
 
 	// ── Masthead ─────────────────────────────────────────────────────────────────
