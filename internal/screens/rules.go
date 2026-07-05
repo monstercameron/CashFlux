@@ -6,11 +6,13 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -36,8 +38,10 @@ func Rules() ui.Node {
 	// Re-render after modal saves (RuleEditHost bumps the shared data revision).
 	_ = uistate.UseDataRevision().Get()
 
-	// In-context add (G18 §1): an "+ Add rule" button in the "Your rules" header.
-	addRule := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("rule") }))
+	// In-context add (G18 §1): the header's "+ Add rule" jumps to the on-page
+	// quick-add form (the page previously offered the same form TWICE — inline
+	// AND in a modal — with nothing explaining the difference).
+	addRule := ui.UseEvent(Prevent(func() { focusByID("rule-quick-match") }))
 
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
@@ -47,6 +51,27 @@ func Rules() ui.Node {
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
+	}
+	acctName := func(id string) string {
+		for _, a := range app.Accounts() {
+			if a.ID == id {
+				return a.Name
+			}
+		}
+		return id
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	fmtAmt := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
+	// condLine renders a rule's structured conditions in plain English ("" when
+	// it has none) — the row, the precedence chain, and notices all read it.
+	condLine := func(r rules.Rule) string {
+		if len(r.Conditions) == 0 {
+			return ""
+		}
+		return ruleCondsEnglish(r.Conditions, acctName, fmtAmt)
 	}
 
 	deleteRule := func(ruleID string) {
@@ -63,41 +88,51 @@ func Rules() ui.Node {
 			bump()
 		})
 	}
-	// Text each rule is matched against (payee + description), mirroring the engine
-	// at entry/import. Computed once and reused for the per-rule counts below.
-	txns := app.Transactions()
-	texts := make([]string, len(txns))
-	for i, t := range txns {
-		texts[i] = t.Payee + " " + t.Desc
+	// Full transaction contexts (transfers excluded, mirroring the engine at
+	// entry/import) so counts, coverage, and the authoring preview evaluate
+	// structured conditions exactly like FirstMatchFull.
+	ctxs := ruleTxnCtxs(app)
+
+	// ruleDisplayLabel names a rule for notices: the match phrase, or its
+	// conditions in plain English for a condition-bearing rule.
+	ruleDisplayLabel := func(r rules.Rule) string {
+		if l := condLine(r); l != "" {
+			return l
+		}
+		return r.Match
 	}
 
+	// Apply-to-existing is an irreversible bulk overwrite — preview the blast
+	// radius first (dry-run, conditions-aware) and confirm before writing.
 	applyExisting := ui.UseEvent(Prevent(func() {
-		// Capture the rule list at event time so match phrases are current.
 		currentRules := app.Rules()
-		n, perRule, err := app.ApplyRulesWithCounts()
-		if err != nil {
-			notice.Set(notice.Get().With(err.Error(), true))
+		total, perRule := app.PreviewApplyRules()
+		if total == 0 {
+			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
 			return
 		}
-		if n == 0 {
-			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
-		} else {
-			msg := uistate.T("rules.applied", plural(n, "transaction"))
-			// Append per-rule breakdown when at least one rule fired.
-			if len(perRule) > 0 {
-				var parts []string
-				for _, r := range currentRules {
-					if cnt, ok := perRule[r.ID]; ok {
-						parts = append(parts, uistate.T("rules.appliedPerRule", r.Match, plural(cnt, "transaction")))
-					}
-				}
-				if len(parts) > 0 {
-					msg += " — " + strings.Join(parts, ", ") + "."
-				}
+		var parts []string
+		for _, r := range currentRules {
+			if cnt, ok := perRule[r.ID]; ok {
+				parts = append(parts, uistate.T("rules.appliedPerRule", ruleDisplayLabel(r), plural(cnt, "transaction")))
 			}
-			notice.Set(notice.Get().With(msg, false))
 		}
-		bump()
+		confirmMsg := uistate.T("rules.applyConfirm", plural(total, "transaction"))
+		if len(parts) > 0 {
+			confirmMsg += " " + strings.Join(parts, ", ") + "."
+		}
+		uistate.ConfirmModal(confirmMsg, false, func(ok bool) {
+			if !ok {
+				return
+			}
+			n, _, err := app.ApplyRulesWithCounts()
+			if err != nil {
+				notice.Set(notice.Get().With(err.Error(), true))
+				return
+			}
+			notice.Set(notice.Get().With(uistate.T("rules.applied", plural(n, "transaction")), false))
+			bump()
+		})
 	}))
 
 	rs := app.Rules()
@@ -111,14 +146,15 @@ func Rules() ui.Node {
 		}
 	}
 	// Per-rule match counts + overall coverage — the "before you Apply to existing"
-	// signal (L15), reusing the texts computed above. maxMatch anchors the per-rule
-	// weight bars (each rule's catch vs the heaviest rule's).
-	covered := rules.Covered(rs, texts)
-	hasTxns := len(texts) > 0
+	// signal (L15), evaluated with FULL transaction context so condition-bearing
+	// rules count honestly (a plain-text count read "0 caught" for a rule that
+	// catches hundreds). maxMatch anchors the per-rule weight bars.
+	covered := rules.CoveredFull(rs, ctxs)
+	hasTxns := len(ctxs) > 0
 	matchCounts := make(map[string]int, len(rs))
 	maxMatch := 0
 	for _, r := range rs {
-		n := r.MatchCount(texts)
+		n := r.MatchCountFull(ctxs)
 		matchCounts[r.ID] = n
 		if n > maxMatch {
 			maxMatch = n
@@ -148,6 +184,29 @@ func Rules() ui.Node {
 			bump()
 		}
 	}
+	// moveRule shifts a rule one step up or down the precedence chain — the
+	// keyboard-reachable complement to drag-to-reorder (the grip is mouse-only).
+	moveRule := func(id string, delta int) {
+		idx := -1
+		for i, r := range rs {
+			if r.ID == id {
+				idx = i
+				break
+			}
+		}
+		j := idx + delta
+		if idx < 0 || j < 0 || j >= len(rs) {
+			return
+		}
+		res := make([]string, len(rs))
+		for i, r := range rs {
+			res[i] = r.ID
+		}
+		res[idx], res[j] = res[j], res[idx]
+		if err := app.ReorderRules(res); err == nil {
+			bump()
+		}
+	}
 
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), AddTarget: "rule"}),
@@ -156,9 +215,10 @@ func Rules() ui.Node {
 			func(r rules.Rule) ui.Node {
 				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
-					Rule: r, CategoryName: catName[r.SetCategoryID],
+					Rule: r, CategoryName: catName[r.SetCategoryID], CondLine: condLine(r),
 					Warning: warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
 					OnDelete:    deleteRule,
+					OnMove:      moveRule,
 					OnDragStart: func() { dragSrc.Set(rid) },
 					OnDrop:      func() { reorder(rid) },
 				})
@@ -168,6 +228,8 @@ func Rules() ui.Node {
 
 	acceptSuggestion := func(r rules.Rule) {
 		r.ID = id.New()
+		// Accepted suggestions append to the END of the chain (see RuleAddForm).
+		r.Order = app.NextRuleOrder()
 		if err := app.PutRule(r); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -215,8 +277,8 @@ func Rules() ui.Node {
 	// ── Hero: the coverage figure, the health chips, and the takeaway. ──────────
 	shadowedCount := len(warnByID)
 	coveredPct := 0
-	if len(texts) > 0 {
-		coveredPct = covered * 100 / len(texts)
+	if len(ctxs) > 0 {
+		coveredPct = covered * 100 / len(ctxs)
 	}
 	countLine := uistate.T("rules.countWord", len(rs))
 	if len(rs) == 1 {
@@ -238,7 +300,7 @@ func Rules() ui.Node {
 
 	takeaway := uistate.T("rls.noneTake")
 	if len(rs) > 0 && hasTxns {
-		takeaway = uistate.T("rls.coverTake", fmt.Sprintf("%d", covered), len(texts))
+		takeaway = uistate.T("rls.coverTake", fmt.Sprintf("%d", covered), len(ctxs))
 		if shadowedCount == 1 {
 			takeaway += " " + uistate.T("rls.shadowClauseOne")
 		} else if shadowedCount > 1 {
@@ -284,7 +346,7 @@ func Rules() ui.Node {
 				// match-count preview + validation) the modal uses.
 				Div(css.Class(tw.Mb2),
 					H3(css.Class("set-label"), uistate.T("rules.quickAddTitle")),
-					RuleAddForm(RuleAddFormProps{OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
+					RuleAddForm(RuleAddFormProps{MatchInputID: "rule-quick-match", OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
 				),
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 				list,
@@ -298,7 +360,7 @@ func Rules() ui.Node {
 		If(len(rs) > 1, rptTile("rules-order", "1 / span 4",
 			rptSection("sec-rules-order", uistate.T("rules.orderTitle"), nil, Fragment(
 				P(css.Class("muted"), uistate.T("rules.orderHint")),
-				rulesPrecedenceChain(rs, catName, warnByID),
+				rulesPrecedenceChain(rs, catName, warnByID, condLine),
 			)))),
 	)
 }
@@ -307,7 +369,7 @@ func Rules() ui.Node {
 // each link shows its precedence number, the match phrase, and the category it
 // files into; shadowed rules dim with their warning inline. A native replacement
 // for the stock-themed Mermaid flowchart (aria-label preserved).
-func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID map[string]string) ui.Node {
+func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID map[string]string, condLine func(rules.Rule) string) ui.Node {
 	items := []any{css.Class("rule-chain"), Attr("role", "list"), Attr("aria-label", uistate.T("rules.precedenceLabel"))}
 	for i, r := range rs {
 		cat := catName[r.SetCategoryID]
@@ -318,10 +380,14 @@ func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID m
 		if warnByID[r.ID] != "" {
 			cls += " rule-chain-shadowed"
 		}
+		identity := uistate.T("rules.matchLabel", r.Match)
+		if l := condLine(r); l != "" {
+			identity = uistate.T("rules.condLabel", l)
+		}
 		items = append(items, Div(ClassStr(cls), Attr("role", "listitem"),
 			Span(css.Class("rule-chain-n", tw.FontDisplay), fmt.Sprintf("%d", i+1)),
 			Div(css.Class("rule-chain-body"),
-				Span(css.Class("rule-chain-match"), uistate.T("rules.matchLabel", r.Match)),
+				Span(css.Class("rule-chain-match"), identity),
 				Span(css.Class("rule-chain-cat"), "→ "+cat),
 				If(warnByID[r.ID] != "", Span(css.Class("rule-chain-warn", tw.TextWarn), warnByID[r.ID])),
 			),
@@ -331,10 +397,12 @@ func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID m
 }
 
 // validateRuleInput returns the i18n key of the first problem with a rule's
-// match/category, or "" when both are present. Keeps the raw appstate error out
-// of the UI by checking the same invariants client-side first.
-func validateRuleInput(match, categoryID string) string {
-	if strings.TrimSpace(match) == "" {
+// match/category, or "" when the rule is saveable. A match phrase is required
+// UNLESS structured conditions are set (conditions override the phrase at
+// evaluation time, so a pure-conditions rule is legitimate — C105). Keeps the
+// raw appstate error out of the UI by checking the same invariants client-side.
+func validateRuleInput(match, categoryID string, hasConditions bool) string {
+	if strings.TrimSpace(match) == "" && !hasConditions {
 		return "rules.matchRequired"
 	}
 	if categoryID == "" {
@@ -369,13 +437,18 @@ func SuggestionRow(props suggestionRowProps) ui.Node {
 }
 
 type ruleRowProps struct {
-	Rule           rules.Rule
-	CategoryName   string
+	Rule         rules.Rule
+	CategoryName string
+	// CondLine is the rule's structured conditions in plain English ("" when the
+	// rule matches by phrase) — shown as the row's identity so a condition rule
+	// isn't a black box behind an ignored match phrase.
+	CondLine       string
 	Warning        string // non-empty when this rule never fires (shadowed)
 	MatchCount     int    // how many existing transactions this rule's phrase hits
 	MaxMatchCount  int    // the heaviest rule's count — anchors the weight bar
 	ShowMatchCount bool   // whether to show the count (there are transactions to count)
 	OnDelete       func(string)
+	OnMove         func(id string, delta int) // keyboard-reachable precedence nudge (in the row menu)
 	OnDragStart    func()
 	OnDrop         func()
 }
@@ -387,10 +460,26 @@ func RuleRow(props ruleRowProps) ui.Node {
 	r := props.Rule
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
 	startEdit := ui.UseEvent(Prevent(func() { uistate.SetRuleEdit(r.ID) }))
+	moveUp := ui.UseEvent(Prevent(func() {
+		if props.OnMove != nil {
+			props.OnMove(r.ID, -1)
+		}
+	}))
+	moveDown := ui.UseEvent(Prevent(func() {
+		if props.OnMove != nil {
+			props.OnMove(r.ID, 1)
+		}
+	}))
 
 	target := props.CategoryName
 	if target == "" {
 		target = uistate.T("rules.unknownCategory")
+	}
+	// A condition rule's identity IS its conditions (the engine ignores the
+	// phrase when conditions are set) — say so instead of showing a dead phrase.
+	identity := uistate.T("rules.matchLabel", r.Match)
+	if props.CondLine != "" {
+		identity = uistate.T("rules.condLabel", props.CondLine)
 	}
 	meta := uistate.T("rules.appliesTo", target)
 	if len(r.SetTags) > 0 {
@@ -431,7 +520,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 		})),
 		Span(css.Class("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), Span(css.Class("rule-match"), uistate.T("rules.matchLabel", r.Match))),
+			Span(css.Class("row-desc"), Span(css.Class("rule-match"), identity)),
 			Span(css.Class("row-meta"), meta),
 			If(props.Warning != "", Span(css.Class("row-meta", tw.TextWarn), props.Warning)),
 			bar,
@@ -443,10 +532,80 @@ func RuleRow(props ruleRowProps) ui.Node {
 			AriaLabel:    uistate.T("rules.menuAria"),
 			ToggleTestID: "rule-menu-btn-" + r.ID,
 			Items: []ui.Node{
+				// Keyboard-reachable precedence nudges (the drag grip is mouse-only).
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "rule-moveup-"+r.ID), OnClick(moveUp), uistate.T("rules.moveUp")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "rule-movedown-"+r.ID), OnClick(moveDown), uistate.T("rules.moveDown")),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "rule-delete-"+r.ID), Attr("aria-label", uistate.T("rules.deleteTitle")),
 					Title(uistate.T("rules.deleteTitle")), OnClick(del), uistate.T("rules.deleteTitle")),
 			},
 		}),
 	)
+}
+
+// ruleCondsEnglish renders structured rule conditions as one plain-English
+// clause ("amount over $100 and payee contains \u201cuber\u201d-style text) so
+// condition rules are never a black box behind an ignored match phrase (C105).
+func ruleCondsEnglish(conds []rules.RuleCondition, acctName func(string) string, fmtAmt func(int64) string) string {
+	parts := make([]string, 0, len(conds))
+	for _, c := range conds {
+		parts = append(parts, ruleCondEnglish(c, acctName, fmtAmt))
+	}
+	return strings.Join(parts, uistate.T("rls.cond.joiner"))
+}
+
+// ruleCondEnglish renders one structured condition in plain English. Unknown
+// field/op combinations fall back to a literal "field op value" so nothing is
+// silently hidden.
+func ruleCondEnglish(c rules.RuleCondition, acctName func(string) string, fmtAmt func(int64) string) string {
+	v := strings.TrimSpace(c.Value)
+	switch c.Field {
+	case rules.ConditionFieldPayee, rules.ConditionFieldDescription:
+		word := uistate.T("rls.cond.fieldPayee")
+		if c.Field == rules.ConditionFieldDescription {
+			word = uistate.T("rls.cond.fieldDesc")
+		}
+		if c.Op == rules.ConditionOpEquals {
+			return uistate.T("rls.cond.textEquals", word, v)
+		}
+		return uistate.T("rls.cond.textContains", word, v)
+	case rules.ConditionFieldAmount:
+		amt := v
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			amt = fmtAmt(n)
+		}
+		switch c.Op {
+		case rules.ConditionOpGt:
+			return uistate.T("rls.cond.amtGt", amt)
+		case rules.ConditionOpGte:
+			return uistate.T("rls.cond.amtGte", amt)
+		case rules.ConditionOpLt:
+			return uistate.T("rls.cond.amtLt", amt)
+		case rules.ConditionOpLte:
+			return uistate.T("rls.cond.amtLte", amt)
+		case rules.ConditionOpEq:
+			return uistate.T("rls.cond.amtEq", amt)
+		case rules.ConditionOpNeq:
+			return uistate.T("rls.cond.amtNeq", amt)
+		}
+	case rules.ConditionFieldAccount:
+		if c.Op == rules.ConditionOpIsNot {
+			return uistate.T("rls.cond.acctIsNot", acctName(v))
+		}
+		return uistate.T("rls.cond.acctIs", acctName(v))
+	case rules.ConditionFieldDate:
+		switch c.Op {
+		case rules.ConditionOpInMonth:
+			return uistate.T("rls.cond.dateInMonth", v)
+		case rules.ConditionOpOn:
+			return uistate.T("rls.cond.dateOn", v)
+		case rules.ConditionOpBefore:
+			return uistate.T("rls.cond.dateBefore", v)
+		case rules.ConditionOpAfter:
+			return uistate.T("rls.cond.dateAfter", v)
+		}
+	}
+	return string(c.Field) + " " + string(c.Op) + " " + v
 }

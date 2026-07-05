@@ -35,6 +35,10 @@ type RuleAddFormProps struct {
 	// close the modal. On a validation error the form stays open and OnDone is
 	// not called.
 	OnDone func()
+	// MatchInputID, when set, lands as the match input's element id so a page
+	// affordance can focus the form (only ONE instance may set it — a static id
+	// on both the inline form and the AddHost modal produced duplicate ids, C107).
+	MatchInputID string
 }
 
 // condSlotOpts returns the field dropdown options for a structured condition slot.
@@ -163,19 +167,10 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 	cats := app.Categories()
 
-	// Text each rule is matched against (payee + description), mirroring the engine
-	// at entry/import. Used for the live authoring preview.
-	txns := app.Transactions()
-	texts := make([]string, len(txns))
-	for i, t := range txns {
-		texts[i] = t.Payee + " " + t.Desc
-	}
-	// Live match-count preview while authoring.
-	liveMatch := strings.TrimSpace(match.Get())
-	liveCount := 0
-	if liveMatch != "" {
-		liveCount = rules.Rule{Match: liveMatch}.MatchCount(texts)
-	}
+	// Full transaction contexts (transfers excluded, mirroring the engine at
+	// entry/import) so the live authoring preview evaluates structured
+	// conditions exactly like FirstMatchFull will.
+	ctxs := ruleTxnCtxs(app)
 
 	// collectConditions gathers the enabled condition slots into a []RuleCondition.
 	collectConditions := func() []rules.RuleCondition {
@@ -204,7 +199,8 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	}
 
 	add := ui.UseEvent(Prevent(func() {
-		if errKey := validateRuleInput(match.Get(), categoryID.Get()); errKey != "" {
+		conds := collectConditions()
+		if errKey := validateRuleInput(match.Get(), categoryID.Get(), len(conds) > 0); errKey != "" {
 			errMsg.Set(uistate.T(errKey))
 			return
 		}
@@ -213,7 +209,11 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			Match:         strings.TrimSpace(match.Get()),
 			SetCategoryID: categoryID.Get(),
 			SetTags:       textutil.CommaFields(tags.Get()),
-			Conditions:    collectConditions(),
+			Conditions:    conds,
+			// New rules append to the END of the first-match-wins chain: with the
+			// zero Order they tie with existing rules and the store's ID tie-break
+			// silently jumped them to the TOP of precedence.
+			Order: app.NextRuleOrder(),
 		}
 		if err := app.PutRule(r); err != nil {
 			errMsg.Set(err.Error())
@@ -297,7 +297,14 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		// C109: Match wrapped in FormField for a visible label (previously aria-label-only).
 		// Order is trigger-first (Match → Category → Tags): "when payee contains X, assign Y".
 		uiw.FormField(uistate.T("rules.matchFieldLabel"),
-			Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}, errAttrs("rule-err", errMsg.Get())...)...),
+			func() ui.Node {
+				args := []any{css.Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}
+				if props.MatchInputID != "" {
+					args = append(args, Attr("id", props.MatchInputID))
+				}
+				args = append(args, errAttrs("rule-err", errMsg.Get())...)
+				return Input(args...)
+			}(),
 		),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -314,6 +321,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		// registered at stable hook positions above, not inside a loop.
 		Fieldset(css.Class("cond-slots"),
 			Legend(uistate.T("rulecond.sectionLabel")),
+			P(css.Class("muted"), uistate.T("rulecond.overridesHint")),
 			renderCondSlot(
 				uistate.T("rulecond.slot1"),
 				cond1Enabled.Get(), onCond1Enable,
@@ -338,7 +346,38 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		),
 
 		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
-		If(liveMatch != "" && len(texts) > 0, P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))),
+		// Live preview: evaluate the draft exactly as the engine will (conditions
+		// override the phrase when set), so an amount rule can't read "Matches 0".
+		func() ui.Node {
+			liveMatch := strings.TrimSpace(match.Get())
+			liveConds := collectConditions()
+			if (liveMatch == "" && len(liveConds) == 0) || len(ctxs) == 0 {
+				return Fragment()
+			}
+			liveCount := rules.Rule{Match: liveMatch, Conditions: liveConds}.MatchCountFull(ctxs)
+			return P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))
+		}(),
 		errText("rule-err", errMsg.Get()),
 	)
+}
+
+// ruleTxnCtxs projects the household's non-transfer transactions into the
+// rules engine's full-context form — shared by the authoring preview, the row
+// weight counts, and the coverage hero so they can never disagree with the
+// engine's own matching.
+func ruleTxnCtxs(app *appstate.App) []rules.TxnCtx {
+	txns := app.Transactions()
+	ctxs := make([]rules.TxnCtx, 0, len(txns))
+	for _, t := range txns {
+		if t.IsTransfer() {
+			continue
+		}
+		ctxs = append(ctxs, rules.TxnCtx{
+			Payee: t.Payee, Desc: t.Desc,
+			AmountMinor: t.Amount.Amount,
+			AccountID:   t.AccountID,
+			Date:        rules.NewTxnDate(t.Date),
+		})
+	}
+	return ctxs
 }

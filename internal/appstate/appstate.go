@@ -839,8 +839,10 @@ func (a *App) DeleteCategory(id string) error {
 	return a.del("category", id, a.store.DeleteCategory)
 }
 
-// PutRule saves an auto-categorization rule. A rule needs an ID, a non-empty
-// match phrase, and a target category to be useful.
+// PutRule saves an auto-categorization rule. A rule needs an ID, a target
+// category, and a way to match: a non-empty match phrase OR at least one
+// structured condition (C105 — conditions override the phrase at evaluation
+// time, so a pure-conditions rule is legitimate).
 func (a *App) PutRule(r rules.Rule) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -848,8 +850,8 @@ func (a *App) PutRule(r rules.Rule) error {
 	if r.ID == "" {
 		return fmt.Errorf("appstate: rule needs an id")
 	}
-	if strings.TrimSpace(r.Match) == "" {
-		return fmt.Errorf("appstate: rule needs a match phrase")
+	if strings.TrimSpace(r.Match) == "" && len(r.Conditions) == 0 {
+		return fmt.Errorf("appstate: rule needs a match phrase or a condition")
 	}
 	if r.SetCategoryID == "" {
 		return fmt.Errorf("appstate: rule needs a category")
@@ -941,6 +943,12 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	}
 	if len(t.Tags) == 0 && len(r.SetTags) > 0 {
 		t.Tags = append([]string(nil), r.SetTags...)
+	}
+	// C102: the rename action fires on entry too — previously only the
+	// "Apply to existing" backfill applied it, so a fresh transaction kept its
+	// raw description while an identical historical one got cleaned.
+	if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+		t.Desc = r.RenameDesc
 	}
 	return t
 }
@@ -1965,6 +1973,58 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 	}
 	a.log.Info("applied rules to existing transactions", "updated", total)
 	return total, perRule, nil
+}
+
+// PreviewApplyRules is the dry-run twin of ApplyRulesWithCounts: it reports how
+// many transactions WOULD change (total + per rule ID) without writing anything,
+// so the UI can show the backfill's blast radius before the user commits to an
+// overwrite that has no per-rule undo.
+func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
+	rs := a.Rules()
+	perRule = make(map[string]int, len(rs))
+	if len(rs) == 0 {
+		return 0, perRule
+	}
+	for _, t := range a.Transactions() {
+		if t.IsTransfer() {
+			continue
+		}
+		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
+		if r == nil {
+			continue
+		}
+		changed := t.CategoryID != r.SetCategoryID
+		for _, tag := range r.SetTags {
+			before := len(t.Tags)
+			t.Tags = addTagUnique(t.Tags, tag)
+			if len(t.Tags) != before {
+				changed = true
+			}
+		}
+		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+			changed = true
+		}
+		if !changed {
+			continue
+		}
+		total++
+		perRule[r.ID]++
+	}
+	return total, perRule
+}
+
+// NextRuleOrder returns a precedence Order value that places a NEW rule after
+// every existing one (max existing Order + 1). Without this, new rules default
+// to Order 0 and the store's ID tie-break silently jumps them to the TOP of the
+// first-match-wins chain — ahead of every rule the user already trusts.
+func (a *App) NextRuleOrder() int {
+	next := 0
+	for _, r := range a.Rules() {
+		if r.Order >= next {
+			next = r.Order + 1
+		}
+	}
+	return next
 }
 
 // ApplyRules applies every saved categorization rule to all existing, non-transfer

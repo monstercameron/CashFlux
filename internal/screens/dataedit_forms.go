@@ -374,7 +374,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 			done()
 			return
 		}
-		if errKey := validateRuleInput(matchS.Get(), catS.Get()); errKey != "" {
+		if errKey := validateRuleInput(matchS.Get(), catS.Get(), len(r.Conditions) > 0); errKey != "" {
 			errS.Set(uistate.T(errKey))
 			return
 		}

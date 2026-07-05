@@ -34,3 +34,52 @@ func Covered(rs []Rule, texts []string) int {
 func Uncovered(rs []Rule, texts []string) int {
 	return len(texts) - Covered(rs, texts)
 }
+
+// TxnCtx is a full transaction projection for conditions-aware previews: the
+// same fields FirstMatchFull evaluates, so preview counts and live matching can
+// never disagree.
+type TxnCtx struct {
+	Payee       string
+	Desc        string
+	AmountMinor int64
+	AccountID   string
+	Date        TxnDate
+}
+
+// matchesFull reports whether the rule matches one full transaction context —
+// structured conditions when present (AND), else the legacy Match substring.
+// This is the single-rule form of FirstMatchFull's per-rule check.
+func (r Rule) matchesFull(c TxnCtx) bool {
+	if len(r.Conditions) > 0 {
+		return MatchConditions(r.Conditions, c.Payee, c.Desc, c.AmountMinor, c.AccountID, c.Date)
+	}
+	return matches(c.Payee+" "+c.Desc, r.Match)
+}
+
+// MatchCountFull returns how many of the transaction contexts the rule would
+// match, evaluating structured conditions when present. It supersedes
+// MatchCount wherever full transaction context is available — a plain-text
+// count reads "0 transactions caught" for a condition rule that actually
+// catches hundreds.
+func (r Rule) MatchCountFull(txns []TxnCtx) int {
+	n := 0
+	for _, c := range txns {
+		if r.matchesFull(c) {
+			n++
+		}
+	}
+	return n
+}
+
+// CoveredFull returns how many transaction contexts are matched by at least
+// one rule under first-match-wins, evaluating structured conditions — the
+// conditions-aware form of Covered.
+func CoveredFull(rs []Rule, txns []TxnCtx) int {
+	n := 0
+	for _, c := range txns {
+		if FirstMatchFull(rs, c.Payee, c.Desc, c.AmountMinor, c.AccountID, c.Date) != nil {
+			n++
+		}
+	}
+	return n
+}

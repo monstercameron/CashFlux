@@ -1,3 +1,27 @@
+## 2026-07-05 — Rules engine gate, round 1: 51/100, and every point was earned
+
+Cam's ask: an adversarial agent decides when the rules engine's UX and functionality are
+100/100. Round 1 scored 51 — and the deductions were all real, mostly one theme: **the C105
+condition layer was wired into matching but NOT into anything the user sees.** FirstMatchFull
+applied condition rules correctly at entry and backfill, while MatchCount/Covered/the
+authoring preview/the row label all still spoke legacy-substring — so a condition rule showed
+"Contains \"\" · 0 transactions caught" while quietly re-filing 182 transactions on Apply.
+Textbook explainability failure (SPEC rule 5: no black boxes).
+
+The auditor also caught two brutal latent bugs: RenameDesc never applied on the ENTRY path
+(only backfill — the flagship "clean up bank-feed garbage" action didn't work on new data),
+and new rules silently claimed TOP precedence because Order defaulted to 0 and the store
+tie-breaks by raw ID — generated hex IDs all sort before the seeds' "rule-*" IDs. Every rule
+a user ever added jumped ahead of every rule they trusted, invisibly.
+
+Fixes: conditions-aware TxnCtx/MatchCountFull/CoveredFull primitives feeding row weights,
+hero, and live preview; plain-English condition rendering everywhere (rows, chain, notices,
+apply preview); rename-on-entry; NextRuleOrder append-at-end; pure-conditions rules allowed
+(phrase optional + stated as ignored); Apply-to-existing dry-run confirm with per-rule counts;
+condition-aware suggestion dedupe; Move up/down in the row menu (drag was mouse-only,
+aria-hidden). Native tests for each; live probe proves hero moved 17%→39% when a condition
+rule landed and that a new broad rule can no longer shadow the seeds.
+
 ## 2026-07-05 — Data & People edits: inline forms → flip modals
 
 Cam's follow-up on the shipped pages. The app already had the exact pattern (BudgetEditHost et

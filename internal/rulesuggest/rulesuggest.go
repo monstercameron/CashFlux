@@ -40,10 +40,14 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 		minCount = 2
 	}
 
-	// Per normalized key: the first-seen original text, total count, and per-category counts.
+	// Per normalized key: the first-seen original text, total count, per-category
+	// counts, and how many of the key's transactions an existing rule ALREADY
+	// catches under full structured-condition matching — a condition-bearing rule
+	// (invisible to the legacy substring check) can govern a key just as well.
 	type agg struct {
 		display string
 		total   int
+		covered int
 		byCat   map[string]int
 	}
 	keys := map[string]*agg{}
@@ -67,6 +71,9 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 		}
 		a.total++
 		a.byCat[t.CategoryID]++
+		if rules.FirstMatchFull(existing, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date)) != nil {
+			a.covered++
+		}
 	}
 
 	var out []Suggestion
@@ -84,8 +91,15 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 		if bestCat == "" || float64(bestN)/float64(a.total) < consistency {
 			continue
 		}
-		// Skip keys an existing rule already covers.
+		// Skip keys an existing rule already covers: the legacy substring check
+		// (a Match rule catches every occurrence of the key text), plus the
+		// conditions-aware share — when >= `consistency` of the key's own
+		// transactions are already caught by ANY rule under full matching,
+		// suggesting a duplicate would be noise.
 		if rules.FirstMatch(existing, a.display) != nil {
+			continue
+		}
+		if float64(a.covered)/float64(a.total) >= consistency {
 			continue
 		}
 		out = append(out, Suggestion{

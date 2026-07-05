@@ -403,9 +403,9 @@ type categoryRowProps struct {
 	IsZeroUsage bool // true when TxnCount == 0 (dim treatment, GI2)
 	// This-period figure: spend for expense categories, income for income ones.
 	Amount    money.Money
-	AmountSub string // "spent this period" / "earned this period"
-	HasAmount bool   // false hides the figure column (nothing this period)
-	SharePct  int    // share of the largest same-kind category (0–100)
+	AmountSub string       // "spent this period" / "earned this period"
+	HasAmount bool         // false hides the figure column (nothing this period)
+	SharePct  int          // share of the largest same-kind category (0–100)
 	OnView    func(string) // drill into Transactions filtered by category
 	OnDelete  func(string)
 	OnToggle  func(id string) // toggle collapse/expand for this category

@@ -77,3 +77,27 @@ func TestSuggestUsesDescWhenNoPayee(t *testing.T) {
 		t.Errorf("want a desc-based suggestion, got %+v", got)
 	}
 }
+
+// TestSuggestSkipsConditionCoveredKeys proves a condition-bearing rule (which
+// the legacy substring check can't see) suppresses suggestions for a key whose
+// transactions it already governs.
+func TestSuggestSkipsConditionCoveredKeys(t *testing.T) {
+	txns := []domain.Transaction{
+		tx("Starbucks", "coffee", "cafe"),
+		tx("Starbucks", "latte", "cafe"),
+		tx("Starbucks", "beans", "cafe"),
+	}
+	// A condition rule catching every small outflow (amount > -1000 minor units,
+	// i.e. all the -500 fixtures) already governs the Starbucks population.
+	existing := []rules.Rule{{
+		ID: "small", SetCategoryID: "cafe",
+		Conditions: []rules.RuleCondition{{Field: rules.ConditionFieldAmount, Op: rules.ConditionOpGt, Value: "-1000"}},
+	}}
+	if got := Suggest(txns, existing, 3); len(got) != 0 {
+		t.Fatalf("Suggest = %d suggestions, want 0 (key fully governed by a condition rule)", len(got))
+	}
+	// Without the rule the key IS suggested (sanity check).
+	if got := Suggest(txns, nil, 3); len(got) != 1 {
+		t.Fatalf("Suggest without rules = %d, want 1", len(got))
+	}
+}
