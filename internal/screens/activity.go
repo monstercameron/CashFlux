@@ -41,6 +41,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
@@ -309,13 +310,75 @@ func Activity() ui.Node {
 
 const activityFeedMax = 50 // maximum rows shown on the timeline
 
+// actEntityLabel maps an audit entry's entity type — including legacy raw
+// collection names persisted by older builds ("auditEntries", "placements",
+// "settingsState") — to a plain-English label. Unknown types pass through.
+func actEntityLabel(t string) string {
+	switch t {
+	case "auditEntries", "auditEntry":
+		return "history"
+	case "placements", "placement":
+		return "dashboard layout"
+	case "recurring":
+		return "recurring item"
+	case "settingsState", "settings":
+		return "settings"
+	case "customPages":
+		return "page"
+	case "sharedExpenses":
+		return "shared expense"
+	}
+	return t
+}
+
+// actHumanizeSummary repairs machine-speak in legacy persisted summaries:
+// "Added 20 placements records" gets its collection word relabelled, and a
+// single-record "Added settings settingsState" drops the raw identifier.
+func actHumanizeSummary(s string) string {
+	fields := strings.Fields(s)
+	// "<Action> <N> <coll> records" — relabel the collection word.
+	if len(fields) == 4 && fields[3] == "records" {
+		if lbl := actEntityLabel(fields[2]); lbl != fields[2] {
+			return fields[0] + " " + fields[1] + " " + lbl + " records"
+		}
+		return s
+	}
+	// "<Action> <type> <rawID>" (legacy single-change fallback) — keep the
+	// action + type, drop the identifier when the type is a known entity word.
+	if len(fields) == 3 {
+		if lbl := actEntityLabel(fields[1]); lbl != fields[1] {
+			return fields[0] + " " + lbl
+		}
+	}
+	return s
+}
+
 // buildActivityFeed returns at most activityFeedMax entries newest-first.
 // It prefers the audit feed (auditview.Feed) and falls back to entity-timestamp
 // synthesis when the feed is empty (Phase 2 not yet landed).
 func buildActivityFeed(app *appstate.App) []auditlog.Entry {
 	// Primary: in-process audit feed (populated by RecordAuditPoint).
 	if primary := auditview.Feed.Recent(activityFeedMax); len(primary) > 0 {
-		return primary
+		// The feed's storage order isn't guaranteed newest-first (imported/seeded
+		// entries append in file order) — the page promises "newest first", so
+		// enforce it: undated entries lead (they're the freshest session writes),
+		// then dated entries newest-first.
+		out := make([]auditlog.Entry, len(primary))
+		copy(out, primary)
+		sort.SliceStable(out, func(i, j int) bool {
+			zi, zj := out[i].At.IsZero(), out[j].At.IsZero()
+			if zi != zj {
+				return zi
+			}
+			return out[i].At.After(out[j].At)
+		})
+		// Humanize legacy machine-speak (raw collection names / record IDs) that
+		// older builds persisted into the audit log.
+		for i := range out {
+			out[i].EntityType = actEntityLabel(out[i].EntityType)
+			out[i].Summary = actHumanizeSummary(out[i].Summary)
+		}
+		return out
 	}
 
 	// Fallback: synthesise from live entity data.

@@ -600,10 +600,18 @@ func MemberRow(props memberRowProps) ui.Node {
 		chips = append(chips, Span(css.Class("badge badge-muted"), uistate.T("members.pinBadge")))
 	}
 
+	// A negative worth reads as a drag on the household, not a share of it: the
+	// bar takes the down tone and the label leads with a minus (L7 gate note).
+	shareTitle := uistate.T("members.shareOfWorth")
+	sharePctLabel := fmt.Sprintf("%d%%", props.SharePct)
+	if props.Worth.IsNegative() {
+		shareTitle = uistate.T("members.shareOfWorthNeg")
+		sharePctLabel = fmt.Sprintf("−%d%%", props.SharePct)
+	}
 	shareBar := Div(css.Class("hh-person-share"),
-		Div(css.Class("share-bar", "share-bar-thin"), Attr("title", uistate.T("members.shareOfWorth")),
+		Div(css.Class("share-bar", "share-bar-thin"), Attr("title", shareTitle),
 			Div(ClassStr(shareFillCls(props.Worth)), Style(map[string]string{"width": fmt.Sprintf("%d%%", props.SharePct)}))),
-		Span(css.Class("hh-person-share-pct"), fmt.Sprintf("%d%%", props.SharePct)),
+		Span(css.Class("hh-person-share-pct"), Attr("title", shareTitle), sharePctLabel),
 	)
 
 	return Div(css.Class("row hh-person"),

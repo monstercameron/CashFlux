@@ -46,4 +46,64 @@ func registerRulesSurface() {
 	rule(".bento-rules .row-desc .rule-match",
 		prop("font-weight", "600"),
 	)
+
+	// ── Precedence chain: first-match-wins as a numbered spine. ─────────────
+	rule(".rule-chain",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("margin-top", "0.6rem"),
+		prop("border-left", "2px solid var(--border)"),
+		prop("margin-left", "0.85rem"),
+	)
+	rule(".rule-chain-item",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.85rem"),
+		prop("padding", "0.45rem 0 0.45rem 1rem"),
+		prop("position", "relative"),
+	)
+	// The precedence number sits ON the spine as an accent-ringed disc.
+	rule(".rule-chain-n",
+		prop("position", "absolute"),
+		prop("left", "-0.85rem"),
+		prop("top", "50%"),
+		prop("transform", "translateY(-50%)"),
+		prop("width", "1.7rem"),
+		prop("height", "1.7rem"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "center"),
+		prop("border-radius", "50%"),
+		prop("background", "var(--bg-card)"),
+		prop("border", "1px solid var(--accent)"),
+		prop("color", "var(--accent)"),
+		prop("font-size", "0.85rem"),
+		prop("font-weight", "700"),
+	)
+	rule(".rule-chain-body",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.25rem 0.6rem"),
+		prop("padding-left", "1rem"),
+	)
+	rule(".rule-chain-match",
+		prop("font-weight", "600"),
+	)
+	rule(".rule-chain-cat",
+		prop("color", "var(--text-dim)"),
+		prop("font-size", "0.85rem"),
+	)
+	rule(".rule-chain-warn",
+		prop("font-size", "0.78rem"),
+		prop("flex-basis", "100%"),
+	)
+	rule(".rule-chain-item.rule-chain-shadowed .rule-chain-match",
+		prop("opacity", "0.55"),
+		prop("text-decoration", "line-through"),
+	)
+	rule(".rule-chain-item.rule-chain-shadowed .rule-chain-n",
+		prop("border-color", "var(--border)"),
+		prop("color", "var(--text-dim)"),
+	)
 }

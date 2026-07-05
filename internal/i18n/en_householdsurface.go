@@ -25,6 +25,7 @@ var householdSurfaceKeys = Catalog{
 	"members.worthLabel":     "net worth",
 	"members.spentSub":       "spent %s this period",
 	"members.shareOfWorth":   "share of household worth",
+	"members.shareOfWorthNeg": "weighs on household worth (owes more than they hold)",
 	"members.pinBadge":       "PIN set",
 	"members.menuAria":       "Member actions",
 	"household.byPersonTitle": "Where each person stands",

@@ -126,21 +126,8 @@ func Artifacts() ui.Node {
 	total := app.DatasetBytesWithBlobs()
 	blobUsage := app.BlobStoreUsage()
 
-	// Quota nudge: shown once when IndexedDB usage is near the recommended cap.
-	// Dismissed by the user via component state for the session; a page refresh
-	// re-evaluates usage and may not show again if usage has dropped.
-	quotaDismissed := ui.UseState(false)
-	var quotaNudge ui.Node = Fragment()
-	if blobUsage > 0 && artifactstore.NearLimit(blobUsage) && !quotaDismissed.Get() {
-		quotaNudge = Div(css.Class("notice notice-warn", tw.Mt2, tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Span(uistate.T("artifacts.quotaWarn", artifacts.HumanSize(int(blobUsage)))),
-			Button(css.Class("btn btn-sm"), Type("button"),
-				OnClick(func() { quotaDismissed.Set(true) }),
-				uistate.T("action.dismiss"),
-			),
-		)
-	}
-
+	// The near-limit quota story lives in the hero takeaway (art.takeNearLimit)
+	// — the old dismissible banner duplicated it word-for-word one section down.
 	storageLabel := uistate.T("artifacts.storage", artifacts.HumanSize(total))
 	if blobUsage > 0 {
 		storageLabel = uistate.T("artifacts.storageIDB",
@@ -236,7 +223,6 @@ func Artifacts() ui.Node {
 		rptTile("vault-list", "1 / span 4",
 			rptSection("sec-vault-list", uistate.T("artifacts.vaultTitle"), uploadActions, Fragment(
 				P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
-				quotaNudge,
 				listBody,
 			))),
 	)

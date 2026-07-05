@@ -124,9 +124,16 @@ func registerHouseholdSurface() {
 		prop("color", "var(--text-dim)"),
 		prop("padding-left", "3.15rem"),
 	)
-	// Inline edit / PIN forms open indented under the row main line.
+	// Inline edit / PIN forms open indented under the row main line. Selects
+	// get room to show "Inherit household default" without clipping into the
+	// caret glyph.
 	rule(".hh-person-form",
 		prop("padding", "0.35rem 0 0.25rem 3.15rem"),
+	)
+	rule(".hh-person-form select.field",
+		prop("min-width", "15rem"),
+		prop("padding-right", "1.75rem"),
+		prop("text-overflow", "ellipsis"),
 	)
 	// On narrow screens the indent collapses so forms and bars use full width.
 	ruleMedia("(max-width:40rem)", ".hh-person-share", prop("padding-left", "0"))

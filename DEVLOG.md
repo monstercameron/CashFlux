@@ -1,3 +1,22 @@
+## 2026-07-04 — Data & People gate, round 1: ITERATE (3 high / 2 medium / 2 low)
+
+The Sonnet critic drove all five pages live (both themes, 700px, real interactions) and earned
+its keep. Its three highs were all REAL: (1) /activity spoke machine — "Added 2 auditEntries
+records", "Added settings settingsState" — because singularize() passed unknown collections
+through raw and buildSummary appended record IDs; fixed at source AND display (legacy persisted
+entries get relabelled at render). (2) The page said "newest first" while rendering days
+ascending — the audit feed's Recent() returns storage order, and nobody had ever sorted it;
+the inline Undo was even sitting on the wrong "first" row. (3) The rules Mermaid diagram wore
+the library's stock lavender theme in light mode — replaced with a native numbered-spine chain
+(accent discs, match → category, shadowed rules struck through), which reads better than the
+flowchart ever did. Also: artifacts' quota banner duplicated the hero takeaway (removed),
+household edit selects clipped their "Inherit household default" labels, and a negative-worth
+share bar now leads its percent with a minus so it can't read as ownership.
+
+Kept as-is with reasoning: the household kebab overlapping the next row is standard floating-
+popover behavior (solid panel, viewport-aware flip) — "fixing" it would mean pushing rows
+apart on open.
+
 ## 2026-07-04 — /artifacts + /activity: the vault and the record
 
 Last two Data & People pages. /artifacts' one number is its storage footprint (a local-first

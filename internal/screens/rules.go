@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -304,19 +303,45 @@ func Rules() ui.Node {
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 				list,
 			))),
-		// Suggestions surface above the Mermaid diagram (C38): users discover AI-suggested
-		// rules before scrolling through the precedence chain (which is a power-user view).
+		// Suggestions surface above the precedence chain (C38): users discover
+		// AI-suggested rules before the power-user precedence view.
 		If(len(suggestions) > 0, rptTile("rules-suggest", "1 / span 4", suggestCard)),
-		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
+		// Precedence chain: first match wins, top to bottom; shadowed rules flagged
+		// (C70/C64). Rendered natively in the surface's own language (a numbered
+		// spine) — the old Mermaid flowchart wore the library's stock lavender theme.
 		If(len(rs) > 1, rptTile("rules-order", "1 / span 4",
 			rptSection("sec-rules-order", uistate.T("rules.orderTitle"), nil, Fragment(
 				P(css.Class("muted"), uistate.T("rules.orderHint")),
-				uiw.Mermaid(uiw.MermaidProps{
-					Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
-					Label:  uistate.T("rules.precedenceLabel"),
-				}),
+				rulesPrecedenceChain(rs, catName, warnByID),
 			)))),
 	)
+}
+
+// rulesPrecedenceChain renders the first-match-wins order as a numbered spine:
+// each link shows its precedence number, the match phrase, and the category it
+// files into; shadowed rules dim with their warning inline. A native replacement
+// for the stock-themed Mermaid flowchart (aria-label preserved).
+func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID map[string]string) ui.Node {
+	items := []any{css.Class("rule-chain"), Attr("role", "list"), Attr("aria-label", uistate.T("rules.precedenceLabel"))}
+	for i, r := range rs {
+		cat := catName[r.SetCategoryID]
+		if cat == "" {
+			cat = uistate.T("rules.unknownCategory")
+		}
+		cls := "rule-chain-item"
+		if warnByID[r.ID] != "" {
+			cls += " rule-chain-shadowed"
+		}
+		items = append(items, Div(ClassStr(cls), Attr("role", "listitem"),
+			Span(css.Class("rule-chain-n", tw.FontDisplay), fmt.Sprintf("%d", i+1)),
+			Div(css.Class("rule-chain-body"),
+				Span(css.Class("rule-chain-match"), uistate.T("rules.matchLabel", r.Match)),
+				Span(css.Class("rule-chain-cat"), "→ "+cat),
+				If(warnByID[r.ID] != "", Span(css.Class("rule-chain-warn", tw.TextWarn), warnByID[r.ID])),
+			),
+		))
+	}
+	return Div(items...)
 }
 
 // validateRuleInput returns the i18n key of the first problem with a rule's

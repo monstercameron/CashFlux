@@ -98,11 +98,12 @@ func inferEntryFields(cs history.ChangeSet) (action, entityType, entityID string
 		collCount[c.Collection]++
 	}
 	// Pick the dominant collection, preferring real entity collections over the
-	// internal "_meta:*" scalar buckets (settings KV, schema version, …) so a
-	// mixed change is described by what the user actually touched (C355).
+	// internal "_meta:*" scalar buckets (settings KV, schema version, …) and the
+	// audit log's own storage, so a mixed change is described by what the user
+	// actually touched (C355).
 	domColl, domCount := "", 0
 	for coll, n := range collCount {
-		if strings.HasPrefix(coll, "_meta:") {
+		if strings.HasPrefix(coll, "_meta:") || coll == "auditEntries" {
 			continue
 		}
 		if n > domCount {
@@ -139,7 +140,9 @@ func buildSummary(cs history.ChangeSet, action, entityType string) string {
 	}
 	n := len(cs.Changes)
 	if n == 1 {
-		return capitalize(action) + " " + entityType + " " + cs.Changes[0].ID
+		// No raw record ID — "Added transaction tx_01H…" is machine-speak; the
+		// entity type alone reads as the plain-English fallback (C355).
+		return capitalize(action) + " a " + entityType
 	}
 	return fmt.Sprintf("%s %d %s records", capitalize(action), n, entityType)
 }
@@ -173,6 +176,20 @@ func singularize(coll string) string {
 		return "page"
 	case "artifacts":
 		return "artifact"
+	case "placements":
+		return "dashboard layout"
+	case "recurring":
+		return "recurring item"
+	case "workflows":
+		return "workflow"
+	case "notifications":
+		return "notification"
+	case "sharedExpenses":
+		return "shared expense"
+	case "settlements":
+		return "settlement"
+	case "auditEntries":
+		return "history entry"
 	default:
 		if coll == "" {
 			return "record"
