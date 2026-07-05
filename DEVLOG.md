@@ -1,3 +1,27 @@
+## 2026-07-05 — System surfaces: tabbed Settings + help/about/appearance in the family language
+
+The settings panel's architecture made tabbing cheap: globalSettingsForm owns EVERY hook and
+the two column builders were already pure props-driven renderers — so the split was cutting
+settingsLeft/RightColumn at their section seams into six pane functions and switching on one
+new UseState. Panes mount/unmount their embedded components cleanly (same rule as the
+household tabs). The old heading-text jump-nav died with the columns (deleted, not orphaned).
+
+Entry-point move: the rail's household card is disabled with If(false) (goal said "remove
+from markup, don't delete") and a quiet non-interactive summary keeps the "2 members · USD
+base" glance — which surfaced a latent staleness bug: the rail foot never subscribed to the
+data revision, so a base-currency change didn't update it (the e2e caught it on first run).
+Settings now leads the top ⋯ menu with a testid for tests.
+
+The three pages got the hero/chips/takeaway treatment; /help's hero is the live setup
+progress ("6 of 6") which finally gives the page a reason to be looked at twice. Real copy
+bug fixed: the setup checklist's currency step linked to /appearance and its label said
+"Settings → Appearance" — base currency has never lived there; the step now opens the
+Settings modal (Household is the default tab).
+
+e2e/settings_hookup_check.mjs is the standing proof that settings are wired: 16 assertions
+across all six tabs, including live effects (rail summary, nav item removal) and
+close-reopen persistence (date format, AI key, backup cadence).
+
 ## 2026-07-05 — Activity diffs: the record learns before → after
 
 Cam wanted the activity log to show what actually changed. The undo stack already carried

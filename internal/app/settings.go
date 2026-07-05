@@ -552,6 +552,9 @@ var hideableScreens = []struct{ LabelKey, Path string }{
 // and wiring data actions land in their own features).
 func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
+	// The active settings tab. The panel was one dense two-column form with 14
+	// stacked sections and a jump-nav; tabs give each cluster its own room.
+	setTab := uic.UseState("household")
 	prefsAtom := uistate.UsePrefs()
 	periodAtom := uistate.UsePeriod()
 	noticeAtom := uistate.UseNotice()
@@ -928,7 +931,7 @@ func globalSettingsForm() uic.Node {
 		OnSet:        setRate,
 	})
 
-	left := settingsLeftColumn(settingsLeftProps{
+	leftProps := settingsLeftProps{
 		MemberChips:   memberChips,
 		OnBase:        onBase,
 		Base:          base,
@@ -938,7 +941,7 @@ func globalSettingsForm() uic.Node {
 		FXAIFetch:     fxAIFetchNode,
 		ScreenToggles: screenToggles,
 		FreshnessRows: freshnessRows,
-	})
+	}
 
 	activeLang := uistate.ActiveLanguage()
 	langOptions := make([]uic.Node, 0)
@@ -946,9 +949,10 @@ func globalSettingsForm() uic.Node {
 		langOptions = append(langOptions, Option(Value(string(l)), SelectedIf(activeLang == l), langDisplay(l)))
 	}
 
-	// Right column: Appearance → Preferences → AI → Cloud & server → Data → Advanced.
-	// Ordered by usage frequency: Appearance is everyday, AI is setup-once, Cloud is power-user.
-	right := settingsRightColumn(settingsRightProps{
+	// Tab panes: Preferences → AI → Cloud → Data → Advanced (plus Household from
+	// leftProps). Ordered by usage frequency: everyday preferences first, AI is
+	// setup-once, Cloud is power-user.
+	rightProps := settingsRightProps{
 		Pr: pr,
 		OnAppearanceLink: func() {
 			settingsAtom.Set(uistate.SettingsTarget{})
@@ -1029,7 +1033,7 @@ func globalSettingsForm() uic.Node {
 		OnExportLangs: func() { exportLanguages(notify) },
 		OnImportLangs: func() { importLanguages(notify) },
 		Bump:          bump,
-	})
+	}
 
 	// Debug log viewer (moved here from the old /settings screen): the last entries
 	// of the in-app log ring, newest first, with a refresh.
@@ -1089,11 +1093,40 @@ func globalSettingsForm() uic.Node {
 			Attr("rel", "noopener noreferrer"), css.Class(tw.HoverTextFg, tw.Underline), uistate.T("settings.changelog")),
 	)
 
+	// One pane at a time behind the tab strip. Panes are pure renderers (their
+	// embedded components own their hooks and mount/unmount cleanly per tab).
+	var pane uic.Node
+	switch setTab.Get() {
+	case "prefs":
+		pane = Div(settingsPreferencesPane(rightProps), settingsAttentionExtras(leftProps))
+	case "ai":
+		pane = settingsAIPane(rightProps)
+	case "cloud":
+		pane = settingsCloudPane(rightProps)
+	case "data":
+		pane = settingsDataPane(rightProps)
+	case "advanced":
+		pane = Div(settingsAdvancedPane(rightProps), debugLog, about)
+	default: // "household"
+		pane = settingsHouseholdPane(leftProps)
+	}
 	return Div(
-		settingsSectionNav(),
-		Div(css.Class(tw.Grid, tw.GridCols2, tw.GapX7, tw.ContentStart), left, right),
-		debugLog,
-		about,
+		Div(css.Class("set-tab-strip", tw.Mb3, tw.Pb2, tw.BorderB, tw.BorderLine),
+			ui.Segmented(ui.SegmentedProps{
+				Label:    uistate.T("settings.tabsAria"),
+				Selected: setTab.Get(),
+				OnSelect: func(v string) { setTab.Set(v) },
+				Options: []ui.SegOption{
+					{Value: "household", Label: uistate.T("settings.tabHousehold")},
+					{Value: "prefs", Label: uistate.T("settings.tabPrefs")},
+					{Value: "ai", Label: uistate.T("settings.tabAI")},
+					{Value: "cloud", Label: uistate.T("settings.tabCloud")},
+					{Value: "data", Label: uistate.T("settings.tabData")},
+					{Value: "advanced", Label: uistate.T("settings.tabAdvanced")},
+				},
+			}),
+		),
+		pane,
 	)
 }
 

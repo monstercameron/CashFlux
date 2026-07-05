@@ -2499,7 +2499,7 @@ var english = Catalog{
 	// first first-run step so new users can find and confirm these early. The label
 	// becomes a link to /appearance where week-start lives; currency is in Settings
 	// (opened from the household card in the sidebar).
-	"help.currencyStepLabel": "Confirm base currency & week start (Settings → Appearance)",
+	"help.currencyStepLabel": "Confirm base currency & week start (Settings → Household)",
 	// C28: household-members step — optional, shown so solo users know the
 	// feature exists; marked done once a second member is added (≥2 members).
 	"help.membersStepLabel": "Add household members (optional)",

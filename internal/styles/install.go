@@ -35,6 +35,7 @@ func Register() {
 	registerRulesSurface()
 	registerVaultSurface()
 	registerRecordSurface()
+	registerSystemSurface()
 	inject(Build())
 }
 

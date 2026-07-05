@@ -5,7 +5,7 @@
 package screens
 
 import (
-	"strconv"
+	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -16,38 +16,19 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// helpSection is one widgetized help card: a stable id, a title, a standard
-// column width (ColSpan on the 4-column bento; height follows content), and its
-// body. It mirrors, at a small scale, the unified WidgetSpec+Placement model from
-// docs/UNIFIED_WIDGET_API.md — the /help page is the first surface to render its
-// sections as locked tiles on the dashboard's bento grid (no drag/gear: a
-// non-custom surface, §7.4) so layout, standard sizes, and reflow are shared.
-type helpSection struct {
-	id    string
-	title string
-	col   int // ColSpan (standard width); height is content-driven (§7.5)
-	body  ui.Node
+// setupSteps evaluates the first-run checklist against live data (R34-onboard /
+// C23): each step's label (possibly a link) and whether it's done. Reads counts
+// only — no mutation, safe to render anywhere.
+type setupStep struct {
+	label ui.Node
+	done  bool
 }
 
-// setupChecklistBody (R34-onboard / C23) shows the first-run steps with a live
-// ✓/○ from the actual data, so a new household sees what's left to set up and a
-// returning one sees it's all done. Reads counts only — no mutation, safe to
-// render anywhere. The first step surfaces base currency + week-start so new
-// users can no longer miss these settings (C23 [MAJOR F3]).
-func setupChecklistBody() ui.Node {
-	app := appstate.Default
-	if app == nil {
-		return Fragment()
-	}
-	type step struct {
-		label ui.Node // may be plain text or a link
-		done  bool
-	}
-
-	currencySet := app.Settings().BaseCurrency != ""
-	currencyLink := A(
-		Attr("href", uistate.RoutePath("/appearance")),
-		css.Class(tw.Underline, tw.HoverTextFg),
+func setupSteps(app *appstate.App, openSettings func()) []setupStep {
+	currencyLink := Button(
+		Type("button"),
+		css.Class("btn-link", tw.Underline, tw.HoverTextFg),
+		OnClick(Prevent(func() { openSettings() })),
 		uistate.T("help.currencyStepLabel"),
 	)
 	membersLink := A(
@@ -55,40 +36,33 @@ func setupChecklistBody() ui.Node {
 		css.Class(tw.Underline, tw.HoverTextFg),
 		uistate.T("help.membersStepLabel"),
 	)
-
-	steps := []step{
-		{currencyLink, currencySet},
+	return []setupStep{
+		{currencyLink, app.Settings().BaseCurrency != ""},
 		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.addAccount")), len(app.Accounts()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.recordTxn")), len(app.Transactions()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.setBudget")), len(app.Budgets()) > 0},
 		{Span(css.Class("t-body", tw.TextDim), uistate.T("onboard.setGoal")), len(app.Goals()) > 0},
 		{membersLink, len(app.Members()) >= 2},
 	}
-	rows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
-	allDone := true
+}
+
+// setupChecklistBody renders the first-run steps with a live ✓/○ read.
+func setupChecklistBody(steps []setupStep) ui.Node {
+	rows := []any{css.Class(tw.Flex, tw.FlexCol)}
 	for _, s := range steps {
 		mark, tone := "○", "text-faint"
 		if s.done {
 			mark, tone = "✓", "text-up"
-		} else {
-			allDone = false
 		}
-		rows = append(rows, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Span(ClassStr("t-body "+tw.ColorClass(tone)), mark),
+		rows = append(rows, Div(css.Class("sys-step"),
+			Span(ClassStr("sys-step-mark t-body "+tw.ColorClass(tone)), mark),
 			s.label))
 	}
-	lead := "A few steps to get the most out of CashFlux:"
-	if allDone {
-		lead = "You're all set up — nice work. ✓"
-	}
-	body := append([]any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-		P(css.Class("t-body", tw.TextDim), lead)}, Div(rows...))
-	return Div(body...)
+	return Div(rows...)
 }
 
-// whatsNewBody surfaces a plain-English description of what CashFlux is, the
-// local-first privacy commitment, the current version, recent highlights, and a
-// link to the full changelog (C293 / R34-whatsnew).
+// whatsNewBody surfaces recent highlights and a link to the full changelog
+// (C293 / R34-whatsnew).
 func whatsNewBody() ui.Node {
 	bullets := []string{
 		"Financial-health score — a 0–100 read of your overall position with next steps.",
@@ -96,12 +70,7 @@ func whatsNewBody() ui.Node {
 		"Installable app (PWA) with an on-brand icon and offline support.",
 		"A privacy line in the sidebar — your data stays on this device.",
 	}
-	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
-	// Version pill sits at the top, directly under the tile title, where it reads as
-	// a label for the section rather than floating mid-paragraph.
-	body = append(body, Div(
-		Span(Attr("style", "display:inline-block;padding:.12rem .5rem;border:1px solid var(--border);border-radius:999px;font-size:.78rem;color:var(--text-dim)"),
-			version.Label())))
+	body := []any{css.Class("sys-prose")}
 	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.aboutTagline")))
 	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.aboutPrivacy")))
 	for _, b := range bullets {
@@ -118,26 +87,25 @@ func whatsNewBody() ui.Node {
 // line and two GitHub links (bug report + feature request) so users always have
 // a reachable path to the project without leaving the app.
 func supportBody() ui.Node {
-	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
-	body = append(body, P(css.Class("t-body", tw.TextDim), uistate.T("help.supportInvite")))
-	body = append(body,
+	return Div(css.Class("sys-prose"),
+		P(css.Class("t-body", tw.TextDim), uistate.T("help.supportInvite")),
 		A(Attr("href", "https://github.com/monstercameron/CashFlux/issues/new"),
 			Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
 			Attr("title", uistate.T("help.supportBugTitle")),
 			css.Class(tw.Underline, tw.HoverTextFg),
-			uistate.T("help.supportBugLabel")+" →"))
-	body = append(body,
+			uistate.T("help.supportBugLabel")+" →"),
 		A(Attr("href", "https://github.com/monstercameron/CashFlux/issues"),
 			Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
 			Attr("title", uistate.T("help.supportFeatureTitle")),
 			css.Class(tw.Underline, tw.HoverTextFg),
-			uistate.T("help.supportFeatureLabel")+" →"))
-	return Div(body...)
+			uistate.T("help.supportFeatureLabel")+" →"),
+	)
 }
 
-// helpTopicBody renders one help card's body: one or more plain-English lines.
+// helpTopicBody renders one help section's body: plain-English lines at a
+// readable measure.
 func helpTopicBody(lines ...string) ui.Node {
-	body := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap2)}
+	body := []any{css.Class("sys-prose")}
 	for _, l := range lines {
 		body = append(body, P(css.Class("t-body", tw.TextDim), l))
 	}
@@ -150,74 +118,95 @@ func About() ui.Node {
 	return AboutScreen()
 }
 
-// helpSections returns the ordered, widgetized help content with standard bento
-// sizes. Every tile is 2 columns wide (two per row) so the grid stays a balanced
-// pair-per-row layout; heights follow content.
+// helpSection is one help topic: a stable id, a serif section title, and body.
+type helpSection struct {
+	id    string
+	title string
+	body  ui.Node
+}
+
+// helpSections returns the ordered help topics (the setup checklist and
+// what's-new render separately beside the hero).
 func helpSections() []helpSection {
 	return []helpSection{
-		{"help-setup", "Getting set up", 2, setupChecklistBody()},
-		{"help-whatsnew", "What's new", 2, whatsNewBody()},
-		{"help-start", "Getting started", 2, helpTopicBody(
+		{"help-start", "Getting started", helpTopicBody(
 			"Add an account (Accounts → Add account), then record what you spend and earn from the + button or the dashboard's Add transaction.",
 			"Set a budget per category in Budgets, and track savings targets in Goals — the dashboard rolls it all up.")},
-		{"help-data", "Bringing in your data", 2, helpTopicBody(
+		{"help-data", "Bringing in your data", helpTopicBody(
 			"Import a bank CSV from Documents → import; CashFlux maps the columns and flags duplicates before anything is saved.",
 			"Most banks let you export a CSV from your transactions or statements page — look for an Export or Download option.")},
-		{"help-reports", "Budgets, goals & reports", 2, helpTopicBody(
+		{"help-reports", "Budgets, goals & reports", helpTopicBody(
 			"Budgets show what's left for the period; Goals show pace toward a target. Reports breaks down spending by category, payee, and member, with trends over time.",
 			"Financial health (in Plan & analyze) scores your overall position and suggests the next step.")},
-		{"help-smart", "The Smart layer", 2, helpTopicBody(
+		{"help-smart", "The Smart layer", helpTopicBody(
 			"Smart surfaces optional, opt-in insights and recommendations. Free insights run entirely on your device at no cost; AI features are clearly labelled and only run when you add your own key.",
 			"Turn features on or off in Smart → Manage, and dial how much they surface in Appearance.")},
-		{"help-shortcuts", "Keyboard shortcuts", 2, helpTopicBody(
+		{"help-shortcuts", "Keyboard shortcuts", helpTopicBody(
 			"Press ? anytime to see the full shortcut list. Ctrl/⌘ K opens the command palette to jump anywhere or run an action.",
 			"Alt + 1–9 jumps between the main sections; Alt + N adds a transaction.")},
-		{"help-privacy", "Your privacy", 2, helpTopicBody(
+		{"help-privacy", "Your privacy", helpTopicBody(
 			"CashFlux is local-first: your financial data is stored on this device and is never uploaded or shared. You can export a backup at any time from Settings.",
 			"An optional passcode lock (Settings) keeps the app's screens behind a code and can encrypt your data at rest.")},
-		{"help-support", "Support & feedback", 2, supportBody()},
-		{"help-offline", "Works offline", 2, P(css.Class("t-body", tw.TextDim),
-			uistate.T("help.worksOfflineBody"))},
+		{"help-support", "Support & feedback", supportBody()},
+		{"help-offline", "Works offline", helpTopicBody(uistate.T("help.worksOfflineBody"))},
 	}
 }
 
-// helpTile renders one section as a locked bento tile: the same .w/.wh/.wbody
-// chrome as a dashboard widget, minus the drag grip and settings gear (this is a
-// non-custom, movement-locked surface — unified spec §7.4). Tiles span standard
-// column widths but size to their CONTENT height (the help grid uses auto rows),
-// so there's no dead space below short copy — the §7.5 lesson that text has
-// intrinsic height. Background uses the theme card token and a subtle shadow
-// (§7.7) so every tile reads as a distinct card, consistently — no one-off accent.
-func helpTile(s helpSection) ui.Node {
-	style := "grid-column:span " + strconv.Itoa(s.col) +
-		";background:var(--bg-card);box-shadow:0 1px 3px rgba(0,0,0,.35)"
-	return Div(css.Class("w"),
-		Attr("data-widget", s.id),
-		Attr("data-testid", "help-tile"),
-		Attr("style", style),
-		// Left-aligned title (override the bento's centered .wh h2) at a larger size
-		// for clear title↔body hierarchy — this is informational prose, not a KPI.
-		Div(css.Class("wh"), H2(Attr("style", "text-align:left;flex:1;font-size:1.15rem"), s.title)),
-		// Cap the reading measure (~62ch) so long help lines stay legible.
-		Div(ClassStr("wbody"), Attr("style", "max-width:62ch"), s.body),
-	)
-}
-
-// HelpScreen is the in-app help center (/help, R34), widgetized onto the app's
-// bento grid: each section is a locked tile at a standard column width, sized to
-// its content height. The page header (title) comes from the screen registry via
-// the shell, so the page format matches every other screen. The grid overrides
-// the dashboard's fixed row tracks with auto rows so text tiles fit their copy.
+// HelpScreen is the in-app help center (/help, R34) in the Understand-surface
+// language: a hero that reads your setup progress with a plain-English
+// takeaway, the live checklist and what's-new beside it, then the topics as
+// serif half-width sections.
 func HelpScreen() ui.Node {
-	sections := helpSections()
-	tiles := make([]any, 0, len(sections)+2)
-	tiles = append(tiles, css.Class("bento no-touch-chrome"))
-	// Content-height rows: drop the fixed 152px row tracks the dashboard uses;
-	// each text tile takes exactly the height its copy needs (paired tiles in a
-	// row equalize via grid stretch), eliminating the half-empty-box look.
-	tiles = append(tiles, Attr("style", "grid-template-rows:none;grid-auto-rows:auto"))
-	for _, s := range sections {
-		tiles = append(tiles, helpTile(s))
+	app := appstate.Default
+	if app == nil {
+		return P(css.Class("empty"), uistate.T("common.notReady"))
+	}
+	_ = uistate.UseDataRevision().Get() // checklist reflects live data
+	settingsAtom := uistate.UseSettings()
+	openSettings := func() { settingsAtom.Set(uistate.Global()) }
+
+	steps := setupSteps(app, openSettings)
+	done := 0
+	var nextStep string
+	for _, s := range steps {
+		if s.done {
+			done++
+		}
+	}
+	switch {
+	case done == len(steps):
+		nextStep = uistate.T("help.takeAllSet")
+	default:
+		nextStep = uistate.T("help.takeRemaining", len(steps)-done)
+	}
+
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-help-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), "CashFlux "+version.Label()+" · "+uistate.T("about.chipStorageVal")),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("help.heroLabel")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), fmt.Sprintf("%d of %d", done, len(steps))),
+			),
+		),
+		Div(css.Class("debt-chips"),
+			rptChip(uistate.T("help.chipShortcut"), "?", ""),
+			rptChip(uistate.T("help.chipPalette"), "Ctrl+K", ""),
+			rptChip(uistate.T("help.chipOffline"), uistate.T("help.chipOfflineVal"), rptToneCls("pos")),
+		),
+		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "help-takeaway"), nextStep),
+	)
+
+	tiles := []any{css.Class("bento bento-sys")}
+	tiles = append(tiles, rptTile("help-hero", "1 / span 4", rptSection("", uistate.T("help.heroTitle"), nil, heroBody)))
+	tiles = append(tiles,
+		rptTile("help-setup", "span 2", Div(Attr("data-testid", "help-tile"),
+			rptSection("sec-help-setup", "Getting set up", nil, setupChecklistBody(steps)))),
+		rptTile("help-whatsnew", "span 2", Div(Attr("data-testid", "help-tile"),
+			rptSection("sec-help-whatsnew", "What's new", nil, whatsNewBody()))),
+	)
+	for _, s := range helpSections() {
+		tiles = append(tiles, rptTile(s.id, "span 2", Div(Attr("data-testid", "help-tile"),
+			rptSection("sec-"+s.id, s.title, nil, s.body))))
 	}
 	return Div(tiles...)
 }

@@ -34,10 +34,10 @@ type settingsLeftProps struct {
 	FreshnessRows []uic.Node
 }
 
-// settingsLeftColumn renders the left column of the global settings panel
-// (household members, base currency, budget method, FX rates, screen toggles,
-// freshness windows, notifications, music). Pure rendering helper — no hooks.
-func settingsLeftColumn(p settingsLeftProps) uic.Node {
+// settingsHouseholdPane renders the Household tab of the global settings panel
+// (members, screen toggles, base currency, budget method, FX rates). Pure
+// rendering helper — no hooks.
+func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 	return Div(
 		// Household members first — Renée reviews who is in the household before
 		// adjusting anything else. Screens immediately after so she can hide modules
@@ -64,7 +64,15 @@ func settingsLeftColumn(p settingsLeftProps) uic.Node {
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
 		p.FXAIFetch,
-		Hr(css.Class(tw.BorderT, tw.BorderLine), Style(map[string]string{"border-bottom": "none", "margin": "1rem 0 0"})),
+	)
+}
+
+// settingsAttentionExtras renders the freshness/notifications/music cluster —
+// the everyday-attention settings that join the Preferences tab. Pure
+// rendering helper — no hooks of its own (the embedded components own theirs).
+func settingsAttentionExtras(p settingsLeftProps) uic.Node {
+	return Div(
+		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
@@ -158,12 +166,12 @@ func aiModelDisplayName(model string) string {
 	}
 }
 
-// settingsRightColumn renders the right column of the global settings panel
-// (appearance, preferences, AI, cloud & server, data, advanced). Pure rendering
-// helper — no hooks.
-func settingsRightColumn(p settingsRightProps) uic.Node {
+// settingsPreferencesPane renders the Preferences tab: the appearance link,
+// week start, date format, pay-cycle anchor, and monthly income. Pure
+// rendering helper — no hooks.
+func settingsPreferencesPane(p settingsRightProps) uic.Node {
 	return Div(
-		// 1 · Appearance — link to the dedicated /appearance page (B34); all
+		// Appearance — link to the dedicated /appearance page (B34); all
 		// theming controls live there so the Settings panel stays focused.
 		H4(css.Class("set-label"), uistate.T("settings.appearance")),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.appearanceHint")),
@@ -220,9 +228,13 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			OnChange:   p.OnMonthlyIncome,
 		}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.monthlyIncomeHint")),
+	)
+}
 
-		// 3 · AI — setup-once; key + model select in one logical cluster.
-		ui.Divider(),
+// settingsAIPane renders the AI tab: the BYOK key, model choice, and the web
+// search key. Pure rendering helper — no hooks.
+func settingsAIPane(p settingsRightProps) uic.Node {
+	return Div(
 		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
 		// AI is enabled by the presence of an API key (the no-key hint below is the
 		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
@@ -248,9 +260,13 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(p.WsKey), OnInput(p.OnWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
+	)
+}
 
-		// 4 · Cloud & server — power-user sync config after AI.
-		ui.Divider(),
+// settingsCloudPane renders the Cloud tab: backend connection, auth, sync,
+// conflict recovery, and the subscription surface. Pure rendering helper.
+func settingsCloudPane(p settingsRightProps) uic.Node {
+	return Div(
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// C304: framing line — communicates this section as the subscription/connection
 		// surface (sync + backup + bundled AI, self-host option), not raw infrastructure.
@@ -349,9 +365,13 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			),
 			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
 		)),
+	)
+}
 
-		// 5 · Data — export/import/wipe actions.
-		ui.Divider(),
+// settingsDataPane renders the Data tab: export/import/backup actions, the
+// backup cadence, and workspaces. Pure rendering helper — no hooks.
+func settingsDataPane(p settingsRightProps) uic.Node {
+	return Div(
 		H4(css.Class("set-label"), uistate.T("settings.data")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportJSON"), false, p.OnExportJSON),
@@ -372,11 +392,18 @@ func settingsRightColumn(p settingsRightProps) uic.Node {
 			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
 		),
 
-		// 6 · Advanced — workspaces, app lock, languages; rarely needed at the bottom.
 		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("ws.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("ws.sectionHint")),
 		workspacesSection(p.Bump),
+	)
+}
+
+// settingsAdvancedPane renders the Advanced tab: app lock and languages. Pure
+// rendering helper — no hooks (the debug log + about line are appended by the
+// caller, which owns their state).
+func settingsAdvancedPane(p settingsRightProps) uic.Node {
+	return Div(
 		H4(css.Class("set-label"), uistate.T("applock.section")),
 		P(css.Class("muted", tw.TextXs), uistate.T("applock.sectionHint")),
 		appLockSection(p.Bump),

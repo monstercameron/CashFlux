@@ -741,6 +741,9 @@ func navItem(props navItemProps) uic.Node {
 func HouseholdCard() uic.Node {
 	settings := uistate.UseSettings()
 	collapsed := uistate.UseRailCollapsed()
+	// The quiet household summary reads live data (member count, base currency)
+	// — subscribe to the shared revision so a settings change updates it live.
+	_ = uistate.UseDataRevision().Get()
 	isCollapsed := collapsed.Get()
 	name := uistate.T("household.title")
 	summary := uistate.T("household.settings")
@@ -787,7 +790,11 @@ func HouseholdCard() uic.Node {
 				ui.Icon(collapseIcon, css.Class(tw.W4, tw.H4)),
 			),
 		),
-		Button(
+		// The household settings card is intentionally out of the rail markup —
+		// Settings moved to the top bar's ⋯ menu (goal 2026-07-05: "remove the flip
+		// modal settings from the side nav bar"). The markup is kept here, disabled,
+		// so restoring the rail entry point is a one-line change.
+		If(false, Button(
 			css.Class("hh", tw.Mt3, tw.Mb3, tw.P3, tw.Rounded4, tw.Border, tw.BorderLine, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextLeft, tw.HoverBgHover, tw.WFull),
 			// Tooltip/accessible name — keeps the "Settings" affordance (the gear icon
 			// signals it visually) without repeating it in the visible summary line.
@@ -799,6 +806,12 @@ func HouseholdCard() uic.Node {
 				Span(css.Class(tw.FontDisplay, tw.Text14, tw.FontMedium, tw.Block), name),
 				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 			),
+		)),
+		// The household summary keeps its rail-foot spot as a QUIET, non-interactive
+		// line (people still glance here for "2 members · USD base").
+		Div(css.Class("hh-quiet", tw.Mt3, tw.Mb2, tw.Px3, tw.TextCenter, tw.LeadingTight),
+			Span(css.Class(tw.FontDisplay, tw.Text13, tw.TextDim, tw.Block), name),
+			Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 		),
 		// Local-first trust line (C289 / R34-trust): the privacy differentiator was
 		// only in the admin console; surface it where every user sees it. Muted so it

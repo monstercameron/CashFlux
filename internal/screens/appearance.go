@@ -14,11 +14,35 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Appearance is the dedicated appearance screen reachable at /appearance.
-// It renders the full appearance and theming controls — theme mode, accent
-// color, motion, and the complete theme editor — on a calm, full-width routed
-// page instead of in the cramped Settings panel (B34). All controls write to
-// the same cashflux:theme and cashflux:prefs stores as the Settings panel, so
+// appearanceThemeWord maps a theme mode to its display word for the hero.
+func appearanceThemeWord(t prefs.Theme) string {
+	switch t {
+	case prefs.ThemeLight:
+		return uistate.T("settings.themeLight")
+	case prefs.ThemeSystem:
+		return uistate.T("settings.themeSystem")
+	default:
+		return uistate.T("settings.themeDark")
+	}
+}
+
+// appearanceMotionWord maps a motion preference to its display word.
+func appearanceMotionWord(m prefs.Motion) string {
+	switch m {
+	case prefs.MotionSubtle:
+		return uistate.T("settings.motionSubtle")
+	case prefs.MotionOff:
+		return uistate.T("settings.motionOff")
+	default:
+		return uistate.T("settings.motionFull")
+	}
+}
+
+// Appearance is the dedicated appearance screen reachable at /appearance,
+// presented in the Understand-surface language: a hero that reads the current
+// look back in plain English, then the mode/motion/accent controls and the
+// full theme editor as serif sections. All controls write to the same
+// cashflux:theme and cashflux:prefs stores as the Settings panel, so
 // preferences persist and are consistent regardless of where they were set.
 func Appearance() uic.Node {
 	prefsAtom := uistate.UsePrefs()
@@ -38,12 +62,34 @@ func Appearance() uic.Node {
 		uistate.ApplyTheme(uistate.LoadTheme())
 	}
 
-	return Div(css.Class("page-content"),
+	accent := pr.Accent
+	if accent == "" {
+		accent = "#2e8b57"
+	}
+
+	// ── Hero: the current look, read back in plain English. ────────────────────
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-appearance-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("appearance.eyebrow")),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("settings.appearance")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), appearanceThemeWord(pr.Theme)),
+			),
+		),
+		Div(css.Class("debt-chips"),
+			rptChip(uistate.T("settings.motion"), appearanceMotionWord(pr.Motion), ""),
+			rptChip(uistate.T("settings.accent"), accent, ""),
+		),
+		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "appearance-takeaway"),
+			uistate.T("appearance.takeaway", appearanceThemeWord(pr.Theme), appearanceMotionWord(pr.Motion))),
+	)
+
+	// ── Mode & motion & accent controls (unchanged mechanics). ─────────────────
+	controls := Div(
 		// Theme mode — Dark / Light / System. C318: the Segmented itself carries the
-		// accessible group name (role="radiogroup" + aria-label), so the wrapper is a
-		// plain layout Div — no redundant outer role="group" nesting a radiogroup.
-		Div(
-			H4(css.Class("set-label"), uistate.T("settings.appearance")),
+		// accessible group name (role="radiogroup" + aria-label).
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.appearance")),
 			ui.Segmented(ui.SegmentedProps{
 				Label: uistate.T("settings.appearance"),
 				Options: []ui.SegOption{
@@ -59,9 +105,7 @@ func Appearance() uic.Node {
 				},
 			}),
 		),
-
-		// Motion / WONDER — C318: the Segmented carries its own radiogroup aria-label,
-		// so the row is a plain layout div (no redundant outer role="group").
+		// Motion / WONDER.
 		Div(css.Class("toggle-row", tw.Mt2),
 			Span(uistate.T("settings.motion")),
 			ui.Segmented(ui.SegmentedProps{
@@ -80,9 +124,7 @@ func Appearance() uic.Node {
 			}),
 		),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.motionHint")),
-
-		// Accent color swatch picker — existing toggle-row div gains role="group" +
-		// aria-label so the visible "Accent" label is associated with the SwatchPicker.
+		// Accent color swatch picker.
 		Div(css.Class("toggle-row", tw.Mt2), Attr("role", "group"), Attr("aria-label", uistate.T("settings.accent")),
 			Span(uistate.T("settings.accent")),
 			ui.SwatchPicker(ui.SwatchPickerProps{
@@ -95,11 +137,15 @@ func Appearance() uic.Node {
 				},
 			}),
 		),
+	)
 
+	return Div(css.Class("bento bento-sys"),
+		rptTile("appearance-hero", "1 / span 4", rptSection("", uistate.T("appearance.heroTitle"), nil, heroBody)),
+		rptTile("appearance-mode", "1 / span 4",
+			rptSection("sec-appearance-mode", uistate.T("appearance.modeTitle"), nil, controls)),
 		// Theme editor: presets, color tokens, typography, density, banner.
-		// css.Class wraps the border utilities — passing tw.* css.Rule values directly as
-		// Hr children dumped them as literal text ("{[{border-top-width 1px}]...}") above THEME.
-		Hr(css.Class(tw.BorderT, tw.BorderLine), Style(map[string]string{"border-bottom": "none", "margin": "1.25rem 0 0"})),
-		uic.CreateElement(ThemeEditor),
+		rptTile("appearance-editor", "1 / span 4",
+			rptSection("sec-appearance-editor", uistate.T("appearance.editorTitle"), nil,
+				uic.CreateElement(ThemeEditor))),
 	)
 }
