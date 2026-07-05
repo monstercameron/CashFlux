@@ -9,12 +9,10 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
-	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -35,6 +33,8 @@ func Rules() ui.Node {
 
 	rev := state.UseAtom("rev:rules", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+	// Re-render after modal saves (RuleEditHost bumps the shared data revision).
+	_ = uistate.UseDataRevision().Get()
 
 	// In-context add (G18 §1): an "+ Add rule" button in the "Your rules" header.
 	addRule := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("rule") }))
@@ -63,20 +63,6 @@ func Rules() ui.Node {
 			bump()
 		})
 	}
-	saveRule := func(ruleID, m, cat, tagStr, renameDesc string) {
-		if errKey := validateRuleInput(m, cat); errKey != "" {
-			errMsg.Set(uistate.T(errKey))
-			return
-		}
-		r := rules.Rule{ID: ruleID, Match: strings.TrimSpace(m), SetCategoryID: cat, SetTags: textutil.CommaFields(tagStr), RenameDesc: strings.TrimSpace(renameDesc)}
-		if err := app.PutRule(r); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		errMsg.Set("")
-		bump()
-	}
-
 	// Text each rule is matched against (payee + description), mirroring the engine
 	// at entry/import. Computed once and reused for the per-rule counts below.
 	txns := app.Transactions()
@@ -170,9 +156,9 @@ func Rules() ui.Node {
 			func(r rules.Rule) ui.Node {
 				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
-					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
+					Rule: r, CategoryName: catName[r.SetCategoryID],
 					Warning: warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
-					OnDelete: deleteRule, OnSave: saveRule,
+					OnDelete:    deleteRule,
 					OnDragStart: func() { dragSrc.Set(rid) },
 					OnDrop:      func() { reorder(rid) },
 				})
@@ -384,77 +370,23 @@ func SuggestionRow(props suggestionRowProps) ui.Node {
 
 type ruleRowProps struct {
 	Rule           rules.Rule
-	Categories     []domain.Category
 	CategoryName   string
 	Warning        string // non-empty when this rule never fires (shadowed)
 	MatchCount     int    // how many existing transactions this rule's phrase hits
 	MaxMatchCount  int    // the heaviest rule's count — anchors the weight bar
 	ShowMatchCount bool   // whether to show the count (there are transactions to count)
 	OnDelete       func(string)
-	OnSave         func(id, match, category, tags, renameDesc string) // C102: renameDesc rewrites description on match
 	OnDragStart    func()
 	OnDrop         func()
 }
 
-// RuleRow is a per-rule row, editable inline (match + category + tags + rename).
-// All hooks are declared unconditionally so the edit toggle never reorders them.
+// RuleRow is a per-rule weighted ledger row. Edit opens the shell-root flip
+// modal (RuleEditHost), which — unlike the old inline form — preserves the
+// rule's precedence Order and structured Conditions on save.
 func RuleRow(props ruleRowProps) ui.Node {
 	r := props.Rule
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
-	editing := ui.UseState(false)
-	matchS := ui.UseState(r.Match)
-	catS := ui.UseState(r.SetCategoryID)
-	tagsS := ui.UseState(strings.Join(r.SetTags, ", "))
-	renameDescS := ui.UseState(r.RenameDesc)
-	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
-	// onCat hook slot kept for stable hook ordering; SelectInput owns the event.
-	ui.UseEvent(func(e ui.Event) { catS.Set(e.GetValue()) })
-	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
-	onRenameDesc := ui.UseEvent(func(v string) { renameDescS.Set(v) })
-	startEdit := ui.UseEvent(Prevent(func() {
-		matchS.Set(r.Match)
-		catS.Set(r.SetCategoryID)
-		tagsS.Set(strings.Join(r.SetTags, ", "))
-		renameDescS.Set(r.RenameDesc)
-		editing.Set(true)
-	}))
-	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
-	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(r.ID, matchS.Get(), catS.Get(), tagsS.Get(), renameDescS.Get())
-		editing.Set(false)
-	}))
-
-	// Land the cursor in the first field when the inline editor opens (§6.7).
-	editKey := "closed"
-	if editing.Get() {
-		editKey = "open"
-	}
-	ui.UseEffect(func() func() {
-		if editing.Get() {
-			focusByID("rule-edit-" + r.ID)
-		}
-		return nil
-	}, editKey)
-
-	if editing.Get() {
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				Input(css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch)),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   categorySelectOptions(props.Categories, catS.Get()),
-					Selected:  catS.Get(),
-					OnChange:  func(v string) { catS.Set(v) },
-					AriaLabel: uistate.T("rules.categoryFieldLabel"),
-				}),
-				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags)),
-				// C102: rename description action — when filled, matching transactions have their
-				// description rewritten to this value (e.g. clean up garbled bank feed text).
-				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), Value(renameDescS.Get()), OnInput(onRenameDesc)),
-				Button(css.Class("btn btn-primary fit"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn fit"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
+	startEdit := ui.UseEvent(Prevent(func() { uistate.SetRuleEdit(r.ID) }))
 
 	target := props.CategoryName
 	if target == "" {

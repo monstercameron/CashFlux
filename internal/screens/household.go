@@ -157,7 +157,9 @@ func HouseholdHub(props householdHubProps) ui.Node {
 	}
 	// Re-render whenever any mutation bumps the shared data revision (a member
 	// edit, a recorded settlement, a new transaction — all move the figures).
-	_ = uistate.UseDataRevision().Get()
+	// The revision also threads into the panel props: empty-struct props NEVER
+	// re-render a memoized child, so a modal save would leave the roster stale.
+	rev := uistate.UseDataRevision().Get()
 	tab := ui.UseState("members")
 	pr := uistate.UsePrefs().Get()
 	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
@@ -226,9 +228,9 @@ func HouseholdHub(props householdHubProps) ui.Node {
 	// Pre-compute all three panel element descriptors unconditionally (mirrors the
 	// Reports() tabbed-view pattern) so the GWC reconciler can mount/unmount each
 	// panel component cleanly as the tab changes.
-	membersSection := ui.CreateElement(householdMembersPanel, householdMembersPanelProps{})
-	splitSection := ui.CreateElement(householdSplitPanel, householdSplitPanelProps{})
-	byPersonSection := ui.CreateElement(householdByPersonPanel, householdByPersonPanelProps{})
+	membersSection := ui.CreateElement(householdMembersPanel, householdMembersPanelProps{Rev: rev})
+	splitSection := ui.CreateElement(householdSplitPanel, householdSplitPanelProps{Rev: rev})
+	byPersonSection := ui.CreateElement(householdByPersonPanel, householdByPersonPanelProps{Rev: rev})
 
 	var body ui.Node
 	switch tab.Get() {
@@ -253,7 +255,9 @@ func Household() ui.Node {
 
 // ── Panel: Members ────────────────────────────────────────────────────────────
 
-type householdMembersPanelProps struct{}
+type householdMembersPanelProps struct {
+	Rev int // shared data revision — forces re-render after modal saves
+}
 
 // householdMembersPanel renders the person roster inside the hub. The per-person
 // analytics live on the "By person" tab, so the roster is rendered without its
@@ -264,7 +268,9 @@ func householdMembersPanel(_ householdMembersPanelProps) ui.Node {
 
 // ── Panel: Split ──────────────────────────────────────────────────────────────
 
-type householdSplitPanelProps struct{}
+type householdSplitPanelProps struct {
+	Rev int // shared data revision — forces re-render after modal saves
+}
 
 // householdSplitPanel delegates to the standalone Split screen so the hub's
 // Split tab and the existing /split route share a single implementation.
@@ -274,7 +280,9 @@ func householdSplitPanel(_ householdSplitPanelProps) ui.Node {
 
 // ── Panel: By person ──────────────────────────────────────────────────────────
 
-type householdByPersonPanelProps struct{}
+type householdByPersonPanelProps struct {
+	Rev int // shared data revision — forces re-render after modal saves
+}
 
 // hhRowsList wraps pre-built row nodes in the canonical .rows list container —
 // the single literal shared by the household surface (rows-container ratchet).

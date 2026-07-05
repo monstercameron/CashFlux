@@ -23,6 +23,7 @@ var rulesSurfaceKeys = Catalog{
 	"rls.suggestClause":   "%d ready-made rules are waiting below.",
 	"rules.caughtSub":     "caught",
 	"rules.menuAria":      "Rule actions",
+	"rules.editKeepsConditions": "This rule also carries %d additional condition(s) — they're kept as-is when you save.",
 }
 
 func init() {

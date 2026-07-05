@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
@@ -137,32 +136,6 @@ func membersBody() ui.Node {
 	}
 
 	memberDefs := app.CustomFieldDefsFor("member")
-	saveMember := func(id, newName, newColor, dateStyle, defAccountID, newRole string, custom map[string]string) {
-		for _, m := range app.Members() {
-			if m.ID != id {
-				continue
-			}
-			if n := strings.TrimSpace(newName); n != "" {
-				m.Name = n
-			}
-			m.Color = strings.TrimSpace(newColor)
-			// Per-member preferences (§1.19): empty = inherit the household default.
-			m.Prefs.DateStyle = strings.TrimSpace(dateStyle)
-			m.Prefs.DefaultAccountID = strings.TrimSpace(defAccountID)
-			// Role: accept the form value; fall back to the resolved role if invalid.
-			if r, err := memberrole.ParseRole(strings.TrimSpace(newRole)); err == nil {
-				m.Role = r
-			}
-			m.Custom = customValuesToMap(memberDefs, custom)
-			if err := app.PutMember(m); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			break
-		}
-		errMsg.Set("")
-		bump()
-	}
 
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
@@ -204,20 +177,11 @@ func membersBody() ui.Node {
 			Spent:        money.New(f.SpendByID[mID], f.Base),
 			SharePct:     pct,
 			CustomLine:   customSummary(memberDefs, m.Custom),
-			Defs:         memberDefs,
 			OnDelete:     deleteMember,
 			OnSetDefault: setDefault,
-			OnSave:       saveMember,
 			OnView:       viewTransactions,
-			// C274: per-member PIN management.
+			// C274: per-member PIN management (set/change opens the flip modal).
 			MemberHasPIN: app.MemberHasPIN(mID),
-			OnSetPIN: func(id, pin string) error {
-				err := app.SetMemberPIN(id, pin)
-				if err == nil {
-					bump() // re-render so MemberHasPIN reflects the new state
-				}
-				return err
-			},
 			OnClearPIN: func(id string) {
 				app.ClearMemberPIN(id)
 				bump()
@@ -376,25 +340,22 @@ type memberRowProps struct {
 	Spent    money.Money
 	SharePct int
 	// CustomLine is the pre-built "Label: value · …" summary of the member's
-	// custom-field values; Defs drive the inline edit form's custom inputs.
+	// custom-field values.
 	CustomLine   string
-	Defs         []customfields.Def
 	OnDelete     func(string)
 	OnSetDefault func(string)
-	OnSave       func(id, name, color, dateStyle, defAccountID, role string, custom map[string]string)
 	OnView       func(string)
-	// C274: per-member PIN management (device-level access control).
+	// C274: per-member PIN management (device-level access control). Set/change
+	// opens the shell-root flip modal; remove clears immediately.
 	MemberHasPIN bool
-	OnSetPIN     func(id, pin string) error // nil → PIN management unavailable
-	OnClearPIN   func(id string)            // nil → PIN management unavailable
+	OnClearPIN   func(id string) // nil → PIN management unavailable
 }
 
 // MemberRow is one person's ledger row: the oversized avatar + name + role
 // chips on the left, the worth/spent figure column on the right, their share
 // of household worth as a bar underneath, and the actions behind an Edit
-// button plus a ⋯ menu (transactions, default, PIN, delete). It can be edited
-// inline (name, color, role, preferences, custom fields). All hooks are
-// declared unconditionally so the edit toggle never reorders them.
+// button plus a ⋯ menu (transactions, default, PIN, delete). Edit and PIN
+// set/change open the shell-root flip modal (MemberEditHost).
 func MemberRow(props memberRowProps) ui.Node {
 	m := props.Member
 	color := m.Color
@@ -405,78 +366,13 @@ func MemberRow(props memberRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(m.ID) }))
 	mkDefault := ui.UseEvent(Prevent(func() { props.OnSetDefault(m.ID) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(m.ID) }))
-	editing := ui.UseState(false)
-	nameS := ui.UseState(m.Name)
-	colorS := ui.UseState(color)
-	dateStyleS := ui.UseState(m.Prefs.DateStyle)
-	defAcctS := ui.UseState(m.Prefs.DefaultAccountID)
-	roleS := ui.UseState(string(memberrole.Resolve(m)))
-	customS := ui.UseState(map[string]string{})
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
-	setCustom := func(key, value string) {
-		cur := customS.Get()
-		next := make(map[string]string, len(cur)+1)
-		for k, v := range cur {
-			next[k] = v
-		}
-		next[key] = value
-		customS.Set(next)
-	}
+	// Edit and PIN set/change open the shell-root flip modal (MemberEditHost) —
+	// an inline row form sat under transformed tile ancestors (see BudgetEditHost).
 	startEdit := ui.UseEvent(Prevent(func() {
-		nameS.Set(m.Name)
-		colorS.Set(color)
-		dateStyleS.Set(m.Prefs.DateStyle)
-		defAcctS.Set(m.Prefs.DefaultAccountID)
-		roleS.Set(string(memberrole.Resolve(m)))
-		customS.Set(customMapToStrings(m.Custom))
-		editing.Set(true)
+		uistate.SetMemberEdit(uistate.MemberEdit{ID: m.ID, Mode: uistate.MemberEditModeEdit})
 	}))
-	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
-	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get(), roleS.Get(), customS.Get())
-		editing.Set(false)
-	}))
-
-	// Land the cursor in the first field when the inline editor opens (§6.7).
-	editKey := "closed"
-	if editing.Get() {
-		editKey = "open"
-	}
-	ui.UseEffect(func() func() {
-		if editing.Get() {
-			focusByID("member-edit-" + m.ID)
-		}
-		return nil
-	}, editKey)
-
-	// C274: per-member PIN management hooks — declared unconditionally so
-	// hook depth is stable regardless of the editing / showPINForm state.
-	showPINForm := ui.UseState(false)
-	pinInputS := ui.UseState("")
-	pinErrS := ui.UseState("")
-	onPINInput := ui.UseEvent(func(v string) { pinInputS.Set(v) })
 	onShowPINForm := ui.UseEvent(Prevent(func() {
-		showPINForm.Set(true)
-		pinInputS.Set("")
-		pinErrS.Set("")
-	}))
-	onCancelPINForm := ui.UseEvent(Prevent(func() {
-		showPINForm.Set(false)
-		pinInputS.Set("")
-		pinErrS.Set("")
-	}))
-	onSubmitPIN := ui.UseEvent(Prevent(func() {
-		if props.OnSetPIN == nil {
-			return
-		}
-		if err := props.OnSetPIN(m.ID, pinInputS.Get()); err != nil {
-			pinErrS.Set(uistate.T("profileSwitch.pinTooWeak"))
-		} else {
-			pinErrS.Set("")
-			showPINForm.Set(false)
-			pinInputS.Set("")
-		}
+		uistate.SetMemberEdit(uistate.MemberEdit{ID: m.ID, Mode: uistate.MemberEditModePIN})
 	}))
 	onRemovePIN := ui.UseEvent(Prevent(func() {
 		if props.OnClearPIN != nil {
@@ -484,82 +380,9 @@ func MemberRow(props memberRowProps) ui.Node {
 		}
 	}))
 
-	if editing.Get() {
-		// Custom-field inputs (member-scoped defs), rendered as keyed components so
-		// each owns its event hook.
-		customInputs := MapKeyed(props.Defs,
-			func(d customfields.Def) any { return d.Key },
-			func(d customfields.Def) ui.Node {
-				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{
-					Def: d, Value: customS.Get()[d.Key], OnChange: setCustom,
-				}))
-			})
-		return Div(css.Class("row hh-person"),
-			Form(css.Class("form-grid hh-person-form"), OnSubmit(saveEdit),
-				labeledField(uistate.T("members.name"),
-					Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName))),
-				labeledField(uistate.T("members.color"),
-					Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor))),
-				// Per-member preferences (§1.19): an optional personal date style and a
-				// default account that seeds this member's quick-add. "Inherit" = use the
-				// household default.
-				labeledField(uistate.T("members.prefDateStyle"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   memberDateStyleOptions(),
-						Selected:  dateStyleS.Get(),
-						OnChange:  func(v string) { dateStyleS.Set(v) },
-						AriaLabel: uistate.T("members.prefDateStyle"),
-					})),
-				labeledField(uistate.T("members.prefDefaultAccount"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   memberDefaultAccountOptions(),
-						Selected:  defAcctS.Get(),
-						OnChange:  func(v string) { defAcctS.Set(v) },
-						AriaLabel: uistate.T("members.prefDefaultAccount"),
-					})),
-				labeledField(uistate.T("members.roleLabel"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   memberRoleOptions(),
-						Selected:  roleS.Get(),
-						OnChange:  func(v string) { roleS.Set(v) },
-						AriaLabel: "Role",
-						TestID:    "member-edit-role-" + m.ID,
-					})),
-				customInputs,
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
-
 	// C276: show the member's real role (Owner/Admin/Viewer) as a chip,
 	// with the "default" quick-add-seed chip kept separately and visually distinct.
 	roleLabel := memberrole.Label(memberrole.Resolve(m))
-
-	// C274: the PIN set/change form, opened from the ⋯ menu.
-	pinForm := Fragment()
-	if props.OnSetPIN != nil && showPINForm.Get() {
-		pinLbl := uistate.T("profileSwitch.setPIN")
-		if props.MemberHasPIN {
-			pinLbl = uistate.T("profileSwitch.changePIN")
-		}
-		pinForm = Form(css.Class("form-grid hh-person-form"),
-			Attr("data-testid", "member-pin-form-"+m.ID),
-			OnSubmit(onSubmitPIN),
-			uiw.FormField(uistate.T("profileSwitch.pinNew"),
-				Input(css.Class("field"), Type("password"),
-					Attr("autocomplete", "off"),
-					Attr("data-testid", "member-pin-input-"+m.ID),
-					Value(pinInputS.Get()),
-					OnInput(onPINInput),
-				),
-			),
-			If(pinErrS.Get() != "", P(css.Class("notice-danger"), pinErrS.Get())),
-			Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
-			Button(css.Class("btn"), Type("button"), OnClick(onCancelPINForm),
-				uistate.T("profileSwitch.pinFormCancel")),
-		)
-	}
 
 	// The ⋯ overflow menu: transactions, make-default, PIN management, delete.
 	menuItem := func(testID, label string, on ui.Handler, extra ...any) ui.Node {
@@ -577,15 +400,13 @@ func MemberRow(props memberRowProps) ui.Node {
 	if !m.IsDefault {
 		items = append(items, menuItem("member-make-default-"+m.ID, uistate.T("members.makeDefault"), mkDefault, Title(uistate.T("members.makeDefaultTitle"))))
 	}
-	if props.OnSetPIN != nil {
-		if props.MemberHasPIN {
-			items = append(items,
-				menuItem("member-change-pin-"+m.ID, uistate.T("profileSwitch.changePIN"), onShowPINForm),
-				menuItem("member-remove-pin-"+m.ID, uistate.T("profileSwitch.removePIN"), onRemovePIN),
-			)
-		} else {
-			items = append(items, menuItem("member-set-pin-"+m.ID, uistate.T("profileSwitch.setPIN"), onShowPINForm))
-		}
+	if props.MemberHasPIN {
+		items = append(items,
+			menuItem("member-change-pin-"+m.ID, uistate.T("profileSwitch.changePIN"), onShowPINForm),
+			menuItem("member-remove-pin-"+m.ID, uistate.T("profileSwitch.removePIN"), onRemovePIN),
+		)
+	} else {
+		items = append(items, menuItem("member-set-pin-"+m.ID, uistate.T("profileSwitch.setPIN"), onShowPINForm))
 	}
 	items = append(items, menuItem("member-delete-"+m.ID, uistate.T("members.deleteTitle"), del,
 		Attr("aria-label", uistate.T("members.deleteTitle"))))
@@ -639,7 +460,6 @@ func MemberRow(props memberRowProps) ui.Node {
 		),
 		shareBar,
 		If(props.CustomLine != "", Div(css.Class("hh-person-custom"), props.CustomLine)),
-		pinForm,
 	)
 }
 

@@ -1,3 +1,18 @@
+## 2026-07-05 — Data & People edits: inline forms → flip modals
+
+Cam's follow-up on the shipped pages. The app already had the exact pattern (BudgetEditHost et
+al: uistate captured-atom selector → shell-root host → FlipPanel with a NoFooter form body), so
+this was four instances of a known shape: member (edit + PIN modes), category, rule, artifact
+rename. Rows lost ~400 lines of inline-form state; every testid moved into the modal intact.
+
+Two latent bugs surfaced by the conversion:
+- The old inline rule editor REBUILT the rule from scratch on save — silently zeroing its
+  precedence Order and its C105 structured Conditions. The modal mutates the loaded rule and
+  shows a "conditions ride along" note. (Handy ammo for the rules-engine gate next.)
+- The household tab panels used empty-struct props, so the memoized roster ignored the modal's
+  BumpDataRevision — the rename "saved" but the row showed the old name until re-nav. Rev now
+  threads through the panel props (same class as the widget-tile dataRevision landmine).
+
 ## 2026-07-04 — Data & People gate, round 2: SHIP
 
 Fresh critic (the round-1 transcript aged out) re-verified every fix live — including

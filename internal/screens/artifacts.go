@@ -38,6 +38,8 @@ func Artifacts() ui.Node {
 	rev := ui.UseState(0)
 	_ = rev.Get()
 	refresh := func() { rev.Set(rev.Get() + 1) }
+	// Re-render after modal saves (ArtifactEditHost bumps the shared data revision).
+	_ = uistate.UseDataRevision().Get()
 	// Surface upload/save failures instead of swallowing them — a large image can
 	// blow the localStorage quota (the whole dataset is one blob), and silently
 	// dropping the file leaves the user confused (C66, reliability). The real error
@@ -244,32 +246,8 @@ func artifactRow(props artifactRowProps) ui.Node {
 	a := props.Artifact
 	app := appstate.Default
 
-	renaming := ui.UseState(false)
-	nameS := ui.UseState(a.Name)
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-
-	startRename := ui.UseEvent(Prevent(func() {
-		nameS.Set(a.Name)
-		renaming.Set(true)
-	}))
-	cancelRename := ui.UseEvent(Prevent(func() { renaming.Set(false) }))
-	saveRename := ui.UseEvent(Prevent(func() {
-		n := strings.TrimSpace(nameS.Get())
-		if n == "" || app == nil {
-			renaming.Set(false)
-			return
-		}
-		updated := a
-		updated.Name = n
-		if err := app.PutArtifact(updated); err != nil {
-			if props.Notice != nil {
-				props.Notice(err.Error())
-			}
-		} else if props.Refresh != nil {
-			props.Refresh()
-		}
-		renaming.Set(false)
-	}))
+	// Rename opens the shell-root flip modal (ArtifactEditHost).
+	startRename := ui.UseEvent(Prevent(func() { uistate.SetArtifactEdit(a.ID) }))
 
 	del := ui.UseEvent(Prevent(func() {
 		if app == nil {
@@ -332,17 +310,6 @@ func artifactRow(props artifactRowProps) ui.Node {
 			Table(css.Class("csv-preview"),
 				Thead(Tr(headerCells...)),
 				Tbody(bodyRows...),
-			),
-		)
-	}
-
-	if renaming.Get() {
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveRename),
-				Input(css.Class("field"), Attr("aria-label", uistate.T("artifacts.renameLabel")),
-					Value(nameS.Get()), OnInput(onName), Attr("data-testid", "artifact-rename-input")),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelRename), uistate.T("action.cancel")),
 			),
 		)
 	}

@@ -166,29 +166,6 @@ func Categories() ui.Node {
 			expenseList = append(expenseList, c)
 		}
 	}
-	saveCat := func(id, newName, kind, parent, color string, deductible bool) {
-		for _, c := range app.Categories() {
-			if c.ID != id {
-				continue
-			}
-			if n := strings.TrimSpace(newName); n != "" {
-				c.Name = n
-			}
-			if k := domain.CategoryKind(kind); k.Valid() {
-				c.Kind = k
-			}
-			c.ParentID = parent
-			c.Color = color
-			c.Deductible = deductible
-			if err := app.PutCategory(c); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			break
-		}
-		errMsg.Set("")
-		bump()
-	}
 	// hasChildrenSet: set of category IDs that have at least one child in the full
 	// category list, used to decide whether to show a collapse toggle.
 	hasChildrenSet := make(map[string]bool, len(cats))
@@ -306,22 +283,20 @@ func Categories() ui.Node {
 			pct = int(amt * 100 / maxAmt)
 		}
 		return ui.CreateElement(CategoryRow, categoryRowProps{
-			Category:      f.Category,
-			Depth:         f.Depth,
-			AllCategories: cats,
-			TxnCount:      txnByCat[catID],
-			HasChildren:   hasChildrenSet[catID],
-			Collapsed:     collapsed.Get()[catID],
-			IsChild:       f.Depth > 0,
-			IsZeroUsage:   txnByCat[catID] == 0,
-			Amount:        money.New(amt, base),
-			AmountSub:     sub,
-			HasAmount:     hasAmt,
-			SharePct:      pct,
-			OnView:        viewTxns,
-			OnDelete:      deleteCat,
-			OnSave:        saveCat,
-			OnToggle:      toggleCollapse,
+			Category:    f.Category,
+			Depth:       f.Depth,
+			TxnCount:    txnByCat[catID],
+			HasChildren: hasChildrenSet[catID],
+			Collapsed:   collapsed.Get()[catID],
+			IsChild:     f.Depth > 0,
+			IsZeroUsage: txnByCat[catID] == 0,
+			Amount:      money.New(amt, base),
+			AmountSub:   sub,
+			HasAmount:   hasAmt,
+			SharePct:    pct,
+			OnView:      viewTxns,
+			OnDelete:    deleteCat,
+			OnToggle:    toggleCollapse,
 		})
 	}
 	// flattenSortedByUsage produces a flat list sorted by descending transaction
@@ -419,14 +394,13 @@ func Categories() ui.Node {
 }
 
 type categoryRowProps struct {
-	Category      domain.Category
-	Depth         int
-	AllCategories []domain.Category // for the inline parent picker
-	TxnCount      int               // transactions filed under this category
-	HasChildren   bool              // true when this category has at least one child
-	Collapsed     bool              // true when this category's children are hidden
-	IsChild       bool              // true when depth > 0 (sub-category nesting cue, GI2)
-	IsZeroUsage   bool              // true when TxnCount == 0 (dim treatment, GI2)
+	Category    domain.Category
+	Depth       int
+	TxnCount    int  // transactions filed under this category
+	HasChildren bool // true when this category has at least one child
+	Collapsed   bool // true when this category's children are hidden
+	IsChild     bool // true when depth > 0 (sub-category nesting cue, GI2)
+	IsZeroUsage bool // true when TxnCount == 0 (dim treatment, GI2)
 	// This-period figure: spend for expense categories, income for income ones.
 	Amount    money.Money
 	AmountSub string // "spent this period" / "earned this period"
@@ -434,7 +408,6 @@ type categoryRowProps struct {
 	SharePct  int    // share of the largest same-kind category (0–100)
 	OnView    func(string) // drill into Transactions filtered by category
 	OnDelete  func(string)
-	OnSave    func(id, name, kind, parent, color string, deductible bool)
 	OnToggle  func(id string) // toggle collapse/expand for this category
 }
 
@@ -455,9 +428,8 @@ func visibleFlats(flats []categorytree.Flat, visible map[string]bool) []category
 // CategoryRow is a per-category ledger row: swatch + collapse toggle + name
 // (indented by depth) with the usage drill and deductible tag, a this-period
 // figure with a category-tinted share bar, then a visible Edit and the ⋯ menu
-// (view transactions / delete). It can be edited inline (name, kind, parent,
-// color, deductible). All hooks are declared unconditionally so the edit
-// toggle never reorders them.
+// (view transactions / delete). Edit opens the shell-root flip modal
+// (CategoryEditHost).
 func CategoryRow(props categoryRowProps) ui.Node {
 	c := props.Category
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(c.ID) }))
@@ -471,92 +443,7 @@ func CategoryRow(props categoryRowProps) ui.Node {
 			props.OnToggle(c.ID)
 		}
 	}))
-	editing := ui.UseState(false)
-	nameS := ui.UseState(c.Name)
-	kindS := ui.UseState(string(c.Kind))
-	parentS := ui.UseState(c.ParentID)
-	colorS := ui.UseState(catColor(c.Color))
-	deductibleS := ui.UseState(c.Deductible)
-	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
-	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
-	// onKind/onParent hook slots kept for stable hook ordering; SelectInput owns the
-	// change event internally.
-	ui.UseEvent(func(e ui.Event) {
-		kindS.Set(e.GetValue())
-		parentS.Set("")
-	})
-	ui.UseEvent(func(e ui.Event) { parentS.Set(e.GetValue()) })
-	onDeductible := ui.UseEvent(func(e ui.Event) { deductibleS.Set(e.IsChecked()) })
-	startEdit := ui.UseEvent(Prevent(func() {
-		nameS.Set(c.Name)
-		kindS.Set(string(c.Kind))
-		parentS.Set(c.ParentID)
-		colorS.Set(catColor(c.Color))
-		deductibleS.Set(c.Deductible)
-		editing.Set(true)
-	}))
-	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
-	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(c.ID, nameS.Get(), kindS.Get(), parentS.Get(), colorS.Get(), deductibleS.Get())
-		editing.Set(false)
-	}))
-
-	// Land the cursor in the first field when the inline editor opens (§6.7).
-	editKey := "closed"
-	if editing.Get() {
-		editKey = "open"
-	}
-	ui.UseEffect(func() func() {
-		if editing.Get() {
-			focusByID("cat-edit-" + c.ID)
-		}
-		return nil
-	}, editKey)
-
-	if editing.Get() {
-		// Parent options: same-kind categories except this one (prevents self-parenting).
-		var sameKind []domain.Category
-		for _, cc := range props.AllCategories {
-			if string(cc.Kind) == kindS.Get() && cc.ID != c.ID {
-				sameKind = append(sameKind, cc)
-			}
-		}
-		parentOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("categories.noParent")}}
-		for _, f := range categorytree.Flatten(sameKind) {
-			parentOpts = append(parentOpts, uiw.SelectOption{Value: f.Category.ID, Label: uiw.IndentLabel(f.Depth) + f.Category.Name})
-		}
-		kindOpts := []uiw.SelectOption{
-			{Value: string(domain.KindExpense), Label: uistate.T("category.expense")},
-			{Value: string(domain.KindIncome), Label: uistate.T("category.income")},
-		}
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
-				// Visible label for the name field (C63 labelling gap: placeholder-only
-				// is insufficient for screen readers and sighted users who clear the field).
-				Label(css.Class("field-label"), Attr("for", "cat-edit-"+c.ID), uistate.T("common.name")),
-				Input(css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName)),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   kindOpts,
-					Selected:  kindS.Get(),
-					OnChange:  func(v string) { kindS.Set(v); parentS.Set("") },
-					AriaLabel: "Category type",
-				}),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   parentOpts,
-					Selected:  parentS.Get(),
-					OnChange:  func(v string) { parentS.Set(v) },
-					AriaLabel: "Parent category",
-				}),
-				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor)),
-				Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
-					Input(Type("checkbox"), Attr("id", "cat-edit-deductible-"+c.ID), Attr("aria-label", uistate.T("categories.deductible")), Attr("data-testid", "cat-deductible-"+c.ID), CheckedIf(deductibleS.Get()), OnChange(onDeductible)),
-					Text(" "+uistate.T("categories.deductible")),
-				),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-			),
-		)
-	}
+	startEdit := ui.UseEvent(Prevent(func() { uistate.SetCategoryEdit(c.ID) }))
 
 	// Sub-categories nest with real left padding (a guide line via border) rather
 	// than literal "— " prefixes, for a cleaner hierarchy (C63). Depth 0 is flush.
