@@ -141,6 +141,7 @@ type settingsRightProps struct {
 	OnBackupAll     func() // C297: full multi-workspace backup, also in the palette
 	OnImportJSON    func()
 	OnLoadSample    func()
+	OnResetSample   func() // one-step wipe + reseed (the demo reset)
 	OnWipe          func()
 	OnBackupCadence uic.Handler // UseEvent
 	// Advanced
@@ -378,6 +379,7 @@ func settingsDataPane(p settingsRightProps) uic.Node {
 			dataBtn(uistate.T("settings.backupAll"), false, p.OnBackupAll),
 			dataBtn(uistate.T("settings.importDataset"), false, p.OnImportJSON),
 			dataBtn(uistate.T("settings.loadSample"), false, p.OnLoadSample),
+			dataBtn(uistate.T("settings.resetSample"), false, p.OnResetSample),
 			dataBtn(uistate.T("settings.wipe"), true, p.OnWipe),
 		),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.dataExportHint")),

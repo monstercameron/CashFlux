@@ -1043,6 +1043,7 @@ func globalSettingsForm() uic.Node {
 		OnBackupAll:     backupEverything,
 		OnImportJSON:    func() { importJSON(bump, notify) },
 		OnLoadSample:    func() { loadSample(bump, notify) },
+		OnResetSample:   func() { resetSampleData(notify) },
 		OnWipe:          func() { wipeData(bump, notify) },
 		OnBackupCadence: onBackupCadence,
 
@@ -1534,6 +1535,37 @@ func loadSample(onChange func(), notify func(string, bool)) {
 	uistate.SetSampleActive(true)
 	uistate.RequestPersist() // C2: flush before a fast reload can race the autosave ticker
 	notify(uistate.T("settings.loadedSample"), false)
+}
+
+// resetSampleData is the ONE-step demo reset: wipe + load-sample without the
+// intermediate stop. It replaces everything with the fresh built-in sample
+// (store.Load is a wholesale replace, so no separate wipe is needed), clears
+// the two stores that describe the OLD data (the in-memory activity feed and
+// the cached SMART content in the preserved settings KV), purges stray
+// financial browser-store keys, persists the new snapshot, and reloads once
+// the write commits — exactly what wipe-then-load did in two trips.
+func resetSampleData(notify func(string, bool)) {
+	uistate.ConfirmModalLabeled(uistate.T("settings.resetSampleConfirm"), uistate.T("settings.resetSampleConfirmBtn"), true, func(ok bool) {
+		if !ok {
+			return
+		}
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.LoadSample(); err != nil {
+			notify(uistate.T("settings.loadSampleErr", err.Error()), true)
+			return
+		}
+		auditview.Feed.Clear()
+		uistate.ClearSmartGenerated()
+		uistate.SetSampleActive(true)
+		// Persist the fresh sample and reload after the write commits;
+		// wipeFinancialLocalState snapshots whatever the store now holds — the
+		// sample — while sweeping the satellite keys derived from the old data.
+		suspendAutosave = true
+		wipeFinancialLocalState(reloadPage)
+	})
 }
 
 // wipeData clears all data after a confirmation, then refreshes.

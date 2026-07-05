@@ -1,3 +1,17 @@
+## 2026-07-05 — BalanceAsOf is metadata, not a cutoff (found the hard way)
+
+Two mistakes in one field. First: moving the seed's opening statements to 2021 made EVERY
+account ~1,831 days "stale" — freshness anchors on BalanceAsOf, and every account type has a
+default window. Second, the attempted fix restated the 401(k)/Roth openings at a 2026 date —
+which DOUBLE-COUNTED five years of transfers (~$10.9k phantom net worth), because
+ledger.Balance turns out to sum opening + ALL transactions; BalanceAsOf is pure
+when-was-this-confirmed metadata. The correct shape: openings stay at their 2021 values,
+confirmation dates move to realistic recent ones (statement days, payment days), and the
+401(k)/Roth sit at Mar 31 — six days past their seeded 90-day overrides, so the staleness
+nudge fires subtly instead of screaming 5 years. The seed now documents the semantics at the
+declaration so the next editor doesn't re-learn it. Also per Cam: the brokerage is named
+what it is — "Stonks (Fun Money)" — hobby-sized by design.
+
 ## 2026-07-05 — Five years of Hartleys: the seed becomes a story
 
 The interesting problem wasn't generating 60 months of rows — it was making the ECONOMY

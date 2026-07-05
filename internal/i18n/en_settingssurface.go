@@ -19,6 +19,10 @@ var settingsSurfaceKeys = Catalog{
 	"topbar.settings":        "Settings",
 	"screen.settingsSub":     "Everything configurable, in one place — household, preferences, appearance, alerts, AI, cloud, data, and advanced.",
 
+	"settings.resetSample":           "Reset sample data",
+	"settings.resetSampleConfirm":    "Replace everything on this device with a fresh copy of the sample dataset? Any data you added or changed will be erased.",
+	"settings.resetSampleConfirmBtn": "Reset to sample",
+
 	"about.eyebrow":         "local-first budgeting · built in the open",
 	"about.chipStorage":     "Your data lives",
 	"about.chipStorageVal":  "On this device",
