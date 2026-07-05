@@ -12,6 +12,8 @@
 package auditlog
 
 import (
+	"encoding/json"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +42,18 @@ type Entry struct {
 	EntityType string
 	EntityID   string
 	Summary    string
+	// Details are the field-level before → after changes behind an update (or
+	// the notable fields of a deleted row), display-ready and redacted. Empty
+	// for adds and for entries recorded before details existed.
+	Details []FieldChange
+}
+
+// FieldChange is one field's before → after in a recorded change. All three
+// strings are display-ready (formatted and redacted by the recorder).
+type FieldChange struct {
+	Field  string
+	Before string
+	After  string
 }
 
 // Log is a bounded, append-only in-memory audit log. It is safe for concurrent use.
@@ -173,4 +187,114 @@ func Redact(s string) string {
 		}
 	}
 	return s
+}
+
+// ─── Field-level diffs ─────────────────────────────────────────────────────────
+
+// ValueFormatter renders one raw JSON value (as decoded by encoding/json: string,
+// float64, bool, nil, map[string]any, []any) for display. key is the JSON field
+// name, so a caller can resolve IDs to names or format money shapes.
+type ValueFormatter func(key string, v any) string
+
+// DiffJSON compares two JSON object payloads (an update's before/after rows) and
+// returns the changed top-level fields as display-ready FieldChanges, sorted by
+// field name. fmtVal renders values (nil falls back to a compact default);
+// skip lists JSON keys to ignore (ids, blob payloads, timestamps — noise).
+// Formatted values pass through Redact so a secret-bearing field can never land
+// in the activity feed. Unparseable payloads yield no details (never an error —
+// the summary still describes the change).
+func DiffJSON(before, after []byte, fmtVal ValueFormatter, skip map[string]bool) []FieldChange {
+	var b, a map[string]any
+	if err := json.Unmarshal(before, &b); err != nil {
+		return nil
+	}
+	if err := json.Unmarshal(after, &a); err != nil {
+		return nil
+	}
+	if fmtVal == nil {
+		fmtVal = DefaultValueFormatter
+	}
+	keys := map[string]bool{}
+	for k := range b {
+		keys[k] = true
+	}
+	for k := range a {
+		keys[k] = true
+	}
+	var out []FieldChange
+	for k := range keys {
+		if skip[k] {
+			continue
+		}
+		bv, bok := b[k]
+		av, aok := a[k]
+		if !bok && !aok {
+			continue
+		}
+		if jsonEqual(bv, av) {
+			continue
+		}
+		bs, as := "", ""
+		if bok {
+			bs = Redact(fmtVal(k, bv))
+		}
+		if aok {
+			as = Redact(fmtVal(k, av))
+		}
+		if bs == as {
+			continue // formatting collapsed the difference (e.g. float noise)
+		}
+		out = append(out, FieldChange{Field: k, Before: bs, After: as})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Field < out[j].Field })
+	return out
+}
+
+// jsonEqual reports deep equality of two decoded-JSON values by re-marshalling
+// (cheap at row scale, and immune to map ordering).
+func jsonEqual(a, b any) bool {
+	ab, errA := json.Marshal(a)
+	bb, errB := json.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return string(ab) == string(bb)
+}
+
+// DefaultValueFormatter renders a decoded JSON value compactly: strings as-is,
+// bools as yes/no, nil/missing as an em dash, numbers trimmed, and composite
+// values as compact JSON truncated to a readable length.
+func DefaultValueFormatter(_ string, v any) string {
+	switch t := v.(type) {
+	case nil:
+		return "—"
+	case string:
+		if t == "" {
+			return "—"
+		}
+		return truncateVal(t)
+	case bool:
+		if t {
+			return "yes"
+		}
+		return "no"
+	case float64:
+		b, _ := json.Marshal(t)
+		return string(b)
+	default:
+		bs, err := json.Marshal(v)
+		if err != nil {
+			return "…"
+		}
+		return truncateVal(string(bs))
+	}
+}
+
+// truncateVal caps a display value at a readable length.
+func truncateVal(s string) string {
+	const max = 60
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-1] + "…"
 }

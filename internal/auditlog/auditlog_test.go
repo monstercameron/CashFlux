@@ -235,3 +235,48 @@ func TestFilterByEntityType(t *testing.T) {
 		})
 	}
 }
+
+func TestDiffJSON(t *testing.T) {
+	before := []byte(`{"id":"t1","desc":"coffee","amount":{"amount":-450,"currency":"USD"},"cleared":false,"tags":["a"],"note":"sk-secret123"}`)
+	after := []byte(`{"id":"t1","desc":"latte","amount":{"amount":-550,"currency":"USD"},"cleared":true,"tags":["a"],"note":"sk-secret123"}`)
+	got := auditlog.DiffJSON(before, after, nil, map[string]bool{"id": true})
+	want := map[string][2]string{
+		"amount":  {`{"amount":-450,"currency":"USD"}`, `{"amount":-550,"currency":"USD"}`},
+		"cleared": {"no", "yes"},
+		"desc":    {"coffee", "latte"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d changes %+v, want %d", len(got), got, len(want))
+	}
+	for _, fc := range got {
+		w, ok := want[fc.Field]
+		if !ok {
+			t.Fatalf("unexpected field %q", fc.Field)
+		}
+		if fc.Before != w[0] || fc.After != w[1] {
+			t.Fatalf("%s = %q → %q, want %q → %q", fc.Field, fc.Before, fc.After, w[0], w[1])
+		}
+	}
+}
+
+func TestDiffJSONRedactsAndHandlesMissing(t *testing.T) {
+	before := []byte(`{"key":"old"}`)
+	after := []byte(`{"key":"sk-verysecretvalue","added":"x"}`)
+	got := auditlog.DiffJSON(before, after, nil, nil)
+	for _, fc := range got {
+		if fc.Field == "key" {
+			if fc.After != "[REDACTED]" {
+				t.Fatalf("secret leaked: %q", fc.After)
+			}
+		}
+		if fc.Field == "added" && fc.Before != "" {
+			t.Fatalf("missing-before should be empty, got %q", fc.Before)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d changes, want 2", len(got))
+	}
+	if auditlog.DiffJSON([]byte("not json"), after, nil, nil) != nil {
+		t.Fatalf("unparseable before should yield nil")
+	}
+}

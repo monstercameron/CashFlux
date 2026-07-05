@@ -51,6 +51,38 @@ func registerRecordSurface() {
 	rule(".bento-record .act-filter",
 		prop("max-width", "14rem"),
 	)
+	// Field-level before → after detail lines under an update entry: the field
+	// name in a fixed quiet column, the old value struck through, the new value
+	// carrying the weight.
+	rule(".act-diff",
+		prop("margin-top", "0.35rem"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+	)
+	rule(".act-diff-line",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.5rem"),
+		prop("flex-wrap", "wrap"),
+		prop("font-size", "0.78rem"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".act-diff-field",
+		prop("color", "var(--text-dim)"),
+		prop("min-width", "6.5rem"),
+	)
+	rule(".act-diff-before",
+		prop("color", "var(--text-dim)"),
+		prop("text-decoration", "line-through"),
+	)
+	rule(".act-diff-arrow",
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".act-diff-after",
+		prop("font-weight", "600"),
+	)
+
 	// The aside holds actor + (on the newest row) Undo — keep them apart.
 	rule(".bento-record .row-aside",
 		prop("display", "flex"),

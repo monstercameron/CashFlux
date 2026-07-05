@@ -18,7 +18,8 @@ var recordSurfaceKeys = Catalog{
 	"act.takeEmpty":         "Nothing on record yet — changes appear here as you work.",
 	"act.takeLast":          "Most recently: %s — %s.",
 	"activity.timelineTitle": "What changed",
-	"activity.dayUndated":    "Recent",
+	"activity.dayUndated":    "Undated",
+	"activity.moreChanges":   "+%d more changes",
 }
 
 func init() {

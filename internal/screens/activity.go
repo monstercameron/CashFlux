@@ -114,6 +114,36 @@ func activityRow(props activityRowProps) ui.Node {
 		rowCls += " act-del"
 	}
 
+	// Field-level before → after details (updates recorded since the diff layer
+	// landed). Capped for scanability; the tail collapses to a count.
+	var detailNodes []ui.Node
+	const maxDiffLines = 5
+	shown := e.Details
+	extra := 0
+	if len(shown) > maxDiffLines {
+		extra = len(shown) - maxDiffLines
+		shown = shown[:maxDiffLines]
+	}
+	for _, d := range shown {
+		before := d.Before
+		if before == "" {
+			before = "—"
+		}
+		after := d.After
+		if after == "" {
+			after = "—"
+		}
+		detailNodes = append(detailNodes, Div(css.Class("act-diff-line"),
+			Span(css.Class("act-diff-field"), actFieldLabel(d.Field)),
+			Span(css.Class("act-diff-before"), before),
+			Span(css.Class("act-diff-arrow"), Attr("aria-hidden", "true"), "→"),
+			Span(css.Class("act-diff-after"), after),
+		))
+	}
+	if extra > 0 {
+		detailNodes = append(detailNodes, Div(css.Class("act-diff-line", tw.TextFaint), uistate.T("activity.moreChanges", extra)))
+	}
+
 	return Div(ClassStr(rowCls),
 		Div(css.Class("row-main"),
 			Div(css.Class("row-desc"),
@@ -121,6 +151,7 @@ func activityRow(props activityRowProps) ui.Node {
 				If(e.EntityType != "", Span(css.Class("row-meta", tw.TextFaint), " · "+e.EntityType)),
 			),
 			Span(css.Class("row-meta"), e.Summary),
+			If(len(detailNodes) > 0, Div(css.Class("act-diff"), detailNodes)),
 		),
 		Div(css.Class("row-aside"),
 			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), actorLabel)),
@@ -365,14 +396,14 @@ func buildActivityFeed(app *appstate.App) []auditlog.Entry {
 	if primary := auditview.Feed.Recent(activityFeedMax); len(primary) > 0 {
 		// The feed's storage order isn't guaranteed newest-first (imported/seeded
 		// entries append in file order) — the page promises "newest first", so
-		// enforce it: undated entries lead (they're the freshest session writes),
-		// then dated entries newest-first.
+		// enforce it: dated entries newest-first, with undated legacy entries
+		// (recorded before timestamps existed) trailing at the end.
 		out := make([]auditlog.Entry, len(primary))
 		copy(out, primary)
 		sort.SliceStable(out, func(i, j int) bool {
 			zi, zj := out[i].At.IsZero(), out[j].At.IsZero()
 			if zi != zj {
-				return zi
+				return zj // dated before undated
 			}
 			return out[i].At.After(out[j].At)
 		})
@@ -445,4 +476,24 @@ func actTruncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "…"
+}
+
+// actFieldLabel humanizes a JSON field key for the diff lines: camelCase splits
+// into words, a trailing "Id" drops (the value is already resolved to a name),
+// and the result lowercases ("categoryId" → "category", "renameDesc" →
+// "rename desc").
+func actFieldLabel(key string) string {
+	if key == "" {
+		return key
+	}
+	var b []rune
+	for i, r := range key {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			b = append(b, ' ')
+		}
+		b = append(b, r)
+	}
+	out := strings.ToLower(string(b))
+	out = strings.TrimSuffix(out, " id")
+	return out
 }

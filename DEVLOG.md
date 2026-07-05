@@ -1,3 +1,26 @@
+## 2026-07-05 — Activity diffs: the record learns before → after
+
+Cam wanted the activity log to show what actually changed. The undo stack already carried
+everything needed — history.Change stores Before/After JSON per row — nobody had ever read it
+for display. New pure auditlog.DiffJSON (top-level JSON field diff, Redact on every value,
+skip-list for blob fields, nil on unparseable) + a domain-aware formatter at record time:
+money shapes → formatted amounts, RFC3339 → dates, *Id fields → resolved display names.
+Resolving at RECORD time was deliberate: history stays true even if the category is renamed
+later.
+
+Wiring it exposed three real bugs in the recorder, each visible in the probe rows:
+1. Entries never set At — the whole record was undated (that's why the "Recent" bucket
+   existed at all). Stamped now; the undated sort pin flipped (dated first, legacy last).
+2. The audit log audited itself — each capture recorded the previous entry's own
+   auditEntries write ("Added a history entry" forever riding the top of the feed).
+3. Summaries/op-inference counted internal rows — one member edit read "Updated 2 member
+   records", and an update bundled with bookkeeping adds could be mislabeled "Added".
+
+Detail extraction mirrors the dominant-collection rule: exactly ONE real entity update in
+the set → field diffs; bulk sets keep their summary. Verified live: rename → "name: Marcus
+Hartley → Marcus Q. Hartley" + "role: — → owner" under a real Jul 5 day divider, revert
+logged symmetrically.
+
 ## 2026-07-05 — Vault downloads + rename-modal consistency
 
 Cam: review the artifacts modals for consistency and let users download artifacts. The rename
