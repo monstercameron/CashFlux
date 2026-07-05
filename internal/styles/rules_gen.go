@@ -7860,6 +7860,10 @@ func registerGenerated() {
 		scrollbarWidth("thin"),
 		scrollbarColor("#34343a transparent"),
 		scrollBehavior("smooth"),
+		// Bottom clearance for the fixed corner controls (scroll-to-top, the PWA
+		// install button): without it they sit ON the last row of content —
+		// e.g. covering a pager's Next button at the end of a page.
+		prop("padding-bottom", "5.25rem"),
 	)
 	rule("main.cf-scroll::-webkit-scrollbar",
 		width("11px"),
