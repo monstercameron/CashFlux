@@ -17,7 +17,7 @@ var quickAddFixKeys = Catalog{
 	// C47: short muted caption shown beneath the checkbox explaining what
 	// leaving it unchecked means, so the user never has to guess at the
 	// consequences of either choice.
-	"quickAdd.reviewedHelp": "Leave unchecked to tag this transaction #needs-review for later follow-up.",
+	"quickAdd.reviewedHelp": "Leave unchecked to tag it #needs-review for follow-up.",
 }
 
 func init() {

@@ -12,7 +12,7 @@ var miaKeys = Catalog{
 
 	// Accounts — institution field (#445-10)
 	"accounts.institution":     "Institution",
-	"accounts.institutionHint": "The bank or financial institution",
+	"accounts.institutionHint": "Bank or institution",
 	"accounts.setInstitution":  "Set institution",
 
 	// Insights scope chip (#445-9)

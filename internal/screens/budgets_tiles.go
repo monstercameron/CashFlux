@@ -131,7 +131,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		If(v.OverCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
 			Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
-			Span(css.Class("budget-over-text"), uistate.T("budgets.overBanner", v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
+			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
 		)),
 		If(v.OverCount > 0 || v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			If(v.OverCount > 0, Span(css.Class("pill is-danger"), uistate.T("budgets.overBadge", v.OverCount))),
@@ -147,6 +147,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 // budgetAssignBanner renders the method-specific income context line: simple mode
 // shows income · budgeted · the unbudgeted/over gap; zero-based shows the amount left
 // to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
+// overBannerText renders the over-budget banner copy with correct grammar for a
+// single over-budget category (the plural string read "1 budgets are over").
+func overBannerText(count int, total string) string {
+	if count == 1 {
+		return uistate.T("budgets.overBannerOne", total)
+	}
+	return uistate.T("budgets.overBanner", count, total)
+}
+
 func budgetAssignBanner(v budgetView) ui.Node {
 	switch v.Method {
 	case budgeting.MethodSimple:
@@ -229,6 +238,8 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	})
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	// C114: one-click 50/30/20 starter template over last full month's income.
+	// v1.0: this is a bulk mutation (up to ~10 new budgets), so it previews the
+	// count and confirms before creating anything.
 	apply503020 := ui.UseEvent(Prevent(func() {
 		txns := app.Transactions()
 		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
@@ -246,22 +257,34 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		for _, b := range app.Budgets() {
 			existing[b.CategoryID] = true
 		}
-		n := 0
+		var toAdd []domain.Budget
 		for _, prop := range res.Proposals {
 			if prop.LimitMinor <= 0 || existing[prop.Category.ID] {
 				continue
 			}
-			nb := domain.Budget{
+			toAdd = append(toAdd, domain.Budget{
 				ID: id.New(), Name: prop.Category.Name, CategoryID: prop.Category.ID,
 				Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
 				Period: domain.PeriodMonthly, Limit: money.New(prop.LimitMinor, base),
-			}
-			if err := app.PutBudget(nb); err == nil {
-				n++
-			}
+			})
 		}
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("budgets.tmplApplied", plural(n, "budget")), false)
+		if len(toAdd) == 0 {
+			uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
+			return
+		}
+		uistate.ConfirmModalLabeled(uistate.T("budgets.tmplConfirm", plural(len(toAdd), "budget")), uistate.T("budgets.tmplConfirmBtn"), false, func(ok bool) {
+			if !ok {
+				return
+			}
+			n := 0
+			for _, nb := range toAdd {
+				if err := app.PutBudget(nb); err == nil {
+					n++
+				}
+			}
+			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("budgets.tmplApplied", plural(n, "budget")), false)
+		})
 	}))
 
 	formulasLabel := uistate.T("budgets.showFormulas")

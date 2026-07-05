@@ -343,7 +343,7 @@ func QuickAddHost() uic.Node {
 			Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 				Input(reviewedArgs...),
 				uistate.T("quickAdd.reviewedClear")),
-			Span(Style(map[string]string{"font-size": "0.72rem", "color": "var(--color-text-muted)", "padding-left": "1.4rem"}),
+			Span(Style(map[string]string{"font-size": "0.72rem", "color": "var(--text-dim)", "padding-left": "1.4rem"}),
 				uistate.T("quickAdd.reviewedHelp"))),
 		// C42 TRIAGE — NO CODE BUG: native <input type="date"> has internal sub-field
 		// segments (mm / dd / yyyy) that capture Arrow/Tab key presses to cycle between
