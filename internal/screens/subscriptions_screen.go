@@ -201,11 +201,25 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// debits, lender-named charges) — they recur like subscriptions but aren't ones,
 	// and counting them inflated both the list and the annual total. IsLiabilityPayment
 	// checks the debiting account's class/type and lender-phrase labels.
+	// A charge the user already models as a planned recurring flow (HOA dues,
+	// utilities) is a known bill, not a mystery "subscription" to cancel —
+	// listing it here produced nonsense like "How to cancel HOA dues subscription".
+	// Cross-check detected names against the recurring labels and drop matches.
+	recurringNames := make(map[string]bool)
+	for _, r := range app.Recurring() {
+		if n := strings.ToLower(strings.TrimSpace(r.Label)); n != "" {
+			recurringNames[n] = true
+		}
+	}
+
 	var subs []subscriptions.Subscription
 	var ignoredSubs []subscriptions.Subscription
 	for _, s := range rawSubs {
 		if subscriptions.IsLiabilityPayment(s, allTxns, allAccts) {
 			continue
+		}
+		if recurringNames[strings.ToLower(strings.TrimSpace(s.Name))] {
+			continue // already a planned recurring flow — not a subscription
 		}
 		if ignoreMap[strings.ToLower(strings.TrimSpace(s.Name))] {
 			ignoredSubs = append(ignoredSubs, s)

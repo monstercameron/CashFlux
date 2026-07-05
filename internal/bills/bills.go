@@ -12,6 +12,7 @@ package bills
 
 import (
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -62,6 +63,20 @@ func Upcoming(accounts []domain.Account, now time.Time) []Bill {
 // after now, bounded to avoid bad imported schedules looping forever.
 func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now time.Time) []Bill {
 	out := Upcoming(accounts, now)
+	// A recurring flow often models the SAME real payment as its target
+	// liability's own statement due-date (a car/mortgage/loan payment). Both the
+	// account-derived bill and the recurring flow would otherwise list separately
+	// and double-count the headline "total due" and "per year". Dedupe by
+	// (currency, amount, due day-of-month): a recurring flow matching a bill
+	// already surfaced from the accounts is the same obligation, so skip it and
+	// keep the account's ✦ representation.
+	billKey := func(cur string, minor int64, day int) string {
+		return cur + ":" + strconv.FormatInt(minor, 10) + ":" + strconv.Itoa(day)
+	}
+	seen := make(map[string]bool, len(out))
+	for _, b := range out {
+		seen[billKey(b.Amount.Currency, b.Amount.Amount, b.DueDate.Day())] = true
+	}
 	for _, r := range recurring {
 		if !r.Amount.IsNegative() {
 			continue
@@ -70,10 +85,17 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 		if !ok {
 			continue
 		}
+		amt := r.Amount.Abs()
+		// Only a MONTHLY recurring can duplicate a monthly liability statement; a
+		// weekly/quarterly flow that happens to share an amount+day is a coincidence,
+		// not the same obligation.
+		if r.Cadence == domain.CadenceMonthly && seen[billKey(amt.Currency, amt.Amount, due.Day())] {
+			continue // same obligation as an account-derived bill already listed
+		}
 		out = append(out, Bill{
 			AccountID: "recurring:" + r.ID,
 			Name:      r.Label,
-			Amount:    r.Amount.Abs(),
+			Amount:    amt,
 			DueDate:   due,
 			DaysUntil: daysBetween(now, due),
 			Autopay:   r.Autopay,
@@ -94,6 +116,13 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 // sum the results (mirroring how the upcoming list is totalled).
 func AnnualAmounts(accounts []domain.Account, recurring []domain.Recurring) []money.Money {
 	var out []money.Money
+	// Same dedupe rationale as UpcomingAll: a monthly recurring flow that models a
+	// liability's statement payment (same currency, monthly amount, and due day)
+	// is the same obligation and must not be counted twice in the yearly total.
+	key := func(cur string, minor int64, day int) string {
+		return cur + ":" + strconv.FormatInt(minor, 10) + ":" + strconv.Itoa(day)
+	}
+	seen := map[string]bool{}
 	for _, a := range accounts {
 		if a.Archived || a.Class != domain.ClassLiability {
 			continue
@@ -102,6 +131,7 @@ func AnnualAmounts(accounts []domain.Account, recurring []domain.Recurring) []mo
 			continue
 		}
 		mp := a.MinPayment.Abs()
+		seen[key(mp.Currency, mp.Amount, a.DueDayOfMonth)] = true
 		out = append(out, money.New(mp.Amount*12, mp.Currency))
 	}
 	for _, r := range recurring {
@@ -110,11 +140,16 @@ func AnnualAmounts(accounts []domain.Account, recurring []domain.Recurring) []mo
 		}
 		// MonthlyEquivalent already normalizes the cadence to a per-month figure;
 		// ×12 yields the yearly amount. Abs since recurring outflows are negative.
-		annual := r.MonthlyEquivalent() * 12
-		if annual < 0 {
-			annual = -annual
+		monthly := r.MonthlyEquivalent()
+		if monthly < 0 {
+			monthly = -monthly
 		}
-		out = append(out, money.New(annual, r.Amount.Currency))
+		// Only a monthly recurring can be the same obligation as a monthly
+		// liability statement (see UpcomingAll).
+		if r.Cadence == domain.CadenceMonthly && seen[key(r.Amount.Currency, monthly, r.NextDue.Day())] {
+			continue // already counted via the target liability's minimum payment
+		}
+		out = append(out, money.New(monthly*12, r.Amount.Currency))
 	}
 	return out
 }

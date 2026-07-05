@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Bills no longer double-count loan/mortgage payments (v1.0 correctness, 2026-07-05):** `/bills` unioned each liability's own statement due-date with the negative recurring flows, and when a recurring flow modelled the SAME payment (the seed's car/mortgage/loan payments do), both listed separately — inflating the headline "total due soon" by ~$2,580 and the "per year" figure proportionally. `bills.UpcomingAll` and `bills.AnnualAmounts` now dedupe a **monthly** recurring flow that matches an account-derived bill by (currency, amount, due day-of-month), keeping the account's ✦ representation. Guarded by `TestUpcomingAllDedupesLiabilityRecurring` (and the monthly-only guard keeps a quarterly flow whose monthly-equivalent coincides from being wrongly collapsed).
+- **Subscriptions stop flagging planned bills as cancellable subscriptions (v1.0, 2026-07-05):** a charge already modelled as a recurring flow (HOA dues, utilities) was also detected as a "subscription", producing nonsense like "How to cancel HOA dues subscription". Detected names are now cross-checked against the recurring labels and dropped — the Subscriptions list shows genuine subscriptions only.
+- **Loans/credit polish (v1.0, 2026-07-05):** the /loans "Extra payment" input clipped its placeholder ("Extra paymen") — copy shortened to "Extra/mo" and the field widened; the /credit per-card limit editor shared one `credit-limit-edit` testid across every card (a Playwright strict-mode collision) — now suffixed with the account id.
+
+
+### Fixed
 - **Budgets & quick-add copy polish (v1.0, 2026-07-05):** the over-budget banner read "**1 budgets are over**" for a single category (now "1 budget is over…" via a singular variant); the 50/30/20 template's bulk create (up to ~10 budgets) fired **instantly with no confirmation** and now previews the count in a ConfirmModal ("Create N budgets…"), with an honest "nothing to add" notice when every category already has one; the quick-add "reviewed" helper text was clipped mid-word ("#needs-") — shortened, and its color moved off the undefined `--color-text-muted` token to `--text-dim`; the account institution placeholder ("The bank or financial institution") was clipping in the field — shortened to "Bank or institution".
 
 

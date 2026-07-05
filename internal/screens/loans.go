@@ -223,7 +223,7 @@ func loanCard(props loanCardProps) ui.Node {
 		Input(css.Class("field"),
 			Attr("id", "loan-extra-"+a.ID),
 			Type("number"), Attr("min", "0"), Attr("step", "any"),
-			Style(map[string]string{"width": "8rem"}),
+			Style(map[string]string{"width": "9.5rem"}),
 			Placeholder(fmt.Sprintf(uistate.T("loans.extraPlaceholder"), sym)),
 			Value(extraS.Get()),
 			OnInput(onExtra),
