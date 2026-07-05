@@ -84,6 +84,12 @@ try {
   const weekSeg = page.locator(".flip-backdrop .toggle-row", { hasText: "Week starts on" });
   ok(await weekSeg.count() >= 1 || await page.locator(".flip-backdrop").getByText("Monday").count() >= 1, "week-start control present on Preferences");
 
+  // ── Alerts tab: freshness + notifications moved here from Preferences. ─────
+  await goTab(page, "Alerts");
+  const alertsText = await page.locator(".flip-backdrop .set-body").innerText();
+  ok(/freshness|stale/i.test(alertsText), "freshness reminders live on the Alerts tab");
+  ok(/notification/i.test(alertsText), "notifications live on the Alerts tab");
+
   // ── AI tab: key field persists to app settings. ─────────────────────────────
   await goTab(page, "AI");
   const keyInput = page.locator('.flip-backdrop input[aria-label*="OpenAI"], .flip-backdrop input[placeholder*="OpenAI"]').first();

@@ -9,6 +9,7 @@ var settingsSurfaceKeys = Catalog{
 	"settings.tabsAria":     "Settings sections",
 	"settings.tabHousehold": "Household",
 	"settings.tabPrefs":     "Preferences",
+	"settings.tabAlerts":    "Alerts",
 	"settings.tabAI":        "AI",
 	"settings.tabCloud":     "Cloud",
 	"settings.tabData":      "Data",

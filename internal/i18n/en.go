@@ -1423,7 +1423,7 @@ var english = Catalog{
 	"settings.fxAIApplyAll":     "Apply all",
 	"settings.fxAICurrent":      "Current",
 	"settings.fxAIProposed":     "Proposed",
-	"settings.fxAINoKey":        "Add an OpenAI key in the AI section above to enable live rate fetching.",
+	"settings.fxAINoKey":        "Add an OpenAI key on the AI tab to enable live rate fetching.",
 	"settings.fxAIError":        "Couldn't fetch rates: %s",
 	"settings.exportedData":     "Exported your data as %s.",
 	"settings.exportDataErr":    "Couldn't export your data: %s",
@@ -2499,7 +2499,7 @@ var english = Catalog{
 	// first first-run step so new users can find and confirm these early. The label
 	// becomes a link to /appearance where week-start lives; currency is in Settings
 	// (opened from the household card in the sidebar).
-	"help.currencyStepLabel": "Confirm base currency & week start (Settings → Household)",
+	"help.currencyStepLabel": "Confirm your base currency and week start in Settings",
 	// C28: household-members step — optional, shown so solo users know the
 	// feature exists; marked done once a second member is added (≥2 members).
 	"help.membersStepLabel": "Add household members (optional)",

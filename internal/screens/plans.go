@@ -62,11 +62,14 @@ func Plans() ui.Node {
 					uistate.T("plans.cloudFeature3"),
 					uistate.T("plans.cloudFeature4"),
 				},
-				// CTA: navigates to Cloud settings → Stripe Checkout (same as UpgradeSheet).
+				// CTA: opens Settings (the Cloud tab holds Stripe Checkout, same as
+				// UpgradeSheet). Settings is a modal, not a route — a /settings href
+				// silently landed on the dashboard.
 				Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-					A(
+					Button(
+						Type("button"),
 						css.Class("btn btn-primary", tw.WFull, tw.TextCenter),
-						Attr("href", uistate.RoutePath("/settings")),
+						OnClick(Prevent(func() { uistate.OpenGlobalSettings() })),
 						uistate.T("plans.startTrial"),
 					),
 					P(css.Class(tw.Text12, tw.TextDim, tw.TextCenter), uistate.T("plans.cloudTrial")),

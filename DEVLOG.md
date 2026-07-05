@@ -1,3 +1,24 @@
+## 2026-07-05 — System surfaces round 1: the /settings ghost route
+
+The critic's best find generalizes: Settings has NEVER had a route — it's a modal — yet six
+call sites across four screens did `history.pushState("/settings")` and every one of them
+silently dumped the user on the dashboard. The pattern survived because navigation "worked"
+(no error, no 404 screen) — the failure mode of a SPA router with a silent fallback. Fix is
+uistate.OpenGlobalSettings(), the captured-atom trick again (UseSettings captures the atom at
+render; the opener is safe from any click handler). Grep for `"/settings"` now returns zero
+navigations.
+
+Tab rebalance judgment call: the critic measured Preferences at 1,759px vs Household 900px.
+Rather than shrink the freshness grid (8 account-type day fields — legitimately big), the
+attention cluster (freshness, notifications, learn threshold, music) became its own Alerts
+tab. Preferences is now 650px. Seven tabs is the ceiling; anything more and the strip itself
+becomes the crowding problem the goal complained about.
+
+Also from the round: checklist copy de-tabbed (naming tabs in copy is a maintenance trap —
+"Settings → Appearance" was already wrong once), fxAINoKey says "on the AI tab", and the
+self-hosting doc link is absolute to GitHub (relative docs/ 404s in the served app).
+settings_hookup_check.mjs gained Alerts assertions: 18/18.
+
 ## 2026-07-05 — System surfaces: tabbed Settings + help/about/appearance in the family language
 
 The settings panel's architecture made tabbing cheap: globalSettingsForm owns EVERY hook and

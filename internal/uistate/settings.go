@@ -24,7 +24,29 @@ const settingsAtomID = "settings:target"
 // settings host (at the shell root) reads it to render the FlipPanel; widget
 // gears and the household card write it.
 func UseSettings() state.Atom[SettingsTarget] {
-	return state.UseAtom(settingsAtomID, SettingsTarget{})
+	a := state.UseAtom(settingsAtomID, SettingsTarget{})
+	capturedSettings = a
+	settingsCaptured = true
+	return a
+}
+
+// capturedSettings holds the atom reference captured during a render so that
+// OpenGlobalSettings can open the panel from a click handler without calling
+// state.UseAtom outside a render (which panics). The shell's SettingsHost calls
+// UseSettings every frame, so the capture is always live.
+var (
+	capturedSettings state.Atom[SettingsTarget]
+	settingsCaptured bool
+)
+
+// OpenGlobalSettings opens the global settings flip panel. Safe from click
+// handlers. This is the ONE correct way to reach Settings from a screen —
+// there is no /settings route (navigating there silently lands on the
+// dashboard; that dead pattern is why this exists).
+func OpenGlobalSettings() {
+	if settingsCaptured {
+		capturedSettings.Set(Global())
+	}
 }
 
 // Widget builds a target that opens a per-widget settings panel.

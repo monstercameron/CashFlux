@@ -66,9 +66,10 @@ func AboutScreen() ui.Node {
 					P(css.Class("t-body", tw.TextDim), uistate.T("about.aiKeyOwnKey")),
 					P(css.Class("t-body", tw.TextDim), uistate.T("about.aiKeyStorage")),
 					P(css.Class("t-body", tw.TextDim), uistate.T("about.aiKeyUsage")),
-					P(css.Class("t-body", tw.TextDim), A(
-						Attr("href", uistate.RoutePath("/settings")),
-						css.Class(tw.Underline, tw.HoverTextFg),
+					P(css.Class("t-body", tw.TextDim), Button(
+						Type("button"),
+						css.Class("btn-link", tw.Underline, tw.HoverTextFg),
+						OnClick(Prevent(func() { uistate.OpenGlobalSettings() })),
 						uistate.T("about.aiKeySettings"),
 					)),
 				)))),

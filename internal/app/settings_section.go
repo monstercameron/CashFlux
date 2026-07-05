@@ -67,12 +67,11 @@ func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 	)
 }
 
-// settingsAttentionExtras renders the freshness/notifications/music cluster —
-// the everyday-attention settings that join the Preferences tab. Pure
-// rendering helper — no hooks of its own (the embedded components own theirs).
-func settingsAttentionExtras(p settingsLeftProps) uic.Node {
+// settingsAlertsPane renders the Alerts tab: freshness windows, notifications
+// and per-alert toggles, the learning threshold, and music. Pure rendering
+// helper — no hooks of its own (the embedded components own theirs).
+func settingsAlertsPane(p settingsLeftProps) uic.Node {
 	return Div(
-		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
@@ -314,7 +313,7 @@ func settingsCloudPane(p settingsRightProps) uic.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(p.OnTestBackend), uistate.T("settings.testBackend")),
 			Button(css.Class("btn"), Type("button"), OnClick(p.OnSyncNow), uistate.T("settings.syncNow")),
 			Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey")),
-			A(css.Class("btn"), Attr("href", "docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
+			A(css.Class("btn"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
 		// C309: recoverable conflict backup — when a local edit lost an LWW conflict
 		// (server had newer changes), offer to restore the saved local copy or discard

@@ -1098,7 +1098,9 @@ func globalSettingsForm() uic.Node {
 	var pane uic.Node
 	switch setTab.Get() {
 	case "prefs":
-		pane = Div(settingsPreferencesPane(rightProps), settingsAttentionExtras(leftProps))
+		pane = settingsPreferencesPane(rightProps)
+	case "alerts":
+		pane = settingsAlertsPane(leftProps)
 	case "ai":
 		pane = settingsAIPane(rightProps)
 	case "cloud":
@@ -1119,6 +1121,7 @@ func globalSettingsForm() uic.Node {
 				Options: []ui.SegOption{
 					{Value: "household", Label: uistate.T("settings.tabHousehold")},
 					{Value: "prefs", Label: uistate.T("settings.tabPrefs")},
+					{Value: "alerts", Label: uistate.T("settings.tabAlerts")},
 					{Value: "ai", Label: uistate.T("settings.tabAI")},
 					{Value: "cloud", Label: uistate.T("settings.tabCloud")},
 					{Value: "data", Label: uistate.T("settings.tabData")},
