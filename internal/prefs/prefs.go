@@ -181,9 +181,11 @@ func (p Prefs) BackendActive() bool {
 // long dates, dark theme, green accent, comfortable density, 100% scale, full
 // motion). Dates default to the human "Jan 2, 2006" style rather than raw ISO so
 // the app reads friendly out of the box (C155); users who want ISO/US/EU can
-// switch in Appearance.
+// switch in Appearance. The backend is DISABLED by default so a fresh install is
+// fully local — matching the About page's "Cloud sync is off by default" promise;
+// the saved ServerURL is only a prefill for when the user opts in.
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateLong, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateLong, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull, BackendDisabled: true}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or

@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Backend "off" now means fully off (v1.0, 2026-07-05):** two Settings › Cloud issues. The backend shipped switched ON out of the box (pointed at a loopback dev URL), which read as "already connected to something" and contradicted About's "Cloud sync is off by default" — a fresh install now defaults the backend OFF (the saved URL is just a prefill for when you opt in). And "Test connection", "Sync now", and "Upload key" stayed clickable while the backend was off, so clicking them fired a real network request the "fully local" copy promised wouldn't happen — those three actions are now hidden until the backend is switched on.
+
 ### Added
 - **Flow series can plot magnitudes (`abs`) (v1.0, 2026-07-05):** a `flow`-metric chart bound to a pure-expense category (Priya's "Shop costs") plotted its signed monthly sums, so a "costs" chart showed a run of negative dollars — accounting-correct but confusing under a "costs" title. `SeriesSpec` gains an opt-in `Abs` flag that plots each month's magnitude; the sample's Shop-costs widget uses it, so costs now read as positive dollars.
 

@@ -104,7 +104,12 @@ func TestWeekStartNormalize(t *testing.T) {
 
 func TestNormalize(t *testing.T) {
 	got := Prefs{WeekStart: "x", DateStyle: "y", Theme: "z", Accent: "nope"}.Normalize()
-	if got != Default() {
+	// Normalize repairs blank/invalid fields but never overrides a bool the user
+	// may have chosen — BackendDisabled defaults ON in Default() (off-by-default
+	// backend) yet stays as-given through Normalize, so compare against that.
+	want := Default()
+	want.BackendDisabled = false
+	if got != want {
 		t.Errorf("bad values should normalize to default, got %+v", got)
 	}
 	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true, Scale: 110, ServerMode: ServerCloud, ServerURL: "http://127.0.0.1:8081", ServerToken: "dev-token", Motion: MotionSubtle}

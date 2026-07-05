@@ -311,9 +311,13 @@ func settingsCloudPane(p settingsRightProps) uic.Node {
 			If(p.ShowGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGoogle), uistate.T("settings.signInGoogle"))),
 			If(p.ShowGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGitHub), uistate.T("settings.signInGitHub"))),
 			If(strings.TrimSpace(p.ServerToken) != "", Button(css.Class("btn"), Type("button"), OnClick(p.OnSignOut), uistate.T("settings.signOut"))),
-			Button(css.Class("btn"), Type("button"), OnClick(p.OnTestBackend), uistate.T("settings.testBackend")),
-			Button(css.Class("btn"), Type("button"), OnClick(p.OnSyncNow), uistate.T("settings.syncNow")),
-			Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey")),
+			// Test/Sync/Upload each open a real connection to the saved server URL, so
+			// they only appear while the backend is switched on — otherwise clicking
+			// them fires a network request the "Backend off — fully local" copy just
+			// promised wouldn't happen.
+			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnTestBackend), uistate.T("settings.testBackend"))),
+			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnSyncNow), uistate.T("settings.syncNow"))),
+			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey"))),
 			A(css.Class("btn"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 		),
 		// C309: recoverable conflict backup — when a local edit lost an LWW conflict
