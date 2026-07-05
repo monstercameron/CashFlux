@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetdata"
+	"github.com/monstercameron/CashFlux/internal/widgetengine"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
@@ -412,8 +414,13 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	)
 }
 
-// widgetBody dispatches to the renderer for a widget's type.
+// widgetBody dispatches to the renderer for a widget's type. A widget carrying
+// a unified-engine Spec renders through the engine instead of the legacy
+// Binding — the same WidgetSpec shape the widget designer publishes.
 func widgetBody(w domain.PageWidget, ctx pageCtx) ui.Node {
+	if w.Spec != nil {
+		return cpSpecBody(*w.Spec, ctx)
+	}
 	switch w.Type {
 	case widgetspec.TypeKPI:
 		return cpKPIBody(w, ctx)
@@ -429,6 +436,61 @@ func widgetBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 		return cpTableBody(w, ctx)
 	default:
 		return P(css.Class("empty"), uistate.T("pages.unknownWidget"))
+	}
+}
+
+// cpSpecBody renders a unified-engine WidgetSpec's BODY inside a custom-page
+// tile — the page keeps its own chrome (drag/resize/edit/delete); only the body
+// is delegated. Scalar KPIs hydrate through widgetengine and paint the standard
+// figure body; List/Table/Chart pipelines hydrate to a Frame and paint through
+// the same generic frame bodies the dashboard's Studio-designed widgets use.
+// Errors and panics degrade to an inline note so one bad spec can't take down
+// the page.
+func cpSpecBody(spec domain.WidgetSpec, ctx pageCtx) (node ui.Node) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			slog.Error("custom page spec widget panicked", "id", spec.ID, "recover", rec)
+			node = P(css.Class("empty", tw.TextDim), uistate.T("dashboard.widgetLoadFailed"))
+		}
+	}()
+	switch spec.Kind {
+	case domain.KindKPI:
+		view, err := widgetengine.HydrateKPI(spec.Scalar, widgetengine.Scope{Vars: ctx.Vars, Base: ctx.Base})
+		if err != nil {
+			slog.Warn("custom page: hydrate kpi failed", "id", spec.ID, "err", err)
+			return kpiBody("—", "", "", "text-dim")
+		}
+		tone := ""
+		if view.Value < 0 {
+			tone = "text-down"
+		}
+		return kpiBody(view.Text, tone, view.Sub, "text-dim")
+	case domain.KindList, domain.KindTable, domain.KindChart:
+		fr, err := widgetengine.HydrateFrame(spec.Pipeline, cpDataCtx(ctx))
+		if err != nil {
+			slog.Warn("custom page: hydrate frame failed", "id", spec.ID, "err", err)
+			return P(css.Class("empty", tw.TextDim), uistate.T("dashboard.widgetLoadFailed"))
+		}
+		if spec.Kind == domain.KindChart {
+			return genericChartBody(fr, ctx.Base)
+		}
+		return genericListBody(fr, ctx.Base)
+	}
+	return P(css.Class("empty"), uistate.T("pages.unknownWidget"))
+}
+
+// cpDataCtx builds the engine DataCtx for a page spec's pipeline: unscoped
+// household data over the current calendar month (custom pages carry no
+// member-scope or period controls of their own).
+func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	app := ctx.App
+	return widgetengine.DataCtx{
+		Vars: ctx.Vars, Base: ctx.Base,
+		Accounts: app.Accounts(), Transactions: app.Transactions(),
+		Budgets: app.Budgets(), Categories: app.Categories(), Recurring: app.Recurring(),
+		Rates: ctx.Rates, Start: start, End: start.AddDate(0, 1, 0), Now: now,
 	}
 }
 

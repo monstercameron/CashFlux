@@ -589,6 +589,12 @@ type PageWidget struct {
 	Title   string           `json:"title,omitempty"`
 	Config  widgetcfg.Config `json:"config,omitempty"`
 	Binding WidgetBinding    `json:"binding,omitempty"`
+	// Spec, when set, binds this page widget to the unified widget engine (the
+	// same WidgetSpec the widget designer publishes): the tile's body hydrates
+	// through widgetengine (scalar KPIs, collection/series pipelines) instead of
+	// the legacy Binding. The page keeps its own tile chrome and layout; only
+	// the body rendering is delegated. Legacy fields are ignored when Spec is set.
+	Spec *WidgetSpec `json:"spec,omitempty"`
 }
 
 // CustomPage is a user-authored page: its own left-rail entry (Name + Icon),

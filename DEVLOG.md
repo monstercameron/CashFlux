@@ -1,3 +1,14 @@
+## 2026-07-05 — Custom pages join the unified widget engine (the seam, first)
+
+Groundwork for the seed rehydration goal. Custom pages were fully isolated from the
+WidgetSpec/widgetengine/widgetrender pipeline (legacy PageWidget bindings only; the
+"page:<slug>" Placement surface was dead vocabulary nothing rendered). Rather than build a
+whole placement host, the cheap honest seam: PageWidget.Spec *WidgetSpec + a body-level
+renderer (cpSpecBody) that reuses the SAME package-local pieces the dashboard uses —
+HydrateKPI + kpiBody, HydrateFrame + genericChart/ListBody — under the page's own tile
+chrome. One decision of note: pages hydrate UNSCOPED household data over the current
+calendar month (pages have no scope/period controls), built in cpDataCtx.
+
 ## 2026-07-05 — Round 3: the third mode writer, and the accent chip
 
 Two lessons. First: when a fix is "apply rule X at every call site", grep for the SITES, not
