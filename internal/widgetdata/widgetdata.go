@@ -27,10 +27,13 @@ import (
 // DefaultListRows is how many rows a List widget shows by default.
 const DefaultListRows = 5
 
-// Row is one label/value pair a List widget renders.
+// Row is one label/value pair a List widget renders. Sub is an optional muted
+// second line (e.g. a transaction's date) so rows that share a label — the
+// sample's repeated "Side-project revenue" — aren't indistinguishable.
 type Row struct {
 	Label string
 	Value string
+	Sub   string
 }
 
 // Data is the dataset a List widget reads from, plus the rate table used by any
@@ -69,7 +72,11 @@ func ListRows(source string, d Data, n int) (rows []Row, ok bool) {
 			if i >= n {
 				break
 			}
-			rows = append(rows, Row{Label: firstNonEmpty(t.Desc, t.Payee), Value: fmtMoney(t.Amount)})
+			sub := ""
+			if !t.Date.IsZero() {
+				sub = t.Date.Format("Jan 2, 2006")
+			}
+			rows = append(rows, Row{Label: firstNonEmpty(t.Desc, t.Payee), Value: fmtMoney(t.Amount), Sub: sub})
 		}
 	case widgetspec.SourceAccounts:
 		for i, a := range d.Accounts {

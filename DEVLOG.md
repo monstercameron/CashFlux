@@ -1,3 +1,17 @@
+## 2026-07-05 — v1.0 polish, Group J: custom pages
+
+The custom-page (`/p/*`) sweep surfaced two things that only bite on those pages because
+they lean on sample "chart" SVGs and transaction-bound lists. First, the sample SVG headers
+were light-stroke-on-transparent — fine on a dark card, near-gone on a light one; the fix is
+a one-line dark backing rect in `svgHeader` so a chart is a self-contained dark chip
+regardless of the page theme (verified: the WSB rollercoaster reads on light). Second, a List
+bound to `SourceTransactions` showed five identical "Side-project revenue" labels — true to the
+data but useless to the eye. Rather than fabricate distinct labels, I added an optional `Sub`
+line to `widgetdata.Row` (populated with the txn date) and rendered it muted under the label in
+`custompage.go`'s `listBody`; the label/value contract is unchanged, so KPIs and other sources
+are untouched. Both are pure-render/pure-data changes — no new tests needed beyond the existing
+widgetdata table, which still passes.
+
 ## 2026-07-05 — GWC v4.2.0: the migration that was really a pin repair
 
 The scary-sounding "3.x → 4.x with many changes" turned out to be the best kind of major

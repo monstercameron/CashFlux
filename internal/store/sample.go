@@ -1293,6 +1293,11 @@ func svgMaxf(vals []float64) float64 {
 
 func svgHeader(b *strings.Builder, title string) {
 	fmt.Fprintf(b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %.0f %.0f" font-family="ui-sans-serif,system-ui,sans-serif">`, svgW, svgH)
+	// A self-contained dark chip: the chart's light-slate text/labels are baked
+	// into the static artifact and can't adapt to the host card's theme, so
+	// without this they wash out to pale-on-white in light mode. The rounded
+	// dark background makes each chart legible on any surface.
+	fmt.Fprintf(b, `<rect x="0" y="0" width="%.0f" height="%.0f" rx="10" fill="#1a1a1d"/>`, svgW, svgH)
 	fmt.Fprintf(b, `<text x="14" y="24" font-size="14" font-weight="600" fill="#cbd5e1">%s</text>`, title)
 	fmt.Fprintf(b, `<line x1="%.0f" y1="%.1f" x2="%.0f" y2="%.1f" stroke="#94a3b8" stroke-opacity="0.35"/>`, svgX0, svgYBot, svgX1, svgYBot)
 }

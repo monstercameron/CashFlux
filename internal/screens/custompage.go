@@ -614,8 +614,17 @@ func listBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	}
 	nodes := make([]ui.Node, 0, len(rows))
 	for _, r := range rows {
+		// A muted sub-line (e.g. the transaction date) distinguishes rows that
+		// share a label — otherwise five "Side-project revenue" rows read as dupes.
+		label := ui.Node(Span(css.Class("row-desc", tw.Truncate), r.Label))
+		if r.Sub != "" {
+			label = Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0),
+				Span(css.Class("row-desc", tw.Truncate), r.Label),
+				Span(css.Class("t-caption", tw.TextDim), r.Sub),
+			)
+		}
 		nodes = append(nodes, Div(css.Class("row"),
-			Span(css.Class("row-desc", tw.Truncate), r.Label),
+			label,
 			Span(css.Class("amount fig"), r.Value),
 		))
 	}
