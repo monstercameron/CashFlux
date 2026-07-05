@@ -1585,7 +1585,9 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 		Attr("aria-label", p.Insight.Title),
 		OnClick(navigate),
 		Span(ClassStr("insight-dot text-down"), uiw.Icon(iconName, css.Class(tw.W4, tw.H4))),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart, tw.MinW0),
+		// WFull + default stretch (no ItemsStart) so the Truncate children fill
+		// the row and the ellipsis engages instead of overflowing the card.
+		Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0, tw.WFull),
 			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
 			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
 		),

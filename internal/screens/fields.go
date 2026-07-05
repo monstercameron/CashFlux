@@ -22,7 +22,17 @@ func Fields() ui.Node {
 	if appstate.Default == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	return CustomFieldsManager()
+	// The masthead lives on the component (not the Studio-tab wrapper) so a
+	// standalone /fields visit gets the same "Custom fields / your data's shape"
+	// intro every sibling standalone route has — matching StudioFormulas/Workflows.
+	return Div(css.Class("stu-deck"),
+		Div(css.Class("wman-head"),
+			Span(css.Class("studio-eyebrow"), uistate.T("wman.eyebrow")),
+			H2(css.Class("studio-design-title"), uistate.T("stuh.fieldsTitle")),
+			P(css.Class("studio-design-sub"), uistate.T("stuh.fieldsLede")),
+		),
+		CustomFieldsManager(),
+	)
 }
 
 // CustomFields is the registered view for the /fields route in screens.go.

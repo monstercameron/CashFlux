@@ -1783,7 +1783,7 @@ func registerGenerated() {
 	)
 	rule(".card-alert",
 		borderLeft("4px solid var(--danger)"),
-		background("color-mix(in srgb, var(--danger) 6%, var(--card-bg))"),
+		background("color-mix(in srgb, var(--danger) 6%, var(--bg-card))"),
 	)
 	rule(".budget-over-banner",
 		padding("0.6rem 0.85rem"),

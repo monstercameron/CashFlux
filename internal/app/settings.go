@@ -1242,7 +1242,7 @@ func fxRateRow(props fxRateRowProps) uic.Node {
 		inverseHint,
 		// C80: show when this rate was last set so the user can judge its freshness.
 		If(props.AsOf != "", Span(css.Class(tw.TextXs, tw.TextFaint), Attr("data-testid", "fx-asof"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T("settings.fxAsOf", props.AsOf))),
-		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "var(--color-warn)", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
+		If(props.Stale, Span(css.Class(tw.TextXs), Attr("data-testid", "fx-stale"), Attr("title", uistate.T("settings.fxStaleTitle")), Style(map[string]string{"color": "var(--warn)", "margin-left": "0.5rem"}), uistate.T("settings.fxStale"))),
 	)
 }
 
@@ -1355,7 +1355,7 @@ func fxAIFetch(props fxAIFetchProps) uic.Node {
 
 		// Error display
 		If(errMsg.Get() != "",
-			P(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--color-danger)", "margin-top": "0.4rem"}), errMsg.Get()),
+			P(css.Class(tw.TextXs), Style(map[string]string{"color": "var(--danger)", "margin-top": "0.4rem"}), errMsg.Get()),
 		),
 
 		// Review panel — only shown when we have proposed rates

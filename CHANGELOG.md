@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Flagged-activity rows stop overflowing their card (v1.0, 2026-07-05):** the smart flagged-activity insight rows on the dashboard, /insights, and /assistant wrapped their text in a flex column with `align-items:flex-start`, which sized the children to their content instead of the row width — so `Truncate`/`LineClamp` never engaged and long titles overflowed off the card. The wrapper now fills the row (`w-full`, default stretch) so the ellipsis works.
+- **/fields shows its masthead standalone (v1.0, 2026-07-05):** a direct visit to /fields dropped straight into "FIELD REGISTRY" with no page heading — the "Custom fields / your data's shape" intro only appeared inside the Studio tab wrapper. The masthead now lives on the `Fields()` component itself (single owner), so standalone and the Studio tab match, like every sibling standalone route.
+- **Three more undefined-token theming bugs (v1.0, 2026-07-05):** the Settings FX-stale hint (`var(--color-warn)`), the AI-key error text (`var(--color-danger)`), and a card background (`var(--card-bg)`) referenced token names the theme engine doesn't emit — corrected to the real runtime tokens (`--warn`, `--danger`, `--bg-card`).
+
+
+### Fixed
 - **Adding a to-do now refreshes the list and confirms (v1.0 blocker, 2026-07-05):** the /todo add form saved the task but never bumped the shared data revision, so the new task didn't appear (until an unrelated control forced a re-render) and no success toast showed. It now bumps the revision, returns the list to page 1, and toasts "Task added." (matching every other add form).
 - **Goal % and notification actions are legible in light theme (v1.0 a11y, 2026-07-05):** each goal card's progress percentage used a pale-accent-on-dark tint (~1.2:1 on light theme's pale track — effectively invisible); a light-theme override darkens it (WCAG AA). The /notifications per-row action buttons (mark read / snooze / dismiss) were invisible at rest (border blended in, glyph too faint) — the icon now takes full text contrast with a perceptible border.
 - **Goal cards stop stretching to leave dead whitespace (v1.0, 2026-07-05):** the two-up goal grid stretched every card to the tallest in its row, leaving 100px+ gaps under cards without a linked to-do list — `align-items: start` lets each card size to its content.

@@ -103,14 +103,8 @@ type studioFieldsPanelProps struct{}
 // hooks), under the studio masthead every sibling tab opens with, so custom
 // values live alongside formulas and the designer that consumes them.
 func studioFieldsPanel(_ studioFieldsPanelProps) ui.Node {
-	return Div(css.Class("stu-deck"),
-		Div(css.Class("wman-head"),
-			Span(css.Class("studio-eyebrow"), uistate.T("wman.eyebrow")),
-			H2(css.Class("studio-design-title"), uistate.T("stuh.fieldsTitle")),
-			P(css.Class("studio-design-sub"), uistate.T("stuh.fieldsLede")),
-		),
-		CustomFields(),
-	)
+	// Fields() now owns its masthead (single source), so the tab just embeds it.
+	return CustomFields()
 }
 
 type studioWorkflowsPanelProps struct{}
