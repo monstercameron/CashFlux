@@ -47,6 +47,14 @@ func registerRulesSurface() {
 		prop("font-weight", "600"),
 	)
 
+	// Condition-slot headers: breathe between the checkbox and its label
+	// (they rendered flush — "☐Condition 1").
+	rule(".cond-slot-header",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.45rem"),
+	)
+
 	// ── Precedence chain: first-match-wins as a numbered spine. ─────────────
 	rule(".rule-chain",
 		prop("display", "flex"),

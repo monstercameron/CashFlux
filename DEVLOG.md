@@ -1,3 +1,14 @@
+## 2026-07-04 — Data & People gate, round 2: SHIP
+
+Fresh critic (the round-1 transcript aged out) re-verified every fix live — including
+force-creating a shadowed rule to prove the precedence spine's struck-through state, then
+cleaning up after itself. Verdict SHIP with one medium ("Added a settings" — the mass-noun
+casualty of the round-1 article fix; now special-cased at source and repaired for persisted
+entries at display) and one low (condition checkboxes flush against labels; gap added). Both
+applied. The goal's five pages — household, categories, rules, artifacts, activity — now all
+speak the Understand language: one hero figure, chips, a takeaway that names names, share
+bars for rank, serif section ticks, kebab-behind-Edit actions.
+
 ## 2026-07-04 — Data & People gate, round 1: ITERATE (3 high / 2 medium / 2 low)
 
 The Sonnet critic drove all five pages live (both themes, 700px, real interactions) and earned

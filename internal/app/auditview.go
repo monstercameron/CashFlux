@@ -141,7 +141,11 @@ func buildSummary(cs history.ChangeSet, action, entityType string) string {
 	n := len(cs.Changes)
 	if n == 1 {
 		// No raw record ID — "Added transaction tx_01H…" is machine-speak; the
-		// entity type alone reads as the plain-English fallback (C355).
+		// entity type alone reads as the plain-English fallback (C355). Mass
+		// nouns (settings) take no article — "Updated settings", not "a settings".
+		if entityType == "settings" {
+			return capitalize(action) + " settings"
+		}
 		return capitalize(action) + " a " + entityType
 	}
 	return fmt.Sprintf("%s %d %s records", capitalize(action), n, entityType)

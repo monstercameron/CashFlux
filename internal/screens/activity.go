@@ -343,6 +343,10 @@ func actHumanizeSummary(s string) string {
 		}
 		return s
 	}
+	// "<Action> a settings" (persisted before the mass-noun fix) — drop the article.
+	if len(fields) == 3 && fields[1] == "a" && fields[2] == "settings" {
+		return fields[0] + " settings"
+	}
 	// "<Action> <type> <rawID>" (legacy single-change fallback) — keep the
 	// action + type, drop the identifier when the type is a known entity word.
 	if len(fields) == 3 {
