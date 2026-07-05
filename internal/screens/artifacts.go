@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/pagination"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -46,6 +47,12 @@ func Artifacts() ui.Node {
 	// text (e.g. the quota message) is shown so the cause is clear.
 	notice := uistate.UseNotice()
 	notify := func(text string) { notice.Set(notice.Get().With(text, true)) }
+
+	// Pagination: a receipt-heavy vault runs to dozens of rows (and each image
+	// row carries a thumbnail), so the ledger renders one page at a time.
+	pageS := ui.UseState(1)
+	prevPage := ui.UseEvent(Prevent(func() { pageS.Set(pageS.Get() - 1) }))
+	nextPage := ui.UseEvent(Prevent(func() { pageS.Set(pageS.Get() + 1) }))
 
 	uploadImage := func() {
 		pickFile("image/*", func(name, mime string, data []byte) {
@@ -103,8 +110,16 @@ func Artifacts() ui.Node {
 		}
 	}
 	list := app.Artifacts()
+
+	// One page of the vault at a time (deleting off the last page clamps back).
+	const artifactsPageSize = 10
+	totalFiles := len(list)
+	curPage := pagination.Clamp(pageS.Get(), totalFiles, artifactsPageSize)
+	totalPages := pagination.TotalPages(totalFiles, artifactsPageSize)
+	pageItems := pagination.Slice(list, curPage, artifactsPageSize)
+
 	var rows []ui.Node
-	for _, a := range list {
+	for _, a := range pageItems {
 		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{
 			Artifact: a, Refresh: refresh,
 			ReferencedBy: refCount[a.ID],
@@ -119,6 +134,33 @@ func Artifacts() ui.Node {
 		// position rule), breaking the screen. The always-visible upload card at the top
 		// already provides the affordance, so the list stays a plain row container.
 		listBody = Div(css.Class("rows"), rows)
+	}
+
+	// Pager: shown only past one page. Mirrors the to-do ledger's pager (range
+	// caption + Prev/Next disabled at the ends).
+	var pager ui.Node = Fragment()
+	if totalPages > 1 {
+		first := (curPage-1)*artifactsPageSize + 1
+		last := first + artifactsPageSize - 1
+		if last > totalFiles {
+			last = totalFiles
+		}
+		prevArgs := []any{css.Class("todo-page-btn"), Type("button"), Attr("data-testid", "artifacts-prev"), Attr("aria-label", uistate.T("todo.pagePrev")), OnClick(prevPage), uiw.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4)), Span(uistate.T("todo.pagePrev"))}
+		if curPage <= 1 {
+			prevArgs = append(prevArgs, Attr("disabled", ""))
+		}
+		nextArgs := []any{css.Class("todo-page-btn"), Type("button"), Attr("data-testid", "artifacts-next"), Attr("aria-label", uistate.T("todo.pageNext")), OnClick(nextPage), Span(uistate.T("todo.pageNext")), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))}
+		if curPage >= totalPages {
+			nextArgs = append(nextArgs, Attr("disabled", ""))
+		}
+		pager = Div(css.Class("todo-pager"),
+			Span(css.Class("todo-pager-range"), Attr("data-testid", "artifacts-pager-range"), uistate.T("todo.pageRange", first, last, totalFiles)),
+			Div(css.Class("todo-pager-nav"),
+				Button(prevArgs...),
+				Span(css.Class("todo-pager-page"), uistate.T("todo.pageOf", curPage, totalPages)),
+				Button(nextArgs...),
+			),
+		)
 	}
 
 	// Storage meter: combined localStorage dataset size + IndexedDB blob bytes.
@@ -226,6 +268,7 @@ func Artifacts() ui.Node {
 			rptSection("sec-vault-list", uistate.T("artifacts.vaultTitle"), uploadActions, Fragment(
 				P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
 				listBody,
+				pager,
 			))),
 	)
 }
@@ -364,7 +407,7 @@ func artifactRow(props artifactRowProps) ui.Node {
 				Div(css.Class(refClass), Attr("data-testid", "artifact-refs"), refLabel),
 				If(props.UsedByPages > 0,
 					Div(css.Class("row-meta"), Attr("data-testid", "artifact-page-refs"),
-						uistate.T("artifacts.usedByPages", props.UsedByPages))),
+						uistate.T("artifacts.usedByPages", props.UsedByPages, pageNoun(props.UsedByPages)))),
 				Div(css.Class("row-meta"), meta+" · "+artifacts.HumanSize(a.Size)),
 				If(uploadedOn != "", Div(css.Class("row-meta"), uploadedOn)),
 				csvPreview,
@@ -487,4 +530,14 @@ func decodeDataURL(url string) (string, []byte) {
 		return mime, nil
 	}
 	return mime, data
+}
+
+// pageNoun pluralizes the custom-page noun for the used-by label ("Used by 1
+// custom page" / "Used by 3 custom pages") — the label previously passed one
+// argument to a two-verb format string and rendered "%!s(MISSING)".
+func pageNoun(n int) string {
+	if n == 1 {
+		return "page"
+	}
+	return "pages"
 }
