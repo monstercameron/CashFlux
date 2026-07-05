@@ -732,12 +732,12 @@ func SampleDataset() Dataset {
 	// surface's data) — the retirement funds are boring on purpose; the WSB
 	// positions mirror the art-wsb positions table. ---
 	holdings := []domain.Holding{
-		{ID: "hold-401k-tdf", AccountID: k401, Name: "Target 2055 Fund", Shares: 412.6, CostBasisMinor: 1310000, CurrentPriceMinorPerShare: 4120, AssetClass: "Stocks"},
-		{ID: "hold-roth-vti", AccountID: roth, Ticker: "VTI", Name: "Vanguard Total Market ETF", Shares: 19.6, CostBasisMinor: 442000, CurrentPriceMinorPerShare: 29350, AssetClass: "Stocks"},
-		{ID: "hold-wsb-nvda", AccountID: wsb, Ticker: "NVDA", Name: "NVDA calls (Jul)", Shares: 2, CostBasisMinor: 120000, CurrentPriceMinorPerShare: 132000, AssetClass: "Stocks"},
-		{ID: "hold-wsb-tsla", AccountID: wsb, Ticker: "TSLA", Name: "Tesla shares", Shares: 6, CostBasisMinor: 180000, CurrentPriceMinorPerShare: 25150, AssetClass: "Stocks"},
-		{ID: "hold-wsb-gme", AccountID: wsb, Ticker: "GME", Name: "GameStop shares", Shares: 15, CostBasisMinor: 64000, CurrentPriceMinorPerShare: 2770, AssetClass: "Stocks"},
-		{ID: "hold-wsb-pltr", AccountID: wsb, Ticker: "PLTR", Name: "Palantir shares", Shares: 12, CostBasisMinor: 50000, CurrentPriceMinorPerShare: 6790, AssetClass: "Stocks"},
+		{ID: "hold-401k-tdf", AccountID: k401, Name: "Target 2055 Fund", Shares: 412.6, CostBasisMinor: 1310000, CurrentPriceMinorPerShare: 4120, AssetClass: "Stocks", SecurityType: domain.SecurityMutualFund},
+		{ID: "hold-roth-vti", AccountID: roth, Ticker: "VTI", Name: "Vanguard Total Market ETF", Shares: 19.6, CostBasisMinor: 442000, CurrentPriceMinorPerShare: 29350, AssetClass: "Stocks", SecurityType: domain.SecurityETF},
+		{ID: "hold-wsb-nvda", AccountID: wsb, Ticker: "NVDA", Name: "NVDA calls (Jul)", Shares: 2, CostBasisMinor: 120000, CurrentPriceMinorPerShare: 132000, AssetClass: "Stocks", SecurityType: domain.SecurityStock},
+		{ID: "hold-wsb-tsla", AccountID: wsb, Ticker: "TSLA", Name: "Tesla shares", Shares: 6, CostBasisMinor: 180000, CurrentPriceMinorPerShare: 25150, AssetClass: "Stocks", SecurityType: domain.SecurityStock},
+		{ID: "hold-wsb-gme", AccountID: wsb, Ticker: "GME", Name: "GameStop shares", Shares: 15, CostBasisMinor: 64000, CurrentPriceMinorPerShare: 2770, AssetClass: "Stocks", SecurityType: domain.SecurityStock},
+		{ID: "hold-wsb-pltr", AccountID: wsb, Ticker: "PLTR", Name: "Palantir shares", Shares: 12, CostBasisMinor: 50000, CurrentPriceMinorPerShare: 6790, AssetClass: "Stocks", SecurityType: domain.SecurityStock},
 	}
 
 	// --- Quarterly valuation snapshots for the slow accounts (401(k), Roth,

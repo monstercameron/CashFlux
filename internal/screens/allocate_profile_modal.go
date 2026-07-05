@@ -111,10 +111,25 @@ func AllocProfileForm(props AllocProfileFormProps) ui.Node {
 		if !strings.HasPrefix(sel, "saved:") {
 			return
 		}
-		_ = app.DeleteAllocProfile(strings.TrimPrefix(sel, "saved:"))
-		profile.Set("balanced")
-		setWeights(allocProfiles()["balanced"])
-		profMsg.Set("")
+		pid := strings.TrimPrefix(sel, "saved:")
+		// A saved allocation profile is user work — confirm before deleting
+		// (was instant + unconfirmed).
+		name := uistate.T("allocate.thisProfile")
+		for _, p := range app.AllocProfiles() {
+			if p.ID == pid && p.Name != "" {
+				name = p.Name
+				break
+			}
+		}
+		uistate.ConfirmModal(uistate.T("allocate.deleteProfileConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			_ = app.DeleteAllocProfile(pid)
+			profile.Set("balanced")
+			setWeights(allocProfiles()["balanced"])
+			profMsg.Set("")
+		})
 	}))
 	done := ui.UseEvent(Prevent(func() {
 		if props.OnDone != nil {

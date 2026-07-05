@@ -124,10 +124,26 @@ func Planning() ui.Node {
 	openPlanAdd := ui.UseEvent(Prevent(func() { planAddOpen.Set(true) }))
 	closePlanAdd := func() { planAddOpen.Set(false) }
 	deletePlan := func(pid string) {
-		if app != nil {
+		if app == nil {
+			return
+		}
+		// A saved what-if scenario is user work — confirm before it's gone (was
+		// an instant, unconfirmed delete; every other saved-artifact delete in
+		// the app goes through ConfirmModal).
+		name := uistate.T("planning.thisScenario")
+		for _, p := range app.Plans() {
+			if p.ID == pid && p.Name != "" {
+				name = p.Name
+				break
+			}
+		}
+		uistate.ConfirmModal(uistate.T("planning.deleteConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
 			_ = app.DeletePlan(pid)
 			uistate.BumpDataRevision()
-		}
+		})
 	}
 
 	forecastCard := Fragment()

@@ -182,3 +182,18 @@ func TestSampleNarrative(t *testing.T) {
 		}
 	}
 }
+
+// TestSampleHoldingsTyped guards the demo polish: every seeded holding must
+// carry a real SecurityType (not the "other" default), so the Investments page
+// badges each position correctly instead of showing "Other" on everything.
+func TestSampleHoldingsTyped(t *testing.T) {
+	ds := SampleDataset()
+	if len(ds.Holdings) == 0 {
+		t.Fatal("expected seeded holdings")
+	}
+	for _, h := range ds.Holdings {
+		if h.SecurityType == "" || h.SecurityType == domain.SecurityOther {
+			t.Errorf("holding %s (%s) has no real SecurityType (got %q)", h.ID, h.Name, h.SecurityType)
+		}
+	}
+}

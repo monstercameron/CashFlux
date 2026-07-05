@@ -60,7 +60,7 @@ func ProgressBar(props ProgressBarProps) uic.Node {
 	if w > 100 {
 		w = 100
 	}
-	track := appendTrackSpacing([]css.Rule{tw.H2, tw.BgLine, tw.RoundedFull, tw.OverflowHidden}, props.Class)
+	track := appendTrackSpacing([]css.Rule{tw.H2, tw.BgTrack, tw.RoundedFull, tw.OverflowHidden}, props.Class)
 	return Div(css.Class(css.New(track...)),
 		Div(css.Class(css.New(tw.HFull, toneRule(props.Tone))), Style(map[string]string{"width": fmt.Sprintf("%d%%", w)})),
 	)

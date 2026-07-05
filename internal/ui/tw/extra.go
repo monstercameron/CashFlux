@@ -67,8 +67,12 @@ func Fold(parts ...any) string {
 // bar. Same exact-value contract as tw.go.
 var (
 	// background palette tokens
-	BgDim   = css.Bg(css.Color(cDim))
-	BgLine  = css.Bg(css.Color(cLine))
+	BgDim  = css.Bg(css.Color(cDim))
+	BgLine = css.Bg(css.Color(cLine))
+	// BgTrack is the unfilled-track background for meters/progress bars. Unlike
+	// BgLine (a fixed dark hairline), it follows the theme via --bg-elev so a
+	// meter track isn't a solid black bar on a white page in light mode.
+	BgTrack = css.Bg(css.Color("var(--bg-elev, " + cLine + ")"))
 	BgWarn  = css.Bg(css.Color(cWarn))
 	BgHover = css.Bg(css.Color(cHover))
 	BgHex1c = css.Bg(css.Color("#1c1c1e")) // bg-[#1c1c1e] (active nav row)

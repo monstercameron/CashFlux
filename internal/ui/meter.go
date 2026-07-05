@@ -53,7 +53,7 @@ func MeterBar(props MeterBarProps) uic.Node {
 		pct = (v - min) / (max - min) * 100
 	}
 
-	track := []css.Rule{tw.H2, tw.BgLine, tw.RoundedFull, tw.OverflowHidden}
+	track := []css.Rule{tw.H2, tw.BgTrack, tw.RoundedFull, tw.OverflowHidden}
 	switch props.Class {
 	case "mt-1.5":
 		track = append(track, tw.Mt15)

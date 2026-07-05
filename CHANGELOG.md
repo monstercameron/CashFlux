@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Meter/progress-bar tracks follow the theme (v1.0 polish, 2026-07-05):** the unfilled track of every `MeterBar`/`ProgressBar` was hardcoded to `#232325` (a fixed dark hairline), so in light mode every score meter on /allocate (19 rows) and every utilization/score bar on /debt's Credit Health rendered a solid black bar on a white page. New `tw.BgTrack` token follows `--bg-elev` (themed in dark/light/paper); both primitives now use it. App-wide fix — every meter/progress consumer inherits it.
+- **Saved scenarios and allocation profiles now confirm before deletion (v1.0 polish, 2026-07-05):** a what-if scenario on /planning and a saved allocation profile on /allocate each deleted **instantly on a single click** — the only unconfirmed destructive actions left in the app. Both now route through `ConfirmModal` with the artifact's name, matching every other saved-artifact delete.
+- **Seeded holdings carry real security types (2026-07-05):** the six sample holdings never set `SecurityType`, so /investments badged every position "Other". They're now typed (mutual fund / ETF / stock), guarded by a new `TestSampleHoldingsTyped`.
+
+
+### Fixed
 - **The undefined-token theming landmine, swept (v1.0 polish, 2026-07-05):** three CSS rules referenced `var(--fg)` / `var(--fg-dim)` — tokens that are defined nowhere, so they silently fell back to inherited color or, worse, to nothing. The **credit meter's 30%-target tick was invisible** (`background: var(--fg)` → no background), and the credit disclaimer + reports scope labels drew inherited instead of the muted token in both themes. All three now use the real tokens (`--text` / `--text-dim`). Part of the v1.0 refinement pass adding regression coverage for every page (new `e2e/regression/` harness).
 
 
