@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // UseOnline returns the shared atom holding the browser's online/offline state
 // (true = online). The top-bar OfflineIndicator renders it; app boot wiring sets

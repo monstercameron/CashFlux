@@ -23,8 +23,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 h1:NmZ1PKzSTQbuGHw9DGPFomqkkLW
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3/go.mod h1:zQrxl1YP88HQlA6i9c63DSVPFklWpGX4OWAc9bFuaH4=
 github.com/monstercameron/GoGRPCBridge v0.0.19 h1:nYMrLMeoVp0EV/WMJ0qj0eMq7HmjKOBywGQ/ffuvxJA=
 github.com/monstercameron/GoGRPCBridge v0.0.19/go.mod h1:arqTZ5zqyn/byJ4lU4teJQQLi7esbPIvvuTPQeo1aK8=
-github.com/monstercameron/GoWebComponents v1.1.1-0.20260621010857-935d73b0cd3a h1:/JXbYD3O1LGWtkkjGwP0UP2hqzVLpICORaPlOiVLnHg=
-github.com/monstercameron/GoWebComponents v1.1.1-0.20260621010857-935d73b0cd3a/go.mod h1:s/S/HcSZxj/GgjCjbD0+9aCCoVW633DgcykTEvJaeHI=
+github.com/monstercameron/GoWebComponents/v4 v4.2.0 h1:pbbcCfhEmE980Xg4pqJBAQTXKQHKG1cXqtNbBhSUhQM=
+github.com/monstercameron/GoWebComponents/v4 v4.2.0/go.mod h1:DBcK619SOl/Z31MwjwP5RKMg0MuSzWU9Tm+rJszqnUs=
 github.com/ncruces/go-sqlite3 v0.35.0 h1:10wTnMpLwmhNowJ19LqHivHK3m8heBBllfFRYEXzM/U=
 github.com/ncruces/go-sqlite3 v0.35.0/go.mod h1:fXOSIkWwN5NXgbJk+7Zls8QIW4xOflmgh11OFvcY+J0=
 github.com/ncruces/go-sqlite3-wasm/v3 v3.1.35302 h1:Cew7/eNAMd1zhpXYBjofBua/63pFvbvB2h4PM/p6gKU=

@@ -13,7 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/cmdmatch"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/router"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 )
 
 // wireKeyboardShortcuts installs global keyboard shortcuts. Alt+1..9 jumps to the

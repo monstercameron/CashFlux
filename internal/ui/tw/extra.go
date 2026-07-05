@@ -2,7 +2,7 @@
 
 package tw
 
-import "github.com/monstercameron/GoWebComponents/css"
+import "github.com/monstercameron/GoWebComponents/v4/css"
 
 // ColorClass maps a color-token name (the old "text-up"/"bg-warn"/… utility class
 // strings that are computed dynamically into tones) to a styled class. It returns

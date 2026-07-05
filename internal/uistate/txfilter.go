@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 // TxFilter is the transaction list's filter/sort selection. It aliases the pure

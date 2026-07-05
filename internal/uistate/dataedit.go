@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // Shell-root edit selectors for the Data & People pages (members, categories,
 // rules, artifacts). Each row's Edit action sets its atom; the matching

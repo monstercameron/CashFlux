@@ -1,3 +1,18 @@
+## 2026-07-05 — GWC v4.2.0: the migration that was really a pin repair
+
+The scary-sounding "3.x → 4.x with many changes" turned out to be the best kind of major
+bump: 294 commits, zero removed/renamed APIs (verified — no Removed/Breaking section exists
+in the changelog span, and every suspect symbol was ground-truthed against HEAD). The
+genuinely broken thing was OUR side: the old pin's pseudo-version was v1.1.1-based because
+the framework predated the /v4 module path, so the resolver was blind to every v2+ tag and
+upgrades were impossible. Mechanics: one sed across 220 files, go get /v4@latest (resolved
+to v4.2.0 — the tag WAS on the proxy despite my ls-remote sampling missing it), three
+UseComputed → ui.UseMemo selectors (drop the .Get(), same dep keys). Notes for the tester:
+go install tools/gwc@version refuses (module has replace directives) — build gwc.exe from
+the checkout; the entangled formula_builder.go WIP rode along because a module-path change
+must touch every importer; behavioral deltas to watch in the test phase are the synchronous
+event flush and the GOGC=300/512MB pacing default, not any API.
+
 ## 2026-07-05 — Graphing deps: formula + flow series
 
 Cam's complaint was exact: the page charts were static SVG artifacts wearing chart costumes.

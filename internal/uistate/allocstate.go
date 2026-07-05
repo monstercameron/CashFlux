@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // The allocate strategy (profile / mode / buffer / cap / criterion weights) lives in shared
 // atoms rather than the screen's local state, because it is edited in a shell-root FLIP MODAL

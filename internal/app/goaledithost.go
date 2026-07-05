@@ -8,8 +8,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/ui"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // GoalEditHost is mounted at the shell root (beside BudgetEditHost). It reads the

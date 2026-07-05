@@ -17,9 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetstyle"
 	"github.com/monstercameron/CashFlux/internal/widgetvis"
-	"github.com/monstercameron/GoWebComponents/css"
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/ui"
+	"github.com/monstercameron/GoWebComponents/v4/css"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // Bento cell geometry, mirrored from the dashboard grid (.bento --cell + gap) so

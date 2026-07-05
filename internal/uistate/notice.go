@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // Notice is a transient, app-wide message rendered by the toast surface. Seq is
 // bumped on every post so that re-posting the same Text still re-triggers the

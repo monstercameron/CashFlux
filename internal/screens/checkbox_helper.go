@@ -5,7 +5,7 @@
 package screens
 
 import (
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 )
 
 // CheckedIf renders the `checked` attribute on a checkbox when on is true, and a

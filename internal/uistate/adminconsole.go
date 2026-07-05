@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // UseAdminConsoleAvailable returns the shared atom that tracks whether the
 // current bearer token has admin access on the configured backend. False until

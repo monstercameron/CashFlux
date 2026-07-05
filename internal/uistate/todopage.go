@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // taskEditAtomID keys the shared task-editor modal selector.
 const taskEditAtomID = "todo:edit"

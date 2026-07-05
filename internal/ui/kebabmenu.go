@@ -7,9 +7,9 @@ package ui
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/GoWebComponents/css"
-	sh "github.com/monstercameron/GoWebComponents/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/ui"
+	"github.com/monstercameron/GoWebComponents/v4/css"
+	sh "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // KebabMenuProps configures a KebabMenu.

@@ -7,7 +7,7 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 const (

@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // budgetFormulasAtomID keys the shared "show budget metrics" toggle for the
 // widgetized /budgets surface.

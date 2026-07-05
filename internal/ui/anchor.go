@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	uic "github.com/monstercameron/GoWebComponents/ui"
+	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // SmartTipPortal renders an explainer popover for the trigger wrapper (#wrapID) as a

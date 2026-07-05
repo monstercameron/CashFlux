@@ -6,7 +6,7 @@ package uistate
 
 import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 // sampleActiveKey is the localStorage flag written when the sample dataset is

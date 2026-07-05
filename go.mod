@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/monstercameron/GoGRPCBridge v0.0.19
-	github.com/monstercameron/GoWebComponents v1.1.1-0.20260621010857-935d73b0cd3a
+	github.com/monstercameron/GoWebComponents/v4 v4.2.0
 	github.com/ncruces/go-sqlite3 v0.35.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.39.0

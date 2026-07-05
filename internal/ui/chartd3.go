@@ -9,8 +9,8 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/chartspec"
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/ui"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // ChartProps configures a Chart.

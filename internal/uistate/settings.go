@@ -7,7 +7,7 @@ package uistate
 import (
 	"syscall/js"
 
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 // SettingsTarget identifies which settings panel (if any) is open. Kind is "" for

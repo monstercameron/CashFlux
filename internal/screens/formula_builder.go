@@ -22,9 +22,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
-	"github.com/monstercameron/GoWebComponents/css"
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/ui"
+	"github.com/monstercameron/GoWebComponents/v4/css"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // liveEngineVars computes the full engine variable surface (atoms + molecules +
@@ -153,6 +153,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 	metrics = append(metrics, widgetcatalog.HealthMetrics()...)
 	metrics = append(metrics, widgetcatalog.CreditMetrics()...)
 	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
+	metrics = append(metrics, widgetcatalog.AssistantMetrics()...)
 	metrics = append(metrics, widgetcatalog.SmartMetrics()...)
 
 	expr := ui.UseState(props.Initial)

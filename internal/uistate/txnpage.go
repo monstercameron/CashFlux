@@ -18,7 +18,7 @@ package uistate
 
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 const (

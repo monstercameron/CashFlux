@@ -14,8 +14,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetregistry"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
-	. "github.com/monstercameron/GoWebComponents/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/ui"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // kpiScope builds the engine evaluation context for a KPI tile: the numeric variable

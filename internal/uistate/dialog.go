@@ -7,7 +7,7 @@ package uistate
 import (
 	"strings"
 
-	"github.com/monstercameron/GoWebComponents/state"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
 // DialogKind distinguishes a yes/no confirm from a text prompt.

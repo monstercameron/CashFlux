@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import "github.com/monstercameron/GoWebComponents/v4/state"
 
 // UseRecurringEditID drives the add/edit-recurring flip modal (RecurringEditHost):
 // "" = closed, "new" = create, or a recurring ID to edit. Only the shell-root host
