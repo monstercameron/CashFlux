@@ -69,7 +69,7 @@ func Plans() ui.Node {
 					Button(
 						Type("button"),
 						css.Class("btn btn-primary", tw.WFull, tw.TextCenter),
-						OnClick(Prevent(func() { uistate.OpenGlobalSettings() })),
+						OnClick(Prevent(func() { uistate.OpenGlobalSettingsAt("cloud") })),
 						uistate.T("plans.startTrial"),
 					),
 					P(css.Class(tw.Text12, tw.TextDim, tw.TextCenter), uistate.T("plans.cloudTrial")),

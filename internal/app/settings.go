@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -47,6 +48,19 @@ func backendHost(raw string) string {
 		s = s[:i]
 	}
 	return strings.ToLower(s)
+}
+
+// settingsPage hosts the tabbed settings form as the routed /settings page —
+// the same component the flip-modal host mounts, laid out for the content
+// column.
+func settingsPage() uic.Node {
+	return Div(css.Class("settings-page"), uic.CreateElement(globalSettingsForm))
+}
+
+// The screens registry can't import this package (app imports screens), so the
+// /settings route's view is injected at boot.
+func init() {
+	screens.SettingsView = func() uic.Node { return uic.CreateElement(settingsPage) }
 }
 
 // SettingsHost mounts at the shell root and renders the active settings panel
@@ -554,7 +568,13 @@ func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
 	// The active settings tab. The panel was one dense two-column form with 14
 	// stacked sections and a jump-nav; tabs give each cluster its own room.
-	setTab := uic.UseState("household")
+	// A pending deep-link (OpenGlobalSettingsAt) picks the opening tab; the
+	// consume only matters on mount, which is exactly when UseState reads it.
+	initTab := uistate.ConsumeRequestedSettingsTab()
+	if initTab == "" {
+		initTab = "household"
+	}
+	setTab := uic.UseState(initTab)
 	prefsAtom := uistate.UsePrefs()
 	periodAtom := uistate.UsePeriod()
 	noticeAtom := uistate.UseNotice()

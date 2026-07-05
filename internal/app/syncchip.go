@@ -51,7 +51,6 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 // and opens the global settings panel (where Cloud sync is managed). Its own
 // component so the click + atom hooks stay at a stable render position.
 func SyncChip() uic.Node {
-	settings := uistate.UseSettings()
 	// C324: subscribe to the revision atom so background setSyncStatus calls re-render
 	// this chip; capture it for those out-of-render callers.
 	rev := state.UseAtom(syncRevAtomID, 0)
@@ -88,7 +87,7 @@ func SyncChip() uic.Node {
 			return
 		}
 		requestBackendSyncNow()
-		settings.Set(uistate.Global())
+		uistate.OpenGlobalSettingsAt("cloud")
 	})
 
 	args := []any{

@@ -97,7 +97,6 @@ func subBannerFace(bs billingStatus) (text, cls string, ok bool) {
 // is inherent to the local-first architecture). Clicking opens Cloud settings.
 func SubscriptionBanner() uic.Node {
 	prefsAtom := uistate.UsePrefs()
-	settings := uistate.UseSettings()
 	status := uic.UseState(billingStatus{})
 
 	pr := prefsAtom.Get().Normalize()
@@ -114,7 +113,7 @@ func SubscriptionBanner() uic.Node {
 	if !ok {
 		return Fragment()
 	}
-	onClick := uic.UseEvent(func() { settings.Set(uistate.Global()) })
+	onClick := uic.UseEvent(func() { uistate.OpenGlobalSettingsAt("cloud") })
 	return Button(ClassStr(cls+" "+tw.Fold(tw.WFull, tw.TextLeft)), Type("button"),
 		Attr("role", "status"), OnClick(onClick), text)
 }

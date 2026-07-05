@@ -38,7 +38,6 @@ func UpgradeSheet() uic.Node {
 	open := state.UseAtom(upgradeSheetAtomID, false)
 	capturedUpgrade = open
 	upgradeSheetCapture = true
-	settings := uistate.UseSettings()
 
 	if !open.Get() {
 		return Fragment()
@@ -47,7 +46,7 @@ func UpgradeSheet() uic.Node {
 	close := uic.UseEvent(func() { open.Set(false) })
 	startTrial := uic.UseEvent(func() {
 		open.Set(false)
-		settings.Set(uistate.Global()) // Cloud section hosts the trial → Stripe Checkout flow
+		uistate.OpenGlobalSettingsAt("cloud") // the Cloud tab hosts the trial → Stripe Checkout flow
 	})
 	viewPlans := uic.UseEvent(func() { open.Set(false) })
 

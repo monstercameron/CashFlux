@@ -1,3 +1,23 @@
+## 2026-07-05 — Settings graduates to a routed page
+
+Cam overruled the modal: "it should be a page and in the side nav." The funnel built for
+the round-1 fix paid off immediately — because every open-settings affordance already went
+through uistate.OpenGlobalSettings(), moving Settings from modal to page was ONE function's
+body (pushState + synthetic popstate, the same pattern the e2e probes use) plus a registry
+row and a railMeta row. The form itself didn't change: screens can't import app (app imports
+screens), so the /settings route's view is injected at boot (screens.SettingsView var), and
+the page mounts the same globalSettingsForm component the modal host did.
+
+Upgraded the funnel while at it: OpenGlobalSettingsAt(tab) — a one-shot package var the
+form's setTab UseState consumes as its initial value on mount (no atom; mount is exactly
+when UseState reads its initial). Call sites that name a tab in their copy now land there:
+trial/sync/subscription → Cloud, AI-key prompts → AI, app-lock → Advanced. The seven
+now-dead `settings := uistate.UseSettings()` captures came out of their components; the
+widget-settings modal keeps the atom and host.
+
+Page CSS: 72rem measure, and .settings-page .set-tab-strip goes static — the modal's sticky
+top-0 rule would wedge the strip under the page's own sticky topbar (z20 beats z5).
+
 ## 2026-07-05 — System surfaces round 2: the collapsed rail's new tenant
 
 Round 2 verified all five round-1 fixes (including a source grep proving zero /settings

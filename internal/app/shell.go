@@ -326,6 +326,7 @@ var railMeta = map[string]struct {
 	"/categories":     {"nav.categories", icon.Tag},
 	"/rules":          {"nav.rules", icon.Tag},
 	"/notifications":  {"nav.notifications", icon.Bell},
+	"/settings":       {"nav.settings", icon.Settings},
 	"/appearance":     {"nav.appearance", icon.Appearance},
 	"/about":          {"nav.about", icon.HelpCircle},
 	"/admin":          {"nav.admin", icon.Settings},
@@ -739,7 +740,6 @@ func navItem(props navItemProps) uic.Node {
 // the top-right of the footer area so users can collapse/expand the rail from
 // within the panel rather than relying solely on the top-bar menu button.
 func HouseholdCard() uic.Node {
-	settings := uistate.UseSettings()
 	collapsed := uistate.UseRailCollapsed()
 	// The quiet household summary reads live data (member count, base currency)
 	// — subscribe to the shared revision so a settings change updates it live.
@@ -800,7 +800,7 @@ func HouseholdCard() uic.Node {
 			// signals it visually) without repeating it in the visible summary line.
 			Title(name+" · "+summary+" · "+uistate.T("household.settings")),
 			Attr("aria-label", name+" · "+summary+" · "+uistate.T("household.settings")), // C315: explicit SR name
-			OnClick(func() { settings.Set(uistate.Global()) }),
+			OnClick(func() { uistate.OpenGlobalSettings() }),
 			ui.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)),
 			Span(css.Class("hh-text", tw.LeadingTight),
 				Span(css.Class(tw.FontDisplay, tw.Text14, tw.FontMedium, tw.Block), name),

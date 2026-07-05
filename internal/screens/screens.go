@@ -98,6 +98,7 @@ func All() []Route {
 		{Path: "/activity", Label: "nav.activity", Title: "nav.activity", Subtitle: "screen.activitySub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Activity},
 
 		// SYSTEM — household configuration and app meta.
+		{Path: "/settings", Label: "nav.settings", Title: "nav.settings", Subtitle: "screen.settingsSub", Phase: 1, Group: GroupSystem, View: SettingsScreen},
 		{Path: "/appearance", Label: "nav.appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, Group: GroupSystem, View: Appearance},
 		{Path: "/help", Label: "nav.help", Title: "nav.help", Subtitle: "screen.helpSub", Phase: 1, Group: GroupSystem, View: HelpScreen},
 		{Path: "/about", Label: "nav.about", Title: "nav.about", Subtitle: "screen.aboutSub", Phase: 1, Group: GroupSystem, View: About},

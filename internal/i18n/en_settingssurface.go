@@ -15,6 +15,7 @@ var settingsSurfaceKeys = Catalog{
 	"settings.tabData":      "Data",
 	"settings.tabAdvanced":  "Advanced",
 	"topbar.settings":       "Settings",
+	"screen.settingsSub":    "Everything configurable, in one place — household, preferences, alerts, AI, cloud, data, and advanced.",
 
 	"about.eyebrow":         "local-first budgeting · built in the open",
 	"about.chipStorage":     "Your data lives",

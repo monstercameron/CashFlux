@@ -43,4 +43,16 @@ func registerSystemSurface() {
 		prop("background", "var(--bg-card)"),
 		prop("padding-top", "0.25rem"),
 	)
+	// The routed /settings page hosts the same form in the content column: a
+	// readable form measure, and the strip goes static (the modal's sticky rule
+	// would wedge it under the page's own sticky top bar).
+	rule(".settings-page",
+		prop("max-width", "72rem"),
+		prop("margin", "0 auto"),
+		prop("padding-bottom", "1.5rem"),
+	)
+	rule(".settings-page .set-tab-strip",
+		prop("position", "static"),
+		prop("background", "transparent"),
+	)
 }

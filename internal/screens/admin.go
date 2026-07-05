@@ -247,7 +247,7 @@ func AdminConsole() ui.Node {
 
 	retry := ui.UseEvent(func() { loadRev.Set(loadRev.Get() + 1) })
 	// Declared before the switch so its hook position is stable across states.
-	openCloudSettings := ui.UseEvent(func() { uistate.UseSettings().Set(uistate.Global()) })
+	openCloudSettings := ui.UseEvent(func() { uistate.OpenGlobalSettingsAt("cloud") })
 
 	switch screenState.Get() {
 	case adminStateSignIn:

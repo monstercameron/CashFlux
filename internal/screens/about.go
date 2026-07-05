@@ -69,7 +69,7 @@ func AboutScreen() ui.Node {
 					P(css.Class("t-body", tw.TextDim), Button(
 						Type("button"),
 						css.Class("btn-link", tw.Underline, tw.HoverTextFg),
-						OnClick(Prevent(func() { uistate.OpenGlobalSettings() })),
+						OnClick(Prevent(func() { uistate.OpenGlobalSettingsAt("ai") })),
 						uistate.T("about.aiKeySettings"),
 					)),
 				)))),

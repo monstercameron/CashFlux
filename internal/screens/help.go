@@ -162,8 +162,7 @@ func HelpScreen() ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 	_ = uistate.UseDataRevision().Get() // checklist reflects live data
-	settingsAtom := uistate.UseSettings()
-	openSettings := func() { settingsAtom.Set(uistate.Global()) }
+	openSettings := func() { uistate.OpenGlobalSettings() }
 
 	steps := setupSteps(app, openSettings)
 	done := 0

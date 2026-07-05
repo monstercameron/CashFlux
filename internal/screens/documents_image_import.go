@@ -77,7 +77,7 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 				Div(css.Class("notice notice-warn", tw.Mt1, tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Span(uistate.T("documents.needKey")),
 					Button(css.Class("btn btn-sm"), Type("button"),
-						OnClick(func() { uistate.OpenGlobalSettings() }),
+						OnClick(func() { uistate.OpenGlobalSettingsAt("ai") }),
 						uistate.T("documents.goToSettings"),
 					),
 				),

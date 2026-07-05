@@ -153,7 +153,7 @@ func Insights() ui.Node {
 		return Div(css.Class("asst-keystrip"), Attr("data-testid", "assistant-keynote"),
 			Span(css.Class("asst-keystrip-dot"), Attr("aria-hidden", "true")),
 			Span(css.Class(tw.Text12, tw.TextDim), uistate.T("insights.keyHint")),
-			Button(css.Class("btn-link", tw.Text12), Type("button"), OnClick(func() { uistate.OpenGlobalSettings() }), uistate.T("nav.settings")),
+			Button(css.Class("btn-link", tw.Text12), Type("button"), OnClick(func() { uistate.OpenGlobalSettingsAt("ai") }), uistate.T("nav.settings")),
 		)
 	}
 
@@ -1014,7 +1014,7 @@ func Insights() ui.Node {
 		// lives HERE, where attention lands — not in footer microcopy.
 		If(noAI, Div(css.Class("asst-key-callout"), Attr("data-testid", "assistant-key-callout"),
 			Span(uistate.T("assistant.keyCallout")),
-			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { uistate.OpenGlobalSettings() }), uistate.T("nav.settings")),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { uistate.OpenGlobalSettingsAt("ai") }), uistate.T("nav.settings")),
 		)),
 	)
 

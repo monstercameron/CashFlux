@@ -163,7 +163,7 @@ func Allocate() ui.Node {
 	}
 
 	nav := router.UseNavigate()
-	goToSettings := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettings() }))
+	goToSettings := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("ai") }))
 
 	// --- amount (local to the hero; persisted via AllocConfig) ---
 	amountStr := ui.UseState(seedAmount)

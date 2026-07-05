@@ -33,7 +33,6 @@ func MoreMenu(props moreMenuProps) uic.Node {
 	menuID := uic.UseId()
 	nav := router.UseNavigate()
 	pAtom := uistate.UsePrefs()
-	settings := uistate.UseSettings()
 	closeMenu := func() { open.Set(false) }
 
 	// Escape / outside-click dismissal, matching the +Add menu.
@@ -92,7 +91,7 @@ func MoreMenu(props moreMenuProps) uic.Node {
 			// that the rail's household card no longer opens it.
 			Button(css.Class("add-item", tw.Flex, tw.ItemsCenter, tw.Gap25), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "topbar-settings"),
-				OnClick(func() { closeMenu(); settings.Set(uistate.Global()) }),
+				OnClick(func() { closeMenu(); uistate.OpenGlobalSettings() }),
 				ui.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("topbar.settings")),
 			),

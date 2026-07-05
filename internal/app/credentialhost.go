@@ -31,12 +31,11 @@ func CredentialVaultHost() uic.Node {
 	// panics the wasm app). Hooks below are ALL declared unconditionally, before any
 	// branch, so the host's hook count is stable across renders regardless of which
 	// state (closed / gated / open) it is in.
-	settingsAtom := uistate.UseSettings()
 	closeModal := func() { uistate.SetAccountCredentials("") }
 	gateCancel := uic.UseEvent(Prevent(closeModal))
 	gateOpenSettings := uic.UseEvent(Prevent(func() {
 		closeModal()
-		settingsAtom.Set(uistate.Global()) // open Settings to set up the app lock
+		uistate.OpenGlobalSettingsAt("advanced") // the Advanced tab hosts the app lock
 	}))
 
 	accountID := idAtom.Get()

@@ -324,7 +324,6 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	filterAtom := uistate.UseAccountsFilter()
 	transferAtom := uistate.UseAcctTransferOpen()
 	formulasAtom := uistate.UseAcctShowFormulas()
-	settingsAtom := uistate.UseSettings()
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
@@ -338,7 +337,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
-	openFX := ui.UseEvent(Prevent(func() { settingsAtom.Set(uistate.Global()) }))
+	openFX := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
 	markAll := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
 		now := time.Now()

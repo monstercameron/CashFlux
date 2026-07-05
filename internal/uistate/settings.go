@@ -4,7 +4,11 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/state"
+import (
+	"syscall/js"
+
+	"github.com/monstercameron/GoWebComponents/state"
+)
 
 // SettingsTarget identifies which settings panel (if any) is open. Kind is "" for
 // closed, "widget" for a per-widget panel (ID/Title identify the widget), or
@@ -39,14 +43,36 @@ var (
 	settingsCaptured bool
 )
 
-// OpenGlobalSettings opens the global settings flip panel. Safe from click
-// handlers. This is the ONE correct way to reach Settings from a screen —
-// there is no /settings route (navigating there silently lands on the
-// dashboard; that dead pattern is why this exists).
-func OpenGlobalSettings() {
-	if settingsCaptured {
-		capturedSettings.Set(Global())
-	}
+// requestedSettingsTab is a one-shot deep-link target for the /settings page's
+// tab strip: OpenGlobalSettingsAt sets it, the settings form consumes it on
+// mount. Package-level (not an atom) because it must be writable from click
+// handlers and is only ever read once.
+var requestedSettingsTab string
+
+// OpenGlobalSettings navigates to the routed /settings page. Safe from click
+// handlers. This is still the ONE correct way to reach Settings from a screen:
+// Settings began as a flip modal with no route, and every "open settings"
+// affordance funnels through here so the entry point stays a single decision —
+// which is what made the modal→page switch a one-function change.
+func OpenGlobalSettings() { OpenGlobalSettingsAt("") }
+
+// OpenGlobalSettingsAt navigates to /settings opened on the given tab
+// ("household", "prefs", "alerts", "ai", "cloud", "data", "advanced");
+// "" keeps the default. Callers that tell the user to do something on a
+// specific tab should land them on that tab.
+func OpenGlobalSettingsAt(tab string) {
+	requestedSettingsTab = tab
+	js.Global().Get("history").Call("pushState", js.Null(), "", RoutePath("/settings"))
+	// The history router re-resolves on popstate; pushState alone doesn't fire one.
+	js.Global().Call("dispatchEvent", js.Global().Get("PopStateEvent").New("popstate"))
+}
+
+// ConsumeRequestedSettingsTab returns the pending deep-link tab once, then
+// clears it, so a later plain /settings visit doesn't inherit a stale tab.
+func ConsumeRequestedSettingsTab() string {
+	t := requestedSettingsTab
+	requestedSettingsTab = ""
+	return t
 }
 
 // Widget builds a target that opens a per-widget settings panel.
