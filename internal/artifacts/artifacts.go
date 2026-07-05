@@ -111,3 +111,20 @@ func Validate(a domain.Artifact) []string {
 	}
 	return errs
 }
+
+// CSVBytes serializes a parsed CSV artifact (header + rows) back into CSV file
+// bytes — the inverse of ParseCSV, for downloading a stored dataset. The
+// round-trip is lossless for rectangular data (ParseCSV pads/truncates rows to
+// the header width on the way in).
+func CSVBytes(columns []string, rows [][]string) []byte {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	if len(columns) > 0 {
+		_ = w.Write(columns)
+	}
+	for _, r := range rows {
+		_ = w.Write(r)
+	}
+	w.Flush()
+	return buf.Bytes()
+}

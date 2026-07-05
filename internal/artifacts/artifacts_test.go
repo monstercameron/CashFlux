@@ -67,3 +67,19 @@ func TestValidate(t *testing.T) {
 		t.Error("image with no bytes should be invalid")
 	}
 }
+
+func TestCSVBytesRoundTrip(t *testing.T) {
+	cols := []string{"date", "payee", "amount"}
+	rows := [][]string{{"2026-01-02", "Corner, Cafe", "-4.50"}, {"2026-01-03", "Acme \"Payroll\"", "4000"}}
+	out := CSVBytes(cols, rows)
+	gotCols, gotRows, err := ParseCSV(out)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	if len(gotCols) != 3 || gotCols[1] != "payee" {
+		t.Fatalf("columns round-trip = %v", gotCols)
+	}
+	if len(gotRows) != 2 || gotRows[0][1] != "Corner, Cafe" || gotRows[1][1] != `Acme "Payroll"` {
+		t.Fatalf("rows round-trip = %v", gotRows)
+	}
+}

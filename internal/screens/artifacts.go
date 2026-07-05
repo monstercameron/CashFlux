@@ -238,16 +238,45 @@ type artifactRowProps struct {
 	Notice       func(string) // surface errors to the screen-level notice
 }
 
-// artifactRow is one artifact entry with rename and delete actions — its own
-// component so its hooks stay stable across the list. Rename is inline (no
-// modal required for a single text field). Delete is guarded when the artifact
-// is referenced by custom-page widgets (C66).
+// artifactRow is one artifact entry with rename, download, and delete actions —
+// its own component so its hooks stay stable across the list. Rename opens the
+// shell-root flip modal; delete is guarded when the artifact is referenced by
+// custom-page widgets (C66).
 func artifactRow(props artifactRowProps) ui.Node {
 	a := props.Artifact
 	app := appstate.Default
 
 	// Rename opens the shell-root flip modal (ArtifactEditHost).
 	startRename := ui.UseEvent(Prevent(func() { uistate.SetArtifactEdit(a.ID) }))
+
+	// Download reconstructs the original file: CSV datasets re-serialize from
+	// their parsed columns/rows; image bytes may live only in the IndexedDB blob
+	// store, so the (blocking) fetch runs in a goroutine off the render path.
+	download := ui.UseEvent(Prevent(func() {
+		go func() {
+			data, mime, name := a.Bytes, a.MIME, a.Name
+			if a.Kind == artifacts.KindCSV {
+				data, mime = artifacts.CSVBytes(a.Columns, a.Rows), "text/csv"
+				if !strings.HasSuffix(strings.ToLower(name), ".csv") {
+					name += ".csv"
+				}
+			} else if len(data) == 0 && app != nil {
+				if b, err := app.GetBlobForArtifact(a.ID); err == nil && len(b) > 0 {
+					data = b
+				}
+			}
+			if len(data) == 0 {
+				if props.Notice != nil {
+					props.Notice(uistate.T("artifacts.downloadEmpty", a.Name))
+				}
+				return
+			}
+			if mime == "" {
+				mime = "application/octet-stream"
+			}
+			downloadBytes(name, mime, data)
+		}()
+	}))
 
 	del := ui.UseEvent(Prevent(func() {
 		if app == nil {
@@ -341,14 +370,19 @@ func artifactRow(props artifactRowProps) ui.Node {
 				csvPreview,
 			),
 		),
+		// A labeled Rename button — the sibling Data & People rows all carry a
+		// visible icon+label primary row action, not a bare glyph.
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("aria-label", uistate.T("artifacts.renameTitle")), Title(uistate.T("artifacts.renameTitle")),
-			OnClick(startRename), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+			OnClick(startRename), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("artifacts.renameTitle"))),
 		uiw.KebabMenu(uiw.KebabMenuProps{
 			ID:           "artifact-menu-" + a.ID,
 			AriaLabel:    uistate.T("artifacts.menuAria"),
 			ToggleTestID: "artifact-menu-btn-" + a.ID,
 			Items: []ui.Node{
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "artifact-download-"+a.ID),
+					Title(uistate.T("artifacts.downloadTitle")), OnClick(download), uistate.T("artifacts.download")),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "artifact-delete-"+a.ID), Attr("aria-label", uistate.T("action.delete")),
 					Title(uistate.T("action.delete")), OnClick(del), uistate.T("action.delete")),

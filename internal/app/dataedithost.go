@@ -96,9 +96,9 @@ func ArtifactEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseArtifactEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("artifacts.renameTitle"),
+		Title:    uistate.T("artifacts.renameModalTitle"),
 		Width:    "420px",
-		Height:   "280px",
+		Height:   "230px",
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.ArtifactRenameForm, screens.ArtifactRenameFormProps{ArtifactID: id, OnDone: closeModal}),

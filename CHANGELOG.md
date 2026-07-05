@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Artifacts can be downloaded, and the vault's modal joins the family look (2026-07-05):** every file row's ⋯ menu gains **Download** — images download with their original bytes (fetched from the IndexedDB blob store off the render path when the dataset doesn't carry them inline), and CSV datasets re-serialize losslessly from their stored columns/rows via a new tested `artifacts.CSVBytes` (round-trip proven against ParseCSV, quotes/commas included; filenames gain `.csv` when missing). A file whose data isn't on this device gets an honest error notice instead of an empty download. Design-consistency pass on the rename modal: titled **"Rename file"** (was a bare "Rename"), the row's icon-only pencil became the labeled icon+text button every sibling Data & People row uses, and the panel is sized snug to its one field (230px) with the sticky Save/Cancel bar.
+
 ### Fixed
 - **Rule edit modal height now tracks its content (audit round 4's last point, 2026-07-05):** the fixed 640px panel left ~190px of dead space under Save/Cancel for plain phrase rules; the host now opens snug (470px) for phrase rules and tall (640px) for condition-bearing ones — growth past the panel (enabling more slots mid-edit) scrolls with the sticky action bar in view. Verified live: the void under the actions dropped to 24px.
 

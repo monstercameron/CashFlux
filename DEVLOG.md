@@ -1,3 +1,18 @@
+## 2026-07-05 — Vault downloads + rename-modal consistency
+
+Cam: review the artifacts modals for consistency and let users download artifacts. The rename
+modal was already on the shared dataedit pattern; the real inconsistencies were around it:
+the row's icon-only pencil (every sibling row uses icon+label), a bare "Rename" modal title,
+and a 280px panel with dead space under a single field. All aligned.
+
+Downloads: the interesting part is that an artifact's bytes live in one of two places — CSV
+datasets store PARSED columns/rows (no raw bytes), and image bytes may live only in the
+IndexedDB blob store (the dataset carries a BlobRef). So Download re-serializes CSVs via a
+new pure artifacts.CSVBytes (round-trip test against ParseCSV covers quotes/commas) and falls
+back to app.GetBlobForArtifact for images — inside a goroutine, because the wasm IDB get
+blocks on a channel and would deadlock a render path. Verified live: real download events
+with correct filenames and content for both kinds.
+
 ## 2026-07-05 — Rules engine gate: 100/100
 
 Rounds 4 and 5 closed it out. Round 4 (99/100) scored the Smart+ lane clean on first review —
