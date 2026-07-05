@@ -61,7 +61,27 @@ func UseTodoSortMode() state.Atom[string] { return state.UseAtom("todo:sortMode"
 
 // UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
 // top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.
-func UseTodoPage() state.Atom[int] { return state.UseAtom("todo:page", 1) }
+func UseTodoPage() state.Atom[int] {
+	a := state.UseAtom("todo:page", 1)
+	capturedTodoPage = a
+	todoPageCaptured = true
+	return a
+}
+
+var (
+	capturedTodoPage state.Atom[int]
+	todoPageCaptured bool
+)
+
+// ResetTodoPage returns the to-do list to page 1 from outside a render (e.g. the
+// shell-root add form), so a just-added task lands on the visible top page
+// rather than leaving the user on a later page. No-op until the list has
+// rendered once (always true after first paint).
+func ResetTodoPage() {
+	if todoPageCaptured {
+		capturedTodoPage.Set(1)
+	}
+}
 
 // capturedTodoCollapsed lets ToggleTodoCollapsed flip a parent's collapse state from a
 // row click handler without calling state.UseAtom outside a render (which panics).

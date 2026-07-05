@@ -172,6 +172,12 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 		addLinkID.Set("")
 		addRecur.Set("")
 		errMsg.Set("")
+		// The add form is a shell-root sibling (AddHost), so the /todo list won't
+		// re-render on its own — bump the shared data revision (and confirm) so the
+		// new task appears immediately, matching every other add form.
+		uistate.BumpDataRevision()
+		uistate.ResetTodoPage() // return to the top page so the new task is on-screen
+		uistate.PostNotice(uistate.T("todo.taskAdded"), false)
 		done()
 	}))
 

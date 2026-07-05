@@ -604,7 +604,7 @@ func Sidebar(props sidebarProps) uic.Node {
 		// Cloud-sync status chip by the workspace switcher (§7.11) — invisible until
 		// Cloud sync is in use; shows synced/syncing/offline/conflict/error + queue.
 		uic.CreateElement(SyncChip),
-		Nav(css.Class(tw.Flex1, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
+		Nav(css.Class(tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {

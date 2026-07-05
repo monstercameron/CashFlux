@@ -6401,8 +6401,11 @@ func registerGenerated() {
 	)
 	rule(".notif-icon-btn",
 		background("transparent"),
-		border("1px solid var(--border)"),
-		color("var(--text-dim)"),
+		// v1.0: the resting affordance was invisible (border blended into the
+		// card, glyph too faint). Give the icon full text contrast and the
+		// border a perceptible presence; hover still brightens the background.
+		border("1px solid var(--text-dim)"),
+		color("var(--text)"),
 		cursor("pointer"),
 		padding("0.35rem"),
 		borderRadius("8px"),
@@ -7030,6 +7033,10 @@ func registerGenerated() {
 		display("grid"),
 		gridTemplateColumns("repeat(auto-fill, minmax(460px, 1fr))"),
 		gap("0.75rem"),
+		// Each card sizes to its own content (min-height still applies) instead
+		// of stretching to the tallest in its row — no dead whitespace when one
+		// card has a linked to-do list and its row-mate doesn't.
+		alignItems("start"),
 	)
 	rule(".bento-goals .goal-card",
 		position("relative"),
@@ -7123,6 +7130,13 @@ func registerGenerated() {
 		color("color-mix(in srgb, var(--accent) 40%, #ffffff)"),
 		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
 		whiteSpace("nowrap"),
+	)
+	// The pale-accent-on-dark-track tint above is unreadable on light theme's
+	// pale track (~1.2:1). In light mode, darken the accent and drop the dark
+	// text-shadow so the percentage is legible (WCAG AA).
+	rule("[data-theme=\"light\"] .bento-goals .goal-card-loader .budget-pct",
+		color("color-mix(in srgb, var(--accent) 78%, #000000)"),
+		prop("text-shadow", "none"),
 	)
 	// Footer actions pinned to the card bottom with a hairline separator.
 	rule(".bento-goals .goal-card-actions",
