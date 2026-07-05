@@ -149,24 +149,96 @@ func Artifacts() ui.Node {
 		)
 	}
 
-	return Div(
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("artifacts.uploadTitle"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
-				Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap),
-					Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
-					Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
-				),
-				P(css.Class("muted", tw.Mt2), storageLabel),
-				artifactStorageBar(total, blobUsage),
-				quotaNudge,
+	// ── Hero: the storage footprint, the vault chips, and the takeaway. ────────
+	imgCount, csvCount := 0, 0
+	for _, a := range list {
+		if a.Kind == artifacts.KindImage {
+			imgCount++
+		} else {
+			csvCount++
+		}
+	}
+	attachedCount, pageBoundCount := 0, 0
+	for aid, n := range refCount {
+		if n > 0 && aid != "" {
+			attachedCount++
+		}
+	}
+	for _, n := range pageRefCount {
+		if n > 0 {
+			pageBoundCount++
+		}
+	}
+	heroUsed := total
+	if int(blobUsage) > heroUsed {
+		heroUsed = int(blobUsage)
+	}
+
+	fileLine := uistate.T("artifacts.fileWordN", len(list))
+	if len(list) == 1 {
+		fileLine = uistate.T("artifacts.fileWordOne")
+	}
+	eyebrow := fileLine + " · " + uistate.T("artifacts.eyebrowTail")
+
+	chips := []ui.Node{}
+	if imgCount > 0 {
+		chips = append(chips, rptChip(uistate.T("artifacts.chipImages"), fmt.Sprintf("%d", imgCount), ""))
+	}
+	if csvCount > 0 {
+		chips = append(chips, rptChip(uistate.T("artifacts.chipCSV"), fmt.Sprintf("%d", csvCount), ""))
+	}
+	if attachedCount > 0 {
+		chips = append(chips, rptChip(uistate.T("artifacts.chipAttach"), fmt.Sprintf("%d", attachedCount), rptToneCls("pos")))
+	}
+	if pageBoundCount > 0 {
+		chips = append(chips, rptChip(uistate.T("artifacts.chipPages"), fmt.Sprintf("%d", pageBoundCount), ""))
+	}
+
+	takeaway := uistate.T("art.takeEmpty")
+	if len(list) > 0 {
+		imgWord := uistate.T("art.imageWordN", imgCount)
+		if imgCount == 1 {
+			imgWord = uistate.T("art.imageWordOne")
+		}
+		csvWord := uistate.T("art.csvWordN", csvCount)
+		if csvCount == 1 {
+			csvWord = uistate.T("art.csvWordOne")
+		}
+		takeaway = uistate.T("art.takeStored", imgWord, csvWord, artifacts.HumanSize(heroUsed))
+		if blobUsage > 0 && artifactstore.NearLimit(blobUsage) {
+			takeaway += " " + uistate.T("art.takeNearLimit")
+		}
+	}
+
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-vault-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), eyebrow),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("artifacts.heroLabel")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), artifacts.HumanSize(heroUsed)),
+				Div(css.Class("vault-meter"), artifactStorageBar(total, blobUsage)),
+				P(css.Class("muted", tw.Mt1, tw.Text12), storageLabel),
 			),
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("artifacts.listTitle"),
-			Body:  listBody,
-		}),
+		),
+		If(len(chips) > 0, Div(css.Class("debt-chips"), chips)),
+		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "vault-takeaway"), takeaway),
+	)
+	heroTile := rptTile("vault-hero", "1 / span 4", rptSection("", uistate.T("artifacts.heroTitle"), nil, heroBody))
+
+	// Upload actions ride the vault section's header so the page stays two tiles.
+	uploadActions := Div(css.Class(tw.Flex, tw.Gap2, tw.FlexWrap, tw.ItemsCenter),
+		Button(css.Class("btn btn-primary"), Type("button"), OnClick(uploadImage), uistate.T("artifacts.uploadImage")),
+		Button(css.Class("btn"), Type("button"), OnClick(importCSV), uistate.T("artifacts.importCSV")),
+	)
+
+	return Div(css.Class("bento bento-vault"),
+		heroTile,
+		rptTile("vault-list", "1 / span 4",
+			rptSection("sec-vault-list", uistate.T("artifacts.vaultTitle"), uploadActions, Fragment(
+				P(css.Class("muted"), uistate.T("artifacts.uploadDesc")),
+				quotaNudge,
+				listBody,
+			))),
 	)
 }
 
@@ -319,8 +391,16 @@ func artifactRow(props artifactRowProps) ui.Node {
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("aria-label", uistate.T("artifacts.renameTitle")), Title(uistate.T("artifacts.renameTitle")),
 			OnClick(startRename), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("action.delete")),
-			Title(uistate.T("action.delete")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		uiw.KebabMenu(uiw.KebabMenuProps{
+			ID:           "artifact-menu-" + a.ID,
+			AriaLabel:    uistate.T("artifacts.menuAria"),
+			ToggleTestID: "artifact-menu-btn-" + a.ID,
+			Items: []ui.Node{
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "artifact-delete-"+a.ID), Attr("aria-label", uistate.T("action.delete")),
+					Title(uistate.T("action.delete")), OnClick(del), uistate.T("action.delete")),
+			},
+		}),
 	)
 }
 
