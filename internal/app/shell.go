@@ -327,7 +327,6 @@ var railMeta = map[string]struct {
 	"/rules":          {"nav.rules", icon.Tag},
 	"/notifications":  {"nav.notifications", icon.Bell},
 	"/settings":       {"nav.settings", icon.Settings},
-	"/appearance":     {"nav.appearance", icon.Appearance},
 	"/about":          {"nav.about", icon.HelpCircle},
 	"/admin":          {"nav.admin", icon.Settings},
 	// IA-remap §5.6: three new hub routes on the Tools rail.

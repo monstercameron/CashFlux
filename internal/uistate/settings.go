@@ -57,9 +57,9 @@ var requestedSettingsTab string
 func OpenGlobalSettings() { OpenGlobalSettingsAt("") }
 
 // OpenGlobalSettingsAt navigates to /settings opened on the given tab
-// ("household", "prefs", "alerts", "ai", "cloud", "data", "advanced");
-// "" keeps the default. Callers that tell the user to do something on a
-// specific tab should land them on that tab.
+// ("household", "prefs", "appearance", "alerts", "ai", "cloud", "data",
+// "advanced"); "" keeps the default. Callers that tell the user to do
+// something on a specific tab should land them on that tab.
 func OpenGlobalSettingsAt(tab string) {
 	requestedSettingsTab = tab
 	js.Global().Get("history").Call("pushState", js.Null(), "", RoutePath("/settings"))

@@ -99,20 +99,21 @@ func All() []Route {
 
 		// SYSTEM — household configuration and app meta.
 		{Path: "/settings", Label: "nav.settings", Title: "nav.settings", Subtitle: "screen.settingsSub", Phase: 1, Group: GroupSystem, View: SettingsScreen},
-		{Path: "/appearance", Label: "nav.appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, Group: GroupSystem, View: Appearance},
 		{Path: "/help", Label: "nav.help", Title: "nav.help", Subtitle: "screen.helpSub", Phase: 1, Group: GroupSystem, View: HelpScreen},
 		{Path: "/about", Label: "nav.about", Title: "nav.about", Subtitle: "screen.aboutSub", Phase: 1, Group: GroupSystem, View: About},
 		{Path: "/admin", Label: "nav.admin", Title: "nav.admin", Subtitle: "screen.adminSub", Phase: 2, Group: GroupSystem, AdminOnly: true, View: AdminConsole},
-		// C21: Guided setup wizard — walks new users through currency, income, first
-		// account, and household members. In GroupSystem so it appears in nav and is
-		// reachable from empty-state CTAs.
-		{Path: "/setup", Label: "nav.setup", Title: "setup.pageTitle", Subtitle: "setup.pageSub", Phase: 1, Group: GroupSystem, View: SetupWizard},
 
 		// OFF-RAIL — routable and deep-linkable but intentionally absent from the nav.
 		// No Label so navGroup skips them; Title/Subtitle preserved for page headings;
 		// Phase preserved for filtering. These are consolidated sub-routes: the content
 		// is reachable from their hub page (/debt, /recurring, /assistant, /household,
 		// /studio) but also via direct URL for bookmarks and deep-links.
+		// Appearance lives on the Settings page's Appearance tab; the standalone
+		// route stays for bookmarks/deep links. The guided setup wizard (C21) is
+		// launched from /help's setup checklist (and empty-state CTAs) instead of
+		// holding a rail slot.
+		{Path: "/appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, View: Appearance},
+		{Path: "/setup", Title: "setup.pageTitle", Subtitle: "setup.pageSub", Phase: 1, View: SetupWizard},
 		{Path: "/credit", Title: "nav.credit", Subtitle: "screen.creditSub", Phase: 2, View: CreditScreen},
 		{Path: "/loans", Title: "nav.loans", Subtitle: "screen.loansSub", Phase: 2, View: LoansScreen},
 		{Path: "/bills", Title: "nav.bills", Subtitle: "screen.billsSub", Phase: 2, View: Bills},

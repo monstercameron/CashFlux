@@ -90,7 +90,7 @@ func settingsAlertsPane(p settingsLeftProps) uic.Node {
 type settingsRightProps struct {
 	// Appearance
 	Pr               prefs.Prefs
-	OnAppearanceLink func()      // closes panel + navigates to /appearance
+	OnAppearanceLink func()      // switches to the Appearance tab
 	OnDateStyle      uic.Handler // UseEvent
 	OnWeekStart      func(string)
 	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
@@ -170,8 +170,8 @@ func aiModelDisplayName(model string) string {
 // rendering helper — no hooks.
 func settingsPreferencesPane(p settingsRightProps) uic.Node {
 	return Div(
-		// Appearance — link to the dedicated /appearance page (B34); all
-		// theming controls live there so the Settings panel stays focused.
+		// Appearance — hands off to the Appearance tab; all theming controls
+		// live there so Preferences stays focused.
 		H4(css.Class("set-label"), uistate.T("settings.appearance")),
 		P(css.Class("muted", tw.TextXs), uistate.T("settings.appearanceHint")),
 		If(p.OnAppearanceLink != nil, Button(css.Class("btn", tw.Mt2), Type("button"),

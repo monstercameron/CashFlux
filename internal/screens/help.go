@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/GoWebComponents/css"
 	. "github.com/monstercameron/GoWebComponents/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/router"
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
@@ -163,6 +164,10 @@ func HelpScreen() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get() // checklist reflects live data
 	openSettings := func() { uistate.OpenGlobalSettings() }
+	// The guided setup wizard came off the rail (Settings absorbed the System
+	// group's config pages); the checklist is its home now.
+	nav := router.UseNavigate()
+	openWizard := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/setup")) }))
 
 	steps := setupSteps(app, openSettings)
 	done := 0
@@ -199,7 +204,13 @@ func HelpScreen() ui.Node {
 	tiles = append(tiles, rptTile("help-hero", "1 / span 4", rptSection("", uistate.T("help.heroTitle"), nil, heroBody)))
 	tiles = append(tiles,
 		rptTile("help-setup", "span 2", Div(Attr("data-testid", "help-tile"),
-			rptSection("sec-help-setup", "Getting set up", nil, setupChecklistBody(steps)))),
+			rptSection("sec-help-setup", "Getting set up", nil, Div(
+				setupChecklistBody(steps),
+				Button(Type("button"), css.Class("btn btn-sm", tw.Mt2),
+					Attr("data-testid", "help-guided-setup"),
+					OnClick(openWizard),
+					uistate.T("help.guidedSetup")),
+			)))),
 		rptTile("help-whatsnew", "span 2", Div(Attr("data-testid", "help-tile"),
 			rptSection("sec-help-whatsnew", "What's new", nil, whatsNewBody()))),
 	)

@@ -96,6 +96,19 @@ try {
   const weekSeg = page.locator(".settings-page .toggle-row", { hasText: "Week starts on" });
   ok(await weekSeg.count() >= 1 || await page.locator(".settings-page").getByText("Monday").count() >= 1, "week-start control present on Preferences");
 
+  // ── Appearance tab: the /appearance surface absorbed as a tab; the rail no
+  //    longer lists Appearance or Setup (Settings/help absorbed them). ────────
+  ok(await page.locator('aside.rail a[aria-label="Appearance"]').count() === 0, "Appearance is out of the side nav");
+  ok(await page.locator('aside.rail a[href="/setup"]').count() === 0, "Setup wizard is out of the side nav");
+  await goTab(page, "Appearance");
+  const appearText = await pageText(page);
+  ok(/dark|light/i.test(appearText) && /motion|accent/i.test(appearText), "Appearance tab carries the mode/motion/accent surface");
+  // The Preferences tab's appearance link switches tabs in place.
+  await goTab(page, "Preferences");
+  await page.locator(".settings-page button", { hasText: "Appearance & theme" }).first().click({ force: true });
+  await page.waitForTimeout(400);
+  ok(/motion|accent/i.test(await pageText(page)), "Preferences' appearance link switches to the Appearance tab");
+
   // ── Alerts tab: freshness + notifications moved here from Preferences. ─────
   await goTab(page, "Alerts");
   const alertsText = await pageText(page);
@@ -157,6 +170,16 @@ try {
   } else {
     ok(true, "plans trial CTA not present in this state (skip)");
   }
+  await leaveSettings(page);
+
+  // ── The guided setup wizard now launches from /help's checklist. ───────────
+  await goRoute(page, "/help");
+  await page.waitForTimeout(600);
+  const wizardBtn = page.locator('[data-testid="help-guided-setup"]');
+  ok(await wizardBtn.count() === 1, "guided-setup launcher present on /help");
+  await wizardBtn.evaluate((el) => el.click());
+  await page.waitForTimeout(700);
+  ok((await page.evaluate(() => location.pathname)) === "/setup", "guided-setup launcher routes to /setup");
   await leaveSettings(page);
 
   ok(errors.length === 0, `no page errors (${errors.join(" | ") || "none"})`);

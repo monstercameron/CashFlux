@@ -974,10 +974,8 @@ func globalSettingsForm() uic.Node {
 	// setup-once, Cloud is power-user.
 	rightProps := settingsRightProps{
 		Pr: pr,
-		OnAppearanceLink: func() {
-			settingsAtom.Set(uistate.SettingsTarget{})
-			nav.Navigate(uistate.RoutePath("/appearance"))
-		},
+		// Appearance is its own tab now — the Preferences link just switches to it.
+		OnAppearanceLink: func() { setTab.Set("appearance") },
 		OnDateStyle:      onDateStyle,
 		OnWeekStart:      func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 		OnPayCycleAnchor: func(v string) { p := prefsAtom.Get(); p.PayCycleAnchor = strings.TrimSpace(v); savePrefs(p) },
@@ -1119,6 +1117,11 @@ func globalSettingsForm() uic.Node {
 	switch setTab.Get() {
 	case "prefs":
 		pane = settingsPreferencesPane(rightProps)
+	case "appearance":
+		// The full appearance surface (mode/motion/accent + theme editor) mounts
+		// as a child component — its hooks are its own, same as the other
+		// pane-embedded components.
+		pane = uic.CreateElement(screens.Appearance)
 	case "alerts":
 		pane = settingsAlertsPane(leftProps)
 	case "ai":
@@ -1141,6 +1144,7 @@ func globalSettingsForm() uic.Node {
 				Options: []ui.SegOption{
 					{Value: "household", Label: uistate.T("settings.tabHousehold")},
 					{Value: "prefs", Label: uistate.T("settings.tabPrefs")},
+					{Value: "appearance", Label: uistate.T("settings.tabAppearance")},
 					{Value: "alerts", Label: uistate.T("settings.tabAlerts")},
 					{Value: "ai", Label: uistate.T("settings.tabAI")},
 					{Value: "cloud", Label: uistate.T("settings.tabCloud")},

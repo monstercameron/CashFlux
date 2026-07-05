@@ -1,3 +1,18 @@
+## 2026-07-05 — Appearance becomes a tab; the wizard re-homes to Help
+
+Second consolidation pass on Cam's direction. Appearance was the easy half: the screen is
+already a self-contained component, so the tab is one CreateElement (its hooks are its own —
+the same mount/unmount rule as every pane-embedded component), and the Preferences link that
+used to navigate away now just setTab.Set("appearance") — a nicer interaction than the page
+hop it replaced. The registry rows moved to the off-rail section rather than being deleted:
+/appearance and /setup still resolve for bookmarks and the dashboard onboarding CTAs.
+
+Setup was the judgment call: "don't keep setup as its own tab, move its functionality
+somewhere else." The wizard's only rail-independent entry points were empty-state CTAs, and
+/help already renders the live setup checklist with an N-of-6 hero — so the checklist gains
+an "Open the guided setup" button and becomes the wizard's discoverable home. Settings tabs
+now number eight; that's the ceiling — the strip is full at 1100px.
+
 ## 2026-07-05 — Settings page critique: SHIP, with the sticky strip restored properly
 
 The page critique shipped it (0 HIGH; nav highlight, both deep-links with correct segmented

@@ -6,16 +6,18 @@ package i18n
 // panel and the redesigned system pages. Merged via init so this file does not
 // touch en.go.
 var settingsSurfaceKeys = Catalog{
-	"settings.tabsAria":     "Settings sections",
-	"settings.tabHousehold": "Household",
-	"settings.tabPrefs":     "Preferences",
-	"settings.tabAlerts":    "Alerts",
-	"settings.tabAI":        "AI",
-	"settings.tabCloud":     "Cloud",
-	"settings.tabData":      "Data",
-	"settings.tabAdvanced":  "Advanced",
-	"topbar.settings":       "Settings",
-	"screen.settingsSub":    "Everything configurable, in one place — household, preferences, alerts, AI, cloud, data, and advanced.",
+	"settings.tabsAria":      "Settings sections",
+	"settings.tabHousehold":  "Household",
+	"settings.tabPrefs":      "Preferences",
+	"settings.tabAppearance": "Appearance",
+	"help.guidedSetup":       "Open the guided setup",
+	"settings.tabAlerts":     "Alerts",
+	"settings.tabAI":         "AI",
+	"settings.tabCloud":      "Cloud",
+	"settings.tabData":       "Data",
+	"settings.tabAdvanced":   "Advanced",
+	"topbar.settings":        "Settings",
+	"screen.settingsSub":     "Everything configurable, in one place — household, preferences, appearance, alerts, AI, cloud, data, and advanced.",
 
 	"about.eyebrow":         "local-first budgeting · built in the open",
 	"about.chipStorage":     "Your data lives",
