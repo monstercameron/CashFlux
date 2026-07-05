@@ -1,3 +1,13 @@
+## 2026-07-04 — /rules: coverage is the story
+
+Third Data & People page. The page's one real KPI was hiding in a muted paragraph ("Your rules
+auto-file 289 of 2321 transactions") — that's now the hero: the coverage PERCENT in the serif,
+with Auto-filed / Never fire / Suggestions chips and a takeaway that folds in the shadowed-rule
+warning. Rows got the same treatment: per-rule match counts were a third meta line; now each
+rule shows its weight as a figure column + share bar vs the heaviest rule, which makes
+precedence problems visible at a glance (a fat bar under a low row = candidates for reorder).
+Kebab conversion per the standing pattern; the existing ConfirmModal guard kept.
+
 ## 2026-07-04 — /categories: the taxonomy becomes a ledger
 
 Second Data & People page. The old page listed the taxonomy but told you nothing about MONEY —

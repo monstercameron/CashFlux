@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -125,9 +126,19 @@ func Rules() ui.Node {
 		}
 	}
 	// Per-rule match counts + overall coverage — the "before you Apply to existing"
-	// signal (L15), reusing the texts computed above.
+	// signal (L15), reusing the texts computed above. maxMatch anchors the per-rule
+	// weight bars (each rule's catch vs the heaviest rule's).
 	covered := rules.Covered(rs, texts)
 	hasTxns := len(texts) > 0
+	matchCounts := make(map[string]int, len(rs))
+	maxMatch := 0
+	for _, r := range rs {
+		n := r.MatchCount(texts)
+		matchCounts[r.ID] = n
+		if n > maxMatch {
+			maxMatch = n
+		}
+	}
 
 	// Drag-to-reorder precedence (C64): drop the dragged rule in front of the target,
 	// renumber Order via appstate, and refresh. First matching rule wins, so order =
@@ -155,13 +166,13 @@ func Rules() ui.Node {
 
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), AddTarget: "rule"}),
-		Div(css.Class("rows"), MapKeyed(rs,
+		hhRowsList(MapKeyed(rs,
 			func(r rules.Rule) any { return r.ID },
 			func(r rules.Rule) ui.Node {
 				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, Categories: cats, CategoryName: catName[r.SetCategoryID],
-					Warning: warnByID[r.ID], MatchCount: r.MatchCount(texts), ShowMatchCount: hasTxns,
+					Warning: warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
 					OnDelete: deleteRule, OnSave: saveRule,
 					OnDragStart: func() { dragSrc.Set(rid) },
 					OnDrop:      func() { reorder(rid) },
@@ -200,11 +211,10 @@ func Rules() ui.Node {
 			}
 			toggleBtn = Button(css.Class("btn"), Type("button"), OnClick(toggleShowAll), label)
 		}
-		suggestCard = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("rules.suggestedTitleCount", len(suggestions)),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("rules.suggestedHint")),
-				Div(css.Class("rows"), MapKeyed(visible,
+		suggestCard = rptSection("sec-rules-suggested", uistate.T("rules.suggestedTitleCount", len(suggestions)), nil,
+			Fragment(
+				P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), uistate.T("rules.suggestedHint")),
+				hhRowsList(MapKeyed(visible,
 					func(s rulesuggest.Suggestion) any { return s.Rule.Match },
 					func(s rulesuggest.Suggestion) ui.Node {
 						return ui.CreateElement(SuggestionRow, suggestionRowProps{
@@ -214,26 +224,75 @@ func Rules() ui.Node {
 				)),
 				toggleBtn,
 			),
-		})
+		)
 	}
 
-	// Lead with the user's own rules (G18 §1): the 15-row suggestions card used to
-	// push "Your rules" — Bianca's primary concern — entirely below the fold. Order
-	// is now Your rules → Suggestions (discovery aid, near-top) → Rule order (power-user).
-	return Div(
-		uiw.Card(uiw.CardProps{
-			Header: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.FlexWrap, tw.Gap2),
-				H2(css.Class("card-title"), uistate.T("rules.listTitle")),
+	// ── Hero: the coverage figure, the health chips, and the takeaway. ──────────
+	shadowedCount := len(warnByID)
+	coveredPct := 0
+	if len(texts) > 0 {
+		coveredPct = covered * 100 / len(texts)
+	}
+	countLine := uistate.T("rules.countWord", len(rs))
+	if len(rs) == 1 {
+		countLine = uistate.T("rules.countWordOne")
+	}
+	eyebrow := countLine + " · " + uistate.T("rules.firstWins")
+	chips := []ui.Node{
+		rptChip(uistate.T("rules.chipRules"), fmt.Sprintf("%d", len(rs)), ""),
+	}
+	if hasTxns {
+		chips = append(chips, rptChip(uistate.T("rules.chipCovered"), plural(covered, "transaction"), rptToneCls("pos")))
+	}
+	if shadowedCount > 0 {
+		chips = append(chips, rptChip(uistate.T("rules.chipShadowed"), fmt.Sprintf("%d", shadowedCount), rptToneCls("neg")))
+	}
+	if len(suggestions) > 0 {
+		chips = append(chips, rptChip(uistate.T("rules.chipSuggested"), fmt.Sprintf("%d", len(suggestions)), ""))
+	}
 
-				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-					If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
-					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-						Attr("data-testid", "rules-add"), Title(uistate.T("rules.add")), OnClick(addRule),
-						uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-						Span(uistate.T("rules.addRule"))),
-				),
+	takeaway := uistate.T("rls.noneTake")
+	if len(rs) > 0 && hasTxns {
+		takeaway = uistate.T("rls.coverTake", fmt.Sprintf("%d", covered), len(texts))
+		if shadowedCount == 1 {
+			takeaway += " " + uistate.T("rls.shadowClauseOne")
+		} else if shadowedCount > 1 {
+			takeaway += " " + uistate.T("rls.shadowClauseN", shadowedCount)
+		}
+		if len(suggestions) > 0 {
+			takeaway += " " + uistate.T("rls.suggestClause", len(suggestions))
+		}
+	}
+
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-rules-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), eyebrow),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("rules.heroLabel")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), fmt.Sprintf("%d%%", coveredPct)),
 			),
-			Body: Fragment(
+		),
+		Div(css.Class("debt-chips"), chips),
+		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "rules-takeaway"), takeaway),
+	)
+	heroTile := rptTile("rules-hero", "1 / span 4", rptSection("", uistate.T("rules.heroTitle"), nil, heroBody))
+
+	// Section header actions: apply-to-existing + the add-rule modal button.
+	headerActions := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+		If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "rules-add"), Title(uistate.T("rules.add")), OnClick(addRule),
+			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("rules.addRule"))),
+	)
+
+	// Lead with the user's own rules (G18 §1): Your rules → Suggestions
+	// (discovery aid) → Rule order (power-user precedence view).
+	return Div(css.Class("bento bento-rules"),
+		heroTile,
+		If(errMsg.Get() != "", rptTile("rules-err", "1 / span 4", P(css.Class("notice-danger"), errMsg.Get()))),
+		rptTile("rules-list", "1 / span 4",
+			rptSection("sec-rules-list", uistate.T("rules.listTitle"), headerActions, Fragment(
 				// GI1: an on-page add-rule row at the top of "Your rules" — match +
 				// category + tags + Add, inline — so a rule can be created without
 				// opening the modal. Reuses the same RuleAddForm (with its live
@@ -243,24 +302,20 @@ func Rules() ui.Node {
 					RuleAddForm(RuleAddFormProps{OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
 				),
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
-				If(len(rs) > 0 && hasTxns, P(css.Class("muted"), uistate.T("rules.coverage", covered, len(texts)))),
 				list,
-			),
-		}),
+			))),
 		// Suggestions surface above the Mermaid diagram (C38): users discover AI-suggested
 		// rules before scrolling through the precedence chain (which is a power-user view).
-		suggestCard,
+		If(len(suggestions) > 0, rptTile("rules-suggest", "1 / span 4", suggestCard)),
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged (C70/C64).
-		If(len(rs) > 1, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("rules.orderTitle"),
-			Body: Fragment(
+		If(len(rs) > 1, rptTile("rules-order", "1 / span 4",
+			rptSection("sec-rules-order", uistate.T("rules.orderTitle"), nil, Fragment(
 				P(css.Class("muted"), uistate.T("rules.orderHint")),
 				uiw.Mermaid(uiw.MermaidProps{
 					Source: mermaid.FromRules(rs, func(id string) string { return catName[id] }),
 					Label:  uistate.T("rules.precedenceLabel"),
 				}),
-			),
-		})),
+			)))),
 	)
 }
 
@@ -275,16 +330,6 @@ func validateRuleInput(match, categoryID string) string {
 		return "rules.categoryRequired"
 	}
 	return ""
-}
-
-// categoryOptions builds <option>s for a category picker (a leading "choose"
-// placeholder, then every category by name), marking selected as current.
-func categoryOptions(cats []domain.Category, selected string) []ui.Node {
-	opts := []ui.Node{Option(Value(""), SelectedIf(selected == ""), uistate.T("rules.chooseCategory"))}
-	for _, c := range cats {
-		opts = append(opts, Option(Value(c.ID), SelectedIf(selected == c.ID), c.Name))
-	}
-	return opts
 }
 
 type suggestionRowProps struct {
@@ -318,6 +363,7 @@ type ruleRowProps struct {
 	CategoryName   string
 	Warning        string // non-empty when this rule never fires (shadowed)
 	MatchCount     int    // how many existing transactions this rule's phrase hits
+	MaxMatchCount  int    // the heaviest rule's count — anchors the weight bar
 	ShowMatchCount bool   // whether to show the count (there are transactions to count)
 	OnDelete       func(string)
 	OnSave         func(id, match, category, tags, renameDesc string) // C102: renameDesc rewrites description on match
@@ -397,6 +443,23 @@ func RuleRow(props ruleRowProps) ui.Node {
 	if r.RenameDesc != "" {
 		meta += " · " + uistate.T("rules.renameDescMeta", r.RenameDesc)
 	}
+
+	// The rule's weight: how many transactions its phrase catches, as a figure
+	// column + a share bar against the heaviest rule.
+	var bar ui.Node = Fragment()
+	if props.ShowMatchCount && props.MaxMatchCount > 0 && props.MatchCount > 0 {
+		pct := props.MatchCount * 100 / props.MaxMatchCount
+		bar = Div(css.Class("share-bar", "share-bar-thin"),
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+	}
+	var figure ui.Node = Fragment()
+	if props.ShowMatchCount {
+		figure = Div(css.Class("rule-figure"),
+			Span(css.Class("rule-figure-n"), plural(props.MatchCount, "transaction")),
+			Span(css.Class("rule-figure-sub"), uistate.T("rules.caughtSub")),
+		)
+	}
+
 	return Div(css.Class("row"), Attr("draggable", "true"),
 		OnDragStart(func() {
 			if props.OnDragStart != nil {
@@ -411,12 +474,22 @@ func RuleRow(props ruleRowProps) ui.Node {
 		})),
 		Span(css.Class("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), uistate.T("rules.matchLabel", r.Match)),
+			Span(css.Class("row-desc"), Span(css.Class("rule-match"), uistate.T("rules.matchLabel", r.Match))),
 			Span(css.Class("row-meta"), meta),
-			If(props.ShowMatchCount, Span(css.Class("row-meta"), uistate.T("rules.matchCountMeta", plural(props.MatchCount, "transaction")))),
 			If(props.Warning != "", Span(css.Class("row-meta", tw.TextWarn), props.Warning)),
+			bar,
 		),
+		figure,
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("rules.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("rules.deleteTitle")), Title(uistate.T("rules.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		uiw.KebabMenu(uiw.KebabMenuProps{
+			ID:           "rule-menu-" + r.ID,
+			AriaLabel:    uistate.T("rules.menuAria"),
+			ToggleTestID: "rule-menu-btn-" + r.ID,
+			Items: []ui.Node{
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "rule-delete-"+r.ID), Attr("aria-label", uistate.T("rules.deleteTitle")),
+					Title(uistate.T("rules.deleteTitle")), OnClick(del), uistate.T("rules.deleteTitle")),
+			},
+		}),
 	)
 }

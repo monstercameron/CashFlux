@@ -32,6 +32,7 @@ func Register() {
 	registerWorkflowsSurface()
 	registerHouseholdSurface()
 	registerCategoriesSurface()
+	registerRulesSurface()
 	inject(Build())
 }
 
