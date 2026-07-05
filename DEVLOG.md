@@ -1,3 +1,22 @@
+## 2026-07-04 — /categories: the taxonomy becomes a ledger
+
+Second Data & People page. The old page listed the taxonomy but told you nothing about MONEY —
+33 rows of "Expense · N transactions" with the actual magnitudes locked away on /reports. The
+understand-language fix: put this period's figures ON the taxonomy. Hero = total spent this
+period + a takeaway naming the leader and the unfiled remainder (danger chip when > 0 — the
+one number a taxonomy page owes you is "how much of my money escapes it"). Each row gains its
+period amount + a share bar tinted the category's own color, so the ledger doubles as the
+legend for every chart that uses those hues. Figures ride the same reports.* calls as /reports
+— one computation path, no disagreement.
+
+Small real bug caught while porting: the collapse chevron's expanded/collapsed ternary
+assigned ChevronRight on BOTH branches — the toggle never visually flipped. Deductible was
+also invisible outside the edit form; it's a row tag now.
+
+Kebab conversion note (applies to the remaining pages): keep Edit visible (e2e clicks
+`button[title*="Edit"]` inside `.row`), keep chips/testids at rest, move destructive/secondary
+verbs behind the standard ⋯ menu with `<page>-menu-btn-<id>` / delete-item testids.
+
 ## 2026-07-04 — /household joins the Understand family: the people ledger
 
 First of the Data & People pages (Cam: "use more of the design elements from the understand

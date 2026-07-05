@@ -5,13 +5,18 @@
 package screens
 
 import (
+	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -48,8 +53,12 @@ func categoryMapGrid(roots []categorytree.Node) ui.Node {
 	return Div(groups...)
 }
 
-// Categories manages income and expense categories: add, list (grouped by kind),
-// and per-row delete.
+// Categories manages income and expense categories, presented in the
+// Understand-surface language: a hero tile (this period's filed spending, the
+// taxonomy figure chips, and a plain-English takeaway naming the leading
+// category), the at-a-glance map, then the two tree ledgers whose rows carry
+// this-period figures with category-tinted share bars. Add, inline edit,
+// collapse, drill-to-transactions, and reassign-before-delete all preserved.
 func Categories() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -58,6 +67,7 @@ func Categories() ui.Node {
 
 	rev := state.UseAtom("rev:categories", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
+	_ = uistate.UseDataRevision().Get()
 
 	errMsg := ui.UseState("")
 	reassignID := ui.UseState("") // category awaiting reassignment before delete
@@ -198,16 +208,116 @@ func Categories() ui.Node {
 		collapsed.Set(next)
 	}
 
+	// ── This period's figures — same computation paths as /reports. ────────────
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
+	pr := uistate.UsePrefs().Get()
+
+	spendByCat := map[string]int64{}
+	var totalSpend, unfiledSpend, maxSpend int64
+	var topSpendID string
+	if rows, err := reports.SpendingByCategory(app.Transactions(), periodStart, periodEnd, false, time.Time{}, time.Time{}, rates); err == nil {
+		for _, r := range rows {
+			spendByCat[r.CategoryID] = r.Amount
+			totalSpend += r.Amount
+			if r.CategoryID == "" {
+				unfiledSpend = r.Amount
+				continue
+			}
+			if r.Amount > maxSpend {
+				maxSpend, topSpendID = r.Amount, r.CategoryID
+			}
+		}
+	}
+	incomeByCat := map[string]int64{}
+	var maxIncome int64
+	if rows, err := reports.IncomeByCategory(app.Transactions(), periodStart, periodEnd, rates); err == nil {
+		for _, r := range rows {
+			incomeByCat[r.CategoryID] = r.Amount
+			if r.CategoryID != "" && r.Amount > maxIncome {
+				maxIncome = r.Amount
+			}
+		}
+	}
+
+	deductibleCount := 0
+	for _, c := range cats {
+		if c.Deductible {
+			deductibleCount++
+		}
+	}
+
+	// ── Hero: filed spending, taxonomy chips, and the takeaway. ────────────────
+	eyebrow := uistate.T("categories.countWord", len(cats)) + " · " +
+		pr.FormatDate(periodStart) + " – " + pr.FormatDate(periodEnd)
+	chips := []ui.Node{
+		rptChip(uistate.T("categories.chipExpense"), fmt.Sprintf("%d", len(expenseList)), ""),
+		rptChip(uistate.T("categories.chipIncome"), fmt.Sprintf("%d", len(incomeList)), ""),
+	}
+	if deductibleCount > 0 {
+		chips = append(chips, rptChip(uistate.T("categories.chipDeduct"), fmt.Sprintf("%d", deductibleCount), ""))
+	}
+	if unfiledSpend > 0 {
+		chips = append(chips, rptChip(uistate.T("categories.chipUnfiled"), fmtMoney(money.New(unfiledSpend, base)), rptToneCls("neg")))
+	}
+
+	takeaway := uistate.T("cats.quietTake")
+	if totalSpend > 0 {
+		if top, ok := catByID[topSpendID]; ok {
+			takeaway = uistate.T("cats.leadTake", top.Name)
+		} else {
+			takeaway = ""
+		}
+		if unfiledSpend > 0 {
+			takeaway = strings.TrimSpace(takeaway + " " + uistate.T("cats.unfiledClause", fmtMoney(money.New(unfiledSpend, base))))
+		} else if takeaway != "" {
+			takeaway = takeaway + " " + uistate.T("cats.filedClause")
+		}
+	}
+
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-cats-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), eyebrow),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("categories.heroLabel")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-countup", ""), fmtMoney(money.New(totalSpend, base))),
+			),
+		),
+		Div(css.Class("debt-chips"), chips),
+		If(takeaway != "", P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "cats-takeaway"), takeaway)),
+	)
+	heroTile := rptTile("cats-hero", "1 / span 4", rptSection("", uistate.T("categories.heroTitle"), nil, heroBody))
+
 	renderFlat := func(f categorytree.Flat) ui.Node {
+		catID := f.Category.ID
+		amt, hasAmt := spendByCat[catID], false
+		maxAmt := maxSpend
+		sub := uistate.T("categories.spentSub")
+		if f.Category.Kind == domain.KindIncome {
+			amt, maxAmt, sub = incomeByCat[catID], maxIncome, uistate.T("categories.earnedSub")
+		}
+		hasAmt = amt > 0
+		pct := 0
+		if maxAmt > 0 {
+			pct = int(amt * 100 / maxAmt)
+		}
 		return ui.CreateElement(CategoryRow, categoryRowProps{
 			Category:      f.Category,
 			Depth:         f.Depth,
 			AllCategories: cats,
-			TxnCount:      txnByCat[f.Category.ID],
-			HasChildren:   hasChildrenSet[f.Category.ID],
-			Collapsed:     collapsed.Get()[f.Category.ID],
+			TxnCount:      txnByCat[catID],
+			HasChildren:   hasChildrenSet[catID],
+			Collapsed:     collapsed.Get()[catID],
 			IsChild:       f.Depth > 0,
-			IsZeroUsage:   txnByCat[f.Category.ID] == 0,
+			IsZeroUsage:   txnByCat[catID] == 0,
+			Amount:        money.New(amt, base),
+			AmountSub:     sub,
+			HasAmount:     hasAmt,
+			SharePct:      pct,
 			OnView:        viewTxns,
 			OnDelete:      deleteCat,
 			OnSave:        saveCat,
@@ -230,7 +340,7 @@ func Categories() ui.Node {
 		})
 		return flats
 	}
-	// sortToggleBtn renders the sort-by-usage toggle in a card header (GI2).
+	// sortToggleBtn renders the sort-by-usage toggle in a section header (GI2).
 	sortToggleBtn := func() ui.Node {
 		label := "Sort by usage"
 		if sortByUsage.Get() {
@@ -255,17 +365,15 @@ func Categories() ui.Node {
 			}
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
 		}
-		reassignPanel = uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("common.reassignTitle"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
-				Form(css.Class("form-grid"), OnSubmit(confirmReassign),
-					Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
-					Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
-				),
+		reassignPanel = Div(css.Class("rpt-headsup", tw.Mb2),
+			H3(css.Class(tw.Mb1), uistate.T("common.reassignTitle")),
+			P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
+			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
-		})
+		)
 	}
 
 	// Resolve the current flat lists once (respects sort-by-usage toggle).
@@ -278,38 +386,36 @@ func Categories() ui.Node {
 		incomeFlats = visibleFlats(categorytree.Flatten(incomeList), categorytree.VisibleUnderCollapsed(incomeList, collapsed.Get()))
 	}
 
-	// catTreeRows adapts a keyed tree list to the EntityListSection Rows slot:
-	// nil when empty (so the EmptyState CTA renders), else the MapKeyed list.
-	catTreeRows := func(flats []categorytree.Flat, render func(categorytree.Flat) ui.Node) []ui.Node {
+	// catTreeBody adapts a keyed tree list to a section body: the EmptyState CTA
+	// when the kind has no categories yet, else the .rows ledger.
+	catTreeBody := func(flats []categorytree.Flat, emptyMsg, emptyCTA string) ui.Node {
 		if len(flats) == 0 {
-			return nil
+			return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: emptyMsg, CTALabel: emptyCTA, AddTarget: "category"})
 		}
-		return MapKeyed(flats, flatKey, render)
+		return hhRowsList(MapKeyed(flats, flatKey, renderFlat))
 	}
 
-	return Div(
-		reassignPanel,
-		// Visual category map (GI2): moved first so it's visible on arrival
-		// without scrolling past the full expense/income lists (C70/C63 tree view).
-		If(len(cats) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("categories.mapTitle"),
-			Body:  categoryMapGrid(categorytree.Build(cats)),
-		})),
-		// The two tree lists use the primitive's Rows slot (nil when empty so the
-		// EmptyState CTA renders) instead of a hand-rolled Div(.rows) scaffold.
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title:        uistate.T("categories.expenseTitle"),
-			HeaderAction: Fragment(sortToggleBtn(), addCatBtn()),
-			Rows:         catTreeRows(expenseFlats, renderFlat),
-			EmptyState:   ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.expenseEmpty"), CTALabel: uistate.T("categories.addFirstExpense"), AddTarget: "category"}),
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title:        uistate.T("categories.incomeTitle"),
-			HeaderAction: addCatBtn(),
-			Rows:         catTreeRows(incomeFlats, renderFlat),
-			EmptyState:   ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("categories.incomeEmpty"), CTALabel: uistate.T("categories.addFirstIncome"), AddTarget: "category"}),
-		}),
-	)
+	tiles := []any{css.Class("bento bento-cats"),
+		heroTile,
+		If(reassignID.Get() != "", rptTile("cats-reassign", "1 / span 4", reassignPanel)),
+		If(errMsg.Get() != "", rptTile("cats-err", "1 / span 4", P(css.Class("notice-danger"), errMsg.Get()))),
+		// Visual category map (GI2): visible on arrival without scrolling past the
+		// full expense/income ledgers (C70/C63 tree view).
+		If(len(cats) > 0, rptTile("cats-map", "1 / span 4",
+			rptSection("sec-cats-map", uistate.T("categories.mapTitle"), nil, Fragment(
+				P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), uistate.T("categories.mapTake")),
+				categoryMapGrid(categorytree.Build(cats)),
+			)))),
+		rptTile("cats-expense", "1 / span 4",
+			rptSection("sec-cats-expense", uistate.T("categories.expenseTitle"),
+				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), sortToggleBtn(), addCatBtn()),
+				catTreeBody(expenseFlats, uistate.T("categories.expenseEmpty"), uistate.T("categories.addFirstExpense")))),
+		rptTile("cats-income", "1 / span 4",
+			rptSection("sec-cats-income", uistate.T("categories.incomeTitle"),
+				addCatBtn(),
+				catTreeBody(incomeFlats, uistate.T("categories.incomeEmpty"), uistate.T("categories.addFirstIncome")))),
+	}
+	return Div(tiles...)
 }
 
 type categoryRowProps struct {
@@ -321,10 +427,15 @@ type categoryRowProps struct {
 	Collapsed     bool              // true when this category's children are hidden
 	IsChild       bool              // true when depth > 0 (sub-category nesting cue, GI2)
 	IsZeroUsage   bool              // true when TxnCount == 0 (dim treatment, GI2)
-	OnView        func(string)      // drill into Transactions filtered by category
-	OnDelete      func(string)
-	OnSave        func(id, name, kind, parent, color string, deductible bool)
-	OnToggle      func(id string) // toggle collapse/expand for this category
+	// This-period figure: spend for expense categories, income for income ones.
+	Amount    money.Money
+	AmountSub string // "spent this period" / "earned this period"
+	HasAmount bool   // false hides the figure column (nothing this period)
+	SharePct  int    // share of the largest same-kind category (0–100)
+	OnView    func(string) // drill into Transactions filtered by category
+	OnDelete  func(string)
+	OnSave    func(id, name, kind, parent, color string, deductible bool)
+	OnToggle  func(id string) // toggle collapse/expand for this category
 }
 
 // visibleFlats filters a pre-flattened category list to only those entries whose
@@ -341,8 +452,12 @@ func visibleFlats(flats []categorytree.Flat, visible map[string]bool) []category
 	return out
 }
 
-// CategoryRow is a per-category row. It can be edited inline (name + kind). All
-// hooks are declared unconditionally so the edit toggle never reorders them.
+// CategoryRow is a per-category ledger row: swatch + collapse toggle + name
+// (indented by depth) with the usage drill and deductible tag, a this-period
+// figure with a category-tinted share bar, then a visible Edit and the ⋯ menu
+// (view transactions / delete). It can be edited inline (name, kind, parent,
+// color, deductible). All hooks are declared unconditionally so the edit
+// toggle never reorders them.
 func CategoryRow(props categoryRowProps) ui.Node {
 	c := props.Category
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(c.ID) }))
@@ -451,18 +566,12 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		descStyle["border-left"] = "2px solid var(--border, #2a2a2a)"
 		descStyle["margin-left"] = "2px"
 	}
-	kindLabel := uistate.T("category.expense")
-	if c.Kind == domain.KindIncome {
-		kindLabel = uistate.T("category.income")
-	}
 	// Chevron toggle: shown for parent categories; a spacer aligns leaf rows.
 	var toggleBtn ui.Node
 	if props.HasChildren {
-		chevronIcon := icon.ChevronRight
+		chevronIcon := icon.ChevronDown
 		if props.Collapsed {
 			chevronIcon = icon.ChevronRight
-		} else {
-			chevronIcon = icon.ChevronDown
 		}
 		ariaLabel := uistate.T("categories.collapseTitle", c.Name)
 		if props.Collapsed {
@@ -486,6 +595,45 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		toggleBtn = Span(Style(map[string]string{"display": "inline-block", "width": "1.5rem", "flex-shrink": "0"}))
 	}
 
+	// The this-period share bar, tinted with the category's own color so the
+	// ledger doubles as a legend for the charts that use these hues.
+	var bar ui.Node = Fragment()
+	if props.HasAmount && props.SharePct > 0 {
+		bar = Div(css.Class("share-bar", "share-bar-thin"),
+			Div(css.Class("share-bar-fill"), Style(map[string]string{
+				"width":      fmt.Sprintf("%d%%", props.SharePct),
+				"background": catColor(c.Color),
+			})))
+	}
+	var figure ui.Node = Fragment()
+	if props.HasAmount {
+		figure = Div(css.Class("cat-figure"),
+			Span(css.Class("amount"), fmtMoney(props.Amount)),
+			Span(css.Class("cat-figure-sub"), props.AmountSub),
+		)
+	}
+
+	// The usage drill + deductible tag as the quiet meta line.
+	metaBits := []any{css.Class("row-meta")}
+	if props.TxnCount > 0 {
+		metaBits = append(metaBits, Button(css.Class("btn-link cat-usage"), Type("button"), Title(uistate.T("categories.viewTxnsTitle")), OnClick(view), Text(plural(props.TxnCount, "transaction"))))
+	} else {
+		metaBits = append(metaBits, Span(css.Class(tw.TextFaint), Text(uistate.T("categories.noTransactions"))))
+	}
+	if c.Deductible {
+		metaBits = append(metaBits, Span(css.Class("cat-tag"), uistate.T("categories.deductTag")))
+	}
+
+	// The ⋯ overflow menu: view transactions + delete (reassign guard intact).
+	menuItems := []ui.Node{}
+	if props.TxnCount > 0 {
+		menuItems = append(menuItems, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "cat-view-"+c.ID), OnClick(view), uistate.T("categories.viewTxnsTitle")))
+	}
+	menuItems = append(menuItems, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		Attr("data-testid", "cat-delete-"+c.ID), Attr("aria-label", uistate.T("categories.deleteTitle")),
+		Title(uistate.T("categories.deleteTitle")), OnClick(del), uistate.T("categories.deleteTitle")))
+
 	// Build row class: base "row" + optional child/zero-usage modifiers (GI2).
 	rowClass := "row"
 	if props.IsChild {
@@ -499,19 +647,17 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		toggleBtn,
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), Style(descStyle), c.Name),
-			Span(css.Class("row-meta"),
-				Text(kindLabel),
-				Text(" · "),
-				// Per-row usage (C63): show how many transactions are filed under
-				// this category, and drill into Transactions filtered by it when
-				// there are any (matches the Accounts/Members drill pattern).
-				IfElse(props.TxnCount > 0,
-					Button(css.Class("btn-link cat-usage"), Type("button"), Title(uistate.T("categories.viewTxnsTitle")), OnClick(view), Text(plural(props.TxnCount, "transaction"))),
-					Span(css.Class(tw.TextFaint), Text(uistate.T("categories.noTransactions")))),
-			),
+			Span(metaBits...),
+			bar,
 		),
+		figure,
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("categories.deleteTitle")), Title(uistate.T("categories.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		uiw.KebabMenu(uiw.KebabMenuProps{
+			ID:           "cat-menu-" + c.ID,
+			AriaLabel:    uistate.T("categories.menuAria"),
+			ToggleTestID: "cat-menu-btn-" + c.ID,
+			Items:        menuItems,
+		}),
 	)
 }
 
