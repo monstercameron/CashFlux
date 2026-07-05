@@ -1,3 +1,16 @@
+## 2026-07-05 — The five-year seed as a bug detector
+
+The demo critique's four HIGHs were all APP bugs the richer data exposed, which is the seed
+doing exactly its job. The best one: SMART-BL3 called a car payment missed that was plainly
+in the ledger — a timezone trap (UTC-midnight transaction stamps vs local-midnight due
+dates) that only fires when a payment lands exactly ON the due date, which the old 48-month
+seed never exercised and the new one does monthly. Second best: the in-flight July exposed
+the subscriptions share gauge dividing a full-month numerator by a five-day denominator
+(233%). The COBRA fix earned a real feature (Subscription.Lapsed — dead patterns get a
+quiet section instead of Remind-me buttons), and the side-hustle list turned out to have
+NEVER applied its tag: filter — invisible until a page actually depended on it. Also
+learned: innerText honors CSS text-transform — probe regexes must be case-insensitive.
+
 ## 2026-07-05 — Studio absorbs the Build group
 
 The hub was already built for this: StudioHub carries Formulas and Custom fields as

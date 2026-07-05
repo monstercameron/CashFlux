@@ -39,6 +39,23 @@ type Subscription struct {
 	NextRenewal time.Time // Last advanced by one cadence interval
 }
 
+// Lapsed reports whether the pattern looks no longer active: now is more than
+// one full cadence interval (plus a two-week grace) past the expected next
+// renewal. A COBRA premium from a 2023 layoff must not surface as a live
+// subscription whose "next renewal" is years in the past.
+func (s Subscription) Lapsed(now time.Time) bool {
+	var interval time.Duration
+	switch s.Cadence {
+	case CadenceYearly:
+		interval = 366 * 24 * time.Hour
+	case CadenceWeekly:
+		interval = 7 * 24 * time.Hour
+	default:
+		interval = 31 * 24 * time.Hour
+	}
+	return now.After(s.NextRenewal.Add(interval + 14*24*time.Hour))
+}
+
 // MonthlyAmount normalizes the charge to a per-month figure (yearly /12, weekly
 // ×52/12), so subscriptions on different cadences can be compared and summed.
 func (s Subscription) MonthlyAmount() int64 {

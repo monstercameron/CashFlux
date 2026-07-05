@@ -214,6 +214,25 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 	}
 
+	// A detected pattern whose renewal is long past isn't an ACTIVE
+	// subscription — the 2023 COBRA premium must not lead the list with
+	// "next Jun 4, 2023" and Remind-me buttons. Lapsed patterns drop out of
+	// the list, the counts, and the money totals, and get their own quiet
+	// section at the bottom.
+	var lapsedSubs []subscriptions.Subscription
+	{
+		now := time.Now()
+		live := make([]subscriptions.Subscription, 0, len(subs))
+		for _, s := range subs {
+			if s.Lapsed(now) {
+				lapsedSubs = append(lapsedSubs, s)
+			} else {
+				live = append(live, s)
+			}
+		}
+		subs = live
+	}
+
 	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
 	soon := subscriptions.UpcomingRenewals(subs, 7, time.Now())
 
@@ -486,12 +505,22 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		},
 	)
 
-	// Subscriptions as a share of this month's spending — a "how much of my
-	// outflow is recurring?" gauge, shown only when there's spending to compare to.
+	// Subscriptions as a share of a TYPICAL month's spending — a "how much of
+	// my outflow is recurring?" gauge. Month-to-date is an unfair denominator
+	// early in the month (on the 5th the ratio read 233%), so compare against
+	// the average of the last three full months instead.
 	shareStat := Fragment()
-	ms, me := dateutil.MonthRange(time.Now())
-	if _, expense, err := ledger.PeriodTotals(app.Transactions(), ms, me, rates); err == nil && expense.Amount > 0 {
-		pct := subscriptions.MonthlyTotal(subs) * 100 / expense.Amount
+	var trailingExpense int64
+	trailingMonths := 0
+	for k := 1; k <= 3; k++ {
+		ms, me := dateutil.MonthRange(time.Now().AddDate(0, -k, 0))
+		if _, expense, err := ledger.PeriodTotals(app.Transactions(), ms, me, rates); err == nil && expense.Amount > 0 {
+			trailingExpense += expense.Amount
+			trailingMonths++
+		}
+	}
+	if trailingMonths > 0 {
+		pct := subscriptions.MonthlyTotal(subs) * 100 * int64(trailingMonths) / trailingExpense
 		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", pct), "")
 	}
 
@@ -631,6 +660,22 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 							Base:       base,
 							OnUnignore: doUnignore,
 						})
+					},
+				)),
+			),
+		))),
+		// Lapsed patterns: recognized as past subscriptions, kept out of the live
+		// list/totals, shown quietly for the record (e.g. the layoff-era COBRA).
+		If(len(lapsedSubs) > 0, recurTile("subs-lapsed", recurSection("sec-subs-lapsed", uistate.T("subs.lapsedTitle"), nil,
+			Fragment(
+				P(css.Class("row-meta"), uistate.T("subs.lapsedDesc")),
+				Div(css.Class("rows rec-cardrows"), MapKeyed(lapsedSubs,
+					func(s subscriptions.Subscription) any { return "lapsed|" + s.Name },
+					func(s subscriptions.Subscription) ui.Node {
+						return Div(css.Class("row"),
+							Span(css.Class("row-desc", tw.Truncate), s.Name),
+							Span(css.Class("row-meta"), uistate.T("subs.lapsedLast", pr.FormatDate(s.Last))),
+						)
 					},
 				)),
 			),

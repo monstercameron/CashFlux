@@ -638,13 +638,17 @@ func totalLiquidBase(in Input) int64 {
 }
 
 // paymentInWindow reports whether any transaction touches the account (directly
-// or as a transfer counterpart) within [start, end].
+// or as a transfer counterpart) within [start, end], at DAY granularity:
+// transaction dates are UTC-midnight stamps while due dates are built in local
+// time, so an instant comparison drops a payment made ON the due date whenever
+// the local zone is behind UTC — which read as "Car Loan may have been missed"
+// against a ledger that plainly held the Jun 15 payment.
 func paymentInWindow(txns []domain.Transaction, accountID string, start, end time.Time) bool {
 	for _, t := range txns {
 		if t.AccountID != accountID && t.TransferAccountID != accountID {
 			continue
 		}
-		if t.Date.Before(start) || t.Date.After(end) {
+		if dateutil.DaysBetween(start, t.Date) < 0 || dateutil.DaysBetween(t.Date, end) < 0 {
 			continue
 		}
 		return true

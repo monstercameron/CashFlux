@@ -7,6 +7,7 @@ package screens
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -558,11 +559,31 @@ func cpKPIBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 // (source selection, newest-first ordering, formatting, cap) is computed by the
 // pure internal/widgetdata package; this just renders the rows.
 func listBody(w domain.PageWidget, ctx pageCtx) ui.Node {
-	rows, ok := widgetdata.ListRows(w.Binding.Source, widgetdata.Data{
+	data := widgetdata.Data{
 		Transactions: ctx.App.Transactions(), Accounts: ctx.App.Accounts(),
 		Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
 		Recurring: ctx.App.Recurring(), Rates: ctx.Rates, Now: time.Now(),
-	}, widgetdata.DefaultListRows)
+	}
+	// Apply the binding's tag filter — the one filter form the page widgets
+	// use ("tag:business" keeps only transactions carrying that tag). It was
+	// silently ignored, so the "Side projects & business" list showed the same
+	// generic feed as the dashboard.
+	if w.Binding.Source == "transactions" {
+		if tag, ok := strings.CutPrefix(strings.TrimSpace(w.Binding.Filter), "tag:"); ok && strings.TrimSpace(tag) != "" {
+			tag = strings.TrimSpace(tag)
+			filtered := make([]domain.Transaction, 0, len(data.Transactions))
+			for _, t := range data.Transactions {
+				for _, tg := range t.Tags {
+					if strings.EqualFold(tg, tag) {
+						filtered = append(filtered, t)
+						break
+					}
+				}
+			}
+			data.Transactions = filtered
+		}
+	}
+	rows, ok := widgetdata.ListRows(w.Binding.Source, data, widgetdata.DefaultListRows)
 	if !ok {
 		return P(css.Class("empty"), uistate.T("pages.pickSource"))
 	}
