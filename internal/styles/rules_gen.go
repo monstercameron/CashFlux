@@ -801,6 +801,9 @@ func registerGenerated() {
 	rule(".tb-title",
 		marginRight("auto"),
 		minWidth("0"),
+		// Shrink LAST — the page title (e.g. "Reports") was truncating to "Re…"
+		// at ~1100px because the scope/period context yielded no space first.
+		flexShrink("1"),
 	)
 	rule(".tb-context, .tb-actions",
 		display("inline-flex"),
@@ -808,6 +811,10 @@ func registerGenerated() {
 	)
 	rule(".tb-context",
 		gap(".5rem"),
+		// Yield width before the page title does (its member/period controls can
+		// compress); keeps short titles from over-truncating on 13" laptops.
+		minWidth("0"),
+		flexShrink("4"),
 	)
 	rule(".tb-actions",
 		gap(".15rem"),

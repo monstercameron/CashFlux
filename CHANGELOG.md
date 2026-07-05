@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The money-flow Sankey is legible in dark theme (v1.0, 2026-07-05):** it used Mermaid's stock "dark" theme, which darkened the whole palette so the flow bands rendered near-black on the dark card. It now keeps the vivid multi-colour "default" palette in both themes and, in dark mode, overrides only the label/value text to a light colour (and the canvas to transparent) — the bands stay colourful and the numbers read.
+- **The page title stops over-truncating at ~1100px (v1.0, 2026-07-05):** "Reports" clipped to "Re…" on 13" laptops because the top bar's scope/period controls yielded no space before the title. The context group now shrinks first (`min-width:0` + higher `flex-shrink`), so single-word titles like "Notifications"/"Investments" render in full with no top-bar overflow.
+
+
+### Fixed
 - **The /members roster refreshes after an edit (v1.0, 2026-07-05):** editing a member from the standalone /members page saved correctly but the row kept showing the old value until navigating away and back — `Members()` never subscribed to the shared data revision (the /household hub did, which is why it updated). Added the subscription, matching /categories and /rules.
 - **Split "by weight" no longer breaks the row (v1.0, 2026-07-05):** the per-member weight input had no width cap and stretched across the whole row, wrapping member names mid-name. Capped at 8rem (matching the split editor's amount field).
 - **Member reassign-before-delete count is honest (v1.0, 2026-07-05):** the dialog read "'Marcus Hartley' owns 2531 account(s), budget(s), or goal(s)" — the count includes tagged transactions (correctly reassigned), which the copy never mentioned. Reworded to "owns or is tagged on N account(s), budget(s), goal(s), or transaction(s)."

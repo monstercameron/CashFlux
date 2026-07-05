@@ -10,34 +10,43 @@
   var seq = 0;
   var lastTheme = null;
 
-  // Match the diagram theme to the app theme (C69/C70): a light shell sets
-  // data-theme="light" on <html>, where Mermaid's "default" (light) theme reads
-  // far better than dark-on-light. Re-initialise when the theme changes so a
-  // diagram rendered after a theme switch picks up the new palette.
-  function mermaidTheme() {
-    var t = document.documentElement.getAttribute("data-theme");
-    return t === "light" ? "default" : "dark";
+  // Match the diagram to the app theme (C69/C70). Mermaid's stock "dark" theme
+  // DARKENS the whole palette, so the money-flow Sankey's flow bands rendered
+  // near-black on a dark card (v1.0 QA finding). Instead we keep the vivid
+  // multi-colour "default" palette in BOTH themes and, in dark mode, override
+  // only the label/value text to a light colour via themeCSS — so the bands stay
+  // legible and the numbers read on the dark surface. Re-initialise when the
+  // shell theme (or the Sankey value prefix) changes.
+  function shellIsDark() {
+    return document.documentElement.getAttribute("data-theme") !== "light";
   }
 
   var lastPrefix = null;
 
   function ensureInit(valuePrefix) {
     if (!window.mermaid) return false;
-    var theme = mermaidTheme();
+    var dark = shellIsDark();
+    var themeKey = dark ? "dark" : "light";
     var prefix = valuePrefix || "";
-    // Re-initialise when EITHER the theme OR the Sankey value prefix changes. The
-    // Go side passes the base-currency symbol ("$"/"€"/"£") so the money-flow
-    // Sankey reads "Income $4068" rather than a bare number; it's per-render config
-    // (not hardcoded) so non-USD households get the correct symbol.
-    if (theme !== lastTheme || prefix !== lastPrefix) {
-      window.mermaid.initialize({
+    // The Go side passes the base-currency symbol ("$"/"€"/"£") so the money-flow
+    // Sankey reads "Income $4068" rather than a bare number; per-render config.
+    if (themeKey !== lastTheme || prefix !== lastPrefix) {
+      var cfg = {
         startOnLoad: false,
         securityLevel: "strict",
-        theme: theme,
+        theme: "default", // vivid multi-colour bands in both themes
         flowchart: { useMaxWidth: true, htmlLabels: false },
         sankey: { useMaxWidth: true, prefix: prefix, showValues: true },
-      });
-      lastTheme = theme;
+      };
+      if (dark) {
+        // Light labels/values + transparent canvas so the "default" palette's
+        // dark text doesn't vanish on the dark card.
+        cfg.themeCSS =
+          "svg{background:transparent!important}" +
+          "text,.sankey-node text,.node-label,.messageText,tspan{fill:#e6e6e6!important}";
+      }
+      window.mermaid.initialize(cfg);
+      lastTheme = themeKey;
       lastPrefix = prefix;
     }
     return true;
