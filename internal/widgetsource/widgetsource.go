@@ -14,6 +14,8 @@
 package widgetsource
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -317,5 +319,145 @@ func SpendingBreakdown(cats []domain.Category, txns []domain.Transaction, rates 
 		domain.Field{Name: "name", Type: domain.FieldString, Values: names},
 		domain.Field{Name: "amount", Type: domain.FieldMoney, Values: amounts},
 		domain.Field{Name: "percent", Type: domain.FieldPercent, Values: percents},
+	)
+}
+
+// TxnFilterMatcher parses a flow-series filter into a per-transaction
+// predicate. Three selector forms cover the household's own vocabulary:
+//
+//	tag:<tag>        — the transaction carries the tag (case-insensitive)
+//	cat:<id or name> — the category, by stable id or display name
+//	cf:<key>=<value> — a custom-field value on the transaction
+//
+// Transfers never match (they're money moving, not flow).
+func TxnFilterMatcher(filter string, cats []domain.Category) (func(domain.Transaction) bool, error) {
+	f := strings.TrimSpace(filter)
+	sel, arg, ok := strings.Cut(f, ":")
+	if !ok || strings.TrimSpace(arg) == "" {
+		return nil, fmt.Errorf("flow series: unsupported filter %q (want tag:, cat:, or cf:key=value)", filter)
+	}
+	arg = strings.TrimSpace(arg)
+	switch strings.ToLower(sel) {
+	case "tag":
+		return func(t domain.Transaction) bool {
+			if t.TransferAccountID != "" {
+				return false
+			}
+			for _, tg := range t.Tags {
+				if strings.EqualFold(tg, arg) {
+					return true
+				}
+			}
+			return false
+		}, nil
+	case "cat":
+		ids := map[string]bool{}
+		for _, c := range cats {
+			if c.ID == arg || strings.EqualFold(c.Name, arg) {
+				ids[c.ID] = true
+			}
+		}
+		if len(ids) == 0 {
+			ids[arg] = true // fall back to a literal id (cats may be absent in tests)
+		}
+		return func(t domain.Transaction) bool {
+			return t.TransferAccountID == "" && ids[t.CategoryID]
+		}, nil
+	case "cf":
+		key, want, ok := strings.Cut(arg, "=")
+		key, want = strings.TrimSpace(key), strings.TrimSpace(want)
+		if !ok || key == "" || want == "" {
+			return nil, fmt.Errorf("flow series: cf filter needs key=value, got %q", arg)
+		}
+		return func(t domain.Transaction) bool {
+			if t.TransferAccountID != "" || t.Custom == nil {
+				return false
+			}
+			v, has := t.Custom[key]
+			if !has {
+				return false
+			}
+			return strings.EqualFold(strings.TrimSpace(fmt.Sprint(v)), want)
+		}, nil
+	}
+	return nil, fmt.Errorf("flow series: unknown selector %q", sel)
+}
+
+// FilteredFlowSeries plots the matching transactions' monthly sums (base
+// currency, signed) for the trailing `months` months — the "graph MY tag /
+// category / custom value" series behind Metric=="flow".
+func FilteredFlowSeries(txns []domain.Transaction, rates currency.Rates, now time.Time, months int, match func(domain.Transaction) bool) domain.Frame {
+	if months < 1 {
+		months = 12
+	}
+	// End at the last COMPLETE month: a mid-month partial reads as a cliff to
+	// zero on a trend chart, which looks broken rather than honest.
+	start := dateutil.AddMonths(dateutil.MonthStart(now), -1)
+	var ts, values []any
+	for i := 0; i < months; i++ {
+		ms := dateutil.AddMonths(start, i-(months-1))
+		s, e := dateutil.MonthRange(ms)
+		var sum int64
+		for _, t := range txns {
+			if !match(t) || t.Date.Before(s) || !t.Date.Before(e) {
+				continue
+			}
+			conv, err := rates.ToBase(t.Amount)
+			if err != nil {
+				continue
+			}
+			sum += conv.Amount
+		}
+		ts = append(ts, float64(ms.Unix()))
+		values = append(values, sum)
+	}
+	return domain.NewFrame(
+		domain.Field{Name: "t", Type: domain.FieldNumber, Values: ts},
+		domain.Field{Name: "value", Type: domain.FieldMoney, Values: values},
+	)
+}
+
+// FormulaSeries plots a formula's value for each trailing month window — the
+// series behind Metric=="formula". eval receives each window's bounds and
+// returns the formula's value against that month's variable surface (ok=false
+// plots the month as zero rather than dropping it, keeping the x-axis dense).
+// format selects the value column's type: "percent", "number", or currency
+// (the default — values arrive in major units and are stored as minor).
+func FormulaSeries(now time.Time, months int, format, base string, eval func(start, end time.Time) (float64, bool)) domain.Frame {
+	if months < 1 {
+		months = 12
+	}
+	mul := 1.0
+	for i := 0; i < currency.Decimals(base); i++ {
+		mul *= 10
+	}
+	fieldType := domain.FieldMoney
+	switch format {
+	case "percent":
+		fieldType, mul = domain.FieldPercent, 1
+	case "number":
+		fieldType, mul = domain.FieldNumber, 1
+	}
+	// Same last-complete-month window as FilteredFlowSeries: a formula over a
+	// five-day partial month plots a misleading spike or cliff.
+	start := dateutil.AddMonths(dateutil.MonthStart(now), -1)
+	var ts, values []any
+	for i := 0; i < months; i++ {
+		ms := dateutil.AddMonths(start, i-(months-1))
+		s, e := dateutil.MonthRange(ms)
+		v, ok := eval(s, e)
+		if !ok {
+			v = 0
+		}
+		ts = append(ts, float64(ms.Unix()))
+		if fieldType == domain.FieldMoney {
+			values = append(values, int64(math.Round(v*mul)))
+		} else {
+			values = append(values, v)
+		}
+	}
+	return domain.NewFrame(
+		domain.Field{Name: "t", Type: domain.FieldNumber, Values: ts},
+		domain.Field{Name: "value", Type: fieldType, Values: values},
 	)
 }

@@ -123,9 +123,20 @@ type Source struct {
 }
 
 // SeriesSpec describes a windowed time series (e.g. net-worth over N months).
+// Beyond the built-in metrics ("networth", "cashflow"), two user-programmable
+// metrics graph the household's own vocabulary:
+//   - "formula": Expr is evaluated against the engine variable surface for
+//     EACH month window — any formula or molecule ("income - expense",
+//     "savings_rate") becomes a trend line.
+//   - "flow": Filter selects transactions ("tag:<tag>", "cat:<id or name>",
+//     or "cf:<key>=<value>" — a custom-field value) and each month plots
+//     their sum.
 type SeriesSpec struct {
-	Metric string `json:"metric"`           // which series (e.g. "networth")
+	Metric string `json:"metric"`           // networth | cashflow | formula | flow
 	Months int    `json:"months,omitempty"` // trailing window length
+	Expr   string `json:"expr,omitempty"`   // Metric=="formula": per-month formula
+	Filter string `json:"filter,omitempty"` // Metric=="flow": txn selector
+	Format string `json:"format,omitempty"` // formula output: currency (default) | percent | number
 }
 
 // TransformKind names a Frame→Frame operation.

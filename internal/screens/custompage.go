@@ -206,7 +206,9 @@ func customTile(props customTileProps) ui.Node {
 		title = widgetTypeLabel(w.Type)
 	}
 
-	// The header doubles as the drag handle for reordering.
+	// The header doubles as the drag handle for reordering. The tile actions
+	// (resize / edit / delete) live in the app-standard ⋯ menu — the old strip
+	// of always-visible glyph buttons (↔ ↕ ✎ ✕) read as dated chrome.
 	header := Div(css.Class("wh"),
 		Attr("draggable", "true"),
 		OnDragStart(func() {
@@ -222,22 +224,31 @@ func customTile(props customTileProps) ui.Node {
 		})),
 		Span(css.Class("grip", tw.CursorGrab), Attr("aria-label", uistate.T("custompage.dragReorder")), Attr("role", "button"), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		H2(title),
-		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeWidth")), Attr("aria-label", uistate.T("pages.resizeWidth")),
-			OnClick(func() {
-				if props.OnResizeW != nil {
-					props.OnResizeW()
-				}
-			}), "↔"),
-		Button(css.Class("gear-inline"), Type("button"), Title(uistate.T("pages.resizeHeight")), Attr("aria-label", uistate.T("pages.resizeHeight")),
-			OnClick(func() {
-				if props.OnResizeH != nil {
-					props.OnResizeH()
-				}
-			}), "↕"),
-		Button(css.Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.editWidget")), Title(uistate.T("pages.editWidget")),
-			OnClick(func() { editing.Set(!editing.Get()) }), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
-		Button(css.Class("gear-inline"), Type("button"), Attr("aria-label", uistate.T("pages.deleteWidget")), Title(uistate.T("pages.deleteWidget")),
-			OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		uiw.KebabMenu(uiw.KebabMenuProps{
+			ID:           "cpw-menu-" + w.ID,
+			ToggleTestID: "cpw-menu-btn-" + w.ID,
+			ToggleClass:  "gear-inline",
+			Items: []ui.Node{
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Title(uistate.T("pages.resizeWidth")), OnClick(func() {
+						if props.OnResizeW != nil {
+							props.OnResizeW()
+						}
+					}), uistate.T("pages.resizeWidth")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Title(uistate.T("pages.resizeHeight")), OnClick(func() {
+						if props.OnResizeH != nil {
+							props.OnResizeH()
+						}
+					}), uistate.T("pages.resizeHeight")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "cpw-edit-"+w.ID),
+					Title(uistate.T("pages.editWidget")), OnClick(func() { editing.Set(!editing.Get()) }), uistate.T("pages.editWidget")),
+				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "cpw-delete-"+w.ID),
+					Title(uistate.T("pages.deleteWidget")), OnClick(del), uistate.T("pages.deleteWidget")),
+			},
+		}),
 	)
 
 	var body ui.Node
@@ -492,6 +503,17 @@ func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
 		Accounts: app.Accounts(), Transactions: app.Transactions(),
 		Budgets: app.Budgets(), Categories: app.Categories(), Recurring: app.Recurring(),
 		Rates: ctx.Rates, Start: start, End: start.AddDate(0, 1, 0), Now: now,
+		// The per-month variable surface behind "formula" series charts: the
+		// same engineenv inputs the page's KPIs use, re-windowed per month.
+		MonthVars: func(s, e time.Time) map[string]float64 {
+			return engineenv.Vars(engineenv.Data{
+				Accounts: app.Accounts(), Transactions: app.Transactions(),
+				Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
+				Recurring: app.Recurring(), Categories: app.Categories(), Rates: ctx.Rates,
+				Now: now, PeriodStart: s, PeriodEnd: e,
+				CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
+			})
+		},
 	}
 }
 

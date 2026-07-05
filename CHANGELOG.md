@@ -6,6 +6,10 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Formula and custom-value series — the graphing primitives pages build from (2026-07-05):** Cam: "the custom pages aren't using formulas or custom values for the graphing… make it so we have graphing deps that you can build from." Two new declarative chart sources join the widget engine, composable from any WidgetSpec (pages, dashboard, the designer): **`formula` series** — any engine formula or molecule ("income - expense", "savings_rate", user molecules) evaluated once per trailing month against the full period-windowed variable surface, with currency/percent/number output formats — and **`flow` series** — monthly sums of the household's own selection: a tag (`tag:business`), a category by id or name (`cat:Online business`), or a **custom-field value** (`cf:project=Side hustle`), transfers excluded, both ending at the last complete month so a mid-month partial can't plot a misleading cliff. Both hosts supply the per-month variable surface (`DataCtx.MonthVars`). The showcase pages now graph on them: Priya's revenue and costs charts hydrate **live from her shop categories** (the static SVGs are gone), Marcus's side-project chart plots by the `project` custom field, and the Side-hustle page charts the household **savings-rate formula**. Fixed en route: the generic chart's percent axis treated 0–100 percent columns as fractions (a 60% savings rate charted as "6000%"); and the pages' tile chrome sheds the dated ↔ ↕ ✎ ✕ glyph strip for the app-standard ⋯ menu (resize/edit/delete, `cpw-menu-btn-<id>` testids). Series sources are table-tested (filter parsing, monthly sums, format handling).
+
+
 ### Fixed
 - **KPI money formatting accepts the documented token (2026-07-05):** the showcase pages' surplus/cash-flow KPIs rendered bare numbers ("4918.75") — `ScalarBind`'s docs said the format token was `money` while the engine only recognized `currency`. The seeded specs now say `currency`, the engine accepts `money` as an alias (so specs written from the docs format correctly), and the doc comment names the canonical token.
 

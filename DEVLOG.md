@@ -1,3 +1,17 @@
+## 2026-07-05 — Graphing deps: formula + flow series
+
+Cam's complaint was exact: the page charts were static SVG artifacts wearing chart costumes.
+The missing primitive was a SERIES source the user's own vocabulary can drive. Two additions
+cover the space: formula series (per-month evaluation of any engine formula/molecule — the
+host supplies DataCtx.MonthVars, a closure rebuilding the engineenv surface per window, so
+the engine stays pure and scope-agnostic) and flow series (monthly sums by tag / category /
+custom-field value, via one parsed matcher). Design notes: both series end at the last
+COMPLETE month — the in-flight July plotted as a $1,100→$0 cliff before that rule; and the
+percent-axis fix documents a convention (FieldPercent carries 0–100 everywhere; only the d3
+"~%" axis wants fractions — scale at the chart edge, not in sources). Per-month Vars
+rebuilds are O(months × txns) per hydration; fine for page mounts, worth memoizing if a
+dashboard ever hosts many formula charts.
+
 ## 2026-07-05 — The five-year seed as a bug detector
 
 The demo critique's four HIGHs were all APP bugs the richer data exposed, which is the seed

@@ -139,6 +139,17 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 		Recurring:    ctx.App.Recurring(),
 		Rates:        ctx.Rates,
 		Start:        ctx.Start, End: ctx.End, Now: time.Now(),
+		// The per-month variable surface behind "formula" series charts —
+		// scoped like the KPI tiles, re-windowed per month.
+		MonthVars: func(s, e time.Time) map[string]float64 {
+			return engineenv.Vars(engineenv.Data{
+				Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
+				Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
+				Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
+				Now: time.Now(), PeriodStart: s, PeriodEnd: e,
+				CustomDefs: ctx.App.CustomFieldDefs(), Molecules: ctx.App.Molecules(),
+			})
+		},
 	}
 }
 
@@ -245,8 +256,14 @@ func genericChartBody(fr domain.Frame, base string) ui.Node {
 		div *= 10
 	}
 	scale := func(v float64) float64 {
-		if valCol.Type == domain.FieldMoney {
+		switch valCol.Type {
+		case domain.FieldMoney:
 			return v / div
+		case domain.FieldPercent:
+			// Percent columns carry 0–100 (the convention every source and the
+			// row formatter use); the axis's d3 "~%" format expects a fraction —
+			// without this a 60% savings rate charted as "6000%".
+			return v / 100
 		}
 		return v
 	}

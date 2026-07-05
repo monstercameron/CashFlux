@@ -50,6 +50,12 @@ type DataCtx struct {
 	Rates        currency.Rates
 	Start, End   time.Time
 	Now          time.Time
+
+	// MonthVars, when set, builds the engine variable surface for an arbitrary
+	// month window — what lets a "formula" series evaluate any formula or
+	// molecule once per month. Supplied by the surface host (it owns scope and
+	// the engineenv inputs); hosts that leave it nil can't hydrate formula series.
+	MonthVars func(start, end time.Time) map[string]float64
 }
 
 // Scope is the evaluation context a KPI/template hydrates against: the numeric
@@ -269,6 +275,28 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 				months = 4
 			}
 			return widgetsource.CashFlowSeries(dc.Transactions, dc.Rates, dc.Now, months), nil
+		case "formula":
+			// A user formula/molecule evaluated once per trailing month —
+			// "income - expense", "savings_rate", a custom molecule: anything
+			// the variable surface can express becomes a trend line.
+			if s.Series.Expr == "" {
+				return domain.Frame{}, errors.New("formula series: no expression")
+			}
+			if dc.MonthVars == nil {
+				return domain.Frame{}, errors.New("formula series: host supplies no variable surface")
+			}
+			return widgetsource.FormulaSeries(dc.Now, s.Series.Months, s.Series.Format, dc.Base, func(start, end time.Time) (float64, bool) {
+				v, err := widgetspec.EvalKPI(s.Series.Expr, dc.MonthVars(start, end))
+				return v, err == nil
+			}), nil
+		case "flow":
+			// Monthly sums of the user's own selection — a tag, a category, or
+			// a custom-field value on the transactions.
+			match, err := widgetsource.TxnFilterMatcher(s.Series.Filter, dc.Categories)
+			if err != nil {
+				return domain.Frame{}, err
+			}
+			return widgetsource.FilteredFlowSeries(dc.Transactions, dc.Rates, dc.Now, s.Series.Months, match), nil
 		default:
 			return domain.Frame{}, fmt.Errorf("unknown series metric %q", s.Series.Metric)
 		}
