@@ -338,10 +338,11 @@ type RuleEditFormProps struct {
 	OnDone func()
 }
 
-// RuleEditForm edits a rule's match phrase, category, tags, and rename action.
-// It mutates the EXISTING rule, so precedence Order and structured Conditions
-// survive the edit — the old inline form rebuilt the rule from scratch and
-// silently dropped both.
+// RuleEditForm edits a rule's match phrase, category, tags, rename action, AND
+// its structured conditions (the same 3 bounded slots the add form offers,
+// seeded from the saved rule). It mutates the EXISTING rule, so precedence
+// Order survives the edit — the old inline form rebuilt the rule from scratch
+// and silently dropped both Order and Conditions.
 func RuleEditForm(props RuleEditFormProps) ui.Node {
 	app := appstate.Default
 	done := props.OnDone
@@ -369,12 +370,68 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
 	onRenameDesc := ui.UseEvent(func(v string) { renameDescS.Set(v) })
+
+	// C105: the 3 bounded condition slots, seeded from the saved rule (the modal
+	// mounts fresh per open, so useState initializers see the right rule). All
+	// hooks are declared unconditionally at stable positions.
+	seedCond := func(i int) rules.RuleCondition {
+		if i < len(r.Conditions) {
+			return r.Conditions[i]
+		}
+		return rules.RuleCondition{}
+	}
+	c1, c2, c3 := seedCond(0), seedCond(1), seedCond(2)
+	cond1Enabled := ui.UseState(c1.Field != "")
+	cond1Field := ui.UseState(string(c1.Field))
+	cond1Op := ui.UseState(string(c1.Op))
+	cond1Value := ui.UseState(c1.Value)
+	cond2Enabled := ui.UseState(c2.Field != "")
+	cond2Field := ui.UseState(string(c2.Field))
+	cond2Op := ui.UseState(string(c2.Op))
+	cond2Value := ui.UseState(c2.Value)
+	cond3Enabled := ui.UseState(c3.Field != "")
+	cond3Field := ui.UseState(string(c3.Field))
+	cond3Op := ui.UseState(string(c3.Op))
+	cond3Value := ui.UseState(c3.Value)
+	onCond1Enable := ui.UseEvent(func(e ui.Event) { cond1Enabled.Set(e.IsChecked()) })
+	onCond1Value := ui.UseEvent(func(v string) { cond1Value.Set(v) })
+	onCond2Enable := ui.UseEvent(func(e ui.Event) { cond2Enabled.Set(e.IsChecked()) })
+	onCond2Value := ui.UseEvent(func(v string) { cond2Value.Set(v) })
+	onCond3Enable := ui.UseEvent(func(e ui.Event) { cond3Enabled.Set(e.IsChecked()) })
+	onCond3Value := ui.UseEvent(func(v string) { cond3Value.Set(v) })
+
+	collectConditions := func() []rules.RuleCondition {
+		var conds []rules.RuleCondition
+		slots := [3]struct {
+			enabled bool
+			field   string
+			op      string
+			value   string
+		}{
+			{cond1Enabled.Get(), cond1Field.Get(), cond1Op.Get(), cond1Value.Get()},
+			{cond2Enabled.Get(), cond2Field.Get(), cond2Op.Get(), cond2Value.Get()},
+			{cond3Enabled.Get(), cond3Field.Get(), cond3Op.Get(), cond3Value.Get()},
+		}
+		for _, s := range slots {
+			if !s.enabled || s.field == "" || s.op == "" {
+				continue
+			}
+			conds = append(conds, rules.RuleCondition{
+				Field: rules.ConditionField(s.field),
+				Op:    rules.ConditionOp(s.op),
+				Value: strings.TrimSpace(s.value),
+			})
+		}
+		return conds
+	}
+
 	saveEdit := ui.UseEvent(Prevent(func() {
 		if app == nil || !found {
 			done()
 			return
 		}
-		if errKey := validateRuleInput(matchS.Get(), catS.Get(), len(r.Conditions) > 0); errKey != "" {
+		conds := collectConditions()
+		if errKey := validateRuleInput(matchS.Get(), catS.Get(), len(conds) > 0); errKey != "" {
 			errS.Set(uistate.T(errKey))
 			return
 		}
@@ -382,6 +439,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		r.SetCategoryID = catS.Get()
 		r.SetTags = textutil.CommaFields(tagsS.Get())
 		r.RenameDesc = strings.TrimSpace(renameDescS.Get())
+		r.Conditions = conds
 		if err := app.PutRule(r); err != nil {
 			errS.Set(err.Error())
 			return
@@ -415,7 +473,31 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		// description rewritten to this value (e.g. clean up garbled bank feed text).
 		labeledField(uistate.T("rules.renameDescFieldLabel"),
 			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), Value(renameDescS.Get()), OnInput(onRenameDesc))),
-		If(len(r.Conditions) > 0, P(css.Class("muted"), uistate.T("rules.editKeepsConditions", len(r.Conditions)))),
+		Fieldset(css.Class("cond-slots"),
+			Legend(uistate.T("rulecond.sectionLabel")),
+			P(css.Class("muted"), uistate.T("rulecond.overridesHint")),
+			condSlotRow(
+				uistate.T("rulecond.slot1"),
+				cond1Enabled.Get(), onCond1Enable,
+				cond1Field.Get(), func(v string) { cond1Field.Set(v); cond1Op.Set("") },
+				cond1Op.Get(), func(v string) { cond1Op.Set(v) },
+				cond1Value.Get(), onCond1Value,
+			),
+			condSlotRow(
+				uistate.T("rulecond.slot2"),
+				cond2Enabled.Get(), onCond2Enable,
+				cond2Field.Get(), func(v string) { cond2Field.Set(v); cond2Op.Set("") },
+				cond2Op.Get(), func(v string) { cond2Op.Set(v) },
+				cond2Value.Get(), onCond2Value,
+			),
+			condSlotRow(
+				uistate.T("rulecond.slot3"),
+				cond3Enabled.Get(), onCond3Enable,
+				cond3Field.Get(), func(v string) { cond3Field.Set(v); cond3Op.Set("") },
+				cond3Op.Get(), func(v string) { cond3Op.Set(v) },
+				cond3Value.Get(), onCond3Value,
+			),
+		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
 		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

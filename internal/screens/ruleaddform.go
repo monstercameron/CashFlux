@@ -242,52 +242,6 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	}))
 
 	catOpts := categorySelectOptions(cats, categoryID.Get())
-	fieldOpts := condSlotFieldOpts()
-
-	// renderCondSlot renders one bounded condition row. All event handlers are
-	// passed in as ui.Handler values — they must have been registered with
-	// UseEvent at stable hook positions above, not inside this helper.
-	// The onField and onOp closures are plain funcs because SelectInput.OnChange
-	// accepts func(string) directly; OnChange/OnInput accept any (including
-	// ui.Handler), so we pass the Handler from UseEvent straight through.
-	renderCondSlot := func(
-		label string,
-		enabled bool, onEnable ui.Handler,
-		field string, onField func(string),
-		op string, onOp func(string),
-		value string, onValue ui.Handler,
-	) ui.Node {
-		opOpts := condSlotOpOpts(field)
-		hint := condValueHint(field)
-		return Div(css.Class("cond-slot"),
-			Label(css.Class("cond-slot-header"),
-				Input(Type("checkbox"), Checked(enabled), OnChange(onEnable)),
-				Span(label),
-			),
-			If(enabled,
-				Div(css.Class("cond-slot-body"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   fieldOpts,
-						Selected:  field,
-						OnChange:  onField,
-						AriaLabel: uistate.T("rulecond.fieldLabel"),
-					}),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   opOpts,
-						Selected:  op,
-						OnChange:  onOp,
-						AriaLabel: uistate.T("rulecond.opLabel"),
-					}),
-					Input(css.Class("field"), Type("text"),
-						Placeholder(hint),
-						Attr("aria-label", uistate.T("rulecond.valueLabel")),
-						Value(value),
-						OnInput(onValue),
-					),
-				),
-			),
-		)
-	}
 
 	return Form(css.Class("form-grid"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
 		// No static id (C107): RuleAddForm renders both inline on /rules and inside the
@@ -322,21 +276,21 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		Fieldset(css.Class("cond-slots"),
 			Legend(uistate.T("rulecond.sectionLabel")),
 			P(css.Class("muted"), uistate.T("rulecond.overridesHint")),
-			renderCondSlot(
+			condSlotRow(
 				uistate.T("rulecond.slot1"),
 				cond1Enabled.Get(), onCond1Enable,
 				cond1Field.Get(), func(v string) { cond1Field.Set(v); cond1Op.Set("") },
 				cond1Op.Get(), func(v string) { cond1Op.Set(v) },
 				cond1Value.Get(), onCond1Value,
 			),
-			renderCondSlot(
+			condSlotRow(
 				uistate.T("rulecond.slot2"),
 				cond2Enabled.Get(), onCond2Enable,
 				cond2Field.Get(), func(v string) { cond2Field.Set(v); cond2Op.Set("") },
 				cond2Op.Get(), func(v string) { cond2Op.Set(v) },
 				cond2Value.Get(), onCond2Value,
 			),
-			renderCondSlot(
+			condSlotRow(
 				uistate.T("rulecond.slot3"),
 				cond3Enabled.Get(), onCond3Enable,
 				cond3Field.Get(), func(v string) { cond3Field.Set(v); cond3Op.Set("") },
@@ -380,4 +334,48 @@ func ruleTxnCtxs(app *appstate.App) []rules.TxnCtx {
 		})
 	}
 	return ctxs
+}
+
+// condSlotRow renders one bounded condition row (checkbox header + field/op/
+// value editors). Shared by the add form and the rule edit modal. All event
+// handlers must have been registered with UseEvent at stable hook positions by
+// the CALLER — this helper registers no hooks. onField/onOp are plain funcs
+// because SelectInput.OnChange accepts func(string) directly.
+func condSlotRow(
+	label string,
+	enabled bool, onEnable ui.Handler,
+	field string, onField func(string),
+	op string, onOp func(string),
+	value string, onValue ui.Handler,
+) ui.Node {
+	opOpts := condSlotOpOpts(field)
+	hint := condValueHint(field)
+	return Div(css.Class("cond-slot"),
+		Label(css.Class("cond-slot-header"),
+			Input(Type("checkbox"), Checked(enabled), OnChange(onEnable)),
+			Span(label),
+		),
+		If(enabled,
+			Div(css.Class("cond-slot-body"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   condSlotFieldOpts(),
+					Selected:  field,
+					OnChange:  onField,
+					AriaLabel: uistate.T("rulecond.fieldLabel"),
+				}),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   opOpts,
+					Selected:  op,
+					OnChange:  onOp,
+					AriaLabel: uistate.T("rulecond.opLabel"),
+				}),
+				Input(css.Class("field"), Type("text"),
+					Placeholder(hint),
+					Attr("aria-label", uistate.T("rulecond.valueLabel")),
+					Value(value),
+					OnInput(onValue),
+				),
+			),
+		),
+	)
 }

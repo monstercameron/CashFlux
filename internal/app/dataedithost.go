@@ -67,8 +67,8 @@ func RuleEditHost() uic.Node {
 	closeModal := func() { uistate.CloseRuleEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("rules.editTitle"),
-		Width:    "460px",
-		Height:   "420px",
+		Width:    "480px",
+		Height:   "640px",
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.RuleEditForm, screens.RuleEditFormProps{RuleID: id, OnDone: closeModal}),
