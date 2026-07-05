@@ -1,3 +1,14 @@
+## 2026-07-05 — System surfaces round 2: the collapsed rail's new tenant
+
+Round 2 verified all five round-1 fixes (including a source grep proving zero /settings
+navigations remain) and caught exactly the class of bug a swap invites: the collapsed-rail
+CSS hides the rail foot's elements BY SELECTOR (.cloud-mention, .rail-foot > span/a), and
+the redesign replaced the old .hh button with a .hh-quiet div that no selector covered — so
+collapsing the sidebar left "Your household / 2 members · USD base" wrapping at 33px into
+stacked letter fragments. One selector addition; verified collapsed→none, expanded→block.
+Lesson filed: when replacing an element in a state-styled container, grep for every rule
+that mentions the container's state, not just the element being replaced.
+
 ## 2026-07-05 — System surfaces round 1: the /settings ghost route
 
 The critic's best find generalizes: Settings has NEVER had a route — it's a modal — yet six

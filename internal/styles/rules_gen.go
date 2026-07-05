@@ -8478,7 +8478,7 @@ func registerGenerated() {
 		paddingRight("0"),
 		position("relative"),
 	)
-	rule("aside.rail.collapsed .cloud-mention,\n      aside.rail.collapsed .rail-foot > span,\n      aside.rail.collapsed .rail-foot > a",
+	rule("aside.rail.collapsed .cloud-mention,\n      aside.rail.collapsed .hh-quiet,\n      aside.rail.collapsed .rail-foot > span,\n      aside.rail.collapsed .rail-foot > a",
 		display("none"),
 	)
 	rule(".nav-alt-hint",
