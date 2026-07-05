@@ -66,7 +66,6 @@ type activityRowProps struct {
 // variable-length loop.
 func activityRow(props activityRowProps) ui.Node {
 	e := props.Entry
-	pr := uistate.UsePrefs().Get()
 
 	// The inline Undo button appears only for the first (newest) row when the
 	// undo stack is non-empty.  Clicking it calls the same path as Ctrl+Z.
@@ -75,13 +74,6 @@ func activityRow(props activityRowProps) ui.Node {
 	})
 
 	showUndo := props.IsFirst && auditview.CanUndoFunc()
-
-	var timeLabel string
-	if e.At.IsZero() {
-		timeLabel = "—"
-	} else {
-		timeLabel = pr.FormatDate(e.At)
-	}
 
 	actionLabel := uistate.T("activity.label" + actCapitalize(e.Action))
 	if actionLabel == "activity.label"+actCapitalize(e.Action) {
@@ -110,7 +102,18 @@ func activityRow(props activityRowProps) ui.Node {
 		undoBtnLabel = "Undo this change"
 	}
 
-	return Div(css.Class("row"),
+	// Action tick tone: additions read in the accent, deletions in the danger
+	// tone, everything else neutral. The day divider above the row carries the
+	// date, so the aside holds just the actor (and the newest row's Undo).
+	rowCls := "row act-entry"
+	switch e.Action {
+	case "added", "create", "created":
+		rowCls += " act-add"
+	case "deleted", "delete", "removed":
+		rowCls += " act-del"
+	}
+
+	return Div(ClassStr(rowCls),
 		Div(css.Class("row-main"),
 			Div(css.Class("row-desc"),
 				Span(css.Class(tw.FontMedium), actionLabel),
@@ -119,10 +122,7 @@ func activityRow(props activityRowProps) ui.Node {
 			Span(css.Class("row-meta"), e.Summary),
 		),
 		Div(css.Class("row-aside"),
-			Span(css.Class("row-meta", tw.TextFaint), timeLabel),
-			// The " · " keeps the date and actor from running together as one
-			// string ("May 26, 2026Marcus Hartley") — the aside has no gap (C355).
-			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), " · "+actorLabel)),
+			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), actorLabel)),
 			If(showUndo,
 				Button(
 					css.Class("btn btn-xs"),
@@ -199,14 +199,6 @@ func Activity() ui.Node {
 	// pure, unit-tested auditlog package (§1.9 — no logic leaks into view code).
 	entries = auditlog.FilterByEntityType(entries, selectedFilter)
 
-	navTitle := uistate.T("nav.activity")
-	if navTitle == "nav.activity" {
-		navTitle = "Activity"
-	}
-	subTitle := uistate.T("screen.activitySub")
-	if subTitle == "screen.activitySub" {
-		subTitle = "Recent changes and history"
-	}
 	emptyMsg := uistate.T("activity.empty")
 	if emptyMsg == "activity.empty" {
 		emptyMsg = "No changes recorded yet — start by adding a transaction."
@@ -216,41 +208,101 @@ func Activity() ui.Node {
 		filterLabel = "Filter by type"
 	}
 
-	filterControl := uiw.SelectInput(uiw.SelectInputProps{
+	filterControl := Div(css.Class("act-filter"), uiw.SelectInput(uiw.SelectInputProps{
 		Options:   activityEntityOptions(),
 		Selected:  selectedFilter,
 		OnChange:  func(v string) { filterAtom.Set(v) },
 		AriaLabel: filterLabel,
 		TestID:    "activity-entity-filter",
-	})
+	}))
 
-	if len(entries) == 0 {
-		return uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: navTitle,
-			Body: Fragment(
-				Div(css.Class("row row-filter"), filterControl),
-				P(css.Class("empty"), emptyMsg),
+	// ── Hero: the record's size, who changed what, and the latest change. ──────
+	pr := uistate.UsePrefs().Get()
+	allEntries := entries // pre-filter view feeds the hero figures
+	if selectedFilter != "" {
+		allEntries = buildActivityFeed(app)
+	}
+	youCount, otherCount := 0, 0
+	for _, e := range allEntries {
+		if e.Actor == "user" || e.Actor == "" {
+			youCount++
+		} else {
+			otherCount++
+		}
+	}
+	chips := []ui.Node{
+		rptChip(uistate.T("activity.chipShown"), fmt.Sprintf("%d", len(entries)), ""),
+	}
+	if otherCount > 0 {
+		chips = append(chips,
+			rptChip(uistate.T("activity.chipYou"), fmt.Sprintf("%d", youCount), ""),
+			rptChip(uistate.T("activity.chipOthers"), fmt.Sprintf("%d", otherCount), ""))
+	}
+	if auditview.CanUndoFunc() {
+		chips = append(chips, rptChip(uistate.T("activity.chipUndo"), uistate.T("activity.chipUndoYes"), rptToneCls("pos")))
+	}
+
+	takeaway := uistate.T("act.takeEmpty")
+	if len(allEntries) > 0 {
+		latest := allEntries[0]
+		who := latest.Actor
+		switch who {
+		case "user", "":
+			who = uistate.T("activity.user")
+		case "system":
+			who = uistate.T("activity.system")
+		}
+		when := ""
+		if !latest.At.IsZero() {
+			when = who + ", " + pr.FormatDate(latest.At)
+		} else {
+			when = who
+		}
+		takeaway = uistate.T("act.takeLast", actTruncate(latest.Summary, 90), when)
+	}
+
+	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-record-hero"),
+		P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("activity.eyebrowTail")),
+		Div(css.Class("rpt-hero-main"),
+			Div(
+				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("activity.heroLabel")),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), fmt.Sprintf("%d", len(allEntries))),
 			),
-		})
-	}
-
-	rows := make([]ui.Node, 0, len(entries))
-	for i, e := range entries {
-		e := e
-		rows = append(rows, ui.CreateElement(activityRow, activityRowProps{
-			Entry:   e,
-			IsFirst: i == 0,
-		}))
-	}
-
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: navTitle,
-		Body: Fragment(
-			P(css.Class("row-meta", tw.TextFaint), subTitle),
-			Div(css.Class("row row-filter"), filterControl),
-			Div(css.Class("rows"), rows),
 		),
-	})
+		Div(css.Class("debt-chips"), chips),
+		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "record-takeaway"), takeaway),
+	)
+	heroTile := rptTile("record-hero", "1 / span 4", rptSection("", uistate.T("activity.heroTitle"), nil, heroBody))
+
+	// ── Timeline: entries grouped under serif day dividers. ────────────────────
+	var timeline ui.Node
+	if len(entries) == 0 {
+		timeline = P(css.Class("empty"), emptyMsg)
+	} else {
+		nodes := make([]ui.Node, 0, len(entries)+8)
+		lastDay := "\x00"
+		for i, e := range entries {
+			day := uistate.T("activity.dayUndated")
+			if !e.At.IsZero() {
+				day = pr.FormatDate(e.At)
+			}
+			if day != lastDay {
+				nodes = append(nodes, Div(css.Class("act-day", tw.FontDisplay), day))
+				lastDay = day
+			}
+			nodes = append(nodes, ui.CreateElement(activityRow, activityRowProps{
+				Entry:   e,
+				IsFirst: i == 0,
+			}))
+		}
+		timeline = hhRowsList(nodes)
+	}
+
+	return Div(css.Class("bento bento-record"),
+		heroTile,
+		rptTile("record-timeline", "1 / span 4",
+			rptSection("sec-record-timeline", uistate.T("activity.timelineTitle"), filterControl, timeline)),
+	)
 }
 
 // ─── feed synthesis ───────────────────────────────────────────────────────────

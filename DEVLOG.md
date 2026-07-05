@@ -1,3 +1,19 @@
+## 2026-07-04 — /artifacts + /activity: the vault and the record
+
+Last two Data & People pages. /artifacts' one number is its storage footprint (a local-first
+app's real constraint) — hero figure + meter + a takeaway that says the quota consequence out
+loud; upload actions moved into the vault section's header so the page is hero + ledger, no
+stacked utility cards. Found a live layout bug while shooting: the base .row-main is a
+CENTERED COLUMN, so the old row markup (thumb + text with tw.Flex/ItemsCenter utilities) was
+stacking and centering file rows — scoped .bento-vault .row-main row-direction fix; the old
+page never showed it because its sample list rendered empty.
+
+/activity got the timeline treatment: serif accent-tick day dividers group entries into days,
+each entry carries an action tick (accent add / danger delete / neutral edit), and the hero
+quotes the latest change with By-you/By-others chips. Contract care: the filter e2e counts
+`.rows .row`, so day dividers are deliberately NOT .row; the select keeps its testid and moved
+into the section header at a sane width.
+
 ## 2026-07-04 — /rules: coverage is the story
 
 Third Data & People page. The page's one real KPI was hiding in a muted paragraph ("Your rules

@@ -33,6 +33,8 @@ func Register() {
 	registerHouseholdSurface()
 	registerCategoriesSurface()
 	registerRulesSurface()
+	registerVaultSurface()
+	registerRecordSurface()
 	inject(Build())
 }
 
