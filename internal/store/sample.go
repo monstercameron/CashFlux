@@ -118,9 +118,13 @@ func SampleDataset() Dataset {
 	usd := func(n int64) money.Money { return money.New(n, "USD") }
 	eur := func(n int64) money.Money { return money.New(n, "EUR") } // for the foreign-trip FX demo
 	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-	// Opening balances are stated as of the eve of the modeled history; the 60
-	// months of transactions then carry each account to "today" (early July 2026).
-	asOf := date(2021, time.June, 30)
+	// Opening balances are stated as of the eve of the modeled history (July
+	// 2021); the 60 months of transactions then carry each account to "today".
+	// BalanceAsOf is when a balance was last CONFIRMED (the freshness anchor,
+	// not a ledger cutoff — ledger.Balance sums opening + all activity), so each
+	// account carries a recent, realistic confirmation date; the 401(k)/Roth sit
+	// just past their 90-day overrides to keep the stale-balance nudge honest.
+	asOf := date(2026, time.June, 20)
 	// Activity on/before this date is reconciled; later (current-month) activity is
 	// still pending, which is what a real ledger looks like mid-month.
 	clearedAsOf := date(2026, time.June, 15)
@@ -583,7 +587,7 @@ func SampleDataset() Dataset {
 			dt := date(y, m, 25)
 			add(domain.Transaction{
 				ID: "tx-" + tag + "-wsb-win", AccountID: wsb, Date: dt, Payee: "Robinhood",
-				Desc: "Sold " + tickers[i%len(tickers)] + " — can't miss right now", CategoryID: catInvestInc,
+				Desc: "Sold " + tickers[i%len(tickers)] + " — stonks only go up", CategoryID: catInvestInc,
 				Amount: usd(streak[i-31]), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "hot-streak"},
 			})
 		default:
@@ -764,19 +768,19 @@ func SampleDataset() Dataset {
 		},
 		Accounts: []domain.Account{
 			{ID: checking, Name: "Joint Checking", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(650000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 95, ExpectedReturnAPR: 0.1, Custom: map[string]any{"last4": "4821"}},
-			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(1050000), BalanceAsOf: asOf, LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
-			{ID: k401, Name: "Marcus's 401(k)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(850000), BalanceAsOf: asOf, LiquidityScore: 40, StabilityScore: 55, ExpectedReturnAPR: 7.5},
-			{ID: roth, Name: "Roth IRA", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(220000), BalanceAsOf: asOf, LiquidityScore: 45, StabilityScore: 60, ExpectedReturnAPR: 7.0},
-			{ID: bizchk, Name: "Priya's Business Checking", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(15000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80, ExpectedReturnAPR: 0.1},
-			{ID: wsb, Name: "Self-Directed Brokerage (WSB)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(40000), BalanceAsOf: asOf, LiquidityScore: 50, StabilityScore: 15, ExpectedReturnAPR: 4.0, Custom: map[string]any{}},
-			{ID: cash, Name: "Cash Wallet", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(9000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80},
-			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(26500000), BalanceAsOf: asOf, LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
-			{ID: mortgage, Name: "Mortgage", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: asOf, InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
-			{ID: carM, Name: "Marcus's Car Loan", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2025, time.January, 10), InterestRateAPR: 7.4, DueDayOfMonth: 15, MinPayment: usd(62000), Lender: "Apex Auto Finance"},
-			{ID: carP, Name: "Priya's Car Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-2600000), BalanceAsOf: date(2025, time.September, 15), InterestRateAPR: 6.9, DueDayOfMonth: 17, MinPayment: usd(48000), Lender: "Apex Auto Finance"},
-			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: asOf, InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing"},
-			{ID: card, Name: "Rewards Credit Card", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: asOf, CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
-			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: asOf, CreditLimit: eur(300000), InterestRateAPR: 19.9, DueDayOfMonth: 20, MinPayment: eur(2500), Lender: "Wise"},
+			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(1050000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
+			{ID: k401, Name: "Marcus's 401(k)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(850000), BalanceAsOf: date(2026, time.March, 31), LiquidityScore: 40, StabilityScore: 55, ExpectedReturnAPR: 7.5},
+			{ID: roth, Name: "Roth IRA", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(220000), BalanceAsOf: date(2026, time.March, 31), LiquidityScore: 45, StabilityScore: 60, ExpectedReturnAPR: 7.0},
+			{ID: bizchk, Name: "Priya's Business Checking", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(15000), BalanceAsOf: date(2026, time.June, 26), LiquidityScore: 100, StabilityScore: 80, ExpectedReturnAPR: 0.1},
+			{ID: wsb, Name: "Stonks (Fun Money)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(40000), BalanceAsOf: date(2026, time.June, 25), LiquidityScore: 50, StabilityScore: 15, ExpectedReturnAPR: 4.0, Custom: map[string]any{}},
+			{ID: cash, Name: "Cash Wallet", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(9000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 100, StabilityScore: 80},
+			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(30400000), BalanceAsOf: date(2026, time.June, 30), LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
+			{ID: mortgage, Name: "Mortgage", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: date(2026, time.July, 1), InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
+			{ID: carM, Name: "Marcus's Car Loan", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 15), InterestRateAPR: 7.4, DueDayOfMonth: 15, MinPayment: usd(62000), Lender: "Apex Auto Finance"},
+			{ID: carP, Name: "Priya's Car Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-2600000), BalanceAsOf: date(2026, time.June, 17), InterestRateAPR: 6.9, DueDayOfMonth: 17, MinPayment: usd(48000), Lender: "Apex Auto Finance"},
+			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 5), InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing"},
+			{ID: card, Name: "Rewards Credit Card", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: date(2026, time.June, 22), CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
+			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: date(2026, time.June, 20), CreditLimit: eur(300000), InterestRateAPR: 19.9, DueDayOfMonth: 20, MinPayment: eur(2500), Lender: "Wise"},
 		},
 		Categories: []domain.Category{
 			{ID: catSalary, Name: "Salary", Kind: domain.KindIncome, Color: "#22c55e"},
@@ -1022,11 +1026,11 @@ func SampleDataset() Dataset {
 					{ID: "w-mh-recent", ColSpan: 2, RowSpan: 2},
 				},
 				Widgets: []domain.PageWidget{
-					{ID: "w-mh-note", Type: "text", Title: "Hobbies & side projects", Config: widgetcfg.Config{"text": "### 🚀 Marcus's playground\nWhere the side income and the *risky fun* live.\n\n**Side projects** — a couple of apps plus freelance gigs. Lumpy income, and the thing that kept him sane (and paid) during the **2023 layoff**.\n\n**The brokerage** — five years of honest history: crypto bought at the **Nov 2021 top** and capitulated in the crash (−$4,200 realized), a dead-quiet 2023 (no gambling money while unemployed), then the **spring-2024 hot streak** — four straight green months, +$13,300 — and, for once, profits actually taken: **$8k moved to savings**. Current positions below — decidedly mixed.\n\n> 🧠 Rule of thumb: only money he can afford to lose goes into the WSB account. It is **not** the retirement plan."}},
+					{ID: "w-mh-note", Type: "text", Title: "Hobbies & side projects", Config: widgetcfg.Config{"text": "### 🚀 Marcus's playground\nWhere the side income and the *risky fun* live.\n\n**Side projects** — a couple of apps plus freelance gigs. Lumpy income, and the thing that kept him sane (and paid) during the **2023 layoff**.\n\n**The brokerage** — five years of honest history: crypto bought at the **Nov 2021 top** and capitulated in the crash (−$4,200 realized), a dead-quiet 2023 (no gambling money while unemployed), then the **spring-2024 hot streak** — four straight green months, +$13,300 — and, for once, profits actually taken: **$8k moved to savings**. Current positions below — decidedly mixed.\n\n> 🧠 Rule of thumb: only money he can afford to lose goes into the Stonks account — it stays hobby-sized on purpose. It is **not** the retirement plan."}},
 					{ID: "w-mh-wsbval", Type: "image", Title: "WSB account value (the rollercoaster)", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-wsb-value"}},
 					{ID: "w-mh-sideproj", Type: "image", Title: "Side-project revenue", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-sideproj"}},
 					{ID: "w-mh-networth", Type: "kpi", Title: "Net worth", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-mh-networth", Kind: domain.KindKPI, Title: "Net worth", Scalar: &domain.ScalarBind{Expr: "net_worth", Format: "money", Sub: "assets minus debts, today"}}},
-					{ID: "w-mh-wsb", Type: "table", Title: "WSB positions", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-wsb"}},
+					{ID: "w-mh-wsb", Type: "table", Title: "Stonks positions", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-wsb"}},
 					{ID: "w-mh-trend", Type: "chart", Title: "Net-worth trend (24 months)", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-mh-trend", Kind: domain.KindChart, Title: "Net-worth trend (24 months)", Pipeline: &domain.Pipeline{Source: domain.Source{Kind: domain.SourceSeries, Series: domain.SeriesSpec{Metric: "networth", Months: 24}}}}},
 					{ID: "w-mh-recent", Type: "list", Title: "Recent side income", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{Source: "transactions"}},
 				},
@@ -1201,7 +1205,7 @@ func SampleDataset() Dataset {
 			}},
 			{ID: "conv-baby", Title: "Can we afford the baby?", Named: true, CreatedAt: date(2026, time.June, 6), UpdatedAt: date(2026, time.June, 6), Messages: []domain.ChatMessage{
 				{ID: "cm-3", Role: "user", Text: "With the baby coming in December, are we going to be okay?", CreatedAt: date(2026, time.June, 6)},
-				{ID: "cm-4", Role: "assistant", Text: "It's tight but workable. The biggest risks are the thin emergency fund (~1.5 months) and dining overspend. If you redirect the dining excess and a bit of the WSB deposits to the baby and emergency funds, you'll be in much steadier shape by the due date.", CreatedAt: date(2026, time.June, 6)},
+				{ID: "cm-4", Role: "assistant", Text: "It's tight but workable. The biggest risks are the thin emergency fund (~1.5 months) and dining overspend. If you redirect the dining excess and a bit of the stonks deposits to the baby and emergency funds, you'll be in much steadier shape by the due date.", CreatedAt: date(2026, time.June, 6)},
 			}},
 		},
 		// A short audit trail so the audit/undo view has real history to show.
