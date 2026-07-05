@@ -164,8 +164,10 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 				),
 			),
 			If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-			Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("profileSwitch.pinFormCancel")),
+			Div(css.Class("dataedit-actions"),
+				Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
+				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("profileSwitch.pinFormCancel")),
+			),
 		)
 	}
 
@@ -209,8 +211,10 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 			})),
 		customInputs,
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("dataedit-actions"),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		),
 	)
 }
 
@@ -325,8 +329,10 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 			Text(" "+uistate.T("categories.deductible")),
 		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("dataedit-actions"),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		),
 	)
 }
 
@@ -499,8 +505,10 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 			),
 		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("dataedit-actions"),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		),
 	)
 }
 
@@ -566,7 +574,9 @@ func ArtifactRenameForm(props ArtifactRenameFormProps) ui.Node {
 			Input(css.Class("field"), Attr("id", "artifact-rename-"+a.ID), Attr("aria-label", uistate.T("artifacts.renameLabel")),
 				Value(nameS.Get()), OnInput(onName), Attr("data-testid", "artifact-rename-input"))),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		Div(css.Class("dataedit-actions"),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		),
 	)
 }

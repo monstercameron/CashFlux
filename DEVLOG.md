@@ -1,3 +1,21 @@
+## 2026-07-05 — Smart+ rule suggestions + rounds 2-3 of the gate (88 → 98)
+
+Round 2 re-verified all eight round-1 fixes live and scored 88 — its one real finding
+(condition rules were view-only in the edit modal) became the condition-slot editor: the
+shared condSlotRow renderer now serves both the add form and the edit modal, seeded from the
+saved rule. Round 3 scored 98/100 (Functionality 60/60), leaving one −2 UX note: the fixed-
+height modal could hide Save/Cancel below an unsignposted scroll with all three slots open —
+fixed with a sticky .dataedit-actions bar across ALL the Data & People modal editors.
+
+Then Cam's Smart+ ask landed mid-gate: an opt-in AI scan that reads uncovered transactions
+and proposes rules. Design choices worth keeping: the scan samples ONLY transactions no rule
+covers (FirstMatchFull — the deterministic layer keeps first claim), the model must answer in
+a strict `phrase => Category` line format parsed by a defensive pure parser that refuses
+invented categories/short phrases/duplicates (table-tested), accepted rules ride the same
+append-at-end precedence path, and the section is honest about privacy (off by default,
+nothing sent until opt-in + explicit scan) and about the keyless state. SMART-T14 in the
+catalog so /smart governs the same switch.
+
 ## 2026-07-05 — Rules engine gate, round 1: 51/100, and every point was earned
 
 Cam's ask: an adversarial agent decides when the rules engine's UX and functionality are

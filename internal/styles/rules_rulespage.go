@@ -47,6 +47,20 @@ func registerRulesSurface() {
 		prop("font-weight", "600"),
 	)
 
+	// The flip-modal editors' Save/Cancel bar sticks to the bottom of the
+	// scrollable body, so a tall form (e.g. a rule with all three condition
+	// slots open) never hides its actions below an unsignposted scroll.
+	rule(".dataedit-actions",
+		prop("position", "sticky"),
+		prop("bottom", "0"),
+		prop("display", "flex"),
+		prop("gap", "0.5rem"),
+		prop("padding", "0.6rem 0 0.1rem"),
+		prop("margin-top", "0.25rem"),
+		prop("background", "var(--bg-card)"),
+		prop("border-top", "1px solid var(--border)"),
+	)
+
 	// Condition-slot headers: breathe between the checkbox and its label
 	// (they rendered flush — "☐Condition 1").
 	rule(".cond-slot-header",

@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
+	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -46,6 +47,18 @@ func Rules() ui.Node {
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the rule being dragged (precedence reorder, C64)
 	notice := uistate.UseNotice()
+
+	// SMART-T14: Smart+ rule suggestions — an opt-in AI scan of the transactions
+	// no rule covers yet. Hooks declared unconditionally at stable positions.
+	pr := uistate.UsePrefs().Get()
+	backendAI := pr.Normalize().BackendActive()
+	hasProvider := aiProviderConfigured(app, backendAI)
+	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+	smartOn := uistate.LoadSmartSettings().IsEnabled("SMART-T14")
+	aiSugs := ui.UseState([]smartai.SuggestedRule(nil))
+	aiLoading := ui.UseState(false)
+	aiErr := ui.UseState("")
+	aiScanned := ui.UseState(false)
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
@@ -92,6 +105,76 @@ func Rules() ui.Node {
 	// entry/import) so counts, coverage, and the authoring preview evaluate
 	// structured conditions exactly like FirstMatchFull.
 	ctxs := ruleTxnCtxs(app)
+
+	// runSmartScan builds the SMART-T14 context at click time (uncovered
+	// transactions + the household's category names) and places the AI call
+	// under the product routing policy. Results parse against the REAL category
+	// list, so the model can never invent a category.
+	runSmartScan := func() {
+		currentRules := app.Rules()
+		var txnLines strings.Builder
+		n := 0
+		for _, t := range app.Transactions() {
+			if t.IsTransfer() {
+				continue
+			}
+			if rules.FirstMatchFull(currentRules, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date)) != nil {
+				continue // a rule already handles it
+			}
+			line := strings.TrimSpace(t.Payee + " — " + t.Desc)
+			cur := catName[t.CategoryID]
+			if cur == "" {
+				cur = "(uncategorized)"
+			}
+			txnLines.WriteString("- " + line + " | " + fmtMoney(t.Amount) + " | currently: " + cur + "\n")
+			if n++; n >= 40 {
+				break
+			}
+		}
+		if n == 0 {
+			aiSugs.Set(nil)
+			aiScanned.Set(true)
+			aiErr.Set("")
+			return
+		}
+		catIDByName := make(map[string]string, len(cats))
+		var catList strings.Builder
+		for _, c := range cats {
+			catIDByName[c.Name] = c.ID
+			catList.WriteString(c.Name + "\n")
+		}
+		aiLoading.Set(true)
+		aiErr.Set("")
+		runSmartAI(aiConn, smartai.RuleSuggest(txnLines.String(), catList.String()),
+			func(text string) {
+				parsed := smartai.ParseRuleSuggestions(text, catIDByName)
+				// Drop anything an existing rule's phrase already covers.
+				var fresh []smartai.SuggestedRule
+				for _, s := range parsed {
+					if rules.FirstMatch(currentRules, s.Match) == nil {
+						fresh = append(fresh, s)
+					}
+				}
+				aiSugs.Set(fresh)
+				aiScanned.Set(true)
+				aiLoading.Set(false)
+			},
+			func(errText string) {
+				aiErr.Set(errText)
+				aiScanned.Set(true)
+				aiLoading.Set(false)
+			})
+	}
+	onSmartScan := ui.UseEvent(Prevent(runSmartScan))
+	onSmartToggle := func(on bool) {
+		uistate.SetSmartFeatureEnabled("SMART-T14", on)
+		if !on {
+			aiSugs.Set(nil)
+			aiScanned.Set(false)
+			aiErr.Set("")
+		}
+		bump()
+	}
 
 	// ruleDisplayLabel names a rule for notices: the match phrase, or its
 	// conditions in plain English for a condition-bearing rule.
@@ -354,6 +437,30 @@ func Rules() ui.Node {
 		// Suggestions surface above the precedence chain (C38): users discover
 		// AI-suggested rules before the power-user precedence view.
 		If(len(suggestions) > 0, rptTile("rules-suggest", "1 / span 4", suggestCard)),
+		// SMART-T14: the opt-in Smart+ AI scan, between the deterministic
+		// suggestions and the precedence chain.
+		If(hasTxns, rptTile("rules-smart", "1 / span 4", rulesSmartSection(rulesSmartSectionArgs{
+			On:          smartOn,
+			HasProvider: hasProvider,
+			Loading:     aiLoading.Get(),
+			Scanned:     aiScanned.Get(),
+			Err:         aiErr.Get(),
+			Suggestions: aiSugs.Get(),
+			OnToggle:    onSmartToggle,
+			OnScan:      onSmartScan,
+			OnAdd: func(s smartai.SuggestedRule) {
+				acceptSuggestion(rules.Rule{Match: s.Match, SetCategoryID: s.CategoryID})
+				// Drop the accepted suggestion from the pending list.
+				cur := aiSugs.Get()
+				next := make([]smartai.SuggestedRule, 0, len(cur))
+				for _, c := range cur {
+					if c.Match != s.Match {
+						next = append(next, c)
+					}
+				}
+				aiSugs.Set(next)
+			},
+		}))),
 		// Precedence chain: first match wins, top to bottom; shadowed rules flagged
 		// (C70/C64). Rendered natively in the surface's own language (a numbered
 		// spine) — the old Mermaid flowchart wore the library's stock lavender theme.
@@ -608,4 +715,82 @@ func ruleCondEnglish(c rules.RuleCondition, acctName func(string) string, fmtAmt
 		}
 	}
 	return string(c.Field) + " " + string(c.Op) + " " + v
+}
+
+// rulesSmartSectionArgs bundles the SMART-T14 section's render inputs — the
+// caller (Rules) owns all the state and hooks.
+type rulesSmartSectionArgs struct {
+	On          bool
+	HasProvider bool
+	Loading     bool
+	Scanned     bool
+	Err         string
+	Suggestions []smartai.SuggestedRule
+	OnToggle    func(bool)
+	OnScan      ui.Handler
+	OnAdd       func(smartai.SuggestedRule)
+}
+
+// rulesSmartSection renders the opt-in Smart+ AI rule-suggestion panel: the
+// toggle, the scan/rescan button with its loading state, and parsed
+// suggestions as add-able rows. Off by default — the scan sends transaction
+// details to the configured AI provider only when the user opts in AND clicks.
+func rulesSmartSection(a rulesSmartSectionArgs) ui.Node {
+	body := []any{
+		P(css.Class("muted"), uistate.T("rules.smartHint")),
+		Div(Attr("data-testid", "rules-smart-toggle"), uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("rules.smartToggle"), On: a.On, OnChange: a.OnToggle})),
+	}
+	switch {
+	case a.On && !a.HasProvider:
+		body = append(body, P(css.Class("muted"), uistate.T("smart.aiNeedsProvider")))
+	case a.On:
+		scanLabel := uistate.T("rules.smartScan")
+		if a.Scanned || len(a.Suggestions) > 0 {
+			scanLabel = uistate.T("rules.smartRescan")
+		}
+		controls := []any{css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap)}
+		if a.Loading {
+			controls = append(controls,
+				Button(css.Class("btn"), Type("button"), Attr("disabled", "disabled"), Attr("data-testid", "rules-smart-scan"), scanLabel),
+				Span(css.Class("muted"), Attr("role", "status"), uistate.T("rules.smartScanning")))
+		} else {
+			controls = append(controls,
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "rules-smart-scan"), OnClick(a.OnScan), scanLabel))
+		}
+		body = append(body, Div(controls...))
+		if a.Err != "" {
+			body = append(body, P(css.Class("notice-danger"), Attr("data-testid", "rules-smart-err"), a.Err))
+		}
+		if a.Scanned && !a.Loading && a.Err == "" && len(a.Suggestions) == 0 {
+			body = append(body, P(css.Class("muted"), Attr("data-testid", "rules-smart-empty"), uistate.T("rules.smartEmpty")))
+		}
+		if len(a.Suggestions) > 0 {
+			body = append(body, hhRowsList(MapKeyed(a.Suggestions,
+				func(s smartai.SuggestedRule) any { return s.Match },
+				func(s smartai.SuggestedRule) ui.Node {
+					return ui.CreateElement(smartSuggestionRow, smartSuggestionRowProps{Suggestion: s, OnAdd: a.OnAdd})
+				})))
+		}
+	}
+	return rptSection("sec-rules-smart", uistate.T("rules.smartTitle"), nil, Fragment(body...))
+}
+
+type smartSuggestionRowProps struct {
+	Suggestion smartai.SuggestedRule
+	OnAdd      func(smartai.SuggestedRule)
+}
+
+// smartSuggestionRow renders one AI-suggested rule with its Add button. Its own
+// component so the click hook stays out of the variable-length list.
+func smartSuggestionRow(props smartSuggestionRowProps) ui.Node {
+	s := props.Suggestion
+	add := ui.UseEvent(Prevent(func() { props.OnAdd(s) }))
+	return Div(css.Class("row"),
+		Div(css.Class("row-main"),
+			Span(css.Class("row-desc"), uistate.T("rules.suggestionDesc", s.Match, s.CategoryName)),
+			Span(css.Class("row-meta"), uistate.T("rules.smartMeta")),
+		),
+		Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.acceptTitle")),
+			Attr("data-testid", "rules-smart-add"), OnClick(add), uistate.T("rules.accept")),
+	)
 }

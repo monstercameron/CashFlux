@@ -83,6 +83,7 @@ var catalog = []Feature{
 	rule("SMART-T11", PageTransactions, "Cash-flow timeline annotations", "Auto-label notable moments in the transaction stream."),
 	ai("SMART-T12", PageTransactions, "Tax-relevant tagging", "Auto-flag potentially deductible transactions into a year-end bucket.", true, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T13", PageTransactions, "Refund / reversal matching", "Pair a refund with its original charge and net them visually."),
+	ai("SMART-T14", PageTransactions, "Smart+ rule suggestions", "Scan your transactions with AI and suggest categorization rules for the ones your rules don't cover yet.", false, tokClassifyIn, tokClassifyOut),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────
 	rule("SMART-B7", PageBudgets, "Seasonal budget adjustment", "Detect seasonal categories and suggest month-specific budget amounts."),

@@ -97,3 +97,35 @@ func TestAccountQA(t *testing.T) {
 		t.Errorf("question not trimmed: %q", r.User)
 	}
 }
+
+func TestParseRuleSuggestions(t *testing.T) {
+	cats := map[string]string{"Dining": "cat-dining", "Groceries": "cat-groc"}
+	answer := "" +
+		"uber eats => Dining\n" +
+		"- \"Greenfield Market\" => groceries\n" + // bullet + quotes + case-insensitive category
+		"xy => Dining\n" + // phrase too short
+		"casino => Gambling\n" + // invented category → dropped
+		"UBER EATS => Dining\n" + // duplicate phrase → dropped
+		"not a rule line\n"
+	got := ParseRuleSuggestions(answer, cats)
+	if len(got) != 2 {
+		t.Fatalf("parsed %d suggestions, want 2: %+v", len(got), got)
+	}
+	if got[0].Match != "uber eats" || got[0].CategoryID != "cat-dining" {
+		t.Fatalf("first = %+v", got[0])
+	}
+	if got[1].Match != "Greenfield Market" || got[1].CategoryID != "cat-groc" || got[1].CategoryName != "Groceries" {
+		t.Fatalf("second = %+v", got[1])
+	}
+}
+
+func TestParseRuleSuggestionsCap(t *testing.T) {
+	cats := map[string]string{"Dining": "d"}
+	var b string
+	for i := 0; i < 10; i++ {
+		b += string(rune('a'+i)) + "aaa => Dining\n"
+	}
+	if got := ParseRuleSuggestions(b, cats); len(got) != 6 {
+		t.Fatalf("cap = %d, want 6", len(got))
+	}
+}

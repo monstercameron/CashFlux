@@ -41,6 +41,7 @@ var implemented = map[string]bool{
 	"SMART-T10":   true, // smart import field-mapping
 	"SMART-T8":    true, // receipt OCR (vision)
 	"SMART-D4":    true, // natural-language to-do quick-add
+	"SMART-T14":   true, // Smart+ rule suggestions (/rules AI scan)
 	"SMART-QUOTE": true, // daily money-mindset quote (hub)
 }
 
@@ -310,4 +311,70 @@ const receiptSystem = "You read receipt images. Extract the merchant name, the d
 // supplied separately to the vision transport by the caller.
 func ReceiptOCR() Request {
 	return Request{System: receiptSystem, User: "Extract the details from this receipt."}
+}
+
+// RuleSuggestSystem frames SMART-T14: propose categorization rules from a
+// sample of transactions the user's rules don't cover, in a STRICT line format
+// the app parses (one suggestion per line: match phrase => category name).
+const RuleSuggestSystem = "You suggest auto-categorization rules for a budgeting app. " +
+	"You are given transactions that no existing rule covers, and the list of the household's categories. " +
+	"Propose up to 6 rules. Each rule is a short case-insensitive phrase found in the payee or description " +
+	"(a merchant name works best) plus the single best-fitting category FROM THE PROVIDED LIST. " +
+	"Reply with ONE rule per line in exactly this format and nothing else:\n" +
+	"phrase => Category Name\n" +
+	"Never invent categories, never suggest a phrase shorter than 3 characters, and skip anything ambiguous."
+
+// RuleSuggest builds the SMART-T14 request from a pre-formatted sample of
+// uncovered transactions and the category-name list (both built by the caller).
+func RuleSuggest(txnContext, categoryList string) Request {
+	return Request{System: RuleSuggestSystem,
+		User: "Categories:\n" + strings.TrimSpace(categoryList) + "\n\nUncovered transactions:\n" + strings.TrimSpace(txnContext)}
+}
+
+// SuggestedRule is one parsed SMART-T14 suggestion: the match phrase and the
+// resolved category (ID + display name).
+type SuggestedRule struct {
+	Match        string
+	CategoryID   string
+	CategoryName string
+}
+
+// ParseRuleSuggestions parses the model's "phrase => Category" lines against
+// the household's real categories (name → id, matched case-insensitively).
+// Lines with unknown categories, short phrases, or duplicates are dropped —
+// the model can never invent a category or a junk rule. Capped at 6.
+func ParseRuleSuggestions(answer string, categoryIDByName map[string]string) []SuggestedRule {
+	// Case-insensitive name lookup.
+	byLower := make(map[string]struct{ id, name string }, len(categoryIDByName))
+	for name, id := range categoryIDByName {
+		byLower[strings.ToLower(strings.TrimSpace(name))] = struct{ id, name string }{id, name}
+	}
+	var out []SuggestedRule
+	seen := map[string]bool{}
+	for _, line := range strings.Split(answer, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
+		phrase, cat, ok := strings.Cut(line, "=>")
+		if !ok {
+			continue
+		}
+		phrase = strings.Trim(strings.TrimSpace(phrase), "\"'`")
+		cat = strings.TrimSpace(cat)
+		if len(phrase) < 3 || cat == "" {
+			continue
+		}
+		hit, known := byLower[strings.ToLower(cat)]
+		if !known {
+			continue
+		}
+		key := strings.ToLower(phrase)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, SuggestedRule{Match: phrase, CategoryID: hit.id, CategoryName: hit.name})
+		if len(out) >= 6 {
+			break
+		}
+	}
+	return out
 }

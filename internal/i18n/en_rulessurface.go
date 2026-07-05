@@ -46,6 +46,14 @@ var rulesSurfaceKeys = Catalog{
 	"rls.cond.dateBefore":       "it's dated before %s",
 	"rls.cond.dateAfter":        "it's dated after %s",
 	"rls.cond.dateInMonth":      "it's dated in %s",
+	"rules.smartTitle":          "Smart+ suggestions",
+	"rules.smartHint":           "Let AI read the transactions your rules don't cover and propose new rules. Nothing is sent anywhere until you turn this on and run a scan.",
+	"rules.smartToggle":         "Suggest rules with AI",
+	"rules.smartScan":           "Scan my transactions",
+	"rules.smartRescan":         "Scan again",
+	"rules.smartScanning":       "Reading your uncovered transactions…",
+	"rules.smartEmpty":          "The scan found no new rules worth suggesting — your rules already cover the recognizable patterns.",
+	"rules.smartMeta":           "AI suggestion — added rules run last, and you can edit or delete them like any other.",
 }
 
 func init() {
