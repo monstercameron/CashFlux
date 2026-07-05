@@ -1811,7 +1811,7 @@ func vbMetricField(p vbMetricFieldProps) ui.Node {
 		if p.Value == "net_worth_sub" {
 			haveCurrent = true
 		}
-		opts = append(opts, Option(Value("net_worth_sub"), SelectedIf(p.Value == "net_worth_sub"), "Text · net worth subline"))
+		opts = append(opts, Option(Value("net_worth_sub"), SelectedIf(p.Value == "net_worth_sub"), uistate.T("vbld.textSubline")))
 	}
 	// The current value always stays visible/selected even when the filter
 	// would hide it — a filtered select must never LOOK re-bound.
@@ -1820,15 +1820,15 @@ func vbMetricField(p vbMetricFieldProps) ui.Node {
 	}
 
 	kids := []any{ClassStr("wb-field"),
-		Span(css.Class("wb-field-label"), "Figure"),
-		Input(css.Class("set-input"), Type("search"), Placeholder("Filter metrics…"), Attr("aria-label", "Filter metrics"), Value(q.Get()), OnInput(onQ)),
-		Select(css.Class("set-input"), Attr("aria-label", "Figure"), OnChange(onSel), opts),
+		Span(css.Class("wb-field-label"), uistate.T("vbld.figure")),
+		Input(css.Class("set-input"), Type("search"), Placeholder(uistate.T("vbld.filterMetrics")), Attr("aria-label", uistate.T("vbld.filterMetrics")), Value(q.Get()), OnInput(onQ)),
+		Select(css.Class("set-input"), Attr("aria-label", uistate.T("vbld.figure")), OnChange(onSel), opts),
 	}
 	if selDoc != "" {
 		kids = append(kids, Span(css.Class("vb-metric-doc"), selDoc))
 	}
 	if selFormula != "" {
-		kids = append(kids, Span(css.Class("vb-metric-formula"), "Built from atoms:  "+prettyFormula(selFormula)))
+		kids = append(kids, Span(css.Class("vb-metric-formula"), uistate.T("vbld.builtFromAtoms")+"  "+prettyFormula(selFormula)))
 	}
 	return Div(kids...)
 }

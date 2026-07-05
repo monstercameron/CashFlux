@@ -12,10 +12,15 @@ package appstate
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/savings"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
@@ -71,11 +76,11 @@ func (a *App) CreateWorkflowFromGoal(goalID string, monthlyAmount int64) (workfl
 		TransferFromAccountID: fundingID,
 		TransferToAccountID:   goal.AccountID,
 		TransferAmount:        monthlyAmount,
-		// DedupeKey template: the period key is appended at run time by the apply
-		// layer using the workflow ID prefix. Here we embed the wfID so the key
-		// space is scoped per-workflow; the period suffix prevents double-execution
-		// within the same calendar month.
-		DedupeKey: "pyf:" + wfID + ":" + now.Format("2006-01"),
+		// {period} resolves to the CURRENT period key at each run (see
+		// stampDedupePeriod), scoping the guard to one transfer per period —
+		// a creation-frozen stamp would match its own first run's record
+		// forever and silently block every transfer after the first.
+		DedupeKey: "pyf:" + wfID + ":{period}",
 	}
 	if err := workflow.ValidateTransferAction(act, workflow.TriggerScheduled); err != nil {
 		return workflow.Workflow{}, fmt.Errorf("appstate: automate-goal: %w", err)
@@ -145,7 +150,11 @@ func (a *App) CreatePayYourselfFirstWorkflow(fromID, toID string, amountMinor in
 		TransferFromAccountID: fromID,
 		TransferToAccountID:   toID,
 		TransferAmount:        amountMinor,
-		DedupeKey:             "pyf:" + wfID + ":" + now.Format("2006-01"),
+		// {period} resolves to the CURRENT period key at each run (runWorkflow
+		// stamps it) so the guard scopes to one transfer per period. A key
+		// frozen at creation time would match its own first run's record
+		// forever and silently block every transfer after the first.
+		DedupeKey: "pyf:" + wfID + ":{period}",
 	}
 	if err := workflow.ValidateTransferAction(act, workflow.TriggerScheduled); err != nil {
 		return workflow.Workflow{}, fmt.Errorf("appstate: pay-yourself-first: %w", err)
@@ -168,6 +177,53 @@ func (a *App) CreatePayYourselfFirstWorkflow(fromID, toID string, amountMinor in
 	}
 	a.log.Info("pay-yourself-first workflow created", "workflow", wf.ID, "from", fromID, "to", toID, "amount", amountMinor, "cadence", cadence)
 	return wf, nil
+}
+
+// legacyPeriodSuffix matches a DedupeKey whose trailing segment is a frozen
+// creation-time month stamp (":YYYY-MM") — the pre-{period} format.
+var legacyPeriodSuffix = regexp.MustCompile(`:\d{4}-\d{2}$`)
+
+// stampDedupePeriod resolves a transfer DedupeKey to the current period key:
+// the "{period}" placeholder becomes the cadence-appropriate key (ISO week for
+// weekly cadence, calendar month otherwise), and a legacy key ending in a
+// frozen ":YYYY-MM" stamp is re-stamped the same way — repairing old
+// pay-yourself-first workflows that would otherwise transfer once and then
+// match their own first run's key forever.
+func stampDedupePeriod(key string, cadence domain.RecurringCadence, now time.Time) string {
+	period := "monthly"
+	if cadence == domain.CadenceWeekly {
+		period = "weekly"
+	}
+	pk := savings.PeriodKey(now, period)
+	if strings.Contains(key, "{period}") {
+		return strings.ReplaceAll(key, "{period}", pk)
+	}
+	if legacyPeriodSuffix.MatchString(key) {
+		return legacyPeriodSuffix.ReplaceAllString(key, ":"+pk)
+	}
+	return key
+}
+
+// transferSummary renders a transfer effect as money + account names ("Move
+// 250.00 USD from Checking to Savings") instead of the engine's raw
+// minor-units-and-ids line, for dry-run previews and the run log.
+func (a *App) transferSummary(e workflow.Effect) string {
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	dec := currency.Decimals(base)
+	name := func(id string) string {
+		for _, ac := range a.Accounts() {
+			if ac.ID == id {
+				return ac.Name
+			}
+		}
+		return id
+	}
+	return fmt.Sprintf("Move %s %s from %s to %s",
+		money.FormatMinor(e.TransferAmount, dec), base,
+		name(e.TransferFromAccountID), name(e.TransferToAccountID))
 }
 
 // pickFundingAccount returns the ID of the best funding account: the first

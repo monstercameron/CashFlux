@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -1434,7 +1435,13 @@ func (a *App) DeleteWorkflow(id string) error {
 	return a.del("workflow", id, a.store.DeleteWorkflow)
 }
 
-// engineVars builds the workflow/widget variable surface from the current dataset.
+// engineVars builds the workflow condition variable surface from the current
+// dataset: the full engine surface the app can compute without the UI layer —
+// atoms, the user's molecules (persisted edits and custom compound variables
+// included), cf_* custom-field values, and the recurring + category inputs
+// that bills_due / safe_to_spend / the health_* factors need. This is the same
+// surface widgets read, so a condition like "safe_to_spend < 0" or
+// "cf_txn_reimbursable > 0" means the same thing everywhere.
 func (a *App) engineVars() map[string]float64 {
 	base := a.Settings().BaseCurrency
 	if base == "" {
@@ -1443,8 +1450,36 @@ func (a *App) engineVars() map[string]float64 {
 	return engineenv.Vars(engineenv.Data{
 		Accounts: a.Accounts(), Transactions: a.Transactions(), Members: a.Members(),
 		Budgets: a.Budgets(), Goals: a.Goals(), Tasks: a.Tasks(),
+		Recurring: a.Recurring(), Categories: a.Categories(),
+		CustomDefs: a.CustomFieldDefs(), Molecules: a.Molecules(),
 		Rates: currency.Rates{Base: base, Rates: a.Settings().FXRates}, Now: a.clock(),
 	})
+}
+
+// WorkflowVariableNames lists the variable names a workflow condition can
+// reference — the exact surface the trigger runners evaluate against — sorted,
+// so the composer can offer them for insertion instead of asking users to
+// memorize names. (The per-transaction txn_* fields join this set on
+// transaction-triggered runs.)
+func (a *App) WorkflowVariableNames() []string {
+	vars := a.engineVars()
+	names := map[string]bool{}
+	for n := range vars {
+		names[n] = true
+	}
+	// Every transaction custom field is referenceable on txn-added runs —
+	// number and yes/no fields as cf_txn_<key> values, text/choice fields via
+	// contains(cf_txn_<key>, "…") — so offer them even though the base surface
+	// only carries numeric period sums.
+	for _, def := range a.CustomFieldDefsFor("transaction") {
+		names["cf_txn_"+def.Key] = true
+	}
+	out := make([]string, 0, len(names))
+	for n := range names {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // txnContext builds the workflow context for a transaction-triggered run: the
@@ -1476,6 +1511,32 @@ func (a *App) txnContext(t domain.Transaction) workflow.Context {
 			break
 		}
 	}
+	// The triggering transaction's OWN custom-field values override the
+	// period-wide cf_txn_* sums the engine surface carries (those answer "the
+	// household total this period", not "this transaction"): numbers as-is,
+	// yes/no as 1/0, text and choices into Strs so contains(cf_txn_project,
+	// "x") works. A field the transaction doesn't carry reads 0 / "".
+	for _, def := range a.CustomFieldDefsFor("transaction") {
+		name := "cf_txn_" + def.Key
+		switch def.Type {
+		case customfields.TypeNumber:
+			ctx.Vars[name] = 0
+			switch n := t.Custom[def.Key].(type) {
+			case float64:
+				ctx.Vars[name] = n
+			case int:
+				ctx.Vars[name] = float64(n)
+			}
+		case customfields.TypeBool:
+			ctx.Vars[name] = 0
+			if b, ok := t.Custom[def.Key].(bool); ok && b {
+				ctx.Vars[name] = 1
+			}
+		default: // text / date / choice
+			s, _ := t.Custom[def.Key].(string)
+			ctx.Strs[name] = s
+		}
+	}
 	return ctx
 }
 
@@ -1498,6 +1559,21 @@ func (a *App) runWorkflow(w workflow.Workflow, ctx workflow.Context, dryRun bool
 	effects, matched, err := workflow.Plan(w, ctx)
 	if err != nil {
 		return workflow.Run{}, err
+	}
+	// Transfer effects: resolve the DedupeKey's {period} placeholder to the
+	// CURRENT period (ISO week for weekly cadence, calendar month otherwise) —
+	// and re-stamp legacy keys frozen at creation, which matched their own
+	// first run forever and silently blocked every later transfer. Also
+	// rewrite the engine's raw "N minor units from acc-id" summary into money
+	// + account names for the dry-run preview and the run log.
+	for i := range effects {
+		if effects[i].Kind != workflow.ActionTransfer {
+			continue
+		}
+		if effects[i].DedupeKey != "" {
+			effects[i].DedupeKey = stampDedupePeriod(effects[i].DedupeKey, w.Trigger.Cadence, a.clock())
+		}
+		effects[i].Summary = a.transferSummary(effects[i])
 	}
 	run := workflow.Run{
 		ID: id.New(), WorkflowID: w.ID, At: a.clock().Format(time.RFC3339),
@@ -1966,6 +2042,14 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	// "transaction added" trigger fires only on real additions, from every add
 	// path (quick-add, inline add, transfer, duplicate, import), not on edits.
 	_, existed, _ := a.store.GetTransaction(t.ID)
+	// Snapshot which budgets are over BEFORE the write: it's the transaction
+	// that pushes a budget over its limit, so the budget-exceeded trigger must
+	// fire from here — previously only re-saving the budget document itself
+	// checked the transition, leaving the trigger dormant in ordinary use.
+	var overBefore map[string]bool
+	if !existed && !a.triggersSuspended {
+		overBefore = a.overBudgetIDs()
+	}
 	if err := a.store.PutTransaction(t); err != nil {
 		return err
 	}
@@ -1977,9 +2061,28 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	}
 	if !existed && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerTxnAdded, &t)
+		for id := range a.overBudgetIDs() {
+			if !overBefore[id] {
+				a.RunTriggered(workflow.TriggerBudgetExceeded, nil)
+				break
+			}
+		}
 	}
 	a.fireTxnMutated()
 	return nil
+}
+
+// overBudgetIDs returns the set of budget IDs currently over their limit —
+// the before/after snapshot PutTransaction uses to fire budget-exceeded on
+// the transition.
+func (a *App) overBudgetIDs() map[string]bool {
+	out := map[string]bool{}
+	for _, b := range a.Budgets() {
+		if a.isBudgetOver(b) {
+			out[b.ID] = true
+		}
+	}
+	return out
 }
 
 // applySinkingFundDrawdown decrements any non-archived sinking-fund goal linked

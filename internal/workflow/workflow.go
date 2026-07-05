@@ -11,6 +11,8 @@ package workflow
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -203,25 +205,71 @@ func Plan(wf Workflow, ctx Context) (effects []Effect, matched bool, err error) 
 	return effects, true, nil
 }
 
+// Expand interpolates {{expr}} templates in s against the run context: each
+// template is evaluated as a sandboxed formula over the engine variables (and,
+// for txn-added runs, the txn_* fields), so a task title or notify message can
+// carry live figures — "Safe to spend is {{safe_to_spend}}" or
+// "{{txn_payee}} charged {{txn_abs}}". Numbers render rounded to cents; an
+// expression that fails to evaluate is left as typed (visible, not swallowed).
+func Expand(s string, ctx Context) string {
+	if !strings.Contains(s, "{{") {
+		return s
+	}
+	var b strings.Builder
+	for {
+		i := strings.Index(s, "{{")
+		if i < 0 {
+			b.WriteString(s)
+			break
+		}
+		j := strings.Index(s[i:], "}}")
+		if j < 0 {
+			b.WriteString(s)
+			break
+		}
+		b.WriteString(s[:i])
+		raw := s[i : i+j+2]
+		expr := strings.TrimSpace(s[i+2 : i+j])
+		out := raw
+		if expr != "" {
+			if v, err := formula.Eval(expr, formula.Env{Vars: ctx.Vars, Strs: ctx.Strs}); err == nil {
+				switch n := v.(type) {
+				case float64:
+					out = strconv.FormatFloat(math.Round(n*100)/100, 'f', -1, 64)
+				case bool:
+					out = strconv.FormatBool(n)
+				case string:
+					out = n
+				}
+			}
+		}
+		b.WriteString(out)
+		s = s[i+j+2:]
+	}
+	return b.String()
+}
+
 // planAction turns one action into its Effect, including a plain-English summary.
 // Transaction-mutating effects carry the triggering transaction's id from ctx.
+// The free-text fields (task title/notes, notify message) pass through Expand so
+// {{expr}} templates resolve against the live context.
 func planAction(a Action, ctx Context) Effect {
-	e := Effect{Kind: a.Kind, Title: a.Title, Notes: a.Notes, Message: a.Message,
-		CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID}
+	e := Effect{Kind: a.Kind, Title: Expand(a.Title, ctx), Notes: Expand(a.Notes, ctx),
+		Message: Expand(a.Message, ctx), CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID}
 	switch a.Kind {
 	case ActionCreateTask:
-		e.Summary = "Create task: " + fallback(a.Title, "(untitled)")
+		e.Summary = "Create task: " + fallback(e.Title, "(untitled)")
 	case ActionApplyRules:
 		e.Summary = "Categorize uncategorized transactions with your rules"
 	case ActionNotify:
-		e.Summary = "Notify: " + a.Message
+		e.Summary = "Notify: " + e.Message
 	case ActionSetCategory:
-		e.Summary = "Set the transaction's category"
+		e.Summary = "Set the transaction's category" + noTxnNote(ctx)
 	case ActionAddTag:
-		e.Summary = "Tag the transaction: " + a.Tag
+		e.Summary = "Tag the transaction: " + a.Tag + noTxnNote(ctx)
 	case ActionFlagReview:
 		e.Tag = ReviewTag
-		e.Summary = "Flag the transaction for review"
+		e.Summary = "Flag the transaction for review" + noTxnNote(ctx)
 	case ActionPostRecurring:
 		e.Summary = "Post all due autopost recurring transactions"
 	case ActionFlagBudgetOver:
@@ -291,6 +339,24 @@ func fallback(s, def string) string {
 	return s
 }
 
+// noTxnNote marks a transaction-mutating effect that has no transaction in
+// scope (a manual/scheduled/aggregate run) — the apply layer will no-op, and
+// the summary must say so rather than reporting a mutation that never happens.
+func noTxnNote(ctx Context) string {
+	if ctx.TxnID == "" {
+		return " — skipped: no transaction in scope for this run"
+	}
+	return ""
+}
+
+// txnOnlyActions are the actions that mutate the TRIGGERING transaction and
+// therefore only make sense on the transaction-added trigger.
+var txnOnlyActions = map[ActionKind]bool{
+	ActionSetCategory: true,
+	ActionAddTag:      true,
+	ActionFlagReview:  true,
+}
+
 // Validate reports problems with a workflow, or nil if valid: it needs an ID, a
 // name, a known trigger, and at least one action; CreateTask actions need a title.
 func Validate(wf Workflow) []string {
@@ -309,6 +375,7 @@ func Validate(wf Workflow) []string {
 	if len(wf.Actions) == 0 {
 		errs = append(errs, "Add at least one action.")
 	}
+	txnOnlyFlagged := false
 	for _, a := range wf.Actions {
 		switch a.Kind {
 		case ActionCreateTask:
@@ -323,7 +390,18 @@ func Validate(wf Workflow) []string {
 			if strings.TrimSpace(a.Tag) == "" {
 				errs = append(errs, "An \"add tag\" action needs a tag.")
 			}
+		case ActionTransfer:
+			if err := ValidateTransferAction(a, wf.Trigger.Kind); err != nil {
+				errs = append(errs, err.Error())
+			}
 		case ActionPostRecurring, ActionFlagBudgetOver: // no required fields
+		}
+		// Transaction-mutating actions act on the transaction that fired the
+		// workflow; on any other trigger there is none and they would silently
+		// no-op — refuse the combination at save instead.
+		if txnOnlyActions[a.Kind] && wf.Trigger.Kind != TriggerTxnAdded && !txnOnlyFlagged {
+			errs = append(errs, "Set category / add tag / flag-for-review actions change the transaction that fired the workflow — they need the \"When a transaction is added\" trigger.")
+			txnOnlyFlagged = true
 		}
 	}
 	return errs

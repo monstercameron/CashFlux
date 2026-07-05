@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/mermaid"
@@ -39,7 +40,7 @@ func Workflows() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	rev := ui.UseState(0)
-	_ = rev.Get()
+	revVal := rev.Get()
 	refresh := func() { rev.Set(rev.Get() + 1) }
 
 	wfs := app.Workflows()
@@ -83,7 +84,10 @@ func Workflows() ui.Node {
 			Div(css.Class("wf-main"),
 				registryHead,
 				registryBody,
-				ui.CreateElement(workflowHistory, workflowHistoryProps{}),
+				// Rev rides along so the component's props CHANGE on refresh —
+				// with empty props the framework memoizes it (reference-equal
+				// props) and a just-completed run wouldn't appear until re-nav.
+				ui.CreateElement(workflowHistory, workflowHistoryProps{Rev: revVal}),
 			),
 			Div(css.Class("wf-aside"),
 				ui.CreateElement(addWorkflowForm, addWorkflowFormProps{Refresh: refresh}),
@@ -442,6 +446,7 @@ func sweepForm(_ sweepFormProps) ui.Node {
 	return Div(css.Class("wf-quick-panel"),
 		H4(css.Class("wf-panel-title"), uistate.T("workflows.sweepTitle")),
 		P(css.Class("wf-panel-desc"), uistate.T("workflows.sweepDesc")),
+		P(css.Class("wf-hint"), uistate.T("wfs.bootNote")),
 		Div(css.Class("wf-panel-enable"),
 			Label(css.Class("checkbox-label"),
 				Input(
@@ -586,6 +591,7 @@ func roundUpForm(_ roundUpFormProps) ui.Node {
 	return Div(css.Class("wf-quick-panel"),
 		H4(css.Class("wf-panel-title"), uistate.T("workflows.roundUpTitle")),
 		P(css.Class("wf-panel-desc"), uistate.T("workflows.roundUpDesc")),
+		P(css.Class("wf-hint"), uistate.T("wfs.bootNote")),
 		Div(css.Class("wf-panel-enable"),
 			Label(css.Class("checkbox-label"),
 				Input(
@@ -633,15 +639,38 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 	draftKind := ui.UseState(string(workflow.ActionCreateTask))
 	draftText := ui.UseState("")
 	draftCat := ui.UseState("")
+	draftFrom := ui.UseState("")
+	draftTo := ui.UseState("")
+	draftAmt := ui.UseState("")
 	msg := ui.UseState("")
 
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
-	onTrigger := ui.UseEvent(func(v string) { trigger.Set(v) })
+	onTrigger := ui.UseEvent(func(v string) {
+		trigger.Set(v)
+		// Keep the drafted action legal for the new trigger: the three
+		// transaction-mutating actions only exist on txn-added; transfers are
+		// forbidden ON txn-added (loop guard).
+		k := workflow.ActionKind(draftKind.Get())
+		txnOnly := k == workflow.ActionSetCategory || k == workflow.ActionAddTag || k == workflow.ActionFlagReview
+		if (txnOnly && v != string(workflow.TriggerTxnAdded)) ||
+			(k == workflow.ActionTransfer && v == string(workflow.TriggerTxnAdded)) {
+			draftKind.Set(string(workflow.ActionCreateTask))
+		}
+	})
 	onCadence := ui.UseEvent(func(v string) { cadence.Set(v) })
 	onCondition := ui.UseEvent(func(v string) { condition.Set(v) })
 	onDraftKind := ui.UseEvent(func(v string) { draftKind.Set(v) })
 	onDraftText := ui.UseEvent(func(v string) { draftText.Set(v) })
 	onDraftCat := ui.UseEvent(func(e ui.Event) { draftCat.Set(e.GetValue()) })
+	onDraftFrom := ui.UseEvent(func(e ui.Event) { draftFrom.Set(e.GetValue()) })
+	onDraftTo := ui.UseEvent(func(e ui.Event) { draftTo.Set(e.GetValue()) })
+	onDraftAmt := ui.UseEvent(func(v string) { draftAmt.Set(v) })
+
+	base := "USD"
+	if app := appstate.Default; app != nil && app.Settings().BaseCurrency != "" {
+		base = app.Settings().BaseCurrency
+	}
+	dec := currency.Decimals(base)
 
 	// buildDraft turns the current action-builder fields into an Action, reporting
 	// whether it's complete enough to add (so an empty draft isn't staged, and a
@@ -661,6 +690,16 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		case workflow.ActionSetCategory:
 			a.CategoryID = draftCat.Get()
 			return a, a.CategoryID != ""
+		case workflow.ActionTransfer:
+			a.TransferFromAccountID = draftFrom.Get()
+			a.TransferToAccountID = draftTo.Get()
+			amt, err := money.ParseMinor(strings.TrimSpace(draftAmt.Get()), dec)
+			if err != nil || amt <= 0 {
+				return a, false
+			}
+			a.TransferAmount = amt
+			return a, a.TransferFromAccountID != "" && a.TransferToAccountID != "" &&
+				a.TransferFromAccountID != a.TransferToAccountID
 		case workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 			return a, true
 		default: // applyRules / flagReview need no parameter
@@ -676,6 +715,9 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		actions.Set(append(append([]workflow.Action(nil), actions.Get()...), a))
 		draftText.Set("")
 		draftCat.Set("")
+		draftFrom.Set("")
+		draftTo.Set("")
+		draftAmt.Set("")
 		msg.Set("")
 	}
 	// Drop a staged action before saving, so a mistaken one doesn't force starting
@@ -707,6 +749,16 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			Trigger:   trig,
 			Condition: condition.Get(), Actions: acts,
 		}
+		// Scheduled transfers get a per-period dedupe scope ({period} resolves
+		// at each run) so a double-fire within one period moves money once;
+		// manual transfers stay unscoped — each deliberate click transfers.
+		if trig.Kind == workflow.TriggerScheduled {
+			for i := range w.Actions {
+				if w.Actions[i].Kind == workflow.ActionTransfer {
+					w.Actions[i].DedupeKey = "wf:" + w.ID + ":{period}"
+				}
+			}
+		}
 		if errs := workflow.Validate(w); len(errs) > 0 {
 			msg.Set(errs[0])
 			return
@@ -720,6 +772,9 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		actions.Set(nil)
 		draftText.Set("")
 		draftCat.Set("")
+		draftFrom.Set("")
+		draftTo.Set("")
+		draftAmt.Set("")
 		msg.Set("")
 		if props.Refresh != nil {
 			props.Refresh()
@@ -737,6 +792,32 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 			}
 		}
 		paramControl = Select(css.Class("field"), OnChange(onDraftCat), opts)
+	case workflow.ActionTransfer:
+		fromOpts := []ui.Node{Option(Value(""), SelectedIf(draftFrom.Get() == ""), uistate.T("workflows.pyfChooseAccount"))}
+		toOpts := []ui.Node{Option(Value(""), SelectedIf(draftTo.Get() == ""), uistate.T("workflows.pyfChooseAccount"))}
+		if app := appstate.Default; app != nil {
+			for _, ac := range app.Accounts() {
+				if ac.Archived {
+					continue
+				}
+				label := ac.Name + " (" + string(ac.Type) + ")"
+				fromOpts = append(fromOpts, Option(Value(ac.ID), SelectedIf(draftFrom.Get() == ac.ID), label))
+				toOpts = append(toOpts, Option(Value(ac.ID), SelectedIf(draftTo.Get() == ac.ID), label))
+			}
+		}
+		amtLabel := uistate.T("wfs.transferAmount", base)
+		paramControl = Fragment(
+			Label(css.Class("fld-field"),
+				Span(css.Class("fld-lbl"), uistate.T("wfs.transferFrom")),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.transferFrom")), OnChange(onDraftFrom), fromOpts)),
+			Label(css.Class("fld-field"),
+				Span(css.Class("fld-lbl"), uistate.T("wfs.transferTo")),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.transferTo")), OnChange(onDraftTo), toOpts)),
+			Label(css.Class("fld-field"),
+				Span(css.Class("fld-lbl"), amtLabel),
+				Input(css.Class("field"), Attr("placeholder", amtLabel), Attr("aria-label", amtLabel),
+					Attr("inputmode", "decimal"), Value(draftAmt.Get()), OnInput(onDraftAmt))),
+		)
 	case workflow.ActionApplyRules, workflow.ActionFlagReview, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 		paramControl = P(css.Class("muted"), uistate.T("workflows.noParam"))
 	default: // createTask / notify / addTag
@@ -825,6 +906,35 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		return Label(css.Class("fld-field"), Span(css.Class("fld-lbl"), lbl), control)
 	}
 
+	// Live sanity-check of the condition draft: a typo, an unknown variable,
+	// or a txn_* variable on a non-transaction trigger warns HERE instead of
+	// surfacing later as a failed run. Placeholder txn values join the check
+	// surface only when the trigger actually provides them.
+	condWarn := ""
+	if c := strings.TrimSpace(condition.Get()); c != "" && appstate.Default != nil {
+		checkCtx := workflow.Context{Vars: map[string]float64{}, Strs: map[string]string{}}
+		for k, v := range vbVariableSurface() {
+			checkCtx.Vars[k] = v
+		}
+		if trigger.Get() == string(workflow.TriggerTxnAdded) {
+			checkCtx.Vars["txn_amount"], checkCtx.Vars["txn_abs"] = 0, 0
+			for _, k := range []string{"txn_payee", "txn_desc", "txn_category", "txn_account", "txn_tags"} {
+				checkCtx.Strs[k] = ""
+			}
+			for _, def := range appstate.Default.CustomFieldDefsFor("transaction") {
+				switch def.Type {
+				case customfields.TypeNumber, customfields.TypeBool:
+					checkCtx.Vars["cf_txn_"+def.Key] = 0
+				default:
+					checkCtx.Strs["cf_txn_"+def.Key] = ""
+				}
+			}
+		}
+		if _, err := workflow.Eval(c, checkCtx); err != nil {
+			condWarn = err.Error()
+		}
+	}
+
 	return Div(css.Class("wf-composer"), Attr("data-testid", "wf-composer"),
 		H3(css.Class("wf-comp-title"), uistate.T("workflows.create")),
 		P(css.Class("wf-comp-lede"), uistate.T("wfs.compLede")),
@@ -850,9 +960,12 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		),
 		fld(uistate.T("workflows.conditionLabel"),
 			Input(css.Class("field"), Attr("placeholder", uistate.T("wfs.condPlaceholder")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition))),
-		// Inline variable reference for the condition formula (C65): every variable
-		// as a click-to-insert chip, each its own component (condVarButton) so its
-		// OnClick hook never runs inside a variable-length loop (framework rule).
+		If(condWarn != "", P(css.Class("wf-cond-warn"), Attr("role", "status"), Attr("data-testid", "wf-cond-warn"), uistate.T("wfs.condWarn", condWarn))),
+		// Inline variable reference for the condition formula (C65): the four
+		// txn_* chips (each its own component so its OnClick hook never runs
+		// inside a variable-length loop), plus an insert-any-variable dropdown
+		// over the FULL engine surface the runners evaluate — custom fields,
+		// molecules, budget/goal figures included.
 		Div(css.Class("wf-cond-help"),
 			P(css.Class("wf-hint"), uistate.T("workflows.conditionHint")),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap15),
@@ -861,21 +974,31 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_payee", Desc: uistate.T("workflows.varTxnPayee"), OnInsert: insertVar}),
 				ui.CreateElement(condVarButton, condVarButtonProps{Token: "txn_category", Desc: uistate.T("workflows.varTxnCategory"), OnInsert: insertVar}),
 			),
+			ui.CreateElement(wfVarInsert, wfVarInsertProps{OnInsert: insertVar}),
 			P(css.Class("wf-hint"), uistate.T("workflows.conditionExamples")),
 		),
 		Div(css.Class("wf-actions-head"), Span(css.Class("fld-lbl"), uistate.T("wfs.actionsHead"))),
 		fld(uistate.T("workflows.actionTypeLabel"),
+			// The option set follows the trigger: setCategory/addTag/flagReview
+			// mutate the TRIGGERING transaction and only exist on txn-added;
+			// transfer is forbidden on txn-added (loop guard) — offering an
+			// illegal combination just to reject it at save is worse.
 			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.actionTypeLabel")), OnChange(onDraftKind),
 				Option(Value(string(workflow.ActionCreateTask)), SelectedIf(draftKind.Get() == string(workflow.ActionCreateTask)), uistate.T("workflows.actCreateTask")),
-				Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
-				Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
-				Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
+				If(trigger.Get() == string(workflow.TriggerTxnAdded), Fragment(
+					Option(Value(string(workflow.ActionSetCategory)), SelectedIf(draftKind.Get() == string(workflow.ActionSetCategory)), uistate.T("workflows.actSetCategory")),
+					Option(Value(string(workflow.ActionAddTag)), SelectedIf(draftKind.Get() == string(workflow.ActionAddTag)), uistate.T("workflows.actAddTag")),
+					Option(Value(string(workflow.ActionFlagReview)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagReview)), uistate.T("workflows.actFlagReview")),
+				)),
 				Option(Value(string(workflow.ActionApplyRules)), SelectedIf(draftKind.Get() == string(workflow.ActionApplyRules)), uistate.T("workflows.actApplyRules")),
 				Option(Value(string(workflow.ActionNotify)), SelectedIf(draftKind.Get() == string(workflow.ActionNotify)), uistate.T("workflows.actNotify")),
 				Option(Value(string(workflow.ActionPostRecurring)), SelectedIf(draftKind.Get() == string(workflow.ActionPostRecurring)), uistate.T("workflows.actPostRecurring")),
 				Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
+				If(trigger.Get() != string(workflow.TriggerTxnAdded),
+					Option(Value(string(workflow.ActionTransfer)), SelectedIf(draftKind.Get() == string(workflow.ActionTransfer)), uistate.T("wfs.actTransfer"))),
 			)),
 		Div(css.Class("wf-param"), paramControl),
+		P(css.Class("wf-hint"), uistate.T("wfs.tmplHint")),
 		Button(css.Class("btn btn-sm wf-addaction"), Type("button"), OnClick(addAction), uistate.T("workflows.addAction")),
 		If(len(staged) > 0, Div(css.Class("wf-staged"), staged)),
 		Div(footKids...),
@@ -897,6 +1020,7 @@ type workflowRowProps struct {
 func workflowRow(props workflowRowProps) ui.Node {
 	w := props.Workflow
 	last := ui.UseState((*workflow.Run)(nil))
+	lastErr := ui.UseState("")
 	showDiagram := ui.UseState(false)
 	editing := ui.UseState(false)
 	confirming := ui.UseState(false)
@@ -937,10 +1061,38 @@ func workflowRow(props workflowRowProps) ui.Node {
 
 	run := func(dry bool) {
 		app := appstate.Default
-		r, err := app.RunWorkflow(w, dry)
-		if err != nil {
-			r = workflow.Run{Effects: []workflow.Effect{{Summary: err.Error()}}}
+		var r workflow.Run
+		var err error
+		if w.Trigger.Kind == workflow.TriggerTxnAdded {
+			// A txn-added workflow only means something WITH a transaction:
+			// dry runs preview against the most recent one (so txn_* and
+			// cf_txn_* conditions evaluate truthfully). There is no manual
+			// LIVE run — the button is hidden, and this guard keeps a future
+			// caller from accidentally mutating the user's latest transaction.
+			if !dry {
+				lastErr.Set(uistate.T("wfs.dryNeedsTxn"))
+				last.Set(nil)
+				return
+			}
+			t, ok := latestTransaction(app)
+			if !ok {
+				lastErr.Set(uistate.T("wfs.dryNeedsTxn"))
+				last.Set(nil)
+				return
+			}
+			r, err = app.RunWorkflowOn(w, t, true)
+		} else {
+			r, err = app.RunWorkflow(w, dry)
 		}
+		if err != nil {
+			// A broken condition (typo, unknown variable, txn_* var with no
+			// transaction in scope) is NOT "didn't match" — it gets its own
+			// visible state so the user can tell logic-false from broken.
+			lastErr.Set(err.Error())
+			last.Set(nil)
+			return
+		}
+		lastErr.Set("")
 		rr := r
 		last.Set(&rr)
 		if !dry && props.Refresh != nil {
@@ -985,21 +1137,36 @@ func workflowRow(props workflowRowProps) ui.Node {
 	}
 
 	var result ui.Node = Fragment()
-	if r := last.Get(); r != nil {
+	if e := lastErr.Get(); e != "" {
+		result = P(css.Class("wf-result-err"), Attr("role", "alert"), uistate.T("wfs.runErr", e))
+	} else if r := last.Get(); r != nil {
 		if !r.Matched && !r.DryRun {
 			result = P(css.Class("wf-result-quiet"), uistate.T("workflows.noMatch"))
 		} else if !r.Matched && r.DryRun {
 			result = P(css.Class("wf-result-quiet"), uistate.T("workflows.dryNoMatch"))
 		} else {
 			var lines []ui.Node
+			allSkipped := len(r.Effects) > 0
 			for _, e := range r.Effects {
 				lines = append(lines, Div(css.Class("wf-result-line"), "• "+e.Summary))
+				if !strings.Contains(e.Summary, "skipped: no transaction") {
+					allSkipped = false
+				}
 			}
 			head := uistate.T("workflows.applied")
 			if r.DryRun {
 				head = uistate.T("workflows.wouldDo")
 			}
-			result = Div(css.Class("wf-result"), Span(css.Class("wf-result-head"), head), Div(lines))
+			if allSkipped {
+				// Every effect skipped for lack of a transaction — "DONE" would
+				// oversell a run that changed nothing.
+				head = uistate.T("wfs.nothingHead")
+			}
+			var note ui.Node = Fragment()
+			if r.DryRun && w.Trigger.Kind == workflow.TriggerTxnAdded {
+				note = Div(css.Class("wf-result-line", tw.TextDim), uistate.T("wfs.dryPreviewTxn"))
+			}
+			result = Div(css.Class("wf-result"), Span(css.Class("wf-result-head"), head), note, Div(lines))
 		}
 	}
 
@@ -1039,10 +1206,11 @@ func workflowRow(props workflowRowProps) ui.Node {
 			Div(css.Class("wf-row-actions"),
 				// Dry run first — simulation is the safe default instinct (G19).
 				Button(css.Class("data-btn wf-dry"), Type("button"), OnClick(func() { run(true) }), uistate.T("workflows.dryRun")),
-				// Run now only while the workflow is ON: the engine would happily
-				// fire a disabled workflow manually, and "off but still runnable
-				// live" is a trap for something that moves money. Re-enable first.
-				If(w.Enabled,
+				// Run now only while the workflow is ON (off means quiet) and
+				// only when a manual run can DO something — a txn-added workflow
+				// has no transaction in a manual run, so it gets Dry run (which
+				// previews against the latest transaction) but no live button.
+				If(w.Enabled && w.Trigger.Kind != workflow.TriggerTxnAdded,
 					Button(css.Class("data-btn"), Type("button"), OnClick(func() { run(false) }), uistate.T("workflows.runNow"))),
 				If(!confirming.Get(),
 					uiw.KebabMenu(uiw.KebabMenuProps{
@@ -1075,7 +1243,10 @@ func workflowRow(props workflowRowProps) ui.Node {
 	)
 }
 
-type workflowHistoryProps struct{}
+// workflowHistoryProps carries the page's refresh revision — its only purpose
+// is to make the props differ across refreshes so the memoized component
+// re-reads the run list (empty props would be reference-equal forever).
+type workflowHistoryProps struct{ Rev int }
 
 // workflowHistory shows the most recent applied runs (newest first).
 func workflowHistory(_ workflowHistoryProps) ui.Node {
@@ -1098,14 +1269,18 @@ func workflowHistory(_ workflowHistoryProps) ui.Node {
 		if name == "" {
 			name = uistate.T("workflows.deleted")
 		}
-		// Human date (per the user's date-format preference), not raw RFC3339 —
-		// with the time of day when it carries information (same-day runs would
-		// otherwise be indistinguishable; midnight-stamped runs skip the noise).
+		// Human date (per the user's date-format preference), not raw RFC3339.
+		// A stamp of exactly midnight UTC is date-only semantics (seed data) and
+		// renders as its UTC date with no time; a real run renders as the LOCAL
+		// date + time, so same-day runs stay distinguishable and the date and
+		// clock never come from different zones.
 		when := r.At
 		if t, err := time.Parse(time.RFC3339, r.At); err == nil {
-			when = uistate.LoadPrefs().FormatDate(t)
-			if lt := t.Local(); lt.Hour() != 0 || lt.Minute() != 0 {
-				when += " " + lt.Format("3:04 PM")
+			if utc := t.UTC(); utc.Hour() == 0 && utc.Minute() == 0 && utc.Second() == 0 {
+				when = uistate.LoadPrefs().FormatDate(utc)
+			} else {
+				lt := t.Local()
+				when = uistate.LoadPrefs().FormatDate(lt) + " " + lt.Format("3:04 PM")
 			}
 		}
 		effWord := uistate.T("workflows.effectsWord")
@@ -1142,11 +1317,28 @@ func wfCondEnglish(cond string) (string, bool) {
 		"txn_payee":    uistate.T("wfs.subjPayee"),
 		"txn_category": uistate.T("wfs.subjCategory"),
 	}
+	// subj resolves the English subject for a variable: the curated txn_*
+	// phrasings first, then any other engine identifier as its spaced name
+	// ("safe_to_spend" → "safe to spend") — the full surface is fair game now.
+	subj := func(v string) (string, bool) {
+		if s, ok := subject[v]; ok {
+			return s, true
+		}
+		if v == "" || (v[0] >= '0' && v[0] <= '9') {
+			return "", false
+		}
+		for _, r := range v {
+			if r != '_' && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+				return "", false
+			}
+		}
+		return strings.ReplaceAll(v, "_", " "), true
+	}
 	if strings.HasPrefix(c, "contains(") && strings.HasSuffix(c, ")") {
 		inner := strings.TrimSuffix(strings.TrimPrefix(c, "contains("), ")")
 		parts := strings.SplitN(inner, ",", 2)
 		if len(parts) == 2 {
-			s, ok := subject[strings.TrimSpace(parts[0])]
+			s, ok := subj(strings.TrimSpace(parts[0]))
 			val := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
 			if ok && val != "" && !strings.ContainsAny(val, `"'(),`) {
 				return uistate.T("wfs.condContains", s, val), true
@@ -1161,7 +1353,7 @@ func wfCondEnglish(cond string) (string, bool) {
 		}
 		v := strings.TrimSpace(c[:i])
 		rhs := strings.TrimSpace(c[i+len(op):])
-		s, ok := subject[v]
+		s, ok := subj(v)
 		if !ok || rhs == "" || strings.ContainsAny(rhs, "<>=&|()") {
 			return "", false
 		}
@@ -1210,6 +1402,25 @@ func actionLabel(a workflow.Action) string {
 		return uistate.T("workflows.actPostRecurring")
 	case workflow.ActionFlagBudgetOver:
 		return uistate.T("workflows.actFlagBudgetOver")
+	case workflow.ActionTransfer:
+		base := "USD"
+		name := func(id string) string { return id }
+		if app := appstate.Default; app != nil {
+			if app.Settings().BaseCurrency != "" {
+				base = app.Settings().BaseCurrency
+			}
+			name = func(id string) string {
+				for _, ac := range app.Accounts() {
+					if ac.ID == id {
+						return ac.Name
+					}
+				}
+				return id
+			}
+		}
+		return uistate.T("wfs.actTransfer") + ": " +
+			money.FormatMinor(a.TransferAmount, currency.Decimals(base)) + " " + base + " · " +
+			name(a.TransferFromAccountID) + " → " + name(a.TransferToAccountID)
 	default:
 		return string(a.Kind)
 	}
@@ -1258,6 +1469,68 @@ func stagedActionRow(props stagedActionRowProps) ui.Node {
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("workflows.removeAction")), Title(uistate.T("workflows.removeAction")),
 			OnClick(func() { props.OnRemove(props.Index) }), "✕"),
 	)
+}
+
+// latestTransaction returns the most recent non-transfer transaction — the
+// context a txn-added workflow's Dry run previews against, so txn_* and
+// cf_txn_* conditions evaluate against something real instead of erroring.
+func latestTransaction(app *appstate.App) (domain.Transaction, bool) {
+	var best domain.Transaction
+	found := false
+	for _, t := range app.Transactions() {
+		if t.IsTransfer() {
+			continue
+		}
+		if !found || t.Date.After(best.Date) {
+			best, found = t, true
+		}
+	}
+	return best, found
+}
+
+type wfVarInsertProps struct{ OnInsert func(string) }
+
+// wfVarInsert offers every workflow-condition variable — the exact surface the
+// trigger runners evaluate against, custom fields and molecules included — as
+// an insert-on-choose dropdown beside the txn_* chips, so conditions over any
+// engine figure are discoverable rather than memorized. Its own component for
+// an isolated change hook; the placeholder re-selects after every insert.
+func wfVarInsert(p wfVarInsertProps) ui.Node {
+	on := ui.UseEvent(func(e ui.Event) {
+		if v := e.GetValue(); v != "" && p.OnInsert != nil {
+			p.OnInsert(v)
+		}
+	})
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	// General figures (atoms, molecules, custom values) lead; the long tail of
+	// per-entity variables sits after a separator so income / safe_to_spend /
+	// cf_* aren't buried under 40 budget_* rows.
+	var general, perEntity []string
+	for _, n := range app.WorkflowVariableNames() {
+		switch {
+		case strings.HasPrefix(n, "budget_"), strings.HasPrefix(n, "goal_"),
+			strings.HasPrefix(n, "account_"), strings.HasPrefix(n, "debt_"),
+			strings.HasPrefix(n, "plan_"), strings.HasPrefix(n, "pool_"):
+			perEntity = append(perEntity, n)
+		default:
+			general = append(general, n)
+		}
+	}
+	opts := []ui.Node{Option(Value(""), SelectedIf(true), uistate.T("wfs.insertVar"))}
+	for _, n := range general {
+		opts = append(opts, Option(Value(n), strings.ReplaceAll(n, "_", " ")))
+	}
+	if len(perEntity) > 0 {
+		opts = append(opts, Option(Value(""), Attr("disabled", "disabled"), uistate.T("wfs.perEntitySep")))
+		for _, n := range perEntity {
+			opts = append(opts, Option(Value(n), strings.ReplaceAll(n, "_", " ")))
+		}
+	}
+	return Select(css.Class("field wf-varselect"), Attr("aria-label", uistate.T("wfs.insertVar")),
+		Attr("data-testid", "wf-var-insert"), OnChange(on), opts)
 }
 
 type condVarButtonProps struct {

@@ -1,3 +1,32 @@
+## 2026-07-04 — Workflows feature review: the matrix run that found a money bug
+
+Cam's goal: verify the workflows FEATURE — every trigger and action actually working, formulas
+and custom values where feasible — with an adversarial matrix reviewer until it all checks out.
+
+**The reviewer earned its tokens.** Round 1 (ITERATE): (1) condition ERRORS rendered identically
+to "condition is false" — a user tuning a formula couldn't tell broken from false; (2)
+setCategory/addTag/flagReview reported "DONE" while silently no-opping on every trigger without
+a transaction; (3) `cf_txn_*` variables were period-wide SUMS, not the triggering transaction's
+value — "if Reimbursable, tag it" was unbuildable (and bool fields never surfaced at all); plus
+budget-exceeded never firing from transactions, no transfer action in the composer, and
+sweep/round-up masquerading as workflows.
+
+**Writing the fixes surfaced two more, worse:** the formula language had NO logical conjunction
+(no &&, no and()) — added and()/or()/not() with table-driven tests. And the CRITICAL one: PYF's
+transfer DedupeKey was frozen at creation month, so pay-yourself-first transferred exactly once,
+ever — every later month matched its own first run's record and silently skipped. Now keys carry
+{period} resolved per run, legacy keys re-stamp transparently, and tests span periods.
+
+Everything landed: full engine surface for conditions (Recurring/Categories/CustomDefs/Molecules
+now feed the runner — safe_to_spend was silently wrong before), per-transaction cf_txn_*
+overrides, {{expr}} templates in action text (workflow.Expand), transfer as a composer action,
+budget-exceeded firing from PutTransaction, a live condition checker in the composer, honest
+skip summaries, and txn-added dry runs previewing against the latest transaction. Round 2:
+**SHIP** with a full trigger×action matrix (every kind VERIFIED live or by test) — its one
+medium (misdiagnosed dry-run error on healthy txn workflows) and lows (goal-page PYF still
+minting the legacy key format, "DONE" over all-skipped runs) fixed post-verdict and re-probed.
+Backlog: converting sweep/round-up into real registry workflows.
+
 ## 2026-07-04 — /workflows rebuilt as the automations desk (critique loop: 2 rounds to SHIP)
 
 Same recipe as the studio pages: from-scratch `.wf-deck` (masthead → savings quick-start band →

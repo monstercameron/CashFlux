@@ -232,6 +232,16 @@ func registerWorkflowsSurface() {
 		prop("font-size", "0.8rem"),
 		prop("opacity", "0.8"),
 	)
+	rule(".wf-result-err",
+		prop("margin", "0.5rem 0 0 1.55rem"),
+		prop("font-size", "0.8rem"),
+		prop("color", "var(--danger)"),
+	)
+	rule(".wf-cond-warn",
+		prop("font-size", "0.74rem"),
+		prop("color", "var(--danger)"),
+		prop("margin", "-0.5rem 0 0.75rem"),
+	)
 	rule(".wf-result-quiet",
 		prop("margin", "0.5rem 0 0 1.55rem"),
 		prop("font-size", "0.8rem"),
@@ -301,6 +311,10 @@ func registerWorkflowsSurface() {
 		prop("opacity", "0.55"),
 		prop("line-height", "1.45"),
 		prop("margin", "0"),
+	)
+	rule(".wf-varselect",
+		prop("max-width", "16rem"),
+		prop("font-size", "0.8rem"),
 	)
 	rule(".wf-actions-head",
 		prop("border-top", "1px solid var(--border)"),

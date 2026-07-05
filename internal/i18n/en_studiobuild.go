@@ -13,6 +13,11 @@ var studioBuildKeys = Catalog{
 	"vbld.canvas":      "Canvas",
 	"vbld.deleteTitle": "Delete this card from My cards",
 	"vbld.previewHint": "Rendered by the real engine at its true dashboard size",
+
+	"vbld.figure":         "Figure",
+	"vbld.filterMetrics":  "Filter metrics…",
+	"vbld.builtFromAtoms": "Built from atoms:",
+	"vbld.textSubline":    "Text · net worth subline",
 }
 
 func init() {

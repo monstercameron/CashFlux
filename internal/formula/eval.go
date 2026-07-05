@@ -281,6 +281,36 @@ func evalCall(c Call, env Env) (Value, error) {
 			return args[1], nil
 		}
 		return args[2], nil
+	case "and":
+		// and(a, b, …) — true when every argument is truthy. The language has
+		// no && operator; this is how a workflow condition (or any formula)
+		// expresses a conjunction: and(txn_abs > 100, contains(txn_payee, "uber")).
+		if len(args) < 2 {
+			return nil, fmt.Errorf("formula: and() needs at least 2 arguments")
+		}
+		for _, a := range args {
+			if !truthy(a) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "or":
+		// or(a, b, …) — true when any argument is truthy.
+		if len(args) < 2 {
+			return nil, fmt.Errorf("formula: or() needs at least 2 arguments")
+		}
+		for _, a := range args {
+			if truthy(a) {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "not":
+		// not(a) — logical negation of a truthy value.
+		if len(args) != 1 {
+			return nil, fmt.Errorf("formula: not() takes 1 argument")
+		}
+		return !truthy(args[0]), nil
 	case "contains":
 		// contains(haystack, needle) → case-insensitive substring test; the
 		// everyday matcher for payee/description rules ("merchant" in payee).
