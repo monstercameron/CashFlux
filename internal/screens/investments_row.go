@@ -28,8 +28,9 @@ type holdingRowProps struct {
 	H         domain.Holding
 	Sym       string
 	Dec       int
-	WeightPct float64 // this holding's share of total securities value
-	OnDelete  func(string)
+	WeightPct float64      // this holding's share of total securities value
+	OnClose   func(string) // mark the position sold (confirm + remove)
+	OnDelete  func(string) // remove an entered-in-error record
 }
 
 // holdingRow renders one security position as a card: a security-type badge + name/ticker,
@@ -90,14 +91,33 @@ func holdingRow(props holdingRowProps) ui.Node {
 				Span(fmtSignedMoney(gainMinor, props.Sym, props.Dec)),
 				Span(css.Class("inv-gain-pct"), fmt.Sprintf(" (%.2f%%)", retPct)),
 			),
-			uiw.DeleteButton(uiw.DeleteButtonProps{
-				AriaLabel: fmt.Sprintf(uistate.T("investments.deleteHoldingAria"), name),
-				Title:     uistate.T("investments.deleteHolding"),
-				TestID:    "holding-del-" + h.ID,
-				OnClick: func() {
-					if props.OnDelete != nil {
-						props.OnDelete(h.ID)
-					}
+			// The app-standard ⋯ menu (was an instant-delete ×): closing marks the
+			// position sold; deleting removes an entered-in-error record. Both
+			// confirm before touching anything.
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "holding-menu-" + h.ID,
+				AriaLabel:    uistate.T("investments.holdingMenuAria"),
+				ToggleTestID: "holding-menu-btn-" + h.ID,
+				Items: []ui.Node{
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "holding-close-"+h.ID),
+						Title(uistate.T("investments.closePosition")),
+						OnClick(func() {
+							if props.OnClose != nil {
+								props.OnClose(h.ID)
+							}
+						}),
+						uistate.T("investments.closePosition")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "holding-del-"+h.ID),
+						Attr("aria-label", fmt.Sprintf(uistate.T("investments.deleteHoldingAria"), name)),
+						Title(uistate.T("investments.deleteHoldingItem")),
+						OnClick(func() {
+							if props.OnDelete != nil {
+								props.OnDelete(h.ID)
+							}
+						}),
+						uistate.T("investments.deleteHoldingItem")),
 				},
 			}),
 		),

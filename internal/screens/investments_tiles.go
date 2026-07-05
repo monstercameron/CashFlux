@@ -265,14 +265,16 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 		})
 	}
 
-	onDelete := func(holdingID string) {
-		name := uistate.T("investments.thisHolding")
+	holdingName := func(holdingID string) string {
 		for _, h := range v.Securities {
 			if h.ID == holdingID && h.Name != "" {
-				name = h.Name
-				break
+				return h.Name
 			}
 		}
+		return uistate.T("investments.thisHolding")
+	}
+	onDelete := func(holdingID string) {
+		name := holdingName(holdingID)
 		uistate.ConfirmModal(uistate.T("investments.deleteConfirm", name), true, func(ok bool) {
 			if !ok {
 				return
@@ -281,6 +283,23 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 				uistate.PostNotice(err.Error(), true)
 				return
 			}
+			uistate.BumpDataRevision()
+		})
+	}
+	// Closing is the sold-the-position path: same removal, but framed (and
+	// confirmed) as a close, with a nudge to record the sale proceeds so the
+	// account's cash reflects it.
+	onClose := func(holdingID string) {
+		name := holdingName(holdingID)
+		uistate.ConfirmModalLabeled(uistate.T("investments.closeConfirm", name), uistate.T("investments.closeConfirmBtn"), false, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteHolding(holdingID); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("investments.closedNotice", name), false)
 			uistate.BumpDataRevision()
 		})
 	}
@@ -295,7 +314,7 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 			if total != 0 {
 				weight = float64(portfolio.HoldingValueMinor(portfolio.FromDomain(h))) / float64(total) * 100
 			}
-			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnDelete: onDelete})
+			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete})
 		})
 		listBody = Div(css.Class("inv-list"), rows)
 	}

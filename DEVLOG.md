@@ -1,3 +1,13 @@
+## 2026-07-05 — Holdings get the ⋯ treatment
+
+Same migration the categories/rules/artifacts rows went through: the instant-delete × on
+each security card becomes the shared KebabMenu. The design question was what "close" means
+when appstate only has DeleteHolding: both menu items remove the record, but the CONFIRM
+frames them differently — Close is the sold-the-position path (non-danger button, and the
+success notice nudges recording the sale proceeds so the cash lands in the account); Delete
+is the entered-in-error path (the original destructive confirm). Distinguishing intent in
+copy instead of pretending there's a lot-tracking engine underneath keeps it honest.
+
 ## 2026-07-05 — BalanceAsOf is metadata, not a cutoff (found the hard way)
 
 Two mistakes in one field. First: moving the seed's opening statements to 2021 made EVERY

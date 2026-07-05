@@ -6,6 +6,10 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Securities rows trade their delete × for the app-standard ⋯ menu (2026-07-05):** Cam: "where they have ×'s replace them with triple dot menus for closing or deleting the record." Each holding card on /investments now carries the shared kebab menu (viewport-aware, Escape/outside-click dismiss) with two confirmed actions: **"Close position…"** — the sold-it path, framed as a close with a nudge to record the sale proceeds as a transaction so the account's cash reflects it — and **"Delete record…"** for entered-in-error rows (the original destructive confirm). Testids preserved (`holding-del-<id>`) plus new `holding-menu-btn-<id>` / `holding-close-<id>`.
+
+
 ### Added
 - **One-step "Reset sample data" (2026-07-05):** Cam: "add a quick reset seed option so I don't have to format the seed in 2 steps but in a single step." The Settings → Data tab gains a single confirmed action that replaces everything with a fresh copy of the sample: it reloads the sample (the store load is a wholesale replace, so no separate wipe), clears the two stores that describe the old data (the in-memory activity feed and the cached Smart content in the preserved settings KV), sweeps stray financial browser-store keys, persists the new snapshot, and reloads once the write commits — what wipe-then-load previously took two trips (and an intermediate page reload) to do.
 
