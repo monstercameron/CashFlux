@@ -47,6 +47,7 @@ func StudioHub(props StudioHubProps) ui.Node {
 					{Value: "design", Label: uistate.T("studio.tabDesign")},
 					{Value: "formulas", Label: uistate.T("studio.tabFormulas")},
 					{Value: "fields", Label: uistate.T("studio.tabFields")},
+					{Value: "workflows", Label: uistate.T("studio.tabWorkflows")},
 					{Value: "build", Label: uistate.T("studio.tabBuild")},
 					{Value: "manage", Label: uistate.T("studio.tabManage")},
 					{Value: "pages", Label: uistate.T("studio.tabPages")},
@@ -61,6 +62,8 @@ func StudioHub(props StudioHubProps) ui.Node {
 				return ui.CreateElement(studioFormulasPanel, studioFormulasPanelProps{})
 			case "fields":
 				return ui.CreateElement(studioFieldsPanel, studioFieldsPanelProps{})
+			case "workflows":
+				return ui.CreateElement(studioWorkflowsPanel, studioWorkflowsPanelProps{})
 			case "build":
 				return ui.CreateElement(studioBuilderPanel, studioBuilderPanelProps{})
 			case "manage":
@@ -109,6 +112,14 @@ func studioFieldsPanel(_ studioFieldsPanelProps) ui.Node {
 		CustomFields(),
 	)
 }
+
+type studioWorkflowsPanelProps struct{}
+
+// studioWorkflowsPanel embeds the workflow-automation surface as a Studio tab
+// (isolated hooks — Workflows owns a large hook chain of its own). Automations
+// belong beside the formulas, fields, and widgets they act on; the standalone
+// /workflows route stays off-rail for bookmarks.
+func studioWorkflowsPanel(_ studioWorkflowsPanelProps) ui.Node { return Workflows() }
 
 type studioManagerPanelProps struct{}
 

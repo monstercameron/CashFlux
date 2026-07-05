@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Studio becomes the Build section's single rail entry (2026-07-05):** Cam: "studio is the parent page, remove formula, remove custom fields from the nav menu on the left, and remove workflow but move it into a tab in the studio as well." The left nav's Build group now lists only **Studio**; Customize (the formula calculator), Custom fields, and Workflows leave the rail. Formulas and Custom fields were already Studio tabs — **Workflows joins them as a new tab** (Design · Formulas · Custom fields · Workflows · Build widget · Manage widgets · My pages), embedded with isolated hooks like its siblings. The standalone /customize, /fields, and /workflows routes move to the registry's off-rail section, still routable for bookmarks and deep links.
+
+
+### Changed
 - **Securities rows trade their delete × for the app-standard ⋯ menu (2026-07-05):** Cam: "where they have ×'s replace them with triple dot menus for closing or deleting the record." Each holding card on /investments now carries the shared kebab menu (viewport-aware, Escape/outside-click dismiss) with two confirmed actions: **"Close position…"** — the sold-it path, framed as a close with a nudge to record the sale proceeds as a transaction so the account's cash reflects it — and **"Delete record…"** for entered-in-error rows (the original destructive confirm). Testids preserved (`holding-del-<id>`) plus new `holding-menu-btn-<id>` / `holding-close-<id>`.
 
 

@@ -1,3 +1,13 @@
+## 2026-07-05 — Studio absorbs the Build group
+
+The hub was already built for this: StudioHub carries Formulas and Custom fields as
+isolated-component tabs, so consolidating meant one new tab (Workflows, wrapping the
+existing screen — its big hook chain stays scoped to its own component) and registry moves.
+Customize/Fields/Workflows follow the same off-rail pattern as /appearance and /setup:
+routable, bookmarkable, absent from the rail. The Build sub-group is a one-item section
+now — if it stays that way, folding Studio directly under Tools without an accordion header
+is a follow-up worth considering.
+
 ## 2026-07-05 — Holdings get the ⋯ treatment
 
 Same migration the categories/rules/artifacts rows went through: the instant-delete × on

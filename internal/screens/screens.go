@@ -84,11 +84,10 @@ func All() []Route {
 		{Path: "/health", Label: "nav.health", Title: "nav.health", Subtitle: "screen.healthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: HealthScreen},
 		{Path: "/assistant", Label: "nav.assistant", Title: "nav.assistant", Subtitle: "screen.assistantSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: Assistant},
 
-		// TOOLS / Build — customization, custom fields, studio, and workflow automation.
-		{Path: "/customize", Label: "nav.customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Customize},
-		{Path: "/fields", Label: "nav.fields", Title: "nav.fields", Subtitle: "screen.fieldsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: CustomFields},
+		// TOOLS / Build — the Studio hub is the one rail entry: formulas, custom
+		// fields, and workflows live as its tabs (their standalone routes are
+		// off-rail below, kept for bookmarks and deep links).
 		{Path: "/studio", Label: "nav.studio", Title: "nav.studio", Subtitle: "screen.studioSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Studio},
-		{Path: "/workflows", Label: "nav.workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupBuild, View: Workflows},
 
 		// TOOLS / Data & people — household, categories, rules, and data management.
 		{Path: "/household", Label: "nav.household", Title: "nav.household", Subtitle: "screen.householdSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Household},
@@ -112,6 +111,9 @@ func All() []Route {
 		// route stays for bookmarks/deep links. The guided setup wizard (C21) is
 		// launched from /help's setup checklist (and empty-state CTAs) instead of
 		// holding a rail slot.
+		{Path: "/customize", Title: "nav.customize", Subtitle: "screen.customizeSub", Phase: 2, View: Customize},
+		{Path: "/fields", Title: "nav.fields", Subtitle: "screen.fieldsSub", Phase: 2, View: CustomFields},
+		{Path: "/workflows", Title: "nav.workflows", Subtitle: "screen.workflowsSub", Phase: 2, View: Workflows},
 		{Path: "/appearance", Title: "nav.appearance", Subtitle: "screen.appearanceSub", Phase: 1, View: Appearance},
 		{Path: "/setup", Title: "setup.pageTitle", Subtitle: "setup.pageSub", Phase: 1, View: SetupWizard},
 		{Path: "/credit", Title: "nav.credit", Subtitle: "screen.creditSub", Phase: 2, View: CreditScreen},
