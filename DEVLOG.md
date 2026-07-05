@@ -1,3 +1,15 @@
+## 2026-07-05 — Appearance-tab critique: one real desync, the two-store lockstep strikes again
+
+The round's HIGH is the appearance system's known two-store shape ([accent had the same
+disease]): prefs.Theme is the mode SOURCE the hero/segmented read, but ApplyTheme derives
+the actual shell from the theme's luminance — so a dark preset over a light pref painted
+the app dark while every readout swore it was Light. The editor's apply() already mirrored
+density + scale into prefs with a comment saying "two stores kept in lockstep"; mode was
+just missing from the lockstep. Mirrored now (theme.IsLight() → prefs.ThemeLight/Dark).
+Everything else in the round came back clean: 8 tabs fit at 1100px, sticky strip clean at
+depth, live mode/accent application, the wizard's Help home, and the ⋯ theme toggle
+(which was already in sync because it goes through prefs).
+
 ## 2026-07-05 — Appearance becomes a tab; the wizard re-homes to Help
 
 Second consolidation pass on Cam's direction. Appearance was the easy half: the screen is

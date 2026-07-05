@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Theme presets no longer desync the mode readout (Appearance-tab critique, 2026-07-05):** applying a dark preset (Midnight) while the mode preference said Light flipped the whole app dark — ApplyTheme derives the shell from the theme's luminance — while the Appearance hero, its takeaway, and the Mode segmented control kept reading "Light". The theme editor's apply path already mirrored density and scale back into prefs ("two stores kept in lockstep") but forgot the shell: it now mirrors the theme's light/dark into `prefs.Theme` too. Verified with the critique's exact repro: Light → Midnight now reads Dark everywhere, in sync with `data-theme`.
+
 ### Changed
 - **Appearance moves into Settings; the setup wizard moves to Help (2026-07-05):** Cam: "move appearance and setup in there as well, don't keep setup as its own tab though." The full /appearance surface (mode/motion/accent + the theme editor) is now an **Appearance tab** on /settings, between Preferences and Alerts — the Preferences tab's "Appearance & theme →" link switches tabs in place instead of leaving the page, and `OpenGlobalSettingsAt("appearance")` deep-links to it. The guided setup wizard came off the rail too, without becoming a tab: **/help's "Getting set up" checklist gains an "Open the guided setup" launcher**, and both /appearance and /setup remain routable off-rail for bookmarks and empty-state CTAs. The System nav group is now just Settings · Help · About. `settings_hookup_check.mjs` grew to 27 assertions (Appearance tab content, the in-place tab switch, both routes absent from the rail, the wizard launcher routing to /setup).
 

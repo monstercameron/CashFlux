@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/browser"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -45,6 +46,16 @@ func ThemeEditor() uic.Node {
 		p := prefsAtom.Get()
 		p.Compact = next.Density == theme.Compact
 		p.Scale = int(next.Scale*100 + 0.5)
+		// The theme also owns the shell skin — ApplyTheme derives data-theme from
+		// the theme's luminance — so mirror that into prefs.Theme too. Without
+		// this, applying a dark preset (Midnight) while prefs said "light" flips
+		// the whole app dark while the Appearance hero and Mode control keep
+		// reading "Light".
+		if next.IsLight() {
+			p.Theme = prefs.ThemeLight
+		} else {
+			p.Theme = prefs.ThemeDark
+		}
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 		cur.Set(next)
