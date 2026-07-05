@@ -1,3 +1,19 @@
+## 2026-07-05 — Round 2 pulls the thread: the whole mode/theme contract, fixed
+
+Round 2 verified the preset fix and found the deeper shape: ANY saved custom theme wins the
+shell (ApplyTheme derives data-theme from luminance), so every mode writer that only wrote
+prefs was writing a preference nothing read. Worst case was Reset — apply(DefaultTheme())
+PERSISTED a snapshot, so "default" was still a pinned custom theme and the mode segmented
+was permanently dead (hero says Dark, app renders light, unrecoverable without reload).
+
+The contract is now explicit: (1) Reset CLEARS the store — default means "re-derive from
+prefs", which is the only state where the mode toggle works by itself; (2) a mode flip with
+a disagreeing saved theme re-bases it via uistate.SyncThemeToMode — stock palette for the
+target mode, personal tokens (accent/fonts/radius/scale/density/stroke) ride along — wired
+into BOTH mode writers (Appearance segmented, top-bar cycle); (3) an editor apply mirrors
+the theme's shell into prefs.Theme (round 1). All three verified live including the exact
+Paper→Reset→Dark repro and Midnight→Light.
+
 ## 2026-07-05 — Appearance-tab critique: one real desync, the two-store lockstep strikes again
 
 The round's HIGH is the appearance system's known two-store shape ([accent had the same

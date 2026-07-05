@@ -930,6 +930,10 @@ func ThemeToggle() uic.Node {
 		uistate.ApplyPrefs(np)
 		uistate.PersistPrefs(np)
 		pAtom.Set(np)
+		// Re-base a saved custom theme that disagrees with the new mode — same
+		// rule as the /settings Appearance segmented (the theme's luminance is
+		// what actually paints the shell).
+		uistate.SyncThemeToMode(np)
 		uistate.ApplyTheme(uistate.LoadTheme())
 	})
 	label := uistate.T("topbar.themeToggle", uistate.T("settings.theme"+themeWord(p.Theme)), uistate.T("settings.theme"+themeWord(next)))

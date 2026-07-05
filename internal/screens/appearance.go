@@ -52,6 +52,9 @@ func Appearance() uic.Node {
 		uistate.ApplyPrefs(p)
 		uistate.PersistPrefs(p)
 		prefsAtom.Set(p)
+		// A saved custom theme pins the shell to its own luminance, so a mode
+		// flip must re-base it (keeping accent/fonts/shape) or it silently loses.
+		uistate.SyncThemeToMode(p)
 		// Re-derive + apply the theme so the engine's INLINE CSS vars (--text-dim,
 		// --text-faint, surfaces…) track the new light/dark mode — exactly as boot
 		// does (app.go: ApplyTheme(LoadTheme())). Without this, toggling to Light

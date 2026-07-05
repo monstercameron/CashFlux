@@ -310,7 +310,13 @@ func ThemeEditor() uic.Node {
 			}),
 			themeDataBtn("Reset to default", false, func() {
 				importMsg.Set("")
-				apply(uistate.DefaultTheme())
+				// Clear the pinned theme rather than apply()-persisting a snapshot
+				// of the default: a snapshot stays pinned to THIS moment's mode
+				// forever, leaving the Mode control writing prefs nothing reads.
+				uistate.ClearTheme()
+				def := uistate.DefaultTheme()
+				uistate.ApplyTheme(def)
+				cur.Set(def)
 			}),
 		),
 		If(importMsg.Get() != "", P(css.Class(tw.TextXs, tw.Mt1), Style(map[string]string{"color": "#d8716f"}), importMsg.Get())),

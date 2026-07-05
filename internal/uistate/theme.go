@@ -61,6 +61,46 @@ func DefaultTheme() theme.Theme {
 	return theme.FromPrefs(p)
 }
 
+// HasCustomTheme reports whether a user-saved theme is pinned in storage.
+// With one, LoadTheme returns it verbatim; without, the theme is re-derived
+// from the display preferences and so follows the mode toggle by itself.
+func HasCustomTheme() bool { return SettingKVGet(themeStoreID) != "" }
+
+// ClearTheme removes the saved custom theme, returning appearance control to
+// the live prefs-derived default. This is what "reset to default" must do:
+// persisting a default-shaped SNAPSHOT instead would keep pinning the shell
+// to the mode current at reset time, leaving the Mode control writing a
+// preference nothing reads.
+func ClearTheme() { SettingKVDelete(themeStoreID) }
+
+// SyncThemeToMode re-bases a saved custom theme whose shell disagrees with
+// the (resolved) mode preference: the surface palette swaps to the target
+// mode's stock palette while the personal tokens — accent, fonts, radius,
+// scale, density, icon stroke — ride along. Without this, a mode flip
+// silently loses to the saved theme (ApplyTheme derives data-theme from the
+// THEME's luminance), so the readouts would claim Light over a still-dark
+// app. No-op when no theme is saved or the saved theme already matches.
+func SyncThemeToMode(p prefs.Prefs) {
+	if !HasCustomTheme() {
+		return
+	}
+	t := LoadTheme()
+	p.Theme = resolvePrefsTheme(p.Theme)
+	if t.IsLight() == (p.Theme == prefs.ThemeLight) {
+		return
+	}
+	nb := theme.FromPrefs(p)
+	nb.Name = "Custom"
+	nb.Accent = t.Accent
+	nb.Radius = t.Radius
+	nb.FontUI = t.FontUI
+	nb.FontDisplay = t.FontDisplay
+	nb.Scale = t.Scale
+	nb.Density = t.Density
+	nb.IconStroke = t.IconStroke
+	PersistTheme(nb)
+}
+
 // PersistTheme saves the active theme to localStorage so it survives reloads.
 func PersistTheme(t theme.Theme) {
 	data, err := t.ToJSON()
