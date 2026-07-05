@@ -88,7 +88,7 @@ type WidgetSpec struct {
 // engine variable surface, plus an output format. NOT a Frame — a scalar (§3.1).
 type ScalarBind struct {
 	Expr   string `json:"expr"`             // formula over engineenv vars (+ cf_* custom fields)
-	Format string `json:"format,omitempty"` // money | percent | number | compact
+	Format string `json:"format,omitempty"` // currency (alias: money) | percent | number | compact
 	// Sub is an optional templated sub-label. Literal text with "{{ expr | format }}"
 	// tokens evaluated over the same variable surface — so a KPI's caption (e.g.
 	// "{{accounts}} accounts") is described by the spec, not hardcoded in a renderer.

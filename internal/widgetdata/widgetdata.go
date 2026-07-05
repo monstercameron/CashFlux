@@ -134,7 +134,10 @@ func ListRows(source string, d Data, n int) (rows []Row, ok bool) {
 // renders in the base currency (rounded to the nearest minor unit — a bare
 // truncation could drop a cent), otherwise number/percent via widgetspec.Format.
 func KPIText(value float64, format, base string) string {
-	if format == widgetspec.FormatCurrency {
+	// "money" is accepted as an alias: ScalarBind's docs used the word before
+	// the canonical token ("currency") was pinned, and specs written from the
+	// docs silently rendered bare numbers.
+	if format == widgetspec.FormatCurrency || format == "money" {
 		div := minorPerMajor(base)
 		return fmtMoney(money.New(int64(math.Round(value*div)), base))
 	}
