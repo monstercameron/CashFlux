@@ -59,6 +59,10 @@ func ThemeEditor() uic.Node {
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 		cur.Set(next)
+		// A preset can change tokens (accent, fonts) without touching prefs at
+		// all — bump the shared revision so readers of the applied look (the
+		// Appearance hero's accent chip, charts) re-render.
+		uistate.BumpDataRevision()
 	}
 	uploadFont := func() {
 		browser.PickFileNamed(".woff2,.woff,.ttf,.otf", func(name, mime string, data []byte) {
@@ -317,6 +321,7 @@ func ThemeEditor() uic.Node {
 				def := uistate.DefaultTheme()
 				uistate.ApplyTheme(def)
 				cur.Set(def)
+				uistate.BumpDataRevision()
 			}),
 		),
 		If(importMsg.Get() != "", P(css.Class(tw.TextXs, tw.Mt1), Style(map[string]string{"color": "#d8716f"}), importMsg.Get())),

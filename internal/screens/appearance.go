@@ -47,6 +47,10 @@ func appearanceMotionWord(m prefs.Motion) string {
 func Appearance() uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	pr := prefsAtom.Get()
+	// The hero reads the APPLIED look (accent from the document root). A theme
+	// apply can change it without touching prefs, so subscribe to the shared
+	// revision the editor bumps.
+	_ = uistate.UseDataRevision().Get()
 
 	savePrefs := func(p prefs.Prefs) {
 		uistate.ApplyPrefs(p)
@@ -65,10 +69,10 @@ func Appearance() uic.Node {
 		uistate.ApplyTheme(uistate.LoadTheme())
 	}
 
-	accent := pr.Accent
-	if accent == "" {
-		accent = "#2e8b57"
-	}
+	// Read the accent from the document root, not prefs: two systems write
+	// --accent (the prefs swatch and the theme engine), and a preset's accent
+	// never lands in prefs — the hero chip would keep reading the old swatch.
+	accent := uistate.CurrentAccent()
 
 	// ── Hero: the current look, read back in plain English. ────────────────────
 	heroBody := Div(css.Class("rpt-hero"), Attr("id", "sec-appearance-hero"),

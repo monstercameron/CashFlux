@@ -73,6 +73,11 @@ func MoreMenu(props moreMenuProps) uic.Node {
 		uistate.ApplyPrefs(np)
 		uistate.PersistPrefs(np)
 		pAtom.Set(np)
+		// Re-base a saved custom theme that disagrees with the new mode — the
+		// theme's luminance paints the shell, so without this the cycle is a
+		// silent no-op whenever a preset/custom theme is saved. Same rule as
+		// the Appearance segmented and ThemeToggle.
+		uistate.SyncThemeToMode(np)
 		uistate.ApplyTheme(uistate.LoadTheme())
 	}
 	themeLabel := uistate.T("topbar.theme") + " · " + uistate.T("settings.theme"+themeWord(p.Theme))

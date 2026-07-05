@@ -1,3 +1,16 @@
+## 2026-07-05 — Round 3: the third mode writer, and the accent chip
+
+Two lessons. First: when a fix is "apply rule X at every call site", grep for the SITES, not
+the symptom — I patched the Appearance segmented and shell.go's ThemeToggle, but ThemeToggle
+turns out to be CSS-hidden (.topbar-secondary display:none, unconditional) and the ⋯ menu's
+cycleTheme is a third, independent copy of the same handler. It re-bases now. (The hidden
+.topbar-secondary icons are pre-existing dead markup — the ⋯ menu duplicates all three
+actions — left as-is, noted here.) Second: the hero's ACCENT chip read pr.Accent — the
+accent-two-systems trap again; presets write --accent through the theme engine and never
+touch prefs. It reads uistate.CurrentAccent() now, and theme applies bump the data revision
+(a preset can change tokens without changing prefs, so nothing else would re-render the
+hero). Round 3 also re-verified rounds 1–2 hold, zero errors across all eight tabs.
+
 ## 2026-07-05 — Round 2 pulls the thread: the whole mode/theme contract, fixed
 
 Round 2 verified the preset fix and found the deeper shape: ANY saved custom theme wins the
