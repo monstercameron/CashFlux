@@ -165,7 +165,7 @@ func registerReportsSurface() {
 		prop("font-size", "0.72rem"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
-		prop("color", "var(--fg-dim, var(--fg))"),
+		prop("color", "var(--text-dim)"),
 		prop("opacity", "0.7"),
 	)
 	rule(".scope-chips",

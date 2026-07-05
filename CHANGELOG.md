@@ -6,6 +6,10 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The undefined-token theming landmine, swept (v1.0 polish, 2026-07-05):** three CSS rules referenced `var(--fg)` / `var(--fg-dim)` — tokens that are defined nowhere, so they silently fell back to inherited color or, worse, to nothing. The **credit meter's 30%-target tick was invisible** (`background: var(--fg)` → no background), and the credit disclaimer + reports scope labels drew inherited instead of the muted token in both themes. All three now use the real tokens (`--text` / `--text-dim`). Part of the v1.0 refinement pass adding regression coverage for every page (new `e2e/regression/` harness).
+
+
 ### Changed
 - **CashFlux moves to GoWebComponents v4.2.0 (2026-07-05):** the framework dependency jumps from a v3.2-era commit to the latest release. The research finding that made this urgent: the old pin's pseudo-version was based on **v1.1.1** — the framework's module path predated semantic import versioning, so Go's resolver could never see v2+ tags and `go get -u` was permanently stuck. The migration itself was mechanical, exactly as proposed: the `/v4` module path across **220 files** (the one forced change in 294 framework commits — the v4 changelog contains no removed or renamed API in the whole span), plus the three deprecated `state.UseComputed` selectors moving to `ui.UseMemo` (same memo keys, minus the atom wrapper). `.tools/gwc.exe` rebuilt from the v4.2.0 tree (dev flags unchanged; the dev server now also kills a predecessor holding its port — goodbye zombie listeners). Free on the rebuild: v4.1/4.2's reconciler campaign — synchronous discrete-event flush, hook fast lanes, cross-node attribute batching — and the new `GOGC=300` + 512MB wasm memory pacing default (tunable via `localStorage["gwc:gogc"]`). Verified: full native test suite green, wasm + native builds clean, dashboard and seven major routes render with zero page errors, and the 27-assertion settings e2e passes. The dedicated testing phase (full e2e sweep + adversarial interaction round against the new reconciler timing) follows separately.
 

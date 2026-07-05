@@ -25,7 +25,7 @@ func registerCreditSurface() {
 		prop("border", "1px dashed var(--border)"),
 		prop("border-radius", "999px"),
 		prop("font-size", "0.75rem"),
-		prop("color", "var(--fg)"),
+		prop("color", "var(--text-dim)"),
 		prop("opacity", "0.85"),
 		prop("max-width", "34rem"),
 	)
@@ -40,7 +40,7 @@ func registerCreditSurface() {
 		prop("top", "-3px"),
 		prop("bottom", "-3px"),
 		prop("width", "2px"),
-		prop("background", "var(--fg)"),
+		prop("background", "var(--text)"),
 		prop("opacity", "0.55"),
 		prop("border-radius", "1px"),
 		prop("pointer-events", "none"),
