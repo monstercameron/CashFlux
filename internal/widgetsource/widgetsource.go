@@ -384,9 +384,11 @@ func TxnFilterMatcher(filter string, cats []domain.Category) (func(domain.Transa
 }
 
 // FilteredFlowSeries plots the matching transactions' monthly sums (base
-// currency, signed) for the trailing `months` months — the "graph MY tag /
-// category / custom value" series behind Metric=="flow".
-func FilteredFlowSeries(txns []domain.Transaction, rates currency.Rates, now time.Time, months int, match func(domain.Transaction) bool) domain.Frame {
+// currency) for the trailing `months` months — the "graph MY tag / category /
+// custom value" series behind Metric=="flow". Sums are signed unless abs is set,
+// in which case each month plots its magnitude (so a pure-expense "costs" series
+// reads as positive dollars rather than a chart of negatives).
+func FilteredFlowSeries(txns []domain.Transaction, rates currency.Rates, now time.Time, months int, match func(domain.Transaction) bool, abs bool) domain.Frame {
 	if months < 1 {
 		months = 12
 	}
@@ -407,6 +409,9 @@ func FilteredFlowSeries(txns []domain.Transaction, rates currency.Rates, now tim
 				continue
 			}
 			sum += conv.Amount
+		}
+		if abs && sum < 0 {
+			sum = -sum
 		}
 		ts = append(ts, float64(ms.Unix()))
 		values = append(values, sum)

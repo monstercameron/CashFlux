@@ -70,7 +70,7 @@ func TestFilteredFlowSeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fr := FilteredFlowSeries(txns, rates, now, 3, match)
+	fr := FilteredFlowSeries(txns, rates, now, 3, match, false)
 	if fr.Rows != 3 {
 		t.Fatalf("want 3 monthly rows, got %d", fr.Rows)
 	}
@@ -85,6 +85,21 @@ func TestFilteredFlowSeries(t *testing.T) {
 	}
 	if got := val.Num(2); got != 12500 {
 		t.Errorf("June sum = %v, want 12500", got)
+	}
+
+	// abs=true plots each month's magnitude — a pure-expense "costs" series
+	// reads as positive dollars instead of a chart of negatives.
+	neg := []domain.Transaction{
+		seriesTxn("e1", time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), -8000, "cat-biz", nil, nil),
+		seriesTxn("e2", time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC), -3000, "cat-biz", nil, nil),
+	}
+	frAbs := FilteredFlowSeries(neg, rates, now, 3, match, true)
+	valAbs, _ := frAbs.Column("value")
+	if got := valAbs.Num(1); got != 3000 {
+		t.Errorf("abs May = %v, want 3000", got)
+	}
+	if got := valAbs.Num(2); got != 8000 {
+		t.Errorf("abs June = %v, want 8000", got)
 	}
 }
 

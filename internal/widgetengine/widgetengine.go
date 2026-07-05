@@ -296,7 +296,7 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 			if err != nil {
 				return domain.Frame{}, err
 			}
-			return widgetsource.FilteredFlowSeries(dc.Transactions, dc.Rates, dc.Now, s.Series.Months, match), nil
+			return widgetsource.FilteredFlowSeries(dc.Transactions, dc.Rates, dc.Now, s.Series.Months, match, s.Series.Abs), nil
 		default:
 			return domain.Frame{}, fmt.Errorf("unknown series metric %q", s.Series.Metric)
 		}

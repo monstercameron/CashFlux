@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Flow series can plot magnitudes (`abs`) (v1.0, 2026-07-05):** a `flow`-metric chart bound to a pure-expense category (Priya's "Shop costs") plotted its signed monthly sums, so a "costs" chart showed a run of negative dollars — accounting-correct but confusing under a "costs" title. `SeriesSpec` gains an opt-in `Abs` flag that plots each month's magnitude; the sample's Shop-costs widget uses it, so costs now read as positive dollars.
+
 ### Fixed
 - **Custom-page charts and lists read on any page (v1.0, 2026-07-05):** two custom-page (`/p/*`) regressions from the Group J sweep. The sample data's SVG "chart" images (e.g. the side-hustle revenue rollercoaster) were drawn as light-on-transparent, so on a light-theme card they washed out to near-invisible — the header now paints a dark `#1a1a1d` backing rect so the strokes read as a legible dark chip in both themes. And a List widget bound to transactions rendered five rows all reading "Side-project revenue" (they differ only by amount), indistinguishable at a glance — each row now carries a muted sub-line with the transaction's date so same-labelled rows are tellable apart. the top of the feed was "Added 17 dashboard layout records" — the dashboard's placement mirror, which it re-persists on every render, so undoing it was instantly re-written and read as "Undo does nothing." Derived placement writes are now dropped before they reach the undo stack and the activity feed (absorbed into the baseline), so the feed shows only genuine user changes and their Undo actually sticks.
 - **/duplicates refreshes after Merge/Delete (v1.0, 2026-07-05):** the panel already subscribed to the data revision but neither handler bumped it, so a resolved group stayed on screen with the "merged/deleted" toast floating over it — indistinguishable from a silent failure. Both handlers now bump the revision.

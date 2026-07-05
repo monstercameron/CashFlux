@@ -136,6 +136,7 @@ type SeriesSpec struct {
 	Months int    `json:"months,omitempty"` // trailing window length
 	Expr   string `json:"expr,omitempty"`   // Metric=="formula": per-month formula
 	Filter string `json:"filter,omitempty"` // Metric=="flow": txn selector
+	Abs    bool   `json:"abs,omitempty"`    // Metric=="flow": plot |monthly sum| (a "costs" chart reads as positive magnitudes, not negatives)
 	Format string `json:"format,omitempty"` // formula output: currency (default) | percent | number
 }
 
