@@ -5,20 +5,18 @@
 package screens
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
 
-	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -29,12 +27,32 @@ import (
 	"github.com/monstercameron/GoWebComponents/ui"
 )
 
-// Members manages the household: add a member (name + color), list members, set
-// the default member, and per-row delete.
+// Members is the standalone /members route: the person roster plus the
+// per-person analytics sections (worth / spending / income split). The
+// /household hub renders the same roster via membersBody and keeps the
+// analytics on its own "By person" tab.
 func Members() ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	}
+	roster := rptSection("sec-people", uistate.T("members.listTitle"), nil, membersBody())
+	f := hhFiguresNow(app, app.Members())
+	args := []any{roster}
+	if len(app.Members()) > 0 {
+		args = append(args, byPersonSections(f)...)
+	}
+	return Div(args...)
+}
+
+// membersBody renders the person-roster body: the orientation copy, the
+// reassign-before-delete panel, and one hh-person ledger row per member (with
+// inline edit, PIN management, and the overflow menu). It registers hooks, so
+// callers must invoke it at a stable render position.
+func membersBody() ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
 	rev := state.UseAtom("rev:members", 0)
@@ -45,6 +63,7 @@ func Members() ui.Node {
 	reassignTo := ui.UseState(domain.GroupOwnerID)
 
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
+	onAddMember := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("member") }))
 
 	ownedCount := func(memberID string) int {
 		owned := 0
@@ -117,7 +136,8 @@ func Members() ui.Node {
 		bump()
 	}
 
-	saveMember := func(id, newName, newColor, dateStyle, defAccountID, newRole string) {
+	memberDefs := app.CustomFieldDefsFor("member")
+	saveMember := func(id, newName, newColor, dateStyle, defAccountID, newRole string, custom map[string]string) {
 		for _, m := range app.Members() {
 			if m.ID != id {
 				continue
@@ -133,6 +153,7 @@ func Members() ui.Node {
 			if r, err := memberrole.ParseRole(strings.TrimSpace(newRole)); err == nil {
 				m.Role = r
 			}
+			m.Custom = customValuesToMap(memberDefs, custom)
 			if err := app.PutMember(m); err != nil {
 				errMsg.Set(err.Error())
 				return
@@ -153,10 +174,37 @@ func Members() ui.Node {
 	}
 
 	members := app.Members()
+	f := hhFiguresNow(app, members)
+
+	// The share denominator: the largest absolute per-owner worth, so the bars
+	// rank people against the household's biggest holder.
+	var maxAbs int64
+	for _, m := range members {
+		if a := f.ownerWorth(m.ID).Amount; a > maxAbs {
+			maxAbs = a
+		} else if -a > maxAbs {
+			maxAbs = -a
+		}
+	}
+
 	renderRow := func(m domain.Member) ui.Node {
 		mID := m.ID // capture for closures
+		worth := f.ownerWorth(mID)
+		abs := worth.Amount
+		if abs < 0 {
+			abs = -abs
+		}
+		pct := 0
+		if maxAbs > 0 {
+			pct = int(abs * 100 / maxAbs)
+		}
 		return ui.CreateElement(MemberRow, memberRowProps{
 			Member:       m,
+			Worth:        worth,
+			Spent:        money.New(f.SpendByID[mID], f.Base),
+			SharePct:     pct,
+			CustomLine:   customSummary(memberDefs, m.Custom),
+			Defs:         memberDefs,
 			OnDelete:     deleteMember,
 			OnSetDefault: setDefault,
 			OnSave:       saveMember,
@@ -177,78 +225,6 @@ func Members() ui.Node {
 		})
 	}
 	keyOf := func(m domain.Member) any { return m.ID }
-
-	// Net worth per owner (member + group-shared), in base currency.
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	byOwner, _ := ledger.NetByOwner(app.Accounts(), app.Transactions(), rates)
-	ownerDisp := func(ownerID string) money.Money {
-		v := byOwner[ownerID]
-		if v.Currency == "" {
-			return money.New(0, base)
-		}
-		return v
-	}
-	ownerRows := make([]ui.Node, 0, len(members)+1)
-	for _, m := range members {
-		v := ownerDisp(m.ID)
-		ownerRows = append(ownerRows, Div(css.Class("row"),
-			Span(css.Class("row-desc"), m.Name),
-			// "amount" (not the bare accentFor class) so the figure carries tabular-nums
-			// and the light-mode contrast pin — the net-worth amounts were inheriting
-			// --text and vanishing on white (G16 CRITICAL).
-			Span(ClassStr("amount "+accentFor(v)), fmtMoney(v)),
-		))
-	}
-	grp := ownerDisp(domain.GroupOwnerID)
-	ownerRows = append(ownerRows, Div(css.Class("row"),
-		Span(css.Class("row-desc"), uistate.T("owner.group")),
-		Span(ClassStr("amount "+accentFor(grp)), fmtMoney(grp)),
-	))
-
-	// C280: spending this period, by member, using the shared period selector.
-	// Uses the same period window as /reports so the figures are consistent.
-	periodStart, periodEnd := uistate.UsePeriod().Get().Range()
-	memberSpend, _ := reports.SpendingByMember(app.Transactions(), periodStart, periodEnd, rates)
-	spendByMember := make(map[string]int64, len(memberSpend))
-	for _, s := range memberSpend {
-		spendByMember[s.MemberID] = s.Amount
-	}
-	spendRows := make([]ui.Node, 0, len(members)+1)
-	for _, m := range members {
-		amt := money.New(spendByMember[m.ID], base)
-		spendRows = append(spendRows, Div(css.Class("row"),
-			Span(css.Class("row-desc"), m.Name),
-			Span(css.Class("amount"), fmtMoney(amt)),
-		))
-	}
-	// Unattributed spend (MemberID == "") shown under the shared-household label.
-	if unattr, ok := spendByMember[""]; ok && unattr > 0 {
-		amt := money.New(unattr, base)
-		spendRows = append(spendRows, Div(css.Class("row"),
-			Span(css.Class("row-desc"), uistate.T("owner.group")),
-			Span(css.Class("amount"), fmtMoney(amt)),
-		))
-	}
-
-	// C279: income split this period — equal apportionment of total household
-	// income across non-group members. Errors (e.g. FX rates unavailable for a
-	// foreign-currency transaction) silently suppress the card rather than
-	// showing zeros that would imply "no income this period".
-	var incomeRows []ui.Node
-	if splits, err := allocate.SplitPeriodIncome(app.Transactions(), members, periodStart, periodEnd, base, rates); err == nil && len(splits) > 0 {
-		incomeRows = make([]ui.Node, 0, len(splits))
-		for _, s := range splits {
-			amt := money.New(s.Amount, base)
-			incomeRows = append(incomeRows, Div(css.Class("row"),
-				Span(css.Class("row-desc"), s.Name),
-				Span(css.Class("amount"), fmtMoney(amt)),
-			))
-		}
-	}
 
 	// When the reassign panel opens, move focus to its target select so a
 	// keyboard user lands on the choice they must make (L-quickhit #47).
@@ -271,61 +247,39 @@ func Members() ui.Node {
 			}
 			opts = append(opts, Option(Value(m.ID), SelectedIf(reassignTo.Get() == m.ID), m.Name))
 		}
-		reassignPanel = uiw.Card(uiw.CardProps{
-			Title: uistate.T("members.reassignTitle"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
-				Form(css.Class("form-grid"), OnSubmit(confirmReassign),
-					Select(css.Class("field"), Attr("id", "member-reassign"), Attr("aria-label", uistate.T("members.reassignTitle")), OnChange(onReassignTo), opts),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
-					Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
-				),
+		reassignPanel = Div(css.Class("rpt-headsup", tw.Mb2),
+			H3(css.Class(tw.Mb1), uistate.T("members.reassignTitle")),
+			P(css.Class("muted"), uistate.T("members.reassignDesc", targetName, ownedCount(rid))),
+			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
+				Select(css.Class("field"), Attr("id", "member-reassign"), Attr("aria-label", uistate.T("members.reassignTitle")), OnChange(onReassignTo), opts),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("members.moveAndDelete")),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
-		})
+		)
 	}
 
-	return Div(
+	return Fragment(
 		reassignPanel,
-		uiw.Card(uiw.CardProps{
-			Title: uistate.T("members.listTitle"),
-			// G16: orientation description so the page self-explains on first visit.
-			// i18n key to add: "members.desc" → "Manage who's in your household. Each
-			// member can own accounts, budgets, and goals."
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("members.desc")),
-				// C274: single-device disclosure — clarifies that roles are labels on a
-				// shared local dataset, not per-member logins. Placed directly under the
-				// orientation description so it appears before the member list.
-				P(css.Class("muted"), Attr("data-testid", "members-single-device-note"), uistate.T("members.singleDeviceNote")),
-				IfElse(len(members) == 0,
-					ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
-					Div(css.Class("rows"), MapKeyed(members, keyOf, renderRow)),
-				),
-			),
-		}),
-		If(len(members) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("members.netWorthTitle"),
-			Rows:  ownerRows,
-		})),
-		// C280: per-member spending this period — shows who spent what so the household
-		// can see contribution patterns at a glance without navigating to /reports.
-		If(len(members) > 0 && len(spendRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("members.spendTitle"),
-			Rows:  spendRows,
-		})),
-		// C279: income split this period — equal apportionment of total period income
-		// shown alongside the spending card so members can compare contribution vs. burn.
-		If(len(members) > 0 && len(incomeRows) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("members.incomeSplitTitle"),
-			Rows:  incomeRows,
-		})),
+		If(errMsg.Get() != "", P(css.Class("notice-danger"), errMsg.Get())),
+		P(css.Class("muted"), uistate.T("members.desc")),
+		IfElse(len(members) == 0,
+			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
+			hhRowsList(MapKeyed(members, keyOf, renderRow)),
+		),
+		Div(css.Class(tw.Mt2),
+			Button(css.Class("btn"), Type("button"), OnClick(onAddMember), uistate.T("members.add")),
+		),
+		// C274: single-device disclosure — clarifies that roles are labels on a
+		// shared local dataset, not per-member logins.
+		P(css.Class("muted", tw.Text12, tw.Mt2), Attr("data-testid", "members-single-device-note"), uistate.T("members.singleDeviceNote")),
 	)
 }
 
-// memberAvatar is a small colored initial avatar (the member's first letter on a
+// memberAvatar is a colored initial avatar (the member's first letter on a
 // disc tinted with their color), for scannability and a touch of personality (C62).
 // Decorative — the member name follows as text — so it's aria-hidden. Inline-styled
-// to avoid a stylesheet dependency; falls back to the border color when no color set.
+// base look (size is overridden by the roster's .hh-person rules); falls back to
+// the accent when no color is set.
 func memberAvatar(name, color string) ui.Node {
 	initial := "?"
 	if t := strings.TrimSpace(name); t != "" {
@@ -344,8 +298,8 @@ func memberAvatar(name, color string) ui.Node {
 		Style(map[string]string{
 			"display": "inline-flex", "align-items": "center", "justify-content": "center",
 			"width": "1.5rem", "height": "1.5rem", "border-radius": "50%",
-			"background": bg, "color": text, "font-size": "0.7rem", "font-weight": "700",
-			"margin-right": "0.5rem", "vertical-align": "middle", "flex-shrink": "0",
+			"background": bg, "color": text, "font-weight": "700",
+			"vertical-align": "middle", "flex-shrink": "0",
 		}),
 		initial,
 	)
@@ -415,10 +369,19 @@ func memberDefaultAccountOptions() []uiw.SelectOption {
 }
 
 type memberRowProps struct {
-	Member       domain.Member
+	Member domain.Member
+	// Worth/Spent/SharePct are the person's ledger figures: net worth, spending
+	// this period, and their share of the household's largest holding (0–100).
+	Worth    money.Money
+	Spent    money.Money
+	SharePct int
+	// CustomLine is the pre-built "Label: value · …" summary of the member's
+	// custom-field values; Defs drive the inline edit form's custom inputs.
+	CustomLine   string
+	Defs         []customfields.Def
 	OnDelete     func(string)
 	OnSetDefault func(string)
-	OnSave       func(id, name, color, dateStyle, defAccountID, role string)
+	OnSave       func(id, name, color, dateStyle, defAccountID, role string, custom map[string]string)
 	OnView       func(string)
 	// C274: per-member PIN management (device-level access control).
 	MemberHasPIN bool
@@ -426,8 +389,12 @@ type memberRowProps struct {
 	OnClearPIN   func(id string)            // nil → PIN management unavailable
 }
 
-// MemberRow is a per-member row. It can be edited inline (name + color). All
-// hooks are declared unconditionally so the edit toggle never reorders them.
+// MemberRow is one person's ledger row: the oversized avatar + name + role
+// chips on the left, the worth/spent figure column on the right, their share
+// of household worth as a bar underneath, and the actions behind an Edit
+// button plus a ⋯ menu (transactions, default, PIN, delete). It can be edited
+// inline (name, color, role, preferences, custom fields). All hooks are
+// declared unconditionally so the edit toggle never reorders them.
 func MemberRow(props memberRowProps) ui.Node {
 	m := props.Member
 	color := m.Color
@@ -444,19 +411,30 @@ func MemberRow(props memberRowProps) ui.Node {
 	dateStyleS := ui.UseState(m.Prefs.DateStyle)
 	defAcctS := ui.UseState(m.Prefs.DefaultAccountID)
 	roleS := ui.UseState(string(memberrole.Resolve(m)))
+	customS := ui.UseState(map[string]string{})
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
+	setCustom := func(key, value string) {
+		cur := customS.Get()
+		next := make(map[string]string, len(cur)+1)
+		for k, v := range cur {
+			next[k] = v
+		}
+		next[key] = value
+		customS.Set(next)
+	}
 	startEdit := ui.UseEvent(Prevent(func() {
 		nameS.Set(m.Name)
 		colorS.Set(color)
 		dateStyleS.Set(m.Prefs.DateStyle)
 		defAcctS.Set(m.Prefs.DefaultAccountID)
 		roleS.Set(string(memberrole.Resolve(m)))
+		customS.Set(customMapToStrings(m.Custom))
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
-		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get(), roleS.Get())
+		props.OnSave(m.ID, nameS.Get(), colorS.Get(), dateStyleS.Get(), defAcctS.Get(), roleS.Get(), customS.Get())
 		editing.Set(false)
 	}))
 
@@ -507,8 +485,17 @@ func MemberRow(props memberRowProps) ui.Node {
 	}))
 
 	if editing.Get() {
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+		// Custom-field inputs (member-scoped defs), rendered as keyed components so
+		// each owns its event hook.
+		customInputs := MapKeyed(props.Defs,
+			func(d customfields.Def) any { return d.Key },
+			func(d customfields.Def) ui.Node {
+				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{
+					Def: d, Value: customS.Get()[d.Key], OnChange: setCustom,
+				}))
+			})
+		return Div(css.Class("row hh-person"),
+			Form(css.Class("form-grid hh-person-form"), OnSubmit(saveEdit),
 				labeledField(uistate.T("members.name"),
 					Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName))),
 				labeledField(uistate.T("members.color"),
@@ -538,88 +525,121 @@ func MemberRow(props memberRowProps) ui.Node {
 						AriaLabel: "Role",
 						TestID:    "member-edit-role-" + m.ID,
 					})),
+				customInputs,
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),
 		)
 	}
 
-	// C276: show the member's real role (Owner/Admin/Viewer) as the row-meta
-	// badge, replacing the generic "Default"/"Member" cosmetic labels. The
-	// "default" quick-add-seed chip is kept separately and visually distinct.
+	// C276: show the member's real role (Owner/Admin/Viewer) as a chip,
+	// with the "default" quick-add-seed chip kept separately and visually distinct.
 	roleLabel := memberrole.Label(memberrole.Resolve(m))
 
-	// C274: build the PIN management section. Two modes:
-	//  - showPINForm=true  → inline set/change form
-	//  - showPINForm=false → "Set PIN" button, or "Change PIN"+"Remove PIN" if set
-	var pinSection ui.Node
-	if props.OnSetPIN != nil {
-		if showPINForm.Get() {
-			pinLbl := uistate.T("profileSwitch.setPIN")
-			if props.MemberHasPIN {
-				pinLbl = uistate.T("profileSwitch.changePIN")
-			}
-			pinSection = Form(css.Class("form-grid"),
-				Attr("data-testid", "member-pin-form-"+m.ID),
-				OnSubmit(onSubmitPIN),
-				uiw.FormField(uistate.T("profileSwitch.pinNew"),
-					Input(css.Class("field"), Type("password"),
-						Attr("autocomplete", "off"),
-						Attr("data-testid", "member-pin-input-"+m.ID),
-						Value(pinInputS.Get()),
-						OnInput(onPINInput),
-					),
-				),
-				If(pinErrS.Get() != "", P(css.Class("notice-danger"), pinErrS.Get())),
-				Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
-				Button(css.Class("btn"), Type("button"), OnClick(onCancelPINForm),
-					uistate.T("profileSwitch.pinFormCancel")),
-			)
-		} else if props.MemberHasPIN {
-			pinSection = Span(
-				Button(css.Class("btn"), Type("button"),
-					Title(uistate.T("profileSwitch.changePIN")),
-					Attr("data-testid", "member-change-pin-"+m.ID),
-					OnClick(onShowPINForm),
-					uistate.T("profileSwitch.changePIN"),
-				),
-				Button(css.Class("btn"), Type("button"),
-					Title(uistate.T("profileSwitch.removePIN")),
-					Attr("data-testid", "member-remove-pin-"+m.ID),
-					OnClick(onRemovePIN),
-					uistate.T("profileSwitch.removePIN"),
-				),
-			)
-		} else {
-			pinSection = Button(css.Class("btn"), Type("button"),
-				Title(uistate.T("profileSwitch.setPIN")),
-				Attr("data-testid", "member-set-pin-"+m.ID),
-				OnClick(onShowPINForm),
-				uistate.T("profileSwitch.setPIN"),
-			)
+	// C274: the PIN set/change form, opened from the ⋯ menu.
+	pinForm := Fragment()
+	if props.OnSetPIN != nil && showPINForm.Get() {
+		pinLbl := uistate.T("profileSwitch.setPIN")
+		if props.MemberHasPIN {
+			pinLbl = uistate.T("profileSwitch.changePIN")
 		}
+		pinForm = Form(css.Class("form-grid hh-person-form"),
+			Attr("data-testid", "member-pin-form-"+m.ID),
+			OnSubmit(onSubmitPIN),
+			uiw.FormField(uistate.T("profileSwitch.pinNew"),
+				Input(css.Class("field"), Type("password"),
+					Attr("autocomplete", "off"),
+					Attr("data-testid", "member-pin-input-"+m.ID),
+					Value(pinInputS.Get()),
+					OnInput(onPINInput),
+				),
+			),
+			If(pinErrS.Get() != "", P(css.Class("notice-danger"), pinErrS.Get())),
+			Button(css.Class("btn btn-primary"), Type("submit"), pinLbl),
+			Button(css.Class("btn"), Type("button"), OnClick(onCancelPINForm),
+				uistate.T("profileSwitch.pinFormCancel")),
+		)
 	}
 
-	return Div(css.Class("row"),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"),
+	// The ⋯ overflow menu: transactions, make-default, PIN management, delete.
+	menuItem := func(testID, label string, on ui.Handler, extra ...any) ui.Node {
+		args := []any{css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(on)}
+		if testID != "" {
+			args = append(args, Attr("data-testid", testID))
+		}
+		args = append(args, extra...)
+		args = append(args, label)
+		return Button(args...)
+	}
+	items := []ui.Node{
+		menuItem("member-view-"+m.ID, uistate.T("nav.transactions"), view, Title(uistate.T("members.viewTitle"))),
+	}
+	if !m.IsDefault {
+		items = append(items, menuItem("member-make-default-"+m.ID, uistate.T("members.makeDefault"), mkDefault, Title(uistate.T("members.makeDefaultTitle"))))
+	}
+	if props.OnSetPIN != nil {
+		if props.MemberHasPIN {
+			items = append(items,
+				menuItem("member-change-pin-"+m.ID, uistate.T("profileSwitch.changePIN"), onShowPINForm),
+				menuItem("member-remove-pin-"+m.ID, uistate.T("profileSwitch.removePIN"), onRemovePIN),
+			)
+		} else {
+			items = append(items, menuItem("member-set-pin-"+m.ID, uistate.T("profileSwitch.setPIN"), onShowPINForm))
+		}
+	}
+	items = append(items, menuItem("member-delete-"+m.ID, uistate.T("members.deleteTitle"), del,
+		Attr("aria-label", uistate.T("members.deleteTitle"))))
+
+	chips := []any{css.Class("hh-person-chips"),
+		Span(css.Class("badge"), Attr("data-testid", "member-role-badge-"+m.ID), roleLabel),
+	}
+	if m.IsDefault {
+		chips = append(chips, Span(css.Class("badge badge-muted"), Attr("data-testid", "member-default-chip-"+m.ID), uistate.T("members.defaultBadge")))
+	}
+	if props.MemberHasPIN {
+		chips = append(chips, Span(css.Class("badge badge-muted"), uistate.T("members.pinBadge")))
+	}
+
+	shareBar := Div(css.Class("hh-person-share"),
+		Div(css.Class("share-bar", "share-bar-thin"), Attr("title", uistate.T("members.shareOfWorth")),
+			Div(ClassStr(shareFillCls(props.Worth)), Style(map[string]string{"width": fmt.Sprintf("%d%%", props.SharePct)}))),
+		Span(css.Class("hh-person-share-pct"), fmt.Sprintf("%d%%", props.SharePct)),
+	)
+
+	return Div(css.Class("row hh-person"),
+		Div(css.Class("hh-person-main"),
+			Div(css.Class("hh-person-id"),
 				memberAvatar(m.Name, color),
-				m.Name,
-			),
-			Span(css.Class("row-meta"),
-				Span(css.Class("badge"), Attr("data-testid", "member-role-badge-"+m.ID), roleLabel),
-				If(m.IsDefault,
-					Span(css.Class("badge badge-muted"), Attr("data-testid", "member-default-chip-"+m.ID), uistate.T("members.defaultBadge")),
+				Div(
+					Div(css.Class("hh-person-name", tw.FontDisplay), m.Name),
+					Div(chips...),
 				),
 			),
+			Div(css.Class("hh-person-figures"),
+				Span(ClassStr("hh-person-worth amount "+accentFor(props.Worth)), fmtMoney(props.Worth)),
+				Span(css.Class("hh-person-sub"), uistate.T("members.spentSub", fmtMoney(props.Spent))),
+			),
+			Div(css.Class("hh-person-actions"),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+				uiw.KebabMenu(uiw.KebabMenuProps{
+					ID:           "member-menu-" + m.ID,
+					AriaLabel:    uistate.T("members.menuAria"),
+					ToggleTestID: "member-menu-btn-" + m.ID,
+					Items:        items,
+				}),
+			),
 		),
-		IfElse(m.IsDefault,
-			Span(css.Class("badge badge-soon"), uistate.T("members.defaultBadge")),
-			Button(css.Class("btn"), Type("button"), Title(uistate.T("members.makeDefaultTitle")), OnClick(mkDefault), uistate.T("members.makeDefault")),
-		),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("members.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-		pinSection,
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("members.deleteTitle")), Title(uistate.T("members.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		shareBar,
+		If(props.CustomLine != "", Div(css.Class("hh-person-custom"), props.CustomLine)),
+		pinForm,
 	)
+}
+
+// shareFillCls tones the person's worth share bar: accent for positive,
+// money-down for negative (matching the /networth liability bars).
+func shareFillCls(v money.Money) string {
+	if v.IsNegative() {
+		return "share-bar-fill nw-bar-down"
+	}
+	return "share-bar-fill"
 }

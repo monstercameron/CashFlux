@@ -237,7 +237,7 @@ func Split() ui.Node {
 	if n := len(ids); n > 0 && amt > 0 {
 		if weighted.Get() {
 			// The summary is the key computed output — highlight it, not muted (G12 §4).
-			splitSummary = P(css.Class("split-summary"), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
+			splitSummary = P(css.Class("split-summary", tw.FontDisplay), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
 		} else {
 			each := amt / int64(n)
 			rem := amt - each*int64(n)
@@ -245,7 +245,7 @@ func Split() ui.Node {
 			if rem > 0 {
 				s += fmt.Sprintf(" (+%s remainder to the first)", fmtMoney(money.New(rem, base)))
 			}
-			splitSummary = P(css.Class("split-summary"), s)
+			splitSummary = P(css.Class("split-summary", tw.FontDisplay), s)
 		}
 	}
 	// Select-all / clear for households with several members.
@@ -260,9 +260,8 @@ func Split() ui.Node {
 	}
 
 	return Div(
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("nav.split"),
-			Body: Fragment(
+		rptSection("sec-split-calc", uistate.T("nav.split"), nil,
+			Fragment(
 				P(css.Class("muted"), uistate.T("split.hint")),
 				Div(css.Class("form-grid"),
 					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount)),
@@ -272,15 +271,14 @@ func Split() ui.Node {
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
 				errText("split-err", errS.Get()),
 			),
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("split.members"),
-			Body: Fragment(
+		),
+		rptSection("sec-split-members", uistate.T("split.members"), nil,
+			Fragment(
 				memberControls,
 				memberBody,
 				splitSummary,
 			),
-		}),
+		),
 		// Forward hint: show a placeholder prompt when the user has entered an amount +
 		// selected members but hasn't chosen who paid — so Priya sees where the result
 		// will appear before she completes the form (G12 §5).
@@ -289,9 +287,8 @@ func Split() ui.Node {
 		),
 		// "This split" — ephemeral card; only visible when a payer + members + amount are
 		// all set. Title distinguishes it from the persisted "Running balance" card (G12 §7).
-		If(len(owes) > 0, uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("split.thisSplit"),
-			Body: Fragment(
+		If(len(owes) > 0, rptSection("sec-split-this", uistate.T("split.thisSplit"), nil,
+			Fragment(
 				Div(css.Class("rows"), owes),
 				// Who-owes-whom as a Mermaid digraph (C70): debtor → payer, labelled.
 				uiw.Mermaid(uiw.MermaidProps{
@@ -310,13 +307,12 @@ func Split() ui.Node {
 					}), uistate.T("split.downloadCsv")),
 				),
 			),
-		})),
+		)),
 		// Persisted running balance — always shown (with empty-state when no splits yet),
 		// titled "Running balance" to distinguish it from the ephemeral "This split" card
 		// above (G12 §7 item 19; G12 §1 item 3 empty-state).
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("split.runningBalance"),
-			Body: Fragment(
+		rptSection("sec-split-balance", uistate.T("split.runningBalance"), nil,
+			Fragment(
 				P(css.Class("muted"), uistate.T("split.runningBalanceHint")),
 				If(len(net) == 0,
 					P(css.Class("muted"), uistate.T("split.runningBalanceEmpty")),
@@ -330,7 +326,7 @@ func Split() ui.Node {
 					If(len(netRows) == 0, P(css.Class("muted"), uistate.T("split.allSettled"))),
 				)),
 			),
-		}),
+		),
 	)
 }
 

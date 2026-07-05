@@ -30,6 +30,7 @@ func Register() {
 	registerFieldsSurface()
 	registerStudioTabs()
 	registerWorkflowsSurface()
+	registerHouseholdSurface()
 	inject(Build())
 }
 

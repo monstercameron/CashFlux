@@ -1,3 +1,35 @@
+## 2026-07-04 — /household joins the Understand family: the people ledger
+
+First of the Data & People pages (Cam: "use more of the design elements from the understand
+pages and keep the designs inline with those… formulas and custom values where appropriate…
+make it beautiful"). Design read: the household page is about PEOPLE, and the Understand
+language already knows how to present a subject — one hero figure, serif sections, share bars,
+a takeaway sentence. So the page opens with the household's one number (combined net worth,
+count-up serif) over figure chips and a computed takeaway ("Marcus Hartley holds the largest
+share of the household's worth. All of this period's spending is shared."), and each member
+becomes a ledger entry: big avatar, serif name, role chips, worth + spent figures, and a share
+bar of their slice of the biggest holding (down-toned when negative, borrowed from /networth).
+
+Decisions worth remembering:
+- Members/By-person previously DUPLICATED the same three analytics sections on two surfaces.
+  Split the roles: the roster rows carry each person's own figures; the By person tab owns the
+  cross-person analytics (now share-bar ranked with takeaway ledes). Standalone /members gets
+  roster + analytics so nothing is lost off-rail.
+- Member custom fields existed in the domain (`Member.Custom`, `cf_member_*` engine vars,
+  member-scoped defs in /fields) but NO UI ever wrote them — the edit form now renders the
+  member defs via the shared CustomFieldInput and saves through customValuesToMap; values show
+  as a quiet meta line on the row.
+- Row actions: visible Edit (e2e c275 clicks `button[title*="Edit"]` directly) + the standard
+  ⋯ KebabMenu for the rest. Role/Default chips stay visible on the row (c276 reads them at
+  rest). Lesson re-learned: the `.row` base class centers/space-betweens children — a bespoke
+  row must restate align-items/justify-content on the SAME selector specificity
+  (`.row.hh-person`) or the column stacks center-aligned.
+- The one-per-surface rows-container ratchet (screenlint) bites on new list markup: route all
+  new lists through a single hhRowsList helper so the literal count stays at baseline.
+
+Probe: shot_hh.mjs (scratchpad) — hero/takeaway/roster/kebab/edit-form/by-person bars/split
+chrome asserted, dark + light shots, zero page errors.
+
 ## 2026-07-04 — Workflows feature review: the matrix run that found a money bug
 
 Cam's goal: verify the workflows FEATURE — every trigger and action actually working, formulas
