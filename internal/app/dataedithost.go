@@ -5,6 +5,7 @@
 package app
 
 import (
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -58,17 +59,29 @@ func CategoryEditHost() uic.Node {
 	})
 }
 
-// RuleEditHost renders the rule editor flip modal.
+// RuleEditHost renders the rule editor flip modal. The panel height tracks the
+// rule's content: a plain phrase rule gets a snug panel (no dead space below
+// the actions), while a condition-bearing rule opens taller; growth past the
+// panel (enabling more slots) scrolls with the sticky action bar in view.
 func RuleEditHost() uic.Node {
 	id := uistate.UseRuleEdit().Get()
 	if id == "" {
 		return Fragment()
 	}
+	height := "470px"
+	if appstate.Default != nil {
+		for _, r := range appstate.Default.Rules() {
+			if r.ID == id && len(r.Conditions) > 0 {
+				height = "640px"
+				break
+			}
+		}
+	}
 	closeModal := func() { uistate.CloseRuleEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("rules.editTitle"),
 		Width:    "480px",
-		Height:   "640px",
+		Height:   height,
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.RuleEditForm, screens.RuleEditFormProps{RuleID: id, OnDone: closeModal}),
