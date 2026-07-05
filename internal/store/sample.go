@@ -30,27 +30,47 @@ func EmptyDataset() Dataset {
 	}
 }
 
-// SampleDataset returns a realistic four-year starter dataset for first run or
-// the "load sample data" action: the finances of the Hartleys — Marcus, a young
-// software engineer earning a modest ~$80k (after raises from ~$68k), and his
-// wife Priya, who works part-time and runs a small online business. They are a
-// debt-heavy, near-break-even household: two financed cars (the lifestyle
-// "bad decision"), a credit card they carry from eating out too often, Priya's
-// student loan, frequent travel — and a baby on the way (Priya is three months
-// pregnant as of "today", mid-June 2026; due ~December 2026). Their north-star
-// goal is a down payment on a family home.
+// SampleDataset returns a realistic FIVE-year starter dataset for first run or
+// the "load sample data" action: the finances of the Hartleys — Marcus, a
+// software engineer, and his wife Priya, who works part-time at a library and
+// runs a small online candle/knitwear shop. They are a debt-heavy,
+// thin-margined household: two financed cars (the lifestyle "bad decision"), a
+// credit card they carry from eating out too often, Priya's student loan,
+// frequent travel — and a baby on the way (Priya is three months pregnant as of
+// "today", late June 2026; due ~December 2026). North star: a bigger family home.
 //
-// It carries 48 months of recurring activity (July 2022 – June 2026) so every
-// trend, chart, report, and forecast has real history, and the values EVOLVE:
-// Marcus's salary steps up each July; Priya's online business grows; the two car
-// loans appear partway through (Jan 2025 and Sep 2025) with their payments;
-// dining runs chronically over budget; and prenatal/baby costs ramp up in the
-// recent tail. It deliberately exercises **every** feature surface:
-// sub-categories, transfers, splits, tags, custom fields, rules, workflows + run
-// history, budgets (all periods + rollover), goals, tasks, recurring schedules,
-// plans, allocation profiles, formulas, documents, artifacts, a custom page,
-// shared expenses + settlements, and rich settings (FX table, freshness
-// overrides, payoff baseline).
+// It carries 60 months of activity (July 2021 – June 2026, plus the first days
+// of July 2026 in flight) so every trend, chart, report, and forecast has real
+// history — and the history tells a STORY with year-over-year growth and real
+// setbacks:
+//
+//   - 2021: thin margins on a junior salary; bad decision #1 — crypto bought at
+//     the November top, bags capitulated in the June 2022 crash.
+//   - Jan 2023: Marcus is LAID OFF from Cohere Systems. Four months out of work
+//     (Feb–May 2023): severance + unemployment + COBRA, savings drawn down
+//     monthly, the card at minimum payments (one late fee), dining/travel cut,
+//     side projects pushed hard. Hired by Meridian Data in June 2023.
+//   - Spring 2024: the LUCKY STREAK — four straight green months in the WSB
+//     brokerage (plus a scratch-off win), and for once he takes profits: $8k
+//     moved to savings that June.
+//   - 2025: bad decision #2 (and #3) — two financed cars, on top of the dining
+//     habit that runs over budget almost every month.
+//   - 2026: pregnancy costs ramp in the tail; the household is growing but the
+//     margins are as thin as ever.
+//
+// Month-to-month amounts wobble on a deterministic hash (vr) — non-periodic
+// like real life, byte-stable across runs for e2e. A rotating clutch of RAW
+// BANK-STATEMENT imports ("POS DEBIT 4417 AMZN MKTP US*2K3L7QW", "VENMO
+// PAYMENT 1023985544", …) lands every month, a standing minority of them
+// uncategorized — plus a doubled DoorDash import and a mis-filed parking
+// charge — so the rules engine, Smart+ scan, /duplicates, and bulk edits
+// always have genuine work in the demo. It deliberately exercises **every**
+// feature surface: sub-categories, transfers, splits, tags, custom fields,
+// rules, workflows + run history, budgets (all periods + rollover), goals,
+// tasks, recurring schedules, plans, allocation profiles, formulas, documents,
+// artifacts, holdings, balance snapshots, unified-spec custom pages, shared
+// expenses + settlements, and rich settings (FX table, freshness overrides,
+// payoff baseline).
 //
 // Liabilities (the two car loans, the student loan, the credit card) are kept as
 // static balances and their payments are categorized expenses — the convention
@@ -98,9 +118,9 @@ func SampleDataset() Dataset {
 	usd := func(n int64) money.Money { return money.New(n, "USD") }
 	eur := func(n int64) money.Money { return money.New(n, "EUR") } // for the foreign-trip FX demo
 	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-	// Opening balances are stated as of the eve of the modeled history; the 48
-	// months of transactions then carry each account to "today" (mid-June 2026).
-	asOf := date(2022, time.June, 30)
+	// Opening balances are stated as of the eve of the modeled history; the 60
+	// months of transactions then carry each account to "today" (early July 2026).
+	asOf := date(2021, time.June, 30)
 	// Activity on/before this date is reconciled; later (current-month) activity is
 	// still pending, which is what a real ledger looks like mid-month.
 	clearedAsOf := date(2026, time.June, 15)
@@ -164,26 +184,57 @@ func SampleDataset() Dataset {
 		catHomeInsurance = "cat-home-insurance" // child of Insurance
 	)
 
-	// Marcus's take-home salary steps up each July (a raise a year): ~$68k → $72k
-	// → $76k → $80k gross, modeled here as the net monthly paycheck.
-	salaryNet := func(i int) int64 {
+	// The layoff arc: Marcus's last Cohere paycheck lands Jan 2023 (i=18); he is
+	// out of work Feb–May 2023 (i 19..22) and starts at Meridian Data in June
+	// 2023 (i=23). Everything money-shaped in the loop keys off these two.
+	const layoffAt, rehiredAt = 19, 23
+
+	// Marcus's net monthly paycheck: junior money at Cohere, the layoff gap,
+	// then Meridian Data at a step up with a raise each July. The July-2026
+	// recurring schedule (rec-salary) matches the final step.
+	salaryNet := func(i int) (payee string, net int64) {
 		switch {
 		case i < 12:
-			return 380000
-		case i < 24:
-			return 405000
+			return "Cohere Systems", 355000
+		case i < layoffAt:
+			return "Cohere Systems", 380000
+		case i < rehiredAt:
+			return "", 0 // the gap: no paycheck (see the unemployment block)
 		case i < 36:
-			return 435000
+			return "Meridian Data", 405000
+		case i < 48:
+			return "Meridian Data", 440000
 		default:
-			return 470000
+			return "Meridian Data", 470000
 		}
 	}
-	// Priya's part-time take-home is steady, with a small bump partway through.
+	// Priya's part-time take-home grows slowly — and she picked up extra shifts
+	// while Marcus was out of work.
 	partTimeNet := func(i int) int64 {
-		if i < 24 {
-			return 100000
+		n := int64(90000)
+		switch {
+		case i >= 36:
+			n = 120000
+		case i >= 24:
+			n = 100000
 		}
-		return 120000
+		if i >= layoffAt && i < rehiredAt {
+			n += 32000
+		}
+		return n
+	}
+
+	// vr is a tiny deterministic hash → 0..n-1: stable across runs (e2e-safe)
+	// but NON-periodic month to month, so charts wobble like real life instead
+	// of repeating on a fixed cycle.
+	vr := func(salt string, i int, n int64) int64 {
+		h := uint32(2166136261)
+		for _, c := range salt {
+			h = (h ^ uint32(c)) * 16777619
+		}
+		h = (h ^ uint32(i)) * 16777619
+		h = (h ^ (h >> 13)) * 16777619
+		return int64(h % uint32(n))
 	}
 
 	var txns []domain.Transaction
@@ -197,15 +248,16 @@ func SampleDataset() Dataset {
 	}
 	cleared := func(d time.Time) bool { return !d.After(clearedAsOf) }
 
-	// --- 48 months of recurring activity (2022-07 .. 2026-06) ---
-	start := date(2022, time.July, 1)
-	for i := range 48 {
+	// --- 60 months of activity (2021-07 .. 2026-06): five years, four arcs ---
+	start := date(2021, time.July, 1)
+	for i := range 60 {
 		ym := start.AddDate(0, i, 0)
 		y, m := ym.Year(), ym.Month()
 		tag := ym.Format("2006-01")
-		v := int64(i % 6) // bounded per-month variation so charts aren't flat
+		v := vr("month", i, 6) // bounded, non-periodic wobble
+		gap := i >= layoffAt && i < rehiredAt
 		// Pregnancy / baby ramp: only the final three months (Apr–Jun 2026).
-		babyMonth := i >= 45
+		babyMonth := i >= 57
 
 		txn := func(slot string, d int, acct, payee, desc, cat string, amt int64) {
 			dt := date(y, m, d)
@@ -221,32 +273,57 @@ func SampleDataset() Dataset {
 				Payee: payee, Desc: desc, CategoryID: cat, Amount: usd(amt), MemberID: member, Cleared: cleared(dt),
 			})
 		}
+		addTransferBetween := func(slot string, d int, from, to, label string, amt int64) {
+			dt := date(y, m, d)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-%s-out", tag, slot), AccountID: from, Date: dt,
+				Payee: label, Desc: label, Amount: usd(-amt), MemberID: marcus, TransferAccountID: to, Cleared: cleared(dt),
+			})
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-%s-in", tag, slot), AccountID: to, Date: dt,
+				Payee: label, Desc: label, Amount: usd(amt), MemberID: marcus, TransferAccountID: from, Cleared: cleared(dt),
+			})
+		}
 		addTransfer := func(slot, dest, label string, amt int64) {
-			dt := date(y, m, 2)
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-%s-out", tag, slot), AccountID: checking, Date: dt,
-				Payee: label, Desc: label, Amount: usd(-amt), MemberID: marcus, TransferAccountID: dest, Cleared: cleared(dt),
-			})
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-%s-in", tag, slot), AccountID: dest, Date: dt,
-				Payee: label, Desc: label, Amount: usd(amt), MemberID: marcus, TransferAccountID: checking, Cleared: cleared(dt),
-			})
+			addTransferBetween(slot, 2, checking, dest, label, amt)
 		}
 
 		// --- Income ---
-		txn("salary", 1, checking, "Cohere Systems", "Paycheck (net)", catSalary, salaryNet(i))
+		if payee, net := salaryNet(i); net > 0 {
+			txn("salary", 1, checking, payee, "Paycheck (net)", catSalary, net)
+		} else {
+			// The gap months (Feb–May 2023): unemployment checks, COBRA instead
+			// of employer health cover, and the emergency fund doing its job —
+			// a monthly drawdown from savings keeps checking above water.
+			txn("unemployment", 3, checking, "State Workforce Commission", "Unemployment benefit", catOtherInc, 172500)
+			txn("cobra", 4, checking, "COBRA Health Admin", "COBRA health premium (family)", catHealth, -68000)
+			if i >= 21 { // the severance carried Feb–Mar; then savings had to
+				addTransferBetween("xfer-drawdown", 6, hysa, checking, "Emergency fund drawdown", 90000)
+			}
+		}
 		txnBy(priya, "parttime", 1, checking, "Lakeside Library", "Part-time pay", catPartTime, partTimeNet(i))
-		// Priya's online business: revenue grows over the four years; supplies/fees
-		// come back out of the business checking. Both legs land in bizchk.
-		bizRev := 18000 + int64(i)*1600 + v*3000 // ~$180/mo early → ~$1,100+/mo recent
-		txnBy(priya, "biz-rev", 18, bizchk, "Etsy / Shopify payout", "Online shop sales", catBizInc, bizRev)
-		txnBy(priya, "biz-exp", 19, bizchk, "Supplies & shipping", "Shop supplies", catBizExp, -(6000 + v*1800))
-		// Marcus's side projects pay out irregularly (an app, a freelance gig).
-		if i%4 == 1 {
+		// Priya's online business opens Nov 2021 and grows ~5x over five years;
+		// supplies/fees come back out of the business checking (both legs in bizchk).
+		if i >= 4 {
+			bizRev := 5200 + int64(i-4)*1850 + vr("bizrev", i, 5)*2800
+			txnBy(priya, "biz-rev", 18, bizchk, "Etsy / Shopify payout", "Online shop sales", catBizInc, bizRev)
+			txnBy(priya, "biz-exp", 19, bizchk, "Supplies & shipping", "Shop supplies", catBizExp, -(4200 + int64(i-4)*160 + vr("bizexp", i, 4)*1500))
+			txnBy(priya, "bizsoft", 5, bizchk, "Shopify", "Shop software", catBizExp, -3900)
+			// The shop pays its owner: most of the profit sweeps into the household
+			// checking each month (the rest stays as the shop's working buffer).
+			addTransferBetween("bizdraw", 26, bizchk, checking, "Owner's draw (shop profit)", (bizRev*7)/10)
+		}
+		// Marcus's side projects pay out irregularly (an app, a freelance gig) —
+		// and he pushed them hard while out of work.
+		if i%4 == 1 || gap {
+			amt := 22000 + v*9000
+			if gap {
+				amt += 45000
+			}
 			dt := date(y, m, 23)
 			add(domain.Transaction{
 				ID: "tx-" + tag + "-sideproj", AccountID: checking, Date: dt, Payee: "App Store / Gumroad",
-				Desc: "Side-project revenue", CategoryID: catSideProj, Amount: usd(22000 + v*9000),
+				Desc: "Side-project revenue", CategoryID: catSideProj, Amount: usd(amt),
 				MemberID: marcus, Cleared: cleared(dt), Tags: []string{"business", "side-hustle"},
 				Custom: map[string]any{"reimbursable": false, "project": "Side hustle"},
 			})
@@ -277,15 +354,17 @@ func SampleDataset() Dataset {
 		}
 		txn("hoa", 1, checking, "Birchwood Condo Association", "HOA dues", catHOA, -38000)
 		if m == time.April || m == time.October {
-			txn("proptax", 12, checking, "County Tax Collector", "Property tax (installment)", catPropTax, -240000)
+			txn("proptax", 12, checking, "County Tax Collector", "Property tax (installment)", catPropTax, -150000)
 		}
 		if m == time.September {
-			txn("homeins", 7, checking, "SafeHarbor Insurance", "Home insurance (annual)", catHomeInsurance, -180000)
+			txn("homeins", 7, checking, "SafeHarbor Insurance", "Home insurance (annual)", catHomeInsurance, -140000)
 		}
-		txn("electric", 8, checking, "Metro Power", "Electricity", catElectric, -(8500 + v*900))
+		txn("electric", 8, checking, "Metro Power", "Electricity", catElectric, -(8500 + vr("elec", i, 9)*900))
 		txn("internet", 9, checking, "Fiberline", "Internet", catInternet, -7500)
 		txn("phone", 9, checking, "CellOne", "Phones (two lines)", catUtilities, -9500)
-		txn("gym", 3, checking, "Iron Works Gym", "Gym membership", catHealth, -5000)
+		if !gap { // the gym membership was frozen while Marcus was out of work
+			txn("gym", 3, checking, "Iron Works Gym", "Gym membership", catHealth, -5000)
+		}
 		// C164: a real recurring service, not a generic "Subscriptions" lump — the old
 		// desc "Subscriptions" leaked into the detector as a subscription literally named
 		// "Subscriptions" (a category name masquerading as a merchant). Same account/
@@ -294,22 +373,21 @@ func SampleDataset() Dataset {
 		// Named subscriptions — engage the Subscriptions detector, price-change
 		// detection, mixed cadence (monthly + annual), and the stale/cancelled flows.
 		netflix := int64(-1549)
-		if i >= 30 { // Netflix raised its price (Jan 2025) → price-change detection
+		if i >= 42 { // Netflix raised its price (Jan 2025) → price-change detection
 			netflix = -1799
 		}
 		txn("netflix", 11, card, "Netflix", "Netflix", catSubs, netflix)
 		txn("spotify", 13, card, "Spotify", "Spotify Premium", catSubs, -1099)
 		txn("icloud", 6, card, "Apple", "iCloud storage", catSubs, -299)
-		if i >= 24 { // Marcus added ChatGPT Plus for the side projects, ~2 years in
+		if i >= 36 { // Marcus added ChatGPT Plus for the side projects (Jul 2024)
 			txn("chatgpt", 7, card, "OpenAI", "ChatGPT Plus", catSubs, -2000)
 		}
 		if m == time.July { // Amazon Prime annual renewal (yearly-cadence subscription)
 			txn("prime", 14, card, "Amazon Prime", "Prime membership (annual)", catSubs, -13900)
 		}
-		if i >= 18 && i <= 29 { // a MasterClass sub they sign up for, then later cancel
+		if i >= 30 && i <= 41 { // MasterClass: signed up Jan 2024, cancelled Jan 2025
 			txn("masterclass", 16, card, "MasterClass", "MasterClass", catSubs, -1800)
 		}
-		txnBy(priya, "bizsoft", 5, bizchk, "Shopify", "Shop software", catBizExp, -3900)
 		// C206: student loan payment as a proper two-legged transfer so the sloan
 		// liability balance decreases each month (amortizes) instead of staying flat.
 		// The out-leg leaves checking; the in-leg credits sloan, reducing the owed balance.
@@ -328,14 +406,17 @@ func SampleDataset() Dataset {
 		}
 
 		// --- Variable living expenses ---
-		txn("grocery1", 6, checking, "Greenfield Market", "Groceries", catGroceries, -(20000 + v*1500 + boolN(babyMonth, 4000)))
-		txnBy(priya, "grocery2", 20, checking, "Greenfield Market", "Groceries", catGroceries, -(17000 + v*1000 + boolN(babyMonth, 3000)))
-		// Dining — the "bad decision": several outings a month, chronically over budget.
-		txn("dining1", 12, card, "Trattoria Nove", "Dinner out", catDining, -(16000 + v*2200))
-		txnBy(priya, "dining2", 21, card, "Sushi Hana", "Date night", catDining, -(13000 + v*1800))
-		txn("takeout", 26, card, "DoorDash", "Takeout", catDining, -(9000 + v*1500))
-		txn("gas", 10, checking, "Shell", "Gas", catGas, -(6000 + v*500))
-		if i >= 38 { // Priya's car adds a second tank of gas
+		txn("grocery1", 6, checking, "Greenfield Market", "Groceries", catGroceries, -(20000 + vr("g1", i, 8)*1200 + boolN(babyMonth, 4000)))
+		txnBy(priya, "grocery2", 20, checking, "Greenfield Market", "Groceries", catGroceries, -(17000 + vr("g2", i, 7)*1000 + boolN(babyMonth, 3000)))
+		// Dining — the standing "bad decision": several outings a month,
+		// chronically over budget — except the gap months, when they cut back hard.
+		txn("dining1", 12, card, "Trattoria Nove", "Dinner out", catDining, -(16000 + vr("d1", i, 6)*2200 - boolN(gap, 9500)))
+		if !gap {
+			txnBy(priya, "dining2", 21, card, "Sushi Hana", "Date night", catDining, -(13000 + vr("d2", i, 5)*1800))
+			txn("takeout", 26, card, "DoorDash", "Takeout", catDining, -(9000 + vr("d3", i, 5)*1500))
+		}
+		txn("gas", 10, checking, "Shell", "Gas", catGas, -(6000 + vr("gas", i, 5)*500))
+		if i >= 50 { // Priya's car adds a second tank of gas
 			txnBy(priya, "gas2", 24, checking, "Chevron", "Gas (Priya's car)", catGas, -(4500 + v*400))
 		}
 		// Car payments appear only once each car is financed.
@@ -343,43 +424,39 @@ func SampleDataset() Dataset {
 		// loan liabilities amortize down each month rather than staying at their
 		// opening balances. The in-leg posts a positive amount to the loan account,
 		// reducing the outstanding balance (which started as a negative opening bal).
-		if i >= 30 { // Marcus's expensive car — financed Jan 2025
-			dt := date(y, m, 15)
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-carpay-m-out", tag), AccountID: checking, Date: dt,
-				Payee: "Apex Auto Finance", Desc: "Car payment (Marcus)",
-				Amount: usd(-62000), MemberID: marcus, TransferAccountID: carM, Cleared: cleared(dt),
-			})
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-carpay-m-in", tag), AccountID: carM, Date: dt,
-				Payee: "Apex Auto Finance", Desc: "Car payment (Marcus)",
-				Amount: usd(62000), MemberID: marcus, TransferAccountID: checking, Cleared: cleared(dt),
-			})
+		if i >= 42 { // Marcus's expensive car — financed Jan 2025 (bad decision #2)
+			addTransferBetween("carpay-m", 15, checking, carM, "Car payment (Marcus)", 62000)
 		}
-		if i >= 38 { // Priya's car — financed Sep 2025
-			dt := date(y, m, 17)
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-carpay-p-out", tag), AccountID: checking, Date: dt,
-				Payee: "Apex Auto Finance", Desc: "Car payment (Priya)",
-				Amount: usd(-48000), MemberID: priya, TransferAccountID: carP, Cleared: cleared(dt),
-			})
-			add(domain.Transaction{
-				ID: fmt.Sprintf("tx-%s-carpay-p-in", tag), AccountID: carP, Date: dt,
-				Payee: "Apex Auto Finance", Desc: "Car payment (Priya)",
-				Amount: usd(48000), MemberID: priya, TransferAccountID: checking, Cleared: cleared(dt),
-			})
+		if i >= 50 { // Priya's car — financed Sep 2025 (bad decision #3)
+			addTransferBetween("carpay-p", 17, checking, carP, "Car payment (Priya)", 48000)
 		}
 		// Car insurance: quarterly, and steps up once both cars are on the policy.
 		if int(m)%3 == 0 {
 			ins := int64(-30000)
-			if i >= 38 {
+			if i >= 50 {
 				ins = -46000
 			}
 			txn("insurance", 6, checking, "SafeHarbor Insurance", "Car insurance", catCarInsurance, ins)
 		}
-		txn("health", 16, checking, "Wellness Pharmacy", "Pharmacy", catHealth, -(3000 + v*700))
-		txn("shopping", 22, checking, "Northside Goods", "Household & shopping", catShopping, -(11000 + v*2500 + boolN(babyMonth, 9000)))
-		txn("fun", 18, checking, "Cineplex", "Movies & fun", catEntertain, -(5000 + v*1300))
+		txn("health", 16, checking, "Wellness Pharmacy", "Pharmacy", catHealth, -(3000 + vr("rx", i, 6)*700))
+		txn("shopping", 22, checking, "Northside Goods", "Household & shopping", catShopping, -(9500 + vr("shop", i, 6)*2200 + boolN(babyMonth, 9000) - boolN(gap, 6000)))
+		if !gap {
+			txn("fun", 18, checking, "Cineplex", "Movies & fun", catEntertain, -(5000 + vr("fun", i, 6)*1300))
+		}
+		// Holiday gifts every December; a card annual fee every August; the odd
+		// out-of-network ATM fee — small realities that keep Gifts/Fees populated.
+		if m == time.December {
+			txn("gifts", 18, card, "Various", "Holiday gifts", catGifts, -(26000 + vr("gift", i, 4)*9000))
+		}
+		if m == time.August {
+			txn("cardfee", 20, card, "Beacon Bank", "Card annual fee", catFees, -9500)
+		}
+		if vr("atmfee", i, 5) == 0 {
+			txn("atmfee", 25, checking, "NON-NETWORK ATM", "ATM fee", catFees, -350)
+		}
+		if i == 21 { // the gap's low point: a missed card payment cost a late fee
+			txn("latefee", 24, card, "Beacon Bank", "Late payment fee", catFees, -3900)
+		}
 		// Coffee runs — feeds the rules engine ("coffee" → Dining) and "Apply rules".
 		coffee := func(slot string, d int) {
 			dt := date(y, m, d)
@@ -391,12 +468,61 @@ func SampleDataset() Dataset {
 		coffee("coffee1", 4)
 		coffee("coffee2", 17)
 
+		// --- Raw bank-statement imports (the garble a real CSV drops in) ---
+		// A rotating clutch each month. Some are categorized (the rules did their
+		// job); a standing minority land UNCATEGORIZED — which is exactly why the
+		// rules engine, the Smart+ scan, and bulk recategorize have real work.
+		type rawRow struct {
+			payee, cat  string
+			amt, spread int64
+		}
+		rawPool := []rawRow{
+			{"POS DEBIT 4417 AMZN MKTP US*2K3L7QW", catShopping, -3400, 5200},
+			{"ACH WEB SQ *SQ *BLUEBOTTL 877-417", catDining, -800, 500},
+			{"TST* PHO SAIGON - 0042", catDining, -2600, 1400},
+			{"CHECKCARD 0612 WL *STEAM PURCHASE 425-9522985", "", -1999, 4000},
+			{"PAYPAL *GKELECTRON 402-935-7733", "", -4700, 6300},
+			{"VENMO PAYMENT 1023985544", "", -2500, 5500},
+			{"ZELLE TO CHEN, JENNY", "", -4000, 4000},
+			{"IC* INSTACART*2 HTTPSINSTACAR", catGroceries, -6400, 3800},
+			{"PWP*CITYPARKING 866-330-3444", catTransport, -1200, 900},
+			{"APLPAY GREENFIELD MKT #204", catGroceries, -3100, 2600},
+			{"GOOGLE *TEMU 855-444-0141", "", -1800, 3300},
+			{"WLMRT GROC 3959 W CHSTR", catGroceries, -5400, 3200},
+			{"CKE*DD DOORDASH WINGSTOP 855-431-0459", catDining, -2800, 1900},
+			{"SP MIDNIGHT CANDLE CO", "", -2200, 1800},
+			{"MSFT * XBOX GAME PASS 425-6816830", "", -1699, 0},
+		}
+		nraw := 3 + int(vr("rawn", i, 3))
+		for r := range nraw {
+			row := rawPool[(i*5+r*3)%len(rawPool)]
+			day := 2 + int(vr(fmt.Sprintf("rawd%d", r), i, 26))
+			amt := row.amt
+			if row.spread > 0 {
+				amt -= vr(fmt.Sprintf("rawa%d", r), i, row.spread)
+			}
+			member := marcus
+			if r%2 == 1 {
+				member = priya
+			}
+			dt := date(y, m, day)
+			add(domain.Transaction{
+				ID: fmt.Sprintf("tx-%s-raw%d", tag, r), AccountID: checking, Date: dt,
+				Payee: row.payee, Desc: row.payee, CategoryID: row.cat,
+				Amount: usd(amt), MemberID: member, Cleared: cleared(dt),
+				Source: domain.TxnSourceImported,
+			})
+		}
+
 		// --- "Guilty pleasure" noise (varies month to month) ---
 		// Marcus's cigarettes: a few small convenience-store buys a month, paid in
 		// cash, with wandering payees, days, and prices so it looks like real habit
 		// spending rather than a clean recurring line.
 		smokeShops := []string{"Quik Mart", "7-Eleven", "Smoke Shop", "Gas-N-Go"}
-		smokes := 2 + int(i%3) // 2..4 packs a month
+		smokes := 2 + int(vr("smoken", i, 3)) // 2..4 packs a month
+		if gap {
+			smokes += 2 // the layoff months were stressful
+		}
 		for s := range smokes {
 			day := min(3+s*7+int(i%4), 28)
 			dt := date(y, m, day)
@@ -420,58 +546,135 @@ func SampleDataset() Dataset {
 			})
 		}
 		// A weekend getaway every few months (they love to travel) — on the card.
-		if i%3 == 2 {
+		// Not during the gap: travel was the first thing cut.
+		if i%3 == 2 && !gap {
 			dt := date(y, m, 14)
 			add(domain.Transaction{
 				ID: "tx-" + tag + "-getaway", AccountID: card, Date: dt, Payee: "Airbnb",
-				Desc: "Weekend getaway", CategoryID: catTravel, Amount: usd(-(28000 + v*7000)),
+				Desc: "Weekend getaway", CategoryID: catTravel, Amount: usd(-(28000 + vr("trip", i, 7)*7000)),
 				MemberID: marcus, Cleared: cleared(dt), Tags: []string{"vacation"},
 			})
 		}
 		// Monthly credit-card payment as a transfer (checking → card) so the card's
 		// balance actually pays down: purchases post to the card, this brings it back,
-		// and they carry a modest revolving balance rather than letting it balloon.
-		addTransfer("cardpay", card, "Credit card payment", 87000)
+		// and they carry a revolving balance. The gap months drop to the MINIMUM
+		// payment — the balance visibly balloons through mid-2023.
+		cardPay := int64(87000)
+		switch {
+		case gap:
+			cardPay = 22000 // minimum payment — the balance balloons through mid-2023
+		case i < 24:
+			cardPay = 55000 // lighter spending years, lighter payment
+		case i >= 42:
+			cardPay = 105000 // two-car era: the card runs hotter, so does the payment
+		}
+		addTransfer("cardpay", card, "Credit card payment", cardPay)
 
 		// --- Marcus's r/wallstreetbets dabbling (varying degrees of "success") ---
 		// Small deposits feed the account; wins and losses land with meme-stock
-		// descriptions. Losses skew bigger and more frequent — as they do.
+		// descriptions. Losses skew bigger and more frequent — as they do — EXCEPT
+		// the spring-2024 lucky streak: four straight green months, each bigger
+		// than the last.
 		tickers := []string{"GME calls", "TSLA", "NVDA calls", "AMC", "SPY puts", "PLTR", "DOGE"}
-		if i%3 == 0 {
-			addTransfer("xfer-wsb", wsb, "Deposit to brokerage", 15000)
-		}
-		switch i % 4 {
-		case 1: // a green day
+		switch {
+		case gap: // no gambling money while out of work
+		case i >= 31 && i <= 34: // THE LUCKY STREAK (Feb–May 2024)
+			streak := []int64{90000, 210000, 380000, 650000}
 			dt := date(y, m, 25)
 			add(domain.Transaction{
 				ID: "tx-" + tag + "-wsb-win", AccountID: wsb, Date: dt, Payee: "Robinhood",
-				Desc: "Sold " + tickers[i%len(tickers)] + " — green day", CategoryID: catInvestInc,
-				Amount: usd(8000 + v*9000), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "stonks"},
+				Desc: "Sold " + tickers[i%len(tickers)] + " — can't miss right now", CategoryID: catInvestInc,
+				Amount: usd(streak[i-31]), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "hot-streak"},
 			})
-		case 3: // a loss (bigger, naturally)
-			dt := date(y, m, 27)
-			add(domain.Transaction{
-				ID: "tx-" + tag + "-wsb-loss", AccountID: wsb, Date: dt, Payee: "Robinhood",
-				Desc: tickers[(i+3)%len(tickers)] + " — expired worthless", CategoryID: catInvestLoss,
-				Amount: usd(-(6000 + v*11000)), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "loss-porn"},
-			})
+		default:
+			if i%3 == 0 {
+				addTransfer("xfer-wsb", wsb, "Deposit to brokerage", 15000)
+			}
+			switch i % 4 {
+			case 1: // a green day
+				dt := date(y, m, 25)
+				add(domain.Transaction{
+					ID: "tx-" + tag + "-wsb-win", AccountID: wsb, Date: dt, Payee: "Robinhood",
+					Desc: "Sold " + tickers[i%len(tickers)] + " — green day", CategoryID: catInvestInc,
+					Amount: usd(8000 + v*9000), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "stonks"},
+				})
+			case 3: // a loss (bigger, naturally)
+				dt := date(y, m, 27)
+				add(domain.Transaction{
+					ID: "tx-" + tag + "-wsb-loss", AccountID: wsb, Date: dt, Payee: "Robinhood",
+					Desc: tickers[(i+3)%len(tickers)] + " — expired worthless", CategoryID: catInvestLoss,
+					Amount: usd(-(6000 + v*11000)), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "loss-porn"},
+				})
+			}
 		}
 
 		// A small monthly ATM withdrawal keeps the cash wallet stocked (it's what
 		// Marcus's cigarettes are paid from), so cash never drifts negative.
 		addTransfer("atm", cash, "ATM withdrawal", 5000)
 
-		// --- Transfers that (slowly) build wealth; thin, and sometimes skipped ---
-		if i%4 != 3 { // they don't manage to save every month
-			addTransfer("xfer-hysa", hysa, "Transfer to savings", 12000+boolN(babyMonth, 8000))
+		// --- Transfers that (slowly) build wealth; thin, sometimes skipped, and
+		// suspended entirely during the gap (the drawdown runs the other way). ---
+		if !gap && i%4 != 3 { // they don't manage to save every month
+			save := int64(12000)
+			if i >= 36 {
+				save = 20000
+			}
+			addTransfer("xfer-hysa", hysa, "Transfer to savings", save+boolN(babyMonth, 8000))
 		}
-		if i >= 12 {
+		if i >= rehiredAt+1 { // the Roth started once the Meridian job stuck
 			addTransfer("xfer-roth", roth, "Transfer to Roth IRA", 10000)
 		}
-		addTransfer("xfer-401k", k401, "Transfer to 401(k)", 15000)
+		if !gap {
+			k := int64(15000)
+			if i >= 48 {
+				k = 20000
+			}
+			addTransfer("xfer-401k", k401, "Transfer to 401(k)", k)
+		}
 	}
 
-	// --- one-off events across the four years (variety for reports/charts) ---
+	// --- one-off milestones across the five years (the arcs' anchors) ---
+
+	// Bad decision #1: crypto bought at the very top (Nov 2021) — one green sale
+	// near the peak, then the bags capitulated into the June 2022 crash.
+	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-out", AccountID: hysa, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(-300000), MemberID: marcus, TransferAccountID: wsb, Cleared: true})
+	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-in", AccountID: wsb, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(300000), MemberID: marcus, TransferAccountID: hysa, Cleared: true})
+	add(domain.Transaction{ID: "tx-crypto-gain-2021-12", AccountID: wsb, Date: date(2021, time.December, 3), Payee: "Coinbase", Desc: "Sold some ETH near the top — should have stopped here", CategoryID: catInvestInc, Amount: usd(45000), MemberID: marcus, Cleared: true, Tags: []string{"crypto"}})
+	add(domain.Transaction{ID: "tx-crypto-loss-2022-06", AccountID: wsb, Date: date(2022, time.June, 16), Payee: "Coinbase", Desc: "Capitulated — sold the BTC/ETH bags (-70%)", CategoryID: catInvestLoss, Amount: usd(-420000), MemberID: marcus, Cleared: true, Tags: []string{"crypto", "loss-porn"}})
+
+	// The layoff (end of Jan 2023): two months' severance up front; the monthly
+	// unemployment checks, COBRA, and savings drawdowns live in the loop above.
+	add(domain.Transaction{ID: "tx-severance-2023-02", AccountID: checking, Date: date(2023, time.February, 3), Payee: "Cohere Systems", Desc: "Severance (2 months)", CategoryID: catSalary, Amount: usd(550000), MemberID: marcus, Cleared: true, Tags: []string{"layoff"}})
+
+	// The lucky streak's coda (Jun 2024): for once, he actually took profits —
+	// $8k out of the brokerage into savings. Plus a scratch-off in the middle of
+	// the hot spring, because luck compounds.
+	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-out", AccountID: wsb, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(-800000), MemberID: marcus, TransferAccountID: hysa, Cleared: true})
+	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-in", AccountID: hysa, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(800000), MemberID: marcus, TransferAccountID: wsb, Cleared: true})
+	add(domain.Transaction{ID: "tx-scratch-2024-03", AccountID: cash, Date: date(2024, time.March, 16), Payee: "FL Lottery", Desc: "Scratch-off win", CategoryID: catOtherInc, Amount: usd(15000), MemberID: marcus, Cleared: true, Tags: []string{"lucky"}})
+
+	// Errata the tools exist for: the same DoorDash charge imported TWICE (the
+	// /duplicates screen has a real catch), and a parking charge mis-filed under
+	// Dining (bulk-recategorize / rules bait).
+	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-a", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-b", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-misfiled-parking-2026-05", AccountID: checking, Date: date(2026, time.May, 14), Payee: "PWP*CITYPARKING 866-330-3444", Desc: "PWP*CITYPARKING 866-330-3444", CategoryID: catDining, Amount: usd(-1400), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
+
+	// The current month (July 2026) is mid-flight: the first few days have
+	// posted — pending, uncleared — which is what a real ledger looks like on
+	// the 4th. (The matching recurring schedules' NextDue dates sit in August.)
+	add(domain.Transaction{ID: "tx-2026-07-salary", AccountID: checking, Date: date(2026, time.July, 1), Payee: "Meridian Data", Desc: "Paycheck (net)", CategoryID: catSalary, Amount: usd(470000), MemberID: marcus, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-parttime", AccountID: checking, Date: date(2026, time.July, 1), Payee: "Lakeside Library", Desc: "Part-time pay", CategoryID: catPartTime, Amount: usd(120000), MemberID: priya, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-mortgage-out", AccountID: checking, Date: date(2026, time.July, 1), Payee: "Beacon Bank Home Loans", Desc: "Mortgage payment", Amount: usd(-148000), MemberID: marcus, TransferAccountID: mortgage, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-mortgage-in", AccountID: mortgage, Date: date(2026, time.July, 1), Payee: "Beacon Bank Home Loans", Desc: "Mortgage payment", Amount: usd(148000), MemberID: marcus, TransferAccountID: checking, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-hoa", AccountID: checking, Date: date(2026, time.July, 1), Payee: "Birchwood Condo Association", Desc: "HOA dues", CategoryID: catHOA, Amount: usd(-38000), MemberID: marcus, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-coffee1", AccountID: checking, Date: date(2026, time.July, 2), Payee: "Blue Bottle Coffee", Desc: "Coffee", Amount: usd(-675), MemberID: marcus, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-grocery1", AccountID: checking, Date: date(2026, time.July, 3), Payee: "Greenfield Market", Desc: "Groceries", CategoryID: catGroceries, Amount: usd(-21400), MemberID: priya, Cleared: false})
+	add(domain.Transaction{ID: "tx-2026-07-raw0", AccountID: checking, Date: date(2026, time.July, 3), Payee: "APLPAY GREENFIELD MKT #204", Desc: "APLPAY GREENFIELD MKT #204", CategoryID: catGroceries, Amount: usd(-2850), MemberID: marcus, Cleared: false, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-2026-07-raw1", AccountID: checking, Date: date(2026, time.July, 4), Payee: "VENMO PAYMENT 1042778120", Desc: "VENMO PAYMENT 1042778120", Amount: usd(-3200), MemberID: marcus, Cleared: false, Source: domain.TxnSourceImported})
+
+	// --- one-off events across the years (variety for reports/charts) ---
+	add(domain.Transaction{ID: "tx-bonus-2021-12", AccountID: checking, Date: date(2021, time.December, 21), Payee: "Cohere Systems", Desc: "Year-end bonus", CategoryID: catSalary, Amount: usd(80000), MemberID: marcus, Cleared: true, Tags: []string{"bonus"}})
 	add(domain.Transaction{ID: "tx-honeymoon-flight-2022-09", AccountID: card, Date: date(2022, time.September, 10), Payee: "SkyJet", Desc: "Honeymoon flights", CategoryID: catTravel, Amount: usd(-110000), MemberID: marcus, Cleared: true, Tags: []string{"vacation", "honeymoon"}})
 	add(domain.Transaction{ID: "tx-honeymoon-hotel-2022-09", AccountID: card, Date: date(2022, time.September, 12), Payee: "Amalfi Resort", Desc: "Honeymoon hotel", CategoryID: catTravel, Amount: usd(-145000), MemberID: marcus, Cleared: true, Tags: []string{"vacation", "honeymoon"}})
 	add(domain.Transaction{ID: "tx-bonus-2022-12", AccountID: checking, Date: date(2022, time.December, 20), Payee: "Cohere Systems", Desc: "Year-end bonus", CategoryID: catSalary, Amount: usd(120000), MemberID: marcus, Cleared: true, Tags: []string{"bonus"}})
@@ -521,6 +724,37 @@ func SampleDataset() Dataset {
 	// A shared dinner the couple splits (settles via the SharedExpense ledger).
 	add(domain.Transaction{ID: "tx-dinner-shared-2026-05", AccountID: card, Date: date(2026, time.May, 24), Payee: "Trattoria Nove", Desc: "Dinner with friends (our half)", CategoryID: catDining, Amount: usd(-11000), MemberID: marcus, Cleared: true})
 
+	// --- Holdings: what the investment accounts actually hold (the Investments
+	// surface's data) — the retirement funds are boring on purpose; the WSB
+	// positions mirror the art-wsb positions table. ---
+	holdings := []domain.Holding{
+		{ID: "hold-401k-tdf", AccountID: k401, Name: "Target 2055 Fund", Shares: 412.6, CostBasisMinor: 1310000, CurrentPriceMinorPerShare: 4120, AssetClass: "Stocks"},
+		{ID: "hold-roth-vti", AccountID: roth, Ticker: "VTI", Name: "Vanguard Total Market ETF", Shares: 19.6, CostBasisMinor: 442000, CurrentPriceMinorPerShare: 29350, AssetClass: "Stocks"},
+		{ID: "hold-wsb-nvda", AccountID: wsb, Ticker: "NVDA", Name: "NVDA calls (Jul)", Shares: 2, CostBasisMinor: 120000, CurrentPriceMinorPerShare: 132000, AssetClass: "Stocks"},
+		{ID: "hold-wsb-tsla", AccountID: wsb, Ticker: "TSLA", Name: "Tesla shares", Shares: 6, CostBasisMinor: 180000, CurrentPriceMinorPerShare: 25150, AssetClass: "Stocks"},
+		{ID: "hold-wsb-gme", AccountID: wsb, Ticker: "GME", Name: "GameStop shares", Shares: 15, CostBasisMinor: 64000, CurrentPriceMinorPerShare: 2770, AssetClass: "Stocks"},
+		{ID: "hold-wsb-pltr", AccountID: wsb, Ticker: "PLTR", Name: "Palantir shares", Shares: 12, CostBasisMinor: 50000, CurrentPriceMinorPerShare: 6790, AssetClass: "Stocks"},
+	}
+
+	// --- Quarterly valuation snapshots for the slow accounts (401(k), Roth,
+	// the condo): the market story the transaction ledger can't tell — 2022
+	// down, 2023 sideways, 2024–25 up — plus steady condo appreciation. These
+	// back each account row's valuation-history sparkline. ---
+	var snapshots []domain.BalanceSnapshot
+	snapCurve := func(acct string, quarterly []int64) {
+		for qi, bal := range quarterly {
+			at := date(2021, time.September, 30).AddDate(0, qi*3, 0)
+			snapshots = append(snapshots, domain.BalanceSnapshot{
+				ID: fmt.Sprintf("snap-%s-%d", acct, qi), AccountID: acct,
+				BalanceMinor: bal, Currency: "USD", AsOf: at,
+			})
+		}
+	}
+	// 20 quarters: 2021-Q3 .. 2026-Q2.
+	snapCurve(k401, []int64{880000, 905000, 860000, 812000, 795000, 830000, 872000, 918000, 969000, 1030000, 1105000, 1190000, 1245000, 1330000, 1428000, 1500000, 1552000, 1610000, 1655000, 1700000})
+	snapCurve(roth, []int64{222000, 227000, 214000, 203000, 200000, 208000, 224000, 248000, 275000, 305000, 338000, 372000, 404000, 438000, 470000, 500000, 528000, 552000, 566000, 580000})
+	snapCurve(home, []int64{26600000, 26750000, 26900000, 27000000, 27050000, 27150000, 27300000, 27500000, 27750000, 28000000, 28300000, 28600000, 28900000, 29150000, 29400000, 29600000, 29800000, 30000000, 30200000, 30400000})
+
 	tinyPNG := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d}
 
 	ds := Dataset{
@@ -529,19 +763,19 @@ func SampleDataset() Dataset {
 			{ID: priya, Name: "Priya Hartley", Color: "#f472b6"},
 		},
 		Accounts: []domain.Account{
-			{ID: checking, Name: "Joint Checking", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(600000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 95, ExpectedReturnAPR: 0.1, Custom: map[string]any{"last4": "4821"}},
-			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(380000), BalanceAsOf: asOf, LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
-			{ID: k401, Name: "Marcus's 401(k)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(1500000), BalanceAsOf: asOf, LiquidityScore: 40, StabilityScore: 55, ExpectedReturnAPR: 7.5},
-			{ID: roth, Name: "Roth IRA", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(450000), BalanceAsOf: asOf, LiquidityScore: 45, StabilityScore: 60, ExpectedReturnAPR: 7.0},
-			{ID: bizchk, Name: "Priya's Business Checking", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(60000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80, ExpectedReturnAPR: 0.1},
-			{ID: wsb, Name: "Self-Directed Brokerage (WSB)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(150000), BalanceAsOf: asOf, LiquidityScore: 50, StabilityScore: 15, ExpectedReturnAPR: 4.0, Custom: map[string]any{}},
-			{ID: cash, Name: "Cash Wallet", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(12000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80},
-			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(28500000), BalanceAsOf: asOf, LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
-			{ID: mortgage, Name: "Mortgage", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-23000000), BalanceAsOf: asOf, InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
+			{ID: checking, Name: "Joint Checking", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(650000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 95, ExpectedReturnAPR: 0.1, Custom: map[string]any{"last4": "4821"}},
+			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(1050000), BalanceAsOf: asOf, LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
+			{ID: k401, Name: "Marcus's 401(k)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(850000), BalanceAsOf: asOf, LiquidityScore: 40, StabilityScore: 55, ExpectedReturnAPR: 7.5},
+			{ID: roth, Name: "Roth IRA", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(220000), BalanceAsOf: asOf, LiquidityScore: 45, StabilityScore: 60, ExpectedReturnAPR: 7.0},
+			{ID: bizchk, Name: "Priya's Business Checking", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(15000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80, ExpectedReturnAPR: 0.1},
+			{ID: wsb, Name: "Self-Directed Brokerage (WSB)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(40000), BalanceAsOf: asOf, LiquidityScore: 50, StabilityScore: 15, ExpectedReturnAPR: 4.0, Custom: map[string]any{}},
+			{ID: cash, Name: "Cash Wallet", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(9000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 80},
+			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(26500000), BalanceAsOf: asOf, LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
+			{ID: mortgage, Name: "Mortgage", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: asOf, InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
 			{ID: carM, Name: "Marcus's Car Loan", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2025, time.January, 10), InterestRateAPR: 7.4, DueDayOfMonth: 15, MinPayment: usd(62000), Lender: "Apex Auto Finance"},
 			{ID: carP, Name: "Priya's Car Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-2600000), BalanceAsOf: date(2025, time.September, 15), InterestRateAPR: 6.9, DueDayOfMonth: 17, MinPayment: usd(48000), Lender: "Apex Auto Finance"},
-			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3400000), BalanceAsOf: asOf, InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing"},
-			{ID: card, Name: "Rewards Credit Card", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-550000), BalanceAsOf: asOf, CreditLimit: usd(1200000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
+			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: asOf, InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing"},
+			{ID: card, Name: "Rewards Credit Card", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: asOf, CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
 			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: asOf, CreditLimit: eur(300000), InterestRateAPR: 19.9, DueDayOfMonth: 20, MinPayment: eur(2500), Lender: "Wise"},
 		},
 		Categories: []domain.Category{
@@ -579,7 +813,9 @@ func SampleDataset() Dataset {
 			{ID: catInvestLoss, Name: "Investing losses", Kind: domain.KindExpense, Color: "#9f1239"},
 			{ID: catFees, Name: "Fees & Charges", Kind: domain.KindExpense, Color: "#94a3b8"},
 		},
-		Transactions: txns,
+		Transactions:     txns,
+		Holdings:         holdings,
+		BalanceSnapshots: snapshots,
 		Budgets: []domain.Budget{
 			{ID: "bud-dining", Name: "Dining", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catDining, Period: domain.PeriodMonthly, Limit: usd(30000)},
 			{ID: "bud-groceries", Name: "Groceries", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catGroceries, Period: domain.PeriodMonthly, Limit: usd(45000), Rollover: true},
@@ -587,6 +823,7 @@ func SampleDataset() Dataset {
 			{ID: "bud-baby", Name: "Baby & Childcare", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catBaby, Period: domain.PeriodMonthly, Limit: usd(40000)},
 			{ID: "bud-shopping", Name: "Shopping", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catShopping, Period: domain.PeriodMonthly, Limit: usd(20000)},
 			{ID: "bud-subs", Name: "Subscriptions", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catSubs, Period: domain.PeriodMonthly, Limit: usd(4000)},
+			{ID: "bud-vices", Name: "Guilty pleasures", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catVices, Period: domain.PeriodMonthly, Limit: usd(6000)},
 			{ID: "bud-fun", Name: "Entertainment", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catEntertain, Period: domain.PeriodWeekly, Limit: usd(2500)},
 			{ID: "bud-travel", Name: "Travel", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTravel, Period: domain.PeriodQuarterly, Limit: usd(60000)},
 		},
@@ -599,9 +836,10 @@ func SampleDataset() Dataset {
 		},
 		Tasks: []domain.Task{
 			{ID: "task-card", Title: "Pay down the credit card balance", Notes: "We're carrying a balance — pay more than the minimum this month.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.June, 22), RelatedType: domain.RelatedAccount, RelatedID: card, MemberID: marcus, Source: domain.SourceManual},
-			{ID: "task-emergency", Title: "Build a real emergency fund — worried about layoffs at work", Notes: "Aim for 3 months of expenses. It's tight on basically one steady income, but start with $200/mo even if it's slow — especially before the baby comes.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.August, 1), RelatedType: domain.RelatedGoal, RelatedID: "goal-emergency", MemberID: marcus, Source: domain.SourceManual},
+			{ID: "task-emergency", Title: "Rebuild the emergency fund — we've been through one layoff already", Notes: "The 2023 layoff drained savings to $7,500 and checking almost hit zero. Aim for 3 months of expenses before the baby comes — the $200/mo transfers aren't enough on their own.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.August, 1), RelatedType: domain.RelatedGoal, RelatedID: "goal-emergency", MemberID: marcus, Source: domain.SourceManual},
 			{ID: "task-baby-budget", Title: "Set up the nursery and finalize baby budget", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.October, 1), RelatedType: domain.RelatedGoal, RelatedID: "goal-baby", MemberID: priya, Source: domain.SourceManual},
 			{ID: "task-dining-budget", Title: "Dining is way over budget — let's cut back", Status: domain.StatusOpen, Priority: domain.PriorityMedium, RelatedType: domain.RelatedBudget, RelatedID: "bud-dining", MemberID: marcus, Source: domain.SourceAI},
+			{ID: "task-categorize", Title: "Categorize the raw bank imports (VENMO / PAYPAL / ZELLE…)", Notes: "The CSV imports keep landing uncategorized. Add rules for the regulars or run the Smart+ suggestion scan on /rules.", Status: domain.StatusOpen, Priority: domain.PriorityMedium, MemberID: marcus, Source: domain.SourceAI},
 			{ID: "task-stale-401k", Title: "Update 401(k) balance (stale)", Status: domain.StatusOpen, Priority: domain.PriorityLow, RelatedType: domain.RelatedAccount, RelatedID: k401, MemberID: marcus, Source: domain.SourceNudge},
 			{ID: "task-maternity-leave", Title: "Check maternity-leave pay and budget for the gap", Status: domain.StatusOpen, Priority: domain.PriorityMedium, Due: date(2026, time.September, 1), MemberID: priya, Source: domain.SourceManual},
 			{ID: "task-done-refi", Title: "Looked into refinancing the car loan", Status: domain.StatusDone, Priority: domain.PriorityMedium, RelatedType: domain.RelatedAccount, RelatedID: carM, MemberID: marcus, Source: domain.SourceManual},
@@ -639,6 +877,8 @@ func SampleDataset() Dataset {
 			{ID: "rule-greenfield", Match: "greenfield", SetCategoryID: catGroceries},
 			{ID: "rule-streaming", Match: "streaming", SetCategoryID: catSubs},
 			{ID: "rule-doordash", Match: "doordash", SetCategoryID: catDining},
+			{ID: "rule-amazon", Match: "amzn", SetCategoryID: catShopping},
+			{ID: "rule-instacart", Match: "instacart", SetCategoryID: catGroceries},
 		},
 		Documents: []domain.Document{
 			{ID: "doc-statement", Filename: "checking-2026-05.csv", Kind: domain.DocCSV, UploadedAt: date(2026, time.June, 1), AccountID: checking, MemberID: marcus, Status: domain.DocImported, Extracted: []domain.DocumentRow{
@@ -659,17 +899,19 @@ func SampleDataset() Dataset {
 			{ID: "insight-dining", Text: "Dining is your biggest leak: it runs roughly $250–$400 over the $300 monthly budget almost every month — about $3,500/year you could redirect to the baby fund or the car loan.", CreatedAt: date(2026, time.May, 2)},
 			{ID: "insight-runway", Text: "Your emergency fund only covers about 1.5 months of expenses right now. With the baby due in December, building this toward three months is the most important near-term move.", CreatedAt: date(2026, time.June, 5)},
 			{ID: "insight-debt", Text: "Between the two car loans, the student loan, and the card, debt payments are over $1,600/month. Paying the card down first (25% APR) saves the most interest.", CreatedAt: date(2026, time.June, 6)},
-			{ID: "insight-jobloss", Text: "If Marcus's paycheck stopped, your savings would cover only about 1.3 months of expenses — Priya's part-time and shop income don't close the gap. Growing the emergency fund toward three months is the single most protective move before the baby arrives.", CreatedAt: date(2026, time.June, 8)},
+			{ID: "insight-jobloss", Text: "You've lived this before: when Marcus was laid off in early 2023, checking bottomed out near $1,200 and you drew down savings for months. Today the fund covers about 1.5 months of expenses — with the baby due in December, growing it toward three months is the single most protective move.", CreatedAt: date(2026, time.June, 8)},
+			{ID: "insight-uncategorized", Text: "There are dozens of imported transactions with raw bank names (VENMO, PAYPAL, ZELLE, STEAM…) still uncategorized. Adding three or four rules — or running the Smart+ scan — would clean most of them up and make every report more accurate.", CreatedAt: date(2026, time.June, 20)},
+			{ID: "insight-streak", Text: "The spring-2024 brokerage streak (+$13,300 over four months) worked out because you took profits — the $8,000 you moved to savings is most of what later covered the car down payments. The habit worth keeping is the cash-out, not the streak.", CreatedAt: date(2026, time.June, 14)},
 		},
 		Recurring: []domain.Recurring{
-			{ID: "rec-salary", Label: "Paycheck (net)", Amount: usd(470000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 1), AccountID: checking, CategoryID: catSalary, Autopost: true},
-			{ID: "rec-mortgage", Label: "Mortgage payment", Amount: usd(-148000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 1), AccountID: checking, CategoryID: catMortgage, Autopost: true},
-			{ID: "rec-hoa", Label: "HOA dues", Amount: usd(-38000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 1), AccountID: checking, CategoryID: catHOA, Autopost: true},
+			{ID: "rec-salary", Label: "Paycheck (net)", Amount: usd(470000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.August, 1), AccountID: checking, CategoryID: catSalary, Autopost: true},
+			{ID: "rec-mortgage", Label: "Mortgage payment", Amount: usd(-148000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.August, 1), AccountID: checking, CategoryID: catMortgage, Autopost: true},
+			{ID: "rec-hoa", Label: "HOA dues", Amount: usd(-38000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.August, 1), AccountID: checking, CategoryID: catHOA, Autopost: true},
 			// Property tax is billed in two installments a year; the cadence enum has no
 			// "semi-annual", so it's modeled as two yearly schedules (April & October).
-			{ID: "rec-proptax-fall", Label: "Property tax (fall installment)", Amount: usd(-240000), Cadence: domain.CadenceYearly, NextDue: date(2026, time.October, 12), AccountID: checking, CategoryID: catPropTax},
-			{ID: "rec-proptax-spring", Label: "Property tax (spring installment)", Amount: usd(-240000), Cadence: domain.CadenceYearly, NextDue: date(2027, time.April, 12), AccountID: checking, CategoryID: catPropTax},
-			{ID: "rec-homeins", Label: "Home insurance (annual)", Amount: usd(-180000), Cadence: domain.CadenceYearly, NextDue: date(2026, time.September, 7), AccountID: checking, CategoryID: catHomeInsurance},
+			{ID: "rec-proptax-fall", Label: "Property tax (fall installment)", Amount: usd(-150000), Cadence: domain.CadenceYearly, NextDue: date(2026, time.October, 12), AccountID: checking, CategoryID: catPropTax},
+			{ID: "rec-proptax-spring", Label: "Property tax (spring installment)", Amount: usd(-150000), Cadence: domain.CadenceYearly, NextDue: date(2027, time.April, 12), AccountID: checking, CategoryID: catPropTax},
+			{ID: "rec-homeins", Label: "Home insurance (annual)", Amount: usd(-140000), Cadence: domain.CadenceYearly, NextDue: date(2026, time.September, 7), AccountID: checking, CategoryID: catHomeInsurance},
 			{ID: "rec-carpay-m", Label: "Car payment (Marcus)", Amount: usd(-62000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 15), AccountID: checking, CategoryID: catAutoLoan, Autopost: true},
 			{ID: "rec-carpay-p", Label: "Car payment (Priya)", Amount: usd(-48000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 17), AccountID: checking, CategoryID: catAutoLoan, Autopost: true},
 			{ID: "rec-studentloan", Label: "Student loan payment", Amount: usd(-32000), Cadence: domain.CadenceMonthly, NextDue: date(2026, time.July, 5), AccountID: checking, CategoryID: catEducation, Autopost: true},
@@ -710,11 +952,15 @@ func SampleDataset() Dataset {
 				CreatedAt: date(2023, time.January, 10),
 				Layout: []dashlayout.Item{
 					{ID: "w-surplus", ColSpan: 1, RowSpan: 1},
-					{ID: "w-freelance", ColSpan: 3, RowSpan: 2},
+					{ID: "w-sh-cashflow", ColSpan: 3, RowSpan: 2},
+					{ID: "w-freelance", ColSpan: 2, RowSpan: 2},
+					{ID: "w-sh-networth", ColSpan: 2, RowSpan: 2},
 				},
 				Widgets: []domain.PageWidget{
-					{ID: "w-surplus", Type: "kpi", Title: "Monthly surplus", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{Expr: "income - expense"}},
+					{ID: "w-surplus", Type: "kpi", Title: "Monthly surplus", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-surplus", Kind: domain.KindKPI, Title: "Monthly surplus", Scalar: &domain.ScalarBind{Expr: "income - expense", Format: "money", Sub: "whole household, this month"}}},
+					{ID: "w-sh-cashflow", Type: "chart", Title: "Cash flow (12 months)", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-sh-cashflow", Kind: domain.KindChart, Title: "Cash flow (12 months)", Pipeline: &domain.Pipeline{Source: domain.Source{Kind: domain.SourceSeries, Series: domain.SeriesSpec{Metric: "cashflow", Months: 12}}}}},
 					{ID: "w-freelance", Type: "list", Title: "Side projects & business", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{Source: "transactions", Filter: "tag:business", Columns: []string{"date", "payee", "amount"}}},
+					{ID: "w-sh-networth", Type: "chart", Title: "Net worth (24 months)", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-sh-networth", Kind: domain.KindChart, Title: "Net worth (24 months)", Pipeline: &domain.Pipeline{Source: domain.Source{Kind: domain.SourceSeries, Series: domain.SeriesSpec{Metric: "networth", Months: 24}}}}},
 				},
 			},
 			// Priya's online business — a detailed dashboard for her Etsy/Shopify shop:
@@ -742,13 +988,13 @@ func SampleDataset() Dataset {
 					{ID: "w-pb-recent", ColSpan: 2, RowSpan: 2},
 				},
 				Widgets: []domain.PageWidget{
-					{ID: "w-pb-note", Type: "text", Title: "About the shop", Config: widgetcfg.Config{"text": "### 🧵 Priya's Handmade Co.\nA small **Etsy + Shopify** shop selling hand-poured candles and knitwear. Revenue has climbed from **~$180/mo** to over **$1,000/mo** (best month: May, **$1,148** / **52 orders**).\n\n**This month at a glance**\n- Net margin **~65%**, avg order value **$22.40**, sales tax accruing **$118** (Q2).\n- **4 orders to fulfill**, **3 supplies low** (soy wax, jars, boxes — reorder).\n- Channels: Etsy 59% · Shopify 33% · local market 8%.\n\nEverything below is what a one-person shop actually tracks: P&L, best-sellers, cost breakdown, stock levels, fulfillment queue, and tax set-aside."}},
+					{ID: "w-pb-note", Type: "text", Title: "About the shop", Config: widgetcfg.Config{"text": "### 🧵 Priya's Handmade Co.\nA small **Etsy + Shopify** shop selling hand-poured candles and knitwear, open since **November 2021**. Revenue has climbed from **~$60/mo** in the first winter to about **$1,100/mo** now — it even carried groceries through Marcus's 2023 layoff. Most of the profit sweeps to the household as a monthly **owner's draw**.\n\n**This month at a glance**\n- Net margin **~65%**, avg order value **$22.40**, sales tax accruing **$118** (Q2).\n- **4 orders to fulfill**, **3 supplies low** (soy wax, jars, boxes — reorder).\n- Channels: Etsy 59% · Shopify 33% · local market 8%.\n\nEverything below is what a one-person shop actually tracks: P&L, best-sellers, cost breakdown, stock levels, fulfillment queue, and tax set-aside."}},
 					{ID: "w-pb-rev", Type: "image", Title: "Revenue by month", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-rev"}},
 					{ID: "w-pb-orders", Type: "image", Title: "Orders by month", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-orders"}},
 					{ID: "w-pb-aov", Type: "image", Title: "Avg order value", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-aov"}},
 					{ID: "w-pb-margin", Type: "image", Title: "Net margin %", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-margin"}},
-					{ID: "w-pb-cashflow", Type: "kpi", Title: "Household cash flow", Config: widgetcfg.Config{"format": "currency"}, Binding: domain.WidgetBinding{Expr: "income - expense"}},
-					{ID: "w-pb-savings", Type: "kpi", Title: "Savings rate", Config: widgetcfg.Config{"format": "percent"}, Binding: domain.WidgetBinding{Expr: "round((income - expense) / income * 100)"}},
+					{ID: "w-pb-cashflow", Type: "kpi", Title: "Household cash flow", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-pb-cashflow", Kind: domain.KindKPI, Title: "Household cash flow", Scalar: &domain.ScalarBind{Expr: "income - expense", Format: "money", Sub: "this month"}}},
+					{ID: "w-pb-savings", Type: "kpi", Title: "Savings rate", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-pb-savings", Kind: domain.KindKPI, Title: "Savings rate", Scalar: &domain.ScalarBind{Expr: "round((income - expense) / income * 100)", Format: "percent", Sub: "this month"}}},
 					{ID: "w-pb-pnl", Type: "table", Title: "Profit & loss by month", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-pnl"}},
 					{ID: "w-pb-products", Type: "table", Title: "Best sellers", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-products"}},
 					{ID: "w-pb-costs", Type: "table", Title: "Cost breakdown", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-shop-costs"}},
@@ -776,12 +1022,12 @@ func SampleDataset() Dataset {
 					{ID: "w-mh-recent", ColSpan: 2, RowSpan: 2},
 				},
 				Widgets: []domain.PageWidget{
-					{ID: "w-mh-note", Type: "text", Title: "Hobbies & side projects", Config: widgetcfg.Config{"text": "### 🚀 Marcus's playground\nWhere the side income and the *risky fun* live.\n\n**Side projects** — a couple of apps plus the occasional freelance gig. Lumpy income (some months nothing, then a $480 payout — see the bar chart).\n\n**r/wallstreetbets** — a small self-directed brokerage. The value chart is a genuine rollercoaster: up on a green NVDA week, gutted when the SPY puts expired worthless. Current positions below — decidedly mixed.\n\n> 🧠 Rule of thumb: only money he can afford to lose goes into the WSB account. It is **not** the retirement plan."}},
+					{ID: "w-mh-note", Type: "text", Title: "Hobbies & side projects", Config: widgetcfg.Config{"text": "### 🚀 Marcus's playground\nWhere the side income and the *risky fun* live.\n\n**Side projects** — a couple of apps plus freelance gigs. Lumpy income, and the thing that kept him sane (and paid) during the **2023 layoff**.\n\n**The brokerage** — five years of honest history: crypto bought at the **Nov 2021 top** and capitulated in the crash (−$4,200 realized), a dead-quiet 2023 (no gambling money while unemployed), then the **spring-2024 hot streak** — four straight green months, +$13,300 — and, for once, profits actually taken: **$8k moved to savings**. Current positions below — decidedly mixed.\n\n> 🧠 Rule of thumb: only money he can afford to lose goes into the WSB account. It is **not** the retirement plan."}},
 					{ID: "w-mh-wsbval", Type: "image", Title: "WSB account value (the rollercoaster)", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-wsb-value"}},
 					{ID: "w-mh-sideproj", Type: "image", Title: "Side-project revenue", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-sideproj"}},
-					{ID: "w-mh-networth", Type: "kpi", Title: "Net worth", Config: widgetcfg.Config{"format": "currency"}, Binding: domain.WidgetBinding{Expr: "net_worth"}},
+					{ID: "w-mh-networth", Type: "kpi", Title: "Net worth", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-mh-networth", Kind: domain.KindKPI, Title: "Net worth", Scalar: &domain.ScalarBind{Expr: "net_worth", Format: "money", Sub: "assets minus debts, today"}}},
 					{ID: "w-mh-wsb", Type: "table", Title: "WSB positions", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{ArtifactID: "art-wsb"}},
-					{ID: "w-mh-trend", Type: "chart", Title: "Net-worth trend", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{}},
+					{ID: "w-mh-trend", Type: "chart", Title: "Net-worth trend (24 months)", Spec: &domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: "w-mh-trend", Kind: domain.KindChart, Title: "Net-worth trend (24 months)", Pipeline: &domain.Pipeline{Source: domain.Source{Kind: domain.SourceSeries, Series: domain.SeriesSpec{Metric: "networth", Months: 24}}}}},
 					{ID: "w-mh-recent", Type: "list", Title: "Recent side income", Config: widgetcfg.Config{}, Binding: domain.WidgetBinding{Source: "transactions"}},
 				},
 			},
@@ -799,11 +1045,12 @@ func SampleDataset() Dataset {
 			}, CreatedAt: date(2026, time.June, 1)},
 			// Priya's shop sales by month — backs the Table widget on her business page.
 			{ID: "art-shop-sales", Name: "shop-sales-by-month.csv", Kind: "csv", Columns: []string{"Month", "Revenue", "Orders", "Net"}, Rows: [][]string{
-				{"Feb 2026", "$842", "37", "$598"},
-				{"Mar 2026", "$915", "41", "$651"},
-				{"Apr 2026", "$1,030", "46", "$742"},
-				{"May 2026", "$1,148", "52", "$833"},
-				{"Jun 2026", "$1,096", "49", "$790"},
+				{"Jan 2026", "$1,012", "45", "$718"},
+				{"Feb 2026", "$1,031", "46", "$730"},
+				{"Mar 2026", "$1,058", "47", "$752"},
+				{"Apr 2026", "$1,076", "48", "$772"},
+				{"May 2026", "$1,091", "50", "$766"},
+				{"Jun 2026", "$1,108", "49", "$791"},
 			}, CreatedAt: date(2026, time.June, 1)},
 			// Marcus's WSB positions — backs the Table widget on his hobbies page.
 			{ID: "art-wsb", Name: "wsb-positions.csv", Kind: "csv", Columns: []string{"Position", "Cost basis", "Current value", "P&L"}, Rows: [][]string{
@@ -818,27 +1065,27 @@ func SampleDataset() Dataset {
 			// Priya: shop revenue (bar) and orders (bar).
 			func() domain.Artifact {
 				b := svgBarChart("Shop revenue by month", "#10b981",
-					[]string{"Feb", "Mar", "Apr", "May", "Jun"},
-					[]float64{842, 915, 1030, 1148, 1096}, dollarsLab)
+					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
+					[]float64{1012, 1031, 1058, 1076, 1091, 1108}, dollarsLab)
 				return domain.Artifact{ID: "art-shop-rev", Name: "shop-revenue.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 1)}
 			}(),
 			func() domain.Artifact {
 				b := svgBarChart("Orders per month", "#22d3ee",
-					[]string{"Feb", "Mar", "Apr", "May", "Jun"},
-					[]float64{37, 41, 46, 52, 49}, intLab)
+					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
+					[]float64{45, 46, 47, 48, 50, 49}, intLab)
 				return domain.Artifact{ID: "art-shop-orders", Name: "shop-orders.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 1)}
 			}(),
 			// Marcus: WSB account value over time (line — the rollercoaster) and
 			// side-project revenue (bar).
 			func() domain.Artifact {
-				b := svgLineChart("WSB account value", "#a78bfa",
-					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
-					[]float64{1500, 2100, 1700, 3050, 2400, 3420}, dollarsLab)
+				b := svgLineChart("Brokerage value — five years", "#a78bfa",
+					[]string{"Jul 21", "Jan 22", "Jul 22", "Jan 23", "Jul 23", "Jan 24", "May 24", "Jul 24", "Jul 25", "Jun 26"},
+					[]float64{550, 4830, 80, 350, 220, 790, 14090, 6070, 6730, 8190}, dollarsLab)
 				return domain.Artifact{ID: "art-wsb-value", Name: "wsb-value.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 12)}
 			}(),
 			func() domain.Artifact {
 				b := svgBarChart("Side-project revenue", "#16a34a",
-					[]string{"Feb", "Mar", "Apr", "May", "Jun"},
+					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
 					[]float64{220, 0, 310, 90, 480}, dollarsLab)
 				return domain.Artifact{ID: "art-sideproj", Name: "sideproject-revenue.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 1)}
 			}(),
@@ -846,11 +1093,12 @@ func SampleDataset() Dataset {
 			// --- Priya's Business: operational artifacts a small shop tracks ---
 			// Profit & loss by month.
 			{ID: "art-shop-pnl", Name: "shop-pnl.csv", Kind: "csv", Columns: []string{"Month", "Revenue", "COGS", "Fees", "Net"}, Rows: [][]string{
-				{"Feb 2026", "$842", "$210", "$84", "$548"},
-				{"Mar 2026", "$915", "$229", "$92", "$594"},
-				{"Apr 2026", "$1,030", "$258", "$103", "$669"},
-				{"May 2026", "$1,148", "$287", "$115", "$746"},
-				{"Jun 2026", "$1,096", "$274", "$110", "$712"},
+				{"Jan 2026", "$1,012", "$253", "$101", "$658"},
+				{"Feb 2026", "$1,031", "$258", "$103", "$670"},
+				{"Mar 2026", "$1,058", "$264", "$106", "$688"},
+				{"Apr 2026", "$1,076", "$269", "$108", "$699"},
+				{"May 2026", "$1,091", "$273", "$109", "$709"},
+				{"Jun 2026", "$1,108", "$277", "$111", "$720"},
 			}, CreatedAt: date(2026, time.June, 1)},
 			// Best-selling products.
 			{ID: "art-shop-products", Name: "top-products.csv", Kind: "csv", Columns: []string{"Product", "Units (mo)", "Revenue", "Margin"}, Rows: [][]string{
@@ -899,14 +1147,14 @@ func SampleDataset() Dataset {
 			// Average order value trend (line chart).
 			func() domain.Artifact {
 				b := svgLineChart("Avg order value", "#f59e0b",
-					[]string{"Feb", "Mar", "Apr", "May", "Jun"},
+					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
 					[]float64{22.8, 22.3, 22.4, 22.1, 22.4}, dollarsLab)
 				return domain.Artifact{ID: "art-shop-aov", Name: "shop-aov.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 1)}
 			}(),
 			// Margin % trend (line chart).
 			func() domain.Artifact {
 				b := svgLineChart("Net margin %", "#10b981",
-					[]string{"Feb", "Mar", "Apr", "May", "Jun"},
+					[]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun"},
 					[]float64{65, 65, 65, 65, 65}, intLab)
 				return domain.Artifact{ID: "art-shop-margin", Name: "shop-margin.svg", Kind: "image", MIME: "image/svg+xml", Bytes: b, Size: len(b), CreatedAt: date(2026, time.June, 1)}
 			}(),

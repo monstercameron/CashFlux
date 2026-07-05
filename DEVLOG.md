@@ -1,3 +1,24 @@
+## 2026-07-05 — Five years of Hartleys: the seed becomes a story
+
+The interesting problem wasn't generating 60 months of rows — it was making the ECONOMY
+close. First draft ran checking to −$16.8k: the shop's profit never reached the household
+(no owner's draw — bizchk was silently hoarding $40k by 2026), property tax was sized for a
+bigger house, and the card payment didn't track the spending eras. Wrote TestSampleTrajectory
+first (replay all five years, assert checking/savings/cash ≥ 0 and the card within its
+limit), then tuned against it like a game economy: owner's draw sweep (70% of shop profit),
+era-keyed card payments ($550 early / $220 minimum in the gap / $1,050 in the two-car era),
+severance sized so the gap bottoms at $1,219 checking — tight enough to feel, never
+insolvent. The test stays as the guard.
+
+Other calls worth recording: the crypto buy comes OUT OF SAVINGS (raiding the emergency fund
+is the bad decision, and it sets up the fund's redemption arc in 2023); variation is a tiny
+FNV hash (vr) so charts wobble non-periodically but every run is byte-identical for e2e;
+the lucky streak escalates strictly (90→210→380→650) because a streak you can assert is a
+streak that can't silently regress; and July 2026 exists as a hand-written partial month
+(salary/mortgage/HOA posted uncleared, recurring NextDue moved to August) so "today" looks
+mid-flight instead of dead. The raw-import pool deliberately leaves VENMO/ZELLE/PAYPAL/STEAM
+uncategorized — those are the Smart+ scan's demo material — while amzn/instacart got rules.
+
 ## 2026-07-05 — Custom pages join the unified widget engine (the seam, first)
 
 Groundwork for the seed rehydration goal. Custom pages were fully isolated from the
