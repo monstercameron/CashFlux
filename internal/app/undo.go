@@ -54,13 +54,41 @@ func captureUndoPoint() {
 		return
 	}
 	cs := history.Diff(lastUndoSnap, snap)
+	// Drop derived UI state (the dashboard's placement mirror) BEFORE it reaches
+	// the undo stack + activity feed. The dashboard re-persists its layout on
+	// every render, so a captured "Added 17 dashboard layout records" entry both
+	// clutters the feed and has a self-healing Undo (the revert is instantly
+	// re-written) — it read as "Undo does nothing". Absorb such changes into the
+	// baseline instead: not undoable, not shown, no phantom entry.
+	cs = filterCapturedChanges(cs)
+	lastUndoSnap = snap // absorb everything (incl. the dropped derived changes)
 	if cs.IsEmpty() {
 		return
 	}
 	undoStack.Push(cs)
 	// Feed the audit log so the Activity timeline shows a per-change entry (C78).
 	RecordAuditPoint(cs)
-	lastUndoSnap = snap
+}
+
+// capturedSkipCollections are dataset collections that mutate as DERIVED UI
+// state (not user actions), so they must not become undo steps or activity
+// entries. The dashboard writes its placement mirror on every render.
+var capturedSkipCollections = map[string]bool{
+	"placements": true,
+}
+
+// filterCapturedChanges removes derived-UI-state changes from a change set so
+// only genuine user mutations reach the undo stack and the activity feed.
+func filterCapturedChanges(cs history.ChangeSet) history.ChangeSet {
+	kept := cs.Changes[:0:0]
+	for _, c := range cs.Changes {
+		if capturedSkipCollections[c.Collection] {
+			continue
+		}
+		kept = append(kept, c)
+	}
+	cs.Changes = kept
+	return cs
 }
 
 // undoLastChange pops the most recent change from the stack, applies its

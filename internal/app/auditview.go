@@ -207,9 +207,22 @@ func buildSummary(cs history.ChangeSet, action, entityType string) string {
 		if entityType == "settings" {
 			return capitalize(action) + " settings"
 		}
-		return capitalize(action) + " a " + entityType
+		return capitalize(action) + " " + indefiniteArticle(entityType) + " " + entityType
 	}
 	return fmt.Sprintf("%s %d %s records", capitalize(action), n, entityType)
+}
+
+// indefiniteArticle returns "an" before a vowel-initial word, else "a" — so a
+// summary reads "Updated an artifact", not "Updated a artifact".
+func indefiniteArticle(word string) string {
+	if word == "" {
+		return "a"
+	}
+	switch word[0] {
+	case 'a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U':
+		return "an"
+	}
+	return "a"
 }
 
 // singularize maps snapshot collection names (plural) to singular display names.

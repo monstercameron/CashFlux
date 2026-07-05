@@ -336,9 +336,16 @@ func artifactRow(props artifactRowProps) ui.Node {
 			}
 			return
 		}
-		if err := app.DeleteArtifact(a.ID); err == nil && props.Refresh != nil {
-			props.Refresh()
-		}
+		// Deleting a file is permanent — confirm first (every other destructive
+		// action in the app does; artifacts was the outlier).
+		uistate.ConfirmModal(uistate.T("artifacts.deleteConfirm", a.Name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if err := app.DeleteArtifact(a.ID); err == nil && props.Refresh != nil {
+				props.Refresh()
+			}
+		})
 	}))
 
 	var preview ui.Node = Fragment()

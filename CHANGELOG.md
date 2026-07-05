@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Activity's Undo works on real changes (v1.0 blocker, 2026-07-05):** the top of the feed was "Added 17 dashboard layout records" — the dashboard's placement mirror, which it re-persists on every render, so undoing it was instantly re-written and read as "Undo does nothing." Derived placement writes are now dropped before they reach the undo stack and the activity feed (absorbed into the baseline), so the feed shows only genuine user changes and their Undo actually sticks.
+- **/duplicates refreshes after Merge/Delete (v1.0, 2026-07-05):** the panel already subscribed to the data revision but neither handler bumped it, so a resolved group stayed on screen with the "merged/deleted" toast floating over it — indistinguishable from a silent failure. Both handlers now bump the revision.
+- **Artifacts and import-history deletes confirm first (v1.0, 2026-07-05):** deleting a file (/artifacts) or an import record (/documents) was instant and permanent — the last unconfirmed destructive actions. Both now route through ConfirmModal.
+- **Copy: "Updated an artifact" and singular duplicate counts (v1.0, 2026-07-05):** the audit summary read "Updated a artifact" (now vowel-aware "an"); the duplicates header read "1 possible duplicate entries across 1 groups" (now "1 possible duplicate entry"), and a single-entry group badge reads "1 entry".
+
+
+### Fixed
 - **The money-flow Sankey is legible in dark theme (v1.0, 2026-07-05):** it used Mermaid's stock "dark" theme, which darkened the whole palette so the flow bands rendered near-black on the dark card. It now keeps the vivid multi-colour "default" palette in both themes and, in dark mode, overrides only the label/value text to a light colour (and the canvas to transparent) — the bands stay colourful and the numbers read.
 - **The page title stops over-truncating at ~1100px (v1.0, 2026-07-05):** "Reports" clipped to "Re…" on 13" laptops because the top bar's scope/period controls yielded no space before the title. The context group now shrinks first (`min-width:0` + higher `flex-shrink`), so single-word titles like "Notifications"/"Investments" render in full with no top-bar overflow.
 

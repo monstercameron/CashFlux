@@ -78,9 +78,11 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 	)
 
 	// Badge: number of entries in this group.
-	badge := Span(css.Class("badge"),
-		fmt.Sprintf(uistate.T("duplicates.groupCount"), len(g.IDs)),
-	)
+	groupCount := fmt.Sprintf(uistate.T("duplicates.groupCount"), len(g.IDs))
+	if len(g.IDs) == 1 {
+		groupCount = uistate.T("duplicates.groupCountOne")
+	}
+	badge := Span(css.Class("badge"), groupCount)
 
 	titleRow := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb3),
 		badge,
@@ -221,6 +223,7 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 			return
 		}
 		uistate.PostUndoable(uistate.T("duplicates.deleted"))
+		uistate.BumpDataRevision() // re-render the panel so the resolved group drops off
 	}
 
 	// C87: merge a duplicate group — keep the first entry (union tags/cleared),
@@ -252,6 +255,7 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 			}
 		}
 		uistate.PostUndoable(uistate.T("duplicates.merged"))
+		uistate.BumpDataRevision() // re-render the panel so the merged group drops off
 	}
 
 	_ = base // reserved for future per-group currency display
@@ -270,8 +274,7 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 	summary := uiw.Card(uiw.CardProps{
 		Body: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap3),
 			Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.Gap1),
-				P(ClassStr("t-body "+tw.Fold(tw.FontMedium)),
-					fmt.Sprintf(uistate.T("duplicates.headline"), total, len(groups))),
+				P(ClassStr("t-body "+tw.Fold(tw.FontMedium)), dupHeadline(total, len(groups))),
 				P(css.Class("t-caption", tw.TextDim), uistate.T("duplicates.hint")),
 			),
 		),
@@ -307,6 +310,16 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 // DuplicatesScreen is the /duplicates route — a thin shell that delegates
 // entirely to DuplicatesPanel. Routes remain registered (pending rail regroup);
 // logic lives in DuplicatesPanel so it can also be embedded on /transactions.
+// dupHeadline renders the duplicates summary with correct grammar for the common
+// single-duplicate case (the plural read "1 possible duplicate entries across 1
+// groups"). A single duplicate is always in a single group.
+func dupHeadline(total, groups int) string {
+	if total == 1 {
+		return uistate.T("duplicates.headlineOne")
+	}
+	return fmt.Sprintf(uistate.T("duplicates.headline"), total, groups)
+}
+
 func DuplicatesScreen() ui.Node {
 	return ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{})
 }

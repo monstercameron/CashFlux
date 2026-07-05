@@ -798,8 +798,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	// Import history: sort newest first before rendering.
 	deleteDoc := func(docID string) {
-		_ = app.DeleteDocument(docID)
-		rev.Set(rev.Get() + 1)
+		// Removing an import record is permanent — confirm first (v1.0).
+		uistate.ConfirmModal(uistate.T("documents.deleteConfirm"), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			_ = app.DeleteDocument(docID)
+			rev.Set(rev.Get() + 1)
+		})
 	}
 	docs := app.Documents()
 	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
