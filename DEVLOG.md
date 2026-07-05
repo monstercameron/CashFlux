@@ -1,3 +1,14 @@
+## 2026-07-05 — Settings page critique: SHIP, with the sticky strip restored properly
+
+The page critique shipped it (0 HIGH; nav highlight, both deep-links with correct segmented
+state, back-button behavior, both themes, 1100px, and modal-residue checks all clean) with
+one MEDIUM I'd created myself: making the strip static to dodge the topbar wedge traded a
+z-index problem for a reachability one — on a tall tab the tabs scrolled out of reach. The
+right fix existed in the codebase all along: the ledger tables' sticky headers pin at
+3.5rem (--dt-sticky-top), the topbar's min-height. The strip now does the same with the
+page bg behind it. Lesson: when a sticky element wedges under another sticky element,
+offset it below, don't un-stick it.
+
 ## 2026-07-05 — Settings graduates to a routed page
 
 Cam overruled the modal: "it should be a page and in the side nav." The funnel built for

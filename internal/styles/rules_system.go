@@ -44,15 +44,18 @@ func registerSystemSurface() {
 		prop("padding-top", "0.25rem"),
 	)
 	// The routed /settings page hosts the same form in the content column: a
-	// readable form measure, and the strip goes static (the modal's sticky rule
-	// would wedge it under the page's own sticky top bar).
+	// readable form measure, and the strip re-sticks BELOW the page's sticky
+	// top bar (the modal's top:0 would wedge it underneath) so a long tab —
+	// Household, Alerts — can switch tabs from anywhere in the scroll. 3.5rem
+	// is the topbar's min-height, the same offset the ledger tables' sticky
+	// headers use (--dt-sticky-top).
 	rule(".settings-page",
 		prop("max-width", "72rem"),
 		prop("margin", "0 auto"),
 		prop("padding-bottom", "1.5rem"),
 	)
 	rule(".settings-page .set-tab-strip",
-		prop("position", "static"),
-		prop("background", "transparent"),
+		prop("top", "3.5rem"),
+		prop("background", "var(--bg)"),
 	)
 }

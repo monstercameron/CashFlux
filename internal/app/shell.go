@@ -734,11 +734,13 @@ func navItem(props navItemProps) uic.Node {
 	return A(args...)
 }
 
-// HouseholdCard sits at the bottom of the rail, summarizing the household and
-// opening the global settings flip panel on click. It also renders the
-// on-panel rail-collapse toggle (C20) — a small chevron button anchored at
-// the top-right of the footer area so users can collapse/expand the rail from
-// within the panel rather than relying solely on the top-bar menu button.
+// HouseholdCard sits at the bottom of the rail: a quiet, non-interactive
+// household summary (Settings itself is the routed /settings page, reached
+// from the System nav group or the top bar's ⋯ menu; the old click-to-open
+// card is kept disabled below). It also renders the on-panel rail-collapse
+// toggle (C20) — a small chevron button anchored at the top-right of the
+// footer area so users can collapse/expand the rail from within the panel
+// rather than relying solely on the top-bar menu button.
 func HouseholdCard() uic.Node {
 	collapsed := uistate.UseRailCollapsed()
 	// The quiet household summary reads live data (member count, base currency)
