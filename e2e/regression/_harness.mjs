@@ -85,10 +85,13 @@ export async function shot(page, name) {
   return `${SHOTS}/${name}.png`;
 }
 
-// text returns the main pane's innerText (case-insensitive matching downstream —
-// innerText honors CSS text-transform).
+// mainText returns the main pane's innerText (case-insensitive matching
+// downstream — innerText honors CSS text-transform). Uses .first() because
+// repeated synthetic history.pushState navigation can leave more than one
+// #main in the DOM (a router-vs-synthetic-event quirk that does not happen on
+// real clicks); .first() keeps strict-mode from throwing on that.
 export async function mainText(page) {
-  return page.locator("#main").innerText();
+  return page.locator("#main").first().innerText();
 }
 
 export function errsOf(errors) {

@@ -54,6 +54,13 @@ func membersBody() ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
+	// Subscribe to the shared data revision so a flip-modal member edit (saved
+	// via the shell-root AddHost/dataEditSaved path, which bumps the shared
+	// revision) refreshes the roster in place — the local rev atom below only
+	// covers this page's own delete/reassign/PIN actions. Matches categories.go
+	// and rules.go.
+	_ = uistate.UseDataRevision().Get()
+
 	rev := state.UseAtom("rev:members", 0)
 	bump := func() { rev.Set(rev.Get() + 1) }
 

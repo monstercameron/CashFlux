@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The /members roster refreshes after an edit (v1.0, 2026-07-05):** editing a member from the standalone /members page saved correctly but the row kept showing the old value until navigating away and back — `Members()` never subscribed to the shared data revision (the /household hub did, which is why it updated). Added the subscription, matching /categories and /rules.
+- **Split "by weight" no longer breaks the row (v1.0, 2026-07-05):** the per-member weight input had no width cap and stretched across the whole row, wrapping member names mid-name. Capped at 8rem (matching the split editor's amount field).
+- **Member reassign-before-delete count is honest (v1.0, 2026-07-05):** the dialog read "'Marcus Hartley' owns 2531 account(s), budget(s), or goal(s)" — the count includes tagged transactions (correctly reassigned), which the copy never mentioned. Reworded to "owns or is tagged on N account(s), budget(s), goal(s), or transaction(s)."
+- **Regression harness `mainText` uses `.first()` (2026-07-05):** repeated synthetic `pushState` navigation can leave multiple `#main` in the DOM (a router/synthetic-event quirk, not a real mount bug), which crashed Playwright strict-mode — `.first()` keeps the inspection/regression scripts robust.
+
+
+### Fixed
 - **Flagged-activity rows stop overflowing their card (v1.0, 2026-07-05):** the smart flagged-activity insight rows on the dashboard, /insights, and /assistant wrapped their text in a flex column with `align-items:flex-start`, which sized the children to their content instead of the row width — so `Truncate`/`LineClamp` never engaged and long titles overflowed off the card. The wrapper now fills the row (`w-full`, default stretch) so the ellipsis works.
 - **/fields shows its masthead standalone (v1.0, 2026-07-05):** a direct visit to /fields dropped straight into "FIELD REGISTRY" with no page heading — the "Custom fields / your data's shape" intro only appeared inside the Studio tab wrapper. The masthead now lives on the `Fields()` component itself (single owner), so standalone and the Studio tab match, like every sibling standalone route.
 - **Three more undefined-token theming bugs (v1.0, 2026-07-05):** the Settings FX-stale hint (`var(--color-warn)`), the AI-key error text (`var(--color-danger)`), and a card background (`var(--card-bg)`) referenced token names the theme engine doesn't emit — corrected to the real runtime tokens (`--warn`, `--danger`, `--bg-card`).

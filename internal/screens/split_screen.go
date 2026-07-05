@@ -374,6 +374,7 @@ func SplitMemberRow(props splitMemberRowProps) ui.Node {
 	weightField := Fragment()
 	if props.Weighted && props.On {
 		weightField = Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
+			Style(map[string]string{"max-width": "8rem"}),
 			Placeholder(uistate.T("split.weight")), Value(props.Weight), Step("1"), OnInput(onWeight))
 	}
 	share := Fragment()

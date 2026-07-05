@@ -2044,7 +2044,7 @@ var english = Catalog{
 	"members.editTitle":          "Edit member",
 	"members.deleteTitle":        "Delete member",
 	"members.reassignTitle":      "Reassign before deleting",
-	"members.reassignDesc":       "%q owns %d account(s), budget(s), or goal(s). Move them to another owner, then this member will be deleted.",
+	"members.reassignDesc":       "%q owns or is tagged on %d account(s), budget(s), goal(s), or transaction(s). Move them to another owner, then this member will be deleted.",
 	"members.moveAndDelete":      "Move and delete",
 	"members.pickDifferentOwner": "Pick a different owner to move these to.",
 	"members.singleDeviceNote":   "Roles are organizational labels for your shared household data on this device. CashFlux runs as a single shared dataset — there are no separate per-member logins or access controls. Multi-user sync is a future hosted feature.",
