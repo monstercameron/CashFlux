@@ -146,6 +146,7 @@ type settingsRightProps struct {
 	OnBackupCadence uic.Handler // UseEvent
 	// Advanced
 	LangOptions   []uic.Node
+	LangCount     int         // number of installed languages; the picker hides at <2
 	OnLang        uic.Handler // UseEvent
 	OnExportLangs func()
 	OnImportLangs func()
@@ -413,7 +414,13 @@ func settingsAdvancedPane(p settingsRightProps) uic.Node {
 		P(css.Class("muted", tw.TextXs), uistate.T("applock.sectionHint")),
 		appLockSection(p.Bump),
 		H4(css.Class("set-label"), uistate.T("settings.languages")),
-		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(p.OnLang), p.LangOptions),
+		// The display-language picker only earns its place once a second language
+		// is installed — with just English it's a one-option no-op. Import a
+		// translation file (below) to unlock it.
+		If(p.LangCount > 1,
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.language")), Title(uistate.T("settings.language")), OnChange(p.OnLang), p.LangOptions),
+		),
+		If(p.LangCount <= 1, P(css.Class("muted", tw.TextXs), uistate.T("settings.languageSingleHint"))),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
 			dataBtn(uistate.T("settings.exportLangs"), false, p.OnExportLangs),
 			dataBtn(uistate.T("settings.importLangs"), false, p.OnImportLangs),

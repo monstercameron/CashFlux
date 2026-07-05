@@ -8784,7 +8784,10 @@ func registerGenerated() {
 		padding(".25rem 0"),
 		fontSize(".85rem"),
 	)
-	rule(".rate-row .rate-in",
+	// Both the freshness rows (.rate-row) and the Alerts threshold rows
+	// (.toggle-row) put a .rate-in number input on the right; share the 90px
+	// width so the two tabs don't drift to different input sizes.
+	rule(".rate-row .rate-in, .toggle-row .rate-in",
 		width("90px"),
 		padding(".35rem .5rem"),
 		background("#1a1a1d"),

@@ -410,7 +410,7 @@ var english = Catalog{
 	"applock.unmuteMusic":       "🔇 Unmute music",
 	"applock.forgotConfirm":     "Forgot your passcode? Your data is encrypted with it and can't be decrypted without it, so resetting erases all CashFlux data on this device — this is the only way to recover. Continue?",
 	"applock.hintLabel":         "Hint (optional)",
-	"applock.hintPlaceholder":   "A reminder (must not contain the passcode)",
+	"applock.hintPlaceholder":   "A reminder — not the passcode itself",
 	"applock.hintLeaks":         "The hint can't contain your passcode.",
 	"applock.showHint":          "Show hint",
 	"applock.hintPrefix":        "Hint: ",
@@ -1404,6 +1404,7 @@ var english = Catalog{
 	"settings.wipe":                     "Wipe data",
 	"settings.languages":                "Languages",
 	"settings.language":                 "Display language",
+	"settings.languageSingleHint":       "English is the only language installed. Import a translation file to add another, then pick it here.",
 	"settings.exportLangs":              "Export languages",
 	"settings.importLangs":              "Import languages",
 

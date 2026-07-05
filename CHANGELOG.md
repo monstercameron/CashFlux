@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Settings › Advanced is tidier (v1.0, 2026-07-05):** the Display-language dropdown had exactly one option (English), so it was a no-op control — it's now hidden until a second language is imported, replaced by a one-line hint pointing at the import button. And the app-lock hint field's placeholder ("A reminder (must not contain the passcode)") was clipped mid-word by the narrow modal; it's shortened to "A reminder — not the passcode itself" so it fits.
+- **Settings › Alerts inputs line up (v1.0, 2026-07-05):** the alert-threshold number inputs were ~2x wider than the freshness-day inputs on the same tab (they sit in a different row class that missed the 90px width rule) — both now share the 90px width.
 - **Backend "off" now means fully off (v1.0, 2026-07-05):** two Settings › Cloud issues. The backend shipped switched ON out of the box (pointed at a loopback dev URL), which read as "already connected to something" and contradicted About's "Cloud sync is off by default" — a fresh install now defaults the backend OFF (the saved URL is just a prefill for when you opt in). And "Test connection", "Sync now", and "Upload key" stayed clickable while the backend was off, so clicking them fired a real network request the "fully local" copy promised wouldn't happen — those three actions are now hidden until the backend is switched on.
 
 ### Added

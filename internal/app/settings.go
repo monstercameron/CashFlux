@@ -1048,6 +1048,7 @@ func globalSettingsForm() uic.Node {
 		OnBackupCadence: onBackupCadence,
 
 		LangOptions:   langOptions,
+		LangCount:     len(langOptions),
 		OnLang:        onLang,
 		OnExportLangs: func() { exportLanguages(notify) },
 		OnImportLangs: func() { importLanguages(notify) },
