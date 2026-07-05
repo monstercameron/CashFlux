@@ -1,3 +1,14 @@
+## 2026-07-05 — Rules engine gate: 100/100
+
+Rounds 4 and 5 closed it out. Round 4 (99/100) scored the Smart+ lane clean on first review —
+sampling via the same FirstMatchFull the engine uses, defensive parser, distinct
+loading/error/empty states, unified /smart toggle — and confirmed the sticky action bar fixed
+the hidden-Save case, leaving only the dead-whitespace half of the old modal note. Fix:
+RuleEditHost now sizes the panel to the rule (470px phrase / 640px conditions; growth scrolls
+with the sticky bar). Round 5 measured it (24px residual gap vs ~187px), regression-checked
+the blast radius, and issued the verdict: **SCORE: 100/100**. The arc: 51 → 88 → 98 → 99 →
+100, and every point in between was a real defect fixed, not a rubric negotiated down.
+
 ## 2026-07-05 — Smart+ rule suggestions + rounds 2-3 of the gate (88 → 98)
 
 Round 2 re-verified all eight round-1 fixes live and scored 88 — its one real finding
