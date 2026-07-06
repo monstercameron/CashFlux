@@ -189,6 +189,12 @@ func TestSyncServiceGRPCBridgeWatchWorkspaces(t *testing.T) {
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("WatchWorkspaces close send: %v", err)
 	}
+	// The watch stream has no server-sent "subscribed" signal, so let the server
+	// goroutine register the subscription before we trigger an event below. Without
+	// this, a Put can fire before the watcher is registered and its event is lost,
+	// hanging Recv — a scheduling race that only surfaces on slower/differently-
+	// scheduled CI, not locally. TODO: replace with a server-sent ready sentinel.
+	time.Sleep(500 * time.Millisecond)
 
 	var put backendrpc.PutWorkspaceResponse
 	if err := writeConn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
@@ -243,6 +249,10 @@ func TestSyncServiceGRPCBridgeTwoDeviceLWWAndTombstone(t *testing.T) {
 	if err := watch.CloseSend(); err != nil {
 		t.Fatalf("watch close send: %v", err)
 	}
+	// Let the server register the subscription before triggering events (no
+	// server-sent "subscribed" signal exists). See the note in
+	// TestSyncServiceGRPCBridgeWatchWorkspaces — same scheduling race.
+	time.Sleep(500 * time.Millisecond)
 
 	base := time.Date(2026, time.June, 19, 17, 0, 0, 0, time.UTC)
 	var put backendrpc.PutWorkspaceResponse
