@@ -35,3 +35,15 @@ go run github.com/bufbuild/buf/cmd/buf@v1.57.2 generate
 
 `buf.yaml` and `buf.gen.yaml` pin the module layout and remote Go/gRPC plugins. CI runs the same command and
 fails if `internal/backendrpc/pb` drifts from `proto/cashflux/v1/cashflux.proto`.
+
+## Future Codegen
+
+The generated `internal/backendrpc/pb` is committed and must stay reproducible from the pinned plugins — never
+hand-edit it (that is what the drift check guards). As the contract evolves:
+
+- Bump the plugin versions in `buf.gen.yaml` deliberately, regenerate, and commit the result in the same change,
+  so `buf generate` is always a no-op against `HEAD`.
+- Keep proto changes additive: add new fields/messages/RPCs rather than renumbering or removing existing ones
+  (see the field-numbering rules above). Reserve retired field numbers before deletion.
+- New plugins or output targets (e.g. a TypeScript client) are added here as additional `plugins:` entries;
+  they must not change the existing Go/gRPC output.

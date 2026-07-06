@@ -234,11 +234,11 @@ func SampleDataset() Dataset {
 	vr := func(salt string, i int, n int64) int64 {
 		h := uint32(2166136261)
 		for _, c := range salt {
-			h = (h ^ uint32(c)) * 16777619
+			h = (h ^ uint32(c)) * 16777619 //#nosec G115 -- FNV-1a hash: modular uint32 overflow is the intended behavior
 		}
-		h = (h ^ uint32(i)) * 16777619
+		h = (h ^ uint32(i)) * 16777619 //#nosec G115 -- FNV-1a hash: modular uint32 overflow is intended
 		h = (h ^ (h >> 13)) * 16777619
-		return int64(h % uint32(n))
+		return int64(h % uint32(n)) //#nosec G115 -- n is a small positive chart count; no overflow
 	}
 
 	var txns []domain.Transaction

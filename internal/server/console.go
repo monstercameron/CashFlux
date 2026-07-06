@@ -19,7 +19,11 @@ func consoleHandler(cfg Config) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
 	return http.StripPrefix("/console/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Serve the file if it exists; fall back to index.html for SPA routes.
-		path := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(r.URL.Path, "/")))
+		// Clean the request path as if rooted at "/" BEFORE joining, so a crafted
+		// "../.." can't escape ConsoleDir (path traversal). filepath.Clean("/"+rel)
+		// collapses any leading "../" against the root, keeping the join contained.
+		rel := filepath.Clean("/" + filepath.FromSlash(strings.TrimPrefix(r.URL.Path, "/")))
+		path := filepath.Join(dir, rel)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 			return
