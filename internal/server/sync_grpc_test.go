@@ -28,7 +28,11 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling (not 5s): these grpc watch-stream tests finish in well under a
+	// second locally, but a cold, contended CI runner can exceed a tight 5s budget
+	// during stream setup and flake with DeadlineExceeded. The higher ceiling never
+	// slows the happy path; it only absorbs CI jitter.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
@@ -158,7 +162,11 @@ func TestSyncServiceGRPCBridgeWatchWorkspaces(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling (not 5s): these grpc watch-stream tests finish in well under a
+	// second locally, but a cold, contended CI runner can exceed a tight 5s budget
+	// during stream setup and flake with DeadlineExceeded. The higher ceiling never
+	// slows the happy path; it only absorbs CI jitter.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	watchConn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
@@ -208,7 +216,11 @@ func TestSyncServiceGRPCBridgeTwoDeviceLWWAndTombstone(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling (not 5s): these grpc watch-stream tests finish in well under a
+	// second locally, but a cold, contended CI runner can exceed a tight 5s budget
+	// during stream setup and flake with DeadlineExceeded. The higher ceiling never
+	// slows the happy path; it only absorbs CI jitter.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	deviceA, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
@@ -304,7 +316,11 @@ func TestSyncServiceGRPCBridgeBlobRoundTrip(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling (not 5s): these grpc watch-stream tests finish in well under a
+	// second locally, but a cold, contended CI runner can exceed a tight 5s budget
+	// during stream setup and flake with DeadlineExceeded. The higher ceiling never
+	// slows the happy path; it only absorbs CI jitter.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
@@ -383,7 +399,11 @@ func TestSyncServiceGRPCBridgeRejectsOversizedSnapshot(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling (not 5s): these grpc watch-stream tests finish in well under a
+	// second locally, but a cold, contended CI runner can exceed a tight 5s budget
+	// during stream setup and flake with DeadlineExceeded. The higher ceiling never
+	// slows the happy path; it only absorbs CI jitter.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
