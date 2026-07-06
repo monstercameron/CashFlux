@@ -618,8 +618,11 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read go.mod: %v", err)
 	}
-	if !strings.Contains(string(goMod), "\ngo 1.26.0\n") {
-		t.Fatal("go.mod does not pin Go 1.26.0")
+	// Pin the Go 1.26 minor (not an exact patch): the Dockerfile tracks the same
+	// minor via golang:1.26-alpine, and security patches (e.g. 1.26.0 -> 1.26.4)
+	// should not require touching this guard.
+	if !strings.Contains(string(goMod), "\ngo 1.26.") {
+		t.Fatal("go.mod does not pin the Go 1.26 minor")
 	}
 
 	dockerfile, err := os.ReadFile("../../Dockerfile.server")

@@ -1,3 +1,11 @@
+## 2026-07-06 — CI security: clear govulncheck (Go 1.26.4 + otel bumps)
+
+The pre-existing red CI step was govulncheck flagging Go 1.26.0 stdlib CVEs
+(x509/textproto/mime/tls) plus two otel deps. Bumped the go.mod Go directive to
+1.26.4 (GOTOOLCHAIN=auto fetched it) and otel/sdk + otlptracehttp to v1.44.0
+(which also lifted grpc to 1.81.1). govulncheck now clean; the deploy toolchain-pin
+guard relaxed to the 1.26 minor so security patches do not trip it.
+
 ## 2026-07-05 — Testing overhaul (1/6): the runner + a deterministic backbone
 
 Post-1.0, the honest audit was that "regression tests for every page" meant hand-run
