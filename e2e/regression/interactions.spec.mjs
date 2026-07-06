@@ -1,0 +1,102 @@
+// interactions.spec.mjs — per-page interaction regressions. Each test drives a
+// real user action and asserts the RESULT (not just "the page loaded"), pinning a
+// specific fixed bug so it can't silently regress. Ported from the v1 wave-1/2
+// bespoke scripts onto the Playwright runner with web-first waits.
+import { test, expect, nav, mainText, setTheme } from "./fixtures.mjs";
+
+test.describe("wave-1 fixes", () => {
+  test("todo: adding a task refreshes the list and toasts", async ({ app }) => {
+    await nav(app, "/todo");
+    // Open the add-task form via the page's own visible "Add task" affordance
+    // (data-testid=todo-add) — not the global "+" menu's hidden "New task" item.
+    await app.getByTestId("todo-add").first().click();
+    const title = app.locator("#task-add");
+    await expect(title).toBeVisible();
+    await title.fill("AAA regression check task");
+    await app.getByTestId("task-add-submit").click();
+    // The new task appears immediately (data-revision bump) and a toast confirms.
+    await expect(app.locator("#main")).toContainText("AAA regression check task");
+    await expect(app.locator("body")).toContainText(/task added/i);
+  });
+
+  test("bills: a liability + its recurring flow are not double-counted", async ({ app }) => {
+    await nav(app, "/bills");
+    const text = await mainText(app);
+    const marcusCarRows = (text.match(/car payment \(marcus\)/gi) || []).length;
+    expect(marcusCarRows, "Marcus car payment should appear at most once").toBeLessThanOrEqual(1);
+  });
+
+  test("subscriptions: share is sane and planned recurring isn't flagged cancellable", async ({ app }) => {
+    await nav(app, "/subscriptions");
+    const text = await mainText(app);
+    const share = text.match(/share of spending\s*\n?\s*(\d+)%/i);
+    if (share) expect(Number(share[1]), "share of spending ≤ 100%").toBeLessThanOrEqual(100);
+    await expect(app.locator("body")).not.toContainText(/how to cancel hoa/i);
+  });
+
+  test("investments: holdings carry real security-type badges", async ({ app }) => {
+    await nav(app, "/investments");
+    await expect(app.locator("#main")).toContainText(/mutual fund|etf|stock/i);
+  });
+
+  test("budgets: no '1 budgets are over' plural bug", async ({ app }) => {
+    await nav(app, "/budgets");
+    await expect(app.locator("#main")).not.toContainText(/\b1 budgets are over\b/i);
+  });
+
+  test("light theme: meter track is not the fixed dark hex", async ({ app }) => {
+    await setTheme(app, "light");
+    await nav(app, "/allocate");
+    const bar = app.locator("#main .cf-bar, #main [role='meter']").first();
+    if (await bar.count()) {
+      const bg = await bar.evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(bg, "meter track must not be the hardcoded dark #232325 in light theme").not.toBe("rgb(35, 35, 37)");
+    }
+  });
+});
+
+test.describe("wave-2 fixes", () => {
+  test("custom-page list rows show a distinguishing date sub-line", async ({ app }) => {
+    await nav(app, "/p/side-hustle");
+    // No leading \b: innerText concatenates the row label with the sub-line
+    // ("revenueApr 23, 2026"), so a word boundary before the month never matches.
+    await expect(app.locator("#main")).toContainText(
+      /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2},\s+20\d\d/i,
+    );
+  });
+
+  test("costs chart plots positive magnitudes (no negative $ axis)", async ({ app }) => {
+    await nav(app, "/p/priya-business");
+    const hasNeg = await app.evaluate(() => {
+      const tiles = [...document.querySelectorAll("*")].filter(
+        (e) => e.textContent && e.textContent.trim() === "Shop costs (live, 12 months)",
+      );
+      if (!tiles.length) return "no-tile";
+      let card = tiles[0];
+      for (let i = 0; i < 6 && card && !card.querySelector("svg"); i++) card = card.parentElement;
+      if (!card) return "no-card";
+      return /[-−]\s?\$/.test(card.innerText || "") ? "HAS_NEG" : "positive";
+    });
+    expect(hasNeg, "costs chart should read positive").toBe("positive");
+  });
+
+  test("Settings Cloud: backend defaults off and live actions are hidden", async ({ app }) => {
+    await nav(app, "/settings");
+    await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
+    const main = app.locator("#main");
+    await expect(main).toContainText(/backend off|fully local/i);
+    await expect(app.locator("[role=switch]").first()).toHaveAttribute("aria-checked", "false");
+    await expect(main).not.toContainText(/test connection/i);
+    await expect(main).not.toContainText(/sync now/i);
+    await expect(main).not.toContainText(/upload key/i);
+  });
+
+  test("Settings Advanced: single-language picker is hidden with a hint", async ({ app }) => {
+    await nav(app, "/settings");
+    await app.locator(".settings-page .set-tab-strip button", { hasText: "Advanced" }).first().click();
+    await expect(app.locator("#main")).toContainText(/only language installed/i);
+    await expect(
+      app.locator(".settings-page select[title='Display language'], .settings-page select[aria-label='Display language']"),
+    ).toHaveCount(0);
+  });
+});

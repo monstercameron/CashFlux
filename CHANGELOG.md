@@ -9,6 +9,8 @@ and every commit updates this file under `Unreleased`.
 ### Added
 - **Enterprise regression foundation: Playwright Test runner + hermetic pipeline (2026-07-05):** the regression suite moves off hand-run `node *.mjs` scripts onto the Playwright Test runner (`e2e/playwright.config.mjs`), with retries, trace/screenshot/video-on-failure, and an HTML report. A `globalSetup` builds the wasm + drops the matching `wasm_exec.js` so a fresh CI checkout is self-contained, and Playwright owns the static server (`e2e/serve.go`) lifecycle on a fixed port — no dependency on a hand-started `gwc dev`. The suite is deterministic: it waits on real signals, never wall-clock sleeps.
 
+- **Per-page interaction regressions on the runner (2026-07-05):** the v1 wave-1/wave-2 fixes are now `interactions.spec.mjs` — real user actions (add a to-do, open Settings tabs) asserting the RESULT, isolated and parallel — replacing the hand-run bespoke `all_routes_smoke`/`v1_wave1`/`v1_wave2` scripts (removed).
+
 ### Changed
 - **App exposes deterministic test signals (2026-07-05):** boot completion now sets `document.documentElement[data-app-ready="true"]` (+ `window.__cashfluxReady`) once hydrate+seed+mount+wiring finish, and the shell's main pane carries `data-route` reflecting the active screen. These let the suite wait on "app ready" and "route mounted" instead of guessing timeouts, eliminating boot/navigation flakiness. Both are inert in normal use. The v1.0 polish campaign inspected and refined every page
 across ten review groups (core money, goals/tasks, debt/invest, recurring/bills,
