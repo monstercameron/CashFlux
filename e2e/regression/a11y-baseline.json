@@ -1,0 +1,27 @@
+{
+  "/": {
+    "aria-prohibited-attr": 1,
+    "scrollable-region-focusable": 3,
+    "svg-img-alt": 1
+  },
+  "/transactions": {},
+  "/accounts": {},
+  "/budgets": {
+    "nested-interactive": 1
+  },
+  "/goals": {
+    "nested-interactive": 1
+  },
+  "/todo": {},
+  "/reports": {
+    "svg-img-alt": 4
+  },
+  "/settings": {},
+  "/household": {},
+  "/investments": {
+    "aria-required-parent": 6,
+    "svg-img-alt": 4
+  },
+  "/recurring": {},
+  "/about": {}
+}
