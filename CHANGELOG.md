@@ -4,7 +4,19 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
-## [Unreleased]
+## [1.0.0] — 2026-07-05
+
+First stable release. The v1.0 polish campaign inspected and refined every page
+across ten review groups (core money, goals/tasks, debt/invest, recurring/bills,
+reports, data & people, studio/build, data management, system settings, and the
+custom showcase pages), fixing theming/token bugs, responsive sizing, copy, and
+destructive-action confirmations, and adding regression coverage for every route.
+
+### Added
+- **Second-wave regression suite (`e2e/regression/v1_wave2_fixes.mjs`) (v1.0, 2026-07-05):** pins the Group I/J fixes — custom-page list sub-lines, the positive-magnitude costs chart, backend-off-by-default with hidden live actions, and the hidden single-language picker.
+
+### Changed
+- **Product version is 1.0.0 (2026-07-05):** `internal/version` and the desktop shell now read 1.0.0; the rail/About footer shows v1.0.0.
 
 ### Fixed
 - **Settings › Advanced is tidier (v1.0, 2026-07-05):** the Display-language dropdown had exactly one option (English), so it was a no-op control — it's now hidden until a second language is imported, replaced by a one-line hint pointing at the import button. And the app-lock hint field's placeholder ("A reminder (must not contain the passcode)") was clipped mid-word by the narrow modal; it's shortened to "A reminder — not the passcode itself" so it fits.

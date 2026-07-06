@@ -1,7 +1,7 @@
 {
   "name": "cashflux-desktop",
   "productName": "CashFlux",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "CashFlux — local-first household budgeting, as a native desktop app (Electron shell over the web/ WASM build).",
   "license": "MIT",
   "main": "main.js",
