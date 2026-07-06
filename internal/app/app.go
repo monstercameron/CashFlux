@@ -258,5 +258,17 @@ func Run() {
 	// Greet once after a version upgrade with a "what's new" pointer (C326).
 	whatsNewToastOnBoot()
 
+	// Readiness signal: boot (hydrate + seed + mount + all wiring) is complete and
+	// the dataset is live in memory. Tests and any external harness can wait on
+	// `document.documentElement[data-app-ready="true"]` (or `window.__cashfluxReady`)
+	// instead of sleeping on a guessed timeout — the single deterministic gate that
+	// the whole regression suite keys off. Harmless in production.
+	if doc := js.Global().Get("document"); doc.Truthy() {
+		if de := doc.Get("documentElement"); de.Truthy() {
+			de.Call("setAttribute", "data-app-ready", "true")
+		}
+	}
+	js.Global().Set("__cashfluxReady", true)
+
 	utils.WaitForever()
 }

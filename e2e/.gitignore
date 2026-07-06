@@ -1,0 +1,9 @@
+# Playwright / Node artifacts for the e2e suite — never committed.
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+# Legacy scratch screenshots at the e2e root (the leading slash keeps this from
+# touching committed visual baselines under regression/__screenshots__/).
+/*.png

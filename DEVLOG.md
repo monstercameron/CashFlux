@@ -1,3 +1,19 @@
+## 2026-07-05 — Testing overhaul (1/6): the runner + a deterministic backbone
+
+Post-1.0, the honest audit was that "regression tests for every page" meant hand-run
+node scripts against a manually-started dev server, leaning on `waitForTimeout`
+sleeps, with 631 stale legacy scripts eroding trust. Starting the six-part fix to make
+the project genuinely stable testing-wise. This commit is the backbone: adopt the
+Playwright Test runner with a hermetic `globalSetup` (builds wasm + copies wasm_exec.js
+so a bare CI checkout works) and a `webServer` that owns `serve.go`'s lifecycle. The key
+determinism win was killing the two flakiness sources at the source rather than papering
+over them with sleeps: the app now sets a `data-app-ready` signal when boot+seed+mount
+completes (no more 5.5s seed sleep), and the shell's main pane carries `data-route` so a
+synthetic navigation is awaitable ("new route mounted" ≠ "#main is visible", which is
+always true). Also neutralized the View Transitions API in the test context — machine-speed
+nav was aborting in-flight `startViewTransition`s, an unhandled rejection a real user
+never hits. Smoke (46 routes, both themes) green on the new runner.
+
 ## 2026-07-05 — v1.0.0 released: the final polish campaign closes
 
 Tagged v1.0.0. The campaign ran every page through ten review groups (A–J) with

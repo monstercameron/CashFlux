@@ -1,0 +1,16 @@
+{
+  "name": "cashflux-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CashFlux end-to-end + regression suite (Playwright Test). The trusted, CI-gated tests live under regression/; serve.go is the hermetic static server.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.0",
+    "axe-core": "^4.10.2"
+  }
+}

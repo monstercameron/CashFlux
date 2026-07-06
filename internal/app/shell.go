@@ -218,7 +218,11 @@ func Shell(props ShellProps) uic.Node {
 	return Div(css.Class("cf-shell", tw.Flex, tw.HScreen, tw.OverflowHidden, tw.BgBase, tw.TextFg, tw.FontSans),
 		A(css.Class("skip-link"), Attr("href", uistate.RoutePath(props.ActivePath)+"#main"), uistate.T("a11y.skipToContent")),
 		uic.CreateElement(Sidebar, sidebarProps{ActivePath: props.ActivePath}),
-		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("tabindex", "-1"),
+		// data-route reflects the logical path of the screen currently mounted here.
+		// It's the deterministic signal the regression suite waits on after an SPA
+		// navigation (the new route's content has rendered once this equals the
+		// target), replacing content-change guessing. Harmless in production.
+		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("data-route", props.ActivePath), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
 			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(SubscriptionBanner),
