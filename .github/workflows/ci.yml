@@ -49,3 +49,46 @@ jobs:
           GOOS: js
           GOARCH: wasm
         run: go build -o /dev/null .
+
+  e2e:
+    name: E2E regression (Playwright)
+    # Runs on Windows so the committed coverage/a11y/-win32 visual baselines match
+    # the runner's rendering. globalSetup builds the wasm; Playwright serves it and
+    # drives Chromium. Visual pixel-diffs are a local gate (skipped in CI).
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install chromium
+
+      - name: Run regression suite
+        working-directory: e2e
+        run: npx playwright test --project=chromium
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7

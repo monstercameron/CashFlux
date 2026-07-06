@@ -19,10 +19,13 @@ const MASK = (page) => [page.locator(".smart-strip"), page.locator('[data-testid
 test.describe("visual regression", () => {
   // Pixel baselines are only trustworthy in the environment they were captured in.
   // These are committed as Windows (-win32) baselines generated natively on the
-  // dev box, so this suite runs on Windows only; elsewhere (e.g. Linux CI) it
-  // skips rather than failing on a platform mismatch. Regenerate on Windows with
-  // `npm run visual:update` (see e2e/README.md).
-  test.skip(process.platform !== "win32", "visual baselines are Windows-native (regenerate on Windows)");
+  // dev box, so this is a LOCAL Windows gate: it skips off-Windows and skips in CI
+  // (font/DPI rendering differs machine-to-machine, which full-page pixel diffs
+  // can't tolerate). Regenerate on Windows with `npm run visual:update`.
+  test.skip(
+    process.platform !== "win32" || !!process.env.CI,
+    "visual is a local Windows gate (baselines are -win32; skipped in CI)",
+  );
   for (const mode of ["dark", "light"]) {
     for (const route of VISUAL_ROUTES) {
       test(`${route} @ ${mode}`, async ({ page }) => {
