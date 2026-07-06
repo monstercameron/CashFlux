@@ -7,3 +7,7 @@ blob-report/
 # Legacy scratch screenshots at the e2e root (the leading slash keeps this from
 # touching committed visual baselines under regression/__screenshots__/).
 /*.png
+
+# The root .gitignore ignores all e2e/**/*.png; re-include the committed visual
+# baselines (this nested .gitignore overrides the parent rule for these paths).
+!regression/__screenshots__/**/*.png
