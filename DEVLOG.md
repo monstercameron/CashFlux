@@ -1,3 +1,23 @@
+## 2026-07-05 — v1.0.0 released: the final polish campaign closes
+
+Tagged v1.0.0. The campaign ran every page through ten review groups (A–J) with
+parallel Sonnet inspectors feeding findings back to a single orchestrator that
+owned all edits/builds/commits — no file/build races. The last two groups landed
+today: Group J (custom `/p/*` pages) fixed light-theme SVG-chart legibility, added
+date sub-lines so same-labelled transaction rows are tellable apart, and gave the
+flow series an `Abs` option so a "costs" chart reads as positive dollars instead
+of negatives. Group I (system settings) was the strongest surface reviewed —
+findings were refinements, not blockers: the two real ones were the Cloud tab
+shipping backend-ON at a loopback URL (now off-by-default, matching About's
+promise) and the Test/Sync/Upload buttons firing real network calls while the
+backend was off (now hidden until it's on); the rest were an over-wide Alerts
+input, a clipped passcode-hint placeholder, and a no-op one-option language picker
+(now hidden). The one finding I deliberately did NOT "fix" was the setup-vs-help
+currency-done mismatch — reconciling it would make the first-run wizard skip the
+currency step, which is worse than a cosmetic signal difference; that's a code
+TODO now. Gate: full native suite green, wasm build clean, all_routes_smoke +
+v1_wave1 + a new v1_wave2 regression all pass, rail/About footer reads v1.0.0.
+
 ## 2026-07-05 — v1.0 polish, Group J: custom pages
 
 The custom-page (`/p/*`) sweep surfaced two things that only bite on those pages because
