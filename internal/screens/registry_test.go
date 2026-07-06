@@ -11,9 +11,14 @@ import (
 
 // The screen registry drives BOTH routing (app.Run registers one route per entry)
 // and the left rail (derived from Group). If an entry is malformed — duplicate or
-// non-rooted path, missing view, unknown group — a rail item either fails to
-// register (falling through to the "*" catch-all, i.e. "not navigable") or never
-// appears in the nav. These invariants guard against that regression.
+// non-rooted path, missing view — the route either fails to register (falling
+// through to the "*" catch-all, i.e. "not navigable") or renders blank. These
+// invariants guard against that.
+//
+// A route with an empty Group is OFF-RAIL by design (e.g. /plans, /setup,
+// /duplicates — reached via CTAs, not the nav rail); it needs a Path, Title, and
+// View but no rail Label/Group. Only ON-rail routes (Group set) must carry a valid
+// group and a rail Label.
 
 func TestRailRoutesResolve(t *testing.T) {
 	all := All()
@@ -37,11 +42,18 @@ func TestRailRoutesResolve(t *testing.T) {
 		if r.View == nil {
 			t.Errorf("route %q has a nil View (would render blank)", r.Path)
 		}
-		if strings.TrimSpace(r.Label) == "" || strings.TrimSpace(r.Title) == "" {
-			t.Errorf("route %q is missing its Label/Title i18n key", r.Path)
+		// Every route needs a Title (the page header i18n key).
+		if strings.TrimSpace(r.Title) == "" {
+			t.Errorf("route %q is missing its Title i18n key", r.Path)
 		}
-		if !groups[r.Group] {
-			t.Errorf("route %q has unknown rail group %q — it would not appear in the nav", r.Path, r.Group)
+		// On-rail routes (Group set) additionally need a valid group + rail Label.
+		if r.Group != "" {
+			if !groups[r.Group] {
+				t.Errorf("route %q has unknown rail group %q — it would not appear in the nav", r.Path, r.Group)
+			}
+			if strings.TrimSpace(r.Label) == "" {
+				t.Errorf("on-rail route %q is missing its rail Label i18n key", r.Path)
+			}
 		}
 	}
 

@@ -81,6 +81,12 @@ jobs:
         working-directory: e2e
         run: npx playwright install chromium
 
+      # Middle layer of the pyramid: fast wasm component/registry tests via
+      # GoWebComponents testkit (mock DOM, no browser). These never run under
+      # `go test ./...` (js&&wasm build tag), so they get a dedicated lane here.
+      - name: WASM component tests (testkit)
+        run: pwsh tools/wasm-test.ps1
+
       - name: Run regression suite
         working-directory: e2e
         run: npx playwright test --project=chromium

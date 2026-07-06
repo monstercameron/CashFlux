@@ -31,6 +31,24 @@ and Playwright starts the static server (`serve.mjs`) itself on port 8099 — yo
 | `a11y.spec.mjs` | **ratchet** — axe (WCAG 2 A/AA) structural violations can't regress past the baseline |
 | `visual.spec.mjs` | pixel baselines for content-stable pages (Windows-native) |
 
+### The test pyramid
+
+- **Base — pure logic** (`go test ./...`): the `internal/*` logic packages (money,
+  ledger, budgeting, widgetdata, bills, allocate, …) are table-tested natively.
+- **Middle — component tests** (`tools/wasm-test.ps1`): real components mounted
+  through GoWebComponents' `testkit/render` (mock DOM, no browser), plus the
+  js/wasm-tagged registry/browserstore tests. These are **wasm-target** Go tests
+  that `go test ./...` skips (build tag), so they run via a dedicated lane:
+
+  ```bash
+  pwsh tools/wasm-test.ps1        # Windows (uses tools/go_js_wasm_exec.bat)
+  # or, on Unix: PATH="$PATH:$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm go test ./internal/ui/ ./internal/screens/ ./internal/browserstore/
+  ```
+
+  See `internal/ui/meter_wasm_test.go` for the reference example. (Scope to specific
+  packages — `./...` won't wasm-compile because `internal/server` is server-only.)
+- **Top — end-to-end** (`regression/*.spec.mjs`): the Playwright layers above.
+
 ## Regenerating baselines (only after an intentional change)
 
 ```bash
