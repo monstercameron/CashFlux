@@ -3,7 +3,7 @@
 // a fresh CI checkout (where web/bin and web/wasm_exec.js are git-ignored build
 // artifacts) has everything the static server needs. Runs once, before webServer.
 import { execFileSync } from "node:child_process";
-import { existsSync, copyFileSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, copyFileSync, mkdirSync, renameSync, rmSync, chmodSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,7 +23,13 @@ export default function globalSetup() {
     path.join(goroot, "misc", "wasm", "wasm_exec.js"),
   ].find(existsSync);
   if (!src) throw new Error(`global-setup: wasm_exec.js not found under GOROOT ${goroot}`);
-  copyFileSync(src, path.join(root, "web", "wasm_exec.js"));
+  // The toolchain source is read-only (Go's module cache is 0444), so a prior copy
+  // can leave web/wasm_exec.js read-only and block the next overwrite (EPERM on
+  // Windows). Remove any existing copy first, then copy and mark it writable.
+  const wasmExecDst = path.join(root, "web", "wasm_exec.js");
+  rmSync(wasmExecDst, { force: true });
+  copyFileSync(src, wasmExecDst);
+  chmodSync(wasmExecDst, 0o644);
 
   // 2. Build the wasm app to a temp file then atomic-rename into place, so a
   //    concurrent `gwc dev` rebuild can never observe a half-written main.wasm.

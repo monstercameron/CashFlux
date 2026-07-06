@@ -93,7 +93,7 @@
       "transfer-start-btn-acct-hysa",
       "transfer-start-btn-acct-roth"
     ],
-    "untestided": 70
+    "untestided": 69
   },
   "/budgets": {
     "testids": [
@@ -304,54 +304,62 @@
       "notif-clear-all",
       "notif-dismiss-default-backup@backup@2026-*",
       "notif-dismiss-default-bill-due@acct-carloan-marcus@2026-07-*",
-      "notif-dismiss-default-bill-due@acct-carloan-priya@2026-07-*",
+      "notif-dismiss-default-bill-due@acct-mortgage@2026-07-*",
       "notif-dismiss-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-dismiss-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-dismiss-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-dismiss-default-bill-due@recurring:rec-subs@2026-07-*",
       "notif-dismiss-default-digest@digest@2026-*",
       "notif-dismiss-default-large@txn:tx-2026-06-getaway",
-      "notif-dismiss-default-stale@acct-card@2026-*",
+      "notif-dismiss-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-dismiss-default-paycheck@paycheck:tx-2026-07-salary",
       "notif-dismiss-default-stale@acct-carloan-marcus@2026-*",
       "notif-dismiss-default-stale@acct-carloan-priya@2026-*",
-      "notif-dismiss-default-stale@acct-cash@2026-*",
       "notif-dismiss-default-stale@acct-studentloan@2026-*",
-      "notif-dismiss-default-stale@acct-travelcard@2026-*",
       "notif-dismiss-digest:2026-07-*",
       "notif-filter",
       "notif-open-default-bill-due@acct-carloan-marcus@2026-07-*",
-      "notif-open-default-bill-due@acct-carloan-priya@2026-07-*",
+      "notif-open-default-bill-due@acct-mortgage@2026-07-*",
       "notif-open-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-open-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-open-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-open-default-bill-due@recurring:rec-subs@2026-07-*",
       "notif-open-default-digest@digest@2026-*",
       "notif-open-default-large@txn:tx-2026-06-getaway",
-      "notif-open-default-stale@acct-card@2026-*",
+      "notif-open-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-open-default-paycheck@paycheck:tx-2026-07-salary",
       "notif-open-default-stale@acct-carloan-marcus@2026-*",
       "notif-open-default-stale@acct-carloan-priya@2026-*",
-      "notif-open-default-stale@acct-cash@2026-*",
       "notif-open-default-stale@acct-studentloan@2026-*",
-      "notif-open-default-stale@acct-travelcard@2026-*",
       "notif-read-default-backup@backup@2026-*",
       "notif-read-default-bill-due@acct-carloan-marcus@2026-07-*",
-      "notif-read-default-bill-due@acct-carloan-priya@2026-07-*",
+      "notif-read-default-bill-due@acct-mortgage@2026-07-*",
       "notif-read-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-read-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-read-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-read-default-bill-due@recurring:rec-subs@2026-07-*",
       "notif-read-default-digest@digest@2026-*",
       "notif-read-default-large@txn:tx-2026-06-getaway",
-      "notif-read-default-stale@acct-card@2026-*",
+      "notif-read-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-read-default-paycheck@paycheck:tx-2026-07-salary",
       "notif-read-default-stale@acct-carloan-marcus@2026-*",
       "notif-read-default-stale@acct-carloan-priya@2026-*",
-      "notif-read-default-stale@acct-cash@2026-*",
       "notif-read-default-stale@acct-studentloan@2026-*",
-      "notif-read-default-stale@acct-travelcard@2026-*",
       "notif-read-digest:2026-07-*",
       "notif-snooze-default-backup@backup@2026-*",
       "notif-snooze-default-bill-due@acct-carloan-marcus@2026-07-*",
-      "notif-snooze-default-bill-due@acct-carloan-priya@2026-07-*",
+      "notif-snooze-default-bill-due@acct-mortgage@2026-07-*",
       "notif-snooze-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-snooze-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-snooze-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-snooze-default-bill-due@recurring:rec-subs@2026-07-*",
       "notif-snooze-default-digest@digest@2026-*",
       "notif-snooze-default-large@txn:tx-2026-06-getaway",
-      "notif-snooze-default-stale@acct-card@2026-*",
+      "notif-snooze-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-snooze-default-paycheck@paycheck:tx-2026-07-salary",
       "notif-snooze-default-stale@acct-carloan-marcus@2026-*",
       "notif-snooze-default-stale@acct-carloan-priya@2026-*",
-      "notif-snooze-default-stale@acct-cash@2026-*",
       "notif-snooze-default-stale@acct-studentloan@2026-*",
-      "notif-snooze-default-stale@acct-travelcard@2026-*",
       "notif-snooze-digest:2026-07-*",
       "profile-switch-btn",
       "sample-dismiss",
@@ -700,7 +708,7 @@
       "topbar-*",
       "topbar-more"
     ],
-    "untestided": 37
+    "untestided": 36
   },
   "/studio": {
     "testids": [
@@ -813,7 +821,7 @@
       "topbar-*",
       "topbar-more"
     ],
-    "untestided": 78
+    "untestided": 77
   },
   "/rules": {
     "testids": [
@@ -1179,7 +1187,7 @@
       "topbar-*",
       "topbar-more"
     ],
-    "untestided": 46
+    "untestided": 45
   },
   "/smart": {
     "testids": [

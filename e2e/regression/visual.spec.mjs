@@ -29,8 +29,7 @@ test.describe("visual regression", () => {
   for (const mode of ["dark", "light"]) {
     for (const route of VISUAL_ROUTES) {
       test(`${route} @ ${mode}`, async ({ page }) => {
-        // Freeze time BEFORE boot so seeding + any date copy is deterministic.
-        await page.clock.install({ time: new Date("2026-07-01T12:00:00Z") });
+        // boot() pins the clock (FIXED_NOW) so date-derived copy is deterministic.
         await boot(page);
         if (mode === "light") await setTheme(page, "light");
         await nav(page, route);

@@ -4,6 +4,14 @@
 // on a guessed timeout — every wait is a web-first assertion.
 import { test as base, expect } from "@playwright/test";
 
+// A fixed wall-clock instant for the whole suite. The sample dataset is seeded
+// relative to "now" at boot (a 5-year window, bills due "soon", notifications), so
+// without pinning the clock the seed — and anything keyed off it, like the
+// coverage manifest's date-bearing notification testids — drifts by run date and
+// breaks CI on a different day than the baselines were captured. Pinning Date.now()
+// (not the timers — the app still runs) makes every date-derived value deterministic.
+export const FIXED_NOW = "2026-07-01T12:00:00.000Z";
+
 // ROUTES is the single source of truth for "every page": the screens registry
 // (rail + off-rail) plus the three seeded custom pages. Each entry pairs a route
 // with a case-insensitive anchor that MUST appear when its real body rendered
@@ -80,6 +88,10 @@ export async function boot(page) {
       }
     } catch (_) {}
   });
+  // Pin the wall clock BEFORE the app boots so the Go/wasm time.Now() the seed
+  // reads is deterministic across machines and run dates. setFixedTime pins
+  // Date.now() only — real timers keep running, so the app boots normally.
+  await page.clock.setFixedTime(new Date(FIXED_NOW));
   await page.goto("/");
   await expect(page.locator("#app")).toBeAttached();
   await page.waitForFunction(
