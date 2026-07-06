@@ -55,6 +55,15 @@ type Progress struct {
 //   - MembersDone: true when len(members) >= 2. A solo household has only the
 //     default member and is considered "done" for this optional step because
 //     household-member setup is not required for a single user.
+// TODO(v1.x): the wizard's CurrencyDone uses the explicit currencyConfirmed flag,
+// while Help's setup checklist marks currency done whenever a base currency is set
+// (always true — USD is the default). So a household configured entirely through
+// Settings sees Help say "all set up" but the wizard's dots still show Currency as
+// incomplete until they click through. Deliberately left as-is for now: keying the
+// wizard off "a base currency exists" would make StepCurrency trivially done and
+// cause NextIncompleteStep to skip the currency step on a genuine first run, which
+// is worse than the cosmetic signal mismatch. Reconcile by giving both readouts a
+// single shared definition of "done" if the onboarding flow is revisited.
 func Compute(currencyConfirmed bool, monthlyIncomeMinor int64, accounts []domain.Account, members []domain.Member) Progress {
 	return Progress{
 		CurrencyDone: currencyConfirmed,
