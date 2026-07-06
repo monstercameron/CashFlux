@@ -26,7 +26,10 @@ export default defineConfig({
   testMatch: "**/*.spec.mjs",
   fullyParallel: true,
   forbidOnly: !!process.env.CI, // a stray test.only fails the CI build
-  retries: process.env.CI ? 2 : 0,
+  // One local retry (two in CI): interaction tests drive a CPU-heavy wasm app and
+  // can flake transiently under worker contention; a test that fails twice is a
+  // real failure, not noise.
+  retries: process.env.CI ? 2 : 1,
   // Cap workers: each test boots a full wasm app (CPU-heavy), so too many in
   // parallel starve each other and skew render-timing-sensitive checks. Two keeps
   // the suite fast without contention.

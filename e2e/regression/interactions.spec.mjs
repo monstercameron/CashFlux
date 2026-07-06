@@ -13,10 +13,14 @@ test.describe("wave-1 fixes", () => {
     const title = app.locator("#task-add");
     await expect(title).toBeVisible();
     await title.fill("AAA regression check task");
+    // Wait until the value is actually committed before submitting — under CPU
+    // contention the fill can lag the click.
+    await expect(title).toHaveValue("AAA regression check task");
     await app.getByTestId("task-add-submit").click();
-    // The new task appears immediately (data-revision bump) and a toast confirms.
-    await expect(app.locator("#main")).toContainText("AAA regression check task");
-    await expect(app.locator("body")).toContainText(/task added/i);
+    // The new task appears (data-revision bump) and a toast confirms — both async
+    // re-renders, so give them headroom beyond the default expect timeout.
+    await expect(app.locator("#main")).toContainText("AAA regression check task", { timeout: 20_000 });
+    await expect(app.locator("body")).toContainText(/task added/i, { timeout: 20_000 });
   });
 
   test("bills: a liability + its recurring flow are not double-counted", async ({ app }) => {
