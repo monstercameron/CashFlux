@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, settle } from "./fixtures.mjs";
 
 const require = createRequire(import.meta.url);
 const AXE_PATH = require.resolve("axe-core/axe.min.js");
@@ -35,6 +35,7 @@ const EXCLUDED_RULES = new Set(["color-contrast"]);
 // scanRoute returns { ruleId: blockingNodeCount } for critical/serious rules.
 async function scanRoute(app, route) {
   await nav(app, route);
+  await settle(app); // axe scans once with no retry — settle first so parallel CPU load can't skew counts
   await app.addScriptTag({ path: AXE_PATH });
   const results = await app.evaluate(async () => {
     // eslint-disable-next-line no-undef

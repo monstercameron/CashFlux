@@ -13,7 +13,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = process.env.E2E_PORT || "8099";
-const BASE = `http://127.0.0.1:${PORT}`;
+// EXTERNAL mode: the app is already built and served elsewhere (e.g. a host
+// serve.go reached from inside the Playwright Docker container via
+// host.docker.internal). In that mode we skip globalSetup's wasm build and the
+// webServer, and just point at E2E_BASE_URL. Used to generate/compare visual
+// snapshots in the same Linux env CI uses.
+const EXTERNAL = process.env.E2E_BASE_URL;
+const BASE = EXTERNAL || `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: "./regression",
@@ -21,15 +27,20 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI, // a stray test.only fails the CI build
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Cap workers: each test boots a full wasm app (CPU-heavy), so too many in
+  // parallel starve each other and skew render-timing-sensitive checks. Two keeps
+  // the suite fast without contention.
+  workers: 2,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]
     : [["list"], ["html", { open: "never" }]],
-  // Visual baselines live next to the specs, committed to the repo.
-  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
+  // Visual baselines live next to the specs, committed to the repo. The platform
+  // suffix keeps Linux (CI + container) baselines separate from any generated
+  // elsewhere — visual snapshots are only trustworthy when made in the same env.
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}",
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  globalSetup: "./global-setup.mjs",
+  globalSetup: EXTERNAL ? undefined : "./global-setup.mjs",
   use: {
     baseURL: BASE,
     trace: "on-first-retry",
@@ -43,13 +54,15 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
   ],
-  webServer: {
-    command: `go run e2e/serve.go web ${PORT}`,
-    cwd: "..",
-    url: BASE,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  webServer: EXTERNAL
+    ? undefined
+    : {
+        command: `node e2e/serve.mjs web ${PORT}`,
+        cwd: "..",
+        url: BASE,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        stdout: "ignore",
+        stderr: "pipe",
+      },
 });

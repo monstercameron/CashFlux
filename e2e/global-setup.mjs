@@ -10,6 +10,11 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export default function globalSetup() {
+  // E2E_SKIP_BUILD: the wasm + wasm_exec.js were already built by the caller
+  // (e.g. a CI job with Go, before handing off to the Go-less Playwright Docker
+  // container). Nothing to do — the static server serves the prebuilt web/.
+  if (process.env.E2E_SKIP_BUILD) return;
+
   // 1. Copy wasm_exec.js from the active Go toolchain (Go 1.24+ moved it from
   //    misc/wasm to lib/wasm — try both so this survives a toolchain bump).
   const goroot = execFileSync("go", ["env", "GOROOT"], { encoding: "utf8" }).trim();

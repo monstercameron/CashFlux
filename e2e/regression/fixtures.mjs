@@ -109,6 +109,22 @@ export async function mainText(page) {
   return page.locator("#main").first().innerText();
 }
 
+// settle waits for the page to reach a stable render state — fonts loaded, all
+// #main images complete, and two animation frames drained. One-shot tools like
+// axe (which snapshot the DOM once, with no retry) need this so they don't score
+// a half-rendered page differently under parallel CPU load. Deterministic: it
+// waits on real completion signals, not a fixed delay.
+export async function settle(page) {
+  await page.evaluate(async () => {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const imgs = [...document.querySelectorAll("#main img")];
+    await Promise.all(
+      imgs.map((im) => (im.complete ? null : new Promise((r) => { im.addEventListener("load", r, { once: true }); im.addEventListener("error", r, { once: true }); }))),
+    );
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  });
+}
+
 // setTheme flips light/dark via the real /settings → Appearance control (the
 // honest path), waiting on the documentElement theme attribute to flip.
 export async function setTheme(page, mode) {
