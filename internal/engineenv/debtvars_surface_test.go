@@ -47,9 +47,9 @@ func TestAddDebtVarsSurface(t *testing.T) {
 		"debt_car_loan_utilization": 0,
 		// aggregate atoms
 		"debt_count":         2,
-		"revolving_balance":  2000,  // only the credit card
-		"credit_limit_total": 5000,  // only the credit card
-		"min_payments_total": 250,   // 50 + 200
+		"revolving_balance":  2000, // only the credit card
+		"credit_limit_total": 5000, // only the credit card
+		"min_payments_total": 250,  // 50 + 200
 		// molecule (formula, not code): 2000 / 5000 * 100
 		"credit_utilization": 40,
 	}

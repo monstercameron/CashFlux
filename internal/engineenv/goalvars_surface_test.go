@@ -76,7 +76,7 @@ func TestAddGoalVarsKindAware(t *testing.T) {
 		"goal_renew_passport_done":       1,
 		"goal_weekly_review_progress":    50, // 3 of 6
 		"goal_weekly_review_streak":      3,
-		"goal_weekly_review_tasks_total": 0, // no linked to-dos
+		"goal_weekly_review_tasks_total": 0,  // no linked to-dos
 		"goal_new_car_progress":          50, // money-based
 		"goal_new_car_tasks_total":       1,  // financial goal can still have linked to-dos
 		"goal_new_car_streak":            0,
