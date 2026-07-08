@@ -1,3 +1,12 @@
+## 2026-07-08 — Release v1.0.6
+
+Cut v1.0.6: subscription payment linkage + the redesigned Link-payment flip modal,
+bill payments to any account (shown on /accounts), and the "Other → count as liability"
+toggle. Bumped version.go (1.0.5→1.0.6) and the SW cache (v293→v294). Verified before
+tagging: go test ./... green; e2e interactions + smoke (incl. the new payment-linkage
+and account-class tests, and light-theme smoke) green; screenshots of the link modal
+(both modes), the /accounts bill line, and the Other-liability toggle.
+
 ## 2026-07-08 — "Other" accounts can be counted as liabilities
 
 Cam: he has an HOA account and had to use the "Other" type, and wanted a toggle to

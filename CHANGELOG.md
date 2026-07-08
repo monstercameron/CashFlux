@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-07-08
+
 ### Added
 - **Count an "Other" account as a liability (2026-07-08):** the account add/edit forms now show a "Count as a liability (debt)" toggle when the account type is **Other** (the catch-all type with no natural asset/liability class). Turning it on classes the account as money owed, so it's included in net worth and the debt formulas — useful for obligations like an HOA balance that don't fit a specific type. The stored class is now the single source of truth the liability formulas read (net worth, financial-health debt ratios, and the low-balance nudge all honor the override).
 
