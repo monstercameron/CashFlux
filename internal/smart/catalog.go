@@ -84,6 +84,9 @@ var catalog = []Feature{
 	ai("SMART-T12", PageTransactions, "Tax-relevant tagging", "Auto-flag potentially deductible transactions into a year-end bucket.", true, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T13", PageTransactions, "Refund / reversal matching", "Pair a refund with its original charge and net them visually."),
 	ai("SMART-T14", PageTransactions, "Smart+ rule suggestions", "Scan your transactions with AI and suggest categorization rules for the ones your rules don't cover yet.", false, tokClassifyIn, tokClassifyOut),
+	ai("SMART-T15", PageTransactions, "Suggest new categories", "Scan your uncategorized transactions and propose new categories to create — you pick which to add.", false, tokClassifyIn, tokClassifyOut),
+	ai("SMART-T16", PageTransactions, "Auto-categorize (with review)", "Scan your uncategorized transactions and propose a category for each — you confirm before anything changes.", false, tokClassifyIn, tokClassifyOut),
+	ai("SMART-T17", PageTransactions, "Miscategorization review", "Scan your categorized transactions for likely mistakes and propose fixes — you confirm each change.", false, tokClassifyIn, tokClassifyOut),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────
 	rule("SMART-B7", PageBudgets, "Seasonal budget adjustment", "Detect seasonal categories and suggest month-specific budget amounts."),

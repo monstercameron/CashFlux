@@ -34,6 +34,7 @@ const (
 	txnColsAtomID      = "transactions:cols"
 	txnColsModalAtomID = "transactions:colsModal"
 	txnColsStoreID     = "cashflux:txn-cols"
+	txnSmartCatAtomID  = "transactions:smartCat"
 )
 
 // TxnCols selects which optional ledger columns are visible. Date and Description
@@ -79,6 +80,11 @@ func loadTxnCols() TxnCols {
 // columns" flip modal is open. The toolbar's Columns button sets it; the host
 // tile renders the flip modal when true.
 func UseTxnColsModalOpen() state.Atom[bool] { return state.UseAtom(txnColsModalAtomID, false) }
+
+// UseTxnSmartCatOpen returns the shared atom selecting whether the Smart+
+// categorization review modal is open. The toolbar's "Smart categorize" button
+// sets it; the shell-root host renders the flip modal when true.
+func UseTxnSmartCatOpen() state.Atom[bool] { return state.UseAtom(txnSmartCatAtomID, false) }
 
 // TxnViewLedger / Import / Duplicates are the mutually exclusive sub-views the
 // transactions surface can show in its main tile slot. Ledger is the default.

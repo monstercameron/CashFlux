@@ -91,6 +91,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	colsModalAtom := uistate.UseTxnColsModalOpen()
 	openCols := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
+	smartCatAtom := uistate.UseTxnSmartCatOpen()
+	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
 
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
@@ -346,6 +348,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(onShowImport), Text(importBtnLabel)),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(onShowDuplicates), Text(dupBtnLabel)),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-columns-btn"), Title(uistate.T("transactions.columnsTitle")), OnClick(openCols), uistate.T("transactions.columns")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-smartcat-btn"), Title(uistate.T("smartcat.title")), OnClick(openSmartCat),
+				smartGlyph(false, tw.Fold(tw.W4, tw.H4)), Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("smartcat.button"))),
 		},
 	})
 

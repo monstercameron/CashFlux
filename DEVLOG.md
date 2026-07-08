@@ -1,3 +1,37 @@
+## 2026-07-08 — Smart+ categorization: three AI scans (suggest / auto-fill / fix)
+
+Cam wanted three AI categorization features: generate categories from uncategorized
+txns, auto-categorize into existing ones (with confirm), and re-categorize
+mis-categorized ones (with confirm). The app already has rich Smart+ infra —
+SMART-T14 on /rules is the exact scan→AI→parse→review→apply template — so I built on
+it.
+
+Pure layer (`internal/smartai`, unit-tested): three Request builders with strict
+line-format system prompts + two parsers — `ParseCategorySuggestions` ("Name | kind"
+→ new cats, dropping any that already exist) and `ParseCategoryAssignments`
+("N => Category" → resolved against the REAL category list, refs bounded to the
+sample). The model can never invent a category. Catalog gets SMART-T15/T16/T17 and
+the smartai "implemented" registry lists them.
+
+UI: one shell-root flip modal (`screens.TxnSmartCatBody` + `app.TxnSmartCatHost`,
+opened by a toolbar "Categorize" button) with a 3-mode segmented control. Each mode
+builds its own context (uncategorized for suggest/auto, categorized-with-current for
+recat), runs `runSmartAI`, and renders a confirm checklist; apply either creates
+categories (PutCategory) or sets CategoryID (PutTransaction, with a bulk-undo
+snapshot). Mounted at shell root — not in the toolbar tile — so the tile transform
+doesn't clip it (same lesson as the columns modal).
+
+The one non-obvious bug: `Attr("disabled", "")` (empty value) still disables a
+button in HTML, so the Scan button was permanently disabled and Playwright hung on
+it for 150s. Fixed by appending the disabled attr only when actually disabled.
+
+Cam handed me a real OpenAI key, so I verified the WHOLE pipeline for real (key via
+Settings→AI, transient env var, throwaway test since deleted): the Suggest scan hit
+the live model and returned sensible categories — Coffee Shops, Digital Goods,
+Gifts, Home Decor, Personal Transfers — which then created on /categories. Auto-fill
+and Fix share the same modal + the unit-tested assignment parser. (Flagged to Cam
+that pasting a live key in chat means he should rotate it.)
+
 ## 2026-07-07 — Transactions: assign-to-member, User column, show/hide columns
 
 Cam wanted, in one thread: a bulk "assign to user" on selected transactions, a User

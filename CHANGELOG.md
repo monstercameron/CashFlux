@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Smart+ categorization: three AI scans on /transactions (2026-07-08):** a "Categorize" button opens a shell-root flip modal with three opt-in AI scans of your ledger, each producing a checklist you confirm before anything is written. **Suggest** (SMART-T15) proposes NEW categories that would cover your uncategorized transactions — you pick which to create. **Auto-fill** (SMART-T16) proposes an existing category for each uncategorized transaction. **Fix mistakes** (SMART-T17) reviews your categorized transactions for likely miscategorizations and proposes corrections. The AI can never invent a category — every suggestion parses against your real category list — and the scan is the consent step (nothing leaves the device until you pick a mode and click Scan). Applying Auto-fill / Fix mistakes is undoable via the usual bulk-undo bar. Verified end-to-end against the live model.
+
 ## [1.0.3] - 2026-07-08
 
 ### Added

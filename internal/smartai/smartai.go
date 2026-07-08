@@ -42,6 +42,9 @@ var implemented = map[string]bool{
 	"SMART-T8":    true, // receipt OCR (vision)
 	"SMART-D4":    true, // natural-language to-do quick-add
 	"SMART-T14":   true, // Smart+ rule suggestions (/rules AI scan)
+	"SMART-T15":   true, // suggest new categories from uncategorized txns
+	"SMART-T16":   true, // auto-categorize uncategorized txns (with review)
+	"SMART-T17":   true, // miscategorization review
 	"SMART-QUOTE": true, // daily money-mindset quote (hub)
 }
 
@@ -377,4 +380,157 @@ func ParseRuleSuggestions(answer string, categoryIDByName map[string]string) []S
 		}
 	}
 	return out
+}
+
+// --- SMART-T15: suggest NEW categories from uncategorized transactions --------
+
+// SuggestCategoriesSystem frames SMART-T15: propose NEW budget categories that
+// would cover the household's uncategorized transactions, in a strict line format.
+const SuggestCategoriesSystem = "You propose NEW budget categories for a household. " +
+	"You are given a sample of their UNCATEGORIZED transactions and the list of categories they ALREADY have. " +
+	"Suggest up to 8 new categories that would cover these transactions and that do NOT already exist. " +
+	"Each is a short, broad, reusable Title Case name plus its kind (expense or income). " +
+	"Reply with ONE category per line in exactly this format and nothing else:\n" +
+	"Category Name | expense\n" +
+	"Never repeat a category that already exists, never propose a name shorter than 3 characters, and skip anything too narrow or ambiguous."
+
+// SuggestCategories builds the SMART-T15 request from a sample of uncategorized
+// transactions and the existing-category list (both formatted by the caller).
+func SuggestCategories(txnContext, existingCategories string) Request {
+	return Request{System: SuggestCategoriesSystem,
+		User: "Existing categories:\n" + strings.TrimSpace(existingCategories) + "\n\nUncategorized transactions:\n" + strings.TrimSpace(txnContext)}
+}
+
+// SuggestedCategory is one parsed SMART-T15 suggestion: a new category name and
+// its kind ("expense" or "income").
+type SuggestedCategory struct {
+	Name string
+	Kind string
+}
+
+// ParseCategorySuggestions parses the model's "Name | kind" lines, dropping any
+// category that already exists (existingLower holds lower-cased existing names),
+// blanks, too-short names, invalid kinds, and duplicates. Kind defaults to
+// "expense" when omitted. Capped at 8 so the review list stays scannable.
+func ParseCategorySuggestions(answer string, existingLower map[string]bool) []SuggestedCategory {
+	var out []SuggestedCategory
+	seen := map[string]bool{}
+	for _, line := range strings.Split(answer, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
+		if line == "" {
+			continue
+		}
+		name, kind := line, "expense"
+		if n, k, ok := strings.Cut(line, "|"); ok {
+			name = strings.TrimSpace(n)
+			if kk := strings.ToLower(strings.TrimSpace(k)); kk == "income" || kk == "expense" {
+				kind = kk
+			}
+		}
+		name = strings.Trim(strings.TrimSpace(name), "\"'`")
+		lower := strings.ToLower(name)
+		if len(name) < 3 || existingLower[lower] || seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		out = append(out, SuggestedCategory{Name: name, Kind: kind})
+		if len(out) >= 8 {
+			break
+		}
+	}
+	return out
+}
+
+// --- SMART-T16 / T17: per-transaction category assignments --------------------
+
+// AutoCategorizeSystem frames SMART-T16: assign an existing category to each
+// uncategorized transaction the model is confident about.
+const AutoCategorizeSystem = "You categorize a household's UNCATEGORIZED transactions. " +
+	"Each transaction is numbered. Use ONLY the categories provided — never invent one. " +
+	"For each transaction you are confident about, reply with its number and the single best-fitting category. " +
+	"Reply with ONE assignment per line in exactly this format and nothing else:\n" +
+	"3 => Category Name\n" +
+	"Skip anything ambiguous rather than guessing."
+
+// AutoCategorize builds the SMART-T16 request from a NUMBERED sample of
+// uncategorized transactions and the category-name list.
+func AutoCategorize(txnContext, categoryList string) Request {
+	return Request{System: AutoCategorizeSystem,
+		User: "Categories:\n" + strings.TrimSpace(categoryList) + "\n\nUncategorized transactions (numbered):\n" + strings.TrimSpace(txnContext)}
+}
+
+// RecategorizeSystem frames SMART-T17: flag likely MIS-categorized transactions
+// and propose a better existing category.
+const RecategorizeSystem = "You review a household's ALREADY-categorized transactions for likely MIS-categorizations. " +
+	"Each numbered transaction shows its current category. Use ONLY the categories provided. " +
+	"ONLY when a DIFFERENT category clearly fits better than the current one, reply with the transaction's number and that better category. " +
+	"Reply with ONE correction per line in exactly this format and nothing else:\n" +
+	"3 => Category Name\n" +
+	"Never suggest a transaction's current category, and skip anything you are not confident is wrong."
+
+// Recategorize builds the SMART-T17 request from a NUMBERED sample of already-
+// categorized transactions (each showing its current category) and the list.
+func Recategorize(txnContext, categoryList string) Request {
+	return Request{System: RecategorizeSystem,
+		User: "Categories:\n" + strings.TrimSpace(categoryList) + "\n\nTransactions (numbered, with current category):\n" + strings.TrimSpace(txnContext)}
+}
+
+// CategoryAssignment is one parsed "N => Category" line: a 1-based reference into
+// the scanned transaction slice plus the resolved category.
+type CategoryAssignment struct {
+	Ref          int
+	CategoryID   string
+	CategoryName string
+}
+
+// ParseCategoryAssignments parses "N => Category Name" lines against the real
+// category list (name → id, case-insensitive). Refs outside [1, maxRef], unknown
+// categories, and duplicate refs are dropped — the model can never invent a
+// category or point past the sample. Capped at maxRef.
+func ParseCategoryAssignments(answer string, maxRef int, categoryIDByName map[string]string) []CategoryAssignment {
+	byLower := make(map[string]struct{ id, name string }, len(categoryIDByName))
+	for name, id := range categoryIDByName {
+		byLower[strings.ToLower(strings.TrimSpace(name))] = struct{ id, name string }{id, name}
+	}
+	var out []CategoryAssignment
+	seen := map[int]bool{}
+	for _, line := range strings.Split(answer, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
+		refStr, cat, ok := strings.Cut(line, "=>")
+		if !ok {
+			continue
+		}
+		ref := atoiSafe(strings.TrimSpace(refStr))
+		cat = strings.Trim(strings.TrimSpace(cat), "\"'`")
+		if ref < 1 || ref > maxRef || cat == "" || seen[ref] {
+			continue
+		}
+		hit, known := byLower[strings.ToLower(cat)]
+		if !known {
+			continue
+		}
+		seen[ref] = true
+		out = append(out, CategoryAssignment{Ref: ref, CategoryID: hit.id, CategoryName: hit.name})
+		if len(out) >= maxRef {
+			break
+		}
+	}
+	return out
+}
+
+// atoiSafe parses a leading run of digits into an int (0 on none), tolerating a
+// model that writes "3." or "#3" around the number.
+func atoiSafe(s string) int {
+	n, started := 0, false
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			n = n*10 + int(r-'0')
+			started = true
+			continue
+		}
+		if started {
+			break
+		}
+	}
+	return n
 }
