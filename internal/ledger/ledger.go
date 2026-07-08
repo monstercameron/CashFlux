@@ -179,7 +179,9 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 
 // NetWorth returns net worth (assets − liabilities) along with the asset and
 // liability totals, all in the base currency. Archived accounts are excluded.
-// Liability amounts are reported as positive amounts owed.
+// Liability amounts are reported as positive amounts owed — taken as the magnitude
+// of the balance so a debt stored either negative (the sample convention) or
+// positive (the "amount you owe" add form) both subtract from net worth.
 func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (net, assets, liabilities money.Money, err error) {
 	assets = money.Zero(rates.Base)
 	liabilities = money.Zero(rates.Base)
@@ -196,7 +198,7 @@ func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currenc
 			return money.Money{}, money.Money{}, money.Money{}, err
 		}
 		if a.Class == domain.ClassLiability {
-			if liabilities, err = liabilities.Add(conv.Neg()); err != nil {
+			if liabilities, err = liabilities.Add(conv.Abs()); err != nil {
 				return money.Money{}, money.Money{}, money.Money{}, err
 			}
 		} else {

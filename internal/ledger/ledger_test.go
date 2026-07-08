@@ -308,6 +308,30 @@ func TestNetWorth(t *testing.T) {
 	}
 }
 
+// TestNetWorthPositiveLiability guards the sign bug where a liability added through
+// the "amount you owe" form is stored positive (not the sample's negative): its
+// magnitude must still be SUBTRACTED from net worth, not added.
+func TestNetWorthPositiveLiability(t *testing.T) {
+	rates := currency.Rates{Base: "USD", Rates: nil}
+	accounts := []domain.Account{
+		{ID: "sav", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(300000)},          // +3000
+		{ID: "mortgage", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(200000)}, // owe 2000, stored POSITIVE
+	}
+	net, assets, liabilities, err := NetWorth(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if !assets.Equal(usd(300000)) {
+		t.Errorf("assets = %v, want 300000 USD", assets)
+	}
+	if !liabilities.Equal(usd(200000)) {
+		t.Errorf("liabilities = %v, want 200000 USD (owed magnitude)", liabilities)
+	}
+	if !net.Equal(usd(100000)) {
+		t.Errorf("net = %v, want 100000 USD (3000 assets - 2000 owed)", net)
+	}
+}
+
 func TestFXAggregatesRecomputeWithRateChange(t *testing.T) {
 	accounts := []domain.Account{
 		{ID: "checking", Class: domain.ClassAsset, Currency: "USD", OpeningBalance: usd(100000)},

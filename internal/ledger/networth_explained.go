@@ -49,7 +49,12 @@ func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rate
 			return NetWorthResult{}, err
 		}
 		if a.Class == domain.ClassLiability {
-			if res.Liabilities, err = res.Liabilities.Add(conv.Neg()); err != nil {
+			// A liability's amount owed is the magnitude of its balance, regardless
+			// of how the balance is signed at rest: the sample seeds liabilities
+			// negative, but an account added through the "amount you owe" form stores
+			// it positive. Abs() makes net worth correct for both, rather than
+			// silently adding a positive-stored debt to net worth.
+			if res.Liabilities, err = res.Liabilities.Add(conv.Abs()); err != nil {
 				return NetWorthResult{}, err
 			}
 		} else {

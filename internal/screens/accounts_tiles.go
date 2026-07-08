@@ -557,14 +557,24 @@ func acctListWidget(props acctListProps) ui.Node {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	// Base-converted balance (signed: assets positive, liabilities negative — the
-	// net-worth contribution). Falls back to the raw amount for rate-less accounts.
+	// Base-converted net-worth contribution: assets positive, liabilities the
+	// negative of their owed magnitude. Taking -Abs for liabilities keeps a debt
+	// below the assets regardless of how its balance is signed at rest (the sample
+	// stores debts negative; the "amount you owe" add form stores them positive).
+	// Falls back to the raw amount for rate-less accounts.
 	convBal := func(ac domain.Account) int64 {
 		bal, _ := ledger.Balance(ac, txns)
+		m := bal.Amount
 		if c, err := props.Rates.Convert(bal, props.Base); err == nil {
-			return c.Amount
+			m = c.Amount
 		}
-		return bal.Amount
+		if ac.Class == domain.ClassLiability {
+			if m < 0 {
+				m = -m
+			}
+			return -m
+		}
+		return m
 	}
 
 	// Active, owner-visible accounts split by class (archived live in their own tile).

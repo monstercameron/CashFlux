@@ -1,3 +1,34 @@
+## 2026-07-07 — Liability sign bug: debts stored positive were inflating net worth
+
+Cam, looking at his real data on /accounts: his liabilities (Rocket Mortgage
+$174,564.11, SCCU Car Loan, SCCU Credit) showed as *positive* green figures like
+assets, and sorted up among the assets — only one debt (Apple) showed negative.
+
+Root cause, confirmed: the "amount you owe" add form stores a liability's opening
+balance *positive* (`money.New(amt, c)`, no negation), but the intended ledger
+convention — the one `NetWorthExplained`/`NetWorth` rely on via `conv.Neg()` — is
+that liabilities are stored *negative* (only the sample seed does that). So for
+every form-added debt, `Neg()` flipped a positive into a negative liabilities
+total, and net worth *added* the debt instead of subtracting it. The tells were
+right there in Cam's debt page: "Total owed ($195,412.17)" in parens (negative
+total) and "Debt vs assets 0%" (should be ~65%).
+
+Fix chosen: robust, no data migration. Owed = magnitude of the balance. Changed
+both `NetWorth` and `NetWorthExplained` from `conv.Neg()` to `conv.Abs()`, which is
+identical for the negative-stored sample but correct for positive-stored real data.
+Added `TestNetWorthPositiveLiability` to lock it in; the existing negative-stored
+tests still pass unchanged. On /accounts, `convBal` (sort) and `AccountRow`
+(display) now sign liabilities as `-Abs`, so a debt reads negative and sorts below
+the assets regardless of stored sign; editing still hits the raw value. (A data
+migration to normalise storage was rejected — flipping a stored balance means
+flipping its transactions too, hairy on real money; Abs is safer and matches what
+the debt page already does.)
+
+Verified with a real end-to-end Playwright pass — not the sample (which stores
+debts negative and so wouldn't exercise the bug): added a Loan via the add form
+(stored +$1,000), confirmed the row shows −$1,000 and net worth *dropped* by
+$1,000 (before the fix it would have risen). Full native suite green.
+
 ## 2026-07-07 — Account rows: month-to-date value change, not a history list
 
 Cam, on his real data: the illiquid-asset rows (home, car, investment) rendered a

@@ -153,9 +153,19 @@ func AccountRow(props accountRowProps) ui.Node {
 	if a.Archived {
 		archLabel, archTitle = uistate.T("accounts.restore"), uistate.T("accounts.restoreTitle")
 	}
+	// A liability is shown as a negative figure — a debt reduces net worth — taking
+	// -Abs so it reads correctly whether the balance is stored positive ("amount you
+	// owe" add form) or negative (the sample convention). Editing still works on the
+	// raw stored value; only the displayed figures are signed.
+	dispBal, dispCleared := props.Balance, props.Cleared
+	if a.Class == domain.ClassLiability {
+		dispBal = props.Balance.Abs().Neg()
+		dispCleared = props.Cleared.Abs().Neg()
+	}
+
 	meta := accountMeta(a, props.Balance)
 	if props.Cleared.Amount != props.Balance.Amount {
-		meta += uistate.T("accounts.clearedSuffix", fmtMoney(props.Cleared))
+		meta += uistate.T("accounts.clearedSuffix", fmtMoney(dispCleared))
 	}
 	menuHidden := ""
 	if !menuOpen.Get() {
@@ -221,10 +231,10 @@ func AccountRow(props accountRowProps) ui.Node {
 			// render parenthesized for liabilities, so give the current balance an explicit accessible name
 			// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
 			// and screen-reader users without cluttering the row with a visible label.
-			Span(ClassStr(amountClass(props.Balance)),
+			Span(ClassStr(amountClass(dispBal)),
 				Title(uistate.T("accounts.balanceTitle")),
-				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(props.Balance))),
-				fmtMoney(props.Balance)),
+				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+				fmtMoney(dispBal)),
 			// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
 			// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
 			// account is flagged.
