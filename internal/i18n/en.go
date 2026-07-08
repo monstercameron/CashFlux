@@ -1610,6 +1610,8 @@ var english = Catalog{
 	"accounts.welcomeDesc":            "No accounts yet. Add one below, or load some sample data to explore.",
 	"accounts.loadSample":             "Load sample data",
 	"accounts.assets":                 "Assets",
+	"accounts.glanceTitle":            "Assets & liabilities",
+	"accounts.glanceHint":             "Every active account by its effect on net worth — largest debts first, largest holdings last.",
 	"accounts.searchPlaceholder":      "Search accounts",
 	"accounts.filters":                "Filters",
 	"accounts.filtersTitle":           "Filter accounts",

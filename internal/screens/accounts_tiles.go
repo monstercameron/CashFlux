@@ -63,6 +63,12 @@ type acctArchivedProps struct {
 	Rates currency.Rates
 }
 
+type acctGlanceProps struct {
+	App   *appstate.App
+	Base  string
+	Rates currency.Rates
+}
+
 type acctWelcomeProps struct{ App *appstate.App }
 
 type acctFormulaProps struct{ App *appstate.App }
@@ -630,6 +636,92 @@ func acctListWidget(props acctListProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(section, liabStub),
+	})
+}
+
+// --- acct-glance ----------------------------------------------------------------
+
+// signedAccountRow pairs an account with its base-converted, net-worth-signed
+// balance (minor units): assets positive, liabilities negative — so a single list
+// can be ordered by each account's effect on net worth.
+type signedAccountRow struct {
+	Acct  domain.Account
+	Minor int64
+}
+
+// signedAccountsLowToHigh returns every active, owner-visible account (assets AND
+// liabilities) paired with its net-worth-signed base-currency balance, sorted low
+// to high: the biggest debts first, the biggest holdings last. The value is each
+// account's raw converted balance — assets positive, liabilities negative — which
+// is exactly its contribution to net worth (matching the per-account breakdown on
+// /networth; ledger.NetWorthExplained only negates liabilities to form the
+// aggregate "amount owed"). Rate-less accounts fall back to their raw balance so
+// they still appear rather than silently dropping out. Pure (no hooks).
+func signedAccountsLowToHigh(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base, activeMemberID string) []signedAccountRow {
+	var rows []signedAccountRow
+	for _, ac := range accounts {
+		if ac.Archived || !ownerVisibleTo(ac.OwnerID, activeMemberID) {
+			continue
+		}
+		bal, err := ledger.Balance(ac, txns)
+		if err != nil {
+			continue
+		}
+		minor := bal.Amount
+		if c, cerr := rates.Convert(bal, base); cerr == nil {
+			minor = c.Amount
+		}
+		rows = append(rows, signedAccountRow{Acct: ac, Minor: minor})
+	}
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Minor < rows[j].Minor })
+	return rows
+}
+
+// acctGlanceWidget is the combined assets-and-liabilities spot-check tile. The
+// asset list (acct-list) is editable but lists only assets, and liabilities are
+// managed on /debt — so this page had nowhere to eyeball both sides of net worth
+// at once. This compact, read-only tile lists every active account by its
+// net-worth-signed balance, lowest first: the largest debts on top (shown as
+// parenthesised negatives), the largest holdings at the bottom. The host only
+// places it when a liability exists — otherwise it would just duplicate the asset
+// list. Editing still happens in the asset list above or on /debt.
+func acctGlanceWidget(props acctGlanceProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := props.App
+	activeMemberID := acctActiveMemberID()
+	rows := signedAccountsLowToHigh(app.Accounts(), app.Transactions(), props.Rates, props.Base, activeMemberID)
+
+	keyOf := func(r signedAccountRow) any { return r.Acct.ID }
+	renderRow := func(r signedAccountRow) ui.Node {
+		m := money.New(r.Minor, props.Base)
+		amtCls := "budget-amount"
+		if m.IsNegative() {
+			amtCls += " " + tw.ColorClass("text-down")
+		}
+		typeLabel := selectorTypeLabel(r.Acct.Type)
+		var meta ui.Node = Fragment()
+		if !strings.EqualFold(typeLabel, r.Acct.Name) {
+			meta = Span(css.Class("row-meta"), typeLabel)
+		}
+		return Div(css.Class("row"), Attr("data-testid", "acct-glance-row"),
+			Div(css.Class("row-main"),
+				Span(css.Class("row-desc"), r.Acct.Name),
+				meta,
+			),
+			Span(ClassStr(amtCls), fmtMoney(m)),
+		)
+	}
+
+	section := uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("accounts.glanceTitle"),
+		Body: Fragment(
+			P(css.Class("muted"), uistate.T("accounts.glanceHint")),
+			Div(css.Class("rows"), MapKeyed(rows, keyOf, renderRow)),
+		),
+	})
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "acct-glance", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: section,
 	})
 }
 

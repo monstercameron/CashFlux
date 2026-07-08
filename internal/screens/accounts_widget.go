@@ -28,6 +28,7 @@ import (
 //   - acct-toolbar  (Native): search, type/archived filters, chips, transfer/mark-all/FX actions
 //   - acct-transfer (Native): the page-level transfer form (when the transfer sub-view is open)
 //   - acct-list     (Native): the owner-scoped, filtered asset rows (AccountRow)
+//   - acct-glance   (Native): read-only assets+liabilities, signed low→high (when a liability exists)
 //   - acct-archived (Native): archived accounts (when "show archived" is on and any exist)
 //
 // The tiles share interaction state (the search/type filter and the transfer
@@ -58,6 +59,17 @@ func Accounts() ui.Node {
 	activeMemberID := acctActiveMemberID()
 	_, archived := partitionAssetAccounts(accounts, txns, rates, base, activeMemberID)
 
+	// Whether any active, owner-visible liability exists — gates the combined
+	// assets-and-liabilities glance tile (with no liabilities it would just
+	// duplicate the asset list).
+	hasLiability := false
+	for _, ac := range accounts {
+		if ac.Class == domain.ClassLiability && !ac.Archived && ownerVisibleTo(ac.OwnerID, activeMemberID) {
+			hasLiability = true
+			break
+		}
+	}
+
 	// The engine render context: the live data every tile body reads from (§6).
 	rctx := widgetrender.RenderCtx{
 		App: app, Accounts: accounts, Txns: txns,
@@ -78,6 +90,9 @@ func Accounts() ui.Node {
 		specs = append(specs, acctNativeSpec("acct-transfer"))
 	}
 	specs = append(specs, acctNativeSpec("acct-list"))
+	if hasLiability {
+		specs = append(specs, acctNativeSpec("acct-glance"))
+	}
 	if f.ShowArchived && len(archived) > 0 {
 		specs = append(specs, acctNativeSpec("acct-archived"))
 	}
@@ -123,6 +138,9 @@ func init() {
 	})
 	R("acct-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(acctListWidget, acctListProps{App: c.App, Base: c.Base, Rates: c.Rates})
+	})
+	R("acct-glance", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(acctGlanceWidget, acctGlanceProps{App: c.App, Base: c.Base, Rates: c.Rates})
 	})
 	R("acct-archived", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(acctArchivedWidget, acctArchivedProps{App: c.App, Base: c.Base, Rates: c.Rates})

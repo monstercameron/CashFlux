@@ -1,3 +1,28 @@
+## 2026-07-07 — /accounts: combined assets & liabilities spot-check tile
+
+Cam wanted to spot-check liabilities and assets together on /accounts — the page
+showed assets but punted liabilities to Debt payoff (a link he liked keeping), so
+there was no single place to eyeball both sides of net worth. Added a read-only
+`acct-glance` tile: every active account by its net-worth-signed balance, sorted
+low → high (biggest debts on top as parenthesised negatives, biggest holdings at
+the bottom).
+
+The one real trap was the sign convention. My first cut negated liabilities on the
+theory that `ledger.Balance` reports "amounts owed" positive — but that's only the
+NetWorth *aggregate* (`res.Liabilities.Add(conv.Neg())`). At the per-account level
+the ledger stores liabilities *negative* (confirmed three ways: sample opening
+balances `usd(-24400000)`, `debt_tiles.go` doing `bal.Abs()` to display owed, and
+the explicit comment in `loans.go` — "Liabilities carry negative balances in the
+ledger"). So the signed net-worth contribution is just the raw converted balance
+for both classes, no per-class flip — matching the existing /networth per-account
+breakdown exactly. Fixed before it shipped.
+
+Host gates the tile on a liability existing (else it duplicates the asset list);
+placed right after the editable asset list. Verified end-to-end by driving
+/accounts in Playwright against the seeded data: rows come out mortgage (−$153,720,
+red) → … → condo ($304,000), strictly ascending. Editing stays in the asset list /
+on /debt; this is a reference view.
+
 ## 2026-07-06 — CI security: clear govulncheck (Go 1.26.4 + otel bumps)
 
 The pre-existing red CI step was govulncheck flagging Go 1.26.0 stdlib CVEs
