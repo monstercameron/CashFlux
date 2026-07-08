@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-07
+
 ### Fixed
 - **Green CI: cleared every latent build-test failure the govulncheck red was masking (2026-07-06):** with govulncheck fixed, steps that never ran surfaced their own failures — the api-compat guard wanted a `## Future Codegen` section in `proto/README.md` (added), `buf generate` didn't reproduce a hand-added SPDX header on the generated pb files (regenerated to buf's canonical output), and gosec flagged a real path-traversal in the operator-console file server (`console.go` now cleans the request path against root before joining), an intentional FNV-hash overflow (annotated `#nosec`), and its own scan of the e2e test server (excluded — test tooling, not production). Every `build-test` step now passes locally.
 - **CI security scan is clean + regression suite is date-deterministic (2026-07-06):** cleared the pre-existing govulncheck red by bumping Go to 1.26.4 (stdlib CVEs) and otel/sdk + otlptracehttp to v1.44.0 (also lifting grpc to 1.81.1). And made the coverage ratchet stable across run dates — `boot()` now pins the wall clock (`setFixedTime`) before the app boots, so bill-due notification testids (which embed the current month) no longer drift and fail CI on a different day than the baselines were captured. Also hardened globalSetup against a read-only toolchain `wasm_exec.js`, and fixed a scary near-miss where the legacy-quarantine step's `git ls-files 'e2e/*.mjs'` matched recursively and swept the whole suite into `_archive`.
