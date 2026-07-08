@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Multi-category budgets: track 1–n categories in one budget (2026-07-08):** a budget's `⋯` menu has a new **Edit tracked categories** action that opens a flip modal to pick the expense categories the budget should count — its spend becomes their combined total (each category still rolls up its own sub-categories). Overlap is allowed with a soft "also in …" note when a category is already tracked by another budget. Single-category budgets are unchanged. Backed by an additive `Budget.CategoryIDs` and the spend engine's existing predicate path (no store migration).
+
+### Changed
+- **Budgets income figure uses last full month (2026-07-08):** the budgets page's income context (the assign banner) derived income from the *current* — partial — month, which under-reports before that month's paychecks land. It now uses the most recent *complete* month as the honest basis (the configured income figure still takes precedence). Labelled "Income (last month)".
+
 ### Fixed
 - **Bill auto-link rules apply reliably alongside category rules (2026-07-08):** the bill-account rule action is now applied independently of the first-match category rule, so an auto-link rule is no longer silently shadowed when another rule (e.g. a category rule for the same merchant) matches first. The first matching rule that sets a bill account wins for that action, on entry, import, and backfill.
 

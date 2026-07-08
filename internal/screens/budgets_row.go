@@ -49,6 +49,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
+	openCategories := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		uistate.SetBudgetCategoriesEdit(s.Budget.ID)
+	}))
 	openTopup := ui.UseEvent(Prevent(func() {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
@@ -205,10 +209,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverBtn,
 		topupBtn,
 		Div(css.Class("add-wrap"), Attr("id", menuID),
-			Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
 				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 			),
@@ -244,6 +249,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// critique). C124: budgetRemainPhrase yields "$50.00 left"/"$50.00 over" (no
 		// accounting parens).
 		Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period)),
+		// Multi-category budgets: list the tracked categories so the combined total reads clearly.
+		If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
+			uistate.T("budgets.catsTracking", props.TrackedCats))),
 		coverageLine,
 		ownerLine,
 		methodLine,

@@ -392,7 +392,7 @@ func currentBudgetStatuses(app *appstate.App, now time.Time) []budgeting.Status 
 	out := make([]budgeting.Status, 0, len(budgets))
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, now, weekStart)
-		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
 			continue
 		}

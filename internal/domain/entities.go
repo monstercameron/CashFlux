@@ -461,6 +461,36 @@ type Budget struct {
 	// from another budget). The UI shows a "Covered" flag while it falls in the current
 	// period, then it quietly ages out. Zero = never covered.
 	CoveredAt time.Time `json:"coveredAt,omitempty"`
+	// CategoryIDs, when non-empty, makes this a MULTI-CATEGORY budget that tracks the
+	// combined spend of every listed category (each still rolls up its sub-categories).
+	// Empty = a single-category budget tracking CategoryID (the historical shape). New
+	// field, additive — existing budgets load with nil and behave exactly as before.
+	CategoryIDs []string `json:"categoryIds,omitempty"`
+}
+
+// TrackedCategoryIDs is the set of categories a budget counts spend against: the
+// explicit CategoryIDs for a multi-category budget, otherwise the single CategoryID.
+// Always the source of truth for "what does this budget track" — callers should use it
+// rather than reading CategoryID directly.
+func (b Budget) TrackedCategoryIDs() []string {
+	if len(b.CategoryIDs) > 0 {
+		return b.CategoryIDs
+	}
+	if b.CategoryID != "" {
+		return []string{b.CategoryID}
+	}
+	return nil
+}
+
+// TracksCategory reports whether the budget directly tracks categoryID (not counting
+// sub-category rollup, which the budgeting engine layers on separately).
+func (b Budget) TracksCategory(categoryID string) bool {
+	for _, id := range b.TrackedCategoryIDs() {
+		if id == categoryID {
+			return true
+		}
+	}
+	return false
 }
 
 // CoverShare is one source budget's weighted share in a recurring cover. Weight is a

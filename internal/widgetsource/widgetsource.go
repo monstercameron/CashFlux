@@ -41,7 +41,7 @@ func BudgetStatus(budgets []domain.Budget, cats []domain.Category, txns []domain
 	}
 	var names, percents, states, over []any
 	for _, b := range budgets {
-		st, err := budgeting.EvaluateRollup(b, txns, start, end, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		st, err := budgeting.EvaluateRollup(b, txns, start, end, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
 			continue
 		}

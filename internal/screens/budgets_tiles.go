@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -367,8 +368,18 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		rows := MapKeyed(v.Statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
+				tracked := ""
+				if len(s.Budget.CategoryIDs) > 0 {
+					var names []string
+					for _, id := range s.Budget.CategoryIDs {
+						if n := v.CatName[id]; n != "" {
+							names = append(names, n)
+						}
+					}
+					tracked = strings.Join(names, ", ")
+				}
 				return ui.CreateElement(BudgetRow, budgetRowProps{
-					Status: s, Category: v.CatName[s.Budget.CategoryID], Members: members, BudgetDefs: budgetDefs,
+					Status: s, Category: v.CatName[s.Budget.CategoryID], TrackedCats: tracked, Members: members, BudgetDefs: budgetDefs,
 					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],

@@ -109,9 +109,9 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 }
 
 // Spent returns the total spent against a budget within [start, end), in the
-// budget's limit currency (the budget's own category only).
+// budget's limit currency (the budget's tracked categories only).
 func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates) (money.Money, error) {
-	return spentCovered(budget, all, start, end, rates, func(id string) bool { return id == budget.CategoryID })
+	return spentCovered(budget, all, start, end, rates, budget.TracksCategory)
 }
 
 // evaluateWith builds the Status using the given category-cover predicate.
@@ -138,7 +138,7 @@ func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end tim
 // the budget's own category. nearThreshold is the fraction of the limit
 // considered "near"; pass DefaultNearThreshold for the standard 80%.
 func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) (Status, error) {
-	return evaluateWith(budget, all, start, end, rates, nearThreshold, func(id string) bool { return id == budget.CategoryID })
+	return evaluateWith(budget, all, start, end, rates, nearThreshold, budget.TracksCategory)
 }
 
 // EvaluateRollup is like Evaluate but the budget also counts spend in any
@@ -148,7 +148,7 @@ func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Ti
 // category.
 func EvaluateRollup(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers map[string]bool) (Status, error) {
 	return evaluateWith(budget, all, start, end, rates, nearThreshold, func(id string) bool {
-		return id == budget.CategoryID || covers[id]
+		return budget.TracksCategory(id) || covers[id]
 	})
 }
 

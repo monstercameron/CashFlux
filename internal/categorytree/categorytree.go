@@ -106,6 +106,22 @@ func Descendants(cats []domain.Category, rootID string) map[string]bool {
 	return out
 }
 
+// DescendantsOfAll is the union of Descendants for each root in rootIDs — the full
+// cover set for a MULTI-CATEGORY budget (every tracked category plus its sub-tree).
+// Empty/blank roots are skipped; an empty input returns an empty set.
+func DescendantsOfAll(cats []domain.Category, rootIDs []string) map[string]bool {
+	out := make(map[string]bool)
+	for _, root := range rootIDs {
+		if root == "" {
+			continue
+		}
+		for id := range Descendants(cats, root) {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 // VisibleUnderCollapsed returns the set of category IDs that should be shown
 // when some parent categories are collapsed. A category is included in the
 // result only when none of its ancestors appear in the collapsed map with a

@@ -1904,7 +1904,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	statuses := make([]budgeting.Status, 0, len(app.Budgets()))
 	bs, be := dateutil.MonthRange(now)
 	for _, b := range app.Budgets() {
-		if st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+		if st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
 			statuses = append(statuses, st)
 		}
 	}

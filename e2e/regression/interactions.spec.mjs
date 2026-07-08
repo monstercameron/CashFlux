@@ -293,3 +293,29 @@ test.describe("bill auto-link rule", () => {
     await expect(app.locator("body")).toContainText(/link automatically/i, { timeout: 15000 });
   });
 });
+
+test.describe("multi-category budgets", () => {
+  test("edit a budget's tracked categories via the kebab modal", async ({ app }) => {
+    await nav(app, "/budgets");
+    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
+    await kebab.scrollIntoViewIfNeeded();
+    const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
+    await kebab.click();
+    await app.locator(`[data-testid="edit-budget-cats-btn-${bid}"]`).click();
+    await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
+    await app.waitForTimeout(650); // FlipPanel flip
+
+    // Check the first two categories → a multi-category budget.
+    const picks = app.locator('[data-testid^="budgetcat-pick-"]');
+    const n = await picks.count();
+    let checked = 0;
+    for (let i = 0; i < n && checked < 2; i++) {
+      const p = picks.nth(i);
+      if (!(await p.isChecked())) await p.click();
+      checked++;
+    }
+    await app.getByTestId("budgetcats-save").click();
+    await expect(app.locator("body")).toContainText(/tracked categories updated/i, { timeout: 15000 });
+    await expect(app.locator(`[data-testid="budget-tracked-cats-${bid}"]`)).toBeVisible();
+  });
+});

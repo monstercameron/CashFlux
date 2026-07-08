@@ -1880,7 +1880,7 @@ func (a *App) isBudgetOver(b domain.Budget) bool {
 	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
 	cats := a.Categories()
 	bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
-	st, err := budgeting.EvaluateRollup(b, a.Transactions(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+	st, err := budgeting.EvaluateRollup(b, a.Transactions(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 	return err == nil && st.State == budgeting.StateOver
 }
 
@@ -1899,7 +1899,7 @@ func (a *App) applyFlagBudgetOver() {
 	existing := a.Tasks()
 	for _, b := range a.Budgets() {
 		bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
-		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil || st.State != budgeting.StateOver {
 			continue
 		}

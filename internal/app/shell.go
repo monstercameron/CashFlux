@@ -260,6 +260,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(AccountEditHost),
 		uic.CreateElement(BudgetEditHost),
 		uic.CreateElement(AutoBudgetHost),
+		uic.CreateElement(BudgetCategoriesHost),
 		uic.CreateElement(GoalEditHost),
 		uic.CreateElement(TaskEditHost),
 		uic.CreateElement(MemberEditHost),

@@ -28,7 +28,7 @@ const maxEnvelopePeriods = 240
 // With no covered spend yet, the envelope holds exactly one period's limit.
 func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef time.Time, weekStart time.Weekday, rates currency.Rates, covers map[string]bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
-	pred := func(id string) bool { return id == budget.CategoryID || covers[id] }
+	pred := func(id string) bool { return budget.TracksCategory(id) || covers[id] }
 
 	// Earliest covered, in-scope expense — the period funding starts from here.
 	var earliest time.Time

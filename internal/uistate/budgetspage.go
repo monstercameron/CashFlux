@@ -58,6 +58,31 @@ func SetBudgetEdit(e BudgetEdit) {
 // CloseBudgetEdit clears the budget-editor atom (dismisses the modal).
 func CloseBudgetEdit() { SetBudgetEdit(BudgetEdit{}) }
 
+// capturedBudgetCatsEdit mirrors the budget-editor captured-atom pattern for the
+// "tracked categories" modal, so a row ⋯ menu can open it from a click handler.
+var (
+	capturedBudgetCatsEdit state.Atom[string]
+	budgetCatsEditCaptured bool
+)
+
+// UseBudgetCategoriesEdit returns the atom holding the id of the budget whose
+// "tracked categories" flip modal is open ("" = closed). The row ⋯ menu sets it; the
+// shell-root BudgetCategoriesHost renders the modal.
+func UseBudgetCategoriesEdit() state.Atom[string] {
+	a := state.UseAtom("budgets:catsEdit", "")
+	capturedBudgetCatsEdit = a
+	budgetCatsEditCaptured = true
+	return a
+}
+
+// SetBudgetCategoriesEdit opens (budgetID) or closes ("") the tracked-categories modal.
+// Safe from a click handler (uses the captured atom, not UseAtom).
+func SetBudgetCategoriesEdit(budgetID string) {
+	if budgetCatsEditCaptured {
+		capturedBudgetCatsEdit.Set(budgetID)
+	}
+}
+
 // UseBudgetsShowFormulas returns the shared atom selecting whether the "Budget
 // metrics" formula tile is revealed on /budgets. The toolbar's Formulas toggle sets
 // it; the surface host appends the formula tile when it is on. Opt-in so the default

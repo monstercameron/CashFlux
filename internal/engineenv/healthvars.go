@@ -125,7 +125,7 @@ func HealthInputs(d Data) healthscore.Inputs {
 		total, within := 0, 0
 		for _, b := range d.Budgets {
 			bs, be := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
-			st, berr := budgeting.EvaluateRollup(b, d.Transactions, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(d.Categories, b.CategoryID))
+			st, berr := budgeting.EvaluateRollup(b, d.Transactions, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
 			if berr != nil {
 				continue
 			}

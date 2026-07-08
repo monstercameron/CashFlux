@@ -1,3 +1,29 @@
+## 2026-07-08 — Multi-category budgets + last-month income
+
+Analyzed Cam's idea first (a budget tracking 1..n categories). Key finding: the spend
+engine is ALREADY predicate-based (`spentCovered`/`EvaluateRollup` take a
+`func(catID) bool`), and a parent-category budget already rolls up its sub-tree — so
+multi-category is a natural extension, not a rewrite. Cam chose "allow overlap + soft
+warn." Implementation:
+- domain: additive `Budget.CategoryIDs` + `TrackedCategoryIDs()`/`TracksCategory()`.
+  Empty = the historical single-category shape (zero behaviour change on old data).
+- engine: base predicate `id == CategoryID` → `budget.TracksCategory(id)` in Spent /
+  Evaluate / EvaluateRollup / EnvelopeAvailable; new `categorytree.DescendantsOfAll`
+  unions the sub-trees of every tracked category (all 7 EvaluateRollup call sites moved
+  to it).
+- UI: a `⋯` → "Edit tracked categories" flip modal (BudgetCategoriesBody +
+  BudgetCategoriesHost, driven by a captured `UseBudgetCategoriesEdit` atom): a checklist
+  of expense categories, pre-checked to the tracked set, with a soft "also in <budget>"
+  overlap note. Save stores a single CategoryID when one is picked, CategoryIDs when
+  many. Row shows a "Tracking: A, B, C" line for multi-category budgets. e2e-pinned.
+
+Also (Cam): the budgets income context derived from the CURRENT partial month, which
+under-reports. Shifted it to the last FULL month (`dateutil.AddMonths(ms, -1)`) and
+relabelled "Income (last month)". Configured income still wins.
+
+Next (Cam follow-ups this session): add the multi-category widget to the add + edit
+budget forms, and simplify the modal UX (frontend-design skill) — it reads a touch busy.
+
 ## 2026-07-08 — Auto-link future bill payments (via the rules engine)
 
 Cam: transactions linked as a bill to an account should auto-tie future imports to that

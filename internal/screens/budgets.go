@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -124,7 +125,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		eval := b
 		if b.Rollover {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
-			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID)); perr == nil {
+			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
 				if eff, cerr := budgeting.Carryover(prev.Remaining, b.Limit); cerr == nil {
 					eval.Limit = eff
 					if eff.Amount != b.Limit.Amount {
@@ -135,7 +136,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 				rollNeg[b.ID] = prev.Remaining.IsNegative()
 			}
 		}
-		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.Descendants(cats, b.CategoryID))
+		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
 			continue
 		}
@@ -213,7 +214,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		if em != budgeting.MethodEnvelope {
 			continue
 		}
-		if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.Descendants(cats, b.CategoryID)); err == nil {
+		if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
 			if av.IsNegative() {
 				envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
 			} else {
@@ -223,12 +224,15 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		}
 	}
 
-	// Monthly income for the assign banner: prefer the configured figure, fall back to
-	// the transaction-derived income (C22).
-	ms, me := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
-	bannerIncome := budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, ms, me, base, rates)
+	// Monthly income for the assign banner: prefer the configured figure, otherwise
+	// derive it from LAST full month's income. The current period is partial — this
+	// month's paychecks may not all have landed yet — so deriving from it under-reports
+	// what you have to budget; the most recent complete month is the honest basis.
+	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
+	prevStart := dateutil.AddMonths(ms, -1)
+	bannerIncome := budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
 	if bannerIncome == 0 {
-		if raw, _, err := ledger.PeriodTotals(txns, ms, me, rates); err == nil {
+		if raw, _, err := ledger.PeriodTotals(txns, prevStart, ms, rates); err == nil {
 			bannerIncome = raw.Amount
 		}
 	}
@@ -322,6 +326,7 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 type budgetRowProps struct {
 	Status            budgeting.Status
 	Category          string
+	TrackedCats       string // comma-joined category names for a multi-category budget; "" for single
 	Members           []domain.Member
 	BudgetDefs        []customfields.Def    // custom-field defs for the "budget" entity (display + inline edit)
 	Envelope          string                // formatted envelope balance (envelope methodology); "" hides the line
