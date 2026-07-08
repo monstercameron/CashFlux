@@ -102,6 +102,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		lockISO = dateutil.FormatDate(a.LockUntil)
 	}
 	nameS := ui.UseState(a.Name)
+	typeS := ui.UseState(string(a.Type))
 	ev := useEntityVarField(accountVarKind, nameS, a.VarName)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
 	climS := ui.UseState(moneyMajorOrEmpty(a.CreditLimit, dec))
@@ -182,12 +183,23 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		if amt, err := money.ParseMinor(strings.TrimSpace(balS.Get()), dec); err == nil {
 			cp.OpeningBalance = money.New(amt, a.Currency)
 		}
-		if a.Class == domain.ClassLiability {
+		// Account type is editable (e.g. a line of credit → credit card, or an asset
+		// reclassified as a liability). The class follows the type, and the fields
+		// that don't belong to the new class are cleared so a reclassified account
+		// doesn't carry stale credit-limit/lock-until data.
+		selType := domain.AccountType(typeS.Get())
+		cp.Type = selType
+		cp.Class = selType.Class()
+		if cp.Class == domain.ClassLiability {
 			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
 			cp.InterestRateAPR = textutil.ParseFloat(aprS.Get())
 			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
 			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
 			cp.Lender = strings.TrimSpace(lenderS.Get())
+			cp.ExpectedReturnAPR = 0
+			cp.LiquidityScore = 0
+			cp.StabilityScore = 0
+			cp.LockUntil = time.Time{}
 		} else {
 			cp.ExpectedReturnAPR = textutil.ParseFloat(retS.Get())
 			cp.LiquidityScore = textutil.ParseInt(liqS.Get())
@@ -199,6 +211,11 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			} else {
 				cp.LockUntil = time.Time{}
 			}
+			cp.CreditLimit = money.Money{}
+			cp.InterestRateAPR = 0
+			cp.MinPayment = money.Money{}
+			cp.DueDayOfMonth = 0
+			cp.Lender = ""
 		}
 		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
 		cp.Notes = strings.TrimSpace(notesS.Get())
@@ -222,7 +239,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		return transferForm(a, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
 		return editForm(a, dec, app.Members(), app.Accounts(), app.CustomFieldDefsFor("account"),
-			nameS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
+			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
 			editAdvOpen, splitOwnS, sharesMapS, customEditVals,
 			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
 			onToggleEditAdv, onToggleSplitOwn, onNotes, onCustomEdit, saveEdit, cancel)
@@ -380,11 +397,18 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 // editForm is the full inline-edit editor (name, owner, balances, type-specific
 // attributes, institution, and custom fields).
 func editForm(a domain.Account, dec int, members []domain.Member, accounts []domain.Account, accDefs []customfields.Def,
-	nameS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
+	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
 	editAdvOpen, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
 	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn, onNotes ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler) ui.Node {
-	isLiab := a.Class == domain.ClassLiability
+	// The type is editable; the shown attribute fields follow the SELECTED type's
+	// class (not the account's stored class), so switching e.g. a line of credit to a
+	// credit card, or a liability to an asset, reveals the right fields live.
+	isLiab := domain.AccountType(typeS.Get()).Class() == domain.ClassLiability
+	typeOptions := uiw.OptionsFrom(domain.AllAccountTypes,
+		func(t domain.AccountType) string { return string(t) },
+		func(t domain.AccountType) string { return humanizeType(string(t)) },
+		typeS.Get())
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "acct-edit-"+a.ID), Attr("autofocus", ""), Type("text"),
@@ -392,6 +416,14 @@ func editForm(a domain.Account, dec int, members []domain.Member, accounts []dom
 		// Optional explicit variable name for formulas/widgets, with a live chip + collision warning.
 		labeledField(uistate.T("accounts.varNameLabel"),
 			entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName)),
+		labeledField(uistate.T("accounts.typeLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   typeOptions,
+				Selected:  typeS.Get(),
+				OnChange:  func(v string) { typeS.Set(v) },
+				AriaLabel: uistate.T("accounts.typeLabel"),
+				TestID:    "acct-edit-type-select",
+			})),
 		labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
 				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),

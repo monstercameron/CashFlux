@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Account type is editable (2026-07-07):** the account edit form now has an Account type picker, so an account can be reclassified — e.g. a line of credit → a credit card, or an asset ↔ a liability. The class follows the chosen type: the attribute fields shown switch live (credit limit / APR / min-payment for liabilities vs. expected-return / liquidity / lock-until for assets), and on save the fields that don't belong to the new class are cleared so a reclassified account carries no stale data. Combined with the sign-robust net-worth fix below, flipping between asset and liability now updates net worth and the /accounts display correctly.
+
 ### Fixed
 - **Liabilities are treated as debts regardless of how their balance is stored (2026-07-07):** an account added through the "amount you owe" form stores a *positive* balance, but net-worth code assumed liabilities were stored *negative* (the sample convention) — so a form-added debt was **added** to net worth instead of subtracted, which also skewed the debt page's "Debt vs assets" ratio and "Total owed" sign. `ledger.NetWorth`/`NetWorthExplained` now take the owed amount as the magnitude (`Abs`) of the balance, correct for both storage signs (guarded by a new positive-liability test). On `/accounts`, liability rows now display a **negative** figure (a debt reduces net worth) and sort below the assets, taking `-Abs` so the sign is right no matter how the balance was stored. Editing still operates on the raw stored value.
 

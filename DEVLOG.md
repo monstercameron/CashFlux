@@ -1,3 +1,23 @@
+## 2026-07-07 — Account type is now editable (reclassify accounts)
+
+Cam wanted to switch an account's type — e.g. a line of credit to a credit card.
+The edit form never exposed the type (`cp := a` kept it), so a mis-typed account
+was stuck. Added an Account-type picker to `editForm` reusing the add form's
+`OptionsFrom(AllAccountTypes, …)`.
+
+The nuance is that class follows type. `isLiab` in the form now derives from the
+*selected* type's class (not the stored `a.Class`), so the attribute fields switch
+live as you change the dropdown — liability fields (credit limit/APR/min-payment)
+vs. asset fields (expected-return/liquidity/lock-until). On save, `cp.Type` and
+`cp.Class` are set from the selection and the fields that don't apply to the new
+class are explicitly zeroed, so reclassifying doesn't leave a stale credit limit or
+lock date behind. Class flips (asset↔liability) ride on this morning's sign-robust
+net-worth fix, so net worth and the /accounts display stay correct.
+
+Verified in Playwright: switched the sample "Rewards Credit Card" to a line of
+credit, and the row meta re-rendered to "Line of credit · 69% of limit used" and
+stuck across navigation.
+
 ## 2026-07-07 — Liability sign bug: debts stored positive were inflating net worth
 
 Cam, looking at his real data on /accounts: his liabilities (Rocket Mortgage
