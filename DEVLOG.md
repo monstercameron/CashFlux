@@ -1,3 +1,14 @@
+## 2026-07-08 — Release v1.0.5
+
+Cut v1.0.5: bill-payment linkage (mark a txn as a bill payment → actual monthly
+payment on the debt card + drill-through), the row-menu clipping fix it exposed, the
+Smart+ categorization checkbox rendering fix, and the OpenAI-key persistence fix.
+Bumped `version.go` (1.0.4→1.0.5) and the SW cache (`cashflux-v292`→`v293`) to evict
+stale assets. Verified before tagging: full native `go test ./...` green, e2e
+regression (interactions + smoke, 13/13 incl. the new bill-payment test and all-routes
+smoke) green, and a visual pass on the debt card, the branded checkbox in both themes,
+and an overflow menu (shared component touched by the backdrop removal).
+
 ## 2026-07-08 — Smart+ categorization checkboxes rendered wrong on Cam's laptop
 
 Cam: the post-AI acceptance checkboxes in the categorization review weren't rendering

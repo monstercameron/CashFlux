@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-07-08
+
 ### Added
 - **Mark a transaction as a bill payment toward a debt (2026-07-08):** each transaction row's new `⋯` menu can mark that transaction as a **bill payment** for any of your liability accounts (or clear the link). The Debt page then reads the most recent linked payment as that account's **actual monthly payment** — shown as "Bill $X/mo" beside (and distinct from) the minimum — with a "· N payments →" link that drills to exactly the transactions backing it (a new bill-account transaction filter). This is the recurring-payment truth for a debt taken straight from your ledger, and a way to eyeball whether a bill actually got paid. Backed by `Transaction.BillAccountID`, the pure `ledger.BillPaymentForAccount` helper (most-recent by date, sign-robust; unit-tested), and a `txnfilter` bill-account criterion; regression-pinned end-to-end. (Subscriptions and a bills-page due-date quick-edit are the next two increments.)
 
