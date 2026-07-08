@@ -7,6 +7,8 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The AI chat assistant can categorize too (2026-07-08):** the in-app assistant gained three tools — `list_uncategorized_transactions`, `create_category`, and `categorize_transactions` — so you can just ask it ("categorize my transactions", "create a Groceries category", "fix anything mis-filed") and it plans the work, creating categories and assigning them with the usual per-change approval. Verified live: the agent created a category on request through the approval flow.
+- **"Suggest categories" button on the Categories page (2026-07-08):** the Smart+ categorization modal is now reachable from /categories (not only the /transactions toolbar) — a ✦ button in the expense section header opens it, leading with the suggest-new-categories scan.
 - **Smart+ categorization: three AI scans on /transactions (2026-07-08):** a "Categorize" button opens a shell-root flip modal with three opt-in AI scans of your ledger, each producing a checklist you confirm before anything is written. **Suggest** (SMART-T15) proposes NEW categories that would cover your uncategorized transactions — you pick which to create. **Auto-fill** (SMART-T16) proposes an existing category for each uncategorized transaction. **Fix mistakes** (SMART-T17) reviews your categorized transactions for likely miscategorizations and proposes corrections. The AI can never invent a category — every suggestion parses against your real category list — and the scan is the consent step (nothing leaves the device until you pick a mode and click Scan). Applying Auto-fill / Fix mistakes is undoable via the usual bulk-undo bar. Verified end-to-end against the live model.
 
 ## [1.0.3] - 2026-07-08

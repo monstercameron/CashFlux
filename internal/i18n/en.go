@@ -457,6 +457,7 @@ var english = Catalog{
 	// Categories screen
 	"categories.add":             "Add category",
 	"categories.addCategory":     "+ Add category",
+	"categories.smartBtn":        "Suggest categories",
 	"categories.nameRequired":    "Enter a category name.",
 	"categories.pickDifferent":   "Pick a different category to move these into.",
 	"categories.noParentTop":     "— No parent (top level) —",

@@ -78,11 +78,21 @@ func Categories() ui.Node {
 	// so Tomás isn't forced to discover the command-palette / global "+".
 	addCategory := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("category") }))
 	toggleSort := ui.UseEvent(Prevent(func() { sortByUsage.Set(!sortByUsage.Get()) }))
+	// Open the Smart+ categorization modal (shared with /transactions) — from here it
+	// leads with the "Suggest new categories" scan, the natural fit for this page.
+	smartCatOpen := uistate.UseTxnSmartCatOpen()
+	openSmartCat := ui.UseEvent(Prevent(func() { smartCatOpen.Set(true) }))
 	addCatBtn := func() ui.Node {
 		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "categories-add"), Title(uistate.T("categories.add")), OnClick(addCategory),
 			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("categories.addCategory")))
+	}
+	smartCatBtn := func() ui.Node {
+		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "categories-smartcat"), Title(uistate.T("smartcat.title")), OnClick(openSmartCat),
+			smartGlyph(false, tw.Fold(tw.W4, tw.H4)),
+			Span(uistate.T("categories.smartBtn")))
 	}
 
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
@@ -383,7 +393,7 @@ func Categories() ui.Node {
 			)))),
 		rptTile("cats-expense", "1 / span 4",
 			rptSection("sec-cats-expense", uistate.T("categories.expenseTitle"),
-				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), sortToggleBtn(), addCatBtn()),
+				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), smartCatBtn(), sortToggleBtn(), addCatBtn()),
 				catTreeBody(expenseFlats, uistate.T("categories.expenseEmpty"), uistate.T("categories.addFirstExpense")))),
 		rptTile("cats-income", "1 / span 4",
 			rptSection("sec-cats-income", uistate.T("categories.incomeTitle"),

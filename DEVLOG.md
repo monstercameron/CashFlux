@@ -1,3 +1,20 @@
+## 2026-07-08 — Categorization as a chat skill + a /categories entry point
+
+Two follow-ups. (1) Cam wanted the categorization to also work as an agent skill in
+chat. The assistant already has a `chatTool{spec, run, mutates, preview}` system, so
+I added three tools mirroring the shipped mutating tools: `list_uncategorized_
+transactions` (read), `create_category` and `categorize_transactions` (mutating,
+approval-gated, with a preview that counts the matches). Updated the system prompt to
+teach the flow (list → group by merchant → create_category → categorize_transactions;
+`only_uncategorized:false` to fix mistakes). Verified live with the real key: asked
+the assistant to create a category, it called the tool, showed the approval card, and
+on approve the category appeared on /categories.
+
+(2) Cam looked for the smart options on the Categories page and didn't find them (I'd
+only put the button on the /transactions toolbar). Fair — "suggest categories" belongs
+there. Added a ✦ "Suggest categories" button to the expense section header that opens
+the SAME shell-root modal (it reads the whole ledger, so it works from any page).
+
 ## 2026-07-08 — Smart+ categorization: three AI scans (suggest / auto-fill / fix)
 
 Cam wanted three AI categorization features: generate categories from uncategorized

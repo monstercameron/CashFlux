@@ -58,11 +58,33 @@ type agentStep struct {
 // always appended separately so a custom prompt never loses it.
 const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific figure (a category total, an account balance, net worth, affordability) instead of guessing. If unsure which category a question means, call list_categories first. You may also COMBINE your own general knowledge (tax brackets, rates, formulas) with the calculator tool and the user's figures to ESTIMATE things the data doesn't directly contain (e.g. taxes) — never refuse; compute a clear estimate and state your assumptions. Use web_search for current or external facts, and the calculator for arithmetic. Never invent the user's own numbers.
 
-You can also CHANGE the user's data with tools (every change asks the user to approve first): add/complete tasks, record transactions, create accounts (assets and liabilities), transfer between accounts, set account balances, add goal contributions. Think in double-entry terms so net worth stays correct. Key rule: borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL at the moment you borrow — model it as a new liability for the amount owed PLUS the cash you received (add_transfer or update_account_balance), not as a one-sided loss. When an event spans multiple accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
+You can also CHANGE the user's data with tools (every change asks the user to approve first): add/complete tasks, record transactions, create accounts (assets and liabilities), transfer between accounts, set account balances, add goal contributions, create categories, and categorize transactions. When the user asks you to categorize their transactions: call list_uncategorized_transactions to see what's uncovered, group them by merchant, create_category for anything not already covered, then categorize_transactions(match, category) per merchant phrase. To fix mis-categorized transactions, call categorize_transactions with only_uncategorized set to false. Propose the plan and let the approvals confirm each change. Think in double-entry terms so net worth stays correct. Key rule: borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL at the moment you borrow — model it as a new liability for the amount owed PLUS the cash you received (add_transfer or update_account_balance), not as a one-sided loss. When an event spans multiple accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
 
 Before creating anything, the tools check for an existing or near-duplicate item; if one is found they return it instead of making a clone — relay that to the user rather than forcing a duplicate. Whenever a creation tool's result contains a Markdown link (e.g. "[Open it](/todo#id)"), ALWAYS include that exact link in your reply so the user can jump straight to the new (or existing) item.
 
 Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
+
+// countTxnMatches counts non-transfer transactions whose payee/description contains
+// match (case-insensitive); when onlyUncat is true, only those without a category.
+func countTxnMatches(txns []domain.Transaction, match string, onlyUncat bool) int {
+	q := strings.ToLower(strings.TrimSpace(match))
+	if q == "" {
+		return 0
+	}
+	n := 0
+	for _, t := range txns {
+		if t.IsTransfer() {
+			continue
+		}
+		if onlyUncat && t.CategoryID != "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), q) {
+			n++
+		}
+	}
+	return n
+}
 
 // categoryNames returns a comma-separated list of the user's category names.
 func categoryNames(cats []domain.Category) string {
@@ -660,6 +682,137 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					return "Couldn't record the transaction: " + err.Error()
 				}
 				return fmt.Sprintf("Recorded %s in %s.%s", fmtMoney(t.Amount), acc.Name, openLink("/transactions", t.ID))
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_uncategorized_transactions",
+				"List the user's transactions that have no category yet, so you can propose categories for them. Returns up to `limit` (default 30) with payee, description, and amount.",
+				json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer"}}}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Limit int `json:"limit"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				if a.Limit <= 0 || a.Limit > 60 {
+					a.Limit = 30
+				}
+				var b strings.Builder
+				n := 0
+				for _, t := range txns {
+					if t.IsTransfer() || t.CategoryID != "" {
+						continue
+					}
+					b.WriteString(fmt.Sprintf("- %s | %s\n", strings.TrimSpace(t.Payee+" — "+t.Desc), fmtM(t.Amount.Amount)))
+					if n++; n >= a.Limit {
+						break
+					}
+				}
+				if n == 0 {
+					return "Every transaction already has a category."
+				}
+				return fmt.Sprintf("%d uncategorized transaction(s):\n%s", n, b.String())
+			},
+		},
+		{
+			spec: ai.FunctionTool("create_category",
+				"Create a new spending or income category. Use this when the user's transactions aren't covered by any existing category. Returns the existing one instead if a category with that name already exists.",
+				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["expense","income"],"description":"defaults to expense"}},"required":["name"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Name string `json:"name"`
+					Kind string `json:"kind"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				kind := "expense"
+				if strings.EqualFold(a.Kind, "income") {
+					kind = "income"
+				}
+				return fmt.Sprintf("Create the %s category “%s”.", kind, strings.TrimSpace(a.Name))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Name string `json:"name"`
+					Kind string `json:"kind"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the category details."
+				}
+				name := strings.TrimSpace(a.Name)
+				if name == "" {
+					return "A category needs a name."
+				}
+				for _, c := range cats {
+					if strings.EqualFold(c.Name, name) {
+						return fmt.Sprintf("A category “%s” already exists.%s", c.Name, openLink("/categories", c.ID))
+					}
+				}
+				kind := domain.KindExpense
+				if strings.EqualFold(a.Kind, "income") {
+					kind = domain.KindIncome
+				}
+				c := domain.Category{ID: id.New(), Name: name, Kind: kind}
+				if err := app.PutCategory(c); err != nil {
+					return "Couldn't create the category: " + err.Error()
+				}
+				return fmt.Sprintf("Created the category “%s”.%s", c.Name, openLink("/categories", c.ID))
+			},
+		},
+		{
+			spec: ai.FunctionTool("categorize_transactions",
+				"Assign a category to the user's transactions whose payee or description contains a phrase. Use to auto-categorize uncategorized transactions or to fix mis-categorized ones. Resolves the category by name; create it first with create_category if it doesn't exist.",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"case-insensitive phrase found in the payee or description"},"category":{"type":"string"},"only_uncategorized":{"type":"boolean","description":"when true (default), only change transactions that currently have no category; set false to also re-categorize"}},"required":["match","category"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Match             string `json:"match"`
+					Category          string `json:"category"`
+					OnlyUncategorized *bool  `json:"only_uncategorized"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				onlyUncat := a.OnlyUncategorized == nil || *a.OnlyUncategorized
+				n := countTxnMatches(txns, a.Match, onlyUncat)
+				return fmt.Sprintf("Set %s matching “%s” to %s.", plural(n, "transaction"), strings.TrimSpace(a.Match), strings.TrimSpace(a.Category))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Match             string `json:"match"`
+					Category          string `json:"category"`
+					OnlyUncategorized *bool  `json:"only_uncategorized"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the details."
+				}
+				q := strings.ToLower(strings.TrimSpace(a.Match))
+				if q == "" {
+					return "Give a phrase to match on."
+				}
+				c, ok := resolveCategory(a.Category)
+				if !ok {
+					return "No category matching “" + a.Category + "”. Create it first with create_category. Existing: " + catNames() + "."
+				}
+				onlyUncat := a.OnlyUncategorized == nil || *a.OnlyUncategorized
+				changed := 0
+				for _, t := range txns {
+					if t.IsTransfer() || t.CategoryID == c.ID {
+						continue
+					}
+					if onlyUncat && t.CategoryID != "" {
+						continue
+					}
+					if !strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), q) {
+						continue
+					}
+					t.CategoryID = c.ID
+					if err := app.PutTransaction(t); err != nil {
+						return fmt.Sprintf("Set %d, then hit an error: %s", changed, err.Error())
+					}
+					changed++
+				}
+				if changed == 0 {
+					return fmt.Sprintf("No transactions matched “%s”.", strings.TrimSpace(a.Match))
+				}
+				return fmt.Sprintf("Categorized %s as %s.", plural(changed, "transaction"), c.Name)
 			},
 		},
 		{
