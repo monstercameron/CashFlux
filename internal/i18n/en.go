@@ -2750,8 +2750,10 @@ var english = Catalog{
 	// Valuation history panel — C225 [F31]: shown for illiquid asset accounts
 	// (property, vehicle, investment, retirement, crypto, other) when the user
 	// has updated the balance at least twice.
-	"accounts.valuationHistoryTitle": "Value history",
-	"accounts.valuationHistoryEmpty": "No history yet — update the value to start tracking.",
+	"accounts.valuationHistoryTitle":  "Value history",
+	"accounts.valuationChangeMonth":   "%s this month",
+	"accounts.valuationNoChangeMonth": "No change this month",
+	"accounts.valuationHistoryEmpty":  "No history yet — update the value to start tracking.",
 }
 
 // DefaultBundle returns a fresh bundle seeded with the English source catalog.

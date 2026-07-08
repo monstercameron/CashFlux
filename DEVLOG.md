@@ -1,3 +1,25 @@
+## 2026-07-07 — Account rows: month-to-date value change, not a history list
+
+Cam, on his real data: the illiquid-asset rows (home, car, investment) rendered a
+scrolling "Value history" list — every recorded valuation with its date. Noise in
+a row. "Just show a change +/- for the month and not a list of changes."
+
+Built a pure `internal/valuation` package with `MonthToDateChange(snaps, current,
+now)`: current value minus the value as of the start of the current calendar month
+(carried forward from the most recent snapshot at/before the 1st). The one judgment
+call was the baseline when an account's whole history is within this month (no
+snapshot predates it) — I fall back to the earliest snapshot so a freshly tracked
+asset still reports its change so far, rather than showing nothing. Table-driven
+tests cover carry-forward, the within-month fallback, an on-the-first boundary,
+zero-change, and unsorted input.
+
+`AccountRow` now renders a single toned meta line — "▲ $2,000.00 this month" /
+"▼ …" / "No change this month" — in place of the list (removed the MapKeyed
+snapshot panel and its now-dead `dec`/`histCur` locals). Gated on ≥2 snapshots as
+before. Verified in Playwright against the seed: the old `val-hist-panel` is gone
+everywhere and valuation rows carry a `val-change` note (Roth IRA etc.). /debt and
+the account editor are untouched.
+
 ## 2026-07-07 — /accounts: All/Assets/Liabilities toggle (superseding the glance tile)
 
 Two iterations in one day. First cut added a *second*, read-only "Assets &

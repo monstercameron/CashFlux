@@ -7,6 +7,7 @@ package screens
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -17,6 +18,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/valuation"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
@@ -109,7 +111,6 @@ func intOrEmpty(n int) string {
 // its hooks so the list and the edit toggle never disturb hook ordering.
 func AccountRow(props accountRowProps) ui.Node {
 	a := props.Account
-	dec := currency.Decimals(a.Currency)
 
 	// Secondary actions live in a "⋯" overflow menu so each row stays uncluttered
 	// (primary: Transactions / Edit / ✕); selecting one closes the menu (C9).
@@ -161,43 +162,27 @@ func AccountRow(props accountRowProps) ui.Node {
 		menuHidden = " hidden-menu"
 	}
 
-	// Valuation history panel — displayed below the row for illiquid-asset
-	// accounts when at least 2 snapshots are available (C225 [F31]).
-	// Display-only: no On* hooks inside the MapKeyed loop.
-	var historyPanel ui.Node = Fragment()
+	// Month-to-date value change for illiquid-asset accounts (home / car /
+	// investment): a single signed figure — "▲ $2,000.00 this month" — in place of
+	// the old scrolling valuation-history list, which was noise in the row (C225
+	// [F31]). Shown only when there is history to compare against. Display-only.
+	var valChange ui.Node = Fragment()
 	if isValuationType(a.Type) && len(props.ValuationHistory) >= 2 {
-		histDec := dec // capture for closure
-		histCur := a.Currency
-		// Show up to the last 6 snapshots, most recent first.
-		snaps := props.ValuationHistory
-		start := 0
-		if len(snaps) > 6 {
-			start = len(snaps) - 6
-		}
-		recent := snaps[start:]
-		// Reverse so most recent appears at the top of the list.
-		reversed := make([]domain.BalanceSnapshot, len(recent))
-		for i, s := range recent {
-			reversed[len(recent)-1-i] = s
-		}
-		keyOfSnap := func(s domain.BalanceSnapshot) any { return s.ID }
-		renderSnap := func(s domain.BalanceSnapshot) ui.Node {
-			dateStr := s.AsOf.Format("Jan 2, 2006")
-			valStr := money.FormatMinor(s.BalanceMinor, histDec)
-			cur := s.Currency
-			if cur == "" {
-				cur = histCur
+		if chg, ok := valuation.MonthToDateChange(props.ValuationHistory, props.Balance, time.Now()); ok {
+			cls := "row-meta acct-val-change"
+			label := uistate.T("accounts.valuationNoChangeMonth")
+			if chg.Amount != 0 {
+				arrow := "▲"
+				if chg.IsNegative() {
+					arrow = "▼"
+				}
+				if t := figTone(chg); t != "" {
+					cls += " " + tw.ColorClass(t)
+				}
+				label = uistate.T("accounts.valuationChangeMonth", arrow+" "+fmtMoney(chg.Abs()))
 			}
-			return Div(css.Class("val-hist-row"),
-				Span(css.Class("val-hist-date", tw.TextDim), dateStr),
-				Span(css.Class("val-hist-val"), valStr+" "+cur),
-			)
+			valChange = Span(ClassStr(cls), Attr("data-testid", "val-change-"+a.ID), label)
 		}
-		historyPanel = Div(css.Class("val-hist-panel"),
-			Attr("data-testid", "val-hist-panel-"+a.ID),
-			P(css.Class("val-hist-title", tw.TextDim), uistate.T("accounts.valuationHistoryTitle")),
-			Div(css.Class("val-hist-rows"), MapKeyed(reversed, keyOfSnap, renderSnap)),
-		)
 	}
 
 	return Div(
@@ -217,6 +202,7 @@ func AccountRow(props accountRowProps) ui.Node {
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
 				Span(css.Class("row-meta"), meta),
+				valChange,
 				// Read-only summary of the account's custom-field values (a compact
 				// "Label: value · …" line), shown only when any are set.
 				If(customSummary(props.AccountDefs, a.Custom) != "",
@@ -264,7 +250,6 @@ func AccountRow(props accountRowProps) ui.Node {
 				),
 			),
 		),
-		historyPanel,
 	)
 }
 
