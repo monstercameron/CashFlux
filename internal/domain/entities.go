@@ -160,6 +160,11 @@ type Transaction struct {
 	// auto-review workflows (ActionFlagReview) skip tagging it "needs-review"
 	// (L43 — suppress the auto-tag on confident manual entry).
 	Reviewed bool `json:"reviewed,omitempty"`
+	// BillAccountID marks this transaction as a recurring BILL PAYMENT toward a
+	// liability account (id). The Debt page reads the most recent such payment as
+	// the account's actual monthly payment (distinct from its minimum), and links
+	// back to the payments as proof. Empty = not a bill payment.
+	BillAccountID string `json:"billAccountId,omitempty"`
 }
 
 // AttachmentRef links a transaction to an Artifact-backed receipt, document, or

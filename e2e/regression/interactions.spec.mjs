@@ -104,3 +104,31 @@ test.describe("wave-2 fixes", () => {
     ).toHaveCount(0);
   });
 });
+
+test.describe("bill-payment linkage", () => {
+  test("transactions: marking a txn as a bill payment shows on the debt card and drills to it", async ({ app }) => {
+    await nav(app, "/transactions");
+
+    // Use a mid-list row (row 1 sits under the sticky topbar/toolbar, where the click
+    // auto-scroll lands the menu item under the sticky chrome). Scrolled to centre, the
+    // row's ⋯ menu opens into clear space — matching how a user marks a bill.
+    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    await row.scrollIntoViewIfNeeded();
+    await row.locator('[data-testid^="txn-kebab-"]').click();
+    const markItem = row.locator('[data-testid^="txn-markbill-"]').first();
+    await expect(markItem).toBeVisible();
+    const acctId = (await markItem.getAttribute("data-testid")).replace("txn-markbill-", "");
+    await markItem.click();
+
+    // The debt card for that liability now shows a bill-payment line (distinct from the
+    // minimum), with a link to the payments that prove it.
+    await nav(app, "/debt");
+    await expect(app.locator(`[data-testid="debt-bill-${acctId}"]`)).toBeVisible();
+
+    // The link drills to the transactions filtered to this account's bill payments —
+    // exactly the one we marked.
+    await app.locator(`[data-testid="debt-bill-link-${acctId}"]`).click();
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+  });
+});

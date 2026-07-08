@@ -381,6 +381,34 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	for _, m := range props.App.Members() {
 		memberName[m.ID] = m.Name
 	}
+	// Active liabilities, for the row ⋯ menu's "mark as bill payment" targets.
+	var liabilities []domain.Account
+	for _, ac := range props.App.Accounts() {
+		if ac.Class == domain.ClassLiability && !ac.Archived {
+			liabilities = append(liabilities, ac)
+		}
+	}
+	// markBill links (or clears, acctID == "") a transaction as a bill payment toward
+	// a liability, so the Debt page can read it as the account's actual payment.
+	markBill := func(txnID, acctID string) {
+		for _, t := range props.App.Transactions() {
+			if t.ID != txnID {
+				continue
+			}
+			t.BillAccountID = acctID
+			if err := props.App.PutTransaction(t); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			if acctID == "" {
+				uistate.PostNotice(uistate.T("transactions.billCleared"), false)
+			} else {
+				uistate.PostNotice(uistate.T("transactions.billMarked"), false)
+			}
+			uistate.BumpDataRevision()
+			return
+		}
+	}
 
 	sel := selAtom.Get()
 
@@ -416,19 +444,21 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
 			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
 			// while /reports showed Jul 1 for the same transaction (C339).
-			Date:       time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
-			Amount:     fmtMoney(amt),
-			AmtTone:    figTone(amt),
-			Desc:       desc,
-			Account:    accCol.Str(i),
-			Category:   cat,
-			Source:     srcCol.Str(i),
-			Member:     memberName[txByID[rid].MemberID],
-			Cleared:    cleared,
-			Selected:   sel[rid],
-			Receipts:   nAtt,
-			Attachment: firstAtt,
-			Vis:        colVis,
+			Date:          time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
+			Amount:        fmtMoney(amt),
+			AmtTone:       figTone(amt),
+			Desc:          desc,
+			Account:       accCol.Str(i),
+			Category:      cat,
+			Source:        srcCol.Str(i),
+			Member:        memberName[txByID[rid].MemberID],
+			Cleared:       cleared,
+			Selected:      sel[rid],
+			Receipts:      nAtt,
+			Attachment:    firstAtt,
+			Vis:           colVis,
+			BillAccountID: txByID[rid].BillAccountID,
+			Liabilities:   liabilities,
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -436,6 +466,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnOpen = openEdit
 		r.OnToggleSelect = toggleSelect
 		r.OnViewReceipt = viewReceipt
+		r.OnMarkBill = markBill
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -484,6 +515,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		if colVis.User {
 			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser")})
 		}
+		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), "Actions"), Class: "td-actions"})
 		dtp := uiw.DataTableProps{
 			Class:       "txn-table",
 			StickyHead:  true,
@@ -531,18 +563,23 @@ func txnTableWidget(props txnTableProps) ui.Node {
 // Display strings are pre-formatted; the callbacks are plain funcs (not hooks) so
 // they pass safely through MapKeyed. The row owns its own interaction hooks.
 type txnFrameRowProps struct {
-	ID             string
-	Date           string
-	Amount         string
-	AmtTone        string // color token for the amount figure (e.g. "text-down")
-	Desc           string
-	Account        string
-	Category       string
-	Source         string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
-	Member         string          // assigned household member's name ("" if unassigned)
-	Vis            uistate.TxnCols // which optional columns to render (must match the header)
-	Cleared        bool
-	Selected       bool
+	ID       string
+	Date     string
+	Amount   string
+	AmtTone  string // color token for the amount figure (e.g. "text-down")
+	Desc     string
+	Account  string
+	Category string
+	Source   string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
+	Member   string          // assigned household member's name ("" if unassigned)
+	Vis      uistate.TxnCols // which optional columns to render (must match the header)
+	Cleared  bool
+	Selected bool
+	// Bill-payment linkage (the ⋯ row menu): the liability accounts the user can mark
+	// this transaction's payment toward, the current link (if any), and the callback.
+	BillAccountID  string
+	Liabilities    []domain.Account
+	OnMarkBill     func(txnID, accountID string)
 	Receipts       int                  // attachment count (drives the paperclip)
 	Attachment     domain.AttachmentRef // first attachment, opened by the paperclip
 	OnOpen         func(id string)
@@ -614,5 +651,40 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		If(props.Vis.Category, Td(props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
+		Td(ClassStr("td-actions"), OnClick(stop), txnRowMenu(props)),
 	)
+}
+
+// txnRowMenu is the row's ⋯ kebab: mark this transaction as a bill payment toward a
+// liability account (or clear the link). Built with OverflowMenu (loop-safe: it owns
+// each item's click hook), so the per-liability items don't call On* in a loop.
+func txnRowMenu(props txnFrameRowProps) ui.Node {
+	if len(props.Liabilities) == 0 || props.OnMarkBill == nil {
+		return Fragment()
+	}
+	items := make([]uiw.OverflowMenuItem, 0, len(props.Liabilities)+1)
+	for _, a := range props.Liabilities {
+		aid, name := a.ID, a.Name
+		label := uistate.T("transactions.markBillFor", name)
+		if props.BillAccountID == aid {
+			label = "✓ " + label
+		}
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    label,
+			TestID:   "txn-markbill-" + aid,
+			OnSelect: func() { props.OnMarkBill(props.ID, aid) },
+		})
+	}
+	if props.BillAccountID != "" {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("transactions.clearBill"),
+			TestID:   "txn-clearbill",
+			OnSelect: func() { props.OnMarkBill(props.ID, "") },
+		})
+	}
+	return uiw.OverflowMenu(uiw.OverflowMenuProps{
+		Items:         items,
+		TriggerLabel:  uistate.T("transactions.rowActions"),
+		TriggerTestID: "txn-kebab-" + props.ID,
+	})
 }

@@ -67,6 +67,10 @@ type Criteria struct {
 	Account  string `json:"account,omitempty"`
 	Category string `json:"category,omitempty"`
 	Member   string `json:"member,omitempty"`
+	// BillAccount filters to transactions marked as bill payments toward this
+	// liability account (Transaction.BillAccountID). Empty = no bill filter. Drives
+	// the Debt page's "N payments" drill-through.
+	BillAccount string `json:"billAccount,omitempty"`
 	// Source filters to transactions with this provenance (domain.TxnSource value:
 	// "manual"/"imported"/"scanned"/"recurring"/"assistant"). Empty = no source filter.
 	Source string `json:"source,omitempty"`
@@ -283,6 +287,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 	for _, t := range txns {
 		switch {
 		case c.Account != "" && t.AccountID != c.Account:
+		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Category != "" && t.CategoryID != c.Category:
 		case c.Member != "" && t.MemberID != c.Member:
 		case c.Source != "" && string(t.Source) != c.Source:

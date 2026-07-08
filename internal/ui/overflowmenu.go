@@ -68,7 +68,6 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		triggerLabel = "More actions"
 	}
 	toggleOpen := uic.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
-	closeMenu := uic.UseEvent(Prevent(func() { open.Set(false) }))
 
 	// Keyboard + outside-click dismissal (WAI-ARIA menu button). Registered only
 	// while open, torn down on close/unmount (mirrors addmenu.go):
@@ -82,9 +81,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	AnchorPopover(open.Get(), id)
 
 	// Use the `hidden-menu` class: it's the one the stylesheet actually hides
-	// (display:none on `.add-menu`/`.add-backdrop`, plus pointer-events:none on the
-	// backdrop). The bare `hidden` class is unstyled, so a closed backdrop would keep
-	// covering the page and swallow clicks on the trigger.
+	// (display:none on `.add-menu`). The bare `hidden` class is unstyled.
 	menuHidden := ""
 	if !open.Get() {
 		menuHidden = " hidden-menu"
@@ -123,9 +120,13 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		}))
 	}
 
+	// No `.add-backdrop` click-catcher: DismissPopover (above) already closes the menu
+	// on any outside pointerdown via a document listener. A fixed backdrop is not only
+	// redundant, it's harmful here — as a transparent, viewport-covering element it wins
+	// the hit-test over the menu items themselves when the row sits inside a bento tile's
+	// stacking context, so clicks on the items land on the backdrop and never fire.
 	return Div(css.Class("add-wrap"), Attr("id", id),
 		Button(triggerArgs...),
-		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 		Div(menuArgs...),
 	)
 }

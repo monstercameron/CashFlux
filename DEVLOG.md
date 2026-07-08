@@ -1,3 +1,37 @@
+## 2026-07-08 — Bill-payment linkage + fixing clipped row menus
+
+New Smart-ish feature (Cam): mark a transaction as a **bill payment** toward a
+liability from the transactions row `⋯` menu, then read the most recent such payment
+as the account's actual monthly payment on the Debt page — distinct from the
+minimum — with a link back to the payments that prove it. Increment 1 of 3
+(subscriptions + a bills-page due-date quick-edit are next).
+
+Model/logic first (SDLC): `Transaction.BillAccountID` (domain), pure
+`ledger.BillPaymentForAccount` (most-recent linked payment by date, magnitude via
+`Abs`, unit-tested), and a `txnfilter.Criteria.BillAccount` filter so the debt-card
+link can drill to exactly the linked payments. UI last: a row `⋯` menu
+(`OverflowMenu`, loop-safe) listing the household's liabilities, a `debt-bill-*`
+meta line + drill link on the debt card.
+
+The hard part was NOT the feature — it was that the row menu **couldn't be clicked**
+in the DataTable. Chased it with a live `elementFromPoint` diagnostic: the open menu
+item's centre resolved to `TD.td-user`, not the button. Two stacked causes: (1) the
+redundant `.add-backdrop` (a transparent, viewport-covering fixed div) won the
+hit-test — removed it, since `DismissPopover` already closes on outside pointerdown;
+(2) the actions cell computes `overflow:hidden` (fixed 96px width), which clipped the
+wider open-left menu so the item painted nowhere. The existing `:has()` lift rules
+only matched `.row`/`.budget`/`li`, never `<tr>`/`<td>` — so card-row menus worked
+and table-row menus regressed. Added a `td:has(> .add-wrap > .add-menu…)` rule that
+lifts (`position:relative; z-index:51`) and un-clips (`overflow:visible`) the open
+cell. After that, `elementFromPoint` returns `BUTTON.add-item` and the click lands.
+
+Screenshot + e2e verified: marking a mid-list row surfaces "Bill $1,480.00/mo · 1
+payment →" on its liability's debt card (beside "Min $220.00/mo · Due the 22nd"), and
+the link drills to exactly that one transaction. Regression pinned in
+`interactions.spec.mjs` (uses a mid-viewport row: row 1 sits under the sticky
+topbar/toolbar, where Playwright's click auto-scroll parks the item under the sticky
+chrome — a test artifact, not a mouse-use bug).
+
 ## 2026-07-08 — OpenAI key didn't persist
 
 Cam: the key doesn't persist. Root cause: persistence was gated on the

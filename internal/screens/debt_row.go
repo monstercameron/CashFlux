@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -26,16 +27,21 @@ import (
 // MapKeyed over a variable-length debt slice without calling hooks in a loop.
 type debtRowProps struct {
 	Account     domain.Account
-	Owed        money.Money         // absolute amount owed, in the account's currency
-	Rank        int                 // 1-based position in the payoff order; 0 = not in the plan
-	Utilization float64             // credit utilization %, or -1 when N/A (not a line of credit)
-	Available   money.Money         // remaining credit (credit lines only)
-	Band        string              // "good" | "warn" | "high" — from DebtConfig.UtilizationBand
-	InPayoff    bool                // whether this debt is included in the payoff plan
-	Defs        []customfields.Def  // account custom-field definitions (for the value summary)
-	OnEdit      func(string)        // open the account editor
-	OnView      func(string)        // drill to this account's transactions
+	Owed        money.Money        // absolute amount owed, in the account's currency
+	Rank        int                // 1-based position in the payoff order; 0 = not in the plan
+	Utilization float64            // credit utilization %, or -1 when N/A (not a line of credit)
+	Available   money.Money        // remaining credit (credit lines only)
+	Band        string             // "good" | "warn" | "high" — from DebtConfig.UtilizationBand
+	InPayoff    bool               // whether this debt is included in the payoff plan
+	Defs        []customfields.Def // account custom-field definitions (for the value summary)
+	OnEdit      func(string)       // open the account editor
+	OnView      func(string)       // drill to this account's transactions
 	OnTogglePay func(domain.Account, bool)
+	// BillPayment is this account's actual recurring payment, read from the most
+	// recent transaction the user marked as a bill payment toward it (distinct from
+	// the minimum). OnViewBills drills to those linked payments.
+	BillPayment ledger.BillPaymentInfo
+	OnViewBills func(string)
 }
 
 // DebtRow renders one liability as a card in the payoff ladder: a payoff-rank medallion
@@ -64,6 +70,11 @@ func DebtRow(props debtRowProps) ui.Node {
 	togglePay := ui.UseEvent(Prevent(func() {
 		if props.OnTogglePay != nil {
 			props.OnTogglePay(a, !props.InPayoff)
+		}
+	}))
+	viewBills := ui.UseEvent(Prevent(func() {
+		if props.OnViewBills != nil {
+			props.OnViewBills(a.ID)
 		}
 	}))
 
@@ -130,6 +141,18 @@ func DebtRow(props debtRowProps) ui.Node {
 		metaNode = Span(css.Class("debt-meta", tw.TextDim), strings.Join(metaParts, " · "))
 	}
 
+	// Bill-payment line: the account's actual recurring payment (from the most
+	// recent linked transaction), shown distinct from the minimum, with a link to
+	// the payments that prove it.
+	var billNode ui.Node = Fragment()
+	if props.BillPayment.HasAny {
+		billNode = Span(css.Class("debt-meta"), Attr("data-testid", "debt-bill-"+a.ID),
+			uistate.T("debt.billPaymentMeta", fmtMoney(props.BillPayment.Latest)),
+			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "debt-bill-link-"+a.ID),
+				Title(uistate.T("debt.billPaymentLinkTitle")), OnClick(viewBills),
+				uistate.T("debt.billPaymentCount", plural(props.BillPayment.Count, "payment"))))
+	}
+
 	// Custom-field values (reuses the shared account custom-field summary).
 	var customNode ui.Node = Fragment()
 	if s := customSummary(props.Defs, a.Custom); s != "" {
@@ -156,6 +179,7 @@ func DebtRow(props debtRowProps) ui.Node {
 			),
 			utilMeter,
 			If(len(metaParts) > 0, metaNode),
+			billNode,
 			customNode,
 		),
 		Div(css.Class("debt-side"),

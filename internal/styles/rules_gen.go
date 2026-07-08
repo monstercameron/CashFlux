@@ -8804,6 +8804,17 @@ func registerGenerated() {
 		position("relative"),
 		zIndex("51"),
 	)
+	// Table rows (e.g. the transactions DataTable) render as <tr>/<td>, which the
+	// selectors above don't match. When a row ⋯ menu is open the cell holding it must
+	// (a) rise above the sibling cells so its popover wins the hit-test, and (b) NOT
+	// clip the popover — the actions cell computes `overflow:hidden` (fixed 96px width),
+	// which clips the wider open-left menu so its item paints nowhere and the cell
+	// underneath (e.g. td-user) swallows the click. Lift + un-clip the open cell.
+	rule("td:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
+		position("relative"),
+		zIndex("51"),
+		overflow("visible"),
+	)
 	rule(".menu-btn:hover",
 		color("#f4f4f5"),
 	)

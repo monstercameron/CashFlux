@@ -388,6 +388,16 @@ func debtListWidget(props debtListProps) ui.Node {
 		})
 	}
 
+	txns := app.Transactions()
+	// viewBills drills to the transactions the user marked as bill payments toward a
+	// liability — the "proof of payment" linkage shown on each debt card.
+	onViewBills := func(accountID string) {
+		f := uistate.TxFilter{BillAccount: accountID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+
 	onView := func(accountID string) {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
 		txFilter.Set(f)
@@ -416,6 +426,7 @@ func debtListWidget(props debtListProps) ui.Node {
 			Band:     v.Cfg.UtilizationBand(v.UtilByID[ac.ID]),
 			InPayoff: v.InPayByID[ac.ID], Defs: v.Defs,
 			OnEdit: onEdit, OnView: onView, OnTogglePay: onTogglePay,
+			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: onViewBills,
 		})
 	})
 
