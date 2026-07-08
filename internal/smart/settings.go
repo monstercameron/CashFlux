@@ -44,6 +44,11 @@ type Settings struct {
 	// Muted features are snoozed: enabled but not surfaced (a per-feature "not
 	// now" that's reversible without losing the opt-in or its schedule).
 	Muted map[string]bool `json:"muted,omitempty"`
+	// SnoozedUntil is a unix-second timestamp: while now is before it, the whole
+	// Smart strip is hidden — a panel-level "not now", distinct from per-feature
+	// Muted and per-insight Dismissed. Zero means not snoozed. It is data-derived
+	// and time-bound, so ClearGenerated drops it.
+	SnoozedUntil int64 `json:"snoozedUntil,omitempty"`
 	// LastRun records the unix-second timestamp of each feature's last run, so
 	// cadence Due/freshness checks and AI result caching work across reloads.
 	LastRun map[string]int64 `json:"lastRun,omitempty"`
@@ -88,6 +93,7 @@ func (s Settings) ClearGenerated() Settings {
 	s.Dismissed = nil
 	s.LastRun = nil
 	s.Results = nil
+	s.SnoozedUntil = 0
 	return s
 }
 
@@ -153,6 +159,27 @@ func (s Settings) Dismiss(key string) Settings {
 	}
 	s.Dismissed[key] = true
 	return s
+}
+
+// DismissAll hides every insight in keys at once — the panel-level "dismiss all"
+// that clears the current batch (new insights, with new keys, can still surface).
+func (s Settings) DismissAll(keys []string) Settings {
+	for _, k := range keys {
+		s = s.Dismiss(k)
+	}
+	return s
+}
+
+// SnoozeUntil hides the whole Smart strip until the given unix-second timestamp.
+// A zero or past value effectively un-snoozes it.
+func (s Settings) SnoozeUntil(unixSec int64) Settings {
+	s.SnoozedUntil = unixSec
+	return s
+}
+
+// IsSnoozed reports whether the Smart strip is snoozed (hidden) at nowUnix.
+func (s Settings) IsSnoozed(nowUnix int64) bool {
+	return s.SnoozedUntil > nowUnix
 }
 
 // Restore un-dismisses an insight key (the "show dismissed again" affordance).

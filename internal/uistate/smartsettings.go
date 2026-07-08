@@ -101,6 +101,21 @@ func RestoreSmartInsight(key string) smart.Settings {
 	return s
 }
 
+// DismissAllSmartInsights dismisses every given insight key at once (the panel's
+// "dismiss all") and persists.
+func DismissAllSmartInsights(keys []string) smart.Settings {
+	s := LoadSmartSettings().DismissAll(keys)
+	SaveSmartSettings(s)
+	return s
+}
+
+// SnoozeSmartPanel hides the whole Smart strip until the given time and persists.
+func SnoozeSmartPanel(until time.Time) smart.Settings {
+	s := LoadSmartSettings().SnoozeUntil(until.Unix())
+	SaveSmartSettings(s)
+	return s
+}
+
 // SetSmartCadence sets a feature's run schedule (when it runs) and persists.
 func SetSmartCadence(code string, c smart.Cadence) smart.Settings {
 	s := LoadSmartSettings().SetCadence(code, c)

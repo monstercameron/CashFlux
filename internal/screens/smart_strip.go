@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -44,11 +45,16 @@ func SmartStrip(props smartStripProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
-	_ = uistate.UseDataRevision().Get() // re-render on data/settings/dismiss change
+	rev := uistate.UseDataRevision()
+	_ = rev.Get() // re-render on data/settings/dismiss/snooze change
 	nav := router.UseNavigate()
 	pr := uistate.UsePrefs().Get()
 
 	settings := uistate.LoadSmartSettings()
+	// Panel-level snooze: the whole strip is hidden until the snooze expires.
+	if settings.IsSnoozed(time.Now().Unix()) {
+		return Fragment()
+	}
 	in := buildSmartInput(app, pr.WeekStartWeekday())
 
 	var insights []smart.Insight
@@ -73,6 +79,12 @@ func SmartStrip(props smartStripProps) ui.Node {
 		return Fragment() // additive: nothing enabled or nothing to say → no footprint
 	}
 	total := len(insights)
+	// Capture every active insight's key BEFORE truncation so "dismiss all" clears
+	// the whole batch, not just the few shown inline.
+	allKeys := make([]string, 0, len(insights))
+	for _, ins := range insights {
+		allKeys = append(allKeys, ins.Key)
+	}
 	if len(insights) > limit {
 		insights = insights[:limit]
 	}
@@ -86,23 +98,48 @@ func SmartStrip(props smartStripProps) ui.Node {
 	expanded := ui.UseState(false)
 	toggleExpand := ui.UseEvent(func() { expanded.Set(!expanded.Get()) })
 
-	// "View all (N)" link in the card header — only when more exist than shown.
-	var headerAction ui.Node
+	// "View all (N)" link in the card header — the count suffix only when more exist
+	// than shown inline.
+	viewAllLabel := uistate.T("smart.viewAll")
 	if total > len(insights) {
-		headerAction = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
-			Attr("data-testid", "smart-strip-viewall"),
-			Attr("aria-label", uistate.T("smart.viewAll")),
-			OnClick(openHub),
-			uistate.T("smart.viewAll")+" ("+itoaStrip(total)+")",
-		)
-	} else {
-		headerAction = Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
-			Attr("data-testid", "smart-strip-viewall"),
-			Attr("aria-label", uistate.T("smart.viewAll")),
-			OnClick(openHub),
-			uistate.T("smart.viewAll"),
-		)
+		viewAllLabel += " (" + itoaStrip(total) + ")"
 	}
+	viewAllBtn := Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+		Attr("data-testid", "smart-strip-viewall"),
+		Attr("aria-label", uistate.T("smart.viewAll")),
+		OnClick(openHub),
+		viewAllLabel,
+	)
+
+	// Panel actions overflow menu: snooze the whole strip, or dismiss the current
+	// batch of nudges at once (complementing the per-nudge dismiss on each card).
+	menuItems := make([]uiw.OverflowMenuItem, 0, 3)
+	if len(allKeys) > 0 {
+		menuItems = append(menuItems, uiw.OverflowMenuItem{
+			Label:    uistate.T("smart.dismissAll"),
+			TestID:   "smart-dismiss-all",
+			OnSelect: func() { uistate.DismissAllSmartInsights(allKeys); rev.Set(rev.Get() + 1) },
+		})
+	}
+	menuItems = append(menuItems,
+		uiw.OverflowMenuItem{
+			Label:    uistate.T("smart.snoozeDay"),
+			TestID:   "smart-snooze-day",
+			OnSelect: func() { uistate.SnoozeSmartPanel(time.Now().Add(24 * time.Hour)); rev.Set(rev.Get() + 1) },
+		},
+		uiw.OverflowMenuItem{
+			Label:    uistate.T("smart.snoozeWeek"),
+			TestID:   "smart-snooze-week",
+			OnSelect: func() { uistate.SnoozeSmartPanel(time.Now().Add(7 * 24 * time.Hour)); rev.Set(rev.Get() + 1) },
+		},
+	)
+	panelMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		Items:         menuItems,
+		TriggerLabel:  uistate.T("smart.panelActions"),
+		TriggerTestID: "smart-strip-menu",
+	})
+
+	headerAction := Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap1)), viewAllBtn, panelMenu)
 
 	pageKey := string(props.Page)
 	if pageKey == "" {

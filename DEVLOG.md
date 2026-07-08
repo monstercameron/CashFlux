@@ -1,3 +1,28 @@
+## 2026-07-07 — Smart panels: snooze + dismiss-all (and an OverflowMenu bug)
+
+Cam: the smart panels dismiss one nudge at a time; also want to snooze the panel
+and dismiss all. Built both bottom-up. New pure `smart.Settings` state:
+`DismissAll(keys)` (bulk dismiss the current batch — new keys can still surface
+later), and `SnoozeUntil(ts)`/`IsSnoozed(now)` — a panel-level unix-second snooze
+distinct from per-feature `Muted` and per-insight `Dismissed`. It's data-derived +
+time-bound, so `ClearGenerated` drops it. Table-driven tests for all three.
+uistate wrappers persist via `SaveSmartSettings`; the caller bumps the data
+revision (same as single-dismiss). SmartStrip gains a "⋯" header menu (reusing
+`uiw.OverflowMenu`) with Dismiss all / Snooze for a day / a week, and returns
+`Fragment()` when snoozed — captured `allKeys` *before* the inline truncation so
+"dismiss all" clears the whole set, not just the 3-4 shown.
+
+The snag: the ⋯ trigger click timed out in e2e. `elementFromPoint` at the trigger
+returned `div.add-backdrop.hidden` sitting on top of it. Root cause was a real bug
+in the shared `OverflowMenu`: it toggled a bare `hidden` class, but the stylesheet
+only hides `.add-menu`/`.add-backdrop` via `hidden-menu` (display:none +
+pointer-events:none). `.hidden` is unstyled, so a *closed* menu's fixed
+full-viewport backdrop kept painting and eating clicks on the trigger — the menu
+never really opened. One-line fix (`hidden` → `hidden-menu`) in the component,
+which fixes it for every OverflowMenu caller. e2e then confirmed dismiss-all makes
+the strip vanish (all accounts insights gone, no AI feature → Fragment) and snooze
+hides the strip on /accounts and stays hidden on /transactions.
+
 ## 2026-07-07 — Dashboard catch-up card wasn't styled (broke the grid)
 
 Cam: the "While you were away" card breaks the dashboard grid — "put it in a

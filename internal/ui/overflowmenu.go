@@ -81,9 +81,13 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	// right edge): flip it left/up when its natural below-right position would overflow.
 	AnchorPopover(open.Get(), id)
 
+	// Use the `hidden-menu` class: it's the one the stylesheet actually hides
+	// (display:none on `.add-menu`/`.add-backdrop`, plus pointer-events:none on the
+	// backdrop). The bare `hidden` class is unstyled, so a closed backdrop would keep
+	// covering the page and swallow clicks on the trigger.
 	menuHidden := ""
 	if !open.Get() {
-		menuHidden = " hidden"
+		menuHidden = " hidden-menu"
 	}
 	// aria-expanded reflects the popover state for assistive tech.
 	expanded := "false"

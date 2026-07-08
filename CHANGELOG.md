@@ -6,7 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Smart panels can be snoozed and dismissed in bulk (2026-07-07):** each Smart strip now has a "⋯" actions menu in its header with **Dismiss all** (clears the whole current batch of nudges at once, complementing the per-nudge Dismiss on each card) and **Snooze for a day / a week** (hides the entire Smart strip everywhere until the snooze expires). Backed by new pure `smart.Settings` state (`DismissAll`, `SnoozeUntil`/`IsSnoozed`, unit-tested); the snooze is data-derived and time-bound, so a data wipe (`ClearGenerated`) drops it.
+
 ### Fixed
+- **Overflow "⋯" menus no longer swallow clicks on their own trigger (2026-07-07):** the shared `OverflowMenu` component toggled a bare `hidden` class, but the stylesheet only hides the popover/backdrop via `hidden-menu` (`display:none` + `pointer-events:none`). So a *closed* menu's full-viewport backdrop stayed painted and intercepted pointer events — the trigger looked clickable but nothing happened. Switched the component to the styled `hidden-menu` class.
 - **Dashboard "While you were away" card no longer breaks the grid (2026-07-07):** the catch-up card had no CSS at all — it rendered as an unstyled block floating between the hero and the bento grid. It now has proper card chrome (theme-aware `--bg-card`/`--border`/`--radius`, box-shadow, light-theme variant) and a flex layout — a clean full-width tile that aligns with the bento grid instead of disrupting it. The dormant entrance animation (which targeted a testid the element never had) now fires too.
 
 ### Added
