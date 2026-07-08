@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-07-08
+
 ### Added
 - **The AI chat assistant can categorize too (2026-07-08):** the in-app assistant gained three tools — `list_uncategorized_transactions`, `create_category`, and `categorize_transactions` — so you can just ask it ("categorize my transactions", "create a Groceries category", "fix anything mis-filed") and it plans the work, creating categories and assigning them with the usual per-change approval. Verified live: the agent created a category on request through the approval flow.
 - **"Suggest categories" button on the Categories page (2026-07-08):** the Smart+ categorization modal is now reachable from /categories (not only the /transactions toolbar) — a ✦ button in the expense section header opens it, leading with the suggest-new-categories scan.
