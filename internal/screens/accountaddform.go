@@ -69,6 +69,10 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	curr := ui.UseState(baseCur)
 	amount := ui.UseState("0")
 	accType := ui.UseState(string(domain.TypeChecking))
+	// asLiab: for an "Other"-type account (no natural class), an explicit "count as a
+	// liability (debt)" override so the net-worth/debt formulas include it.
+	asLiab := ui.UseState(false)
+	onToggleAsLiab := ui.UseEvent(func() { asLiab.Set(!asLiab.Get()) })
 	owner := ui.UseState(domain.GroupOwnerID)
 	creditLimit := ui.UseState("")
 	apr := ui.UseState("")
@@ -134,17 +138,21 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			return
 		}
 		typ := domain.AccountType(accType.Get())
+		class := typ.Class()
+		if typ == domain.TypeOther && asLiab.Get() {
+			class = domain.ClassLiability
+		}
 		scope := domain.ScopeIndividual
 		if owner.Get() == domain.GroupOwnerID {
 			scope = domain.ScopeShared
 		}
 		acc := domain.Account{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), OwnerID: owner.Get(), Scope: scope,
-			Class: typ.Class(), Type: typ, Currency: c,
+			Class: class, Type: typ, Currency: c,
 			OpeningBalance: money.New(amt, c), BalanceAsOf: time.Now(),
 			VarName: strings.TrimSpace(ev.VarName.Get()),
 		}
-		if typ.Class() == domain.ClassLiability {
+		if class == domain.ClassLiability {
 			if cl, e := money.ParseMinor(strings.TrimSpace(creditLimit.Get()), currency.Decimals(c)); e == nil && cl > 0 {
 				acc.CreditLimit = money.New(cl, c)
 			}
@@ -231,7 +239,8 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		accType.Get())
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
-	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability
+	isOther := domain.AccountType(accType.Get()) == domain.TypeOther
+	isLiab := domain.AccountType(accType.Get()).Class() == domain.ClassLiability || (isOther && asLiab.Get())
 	// C74: lock-until is meaningful for illiquid asset types (savings, investment,
 	// retirement, crypto, other) where a maturity / lock date matters at creation time.
 	// Everyday liquid accounts (checking, debit, cash) can still reach it via Advanced.
@@ -264,6 +273,14 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				OnChange:  func(v string) { accType.Set(v) },
 				AriaLabel: uistate.T("accounts.typeLabel"),
 			})),
+		// "Other" has no natural class — let the user mark it a liability (debt) so the
+		// net-worth/debt formulas count it.
+		If(isOther, Div(Attr("style", "grid-column:1 / -1"),
+			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-add-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiab.Get())...)...),
+				Div(css.Class("row-main"),
+					Span(uistate.T("accounts.countAsLiability")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint")))))),
 		// C30: the owner picker only offers "Everyone/Group" until members exist, so in
 		// a 0-member household it's noise that defaults to a meaningless group. Hide it
 		// (owner stays GroupOwnerID = shared) until at least one member is added.

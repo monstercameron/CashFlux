@@ -122,6 +122,12 @@ type Account struct {
 	Notes string `json:"notes,omitempty"`
 }
 
+// IsLiability reports whether the account is a debt, using its STORED class — the
+// source of truth. This honours an explicit override (e.g. an "Other"-type account the
+// user flagged as a liability), where AccountType.Class() alone would not. Prefer this
+// over t.Type.IsLiability() anywhere a formula asks "is this account money owed?".
+func (a Account) IsLiability() bool { return a.Class == ClassLiability }
+
 // Category classifies transactions as income or expense; categories may nest.
 type Category struct {
 	ID         string         `json:"id"`

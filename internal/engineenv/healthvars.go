@@ -103,7 +103,7 @@ func HealthInputs(d Data) healthscore.Inputs {
 		var minSum int64
 		anyLiab := false
 		for _, a := range d.Accounts {
-			if a.Archived || !a.Type.IsLiability() {
+			if a.Archived || !a.IsLiability() {
 				continue
 			}
 			anyLiab = true

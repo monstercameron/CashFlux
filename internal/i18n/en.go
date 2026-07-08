@@ -1744,6 +1744,8 @@ var english = Catalog{
 	"accounts.archiveTitle":           "Archive account",
 	"accounts.restoreTitle":           "Restore account",
 	"accounts.clearedSuffix":          " · cleared %s",
+	"accounts.countAsLiability":       "Count as a liability (debt)",
+	"accounts.countAsLiabilityHint":   "Include this account in net worth and the debt formulas as money owed.",
 	"accounts.billMeta":               "Last bill %s",
 	"accounts.billCount":              "· %s →",
 	"accounts.billLinkTitle":          "View the transactions marked as bill payments for this account",

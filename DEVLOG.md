@@ -1,3 +1,24 @@
+## 2026-07-08 — "Other" accounts can be counted as liabilities
+
+Cam: he has an HOA account and had to use the "Other" type, and wanted a toggle to
+also count it as a liability for the formulas. AccountType.Class() is a fixed mapping
+(Other → Asset), but the Account struct carries its own Class field, and most liability
+formulas already read a.Class (net worth, debt page, etc.). Two spots keyed off
+a.Type.IsLiability() (financial-health debt ratio, low-balance nudge) — pointed both at
+a new `domain.Account.IsLiability()` (reads the stored Class) so the override is honored
+everywhere. Relaxed validate to allow Class != Type.Class() ONLY for TypeOther (the
+catch-all with no natural class); every other type still must match. Added a "Count as a
+liability (debt)" toggle to both the add and edit forms, shown only for Other, that sets
+Class and reveals the liability fields (min payment, due day…).
+
+Gotcha: the toggle checkbox didn't flip in e2e. Root cause — a label-wrapped native
+checkbox double-fires `click` (the label forwards it), so `OnClick`+toggle netted zero;
+and my event-reading `OnChange` handler got an undefined `target.checked`. Fix: match
+the proven budgets cover-source pattern — `OnChange` + a no-arg flip handler +
+`checkedAttr` (not `CheckedIf`). Updated a notifyfeed test whose liability fixture only
+set Type, not Class (the old code keyed off Type). e2e: create an Other account, toggle
+it, confirm it lands under Liabilities and not Assets.
+
 ## 2026-07-08 — Bill payments link to any account
 
 Cam: "I want to link a payment to any account — don't filter accounts." Dropped the

@@ -8490,6 +8490,12 @@ func registerGenerated() {
 		marginTop("auto"),
 		paddingTop(".5rem"),
 	)
+	// "Count as a liability" toggle on the account add/edit forms (shown for the Other
+	// type): a checkbox + a labelled two-line explanation.
+	rule(".acct-liab-toggle",
+		margin(".15rem 0 .35rem"),
+		gap(".55rem"),
+	)
 	rule(".cover-src-name",
 		fontWeight("600"),
 	)

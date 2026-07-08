@@ -117,6 +117,11 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	lockS := ui.UseState(lockISO)
 	ownerS := ui.UseState(a.OwnerID)
 	editAdvOpen := ui.UseState(false)
+	// asLiabS: for an "Other"-type account (the catch-all type), an explicit override to
+	// count it as a liability (debt) in the formulas — e.g. an HOA obligation. Seeded
+	// from the account's stored class. Ignored for typed accounts (their class follows
+	// the type).
+	asLiabS := ui.UseState(a.Type == domain.TypeOther && a.Class == domain.ClassLiability)
 	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	customEditVals := ui.UseState(customMapToStrings(a.Custom))
@@ -134,6 +139,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
 	onLock := ui.UseEvent(func(v string) { lockS.Set(v) })
 	onToggleEditAdv := ui.UseEvent(func() { editAdvOpen.Set(!editAdvOpen.Get()) })
+	onToggleAsLiab := ui.UseEvent(func() { asLiabS.Set(!asLiabS.Get()) })
 	onToggleSplitOwn := ui.UseEvent(func() { splitOwnS.Set(!splitOwnS.Get()) })
 	onCustomEdit := func(key, value string) {
 		m := customEditVals.Get()
@@ -190,6 +196,11 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		selType := domain.AccountType(typeS.Get())
 		cp.Type = selType
 		cp.Class = selType.Class()
+		// "Other" accounts can be explicitly counted as a liability (debt) via the toggle,
+		// overriding the type's natural class so the liability formulas include them.
+		if selType == domain.TypeOther && asLiabS.Get() {
+			cp.Class = domain.ClassLiability
+		}
 		if cp.Class == domain.ClassLiability {
 			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
 			cp.InterestRateAPR = textutil.ParseFloat(aprS.Get())
@@ -240,9 +251,9 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	default:
 		return editForm(a, dec, app.Members(), app.Accounts(), app.CustomFieldDefsFor("account"),
 			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
-			editAdvOpen, splitOwnS, sharesMapS, customEditVals,
+			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals,
 			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
-			onToggleEditAdv, onToggleSplitOwn, onNotes, onCustomEdit, saveEdit, cancel)
+			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onCustomEdit, saveEdit, cancel)
 	}
 }
 
@@ -398,13 +409,17 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 // attributes, institution, and custom fields).
 func editForm(a domain.Account, dec int, members []domain.Member, accounts []domain.Account, accDefs []customfields.Def,
 	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
-	editAdvOpen, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleSplitOwn, onNotes ui.Handler,
+	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
+	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler) ui.Node {
 	// The type is editable; the shown attribute fields follow the SELECTED type's
 	// class (not the account's stored class), so switching e.g. a line of credit to a
 	// credit card, or a liability to an asset, reveals the right fields live.
-	isLiab := domain.AccountType(typeS.Get()).Class() == domain.ClassLiability
+	selType := domain.AccountType(typeS.Get())
+	isOther := selType == domain.TypeOther
+	// "Other" accounts can be flagged as a liability (debt) explicitly; that reveals the
+	// liability fields (min payment, due day, …) the debt formulas use.
+	isLiab := selType.Class() == domain.ClassLiability || (isOther && asLiabS.Get())
 	typeOptions := uiw.OptionsFrom(domain.AllAccountTypes,
 		func(t domain.AccountType) string { return string(t) },
 		func(t domain.AccountType) string { return humanizeType(string(t)) },
@@ -424,6 +439,13 @@ func editForm(a domain.Account, dec int, members []domain.Member, accounts []dom
 				AriaLabel: uistate.T("accounts.typeLabel"),
 				TestID:    "acct-edit-type-select",
 			})),
+		// "Other" is the catch-all type with no natural asset/liability class, so let the
+		// user say whether it's a debt — that's what the net-worth and debt formulas read.
+		If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
+			Div(css.Class("row-main"),
+				Span(uistate.T("accounts.countAsLiability")),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint"))))),
 		labeledField(uistate.T("common.owner"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
 				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),

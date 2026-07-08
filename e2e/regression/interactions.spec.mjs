@@ -117,6 +117,9 @@ test.describe("payment linkage", () => {
     await expect(item).toBeVisible();
     await item.click();
     await expect(app.getByTestId("txnlink-summary")).toBeVisible();
+    // The FlipPanel does a ~550ms 3D flip; wait past it so the picker inside isn't
+    // mid-transform (transforming elements read as "not stable" to Playwright clicks).
+    await app.waitForTimeout(600);
   }
 
   test("bill: mark via the flip modal → the account (any account) shows it and drills to it", async ({ app }) => {
@@ -183,5 +186,32 @@ test.describe("payment linkage", () => {
     await app.locator('[data-testid^="sub-pay-link-"]').first().click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
     await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+  });
+});
+
+test.describe("account class override", () => {
+  test("an Other-type account can be counted as a liability", async ({ app }) => {
+    await nav(app, "/accounts");
+    // Open the add-account form via the top-bar "+" menu.
+    await app.locator('.add-wrap > button[aria-haspopup="menu"]').first().click();
+    await app.getByRole("menuitem", { name: /new account/i }).click();
+    const form = app.locator('[data-testid="account-add-form"]');
+    await expect(form).toBeVisible();
+
+    await form.locator('input[type="text"]').first().fill("Test HOA Dues");
+    await form.locator("select").first().selectOption({ label: "Other" });
+    const liab = app.getByTestId("acct-add-as-liability");
+    await expect(liab).toBeVisible(); // the toggle appears only for the Other type
+    await liab.click();
+    await expect(liab).toBeChecked();
+    await form.locator('button[type="submit"]').click();
+
+    // It now appears under the Liabilities filter, not Assets — the class formulas
+    // read the stored class, so the override takes effect.
+    await nav(app, "/accounts");
+    await app.getByTestId("acct-class-liabilities").click();
+    await expect(app.locator("#main")).toContainText("Test HOA Dues");
+    await app.getByTestId("acct-class-assets").click();
+    await expect(app.locator("#main")).not.toContainText("Test HOA Dues");
   });
 });

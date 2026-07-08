@@ -208,7 +208,7 @@ func LowBalanceCandidates(
 	}
 	var out []notify.Candidate
 	for _, a := range accounts {
-		if a.Archived || a.Type.IsLiability() {
+		if a.Archived || a.IsLiability() {
 			continue
 		}
 		bal, err := balance(a, txns)

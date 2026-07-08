@@ -286,6 +286,7 @@ func TestLowBalanceCandidates(t *testing.T) {
 			ID:             id,
 			Name:           id,
 			Type:           domain.TypeCreditCard,
+			Class:          domain.ClassLiability,
 			Currency:       "USD",
 			OpeningBalance: money.New(opening, "USD"),
 		}

@@ -86,7 +86,10 @@ func ValidateAccount(a domain.Account) Issues {
 	}
 	if !a.Class.Valid() {
 		is.add("class", "is invalid")
-	} else if a.Type.Valid() && a.Class != a.Type.Class() {
+	} else if a.Type.Valid() && a.Type != domain.TypeOther && a.Class != a.Type.Class() {
+		// "Other" is the catch-all type with no natural class, so it may be either an
+		// asset or an explicit liability (e.g. an HOA obligation). Every other type has a
+		// fixed class the stored class must match.
 		is.add("class", "does not match the account type")
 	}
 	is.requireCurrency("currency", a.Currency)

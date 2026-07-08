@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Count an "Other" account as a liability (2026-07-08):** the account add/edit forms now show a "Count as a liability (debt)" toggle when the account type is **Other** (the catch-all type with no natural asset/liability class). Turning it on classes the account as money owed, so it's included in net worth and the debt formulas — useful for obligations like an HOA balance that don't fit a specific type. The stored class is now the single source of truth the liability formulas read (net worth, financial-health debt ratios, and the low-balance nudge all honor the override).
+
 ### Changed
 - **Link a bill payment to ANY account, not just debts (2026-07-08):** the Link-payment modal's account picker now offers every account, so you can mark a transaction as a bill payment toward a checking, savings, or other account — not only liabilities. Wherever an account appears with a linked bill payment, it shows a "Last bill $X · N →" line that drills to the backing transactions: the **Accounts** page now shows it for every account (previously only the Debt page showed it, for liabilities). Copy is account-neutral ("Which account is this paying?").
 
