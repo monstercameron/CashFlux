@@ -1,3 +1,19 @@
+## 2026-07-08 — Smart+ categorization checkboxes rendered wrong on Cam's laptop
+
+Cam: the post-AI acceptance checkboxes in the categorization review weren't rendering
+correctly on his laptop. Root cause: `txnSmartCatRow` used a bare native
+`<input type="checkbox">`. Native checkboxes render per-OS/browser/theme — on a dark
+theme they can be a tiny, near-invisible dark box — which is exactly why the app
+already brands its checkboxes (`.cf-check`, "critic #1: no more native OS-blue box")
+everywhere else, e.g. the budget cover-source picker. The smartcat rows just never
+got the class. One-line fix: add `css.Class("cf-check")` to the input.
+
+Verified by rendering the `.cf-check` markup (the same one the row now emits) in both
+themes, checked + unchecked: a clear accent-filled box with a white check when on, a
+bordered empty box when off — visible in light and dark. No live AI call needed to
+prove the rendering (the checklist styling is independent of where the rows come
+from).
+
 ## 2026-07-08 — Bill-payment linkage + fixing clipped row menus
 
 New Smart-ish feature (Cam): mark a transaction as a **bill payment** toward a

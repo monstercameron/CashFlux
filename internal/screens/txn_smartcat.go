@@ -386,7 +386,11 @@ type txnSmartCatRowProps struct {
 func txnSmartCatRow(props txnSmartCatRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle() })
 	return Label(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-		Input(Type("checkbox"), Attr("data-testid", props.TestID), CheckedIf(props.Checked), OnClick(onToggle)),
+		// Branded `.cf-check` (not a bare native checkbox): a native <input type=checkbox>
+		// renders inconsistently across OS/browser/theme — on some laptops it's a tiny,
+		// near-invisible dark-on-dark box — so the app styles its own. Match the rest of
+		// the app's checklists (e.g. the cover-source picker).
+		Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", props.TestID), CheckedIf(props.Checked), OnClick(onToggle)),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), props.Label),
 			Span(css.Class("row-meta"), props.Sub),
