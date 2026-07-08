@@ -74,6 +74,14 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
+	// viewSubPayments drills to the transactions the user marked as payments toward a
+	// subscription (by name) — the proof behind the row's "last paid" line.
+	viewSubPayments := func(name string) {
+		f := uistate.TxFilter{Subscription: name}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 
 	pr := uistate.UsePrefs().Get()
 	notice := uistate.UseNotice()
@@ -449,6 +457,8 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				OnIgnore:       doIgnore,
 				SmartSettings:  subSmartSettings,
 				SmartByEntity:  subByEntity,
+				SubPayment:     ledger.SubscriptionPaymentForName(s.Name, allTxns),
+				OnViewPayments: viewSubPayments,
 			})
 		},
 	)
@@ -659,6 +669,8 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						OnIgnore:       doIgnore,
 						SmartSettings:  subSmartSettings,
 						SmartByEntity:  subByEntity,
+						SubPayment:     ledger.SubscriptionPaymentForName(s.Name, allTxns),
+						OnViewPayments: viewSubPayments,
 					})
 				},
 			)),
@@ -735,6 +747,11 @@ type subscriptionRowProps struct {
 	OnUncancel     func(name string)
 	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
 	OnIgnore       func(name string) // mark as "not a subscription"; nil = action not available (ignored rows)
+	// SubPayment is this subscription's payment-check: the most recent transaction the
+	// user marked as a payment toward it (by name). OnViewPayments drills to those
+	// linked payments. HasAny false = no linked payment yet (the line is hidden).
+	SubPayment     ledger.SubscriptionPaymentInfo
+	OnViewPayments func(name string)
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// Current subscription engines do not set RelatedID (they use subscription names
 	// as keys), so byEntity will be empty and badges won't appear until future engines
@@ -782,8 +799,24 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			props.OnToggleSelect(s.Name)
 		}
 	}))
+	viewPayments := ui.UseEvent(Prevent(func() {
+		if props.OnViewPayments != nil {
+			props.OnViewPayments(s.Name)
+		}
+	}))
 
 	slug := nameSlug(s.Name)
+
+	// Payment-check line: the most recent transaction the user linked to this
+	// subscription (proof it was actually paid), with a drill to those payments.
+	var payNode ui.Node = Fragment()
+	if props.SubPayment.HasAny {
+		payNode = Span(css.Class("row-meta"), Attr("data-testid", "sub-pay-"+slug),
+			uistate.T("subs.paymentMeta", fmtMoney(props.SubPayment.Latest)),
+			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "sub-pay-link-"+slug),
+				Title(uistate.T("subs.paymentLinkTitle")), OnClick(viewPayments),
+				uistate.T("subs.paymentCount", plural(props.SubPayment.Count, "payment"))))
+	}
 	meta := subscriptionCadenceLabel(s.Cadence) + " · " + uistate.T("subs.next", props.NextDate)
 
 	// Quiet "worth reviewing?" nudge — only shown for non-cancelled rows where the
@@ -912,6 +945,7 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 				smartBadgeFor(props.SmartSettings, props.SmartByEntity, s.Name),
 			),
 			Span(css.Class("row-meta"), meta),
+			payNode,
 			statusArea,
 			reviewBadge,
 			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),

@@ -1,3 +1,34 @@
+## 2026-07-08 — Subscription payment linkage + a real Link-payment modal
+
+Increment 2 of Cam's payment-linkage request, plus the UI cleanup he asked for. Two
+parts:
+
+1. **Subscriptions get the same payment-check as debts.** New `Transaction.
+   SubscriptionName` (subscriptions are detected by name, not id — so the name is the
+   link), a pure `ledger.SubscriptionPaymentForName` mirroring the bill helper
+   (unit-tested), a `txnfilter.Criteria.Subscription` drill filter, and a "Last paid
+   $X · N →" line on each subscription row that drills to the backing transactions.
+
+2. **The kebab is redesigned.** The old bill flow listed one menu item per liability
+   — doesn't scale and can't express subscriptions. Now the `⋯` menu has two items —
+   "Mark as bill payment…" / "Mark as subscription payment…" — that open ONE shell-root
+   flip modal (`TxnLinkBody` + `TxnLinkHost`, driven by a `uistate.TxnLinkTarget` atom
+   holding {txnId, mode}). The modal has a Bill/Subscription toggle and saves BOTH
+   links together, so it reads as "what is this payment for".
+
+**Design pass (frontend-design skill).** First cut worked but floated in ~200px of
+dead space with a flat summary. Reworked: the payment is the hero (bold description +
+account on the left, the amount as a right-aligned display figure, expense/income
+toned), the panel is right-sized (fixed 372px — `Height:"auto"` collapses FlipPanel's
+3D-flip backface, so px is required), copy is active-voice ("Link payment", "Which
+debt is this paying?"), and a live accent-tinted "Links to · Debt · <name>" chip strip
+echoes every pending link so Save's effect is visible before committing. Screenshot-
+verified in dark theme both modes + with a selection; styles use only theme-aware
+tokens so light theme follows.
+
+Regression: both bill and subscription flows pinned in interactions.spec.mjs (the old
+bill test was rewritten for the modal — the direct-liability-item testids are gone).
+
 ## 2026-07-08 — Release v1.0.5
 
 Cut v1.0.5: bill-payment linkage (mark a txn as a bill payment → actual monthly

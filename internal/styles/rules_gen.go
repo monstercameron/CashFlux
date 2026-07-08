@@ -8421,6 +8421,75 @@ func registerGenerated() {
 		outline("2px solid color-mix(in srgb, var(--accent) 60%, transparent)"),
 		outlineOffset("2px"),
 	)
+	// Payment-link flip modal (the transactions row ⋯ → "Mark as bill/subscription").
+	// A summary card leading with the payment amount, then the picker, a live "links to"
+	// preview, and a right-aligned Cancel / Link footer.
+	rule(".txnlink-summary",
+		display("flex"),
+		alignItems("center"),
+		gap(".75rem"),
+		padding(".65rem .8rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius, 10px)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".txnlink-summary-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("1px"),
+		minWidth("0"),
+		flex("1 1 auto"),
+	)
+	rule(".txnlink-summary-desc",
+		fontWeight("600"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	rule(".txnlink-summary-meta",
+		fontSize("0.82rem"),
+	)
+	rule(".txnlink-summary-amount",
+		fontSize("1.35rem"),
+		fontWeight("600"),
+		lineHeight("1"),
+		whiteSpace("nowrap"),
+		flexShrink("0"),
+	)
+	// "Links to" preview: an accent-tinted strip of chips echoing every pending link, so
+	// Save's effect is visible before committing (both links save together).
+	rule(".txnlink-preview",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap(".4rem"),
+		padding(".5rem .65rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid color-mix(in srgb, var(--accent) 30%, transparent)"),
+		background("color-mix(in srgb, var(--accent) 9%, transparent)"),
+	)
+	rule(".txnlink-preview-label",
+		fontSize("0.8rem"),
+		marginRight(".1rem"),
+	)
+	rule(".txnlink-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding(".15rem .5rem"),
+		borderRadius("999px"),
+		fontSize("0.8rem"),
+		fontWeight("500"),
+		border("1px solid color-mix(in srgb, var(--accent) 40%, transparent)"),
+		background("var(--bg-card)"),
+		color("var(--text)"),
+	)
+	rule(".txnlink-footer",
+		display("flex"),
+		justifyContent("flex-end"),
+		gap(".5rem"),
+		marginTop("auto"),
+		paddingTop(".5rem"),
+	)
 	rule(".cover-src-name",
 		fontWeight("600"),
 	)

@@ -105,29 +105,62 @@ test.describe("wave-2 fixes", () => {
   });
 });
 
-test.describe("bill-payment linkage", () => {
-  test("transactions: marking a txn as a bill payment shows on the debt card and drills to it", async ({ app }) => {
-    await nav(app, "/transactions");
-
-    // Use a mid-list row (row 1 sits under the sticky topbar/toolbar, where the click
-    // auto-scroll lands the menu item under the sticky chrome). Scrolled to centre, the
-    // row's ⋯ menu opens into clear space — matching how a user marks a bill.
+test.describe("payment linkage", () => {
+  // Open a mid-list row's ⋯ menu and click one of its "Mark as…" items. A mid-list row
+  // (nth 6) avoids row 1, which sits under the sticky topbar/toolbar where the click
+  // auto-scroll parks the menu item under the sticky chrome.
+  async function openLinkModal(app, itemTestId) {
     const row = app.locator('[data-testid^="txn-row-"]').nth(6);
     await row.scrollIntoViewIfNeeded();
     await row.locator('[data-testid^="txn-kebab-"]').click();
-    const markItem = row.locator('[data-testid^="txn-markbill-"]').first();
-    await expect(markItem).toBeVisible();
-    const acctId = (await markItem.getAttribute("data-testid")).replace("txn-markbill-", "");
-    await markItem.click();
+    const item = row.locator(`[data-testid="${itemTestId}"]`);
+    await expect(item).toBeVisible();
+    await item.click();
+    await expect(app.getByTestId("txnlink-summary")).toBeVisible();
+  }
 
-    // The debt card for that liability now shows a bill-payment line (distinct from the
-    // minimum), with a link to the payments that prove it.
+  test("bill: mark via the flip modal → debt card shows it and drills to it", async ({ app }) => {
+    await nav(app, "/transactions");
+    await openLinkModal(app, "txn-markbill-open");
+
+    // The modal opens on the Bill picker. Pick the first real liability (option 0 is
+    // the "not a bill payment" clear option) and read its account id from the value.
+    const select = app.getByTestId("txnlink-bill-select");
+    await expect(select).toBeVisible();
+    const [acctId] = await select.selectOption({ index: 1 });
+    expect(acctId).toBeTruthy();
+    await app.getByTestId("txnlink-save").click();
+
+    // The debt card for that liability now shows a bill-payment line, and its link
+    // drills to exactly the one transaction we marked.
     await nav(app, "/debt");
     await expect(app.locator(`[data-testid="debt-bill-${acctId}"]`)).toBeVisible();
-
-    // The link drills to the transactions filtered to this account's bill payments —
-    // exactly the one we marked.
     await app.locator(`[data-testid="debt-bill-link-${acctId}"]`).click();
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+  });
+
+  test("subscription: mark via the flip modal → subscriptions row shows it and drills to it", async ({ app }) => {
+    // Read a real subscription name off the panel first, so the one we link is
+    // guaranteed to be both offered by the picker and displayed on the page.
+    await nav(app, "/subscriptions");
+    const subName = (await app.locator(".sub-row .sub-drill").first().innerText()).trim();
+    expect(subName.length).toBeGreaterThan(0);
+
+    await nav(app, "/transactions");
+    await openLinkModal(app, "txn-marksub-open");
+
+    // The modal opens on the Subscription picker; choose the subscription by name.
+    const select = app.getByTestId("txnlink-sub-select");
+    await expect(select).toBeVisible();
+    await select.selectOption({ label: subName });
+    await app.getByTestId("txnlink-save").click();
+
+    // The subscriptions page now shows exactly one "last paid" line (the one we linked),
+    // and its link drills to exactly that transaction.
+    await nav(app, "/subscriptions");
+    await expect(app.locator('[data-testid^="sub-pay-"]:not([data-testid^="sub-pay-link-"])')).toHaveCount(1);
+    await app.locator('[data-testid^="sub-pay-link-"]').first().click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
     await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
   });

@@ -165,6 +165,12 @@ type Transaction struct {
 	// the account's actual monthly payment (distinct from its minimum), and links
 	// back to the payments as proof. Empty = not a bill payment.
 	BillAccountID string `json:"billAccountId,omitempty"`
+	// SubscriptionName marks this transaction as a payment toward a SUBSCRIPTION,
+	// keyed by the subscription's name (subscriptions are detected from history and
+	// have no stable id, so the name is the link). The Subscriptions page reads the
+	// most recent such payment as the subscription's last confirmed payment and links
+	// back to the payments as proof. Empty = not a subscription payment.
+	SubscriptionName string `json:"subscriptionName,omitempty"`
 }
 
 // AttachmentRef links a transaction to an Artifact-backed receipt, document, or

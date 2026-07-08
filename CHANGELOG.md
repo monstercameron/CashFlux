@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Link a payment to a subscription, and a cleaner Link-payment modal (2026-07-08):** a transaction's `⋯` menu now has two actions — **Mark as bill payment…** and **Mark as subscription payment…** — that open one **Link this payment** flip modal. The modal leads with the transaction (description, account, and the amount as a display figure), offers a **Bill payment / Subscription** toggle, a single picker for the target debt or subscription, and a live "Links to" preview of exactly what Save will do (both links save together). Marking a subscription payment surfaces on the **Subscriptions** page as a "Last paid $X · N →" line on that subscription's row, drilling to the transactions that back it — the same payment-check the Debt page already gives liabilities. This replaces the previous flat "one menu item per liability" bill list with a scalable, self-explanatory modal. Backed by `Transaction.SubscriptionName`, the pure `ledger.SubscriptionPaymentForName` helper (most-recent by date, sign-robust; unit-tested), and a `txnfilter` subscription criterion; regression-pinned end-to-end for both bill and subscription flows.
+
 ## [1.0.5] - 2026-07-08
 
 ### Added

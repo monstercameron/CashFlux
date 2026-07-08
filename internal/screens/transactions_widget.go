@@ -381,33 +381,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	for _, m := range props.App.Members() {
 		memberName[m.ID] = m.Name
 	}
-	// Active liabilities, for the row ⋯ menu's "mark as bill payment" targets.
-	var liabilities []domain.Account
-	for _, ac := range props.App.Accounts() {
-		if ac.Class == domain.ClassLiability && !ac.Archived {
-			liabilities = append(liabilities, ac)
-		}
-	}
-	// markBill links (or clears, acctID == "") a transaction as a bill payment toward
-	// a liability, so the Debt page can read it as the account's actual payment.
-	markBill := func(txnID, acctID string) {
-		for _, t := range props.App.Transactions() {
-			if t.ID != txnID {
-				continue
-			}
-			t.BillAccountID = acctID
-			if err := props.App.PutTransaction(t); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				return
-			}
-			if acctID == "" {
-				uistate.PostNotice(uistate.T("transactions.billCleared"), false)
-			} else {
-				uistate.PostNotice(uistate.T("transactions.billMarked"), false)
-			}
-			uistate.BumpDataRevision()
-			return
-		}
+	// openLink opens the payment-link flip modal (shell-root host) for a transaction,
+	// pre-set to Bill or Subscription mode. The modal owns the actual write, so the row
+	// ⋯ menu just sets the shared target atom.
+	linkAtom := uistate.UseTxnLinkTarget()
+	openLink := func(txnID, linkMode string) {
+		linkAtom.Set(uistate.TxnLinkTarget{TxnID: txnID, Mode: linkMode})
 	}
 
 	sel := selAtom.Get()
@@ -444,21 +423,21 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
 			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
 			// while /reports showed Jul 1 for the same transaction (C339).
-			Date:          time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
-			Amount:        fmtMoney(amt),
-			AmtTone:       figTone(amt),
-			Desc:          desc,
-			Account:       accCol.Str(i),
-			Category:      cat,
-			Source:        srcCol.Str(i),
-			Member:        memberName[txByID[rid].MemberID],
-			Cleared:       cleared,
-			Selected:      sel[rid],
-			Receipts:      nAtt,
-			Attachment:    firstAtt,
-			Vis:           colVis,
-			BillAccountID: txByID[rid].BillAccountID,
-			Liabilities:   liabilities,
+			Date:             time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
+			Amount:           fmtMoney(amt),
+			AmtTone:          figTone(amt),
+			Desc:             desc,
+			Account:          accCol.Str(i),
+			Category:         cat,
+			Source:           srcCol.Str(i),
+			Member:           memberName[txByID[rid].MemberID],
+			Cleared:          cleared,
+			Selected:         sel[rid],
+			Receipts:         nAtt,
+			Attachment:       firstAtt,
+			Vis:              colVis,
+			BillAccountID:    txByID[rid].BillAccountID,
+			SubscriptionName: txByID[rid].SubscriptionName,
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -466,7 +445,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnOpen = openEdit
 		r.OnToggleSelect = toggleSelect
 		r.OnViewReceipt = viewReceipt
-		r.OnMarkBill = markBill
+		r.OnOpenLink = openLink
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -575,16 +554,17 @@ type txnFrameRowProps struct {
 	Vis      uistate.TxnCols // which optional columns to render (must match the header)
 	Cleared  bool
 	Selected bool
-	// Bill-payment linkage (the ⋯ row menu): the liability accounts the user can mark
-	// this transaction's payment toward, the current link (if any), and the callback.
-	BillAccountID  string
-	Liabilities    []domain.Account
-	OnMarkBill     func(txnID, accountID string)
-	Receipts       int                  // attachment count (drives the paperclip)
-	Attachment     domain.AttachmentRef // first attachment, opened by the paperclip
-	OnOpen         func(id string)
-	OnToggleSelect func(id string, shift bool)
-	OnViewReceipt  func(domain.AttachmentRef)
+	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
+	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
+	// this transaction, pre-set to the chosen mode (uistate.TxnLinkMode*).
+	BillAccountID    string
+	SubscriptionName string
+	OnOpenLink       func(txnID, mode string)
+	Receipts         int                  // attachment count (drives the paperclip)
+	Attachment       domain.AttachmentRef // first attachment, opened by the paperclip
+	OnOpen           func(id string)
+	OnToggleSelect   func(id string, shift bool)
+	OnViewReceipt    func(domain.AttachmentRef)
 }
 
 // txnFrameRow renders one clickable transaction row. It owns its click/select/
@@ -655,32 +635,33 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	)
 }
 
-// txnRowMenu is the row's ⋯ kebab: mark this transaction as a bill payment toward a
-// liability account (or clear the link). Built with OverflowMenu (loop-safe: it owns
-// each item's click hook), so the per-liability items don't call On* in a loop.
+// txnRowMenu is the row's ⋯ kebab: two entries that open the payment-link flip modal
+// for this transaction, pre-set to Bill or Subscription mode. A ✓ prefixes an entry
+// whose link is already set. The picking/clearing happens in the modal, so the menu
+// stays short. Built with OverflowMenu (loop-safe: it owns each item's click hook).
 func txnRowMenu(props txnFrameRowProps) ui.Node {
-	if len(props.Liabilities) == 0 || props.OnMarkBill == nil {
+	if props.OnOpenLink == nil {
 		return Fragment()
 	}
-	items := make([]uiw.OverflowMenuItem, 0, len(props.Liabilities)+1)
-	for _, a := range props.Liabilities {
-		aid, name := a.ID, a.Name
-		label := uistate.T("transactions.markBillFor", name)
-		if props.BillAccountID == aid {
-			label = "✓ " + label
-		}
-		items = append(items, uiw.OverflowMenuItem{
-			Label:    label,
-			TestID:   "txn-markbill-" + aid,
-			OnSelect: func() { props.OnMarkBill(props.ID, aid) },
-		})
-	}
+	billLabel := uistate.T("transactions.markBill")
 	if props.BillAccountID != "" {
-		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("transactions.clearBill"),
-			TestID:   "txn-clearbill",
-			OnSelect: func() { props.OnMarkBill(props.ID, "") },
-		})
+		billLabel = "✓ " + billLabel
+	}
+	subLabel := uistate.T("transactions.markSub")
+	if props.SubscriptionName != "" {
+		subLabel = "✓ " + subLabel
+	}
+	items := []uiw.OverflowMenuItem{
+		{
+			Label:    billLabel,
+			TestID:   "txn-markbill-open",
+			OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) },
+		},
+		{
+			Label:    subLabel,
+			TestID:   "txn-marksub-open",
+			OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) },
+		},
 	}
 	return uiw.OverflowMenu(uiw.OverflowMenuProps{
 		Items:         items,

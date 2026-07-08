@@ -35,7 +35,30 @@ const (
 	txnColsModalAtomID = "transactions:colsModal"
 	txnColsStoreID     = "cashflux:txn-cols"
 	txnSmartCatAtomID  = "transactions:smartCat"
+	txnLinkAtomID      = "transactions:linkTarget"
 )
+
+// Payment-link modal modes: the flip modal a transaction row's ⋯ menu opens can link
+// the transaction to a liability (bill payment) or a subscription.
+const (
+	TxnLinkModeBill = "bill"
+	TxnLinkModeSub  = "sub"
+)
+
+// TxnLinkTarget identifies the transaction whose payment-link flip modal is open and
+// which mode it opened to (Bill or Subscription — the modal offers a toggle between
+// them). A zero TxnID means the modal is closed.
+type TxnLinkTarget struct {
+	TxnID string
+	Mode  string
+}
+
+// UseTxnLinkTarget returns the shared atom driving the payment-link flip modal. A row
+// ⋯ menu item sets it (with the row's id + the chosen mode); the shell-root host
+// renders the modal when TxnID is non-empty.
+func UseTxnLinkTarget() state.Atom[TxnLinkTarget] {
+	return state.UseAtom(txnLinkAtomID, TxnLinkTarget{})
+}
 
 // TxnCols selects which optional ledger columns are visible. Date and Description
 // are the row's identity and always shown, so they are not toggleable here.
