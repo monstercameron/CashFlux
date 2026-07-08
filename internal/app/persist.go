@@ -175,13 +175,16 @@ func hydrateDataset() {
 	}
 }
 
-// hydrateAIKey restores the saved OpenAI key into the session when the user has
-// opted into remembering it on this device (the dataset autosave redacts the
-// key, so it is stored separately). No-op when the toggle is off or nothing is
+// hydrateAIKey restores the saved OpenAI key into the session. The key is stored
+// directly in the browser store (the dataset autosave redacts it), and the mere
+// presence of a stored key IS the "remember" signal — restoring on it (rather than
+// on the RememberAIKey pref) makes persistence robust even if the pref, which rides
+// the slower dataset autosave, hasn't been written back yet. Turning "Remember AI
+// key" off clears the stored copy, so nothing is restored. No-op when nothing is
 // stored. Call after hydrateDataset so it lands on the loaded settings.
 func hydrateAIKey() {
 	app := appstate.Default
-	if app == nil || !uistate.LoadPrefs().RememberAIKey {
+	if app == nil {
 		return
 	}
 	key := uistate.LoadAIKey()

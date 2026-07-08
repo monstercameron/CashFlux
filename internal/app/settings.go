@@ -626,9 +626,19 @@ func globalSettingsForm() uic.Node {
 			s.OpenAIKey = v
 			_ = a.PutSettings(s)
 		}
-		// Keep the persisted copy in step when the user has opted in (C27).
-		if prefsAtom.Get().RememberAIKey {
+		// Persist the key across reloads by default: entering a key means you want to
+		// use it, and the dataset autosave deliberately REDACTS the key, so the
+		// on-device browser store is its only persistence path. Turning a key ON also
+		// turns "Remember AI key" on (its opt-out still lets you keep it session-only —
+		// toggling it off clears the stored copy). Clearing the key clears storage.
+		if strings.TrimSpace(v) != "" {
+			if p := prefsAtom.Get(); !p.RememberAIKey {
+				p.RememberAIKey = true
+				savePrefs(p)
+			}
 			uistate.PersistAIKey(v)
+		} else {
+			uistate.ClearAIKey()
 		}
 		// A newly configured key can now drive the lock-screen quote-of-the-day —
 		// generate + cache it right away so the user doesn't have to wait for a reload.

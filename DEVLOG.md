@@ -1,3 +1,25 @@
+## 2026-07-08 — OpenAI key didn't persist
+
+Cam: the key doesn't persist. Root cause: persistence was gated on the
+`RememberAIKey` pref, which defaults OFF — so `onKey` skipped `PersistAIKey` and
+boot's `hydrateAIKey` skipped restoring. The key lived only in memory (the dataset
+autosave deliberately REDACTS it), so it vanished on reload unless you found the
+buried "Remember AI key" toggle.
+
+Two changes. (1) `onKey`: entering a non-empty key now persists it by default and
+flips RememberAIKey on — entering a key is the intent to keep it; clearing the key
+clears storage. (2) `hydrateAIKey`: restore whenever a key is STORED, dropping the
+RememberAIKey gate — the stored key's presence is the "remember" signal, and this
+makes restore robust even if the pref (which rides the slower SQLite/dataset
+autosave) hasn't flushed. The toggle still works as an opt-out: turning it off calls
+ClearAIKey, so nothing is stored and nothing restores. Key stays out of the
+exported/synced dataset.
+
+Verified: set a (fake) key, reload, and the smart-cat Scan button appears
+(provider configured = key restored). The first test attempt exposed the same
+async-IndexedDB-flush race as earlier bugs — a real user reloads seconds later so
+it flushes; the test needed a brief wait before the programmatic reload.
+
 ## 2026-07-08 — Categorization as a chat skill + a /categories entry point
 
 Two follow-ups. (1) Cam wanted the categorization to also work as an agent skill in

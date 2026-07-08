@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **OpenAI key now persists across reloads (2026-07-08):** entering a key only survived a reload if you also found and enabled the "Remember AI key" toggle (off by default), so the key silently vanished on refresh. Now entering a key persists it on-device by default (and flips the toggle on — turning it off still keeps the key session-only and clears the stored copy), and boot restores any stored key directly rather than gating on a preference that rides the slower dataset autosave. The key is still kept out of the exported/synced dataset.
+
 ## [1.0.4] - 2026-07-08
 
 ### Added
