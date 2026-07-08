@@ -853,8 +853,10 @@ func (a *App) PutRule(r rules.Rule) error {
 	if strings.TrimSpace(r.Match) == "" && len(r.Conditions) == 0 {
 		return fmt.Errorf("appstate: rule needs a match phrase or a condition")
 	}
-	if r.SetCategoryID == "" {
-		return fmt.Errorf("appstate: rule needs a category")
+	// A rule must DO something. Category is the common action, but a rule that only
+	// links a bill account (or renames, or tags) is valid too.
+	if r.SetCategoryID == "" && r.SetBillAccountID == "" && strings.TrimSpace(r.RenameDesc) == "" && len(r.SetTags) == 0 {
+		return fmt.Errorf("appstate: rule needs at least one action")
 	}
 	if err := a.store.PutRule(r); err != nil {
 		return err
@@ -949,6 +951,12 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	// raw description while an identical historical one got cleaned.
 	if r.RenameDesc != "" && t.Desc != r.RenameDesc {
 		t.Desc = r.RenameDesc
+	}
+	// Auto-link as a bill payment when the rule carries that action and the transaction
+	// isn't already linked — so imported/entered payments to a known merchant tie to the
+	// account the user first linked one to. A manual link is never overwritten.
+	if r.SetBillAccountID != "" && t.BillAccountID == "" {
+		t.BillAccountID = r.SetBillAccountID
 	}
 	return t
 }
@@ -1962,6 +1970,12 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 			t.Desc = r.RenameDesc
 			changed = true
 		}
+		// Backfill the bill link only onto unlinked transactions — never clobber a link
+		// the user set by hand.
+		if r.SetBillAccountID != "" && t.BillAccountID == "" {
+			t.BillAccountID = r.SetBillAccountID
+			changed = true
+		}
 		if !changed {
 			continue
 		}
@@ -2002,6 +2016,9 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 			}
 		}
 		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+			changed = true
+		}
+		if r.SetBillAccountID != "" && t.BillAccountID == "" {
 			changed = true
 		}
 		if !changed {

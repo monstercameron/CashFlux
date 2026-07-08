@@ -117,6 +117,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	match := ui.UseState("")
 	categoryID := ui.UseState("")
 	tags := ui.UseState("")
+	billAcct := ui.UseState("")
 	errMsg := ui.UseState("")
 
 	// C105: 3 bounded fixed condition slots — each gets stable hook positions.
@@ -200,16 +201,18 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 	add := ui.UseEvent(Prevent(func() {
 		conds := collectConditions()
-		if errKey := validateRuleInput(match.Get(), categoryID.Get(), len(conds) > 0); errKey != "" {
+		hasAction := categoryID.Get() != "" || billAcct.Get() != "" || strings.TrimSpace(tags.Get()) != ""
+		if errKey := validateRuleInput(match.Get(), len(conds) > 0, hasAction); errKey != "" {
 			errMsg.Set(uistate.T(errKey))
 			return
 		}
 		r := rules.Rule{
-			ID:            id.New(),
-			Match:         strings.TrimSpace(match.Get()),
-			SetCategoryID: categoryID.Get(),
-			SetTags:       textutil.CommaFields(tags.Get()),
-			Conditions:    conds,
+			ID:               id.New(),
+			Match:            strings.TrimSpace(match.Get()),
+			SetCategoryID:    categoryID.Get(),
+			SetTags:          textutil.CommaFields(tags.Get()),
+			SetBillAccountID: billAcct.Get(),
+			Conditions:       conds,
 			// New rules append to the END of the first-match-wins chain: with the
 			// zero Order they tie with existing rules and the store's ID tie-break
 			// silently jumped them to the TOP of precedence.
@@ -223,6 +226,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		match.Set("")
 		categoryID.Set("")
 		tags.Set("")
+		billAcct.Set("")
 		cond1Enabled.Set(false)
 		cond1Field.Set("")
 		cond1Op.Set("")
@@ -270,6 +274,14 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		uiw.FormField(uistate.T("rules.tagsFieldLabel"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
 		),
+		uiw.FormField(uistate.T("rules.billAccountFieldLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ruleBillAccountOptions(app),
+				Selected:  billAcct.Get(),
+				OnChange:  func(v string) { billAcct.Set(v) },
+				AriaLabel: uistate.T("rules.billAccountFieldLabel"),
+				TestID:    "rule-add-billacct-select",
+			})),
 
 		// C105: Up to 3 bounded condition slots. Each slot's On* handlers are
 		// registered at stable hook positions above, not inside a loop.

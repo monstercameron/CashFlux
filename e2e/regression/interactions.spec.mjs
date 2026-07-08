@@ -270,3 +270,26 @@ test.describe("auto budget", () => {
     await expect(app.getByTestId("autobudget-rows")).toHaveCount(0);
   });
 });
+
+test.describe("bill auto-link rule", () => {
+  test("linking a bill with auto-link creates a rule for future payments", async ({ app }) => {
+    await nav(app, "/transactions");
+    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    await row.scrollIntoViewIfNeeded();
+    await row.locator('[data-testid^="txn-kebab-"]').click();
+    await row.locator('[data-testid="txn-markbill-open"]').click();
+    await expect(app.getByTestId("txnlink-summary")).toBeVisible();
+    await app.waitForTimeout(650); // FlipPanel flip
+
+    // The auto-link toggle appears once an account is chosen.
+    await app.getByTestId("txnlink-bill-select").selectOption({ index: 1 });
+    const toggle = app.getByTestId("txnlink-autolink");
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    await app.getByTestId("txnlink-save").click();
+
+    // The toast confirms a rule was created so future payments auto-link.
+    await expect(app.locator("body")).toContainText(/link automatically/i, { timeout: 15000 });
+  });
+});

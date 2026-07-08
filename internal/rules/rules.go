@@ -67,9 +67,14 @@ type Rule struct {
 	Match         string // case-insensitive substring matched against payee + description
 	SetCategoryID string
 	SetTags       []string
-	RenameDesc    string          `json:",omitempty"` // when set, overwrites the transaction description on match
-	Order         int             `json:",omitempty"` // precedence: lower runs first (first match wins)
-	Conditions    []RuleCondition `json:",omitempty"` // C105: structured conditions (ANDed); overrides Match when non-empty
+	RenameDesc    string `json:",omitempty"` // when set, overwrites the transaction description on match
+	// SetBillAccountID, when set, links a matching transaction as a BILL PAYMENT toward
+	// that account (Transaction.BillAccountID) — so future/imported payments to a merchant
+	// auto-tie to the account the user first linked one to. Applied only when the
+	// transaction has no bill link yet (a manual link is never overwritten).
+	SetBillAccountID string          `json:",omitempty"`
+	Order            int             `json:",omitempty"` // precedence: lower runs first (first match wins)
+	Conditions       []RuleCondition `json:",omitempty"` // C105: structured conditions (ANDed); overrides Match when non-empty
 }
 
 // matches reports whether pattern (trimmed, case-insensitive) is a substring of

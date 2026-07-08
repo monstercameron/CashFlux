@@ -373,6 +373,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 	catS := ui.UseState(r.SetCategoryID)
 	tagsS := ui.UseState(strings.Join(r.SetTags, ", "))
 	renameDescS := ui.UseState(r.RenameDesc)
+	billAcctS := ui.UseState(r.SetBillAccountID)
 	onMatch := ui.UseEvent(func(v string) { matchS.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
 	onRenameDesc := ui.UseEvent(func(v string) { renameDescS.Set(v) })
@@ -437,7 +438,8 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 			return
 		}
 		conds := collectConditions()
-		if errKey := validateRuleInput(matchS.Get(), catS.Get(), len(conds) > 0); errKey != "" {
+		hasAction := catS.Get() != "" || billAcctS.Get() != "" || strings.TrimSpace(renameDescS.Get()) != "" || strings.TrimSpace(tagsS.Get()) != ""
+		if errKey := validateRuleInput(matchS.Get(), len(conds) > 0, hasAction); errKey != "" {
 			errS.Set(uistate.T(errKey))
 			return
 		}
@@ -445,6 +447,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		r.SetCategoryID = catS.Get()
 		r.SetTags = textutil.CommaFields(tagsS.Get())
 		r.RenameDesc = strings.TrimSpace(renameDescS.Get())
+		r.SetBillAccountID = billAcctS.Get()
 		r.Conditions = conds
 		if err := app.PutRule(r); err != nil {
 			errS.Set(err.Error())
@@ -479,6 +482,16 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		// description rewritten to this value (e.g. clean up garbled bank feed text).
 		labeledField(uistate.T("rules.renameDescFieldLabel"),
 			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), Value(renameDescS.Get()), OnInput(onRenameDesc))),
+		// Bill-account action — link matching transactions as bill payments toward an
+		// account (drives the auto-link-future-payments rules).
+		labeledField(uistate.T("rules.billAccountFieldLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ruleBillAccountOptions(app),
+				Selected:  billAcctS.Get(),
+				OnChange:  func(v string) { billAcctS.Set(v) },
+				AriaLabel: uistate.T("rules.billAccountFieldLabel"),
+				TestID:    "rule-edit-billacct-select",
+			})),
 		Fieldset(css.Class("cond-slots"),
 			Legend(uistate.T("rulecond.sectionLabel")),
 			P(css.Class("muted"), uistate.T("rulecond.overridesHint")),

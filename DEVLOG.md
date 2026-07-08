@@ -1,3 +1,32 @@
+## 2026-07-08 — Auto-link future bill payments (via the rules engine)
+
+Cam: transactions linked as a bill to an account should auto-tie future imports to that
+account (he suggested regex). Researched first — the rules engine already runs on every
+import path (`AutoCategorizeTransaction` in CSV + document/vision import), so the right
+home is a rule ACTION, not a bespoke matcher. Cam picked "contains payee" over exact /
+regex (handles imports where the bank appends a changing reference number).
+
+Implementation:
+- `rules.Rule.SetBillAccountID` — a new action field (rules express actions as fields,
+  not an enum). Applied in `AutoCategorizeTransaction`, the batch `ApplyRulesWithCounts`,
+  and the dry-run `PreviewApplyRules`, each GUARDED with `t.BillAccountID == ""` so a
+  manual link is never clobbered. Unit-tested (auto-links a matching txn; leaves a
+  hand-linked one alone).
+- Relaxed `PutRule`: was "must have a category"; now "must have at least one action"
+  (category / tags / rename / bill account). `validateRuleInput` generalised to
+  `hasAction` and both rule forms updated (they'd otherwise reject a bill-only rule).
+- The bill-link modal (`txn_link.go`) grew an "Auto-link future \"<payee>\" payments"
+  checkbox shown once an account is chosen; on save `ensureBillRule` creates a
+  `contains`-on-payee rule (deduped against existing rules), and the toast becomes
+  "…Future ones will link automatically." Bumped the modal height (372→500) for the
+  extra control.
+- Rules editor + add form gained a "Link as bill payment to" account picker
+  (`ruleBillAccountOptions`), so these rules are visible/editable — and editing a
+  bill-rule no longer silently drops the action.
+
+Verified: go test ./... green; e2e — pick an account, tick auto-link, save, assert the
+"link automatically" toast; screenshot of the modal with the new toggle + payee.
+
 ## 2026-07-08 — Release v1.0.7
 
 Cut v1.0.7: the Auto budget feature (Smart recent + Smart+ healthy average, slider-

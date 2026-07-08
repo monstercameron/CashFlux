@@ -5,9 +5,13 @@
 package screens
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -16,6 +20,26 @@ import (
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
+
+// ensureBillRule persists a rule that auto-links future transactions matching `phrase`
+// (payee/description, contains) as bill payments toward accountID, unless an equivalent
+// rule already exists. Returns whether a new rule was created.
+func ensureBillRule(app *appstate.App, phrase, accountID string) bool {
+	phrase = strings.TrimSpace(phrase)
+	if app == nil || phrase == "" || accountID == "" {
+		return false
+	}
+	for _, r := range app.Rules() {
+		if r.SetBillAccountID == accountID && strings.EqualFold(strings.TrimSpace(r.Match), phrase) {
+			return false // an equivalent rule already covers this merchant → account
+		}
+	}
+	if err := app.PutRule(rules.Rule{ID: id.New(), Match: phrase, SetBillAccountID: accountID, Order: app.NextRuleOrder()}); err != nil {
+		uistate.PostNotice(err.Error(), true)
+		return false
+	}
+	return true
+}
 
 // TxnLinkBody is the body of the payment-link flip modal (mounted at the shell root
 // by app.TxnLinkHost). It links one transaction to a liability (as a recurring BILL
@@ -48,6 +72,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 	mode := ui.UseState(target.Mode)
 	billChoice := ui.UseState(txn.BillAccountID)
 	subChoice := ui.UseState(txn.SubscriptionName)
+	autoLink := ui.UseState(false)
 	onSave := ui.UseEvent(Prevent(func() {
 		t := txn
 		t.BillAccountID = billChoice.Get()
@@ -56,7 +81,16 @@ func TxnLinkBody(_ struct{}) ui.Node {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
+		// "Auto-link future payments like this" — persist a rule matching this merchant
+		// (payee, contains) that sets the bill account, so future/imported payments tie
+		// to it automatically. Created once per (merchant, account) pair.
+		ruleMade := false
+		if autoLink.Get() && billChoice.Get() != "" {
+			ruleMade = ensureBillRule(app, firstNonEmpty(txn.Payee, txn.Desc), billChoice.Get())
+		}
 		switch {
+		case ruleMade:
+			uistate.PostNotice(uistate.T("txnlink.savedWithRule"), false)
 		case t.BillAccountID == "" && t.SubscriptionName == "":
 			uistate.PostNotice(uistate.T("txnlink.cleared"), false)
 		default:
@@ -66,6 +100,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 		linkAtom.Set(uistate.TxnLinkTarget{})
 	}))
 	onCancel := ui.UseEvent(Prevent(func() { linkAtom.Set(uistate.TxnLinkTarget{}) }))
+	onToggleAutoLink := ui.UseEvent(func() { autoLink.Set(!autoLink.Get()) })
 
 	if !found {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
@@ -169,7 +204,14 @@ func TxnLinkBody(_ struct{}) ui.Node {
 					OnChange:  func(v string) { billChoice.Set(v) },
 					AriaLabel: uistate.T("txnlink.billLabel"), TestID: "txnlink-bill-select",
 				}),
-				P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.billHint")))
+				P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.billHint")),
+				// Offer to remember this as a rule once a debt is chosen, so future
+				// payments to the same merchant auto-link (also applied on import).
+				If(billChoice.Get() != "", Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), OnChange(onToggleAutoLink)}, checkedAttr(autoLink.Get())...)...),
+					Div(css.Class("row-main"),
+						Span(uistate.T("txnlink.autoLink", txnLinkMerchant(txn))),
+						Span(css.Class("row-meta", tw.TextDim), uistate.T("txnlink.autoLinkHint"))))))
 		}
 	}
 
@@ -211,6 +253,16 @@ func txnLinkDesc(t domain.Transaction) string {
 	}
 	if t.Payee != "" {
 		return t.Payee
+	}
+	return uistate.T("transactions.uncategorized")
+}
+
+// txnLinkMerchant is the phrase the auto-link rule matches on — the payee, falling back
+// to the description. Shown in the toggle label so the user sees exactly what "like
+// this" means.
+func txnLinkMerchant(t domain.Transaction) string {
+	if m := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc)); m != "" {
+		return m
 	}
 	return uistate.T("transactions.uncategorized")
 }

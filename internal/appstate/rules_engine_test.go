@@ -42,6 +42,38 @@ func TestAutoCategorizeAppliesRename(t *testing.T) {
 	}
 }
 
+// TestAutoLinkBillPayment proves a rule can carry ONLY a bill-account action (no
+// category) and that it links a matching transaction as a bill payment — the path
+// that auto-ties future/imported payments to the account the user first linked.
+func TestAutoLinkBillPayment(t *testing.T) {
+	app := makeApp(t, domain.RoleOwner)
+	acct := validAccount()
+	if err := app.PutAccount(acct); err != nil {
+		t.Fatalf("put account: %v", err)
+	}
+	// A bill-only rule (no SetCategoryID) must be accepted (PutRule relaxation).
+	if err := app.PutRule(rules.Rule{ID: "r-bill", Match: "rocket mortgage", SetBillAccountID: acct.ID}); err != nil {
+		t.Fatalf("put bill rule: %v", err)
+	}
+
+	got := app.AutoCategorizeTransaction(domain.Transaction{
+		ID: "t1", AccountID: "checking", Date: time.Now(),
+		Desc: "ROCKET MORTGAGE #91002", Amount: money.Money{Amount: -148000, Currency: "USD"},
+	})
+	if got.BillAccountID != acct.ID {
+		t.Fatalf("bill link = %q, want %q (auto-linked by rule)", got.BillAccountID, acct.ID)
+	}
+
+	// A transaction already linked by hand is never overwritten.
+	manual := app.AutoCategorizeTransaction(domain.Transaction{
+		ID: "t2", AccountID: "checking", Date: time.Now(), BillAccountID: "other-acct",
+		Desc: "ROCKET MORTGAGE #91003", Amount: money.Money{Amount: -148000, Currency: "USD"},
+	})
+	if manual.BillAccountID != "other-acct" {
+		t.Errorf("manual bill link overwritten: got %q, want other-acct", manual.BillAccountID)
+	}
+}
+
 // TestPutRulePureConditions proves a rule may match by structured conditions
 // alone — a match phrase is only required when there are no conditions.
 func TestPutRulePureConditions(t *testing.T) {

@@ -508,12 +508,27 @@ func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID m
 // UNLESS structured conditions are set (conditions override the phrase at
 // evaluation time, so a pure-conditions rule is legitimate — C105). Keeps the
 // raw appstate error out of the UI by checking the same invariants client-side.
-func validateRuleInput(match, categoryID string, hasConditions bool) string {
+// ruleBillAccountOptions builds the account picker options for a rule's "link as bill
+// payment" action: a leading "no bill account" option plus every non-archived account.
+func ruleBillAccountOptions(app *appstate.App) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("rules.billNone")}}
+	if app == nil {
+		return opts
+	}
+	for _, a := range app.Accounts() {
+		if !a.Archived {
+			opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
+		}
+	}
+	return opts
+}
+
+func validateRuleInput(match string, hasConditions, hasAction bool) string {
 	if strings.TrimSpace(match) == "" && !hasConditions {
 		return "rules.matchRequired"
 	}
-	if categoryID == "" {
-		return "rules.categoryRequired"
+	if !hasAction {
+		return "rules.actionRequired"
 	}
 	return ""
 }
