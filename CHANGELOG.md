@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-08
+
 ### Added
 - **Transactions: assign to a household member, a User column, and show/hide columns (2026-07-07):** three related additions to the ledger. (1) The bulk-action bar (shown when transactions are selected) now has an **Assign to** picker — set the selected transactions' member in one go (undoable like the other bulk ops). (2) The ledger table has a new **User** column showing each transaction's assigned member (a muted "—" when unassigned). (3) A **Columns** button in the toolbar opens a flip modal to show or hide the optional columns (Amount, Account, Category, Source, User); the choice persists across reloads. Date and Description always show. The modal mounts at the shell root so a tile's transform can't clip it.
 - **Goals: "Undo last contribution" and "Reset to zero" in the ⋯ menu (2026-07-07):** a financial goal's overflow menu now offers **Undo last contribution** — reverses the most recent contribution, subtracting it from the goal's progress and deleting the linked ledger transaction if one was posted — and **Reset to zero** (with a confirm), which clears the goal's saved progress back to $0 while leaving any real linked transactions in place. Backed by a new contribution log on the goal (`domain.Goal.Contributions`, capped, JSON round-tripped) and app ops `UndoLastContribution` / `ResetGoalToZero`, all unit-tested. Undo only shows once there's a logged contribution; reset only when the goal holds anything.
