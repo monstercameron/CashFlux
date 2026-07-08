@@ -1,3 +1,30 @@
+## 2026-07-07 — Goals: undo last contribution + reset to zero
+
+Cam wants two ⋯-menu actions on goals: undo a contribution and reset the goal to
+zero. The blocker was that goals had no contribution history — `CurrentAmount` is
+just a running total, so "undo the last one" had nothing to reverse against. Added
+a bounded contribution log to the domain (`Goal.Contributions []GoalContribution`,
+capped at 50, JSON round-trips — no store migration), with pure
+`RecordContribution` / `PopLastContribution` (value-semantics, copy-on-write) and
+tests.
+
+`ContributeToGoal` now logs each contribution (with the ledger txn id when the
+"also move money" path posts one) — I reordered it to post the ledger entry BEFORE
+the single goal save so the id makes it into the log. New app ops:
+`UndoLastContribution` (pop the log, subtract from CurrentAmount floored at zero,
+delete the linked txn if present) and `ResetGoalToZero` (zero the amount + clear
+the log, but leave real linked transactions alone — those are money moves the user
+manages on Transactions). Both unit-tested, including that undo removes the posted
+ledger entry.
+
+UI: two `KebabMenu` items on financial goals — undo shows only when a contribution
+is logged, reset only when the goal holds > 0; reset gets a confirm dialog. Wired
+through new `goalRowProps.OnUndoContribution`/`OnResetGoal` closures in
+`goalListWidget` (toast + data-revision bump). Verified in Playwright: reset zeroes
+a funded goal, and a $10 contribute → undo returns it to the original amount.
+(KebabMenu already uses the correct `hidden-menu` class, so it didn't hit the
+OverflowMenu backdrop bug from earlier today.)
+
 ## 2026-07-07 — Smart panels: snooze + dismiss-all (and an OverflowMenu bug)
 
 Cam: the smart panels dismiss one nudge at a time; also want to snooze the panel

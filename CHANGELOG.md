@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Goals: "Undo last contribution" and "Reset to zero" in the ⋯ menu (2026-07-07):** a financial goal's overflow menu now offers **Undo last contribution** — reverses the most recent contribution, subtracting it from the goal's progress and deleting the linked ledger transaction if one was posted — and **Reset to zero** (with a confirm), which clears the goal's saved progress back to $0 while leaving any real linked transactions in place. Backed by a new contribution log on the goal (`domain.Goal.Contributions`, capped, JSON round-tripped) and app ops `UndoLastContribution` / `ResetGoalToZero`, all unit-tested. Undo only shows once there's a logged contribution; reset only when the goal holds anything.
 - **Smart panels can be snoozed and dismissed in bulk (2026-07-07):** each Smart strip now has a "⋯" actions menu in its header with **Dismiss all** (clears the whole current batch of nudges at once, complementing the per-nudge Dismiss on each card) and **Snooze for a day / a week** (hides the entire Smart strip everywhere until the snooze expires). Backed by new pure `smart.Settings` state (`DismissAll`, `SnoozeUntil`/`IsSnoozed`, unit-tested); the snooze is data-derived and time-bound, so a data wipe (`ClearGenerated`) drops it.
 
 ### Fixed

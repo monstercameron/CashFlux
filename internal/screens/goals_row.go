@@ -60,6 +60,16 @@ func GoalRow(props goalRowProps) ui.Node {
 	openContribute := ui.UseEvent(Prevent(func() {
 		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModeContribute})
 	}))
+	doUndoContribution := ui.UseEvent(Prevent(func() {
+		if props.OnUndoContribution != nil {
+			props.OnUndoContribution(g.ID)
+		}
+	}))
+	doResetGoal := ui.UseEvent(Prevent(func() {
+		if props.OnResetGoal != nil {
+			props.OnResetGoal(g.ID)
+		}
+	}))
 	// Milestone / habit direct actions (non-financial kinds). Declared unconditionally
 	// so hook order is stable; only wired into the footer for the relevant kind.
 	markDone := ui.UseEvent(Prevent(func() { setMilestoneDone(g.ID, true) }))
@@ -245,6 +255,21 @@ func GoalRow(props goalRowProps) ui.Node {
 			Attr("data-testid", "goal-archive-"+g.ID), OnClick(doArchive), uistate.T("goals.archive"))
 	}
 
+	// Contribution controls in the ⋯ menu (financial goals only): undo the most
+	// recent contribution when there's a logged one, and reset saved progress to
+	// zero when the goal holds anything. Both are hidden on archived goals.
+	var undoItem, resetItem ui.Node = Fragment(), Fragment()
+	if financial && !g.Archived {
+		if len(g.Contributions) > 0 {
+			undoItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "goal-undo-contrib-"+g.ID), OnClick(doUndoContribution), uistate.T("goals.undoContribution"))
+		}
+		if g.CurrentAmount.Amount > 0 {
+			resetItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "goal-reset-"+g.ID), OnClick(doResetGoal), uistate.T("goals.resetToZero"))
+		}
+	}
+
 	// Linked to-dos ("steps"): the tasks joined to this goal. Shown whenever the goal has
 	// any, and always for a checklist goal (where the steps ARE the progress) so it offers
 	// the add-step CTA even when empty. Each item toggles done live (updating progress);
@@ -308,6 +333,8 @@ func GoalRow(props goalRowProps) ui.Node {
 				AriaLabel:    uistate.T("goals.moreActions"),
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
+					undoItem,
+					resetItem,
 					archiveItem,
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),
 				},

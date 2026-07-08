@@ -519,6 +519,48 @@ type Goal struct {
 	// engine. When set, the goal's figures are exposed as goal_<slug(VarName)>_* (e.g.
 	// goal_emergency_remaining) instead of the name-derived slug. Empty = derive from Name.
 	VarName string `json:"varName,omitempty"`
+	// Contributions logs financial contributions (oldest first) so the most recent
+	// one can be undone from the goal's ⋯ menu. It is capped at MaxGoalContributions
+	// entries — older ones drop off, which only limits how far "undo" can walk back.
+	// JSON round-trips automatically; no store migration needed.
+	Contributions []GoalContribution `json:"contributions,omitempty"`
+}
+
+// GoalContribution is one recorded contribution to a financial goal, retained so
+// the contribution can be undone. TxnID links the ledger entry posted for it (when
+// the "also move money" path was used), so undo can remove that entry too.
+type GoalContribution struct {
+	Amount money.Money `json:"amount"`
+	TxnID  string      `json:"txnId,omitempty"`
+	At     time.Time   `json:"at"`
+}
+
+// MaxGoalContributions bounds the retained contribution log per goal. Contributions
+// are infrequent, so this is generous; it exists only so the log can't grow without
+// limit over a goal's life.
+const MaxGoalContributions = 50
+
+// RecordContribution appends c to the goal's contribution log, dropping the oldest
+// entries beyond MaxGoalContributions. Pure; the caller persists the result.
+func (g Goal) RecordContribution(c GoalContribution) Goal {
+	g.Contributions = append(append([]GoalContribution(nil), g.Contributions...), c)
+	if len(g.Contributions) > MaxGoalContributions {
+		g.Contributions = g.Contributions[len(g.Contributions)-MaxGoalContributions:]
+	}
+	return g
+}
+
+// PopLastContribution removes and returns the most recent contribution (for undo),
+// yielding the updated goal, the popped entry, and ok=false when the log is empty.
+// Pure; the caller persists the result.
+func (g Goal) PopLastContribution() (Goal, GoalContribution, bool) {
+	if len(g.Contributions) == 0 {
+		return g, GoalContribution{}, false
+	}
+	cp := append([]GoalContribution(nil), g.Contributions...)
+	last := cp[len(cp)-1]
+	g.Contributions = cp[:len(cp)-1]
+	return g, last, true
 }
 
 // EffectiveKind returns the goal's kind, resolving the empty zero value to

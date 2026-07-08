@@ -73,14 +73,16 @@ func computeGoalView(app *appstate.App, activeMemberID string) goalView {
 }
 
 type goalRowProps struct {
-	Goal           domain.Goal
-	Accounts       []domain.Account
-	Members        []domain.Member
-	Tasks          []domain.Task // linked-to-do source for checklist-goal progress
-	OnDelete       func(string)
-	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
-	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
-	OnRedirect     func()                        // a completed goal frees its monthly — jump to Allocate (L20)
+	Goal               domain.Goal
+	Accounts           []domain.Account
+	Members            []domain.Member
+	Tasks              []domain.Task // linked-to-do source for checklist-goal progress
+	OnDelete           func(string)
+	OnDrillAccount     func(accountID string)        // open Transactions filtered to the linked account
+	OnArchive          func(id string, archive bool) // move goal to/from the Achieved section
+	OnRedirect         func()                        // a completed goal frees its monthly — jump to Allocate (L20)
+	OnUndoContribution func(string)                  // reverse the goal's most recent contribution
+	OnResetGoal        func(string)                  // reset the goal's saved progress to zero
 	// C189/C192: sinking-fund display data (zero values = not a fund / no link).
 	// FundSetAside is the monthly set-aside in minor units (from FundSetAsideMinor).
 	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).

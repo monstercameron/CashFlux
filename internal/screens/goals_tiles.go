@@ -177,11 +177,56 @@ func goalListWidget(props goalListProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 	}
+	undoContribution := func(goalID string) {
+		for _, g := range app.Goals() {
+			if g.ID != goalID {
+				continue
+			}
+			undone, ok, err := app.UndoLastContribution(g)
+			if err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			if !ok {
+				return // nothing to undo
+			}
+			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("goals.undoneToast", fmtMoney(undone)), false)
+			return
+		}
+	}
+	resetGoal := func(goalID string) {
+		name := uistate.T("goals.thisGoal")
+		for _, g := range app.Goals() {
+			if g.ID == goalID && g.Name != "" {
+				name = g.Name
+				break
+			}
+		}
+		uistate.ConfirmModal(uistate.T("goals.resetConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			for _, g := range app.Goals() {
+				if g.ID != goalID {
+					continue
+				}
+				if err := app.ResetGoalToZero(g); err != nil {
+					errMsg.Set(err.Error())
+					return
+				}
+				uistate.BumpDataRevision()
+				uistate.PostNotice(uistate.T("goals.resetToast", name), false)
+				return
+			}
+		})
+	}
 	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
 			OnDelete:       deleteGoal,
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
+			OnUndoContribution: undoContribution, OnResetGoal: resetGoal,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
 		})
 	}

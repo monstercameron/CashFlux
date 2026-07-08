@@ -51,18 +51,17 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 	wasComplete := g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
 
 	g.CurrentAmount = money.New(g.CurrentAmount.Amount+amt.Amount, amt.Currency)
-	if err := a.PutGoal(g); err != nil {
-		return ContributeResult{}, fmt.Errorf("appstate: contribute: save goal: %w", err)
-	}
-
 	becameComplete := !wasComplete && g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
 
+	// Post the ledger entry (if requested) BEFORE saving the goal, so the
+	// contribution log can record the transaction id and "undo contribution" can
+	// later remove both the progress and the ledger entry in one action.
 	var txnID string
+	var postErr error
 	if postLedger && g.AccountID != "" {
-		// Post a debit (expense-signed, negative amount) against the linked
-		// account.  The transaction intentionally carries no CategoryID so it
-		// does not distort budget rollups — the user can categorise it manually
-		// if they wish.
+		// A debit (expense-signed, negative amount) against the linked account. No
+		// CategoryID so it doesn't distort budget rollups — the user can categorise
+		// it manually if they wish.
 		txn := domain.Transaction{
 			ID:        id.New(),
 			AccountID: g.AccountID,
@@ -73,13 +72,63 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 			Source:    domain.TxnSourceManual,               // a deliberate user contribution
 		}
 		if err := a.PutTransaction(txn); err != nil {
-			// The goal was already saved; surface the error but don't roll back
-			// the goal — the user can delete the bad txn manually.
-			return ContributeResult{BecameComplete: becameComplete}, fmt.Errorf("appstate: contribute: post ledger: %w", err)
+			postErr = fmt.Errorf("appstate: contribute: post ledger: %w", err)
+		} else {
+			txnID = txn.ID
+			a.log.Info("goal contribution ledger entry posted", "goal", g.ID, "txn", txnID)
 		}
-		txnID = txn.ID
-		a.log.Info("goal contribution ledger entry posted", "goal", g.ID, "txn", txnID)
+	}
+
+	g = g.RecordContribution(domain.GoalContribution{Amount: amt, TxnID: txnID, At: time.Now()})
+	if err := a.PutGoal(g); err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: save goal: %w", err)
+	}
+	if postErr != nil {
+		// The goal (with its bumped amount) is saved; surface the ledger error but
+		// don't roll back — the contribution still counts, just without a txn.
+		return ContributeResult{BecameComplete: becameComplete}, postErr
 	}
 
 	return ContributeResult{BecameComplete: becameComplete, TransactionID: txnID}, nil
+}
+
+// UndoLastContribution reverses the most recent contribution to a goal: it drops
+// the entry from the log, subtracts its amount from CurrentAmount (floored at
+// zero), and deletes the linked ledger transaction if one was posted. It returns
+// the undone amount and ok=false when there is nothing to undo.
+func (a *App) UndoLastContribution(g domain.Goal) (money.Money, bool, error) {
+	updated, last, ok := g.PopLastContribution()
+	if !ok {
+		return money.Money{}, false, nil
+	}
+	newAmt := updated.CurrentAmount.Amount - last.Amount.Amount
+	if newAmt < 0 {
+		newAmt = 0
+	}
+	updated.CurrentAmount = money.New(newAmt, updated.CurrentAmount.Currency)
+	if err := a.PutGoal(updated); err != nil {
+		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: save goal: %w", err)
+	}
+	// Remove the ledger entry this contribution posted, if it still exists. A
+	// failure here is non-fatal: the goal progress is already reversed, and the
+	// user can delete a stray transaction manually.
+	if last.TxnID != "" {
+		if err := a.DeleteTransaction(last.TxnID); err != nil {
+			a.log.Warn("undo contribution: delete ledger txn failed", "goal", g.ID, "txn", last.TxnID, "err", err)
+		}
+	}
+	return last.Amount, true, nil
+}
+
+// ResetGoalToZero clears a goal's saved progress back to zero and empties its
+// contribution log. Linked ledger transactions are intentionally left untouched —
+// they are real money movements the user manages on the Transactions screen; this
+// only resets the goal's tracked figure.
+func (a *App) ResetGoalToZero(g domain.Goal) error {
+	g.CurrentAmount = money.New(0, g.CurrentAmount.Currency)
+	g.Contributions = nil
+	if err := a.PutGoal(g); err != nil {
+		return fmt.Errorf("appstate: reset goal: save goal: %w", err)
+	}
+	return nil
 }
