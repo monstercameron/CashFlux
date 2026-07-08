@@ -1,3 +1,11 @@
+## 2026-07-08 — Release v1.0.7
+
+Cut v1.0.7: the Auto budget feature (Smart recent + Smart+ healthy average, slider-
+tuned) and the account-filter-includes-linked-payments fix. Bumped version.go
+(1.0.6→1.0.7) and the SW cache (v294→v295). Verified before tagging: go test ./...
+green; e2e interactions + smoke green (incl. the auto-budget test); auto-budget modal
+screenshot-validated both methods.
+
 ## 2026-07-08 — Auto budget (Smart + Smart+)
 
 New feature (Cam): analyze transactions, suggest a monthly budget per category, show
