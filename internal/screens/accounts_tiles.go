@@ -63,12 +63,6 @@ type acctArchivedProps struct {
 	Rates currency.Rates
 }
 
-type acctGlanceProps struct {
-	App   *appstate.App
-	Base  string
-	Rates currency.Rates
-}
-
 type acctWelcomeProps struct{ App *appstate.App }
 
 type acctFormulaProps struct{ App *appstate.App }
@@ -384,7 +378,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		if ac.Currency != "" && ac.Currency != base {
 			hasForeign = true
 		}
-		if !ownerVisibleTo(ac.OwnerID, activeMemberID) || ac.Class == domain.ClassLiability {
+		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
 			continue
 		}
 		typeSet[string(ac.Type)] = true
@@ -542,10 +536,14 @@ func acctTransferWidget(props acctTransferProps) ui.Node {
 
 // --- acct-list ------------------------------------------------------------------
 
-// acctListWidget is the asset-list tile: the owner-scoped, search/type-filtered
-// asset rows rendered as AccountRow inside an EntityListSection (with the smart
-// section action), or the first-run / no-match empty states. It owns the per-row
-// callbacks and the "view transactions" navigation.
+// acctListWidget is the accounts-list tile: the owner-scoped, search/type-filtered
+// account rows rendered as AccountRow inside an EntityListSection. A segmented
+// "All / Assets / Liabilities" toggle in the section header narrows by class so
+// both sides of net worth can be spot-checked in one place (assets and liabilities
+// used to be two separate tiles, which listed every asset twice). Rows sort by
+// signed balance high to low, so the biggest holdings sit on top and the heaviest
+// debts (most negative) at the bottom. The tile owns the per-row callbacks and the
+// "view transactions" navigation.
 func acctListWidget(props acctListProps) ui.Node {
 	// Subscribe to the data revision so balances/rows re-render after any mutation.
 	_ = uistate.UseDataRevision().Get()
@@ -558,14 +556,53 @@ func acctListWidget(props acctListProps) ui.Node {
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
-	assets, _ := partitionAssetAccounts(accounts, txns, props.Rates, props.Base, activeMemberID)
+
+	// Base-converted balance (signed: assets positive, liabilities negative — the
+	// net-worth contribution). Falls back to the raw amount for rate-less accounts.
+	convBal := func(ac domain.Account) int64 {
+		bal, _ := ledger.Balance(ac, txns)
+		if c, err := props.Rates.Convert(bal, props.Base); err == nil {
+			return c.Amount
+		}
+		return bal.Amount
+	}
+
+	// Active, owner-visible accounts split by class (archived live in their own tile).
+	var active, liabs []domain.Account
+	for _, ac := range accounts {
+		if ac.Archived || !ownerVisibleTo(ac.OwnerID, activeMemberID) {
+			continue
+		}
+		active = append(active, ac)
+		if ac.Class == domain.ClassLiability {
+			liabs = append(liabs, ac)
+		}
+	}
+	hasLiab := len(liabs) > 0
+
+	// The class view. With no liabilities the toggle is pointless, so force the
+	// assets-only view (and hide the segment) — the page reads exactly as before.
+	classView := f.Class
+	if !hasLiab {
+		classView = string(domain.ClassAsset)
+	}
+	assetsOnly := classView == string(domain.ClassAsset)
 
 	var shown []domain.Account
-	for _, ac := range assets {
+	for _, ac := range active {
+		if assetsOnly && ac.Class == domain.ClassLiability {
+			continue
+		}
+		if classView == string(domain.ClassLiability) && ac.Class != domain.ClassLiability {
+			continue
+		}
 		if f.Matches(ac.Name, string(ac.Type)) {
 			shown = append(shown, ac)
 		}
 	}
+	// Signed high to low across every view: the biggest holdings lead and the
+	// heaviest debts (most negative) trail.
+	sort.SliceStable(shown, func(i, j int) bool { return convBal(shown[i]) > convBal(shown[j]) })
 
 	smartSettings := uistate.LoadSmartSettings()
 	pr := uistate.UsePrefs().Get()
@@ -597,131 +634,84 @@ func acctListWidget(props acctListProps) ui.Node {
 
 	var bodyContent ui.Node
 	switch {
-	case len(accounts) == 0 || len(assets) == 0:
+	case len(active) == 0:
 		bodyContent = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("accounts.noAssets"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account", Icon: icon.Accounts, ImportLink: true})
-	case len(shown) == 0:
+	case len(shown) == 0 && f.HasNarrowing():
 		bodyContent = P(css.Class("empty"), uistate.T("accounts.noMatch"))
+	case len(shown) == 0 && classView == string(domain.ClassLiability):
+		bodyContent = P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
+	case len(shown) == 0:
+		bodyContent = P(css.Class("empty"), uistate.T("accounts.noAssets"))
 	default:
 		bodyContent = Div(css.Class("rows"), MapKeyed(shown, keyOf, renderRow))
 	}
 
+	// Section title tracks the class view; the segmented toggle is the class picker
+	// (only shown when there is something to toggle between).
+	title := uistate.T("accounts.assets")
+	if hasLiab {
+		switch classView {
+		case string(domain.ClassLiability):
+			title = uistate.T("accounts.liabilitiesTitle")
+		case string(domain.ClassAsset):
+			title = uistate.T("accounts.assets")
+		default:
+			title = uistate.T("accounts.allAccounts")
+		}
+	}
+
+	var classSeg ui.Node = Fragment()
+	if hasLiab {
+		classSeg = uiw.Segmented(uiw.SegmentedProps{
+			Label:    uistate.T("accounts.classFilterLabel"),
+			Selected: classView,
+			Options: []uiw.SegOption{
+				{Value: "", Label: uistate.T("accounts.classAll"), TestID: "acct-class-all"},
+				{Value: string(domain.ClassAsset), Label: uistate.T("accounts.classAssets"), TestID: "acct-class-assets"},
+				{Value: string(domain.ClassLiability), Label: uistate.T("accounts.classLiabilities"), TestID: "acct-class-liabilities"},
+			},
+			OnSelect: func(v string) {
+				nf := filterAtom.Get()
+				nf.Class = v
+				filterAtom.Set(nf.Normalize())
+				uistate.PersistAcctClass(v)
+				// Flush now so a quick reload after toggling doesn't race the
+				// autosave ticker and lose the choice (same guard as sample load, C2).
+				uistate.RequestPersist()
+			},
+		})
+	}
+
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title:        uistate.T("accounts.assets"),
-		HeaderAction: smartSectionAction(smartSettings),
+		Title:        title,
+		HeaderAction: Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2), classSeg, smartSectionAction(smartSettings)),
 		Body:         bodyContent,
 	})
 
-	// C346: liability accounts are deliberately managed on /debt, but that
-	// hand-off was invisible — this page listed only assets while its summary
-	// counted all 14 accounts, and a search for "Mortgage" found nothing with
-	// no explanation. A compact stub names the liabilities that live elsewhere
-	// and links through to the Debt payoff page.
-	liabCount := 0
-	for _, ac := range accounts {
-		if ac.Class == domain.ClassLiability && !ac.Archived && ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			liabCount++
+	// A shortcut to /debt, where liabilities carry the richer payoff surface (min
+	// payment, utilization, payoff order). When the assets-only view hides them, the
+	// link names how many are tucked away (C346); otherwise it's a plain shortcut.
+	var debtLink ui.Node = Fragment()
+	if hasLiab {
+		linkText := uistate.T("accounts.manageDebtLink")
+		testID := "acct-manage-debt"
+		if assetsOnly {
+			linkText = uistate.T("accounts.liabilitiesStub", len(liabs))
+			testID = "acct-liabilities-stub"
 		}
-	}
-	liabStub := If(liabCount > 0,
-		Div(css.Class(tw.Mt3),
+		debtLink = Div(css.Class(tw.Mt3),
 			A(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
 				Href(uistate.RoutePath("/debt")),
-				Attr("data-testid", "acct-liabilities-stub"),
+				Attr("data-testid", testID),
 				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				uistate.T("accounts.liabilitiesStub", liabCount),
+				linkText,
 			),
-		),
-	)
-
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(section, liabStub),
-	})
-}
-
-// --- acct-glance ----------------------------------------------------------------
-
-// signedAccountRow pairs an account with its base-converted, net-worth-signed
-// balance (minor units): assets positive, liabilities negative — so a single list
-// can be ordered by each account's effect on net worth.
-type signedAccountRow struct {
-	Acct  domain.Account
-	Minor int64
-}
-
-// signedAccountsLowToHigh returns every active, owner-visible account (assets AND
-// liabilities) paired with its net-worth-signed base-currency balance, sorted low
-// to high: the biggest debts first, the biggest holdings last. The value is each
-// account's raw converted balance — assets positive, liabilities negative — which
-// is exactly its contribution to net worth (matching the per-account breakdown on
-// /networth; ledger.NetWorthExplained only negates liabilities to form the
-// aggregate "amount owed"). Rate-less accounts fall back to their raw balance so
-// they still appear rather than silently dropping out. Pure (no hooks).
-func signedAccountsLowToHigh(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base, activeMemberID string) []signedAccountRow {
-	var rows []signedAccountRow
-	for _, ac := range accounts {
-		if ac.Archived || !ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			continue
-		}
-		bal, err := ledger.Balance(ac, txns)
-		if err != nil {
-			continue
-		}
-		minor := bal.Amount
-		if c, cerr := rates.Convert(bal, base); cerr == nil {
-			minor = c.Amount
-		}
-		rows = append(rows, signedAccountRow{Acct: ac, Minor: minor})
-	}
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Minor < rows[j].Minor })
-	return rows
-}
-
-// acctGlanceWidget is the combined assets-and-liabilities spot-check tile. The
-// asset list (acct-list) is editable but lists only assets, and liabilities are
-// managed on /debt — so this page had nowhere to eyeball both sides of net worth
-// at once. This compact, read-only tile lists every active account by its
-// net-worth-signed balance, lowest first: the largest debts on top (shown as
-// parenthesised negatives), the largest holdings at the bottom. The host only
-// places it when a liability exists — otherwise it would just duplicate the asset
-// list. Editing still happens in the asset list above or on /debt.
-func acctGlanceWidget(props acctGlanceProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
-	app := props.App
-	activeMemberID := acctActiveMemberID()
-	rows := signedAccountsLowToHigh(app.Accounts(), app.Transactions(), props.Rates, props.Base, activeMemberID)
-
-	keyOf := func(r signedAccountRow) any { return r.Acct.ID }
-	renderRow := func(r signedAccountRow) ui.Node {
-		m := money.New(r.Minor, props.Base)
-		amtCls := "budget-amount"
-		if m.IsNegative() {
-			amtCls += " " + tw.ColorClass("text-down")
-		}
-		typeLabel := selectorTypeLabel(r.Acct.Type)
-		var meta ui.Node = Fragment()
-		if !strings.EqualFold(typeLabel, r.Acct.Name) {
-			meta = Span(css.Class("row-meta"), typeLabel)
-		}
-		return Div(css.Class("row"), Attr("data-testid", "acct-glance-row"),
-			Div(css.Class("row-main"),
-				Span(css.Class("row-desc"), r.Acct.Name),
-				meta,
-			),
-			Span(ClassStr(amtCls), fmtMoney(m)),
 		)
 	}
 
-	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("accounts.glanceTitle"),
-		Body: Fragment(
-			P(css.Class("muted"), uistate.T("accounts.glanceHint")),
-			Div(css.Class("rows"), MapKeyed(rows, keyOf, renderRow)),
-		),
-	})
 	return uiw.Widget(uiw.WidgetProps{
-		ID: "acct-glance", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: section,
+		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: Div(section, debtLink),
 	})
 }
 

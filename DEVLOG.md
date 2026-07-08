@@ -1,27 +1,39 @@
-## 2026-07-07 — /accounts: combined assets & liabilities spot-check tile
+## 2026-07-07 — /accounts: All/Assets/Liabilities toggle (superseding the glance tile)
 
-Cam wanted to spot-check liabilities and assets together on /accounts — the page
-showed assets but punted liabilities to Debt payoff (a link he liked keeping), so
-there was no single place to eyeball both sides of net worth. Added a read-only
-`acct-glance` tile: every active account by its net-worth-signed balance, sorted
-low → high (biggest debts on top as parenthesised negatives, biggest holdings at
-the bottom).
+Two iterations in one day. First cut added a *second*, read-only "Assets &
+liabilities" tile below the existing asset list. Cam immediately (correctly) called
+it: a separate combined tile means every asset renders twice — "why not just add a
+triple radio to hide or show the values?" Right. Collapsed the two tiles into one.
 
-The one real trap was the sign convention. My first cut negated liabilities on the
-theory that `ledger.Balance` reports "amounts owed" positive — but that's only the
-NetWorth *aggregate* (`res.Liabilities.Add(conv.Neg())`). At the per-account level
-the ledger stores liabilities *negative* (confirmed three ways: sample opening
-balances `usd(-24400000)`, `debt_tiles.go` doing `bal.Abs()` to display owed, and
-the explicit comment in `loans.go` — "Liabilities carry negative balances in the
-ledger"). So the signed net-worth contribution is just the raw converted balance
-for both classes, no per-class flip — matching the existing /networth per-account
-breakdown exactly. Fixed before it shipped.
+The account list (`acct-list`) now owns a `uiw.Segmented` toggle in its section
+header — All (default) / Assets / Liabilities — backed by a new `Class` field on the
+shared `AccountsFilter` atom. Every view sorts signed high → low (biggest holdings
+on top, heaviest debts at the bottom). The class view persists across reloads —
+seeded into the atom's default from a `cashflux:accounts-class` localStorage key
+(`kvGet`/`kvSet`, the same pattern as active-member) and written on each toggle;
+name/type search stays ephemeral. Every row (both classes) renders
+through the existing `AccountRow`, which already handled liability attributes —
+so liabilities get utilization %, update-balance, reconcile, edit for free, and the
+list isn't a dumbed-down duplicate. Toggle is hidden when there are no liabilities,
+so a debt-free household sees exactly the old page. Deleted the `acct-glance`
+widget, its props, helper, registration, and i18n; the toolbar type-filter now
+includes liability types too.
 
-Host gates the tile on a liability existing (else it duplicates the asset list);
-placed right after the editable asset list. Verified end-to-end by driving
-/accounts in Playwright against the seeded data: rows come out mortgage (−$153,720,
-red) → … → condo ($304,000), strictly ascending. Editing stays in the asset list /
-on /debt; this is a reference view.
+The sign convention (the one real trap, unchanged from the first cut): the ledger
+stores liabilities *negative* at the per-account level — confirmed three ways
+(sample opening balances `usd(-24400000)`, `debt_tiles.go`'s `bal.Abs()` for the
+owed display, and the explicit comment in `loans.go`, "Liabilities carry negative
+balances in the ledger"). The "positive amount owed" only exists as the NetWorth
+*aggregate* via `.Neg()`. So the signed net-worth contribution is just the raw
+converted balance for both classes — no per-class flip — matching /networth.
+
+Verified end-to-end in Playwright against the seed: All → 14 rows, condo ($304,000)
+first down to mortgage (−$153,720) last, strictly descending; Assets → 8 rows all
+positive, descending; Liabilities → 6 rows all negative, plus the "Manage debts in
+Debt payoff →" shortcut. /debt remains the specialized payoff surface.
+
+(Cam then asked to reverse the order pos → neg, so the sort flipped from low→high
+to high→low across all views — the wording above reflects the final order.)
 
 ## 2026-07-06 — CI security: clear govulncheck (Go 1.26.4 + otel bumps)
 

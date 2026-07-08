@@ -24,6 +24,7 @@ const (
 	acctTransferAtomID = "accounts:transferOpen"
 	acctFormulasAtomID = "accounts:showFormulas"
 	acctEditAtomID     = "accounts:edit"
+	acctClassStore     = "cashflux:accounts-class"
 )
 
 // AccountEdit selects the account + editor a modal should show. A zero value (empty
@@ -49,6 +50,7 @@ const (
 type AccountsFilter struct {
 	Search       string // case-insensitive substring match on the account name
 	Type         string // domain.AccountType string; "" = all types
+	Class        string // domain.AccountClass string ("asset"/"liability"); "" = both
 	ShowArchived bool   // reveal the archived-accounts tile
 }
 
@@ -93,11 +95,22 @@ func (f AccountsFilter) Without(field string) AccountsFilter {
 
 // UseAccountsFilter returns the shared atom holding the accounts list filter. The
 // toolbar tile writes it; the asset-list and archived-list tiles read it to narrow
-// the rows they show. It is ephemeral (not persisted): account filtering is a
-// transient action, unlike the persisted transaction ledger filter.
+// the rows they show. The name/type search and archived toggle are ephemeral
+// (transient actions), but the class view (All/Assets/Liabilities) is seeded from
+// localStorage so the toggle survives reloads (see PersistAcctClass).
 func UseAccountsFilter() state.Atom[AccountsFilter] {
-	return state.UseAtom(acctFilterAtomID, AccountsFilter{})
+	return state.UseAtom(acctFilterAtomID, AccountsFilter{Class: loadAcctClass()})
 }
+
+// PersistAcctClass saves the accounts list class view ("" = All, "asset",
+// "liability") so the All/Assets/Liabilities toggle survives reloads. Call it
+// alongside setting the filter atom's Class (the atom itself is otherwise
+// ephemeral).
+func PersistAcctClass(class string) { kvSet(acctClassStore, class) }
+
+// loadAcctClass reads the saved accounts class view, defaulting to "" (All) when
+// absent.
+func loadAcctClass() string { return kvGet(acctClassStore) }
 
 // UseAcctTransferOpen returns the shared atom selecting whether the page-level
 // transfer form sub-view is open. The toolbar's "Transfer money" action sets it; the
