@@ -7,7 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **Multi-category budgets: track 1–n categories in one budget (2026-07-08):** a budget's `⋯` menu has a new **Edit tracked categories** action that opens a flip modal to pick the expense categories the budget should count — its spend becomes their combined total (each category still rolls up its own sub-categories). Overlap is allowed with a soft "also in …" note when a category is already tracked by another budget. Single-category budgets are unchanged. Backed by an additive `Budget.CategoryIDs` and the spend engine's existing predicate path (no store migration).
+- **Multi-category budgets: track 1–n categories in one budget (2026-07-08):** a budget's `⋯` menu has a new **Edit tracked categories** action, and the **add** and **edit** budget forms now include the same picker, so a budget can count several categories — its spend becomes their combined total (each category still rolls up its own sub-categories). The picker is a searchable, one-line checklist with a soft "also in …" note when a category is already tracked by another budget. Single-category budgets are unchanged. Backed by an additive `Budget.CategoryIDs` and the spend engine's existing predicate path (no store migration).
 
 ### Changed
 - **Budgets income figure uses last full month (2026-07-08):** the budgets page's income context (the assign banner) derived income from the *current* — partial — month, which under-reports before that month's paychecks land. It now uses the most recent *complete* month as the honest basis (the configured income figure still takes precedence). Labelled "Income (last month)".

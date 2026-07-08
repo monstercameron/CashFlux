@@ -319,3 +319,28 @@ test.describe("multi-category budgets", () => {
     await expect(app.locator(`[data-testid="budget-tracked-cats-${bid}"]`)).toBeVisible();
   });
 });
+
+test.describe("budget category picker", () => {
+  test("search filters the list; add form embeds the picker", async ({ app }) => {
+    await nav(app, "/budgets");
+    // Kebab modal: search narrows the checklist.
+    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
+    await kebab.scrollIntoViewIfNeeded();
+    const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
+    await kebab.click();
+    await app.locator(`[data-testid="edit-budget-cats-btn-${bid}"]`).click();
+    await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
+    await app.waitForTimeout(650);
+    const before = await app.locator('[data-testid^="budgetcat-pick-"]').count();
+    await app.getByTestId("budgetcats-search").fill("din");
+    await app.waitForTimeout(150);
+    expect(await app.locator('[data-testid^="budgetcat-pick-"]').count()).toBeLessThan(before);
+    await app.getByTestId("budgetcats-cancel").click();
+
+    // The add-budget form embeds the same picker.
+    await app.getByTestId("budgets-add").click();
+    await expect(app.getByTestId("budget-add-form")).toBeVisible();
+    await app.waitForTimeout(650);
+    await expect(app.getByTestId("budgetcats-search")).toBeVisible();
+  });
+});

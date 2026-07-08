@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -88,45 +90,17 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
 	}
 
-	// Which OTHER budgets track each category (for the soft overlap note).
-	otherBudget := make(map[string]string)
-	for _, b := range app.Budgets() {
-		if b.ID == budgetID {
-			continue
-		}
-		for _, cid := range b.TrackedCategoryIDs() {
-			if otherBudget[cid] == "" {
-				otherBudget[cid] = firstNonEmpty(b.Name, "")
-			}
-		}
-	}
-
-	sel := picked.Get()
 	nSel := 0
-	for _, c := range app.Categories() {
-		if c.Kind == domain.KindExpense && sel[c.ID] {
+	for id, on := range picked.Get() {
+		if on && id != "" {
 			nSel++
 		}
 	}
 
-	var expenseCats []domain.Category
-	for _, c := range app.Categories() {
-		if c.Kind == domain.KindExpense {
-			expenseCats = append(expenseCats, c)
-		}
-	}
-	keyOf := func(c domain.Category) any { return c.ID }
-	rows := MapKeyed(expenseCats, keyOf, func(c domain.Category) ui.Node {
-		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
-			CategoryID: c.ID, CategoryName: c.Name, Checked: sel[c.ID],
-			AlsoIn: otherBudget[c.ID], OnToggle: toggle,
-		})
-	})
-
-	return Div(css.Class(tw.FlexCol, tw.Gap3),
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), Attr("data-testid", "budgetcats-intro"),
-			uistate.T("budgets.catsIntro")),
-		Div(css.Class("autobudget-rows"), Attr("data-testid", "budgetcats-rows"), rows),
+	return Div(css.Class(tw.FlexCol, tw.Gap2),
+		ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
+			Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID,
+		}),
 		Div(css.Class("autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
 				uistate.T("budgets.catsCount", plural(nSel, "category"))),
@@ -135,7 +109,75 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 				uistate.T("budgets.catsSave"))))
 }
 
-// budgetCatRowProps drives one selectable category in the tracked-categories modal.
+// budgetCategoryPickerProps configures the reusable multi-category picker (used by the
+// tracked-categories modal and the add/edit budget forms).
+type budgetCategoryPickerProps struct {
+	Picked          map[string]bool
+	OnToggle        func(id string)
+	ExcludeBudgetID string // a budget id whose own tracking is ignored in the overlap note ("" = none)
+}
+
+// budgetCategoryPicker is the reusable "which categories does this budget track"
+// control: a search box that filters a clean one-line checklist of expense categories.
+// It owns only its search-query state; the parent owns the picked set. Keeping it a
+// component means its search hook stays at a stable position wherever it's embedded.
+func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
+	app := appstate.Default
+	query := ui.UseState("")
+	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
+
+	// Which OTHER budgets track each category — for the soft overlap tag.
+	otherBudget := make(map[string]string)
+	if app != nil {
+		for _, b := range app.Budgets() {
+			if b.ID == props.ExcludeBudgetID {
+				continue
+			}
+			for _, cid := range b.TrackedCategoryIDs() {
+				if otherBudget[cid] == "" {
+					otherBudget[cid] = b.Name
+				}
+			}
+		}
+	}
+
+	q := strings.ToLower(strings.TrimSpace(query.Get()))
+	var shown []domain.Category
+	if app != nil {
+		for _, c := range app.Categories() {
+			if c.Kind != domain.KindExpense {
+				continue
+			}
+			if q != "" && !strings.Contains(strings.ToLower(c.Name), q) {
+				continue
+			}
+			shown = append(shown, c)
+		}
+	}
+
+	keyOf := func(c domain.Category) any { return c.ID }
+	rows := MapKeyed(shown, keyOf, func(c domain.Category) ui.Node {
+		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
+			CategoryID: c.ID, CategoryName: c.Name, Checked: props.Picked[c.ID],
+			AlsoIn: otherBudget[c.ID], OnToggle: props.OnToggle,
+		})
+	})
+
+	var list ui.Node
+	if len(shown) == 0 {
+		list = P(css.Class("muted", tw.Text13), Attr("data-testid", "budgetcats-none"), uistate.T("budgets.catsNoMatch"))
+	} else {
+		list = Div(css.Class("budgetcats-list"), Attr("data-testid", "budgetcats-rows"), rows)
+	}
+	return Div(css.Class(tw.FlexCol, tw.Gap15),
+		Input(css.Class("field"), Type("search"), Attr("data-testid", "budgetcats-search"),
+			Attr("aria-label", uistate.T("budgets.catsSearch")), Placeholder(uistate.T("budgets.catsSearch")),
+			Value(query.Get()), OnInput(onQuery)),
+		list,
+	)
+}
+
+// budgetCatRowProps drives one selectable category in the picker.
 type budgetCatRowProps struct {
 	CategoryID   string
 	CategoryName string
@@ -144,14 +186,18 @@ type budgetCatRowProps struct {
 	OnToggle     func(id string)
 }
 
-// budgetCatRow is one category checklist row (its own component so its checkbox hook is
-// never registered inside the results loop).
+// budgetCatRow is one clean, one-line category checklist row: checkbox + name, with a
+// subtle right-aligned "in <budget>" tag only when the category is already budgeted
+// elsewhere. Its own component so its checkbox hook is never registered in a loop.
 func budgetCatRow(props budgetCatRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle(props.CategoryID) })
-	return Label(css.Class("row", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer", "padding": ".35rem .3rem"}),
+	rowCls := "budgetcat-row"
+	if props.Checked {
+		rowCls += " is-on"
+	}
+	return Label(ClassStr(rowCls),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgetcat-pick-"+props.CategoryID), OnChange(onToggle)}, checkedAttr(props.Checked)...)...),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), props.CategoryName),
-			If(props.AlsoIn != "", Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.catsAlsoIn", props.AlsoIn)))),
+		Span(css.Class("budgetcat-name"), props.CategoryName),
+		If(props.AlsoIn != "", Span(css.Class("budgetcat-also"), uistate.T("budgets.catsAlsoIn", props.AlsoIn))),
 	)
 }

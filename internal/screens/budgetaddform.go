@@ -76,6 +76,18 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	rollover := ui.UseState(false)
 	methodology := ui.UseState("") // empty = inherit global method
 	customVals := ui.UseState(map[string]string{})
+	// alsoTrack: extra existing categories this budget should also count (multi-category).
+	// The primary category above is always tracked; these add to it.
+	alsoTrack := ui.UseState(map[string]bool{})
+	toggleAlso := func(id string) {
+		m := alsoTrack.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[id] = !nm[id]
+		alsoTrack.Set(nm)
+	}
 	errMsg := ui.UseState("")
 
 	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
@@ -149,11 +161,25 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		if m := budgeting.Methodology(methodVal); methodVal != "" && !m.Valid() {
 			methodVal = ""
 		}
+		// Fold in any "also track" extras (existing expense categories), keeping the
+		// primary first and de-duped. Only set CategoryIDs when tracking more than one.
+		catIDs := []string{finalCatID}
+		seen := map[string]bool{finalCatID: true}
+		selAlso := alsoTrack.Get()
+		for _, c := range app.Categories() {
+			if c.Kind == domain.KindExpense && selAlso[c.ID] && !seen[c.ID] {
+				seen[c.ID] = true
+				catIDs = append(catIDs, c.ID)
+			}
+		}
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, base),
 			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
 			VarName: strings.TrimSpace(ev.VarName.Get()),
+		}
+		if len(catIDs) > 1 {
+			b.CategoryIDs = catIDs
 		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
@@ -168,6 +194,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		methodology.Set("")
 		catID.Set(defaultCat)
 		newCatName.Set("")
+		alsoTrack.Set(map[string]bool{})
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		if createdCatName != "" {
@@ -217,6 +244,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				labeledField(uistate.T("budgets.newCategoryName"),
 					Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
 						Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName))))),
+			// Optional multi-category: track more existing categories in this one budget.
+			If(len(expenseCats) > 0, Div(css.Class("ba-full"),
+				labeledField(uistate.T("budgets.catsAlsoTrack"),
+					ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: alsoTrack.Get(), OnToggle: toggleAlso})))),
 			// Owner / Period / Limit / Method pair up two-per-row in the grid. Owner is
 			// hidden until members exist (it only offers "Everyone" otherwise).
 			If(len(app.Members()) > 0, labeledField(uistate.T("common.owner"),

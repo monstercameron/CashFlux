@@ -8588,6 +8588,43 @@ func registerGenerated() {
 		marginRight("auto"),
 		fontSize(".9rem"),
 	)
+	// Budget category picker (multi-category budgets): a clean, scannable one-line
+	// checklist — checkbox + name, with a subtle right-aligned "in <budget>" overlap tag.
+	rule(".budgetcats-list",
+		display("flex"),
+		flexDirection("column"),
+		overflowY("auto"),
+		maxHeight("42vh"),
+		margin("0 -.25rem"),
+		padding("0 .25rem"),
+	)
+	rule(".budgetcat-row",
+		display("flex"),
+		alignItems("center"),
+		gap(".6rem"),
+		padding(".4rem .35rem"),
+		borderRadius("8px"),
+		cursor("pointer"),
+	)
+	rule(".budgetcat-row:hover",
+		background("var(--hover)"),
+	)
+	rule(".budgetcat-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budgetcat-row.is-on .budgetcat-name",
+		fontWeight("600"),
+	)
+	rule(".budgetcat-also",
+		flexShrink("0"),
+		fontSize(".75rem"),
+		color("var(--text-faint)"),
+		fontStyle("italic"),
+	)
 	rule(".cover-src-name",
 		fontWeight("600"),
 	)

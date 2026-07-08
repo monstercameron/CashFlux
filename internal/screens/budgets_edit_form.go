@@ -124,6 +124,21 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	ownerS := ui.UseState(b.OwnerID)
 	rolloverS := ui.UseState(b.Rollover)
 	methodologyS := ui.UseState(b.Methodology)
+	// Tracked categories (multi-category budgets), seeded from the budget's current set.
+	trackSeed := make(map[string]bool)
+	for _, id := range b.TrackedCategoryIDs() {
+		trackSeed[id] = true
+	}
+	trackCats := ui.UseState(trackSeed)
+	toggleTrack := func(id string) {
+		m := trackCats.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			nm[k] = v
+		}
+		nm[id] = !nm[id]
+		trackCats.Set(nm)
+	}
 	customEditVals := ui.UseState(customMapToStrings(b.Custom))
 	topupAmt := ui.UseState("")
 	coverAmtS := ui.UseState(coverDefaultStr)
@@ -361,6 +376,23 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			if defs := app.CustomFieldDefsFor("budget"); len(defs) > 0 {
 				bb.Custom = customValuesToMap(defs, customEditVals.Get())
 			}
+			// Tracked categories: rebuild from the picker (single → CategoryID, many →
+			// CategoryIDs). If the user cleared every box, keep the existing category
+			// rather than leave the budget tracking nothing.
+			var sel []string
+			for _, c := range app.Categories() {
+				if c.Kind == domain.KindExpense && trackCats.Get()[c.ID] {
+					sel = append(sel, c.ID)
+				}
+			}
+			if len(sel) > 0 {
+				bb.CategoryID = sel[0]
+				if len(sel) > 1 {
+					bb.CategoryIDs = sel
+				} else {
+					bb.CategoryIDs = nil
+				}
+			}
 			if err := app.PutBudget(bb); err != nil {
 				errS.Set(err.Error())
 				return
@@ -586,6 +618,9 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
 			})),
+		// Tracked categories: pick the 1..n categories this budget counts.
+		labeledField(uistate.T("budgets.catsField"),
+			ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: trackCats.Get(), OnToggle: toggleTrack, ExcludeBudgetID: props.BudgetID})),
 		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
 			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 			Span(uistate.T("budgets.rollover")),

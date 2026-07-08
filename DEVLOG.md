@@ -21,8 +21,14 @@ Also (Cam): the budgets income context derived from the CURRENT partial month, w
 under-reports. Shifted it to the last FULL month (`dateutil.AddMonths(ms, -1)`) and
 relabelled "Income (last month)". Configured income still wins.
 
-Next (Cam follow-ups this session): add the multi-category widget to the add + edit
-budget forms, and simplify the modal UX (frontend-design skill) — it reads a touch busy.
+Follow-ups (done): extracted a reusable `budgetCategoryPicker` component — a search box
+over a clean one-line checklist (checkbox + name, subtle right-aligned italic "also in
+<budget>" overlap tag) — and used it in the kebab modal, the add form ("Also track
+(optional)", additive to the primary/create-new category), and the edit form
+("Categories to track"). The frontend-design pass cut the busyness: dropped the intro
+paragraph, made the search the single strong element, and de-emphasised the overlap
+notes. Screenshot-validated all three surfaces; e2e covers search-filters-list + the
+add-form embed.
 
 ## 2026-07-08 — Auto-link future bill payments (via the rules engine)
 
