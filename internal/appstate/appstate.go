@@ -936,7 +936,18 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 		return t
 	}
 	rs := a.transactionAutoRules()
-	r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
+	td := rules.NewTxnDate(t.Date)
+	// The bill-account action is applied INDEPENDENTLY of the primary (category) match:
+	// the first matching rule that sets a bill account wins, so an auto-link rule isn't
+	// shadowed by an earlier rule whose only job is a category/tag. Applied only when the
+	// transaction has no bill link yet — a manual link is never overwritten.
+	if t.BillAccountID == "" {
+		if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td,
+			func(r rules.Rule) bool { return r.SetBillAccountID != "" }); br != nil {
+			t.BillAccountID = br.SetBillAccountID
+		}
+	}
+	r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td)
 	if r == nil {
 		return t
 	}
@@ -951,12 +962,6 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	// raw description while an identical historical one got cleaned.
 	if r.RenameDesc != "" && t.Desc != r.RenameDesc {
 		t.Desc = r.RenameDesc
-	}
-	// Auto-link as a bill payment when the rule carries that action and the transaction
-	// isn't already linked — so imported/entered payments to a known merchant tie to the
-	// account the user first linked one to. A manual link is never overwritten.
-	if r.SetBillAccountID != "" && t.BillAccountID == "" {
-		t.BillAccountID = r.SetBillAccountID
 	}
 	return t
 }
@@ -1970,11 +1975,14 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 			t.Desc = r.RenameDesc
 			changed = true
 		}
-		// Backfill the bill link only onto unlinked transactions — never clobber a link
-		// the user set by hand.
-		if r.SetBillAccountID != "" && t.BillAccountID == "" {
-			t.BillAccountID = r.SetBillAccountID
-			changed = true
+		// The bill link applies independently of the category winner (first matching rule
+		// that sets it), and only onto unlinked transactions — never clobber a manual link.
+		if t.BillAccountID == "" {
+			if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date),
+				func(rr rules.Rule) bool { return rr.SetBillAccountID != "" }); br != nil {
+				t.BillAccountID = br.SetBillAccountID
+				changed = true
+			}
 		}
 		if !changed {
 			continue
@@ -2018,8 +2026,11 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
 			changed = true
 		}
-		if r.SetBillAccountID != "" && t.BillAccountID == "" {
-			changed = true
+		if t.BillAccountID == "" {
+			if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date),
+				func(rr rules.Rule) bool { return rr.SetBillAccountID != "" }); br != nil {
+				changed = true
+			}
 		}
 		if !changed {
 			continue

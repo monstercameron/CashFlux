@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Bill auto-link rules apply reliably alongside category rules (2026-07-08):** the bill-account rule action is now applied independently of the first-match category rule, so an auto-link rule is no longer silently shadowed when another rule (e.g. a category rule for the same merchant) matches first. The first matching rule that sets a bill account wins for that action, on entry, import, and backfill.
+
 ### Added
 - **Auto-link future bill payments to an account (2026-07-08):** the "Link this payment" modal now offers **"Auto-link future \<merchant\> payments"** once you pick an account. Ticking it creates a rule so that future — and **imported** — transactions from that merchant automatically link as bill payments to the same account (matched on the payee, "contains"). Rules gained a new **"Link as bill payment to"** action (visible/editable on the Rules page), applied wherever rules already run — CSV import, document/vision import, manual entry, and the "apply to existing" backfill — and it never overwrites a link you set by hand. Backed by `rules.Rule.SetBillAccountID` and the existing `AutoCategorizeTransaction` path (unit-tested).
 

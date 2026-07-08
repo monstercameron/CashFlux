@@ -74,6 +74,39 @@ func TestAutoLinkBillPayment(t *testing.T) {
 	}
 }
 
+// TestBillActionNotShadowedByCategoryRule proves the bill-account action applies
+// independently of the first-match category rule: an earlier category-only rule that
+// wins the primary match must NOT prevent a later bill-only rule from linking.
+func TestBillActionNotShadowedByCategoryRule(t *testing.T) {
+	app := makeApp(t, domain.RoleOwner)
+	acct := validAccount()
+	if err := app.PutAccount(acct); err != nil {
+		t.Fatalf("put account: %v", err)
+	}
+	if err := app.PutCategory(domain.Category{ID: "cat-home", Name: "Home", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("put category: %v", err)
+	}
+	// Category rule first (lower Order = higher precedence), bill rule second — both
+	// match "acme mortgage".
+	if err := app.PutRule(rules.Rule{ID: "r-cat", Match: "acme mortgage", SetCategoryID: "cat-home", Order: 1}); err != nil {
+		t.Fatalf("put category rule: %v", err)
+	}
+	if err := app.PutRule(rules.Rule{ID: "r-bill", Match: "acme mortgage", SetBillAccountID: acct.ID, Order: 2}); err != nil {
+		t.Fatalf("put bill rule: %v", err)
+	}
+
+	got := app.AutoCategorizeTransaction(domain.Transaction{
+		ID: "t1", AccountID: "checking", Date: time.Now(),
+		Desc: "ACME MORTGAGE 0091", Amount: money.Money{Amount: -120000, Currency: "USD"},
+	})
+	if got.CategoryID != "cat-home" {
+		t.Errorf("category = %q, want cat-home (first-match rule wins category)", got.CategoryID)
+	}
+	if got.BillAccountID != acct.ID {
+		t.Errorf("bill link = %q, want %q (bill action must apply even though the category rule matched first)", got.BillAccountID, acct.ID)
+	}
+}
+
 // TestPutRulePureConditions proves a rule may match by structured conditions
 // alone — a match phrase is only required when there are no conditions.
 func TestPutRulePureConditions(t *testing.T) {

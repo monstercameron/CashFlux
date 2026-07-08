@@ -108,15 +108,30 @@ func FirstMatch(rs []Rule, text string) *Rule {
 // substring. It supersedes FirstMatch at all call-sites that have a full
 // transaction view.
 func FirstMatchFull(rs []Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) *Rule {
+	return FirstMatchFullWhere(rs, payee, desc, amountMinor, accountID, txnDate, nil)
+}
+
+// ruleMatchesFull reports whether one rule matches the full transaction context
+// (structured conditions when present, otherwise the legacy substring Match).
+func ruleMatchesFull(r Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
+	if len(r.Conditions) > 0 {
+		return MatchConditions(r.Conditions, payee, desc, amountMinor, accountID, txnDate)
+	}
+	return matches(payee+" "+desc, r.Match)
+}
+
+// FirstMatchFullWhere returns the first rule that both matches the transaction and
+// satisfies pred (nil pred = any match). It lets a caller pick, independently, the
+// first rule carrying a PARTICULAR action — e.g. the first matching rule that sets a
+// bill account — so that action isn't shadowed by an earlier rule whose only job is a
+// different action (category/tags/rename). Preserves first-match-wins ordering.
+func FirstMatchFullWhere(rs []Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate, pred func(Rule) bool) *Rule {
 	for i := range rs {
-		if len(rs[i].Conditions) > 0 {
-			if MatchConditions(rs[i].Conditions, payee, desc, amountMinor, accountID, txnDate) {
-				return &rs[i]
-			}
-		} else {
-			if matches(payee+" "+desc, rs[i].Match) {
-				return &rs[i]
-			}
+		if pred != nil && !pred(rs[i]) {
+			continue
+		}
+		if ruleMatchesFull(rs[i], payee, desc, amountMinor, accountID, txnDate) {
+			return &rs[i]
 		}
 	}
 	return nil
