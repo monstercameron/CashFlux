@@ -954,6 +954,7 @@ func dashCatchUpCard() ui.Node {
 
 	return Div(
 		css.Class("catchup-card"),
+		Attr("data-testid", "dash-catchup-card"),
 		Attr("role", "complementary"),
 		Attr("aria-label", uistate.T("dashboard.catchUpTitle")),
 		Div(css.Class("catchup-card-body"),

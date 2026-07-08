@@ -3620,8 +3620,60 @@ func registerGenerated() {
 		animation("catchup-fadeslide 220ms var(--wonder-ease-out) both"),
 		animationDelay("80ms"),
 	)
+	// The "While you were away" catch-up card reads as a full-width dashboard tile
+	// (matching the .card / bento tile chrome) rather than an unstyled floating block,
+	// so it sits cleanly above the bento grid instead of breaking its rhythm (C271).
+	rule(".catchup-card",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("1rem"),
+		flexWrap("wrap"),
+		background("var(--bg-card)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius)"),
+		padding("1rem 1.25rem"),
+		marginBottom("1rem"),
+		boxShadow("0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),\n                    inset 0 1px 0 rgba(255,255,255,0.035)"),
+	)
+	rule("[data-theme=\"light\"] .catchup-card",
+		boxShadow("0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),\n                    inset 0 1px 0 rgba(255,255,255,0.7)"),
+	)
+	rule(".catchup-card-body",
+		display("flex"),
+		alignItems("center"),
+		gap("0.75rem"),
+		flex("1"),
+		minWidth("0"),
+	)
+	rule(".catchup-card-icon",
+		flex("none"),
+		fontSize("1.35rem"),
+		lineHeight("1"),
+	)
+	rule(".catchup-card-text",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		minWidth("0"),
+	)
+	rule(".catchup-card-text strong",
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".catchup-card-text p",
+		margin("0"),
+		fontSize("0.85rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".catchup-card-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flex("none"),
+	)
 	rawBlockMedia("(prefers-reduced-motion: no-preference)", "@keyframes catchup-card-in{from { opacity: 0; transform: translateY(10px); }\n          to   { opacity: 1; transform: translateY(0); }}")
-	ruleMedia("(prefers-reduced-motion: no-preference)", "[data-testid=\"dash-catchup-card\"]",
+	ruleMedia("(prefers-reduced-motion: no-preference)", ".catchup-card",
 		animation("catchup-card-in 280ms var(--wonder-ease-out) 60ms both"),
 	)
 	rule(":root",

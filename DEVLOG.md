@@ -1,3 +1,25 @@
+## 2026-07-07 — Dashboard catch-up card wasn't styled (broke the grid)
+
+Cam: the "While you were away" card breaks the dashboard grid — "put it in a
+grid if it wants to stay, do 4 wide." Screenshotted the dashboard to see it, and
+the root cause was blunt: `.catchup-card` (and its child classes) had *zero* CSS
+rules. It rendered as an unstyled block of raw text + buttons floating between the
+hero and the bento grid, so it read as broken against the clean tile cards.
+
+Gave it the `.card`/bento-tile treatment: theme-aware chrome (`--bg-card`,
+`--border`, `--radius`, matching box-shadow + a light-theme shadow override) and a
+flex layout (icon + title/body on the left, actions on the right, wrapping). It's
+block-level so it already spans the full content column — now it reads as a
+full-width (4-wide) tile aligned with the grid. Also noticed the entrance animation
+was dead code (it targeted `[data-testid="dash-catchup-card"]`, which the element
+never carried) — pointed it at `.catchup-card` and added the testid, so the slide-in
+works and the card is selectable in tests.
+
+Verified by injecting the real catch-up markup onto the seeded dashboard (the card
+only renders with unread notifications, which the fixed seed clock doesn't produce)
+and screenshotting: full-width, card chrome, left edge aligned with "Needs
+attention" below. Confirmed the reclassify-net-worth work still builds green.
+
 ## 2026-07-07 — Account type is now editable (reclassify accounts)
 
 Cam wanted to switch an account's type — e.g. a line of credit to a credit card.

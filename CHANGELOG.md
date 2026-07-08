@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Dashboard "While you were away" card no longer breaks the grid (2026-07-07):** the catch-up card had no CSS at all — it rendered as an unstyled block floating between the hero and the bento grid. It now has proper card chrome (theme-aware `--bg-card`/`--border`/`--radius`, box-shadow, light-theme variant) and a flex layout — a clean full-width tile that aligns with the bento grid instead of disrupting it. The dormant entrance animation (which targeted a testid the element never had) now fires too.
+
 ### Added
 - **Account type is editable (2026-07-07):** the account edit form now has an Account type picker, so an account can be reclassified — e.g. a line of credit → a credit card, or an asset ↔ a liability. The class follows the chosen type: the attribute fields shown switch live (credit limit / APR / min-payment for liabilities vs. expected-return / liquidity / lock-until for assets), and on save the fields that don't belong to the new class are cleared so a reclassified account carries no stale data. Combined with the sign-robust net-worth fix below, flipping between asset and liability now updates net worth and the /accounts display correctly.
 
