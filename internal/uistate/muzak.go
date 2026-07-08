@@ -23,8 +23,30 @@ const (
 
 // UseMuzakEnabled returns the shared on/off atom for the background music, seeded
 // from localStorage. Defaults to ON (music plays at low volume until toggled off).
+// The atom is captured so SetMuzakEnabled can drive it from outside a render.
 func UseMuzakEnabled() state.Atom[bool] {
-	return state.UseAtom(muzakAtomID, loadMuzakEnabled())
+	a := state.UseAtom(muzakAtomID, loadMuzakEnabled())
+	capturedMuzakEnabled = a
+	muzakEnabledCaptured = true
+	return a
+}
+
+var (
+	capturedMuzakEnabled state.Atom[bool]
+	muzakEnabledCaptured bool
+)
+
+// SetMuzakEnabled sets the music on/off from OUTSIDE a component render — used by
+// the raw-JS app-lock gate's mute button. It updates the shared atom (so the
+// top-bar toggle and the player-driving effect stay in sync — otherwise the effect
+// would re-apply the stale value and the music would resume) AND persists the
+// choice. The persist always happens; the atom update is a no-op until a component
+// has read the atom once (which the always-rendered top bar does).
+func SetMuzakEnabled(on bool) {
+	PersistMuzakEnabled(on)
+	if muzakEnabledCaptured {
+		capturedMuzakEnabled.Set(on)
+	}
 }
 
 // PersistMuzakEnabled remembers the music on/off choice across reloads.

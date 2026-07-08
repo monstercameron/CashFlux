@@ -235,7 +235,9 @@ func buildAppLockGate(doc js.Value) {
 			}
 		}
 		muzak.Call("setEnabled", !enabled)
-		uistate.PersistMuzakEnabled(!enabled)
+		// Drive the shared atom (not just persist), so the top-bar toggle and the
+		// player effect stay in sync and don't re-enable the music behind the gate.
+		uistate.SetMuzakEnabled(!enabled)
 		refreshLockMute(doc)
 		return nil
 	})

@@ -1,3 +1,24 @@
+## 2026-07-07 — Three bugs: debt-link reload/lock + lock-screen mute state
+
+Cam reported three linked bugs. (1) The /accounts "Manage debts in Debt payoff →"
+link reloaded the whole app instead of navigating, and (2) with app-lock on, that
+reload re-booted into the passcode gate. Both were one cause: the link was a plain
+`<a href>` doing a full page load. Fixed by intercepting the click
+(`ui.UseEvent(Prevent(nav.Navigate(...)))`, declared unconditionally and wired via
+the `If(...)` node form so the hook stays at a stable position) — SPA nav, href
+kept for keyboard/middle-click. e2e confirms: a `window` sentinel survives the
+click and `data-app-ready` stays true, so no reload → no re-lock.
+
+(3) The lock-screen mute toggle "had no state and always played". The app-lock gate
+is raw JS; its mute button called `muzak.setEnabled` + `PersistMuzakEnabled` but
+never touched the `UseMuzakEnabled` atom. So the atom diverged, and the top-bar
+`MuzakToggle` effect (keyed on the atom) could re-apply the stale "on" value and
+resume the music. Added `uistate.SetMuzakEnabled` — a capture-based setter (mirrors
+SetActiveMember) that updates the atom AND persists — and pointed the lock mute at
+it. Now player, atom, storage, and the top-bar toggle all agree; muting on the lock
+screen stays muted. (Couldn't e2e this cleanly — it needs configured muzak tracks +
+an active lock — so it's verified by build + the state-flow reasoning.)
+
 ## 2026-07-07 — Goals: undo last contribution + reset to zero
 
 Cam wants two ⋯-menu actions on goals: undo a contribution and reset the goal to

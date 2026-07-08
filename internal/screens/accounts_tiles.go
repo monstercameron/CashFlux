@@ -554,6 +554,12 @@ func acctListWidget(props acctListProps) ui.Node {
 	activeMemberID := acctActiveMemberID()
 	f := filterAtom.Get()
 
+	// Client-side navigation to /debt for the "Manage debts" link. Declared
+	// unconditionally (stable hook position); it prevents the anchor's default full
+	// page load — which otherwise re-booted the app and, with app-lock on, dropped
+	// the user onto the lock screen.
+	goToDebt := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/debt")) }))
+
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
@@ -701,23 +707,26 @@ func acctListWidget(props acctListProps) ui.Node {
 	// A shortcut to /debt, where liabilities carry the richer payoff surface (min
 	// payment, utilization, payoff order). When the assets-only view hides them, the
 	// link names how many are tucked away (C346); otherwise it's a plain shortcut.
-	var debtLink ui.Node = Fragment()
-	if hasLiab {
-		linkText := uistate.T("accounts.manageDebtLink")
-		testID := "acct-manage-debt"
-		if assetsOnly {
-			linkText = uistate.T("accounts.liabilitiesStub", len(liabs))
-			testID = "acct-liabilities-stub"
-		}
-		debtLink = Div(css.Class(tw.Mt3),
+	// Left-click navigates client-side (goToDebt prevents the full reload); the href
+	// stays for keyboard/middle-click. Built via If (not a Go `if`) so the OnClick
+	// hook is always registered at a stable position.
+	debtLinkText := uistate.T("accounts.manageDebtLink")
+	debtLinkTestID := "acct-manage-debt"
+	if assetsOnly {
+		debtLinkText = uistate.T("accounts.liabilitiesStub", len(liabs))
+		debtLinkTestID = "acct-liabilities-stub"
+	}
+	debtLink := If(hasLiab,
+		Div(css.Class(tw.Mt3),
 			A(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
 				Href(uistate.RoutePath("/debt")),
-				Attr("data-testid", testID),
+				Attr("data-testid", debtLinkTestID),
+				OnClick(goToDebt),
 				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				linkText,
+				debtLinkText,
 			),
-		)
-	}
+		),
+	)
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
