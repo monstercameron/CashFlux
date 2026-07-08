@@ -1,3 +1,30 @@
+## 2026-07-07 — Transactions: assign-to-member, User column, show/hide columns
+
+Cam wanted, in one thread: a bulk "assign to user" on selected transactions, a User
+column in the ledger, and a flip modal to show/hide columns. Built all three.
+
+Assign: `Transaction.MemberID` already exists (per-txn edit sets it), so the bulk
+bar gets a member picker + Assign button mirroring the recategorize op (new
+`UseTxnBulkMember` atom, undoable snapshot). Column: the engine table is hydrated
+from a typed Frame with no member column, so I resolve member id → name in the row
+builder and pass it through `txnFrameRowProps`.
+
+Show/hide columns: a persisted `uistate.TxnCols` (Amount/Account/Category/Source/
+User; Date + Description are the row's identity and always show) with an atom, a
+loader/persist, and a modal-open atom. The tricky part is the header/cell coupling
+— the DataTable header list and each row's `<td>`s must stay positionally aligned —
+so both build their optional columns from the SAME `TxnCols` in the same order via
+`If(...)`. A "Columns" toolbar button opens the flip modal.
+
+The one real snag (caught by e2e + a screenshot): I first rendered the flip modal
+from inside the toolbar tile, and the tile's CSS transform mis-positioned and
+CLIPPED it — the User checkbox was below the fold, so the click timed out. Fixed by
+the established shell-root pattern: exported `screens.TxnColumnsBody` and mounted a
+new `app.TxnColumnsHost` beside the other modal hosts in shell.go, wrapping the body
+in the FlipPanel there. Re-ran e2e green: User column present, bulk assign populates
+it ("Marcus Hartley"), and toggling User in the (now-centered) modal drops the
+column. Full native suite green.
+
 ## 2026-07-07 — Three bugs: debt-link reload/lock + lock-screen mute state
 
 Cam reported three linked bugs. (1) The /accounts "Manage debts in Debt payoff →"

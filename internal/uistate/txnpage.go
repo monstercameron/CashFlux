@@ -17,6 +17,8 @@
 package uistate
 
 import (
+	"encoding/json"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/GoWebComponents/v4/state"
 )
@@ -25,10 +27,58 @@ const (
 	txnSelectionAtomID = "transactions:selection"
 	txnSelAnchorAtomID = "transactions:selAnchor"
 	txnBulkCatAtomID   = "transactions:bulkCat"
+	txnBulkMemAtomID   = "transactions:bulkMember"
 	txnViewAtomID      = "transactions:view"
 	txnUndoAtomID      = "transactions:undo"
 	txnPreviewAtomID   = "transactions:preview"
+	txnColsAtomID      = "transactions:cols"
+	txnColsModalAtomID = "transactions:colsModal"
+	txnColsStoreID     = "cashflux:txn-cols"
 )
+
+// TxnCols selects which optional ledger columns are visible. Date and Description
+// are the row's identity and always shown, so they are not toggleable here.
+type TxnCols struct {
+	Amount   bool `json:"amount"`
+	Account  bool `json:"account"`
+	Category bool `json:"category"`
+	Source   bool `json:"source"`
+	User     bool `json:"user"`
+}
+
+// DefaultTxnCols shows every optional column (the ledger's historical layout, plus
+// the new User column).
+func DefaultTxnCols() TxnCols {
+	return TxnCols{Amount: true, Account: true, Category: true, Source: true, User: true}
+}
+
+// UseTxnCols returns the shared atom holding the ledger's column visibility,
+// seeded from localStorage. The table tile reads it; the columns modal writes it.
+func UseTxnCols() state.Atom[TxnCols] {
+	return state.UseAtom(txnColsAtomID, loadTxnCols())
+}
+
+// PersistTxnCols remembers the column visibility across reloads.
+func PersistTxnCols(c TxnCols) {
+	if b, err := json.Marshal(c); err == nil {
+		SettingKVSet(txnColsStoreID, string(b))
+	}
+}
+
+func loadTxnCols() TxnCols {
+	raw := SettingKVGet(txnColsStoreID)
+	if raw == "" {
+		return DefaultTxnCols()
+	}
+	c := DefaultTxnCols()
+	_ = json.Unmarshal([]byte(raw), &c)
+	return c
+}
+
+// UseTxnColsModalOpen returns the shared atom selecting whether the "show/hide
+// columns" flip modal is open. The toolbar's Columns button sets it; the host
+// tile renders the flip modal when true.
+func UseTxnColsModalOpen() state.Atom[bool] { return state.UseAtom(txnColsModalAtomID, false) }
 
 // TxnViewLedger / Import / Duplicates are the mutually exclusive sub-views the
 // transactions surface can show in its main tile slot. Ledger is the default.
@@ -62,6 +112,10 @@ func UseTxnSelAnchor() state.Atom[string] { return state.UseAtom(txnSelAnchorAto
 // UseTxnBulkCat returns the shared atom holding the category id chosen in the
 // bulk-action tile's "recategorize to" picker (empty = uncategorized).
 func UseTxnBulkCat() state.Atom[string] { return state.UseAtom(txnBulkCatAtomID, "") }
+
+// UseTxnBulkMember returns the shared atom holding the member id chosen in the
+// bulk-action tile's "assign to" picker (empty = nobody / unassigned).
+func UseTxnBulkMember() state.Atom[string] { return state.UseAtom(txnBulkMemAtomID, "") }
 
 // UseTxnView returns the shared atom selecting the active sub-view (ledger /
 // import / duplicates). The toolbar tile toggles it; the host swaps which tile

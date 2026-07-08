@@ -275,6 +275,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	anchorAtom := uistate.UseTxnSelAnchor()
 	previewAtom := uistate.UseTxnPreview()
+	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
 
 	setPage := func(p int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Page = p }) }
 	setPageSize := func(s int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.PageSize, x.Page = s, 1 }) }
@@ -375,6 +376,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	for _, t := range props.Shown {
 		txByID[t.ID] = t
 	}
+	// Member id → name, for the optional "User" column (the frame carries no member).
+	memberName := make(map[string]string)
+	for _, m := range props.App.Members() {
+		memberName[m.ID] = m.Name
+	}
 
 	sel := selAtom.Get()
 
@@ -405,7 +411,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			}
 		}
 		return txnFrameRowProps{
-			ID:         rid,
+			ID: rid,
 			// .UTC() is load-bearing: txn dates are UTC-midnight calendar dates
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
 			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
@@ -417,10 +423,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Account:    accCol.Str(i),
 			Category:   cat,
 			Source:     srcCol.Str(i),
+			Member:     memberName[txByID[rid].MemberID],
 			Cleared:    cleared,
 			Selected:   sel[rid],
 			Receipts:   nAtt,
 			Attachment: firstAtt,
+			Vis:        colVis,
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -453,14 +461,28 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	case total == 0:
 		tableBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
 	default:
+		// Header columns, built to match the row cells' conditional set exactly (same
+		// order): Select + Date + Description are always shown; the rest follow the
+		// user's column-visibility choice.
 		cols := []uiw.Column{
 			{Head: Span(css.Class(tw.SrOnly), "Select")},
 			{Label: "Date", SortKey: "date"},
-			{Label: "Amount", SortKey: "amount", Class: "td-amount"},
-			{Label: "Description", SortKey: "payee"},
-			{Label: "Account", SortKey: "account"},
-			{Label: "Category", SortKey: "category"},
-			{Label: "Source", SortKey: "source"},
+		}
+		if colVis.Amount {
+			cols = append(cols, uiw.Column{Label: "Amount", SortKey: "amount", Class: "td-amount"})
+		}
+		cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee"})
+		if colVis.Account {
+			cols = append(cols, uiw.Column{Label: "Account", SortKey: "account"})
+		}
+		if colVis.Category {
+			cols = append(cols, uiw.Column{Label: "Category", SortKey: "category"})
+		}
+		if colVis.Source {
+			cols = append(cols, uiw.Column{Label: "Source", SortKey: "source"})
+		}
+		if colVis.User {
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser")})
 		}
 		dtp := uiw.DataTableProps{
 			Class:       "txn-table",
@@ -516,7 +538,9 @@ type txnFrameRowProps struct {
 	Desc           string
 	Account        string
 	Category       string
-	Source         string // provenance label ("Manual"/"Imported"/…, "—" if unset)
+	Source         string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
+	Member         string          // assigned household member's name ("" if unassigned)
+	Vis            uistate.TxnCols // which optional columns to render (must match the header)
 	Cleared        bool
 	Selected       bool
 	Receipts       int                  // attachment count (drives the paperclip)
@@ -564,18 +588,31 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		srcClass += " text-dim"
 	}
 
+	// Cells are rendered in the same conditional order as the table header
+	// (transactions_widget.go's `cols`): Select, Date, [Amount], Description,
+	// [Account], [Category], [Source], [User]. A muted em dash marks an unassigned
+	// member so the User column reads as "nobody" rather than blank.
+	member := props.Member
+	if strings.TrimSpace(member) == "" {
+		member = "—"
+	}
+	memClass := "td-user"
+	if member == "—" {
+		memClass += " text-dim"
+	}
 	return Tr(ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), OnClick(open),
 		Td(OnClick(stop),
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("transactions.selectRow", props.Desc)), CheckedIf(props.Selected), OnClick(selToggle))),
 		Td(props.Date),
-		Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount),
+		If(props.Vis.Amount, Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
 		Td(props.Desc,
 			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
 				Attr("data-testid", "txn-row-receipt"), OnClick(view),
 				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts))))),
-		Td(props.Account),
-		Td(props.Category),
-		Td(ClassStr(srcClass), props.Source),
+		If(props.Vis.Account, Td(props.Account)),
+		If(props.Vis.Category, Td(props.Category)),
+		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
+		If(props.Vis.User, Td(ClassStr(memClass), member)),
 	)
 }

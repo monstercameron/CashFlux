@@ -89,6 +89,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	filterAtom := uistate.UseTxFilter()
 	viewAtom := uistate.UseTxnView()
 	selAtom := uistate.UseTxnSelection()
+	colsModalAtom := uistate.UseTxnColsModalOpen()
+	openCols := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
 
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
@@ -343,6 +345,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(onShowImport), Text(importBtnLabel)),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(onShowDuplicates), Text(dupBtnLabel)),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-columns-btn"), Title(uistate.T("transactions.columnsTitle")), OnClick(openCols), uistate.T("transactions.columns")),
 		},
 	})
 
@@ -380,6 +383,39 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	})
 }
 
+// TxnColumnsBody is the body of the "show / hide columns" flip modal: a checkbox
+// per optional ledger column, writing the persisted visibility atom so the table
+// re-renders in step. Date and Description are the row's identity and always show,
+// so they aren't offered. It is mounted at the SHELL ROOT (by the app package's
+// TxnColumnsHost) rather than inside the toolbar tile, because a tile's CSS
+// transform would otherwise mis-position and clip the fixed modal (C-modals).
+func TxnColumnsBody(_ struct{}) ui.Node {
+	colsAtom := uistate.UseTxnCols()
+	cols := colsAtom.Get()
+	apply := func(c uistate.TxnCols) { colsAtom.Set(c); uistate.PersistTxnCols(c); uistate.BumpDataRevision() }
+
+	amount := ui.UseEvent(func() { c := colsAtom.Get(); c.Amount = !c.Amount; apply(c) })
+	account := ui.UseEvent(func() { c := colsAtom.Get(); c.Account = !c.Account; apply(c) })
+	category := ui.UseEvent(func() { c := colsAtom.Get(); c.Category = !c.Category; apply(c) })
+	source := ui.UseEvent(func() { c := colsAtom.Get(); c.Source = !c.Source; apply(c) })
+	user := ui.UseEvent(func() { c := colsAtom.Get(); c.User = !c.User; apply(c) })
+
+	row := func(label, testID string, on bool, onClick ui.Handler) ui.Node {
+		return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"padding": "0.35rem 0", "cursor": "pointer"}),
+			Input(Type("checkbox"), Attr("data-testid", testID), CheckedIf(on), OnClick(onClick)),
+			Span(label),
+		)
+	}
+	return Div(css.Class(tw.FlexCol),
+		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("transactions.columnsHint")),
+		row(uistate.T("transactions.colAmount"), "col-toggle-amount", cols.Amount, amount),
+		row(uistate.T("transactions.colAccount"), "col-toggle-account", cols.Account, account),
+		row(uistate.T("transactions.colCategory"), "col-toggle-category", cols.Category, category),
+		row(uistate.T("transactions.colSource"), "col-toggle-source", cols.Source, source),
+		row(uistate.T("transactions.colUser"), "col-toggle-user", cols.User, user),
+	)
+}
+
 // txnBulkBarProps carries the app the bulk tile mutates.
 type txnBulkBarProps struct {
 	App *appstate.App
@@ -394,6 +430,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	anchorAtom := uistate.UseTxnSelAnchor()
 	bulkCatAtom := uistate.UseTxnBulkCat()
+	bulkMemAtom := uistate.UseTxnBulkMember()
 	undoAtom := uistate.UseTxnUndo()
 
 	clearSel := func() {
@@ -453,6 +490,30 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		uistate.BumpDataRevision()
 	}))
 
+	bulkAssignMember := ui.UseEvent(Prevent(func() {
+		sel := selAtom.Get()
+		mid := bulkMemAtom.Get()
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && t.MemberID != mid {
+				prior = append(prior, t)
+			}
+		}
+		for _, t := range app.Transactions() {
+			if !sel[t.ID] || t.MemberID == mid {
+				continue
+			}
+			t.MemberID = mid
+			if err := app.PutTransaction(t); err != nil {
+				uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
+			}
+		}
+		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpAssigned", len(prior)), Prior: prior})
+		clearSel()
+		bulkMemAtom.Set("")
+		uistate.BumpDataRevision()
+	}))
+
 	exportSelected := ui.UseEvent(Prevent(func() {
 		sel := selAtom.Get()
 		if len(sel) == 0 {
@@ -505,6 +566,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 
 	bulkCatOpts := withAllOption(uistate.T("transactions.bulkNoCategory"),
 		uiw.OptionsFrom(app.Categories(), func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
+	bulkMemOpts := withAllOption(uistate.T("transactions.bulkNoMember"),
+		uiw.OptionsFrom(app.Members(), func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
 
 	n := len(selAtom.Get())
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
@@ -514,6 +577,11 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			OnChange: func(v string) { bulkCatAtom.Set(v) },
 		}),
 		actionBtn(uistate.T("transactions.applyCategory"), uistate.T("transactions.applyCategoryTitle"), "btn", "", bulkRecategorize),
+		If(len(app.Members()) > 0, uiw.SelectInput(uiw.SelectInputProps{
+			Options: bulkMemOpts, Selected: bulkMemAtom.Get(), AriaLabel: uistate.T("transactions.memberToAssign"), TestID: "bulk-member-select",
+			OnChange: func(v string) { bulkMemAtom.Set(v) },
+		})),
+		If(len(app.Members()) > 0, actionBtn(uistate.T("transactions.assignMember"), uistate.T("transactions.assignMemberTitle"), "btn", "bulk-assign-member", bulkAssignMember)),
 		actionBtn(uistate.T("transactions.markCleared"), uistate.T("transactions.markClearedTitle"), "btn", "", bulkMarkCleared),
 		actionBtn(uistate.T("transactions.markUncleared"), uistate.T("transactions.markUnclearedTitle"), "btn", "", bulkMarkUncleared),
 		actionBtn(uistate.T("transactions.exportSelected"), uistate.T("transactions.exportSelectedTitle"), "btn", "bulk-export-selected", exportSelected),

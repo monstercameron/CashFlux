@@ -254,6 +254,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(QuickAddHost),
 		uic.CreateElement(AddHost),
 		uic.CreateElement(TxnEditHost),
+		uic.CreateElement(TxnColumnsHost),
 		uic.CreateElement(AccountEditHost),
 		uic.CreateElement(BudgetEditHost),
 		uic.CreateElement(GoalEditHost),
