@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Auto budget: suggest monthly budgets from your spending (2026-07-08):** a new ✦ **Auto budget** button on the Budgets page opens a review modal that learns a suggested monthly budget for each expense category from your history, and shows each with a **slider** so you can tune the target up or down before creating them. Two methods: **Recent** (the Smart, free take — averages your last 3 months) and **Healthy average** (the Smart+ take — reviews 6 months and drops one-off spikes for a sustainable target you can actually keep). Categories that already have a monthly budget are flagged and left unticked so nothing is overwritten by accident; a running total and a per-category "% of avg" readout keep the adjustment legible. Save creates or updates the budgets in one go. Deterministic and on-device (no AI) — backed by the pure `budgeting.SuggestBudgets`/`HealthyLimit` helpers (unit-tested) and catalogued as SMART-B11 / SMART-B12.
+
 ### Fixed
 - **Filtering transactions by an account now includes payments linked to it (2026-07-08):** filtering by an account showed only transactions *booked on* it (AccountID). A bill payment is booked on the account the money leaves (e.g. checking) and linked to the account it pays (e.g. an HOA or a loan), so filtering by that linked account returned nothing even right after linking a payment. The account filter now matches a transaction on the account **or** linked to it as a bill payment, so those payments show up (verified end-to-end + unit-tested).
 

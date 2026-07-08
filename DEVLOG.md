@@ -1,3 +1,39 @@
+## 2026-07-08 — Auto budget (Smart + Smart+)
+
+New feature (Cam): analyze transactions, suggest a monthly budget per category, show
+them with sliders to adjust. He clarified the tiering: the Smart (free) take is "auto
+budget" from recent spend; the Smart+ take reviews spend over time and picks a "healthy
+average." Built both.
+
+Logic (reused + extended): `budgeting.SuggestLimit` already computes a per-category
+trailing-mean, excluding the current partial month and averaging over the span from the
+oldest month-with-spend. Added `HealthyLimit` — same span logic but DROPS the single
+highest month before averaging (a holiday / annual bill doesn't inflate the everyday
+target), and `SuggestBudgets(cats, txns, now, months, rates, method)` dispatching between
+the two. Pure + unit-tested (incl. a spike case: recent mean 31666 vs healthy 20000).
+
+UI: shell-root flip modal `AutoBudgetBody` + `AutoBudgetHost` driven by a
+`UseBudgetAutoOpen` bool atom, opened from a new ✦ "Auto budget" toolbar button. A
+Segmented "Recent / Healthy average" toggle (window 3 vs 6 months) recomputes live; the
+slider %s + include flags (keyed by category) carry across the switch, so only the
+learned baselines change. Each row is its own component (per-row slider/checkbox hooks
+never in a loop) with a 0–200% slider — percentage-of-average so tuning is uniform
+regardless of magnitude — the target figure updating live. Categories with an existing
+monthly budget are flagged + unticked (Save updates-or-creates, never silently
+overwrites). Registered SMART-B11 (Auto budget) + SMART-B12 (Healthy average), both Free
+tier (deterministic; the catalog's only tiers are Free/AI, so "Smart+" here means
+sophistication, not cost).
+
+Design pass (frontend-design skill): first cut showed "$X/mo" twice (target == avg at
+100%), so the slider's effect was invisible until moved. Reworked the control line to a
+"100% of avg $X/mo" readout that turns accent-green + bold when tuned off 100% — the
+up/down adjustment is now legible, and the big display-serif target stays the hero.
+Screenshot-verified both methods (healthy targets are visibly lower — Groceries $635 →
+$527 with the spike dropped) and a tuned 50% row.
+
+e2e: open the modal, tune a slider (amount changes), switch to Healthy (intro 3→6
+months), save (toast + modal closes).
+
 ## 2026-07-08 — Account filter includes linked bill payments
 
 Cam linked a bill to his HOA account, filtered transactions by that account, and got

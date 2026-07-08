@@ -229,6 +229,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 
 	// Open the add-budget modal (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
+	// Open the "Auto budget" review modal (suggests budgets from spending history).
+	autoBudgetAtom := uistate.UseBudgetAutoOpen()
+	openAutoBudget := ui.UseEvent(Prevent(func() { autoBudgetAtom.Set(true) }))
 	// C112: switch the budgeting methodology right from /budgets.
 	onMethod := ui.UseEvent(func(e ui.Event) {
 		s := app.Settings()
@@ -308,6 +311,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		// "+ Add budget" last so it clearly outranks the ghost controls.
 		Div(css.Class("budgets-toolbar-actions"),
 			smartSectionAction(smartSettings),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
+				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
+				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgets-template-503020"),
 				Title(uistate.T("budgets.tmplTitle")), OnClick(apply503020), uistate.T("budgets.tmpl503020")),
 			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),

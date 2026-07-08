@@ -8496,6 +8496,98 @@ func registerGenerated() {
 		margin(".15rem 0 .35rem"),
 		gap(".55rem"),
 	)
+	// Auto-budget modal: a scrollable list of tunable per-category suggestions, each a
+	// checkbox + name/slider + a live monthly figure, then a Cancel/Save footer.
+	rule(".autobudget-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap(".2rem"),
+		overflowY("auto"),
+		maxHeight("46vh"),
+		margin("0 -.25rem"),
+		padding("0 .25rem"),
+	)
+	rule(".autobudget-row",
+		display("grid"),
+		gridTemplateColumns("auto 1fr auto"),
+		alignItems("center"),
+		gap(".7rem"),
+		padding(".5rem .3rem"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".autobudget-row.is-off",
+		opacity(".5"),
+	)
+	rule(".autobudget-pick",
+		display("flex"),
+		alignItems("center"),
+	)
+	rule(".autobudget-main",
+		display("flex"),
+		flexDirection("column"),
+		gap(".2rem"),
+		minWidth("0"),
+	)
+	rule(".autobudget-head",
+		display("flex"),
+		alignItems("center"),
+		gap(".45rem"),
+	)
+	rule(".autobudget-name",
+		fontWeight("600"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	rule(".autobudget-tag",
+		fontSize(".7rem"),
+		textTransform("uppercase"),
+		letterSpacing(".04em"),
+		padding(".05em .4em"),
+		borderRadius("4px"),
+		border("1px solid var(--border)"),
+	)
+	rule(".autobudget-controls",
+		display("flex"),
+		alignItems("center"),
+		gap(".6rem"),
+	)
+	rule(".autobudget-slider",
+		flex("1 1 auto"),
+		width("auto"),
+		minWidth("0"),
+	)
+	rule(".autobudget-readout",
+		fontSize(".78rem"),
+		whiteSpace("nowrap"),
+		flexShrink("0"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+		minWidth("8.5rem"),
+		textAlign("right"),
+	)
+	rule(".autobudget-readout.is-tuned",
+		color("var(--accent)"),
+		fontWeight("600"),
+	)
+	rule(".autobudget-amt",
+		fontSize("1.05rem"),
+		fontWeight("600"),
+		whiteSpace("nowrap"),
+		justifySelf("end"),
+	)
+	rule(".autobudget-footer",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("flex-end"),
+		gap(".5rem"),
+		marginTop("auto"),
+		paddingTop(".6rem"),
+	)
+	rule(".autobudget-total",
+		marginRight("auto"),
+		fontSize(".9rem"),
+	)
 	rule(".cover-src-name",
 		fontWeight("600"),
 	)

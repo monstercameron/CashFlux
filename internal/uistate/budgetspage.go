@@ -77,6 +77,11 @@ func UseGoalsShowFormulas() state.Atom[bool] { return state.UseAtom("goals:showF
 // aggregate atoms/molecules (credit_utilization, min_payments_total, …).
 func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFormulas", false) }
 
+// UseBudgetAutoOpen returns the shared atom controlling whether the "Auto budget" review
+// flip modal is open. The budgets toolbar's Auto-budget button sets it; the shell-root
+// AutoBudgetHost renders the modal when true.
+func UseBudgetAutoOpen() state.Atom[bool] { return state.UseAtom("budgets:autoOpen", false) }
+
 // UseInvestShowFormulas returns the shared atom for the /investments "Portfolio metrics"
 // formula tile reveal — the investments analog of the other formula toggles.
 func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:showFormulas", false) }

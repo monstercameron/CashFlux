@@ -93,6 +93,8 @@ var catalog = []Feature{
 	rule("SMART-B8", PageBudgets, "Safe-to-spend indicator", "One number: discretionary cash genuinely free after commitments."),
 	rule("SMART-B9", PageBudgets, "Budget goal pacing nudges", "Show whether you're ahead or behind pace and the adjustment to fix it."),
 	rule("SMART-B10", PageBudgets, "Uncovered-spending finder", "Surface recurring spending with no budget category yet."),
+	rule("SMART-B11", PageBudgets, "Auto budget", "Suggest a monthly budget per category from your recent spending, tunable with a slider before you create them."),
+	rule("SMART-B12", PageBudgets, "Healthy budget average", "Review each category's spending over time and suggest a sustainable monthly target that ignores one-off spikes."),
 
 	// ── Goals ─────────────────────────────────────────────────────────────────
 	rule("SMART-G1", PageGoals, "Suggested contribution amount", "Compute the per-month amount needed and check it against your slack."),

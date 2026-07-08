@@ -240,3 +240,33 @@ test.describe("account filter includes linked payments", () => {
     await expect(app.locator(`[data-testid="${rowId}"]`)).toBeVisible();
   });
 });
+
+test.describe("auto budget", () => {
+  test("suggests budgets from history, tunes with sliders, switches method, and saves", async ({ app }) => {
+    await nav(app, "/budgets");
+    await app.getByTestId("budgets-autobudget").click();
+    await expect(app.getByTestId("autobudget-rows")).toBeVisible();
+    await app.waitForTimeout(650); // FlipPanel flip
+
+    const rows = app.locator('[data-testid^="autobudget-row-"]');
+    expect(await rows.count()).toBeGreaterThan(0);
+
+    // Tune the first category to 50% and confirm its target amount changes.
+    const firstAmt = app.locator('[data-testid^="autobudget-amt-"]').first();
+    const before = (await firstAmt.innerText()).trim();
+    await app.locator('[data-testid^="autobudget-slider-"]').first().fill("50");
+    await expect(firstAmt).not.toHaveText(before);
+
+    // The Smart+ "Healthy average" method reviews a longer window (3→6 months).
+    await expect(app.getByTestId("autobudget-intro")).toContainText(/3 months/);
+    await app.getByTestId("autobudget-method-healthy").click();
+    await expect(app.getByTestId("autobudget-intro")).toContainText(/6 months/);
+
+    // Ensure at least one category is selected, then save.
+    const firstPick = app.locator('[data-testid^="autobudget-pick-"]').first();
+    if (!(await firstPick.isChecked())) await firstPick.click();
+    await app.getByTestId("autobudget-save").click();
+    await expect(app.locator("body")).toContainText(/saved/i, { timeout: 15000 });
+    await expect(app.getByTestId("autobudget-rows")).toHaveCount(0);
+  });
+});
