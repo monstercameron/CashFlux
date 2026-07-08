@@ -1,3 +1,17 @@
+## 2026-07-08 — Bill payments link to any account
+
+Cam: "I want to link a payment to any account — don't filter accounts." Dropped the
+liability-only filter in the Link-payment modal's bill picker (`liabilities` →
+`billAccts` = all non-archived accounts), and made the copy account-neutral. Because a
+bill linked to a non-liability wouldn't surface on the Debt page (which only lists
+debts), added the same "Last bill $X · N →" payment-check line to the /accounts rows
+(`AccountRow` gains `BillPayment` + `OnViewBills`; `accounts_tiles.go` wires
+`ledger.BillPaymentForAccount` + a new `acctViewBillPayments` drill at both row sites).
+So the link is now visible on every account, and still drills to the backing txns.
+The Debt page keeps its liability-specific "monthly payment vs minimum" framing.
+Regression: split the bill test into two — one links to any account and checks
+/accounts, one links to a liability (name read off /debt) and checks /debt.
+
 ## 2026-07-08 — Subscription payment linkage + a real Link-payment modal
 
 Increment 2 of Cam's payment-linkage request, plus the UI cleanup he asked for. Two

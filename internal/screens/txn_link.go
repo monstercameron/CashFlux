@@ -74,14 +74,15 @@ func TxnLinkBody(_ struct{}) ui.Node {
 				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
 	}
 
-	// Active, non-archived liabilities — the bill-payment targets — plus an id→name
-	// map (for the summary's account line and the effect preview).
-	var liabilities []domain.Account
+	// Bill-payment targets: ANY non-archived account (not just liabilities) — a bill can
+	// be paid toward any account the user tracks. Also build an id→name map for the
+	// summary's account line and the effect preview.
+	var billAccts []domain.Account
 	acctName := make(map[string]string)
 	for _, ac := range app.Accounts() {
 		acctName[ac.ID] = ac.Name
-		if ac.Class == domain.ClassLiability && !ac.Archived {
-			liabilities = append(liabilities, ac)
+		if !ac.Archived {
+			billAccts = append(billAccts, ac)
 		}
 	}
 
@@ -154,11 +155,11 @@ func TxnLinkBody(_ struct{}) ui.Node {
 				P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.subHint")))
 		}
 	} else {
-		if len(liabilities) == 0 {
+		if len(billAccts) == 0 {
 			picker = P(css.Class("muted"), Attr("data-testid", "txnlink-no-debts"), uistate.T("txnlink.noDebts"))
 		} else {
 			opts := []uiw.SelectOption{{Value: "", Label: uistate.T("txnlink.noneBill")}}
-			for _, a := range liabilities {
+			for _, a := range billAccts {
 				opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
 			}
 			picker = Div(css.Class(tw.FlexCol, tw.Gap15),

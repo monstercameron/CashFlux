@@ -249,6 +249,18 @@ func acctViewTransactions(nav router.Navigator, txFilter state.Atom[uistate.TxFi
 	}
 }
 
+// acctViewBillPayments drills to the transactions the user marked as bill payments
+// toward an account (Transaction.BillAccountID) — the proof behind the row's
+// "last bill" line.
+func acctViewBillPayments(nav router.Navigator, txFilter state.Atom[uistate.TxFilter]) func(string) {
+	return func(accountID string) {
+		f := uistate.TxFilter{BillAccount: accountID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+}
+
 // --- acct-summary ---------------------------------------------------------------
 
 // acctSummaryWidget is the net-worth-dominant summary tile: a hero net-worth figure
@@ -633,6 +645,7 @@ func acctListWidget(props acctListProps) ui.Node {
 	accDefs := app.CustomFieldDefsFor("account")
 	cbs := buildAcctRowCallbacks(app)
 	viewTxns := acctViewTransactions(nav, txFilter)
+	viewBills := acctViewBillPayments(nav, txFilter)
 
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
@@ -644,6 +657,7 @@ func acctListWidget(props acctListProps) ui.Node {
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
 			SmartSettings: smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
 			AccountDefs: accDefs,
+			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -766,6 +780,7 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	accDefs := app.CustomFieldDefsFor("account")
 	cbs := buildAcctRowCallbacks(app)
 	viewTxns := acctViewTransactions(nav, txFilter)
+	viewBills := acctViewBillPayments(nav, txFilter)
 
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
@@ -776,6 +791,7 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
 			ValuationHistory: app.BalanceHistory(ac.ID), AccountDefs: accDefs,
+			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }

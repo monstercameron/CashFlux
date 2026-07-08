@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Link a bill payment to ANY account, not just debts (2026-07-08):** the Link-payment modal's account picker now offers every account, so you can mark a transaction as a bill payment toward a checking, savings, or other account — not only liabilities. Wherever an account appears with a linked bill payment, it shows a "Last bill $X · N →" line that drills to the backing transactions: the **Accounts** page now shows it for every account (previously only the Debt page showed it, for liabilities). Copy is account-neutral ("Which account is this paying?").
+
 ### Added
 - **Link a payment to a subscription, and a cleaner Link-payment modal (2026-07-08):** a transaction's `⋯` menu now has two actions — **Mark as bill payment…** and **Mark as subscription payment…** — that open one **Link this payment** flip modal. The modal leads with the transaction (description, account, and the amount as a display figure), offers a **Bill payment / Subscription** toggle, a single picker for the target debt or subscription, and a live "Links to" preview of exactly what Save will do (both links save together). Marking a subscription payment surfaces on the **Subscriptions** page as a "Last paid $X · N →" line on that subscription's row, drilling to the transactions that back it — the same payment-check the Debt page already gives liabilities. This replaces the previous flat "one menu item per liability" bill list with a scalable, self-explanatory modal. Backed by `Transaction.SubscriptionName`, the pure `ledger.SubscriptionPaymentForName` helper (most-recent by date, sign-robust; unit-tested), and a `txnfilter` subscription criterion; regression-pinned end-to-end for both bill and subscription flows.
 

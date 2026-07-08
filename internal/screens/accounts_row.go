@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -53,6 +54,11 @@ type accountRowProps struct {
 	// entity, passed in so the inline editor can render their inputs and the row can
 	// show their values. Empty = no custom fields configured.
 	AccountDefs []customfields.Def
+	// BillPayment is this account's most recent linked bill payment (any transaction the
+	// user marked as a bill payment toward it). Shown as a "Bill $X · N →" line so the
+	// linkage is visible for every account, not just debts. OnViewBills drills to them.
+	BillPayment ledger.BillPaymentInfo
+	OnViewBills func(string)
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -130,6 +136,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
+	viewBills := ui.UseEvent(Prevent(func() {
+		if props.OnViewBills != nil {
+			props.OnViewBills(a.ID)
+		}
+	}))
 	// The editors (edit / update-balance / reconcile / transfer) open in a flip modal
 	// rendered by the shell-root AccountEditHost (uistate account-editor atom) — not
 	// inline in the row — so the modal centers on the viewport instead of resolving
@@ -195,6 +206,18 @@ func AccountRow(props accountRowProps) ui.Node {
 		}
 	}
 
+	// Bill-payment line: the account's most recent linked bill payment, with a drill to
+	// the payments. Shown for ANY account the user has linked a bill payment to (the
+	// Debt page shows liabilities; this makes the link visible on every account).
+	var billNode ui.Node = Fragment()
+	if props.BillPayment.HasAny {
+		billNode = Span(css.Class("row-meta"), Attr("data-testid", "acct-bill-"+a.ID),
+			uistate.T("accounts.billMeta", fmtMoney(props.BillPayment.Latest)),
+			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-bill-link-"+a.ID),
+				Title(uistate.T("accounts.billLinkTitle")), OnClick(viewBills),
+				uistate.T("accounts.billCount", plural(props.BillPayment.Count, "payment"))))
+	}
+
 	return Div(
 		Div(css.Class("row"),
 			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
@@ -213,6 +236,7 @@ func AccountRow(props accountRowProps) ui.Node {
 				),
 				Span(css.Class("row-meta"), meta),
 				valChange,
+				billNode,
 				// Read-only summary of the account's custom-field values (a compact
 				// "Label: value · …" line), shown only when any are set.
 				If(customSummary(props.AccountDefs, a.Custom) != "",

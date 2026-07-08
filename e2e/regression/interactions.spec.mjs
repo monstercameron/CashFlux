@@ -119,20 +119,40 @@ test.describe("payment linkage", () => {
     await expect(app.getByTestId("txnlink-summary")).toBeVisible();
   }
 
-  test("bill: mark via the flip modal → debt card shows it and drills to it", async ({ app }) => {
+  test("bill: mark via the flip modal → the account (any account) shows it and drills to it", async ({ app }) => {
     await nav(app, "/transactions");
     await openLinkModal(app, "txn-markbill-open");
 
-    // The modal opens on the Bill picker. Pick the first real liability (option 0 is
-    // the "not a bill payment" clear option) and read its account id from the value.
+    // The bill picker offers ANY account (not just liabilities). Pick the first one
+    // (option 0 is the "not a bill payment" clear option) and read its id from the value.
     const select = app.getByTestId("txnlink-bill-select");
     await expect(select).toBeVisible();
     const [acctId] = await select.selectOption({ index: 1 });
     expect(acctId).toBeTruthy();
     await app.getByTestId("txnlink-save").click();
 
-    // The debt card for that liability now shows a bill-payment line, and its link
-    // drills to exactly the one transaction we marked.
+    // The Accounts page shows a bill-payment line on that account (works for any
+    // account, not only debts), and its link drills to exactly the one we marked.
+    await nav(app, "/accounts");
+    await expect(app.locator(`[data-testid="acct-bill-${acctId}"]`)).toBeVisible();
+    await app.locator(`[data-testid="acct-bill-link-${acctId}"]`).click();
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+  });
+
+  test("bill: a liability still shows the payment on the Debt page", async ({ app }) => {
+    // Read a real liability's name off the Debt page so the account we link is a debt.
+    await nav(app, "/debt");
+    const debtName = (await app.locator(".debt-name").first().innerText()).trim();
+    expect(debtName.length).toBeGreaterThan(0);
+
+    await nav(app, "/transactions");
+    await openLinkModal(app, "txn-markbill-open");
+    const select = app.getByTestId("txnlink-bill-select");
+    const [acctId] = await select.selectOption({ label: debtName });
+    expect(acctId).toBeTruthy();
+    await app.getByTestId("txnlink-save").click();
+
     await nav(app, "/debt");
     await expect(app.locator(`[data-testid="debt-bill-${acctId}"]`)).toBeVisible();
     await app.locator(`[data-testid="debt-bill-link-${acctId}"]`).click();
