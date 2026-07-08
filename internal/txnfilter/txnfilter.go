@@ -63,7 +63,10 @@ func DefaultDir(key string) string {
 // localStorage (hence the JSON tags); Cleared is "", "yes", or "no". Sort is one
 // of SortKeys; Dir is Asc or Desc.
 type Criteria struct {
-	Text     string `json:"text,omitempty"`
+	Text string `json:"text,omitempty"`
+	// Account filters to transactions on this account (AccountID) OR linked to it as a
+	// bill payment (BillAccountID), so an account that only receives linked payments
+	// still shows them. Empty = no account filter.
 	Account  string `json:"account,omitempty"`
 	Category string `json:"category,omitempty"`
 	Member   string `json:"member,omitempty"`
@@ -290,7 +293,11 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 	out := make([]domain.Transaction, 0, len(txns))
 	for _, t := range txns {
 		switch {
-		case c.Account != "" && t.AccountID != c.Account:
+		// An account filter matches a transaction booked on the account (AccountID) OR
+		// one linked to it as a bill payment (BillAccountID) — so filtering by an account
+		// that only receives linked bill payments (e.g. an HOA obligation the money is
+		// paid FROM another account) still surfaces those payments.
+		case c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
 		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
 		case c.Category != "" && t.CategoryID != c.Category:

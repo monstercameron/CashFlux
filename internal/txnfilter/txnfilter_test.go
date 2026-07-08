@@ -191,6 +191,23 @@ func TestWithoutClearsOneFilterKeepingSortAndPaging(t *testing.T) {
 	}
 }
 
+func TestAccountFilterIncludesBillPayments(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "x", AccountID: "checking", Amount: money.New(-38000, "USD"), Date: d("2026-06-05")},
+		// An HOA bill paid FROM checking, linked to the HOA account.
+		{ID: "y", AccountID: "checking", BillAccountID: "hoa", Amount: money.New(-38000, "USD"), Date: d("2026-06-06")},
+	}
+	// Filtering by the HOA account surfaces the linked bill payment even though no
+	// transaction is booked ON it.
+	if got := ids(Apply(txns, Criteria{Account: "hoa"})); got != "y" {
+		t.Errorf("account=hoa = %q, want y (the linked bill payment)", got)
+	}
+	// Filtering by checking still shows its own transactions (newest first).
+	if got := ids(Apply(txns, Criteria{Account: "checking"})); got != "yx" {
+		t.Errorf("account=checking = %q, want yx", got)
+	}
+}
+
 func TestApplyFilters(t *testing.T) {
 	all := sample()
 	if got := Apply(all, Criteria{Account: "acc1"}); ids(got) != "ca" {

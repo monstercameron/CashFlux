@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Filtering transactions by an account now includes payments linked to it (2026-07-08):** filtering by an account showed only transactions *booked on* it (AccountID). A bill payment is booked on the account the money leaves (e.g. checking) and linked to the account it pays (e.g. an HOA or a loan), so filtering by that linked account returned nothing even right after linking a payment. The account filter now matches a transaction on the account **or** linked to it as a bill payment, so those payments show up (verified end-to-end + unit-tested).
+
 ## [1.0.6] - 2026-07-08
 
 ### Added

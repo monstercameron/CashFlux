@@ -1,3 +1,15 @@
+## 2026-07-08 — Account filter includes linked bill payments
+
+Cam linked a bill to his HOA account, filtered transactions by that account, and got
+nothing. Root cause: the account filter matched only `t.AccountID`, but a bill payment
+is booked on the paying account (checking) and only *linked* to the target via
+`t.BillAccountID`. Broadened the account criterion: a txn matches when
+`t.AccountID == c.Account || t.BillAccountID == c.Account`. This flows through every
+account-filter entry point (the filter chip, the /accounts and /debt "Transactions"
+drills, all of which set `TxFilter{Account}`). Unit-tested (booked-vs-linked) + e2e:
+link a payment to a debt, drill via the debt card's Transactions button (Account
+filter), confirm the payment — booked on Joint Checking — shows under the debt's filter.
+
 ## 2026-07-08 — Release v1.0.6
 
 Cut v1.0.6: subscription payment linkage + the redesigned Link-payment flip modal,

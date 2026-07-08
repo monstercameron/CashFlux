@@ -215,3 +215,28 @@ test.describe("account class override", () => {
     await expect(app.locator("#main")).not.toContainText("Test HOA Dues");
   });
 });
+
+test.describe("account filter includes linked payments", () => {
+  test("filtering by an account surfaces bill payments linked to it (booked elsewhere)", async ({ app }) => {
+    await nav(app, "/debt");
+    const debtName = (await app.locator(".debt-name").first().innerText()).trim();
+
+    await nav(app, "/transactions");
+    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    await row.scrollIntoViewIfNeeded();
+    const rowId = await row.getAttribute("data-testid");
+    await row.locator('[data-testid^="txn-kebab-"]').click();
+    await row.locator('[data-testid="txn-markbill-open"]').click();
+    await expect(app.getByTestId("txnlink-summary")).toBeVisible();
+    await app.waitForTimeout(600); // past the FlipPanel flip
+    const [acctId] = await app.getByTestId("txnlink-bill-select").selectOption({ label: debtName });
+    await app.getByTestId("txnlink-save").click();
+
+    // The debt card's "Transactions" drill filters by Account:<acctId>. The linked
+    // payment shows even though it's booked on a different account.
+    await nav(app, "/debt");
+    await app.locator(`[data-testid="debt-view-${acctId}"]`).click();
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+    await expect(app.locator(`[data-testid="${rowId}"]`)).toBeVisible();
+  });
+});
