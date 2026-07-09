@@ -982,6 +982,7 @@ type draftRowProps struct {
 	Currency    string            // for accounting-formatting the review amount (C27)
 	Categories  []domain.Category // existing categories, so editing picks a real one (C60)
 	IsDuplicate bool              // G14 §4: row matches an existing transaction — show badge
+	ColorBySign bool              // statement mode: tint the amount by direction (money in/out); off for receipts (all positive line prices)
 	OnRemove    func(int)
 	OnUpdate    func(int, extract.Row)
 }
@@ -1050,53 +1051,80 @@ func DraftRow(props draftRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
-		return Div(css.Class("row"),
-			Form(css.Class("form-grid"), OnSubmit(saveEdit),
+		// A purpose-built editor grid (date · description · amount · category on one
+		// aligned row, actions right-aligned below) rather than the generic auto-fit
+		// form-grid, which wrapped its six controls unpredictably in the modal width.
+		return Div(css.Class("row-edit"),
+			Form(css.Class("draft-edit-grid"), OnSubmit(saveEdit),
 				Input(css.Class("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
 				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
+				Input(css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
 				// Category is a select of existing categories (plus the AI's extracted
 				// value when it doesn't match one) so editing can't introduce an
 				// orphan/typo category on import (C60).
 				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnChange(onCat), draftCategoryOptions(props.Categories, catS.Get())),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Div(css.Class("draft-edit-actions"),
+					Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+				),
 			),
 		)
 	}
 
-	meta := r.Date
-	if r.Category != "" {
-		meta += " · " + r.Category
-	}
 	// Show the amount in accounting style (parentheses for negatives) like the
 	// rest of the app (C27/C2); fall back to the raw string if it won't parse
-	// (e.g. while the AI value is still being corrected).
+	// (e.g. while the AI value is still being corrected). In statement mode, tint
+	// it by direction so money-in and money-out separate at a glance.
 	amtText := r.Amount
-	if props.Currency != "" {
-		if minor, err := money.ParseMinor(strings.TrimSpace(r.Amount), currency.Decimals(props.Currency)); err == nil {
-			amtText = fmtMoney(money.New(minor, props.Currency))
+	amtClass := "amount fig"
+	minor, perr := money.ParseMinor(strings.TrimSpace(r.Amount), currency.Decimals(props.Currency))
+	if props.Currency != "" && perr == nil {
+		amtText = fmtMoney(money.New(minor, props.Currency))
+	}
+	if props.ColorBySign && perr == nil {
+		switch {
+		case minor > 0:
+			amtClass = "amount fig amount-income"
+		case minor < 0:
+			amtClass = "amount fig amount-expense"
 		}
 	}
+
+	// Category state is a primary review task, so surface it as a chip — and when
+	// the AI left it blank (no confident match to an existing category), show a
+	// "+ Category" affordance instead of nothing, so blank rows read as actionable
+	// rather than disappearing.
+	var catNode ui.Node = Fragment()
+	if r.Category != "" {
+		catNode = Span(css.Class("draft-cat-chip"), r.Category)
+	} else {
+		catNode = Button(css.Class("draft-cat-add"), Type("button"),
+			Attr("aria-label", uistate.T("documents.addCategory")),
+			OnClick(startEdit), Span("+ "), uistate.T("documents.category"))
+	}
+
 	return Div(css.Class("row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
-			Span(css.Class("row-meta"), meta),
+			Div(css.Class("draft-subline"),
+				Span(css.Class("row-meta"), r.Date),
+				// G14 §4: amber "Already imported" badge for rows that match an existing
+				// transaction by date+amount — will be skipped on import.
+				If(props.IsDuplicate, Span(css.Class("badge badge-warn"), uistate.T("documents.alreadyImported"))),
+				catNode,
+			),
 		),
-		// G14 §4: amber "Already imported" badge for rows that match an existing
-		// transaction by date+amount — will be skipped on import.
-		If(props.IsDuplicate,
-			Span(css.Class("badge badge-warn"), "Already imported"),
+		Span(css.Class(amtClass), amtText),
+		Div(css.Class("draft-row-actions"),
+			// G14 §4: icon-only edit button (matches the × remove affordance; label
+			// preserved via aria-label for screen readers).
+			Button(css.Class("btn-del"), Type("button"),
+				Attr("aria-label", uistate.T("documents.editRow")),
+				Title(uistate.T("documents.editRow")),
+				OnClick(startEdit),
+				uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
-		Span(css.Class("amount fig"), amtText),
-		// G14 §4: icon-only edit button (matches the × remove affordance; label
-		// preserved via aria-label for screen readers).
-		Button(css.Class("btn-del"), Type("button"),
-			Attr("aria-label", uistate.T("documents.editRow")),
-			Title(uistate.T("documents.editRow")),
-			OnClick(startEdit),
-			uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 	)
 }
 

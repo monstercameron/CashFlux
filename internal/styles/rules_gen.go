@@ -2939,24 +2939,136 @@ func registerGenerated() {
 		height("1px"),
 		background("var(--border, rgba(255,255,255,0.1))"),
 	)
+	// Statement-import review header: a sticky two-tier bar — an in/out/net summary
+	// above the account picker + Import action.
 	rule(".draft-actionbar",
 		position("sticky"),
 		top("0"),
 		zIndex("5"),
 		display("flex"),
+		flexDirection("column"),
+		gap("0.55rem"),
+		padding("0.65rem 0 0.6rem"),
+		margin("0 0 0.4rem"),
+		background("var(--bg-card)"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".draft-actionrow",
+		display("flex"),
 		gap("0.5rem"),
 		alignItems("center"),
-		padding("0.5rem 0"),
-		margin("0.25rem 0 0.5rem"),
-		background("var(--bg-elev, #1a1a1d)"),
-		borderBottom("1px solid var(--border, rgba(255,255,255,0.08))"),
 	)
-	rule(".draft-actionbar .field",
+	rule(".draft-actionrow .field",
 		flex("1 1 auto"),
 		minWidth("0"),
 	)
-	rule(".draft-actionbar .btn",
+	rule(".draft-actionrow .btn",
 		flex("0 0 auto"),
+	)
+	// The money-in / money-out / net summary strip. Net is pushed to the right so it
+	// foots the amount column like a statement's bottom line.
+	rule(".draft-summary",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.35rem 1.4rem"),
+	)
+	rule(".draft-sum-item",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.12rem"),
+	)
+	rule(".draft-sum-item-net",
+		marginLeft("auto"),
+		textAlign("right"),
+	)
+	rule(".draft-sum-label",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".draft-sum-val",
+		fontSize("1.02rem"),
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	rule(".draft-sum-net",
+		fontSize("1.12rem"),
+	)
+	// Ledger layout for the reviewed rows: date/description on the left, a
+	// right-aligned amount column, then the row actions — so a statement's figures
+	// scan like the statement they came from.
+	rule(".draft-ledger .row",
+		display("grid"),
+		gridTemplateColumns("minmax(0, 1fr) auto auto"),
+		alignItems("center"),
+		prop("column-gap", "0.9rem"),
+	)
+	rule(".draft-ledger .row .amount",
+		justifySelf("end"),
+		fontSize("0.95rem"),
+	)
+	rule(".draft-subline",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.35rem"),
+		marginTop("0.15rem"),
+	)
+	rule(".draft-row-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.05rem"),
+	)
+	// Category as a chip on the row; a dashed "+ Category" ghost when the AI left it
+	// blank, so unmapped rows read as an action rather than an absence.
+	rule(".draft-cat-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		lineHeight("1"),
+		padding("0.2rem 0.5rem"),
+		borderRadius("999px"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+		border("1px solid var(--border)"),
+	)
+	rule(".draft-cat-add",
+		display("inline-flex"),
+		alignItems("center"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		lineHeight("1"),
+		padding("0.2rem 0.5rem"),
+		borderRadius("999px"),
+		background("transparent"),
+		color("var(--text-faint)"),
+		border("1px dashed var(--border)"),
+		cursor("pointer"),
+	)
+	rule(".draft-cat-add:hover",
+		color("var(--accent)"),
+		borderColor("var(--accent)"),
+	)
+	// Purpose-built inline editor: one aligned row of fields, actions right-aligned
+	// below — steadier than the generic auto-fit form grid in the modal width.
+	rule(".draft-edit-grid",
+		display("grid"),
+		gridTemplateColumns("9.5rem minmax(0, 1fr) 7.5rem 11rem"),
+		gap("0.5rem"),
+		alignItems("end"),
+	)
+	rule(".draft-edit-actions",
+		prop("grid-column", "1 / -1"),
+		display("flex"),
+		gap("0.5rem"),
+		justifyContent("flex-end"),
+	)
+	ruleMedia("(max-width: 640px)", ".draft-edit-grid",
+		gridTemplateColumns("1fr 1fr"),
 	)
 	rule(".badge-warn",
 		display("inline-block"),

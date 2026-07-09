@@ -49,8 +49,42 @@ path fetches blob-backed bytes from IDB, so PDFs show up and download for free; 
 their own "Statements" hero chip (they were miscounted under the datasets chip) and updated
 the privacy copy (was "never stores the file" — now "keeps a copy only if you tick"). Test:
 `TestPDFArtifactBlobStored` (bytes → blob store, cleared from record, recoverable via
-GetBlobForArtifact). Next: the still-pending "use formulas for budgets / make the formula
-engine more powerful" ask hasn't been started.
+GetBlobForArtifact).
+
+**Follow-up (same day): live e2e + review-table UX refinement, cut 1.0.8.** Cam pasted a
+live key and said "make the call and e2e test it out." Built a throwaway native harness
+(temp/, gitignored, deleted after) that drives the EXACT production request-builder
+(`ai.BuildStructuredFileRequest`, where the temperature omitempty lives) and parse pipeline
+(`ai.ParseResponse` → `extract.ParseRows`) and does the real HTTPS POST — the only
+difference from the wasm app is net/http vs fetch, so the bytes OpenAI sees and the parsing
+are identical. Result: HTTP 200, temperature field absent, **32 transactions** extracted
+from the real Apple Card statement, category mapping exactly right (5 mapped to the passed
+list — Subscriptions/Utilities/Shopping×2/Transport — 27 blank, nothing invented). The
+temperature bug is genuinely dead. (Advised Cam to rotate the key; used only via a transient
+env var, never written to disk.)
+
+Then the frontend-design pass on the review table (`DraftReviewList`/`DraftRow`, shared with
+the receipt importer). Anchor: the data came off a *statement*, so make it read like one.
+Changes: amounts right-aligned in a real column and tinted by direction via the existing
+`amount-income/expense` tokens (reinforcing the accounting parentheses — never color-alone);
+a money-in/out/net summary in the sticky header that foots the amount column; category
+surfaced as a chip with a `+ Category` ghost when blank (unmapped rows become an action, not
+an absence — 27/32 were blank in the real extraction); dropped the redundant bottom Import
+form (one sticky account-picker + Import, count-labelled); a purpose-built inline-edit grid.
+Amount-tinting is gated `ColorBySign` = !ReceiptMode (receipt lines are all positive prices,
+so green "income" would mislead). Ledger rows are scoped under a `.draft-ledger` container so
+the generic `.row`/`.rows` classes used everywhere else are untouched.
+
+Visual validation via Playwright (node in e2e/): booted the real app so its real injected CSS
+applies, replaced the view with a faithful markup replica of the refined list + the 32 real
+rows, screenshotted dark AND light. Caught a real trap: `--bg-elev` (my category chips) is
+dark-biased — the `[data-theme="light"]` block flips it to #efede8, but only when the app
+BOOTS in light (its theme JS writes inline custom props; flipping `data-theme` after boot
+loses to boot's inline dark props — appearance.go documents this exact gotcha). Seeding
+`cashflux:prefs`={theme:light} before load gave a trustworthy light shot: summary bar + chips
+render correctly light-on-white in light, dark in dark. Both themes clean. Cut version 1.0.8.
+Next: the still-pending "use formulas for budgets / make the formula engine more powerful"
+ask hasn't been started.
 
 Couldn't e2e the live extraction (needs Cam's key + a real statement); verified the modal
 UI/upload flow via e2e + screenshot, and the request shape via a native ai test. Cam to
