@@ -233,6 +233,36 @@ func TestApplyFilters(t *testing.T) {
 	}
 }
 
+// TestApplyMultiCategory covers the multi-category (OR) filter used when drilling
+// from a multi-category budget: a transaction matches if its category is ANY of
+// the comma-joined ids.
+func TestApplyMultiCategory(t *testing.T) {
+	all := sample() // a=food, b=rent, c=pay; default sort newest-first (b,c,a)
+	if got := ids(Apply(all, Criteria{Categories: "food,rent"})); got != "ba" {
+		t.Errorf("multi-category filter = %q, want ba", got)
+	}
+	if got := ids(Apply(all, Criteria{Categories: "pay"})); got != "c" {
+		t.Errorf("single-id categories = %q, want c", got)
+	}
+	// Categories takes precedence over a lone Category when both are set.
+	if got := ids(Apply(all, Criteria{Category: "pay", Categories: "food,rent"})); got != "ba" {
+		t.Errorf("Categories should win over Category = %q, want ba", got)
+	}
+	// Each selected category surfaces as its own removable chip.
+	af := (Criteria{Categories: "food,rent"}).ActiveFilters()
+	if len(af) != 2 || af[0].Field != FieldCategory || af[1].Field != FieldCategory {
+		t.Errorf("ActiveFilters = %+v, want two category chips", af)
+	}
+	// Clearing the category field drops the whole multi-category set.
+	if c := (Criteria{Categories: "food,rent"}).Without(FieldCategory); c.Categories != "" {
+		t.Errorf("Without(FieldCategory) should clear Categories, got %q", c.Categories)
+	}
+	// The struct stays comparable, so ScopeChanged still detects a Categories change.
+	if !ScopeChanged(Criteria{}, Criteria{Categories: "food"}) {
+		t.Error("ScopeChanged should see a Categories change")
+	}
+}
+
 // TestApplyTextMatchesPayee guards C50: search must match the Payee field, not
 // just Desc/Tags, so a cleaned-up merchant name that differs from the raw
 // description is still findable.

@@ -69,7 +69,12 @@ type Criteria struct {
 	// still shows them. Empty = no account filter.
 	Account  string `json:"account,omitempty"`
 	Category string `json:"category,omitempty"`
-	Member   string `json:"member,omitempty"`
+	// Categories is a comma-joined set of category IDs for a MULTI-category filter
+	// (OR: a transaction matches if its category is any of them). It's a string (not
+	// a slice) so Criteria stays comparable for ScopeChanged. When set it takes
+	// precedence over Category. Drives the drill from a multi-category budget.
+	Categories string `json:"categories,omitempty"`
+	Member     string `json:"member,omitempty"`
 	// BillAccount filters to transactions marked as bill payments toward this
 	// liability account (Transaction.BillAccountID). Empty = no bill filter. Drives
 	// the Debt page's "N payments" drill-through.
@@ -188,6 +193,11 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	add(FieldText, c.Text)
 	add(FieldAccount, c.Account)
 	add(FieldCategory, c.Category)
+	// A multi-category filter shows one removable chip per category (each resolves
+	// to a name); the chip ✕ clears the whole category dimension via Without.
+	for _, id := range splitCSV(c.Categories) {
+		out = append(out, ActiveFilter{Field: FieldCategory, Value: id})
+	}
 	add(FieldMember, c.Member)
 	add(FieldSource, c.Source)
 	add(FieldTag, c.Tag)
@@ -219,6 +229,7 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.Account = ""
 	case FieldCategory:
 		c.Category = ""
+		c.Categories = ""
 	case FieldMember:
 		c.Member = ""
 	case FieldSource:
@@ -239,6 +250,31 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.CustomKey, c.CustomVal = "", ""
 	}
 	return c
+}
+
+// splitCSV splits a comma-joined value into its non-empty, trimmed parts (nil for
+// an empty string). Used for the multi-category filter's ID set.
+func splitCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// csvHas reports whether val is one of the comma-joined values in csv.
+func csvHas(csv, val string) bool {
+	for _, p := range splitCSV(csv) {
+		if p == val {
+			return true
+		}
+	}
+	return false
 }
 
 // Labels resolves entity IDs to display names for name-aware sorting (category,
@@ -300,7 +336,8 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
 		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
-		case c.Category != "" && t.CategoryID != c.Category:
+		case c.Categories != "" && !csvHas(c.Categories, t.CategoryID):
+		case c.Categories == "" && c.Category != "" && t.CategoryID != c.Category:
 		case c.Member != "" && t.MemberID != c.Member:
 		case c.Source != "" && string(t.Source) != c.Source:
 		case tagF != "" && !hasTag(t, tagF):

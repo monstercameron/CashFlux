@@ -115,7 +115,9 @@ func transactionsLegacy() ui.Node {
 
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
-	onFilterCat := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue() }) })
+	onFilterCat := ui.UseEvent(func(e ui.Event) {
+		setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue(); x.Categories = "" }) // single choice replaces any multi-category drill
+	})
 	// Click a column header to sort by it; click the active column again to flip
 	// direction. (Replaces the old Sort dropdown — C47.)
 	sortBy := func(key string) {

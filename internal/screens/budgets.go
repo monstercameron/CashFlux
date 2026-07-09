@@ -339,8 +339,8 @@ type budgetRowProps struct {
 	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
 	Covered           bool                  // received one-time cover money this period
 	OnDelete          func(string)
-	OnRemoveRecurring func(string)            // clear this budget's recurring cover (confirmed)
-	OnDrill           func(categoryID string) // open Transactions filtered to this budget's category
+	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
+	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)
 }
 
 // budgetLeftValue formats a budget's remaining amount for the summary "Left" stat

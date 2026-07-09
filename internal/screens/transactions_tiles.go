@@ -300,7 +300,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	filtersBody := Div(css.Class("filter-fields"),
 		filterSelect(uistate.T("transactions.filterAccount"), f.Account, accOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Account = v }) }),
-		filterSelect(uistate.T("transactions.filterCategory"), f.Category, catOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Category = v }) }),
+		filterSelect(uistate.T("transactions.filterCategory"), f.Category, catOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Category = v; x.Categories = "" }) }),
 		filterSelect(uistate.T("transactions.member"), f.Member, memberOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Member = v }) }),
 		filterSelect(uistate.T("transactions.filterSource"), f.Source, sourceOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Source = v }) }),
 		If(len(tagList) > 0, filterSelect(uistate.T("transactions.filterTag"), f.Tag, tagOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Tag = v }) })),

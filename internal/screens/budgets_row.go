@@ -37,9 +37,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
-			props.OnDrill(s.Budget.CategoryID)
+			// Pass EVERY tracked category so a multi-category budget drills to
+			// transactions in all of them, not just the primary one.
+			props.OnDrill(s.Budget.TrackedCategoryIDs())
 		}
 	}))
+	// The drill affordances show whenever the budget tracks any category (a
+	// multi-category budget may have no single primary CategoryID).
+	canDrill := len(s.Budget.TrackedCategoryIDs()) > 0
 	// Edit and Top up open the shell-root flip modal (BudgetEditHost) rather than an
 	// inline row form: a row sits under transformed bento/tile ancestors, which threw an
 	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured. Edit is
@@ -203,7 +208,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	actionsRow := Div(css.Class("budget-actions"),
 		// Quick review: jump to /transactions filtered to this budget's category
 		// (the category title is also a drill link, but a labelled button is discoverable).
-		If(s.Budget.CategoryID != "", Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		If(canDrill, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drill),
 			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
 		coverBtn,
@@ -225,7 +230,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// The title gets the whole header line now (the spent/limit amount and the
 			// percent moved INTO the bar below), so a long budget name has room to breathe.
 			Div(css.Class("budget-head-main"),
-				IfElse(s.Budget.CategoryID != "",
+				IfElse(canDrill,
 					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
 						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
 						title),

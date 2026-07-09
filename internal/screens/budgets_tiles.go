@@ -374,8 +374,17 @@ func budgetListWidget(props budgetListProps) ui.Node {
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
 	// category (mirrors Accounts→Transactions, C30/C50).
-	viewTransactions := func(categoryID string) {
-		f := uistate.TxFilter{Category: categoryID}.Normalize()
+	viewTransactions := func(categoryIDs []string) {
+		var f uistate.TxFilter
+		switch len(categoryIDs) {
+		case 0:
+			// no tracked category — just open the unfiltered ledger
+		case 1:
+			f.Category = categoryIDs[0] // single: use the plain category filter (dropdown reflects it)
+		default:
+			f.Categories = strings.Join(categoryIDs, ",") // multi: OR across all tracked categories
+		}
+		f = f.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))

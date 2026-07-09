@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Multi-category budget "Transactions" now filters by ALL its categories (2026-07-09):** clicking Transactions on a budget that tracks several categories (e.g. "HOA, Mortgage Payment") drilled to only the first category. It now opens the ledger filtered to **every** tracked category (OR — a transaction matches if it's in any of them), shown as one removable chip per category. Backed by a new comma-joined `Categories` filter dimension; picking a single category from the toolbar still replaces it. Single-category budgets are unchanged.
+
 ### Added
 - **"Utilities" account type (2026-07-09):** a new account type for utility / HOA / service accounts (electric, water, HOA dues). It classes as a **liability** — a recurring obligation you owe — so a Utilities account counts as debt in net worth and the debt formulas with no manual toggle, and (like every liability) it's excluded from low-balance alerts. Appears in the account type picker grouped with the other liabilities, with a receipt glyph.
 

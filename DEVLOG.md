@@ -86,6 +86,33 @@ render correctly light-on-white in light, dark in dark. Both themes clean. Cut v
 Next: the still-pending "use formulas for budgets / make the formula engine more powerful"
 ask hasn't been started.
 
+## 2026-07-09 — multi-category budget → transactions drill filters ALL categories
+
+Cam: a budget tracking "HOA, Mortgage Payment" → click Transactions → only filtered the first
+category. The drill (budgets_row.drill → OnDrill → budgets_tiles.viewTransactions) passed
+s.Budget.CategoryID (the single primary) and set TxFilter{Category: id}. TxFilter (=
+txnfilter.Criteria) only had a single-value Category.
+
+Design constraint: Criteria is compared with `a != b` in ScopeChanged, so it must stay
+comparable — a []string field would break that (a struct with a slice field isn't comparable
+at all, even with nil slices). So instead of a slice or migrating the screen onto the existing
+MultiCriteria model (bigger change), added a comma-joined `Categories string` dimension:
+- Apply: `case c.Categories != "" && !csvHas(c.Categories, t.CategoryID)` (OR across ids),
+  and the single Category case only fires when Categories is empty (Categories wins).
+- ActiveFilters emits one FieldCategory chip PER id (each resolves to a name via catName);
+  Without(FieldCategory) clears both Category and Categories.
+- OnDrill signature string→[]string; drill passes s.Budget.TrackedCategoryIDs() (all of them);
+  the Transactions affordance gate is now len(TrackedCategoryIDs)>0 (a pure multi-cat budget
+  may have no primary CategoryID). viewTransactions: 1 id → Category, >1 → Categories CSV.
+- The toolbar category dropdown clears Categories when you pick a single category (single
+  choice replaces the multi drill). Both toolbar variants (transactions.go + _tiles.go).
+
+Unit-tested in txnfilter_test.TestApplyMultiCategory: OR match, single-id CSV, Categories-wins
+precedence, two-chip ActiveFilters, Without clears, ScopeChanged still sees a Categories change
+(struct stayed comparable). Full suite green. Browser check of the widgetized filter UI was
+impractical (custom select components, no native <select> at rest), but the change is purely
+additive to the same Apply(persisted-filter) path the working single-category drill already uses.
+
 ## 2026-07-09 — "Utilities" account type (liability)
 
 Cam: "we also need utilities as an account type." The one non-trivial decision was the CLASS
