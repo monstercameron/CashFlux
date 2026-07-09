@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-07-09
+
 ### Changed
 - **Zero-based budget summary leads with "To Assign" (2026-07-09):** in the zero-based view the summary now opens with the big **To Assign** figure (the thesis — give every dollar a job) and demotes the spent/budgeted/left progress bar below it under a "Spending so far this month" caption, so the number you're driving to $0 is the headline instead of competing with the safe-to-spend figure.
 
