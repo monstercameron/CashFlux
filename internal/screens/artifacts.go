@@ -181,11 +181,14 @@ func Artifacts() ui.Node {
 	}
 
 	// ── Hero: the storage footprint, the vault chips, and the takeaway. ────────
-	imgCount, csvCount := 0, 0
+	imgCount, csvCount, pdfCount := 0, 0, 0
 	for _, a := range list {
-		if a.Kind == artifacts.KindImage {
+		switch a.Kind {
+		case artifacts.KindImage:
 			imgCount++
-		} else {
+		case artifacts.KindPDF:
+			pdfCount++
+		default:
 			csvCount++
 		}
 	}
@@ -217,6 +220,9 @@ func Artifacts() ui.Node {
 	}
 	if csvCount > 0 {
 		chips = append(chips, rptChip(uistate.T("artifacts.chipCSV"), fmt.Sprintf("%d", csvCount), ""))
+	}
+	if pdfCount > 0 {
+		chips = append(chips, rptChip(uistate.T("artifacts.chipPDF"), fmt.Sprintf("%d", pdfCount), ""))
 	}
 	if attachedCount > 0 {
 		chips = append(chips, rptChip(uistate.T("artifacts.chipAttach"), fmt.Sprintf("%d", attachedCount), rptToneCls("pos")))

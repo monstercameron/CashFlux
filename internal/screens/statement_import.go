@@ -7,13 +7,16 @@ package screens
 import (
 	"encoding/base64"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -78,11 +81,13 @@ func StatementImportBody(_ struct{}) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	openAtom := uistate.UseStatementImportOpen()
 
-	fileData := ui.UseState("") // data:application/pdf;base64,…
+	fileData := ui.UseState("")           // data:application/pdf;base64,… (for the AI call)
+	fileBytes := ui.UseState([]byte(nil)) // the raw PDF, kept for optional browser storage
 	fileName := ui.UseState("")
 	loading := ui.UseState(false)
 	errText := ui.UseState("")
 	needsKey := ui.UseState(false)
+	saveDoc := ui.UseState(false) // "keep a copy of this statement in this browser"
 	draft := ui.UseState([]extract.Row(nil))
 
 	accounts := app.Accounts()
@@ -114,12 +119,14 @@ func StatementImportBody(_ struct{}) ui.Node {
 				mt = "application/pdf"
 			}
 			fileData.Set("data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(data))
+			fileBytes.Set(data)
 			fileName.Set(name)
 			errText.Set("")
 			needsKey.Set(false)
 			draft.Set(nil)
 		})
 	})
+	onToggleSaveDoc := ui.UseEvent(func() { saveDoc.Set(!saveDoc.Get()) })
 
 	runAI := ui.UseEvent(func() {
 		if fileData.Get() == "" {
@@ -142,7 +149,9 @@ func StatementImportBody(_ struct{}) ui.Node {
 		errText.Set("")
 		ai.SendStructuredFileChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel,
 			statementSystemPrompt(catNames), "Extract every transaction from this statement.",
-			firstNonEmpty(fileName.Get(), "statement.pdf"), fileData.Get(), 0.1,
+			// Temperature 0 → omitted (omitempty) → the model's default. The gpt-5.x family
+			// rejects any non-default temperature ("Only the default (1) value is supported").
+			firstNonEmpty(fileName.Get(), "statement.pdf"), fileData.Get(), 0,
 			"transactions", []byte(statementImportSchema),
 			func(content string, _ ai.Usage) {
 				loading.Set(false)
@@ -187,6 +196,31 @@ func StatementImportBody(_ struct{}) ui.Node {
 		if err != nil {
 			errText.Set(uistate.T("documents.chooseAccount"))
 			return
+		}
+		// Optionally keep the source PDF in the browser as a findable document. Its
+		// bytes go to the IndexedDB blob store (not the SQLite dataset) via
+		// StoreBlobForArtifact, so the persisted record stays lightweight. The blob
+		// Put blocks on IDB, so run it off the event goroutine.
+		if saveDoc.Get() && len(fileBytes.Get()) > 0 {
+			pdf := domain.Artifact{
+				ID: id.New(), Name: firstNonEmpty(fileName.Get(), "statement.pdf"),
+				Kind: artifacts.KindPDF, MIME: "application/pdf",
+				Bytes: fileBytes.Get(), CreatedAt: time.Now(),
+			}
+			pdf.Size = artifacts.Size(pdf)
+			go func() {
+				stored, serr := app.StoreBlobForArtifact(pdf)
+				if serr != nil {
+					uistate.PostNotice(serr.Error(), true)
+					return
+				}
+				if perr := app.PutArtifact(stored); perr != nil {
+					uistate.PostNotice(perr.Error(), true)
+					return
+				}
+				app.RefreshBlobUsage()
+				uistate.RequestPersist()
+			}()
 		}
 		summary := uistate.T("documents.importedImage", plural(result.Imported, "transaction"))
 		if result.Skipped > 0 {
@@ -254,6 +288,14 @@ func StatementImportBody(_ struct{}) ui.Node {
 			buttonWithDisabled(fileData.Get() == "" || loading.Get(),
 				[]any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "statementimport-run"), OnClick(runAI)},
 				uistate.T("statementimport.run")),
+			// Opt-in: keep the source PDF in this browser (IndexedDB) as a findable
+			// document, separate from the imported transactions. Only offered once a
+			// file is attached.
+			If(fileData.Get() != "", Label(css.Class("statement-savedoc", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "statementimport-savedoc"), OnChange(onToggleSaveDoc)}, checkedAttr(saveDoc.Get())...)...),
+				Div(css.Class("row-main"),
+					Span(uistate.T("statementimport.saveDoc")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("statementimport.saveDocHint"))))),
 		)
 	}
 

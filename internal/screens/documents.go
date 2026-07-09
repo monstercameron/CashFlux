@@ -516,13 +516,15 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			draft.Set(rows)
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
+		// Temperature 0 → omitted (omitempty) → the model's default. gpt-5.x rejects any
+		// non-default temperature ("Only the default (1) value is supported").
 		if useBackendAI {
 			ai.SendProxyStructuredVisionChat(pr.ServerURL, pr.ServerToken, aiModel, visionSystemPrompt,
-				"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+				"Extract every transaction you can read from this image.", imageURL.Get(), 0,
 				"transactions", []byte(visionExtractionSchema), onResult, onError)
 		} else {
 			ai.SendStructuredVisionChat(settings.OpenAIKey, ai.DefaultBaseURL, aiModel, visionSystemPrompt,
-				"Extract every transaction you can read from this image.", imageURL.Get(), 0.1,
+				"Extract every transaction you can read from this image.", imageURL.Get(), 0,
 				"transactions", []byte(visionExtractionSchema), onResult, onError)
 		}
 	})

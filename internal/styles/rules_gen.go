@@ -8509,6 +8509,14 @@ func registerGenerated() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 	)
+	// Statement-import modal: the opt-in "keep a copy in this browser" checkbox row.
+	rule(".statement-savedoc",
+		marginTop(".35rem"),
+		padding(".55rem .7rem"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-card)"),
+	)
 	// Auto-budget modal: a scrollable list of tunable per-category suggestions, each a
 	// checkbox + name/slider + a live monthly figure, then a Cancel/Save footer.
 	rule(".autobudget-rows",

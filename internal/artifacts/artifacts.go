@@ -22,7 +22,13 @@ const (
 	KindImage = "image"
 	KindCSV   = "csv"
 	KindJSON  = "json"
+	KindPDF   = "pdf"
 )
+
+// IsBinaryKind reports whether an artifact kind stores raw file Bytes (and is
+// therefore blob-backed: its bytes live in IndexedDB, not the SQLite dataset).
+// Images and PDFs are binary; CSV/JSON are held as parsed columns/rows.
+func IsBinaryKind(kind string) bool { return kind == KindImage || kind == KindPDF }
 
 // ParseCSV reads CSV bytes into a header row and the remaining data rows. Rows are
 // padded/truncated to the header width so the table is rectangular. An empty input
@@ -101,6 +107,10 @@ func Validate(a domain.Artifact) []string {
 	case KindImage:
 		if len(a.Bytes) == 0 {
 			errs = append(errs, "An image artifact needs image data.")
+		}
+	case KindPDF:
+		if len(a.Bytes) == 0 {
+			errs = append(errs, "A PDF artifact needs file data.")
 		}
 	case KindCSV, KindJSON:
 		if len(a.Columns) == 0 && len(a.Rows) == 0 && len(a.Bytes) == 0 {

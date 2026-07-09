@@ -14,6 +14,7 @@ var vaultSurfaceKeys = Catalog{
 	"artifacts.eyebrowTail":      "receipts and datasets, stored locally",
 	"artifacts.chipImages":       "Images",
 	"artifacts.chipCSV":          "Datasets",
+	"artifacts.chipPDF":          "Statements",
 	"artifacts.chipAttach":       "Attached to transactions",
 	"artifacts.chipPages":        "Used by pages",
 	"art.takeEmpty":              "Nothing stored yet — upload a receipt image or import a CSV dataset below.",

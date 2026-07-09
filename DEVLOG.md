@@ -20,6 +20,38 @@ path, a Transactions toolbar button, and SMART-T18 (vision tier) + `smartai.impl
 BYO-key only (the optional cloud proxy's RPC doesn't carry file uploads yet). Cam's
 sample PDF is in temp/ (gitignored — personal).
 
+**Follow-up (same day): the temperature bug + "keep a copy in the browser."** Cam ran it
+live with his key and hit `Unsupported value: 'temperature' does not support 0.1 with this
+model. Only the default (1) value is supported.` Fair catch — I'd verified the request
+*shape* (there's a passing `TestBuildStructuredFileRequest`) and the modal opening, but I
+never made a live OpenAI call (needs his key), so I missed a constraint I could have caught
+from the model's docs alone. gpt-5.x reasoning/vision models only accept the default
+temperature. Fix: pass `0` so `omitempty` drops the field → model default. The **same
+latent bug** was in the receipt/image import (`documents.go`, both proxy + BYO-key vision
+calls also force gpt-5.5 with 0.1) — fixed both there too. Left the plain-chat
+Q&A/insights/text-import calls alone: they default to `gpt-5.4-mini`, which accepts a
+custom temperature, and Cam's been using them fine. Lesson logged: don't claim an AI path
+is "verified" when only its request construction was exercised, not a live call.
+
+Then Cam's other ask: an opt-in checkbox to **keep the uploaded PDF in the browser** (his
+words: "not in the sqlite but in the browser … store as a document or artifact"). Added a
+`pdf` artifact kind + `artifacts.IsBinaryKind` (image|pdf), and routed PDFs through the
+same blob-store treatment images get — `StoreBlobForArtifact`/`rehydrateArtifactBytes`/
+`ImportJSONWithBlobs` now gate on `IsBinaryKind`, so a stored PDF's bytes live in IndexedDB
+and the SQLite/localStorage record stays lightweight. The modal keeps the raw `[]byte`
+(previously only the base64 data URL), and on import — when the box is ticked — builds a
+`domain.Artifact{Kind:pdf}`, calls `StoreBlobForArtifact` (off the event goroutine, since
+the IDB Put blocks), then `PutArtifact` + `RequestPersist`. Explicitly calling
+StoreBlobForArtifact is stronger than the image-upload path (which keeps bytes inline until
+an export/import round-trip migrates them) and matches Cam's "not in the sqlite" intent
+exactly. The `/artifacts` ("Your files") screen already lists any kind and its download
+path fetches blob-backed bytes from IDB, so PDFs show up and download for free; gave them
+their own "Statements" hero chip (they were miscounted under the datasets chip) and updated
+the privacy copy (was "never stores the file" — now "keeps a copy only if you tick"). Test:
+`TestPDFArtifactBlobStored` (bytes → blob store, cleared from record, recoverable via
+GetBlobForArtifact). Next: the still-pending "use formulas for budgets / make the formula
+engine more powerful" ask hasn't been started.
+
 Couldn't e2e the live extraction (needs Cam's key + a real statement); verified the modal
 UI/upload flow via e2e + screenshot, and the request shape via a native ai test. Cam to
 test end-to-end with his statement.

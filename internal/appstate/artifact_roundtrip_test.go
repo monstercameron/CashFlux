@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -65,10 +66,10 @@ func (m *memBlobStore) Usage() (int64, error) {
 
 // TestArtifactBlobRoundTripWithBlobs proves the export→import path is fully
 // lossless when a blob store is wired in (C294). Scenario:
-//   1. Put an image artifact whose bytes are in the blob store (not in SQLite).
-//   2. ExportJSONWithBlobs — bytes must be rehydrated from the store into the JSON.
-//   3. ImportJSONWithBlobs on a fresh App — bytes must land in the new store and
-//      be absent from the SQLite record (so the autosave stays small).
+//  1. Put an image artifact whose bytes are in the blob store (not in SQLite).
+//  2. ExportJSONWithBlobs — bytes must be rehydrated from the store into the JSON.
+//  3. ImportJSONWithBlobs on a fresh App — bytes must land in the new store and
+//     be absent from the SQLite record (so the autosave stays small).
 func TestArtifactBlobRoundTripWithBlobs(t *testing.T) {
 	// Device A: the source app with a blob store.
 	srcApp := newApp(t, false)
@@ -215,5 +216,51 @@ func TestArtifactBlobRoundTripNoBlobStore(t *testing.T) {
 	}
 	if !bytes.Equal(arts[0].Bytes, receipt) {
 		t.Errorf("inline bytes not preserved: got %v, want %v", arts[0].Bytes, receipt)
+	}
+}
+
+// TestPDFArtifactBlobStored proves a PDF artifact (the statement-import "keep a copy
+// in this browser" path) is treated as a binary, blob-backed kind: StoreBlobForArtifact
+// moves its bytes to the blob store and clears them from the SQLite record, and the
+// bytes are recoverable via GetBlobForArtifact — the same treatment images get, so the
+// PDF never bloats the localStorage dataset.
+func TestPDFArtifactBlobStored(t *testing.T) {
+	app := newApp(t, false)
+	blobs := newMemBlobStore()
+	app.SetBlobStore(blobs)
+
+	pdf := []byte{0x25, 0x50, 0x44, 0x46, 0x2d} // "%PDF-" magic
+	art := domain.Artifact{
+		ID:    "art-stmt-1",
+		Name:  "Apple Card Statement.pdf",
+		Kind:  artifacts.KindPDF,
+		MIME:  "application/pdf",
+		Bytes: pdf,
+		Size:  len(pdf),
+	}
+
+	stored, err := app.StoreBlobForArtifact(art)
+	if err != nil {
+		t.Fatalf("StoreBlobForArtifact: %v", err)
+	}
+	if len(stored.Bytes) != 0 {
+		t.Fatal("PDF bytes should be cleared from the record after moving to the blob store")
+	}
+	if err := app.PutArtifact(stored); err != nil {
+		t.Fatalf("PutArtifact: %v", err)
+	}
+
+	// The SQLite record is lightweight (no inline bytes)…
+	got := app.Artifacts()
+	if len(got) != 1 || len(got[0].Bytes) != 0 {
+		t.Fatalf("record should carry no inline bytes, got %d artifacts / %d bytes", len(got), len(got[0].Bytes))
+	}
+	// …but the bytes are recoverable from the blob store (what the download path uses).
+	back, err := app.GetBlobForArtifact("art-stmt-1")
+	if err != nil {
+		t.Fatalf("GetBlobForArtifact: %v", err)
+	}
+	if !bytes.Equal(back, pdf) {
+		t.Errorf("blob bytes = %v, want %v", back, pdf)
 	}
 }

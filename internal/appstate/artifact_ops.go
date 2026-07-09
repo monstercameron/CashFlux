@@ -5,6 +5,7 @@ package appstate
 import (
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/artifactstore"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -41,13 +42,13 @@ func (a *App) RefreshBlobUsage() {
 	a.blobUsageCache = n
 }
 
-// StoreBlobForArtifact moves the binary bytes for an image artifact into the
-// blob store, stripping them from the artifact record so the main dataset JSON
-// stays small. If the blob store is unavailable, the bytes remain on the
+// StoreBlobForArtifact moves the binary bytes for an image or PDF artifact into
+// the blob store, stripping them from the artifact record so the main dataset
+// JSON stays small. If the blob store is unavailable, the bytes remain on the
 // artifact (the inline fallback path). Returns the modified artifact (bytes
 // cleared if the put succeeded) so the caller can decide what to persist.
 func (a *App) StoreBlobForArtifact(art domain.Artifact) (domain.Artifact, error) {
-	if a.blobs == nil || art.Kind != "image" || len(art.Bytes) == 0 {
+	if a.blobs == nil || !artifacts.IsBinaryKind(art.Kind) || len(art.Bytes) == 0 {
 		return art, nil
 	}
 	if err := a.blobs.Put(art.ID, art.MIME, art.Bytes); err != nil {
@@ -88,8 +89,8 @@ func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) {
 		if len(arts[i].Bytes) > 0 {
 			continue // already present (legacy record or CSV artifact)
 		}
-		if arts[i].Kind != "image" {
-			continue // only binary artifacts need rehydration
+		if !artifacts.IsBinaryKind(arts[i].Kind) {
+			continue // only binary artifacts (image/pdf) need rehydration
 		}
 		_, data, ok, err := a.blobs.Get(arts[i].ID)
 		if err != nil {
@@ -143,7 +144,7 @@ func (a *App) ImportJSONWithBlobs(data []byte) error {
 	if a.blobs != nil {
 		for i := range ds.Artifacts {
 			art := &ds.Artifacts[i]
-			if art.Kind == "image" && len(art.Bytes) > 0 {
+			if artifacts.IsBinaryKind(art.Kind) && len(art.Bytes) > 0 {
 				if putErr := a.blobs.Put(art.ID, art.MIME, art.Bytes); putErr != nil {
 					a.log.Warn("blob store put during import failed", "id", art.ID, "err", putErr)
 				} else {
