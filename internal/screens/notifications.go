@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -190,12 +191,12 @@ func notifyRow(props notifyRowProps) ui.Node {
 			Attr("data-testid", "notif-open-"+it.ID), OnClick(goResource))
 	}
 	mainArgs = append(mainArgs,
-		Div(css.Class("notif-badge"), Attr("aria-hidden", "true"), uiw.Icon(notifySeverityIcon(sev), css.Class("w-4", "h-4"))),
+		Div(css.Class("notif-badge"), Attr("aria-hidden", "true"), uiw.Icon(notifySeverityIcon(sev), css.Class(tw.W4, tw.H4))),
 		Div(css.Class("notif-body"),
 			Div(css.Class("notif-top"),
 				unreadDot,
 				Span(css.Class("notif-title"), it.Title),
-				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class("w-4", "h-4")))),
+				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4)))),
 			),
 			If(it.Body != "", P(css.Class("notif-text"), it.Body)),
 			Div(css.Class("notif-foot"),
@@ -212,11 +213,11 @@ func notifyRow(props notifyRowProps) ui.Node {
 		// a per-notification menu is an extra click for actions you take constantly.
 		Div(css.Class("notif-actions"),
 			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
-				Attr("aria-label", readLabel), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class("w-4", "h-4"))),
+				Attr("aria-label", readLabel), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4))),
 			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
-				Attr("aria-label", uistate.T("notifications.snooze")), Title(uistate.T("notifications.snooze")), OnClick(onSnooze), uiw.Icon(icon.Clock, css.Class("w-4", "h-4"))),
+				Attr("aria-label", uistate.T("notifications.snooze")), Title(uistate.T("notifications.snooze")), OnClick(onSnooze), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
 			Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"), Attr("data-testid", "notif-dismiss-"+it.ID),
-				Attr("aria-label", uistate.T("notifications.dismiss")), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class("w-4", "h-4"))),
+				Attr("aria-label", uistate.T("notifications.dismiss")), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
 }
