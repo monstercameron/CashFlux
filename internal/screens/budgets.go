@@ -59,7 +59,13 @@ type budgetView struct {
 	TotalLimit        int64
 	TotalOver         int64
 	TotalFundSetAside int64
-	BannerIncome      int64 // monthly income (configured or derived) for the assign banner
+	BannerIncome      int64 // monthly income (per the chosen basis) for the assign banner
+	// SavingsAssigned is the total monthly income assigned to savings/investments —
+	// the sum of every active goal's monthly assignment (base-currency minor units).
+	// Counts toward "assigned" in the zero-based view so To Assign spans expenses +
+	// savings. SavingsLines is the per-goal breakdown the savings section renders.
+	SavingsAssigned int64
+	SavingsLines    []goalsvc.Assignment
 }
 
 // computeBudgetView runs the full budget evaluation for the active member scope and
@@ -230,11 +236,27 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	// what you have to budget; the most recent complete month is the honest basis.
 	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
 	prevStart := dateutil.AddMonths(ms, -1)
-	bannerIncome := budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
-	if bannerIncome == 0 {
-		if raw, _, err := ledger.PeriodTotals(txns, prevStart, ms, rates); err == nil {
-			bannerIncome = raw.Amount
+	var bannerIncome int64
+	switch pr.BudgetIncomeMode {
+	case budgeting.IncomeModeAll, budgeting.IncomeModePaychecks, budgeting.IncomeModeFixed:
+		// Explicit basis (zero-based income control): all income, paychecks-only, or a fixed figure.
+		bannerIncome = budgeting.ZeroBasedIncome(pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
+	default:
+		// Unset basis — preserve prior behaviour: configured figure wins, else last month's income.
+		bannerIncome = budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
+		if bannerIncome == 0 {
+			if raw, _, err := ledger.PeriodTotals(txns, prevStart, ms, rates); err == nil {
+				bannerIncome = raw.Amount
+			}
 		}
+	}
+
+	// Savings/investments assigned this month: every active goal's monthly assignment.
+	// Counts toward "assigned" in the zero-based view (To Assign spans expenses + savings).
+	savingsLines := goalsvc.MonthlyAssignments(app.Goals(), now, base, rates)
+	var savingsAssigned int64
+	for _, a := range savingsLines {
+		savingsAssigned += a.Minor
 	}
 
 	// C190: sum the monthly set-aside across all active sinking-fund goals.
@@ -252,6 +274,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
+		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
 	}
 }
 

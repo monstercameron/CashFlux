@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -130,6 +131,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		If(!vw.IsSinglePeriod(), P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
 			uistate.T("budgets.customRangeHint"))),
 		budgetAssignBanner(v),
+		If(v.Method == budgeting.MethodZeroBased, ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: v.Base})),
 		budgetFundSetAsideNode(v),
 		// C125: lead with a salient over-spend banner, with the count/near pills below.
 		If(v.OverCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
@@ -186,19 +188,255 @@ func budgetAssignBanner(v budgetView) ui.Node {
 			uistate.T("budgets.simpleIncome", fmtMoney(money.New(v.BannerIncome, v.Base))), " · ",
 			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(v.TotalLimit, v.Base))), " · ", diff)
 	case budgeting.MethodZeroBased:
-		toAssign := budgeting.ToAssign(v.BannerIncome, v.TotalLimit)
-		switch {
-		case toAssign > 0:
-			return P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.toAssign", fmtMoney(money.New(toAssign, v.Base))))
-		case toAssign == 0:
-			return P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.allAssigned"))
-		default:
-			return P(css.Class("budget-sub", tw.FontDisplay, tw.TextDown), uistate.T("budgets.overAssigned", fmtMoney(money.New(-toAssign, v.Base))))
-		}
+		return zeroBasedHero(v)
 	case budgeting.MethodEnvelope:
 		return P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
 	}
 	return Fragment()
+}
+
+// zeroBasedHero is the zero-based view's centrepiece: a big "To Assign" figure —
+// income minus everything assigned to EXPENSES and to SAVINGS/INVESTMENTS — that the
+// user drives to $0, over a one-line breakdown of the four figures. Green at $0 (every
+// dollar has a job), red when over-assigned, neutral while there is money left to
+// assign (the status word says how much). Pure node builder.
+func zeroBasedHero(v budgetView) ui.Node {
+	assigned := v.TotalLimit + v.SavingsAssigned
+	toAssign := budgeting.ToAssign(v.BannerIncome, assigned)
+	figCls := "zbb-figure fig"
+	var status ui.Node
+	switch {
+	case toAssign == 0:
+		figCls += " is-done"
+		status = Span(css.Class("zbb-status"), uistate.T("budgets.zbbAllAssigned"))
+	case toAssign > 0:
+		figCls += " is-left"
+		status = Span(css.Class("zbb-status"), uistate.T("budgets.zbbLeft"))
+	default:
+		figCls += " is-over"
+		status = Span(css.Class("zbb-status zbb-status-over"), uistate.T("budgets.zbbOver"))
+	}
+	return Div(css.Class("zbb-hero"),
+		Span(css.Class("zbb-label"), uistate.T("budgets.zbbToAssign")),
+		Div(css.Class("zbb-figrow"),
+			Span(css.Class(figCls), Attr("data-testid", "budgets-zbb-toassign"), fmtMoney(money.New(toAssign, v.Base))),
+			status),
+		Div(css.Class("zbb-breakdown"),
+			zbbChip(uistate.T("budgets.zbbIncome"), v.BannerIncome, v.Base),
+			zbbChip(uistate.T("budgets.zbbExpenses"), v.TotalLimit, v.Base),
+			zbbChip(uistate.T("budgets.zbbSavings"), v.SavingsAssigned, v.Base),
+		),
+	)
+}
+
+// zbbChip is one figure of the zero-based breakdown: a small uppercase label above a
+// tabular amount.
+func zbbChip(label string, minor int64, base string) ui.Node {
+	return Div(css.Class("zbb-chip"),
+		Span(css.Class("zbb-chip-label"), label),
+		Span(css.Class("zbb-chip-val fig"), fmtMoney(money.New(minor, base))))
+}
+
+// minorToMajorStr renders minor units as an edit-friendly major-unit string (""
+// for zero, so an input shows its placeholder instead of "0").
+func minorToMajorStr(minor int64, base string) string {
+	if minor <= 0 {
+		return ""
+	}
+	dec := currency.Decimals(base)
+	mult := 1.0
+	for i := 0; i < dec; i++ {
+		mult *= 10
+	}
+	return strconv.FormatFloat(float64(minor)/mult, 'f', -1, 64)
+}
+
+// majorStrToMinor parses an edit-field major-unit string back to minor units;
+// ok=false for blank/invalid input so the caller can distinguish "clear" from "keep".
+func majorStrToMinor(s, base string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, true // explicit clear
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || f < 0 {
+		return 0, false
+	}
+	dec := currency.Decimals(base)
+	mult := 1.0
+	for i := 0; i < dec; i++ {
+		mult *= 10
+	}
+	return int64(f*mult + 0.5), true
+}
+
+type incomeBasisProps struct{ Base string }
+
+// budgetIncomeBasisControl is the zero-based view's income-source picker: whether the
+// "income to assign" is ALL of last month's income, only regular paychecks (deposits at
+// or above a threshold, so side hustles are ignored), or a fixed monthly figure. It
+// writes the household prefs so the hero recomputes.
+func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	prefsAtom := uistate.UsePrefs()
+	pr := prefsAtom.Get()
+	mode := pr.BudgetIncomeMode
+	if mode == "" {
+		mode = budgeting.IncomeModeAll
+	}
+
+	onMode := ui.UseEvent(func(e ui.Event) {
+		p := prefsAtom.Get()
+		p.BudgetIncomeMode = e.GetValue()
+		uistate.SetPrefs(p)
+	})
+	onThreshold := ui.UseEvent(func(e ui.Event) {
+		if v, ok := majorStrToMinor(e.GetValue(), props.Base); ok {
+			p := prefsAtom.Get()
+			p.BudgetPaycheckMinMinor = v
+			uistate.SetPrefs(p)
+		}
+	})
+	onFixed := ui.UseEvent(func(e ui.Event) {
+		if v, ok := majorStrToMinor(e.GetValue(), props.Base); ok {
+			p := prefsAtom.Get()
+			p.MonthlyIncomeMinor = v
+			uistate.SetPrefs(p)
+		}
+	})
+
+	var extra ui.Node = Fragment()
+	switch mode {
+	case budgeting.IncomeModePaychecks:
+		extra = Label(css.Class("zbb-basis-extra"),
+			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbPaycheckMin")),
+			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-paycheck-min"),
+				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), Value(minorToMajorStr(pr.BudgetPaycheckMinMinor, props.Base)), OnInput(onThreshold)))
+	case budgeting.IncomeModeFixed:
+		extra = Label(css.Class("zbb-basis-extra"),
+			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbFixedAmount")),
+			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-fixed-amount"),
+				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), Value(minorToMajorStr(pr.MonthlyIncomeMinor, props.Base)), OnInput(onFixed)))
+	}
+
+	return Div(css.Class("zbb-basis"), Attr("data-testid", "budgets-zbb-basis"),
+		Label(css.Class("zbb-basis-main"),
+			Span(css.Class("zbb-basis-label"), uistate.T("budgets.zbbBasisLabel")),
+			Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), OnChange(onMode),
+				Option(Value(budgeting.IncomeModeAll), SelectedIf(mode == budgeting.IncomeModeAll), uistate.T("budgets.zbbBasisAll")),
+				Option(Value(budgeting.IncomeModePaychecks), SelectedIf(mode == budgeting.IncomeModePaychecks), uistate.T("budgets.zbbBasisPaychecks")),
+				Option(Value(budgeting.IncomeModeFixed), SelectedIf(mode == budgeting.IncomeModeFixed), uistate.T("budgets.zbbBasisFixed")),
+			)),
+		extra,
+	)
+}
+
+// budgetSavingsWidget is the zero-based view's "Savings & investments" tile: the goals
+// whose monthly contribution counts toward the assigned total, each with a quick inline
+// edit of that monthly amount so the user can drive To Assign to $0 without leaving the
+// page. Rendered only in zero-based mode.
+func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := props.App
+	activeMemberID := uistate.UseActiveMember().Get()
+	vw := uistate.UsePeriod().Get()
+	if uistate.UseBudgetsLastMonth().Get() {
+		vw = vw.Shift(-1)
+	}
+	pr := uistate.UsePrefs().Get()
+	v := computeBudgetView(app, activeMemberID, vw, pr)
+	if v.Method != budgeting.MethodZeroBased || len(v.Statuses) == 0 {
+		return Fragment() // only meaningful in zero-based mode with budgets present
+	}
+
+	nav := router.UseNavigate()
+	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
+
+	var body ui.Node
+	if len(v.SavingsLines) == 0 {
+		body = P(css.Class("empty", tw.TextDim), Attr("data-testid", "budgets-savings-empty"), uistate.T("budgets.savingsEmpty"))
+	} else {
+		rows := MapKeyed(v.SavingsLines,
+			func(a goalsvc.Assignment) any { return a.GoalID },
+			func(a goalsvc.Assignment) ui.Node {
+				return ui.CreateElement(budgetSavingsRow, budgetSavingsRowProps{App: app, Line: a, Base: v.Base})
+			})
+		body = Div(css.Class("zbb-savings-rows"), rows)
+	}
+
+	head := Div(css.Class("zbb-savings-head"),
+		Span(css.Class("zbb-savings-title"), uistate.T("budgets.savingsTitle")),
+		Span(css.Class("zbb-savings-total fig"), fmtMoney(money.New(v.SavingsAssigned, v.Base))))
+
+	section := uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("budgets.savingsSectionTitle"),
+		Body: Fragment(
+			head,
+			P(css.Class("muted", tw.Text13), uistate.T("budgets.savingsDesc")),
+			body,
+			Div(css.Class("zbb-savings-foot"),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), OnClick(goToGoals),
+					uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals")))),
+		),
+	})
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "budget-savings", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: section,
+	})
+}
+
+type budgetSavingsRowProps struct {
+	App  *appstate.App
+	Line goalsvc.Assignment
+	Base string
+}
+
+// budgetSavingsRow is one goal in the savings section: its name, its current monthly
+// assignment, and an inline number input that sets the goal's explicit
+// MonthlyContribution (overriding the target-date-derived pace). Owns its own edit hook.
+func budgetSavingsRow(props budgetSavingsRowProps) ui.Node {
+	app := props.App
+	var goal domain.Goal
+	found := false
+	for _, g := range app.Goals() {
+		if g.ID == props.Line.GoalID {
+			goal, found = g, true
+			break
+		}
+	}
+	onEdit := ui.UseEvent(func(e ui.Event) {
+		if !found {
+			return
+		}
+		cur := goal.TargetAmount.Currency
+		if cur == "" {
+			cur = props.Base
+		}
+		if v, ok := majorStrToMinor(e.GetValue(), cur); ok {
+			g := goal
+			g.MonthlyContribution = money.New(v, cur)
+			if err := app.PutGoal(g); err == nil {
+				uistate.BumpDataRevision()
+				uistate.RequestPersist()
+			}
+		}
+	})
+
+	explicit := ""
+	if found && goal.MonthlyContribution.Amount > 0 {
+		explicit = minorToMajorStr(goal.MonthlyContribution.Amount, goal.MonthlyContribution.Currency)
+	}
+	// The effective monthly (explicit or date-derived) as a placeholder hint.
+	hint := minorToMajorStr(props.Line.Minor, props.Base)
+
+	return Div(css.Class("zbb-savings-row"),
+		Span(css.Class("zbb-savings-name"), props.Line.Name),
+		Div(css.Class("zbb-savings-edit"),
+			Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(props.Base)),
+			Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
+				Attr("data-testid", "budgets-savings-amt-"+props.Line.GoalID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria")),
+				Placeholder(hint), Value(explicit), OnInput(onEdit))),
+	)
 }
 
 // budgetFundSetAsideNode shows the household's total monthly sinking-fund commitment,

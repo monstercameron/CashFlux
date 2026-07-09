@@ -2859,6 +2859,137 @@ func registerGenerated() {
 		fontSize("0.82rem"),
 		marginTop("0.15rem"),
 	)
+	// Zero-based budgeting: the "To Assign" hero, its four-figure breakdown, the
+	// income-basis control, and the Savings & investments section.
+	rule(".zbb-hero",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+		padding("0.9rem 0 0.4rem"),
+	)
+	rule(".zbb-label",
+		fontSize("0.7rem"),
+		fontWeight("700"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-figrow",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.2rem 0.7rem"),
+	)
+	rule(".zbb-figure",
+		fontSize("2.2rem"),
+		fontWeight("800"),
+		lineHeight("1.05"),
+		color("var(--text)"),
+	)
+	rule(".zbb-figure.is-done", color("var(--money-positive)"))
+	rule(".zbb-figure.is-left", color("var(--accent)"))
+	rule(".zbb-figure.is-over", color("var(--money-negative)"))
+	rule(".zbb-status",
+		fontSize("0.9rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+	)
+	rule(".zbb-status-over", color("var(--money-negative)"))
+	rule(".zbb-breakdown",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.3rem 1.4rem"),
+		marginTop("0.5rem"),
+		paddingTop("0.5rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".zbb-chip",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+	)
+	rule(".zbb-chip-label",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.04em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-chip-val",
+		fontSize("1rem"),
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	rule(".zbb-basis",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("flex-end"),
+		gap("0.6rem 0.9rem"),
+		marginTop("0.6rem"),
+	)
+	rule(".zbb-basis-main, .zbb-basis-extra",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+	)
+	rule(".zbb-basis-label, .zbb-basis-sub",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+	)
+	rule(".zbb-basis .field",
+		minWidth("11rem"),
+	)
+	rule(".zbb-savings-head",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+	)
+	rule(".zbb-savings-title",
+		fontSize("0.8rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+	)
+	rule(".zbb-savings-total",
+		fontSize("1.15rem"),
+		fontWeight("800"),
+		color("var(--money-positive)"),
+	)
+	rule(".zbb-savings-rows",
+		display("flex"),
+		flexDirection("column"),
+		marginTop("0.5rem"),
+	)
+	rule(".zbb-savings-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.8rem"),
+		padding("0.5rem 0"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".zbb-savings-row:first-child", borderTop("0"))
+	rule(".zbb-savings-name",
+		fontWeight("500"),
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".zbb-savings-edit",
+		display("flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		prop("flex-shrink", "0"),
+	)
+	rule(".zbb-savings-input",
+		width("7rem"),
+		textAlign("right"),
+	)
+	rule(".zbb-savings-foot",
+		marginTop("0.6rem"),
+	)
 	rule(".plan-compare-select--compact",
 		maxWidth("220px"),
 		fontSize("0.85rem"),

@@ -124,6 +124,15 @@ type Prefs struct {
 	// safe-to-spend) in preference to the transaction-derived income figure.
 	// Zero means unset — fall back to summing income transactions for the period.
 	MonthlyIncomeMinor int64 `json:"monthlyIncomeMinor,omitempty"`
+	// BudgetIncomeMode selects what income a ZERO-BASED budget assigns against:
+	// "all" (every deposit last month — the default), "paychecks" (only deposits at
+	// or above BudgetPaycheckMinMinor, so side hustles are ignored), or "fixed" (the
+	// configured MonthlyIncomeMinor). Empty = "all". See budgeting.IncomeMode*.
+	BudgetIncomeMode string `json:"budgetIncomeMode,omitempty"`
+	// BudgetPaycheckMinMinor is the minimum deposit (minor units, base currency) that
+	// counts as a paycheck when BudgetIncomeMode is "paychecks". Zero = no threshold
+	// (every deposit counts, same as "all").
+	BudgetPaycheckMinMinor int64 `json:"budgetPaycheckMinMinor,omitempty"`
 
 	// SweepEnabled turns on the monthly surplus-sweep job. When false (the
 	// default), RunDueSweeps is a no-op even if the other sweep fields are set.

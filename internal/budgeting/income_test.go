@@ -57,6 +57,37 @@ func transferTxn(dateDay int, amountMinor int64, curr string) domain.Transaction
 	}
 }
 
+func TestZeroBasedIncome(t *testing.T) {
+	rates := makeRates(nil)
+	start, end := jan(1), jan(31)
+	txns := []domain.Transaction{
+		incomeTxn(3, 300000, "USD"),   // $3000 paycheck
+		incomeTxn(10, 5000, "USD"),    // $50 side hustle
+		incomeTxn(17, 300000, "USD"),  // $3000 paycheck
+		expenseTxn(5, 10000, "USD"),   // ignored (expense)
+		transferTxn(6, 100000, "USD"), // ignored (transfer)
+	}
+	cases := []struct {
+		name       string
+		mode       string
+		paycheckMn int64
+		configured int64
+		want       int64
+	}{
+		{"all sums every deposit", IncomeModeAll, 0, 0, 605000},
+		{"paychecks drops sub-threshold side income", IncomeModePaychecks, 10000, 0, 600000},
+		{"paychecks with no threshold == all", IncomeModePaychecks, 0, 0, 605000},
+		{"fixed uses configured, ignores txns", IncomeModeFixed, 0, 500000, 500000},
+		{"fixed unset returns 0", IncomeModeFixed, 0, 0, 0},
+		{"unknown mode falls back to all", "bogus", 0, 0, 605000},
+	}
+	for _, tc := range cases {
+		if got := ZeroBasedIncome(tc.mode, tc.paycheckMn, tc.configured, txns, start, end, "USD", rates); got != tc.want {
+			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestIncomeForBudgets(t *testing.T) {
 	rates := makeRates(map[string]float64{
 		"EUR": 1.10, // 1 EUR = 1.10 USD

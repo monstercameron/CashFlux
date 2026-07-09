@@ -131,6 +131,65 @@ func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) 
 	return money.New(per, rem.Currency), true, nil
 }
 
+// MonthlyAssignment returns the amount to assign to a goal each month under
+// zero-based budgeting, with ok=false when the goal takes no monthly assignment.
+// It prefers the goal's explicit MonthlyContribution — so an open-ended savings/
+// investing goal (no target date) can still take a flat monthly — and otherwise
+// falls back to the target-date-derived pace (MonthlyNeeded). Only financial goals
+// are assignable.
+func MonthlyAssignment(goal domain.Goal, from time.Time) (money.Money, bool, error) {
+	if !goal.IsFinancial() {
+		return money.Money{}, false, nil
+	}
+	if goal.MonthlyContribution.Amount > 0 {
+		return goal.MonthlyContribution, true, nil
+	}
+	return MonthlyNeeded(goal, from)
+}
+
+// Assignment is one active goal's monthly zero-based assignment, in base-currency
+// minor units — the per-goal line the Budgets savings section renders.
+type Assignment struct {
+	GoalID string
+	Name   string
+	Minor  int64
+}
+
+// MonthlyAssignments returns one Assignment per active, assignable goal, each
+// FX-converted to the base currency. Archived goals, non-financial goals, and
+// goals with no assignment (no explicit contribution and no future target date)
+// are skipped; a goal whose amount can't be converted (missing FX rate) is skipped
+// rather than aborting the whole list.
+func MonthlyAssignments(gs []domain.Goal, from time.Time, base string, rates currency.Rates) []Assignment {
+	var out []Assignment
+	for _, g := range gs {
+		if g.Archived {
+			continue
+		}
+		m, ok, err := MonthlyAssignment(g, from)
+		if err != nil || !ok || m.Amount <= 0 {
+			continue
+		}
+		conv, err := currency.ConvertBetween(m.Amount, m.Currency, base, rates)
+		if err != nil {
+			continue
+		}
+		out = append(out, Assignment{GoalID: g.ID, Name: g.Name, Minor: conv})
+	}
+	return out
+}
+
+// TotalMonthlyAssigned sums every active goal's MonthlyAssignment (base-currency
+// minor units) — the income assigned to savings/investments under zero-based
+// budgeting.
+func TotalMonthlyAssigned(gs []domain.Goal, from time.Time, base string, rates currency.Rates) int64 {
+	var total int64
+	for _, a := range MonthlyAssignments(gs, from, base, rates) {
+		total += a.Minor
+	}
+	return total
+}
+
 // OnTrack reports whether, at the given monthly contribution, the goal is
 // projected to be met on or before its target date. known is false when there's
 // nothing to judge — the goal has no target date, or no projection is possible

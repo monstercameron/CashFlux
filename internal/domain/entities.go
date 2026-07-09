@@ -571,6 +571,13 @@ type Goal struct {
 	// entries — older ones drop off, which only limits how far "undo" can walk back.
 	// JSON round-trips automatically; no store migration needed.
 	Contributions []GoalContribution `json:"contributions,omitempty"`
+	// MonthlyContribution is an explicit amount to assign to this goal each month
+	// under zero-based budgeting ("give every dollar a job"). When set (> 0) it is
+	// what the Budgets zero-based view counts toward the assigned total; when zero
+	// the view falls back to the target-date-derived pace (goals.MonthlyNeeded).
+	// This lets an open-ended savings/investing goal (no target date) still take a
+	// flat monthly assignment. Optional/additive — existing goals load with zero.
+	MonthlyContribution money.Money `json:"monthlyContribution,omitempty"`
 }
 
 // GoalContribution is one recorded contribution to a financial goal, retained so

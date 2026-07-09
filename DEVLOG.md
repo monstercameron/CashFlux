@@ -113,6 +113,41 @@ precedence, two-chip ActiveFilters, Without clears, ScopeChanged still sees a Ca
 impractical (custom select components, no native <select> at rest), but the change is purely
 additive to the same Apply(persisted-filter) path the working single-category drill already uses.
 
+## 2026-07-09 — Zero-based budgeting (expenses + savings/investments), cut 1.0.9
+
+Cam budgets by giving his whole salary a job. The existing `zero-based` methodology was a thin
+banner (To Assign = income − EXPENSE budgets); savings/investments couldn't count, so you could
+never zero out a salary. Planned it (plan file cozy-hatching-kite.md), confirmed two decisions:
+reuse Goals for savings (not a new budget-line type), and last-month actual income. Mid-build Cam
+added: make the income basis configurable (paychecks-only vs all vs fixed).
+
+Built bottom-up:
+- domain: `Goal.MonthlyContribution money.Money` (additive) — the enabling piece so an OPEN-ENDED
+  investing goal (no target date, so no MonthlyNeeded) can still take a flat monthly.
+- goals pkg: `MonthlyAssignment` (explicit contribution wins, else target-date `MonthlyNeeded`;
+  financial goals only), `MonthlyAssignments` (per-goal, FX'd, for the UI list), `TotalMonthlyAssigned`.
+  Unit-tested. Fixture gotcha: a Goal with TargetAmount set but CurrentAmount zero-value has empty
+  currency → Remaining errors; real goals always set it.
+- budgeting: `ZeroBasedIncome(mode, paycheckMin, configured, txns, …)` — all/paychecks/fixed. Sums
+  inline (budgeting must NOT import ledger — cycle) and, unlike IncomeForBudgets, skips an
+  unconvertible deposit instead of zeroing the whole figure. New prefs BudgetIncomeMode +
+  BudgetPaycheckMinMinor.
+- screen: computeBudgetView adds SavingsAssigned + SavingsLines; ToAssign = income − (expenses +
+  savings). Income basis: empty mode preserves prior behaviour (configured-wins-else-derived);
+  explicit modes use ZeroBasedIncome.
+- UI (budgets_tiles.go): `zeroBasedHero` (big To-Assign figure, green/red/accent + status word, +
+  Income/Expenses/Savings breakdown chips) replaces the one-line ZBB banner; `budgetIncomeBasisControl`
+  (a "Budget against" select + conditional threshold/fixed inputs writing prefs); `budget-savings`
+  tile (self-gates to ZBB) listing each counted goal with an inline number input that sets the goal's
+  MonthlyContribution — the drive-to-$0 loop — + Manage goals link. Goal editor gains the monthly field.
+- CSS scoped under .zbb-* with theme-safe tokens (--text/--text-faint/--border/--money-*/--accent).
+
+Verified: unit tests green; Playwright screenshots dark+light showed the hero (To Assign
+($2,172.80) over-assigned, since sample goals' near-term target dates give a high derived monthly),
+correct Income−Expenses−Savings math, the income-basis control, and the 5-row savings section with
+inline inputs. Both themes clean. Cut version 1.0.9 (bundles the muzak/notif/liability/utilities/
+multi-cat fixes accumulated under Unreleased).
+
 ## 2026-07-09 — "Utilities" account type (liability)
 
 Cam: "we also need utilities as an account type." The one non-trivial decision was the CLASS

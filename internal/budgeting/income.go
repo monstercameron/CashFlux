@@ -61,3 +61,55 @@ func IncomeForBudgets(
 	}
 	return total
 }
+
+// Zero-based income modes: how the "income to assign" figure is derived for a
+// zero-based budget.
+const (
+	IncomeModeAll       = "all"       // every income deposit in the window (default)
+	IncomeModePaychecks = "paychecks" // only deposits at/above the paycheck threshold (ignore side income)
+	IncomeModeFixed     = "fixed"     // a configured monthly figure, regardless of actual deposits
+)
+
+// ZeroBasedIncome resolves the income a zero-based budget assigns against, per the
+// household's chosen basis so a user can be strict (paychecks only) or loose (all
+// income, some months run over):
+//   - IncomeModeFixed: the configured monthly take-home (configuredMinor); 0 when unset.
+//   - IncomeModePaychecks: actual income in [start,end) but only deposits whose
+//     base-currency amount is >= paycheckMinMinor, so regular paychecks count and
+//     small side-hustle deposits are ignored (no threshold set → same as all).
+//   - IncomeModeAll (default / unknown): every income deposit in [start,end).
+//
+// Actual-income modes sum inline (IsIncome + ConvertBetween over the same window
+// IncomeForBudgets uses) — budgeting must not import ledger. Unlike IncomeForBudgets,
+// an FX failure on one deposit skips just that deposit rather than zeroing the whole
+// figure, so a single missing rate can't blank the budget.
+func ZeroBasedIncome(
+	mode string,
+	paycheckMinMinor, configuredMinor int64,
+	txns []domain.Transaction,
+	start, end time.Time,
+	base string,
+	rates currency.Rates,
+) int64 {
+	if mode == IncomeModeFixed {
+		if configuredMinor > 0 {
+			return configuredMinor
+		}
+		return 0
+	}
+	var total int64
+	for _, t := range txns {
+		if !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
+			continue
+		}
+		conv, err := currency.ConvertBetween(t.Amount.Amount, t.Amount.Currency, base, rates)
+		if err != nil {
+			continue // skip an unconvertible deposit, don't blank the whole figure
+		}
+		if mode == IncomeModePaychecks && paycheckMinMinor > 0 && conv < paycheckMinMinor {
+			continue // below the paycheck threshold — treat as side income
+		}
+		total += conv
+	}
+	return total
+}

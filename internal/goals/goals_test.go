@@ -51,6 +51,41 @@ func TestMonthlyNeeded(t *testing.T) {
 	}
 }
 
+func TestMonthlyAssignment(t *testing.T) {
+	from := mustDate("2026-01-01")
+	// Explicit monthly contribution wins — even with no target date (open-ended investing).
+	if m, ok, err := MonthlyAssignment(domain.Goal{MonthlyContribution: usd(50000)}, from); err != nil || !ok || m.Amount != 50000 {
+		t.Errorf("explicit = %d ok=%v err=%v, want 50000 true", m.Amount, ok, err)
+	}
+	// No explicit contribution → falls back to the target-date pace.
+	dated := domain.Goal{TargetAmount: usd(120000), CurrentAmount: usd(0), TargetDate: mustDate("2027-01-01")} // 12 months → 10000/mo
+	if m, ok, _ := MonthlyAssignment(dated, from); !ok || m.Amount != 10000 {
+		t.Errorf("dated = %d ok=%v, want 10000 true", m.Amount, ok)
+	}
+	// Non-financial goals are never assignable, even with a contribution set.
+	if _, ok, _ := MonthlyAssignment(domain.Goal{Kind: domain.GoalKindHabit, MonthlyContribution: usd(50000)}, from); ok {
+		t.Error("habit goal should not be assignable")
+	}
+	// No contribution and no target date → not assignable.
+	if _, ok, _ := MonthlyAssignment(domain.Goal{TargetAmount: usd(100)}, from); ok {
+		t.Error("open goal with no contribution/date should not be assignable")
+	}
+}
+
+func TestTotalMonthlyAssigned(t *testing.T) {
+	from := mustDate("2026-01-01")
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{}}
+	gs := []domain.Goal{
+		{MonthlyContribution: usd(50000)}, // $500 explicit
+		{TargetAmount: usd(120000), CurrentAmount: usd(0), TargetDate: mustDate("2027-01-01")}, // $100/mo derived
+		{MonthlyContribution: usd(30000), Archived: true},                                      // archived → skipped
+		{Kind: domain.GoalKindHabit, MonthlyContribution: usd(90000)},                          // non-financial → skipped
+	}
+	if got := TotalMonthlyAssigned(gs, from, "USD", rates); got != 60000 {
+		t.Errorf("total = %d, want 60000", got)
+	}
+}
+
 func TestMonthlyNeededRoundsUp(t *testing.T) {
 	from := mustDate("2026-01-01")
 	// $100 over 3 months → ceil(10000/3) = 3334 minor units.

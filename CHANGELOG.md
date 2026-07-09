@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-07-09
+
+### Added
+- **Zero-based budgeting across your whole salary (2026-07-09):** the Budgets page's zero-based method is now a real "give every dollar a job" workflow that spans **expenses AND savings/investments**. A big **"To Assign"** hero shows income minus everything assigned — driven to $0, green when balanced, red when over — over a breakdown of Income · Expenses · Savings & investing. Savings/investments come from your **Goals**: each active goal's monthly contribution counts toward the assigned total, with a new **Savings & investments** section where you can adjust each goal's monthly amount inline to reach $0. Goals gain an optional **monthly budget amount** (in the goal editor) so an open-ended investing goal with no target date can still take a flat monthly (otherwise the target-date pace is used). The income you budget against is **configurable** — *all* of last month's income, *paychecks only* (deposits at or above a threshold, so side hustles are ignored), or a *fixed amount* — via a "Budget against" control. Simple/envelope methods are unchanged.
+
 ### Fixed
 - **Multi-category budget "Transactions" now filters by ALL its categories (2026-07-09):** clicking Transactions on a budget that tracks several categories (e.g. "HOA, Mortgage Payment") drilled to only the first category. It now opens the ledger filtered to **every** tracked category (OR — a transaction matches if it's in any of them), shown as one removable chip per category. Backed by a new comma-joined `Categories` filter dimension; picking a single category from the toolbar still replaces it. Single-category budgets are unchanged.
 

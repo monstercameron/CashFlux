@@ -67,10 +67,14 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	dec := currency.Decimals(cur)
 	targetMajor := ""
 	dateISO := ""
+	monthlyMajor := ""
 	if found {
 		targetMajor = money.FormatMinor(g.TargetAmount.Amount, dec)
 		if !g.TargetDate.IsZero() {
 			dateISO = dateutil.FormatDate(g.TargetDate)
+		}
+		if g.MonthlyContribution.Amount > 0 {
+			monthlyMajor = money.FormatMinor(g.MonthlyContribution.Amount, dec)
 		}
 	}
 
@@ -88,6 +92,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	// All hooks unconditionally at stable positions.
 	nameS := ui.UseState(g.Name)
 	targetS := ui.UseState(targetMajor)
+	monthlyS := ui.UseState(monthlyMajor)
 	dateS := ui.UseState(dateISO)
 	acctS := ui.UseState(g.AccountID)
 	ownerS := ui.UseState(g.OwnerID)
@@ -100,6 +105,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
+	onMonthly := ui.UseEvent(func(v string) { monthlyS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onHabitTarget := ui.UseEvent(func(v string) { habitTargetS.Set(v) })
 	onContrib := ui.UseEvent(func(v string) { contribS.Set(v) })
@@ -139,6 +145,14 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 				}
 				gg.TargetAmount = money.New(amt, c)
 				gg.AccountID = acctS.Get()
+				// Optional explicit monthly assignment for zero-based budgeting.
+				if mc := strings.TrimSpace(monthlyS.Get()); mc != "" {
+					if m, mErr := money.ParseMinor(mc, currency.Decimals(c)); mErr == nil && m >= 0 {
+						gg.MonthlyContribution = money.New(m, c)
+					}
+				} else {
+					gg.MonthlyContribution = money.New(0, c)
+				}
 			case domain.GoalKindHabit:
 				n, err := strconv.Atoi(strings.TrimSpace(habitTargetS.Get()))
 				if err != nil || n <= 0 {
@@ -268,6 +282,9 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			)),
 		If(financial, labeledField(uistate.T("goals.targetLabel"),
 			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.targetLabel")), Value(targetS.Get()), Step("0.01"), OnInput(onTarget)))),
+		If(financial, labeledField(uistate.T("goals.monthlyContribLabel"),
+			Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-edit-monthly"), Attr("min", "0"),
+				Placeholder(uistate.T("goals.monthlyContribPlaceholder")), Value(monthlyS.Get()), Step("0.01"), OnInput(onMonthly)))),
 		If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-edit-cadence",

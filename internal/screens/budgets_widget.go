@@ -67,6 +67,9 @@ func Budgets() ui.Node {
 		budgetNativeSpec("budget-summary"),
 		budgetNativeSpec("budget-toolbar"),
 		budgetNativeSpec("budget-list"),
+		// Self-gating: renders nothing unless the method is zero-based (savings/
+		// investment goals counted toward the assigned total).
+		budgetNativeSpec("budget-savings"),
 	}
 	if formulasAtom.Get() {
 		specs = append(specs, budgetNativeSpec("budget-formula"))
@@ -104,6 +107,9 @@ func init() {
 	})
 	R("budget-formula", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetFormulaWidget, budgetFormulaProps{App: c.App})
+	})
+	R("budget-savings", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(budgetSavingsWidget, budgetSummaryProps{App: c.App})
 	})
 }
 
