@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Background music no longer plays when muted, incl. on the lock screen (2026-07-09):** the player keyed playback off an in-memory on/off flag that could be stale (seeded ON before the persisted store loaded), so a muted user could get music the moment they interacted — most visibly typing the passcode on the lock screen, which is the gesture that releases a browser-blocked autoplay. The player now does a **hard check of the persisted mute state right before it plays** (in `enable()` and at the track-start `play()` site); when muted it refuses and stays consistent. The lock-screen mute toggle now persists the new choice **before** telling the player, so unmuting from the lock screen reads the fresh value and resumes correctly.
+
 ## [1.0.8] - 2026-07-09
 
 ### Added

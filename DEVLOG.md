@@ -86,6 +86,32 @@ render correctly light-on-white in light, dark in dark. Both themes clean. Cut v
 Next: the still-pending "use formulas for budgets / make the formula engine more powerful"
 ask hasn't been started.
 
+## 2026-07-09 — muzak: hard mute-gate on the persisted state (lock-screen bug)
+
+Cam: "the lock screen muting is still bugged, do a hard state check on the persisted mute
+state before allowing the music to be played." He'd diagnosed it. Root cause: web/muzak.js
+gated playback on an in-memory `enabled` flag seeded from the Go atom (loadMuzakEnabled
+defaults ON when the persisted value isn't readable). Real playback only happens on a user
+gesture (autoplay is blocked → armGesture arms a pointer/key listener). The lock screen is
+the trap: typing the passcode is the gesture that fires the armed listener → enable() →
+music, even though the user is muted. The in-memory flag lies; the persisted `cashflux:muzak`
+("0"=muted) is the truth, and by gesture time the IndexedDB store cache is loaded, so a
+re-read is authoritative.
+
+Fix (web/muzak.js): `musicMuted()` reads the persisted key via the synchronous store bridge
+(window.cashfluxStoreGet, localStorage fallback) and returns true only on "0". Hard-gated two
+play sites: top of `enable()` (bail + disable + enabled=false) and `startTrack()` right
+before `el.play()`. So no path — stale setEnabled(true), armed gesture, crossfade — can start
+audio while muted. One interaction fix (applockgate.go): the lock-screen mute button called
+`muzak.setEnabled(!enabled)` BEFORE persisting, so on unmute the player's new hard-check would
+read the not-yet-updated "0" and refuse. Reordered to persist (SetMuzakEnabled) first, then
+tell the player — matches how the top-bar toggle already works (persist → effect → setEnabled).
+
+Verified with a Playwright gate test (seeded store, no audio needed): muted + stale
+setEnabled(true) → enabled=false, playing=false; muted + keydown/pointerdown gesture →
+blocked; persisted "1" + setEnabled(true) → allowed (enabled stays true, not force-disabled).
+All pass. muzak.js is static (no wasm rebuild for it); applockgate.go rebuilt + deployed.
+
 Couldn't e2e the live extraction (needs Cam's key + a real statement); verified the modal
 UI/upload flow via e2e + screenshot, and the request shape via a native ai test. Cam to
 test end-to-end with his statement.
