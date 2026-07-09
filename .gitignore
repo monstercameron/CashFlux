@@ -68,3 +68,6 @@ e2e/*_out.txt
 # Stray root-level wasm build output (build to web/bin/ instead)
 /CashFlux
 sample-statement.pdf
+
+# Personal statement samples (never leave this machine)
+temp/
