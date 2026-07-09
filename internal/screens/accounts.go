@@ -120,6 +120,8 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 		return icon.CreditCard
 	case domain.TypeLoan, domain.TypePersonalLoan, domain.TypeMortgage:
 		return icon.Landmark
+	case domain.TypeUtilities:
+		return icon.Receipt // a utility/HOA account is a recurring bill
 	case domain.TypeInvestment:
 		return icon.Reports
 	case domain.TypeRetirement:

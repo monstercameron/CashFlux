@@ -60,13 +60,13 @@ func TestAllSlicesAreValid(t *testing.T) {
 			t.Errorf("AllRelatedTypes has invalid %q", r)
 		}
 	}
-	if len(AllAccountTypes) != 15 {
-		t.Errorf("AllAccountTypes len = %d, want 15", len(AllAccountTypes))
+	if len(AllAccountTypes) != 16 {
+		t.Errorf("AllAccountTypes len = %d, want 16", len(AllAccountTypes))
 	}
 }
 
 func TestAccountTypeClass(t *testing.T) {
-	liabilities := []AccountType{TypeCreditCard, TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage}
+	liabilities := []AccountType{TypeCreditCard, TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage, TypeUtilities}
 	for _, ty := range liabilities {
 		if ty.Class() != ClassLiability || !ty.IsLiability() {
 			t.Errorf("%s should be a liability", ty)
@@ -151,11 +151,11 @@ func TestRecurringMonthlyEquivalent(t *testing.T) {
 		want int64
 	}{
 		{mk(10000, CadenceMonthly), 10000},
-		{mk(12000, CadenceQuarterly), 4000}, // /3
-		{mk(120000, CadenceYearly), 10000},  // /12
-		{mk(12000, CadenceWeekly), 52000},        // *52/12 = 4.333× → 52000
-		{mk(12000, CadenceBiweekly), 26000},      // *26/12
-		{mk(12000, CadenceSemimonthly), 24000},   // *2
+		{mk(12000, CadenceQuarterly), 4000},    // /3
+		{mk(120000, CadenceYearly), 10000},     // /12
+		{mk(12000, CadenceWeekly), 52000},      // *52/12 = 4.333× → 52000
+		{mk(12000, CadenceBiweekly), 26000},    // *26/12
+		{mk(12000, CadenceSemimonthly), 24000}, // *2
 		{mk(-150000, CadenceMonthly), -150000},
 	}
 	for _, tc := range cases {

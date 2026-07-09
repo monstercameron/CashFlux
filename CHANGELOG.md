@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **"Utilities" account type (2026-07-09):** a new account type for utility / HOA / service accounts (electric, water, HOA dues). It classes as a **liability** — a recurring obligation you owe — so a Utilities account counts as debt in net worth and the debt formulas with no manual toggle, and (like every liability) it's excluded from low-balance alerts. Appears in the account type picker grouped with the other liabilities, with a receipt glyph.
+
 ### Fixed
 - **Notification action buttons show their icons again (2026-07-09):** each notification's inline mark-read / snooze / dismiss controls rendered as empty squares because they were sized with literal `w-4`/`h-4` classes that don't exist in the app's CSS (the real utilities are the atomic `tw.W4`/`tw.H4`). Since the icon primitive takes its size only from caller classes, the SVGs collapsed and the buttons shrank to ~13px. Now sized with `tw.W4`/`tw.H4`, so the check / clock / ✕ glyphs (and the linked-notification chevron) render.
 - **Low-balance alert no longer lingers on accounts you mark a liability (2026-07-09):** a "balance is low" warning raised while an account was an asset stayed in the feed even after you set the account to a liability — where a zero/low balance is *good* (you owe nothing). New alerts already skip liabilities and archived accounts; now a boot-time reconcile also clears any stale low-balance notification for an account that has since become a liability or been archived, so it self-heals.

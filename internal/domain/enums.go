@@ -41,9 +41,12 @@ const (
 	TypeLoan         AccountType = "loan"
 	TypePersonalLoan AccountType = "personal_loan"
 	TypeMortgage     AccountType = "mortgage"
-	TypeInvestment   AccountType = "investment"
-	TypeRetirement   AccountType = "retirement"
-	TypeCrypto       AccountType = "crypto"
+	// TypeUtilities is a utility/HOA/service account — a recurring obligation you
+	// owe (electric, water, HOA dues), so it classes as a liability.
+	TypeUtilities  AccountType = "utilities"
+	TypeInvestment AccountType = "investment"
+	TypeRetirement AccountType = "retirement"
+	TypeCrypto     AccountType = "crypto"
 	// TypeProperty represents a real-estate asset (e.g. a home) whose value is a
 	// periodic user-entered estimate rather than a reconciled cash balance.
 	TypeProperty AccountType = "property"
@@ -56,7 +59,7 @@ const (
 // AllAccountTypes lists every valid account type.
 var AllAccountTypes = []AccountType{
 	TypeChecking, TypeDebit, TypeSavings, TypeCash, TypeCreditCard,
-	TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage,
+	TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage, TypeUtilities,
 	TypeInvestment, TypeRetirement, TypeCrypto, TypeProperty, TypeVehicle, TypeOther,
 }
 
@@ -119,7 +122,7 @@ func (t AccountType) Valid() bool {
 // Class returns the natural account class for a type (liabilities are debts).
 func (t AccountType) Class() AccountClass {
 	switch t {
-	case TypeCreditCard, TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage:
+	case TypeCreditCard, TypeLineOfCredit, TypeLoan, TypePersonalLoan, TypeMortgage, TypeUtilities:
 		return ClassLiability
 	default:
 		return ClassAsset

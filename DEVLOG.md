@@ -86,6 +86,22 @@ render correctly light-on-white in light, dark in dark. Both themes clean. Cut v
 Next: the still-pending "use formulas for budgets / make the formula engine more powerful"
 ask hasn't been started.
 
+## 2026-07-09 — "Utilities" account type (liability)
+
+Cam: "we also need utilities as an account type." The one non-trivial decision was the CLASS
+(asset vs liability) — it flips net-worth sign, so I asked rather than guessed. He chose
+liability (a utility/HOA account is a recurring obligation you owe — matches how he set up the
+Wimbledon HOA). Added TypeUtilities="utilities" to domain/enums.go: in the const block + slice
+right after TypeMortgage (so the picker groups it with the liabilities), and in Class()'s
+liability case. Everything downstream is class-driven and generic — the picker is
+OptionsFrom(AllAccountTypes) with humanizeType auto-labeling ("Utilities"), Valid() reads the
+slice, the add/edit form shows liability fields when Class()==Liability, and low-balance alerts
+already skip IsLiability(). Icon: accountTypeIcon → icon.Receipt (a utility account is a
+recurring bill; the fn has a default so it was optional, but Receipt fits). Updated the two
+domain tests (count 15→16, TestAccountTypeClass liabilities list). Verified via Playwright:
+opened the add-account FlipPanel, dumped the type <select> — "Utilities" present and ordered
+after Mortgage, form renders clean.
+
 ## 2026-07-09 — notifications page: action icons + low-balance liability self-heal
 
 Two bugs from one report. (1) "the per notif widgets are being displayed [wrong]." Screenshotted
