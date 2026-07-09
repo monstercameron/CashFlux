@@ -124,26 +124,47 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		),
 	)
 
-	body := Div(
-		statGrid,
-		// C130: clarify a custom top-bar range only changes the view window — it doesn't
-		// redefine each budget's own period.
-		If(!vw.IsSinglePeriod(), P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
-			uistate.T("budgets.customRangeHint"))),
-		budgetAssignBanner(v),
-		If(v.Method == budgeting.MethodZeroBased, ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: v.Base})),
-		budgetFundSetAsideNode(v),
-		// C125: lead with a salient over-spend banner, with the count/near pills below.
-		If(v.OverCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
-			Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
-			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
-		)),
-		If(v.OverCount > 0 || v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			If(v.OverCount > 0, Span(css.Class("pill is-danger"), uistate.T("budgets.overBadge", v.OverCount))),
-			If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
-		)),
-	)
+	// C130: clarify a custom top-bar range only changes the view window — it doesn't
+	// redefine each budget's own period.
+	rangeHint := If(!vw.IsSinglePeriod(), P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
+		uistate.T("budgets.customRangeHint")))
+	// C125: a salient over-spend banner + the count/near pills.
+	overBanner := If(v.OverCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
+		Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
+		Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
+		Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
+	))
+	pills := If(v.OverCount > 0 || v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
+		If(v.OverCount > 0, Span(css.Class("pill is-danger"), uistate.T("budgets.overBadge", v.OverCount))),
+		If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
+	))
+
+	var body ui.Node
+	if v.Method == budgeting.MethodZeroBased {
+		// Zero-based leads with the To-Assign hero (the thesis: give every dollar a job),
+		// then the income basis, then the spend-progress bar DEMOTED below — spending is
+		// context here, not the headline.
+		body = Div(
+			zeroBasedHero(v),
+			ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: v.Base}),
+			overBanner,
+			Div(css.Class("zbb-spend"),
+				P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap")),
+				statGrid),
+			rangeHint,
+			budgetFundSetAsideNode(v),
+			pills,
+		)
+	} else {
+		body = Div(
+			statGrid,
+			rangeHint,
+			budgetAssignBanner(v),
+			budgetFundSetAsideNode(v),
+			overBanner,
+			pills,
+		)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

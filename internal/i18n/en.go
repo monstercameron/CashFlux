@@ -677,6 +677,7 @@ var english = Catalog{
 	"budgets.allAssigned":            "Every dollar is assigned — nice.",
 	"budgets.overAssigned":           "Over-assigned by %s (budgets exceed income)",
 	"budgets.zbbToAssign":            "To assign",
+	"budgets.zbbSpendCap":            "Spending so far this month",
 	"budgets.zbbAllAssigned":         "Every dollar has a job",
 	"budgets.zbbLeft":                "left to assign",
 	"budgets.zbbOver":                "over-assigned",

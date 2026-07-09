@@ -2881,9 +2881,10 @@ func registerGenerated() {
 		gap("0.2rem 0.7rem"),
 	)
 	rule(".zbb-figure",
-		fontSize("2.2rem"),
+		fontSize("2.6rem"),
 		fontWeight("800"),
-		lineHeight("1.05"),
+		lineHeight("1.03"),
+		letterSpacing("-0.01em"),
 		color("var(--text)"),
 	)
 	rule(".zbb-figure.is-done", color("var(--money-positive)"))
@@ -2989,6 +2990,26 @@ func registerGenerated() {
 	)
 	rule(".zbb-savings-foot",
 		marginTop("0.6rem"),
+	)
+	// The spend-progress bar is DEMOTED in the zero-based view (spending is context,
+	// not the headline), so its figures shrink and sit under a quiet caption below
+	// the To-Assign hero.
+	rule(".zbb-spend",
+		marginTop("1rem"),
+	)
+	rule(".zbb-spend-cap",
+		margin("0 0 0.4rem"),
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-spend .budget-loader-value",
+		fontSize("0.95rem"),
+	)
+	rule(".zbb-spend .budget-loader-value.is-hero",
+		fontSize("1.15rem"),
 	)
 	rule(".plan-compare-select--compact",
 		maxWidth("220px"),
