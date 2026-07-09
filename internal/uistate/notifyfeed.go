@@ -159,6 +159,30 @@ func DismissFeedItem(id string) {
 	setNotifyFeed(out)
 }
 
+// RemoveFeedItems drops every item for which drop() reports true, then persists
+// and pushes the result. Used by the boot reconcile to clear alerts whose
+// underlying condition has resolved (e.g. a low-balance warning on an account the
+// user has since marked a liability — a zero balance there is good, not low). It
+// reads the live persisted feed, so it can run from non-render boot code. No-op
+// when nothing matches.
+func RemoveFeedItems(drop func(FeedItem) bool) {
+	cur := loadNotifyFeed()
+	out := cur[:0:0]
+	changed := false
+	for _, it := range cur {
+		if drop(it) {
+			changed = true
+			continue
+		}
+		out = append(out, it)
+	}
+	if !changed {
+		return
+	}
+	PersistNotifyFeed(out)
+	setNotifyFeed(out)
+}
+
 // SnoozeFeedItem sets SnoozedUntil on the item with the given id to the
 // provided unix-second timestamp, persists, and pushes the live atom (C268).
 // Pass until=0 to clear a snooze.

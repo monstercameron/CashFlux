@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"runtime/debug"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -89,6 +90,13 @@ func runNotifyCatchUp() {
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
 	saveDeliveredLog(log)
+
+	// Self-heal: clear stale "balance is low" alerts for accounts that no longer
+	// qualify. Runs every boot, before the no-new-notifications early return, so a
+	// warning left over from before the user marked an account a liability (where a
+	// zero balance is good — you owe nothing) or archived it, disappears on its own.
+	reconcileLowBalanceFeed(app)
+
 	if len(out) == 0 {
 		return
 	}
@@ -334,6 +342,39 @@ func lowBalanceCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfi
 		return nil
 	}
 	return out
+}
+
+// reconcileLowBalanceFeed removes any existing "balance is low" notifications for
+// accounts that no longer qualify for the alert: liabilities (a low/zero balance
+// there is good — you owe nothing) and archived accounts. New low-balance
+// candidates already skip these (notifyfeed.LowBalanceCandidates checks
+// IsLiability + Archived), but an alert raised BEFORE the user marked the account
+// a liability would otherwise linger; this clears it on the next boot.
+//
+// Low-balance feed IDs are DedupeKey("default-low-balance", "lowbal:<acctID>@<week>")
+// = "default-low-balance@lowbal:<acctID>@<week>", so the account id is recoverable.
+func reconcileLowBalanceFeed(app *appstate.App) {
+	resolved := map[string]bool{}
+	for _, a := range app.Accounts() {
+		if a.IsLiability() || a.Archived {
+			resolved[a.ID] = true
+		}
+	}
+	if len(resolved) == 0 {
+		return
+	}
+	const prefix = "default-low-balance@lowbal:"
+	uistate.RemoveFeedItems(func(it uistate.FeedItem) bool {
+		if !strings.HasPrefix(it.ID, prefix) {
+			return false
+		}
+		rest := strings.TrimPrefix(it.ID, prefix)
+		acctID := rest
+		if i := strings.LastIndex(rest, "@"); i >= 0 { // strip the "@<week>" suffix
+			acctID = rest[:i]
+		}
+		return resolved[acctID]
+	})
 }
 
 // paycheckLandedCandidates flags income transactions that look like a paycheck

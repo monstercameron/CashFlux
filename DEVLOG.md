@@ -86,6 +86,29 @@ render correctly light-on-white in light, dark in dark. Both themes clean. Cut v
 Next: the still-pending "use formulas for budgets / make the formula engine more powerful"
 ask hasn't been started.
 
+## 2026-07-09 — notifications page: action icons + low-balance liability self-heal
+
+Two bugs from one report. (1) "the per notif widgets are being displayed [wrong]." Screenshotted
+/notifications with a seeded feed (Playwright, deep-link, localStorage seed of cashflux:notify:feed
+migrated in by browserstore) — the summary/toolbar/list widgets DID render, but each card's inline
+action buttons were empty ~13px squares. Inspected the DOM: the SVGs were present but the buttons
+had collapsed. Root cause: notifications.go sized icons with literal `css.Class("w-4","h-4")` — but
+`.w-4`/`.h-4` are NOT defined; the real size utilities are the atomic `tw.W4`/`tw.H4`
+(`css.W(css.Rem(1))` → `width:1rem`). uiw.Icon takes its size ONLY from caller classes (viewBox, no
+width/height), so unsized SVGs collapsed; the medallion survived only because `.notif-badge` is a
+fixed 34px circle. Fix: `tw.W4`/`tw.H4` for all 5 icon sites. Re-screenshot: ✓/🕐/✕ + chevron render.
+
+(2) "I manu set this as a liability… do a check if its a liability in your checker because you want 0
+liabilities." Traced it: the manual "count as liability" toggle sets Class=ClassLiability, and
+notifyfeed.LowBalanceCandidates already skips `IsLiability()`/`Archived` (there's even a
+`liability excluded` unit test) — so no NEW alert fires. The one Cam saw was STALE: raised while the
+account was an asset, and the feed is a persisted historical log that doesn't auto-retract. Added a
+boot-time self-heal (notifyrun.reconcileLowBalanceFeed): low-balance feed IDs are
+`default-low-balance@lowbal:<acctID>@<week>`, so parse the account id and drop the item if that
+account is now a liability or archived. Backed by a new generic uistate.RemoveFeedItems(drop func).
+Runs before the no-new-notifications early return so it heals every boot. Scoped to liability/archived
+(the funded-back-above-floor case is left for later — it needs balance recompute).
+
 ## 2026-07-09 — muzak: hard mute-gate on the persisted state (lock-screen bug)
 
 Cam: "the lock screen muting is still bugged, do a hard state check on the persisted mute
