@@ -45,6 +45,7 @@ var implemented = map[string]bool{
 	"SMART-T15":   true, // suggest new categories from uncategorized txns
 	"SMART-T16":   true, // auto-categorize uncategorized txns (with review)
 	"SMART-T17":   true, // miscategorization review
+	"SMART-T18":   true, // statement import (AI PDF → review → import)
 	"SMART-QUOTE": true, // daily money-mindset quote (hub)
 }
 

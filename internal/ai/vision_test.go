@@ -36,6 +36,50 @@ func TestBuildStructuredVisionRequest(t *testing.T) {
 	}
 }
 
+func TestBuildStructuredFileRequest(t *testing.T) {
+	const fileData = "data:application/pdf;base64,JVBERi0="
+	schema := []byte(`{"type":"object","properties":{"transactions":{"type":"array"}},"required":["transactions"],"additionalProperties":false}`)
+	raw, err := BuildStructuredFileRequest("gpt-5.5", "sys", "extract", "statement.pdf", fileData, 0.1, "transactions", schema)
+	if err != nil {
+		t.Fatalf("BuildStructuredFileRequest: %v", err)
+	}
+	// The system message's content is a plain string; the user message's is an array
+	// of parts — parse each message's content lazily so the string doesn't break it.
+	var env struct {
+		Messages []struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.Messages) != 2 {
+		t.Fatalf("want system+user messages, got %d", len(env.Messages))
+	}
+	var parts []struct {
+		Type string `json:"type"`
+		File *struct {
+			Filename string `json:"filename"`
+			FileData string `json:"file_data"`
+		} `json:"file"`
+	}
+	if err := json.Unmarshal(env.Messages[1].Content, &parts); err != nil {
+		t.Fatalf("user content not an array of parts: %v", err)
+	}
+	var found bool
+	for _, p := range parts {
+		if p.Type == "file" && p.File != nil {
+			found = true
+			if p.File.Filename != "statement.pdf" || p.File.FileData != fileData {
+				t.Errorf("file part = %+v, want statement.pdf / the data URL", p.File)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no file content part in %s", raw)
+	}
+}
+
 func TestBuildVisionRequest(t *testing.T) {
 	const dataURL = "data:image/png;base64,AAAA"
 	raw, err := BuildVisionRequest("gpt-5.5", "You read receipts.", "Extract the transactions.", dataURL, 0.2)

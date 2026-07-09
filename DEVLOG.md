@@ -1,3 +1,29 @@
+## 2026-07-09 — AI statement import (attach PDF straight to the model)
+
+New Smart+ feature (Cam): import a bank/CC statement, run it through the AI, best-effort
+map to existing categories (blank otherwise, never invent), review table with quick
+edits before import. Researched first — ~80% already existed (the receipt/vision
+importer's editable review table + dedupe + `ImportReviewedDocumentRows`, a tolerant
+`extract.ParseRows`, `categoryIDForDocumentRow` for existing-only mapping, the flip-modal
+host pattern). I initially planned pdf.js page-rendering; Cam course-corrected: "just
+attach the file to the LLM query itself." Confirmed via OpenAI docs — Chat Completions
+takes a `{"type":"file","file":{"filename","file_data":"data:application/pdf;base64,…"}}`
+content part and extracts BOTH text and page images on vision models (gpt-4o+), so
+scanned statements work with zero client-side rendering. Much cleaner than pdf.js.
+
+Built: `ai.BuildStructuredFileRequest` + `ai.SendStructuredFileChat` (the file content
+part; unit-tested against OpenAI's exact shape), a category-constrained extraction prompt
+(lists the household's category names, "use one of these or empty — never invent"),
+`StatementImportBody` + shell-root `StatementImportHost` (large 900×660 flip modal)
+reusing `DraftReviewList` (editable table + existing-category dropdown) and the import
+path, a Transactions toolbar button, and SMART-T18 (vision tier) + `smartai.implemented`.
+BYO-key only (the optional cloud proxy's RPC doesn't carry file uploads yet). Cam's
+sample PDF is in temp/ (gitignored — personal).
+
+Couldn't e2e the live extraction (needs Cam's key + a real statement); verified the modal
+UI/upload flow via e2e + screenshot, and the request shape via a native ai test. Cam to
+test end-to-end with his statement.
+
 ## 2026-07-08 — Budgets "Last month" one-click toggle
 
 Cam wanted to "see what it looked like last month with a single click." Researched

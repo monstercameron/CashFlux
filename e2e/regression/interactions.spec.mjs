@@ -358,3 +358,16 @@ test.describe("budgets last-month toggle", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+test.describe("statement import", () => {
+  test("the Import statement modal opens with the upload UI", async ({ app }) => {
+    await nav(app, "/transactions");
+    const btn = app.getByTestId("txn-statement-import-btn");
+    await expect(btn).toBeVisible();
+    await btn.click();
+    await expect(app.getByTestId("statementimport-choose")).toBeVisible();
+    await expect(app.getByTestId("statementimport-run")).toBeVisible();
+    await app.getByTestId("statementimport-cancel").click();
+    await expect(app.getByTestId("statementimport-choose")).toHaveCount(0);
+  });
+});

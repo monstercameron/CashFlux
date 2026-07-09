@@ -87,6 +87,7 @@ var catalog = []Feature{
 	ai("SMART-T15", PageTransactions, "Suggest new categories", "Scan your uncategorized transactions and propose new categories to create — you pick which to add.", false, tokClassifyIn, tokClassifyOut),
 	ai("SMART-T16", PageTransactions, "Auto-categorize (with review)", "Scan your uncategorized transactions and propose a category for each — you confirm before anything changes.", false, tokClassifyIn, tokClassifyOut),
 	ai("SMART-T17", PageTransactions, "Miscategorization review", "Scan your categorized transactions for likely mistakes and propose fixes — you confirm each change.", false, tokClassifyIn, tokClassifyOut),
+	ai("SMART-T18", PageTransactions, "Statement import", "Attach a bank or credit-card statement PDF; the AI reads it and lists the transactions to review — categories mapped to your existing ones — before you import.", false, tokVisionIn, tokVisionOut),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────
 	rule("SMART-B7", PageBudgets, "Seasonal budget adjustment", "Detect seasonal categories and suggest month-specific budget amounts."),

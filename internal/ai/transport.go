@@ -88,6 +88,18 @@ func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, im
 	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
 }
 
+// SendStructuredFileChat is SendStructuredVisionChat but attaches a document (PDF)
+// to the user message instead of an image — the model reads the PDF's text and page
+// images natively. Same async contract; returns a cancel function.
+func SendStructuredFileChat(apiKey, baseURL, model, systemPrompt, userText, filename, fileData string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	body, err := BuildStructuredFileRequest(model, systemPrompt, userText, filename, fileData, temperature, schemaName, schema)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
+}
+
 // SendResponsesWebSearch posts a Responses API request (POST /responses) with the
 // hosted web_search tool enabled. It is the wasm-only transport counterpart to
 // BuildResponsesWebSearchRequest + ParseResponsesText (which live in the pure

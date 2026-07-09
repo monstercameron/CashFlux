@@ -8496,6 +8496,19 @@ func registerGenerated() {
 		margin(".15rem 0 .35rem"),
 		gap(".55rem"),
 	)
+	// Statement-import modal: the choose-file row.
+	rule(".statement-drop",
+		display("flex"),
+		alignItems("center"),
+		gap(".7rem"),
+		flexWrap("wrap"),
+	)
+	rule(".statement-file",
+		fontSize(".85rem"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
 	// Auto-budget modal: a scrollable list of tunable per-category suggestions, each a
 	// checkbox + name/slider + a live monthly figure, then a Cancel/Save footer.
 	rule(".autobudget-rows",

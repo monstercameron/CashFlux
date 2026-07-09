@@ -109,6 +109,13 @@ func UseTxnColsModalOpen() state.Atom[bool] { return state.UseAtom(txnColsModalA
 // sets it; the shell-root host renders the flip modal when true.
 func UseTxnSmartCatOpen() state.Atom[bool] { return state.UseAtom(txnSmartCatAtomID, false) }
 
+// UseStatementImportOpen returns the shared atom selecting whether the "Import
+// statement" (AI PDF import) flip modal is open. The transactions toolbar's button sets
+// it; the shell-root StatementImportHost renders the modal when true.
+func UseStatementImportOpen() state.Atom[bool] {
+	return state.UseAtom("transactions:statementImport", false)
+}
+
 // TxnViewLedger / Import / Duplicates are the mutually exclusive sub-views the
 // transactions surface can show in its main tile slot. Ledger is the default.
 const (

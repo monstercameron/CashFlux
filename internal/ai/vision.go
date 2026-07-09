@@ -11,12 +11,22 @@ type visionImageURL struct {
 	URL string `json:"url"`
 }
 
-// visionContentPart is one part of a multimodal user message: either a text part
-// or an image part.
+// visionFile is a document (e.g. a PDF) attached to a multimodal message. FileData
+// is a data: URL ("data:application/pdf;base64,…"). OpenAI extracts BOTH the text
+// and the page images from a PDF, so this handles scanned statements too — the bytes
+// go only to OpenAI.
+type visionFile struct {
+	Filename string `json:"filename"`
+	FileData string `json:"file_data"`
+}
+
+// visionContentPart is one part of a multimodal user message: a text part, an image
+// part, or a file part.
 type visionContentPart struct {
-	Type     string          `json:"type"` // "text" or "image_url"
+	Type     string          `json:"type"` // "text" | "image_url" | "file"
 	Text     string          `json:"text,omitempty"`
 	ImageURL *visionImageURL `json:"image_url,omitempty"`
+	File     *visionFile     `json:"file,omitempty"`
 }
 
 // visionMessage mirrors Message but allows the content to be either a plain
@@ -62,6 +72,35 @@ func BuildStructuredVisionRequest(model, systemPrompt, userText, imageURL string
 	return json.Marshal(visionRequest{
 		Model:       model,
 		Messages:    visionMessages(systemPrompt, userText, imageURL),
+		Temperature: temperature,
+		ResponseFormat: &ResponseFormat{
+			Type:       "json_schema",
+			JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true},
+		},
+	})
+}
+
+// fileMessages builds the system + multimodal-user message pair carrying one attached
+// document (e.g. a PDF) plus the instruction text. fileData is a data: URL.
+func fileMessages(systemPrompt, userText, filename, fileData string) []visionMessage {
+	return []visionMessage{
+		{Role: RoleSystem, Content: systemPrompt},
+		{Role: RoleUser, Content: []visionContentPart{
+			{Type: "file", File: &visionFile{Filename: filename, FileData: fileData}},
+			{Type: "text", Text: userText},
+		}},
+	}
+}
+
+// BuildStructuredFileRequest marshals a structured chat request that attaches a
+// document (PDF) to the user message, with a JSON-schema response_format. The model
+// reads the PDF's text and page images natively — no client-side rendering. Use a
+// vision-capable model (gpt-4o and later, e.g. gpt-5.5). fileData is a data: URL
+// ("data:application/pdf;base64,…").
+func BuildStructuredFileRequest(model, systemPrompt, userText, filename, fileData string, temperature float64, schemaName string, schema []byte) ([]byte, error) {
+	return json.Marshal(visionRequest{
+		Model:       model,
+		Messages:    fileMessages(systemPrompt, userText, filename, fileData),
 		Temperature: temperature,
 		ResponseFormat: &ResponseFormat{
 			Type:       "json_schema",
