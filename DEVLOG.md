@@ -113,6 +113,28 @@ precedence, two-chip ActiveFilters, Without clears, ScopeChanged still sees a Ca
 impractical (custom select components, no native <select> at rest), but the change is purely
 additive to the same Apply(persisted-filter) path the working single-category drill already uses.
 
+## 2026-07-09 — ZBB: set a monthly budget + roll leftover into next month
+
+Cam: "I don't see a way to set the max monthly budget" + "roll leftover budget into next month
+or into an account (treat as higher group budget next month)". Asked 3 clarifying questions
+(money semantics fork): max budget = a fixed amount he sets; leftover = unspent budget
+(budgeted − spent); destination = next month's budget (not an account — the sweep feature already
+does account moves).
+
+- Max budget: the "fixed amount" income basis already did this; relabelled the option
+  "A fixed amount" → "A set monthly budget" and its field "Monthly income" → "Monthly budget" so
+  it's discoverable as a budget cap.
+- Rollover: new pref BudgetRolloverLeftover + a toggle in the income-basis control. In
+  computeBudgetView, for each budget WITHOUT its own per-budget Rollover, evaluate the PREVIOUS
+  period (reusing PreviousPeriodRange + EvaluateRollup already in the loop) and sum
+  max(0, prev.Remaining) FX'd to base → RolledOver. Excluding per-budget-Rollover budgets avoids
+  double-counting (they carry into their own cap). zeroBasedHero folds it into the pool:
+  ToAssign = (income + rolledOver) − (expenses + savings); a "Rolled over" chip shows when > 0.
+
+Verified via Playwright: toggling rollover added a "ROLLED OVER $1,220.00" chip and moved To-Assign
+($2,172.80) → ($952.80) (exactly +$1,220); fixed mode shows option "A set monthly budget" + field
+"Monthly budget". Full suite green. Left under Unreleased (no bump requested).
+
 ## 2026-07-09 — Zero-based budgeting (expenses + savings/investments), cut 1.0.9
 
 Cam budgets by giving his whole salary a job. The existing `zero-based` methodology was a thin

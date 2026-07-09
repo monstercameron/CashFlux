@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Set a monthly budget + roll leftover into next month (2026-07-09):** the zero-based view's "Budget against" now offers **A set monthly budget** — a fixed amount you type (labelled "Monthly budget") to budget against instead of your actual income, so you can cap what you assign each month. And a new **"Roll last month's leftover into this month"** toggle adds last month's **unspent budget** (each budget's limit minus what was spent, clamped at zero, excluding budgets that already carry their own remaining) into this month's assignable pool — shown as a **Rolled over** figure in the breakdown, raising your To-Assign. Off by default.
+
 ## [1.0.10] - 2026-07-09
 
 ### Changed

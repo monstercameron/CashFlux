@@ -2941,6 +2941,16 @@ func registerGenerated() {
 	rule(".zbb-basis .field",
 		minWidth("11rem"),
 	)
+	rule(".zbb-basis-wrap",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.55rem"),
+	)
+	rule(".zbb-rollover",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.5rem"),
+	)
 	rule(".zbb-savings-head",
 		display("flex"),
 		alignItems("baseline"),

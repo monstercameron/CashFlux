@@ -133,6 +133,12 @@ type Prefs struct {
 	// counts as a paycheck when BudgetIncomeMode is "paychecks". Zero = no threshold
 	// (every deposit counts, same as "all").
 	BudgetPaycheckMinMinor int64 `json:"budgetPaycheckMinMinor,omitempty"`
+	// BudgetRolloverLeftover, when true, rolls LAST month's unspent budget (each
+	// budget's limit minus what was spent, summed and clamped at zero — excluding
+	// budgets that already carry their own remaining via Budget.Rollover) into THIS
+	// month's assignable pool in the zero-based view, so leftover becomes extra
+	// budget to assign next month. Off by default.
+	BudgetRolloverLeftover bool `json:"budgetRolloverLeftover,omitempty"`
 
 	// SweepEnabled turns on the monthly surplus-sweep job. When false (the
 	// default), RunDueSweeps is a no-op even if the other sweep fields are set.

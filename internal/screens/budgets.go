@@ -66,6 +66,9 @@ type budgetView struct {
 	// savings. SavingsLines is the per-goal breakdown the savings section renders.
 	SavingsAssigned int64
 	SavingsLines    []goalsvc.Assignment
+	// RolledOver is last month's unspent budget carried into this month's assignable
+	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
+	RolledOver int64
 }
 
 // computeBudgetView runs the full budget evaluation for the active member scope and
@@ -122,6 +125,10 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	rollEffCap := map[string]string{}
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
+	// Pooled leftover: last month's unspent budget (limit − spent, clamped ≥ 0)
+	// summed across budgets that DON'T carry their own remaining, when the user opts
+	// to roll leftover into next month's assignable pool (zero-based view).
+	var pooledRollover int64
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
 		// Flag budgets that received cover money this period (quick ref on the row).
@@ -140,6 +147,15 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 				}
 				rollCarry[b.ID] = budgetRemainPhrase(prev.Remaining)
 				rollNeg[b.ID] = prev.Remaining.IsNegative()
+			}
+		} else if pr.BudgetRolloverLeftover {
+			// This budget doesn't carry its own remaining, so its last-month unspent
+			// feeds the pooled leftover that raises next month's assignable budget.
+			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
+			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil && prev.Remaining.Amount > 0 {
+				if conv, cerr := currency.ConvertBetween(prev.Remaining.Amount, prev.Remaining.Currency, base, rates); cerr == nil {
+					pooledRollover += conv
+				}
 			}
 		}
 		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
@@ -275,6 +291,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
 		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
+		RolledOver: pooledRollover,
 	}
 }
 

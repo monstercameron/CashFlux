@@ -223,7 +223,9 @@ func budgetAssignBanner(v budgetView) ui.Node {
 // assign (the status word says how much). Pure node builder.
 func zeroBasedHero(v budgetView) ui.Node {
 	assigned := v.TotalLimit + v.SavingsAssigned
-	toAssign := budgeting.ToAssign(v.BannerIncome, assigned)
+	// Last month's unspent budget (when rolled over) adds to the pool you can assign.
+	pool := v.BannerIncome + v.RolledOver
+	toAssign := budgeting.ToAssign(pool, assigned)
 	figCls := "zbb-figure fig"
 	var status ui.Node
 	switch {
@@ -244,6 +246,7 @@ func zeroBasedHero(v budgetView) ui.Node {
 			status),
 		Div(css.Class("zbb-breakdown"),
 			zbbChip(uistate.T("budgets.zbbIncome"), v.BannerIncome, v.Base),
+			If(v.RolledOver > 0, zbbChip(uistate.T("budgets.zbbRolledOver"), v.RolledOver, v.Base)),
 			zbbChip(uistate.T("budgets.zbbExpenses"), v.TotalLimit, v.Base),
 			zbbChip(uistate.T("budgets.zbbSavings"), v.SavingsAssigned, v.Base),
 		),
@@ -325,6 +328,11 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 			uistate.SetPrefs(p)
 		}
 	})
+	onToggleRollover := ui.UseEvent(func() {
+		p := prefsAtom.Get()
+		p.BudgetRolloverLeftover = !p.BudgetRolloverLeftover
+		uistate.SetPrefs(p)
+	})
 
 	var extra ui.Node = Fragment()
 	switch mode {
@@ -340,15 +348,23 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), Value(minorToMajorStr(pr.MonthlyIncomeMinor, props.Base)), OnInput(onFixed)))
 	}
 
-	return Div(css.Class("zbb-basis"), Attr("data-testid", "budgets-zbb-basis"),
-		Label(css.Class("zbb-basis-main"),
-			Span(css.Class("zbb-basis-label"), uistate.T("budgets.zbbBasisLabel")),
-			Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), OnChange(onMode),
-				Option(Value(budgeting.IncomeModeAll), SelectedIf(mode == budgeting.IncomeModeAll), uistate.T("budgets.zbbBasisAll")),
-				Option(Value(budgeting.IncomeModePaychecks), SelectedIf(mode == budgeting.IncomeModePaychecks), uistate.T("budgets.zbbBasisPaychecks")),
-				Option(Value(budgeting.IncomeModeFixed), SelectedIf(mode == budgeting.IncomeModeFixed), uistate.T("budgets.zbbBasisFixed")),
-			)),
-		extra,
+	return Div(css.Class("zbb-basis-wrap"),
+		Div(css.Class("zbb-basis"), Attr("data-testid", "budgets-zbb-basis"),
+			Label(css.Class("zbb-basis-main"),
+				Span(css.Class("zbb-basis-label"), uistate.T("budgets.zbbBasisLabel")),
+				Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), OnChange(onMode),
+					Option(Value(budgeting.IncomeModeAll), SelectedIf(mode == budgeting.IncomeModeAll), uistate.T("budgets.zbbBasisAll")),
+					Option(Value(budgeting.IncomeModePaychecks), SelectedIf(mode == budgeting.IncomeModePaychecks), uistate.T("budgets.zbbBasisPaychecks")),
+					Option(Value(budgeting.IncomeModeFixed), SelectedIf(mode == budgeting.IncomeModeFixed), uistate.T("budgets.zbbBasisFixed")),
+				)),
+			extra,
+		),
+		// Roll last month's unspent budget into this month's assignable pool.
+		Label(css.Class("zbb-rollover"), Style(map[string]string{"cursor": "pointer"}),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-rollover"), OnChange(onToggleRollover)}, checkedAttr(pr.BudgetRolloverLeftover)...)...),
+			Div(css.Class("row-main"),
+				Span(uistate.T("budgets.zbbRolloverToggle")),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.zbbRolloverHint")))),
 	)
 }
 
