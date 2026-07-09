@@ -107,6 +107,12 @@ func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFor
 // AutoBudgetHost renders the modal when true.
 func UseBudgetAutoOpen() state.Atom[bool] { return state.UseAtom("budgets:autoOpen", false) }
 
+// UseBudgetsLastMonth returns the shared atom for the budgets page's one-click "Last
+// month" toggle: when true, every budget tile evaluates the PREVIOUS period instead of
+// the current one, so the user can see last month's picture at a glance. Budgets-local
+// (doesn't touch the global period), and resets naturally on reload.
+func UseBudgetsLastMonth() state.Atom[bool] { return state.UseAtom("budgets:lastMonth", false) }
+
 // UseInvestShowFormulas returns the shared atom for the /investments "Portfolio metrics"
 // formula tile reveal — the investments analog of the other formula toggles.
 func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:showFormulas", false) }

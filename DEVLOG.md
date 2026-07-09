@@ -1,3 +1,17 @@
+## 2026-07-08 — Budgets "Last month" one-click toggle
+
+Cam wanted to "see what it looked like last month with a single click." Researched
+first: budgets store only a single current Limit — there's NO allocation history (month-
+paging shifts the spend window, not the limit). Presented the full snapshot-based
+comparison plan; Cam pared it back to "just show last month, one click." So I shipped
+the lean version: a budgets-local `UseBudgetsLastMonth` atom + a toolbar toggle that does
+`vw.Shift(-1)` before both tile computes (summary + list), flipping every budget to the
+previous period. Shows last month's real SPEND against current allocations (limits aren't
+versioned, so those are today's). Clearly labelled "Viewing last month" with an
+aria-pressed state; history icon. If Cam later wants last month's LIMITS too (to catch
+allocation changes), the BalanceSnapshot-style capture I scoped is the add-on. e2e:
+toggle flips aria-pressed + label and back.
+
 ## 2026-07-08 — Multi-category budgets + last-month income
 
 Analyzed Cam's idea first (a budget tracking 1..n categories). Key finding: the spend

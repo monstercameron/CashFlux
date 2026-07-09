@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budgets: one-click "Last month" toggle (2026-07-08):** a **Last month** button on the budgets toolbar flips the whole page to the previous period so you can see last month's budget picture at a glance (click again to return). It shifts every budget tile's evaluation window back one period — the spend figures are last month's actuals against your current allocations. (A future option: recording allocation snapshots so it also reflects last month's *limits*.)
 - **Multi-category budgets: track 1–n categories in one budget (2026-07-08):** a budget's `⋯` menu has a new **Edit tracked categories** action, and the **add** and **edit** budget forms now include the same picker, so a budget can count several categories — its spend becomes their combined total (each category still rolls up its own sub-categories). The picker is a searchable, one-line checklist with a soft "also in …" note when a category is already tracked by another budget. Single-category budgets are unchanged. Backed by an additive `Budget.CategoryIDs` and the spend engine's existing predicate path (no store migration).
 
 ### Changed

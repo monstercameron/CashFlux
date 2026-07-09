@@ -344,3 +344,17 @@ test.describe("budget category picker", () => {
     await expect(app.getByTestId("budgetcats-search")).toBeVisible();
   });
 });
+
+test.describe("budgets last-month toggle", () => {
+  test("one click flips the budgets view to last month and back", async ({ app }) => {
+    await nav(app, "/budgets");
+    const toggle = app.getByTestId("budgets-last-month");
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle).toContainText(/viewing last month/i);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  });
+});

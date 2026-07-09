@@ -54,6 +54,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	app := props.App
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
+	if uistate.UseBudgetsLastMonth().Get() {
+		vw = vw.Shift(-1) // one-click "Last month" — evaluate the previous period
+	}
 	pr := uistate.UsePrefs().Get()
 	v := computeBudgetView(app, activeMemberID, vw, pr)
 	if len(v.Statuses) == 0 {
@@ -145,6 +148,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	})
 }
 
+// lastMonthLabelKey picks the toolbar toggle's label: a call-to-action when off,
+// a "you're viewing last month" state when on.
+func lastMonthLabelKey(on bool) string {
+	if on {
+		return "budgets.lastMonthOn"
+	}
+	return "budgets.lastMonth"
+}
+
 // budgetAssignBanner renders the method-specific income context line: simple mode
 // shows income · budgeted · the unbudgeted/over gap; zero-based shows the amount left
 // to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
@@ -233,6 +245,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	// Open the "Auto budget" review modal (suggests budgets from spending history).
 	autoBudgetAtom := uistate.UseBudgetAutoOpen()
 	openAutoBudget := ui.UseEvent(Prevent(func() { autoBudgetAtom.Set(true) }))
+	// One-click "Last month" — flip the whole budgets view to the previous period.
+	lastMonthAtom := uistate.UseBudgetsLastMonth()
+	toggleLastMonth := ui.UseEvent(Prevent(func() { lastMonthAtom.Set(!lastMonthAtom.Get()) }))
 	// C112: switch the budgeting methodology right from /budgets.
 	onMethod := ui.UseEvent(func(e ui.Event) {
 		s := app.Settings()
@@ -311,6 +326,11 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		// Right: the actions, uniform-height and right-aligned, with the primary
 		// "+ Add budget" last so it clearly outranks the ghost controls.
 		Div(css.Class("budgets-toolbar-actions"),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
+				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
+				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
 			smartSectionAction(smartSettings),
 			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
 				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
@@ -345,6 +365,9 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	txFilter := uistate.UseTxFilter()
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
+	if uistate.UseBudgetsLastMonth().Get() {
+		vw = vw.Shift(-1) // one-click "Last month" — evaluate the previous period
+	}
 	pr := uistate.UsePrefs().Get()
 	v := computeBudgetView(app, activeMemberID, vw, pr)
 	smartSettings := uistate.LoadSmartSettings()
