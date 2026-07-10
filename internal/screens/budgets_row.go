@@ -185,20 +185,27 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			uistate.T("budgets.proratedRest", props.ProratedRest))
 	}
 
-	// "Last month's spend" overlay: what was actually spent in this budget's categories
-	// last period, plus how it compares to this month's budget — a planning reference.
-	// Amber when last month exceeded this month's budget (a nudge to raise it).
+	// "Last month's spend" overlay: a slim reference bar mirroring the main loader above,
+	// filled to last period's actual spend as a share of THIS month's budget — so you can
+	// see at a glance whether you're tracking above or below last month against the same
+	// budget. Red-tinted when last month exceeded this month's budget (a nudge to raise
+	// it); accent-tinted when it came in under.
 	var lastMonthLine ui.Node = Fragment()
 	if props.LastMonthSpent != "" {
-		cls := "budget-lastmonth"
+		barCls := "budget-lastmonth"
 		if props.LastMonthOver {
-			cls += " is-over"
+			barCls += " is-over"
 		}
-		txt := uistate.T("budgets.lastMonthRow", props.LastMonthSpent)
-		if props.LastMonthDelta != "" {
-			txt += " · " + props.LastMonthDelta
-		}
-		lastMonthLine = Span(css.Class("budget-sub", cls), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID), txt)
+		lastMonthLine = Div(ClassStr(barCls), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID),
+			Attr("role", "img"), Attr("aria-label", uistate.T("budgets.lastMonthAria", props.LastMonthSpent, props.LastMonthDelta)),
+			Div(css.Class("budget-lastmonth-fill"), Attr("style", fmt.Sprintf("width:%d%%", props.LastMonthFill))),
+			Div(css.Class("budget-lastmonth-figs"),
+				Span(css.Class("budget-lastmonth-lead"),
+					Span(css.Class("budget-lastmonth-cap"), uistate.T("budgets.lastMonthCap")),
+					Span(css.Class("budget-lastmonth-amt"), props.LastMonthSpent)),
+				Span(css.Class("budget-lastmonth-delta"), props.LastMonthDelta),
+			),
+		)
 	}
 
 	// "Cover…" is offered on an over-budget row and opens the flip modal (which lists

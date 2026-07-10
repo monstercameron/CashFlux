@@ -76,12 +76,14 @@ type budgetView struct {
 }
 
 // budgetLastMonth is the "Last month's spend" overlay for one budget: the formatted
-// actual spend last period, and how it lines up against this month's budget — a
-// formatted "$X under" / "$X over this budget" phrase, plus whether it exceeded it.
+// actual spend last period, how it lines up against this month's budget (a short
+// "$X under"/"$X over" phrase + whether it exceeded it), and Fill — last month's spend
+// as a percent of this month's budget (0..100, capped) to draw the reference bar.
 type budgetLastMonth struct {
 	Spent string
 	Delta string
 	Over  bool
+	Fill  int
 }
 
 // incomeSource is one selectable income category in the "by source" budget basis: its
@@ -194,9 +196,15 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
 				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
-				delta := limitMinor - prev.Spent.Amount
 				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
-				if delta >= 0 {
+				if limitMinor > 0 {
+					if lm.Fill = int(prev.Spent.Amount * 100 / limitMinor); lm.Fill < 0 {
+						lm.Fill = 0
+					} else if lm.Fill > 100 {
+						lm.Fill = 100
+					}
+				}
+				if delta := limitMinor - prev.Spent.Amount; delta >= 0 {
 					lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(delta, base)))
 				} else {
 					lm.Over = true
@@ -471,9 +479,10 @@ type budgetRowProps struct {
 	ProratedRest      string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
 	Covered           bool                  // received one-time cover money this period
-	LastMonthSpent    string                // "Last month's spend" overlay: last period's actual spend; "" hides the line
-	LastMonthDelta    string                // formatted "$X under" / "$X over this budget" vs this month's budget
-	LastMonthOver     bool                  // last month's spend exceeded this month's budget → caution tone
+	LastMonthSpent    string                // "Last month's spend" overlay: last period's actual spend; "" hides the row
+	LastMonthDelta    string                // short "$X under" / "$X over" vs this month's budget
+	LastMonthOver     bool                  // last month's spend exceeded this month's budget → danger tone
+	LastMonthFill     int                   // last month's spend as % of this month's budget (0..100) — the bar width
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)
