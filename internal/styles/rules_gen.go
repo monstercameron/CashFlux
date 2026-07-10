@@ -3076,6 +3076,11 @@ func registerGenerated() {
 		color("var(--text-dim)"),
 	)
 	rule(".zbb-savings-goal-time", color("var(--text-dim)"))
+	rule(".zbb-savings-more",
+		fontSize("0.7rem"),
+		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
+	)
 	rule(".zbb-savings-goal.is-ontrack .zbb-savings-goal-time",
 		color("var(--money-positive)"),
 		fontWeight("600"),

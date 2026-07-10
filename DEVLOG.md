@@ -32,6 +32,23 @@ by $300; Sync flipped to "Synced ✓"; the spread button ("Spread $3,623.30 left
 To Assign to exactly $0.00, splitting $905.82–83 across the four accounts, and the discrepancy
 recomputed to "8 mo · 3 mo behind" at HYSA's new higher rate. `go test ./...` green.
 
+**Adversarial-review hardening pass.** A Sonnet critic flagged one P0 + several P1/P2; fixed
+all the substantive ones: (P0) `computeSavingsAccounts` iterated ALL accounts/goals unscoped —
+the rest of `computeBudgetView` filters by `ownerVisibleTo(ownerID, activeMemberID)`, so a
+member view would over-count SavingsAssigned (→ wrong To-Assign) and expose other members'
+private accounts. Threaded `activeMemberID` in and applied the same filter. (P1) period-
+awareness: the projection used `time.Now()`; now uses the page's period `anchor` so paging
+months moves the "planned" horizon. (P1) multiple goals per account: pick nearest incomplete +
+show "+N more" instead of silently dropping the rest. (P1) FX-missing: leave the projection
+unset and skip the spread account rather than persist a raw cross-currency figure via Sync/
+Spread. (P1) `RateMonths==0` no longer reads as a false "0 mo to go" — distinct "no finish
+estimate yet" copy. (P1) a fully-funded goal now shows "Fully funded ✓" instead of the row
+reverting to unlinked. (P2) sinking-fund goals excluded (own set-aside line); undated copy now
+says "No target date · N mo to go". Skipped the P2 number-spinner nit — the app has no
+spinner-hide convention, so special-casing this one field would be the inconsistency. Verified:
+member/period paths, "+2 more" on HYSA, all three tones (behind/ahead/on-plan). `go test ./...`
+green.
+
 ## 2026-07-10 — Budgets: "Last month" → a spend overlay for planning
 
 Cam: the "Last month" button re-windowed the page to last month's budgets; repurpose it

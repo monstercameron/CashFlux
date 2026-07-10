@@ -842,13 +842,24 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 // action — or a "Synced ✓" marker when the goal already carries this amount. Pure node
 // builder; the row owns the sync handler hook and passes it in.
 func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
+	// Every linked goal is already met — surface the win rather than a projection.
+	if sa.GoalComplete {
+		return Div(css.Class("zbb-savings-goal is-ontrack"),
+			Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
+			Span(css.Class("zbb-savings-goal-time"), uistate.T("budgets.savingsFunded")))
+	}
+	// No amount set yet — invite one, no projection to make.
 	if sa.Monthly <= 0 {
 		return Div(css.Class("zbb-savings-goal"),
 			Span(css.Class("zbb-savings-goal-name", tw.TextDim), uistate.T("budgets.savingsFundsSet", sa.GoalName)))
 	}
 	var tone, phrase string
 	switch {
-	case sa.PlannedMonths <= 0 || sa.RateMonths <= 0:
+	case sa.RateMonths <= 0:
+		// Can't project a finish (amount rounds to nothing, or a needed FX rate is missing).
+		phrase = uistate.T("budgets.savingsNoProject")
+	case sa.PlannedMonths <= 0:
+		// Undated goal — say so, since there's no plan to compare against.
 		phrase = uistate.T("budgets.savingsRateOnly", sa.RateMonths)
 	case sa.DeltaMonths == 0:
 		tone, phrase = "is-ontrack", uistate.T("budgets.savingsOnPlan", sa.PlannedMonths)
@@ -857,10 +868,13 @@ func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
 	default:
 		tone, phrase = "is-ahead", uistate.T("budgets.savingsAhead", sa.PlannedMonths, sa.RateMonths, -sa.DeltaMonths)
 	}
-	var action ui.Node
-	if sa.Synced {
+	// Sync only when there's a money-correct amount to write (a failed FX conversion
+	// leaves SyncMinor at 0, so we offer no button rather than persist a wrong figure).
+	var action ui.Node = Fragment()
+	switch {
+	case sa.Synced:
 		action = Span(css.Class("zbb-savings-synced", tw.TextDim), uistate.T("budgets.savingsSynced"))
-	} else {
+	case sa.SyncMinor > 0:
 		action = Button(css.Class("btn btn-xs zbb-savings-sync"), Type("button"),
 			Attr("data-testid", "budgets-savings-sync-"+sa.AccountID), Attr("title", uistate.T("budgets.savingsSyncTitle", sa.GoalName)),
 			OnClick(onSync), uistate.T("budgets.savingsSync"))
@@ -872,6 +886,7 @@ func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
 	return Div(css.Class(cls),
 		Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
 		Span(css.Class("zbb-savings-goal-time"), phrase),
+		If(sa.MoreGoals > 0, Span(css.Class("zbb-savings-more", tw.TextDim), Attr("title", uistate.T("budgets.savingsMoreTitle")), uistate.T("budgets.savingsMore", sa.MoreGoals))),
 		action)
 }
 
@@ -925,12 +940,16 @@ func spreadLeftoverAcrossSavings(app *appstate.App, accts []savingsAcct, leftove
 		if cur == "" {
 			cur = base
 		}
-		// Convert the base-currency share into the account's own currency.
+		// Convert the base-currency share into the account's own currency. If the rate
+		// is missing, skip this account rather than persist the base figure as if it
+		// were the account's currency (which would silently corrupt its saved amount).
 		addAcct := add
 		if cur != base {
-			if conv, err := currency.ConvertBetween(add, base, cur, rates); err == nil {
-				addAcct = conv
+			conv, err := currency.ConvertBetween(add, base, cur, rates)
+			if err != nil {
+				continue
 			}
+			addAcct = conv
 		}
 		ac.MonthlySavings = money.New(ac.MonthlySavings.Amount+addAcct, cur)
 		if err := app.PutAccount(ac); err == nil {
