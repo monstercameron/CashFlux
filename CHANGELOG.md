@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Ambient music no longer plays on the lock screen (2026-07-10):** with the app lock on, the passcode-entry gesture (or a default-on autostart) started the background music *on the lock screen* — so every unlock came with music. The music player now treats the lock gate as a hard "stay silent" signal: it pauses when the gate appears and resumes (only if it was on) after you unlock, regardless of how playback was triggered. The lock screen is silent; music is an in-app ambiance again.
+
 ## [1.0.11] - 2026-07-10
 
 ### Changed

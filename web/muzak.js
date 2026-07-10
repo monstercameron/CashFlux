@@ -92,6 +92,7 @@
   var active = 0; // index into els currently audible
   var crossing = false; // a crossfade is in progress
   var armed = false; // a gesture listener is waiting
+  var locked = false; // the app-lock gate is covering the app → keep music silent
   var errStreak = 0; // consecutive load errors → back off
   var inited = false; // resume point applied once
   var pendingResume = 0; // seconds to seek the first track to on startup
@@ -230,10 +231,25 @@
     fade(els[active], vol, 400);
   }
 
+  // gateVisible reports whether the app-lock gate (id cf-applock-gate) is on screen —
+  // a DOM fallback so a boot that shows the gate before Go calls setLocked still counts
+  // as locked. isLocked ORs that with the explicit flag Go sets on lock / clears on unlock.
+  function gateVisible() {
+    var g = document.getElementById("cf-applock-gate");
+    if (!g) return false;
+    if (g.style && g.style.display === "none") return false;
+    try { return getComputedStyle(g).display !== "none"; } catch (e) { return true; }
+  }
+  function isLocked() { return locked || gateVisible(); }
+
   function armGesture() {
     if (armed) return;
     armed = true;
     var start = function () {
+      // Don't let the lock screen auto-start music: the passcode-entry gesture must not
+      // kick off playback. Stay armed (don't detach) so music begins on the first
+      // gesture AFTER unlock.
+      if (isLocked()) return;
       window.removeEventListener("pointerdown", start, true);
       window.removeEventListener("keydown", start, true);
       armed = false;
@@ -248,6 +264,9 @@
     // ON before the store loaded) can never resume the music behind the user's back
     // — e.g. the first gesture on the lock screen re-triggering an armed listener.
     if (musicMuted()) { enabled = false; disable(); return; }
+    // Never play while the app-lock gate is up — the lock screen stays silent even
+    // though `enabled` remains true. Arm a gesture so music begins right after unlock.
+    if (isLocked()) { armGesture(); return; }
     ensureEls();
     if (!pl.size()) return;
     var el = els[active];
@@ -274,6 +293,14 @@
       enabled = !!on;
       ensureEls();
       if (enabled) enable(); else disable();
+    },
+    // setLocked is driven by the Go app-lock gate: on lock the ambient music pauses
+    // (without forgetting that it was enabled); on unlock it resumes if it was on. This
+    // keeps the lock screen silent regardless of how the music was started.
+    setLocked: function (on) {
+      locked = !!on;
+      if (locked) disable();
+      else if (enabled) enable();
     },
     setVolume: function (v) {
       if (typeof v !== "number") return;

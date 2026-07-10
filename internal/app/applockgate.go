@@ -32,6 +32,7 @@ func appLockActive() bool {
 // to sharpen into focus, then hides it and resets the styles for next time.
 // Respects prefers-reduced-motion (then it just hides immediately).
 func unlockGate(doc, gate js.Value) {
+	setMuzakLocked(false) // let the ambient music resume (if it was on) now we're unlocked
 	st := gate.Get("style")
 	reduce := false
 	if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); !m.IsNull() && !m.IsUndefined() {
@@ -84,10 +85,24 @@ func animateGateIn(gate js.Value) {
 	)
 }
 
+// setMuzakLocked tells the ambient-music player whether the lock gate is up, so it
+// stays silent behind the gate and resumes (if it was on) after unlock. No-op when the
+// player isn't loaded or predates the setLocked hook.
+func setMuzakLocked(on bool) {
+	muzak := js.Global().Get("cashfluxMuzak")
+	if !muzak.Truthy() {
+		return
+	}
+	if sl := muzak.Get("setLocked"); sl.Truthy() {
+		muzak.Call("setLocked", on)
+	}
+}
+
 func showAppLockGate() {
 	if !loadAppLock().Active() {
 		return
 	}
+	setMuzakLocked(true) // silence the ambient music while the gate is up
 	doc := js.Global().Get("document")
 	if gate := doc.Call("getElementById", appLockGateID); !gate.IsNull() && !gate.IsUndefined() {
 		gate.Get("style").Set("display", "grid")

@@ -1,3 +1,19 @@
+## 2026-07-10 — Fix: ambient music playing on the lock screen
+
+Cam: the music always plays on the lock screen. Traced it: muzak is on by default
+(`cashflux:muzak` unset = on) and autoplay-gated until a user gesture — and on a reload
+the *first* gesture is typing the passcode into the lock gate, which trips the armed
+autostart. (Headless muddied the diagnosis: it autoplays muted media at volume 0, so the
+`playing` proxy fires without a gesture — the real gate is audible playback after a
+gesture.) A gesture-only guard wasn't enough given that nuance, so I made the lock a hard
+silence signal end to end: muzak gained a `locked` flag + `setLocked(on)` (pause on lock,
+resume-if-enabled on unlock), `enable()` and the gesture-start both bail while `isLocked()`
+(the flag OR a visible `#cf-applock-gate`), and Go calls `setMuzakLocked(true/false)` from
+`showAppLockGate`/`unlockGate`. Net: silent behind the gate no matter how playback was
+triggered (boot autostart, passcode gesture, or the lock-screen unmute button), and it
+resumes after unlock if it was on. Non-lock users are untouched (no gate element → never
+locked). Verified with Playwright: on→silent-on-lock→still-silent-if-re-enabled→resumes.
+
 ## 2026-07-10 — Feat: choose income by source (flip modal) + allocation-bar hero
 
 Cam wanted to set a target budget derived from income categories — separate out side
