@@ -71,8 +71,12 @@ type budgetView struct {
 	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
 	RolledOver int64
 	// LastMonth holds the "Last month's spend" overlay per budget (keyed by budget ID),
-	// populated only when that toggle is on; empty otherwise.
-	LastMonth map[string]budgetLastMonth
+	// populated only when that toggle is on; empty otherwise. LastMonthMode is that
+	// toggle, and LastTotalSpent is last period's total spend across all budgets (base
+	// minor units) so the summary graph can show last month too.
+	LastMonth      map[string]budgetLastMonth
+	LastMonthMode  bool
+	LastTotalSpent int64
 }
 
 // budgetLastMonth is the "Last month's spend" overlay for one budget: the formatted
@@ -154,6 +158,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	// budget's ACTUAL spend last period plus how it compares to this month's budget, so
 	// the user can plan this month's amounts against what they really spent.
 	lastMonth := map[string]budgetLastMonth{}
+	var lastTotalSpent int64 // last period's total spend across budgets (base minor), for the summary graph
 	// Pooled leftover: last month's unspent budget (limit − spent, clamped ≥ 0)
 	// summed across budgets that DON'T carry their own remaining, when the user opts
 	// to roll leftover into next month's assignable pool (zero-based view).
@@ -197,6 +202,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		if showLastMonth {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
+				lastTotalSpent += prev.Spent.Amount
 				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
 				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
 				if limitMinor > 0 {
@@ -346,8 +352,10 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
 		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
-		RolledOver: pooledRollover,
-		LastMonth:  lastMonth,
+		RolledOver:     pooledRollover,
+		LastMonth:      lastMonth,
+		LastMonthMode:  showLastMonth,
+		LastTotalSpent: lastTotalSpent,
 	}
 }
 

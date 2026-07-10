@@ -56,6 +56,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
+	// "Last month's spend" overlay: when on, the summary graph shows last period's total
+	// spend too (matching the tiles), not just this month.
+	showLM := uistate.UseBudgetsLastMonth().Get()
 	// Income-basis modal opener. Called unconditionally (before any early return) so the
 	// hook order is stable across renders. Opening seeds the modal's draft from the
 	// current prefs, so the Save/Cancel modal starts from today's basis.
@@ -65,7 +68,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		basisDraft.Set(uistate.NewBudgetBasisDraft(pr))
 		basisOpen.Set(true)
 	}))
-	v := computeBudgetView(app, activeMemberID, vw, pr, false)
+	v := computeBudgetView(app, activeMemberID, vw, pr, showLM)
 	if len(v.Statuses) == 0 {
 		return Fragment()
 	}
@@ -78,10 +81,16 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("budgets.basisButton")))
 
+	// The spend figure the graph shows: this month by default; last period's total when
+	// the "Last month's spend" overlay is on, so the top graph matches the tiles.
+	barSpent := v.TotalSpent
+	if v.LastMonthMode {
+		barSpent = v.LastTotalSpent
+	}
 	// "Spent" is only red once there's actually spending — red on $0.00 reads as an
 	// error rather than a healthy "nothing spent yet" (design critique).
 	spentTone := ""
-	if v.TotalSpent > 0 {
+	if barSpent > 0 {
 		spentTone = "neg"
 	}
 	// The summary is a single big "loader" — an overall spent-of-budget progress bar with
@@ -99,11 +108,11 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		spendLimit = v.BannerIncome + v.RolledOver
 		spendLimitLabel = uistate.T("budgets.spendBudgetLabel")
 	}
-	leftM := money.New(spendLimit-v.TotalSpent, v.Base)
-	over := v.TotalSpent > spendLimit
+	leftM := money.New(spendLimit-barSpent, v.Base)
+	over := barSpent > spendLimit
 	fillPct := 0
 	if spendLimit > 0 {
-		fillPct = int(v.TotalSpent * 100 / spendLimit)
+		fillPct = int(barSpent * 100 / spendLimit)
 	}
 	fillW := fillPct
 	if fillW > 100 {
@@ -131,7 +140,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		Div(css.Class("budget-loader-figs"),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
-				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(v.TotalSpent, v.Base))),
+				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(barSpent, v.Base))),
 			),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), spendLimitLabel),
@@ -163,6 +172,13 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
 	))
 
+	// When the overlay is on, an accent "LAST MONTH" tag over the spend graph makes clear
+	// the figures are last period's, matching the tiles.
+	var lastMonthTag ui.Node = Fragment()
+	if v.LastMonthMode {
+		lastMonthTag = Div(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budgets-summary-lastmonth"), uistate.T("budgets.lastMonthCap"))
+	}
+
 	var body ui.Node
 	if v.Method == budgeting.MethodZeroBased {
 		// Zero-based leads with the To-Assign hero (the thesis: give every dollar a job),
@@ -172,7 +188,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			zeroBasedHero(v, basisBtn),
 			overBanner,
 			Div(css.Class("zbb-spend"),
-				P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap")),
+				IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap"))),
 				statGrid),
 			rangeHint,
 			budgetFundSetAsideNode(v),
@@ -180,6 +196,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		)
 	} else {
 		body = Div(
+			lastMonthTag,
 			statGrid,
 			rangeHint,
 			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
