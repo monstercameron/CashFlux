@@ -50,6 +50,40 @@ func TestEvaluateRollupEmptyCoversIsOwnCategory(t *testing.T) {
 	}
 }
 
+// TestEvaluateRollupMultiCategory reproduces the "Mortgage Payment · HOA" budget:
+// a multi-category budget must sum spend across ALL its tracked categories. It also
+// pins the date boundary that explains the reported "not adding up": a payment made
+// on the LAST day of the PRIOR month is out of this month's range, so it doesn't count.
+func TestEvaluateRollupMultiCategory(t *testing.T) {
+	start, end := june() // [2026-06-01, 2026-07-01)
+	rates := currency.Rates{Base: "USD"}
+	budget := domain.Budget{
+		CategoryIDs: []string{"hoa", "mortgage"}, // multi-category budget
+		Scope:       domain.ScopeShared,
+		Limit:       usd(170000), // $1,700
+	}
+	covers := map[string]bool{"hoa": true, "mortgage": true}
+
+	// Both bills IN the period sum: $1,302.10 + $376.86 = $1,678.96.
+	both := []domain.Transaction{
+		expense(130210, "USD", "mortgage", "", "2026-06-05"),
+		expense(37686, "USD", "hoa", "", "2026-06-15"),
+	}
+	if st, _ := EvaluateRollup(budget, both, start, end, rates, DefaultNearThreshold, covers); !st.Spent.Equal(usd(167896)) {
+		t.Errorf("both in-period: spent = %v, want 167896 ($1,678.96 = mortgage + HOA)", st.Spent)
+	}
+
+	// The HOA payment on the LAST day of the PRIOR month (May 31) is out of the June
+	// range, so only the mortgage counts — the user's actual situation.
+	crossMonth := []domain.Transaction{
+		expense(130210, "USD", "mortgage", "", "2026-06-05"),
+		expense(37686, "USD", "hoa", "", "2026-05-31"),
+	}
+	if st, _ := EvaluateRollup(budget, crossMonth, start, end, rates, DefaultNearThreshold, covers); !st.Spent.Equal(usd(130210)) {
+		t.Errorf("cross-month: spent = %v, want 130210 (mortgage only; May 31 HOA is prior month)", st.Spent)
+	}
+}
+
 func TestEvaluateRollupRespectsScope(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}
