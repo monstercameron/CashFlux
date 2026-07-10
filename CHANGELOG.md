@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-07-10
+
 ### Added
 - **Version tag on the lock screen (2026-07-10):** the lock screen now shows the running build (e.g. "v1.0.12") in a quiet tag at the foot of the card, so the version is identifiable without unlocking.
 
