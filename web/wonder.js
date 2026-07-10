@@ -71,12 +71,23 @@
       return;
     }
 
+    var vh = window.innerHeight || document.documentElement.clientHeight || 0;
     var cards = pageView.querySelectorAll(".card:not([data-wonder-observed])");
     for (var i = 0; i < cards.length; i++) {
       var card = cards[i];
       card.setAttribute("data-wonder-observed", "1");
       card.classList.add("wonder-reveal");
-      io.observe(card);
+      // Already in the viewport? Reveal it synchronously so above-the-fold content
+      // is never gated on the async IntersectionObserver callback, which can be
+      // missed on a cold deep-link load (the element is sampled once, while a
+      // page-enter transform still has it out of place, and never re-checked). This
+      // is the behavior this function's contract has always described.
+      var r = card.getBoundingClientRect();
+      if (r.top < vh && r.bottom > 0) {
+        card.classList.add("in-view");
+      } else {
+        io.observe(card);
+      }
     }
   }
 

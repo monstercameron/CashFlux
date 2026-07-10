@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Budgets top tile no longer intermittently blank on a direct link (2026-07-10):** opening `/budgets` directly (a cold deep-link / hard refresh) sometimes rendered the summary tile invisible while the rest of the page appeared. Root cause: every `.bento .w` tile's entrance animation used `animation-fill-mode: both` with a `from { opacity: 0 }` keyframe, so a tile whose animation never ran to completion — under the main-thread load of a cold wasm boot, or a re-render that restarted it — could settle at `opacity: 0` with nothing to re-trigger it. The tile's resting state is now visible (`opacity: 1`) with `fill-mode: forwards`, so a dropped animation degrades to "shown immediately" instead of "hidden forever". Also made `wonder.js` reveal already-in-viewport `.card` elements synchronously (as its own contract always promised) so above-the-fold content never waits on the async IntersectionObserver.
+
 ### Added
 - **Set a monthly budget + roll leftover into next month (2026-07-09):** the zero-based view's "Budget against" now offers **A set monthly budget** — a fixed amount you type (labelled "Monthly budget") to budget against instead of your actual income, so you can cap what you assign each month. And a new **"Roll last month's leftover into this month"** toggle adds last month's **unspent budget** (each budget's limit minus what was spent, clamped at zero, excluding budgets that already carry their own remaining) into this month's assignable pool — shown as a **Rolled over** figure in the breakdown, raising your To-Assign. Off by default.
 

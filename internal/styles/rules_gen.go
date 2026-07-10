@@ -620,8 +620,18 @@ func registerGenerated() {
 			transform("none"),
 		),
 	)
+	// The tile's resting state is VISIBLE (opacity:1); the entrance is purely
+	// additive motion layered on top. Fill-mode is `forwards`, not `both`: `both`
+	// backfills the from{opacity:0} keyframe as the pre-animation state, so a tile
+	// whose entrance animation never runs to completion — e.g. a cold deep-link
+	// where the main thread is saturated by wasm boot, or a re-render that restarts
+	// the animation mid-flight — could settle at opacity:0 and stay invisible with
+	// nothing to re-trigger it (the "top tile doesn't render on a direct URL load"
+	// bug). With a visible base + `forwards`, a dropped animation degrades to
+	// "shown immediately" instead of "hidden forever".
 	rule(".bento .w",
-		animation("wonder-bento-enter var(--wonder-dur-slow) var(--wonder-ease-out) both"),
+		opacity("1"),
+		animation("wonder-bento-enter var(--wonder-dur-slow) var(--wonder-ease-out) forwards"),
 	)
 	rule("[data-wonder=\"off\"] .bento .w",
 		animation("none"),

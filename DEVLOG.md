@@ -1,3 +1,22 @@
+## 2026-07-10 — Fix: budgets top tile intermittently blank on a direct deep-link
+
+Cam reported the top graph on `/budgets` sometimes doesn't render when you spawn into the
+wasm module with the page in the URL directly. Traced it, ruling out the obvious suspect:
+data loads synchronously before mount (`browserstore.Init` blocks on the IndexedDB read),
+and the tile is pure Go, so it's not a data race. The real cause is the reveal animation —
+every `.bento .w` tile has `animation: wonder-bento-enter … both` with a `from{opacity:0}`
+keyframe, so `opacity:0` is the tile's *gated initial state*. On a cold deep-link the
+main thread is saturated by wasm instantiation + the (heavy, run-3×) `computeBudgetView`,
+and a data-revision bump mid-boot can re-create the tile and restart the animation — if
+it never runs to completion the tile settles at `opacity:0` with nothing to re-trigger it.
+It's the top tile because it's first-painted and heaviest; "sometimes" because it depends
+on timing. Fix aligns with the design's own stated contract (content always visible; motion
+additive): base `opacity:1` + `fill-mode: forwards`, so a dropped animation degrades to
+"shown immediately". Also fixed `wonder.js observe()` to honour the comment it always had —
+reveal already-in-viewport `.card`s synchronously instead of waiting on the async IO
+callback (which can be missed the same way). Verified with Playwright at normal motion: 6
+cold `/budgets` deep-link loads all show the top tile at `opacity:1`.
+
 ## 2026-07-09 — AI statement import (attach PDF straight to the model)
 
 New Smart+ feature (Cam): import a bank/CC statement, run it through the AI, best-effort
