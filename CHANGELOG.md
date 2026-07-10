@@ -6,7 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Version tag on the lock screen (2026-07-10):** the lock screen now shows the running build (e.g. "v1.0.12") in a quiet tag at the foot of the card, so the version is identifiable without unlocking.
+
 ### Fixed
+- **Lock-screen music button now shows the correct muted state (2026-07-10):** the button read muzak's transient in-memory `enabled`, which is still off at gate-build time (before the player seeds) — so it could show "🔊 Mute music" while music was actually muted (or vice versa). It now reads the persisted source of truth (the SQLite settings `cashflux:muzak`), so the 🔊 / 🔇 glyph always matches reality, and its own toggle flips off the same value.
 - **Ambient music no longer plays on the lock screen (2026-07-10):** with the app lock on, the passcode-entry gesture (or a default-on autostart) started the background music *on the lock screen* — so every unlock came with music. The music player now treats the lock gate as a hard "stay silent" signal: it pauses when the gate appears and resumes (only if it was on) after you unlock, regardless of how playback was triggered. The lock screen is silent; music is an in-app ambiance again.
 
 ## [1.0.11] - 2026-07-10

@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/lockquotes"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/version"
 )
 
 const appLockGateID = "cf-applock-gate"
@@ -118,22 +119,23 @@ func showAppLockGate() {
 	buildAppLockGate(doc)
 }
 
-// refreshLockMute shows/labels the lock-screen mute button from the live music state:
-// hidden when no tracks are configured, "Mute music" while playing, "Unmute music"
-// while silenced. Called when the gate is built and each time it is shown.
+// refreshLockMute shows/labels the lock-screen mute button: hidden when no tracks are
+// configured, "🔊 Mute music" when music is on, "🔇 Unmute music" when muted — so the
+// speaker glyph in the label reflects the muted state. Called when the gate is built
+// and each time it is shown. The track count comes from the live player, but the muted
+// state is read from the PERSISTED source of truth (cashflux:muzak, "0" = muted), not
+// muzak's transient in-memory `enabled` — which can still be false at gate-build time
+// (before the player is seeded), which made the icon show muted while music was on.
 func refreshLockMute(doc js.Value) {
 	btn := doc.Call("getElementById", "cf-lock-mute")
 	if btn.IsNull() || btn.IsUndefined() {
 		return
 	}
-	size, enabled := 0, false
+	size := 0
 	if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() {
 		if st := muzak.Call("state"); st.Truthy() {
 			if s := st.Get("size"); s.Truthy() {
 				size = s.Int()
-			}
-			if e := st.Get("enabled"); e.Truthy() {
-				enabled = e.Bool()
 			}
 		}
 	}
@@ -142,10 +144,10 @@ func refreshLockMute(doc js.Value) {
 		return
 	}
 	btn.Get("style").Set("display", "")
-	if enabled {
-		btn.Set("textContent", uistate.T("applock.muteMusic"))
+	if uistate.SettingKVGet(muzakEnabledKey) == "0" {
+		btn.Set("textContent", uistate.T("applock.unmuteMusic")) // 🔇 — currently muted
 	} else {
-		btn.Set("textContent", uistate.T("applock.unmuteMusic"))
+		btn.Set("textContent", uistate.T("applock.muteMusic")) // 🔊 — currently on
 	}
 }
 
@@ -239,23 +241,18 @@ func buildAppLockGate(doc js.Value) {
 	muteBtn.Set("type", "button")
 	muteBtn.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;")
 	muteCb := js.FuncOf(func(js.Value, []js.Value) any {
-		muzak := js.Global().Get("cashfluxMuzak")
-		if !muzak.Truthy() {
-			return nil
+		// Toggle off the PERSISTED source of truth (matches refreshLockMute), not muzak's
+		// transient in-memory `enabled`: currently muted → turn on, currently on → mute.
+		newEnabled := uistate.SettingKVGet(muzakEnabledKey) == "0"
+		// Persist the new on/off choice BEFORE telling the player, so the player's hard
+		// mute-check (musicMuted) reads the fresh value: on unmute it sees "1" and plays;
+		// on mute it sees "0" and refuses. Driving the shared atom (not just persisting)
+		// also keeps the top-bar toggle and player effect in sync so they don't re-enable
+		// the music behind the gate.
+		uistate.SetMuzakEnabled(newEnabled)
+		if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() {
+			muzak.Call("setEnabled", newEnabled)
 		}
-		enabled := false
-		if st := muzak.Call("state"); st.Truthy() {
-			if e := st.Get("enabled"); e.Truthy() {
-				enabled = e.Bool()
-			}
-		}
-		// Persist the new on/off choice BEFORE telling the player, so the player's
-		// hard mute-check (musicMuted) reads the fresh value: on unmute it sees "1"
-		// and plays; on mute it sees "0" and refuses. Driving the shared atom (not
-		// just persisting) also keeps the top-bar toggle and player effect in sync so
-		// they don't re-enable the music behind the gate.
-		uistate.SetMuzakEnabled(!enabled)
-		muzak.Call("setEnabled", !enabled)
 		refreshLockMute(doc)
 		return nil
 	})
@@ -378,6 +375,14 @@ func buildAppLockGate(doc js.Value) {
 	quoteEl.Set("id", "cf-lock-quote")
 	quoteEl.Get("style").Set("cssText", "font-size:0.8rem;opacity:0.5;font-style:italic;margin-top:0.6rem;line-height:1.4;")
 	card.Call("appendChild", quoteEl)
+
+	// A quiet version tag at the foot of the card (e.g. "v1.0.11"), so the running
+	// build is identifiable from the lock screen without unlocking.
+	verEl := doc.Call("createElement", "div")
+	verEl.Set("id", "cf-lock-version")
+	verEl.Set("textContent", version.Label())
+	verEl.Get("style").Set("cssText", "font-size:0.7rem;opacity:0.4;letter-spacing:0.06em;margin-top:0.9rem;")
+	card.Call("appendChild", verEl)
 
 	// Focus trap: keep Tab within the gate's controls so a locked app's covered
 	// background can't be reached by keyboard (mirrors the FlipPanel trap).

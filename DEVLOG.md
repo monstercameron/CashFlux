@@ -1,3 +1,18 @@
+## 2026-07-10 — Lock screen: version tag + correct music-mute icon
+
+Cam: put the version tag on the lock screen, and make the music icon show the muted
+state. Added a quiet `version.Label()` tag at the foot of the lock card. For the music
+icon: the label already carries a state emoji (🔊/🔇), but `refreshLockMute` keyed off
+muzak's transient in-memory `enabled`, which is still false at gate-build time (before
+the shell's muzak effect seeds the player) — so it showed 🔇/muted while music was on. I
+first over-thought it and added a redundant inline-SVG speaker (reverted — the emoji was
+already the icon). Real fix: read the persisted source of truth. Notably that's the
+**SQLite dataset settings KV** (`SettingKVSet`→`app.SetSettingKV`), not browserstore —
+the config-in-SQLite model — so both `refreshLockMute` and the mute button's own toggle
+now read/write `uistate.SettingKVGet(cashflux:muzak)`. Verified with Playwright (inject a
+minimal `{enabled:true}` applock config to show the gate without a real passcode): tag
+reads v1.0.11, button 🔊 Mute music → click → 🔇 Unmute music.
+
 ## 2026-07-10 — Fix: ambient music playing on the lock screen
 
 Cam: the music always plays on the lock screen. Traced it: muzak is on by default
