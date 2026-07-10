@@ -199,7 +199,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		memberS.Get(),
 	)
 
-	return Form(css.Class("form-grid"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
+	return Form(css.Class("form-grid txn-edit"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("transactions.descPlaceholder"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
 		labeledField(uistate.T("transactions.payeeLabel"),
@@ -224,7 +224,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				AriaLabel: uistate.T("transactions.whoLabel"),
 				OnChange:  func(v string) { memberS.Set(v) },
 			}))),
-		Label(css.Class("field-label"),
+		Label(css.Class("txn-check"),
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")), CheckedIf(clearedS.Get()), OnChange(onCleared)),
 			Span(uistate.T("txnwidget.clearedLabel"))),
 		// Receipts: attach a new image; the count of existing receipts is shown so the

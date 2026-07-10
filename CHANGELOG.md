@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **"Edit this transaction" modal layout (2026-07-10):** the edit flip modal used the small default panel size (384×470), so the two-column form was cramped — the "Cleared" checkbox rendered stacked/misaligned and the Save/Delete/Cancel bar was squeezed, under a redundant footer "Close". The modal is now sized properly (500×560) with the form owning its action bar (no footer Close); only the labeled fields pair into two columns while the checkbox, attach button, actions, and error span the full width, and the "Cleared" checkbox is a proper inline row.
+
 ## [1.0.12] - 2026-07-10
 
 ### Added

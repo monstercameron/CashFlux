@@ -2517,6 +2517,33 @@ func registerGenerated() {
 		gap("0.6rem"),
 		alignItems("end"),
 	)
+	// The Edit-transaction flip modal: the labeled fields pair up in two calm columns,
+	// but the checkbox / attach / actions / error rows span the full width (they were
+	// getting squeezed into single grid columns and misaligning). Top-aligned so the
+	// paired fields line up by their labels. Scoped to .txn-edit so other .form-grid
+	// forms are untouched.
+	rule(".txn-edit",
+		gridTemplateColumns("repeat(auto-fit, minmax(190px, 1fr))"),
+		alignItems("start"),
+		gap("0.7rem 0.9rem"),
+	)
+	rule(".txn-edit > :not(.labeled-field)",
+		gridColumn("1 / -1"),
+	)
+	rule(".txn-edit .txn-check",
+		display("flex"),
+		flexDirection("row"),
+		alignItems("center"),
+		gap("0.5rem"),
+		cursor("pointer"),
+	)
+	rule(".txn-edit .form-actions",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+		marginTop("0.3rem"),
+	)
 	// Add-budget modal: a flex-column shell so the fields sit at the top and the action
 	// bar pins to the bottom (breathing room above the CTA, never dead space below it).
 	rule(".budget-add-shell",

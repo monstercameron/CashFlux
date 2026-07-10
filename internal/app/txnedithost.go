@@ -28,9 +28,11 @@ func TxnEditHost() uic.Node {
 	}
 	close := func() { uistate.SetTxnEdit("") }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     uistate.T("transactions.editTitle"),
-		CloseOnly: true,
-		OnClose:   close,
-		Back:      uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
+		Title:    uistate.T("transactions.editTitle"),
+		Width:    "500px",
+		Height:   "560px",
+		NoFooter: true, // the form owns its Save / Delete / Cancel bar — no redundant Close
+		OnClose:  close,
+		Back:     uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
 	})
 }
