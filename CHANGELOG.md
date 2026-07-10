@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-07-10
+
 ### Changed
 - **Zero-based "Spending so far this month" now caps at your selected max budget (2026-07-10):** the spend progress bar in the zero-based summary used the sum of your category budget limits as its ceiling; it now fills against the **income basis you selected** in the Budget-income modal (all income / paychecks / chosen sources / a set monthly figure, plus any rolled-over leftover) — so it reads as "spent of your income/max budget", with the middle figure relabelled **Budget** and **Left** = that cap minus spent. Simple/envelope methods are unchanged (still spent-of-budgeted).
 
