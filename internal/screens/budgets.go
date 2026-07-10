@@ -77,12 +77,14 @@ type budgetView struct {
 
 // budgetLastMonth is the "Last month's spend" overlay for one budget: the formatted
 // actual spend last period, how it lines up against this month's budget (a short
-// "$X under"/"$X over" phrase + whether it exceeded it), and Fill — last month's spend
-// as a percent of this month's budget (0..100, capped) to draw the reference bar.
+// "$X under"/"$X over" phrase + whether it exceeded it), Pct — last month's spend as a
+// percent of this month's budget (uncapped, for the "%" figure) — and Fill, the same
+// clamped to 0..100 for the bar width.
 type budgetLastMonth struct {
 	Spent string
 	Delta string
 	Over  bool
+	Pct   int
 	Fill  int
 }
 
@@ -198,9 +200,10 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
 				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
 				if limitMinor > 0 {
-					if lm.Fill = int(prev.Spent.Amount * 100 / limitMinor); lm.Fill < 0 {
-						lm.Fill = 0
-					} else if lm.Fill > 100 {
+					if lm.Pct = int(prev.Spent.Amount * 100 / limitMinor); lm.Pct < 0 {
+						lm.Pct = 0
+					}
+					if lm.Fill = lm.Pct; lm.Fill > 100 {
 						lm.Fill = 100
 					}
 				}
@@ -482,7 +485,8 @@ type budgetRowProps struct {
 	LastMonthSpent    string                // "Last month's spend" overlay: last period's actual spend; "" hides the row
 	LastMonthDelta    string                // short "$X under" / "$X over" vs this month's budget
 	LastMonthOver     bool                  // last month's spend exceeded this month's budget → danger tone
-	LastMonthFill     int                   // last month's spend as % of this month's budget (0..100) — the bar width
+	LastMonthPct      int                   // last month's spend as % of this month's budget (uncapped) — the "%" figure
+	LastMonthFill     int                   // same, clamped 0..100 — the bar width
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)

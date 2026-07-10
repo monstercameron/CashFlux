@@ -7764,66 +7764,20 @@ func registerGenerated() {
 		boxShadow("inset 5px 0 0 var(--accent)"),
 		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease"),
 	)
-	// "Last month's spend" reference bar — a slimmer, muted echo of the main budget loader
-	// above it, FILLED to last period's spend as a share of this month's budget, with the
-	// figures inside. Accent-tinted for a calm planning reference; danger-tinted (and the
-	// delta reads red) when last month exceeded this month's budget — a nudge to raise it.
-	rule(".bento-budgets .budget-lastmonth",
-		position("relative"),
-		overflow("hidden"),
-		height("26px"),
-		margin("0.1rem 0 0.5rem"),
-		borderRadius("8px"),
-		border("1px solid var(--border)"),
-		background("var(--bg-elev)"),
-	)
-	rule(".bento-budgets .budget-lastmonth-fill",
-		position("absolute"),
-		top("0"),
-		left("0"),
-		bottom("0"),
-		zIndex("0"),
-		background("color-mix(in srgb, var(--accent) 30%, transparent)"),
-		transition("width var(--wonder-dur) var(--wonder-ease-out)"),
-	)
-	rule(".bento-budgets .budget-lastmonth.is-over .budget-lastmonth-fill",
-		background("color-mix(in srgb, var(--money-negative) 34%, transparent)"),
-	)
-	rule(".bento-budgets .budget-lastmonth-figs",
-		position("relative"),
-		zIndex("1"),
-		display("flex"),
-		alignItems("center"),
-		justifyContent("space-between"),
-		gap("0.5rem"),
-		height("100%"),
-		padding("0 0.55rem"),
-		fontSize("0.74rem"),
-	)
-	rule(".bento-budgets .budget-lastmonth-lead",
-		display("flex"),
-		alignItems("baseline"),
-		gap("0.4rem"),
-		minWidth("0"),
-	)
-	rule(".bento-budgets .budget-lastmonth-cap",
-		fontSize("0.62rem"),
+	// "Last month's spend" overline tag: a small accent chip above the main bar that names
+	// it as last month's — so when the overlay is on, the tile reads as last month's
+	// picture (the big bar carries last period's figures) rather than this month's.
+	rule(".bento-budgets .budget-lastmonth-tag",
+		alignSelf("flex-start"),
+		margin("0.3rem 0 0.1rem"),
+		padding("0.1rem 0.45rem"),
+		borderRadius("6px"),
+		fontSize("0.6rem"),
 		fontWeight("700"),
-		letterSpacing("0.05em"),
+		letterSpacing("0.09em"),
 		textTransform("uppercase"),
-		color("var(--text-faint)"),
-	)
-	rule(".bento-budgets .budget-lastmonth-amt",
-		fontWeight("700"),
-		color("var(--text)"),
-	)
-	rule(".bento-budgets .budget-lastmonth-delta",
-		flexShrink("0"),
-		fontWeight("600"),
-		color("var(--text-dim)"),
-	)
-	rule(".bento-budgets .budget-lastmonth.is-over .budget-lastmonth-delta",
-		color("var(--money-negative)"),
+		color("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 13%, transparent)"),
 	)
 	rule(".bento-budgets .budget:first-child",
 		borderTop("1px solid var(--border)"),
