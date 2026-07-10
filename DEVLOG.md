@@ -1,3 +1,37 @@
+## 2026-07-10 — Budgets: savings section by account + plan-vs-reality goal sync
+
+Two related asks from Cam: (1) the zero-based "Savings & investments" section should
+list all savings/investment accounts so you can set a **monthly savings budget per
+account**, plus a smart button to spread the month's leftover across them; (2) add a way
+to **sync that budgeted value back to the goal** and **show the discrepancy** between the
+plan and reality ("planned for 6 months but the allocations will be for 8 months").
+
+Both hinge on the existing `Goal.AccountID` link. Built bottom-up per SDLC:
+- **Domain:** new `Account.MonthlySavings money.Money` (additive, omitempty round-trips);
+  `AccountType.IsSavingsLike()` selecting savings/investment/retirement/crypto.
+- **Compute (`computeBudgetView`):** replaced the goal-based `SavingsLines`/
+  `MonthlyAssignments` with account-based `computeSavingsAccounts` → `[]savingsAcct`.
+  Each account's `MonthlySavings` (FX-converted) now feeds `SavingsAssigned` (still counts
+  toward To Assign). For an account funding a goal, it picks the **nearest incomplete
+  linked goal** (via `goals.LessForList`) and computes plan-vs-reality: `PlannedMonths`
+  from the goal's target date (`monthsUntil`, matching `MonthlyNeeded`'s month convention)
+  vs `RateMonths = ceil(remaining / monthly)` at this rate; `DeltaMonths` is the gap.
+  `Synced` = the goal already carries this monthly amount.
+- **UI (`budgetSavingsWidget` + `budgetSavingsAcctRow`):** per-account monthly input
+  (writes `Account.MonthlySavings` via `PutAccount` + BumpDataRevision/RequestPersist), a
+  tone-colored plan-vs-reality sub-line ("Funds X · Planned N mo → M mo at this rate · k mo
+  behind/ahead", green/red left-border), a **"Sync to goal"** button (writes
+  `Goal.MonthlyContribution`, then shows "Synced ✓"), and a header **"Spread $X leftover"**
+  smart button (`spreadLeftoverAcrossSavings` splits To-Assign evenly, remainder to the
+  first accounts, converting each share into the account's currency). All widget hooks moved
+  above the zero-based early-return so hook order stays stable across method changes.
+
+Verified with Playwright on the sample seed (HYSA funds "Baby fund", 3 investment accts):
+setting $300/mo on HYSA showed "Planned 5 mo → 31 mo · 26 mo behind" and dropped To Assign
+by $300; Sync flipped to "Synced ✓"; the spread button ("Spread $3,623.30 leftover") drove
+To Assign to exactly $0.00, splitting $905.82–83 across the four accounts, and the discrepancy
+recomputed to "8 mo · 3 mo behind" at HYSA's new higher rate. `go test ./...` green.
+
 ## 2026-07-10 — Budgets: "Last month" → a spend overlay for planning
 
 Cam: the "Last month" button re-windowed the page to last month's budgets; repurpose it

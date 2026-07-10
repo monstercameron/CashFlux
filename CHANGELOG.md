@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Budgets "Savings & investments" now budgets by account, with plan-vs-reality goal sync (2026-07-10):** the zero-based savings section used to list *goals* and their monthly contribution. It now lists **every savings/investment account** (savings, investment, retirement, crypto) so you set a **monthly savings budget per account** — each counting toward the assigned total so you can still drive To Assign to $0. A smart **"Spread $X leftover"** button (shown when money is unassigned) splits this month's leftover evenly across those accounts in one click. For an account that **funds a goal** (goal linked to that account), the row shows a **plan-vs-reality line** — e.g. *"Funds Baby fund · Planned 5 mo → 8 mo at this rate · 3 mo behind"* (green when on-plan or ahead, red when behind) — comparing the goal's target-date pace against how long it actually takes at this monthly rate; a **"Sync to goal"** button writes the account's monthly amount back into the goal's planned contribution (then reads "Synced ✓"). New `Account.MonthlySavings` field (additive; existing rows round-trip) and `AccountType.IsSavingsLike()`.
+
 ### Fixed
 - **"Edit budget" modal layout (2026-07-10):** the tracked-category picker rendered every category inline (up to ~42vh) and the fields stacked one per row, so the form ballooned (~1,186px) and buckled inside the panel. The compact fields now pair into two columns (Limit + Period, Owner + Method), the category picker is a bounded, bordered scroll box, and the panel is a touch wider — so the form fits and reads calmly.
 

@@ -132,6 +132,19 @@ func (t AccountType) Class() AccountClass {
 // IsLiability reports whether the type represents money owed.
 func (t AccountType) IsLiability() bool { return t.Class() == ClassLiability }
 
+// IsSavingsLike reports whether the type is a savings or investment vehicle you
+// deliberately fund each month — savings, investment, retirement, or crypto. It
+// selects the accounts the zero-based Budgets view lists under "Savings &
+// investments" for a per-account monthly savings budget.
+func (t AccountType) IsSavingsLike() bool {
+	switch t {
+	case TypeSavings, TypeInvestment, TypeRetirement, TypeCrypto:
+		return true
+	default:
+		return false
+	}
+}
+
 // CategoryKind classifies a category as income or expense.
 type CategoryKind string
 

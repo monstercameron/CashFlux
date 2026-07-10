@@ -113,6 +113,13 @@ type Account struct {
 	StabilityScore    int       `json:"stabilityScore,omitempty"` // 0..100
 	LockUntil         time.Time `json:"lockUntil,omitempty"`
 
+	// MonthlySavings is the amount the household plans to put into this savings/investment
+	// account each month — the per-account monthly savings budget the zero-based view
+	// counts toward "assigned". Zero (the default) means no planned contribution. Stored
+	// in the account's own currency; omitted from JSON when zero so existing rows
+	// round-trip unchanged.
+	MonthlySavings money.Money `json:"monthlySavings,omitempty"`
+
 	Archived bool           `json:"archived,omitempty"`
 	Custom   map[string]any `json:"custom,omitempty"`
 

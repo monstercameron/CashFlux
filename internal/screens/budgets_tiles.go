@@ -15,7 +15,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -686,39 +685,67 @@ func BudgetBasisBody(_ struct{}) ui.Node {
 	)
 }
 
-// budgetSavingsWidget is the zero-based view's "Savings & investments" tile: the goals
-// whose monthly contribution counts toward the assigned total, each with a quick inline
-// edit of that monthly amount so the user can drive To Assign to $0 without leaving the
-// page. Rendered only in zero-based mode.
+// budgetSavingsWidget is the zero-based view's "Savings & investments" tile: every
+// savings/investment account with an inline monthly savings budget (Account.
+// MonthlySavings) that counts toward the assigned total, a smart "Spread leftover"
+// button that splits this month's unassigned money evenly across those accounts, and —
+// for an account that funds a goal — the plan-vs-reality timeline plus a one-click
+// "Sync to goal" that writes the monthly amount back to the goal. Zero-based only.
 func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
+
+	// All hooks run before the mode early-return so hook order stays stable when the
+	// budgeting method changes mid-session. The spread handler recomputes the view at
+	// click time so it always splits the current leftover across the current accounts.
+	nav := router.UseNavigate()
+	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
+	goToAccounts := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/accounts")) }))
+	onSpread := ui.UseEvent(Prevent(func() {
+		vv := computeBudgetView(app, activeMemberID, vw, pr, false)
+		pool := vv.BannerIncome + vv.RolledOver
+		leftover := budgeting.ToAssign(pool, vv.TotalLimit+vv.SavingsAssigned)
+		rates := currency.Rates{Base: vv.Base, Rates: app.Settings().FXRates}
+		spreadLeftoverAcrossSavings(app, vv.SavingsAccts, leftover, vv.Base, rates)
+	}))
+
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	if v.Method != budgeting.MethodZeroBased || len(v.Statuses) == 0 {
 		return Fragment() // only meaningful in zero-based mode with budgets present
 	}
 
-	nav := router.UseNavigate()
-	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
+	pool := v.BannerIncome + v.RolledOver
+	leftover := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned)
 
 	var body ui.Node
-	if len(v.SavingsLines) == 0 {
+	if len(v.SavingsAccts) == 0 {
 		body = P(css.Class("empty", tw.TextDim), Attr("data-testid", "budgets-savings-empty"), uistate.T("budgets.savingsEmpty"))
 	} else {
-		rows := MapKeyed(v.SavingsLines,
-			func(a goalsvc.Assignment) any { return a.GoalID },
-			func(a goalsvc.Assignment) ui.Node {
-				return ui.CreateElement(budgetSavingsRow, budgetSavingsRowProps{App: app, Line: a, Base: v.Base})
+		rows := MapKeyed(v.SavingsAccts,
+			func(a savingsAcct) any { return a.AccountID },
+			func(a savingsAcct) ui.Node {
+				return ui.CreateElement(budgetSavingsAcctRow, budgetSavingsAcctRowProps{App: app, Acct: a, Base: v.Base})
 			})
 		body = Div(css.Class("zbb-savings-rows"), rows)
 	}
 
 	head := Div(css.Class("zbb-savings-head"),
 		Span(css.Class("zbb-savings-title"), uistate.T("budgets.savingsTitle")),
-		Span(css.Class("zbb-savings-total fig"), fmtMoney(money.New(v.SavingsAssigned, v.Base))))
+		Span(css.Class("zbb-savings-total fig"), uistate.T("budgets.savingsPerMonthTotal", fmtMoney(money.New(v.SavingsAssigned, v.Base)))))
+
+	// The smart button appears only when there's unassigned money to place and at least
+	// one account to place it in — otherwise there's nothing to spread.
+	var spreadBtn ui.Node = Fragment()
+	if leftover > 0 && len(v.SavingsAccts) > 0 {
+		spreadBtn = Button(css.Class("btn btn-sm btn-accent zbb-savings-spread"), Type("button"),
+			Attr("data-testid", "budgets-savings-spread"), Attr("aria-label", uistate.T("budgets.savingsSpreadAria")),
+			Attr("title", uistate.T("budgets.savingsSpreadTitle")), OnClick(onSpread),
+			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("budgets.savingsSpread", fmtMoney(money.New(leftover, v.Base)))))
+	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("budgets.savingsSectionTitle"),
@@ -727,8 +754,12 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.savingsDesc")),
 			body,
 			Div(css.Class("zbb-savings-foot"),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), OnClick(goToGoals),
-					uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals")))),
+				spreadBtn,
+				Div(css.Class("zbb-savings-foot-links"),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-accounts-link"), OnClick(goToAccounts),
+						uiw.Icon(icon.Accounts, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageAccounts"))),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), OnClick(goToGoals),
+						uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals"))))),
 		),
 	})
 	return uiw.Widget(uiw.WidgetProps{
@@ -737,58 +768,177 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	})
 }
 
-type budgetSavingsRowProps struct {
+type budgetSavingsAcctRowProps struct {
 	App  *appstate.App
-	Line goalsvc.Assignment
+	Acct savingsAcct
 	Base string
 }
 
-// budgetSavingsRow is one goal in the savings section: its name, its current monthly
-// assignment, and an inline number input that sets the goal's explicit
-// MonthlyContribution (overriding the target-date-derived pace). Owns its own edit hook.
-func budgetSavingsRow(props budgetSavingsRowProps) ui.Node {
+// budgetSavingsAcctRow is one savings/investment account in the savings section: its
+// name and type, an inline number input that sets the account's monthly savings budget
+// (Account.MonthlySavings), and — when it funds a goal — a plan-vs-reality line with a
+// "Sync to goal" button that writes the monthly amount into the goal's planned monthly
+// contribution. Owns its own edit + sync hooks.
+func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 	app := props.App
-	var goal domain.Goal
-	found := false
-	for _, g := range app.Goals() {
-		if g.ID == props.Line.GoalID {
-			goal, found = g, true
-			break
-		}
+	sa := props.Acct
+	cur := sa.Currency
+	if cur == "" {
+		cur = props.Base
 	}
+
 	onEdit := ui.UseEvent(func(e ui.Event) {
-		if !found {
-			return
-		}
-		cur := goal.TargetAmount.Currency
-		if cur == "" {
-			cur = props.Base
-		}
 		if v, ok := majorStrToMinor(e.GetValue(), cur); ok {
-			g := goal
-			g.MonthlyContribution = money.New(v, cur)
-			if err := app.PutGoal(g); err == nil {
+			ac, found := findAccount(app, sa.AccountID)
+			if !found {
+				return
+			}
+			ac.MonthlySavings = money.New(v, cur)
+			if err := app.PutAccount(ac); err == nil {
 				uistate.BumpDataRevision()
 				uistate.RequestPersist()
 			}
 		}
 	})
+	onSync := ui.UseEvent(Prevent(func() {
+		g, found := findGoal(app, sa.GoalID)
+		if !found {
+			return
+		}
+		g.MonthlyContribution = money.New(sa.Monthly, cur)
+		if err := app.PutGoal(g); err == nil {
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+		}
+	}))
 
-	explicit := ""
-	if found && goal.MonthlyContribution.Amount > 0 {
-		explicit = minorToMajorStr(goal.MonthlyContribution.Amount, goal.MonthlyContribution.Currency)
+	val := minorToMajorStr(sa.Monthly, cur)
+
+	var goalNode ui.Node = Fragment()
+	if sa.HasGoal {
+		goalNode = budgetSavingsGoalNode(sa, onSync)
 	}
-	// The effective monthly (explicit or date-derived) as a placeholder hint.
-	hint := minorToMajorStr(props.Line.Minor, props.Base)
 
 	return Div(css.Class("zbb-savings-row"),
-		Span(css.Class("zbb-savings-name"), props.Line.Name),
-		Div(css.Class("zbb-savings-edit"),
-			Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(props.Base)),
-			Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
-				Attr("data-testid", "budgets-savings-amt-"+props.Line.GoalID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria")),
-				Placeholder(hint), Value(explicit), OnInput(onEdit))),
+		Div(css.Class("zbb-savings-main"),
+			Div(css.Class("zbb-savings-id"),
+				Span(css.Class("zbb-savings-name"), sa.Name),
+				Span(css.Class("zbb-savings-type", tw.TextDim), sa.Type)),
+			Div(css.Class("zbb-savings-edit"),
+				Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(cur)),
+				Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
+					Attr("data-testid", "budgets-savings-amt-"+sa.AccountID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria", sa.Name)),
+					Value(val), OnInput(onEdit)),
+				Span(css.Class("zbb-savings-per", tw.TextDim), uistate.T("budgets.savingsPerMonth")))),
+		goalNode,
 	)
+}
+
+// budgetSavingsGoalNode renders the plan-vs-reality line for an account that funds a
+// goal: how the account's monthly savings rate lands against the goal's planned
+// timeline (toned green for on-plan/ahead, amber for behind), with a "Sync to goal"
+// action — or a "Synced ✓" marker when the goal already carries this amount. Pure node
+// builder; the row owns the sync handler hook and passes it in.
+func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
+	if sa.Monthly <= 0 {
+		return Div(css.Class("zbb-savings-goal"),
+			Span(css.Class("zbb-savings-goal-name", tw.TextDim), uistate.T("budgets.savingsFundsSet", sa.GoalName)))
+	}
+	var tone, phrase string
+	switch {
+	case sa.PlannedMonths <= 0 || sa.RateMonths <= 0:
+		phrase = uistate.T("budgets.savingsRateOnly", sa.RateMonths)
+	case sa.DeltaMonths == 0:
+		tone, phrase = "is-ontrack", uistate.T("budgets.savingsOnPlan", sa.PlannedMonths)
+	case sa.DeltaMonths > 0:
+		tone, phrase = "is-behind", uistate.T("budgets.savingsBehind", sa.PlannedMonths, sa.RateMonths, sa.DeltaMonths)
+	default:
+		tone, phrase = "is-ahead", uistate.T("budgets.savingsAhead", sa.PlannedMonths, sa.RateMonths, -sa.DeltaMonths)
+	}
+	var action ui.Node
+	if sa.Synced {
+		action = Span(css.Class("zbb-savings-synced", tw.TextDim), uistate.T("budgets.savingsSynced"))
+	} else {
+		action = Button(css.Class("btn btn-xs zbb-savings-sync"), Type("button"),
+			Attr("data-testid", "budgets-savings-sync-"+sa.AccountID), Attr("title", uistate.T("budgets.savingsSyncTitle", sa.GoalName)),
+			OnClick(onSync), uistate.T("budgets.savingsSync"))
+	}
+	cls := "zbb-savings-goal"
+	if tone != "" {
+		cls += " " + tone
+	}
+	return Div(css.Class(cls),
+		Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
+		Span(css.Class("zbb-savings-goal-time"), phrase),
+		action)
+}
+
+// findAccount returns the current stored account by id (false when missing), so a row's
+// edit handler mutates a fresh copy rather than a possibly-stale captured value.
+func findAccount(app *appstate.App, id string) (domain.Account, bool) {
+	for _, a := range app.Accounts() {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return domain.Account{}, false
+}
+
+// findGoal returns the current stored goal by id (false when missing).
+func findGoal(app *appstate.App, id string) (domain.Goal, bool) {
+	for _, g := range app.Goals() {
+		if g.ID == id {
+			return g, true
+		}
+	}
+	return domain.Goal{}, false
+}
+
+// spreadLeftoverAcrossSavings raises each savings/investment account's monthly savings
+// budget by an even share of the month's leftover (To-Assign), so the smart button
+// drives To-Assign toward $0. The base-currency leftover is split evenly (the rounding
+// remainder goes to the earliest accounts) and each share is converted into the
+// account's own currency before being added. Persists once when anything changed.
+func spreadLeftoverAcrossSavings(app *appstate.App, accts []savingsAcct, leftoverBase int64, base string, rates currency.Rates) {
+	n := int64(len(accts))
+	if n == 0 || leftoverBase <= 0 {
+		return
+	}
+	share := leftoverBase / n
+	remainder := leftoverBase - share*n
+	changed := false
+	for i, sa := range accts {
+		add := share
+		if int64(i) < remainder {
+			add++ // hand the leftover minor units to the first few accounts
+		}
+		if add <= 0 {
+			continue
+		}
+		ac, ok := findAccount(app, sa.AccountID)
+		if !ok {
+			continue
+		}
+		cur := ac.Currency
+		if cur == "" {
+			cur = base
+		}
+		// Convert the base-currency share into the account's own currency.
+		addAcct := add
+		if cur != base {
+			if conv, err := currency.ConvertBetween(add, base, cur, rates); err == nil {
+				addAcct = conv
+			}
+		}
+		ac.MonthlySavings = money.New(ac.MonthlySavings.Amount+addAcct, cur)
+		if err := app.PutAccount(ac); err == nil {
+			changed = true
+		}
+	}
+	if changed {
+		uistate.BumpDataRevision()
+		uistate.RequestPersist()
+	}
 }
 
 // budgetFundSetAsideNode shows the household's total monthly sinking-fund commitment,

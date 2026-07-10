@@ -3011,19 +3011,35 @@ func registerGenerated() {
 	)
 	rule(".zbb-savings-row",
 		display("flex"),
-		alignItems("center"),
-		justifyContent("space-between"),
-		gap("0.8rem"),
-		padding("0.5rem 0"),
+		flexDirection("column"),
+		alignItems("stretch"),
+		gap("0.35rem"),
+		padding("0.6rem 0"),
 		borderTop("1px solid var(--border)"),
 	)
 	rule(".zbb-savings-row:first-child", borderTop("0"))
+	rule(".zbb-savings-main",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.8rem"),
+	)
+	rule(".zbb-savings-id",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.05rem"),
+		minWidth("0"),
+	)
 	rule(".zbb-savings-name",
-		fontWeight("500"),
+		fontWeight("600"),
 		color("var(--text)"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
+	)
+	rule(".zbb-savings-type",
+		fontSize("0.72rem"),
+		color("var(--text-faint)"),
 	)
 	rule(".zbb-savings-edit",
 		display("flex"),
@@ -3035,8 +3051,75 @@ func registerGenerated() {
 		width("7rem"),
 		textAlign("right"),
 	)
+	rule(".zbb-savings-per",
+		fontSize("0.75rem"),
+		color("var(--text-faint)"),
+	)
+	// Plan-vs-reality sub-line: an indented, accent-bordered strip under the account
+	// row showing how this monthly rate lands against the goal's timeline. The left
+	// border and the time figure take on a positive/negative tone from the delta.
+	rule(".zbb-savings-goal",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+		marginLeft("0.1rem"),
+		paddingLeft("0.6rem"),
+		borderLeft("2px solid var(--border)"),
+		fontSize("0.75rem"),
+	)
+	rule(".zbb-savings-goal.is-ontrack", borderLeftColor("var(--money-positive)"))
+	rule(".zbb-savings-goal.is-ahead", borderLeftColor("var(--money-positive)"))
+	rule(".zbb-savings-goal.is-behind", borderLeftColor("var(--money-negative)"))
+	rule(".zbb-savings-goal-name",
+		fontWeight("500"),
+		color("var(--text-dim)"),
+	)
+	rule(".zbb-savings-goal-time", color("var(--text-dim)"))
+	rule(".zbb-savings-goal.is-ontrack .zbb-savings-goal-time",
+		color("var(--money-positive)"),
+		fontWeight("600"),
+	)
+	rule(".zbb-savings-goal.is-ahead .zbb-savings-goal-time",
+		color("var(--money-positive)"),
+		fontWeight("600"),
+	)
+	rule(".zbb-savings-goal.is-behind .zbb-savings-goal-time",
+		color("var(--money-negative)"),
+		fontWeight("600"),
+	)
+	rule(".zbb-savings-sync",
+		marginLeft("auto"),
+		padding("0.15rem 0.5rem"),
+		fontSize("0.72rem"),
+	)
+	rule(".zbb-savings-synced",
+		marginLeft("auto"),
+		fontSize("0.72rem"),
+		color("var(--money-positive)"),
+		fontWeight("600"),
+	)
 	rule(".zbb-savings-foot",
-		marginTop("0.6rem"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.6rem"),
+		marginTop("0.7rem"),
+	)
+	rule(".zbb-savings-foot-links",
+		display("flex"),
+		gap("0.4rem"),
+		flexWrap("wrap"),
+	)
+	rule(".zbb-savings-spread",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.35rem"),
+		background("var(--accent)"),
+		color("#fff"),
+		borderColor("transparent"),
+		fontWeight("600"),
 	)
 	// The spend-progress bar is DEMOTED in the zero-based view (spending is context,
 	// not the headline), so its figures shrink and sit under a quiet caption below

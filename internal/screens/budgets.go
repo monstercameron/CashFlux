@@ -62,11 +62,12 @@ type budgetView struct {
 	TotalFundSetAside int64
 	BannerIncome      int64 // monthly income (per the chosen basis) for the assign banner
 	// SavingsAssigned is the total monthly income assigned to savings/investments —
-	// the sum of every active goal's monthly assignment (base-currency minor units).
-	// Counts toward "assigned" in the zero-based view so To Assign spans expenses +
-	// savings. SavingsLines is the per-goal breakdown the savings section renders.
+	// the sum of every savings/investment account's monthly savings budget
+	// (Account.MonthlySavings), FX-converted to base minor units. Counts toward
+	// "assigned" in the zero-based view so To Assign spans expenses + savings.
+	// SavingsAccts is the per-account breakdown the savings section renders.
 	SavingsAssigned int64
-	SavingsLines    []goalsvc.Assignment
+	SavingsAccts    []savingsAcct
 	// RolledOver is last month's unspent budget carried into this month's assignable
 	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
 	RolledOver int64
@@ -98,6 +99,124 @@ type incomeSource struct {
 	CategoryID string
 	Name       string
 	Minor      int64
+}
+
+// savingsAcct is one savings/investment account in the zero-based "Savings &
+// investments" section: its identity, the per-account monthly savings budget
+// (Account.MonthlySavings, in the account's own currency) and its base-currency
+// equivalent, plus — when the account funds a goal — the plan-vs-reality read
+// (the goal's target-date pace vs. where this monthly rate actually lands).
+type savingsAcct struct {
+	AccountID    string
+	Name         string
+	Type         string // account type value, humanized for the row sublabel
+	Currency     string // account currency (also the monthly-savings currency)
+	Monthly      int64  // monthly savings budget, account-currency minor units
+	AssignedBase int64  // Monthly converted to base currency (0 when unconvertible)
+
+	// Plan-vs-reality against the account's funded goal (populated only when the
+	// account funds a still-incomplete financial goal).
+	HasGoal       bool
+	GoalID        string
+	GoalName      string
+	PlannedMonths int  // whole months from now to the goal's target date (0 = undated)
+	RateMonths    int  // months to reach the goal at this monthly rate (0 = can't project)
+	DeltaMonths   int  // RateMonths − PlannedMonths (>0 later than planned, <0 sooner)
+	Synced        bool // goal.MonthlyContribution already equals this monthly amount
+}
+
+// monthsUntil counts whole calendar months from `from` to `target`, rounding a
+// partial final month up and flooring at 1, matching goals.MonthlyNeeded's
+// convention. It returns 0 for an undated or already-past target so callers can
+// treat "no plan" uniformly.
+func monthsUntil(from, target time.Time) int {
+	if target.IsZero() || !target.After(from) {
+		return 0
+	}
+	m := (target.Year()-from.Year())*12 + int(target.Month()) - int(from.Month())
+	if target.Day() > from.Day() {
+		m++ // a partial final month still needs a contribution
+	}
+	if m < 1 {
+		m = 1
+	}
+	return m
+}
+
+// computeSavingsAccounts builds the per-account savings lines for the zero-based
+// view: every non-archived savings/investment account, its monthly savings budget
+// converted to base, and — when the account funds a financial goal — the plan-vs-
+// reality timeline (how many months the goal is planned for vs. how many it takes
+// at this monthly rate). Accounts are returned sorted by name for a stable list.
+func computeSavingsAccounts(app *appstate.App, now time.Time, base string, rates currency.Rates) []savingsAcct {
+	// Index active, still-incomplete financial goals by the account they fund,
+	// nearest target first, so each account picks its most time-sensitive goal.
+	goalsByAcct := map[string][]domain.Goal{}
+	for _, g := range app.Goals() {
+		if g.Archived || !g.IsFinancial() || g.AccountID == "" {
+			continue
+		}
+		goalsByAcct[g.AccountID] = append(goalsByAcct[g.AccountID], g)
+	}
+	for id, gs := range goalsByAcct {
+		sort.SliceStable(gs, func(i, j int) bool { return goalsvc.LessForList(gs[i], gs[j]) })
+		goalsByAcct[id] = gs
+	}
+
+	var out []savingsAcct
+	for _, ac := range app.Accounts() {
+		if ac.Archived || !ac.Type.IsSavingsLike() {
+			continue
+		}
+		cur := ac.Currency
+		if cur == "" {
+			cur = base
+		}
+		monthly := ac.MonthlySavings.Amount
+		mCur := ac.MonthlySavings.Currency
+		if mCur == "" {
+			mCur = cur
+		}
+		assignedBase := monthly
+		if monthly != 0 {
+			if conv, err := currency.ConvertBetween(monthly, mCur, base, rates); err == nil {
+				assignedBase = conv
+			}
+		}
+		sa := savingsAcct{
+			AccountID: ac.ID, Name: ac.Name, Type: humanizeType(string(ac.Type)),
+			Currency: cur, Monthly: monthly, AssignedBase: assignedBase,
+		}
+		// Plan-vs-reality against the account's nearest funded, incomplete goal.
+		for _, g := range goalsByAcct[ac.ID] {
+			rem, err := goalsvc.Remaining(g)
+			if err != nil || rem.Amount <= 0 {
+				continue
+			}
+			sa.HasGoal = true
+			sa.GoalID = g.ID
+			sa.GoalName = g.Name
+			sa.PlannedMonths = monthsUntil(now, g.TargetDate)
+			// The monthly rate expressed in the goal's currency for the projection.
+			rate := monthly
+			if mCur != rem.Currency {
+				if conv, err := currency.ConvertBetween(monthly, mCur, rem.Currency, rates); err == nil {
+					rate = conv
+				}
+			}
+			if rate > 0 {
+				sa.RateMonths = int((rem.Amount + rate - 1) / rate) // ceil division
+			}
+			if sa.PlannedMonths > 0 && sa.RateMonths > 0 {
+				sa.DeltaMonths = sa.RateMonths - sa.PlannedMonths
+			}
+			sa.Synced = monthly > 0 && g.MonthlyContribution.Amount == monthly && g.MonthlyContribution.Currency == mCur
+			break
+		}
+		out = append(out, sa)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // computeBudgetView runs the full budget evaluation for the active member scope and
@@ -328,12 +447,13 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		}
 	}
 
-	// Savings/investments assigned this month: every active goal's monthly assignment.
-	// Counts toward "assigned" in the zero-based view (To Assign spans expenses + savings).
-	savingsLines := goalsvc.MonthlyAssignments(app.Goals(), now, base, rates)
+	// Savings/investments assigned this month: each savings/investment account's own
+	// monthly savings budget (Account.MonthlySavings), FX-converted to base. Counts
+	// toward "assigned" in the zero-based view (To Assign spans expenses + savings).
+	savingsAccts := computeSavingsAccounts(app, now, base, rates)
 	var savingsAssigned int64
-	for _, a := range savingsLines {
-		savingsAssigned += a.Minor
+	for _, sa := range savingsAccts {
+		savingsAssigned += sa.AssignedBase
 	}
 
 	// C190: sum the monthly set-aside across all active sinking-fund goals.
@@ -351,7 +471,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
-		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
+		SavingsAssigned: savingsAssigned, SavingsAccts: savingsAccts,
 		RolledOver:     pooledRollover,
 		LastMonth:      lastMonth,
 		LastMonthMode:  showLastMonth,
