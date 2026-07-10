@@ -504,75 +504,77 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		}
 		srcKey := func(sc budgetCoverSource) any { return sc.ID }
 		return Form(css.Class("acct-edit-form", "cover-form"), OnSubmit(submitCover),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-				uistate.T("budgets.coverHint", coverShortfallStr)),
-			// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
-			// this budget's context and re-evaluated each period when recurring.
-			labeledField(uistate.T("budgets.amountToMove"),
-				Div(css.Class("cover-amount-block"),
-					Div(css.Class("cover-amount-row"),
-						IfElse(amtFxS.Get(),
-							Input(css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
-								Placeholder("overspend"), Value(amtFormulaS.Get()), OnInput(onAmtFormula)),
-							Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
-								Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
-								Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt))),
-						If(!amtFxS.Get() && coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
-							OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
-						Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(amtFxS.Get())),
-							Attr("data-testid", "cover-fx-toggle"), Title(uistate.T("budgets.coverFormulaTitle")), OnClick(toggleAmtFx), "ƒx"),
+			Div(css.Class("modal-scroll"),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+					uistate.T("budgets.coverHint", coverShortfallStr)),
+				// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
+				// this budget's context and re-evaluated each period when recurring.
+				labeledField(uistate.T("budgets.amountToMove"),
+					Div(css.Class("cover-amount-block"),
+						Div(css.Class("cover-amount-row"),
+							IfElse(amtFxS.Get(),
+								Input(css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
+									Placeholder("overspend"), Value(amtFormulaS.Get()), OnInput(onAmtFormula)),
+								Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
+									Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
+									Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt))),
+							If(!amtFxS.Get() && coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
+								OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
+							Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(amtFxS.Get())),
+								Attr("data-testid", "cover-fx-toggle"), Title(uistate.T("budgets.coverFormulaTitle")), OnClick(toggleAmtFx), "ƒx"),
+						),
+						If(amtFxS.Get() && amtFxErr == "", Span(css.Class("cover-fx-preview"), Attr("data-testid", "cover-fx-preview"), uistate.T("budgets.coverFormulaPreview", amtPreview))),
+						If(amtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", amtFxErr))),
+						If(amtFxS.Get(), Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverFormulaHint"))),
+					)),
+				// Multi-source: check the budgets to pull from (split equally by default);
+				// the ratio input per source lets the split be unequal — or drive every
+				// source's ratio from a single formula (ƒx) evaluated in each source's context.
+				Div(css.Class("cover-spread-head"),
+					Div(css.Class("cover-spread-titles"),
+						Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
+						Span(css.Class("cover-spread-sub"), spreadSub),
 					),
-					If(amtFxS.Get() && amtFxErr == "", Span(css.Class("cover-fx-preview"), Attr("data-testid", "cover-fx-preview"), uistate.T("budgets.coverFormulaPreview", amtPreview))),
-					If(amtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", amtFxErr))),
-					If(amtFxS.Get(), Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverFormulaHint"))),
-				)),
-			// Multi-source: check the budgets to pull from (split equally by default);
-			// the ratio input per source lets the split be unequal — or drive every
-			// source's ratio from a single formula (ƒx) evaluated in each source's context.
-			Div(css.Class("cover-spread-head"),
-				Div(css.Class("cover-spread-titles"),
-					Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
-					Span(css.Class("cover-spread-sub"), spreadSub),
+					// The "ƒx ratios" toggle only appears once a source is picked (it weights the
+					// selected sources), so the default view has just one ƒx — the amount one —
+					// instead of two identical buttons. Labelled to read as the ratio control.
+					If(selCount > 0, Button(css.Class("btn", "cover-fx-toggle", "cover-fx-ratio"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
+						Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx),
+						Span(css.Class("cover-fx-ratio-label"), uistate.T("budgets.coverWeightFxBtn")), "ƒx")),
 				),
-				// The "ƒx ratios" toggle only appears once a source is picked (it weights the
-				// selected sources), so the default view has just one ƒx — the amount one —
-				// instead of two identical buttons. Labelled to read as the ratio control.
-				If(selCount > 0, Button(css.Class("btn", "cover-fx-toggle", "cover-fx-ratio"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
-					Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx),
-					Span(css.Class("cover-fx-ratio-label"), uistate.T("budgets.coverWeightFxBtn")), "ƒx")),
-			),
-			If(wtFxS.Get() && selCount > 0, Div(css.Class("cover-weight-fx"),
-				Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
-					Placeholder("cf_budget_priority"), Value(wtFormulaS.Get()), OnInput(onWtFormula)),
-				If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
-				Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
-			)),
-			// A running "Selected N · splitting $X" caption pinned above the list, so the
-			// split total reads at a glance even as rows scroll. Kept always-present (hidden
-			// when empty) so toggling it never restructures the siblings and forces the keyed
-			// list below to remount — which would detach a row mid-click.
-			Span(ClassStr(coverCapClass(selCount)), coverCapText(selCount, selTotal, cur)),
-			// One keyed list, sorted so the picked budgets cluster at the top; the CSS tints
-			// the checked group and rules a divider before the remaining sources.
-			Div(css.Class("cover-sources"),
-				MapKeyed(sortedCoverSrcs, srcKey, renderSrc),
-			),
-			// Repeat this cover automatically at the start of each new period.
-			Label(css.Class("cover-recurring-toggle"),
-				Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-recurring"), OnChange(onToggleRecurring)}, checkedAttr(recurringS.Get())...)...),
-				Span(uistate.T("budgets.coverRecurring")),
-			),
-			// Custom fields on the standing rule (metadata like a reason / review-by), shown
-			// only when recurring is on and the household has defined "cover" fields.
-			If(recurringS.Get() && len(app.CustomFieldDefsFor("cover")) > 0,
-				Div(css.Class("cover-custom-fields"),
-					P(css.Class("cover-fx-hint"), uistate.T("budgets.coverCustomHint")),
-					MapKeyed(app.CustomFieldDefsFor("cover"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: coverCustomVals.Get()[d.Key], OnChange: onCoverCustom}))
-					}),
+				If(wtFxS.Get() && selCount > 0, Div(css.Class("cover-weight-fx"),
+					Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
+						Placeholder("cf_budget_priority"), Value(wtFormulaS.Get()), OnInput(onWtFormula)),
+					If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
+					Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
 				)),
-			errLine,
-			Div(css.Class("acct-edit-actions"),
+				// A running "Selected N · splitting $X" caption pinned above the list, so the
+				// split total reads at a glance even as rows scroll. Kept always-present (hidden
+				// when empty) so toggling it never restructures the siblings and forces the keyed
+				// list below to remount — which would detach a row mid-click.
+				Span(ClassStr(coverCapClass(selCount)), coverCapText(selCount, selTotal, cur)),
+				// One keyed list, sorted so the picked budgets cluster at the top; the CSS tints
+				// the checked group and rules a divider before the remaining sources.
+				Div(css.Class("cover-sources"),
+					MapKeyed(sortedCoverSrcs, srcKey, renderSrc),
+				),
+				// Repeat this cover automatically at the start of each new period.
+				Label(css.Class("cover-recurring-toggle"),
+					Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-recurring"), OnChange(onToggleRecurring)}, checkedAttr(recurringS.Get())...)...),
+					Span(uistate.T("budgets.coverRecurring")),
+				),
+				// Custom fields on the standing rule (metadata like a reason / review-by), shown
+				// only when recurring is on and the household has defined "cover" fields.
+				If(recurringS.Get() && len(app.CustomFieldDefsFor("cover")) > 0,
+					Div(css.Class("cover-custom-fields"),
+						P(css.Class("cover-fx-hint"), uistate.T("budgets.coverCustomHint")),
+						MapKeyed(app.CustomFieldDefsFor("cover"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+							return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: coverCustomVals.Get()[d.Key], OnChange: onCoverCustom}))
+						}),
+					)),
+				errLine,
+			),
+			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.coverAction")),
 			),
@@ -582,14 +584,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// --- Top-up: a single amount that raises the budget's limit. ---
 	if props.Mode == uistate.BudgetEditModeTopup {
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-				uistate.T("budgets.topupHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)), fmtMoney(b.Limit))),
-			labeledField(uistate.T("budgets.amountToAdd"),
-				Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
-					Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
-					Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
-			errLine,
-			Div(css.Class("acct-edit-actions"),
+			Div(css.Class("modal-scroll"),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+					uistate.T("budgets.topupHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)), fmtMoney(b.Limit))),
+				labeledField(uistate.T("budgets.amountToAdd"),
+					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
+						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
+						Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
+				errLine,
+			),
+			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.addFunds")),
 			),
@@ -600,49 +604,51 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// the rollover explanation and Method sit full-width beneath their controls, and the
 	// action row's margin-top:auto pins Save/Cancel to the modal's bottom. ---
 	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),
-		labeledField(uistate.T("common.name"),
-			Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(ev.OnName))),
-		// Variable name: an optional explicit handle for this budget in formulas/widgets.
-		// Empty falls back to the display name; the resolved variable is previewed live.
-		labeledField(uistate.T("budgets.varNameLabel"),
-			entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName)),
-		// The core budget params pair into two columns so the form reads calmly and fits
-		// the panel instead of a long single stack: amount + cadence, then owner + method.
-		Div(css.Class("budget-edit-row"),
-			labeledField(uistate.T("budgets.limitLabel"),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
-			labeledField(uistate.T("budgets.period"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
-					OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
-				}))),
-		Div(css.Class("budget-edit-row"),
-			labeledField(uistate.T("common.owner"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
-					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
-				})),
-			labeledField(uistate.T("budgets.methodLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
-					OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
-				}))),
-		// Tracked categories: pick the 1..n categories this budget counts (a bounded,
-		// scrollable list box so it can't balloon the form).
-		labeledField(uistate.T("budgets.catsField"),
-			ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: trackCats.Get(), OnToggle: toggleTrack, ExcludeBudgetID: props.BudgetID})),
-		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
-			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
-			Span(uistate.T("budgets.rollover")),
+		Div(css.Class("modal-scroll"),
+			labeledField(uistate.T("common.name"),
+				Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(ev.OnName))),
+			// Variable name: an optional explicit handle for this budget in formulas/widgets.
+			// Empty falls back to the display name; the resolved variable is previewed live.
+			labeledField(uistate.T("budgets.varNameLabel"),
+				entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName)),
+			// The core budget params pair into two columns so the form reads calmly and fits
+			// the panel instead of a long single stack: amount + cadence, then owner + method.
+			Div(css.Class("budget-edit-row"),
+				labeledField(uistate.T("budgets.limitLabel"),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
+				labeledField(uistate.T("budgets.period"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
+						OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
+					}))),
+			Div(css.Class("budget-edit-row"),
+				labeledField(uistate.T("common.owner"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
+						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
+					})),
+				labeledField(uistate.T("budgets.methodLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
+						OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
+					}))),
+			// Tracked categories: pick the 1..n categories this budget counts (a bounded,
+			// scrollable list box so it can't balloon the form).
+			labeledField(uistate.T("budgets.catsField"),
+				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: trackCats.Get(), OnToggle: toggleTrack, ExcludeBudgetID: props.BudgetID})),
+			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
+				Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
+				Span(uistate.T("budgets.rollover")),
+			),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
+			// Custom fields: one input per user-defined "budget" field (renders nothing
+			// when there are no defs).
+			MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
+			}),
+			errLine,
 		),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
-		// Custom fields: one input per user-defined "budget" field (renders nothing
-		// when there are no defs).
-		MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-			return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
-		}),
-		errLine,
-		Div(css.Class("acct-edit-actions"),
+		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),

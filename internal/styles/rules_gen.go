@@ -2577,29 +2577,16 @@ func registerGenerated() {
 	// Action bar pinned to the modal's bottom: a quiet Cancel + a prominent primary. Sticky
 	// so it stays visible (with a solid backing) even if a field-heavy form has to scroll;
 	// margin-top:auto pins it to the bottom when the form is short.
-	rule(".budget-add-actions",
-		display("flex"),
-		justifyContent("flex-end"),
-		alignItems("center"),
-		gap("0.6rem"),
-		marginTop("auto"),
-		position("sticky"),
-		bottom("-1.5rem"),
-		paddingTop("0.9rem"),
-		paddingBottom("1.5rem"),
-		marginBottom("-1.5rem"),
-		background("var(--bg-panel, #121214)"),
-		borderTop("1px solid var(--border)"),
-	)
-	rule(".budget-add-actions .ba-submit",
-		minHeight("46px"),
+	// Pinned custom footer button sizing (shared by every .modal-foot action bar), so
+	// the primary "Add"/"Save" button reads as a comfortable, prominent target.
+	rule(".modal-foot .ba-submit",
 		padding("0 1.5rem"),
 		fontWeight("600"),
 		fontSize("0.95rem"),
 		minWidth("150px"),
 	)
-	rule(".budget-add-actions .btn",
-		minHeight("46px"),
+	rule(".modal-foot .btn",
+		minHeight("44px"),
 	)
 	rule(".field",
 		width("100%"),
@@ -8459,6 +8446,58 @@ func registerGenerated() {
 		background("#2d2d33"),
 		borderRadius("999px"),
 		border("2px solid #121214"),
+	)
+	// Flush body: the scroll padding is dropped and the single form/body child fills the
+	// full height as a flex column, so it can split into a scrolling field region
+	// (.modal-scroll) and a pinned action bar (.modal-foot) that never scrolls off.
+	rule(".set-body-flush",
+		padding("0"),
+		overflow("hidden"),
+		display("flex"),
+		flexDirection("column"),
+	)
+	rule(".set-body-flush > *",
+		flex("1"),
+		minHeight("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0"),
+	)
+	rule(".modal-scroll",
+		flex("1"),
+		minHeight("0"),
+		overflowY("auto"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.75rem"),
+		padding("1rem 1rem 0.9rem"),
+		scrollbarWidth("thin"),
+		scrollbarColor("#34343a transparent"),
+	)
+	rule(".modal-scroll::-webkit-scrollbar",
+		width("9px"),
+	)
+	rule(".modal-scroll::-webkit-scrollbar-thumb",
+		background("#2d2d33"),
+		borderRadius("999px"),
+		border("2px solid #121214"),
+	)
+	rule(".modal-foot",
+		flexShrink("0"),
+		display("flex"),
+		justifyContent("flex-end"),
+		gap("0.5rem"),
+		padding("0.75rem 1rem"),
+		borderTop("1px solid #2a2a2c"),
+		background("#121214"),
+	)
+	// When a category/auto-budget list is the modal body's own scroll content (a direct
+	// child of .modal-scroll), drop its independent max-height/scroll so .modal-scroll is
+	// the single scroll region — no nested scrollbars. Nested pickers inside the add/edit
+	// forms are NOT direct children, so they keep their own bounded box.
+	rule(".modal-scroll > .autobudget-rows, .modal-scroll > .budgetcats-list",
+		maxHeight("none"),
+		overflowY("visible"),
 	)
 	rule(".set-label",
 		fontSize(".7rem"),

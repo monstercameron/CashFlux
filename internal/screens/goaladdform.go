@@ -175,6 +175,12 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			props.OnDone()
 		}
 	}))
+	// Cancel just closes the add modal (the pinned footer's quiet action).
+	cancelAdd := ui.UseEvent(Prevent(func() {
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	}))
 
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 	linkOptions := goalAccountOptions(accounts, linkAcct.Get())
@@ -203,73 +209,80 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	kind := domain.GoalKind(kindS.Get())
 	financial := kind.IsFinancial()
 
-	return Form(css.Class("form-grid"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
-		labeledField(uistate.T("common.name"),
-			Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
-		// Goal type picker (savings / checklist / milestone / habit) with a one-line hint.
-		labeledField(uistate.T("goals.kindLabel"),
-			Div(
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: goalKindOptions(), Selected: kindS.Get(), TestID: "goal-add-kind",
-					OnChange: func(v string) { kindS.Set(v) }, AriaLabel: uistate.T("goals.kindLabel"),
+	return Form(css.Class("acct-edit-form"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
+		Div(css.Class("modal-scroll"),
+			Div(css.Class("form-grid"),
+				labeledField(uistate.T("common.name"),
+					Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
+				// Goal type picker (savings / checklist / milestone / habit) with a one-line hint.
+				labeledField(uistate.T("goals.kindLabel"),
+					Div(
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options: goalKindOptions(), Selected: kindS.Get(), TestID: "goal-add-kind",
+							OnChange: func(v string) { kindS.Set(v) }, AriaLabel: uistate.T("goals.kindLabel"),
+						}),
+						Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-kind-hint"), goalKindHint(kind)),
+					)),
+				// --- Financial-only: target / saved / linked account / sinking fund / category. ---
+				If(financial, wishAssist),
+				If(financial, labeledField(uistate.T("goals.targetLabel"),
+					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)))),
+				If(financial, labeledField(uistate.T("goals.savedSoFar"),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
+				// --- Habit-only: check-in rhythm + how many check-ins finish it. ---
+				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-add-cadence",
+						OnChange: func(v string) { cadenceS.Set(v) }, AriaLabel: uistate.T("goals.habitCadenceLabel"),
+					}))),
+				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitTargetLabel"),
+					Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-add-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Value(habitTargetS.Get()), Step("1"), OnInput(onHabitTarget)))),
+				// --- Common: an optional target date / deadline, and owner. ---
+				labeledField(uistate.T("goals.dateLabel"),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
+				labeledField(uistate.T("goals.owner"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   ownerOptions,
+						Selected:  owner.Get(),
+						OnChange:  func(v string) { owner.Set(v) },
+						AriaLabel: uistate.T("goals.owner"),
+					})),
+				If(financial, labeledField(uistate.T("goals.linkedOptional"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   linkOptions,
+						Selected:  linkAcct.Get(),
+						OnChange:  func(v string) { linkAcct.Set(v) },
+						AriaLabel: uistate.T("goals.linkedOptional"),
+					}))),
+				// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
+				If(financial, labeledField(uistate.T("goals.sinkingFund"),
+					func() ui.Node {
+						cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund)}
+						if isSinkingFund.Get() {
+							cbArgs = append(cbArgs, Attr("checked", ""))
+						}
+						return Div(
+							Input(cbArgs...),
+							Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
+						)
+					}())),
+				// C192: optional linked spending category for the fund (meaningful mainly for sinking funds).
+				If(financial, labeledField(uistate.T("goals.linkedCategory"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   catOptions,
+						Selected:  categoryID.Get(),
+						OnChange:  func(v string) { categoryID.Set(v) },
+						AriaLabel: uistate.T("goals.linkedCategory"),
+					}))),
+				MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 				}),
-				Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-kind-hint"), goalKindHint(kind)),
-			)),
-		// --- Financial-only: target / saved / linked account / sinking fund / category. ---
-		If(financial, wishAssist),
-		If(financial, labeledField(uistate.T("goals.targetLabel"),
-			Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)))),
-		If(financial, labeledField(uistate.T("goals.savedSoFar"),
-			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
-		// --- Habit-only: check-in rhythm + how many check-ins finish it. ---
-		If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-add-cadence",
-				OnChange: func(v string) { cadenceS.Set(v) }, AriaLabel: uistate.T("goals.habitCadenceLabel"),
-			}))),
-		If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitTargetLabel"),
-			Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-add-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Value(habitTargetS.Get()), Step("1"), OnInput(onHabitTarget)))),
-		// --- Common: an optional target date / deadline, and owner. ---
-		labeledField(uistate.T("goals.dateLabel"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
-		labeledField(uistate.T("goals.owner"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   ownerOptions,
-				Selected:  owner.Get(),
-				OnChange:  func(v string) { owner.Set(v) },
-				AriaLabel: uistate.T("goals.owner"),
-			})),
-		If(financial, labeledField(uistate.T("goals.linkedOptional"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   linkOptions,
-				Selected:  linkAcct.Get(),
-				OnChange:  func(v string) { linkAcct.Set(v) },
-				AriaLabel: uistate.T("goals.linkedOptional"),
-			}))),
-		// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
-		If(financial, labeledField(uistate.T("goals.sinkingFund"),
-			func() ui.Node {
-				cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund)}
-				if isSinkingFund.Get() {
-					cbArgs = append(cbArgs, Attr("checked", ""))
-				}
-				return Div(
-					Input(cbArgs...),
-					Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
-				)
-			}())),
-		// C192: optional linked spending category for the fund (meaningful mainly for sinking funds).
-		If(financial, labeledField(uistate.T("goals.linkedCategory"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   catOptions,
-				Selected:  categoryID.Get(),
-				OnChange:  func(v string) { categoryID.Set(v) },
-				AriaLabel: uistate.T("goals.linkedCategory"),
-			}))),
-		MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-		}),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.add")),
-		errText("goal-err", errMsg.Get()),
+				errText("goal-err", errMsg.Get()),
+			),
+		),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancelAdd), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.add")),
+		),
 	)
 }

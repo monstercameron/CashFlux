@@ -25,17 +25,19 @@ func GoalEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseGoalEdit() }
 
-	title, width, height := uistate.T("goals.editTitle"), "460px", "560px"
+	// Standard sizes: full edit uses Medium, the short contribute form uses Small.
+	title, width, height := uistate.T("goals.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	if e.Mode == uistate.GoalEditModeContribute {
-		title, width, height = uistate.T("goals.contributeTitle"), "420px", "340px"
+		title, width, height = uistate.T("goals.contributeTitle"), uiw.FlipSmallW, uiw.FlipSmallH
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    title,
-		Width:    width,
-		Height:   height,
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.GoalEditForm, screens.GoalEditFormProps{GoalID: e.ID, Mode: e.Mode, OnDone: closeModal}),
+		Title:     title,
+		Width:     width,
+		Height:    height,
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   closeModal,
+		Back:      uic.CreateElement(screens.GoalEditForm, screens.GoalEditFormProps{GoalID: e.ID, Mode: e.Mode, OnDone: closeModal}),
 	})
 }

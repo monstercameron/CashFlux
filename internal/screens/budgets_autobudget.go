@@ -184,13 +184,14 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		})
 	})
 
-	return Div(css.Class(tw.FlexCol, tw.Gap3),
-		seg,
-		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
-			Attr("data-testid", "autobudget-intro"),
-			uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
-		Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows),
-		Div(css.Class("autobudget-footer"),
+	return Div(css.Class(tw.FlexCol),
+		Div(css.Class("modal-scroll"),
+			seg,
+			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
+				Attr("data-testid", "autobudget-intro"),
+				uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
+			Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
+		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"),
 				uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), OnClick(onCancel), uistate.T("action.cancel")),

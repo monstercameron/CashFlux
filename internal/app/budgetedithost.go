@@ -31,20 +31,22 @@ func BudgetEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseBudgetEdit() }
 
-	title, width, height := uistate.T("budgets.editTitle"), "520px", "660px"
+	// Standard sizes: full edit + cover use Medium, the short top-up uses Small.
+	title, width, height := uistate.T("budgets.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	switch e.Mode {
 	case uistate.BudgetEditModeTopup:
-		title, width, height = uistate.T("budgets.topupTitle"), "420px", "300px"
+		title, width, height = uistate.T("budgets.topupTitle"), uiw.FlipSmallW, uiw.FlipSmallH
 	case uistate.BudgetEditModeCover:
-		title, width, height = uistate.T("budgets.coverModalTitle"), "540px", "780px"
+		title = uistate.T("budgets.coverModalTitle")
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    title,
-		Width:    width,
-		Height:   height,
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.BudgetEditForm, screens.BudgetEditFormProps{BudgetID: e.ID, Mode: e.Mode, OnDone: closeModal}),
+		Title:     title,
+		Width:     width,
+		Height:    height,
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   closeModal,
+		Back:      uic.CreateElement(screens.BudgetEditForm, screens.BudgetEditFormProps{BudgetID: e.ID, Mode: e.Mode, OnDone: closeModal}),
 	})
 }

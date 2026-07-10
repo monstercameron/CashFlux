@@ -22,11 +22,12 @@ func BudgetCategoriesHost() uic.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("budgets.catsTitle"),
-		Width:    "440px",
-		Height:   "560px",
-		NoFooter: true,
-		OnClose:  func() { open.Set("") },
-		Back:     uic.CreateElement(screens.BudgetCategoriesBody, struct{}{}),
+		Title:     uistate.T("budgets.catsTitle"),
+		Width:     uiw.FlipMediumW,
+		Height:    uiw.FlipMediumH,
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   func() { open.Set("") },
+		Back:      uic.CreateElement(screens.BudgetCategoriesBody, struct{}{}),
 	})
 }

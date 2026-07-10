@@ -1,3 +1,32 @@
+## 2026-07-10 — Budget/goal flip modals: 3 standard sizes + pinned footers
+
+Cam: review all the budget/goal flip modals — standardize to one of 3 sizes and kill the
+"weird scrolling save/cancel buttons." Root cause: the `.acct-edit-actions` / `.budget-add-actions`
+/ `.autobudget-footer` action bars live INSIDE the scrolling `.set-body`, with `margin-top:auto`
+(no pinning). When a form is taller than the panel the bar scrolls off the bottom — confirmed via
+Playwright on budget-edit (scrollHeight 837 > client 605, actions below the fold). Sticky was a dead
+end (the previous dev reverted it; the flip card's 3D transform makes `position:sticky` unreliable),
+and an external `<button form=…>` submit is untested here — so I used deterministic flexbox instead.
+
+- **FlipPanel**: added 3 standard size constants (`FlipSmall/Medium/Large` W/H) and a `FlushBody`
+  option that swaps `.set-body`'s scroll+padding for a full-height flex column (`.set-body-flush`).
+- **Forms** (budget edit/topup/cover, goal edit/contribute, budget add, goal add, tracked-categories,
+  auto-budget): wrapped the fields in a `.modal-scroll` flex-1 scroll region and moved the action bar
+  into a sibling `.modal-foot` (flex-shrink:0, border-top, opaque bg) — so the footer pins and only the
+  fields scroll. Goal-add was converted from `CloseOnly` (which gave it a redundant pinned "Close" over
+  a scrolling "Add goal") to `NoFooter`+own Cancel/Add bar. Neutralized the inner `.autobudget-rows` /
+  `.budgetcats-list` max-height when they're the modal's direct scroll child, so there's one scrollbar,
+  not two (nested pickers in the add/edit forms stay bounded).
+- **Hosts**: every budget/goal host now passes a standard size + `FlushBody:true` (basis keeps the
+  standard pinned Save/Cancel footer, just resized).
+
+Gotcha found in verification: `.set-body-flush` needs `display:flex` explicitly — without it the child's
+`flex:1` was ignored (block parent), the form overflowed, and the footer pushed off-panel (budget-edit /
+auto-budget showed `footVisible:false`). Added it → all pass. Playwright now reports every modal at a
+standard size with `footVisible:true` and a single scroll region: budget edit/add/cover/categories/
+auto-budget/basis + goal add/edit = Medium 560×680, top-up + contribute = Small 440×440. `go test ./...`
+green.
+
 ## 2026-07-10 — Budgets: savings section by account + plan-vs-reality goal sync
 
 Two related asks from Cam: (1) the zero-based "Savings & investments" section should

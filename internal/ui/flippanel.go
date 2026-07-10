@@ -15,14 +15,35 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
+// Standard flip-modal sizes. Every config/edit modal should pick ONE of these three
+// (width, height) pairs instead of hand-tuning its own numbers, so the app's modals
+// feel consistent. Tall content still fits — the body scrolls and the footer stays
+// pinned (see FlushBody), so the size is a target, not a hard clamp.
+const (
+	// FlipSmall — compact, single-purpose panels: a top-up amount, a contribution, a
+	// short confirm (roughly 1–3 fields).
+	FlipSmallW, FlipSmallH = "440px", "440px"
+	// FlipMedium — standard entity add/edit forms: budget, goal, tracked categories,
+	// auto-budget, income basis.
+	FlipMediumW, FlipMediumH = "560px", "680px"
+	// FlipLarge — dense, multi-section or wide panels: global settings, add-account.
+	FlipLargeW, FlipLargeH = "760px", "720px"
+)
+
 // FlipPanelProps configures a FlipPanel overlay.
 type FlipPanelProps struct {
-	Title   string   // settings title (centered in the header)
-	Back    uic.Node // settings body content (scrolls inside the back face)
-	Width   string   // panel width, default "384px" (use "760px" for global settings)
-	Height  string   // panel height, default "470px" (use "560px" for global settings)
-	OnSave  func()   // invoked on Save (then the panel closes)
-	OnClose func()   // invoked on Cancel/close (and after Save)
+	Title  string   // settings title (centered in the header)
+	Back   uic.Node // settings body content (scrolls inside the back face)
+	Width  string   // panel width, default "384px" (prefer a Flip*W standard size)
+	Height string   // panel height, default "470px" (prefer a Flip*H standard size)
+	// FlushBody makes the scrollable body a full-height flex column with no padding, so
+	// a NoFooter form can split itself into a `.modal-scroll` field region and a pinned
+	// `.modal-foot` action bar — the action bar then stays put instead of scrolling off
+	// the bottom when the form is taller than the panel. Only meaningful with NoFooter
+	// (a form that supplies its own footer); ignored by the standard Save/Cancel footer.
+	FlushBody bool
+	OnSave    func() // invoked on Save (then the panel closes)
+	OnClose   func() // invoked on Cancel/close (and after Save)
 	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
 	// panels that have nothing to save (e.g. a widget with no settings), so the UI
 	// doesn't imply there's something to commit.
@@ -203,6 +224,11 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		innerCls += " flipped"
 	}
 
+	bodyCls := "set-body"
+	if props.FlushBody {
+		bodyCls += " set-body-flush"
+	}
+
 	onClose, onSave := props.OnClose, props.OnSave
 
 	save := func() {
@@ -270,7 +296,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 							Icon(icon.Close, css.Class(tw.W4, tw.H4)),
 						),
 					),
-					Div(css.Class("set-body"), props.Back),
+					Div(ClassStr(bodyCls), props.Back),
 					foot,
 				),
 			),

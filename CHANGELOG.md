@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Budget & goal modals: standardized sizes and pinned footers (2026-07-10):** every budget and goal flip modal now uses one of **three standard sizes** — Small (440×440) for the short one-field panels (budget top-up, goal contribution), Medium (560×680) for the standard forms (budget add/edit/cover, goal add/edit, tracked categories, auto-budget, income basis) — instead of eight different hand-tuned dimensions. More importantly, their **Save/Cancel/Add bars are now pinned to the bottom of the modal**: when a form was taller than the panel, the action bar used to scroll off the bottom (you had to scroll down to find Save). The form now splits into a scrolling field region and a fixed footer, so the actions are always visible and the fields scroll under them. Also fixed the goal-add modal's double footer (it had both a pinned "Close" and a scrolling "Add goal") — it now has a single pinned Cancel + Add goal bar, and removed the nested double-scrollbars in the categories and auto-budget lists. `FlipPanel` gained standard-size constants and a `FlushBody` option to support this.
+
 ## [1.0.13] - 2026-07-10
 
 ### Added

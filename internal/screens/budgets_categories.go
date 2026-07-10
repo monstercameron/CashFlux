@@ -97,11 +97,12 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		}
 	}
 
-	return Div(css.Class(tw.FlexCol, tw.Gap2),
-		ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
-			Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID,
-		}),
-		Div(css.Class("autobudget-footer"),
+	return Div(css.Class(tw.FlexCol),
+		Div(css.Class("modal-scroll"),
+			ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
+				Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID,
+			})),
+		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
 				uistate.T("budgets.catsCount", plural(nSel, "category"))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), OnClick(onCancel), uistate.T("action.cancel")),

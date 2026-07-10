@@ -23,11 +23,12 @@ func AutoBudgetHost() uic.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("budgets.autoTitle"),
-		Width:    "500px",
-		Height:   "600px",
-		NoFooter: true,
-		OnClose:  func() { open.Set(false) },
-		Back:     uic.CreateElement(screens.AutoBudgetBody, struct{}{}),
+		Title:     uistate.T("budgets.autoTitle"),
+		Width:     uiw.FlipMediumW,
+		Height:    uiw.FlipMediumH,
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   func() { open.Set(false) },
+		Back:      uic.CreateElement(screens.AutoBudgetBody, struct{}{}),
 	})
 }

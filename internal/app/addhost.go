@@ -31,9 +31,13 @@ func AddHost() uic.Node {
 
 	switch target.Get() {
 	case "goal":
+		// NoFooter + FlushBody: the form owns a pinned Cancel + Add goal bar.
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("goals.add"),
-			CloseOnly: true,
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			NoFooter:  true,
+			FlushBody: true,
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.GoalAddForm, screens.GoalAddFormProps{OnDone: close}),
 		})
@@ -47,15 +51,16 @@ func AddHost() uic.Node {
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
 		})
 	case "budget":
-		// NoFooter: the form owns its own Cancel + Add budget bar (pinned to the bottom),
-		// so there's no separate Close footer and no dead space above it.
+		// NoFooter + FlushBody: the form owns its own Cancel + Add budget bar, pinned to
+		// the bottom so it never scrolls off; no separate Close footer, no dead space.
 		return uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:    uistate.T("budgets.add"),
-			Width:    "540px",
-			Height:   "700px",
-			NoFooter: true,
-			OnClose:  close,
-			Back:     uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
+			Title:     uistate.T("budgets.add"),
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			NoFooter:  true,
+			FlushBody: true,
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
 		})
 	case "task":
 		// NoFooter: the form is a two-zone "compose slip" that bleeds to the panel edges

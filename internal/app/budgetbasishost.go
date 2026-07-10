@@ -24,10 +24,11 @@ func BudgetBasisHost() uic.Node {
 	if !open.Get() {
 		return Fragment()
 	}
+	// Keeps the standard pinned Save/Cancel footer (staged draft) — just a standard size.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:   uistate.T("budgets.basisModalTitle"),
-		Width:   "520px",
-		Height:  "690px",
+		Width:   uiw.FlipMediumW,
+		Height:  uiw.FlipMediumH,
 		OnSave:  func() { uistate.CommitBudgetBasisDraft(draft.Get()) },
 		OnClose: func() { open.Set(false) },
 		Back:    uic.CreateElement(screens.BudgetBasisBody, struct{}{}),
