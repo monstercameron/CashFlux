@@ -805,7 +805,9 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 		if !found {
 			return
 		}
-		g.MonthlyContribution = money.New(sa.Monthly, cur)
+		// Written in the goal's currency (computed upstream) so the goal's pace math
+		// stays currency-consistent even when the account currency differs.
+		g.MonthlyContribution = money.New(sa.SyncMinor, sa.SyncCurrency)
 		if err := app.PutGoal(g); err == nil {
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()

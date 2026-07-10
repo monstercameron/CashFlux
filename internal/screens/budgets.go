@@ -119,10 +119,12 @@ type savingsAcct struct {
 	HasGoal       bool
 	GoalID        string
 	GoalName      string
-	PlannedMonths int  // whole months from now to the goal's target date (0 = undated)
-	RateMonths    int  // months to reach the goal at this monthly rate (0 = can't project)
-	DeltaMonths   int  // RateMonths − PlannedMonths (>0 later than planned, <0 sooner)
-	Synced        bool // goal.MonthlyContribution already equals this monthly amount
+	PlannedMonths int    // whole months from now to the goal's target date (0 = undated)
+	RateMonths    int    // months to reach the goal at this monthly rate (0 = can't project)
+	DeltaMonths   int    // RateMonths − PlannedMonths (>0 later than planned, <0 sooner)
+	SyncMinor     int64  // this monthly expressed in the goal's currency — what Sync writes
+	SyncCurrency  string // the goal's currency (money-correct target for MonthlyContribution)
+	Synced        bool   // goal.MonthlyContribution already equals SyncMinor/SyncCurrency
 }
 
 // monthsUntil counts whole calendar months from `from` to `target`, rounding a
@@ -210,7 +212,11 @@ func computeSavingsAccounts(app *appstate.App, now time.Time, base string, rates
 			if sa.PlannedMonths > 0 && sa.RateMonths > 0 {
 				sa.DeltaMonths = sa.RateMonths - sa.PlannedMonths
 			}
-			sa.Synced = monthly > 0 && g.MonthlyContribution.Amount == monthly && g.MonthlyContribution.Currency == mCur
+			// Sync writes the monthly IN THE GOAL'S CURRENCY (rate is monthly converted
+			// to rem.Currency) so the goal's own pace math stays currency-consistent.
+			sa.SyncMinor = rate
+			sa.SyncCurrency = rem.Currency
+			sa.Synced = monthly > 0 && g.MonthlyContribution.Amount == rate && g.MonthlyContribution.Currency == rem.Currency
 			break
 		}
 		out = append(out, sa)
