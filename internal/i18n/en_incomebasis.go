@@ -17,6 +17,7 @@ var incomeBasisKeys = Catalog{
 	"budgets.incomeSelectAll":       "Include all",
 	"budgets.incomeHoldAll":         "Hold all aside",
 	"budgets.incomeSourcesCount":    "%d of %d included",
+	"budgets.spendBudgetLabel":      "Budget",
 	"budgets.zbbAverageToggle":      "Average my last 3 months of income",
 	"budgets.zbbAverageHint":        "Steadier than one month — good when income varies (freelance, commissions, tips).",
 	// Allocation bar (zero-based hero) + the income-basis button and modal.

@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Zero-based "Spending so far this month" now caps at your selected max budget (2026-07-10):** the spend progress bar in the zero-based summary used the sum of your category budget limits as its ceiling; it now fills against the **income basis you selected** in the Budget-income modal (all income / paychecks / chosen sources / a set monthly figure, plus any rolled-over leftover) — so it reads as "spent of your income/max budget", with the middle figure relabelled **Budget** and **Left** = that cap minus spent. Simple/envelope methods are unchanged (still spent-of-budgeted).
+
 ### Fixed
 - **Budgets top tile no longer intermittently blank on a direct link (2026-07-10):** opening `/budgets` directly (a cold deep-link / hard refresh) sometimes rendered the summary tile invisible while the rest of the page appeared. Root cause: every `.bento .w` tile's entrance animation used `animation-fill-mode: both` with a `from { opacity: 0 }` keyframe, so a tile whose animation never ran to completion — under the main-thread load of a cold wasm boot, or a re-render that restarted it — could settle at `opacity: 0` with nothing to re-trigger it. The tile's resting state is now visible (`opacity: 1`) with `fill-mode: forwards`, so a dropped animation degrades to "shown immediately" instead of "hidden forever". Also made `wonder.js` reveal already-in-viewport `.card` elements synchronously (as its own contract always promised) so above-the-fold content never waits on the async IntersectionObserver.
 

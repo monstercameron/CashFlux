@@ -87,15 +87,26 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	if v.TotalSpent > 0 {
 		spentTone = "neg"
 	}
-	// The summary is a single big "loader" — an overall spent-of-budgeted progress bar
-	// with the spent / budgeted / left figures rendered INSIDE it, so the numbers and the
-	// visual fill read as one unit. The fill grows with spending and turns amber/red as it
-	// nears/exceeds the total; "Left" (safe-to-spend) is the hero figure on the right.
-	leftM := money.New(v.TotalLimit-v.TotalSpent, v.Base)
-	over := v.TotalSpent > v.TotalLimit
+	// The summary is a single big "loader" — an overall spent-of-budget progress bar with
+	// the spent / budget / left figures rendered INSIDE it, so the numbers and the visual
+	// fill read as one unit. The fill grows with spending and turns amber/red as it
+	// nears/exceeds the cap; "Left" (safe-to-spend) is the hero figure on the right.
+	//
+	// The cap is the SELECTED MAX BUDGET. In zero-based mode that's the income basis you
+	// chose in the modal (all income / paychecks / chosen sources / a set monthly figure)
+	// plus any rolled-over leftover — so the bar reads as "spent of your income", not
+	// "spent of what's assigned to categories". Simple/envelope keep the total budgeted.
+	spendLimit := v.TotalLimit
+	spendLimitLabel := uistate.T("budgets.budgeted")
+	if v.Method == budgeting.MethodZeroBased {
+		spendLimit = v.BannerIncome + v.RolledOver
+		spendLimitLabel = uistate.T("budgets.spendBudgetLabel")
+	}
+	leftM := money.New(spendLimit-v.TotalSpent, v.Base)
+	over := v.TotalSpent > spendLimit
 	fillPct := 0
-	if v.TotalLimit > 0 {
-		fillPct = int(v.TotalSpent * 100 / v.TotalLimit)
+	if spendLimit > 0 {
+		fillPct = int(v.TotalSpent * 100 / spendLimit)
 	}
 	fillW := fillPct
 	if fillW > 100 {
@@ -126,8 +137,8 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(v.TotalSpent, v.Base))),
 			),
 			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), uistate.T("budgets.budgeted")),
-				Div(css.Class("budget-loader-value"), fmtMoney(money.New(v.TotalLimit, v.Base))),
+				Div(css.Class("budget-loader-label"), spendLimitLabel),
+				Div(css.Class("budget-loader-value"), fmtMoney(money.New(spendLimit, v.Base))),
 			),
 			// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
 			Div(css.Class("budget-loader-fig", "is-right"),
