@@ -62,12 +62,42 @@ func IncomeForBudgets(
 	return total
 }
 
+// AveragedIncome resolves the income basis averaged over the last `months` full months
+// ending at monthStart, so irregular income is budgeted off a steadier figure than one
+// month alone. It sums the chosen basis (ZeroBasedIncome) over [monthStart-months,
+// monthStart) and divides by months. months < 1 is treated as 1 (last month only). The
+// fixed basis is a set monthly figure, so it is returned as-is (never averaged).
+func AveragedIncome(
+	mode string,
+	paycheckMinMinor, configuredMinor int64,
+	categoryIDs []string,
+	txns []domain.Transaction,
+	monthStart time.Time,
+	months int,
+	base string,
+	rates currency.Rates,
+) int64 {
+	if months < 1 {
+		months = 1
+	}
+	if mode == IncomeModeFixed {
+		if configuredMinor > 0 {
+			return configuredMinor
+		}
+		return 0
+	}
+	start := dateutil.AddMonths(monthStart, -months)
+	sum := ZeroBasedIncome(mode, paycheckMinMinor, configuredMinor, categoryIDs, txns, start, monthStart, base, rates)
+	return sum / int64(months)
+}
+
 // Zero-based income modes: how the "income to assign" figure is derived for a
 // zero-based budget.
 const (
-	IncomeModeAll       = "all"       // every income deposit in the window (default)
-	IncomeModePaychecks = "paychecks" // only deposits at/above the paycheck threshold (ignore side income)
-	IncomeModeFixed     = "fixed"     // a configured monthly figure, regardless of actual deposits
+	IncomeModeAll        = "all"        // every income deposit in the window (default)
+	IncomeModePaychecks  = "paychecks"  // only deposits at/above the paycheck threshold (ignore side income)
+	IncomeModeFixed      = "fixed"      // a configured monthly figure, regardless of actual deposits
+	IncomeModeCategories = "categories" // only income in a chosen set of categories (pick sources by name)
 )
 
 // ZeroBasedIncome resolves the income a zero-based budget assigns against, per the
@@ -77,15 +107,22 @@ const (
 //   - IncomeModePaychecks: actual income in [start,end) but only deposits whose
 //     base-currency amount is >= paycheckMinMinor, so regular paychecks count and
 //     small side-hustle deposits are ignored (no threshold set → same as all).
+//   - IncomeModeCategories: actual income in [start,end) but only from the categories
+//     in categoryIDs, so a household picks its income sources by name (e.g. count
+//     Salary, hold aside Freelance). An empty categoryIDs set means nothing is chosen
+//     yet, so the figure is 0 until a source is picked.
 //   - IncomeModeAll (default / unknown): every income deposit in [start,end).
 //
 // Actual-income modes sum inline (IsIncome + ConvertBetween over the same window
 // IncomeForBudgets uses) — budgeting must not import ledger. Unlike IncomeForBudgets,
 // an FX failure on one deposit skips just that deposit rather than zeroing the whole
-// figure, so a single missing rate can't blank the budget.
+// figure, so a single missing rate can't blank the budget. Income is bucketed by the
+// transaction's own CategoryID (splits are not decomposed), matching how the rest of
+// the budgeting income helpers and reports.IncomeByCategory attribute income.
 func ZeroBasedIncome(
 	mode string,
 	paycheckMinMinor, configuredMinor int64,
+	categoryIDs []string,
 	txns []domain.Transaction,
 	start, end time.Time,
 	base string,
@@ -97,10 +134,23 @@ func ZeroBasedIncome(
 		}
 		return 0
 	}
+	var allowed map[string]bool
+	if mode == IncomeModeCategories {
+		allowed = make(map[string]bool, len(categoryIDs))
+		for _, id := range categoryIDs {
+			allowed[id] = true
+		}
+		if len(allowed) == 0 {
+			return 0 // no income source chosen yet
+		}
+	}
 	var total int64
 	for _, t := range txns {
 		if !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
 			continue
+		}
+		if mode == IncomeModeCategories && !allowed[t.CategoryID] {
+			continue // this income source is held aside
 		}
 		conv, err := currency.ConvertBetween(t.Amount.Amount, t.Amount.Currency, base, rates)
 		if err != nil {

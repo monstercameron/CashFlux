@@ -1,0 +1,298 @@
+// SPDX-License-Identifier: MIT
+
+package styles
+
+// registerBudgetsSurface emits the /budgets zero-based "by source" income-basis
+// ledger: a grouped, tactile list of the household's income categories, each an
+// include / hold-aside toggle with its last-month amount, under a live "budgeting
+// against $X" total. It reuses the page's existing zbb vocabulary (uppercase micro-
+// labels, tabular figures, the accent/positive/faint tones) so the new control reads
+// as part of the same surface rather than a bolted-on panel. Registered after the
+// generated sheet, so equal-specificity refinements win.
+func registerBudgetsSurface() {
+	// A named token for the savings allocation tone, so it inherits theme handling like
+	// every other surface color instead of a bare literal hex (a soft indigo that stays
+	// distinct from the green --accent used for expenses).
+	rule(":root", customProp("--accent-savings", "#8b7cf6"))
+	// The ledger is a quiet inset panel: it groups the sources visually and gives the
+	// toggles a surface to sit on, distinct from the demoted spend bar below.
+	rule(".zbb-sources",
+		marginTop("0.2rem"),
+		padding("0.55rem 0.7rem 0.35rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius)"),
+	)
+	// Header row: title on the left, bulk include / hold-aside actions on the right.
+	rule(".zbb-sources-head",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+		paddingBottom("0.3rem"),
+	)
+	rule(".zbb-sources-title",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-sources-actions",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.4rem"),
+		prop("flex-shrink", "0"),
+	)
+	rule(".zbb-sources-act",
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		cursor("pointer"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		color("var(--accent)"),
+	)
+	rule(".zbb-sources-act:hover", textDecoration("underline"))
+	rule(".zbb-sources-actsep",
+		color("var(--text-faint)"),
+		fontSize("0.72rem"),
+	)
+	// The running total row, under the header: the figure the checked rows sum to, plus
+	// how many sources are included.
+	rule(".zbb-sources-total",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.15rem 0.4rem"),
+		paddingBottom("0.35rem"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".zbb-sources-total-cap",
+		fontSize("0.66rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-sources-total-val",
+		fontSize("1.05rem"),
+		fontWeight("800"),
+		color("var(--accent)"),
+	)
+	rule(".zbb-sources-count", fontSize("0.72rem"))
+	// Cap the height once the list is long, so a household with many income categories
+	// scrolls the ledger instead of stretching the modal past the viewport.
+	rule(".zbb-sources-rows",
+		display("flex"),
+		flexDirection("column"),
+		maxHeight("264px"),
+		overflowY("auto"),
+	)
+	// One income source. Default (unchecked) is the held-aside state — muted, so the
+	// eye lands on what IS funding the budget.
+	rule(".zbb-source",
+		display("flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		padding("0.4rem 0.15rem"),
+		cursor("pointer"),
+		borderTop("1px solid var(--border)"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-sources-rows .zbb-source:first-child",
+		borderTop("0"),
+	)
+	rule(".zbb-source:hover",
+		background("var(--bg-card)"),
+	)
+	rule(".zbb-source .cf-check",
+		flexShrink("0"),
+	)
+	rule(".zbb-source-name",
+		flex("1"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontWeight("500"),
+	)
+	rule(".zbb-source-aside",
+		flexShrink("0"),
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		letterSpacing("0.04em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-source-amt",
+		flexShrink("0"),
+		fontWeight("600"),
+		color("var(--text-faint)"),
+	)
+	// A category with no income last month: a plain italic note, not a figure — so it
+	// reads as "nothing here" rather than a source you forgot to include.
+	rule(".zbb-source-none",
+		fontSize("0.74rem"),
+		fontStyle("italic"),
+		fontWeight("400"),
+	)
+	// Included: the source counts toward the budget — name reads full-strength, its
+	// amount in the positive (money-in) tone, and the held-aside tag is gone.
+	rule(".zbb-source.is-in",
+		color("var(--text)"),
+	)
+	rule(".zbb-source.is-in .zbb-source-name",
+		color("var(--text)"),
+	)
+	rule(".zbb-source.is-in .zbb-source-amt",
+		color("var(--money-positive)"),
+		fontWeight("700"),
+	)
+	rule(".zbb-sources-empty",
+		margin("0"),
+		padding("0.4rem 0.1rem"),
+		fontSize("0.82rem"),
+	)
+
+	// --- zero-based hero: header row + allocation bar + legend --------------------
+	// The eyebrow label and the income button share the top row so the action reads as
+	// part of the hero rather than a stray button.
+	rule(".zbb-hero-top",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+	)
+	// A quiet caption above the bar naming the income pool it splits.
+	rule(".zbb-alloc-cap",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.15rem 0.5rem"),
+		marginTop("0.7rem"),
+	)
+	rule(".zbb-alloc-cap-label",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".zbb-alloc-cap-val",
+		fontSize("0.9rem"),
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	rule(".zbb-alloc-cap-note",
+		fontSize("0.72rem"),
+		color("var(--text-dim)"),
+	)
+	// A non-clipping wrapper positions the income marker so its tick can protrude past
+	// the bar (which clips its own segments).
+	rule(".zbb-alloc-wrap",
+		position("relative"),
+		marginTop("0.35rem"),
+	)
+	// The allocation bar: income split into expenses, savings, and the unassigned gap.
+	// The track color is the "empty" tone, so any rounding remainder reads as gap.
+	rule(".zbb-alloc",
+		position("relative"),
+		display("flex"),
+		height("16px"),
+		overflow("hidden"),
+		borderRadius("var(--radius)"),
+		background("color-mix(in srgb, var(--text-faint) 26%, transparent)"),
+	)
+	rule(".zbb-alloc-seg",
+		height("100%"),
+		transition("width var(--wonder-dur) var(--wonder-ease-out)"),
+	)
+	rule(".zbb-alloc-seg.is-exp", background("var(--accent)"))
+	// A hairline (inset shadow) separates savings from the expenses segment beside it.
+	rule(".zbb-alloc-seg.is-sav",
+		background("var(--accent-savings)"),
+		prop("box-shadow", "inset 1px 0 0 var(--bg-card)"),
+	)
+	// The unassigned segment uses the same tone as its legend dot, so "still open" reads
+	// as a real color in both the bar and the legend (not just the empty track).
+	rule(".zbb-alloc-seg.is-gap", background("color-mix(in srgb, var(--text-faint) 45%, transparent)"))
+	// Income reference marker: a vertical tick showing where actual income runs out, so
+	// the fill past it (when over-assigned) reads as the overage.
+	rule(".zbb-alloc-marker",
+		position("absolute"),
+		top("-2px"),
+		bottom("-2px"),
+		width("2px"),
+		marginLeft("-1px"),
+		background("var(--text)"),
+		prop("box-shadow", "0 0 0 1px var(--bg-card)"),
+	)
+	// The legend ties each amount to its bar color.
+	rule(".zbb-legend",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.3rem 1.2rem"),
+		marginTop("0.55rem"),
+	)
+	rule(".zbb-legend-item",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.4rem"),
+	)
+	rule(".zbb-legend-dot",
+		width("0.6rem"),
+		height("0.6rem"),
+		borderRadius("var(--radius)"),
+		prop("flex-shrink", "0"),
+		prop("align-self", "center"),
+	)
+	rule(".zbb-legend-dot.is-exp", background("var(--accent)"))
+	rule(".zbb-legend-dot.is-sav", background("var(--accent-savings)"))
+	rule(".zbb-legend-dot.is-gap", background("color-mix(in srgb, var(--text-faint) 45%, transparent)"))
+	// The over-assigned swatch is a vertical tick (matching the bar's income marker), not
+	// a round dot — it reads as a threshold reading, not an additive fourth slice.
+	rule(".zbb-legend-dot.is-over",
+		width("2px"),
+		height("0.85rem"),
+		borderRadius("0"),
+		background("var(--text)"),
+		prop("box-shadow", "0 0 0 1px var(--bg-card)"),
+	)
+	rule(".zbb-legend-label",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".zbb-legend-val",
+		fontSize("0.82rem"),
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	// The over-assigned legend figure reads in the danger tone (matches the headline).
+	rule(".zbb-legend-val-over", color("var(--money-negative)"))
+
+	// --- the income button (page) + the basis modal (config lives in the modal) -----
+	rule(".zbb-basis-open",
+		prop("flex-shrink", "0"),
+	)
+	// Simple/envelope summary: the income context line + the income button on one row.
+	rule(".budget-basis-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.5rem 0.9rem"),
+		marginTop("0.5rem"),
+	)
+	rule(".zbb-basis-modal",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+		padding("0.2rem 0.1rem"),
+	)
+	rule(".zbb-basis-modal-help",
+		margin("0"),
+		fontSize("0.85rem"),
+		lineHeight("1.45"),
+	)
+}

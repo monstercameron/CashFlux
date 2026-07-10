@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -69,6 +70,14 @@ type budgetView struct {
 	// RolledOver is last month's unspent budget carried into this month's assignable
 	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
 	RolledOver int64
+}
+
+// incomeSource is one selectable income category in the "by source" budget basis: its
+// id, display name, and how much it brought in last full month (base minor units).
+type incomeSource struct {
+	CategoryID string
+	Name       string
+	Minor      int64
 }
 
 // computeBudgetView runs the full budget evaluation for the active member scope and
@@ -254,9 +263,11 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	prevStart := dateutil.AddMonths(ms, -1)
 	var bannerIncome int64
 	switch pr.BudgetIncomeMode {
-	case budgeting.IncomeModeAll, budgeting.IncomeModePaychecks, budgeting.IncomeModeFixed:
-		// Explicit basis (zero-based income control): all income, paychecks-only, or a fixed figure.
-		bannerIncome = budgeting.ZeroBasedIncome(pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
+	case budgeting.IncomeModeAll, budgeting.IncomeModePaychecks, budgeting.IncomeModeFixed, budgeting.IncomeModeCategories:
+		// Explicit basis (zero-based income control): all income, paychecks-only, a fixed
+		// figure, or a chosen set of income categories — averaged over BudgetIncomeAvgMonths
+		// recent months (last month only when 0/1).
+		bannerIncome = budgeting.AveragedIncome(pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, txns, ms, pr.BudgetIncomeAvgMonths, base, rates)
 	default:
 		// Unset basis — preserve prior behaviour: configured figure wins, else last month's income.
 		bannerIncome = budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
@@ -293,6 +304,54 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
 		RolledOver: pooledRollover,
 	}
+}
+
+// computeIncomeSources builds the income-source menu the "by source" basis presents:
+// every income-kind category with how much it earned per month over the last `months`
+// full months ending at monthStart (a plain average when months > 1), largest first,
+// plus any uncategorized income that actually landed. months < 1 is treated as 1 (last
+// month only). A category with no income in the window shows a zero amount, so the user
+// can still pre-include it; the checked rows sum to the AveragedIncome figure.
+func computeIncomeSources(app *appstate.App, base string, rates currency.Rates, monthStart time.Time, months int) []incomeSource {
+	if months < 1 {
+		months = 1
+	}
+	start := dateutil.AddMonths(monthStart, -months)
+	amtByCat := map[string]int64{}
+	if lines, err := reports.IncomeByCategory(app.Transactions(), start, monthStart, rates); err == nil {
+		for _, ln := range lines {
+			amtByCat[ln.CategoryID] = ln.Amount / int64(months)
+		}
+	}
+	// Rank rows by LAST month's amount — a window independent of `months` — so toggling
+	// the averaging window changes only the figures shown, never the row order (no
+	// reshuffle under the user's cursor). Sources that only earned in prior months stay
+	// pinned at the bottom, showing their average, instead of jumping up when averaging
+	// surfaces them.
+	rankByCat := map[string]int64{}
+	rankStart := dateutil.AddMonths(monthStart, -1)
+	if lines, err := reports.IncomeByCategory(app.Transactions(), rankStart, monthStart, rates); err == nil {
+		for _, ln := range lines {
+			rankByCat[ln.CategoryID] = ln.Amount
+		}
+	}
+	var out []incomeSource
+	for _, c := range app.Categories() {
+		if c.Kind != domain.KindIncome {
+			continue
+		}
+		out = append(out, incomeSource{CategoryID: c.ID, Name: c.Name, Minor: amtByCat[c.ID]})
+	}
+	if amt := amtByCat[""]; amt > 0 {
+		out = append(out, incomeSource{CategoryID: "", Name: uistate.T("budgets.incomeSourceUncat"), Minor: amt})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if ri, rj := rankByCat[out[i].CategoryID], rankByCat[out[j].CategoryID]; ri != rj {
+			return ri > rj
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 // budgetRowCallbacks bundles the per-row mutation handlers the list tile hands to each

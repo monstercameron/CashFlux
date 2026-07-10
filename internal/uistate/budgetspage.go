@@ -4,7 +4,10 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import (
+	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/GoWebComponents/v4/state"
+)
 
 // budgetFormulasAtomID keys the shared "show budget metrics" toggle for the
 // widgetized /budgets surface.
@@ -106,6 +109,58 @@ func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFor
 // flip modal is open. The budgets toolbar's Auto-budget button sets it; the shell-root
 // AutoBudgetHost renders the modal when true.
 func UseBudgetAutoOpen() state.Atom[bool] { return state.UseAtom("budgets:autoOpen", false) }
+
+// UseBudgetBasisOpen returns the shared atom controlling whether the "Income to budget
+// with" flip modal is open. The budget summary's income button sets it; the shell-root
+// BudgetBasisHost renders the modal (the income-source picker + rules) when true. Lives
+// at the shell root — like the other budget modals — so the fixed panel clears the tile
+// transform that would otherwise clip it.
+func UseBudgetBasisOpen() state.Atom[bool] { return state.UseAtom("budgets:basisOpen", false) }
+
+// BudgetBasisDraft is the staged copy of the income-basis prefs the "Income to budget
+// with" modal edits. Changes are held in the draft and only written to the household
+// prefs on Save (CommitBudgetBasisDraft); Cancel discards them by simply not committing.
+// This is why the modal edits a draft rather than prefs directly: config changes in this
+// project are staged behind a Save/Cancel footer, never applied live.
+type BudgetBasisDraft struct {
+	Mode        string   // budgeting.IncomeMode* — how income is resolved
+	PaycheckMin int64    // paycheck threshold (minor, base) for "paychecks" mode
+	Fixed       int64    // fixed monthly figure (minor, base) for "fixed" mode
+	Cats        []string // chosen income categories for "categories" mode
+	AvgMonths   int      // average the basis over this many recent months (0/1 = last month)
+	Rollover    bool     // roll last month's leftover into this month
+}
+
+// UseBudgetBasisDraft returns the atom holding the modal's staged income-basis edits.
+func UseBudgetBasisDraft() state.Atom[BudgetBasisDraft] {
+	return state.UseAtom("budgets:basisDraft", BudgetBasisDraft{})
+}
+
+// NewBudgetBasisDraft seeds a draft from the given prefs — called when the modal opens so
+// it starts from the household's current basis.
+func NewBudgetBasisDraft(p prefs.Prefs) BudgetBasisDraft {
+	return BudgetBasisDraft{
+		Mode:        p.BudgetIncomeMode,
+		PaycheckMin: p.BudgetPaycheckMinMinor,
+		Fixed:       p.MonthlyIncomeMinor,
+		Cats:        append([]string(nil), p.BudgetIncomeCategoryIDs...),
+		AvgMonths:   p.BudgetIncomeAvgMonths,
+		Rollover:    p.BudgetRolloverLeftover,
+	}
+}
+
+// CommitBudgetBasisDraft writes the staged edits into the household prefs and persists
+// them (invoked from the modal's Save button).
+func CommitBudgetBasisDraft(d BudgetBasisDraft) {
+	p := CurrentPrefs()
+	p.BudgetIncomeMode = d.Mode
+	p.BudgetPaycheckMinMinor = d.PaycheckMin
+	p.MonthlyIncomeMinor = d.Fixed
+	p.BudgetIncomeCategoryIDs = append([]string(nil), d.Cats...)
+	p.BudgetIncomeAvgMonths = d.AvgMonths
+	p.BudgetRolloverLeftover = d.Rollover
+	SetPrefs(p)
+}
 
 // UseBudgetsLastMonth returns the shared atom for the budgets page's one-click "Last
 // month" toggle: when true, every budget tile evaluates the PREVIOUS period instead of

@@ -618,7 +618,7 @@ var english = Catalog{
 	"budgets.nextMonth":              "Next month",
 	"budgets.overNear":               "%d over budget · %d near the limit",
 	"budgets.overBadge":              "%d over budget",
-	"budgets.overBanner":             "%d budgets are over by %s total — review and cover the overspend.",
+	"budgets.overBanner":             "Overspent: %d budgets are over by %s total — review and cover the overspend.",
 	"budgets.customRangeHint":        "The date range above changes what you're viewing — it doesn't redefine each budget's period.",
 	"budgets.toppedUpToast":          "Added %s to the budget limit.",
 	"documents.csvAccount":           "Import into account",

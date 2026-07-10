@@ -133,6 +133,19 @@ type Prefs struct {
 	// counts as a paycheck when BudgetIncomeMode is "paychecks". Zero = no threshold
 	// (every deposit counts, same as "all").
 	BudgetPaycheckMinMinor int64 `json:"budgetPaycheckMinMinor,omitempty"`
+	// BudgetIncomeAvgMonths averages the income basis over this many recent months
+	// instead of using last month alone — so irregular income (freelance, commissions)
+	// is budgeted off a steadier figure. 0 or 1 means "last month only"; 3 means the
+	// three-month average. Applies to the actual-income modes (all/paychecks/categories),
+	// never to the fixed figure.
+	BudgetIncomeAvgMonths int `json:"budgetIncomeAvgMonths,omitempty"`
+	// BudgetIncomeCategoryIDs lists the income categories that fund the budget when
+	// BudgetIncomeMode is "categories" — the precise alternative to the paycheck
+	// dollar-threshold. Only income in these categories counts toward the amount to
+	// assign, so a household can budget against its salary and hold aside (or add
+	// back) each side-income source by name. Empty in "categories" mode means no
+	// source is chosen yet, so the income basis is zero until one is picked.
+	BudgetIncomeCategoryIDs []string `json:"budgetIncomeCategoryIds,omitempty"`
 	// BudgetRolloverLeftover, when true, rolls LAST month's unspent budget (each
 	// budget's limit minus what was spent, summed and clamped at zero — excluding
 	// budgets that already carry their own remaining via Budget.Rollover) into THIS

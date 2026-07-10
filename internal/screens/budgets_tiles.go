@@ -59,11 +59,27 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		vw = vw.Shift(-1) // one-click "Last month" — evaluate the previous period
 	}
 	pr := uistate.UsePrefs().Get()
+	// Income-basis modal opener. Called unconditionally (before any early return) so the
+	// hook order is stable across renders. Opening seeds the modal's draft from the
+	// current prefs, so the Save/Cancel modal starts from today's basis.
+	basisOpen := uistate.UseBudgetBasisOpen()
+	basisDraft := uistate.UseBudgetBasisDraft()
+	openBasis := ui.UseEvent(Prevent(func() {
+		basisDraft.Set(uistate.NewBudgetBasisDraft(pr))
+		basisOpen.Set(true)
+	}))
 	v := computeBudgetView(app, activeMemberID, vw, pr)
 	if len(v.Statuses) == 0 {
 		return Fragment()
 	}
 	smartSettings := uistate.LoadSmartSettings()
+	// A discoverable button that opens the "Income to budget with" modal (the income-
+	// source picker + rules) — present in every method, so simple/envelope users can set
+	// which income funds the budget just like zero-based users.
+	basisBtn := Button(css.Class("btn btn-sm zbb-basis-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "budgets-basis-open"), Title(uistate.T("budgets.basisButtonTitle")), OnClick(openBasis),
+		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(uistate.T("budgets.basisButton")))
 
 	// "Spent" is only red once there's actually spending — red on $0.00 reads as an
 	// error rather than a healthy "nothing spent yet" (design critique).
@@ -145,8 +161,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		// then the income basis, then the spend-progress bar DEMOTED below — spending is
 		// context here, not the headline.
 		body = Div(
-			zeroBasedHero(v),
-			ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: v.Base}),
+			zeroBasedHero(v, basisBtn),
 			overBanner,
 			Div(css.Class("zbb-spend"),
 				P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap")),
@@ -159,7 +174,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		body = Div(
 			statGrid,
 			rangeHint,
-			budgetAssignBanner(v),
+			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
 			budgetFundSetAsideNode(v),
 			overBanner,
 			pills,
@@ -209,23 +224,26 @@ func budgetAssignBanner(v budgetView) ui.Node {
 			uistate.T("budgets.simpleIncome", fmtMoney(money.New(v.BannerIncome, v.Base))), " · ",
 			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(v.TotalLimit, v.Base))), " · ", diff)
 	case budgeting.MethodZeroBased:
-		return zeroBasedHero(v)
+		return zeroBasedHero(v, Fragment())
 	case budgeting.MethodEnvelope:
 		return P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
 	}
 	return Fragment()
 }
 
-// zeroBasedHero is the zero-based view's centrepiece: a big "To Assign" figure —
-// income minus everything assigned to EXPENSES and to SAVINGS/INVESTMENTS — that the
-// user drives to $0, over a one-line breakdown of the four figures. Green at $0 (every
-// dollar has a job), red when over-assigned, neutral while there is money left to
-// assign (the status word says how much). Pure node builder.
-func zeroBasedHero(v budgetView) ui.Node {
-	assigned := v.TotalLimit + v.SavingsAssigned
-	// Last month's unspent budget (when rolled over) adds to the pool you can assign.
-	pool := v.BannerIncome + v.RolledOver
+// zeroBasedHero is the zero-based view's centrepiece. The thesis of zero-based
+// budgeting — give every dollar a job — is made visual: a big "To Assign" figure (the
+// income pool minus everything assigned to expenses and savings) sits over an
+// ALLOCATION BAR that splits the income into Expenses, Savings, and the still-
+// unassigned gap. Filling the bar (closing the gap) is the goal; the figure reads green
+// at $0 and red when over-assigned. `action` is an optional control rendered in the
+// header — the income button — pass Fragment() for none. Pure node builder.
+func zeroBasedHero(v budgetView, action ui.Node) ui.Node {
+	expenses, savings := v.TotalLimit, v.SavingsAssigned
+	assigned := expenses + savings
+	pool := v.BannerIncome + v.RolledOver // last month's leftover adds to what you can assign
 	toAssign := budgeting.ToAssign(pool, assigned)
+
 	figCls := "zbb-figure fig"
 	var status ui.Node
 	switch {
@@ -239,26 +257,101 @@ func zeroBasedHero(v budgetView) ui.Node {
 		figCls += " is-over"
 		status = Span(css.Class("zbb-status zbb-status-over"), uistate.T("budgets.zbbOver"))
 	}
+
+	// Segment widths as a share of the larger of the income pool or what's assigned, so
+	// the bar stays sensible when over-assigned. The remainder folds into savings so the
+	// segments always fill exactly 100% (no rounding sliver).
+	over := toAssign < 0
+	base := pool
+	if assigned > base {
+		base = assigned
+	}
+	unassigned := toAssign
+	if unassigned < 0 {
+		unassigned = 0
+	}
+	pctOf := func(n int64) int {
+		if base <= 0 || n <= 0 {
+			return 0
+		}
+		if p := int(n * 100 / base); p < 100 {
+			return p
+		}
+		return 100
+	}
+	expPct := pctOf(expenses)
+	gapPct := pctOf(unassigned)
+	savPct := 100 - expPct - gapPct // savings takes the remainder so the bar always fills
+	if savPct < 0 || base <= 0 {
+		// Guard: no income and nothing assigned → an empty bar, never a false 100% savings.
+		savPct = 0
+	}
+	// Income reference marker: only meaningful when over-assigned — it sits where actual
+	// income runs out, so the fill past it reads as the overage rather than "healthy".
+	incomeMarkerPct := -1
+	if over && base > 0 {
+		incomeMarkerPct = int(pool * 100 / base)
+	}
+	// The third legend slot flips to a red "Over-assigned $X" when over, instead of a
+	// misleading "Unassigned $0.00" sitting beside the red headline. Its swatch is a tick
+	// (is-over renders as a vertical mark, matching the bar's income marker) not a round
+	// dot — the over figure is a threshold reading, not an additive fourth slice.
+	thirdLegend := zbbLegendItemTone("is-gap", "", uistate.T("budgets.zbbUnassigned"), unassigned, v.Base)
+	if over {
+		thirdLegend = zbbLegendItemTone("is-over", "zbb-legend-val-over", uistate.T("budgets.zbbOverAssignedShort"), -toAssign, v.Base)
+	}
+	allocAria := uistate.T("budgets.zbbAllocAria")
+	if over {
+		allocAria = uistate.T("budgets.zbbAllocAriaOver")
+	}
+
 	return Div(css.Class("zbb-hero"),
-		Span(css.Class("zbb-label"), uistate.T("budgets.zbbToAssign")),
+		Div(css.Class("zbb-hero-top"),
+			Span(css.Class("zbb-label"), uistate.T("budgets.zbbToAssign")),
+			action,
+		),
 		Div(css.Class("zbb-figrow"),
-			Span(css.Class(figCls), Attr("data-testid", "budgets-zbb-toassign"), fmtMoney(money.New(toAssign, v.Base))),
+			// Show the magnitude — the status word ("left to assign" / "over-assigned")
+			// carries the sign, so an accounting-parens negative is avoided.
+			Span(css.Class(figCls), Attr("data-testid", "budgets-zbb-toassign"), fmtMoney(money.New(toAssign, v.Base).Abs())),
 			status),
-		Div(css.Class("zbb-breakdown"),
-			zbbChip(uistate.T("budgets.zbbIncome"), v.BannerIncome, v.Base),
-			If(v.RolledOver > 0, zbbChip(uistate.T("budgets.zbbRolledOver"), v.RolledOver, v.Base)),
-			zbbChip(uistate.T("budgets.zbbExpenses"), v.TotalLimit, v.Base),
-			zbbChip(uistate.T("budgets.zbbSavings"), v.SavingsAssigned, v.Base),
+		Div(css.Class("zbb-alloc-cap"),
+			Span(css.Class("zbb-alloc-cap-label"), uistate.T("budgets.zbbIncome")),
+			Span(css.Class("zbb-alloc-cap-val fig"), fmtMoney(money.New(pool, v.Base))),
+			If(v.RolledOver > 0, Span(css.Class("zbb-alloc-cap-note"), uistate.T("budgets.zbbAllocRolled", fmtMoney(money.New(v.RolledOver, v.Base))))),
+		),
+		// Bar + marker share a non-clipping wrapper so the income tick can protrude above
+		// and below the bar (the bar itself clips its segments).
+		Div(css.Class("zbb-alloc-wrap"),
+			Div(css.Class("zbb-alloc"), Attr("role", "img"), Attr("aria-label", allocAria),
+				If(expPct > 0, Div(css.Class("zbb-alloc-seg is-exp"), Attr("style", fmt.Sprintf("width:%d%%", expPct)))),
+				If(savPct > 0, Div(css.Class("zbb-alloc-seg is-sav"), Attr("style", fmt.Sprintf("width:%d%%", savPct)))),
+				If(gapPct > 0, Div(css.Class("zbb-alloc-seg is-gap"), Attr("style", fmt.Sprintf("width:%d%%", gapPct)))),
+			),
+			If(incomeMarkerPct >= 0, Div(css.Class("zbb-alloc-marker"), Attr("style", fmt.Sprintf("left:%d%%", incomeMarkerPct)), Attr("title", uistate.T("budgets.zbbIncomeMarker")))),
+		),
+		Div(css.Class("zbb-legend"),
+			zbbLegendItem("is-exp", uistate.T("budgets.zbbExpenses"), expenses, v.Base),
+			zbbLegendItem("is-sav", uistate.T("budgets.zbbSavings"), savings, v.Base),
+			thirdLegend,
 		),
 	)
 }
 
-// zbbChip is one figure of the zero-based breakdown: a small uppercase label above a
-// tabular amount.
-func zbbChip(label string, minor int64, base string) ui.Node {
-	return Div(css.Class("zbb-chip"),
-		Span(css.Class("zbb-chip-label"), label),
-		Span(css.Class("zbb-chip-val fig"), fmtMoney(money.New(minor, base))))
+// zbbLegendItem is one entry in the allocation legend: a color swatch matching a bar
+// segment (tone = is-exp / is-sav / is-gap), a label, and a tabular amount.
+func zbbLegendItem(tone, label string, minor int64, base string) ui.Node {
+	return zbbLegendItemTone(tone, "", label, minor, base)
+}
+
+// zbbLegendItemTone is zbbLegendItem with an extra class on the amount (valCls), so the
+// over-assigned slot can render its figure in the money-negative tone.
+func zbbLegendItemTone(tone, valCls, label string, minor int64, base string) ui.Node {
+	return Div(css.Class("zbb-legend-item"),
+		Span(css.Class("zbb-legend-dot "+tone)),
+		Span(css.Class("zbb-legend-label"), label),
+		Span(css.Class("zbb-legend-val fig "+valCls), fmtMoney(money.New(minor, base))),
+	)
 }
 
 // minorToMajorStr renders minor units as an edit-friendly major-unit string (""
@@ -294,45 +387,108 @@ func majorStrToMinor(s, base string) (int64, bool) {
 	return int64(f*mult + 0.5), true
 }
 
-type incomeBasisProps struct{ Base string }
+type incomeBasisProps struct {
+	Base    string
+	Sources []incomeSource // income categories + last-month amounts (by-source basis)
+	Income  int64          // the resolved income feeding the hero (the ledger's running total)
+}
 
-// budgetIncomeBasisControl is the zero-based view's income-source picker: whether the
-// "income to assign" is ALL of last month's income, only regular paychecks (deposits at
-// or above a threshold, so side hustles are ignored), or a fixed monthly figure. It
-// writes the household prefs so the hero recomputes.
+// budgetIncomeBasisControl is the income-source picker inside the "Income to budget with"
+// modal: whether the income is ALL of last month's income, only regular paychecks
+// (deposits at or above a threshold), income from a chosen set of SOURCES (categories),
+// or a fixed monthly figure — plus the roll-leftover rule. It edits the STAGED DRAFT
+// (UseBudgetBasisDraft), never prefs directly, so the modal's Save commits and Cancel
+// discards. props.Income is the live preview total computed from that draft.
 func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	prefsAtom := uistate.UsePrefs()
-	pr := prefsAtom.Get()
-	mode := pr.BudgetIncomeMode
+	draftAtom := uistate.UseBudgetBasisDraft()
+	d := draftAtom.Get()
+	mode := d.Mode
 	if mode == "" {
 		mode = budgeting.IncomeModeAll
 	}
 
 	onMode := ui.UseEvent(func(e ui.Event) {
-		p := prefsAtom.Get()
-		p.BudgetIncomeMode = e.GetValue()
-		uistate.SetPrefs(p)
+		dd := draftAtom.Get()
+		next := e.GetValue()
+		// Switching to "by source" with nothing chosen yet seeds every source that
+		// actually earned last month, so the basis starts equal to "all income" and the
+		// user removes what to hold aside — a friendlier start than $0.
+		if next == budgeting.IncomeModeCategories && len(dd.Cats) == 0 {
+			var seed []string
+			for _, s := range props.Sources {
+				if s.Minor > 0 {
+					seed = append(seed, s.CategoryID)
+				}
+			}
+			dd.Cats = seed
+		}
+		dd.Mode = next
+		draftAtom.Set(dd)
 	})
 	onThreshold := ui.UseEvent(func(e ui.Event) {
 		if v, ok := majorStrToMinor(e.GetValue(), props.Base); ok {
-			p := prefsAtom.Get()
-			p.BudgetPaycheckMinMinor = v
-			uistate.SetPrefs(p)
+			dd := draftAtom.Get()
+			dd.PaycheckMin = v
+			draftAtom.Set(dd)
 		}
 	})
 	onFixed := ui.UseEvent(func(e ui.Event) {
 		if v, ok := majorStrToMinor(e.GetValue(), props.Base); ok {
-			p := prefsAtom.Get()
-			p.MonthlyIncomeMinor = v
-			uistate.SetPrefs(p)
+			dd := draftAtom.Get()
+			dd.Fixed = v
+			draftAtom.Set(dd)
 		}
 	})
 	onToggleRollover := ui.UseEvent(func() {
-		p := prefsAtom.Get()
-		p.BudgetRolloverLeftover = !p.BudgetRolloverLeftover
-		uistate.SetPrefs(p)
+		dd := draftAtom.Get()
+		dd.Rollover = !dd.Rollover
+		draftAtom.Set(dd)
 	})
+	onToggleAverage := ui.UseEvent(func() {
+		dd := draftAtom.Get()
+		if dd.AvgMonths >= 2 {
+			dd.AvgMonths = 0
+		} else {
+			dd.AvgMonths = 3
+		}
+		draftAtom.Set(dd)
+	})
+	// Include-all / hold-all-aside bulk actions for the source ledger.
+	selectAllSources := ui.UseEvent(Prevent(func() {
+		dd := draftAtom.Get()
+		var all []string
+		for _, s := range props.Sources {
+			if s.Minor > 0 {
+				all = append(all, s.CategoryID)
+			}
+		}
+		dd.Cats = all
+		draftAtom.Set(dd)
+	}))
+	holdAllSources := ui.UseEvent(Prevent(func() {
+		dd := draftAtom.Get()
+		dd.Cats = nil
+		draftAtom.Set(dd)
+	}))
+	// toggleSource adds or removes one income category from the by-source draft.
+	toggleSource := func(catID string) {
+		dd := draftAtom.Get()
+		out := dd.Cats[:0:0]
+		found := false
+		for _, id := range dd.Cats {
+			if id == catID {
+				found = true
+				continue
+			}
+			out = append(out, id)
+		}
+		if !found {
+			out = append(out, catID)
+		}
+		dd.Cats = out
+		draftAtom.Set(dd)
+	}
 
 	var extra ui.Node = Fragment()
 	switch mode {
@@ -340,12 +496,33 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbPaycheckMin")),
 			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-paycheck-min"),
-				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), Value(minorToMajorStr(pr.BudgetPaycheckMinMinor, props.Base)), OnInput(onThreshold)))
+				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), Value(minorToMajorStr(d.PaycheckMin, props.Base)), OnInput(onThreshold)))
 	case budgeting.IncomeModeFixed:
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbFixedAmount")),
 			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-fixed-amount"),
-				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), Value(minorToMajorStr(pr.MonthlyIncomeMinor, props.Base)), OnInput(onFixed)))
+				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), Value(minorToMajorStr(d.Fixed, props.Base)), OnInput(onFixed)))
+	}
+
+	// The income-source ledger appears only in by-source mode.
+	var sources ui.Node = Fragment()
+	if mode == budgeting.IncomeModeCategories {
+		selected := make(map[string]bool, len(d.Cats))
+		for _, id := range d.Cats {
+			selected[id] = true
+		}
+		included := 0
+		for _, s := range props.Sources {
+			if selected[s.CategoryID] {
+				included++
+			}
+		}
+		actions := Div(css.Class("zbb-sources-actions"),
+			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-select-all"), OnClick(selectAllSources), uistate.T("budgets.incomeSelectAll")),
+			Span(css.Class("zbb-sources-actsep"), Attr("aria-hidden", "true"), "·"),
+			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-hold-all"), OnClick(holdAllSources), uistate.T("budgets.incomeHoldAll")),
+		)
+		sources = budgetIncomeSourcesLedger(props, selected, toggleSource, actions, included)
 	}
 
 	return Div(css.Class("zbb-basis-wrap"),
@@ -355,16 +532,132 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 				Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), OnChange(onMode),
 					Option(Value(budgeting.IncomeModeAll), SelectedIf(mode == budgeting.IncomeModeAll), uistate.T("budgets.zbbBasisAll")),
 					Option(Value(budgeting.IncomeModePaychecks), SelectedIf(mode == budgeting.IncomeModePaychecks), uistate.T("budgets.zbbBasisPaychecks")),
+					Option(Value(budgeting.IncomeModeCategories), SelectedIf(mode == budgeting.IncomeModeCategories), uistate.T("budgets.zbbBasisCategories")),
 					Option(Value(budgeting.IncomeModeFixed), SelectedIf(mode == budgeting.IncomeModeFixed), uistate.T("budgets.zbbBasisFixed")),
 				)),
 			extra,
 		),
+		sources,
+		// Average the basis over the last 3 months — steadier for irregular income.
+		Label(css.Class("zbb-rollover"), Style(map[string]string{"cursor": "pointer"}),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-average"), OnChange(onToggleAverage)}, checkedAttr(d.AvgMonths >= 2)...)...),
+			Div(css.Class("row-main"),
+				Span(uistate.T("budgets.zbbAverageToggle")),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.zbbAverageHint")))),
 		// Roll last month's unspent budget into this month's assignable pool.
 		Label(css.Class("zbb-rollover"), Style(map[string]string{"cursor": "pointer"}),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-rollover"), OnChange(onToggleRollover)}, checkedAttr(pr.BudgetRolloverLeftover)...)...),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-rollover"), OnChange(onToggleRollover)}, checkedAttr(d.Rollover)...)...),
 			Div(css.Class("row-main"),
 				Span(uistate.T("budgets.zbbRolloverToggle")),
 				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.zbbRolloverHint")))),
+	)
+}
+
+// budgetIncomeSourcesLedger renders the by-source basis: each income category as an
+// include / hold-aside toggle with its last-month amount, under a live "budgeting
+// against $X" total that equals the Income figure feeding the hero above. Pure node
+// builder — each toggle row is its own component so the On* hook stays at a stable
+// position (framework rule: never register hooks inside a variable-length loop).
+func budgetIncomeSourcesLedger(props incomeBasisProps, selected map[string]bool, toggle func(string), actions ui.Node, included int) ui.Node {
+	if len(props.Sources) == 0 {
+		return Div(css.Class("zbb-sources"),
+			P(css.Class("zbb-sources-empty", tw.TextDim), Attr("data-testid", "budgets-zbb-sources-empty"),
+				uistate.T("budgets.incomeSourcesEmpty")))
+	}
+	rows := MapKeyed(props.Sources,
+		func(s incomeSource) any { return s.CategoryID },
+		func(s incomeSource) ui.Node {
+			return ui.CreateElement(budgetIncomeSourceRow, budgetIncomeSourceRowProps{
+				Source: s, Base: props.Base, Included: selected[s.CategoryID], OnToggle: toggle,
+			})
+		})
+	return Div(css.Class("zbb-sources"), Attr("data-testid", "budgets-zbb-sources"),
+		Div(css.Class("zbb-sources-head"),
+			Span(css.Class("zbb-sources-title"), uistate.T("budgets.incomeSourcesTitle")),
+			actions,
+		),
+		Div(css.Class("zbb-sources-total"),
+			Span(css.Class("zbb-sources-total-cap"), uistate.T("budgets.incomeSourcesTotalCap")),
+			Span(css.Class("zbb-sources-total-val fig"), Attr("data-testid", "budgets-zbb-sources-total"),
+				fmtMoney(money.New(props.Income, props.Base))),
+			Span(css.Class("zbb-sources-count", tw.TextDim), uistate.T("budgets.incomeSourcesCount", included, len(props.Sources))),
+		),
+		Div(css.Class("zbb-sources-rows"), rows),
+	)
+}
+
+type budgetIncomeSourceRowProps struct {
+	Source   incomeSource
+	Base     string
+	Included bool
+	OnToggle func(string)
+}
+
+// budgetIncomeSourceRow is one income category in the by-source basis: an include
+// checkbox, the source name, and its last-month amount. Included rows count toward the
+// budget (positive tone); excluded rows are held aside (muted). Owns its own OnChange
+// hook, so it's safe to render many of these in a MapKeyed loop.
+func budgetIncomeSourceRow(props budgetIncomeSourceRowProps) ui.Node {
+	onChange := ui.UseEvent(func() { props.OnToggle(props.Source.CategoryID) })
+	rowCls := "zbb-source"
+	if props.Included {
+		rowCls += " is-in"
+	}
+	hasIncome := props.Source.Minor > 0
+	var aside, amtNode ui.Node = Fragment(), Fragment()
+	if hasIncome {
+		// A real source: show its amount, and a "held aside" tag when excluded.
+		if !props.Included {
+			aside = Span(css.Class("zbb-source-aside"), uistate.T("budgets.incomeSourceHeldAside"))
+		}
+		amtNode = Span(css.Class("zbb-source-amt fig"), fmtMoney(money.New(props.Source.Minor, props.Base)))
+	} else {
+		// No income last month: say so plainly, so it's not confused with a source the
+		// user simply hasn't checked (no bare dash, no misleading "held aside" tag).
+		amtNode = Span(css.Class("zbb-source-amt zbb-source-none"), uistate.T("budgets.incomeSourceNoHistory"))
+	}
+	return Label(ClassStr(rowCls), Attr("data-testid", "budgets-zbb-source-"+props.Source.CategoryID),
+		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("aria-label", props.Source.Name), OnChange(onChange)}, checkedAttr(props.Included)...)...),
+		Span(css.Class("zbb-source-name"), props.Source.Name),
+		aside,
+		amtNode,
+	)
+}
+
+// BudgetBasisBody is the "Income to budget with" modal body (mounted at the shell root
+// by BudgetBasisHost). It reads the live store for the income-source menu, then previews
+// the income the STAGED DRAFT would resolve to — so the running total reflects unsaved
+// edits — and renders the income-basis control. Reachable from EVERY budgeting method,
+// not just zero-based. Self-contained (no props), matching the AutoBudgetBody convention.
+func BudgetBasisBody(_ struct{}) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	pr := uistate.UsePrefs().Get()
+	d := uistate.UseBudgetBasisDraft().Get()
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+
+	// Everything the modal shows reflects the STAGED draft (its mode, chosen sources, and
+	// averaging window), so the running total and per-source amounts preview unsaved edits
+	// and stay consistent: the checked rows sum to the previewed income.
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	now := time.Now()
+	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, now, pr.WeekStartWeekday())
+	mode := d.Mode
+	if mode == "" {
+		mode = budgeting.IncomeModeAll
+	}
+	draftIncome := budgeting.AveragedIncome(mode, d.PaycheckMin, d.Fixed, d.Cats, app.Transactions(), ms, d.AvgMonths, base, rates)
+	sources := computeIncomeSources(app, base, rates, ms, d.AvgMonths)
+
+	return Div(css.Class("zbb-basis-modal"),
+		P(css.Class("zbb-basis-modal-help", tw.TextDim), uistate.T("budgets.basisModalHelp")),
+		ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: base, Sources: sources, Income: draftIncome}),
 	)
 }
 

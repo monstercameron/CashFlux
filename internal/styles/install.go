@@ -36,6 +36,7 @@ func Register() {
 	registerVaultSurface()
 	registerRecordSurface()
 	registerSystemSurface()
+	registerBudgetsSurface()
 	inject(Build())
 }
 

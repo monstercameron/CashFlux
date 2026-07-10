@@ -1,3 +1,34 @@
+## 2026-07-10 — Feat: choose income by source (flip modal) + allocation-bar hero
+
+Cam wanted to set a target budget derived from income categories — separate out side
+income or add it back — reflected in the top graph. The income basis already had a
+threshold heuristic ("paychecks only" = deposits ≥ $X); he wanted precise, by-category
+control. Built bottom-up: `budgeting.ZeroBasedIncome` gained a `categories` mode (sum
+income whose CategoryID is in a chosen set) and `budgeting.AveragedIncome` (basis over the
+last N months / N — steadier for irregular income), both table-tested. Prefs gained
+`BudgetIncomeCategoryIDs` + `BudgetIncomeAvgMonths`.
+
+Course-corrections from Cam mid-build shaped the UX: (1) it must be reachable in *every*
+method, not just zero-based — so the control moved off the page into a discoverable
+**Budget income** button; (2) "configs are done in flip modals, not on the page" — so it
+became a shell-root `BudgetBasisHost` flip modal (`BudgetBasisBody`); (3) "add Save/Cancel
+using project verbiage instead of applying live" — so the modal edits a staged
+`BudgetBasisDraft` atom and commits to prefs only on the FlipPanel's Save (discard on
+Cancel), with a live draft preview total. The modal's income-source **ledger** shows each
+category's recent amount as an include/hold-aside toggle, a "Budgeting against $X" total +
+"N of M included" count, Include-all / Hold-all-aside, and a 3-month-average toggle.
+
+Cam also flagged the zero-based UI "looked like toddlers made it," so I redesigned the
+summary around an **allocation bar** (income → Expenses / Savings / still-to-assign) and
+ran an adversarial Sonnet critic in a refinement loop (SHIP after one iterate round). That
+loop fixed: the over-assigned state (a red "Over-assigned $X" legend + an income-reference
+marker at where income runs out, vs the old contradictory "Unassigned $0.00"), an
+empty-household false-100% bar guard, "No income last month" rows (vs a bare dash),
+Include-all/Hold-all + count, the 3-mo average, a `--accent-savings` token, matched
+bar/legend tones, an "Overspent:" prefix to distinguish spend-overage from over-assignment,
+a scrollable ledger, and a stable row sort (toggling Average no longer reshuffles rows).
+Verified throughout with Playwright screenshots at normal motion.
+
 ## 2026-07-10 — Fix: budgets top tile intermittently blank on a direct deep-link
 
 Cam reported the top graph on `/budgets` sometimes doesn't render when you spawn into the

@@ -3,6 +3,7 @@
 package prefs
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -109,11 +110,11 @@ func TestNormalize(t *testing.T) {
 	// backend) yet stays as-given through Normalize, so compare against that.
 	want := Default()
 	want.BackendDisabled = false
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("bad values should normalize to default, got %+v", got)
 	}
 	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true, Scale: 110, ServerMode: ServerCloud, ServerURL: "http://127.0.0.1:8081", ServerToken: "dev-token", Motion: MotionSubtle}
-	if keep.Normalize() != keep {
+	if !reflect.DeepEqual(keep.Normalize(), keep) {
 		t.Errorf("valid values should be preserved, got %+v", keep.Normalize())
 	}
 	if got := (Prefs{ServerMode: ServerMode("other")}).Normalize().ServerMode; got != ServerSelfHosted {
