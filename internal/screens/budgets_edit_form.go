@@ -599,26 +599,36 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// --- Full edit. Single-column form (.acct-edit-form) — a clean vertical stack so
 	// the rollover explanation and Method sit full-width beneath their controls, and the
 	// action row's margin-top:auto pins Save/Cancel to the modal's bottom. ---
-	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
+	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(ev.OnName))),
 		// Variable name: an optional explicit handle for this budget in formulas/widgets.
 		// Empty falls back to the display name; the resolved variable is previewed live.
 		labeledField(uistate.T("budgets.varNameLabel"),
 			entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName)),
-		labeledField(uistate.T("budgets.limitLabel"),
-			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
-		labeledField(uistate.T("budgets.period"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
-				OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
-			})),
-		labeledField(uistate.T("common.owner"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
-				OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
-			})),
-		// Tracked categories: pick the 1..n categories this budget counts.
+		// The core budget params pair into two columns so the form reads calmly and fits
+		// the panel instead of a long single stack: amount + cadence, then owner + method.
+		Div(css.Class("budget-edit-row"),
+			labeledField(uistate.T("budgets.limitLabel"),
+				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
+			labeledField(uistate.T("budgets.period"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
+					OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
+				}))),
+		Div(css.Class("budget-edit-row"),
+			labeledField(uistate.T("common.owner"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
+					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
+				})),
+			labeledField(uistate.T("budgets.methodLabel"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
+					OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
+				}))),
+		// Tracked categories: pick the 1..n categories this budget counts (a bounded,
+		// scrollable list box so it can't balloon the form).
 		labeledField(uistate.T("budgets.catsField"),
 			ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: trackCats.Get(), OnToggle: toggleTrack, ExcludeBudgetID: props.BudgetID})),
 		Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
@@ -626,11 +636,6 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			Span(uistate.T("budgets.rollover")),
 		),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
-		labeledField(uistate.T("budgets.methodLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
-				OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
-			})),
 		// Custom fields: one input per user-defined "budget" field (renders nothing
 		// when there are no defs).
 		MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {

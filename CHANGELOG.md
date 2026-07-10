@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **"Edit budget" modal layout (2026-07-10):** the tracked-category picker rendered every category inline (up to ~42vh) and the fields stacked one per row, so the form ballooned (~1,186px) and buckled inside the panel. The compact fields now pair into two columns (Limit + Period, Owner + Method), the category picker is a bounded, bordered scroll box, and the panel is a touch wider — so the form fits and reads calmly.
+
 ### Changed
 - **Budgets "Last month" is now a spend overlay for planning (2026-07-10):** the button used to re-window the whole page to last month's budget picture. It now keeps the app on THIS month's budgets, but each budget tile **leads with what you actually spent last period** against this month's budget: a **LAST MONTH** tag over the tile's big progress bar, filled to last month's spend (e.g. "$694.80 / $205.20 · 338%", red when it blew this month's budget, accent when under), the over/under-budget gap beneath it, and this month kept as a small "This month: $X spent" reference line. So the tile visibly becomes last month's picture — easy to read at a glance — for setting this month's amounts against last month's reality. Renamed the button to **"Last month's spend"** with matching hover text.
 

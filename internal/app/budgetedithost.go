@@ -31,7 +31,7 @@ func BudgetEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseBudgetEdit() }
 
-	title, width, height := uistate.T("budgets.editTitle"), "460px", "680px"
+	title, width, height := uistate.T("budgets.editTitle"), "520px", "660px"
 	switch e.Mode {
 	case uistate.BudgetEditModeTopup:
 		title, width, height = uistate.T("budgets.topupTitle"), "420px", "300px"

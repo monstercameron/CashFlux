@@ -8488,6 +8488,20 @@ func registerGenerated() {
 		gap("0.75rem"),
 		minHeight("100%"),
 	)
+	// Edit-budget modal: pair the compact fields into two columns, and give the tracked-
+	// category picker a bounded, bordered scroll box so it can't balloon the form.
+	rule(".budget-edit-row",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(150px, 1fr))"),
+		gap("0.75rem 0.9rem"),
+	)
+	rule(".acct-edit-form.budget-edit .budgetcats-list",
+		maxHeight("184px"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-elev)"),
+		padding("0.15rem 0.35rem"),
+	)
 	rule(".acct-edit-form .labeled-field",
 		width("100%"),
 	)
