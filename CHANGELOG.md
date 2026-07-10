@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Budgets "Last month" is now a spend overlay for planning (2026-07-10):** the button used to re-window the whole page to last month's budget picture. It now keeps you on THIS month and overlays each budget with **what you actually spent last period** plus how it lines up against this month's amount — a pill like "Last month: $694.80 spent · $489.60 over this budget" (accent-tinted when under, red when over, a nudge to raise it). Renamed the button to **"Last month's spend"** with matching hover text. This makes it a planning aid — set this month's budgets against last month's reality — instead of a time-machine view.
+
 ### Fixed
 - **"Edit this transaction" modal layout (2026-07-10):** the edit flip modal used the small default panel size (384×470), so the two-column form was cramped — the "Cleared" checkbox rendered stacked/misaligned and the Save/Delete/Cancel bar was squeezed, under a redundant footer "Close". The modal is now sized properly (500×560) with the form owning its action bar (no footer Close); only the labeled fields pair into two columns while the checkbox, attach button, actions, and error span the full width, and the "Cleared" checkbox is a proper inline row.
 

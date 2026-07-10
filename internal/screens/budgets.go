@@ -70,6 +70,18 @@ type budgetView struct {
 	// RolledOver is last month's unspent budget carried into this month's assignable
 	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
 	RolledOver int64
+	// LastMonth holds the "Last month's spend" overlay per budget (keyed by budget ID),
+	// populated only when that toggle is on; empty otherwise.
+	LastMonth map[string]budgetLastMonth
+}
+
+// budgetLastMonth is the "Last month's spend" overlay for one budget: the formatted
+// actual spend last period, and how it lines up against this month's budget — a
+// formatted "$X under" / "$X over this budget" phrase, plus whether it exceeded it.
+type budgetLastMonth struct {
+	Spent string
+	Delta string
+	Over  bool
 }
 
 // incomeSource is one selectable income category in the "by source" budget basis: its
@@ -85,7 +97,7 @@ type incomeSource struct {
 // the same statuses drive the summary totals, the banners, and the rows. Pure (no
 // hooks) — the caller resolves the active member, period window, and prefs and passes
 // them in, so it can be called from more than one tile without hook-ordering issues.
-func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs) budgetView {
+func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -134,6 +146,10 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 	rollEffCap := map[string]string{}
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
+	// lastMonth (populated only when the "Last month's spend" overlay is on): each
+	// budget's ACTUAL spend last period plus how it compares to this month's budget, so
+	// the user can plan this month's amounts against what they really spent.
+	lastMonth := map[string]budgetLastMonth{}
 	// Pooled leftover: last month's unspent budget (limit − spent, clamped ≥ 0)
 	// summed across budgets that DON'T carry their own remaining, when the user opts
 	// to roll leftover into next month's assignable pool (zero-based view).
@@ -172,6 +188,23 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 			continue
 		}
 		statuses = append(statuses, st)
+		// Last-month spend overlay (planning): what was actually spent in this budget's
+		// categories LAST period, and how that lines up against this month's budget.
+		if showLastMonth {
+			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
+			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
+				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
+				delta := limitMinor - prev.Spent.Amount
+				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
+				if delta >= 0 {
+					lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(delta, base)))
+				} else {
+					lm.Over = true
+					lm.Delta = uistate.T("budgets.lastMonthOver", fmtMoney(money.New(-delta, base)))
+				}
+				lastMonth[b.ID] = lm
+			}
+		}
 		// Pace projection (D2): warn only while the period is genuinely in progress and
 		// the budget isn't already over.
 		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
@@ -303,6 +336,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
 		SavingsAssigned: savingsAssigned, SavingsLines: savingsLines,
 		RolledOver: pooledRollover,
+		LastMonth:  lastMonth,
 	}
 }
 
@@ -437,6 +471,9 @@ type budgetRowProps struct {
 	ProratedRest      string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
 	Covered           bool                  // received one-time cover money this period
+	LastMonthSpent    string                // "Last month's spend" overlay: last period's actual spend; "" hides the line
+	LastMonthDelta    string                // formatted "$X under" / "$X over this budget" vs this month's budget
+	LastMonthOver     bool                  // last month's spend exceeded this month's budget → caution tone
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)

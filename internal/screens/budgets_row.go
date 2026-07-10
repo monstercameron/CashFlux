@@ -185,6 +185,22 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			uistate.T("budgets.proratedRest", props.ProratedRest))
 	}
 
+	// "Last month's spend" overlay: what was actually spent in this budget's categories
+	// last period, plus how it compares to this month's budget — a planning reference.
+	// Amber when last month exceeded this month's budget (a nudge to raise it).
+	var lastMonthLine ui.Node = Fragment()
+	if props.LastMonthSpent != "" {
+		cls := "budget-lastmonth"
+		if props.LastMonthOver {
+			cls += " is-over"
+		}
+		txt := uistate.T("budgets.lastMonthRow", props.LastMonthSpent)
+		if props.LastMonthDelta != "" {
+			txt += " · " + props.LastMonthDelta
+		}
+		lastMonthLine = Span(css.Class("budget-sub", cls), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID), txt)
+	}
+
 	// "Cover…" is offered on an over-budget row and opens the flip modal (which lists
 	// the other budgets to pull from). Top up is offered when not over.
 	isOver := s.State == budgeting.StateOver
@@ -257,6 +273,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// Multi-category budgets: list the tracked categories so the combined total reads clearly.
 		If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
 			uistate.T("budgets.catsTracking", props.TrackedCats))),
+		lastMonthLine,
 		coverageLine,
 		ownerLine,
 		methodLine,

@@ -7764,6 +7764,25 @@ func registerGenerated() {
 		boxShadow("inset 5px 0 0 var(--accent)"),
 		transition("transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease"),
 	)
+	// "Last month's spend" overlay pill: last period's actual spend + how it compares to
+	// this month's budget. Accent-tinted for a calm planning reference; danger-tinted
+	// when last month exceeded this month's budget (a nudge to raise it).
+	rule(".bento-budgets .budget-lastmonth",
+		alignSelf("flex-start"),
+		marginTop("0.35rem"),
+		padding("0.2rem 0.5rem"),
+		borderRadius("8px"),
+		fontSize("0.78rem"),
+		fontWeight("600"),
+		color("var(--text)"),
+		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
+		border("1px solid color-mix(in srgb, var(--accent) 24%, var(--border))"),
+	)
+	rule(".bento-budgets .budget-lastmonth.is-over",
+		color("var(--money-negative)"),
+		background("color-mix(in srgb, var(--money-negative) 12%, transparent)"),
+		borderColor("color-mix(in srgb, var(--money-negative) 30%, var(--border))"),
+	)
 	rule(".bento-budgets .budget:first-child",
 		borderTop("1px solid var(--border)"),
 	)

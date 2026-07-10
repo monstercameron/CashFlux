@@ -94,7 +94,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	var coverSrcs []budgetCoverSource
 	coverDefaultStr, coverShortfallStr := "", ""
 	if app != nil {
-		cv := computeBudgetView(app, activeMemberID, vw, pr)
+		cv := computeBudgetView(app, activeMemberID, vw, pr, false)
 		for _, s := range cv.Statuses {
 			if s.Budget.ID == props.BudgetID {
 				sf := budgeting.CoverAmount(s)

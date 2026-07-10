@@ -55,9 +55,6 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	app := props.App
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
-	if uistate.UseBudgetsLastMonth().Get() {
-		vw = vw.Shift(-1) // one-click "Last month" — evaluate the previous period
-	}
 	pr := uistate.UsePrefs().Get()
 	// Income-basis modal opener. Called unconditionally (before any early return) so the
 	// hook order is stable across renders. Opening seeds the modal's draft from the
@@ -68,7 +65,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		basisDraft.Set(uistate.NewBudgetBasisDraft(pr))
 		basisOpen.Set(true)
 	}))
-	v := computeBudgetView(app, activeMemberID, vw, pr)
+	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	if len(v.Statuses) == 0 {
 		return Fragment()
 	}
@@ -681,11 +678,8 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	app := props.App
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
-	if uistate.UseBudgetsLastMonth().Get() {
-		vw = vw.Shift(-1)
-	}
 	pr := uistate.UsePrefs().Get()
-	v := computeBudgetView(app, activeMemberID, vw, pr)
+	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	if v.Method != budgeting.MethodZeroBased || len(v.Statuses) == 0 {
 		return Fragment() // only meaningful in zero-based mode with budgets present
 	}
@@ -944,11 +938,11 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	txFilter := uistate.UseTxFilter()
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
-	if uistate.UseBudgetsLastMonth().Get() {
-		vw = vw.Shift(-1) // one-click "Last month" — evaluate the previous period
-	}
 	pr := uistate.UsePrefs().Get()
-	v := computeBudgetView(app, activeMemberID, vw, pr)
+	// "Last month's spend" overlays each budget with last period's actual spending for
+	// planning — it no longer re-windows the view to last month.
+	showLastMonth := uistate.UseBudgetsLastMonth().Get()
+	v := computeBudgetView(app, activeMemberID, vw, pr, showLastMonth)
 	smartSettings := uistate.LoadSmartSettings()
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
@@ -994,7 +988,8 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
-					Covered:  v.Covered[s.Budget.ID],
+					Covered:        v.Covered[s.Budget.ID],
+					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 				})
 			},

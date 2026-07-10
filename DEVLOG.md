@@ -1,3 +1,18 @@
+## 2026-07-10 — Budgets: "Last month" → a spend overlay for planning
+
+Cam: the "Last month" button re-windowed the page to last month's budgets; repurpose it
+to show last month's actual transaction spend *inside this month's budget* so you can plan
+better, and update the button + hover text. Reworked it from a view-shift into an overlay:
+`computeBudgetView` gained a `showLastMonth` param (threaded through all four call sites —
+summary/savings/edit-form pass false, the list passes the toggle) and, when on, evaluates
+each budget over the PREVIOUS period (reusing EvaluateRollup + PreviousPeriodRange) to get
+last-period spend, comparing it to this month's effective budget → a per-budget
+`budgetLastMonth{Spent, Delta, Over}`. The row renders it as an accent/danger pill ("Last
+month: $X spent · $Y under/over this budget"). Removed the `vw.Shift(-1)` from the three
+tiles so the view stays on this month. Button/tooltip reworded to "Last month's spend".
+Verified with Playwright: toggle flips the label + aria-pressed, pills populate with
+correct over/under tone.
+
 ## 2026-07-10 — Lock screen: version tag + correct music-mute icon
 
 Cam: put the version tag on the lock screen, and make the music icon show the muted

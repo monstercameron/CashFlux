@@ -162,10 +162,11 @@ func CommitBudgetBasisDraft(d BudgetBasisDraft) {
 	SetPrefs(p)
 }
 
-// UseBudgetsLastMonth returns the shared atom for the budgets page's one-click "Last
-// month" toggle: when true, every budget tile evaluates the PREVIOUS period instead of
-// the current one, so the user can see last month's picture at a glance. Budgets-local
-// (doesn't touch the global period), and resets naturally on reload.
+// UseBudgetsLastMonth returns the shared atom for the budgets "Last month's spend"
+// toggle: when true, each budget row OVERLAYS last period's actual spending in its
+// categories plus how it compares to this month's budget — a planning reference — while
+// the view stays on THIS month. (It used to re-window the whole page to last month.)
+// Budgets-local (doesn't touch the global period), and resets naturally on reload.
 func UseBudgetsLastMonth() state.Atom[bool] { return state.UseAtom("budgets:lastMonth", false) }
 
 // UseInvestShowFormulas returns the shared atom for the /investments "Portfolio metrics"
