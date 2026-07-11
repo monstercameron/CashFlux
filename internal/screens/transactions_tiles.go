@@ -7,10 +7,12 @@ package screens
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -129,15 +131,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		uistate.PersistTxFilter(cleared)
 	}
 
-	// Text/date/amount inputs fire on every keystroke, so their handlers are hooks at
-	// stable positions here. The <select> filters use SelectInput (which owns its own
-	// change hook), so they just take a plain setter closure below — no hook each.
-	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
-	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) })
-	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) })
+	// Text/amount inputs fire on every keystroke, and each setFilter re-filters the whole
+	// ledger + persists the filter — so those are DEBOUNCED (~250ms) to filter/persist
+	// once you pause typing rather than on every character; the native input holds what
+	// you type between renders, so search-as-you-type stays smooth on a large ledger. The
+	// date fields commit a single value from the picker, so they set immediately.
+	debFilter := func(key string, mut func(*uistate.TxFilter)) {
+		debounce.Call("txn-filter:"+key, 250*time.Millisecond, func() { setFilter(mut) })
+	}
+	onFilterText := func(v string) { debFilter("text", func(x *uistate.TxFilter) { x.Text = v }) }
+	onFilterAmountMin := ui.UseEvent(func(v string) { debFilter("amtmin", func(x *uistate.TxFilter) { x.AmountMin = v }) })
+	onFilterAmountMax := ui.UseEvent(func(v string) { debFilter("amtmax", func(x *uistate.TxFilter) { x.AmountMax = v }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
-	onFilterCustomValText := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.CustomVal = v }) })
+	onFilterCustomValText := ui.UseEvent(func(v string) { debFilter("customval", func(x *uistate.TxFilter) { x.CustomVal = v }) })
 	clearFilters := ui.UseEvent(Prevent(clearAllFilters))
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 
