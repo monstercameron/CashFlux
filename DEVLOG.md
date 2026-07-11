@@ -1,3 +1,22 @@
+## 2026-07-11 — Revision-cache the read accessors (+ fix Load not bumping Rev)
+
+Perf audit's #1 finding: `App`'s list accessors (`Accounts`, `Transactions`, `Categories`, `Goals`,
+…) ran a live SQL query + JSON-unmarshal of every row on *every* call, and a single render calls
+them dozens of times (each tile's budget/goal/net-worth compute, per-row member/category lookups).
+Fixed at the source — one place, zero call-site churn — with a tiny generic `revCache[T]` per table
+on `App`, keyed on `store.Rev()` (the O(1) monotonic mutation counter). `get(rev, load)` re-queries
+only when the revision advanced, and returns a **fresh top-level copy** each call so the existing
+"caller owns the slice" contract holds (in-place sorts/filters can't corrupt the cache). Verified no
+caller does `sort.Slice(app.X())` directly before choosing the defensive-copy form.
+
+Caught a latent correctness bug the cache surfaced: `SQLiteStore.Load` — the bulk dataset-replace
+path behind undo/redo, import, and sample-load — swapped the whole dataset **without** advancing
+`mutationRev`, unlike `Wipe` (which does, manage.go:96). So any `Rev()`-keyed memoization (the
+dashboard `selectors.go` already relies on this, and now the accessors) would serve stale rows after
+an undo/import. `Load` now `mutationRev.Add(1)` on commit. This showed up immediately as two failing
+store/appstate tests (post-undo CurrentAmount stale at 5000; load-sample+wipe) — both green after the
+fix. Full suite: 142 packages ok. wasm build clean; deployed to web/bin.
+
 ## 2026-07-10 — Standardize flip-modal footers (pinned Cancel+Save via FormID)
 
 Cam wants every flip modal to have a Save/Apply + Cancel footer, standardized buttons + sizing,

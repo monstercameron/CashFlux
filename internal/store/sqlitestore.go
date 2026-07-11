@@ -224,7 +224,16 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceKVTable(tx, "settingskv", ds.SettingsKV); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// A full load replaces the entire dataset, so advance the mutation revision —
+	// same reasoning as Wipe (§1.6). Undo/redo, sample-load, and import all funnel
+	// through here, and revision-keyed memoization (read-accessor caches, derived
+	// views such as the dashboard selectors) must invalidate when the whole dataset
+	// is swapped underneath them, otherwise they serve stale rows.
+	mutationRev.Add(1)
+	return nil
 }
 
 // Snapshot reads the entire dataset back out (clean egress).

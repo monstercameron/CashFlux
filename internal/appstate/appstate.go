@@ -59,6 +59,12 @@ type App struct {
 	// BlobStoreUsage can be called safely from render functions without blocking
 	// on the single-threaded wasm runtime.
 	blobUsageCache int64
+	// reads memoizes the list accessors (Accounts/Transactions/…) by the store's
+	// mutation revision, so a screen that reads the same table many times in one render
+	// pays the SQL query + JSON unmarshal only once. Each accessor still returns a fresh
+	// top-level copy, so callers keep their "you own this slice" contract (safe to sort
+	// or filter in place). Single-threaded wasm, so no locking.
+	reads appReadCaches
 	// triggersSuspended pauses automatic workflow firing from PutTransaction while
 	// a bulk operation (import) or a workflow's own effects are running, so a single
 	// user-facing "add a transaction" fires triggers but a 500-row import doesn't
@@ -378,43 +384,113 @@ func (a *App) Wipe() error {
 
 // --- read accessors (errors are logged and swallowed; UI shows empty) ---
 
+// revCache memoizes one list accessor's result by the store's mutation revision.
+// A screen render reads the same table many times; without this, each read pays a
+// fresh SQL query + JSON unmarshal. get() re-loads only when the revision advances,
+// and always hands back a fresh top-level copy so callers keep their "you own this
+// slice" contract (sorting or filtering the result in place can't corrupt the cache).
+// wasm is single-threaded, so no locking is needed.
+type revCache[T any] struct {
+	rev    uint64
+	val    []T
+	loaded bool
+}
+
+func (c *revCache[T]) get(rev uint64, load func() []T) []T {
+	if !c.loaded || c.rev != rev {
+		c.val, c.rev, c.loaded = load(), rev, true
+	}
+	if len(c.val) == 0 {
+		return nil
+	}
+	out := make([]T, len(c.val))
+	copy(out, c.val)
+	return out
+}
+
+// appReadCaches holds one revCache per frequently-read table. It lives inline on
+// App (see the reads field) so every accessor shares the same revision key.
+type appReadCaches struct {
+	members      revCache[domain.Member]
+	accounts     revCache[domain.Account]
+	categories   revCache[domain.Category]
+	transactions revCache[domain.Transaction]
+	budgets      revCache[domain.Budget]
+	goals        revCache[domain.Goal]
+	tasks        revCache[domain.Task]
+	holdings     revCache[domain.Holding]
+	rules        revCache[rules.Rule]
+	documents    revCache[domain.Document]
+	recurring    revCache[domain.Recurring]
+}
+
 func (a *App) Members() []domain.Member {
-	v, err := a.store.ListMembers()
-	a.logErr("members", err)
-	return v
+	return a.reads.members.get(a.store.Rev(), func() []domain.Member {
+		v, err := a.store.ListMembers()
+		a.logErr("members", err)
+		return v
+	})
 }
 func (a *App) Accounts() []domain.Account {
-	v, err := a.store.ListAccounts()
-	a.logErr("accounts", err)
-	return v
+	return a.reads.accounts.get(a.store.Rev(), func() []domain.Account {
+		v, err := a.store.ListAccounts()
+		a.logErr("accounts", err)
+		return v
+	})
 }
 func (a *App) Categories() []domain.Category {
-	v, err := a.store.ListCategories()
-	a.logErr("categories", err)
-	return v
+	return a.reads.categories.get(a.store.Rev(), func() []domain.Category {
+		v, err := a.store.ListCategories()
+		a.logErr("categories", err)
+		return v
+	})
 }
 func (a *App) Transactions() []domain.Transaction {
-	v, err := a.store.ListTransactions()
-	a.logErr("transactions", err)
-	return v
+	return a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
+		v, err := a.store.ListTransactions()
+		a.logErr("transactions", err)
+		return v
+	})
 }
 func (a *App) Budgets() []domain.Budget {
-	v, err := a.store.ListBudgets()
-	a.logErr("budgets", err)
-	return v
+	return a.reads.budgets.get(a.store.Rev(), func() []domain.Budget {
+		v, err := a.store.ListBudgets()
+		a.logErr("budgets", err)
+		return v
+	})
 }
-func (a *App) Goals() []domain.Goal { v, err := a.store.ListGoals(); a.logErr("goals", err); return v }
-func (a *App) Tasks() []domain.Task { v, err := a.store.ListTasks(); a.logErr("tasks", err); return v }
+func (a *App) Goals() []domain.Goal {
+	return a.reads.goals.get(a.store.Rev(), func() []domain.Goal {
+		v, err := a.store.ListGoals()
+		a.logErr("goals", err)
+		return v
+	})
+}
+func (a *App) Tasks() []domain.Task {
+	return a.reads.tasks.get(a.store.Rev(), func() []domain.Task {
+		v, err := a.store.ListTasks()
+		a.logErr("tasks", err)
+		return v
+	})
+}
 
 // Holdings returns every persisted investment holding.
 func (a *App) Holdings() []domain.Holding {
-	v, err := a.store.ListHoldings()
-	a.logErr("holdings", err)
-	return v
+	return a.reads.holdings.get(a.store.Rev(), func() []domain.Holding {
+		v, err := a.store.ListHoldings()
+		a.logErr("holdings", err)
+		return v
+	})
 }
 
 // Rules returns every auto-categorization rule.
-func (a *App) Rules() []rules.Rule { v, err := a.store.ListRules(); a.logErr("rules", err); return v }
+func (a *App) Rules() []rules.Rule {
+	return a.reads.rules.get(a.store.Rev(), func() []rules.Rule {
+		v, err := a.store.ListRules()
+		a.logErr("rules", err)
+		return v
+	})
+}
 
 // Rev returns the store's monotonic mutation revision — an O(1) value that
 // advances on every entity write or delete. It is the correct cache key for
@@ -424,9 +500,11 @@ func (a *App) Rev() uint64 { return a.store.Rev() }
 
 // Documents returns every imported-document record.
 func (a *App) Documents() []domain.Document {
-	v, err := a.store.ListDocuments()
-	a.logErr("documents", err)
-	return v
+	return a.reads.documents.get(a.store.Rev(), func() []domain.Document {
+		v, err := a.store.ListDocuments()
+		a.logErr("documents", err)
+		return v
+	})
 }
 
 // SavedInsights returns every pinned AI insight.
@@ -438,9 +516,11 @@ func (a *App) SavedInsights() []domain.SavedInsight {
 
 // Recurring returns every scheduled recurring cash flow.
 func (a *App) Recurring() []domain.Recurring {
-	v, err := a.store.ListRecurring()
-	a.logErr("recurring", err)
-	return v
+	return a.reads.recurring.get(a.store.Rev(), func() []domain.Recurring {
+		v, err := a.store.ListRecurring()
+		a.logErr("recurring", err)
+		return v
+	})
 }
 
 // AllocProfiles returns every saved capital-allocation weight profile.
