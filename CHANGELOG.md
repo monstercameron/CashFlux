@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Budgets/Goals: income summary tile no longer renders below the cards on load (2026-07-10):** the widget order on the `/budgets` (and `/goals`) surface could vary between loads — the income/To-Assign summary tile sometimes appeared *after* the budget cards. Cause: the summary tile self-hides (renders nothing) until data loads, and a keyed child that renders empty first then fills can lose its DOM anchor and get appended after the later tiles; the grid then auto-places it last. Pinned each surface tile's CSS `order` so grid placement follows the intended sequence (summary → toolbar → cards → savings) regardless of when each tile's node arrives — proven with the summary tile forced to be the last DOM child.
+
 ### Changed
 - **Budget & goal modals: standardized sizes and pinned footers (2026-07-10):** every budget and goal flip modal now uses one of **three standard sizes** — Small (440×440) for the short one-field panels (budget top-up, goal contribution), Medium (560×680) for the standard forms (budget add/edit/cover, goal add/edit, tracked categories, auto-budget, income basis) — instead of eight different hand-tuned dimensions. More importantly, their **Save/Cancel/Add bars are now pinned to the bottom of the modal**: when a form was taller than the panel, the action bar used to scroll off the bottom (you had to scroll down to find Save). The form now splits into a scrolling field region and a fixed footer, so the actions are always visible and the fields scroll under them. Also fixed the goal-add modal's double footer (it had both a pinned "Close" and a scrolling "Add goal") — it now has a single pinned Cancel + Add goal bar, and removed the nested double-scrollbars in the categories and auto-budget lists. `FlipPanel` gained standard-size constants and a `FlushBody` option to support this.
 

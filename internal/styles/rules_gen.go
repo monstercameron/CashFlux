@@ -4940,6 +4940,17 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// Deterministic budget-surface tile order. budget-summary (the income/To-Assign banner)
+	// and budget-savings self-hide by rendering nothing until data loads / the method is
+	// zero-based; a keyed child that renders empty first then fills can lose its DOM anchor
+	// and get appended after the later tiles, so the income summary would sometimes land
+	// below the budget cards. CSS grid auto-placement uses order-modified document order, so
+	// pinning `order` fixes the visual sequence no matter when each tile's node arrives.
+	rule(".bento-budgets > .w[data-widget=\"budget-summary\"]", order("1"))
+	rule(".bento-budgets > .w[data-widget=\"budget-toolbar\"]", order("2"))
+	rule(".bento-budgets > .w[data-widget=\"budget-list\"]", order("3"))
+	rule(".bento-budgets > .w[data-widget=\"budget-savings\"]", order("4"))
+	rule(".bento-budgets > .w[data-widget=\"budget-formula\"]", order("5"))
 	// /goals is the same widgetized surface as /budgets: full-width tiles that size to
 	// their content (not the fixed dashboard bento cells).
 	rule(".bento.bento-goals",
@@ -4951,6 +4962,13 @@ func registerGenerated() {
 		minHeight("0"),
 		overflow("visible"),
 	)
+	// Same deterministic-order fix as /budgets: goal-summary self-hides until goals load,
+	// so pin the surface tile order so the summary can't land below the goal list on a
+	// slow/racy first paint.
+	rule(".bento-goals > .w[data-widget=\"goal-summary\"]", order("1"))
+	rule(".bento-goals > .w[data-widget=\"goal-toolbar\"]", order("2"))
+	rule(".bento-goals > .w[data-widget=\"goal-list\"]", order("3"))
+	rule(".bento-goals > .w[data-widget=\"goal-formula\"]", order("4"))
 	// /debt is the widgetized payoff-ladder surface: full-width tiles that size to their
 	// content, the same layout family as /goals and /budgets.
 	rule(".bento.bento-debt",

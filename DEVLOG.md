@@ -1,3 +1,23 @@
+## 2026-07-10 — Fix budgets/goals surface tile-order race on load
+
+Cam: on loading /budgets the widget render order can vary — the income summary tile sometimes
+renders AFTER the budget cards. The surface (`budgets_widget.go`) builds a FIXED-order spec list
+`[summary, toolbar, list, savings]` and renders it through `MapKeyed` into a `.bento-budgets` CSS
+grid. The grid tiles are full-width (`grid-column: 1 / span 4`) with no explicit `grid-row`, so
+they AUTO-PLACE by document order. `budget-summary` self-hides (returns `Fragment()`) until budgets
+load, and `budget-savings` until the method is zero-based — so on a racy first paint the summary is
+an empty keyed child. When it later fills, the vendored MapKeyed loses the (anchorless) empty slot's
+position and appends the node at the END → the grid auto-places the income summary below the cards.
+
+Fix: pin each surface tile's CSS `order` (summary 1, toolbar 2, list 3, savings 4, formula 5) keyed
+off the `data-widget=<id>` attribute `uiw.Widget` already emits. CSS grid auto-placement processes
+items in *order-modified* document order, so `order` fixes the visual sequence no matter when a
+tile's DOM node arrives — without touching the (vendored) reconciler or the surface composition.
+Applied the same to the twin `/goals` surface. Proven with Playwright: forcing the summary tile to
+be the LAST DOM child of the bento still renders it visually FIRST (top), on both surfaces.
+`go test ./...` green. (Left the other surface-host pages — accounts/recurring/allocate — for a
+follow-up; they share the pattern but weren't reported.)
+
 ## 2026-07-10 — Budget/goal flip modals: 3 standard sizes + pinned footers
 
 Cam: review all the budget/goal flip modals — standardize to one of 3 sizes and kill the
