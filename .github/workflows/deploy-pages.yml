@@ -40,7 +40,9 @@ jobs:
           GOARCH: wasm
         run: |
           mkdir -p web/bin
-          go build -o web/bin/main.wasm .
+          # -s -w strips the DWARF debug info + symbol table (smaller binary, no
+          # effect on behavior); -trimpath drops absolute build paths.
+          go build -ldflags="-s -w" -trimpath -o web/bin/main.wasm .
 
       - name: Compress WebAssembly (precompressed siblings for C314)
         run: |

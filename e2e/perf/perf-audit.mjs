@@ -26,6 +26,7 @@
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROUTES } from "../regression/fixtures.mjs";
@@ -134,12 +135,16 @@ async function main() {
 
   console.log(`CashFlux perf audit — v${version} — ${ROUTE_LIST.length} routes × ${PASSES} passes`);
 
-  // 1) Build fresh wasm so the audit reflects HEAD, then serve it.
-  console.log("building wasm…");
-  await run("go", ["build", "-o", path.join(REPO, "web", "bin", "main.wasm"), "."], {
+  // 1) Build fresh wasm so the audit reflects HEAD — same flags + gzip sibling as
+  // the deploy pipeline, so cold-load transfer reflects what real users download.
+  console.log("building wasm (stripped) + gzip sibling…");
+  const wasmPath = path.join(REPO, "web", "bin", "main.wasm");
+  // Quote the ldflags value so the win32 shell doesn't split "-s -w" into two args.
+  await run("go", ["build", '-ldflags="-s -w"', "-trimpath", "-o", wasmPath, "."], {
     cwd: REPO,
     env: { ...process.env, GOOS: "js", GOARCH: "wasm" },
   });
+  writeFileSync(wasmPath + ".gz", gzipSync(readFileSync(wasmPath), { level: 9 }));
   console.log(`serving web/ on :${PORT}…`);
   const server = spawn("node", ["e2e/serve.mjs", "web", PORT], { cwd: REPO, stdio: "ignore" });
   const cleanup = () => { try { server.kill(); } catch (_) {} };
@@ -195,7 +200,9 @@ async function main() {
     let wasmBytes = 0;
     for (const r of res) {
       bytes += r.transferSize || 0;
-      if (r.name.endsWith(".wasm")) wasmBytes += r.encodedBodySize || r.transferSize || 0;
+      if (r.name.endsWith(".wasm") || r.name.endsWith(".wasm.gz")) {
+        wasmBytes += r.transferSize || r.encodedBodySize || 0;
+      }
     }
     return {
       appReadyMs: window.__perf.appReadyMs,

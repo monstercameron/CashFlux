@@ -1,3 +1,24 @@
+## 2026-07-11 — Perf loop #1: gzip wasm delivery (cold-load 39→50)
+
+Kicked off an optimization loop against the v1.0.14 ratings. First target: cold load (39/100),
+whose worst inputs are transfer weight (72MB) and boot blocking. Recon: streaming instantiation was
+already in place, wasm-opt isn't installed, and `-s -w` only trims 3% (the code section is the floor,
+not debug info). But the deploy pipeline was *already* producing `main.wasm.gz`/`.br` siblings that
+nothing consumed — GitHub Pages won't apply `Content-Encoding` to them on its own, so they were dead
+weight. Wired the boot loader to fetch `main.wasm.gz` and decompress it via `DecompressionStream`
+before `instantiateStreaming`, with a fallback to the raw binary (can't break boot). Updated sw.js to
+precache the `.gz`, the deploy build to strip (`-ldflags="-s -w" -trimpath`), and the perf harness to
+build the same way so it measures the real path.
+
+Result (measured, not projected): transfer 78→18.6MB, wasm 74→14.9MB gz, TTI 7.0s→4.7s, LCP
+1448→972ms, boot TBT 7.8s→5.2s, **cold-load 39→50**. App boots cleanly through the new loader.
+
+Honest ceiling: the remaining cold-load cost is the browser compiling the 72MB code section (TBT
+scores ~0, weight 20; TTI gated the same way). gzip cuts the download, not the compile. Reaching 80
+would need a much smaller code section — TinyGo or removing the SQLite driver/reflection — which are
+breaking changes the loop is told to avoid. So cold-load can climb into the ~50s honestly, but 80 is
+out of reach without that trade-off. Recorded as such rather than gamed.
+
 ## 2026-07-11 — Per-page performance framework (Lighthouse-style) + v1.0.14 baseline
 
 Built a reusable perf-rating framework in `e2e/perf/`: `scoring.mjs` (Lighthouse's log-normal

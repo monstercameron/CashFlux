@@ -269,7 +269,31 @@
         }
 
         const go = new Go();
-        WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject)
+
+        // Prefer the gzip-compressed binary: the wasm is ~4× smaller over the wire
+        // (the deploy ships main.wasm.gz alongside main.wasm). We decompress it in a
+        // stream so instantiate still overlaps the network, then fall back to the raw
+        // binary if the browser lacks DecompressionStream or the .gz isn't present —
+        // so this can never make boot worse, only lighter.
+        function loadCompressed() {
+          if (typeof DecompressionStream !== "function") {
+            return Promise.reject(new Error("DecompressionStream unavailable"));
+          }
+          return fetch("./bin/main.wasm.gz").then(function (resp) {
+            if (!resp.ok || !resp.body) throw new Error("main.wasm.gz " + resp.status);
+            const stream = resp.body.pipeThrough(new DecompressionStream("gzip"));
+            const wasmResp = new Response(stream, { headers: { "Content-Type": "application/wasm" } });
+            return WebAssembly.instantiateStreaming(wasmResp, go.importObject);
+          });
+        }
+        function loadRaw() {
+          return WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject);
+        }
+        loadCompressed()
+          .catch(function (e) {
+            console.warn("[wasm] compressed load unavailable, using raw binary:", e && e.message ? e.message : e);
+            return loadRaw();
+          })
           .then(function (result) { go.run(result.instance); })
           .catch(function (err) {
             errorBox.style.display = "block";
