@@ -1,3 +1,26 @@
+## 2026-07-11 — E2E validation of the perf pass (+ realign 2 stale tests)
+
+Ran the trusted regression specs (interactions/invariants/smoke/coverage) after rebuilding wasm
+from the perf-pass source. 23/26 passed — crucially every mutate→read correctness test (todo add
+refreshes the list, auto-budget save, multi-category budget edit, bill/subscription linkage,
+investments badges) passed, proving the revision-keyed accessor cache and the compute-view memos
+serve fresh, correct data (a stale cache would have failed these).
+
+Three failures, all traced to PRE-EXISTING drift unrelated to the perf changes:
+  1. `account class override` — clicked `[data-testid=account-add-form] button[type=submit]`, but
+     the add modal was moved onto the FlipPanel FormID footer (internal/app/addhost.go), so the
+     submit button is the footer Save (`button[form=account-add-form]`). Updated the selector.
+  2. `budgets last-month toggle` — the toggle works (aria-pressed flips true); the test asserted the
+     old copy "viewing last month" vs the shipped "Showing last month's spend"
+     (budgets.lastMonthOn). Updated the assertion.
+  3. coverage-manifest ratchet — stale since 07-05; current drift is app-wide feature work
+     (smart-strip, per-row kebabs, account actions, goal-reset) AND a rise in untestable controls
+     (/accounts 69→108 with no testid). Regenerating would bless that testid debt, defeating the
+     ratchet's purpose — so I deliberately did NOT regenerate it here; it's a team decision that
+     should pair regeneration with giving the new controls testids. Left it correctly red.
+
+Fixed #1 and #2 (narrow, bless no debt); both pass. My perf changes introduced zero regressions.
+
 ## 2026-07-11 — Debounce the smart-bills setup inputs
 
 Finding #3: the smart-schedule modal's "min balance to keep" (typed digit-by-digit) and payday

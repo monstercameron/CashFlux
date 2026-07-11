@@ -204,7 +204,10 @@ test.describe("account class override", () => {
     await expect(liab).toBeVisible(); // the toggle appears only for the Other type
     await liab.click();
     await expect(liab).toBeChecked();
-    await form.locator('button[type="submit"]').click();
+    // The add modal was standardized onto the FlipPanel FormID footer (internal/app/
+    // addhost.go), so the submit button lives in the pinned panel footer and submits
+    // the body form via form="account-add-form" — it is no longer inside the form.
+    await app.locator('button[form="account-add-form"]').click();
 
     // It now appears under the Liabilities filter, not Assets — the class formulas
     // read the stored class, so the override takes effect.
@@ -353,7 +356,9 @@ test.describe("budgets last-month toggle", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
-    await expect(toggle).toContainText(/viewing last month/i);
+    // Pressed-state label is "Showing last month's spend" (budgets.lastMonthOn); the
+    // off-state label is "Last month's spend", so "showing" pins the active state.
+    await expect(toggle).toContainText(/showing last month/i);
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
