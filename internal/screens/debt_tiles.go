@@ -136,9 +136,21 @@ func majorMoney(v float64, base string) money.Money {
 	return money.New(int64(math.Round(v*mult)), base)
 }
 
-// computeDebtView builds the shared model over the live store. Pure (no hooks) so any tile
-// can call it after subscribing to the data revision.
+// debtViewCache memoizes computeDebtView. Keyed on the store revision AND the debt
+// config (payoff strategy/extra/thresholds), which lives in uistate and can change
+// without a store mutation.
+var debtViewCache = map[string]debtView{}
+
+// computeDebtView returns the shared debt model, memoized so the debt surface's tiles
+// don't each re-aggregate the ledger (and re-run the payoff engine) per render.
 func computeDebtView(app *appstate.App) debtView {
+	key := revKey(app) + "|" + fmt.Sprintf("%v", uistate.DebtConfigGet())
+	return memoByRev(debtViewCache, key, func() debtView { return computeDebtViewRaw(app) })
+}
+
+// computeDebtViewRaw builds the shared model over the live store. Pure (no hooks) so any tile
+// can call it after subscribing to the data revision.
+func computeDebtViewRaw(app *appstate.App) debtView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"

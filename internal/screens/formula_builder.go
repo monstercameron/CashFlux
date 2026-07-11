@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,11 +28,23 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
+// liveEngineVarsCache memoizes liveEngineVars by store revision + current month (the
+// vars are computed over the current month, so the month is part of the identity).
+// Callers only read the returned map, so sharing one instance is safe.
+var liveEngineVarsCache = map[string]map[string]float64{}
+
 // liveEngineVars computes the full engine variable surface (atoms + molecules +
 // custom fields) over the current month, for live formula evaluation. This is the
 // SAME surface the dashboard engine uses, so a formula built here behaves identically
-// when bound to a widget — and every figure traces back to atoms.
+// when bound to a widget — and every figure traces back to atoms. Memoized: walking
+// the whole ledger is expensive and several tiles request it per render.
 func liveEngineVars(app *appstate.App) map[string]float64 {
+	mk := time.Now()
+	key := revKey(app) + "|" + strconv.Itoa(mk.Year()*100+int(mk.Month()))
+	return memoByRev(liveEngineVarsCache, key, func() map[string]float64 { return liveEngineVarsRaw(app) })
+}
+
+func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 	now := time.Now()
 	start, end := dateutil.MonthRange(now)
 	base := app.Settings().BaseCurrency

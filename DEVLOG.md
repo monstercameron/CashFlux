@@ -1,3 +1,20 @@
+## 2026-07-11 — Memoize the heavy derived surface views (invest/debt/goal/engine-vars)
+
+Follow-on to the accessor cache. Those functions each walk the full ledger, and a surface
+renders many tiles that each call the same compute once (`computeInvestView` has 6 call sites,
+one per investments tile). Added `memoByRev[T]` (internal/screens/memo.go) — a small map cache
+gated on a string key that MUST include `app.Rev()`, plus a `revKey(app)` helper. Wrapped
+`computeInvestView`, `computeDebtView`, `computeGoalView`, and `liveEngineVars` (renaming the
+originals `…Raw`). Cache keys append the inputs that aren't in the store: active member (goals),
+`uistate.DebtConfigGet()` (debt payoff config), current month (engine vars — computed over the
+month). Verified every `liveEngineVars` caller only *reads* the returned map, so sharing one
+instance is safe (no defensive clone needed).
+
+Deliberately did NOT memoize `computeBillsSmart`: it takes time-based `now`/`until` params that
+differ per call, so a rev+time key would thrash, and quantizing time for the key risks changing
+the optimizer's output. Its data reads are already cheap now (accessor cache), so the real bills
+win is debouncing its per-keystroke `BumpDataRevision`, handled separately.
+
 ## 2026-07-11 — Revision-cache the read accessors (+ fix Load not bumping Rev)
 
 Perf audit's #1 finding: `App`'s list accessors (`Accounts`, `Transactions`, `Categories`, `Goals`,

@@ -128,8 +128,18 @@ type investView struct {
 	HasAny          bool // any investment account exists at all
 }
 
-// computeInvestView builds the shared model over the live store. Pure (no hooks).
+// investViewCache memoizes computeInvestView by store revision — the investments
+// surface has ~6 tiles that each call it once per render.
+var investViewCache = map[string]investView{}
+
+// computeInvestView returns the shared investments model, memoized on the store
+// revision so a multi-tile render aggregates the ledger once, not once per tile.
 func computeInvestView(app *appstate.App) investView {
+	return memoByRev(investViewCache, revKey(app), func() investView { return computeInvestViewRaw(app) })
+}
+
+// computeInvestViewRaw builds the shared model over the live store. Pure (no hooks).
+func computeInvestViewRaw(app *appstate.App) investView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"

@@ -37,10 +37,21 @@ type goalView struct {
 	OverallPct  int           // combined saved/target percent across active goals
 }
 
-// computeGoalView assembles the goalView for the active member view: owner-scoped,
+// goalViewCache memoizes computeGoalView by store revision + active member (the only
+// input beyond stored data), so the goals surface's tiles share one aggregation.
+var goalViewCache = map[string]goalView{}
+
+// computeGoalView assembles the goalView for the active member view (memoized).
+func computeGoalView(app *appstate.App, activeMemberID string) goalView {
+	return memoByRev(goalViewCache, revKey(app)+"|"+activeMemberID, func() goalView {
+		return computeGoalViewRaw(app, activeMemberID)
+	})
+}
+
+// computeGoalViewRaw assembles the goalView for the active member view: owner-scoped,
 // partitioned into active / sinking-fund / achieved, sorted, with the headline totals.
 // Pure aggregation over the internal/goals package (no hooks, no mutation).
-func computeGoalView(app *appstate.App, activeMemberID string) goalView {
+func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
