@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -261,7 +262,32 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 // the same statuses drive the summary totals, the banners, and the rows. Pure (no
 // hooks) — the caller resolves the active member, period window, and prefs and passes
 // them in, so it can be called from more than one tile without hook-ordering issues.
+// budgetViewCache memoizes computeBudgetView within/across renders. The budgets surface
+// renders several tiles (summary, list, savings, formula) that each call it with the same
+// inputs in one frame — without this, the full budget-over-all-transactions evaluation
+// ran once per tile. The key captures everything the result depends on: the data revision
+// (bumps on any dataset mutation), the member scope, the period window, the last-month
+// toggle, the base currency + FX rates, and the prefs — so a hit is always current. The
+// map is cleared once it grows past a small cap (old data-revision keys are dead weight).
+var budgetViewCache = map[string]budgetView{}
+
+// computeBudgetView is the memoized entry point; computeBudgetViewRaw does the work.
 func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
+	s := app.Settings()
+	key := fmt.Sprintf("%d|%s|%v|%t|%s|%v|%v",
+		uistate.CurrentDataRevision(), activeMemberID, vw, showLastMonth, s.BaseCurrency, s.FXRates, pr)
+	if v, ok := budgetViewCache[key]; ok {
+		return v
+	}
+	if len(budgetViewCache) > 8 {
+		budgetViewCache = map[string]budgetView{}
+	}
+	v := computeBudgetViewRaw(app, activeMemberID, vw, pr, showLastMonth)
+	budgetViewCache[key] = v
+	return v
+}
+
+func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"

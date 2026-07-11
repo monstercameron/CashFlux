@@ -106,6 +106,17 @@ var (
 	dataRevCaptured bool
 )
 
+// CurrentDataRevision returns the current data-revision value WITHOUT subscribing (safe
+// to call outside a component render). It bumps on every data mutation, so it's a cheap
+// cache key for memoizing expensive per-render computations over the dataset: a hit means
+// the underlying data hasn't changed. Returns 0 before the first render captures the atom.
+func CurrentDataRevision() int {
+	if dataRevCaptured {
+		return capturedDataRev.Get()
+	}
+	return 0
+}
+
 // BumpDataRevision increments the shared data-revision atom from outside a render
 // — for global callbacks such as undo/redo or post-decrypt hydration that replace
 // the dataset without being inside a component. It is a no-op until at least one
