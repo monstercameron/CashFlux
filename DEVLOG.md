@@ -1,3 +1,31 @@
+## 2026-07-11 — Per-page performance framework (Lighthouse-style) + v1.0.14 baseline
+
+Built a reusable perf-rating framework in `e2e/perf/`: `scoring.mjs` (Lighthouse's log-normal
+curve — score(p10)=0.9, score(median)=0.5, verified against the anchor points) and
+`perf-audit.mjs` (a Playwright harness). "Think Lighthouse, not code-level": everything is measured
+from the browser's own Performance timeline (longtask / layout-shift / paint / LCP observers,
+`performance.memory`), never from Go instrumentation.
+
+Design: each page is rated as a **warm SPA navigation from the dashboard** — the cost of *arriving*
+on that route with the wasm already booted — because cold-loading each route would reboot the 78 MB
+binary every time and drown out the per-route signal. Per page: route-mount, TBT (blocking), CLS,
+settle time, DOM size → weighted 0–100 + grade. The one-time wasm boot gets its own **cold-load**
+section (FCP/LCP/TBT/transfer). Median of 3 passes; resets to a consistent baseline before each
+measure (from `/transactions` when the dashboard itself is the target, so the nav isn't a no-op).
+
+Two gotchas solved: (1) `page.clock.setFixedTime` silently breaks `performance.getEntriesByType`
+(navigation/resource/paint came back empty) — dropped clock pinning (perf doesn't need a pinned
+seed) and the timeline populated; (2) app-ready timing is taken from a Node wall-clock delta as a
+robust fallback to the in-page mark.
+
+**v1.0.14 baseline** (stored in `e2e/perf/results/`): average page score **85/100**, 46/46 routes
+rated. Best: `/plans` 100, `/settings`/`/help`/`/about` 99 (light pages, ~50–90ms mount, ~0 TBT).
+Worst: `/` dashboard **46** (mount 771ms, TBT 970ms — the widget bento + charts), `/assistant` 51
+(TBT 1208ms), `/insights` 52. Cold-load **39/100**: TTI ~7.0s, boot TBT ~7.8s, transfer **78.1 MB**
+(wasm 74.4 MB) — the headline is the wasm payload + instantiate blocking; FCP 68ms, TTFB 7ms, CLS
+~0 are excellent, so the shell is snappy and it's the binary that hurts. This baseline is the
+reference for future version bumps (re-run and compare via `results/index.json`).
+
 ## 2026-07-11 — E2E validation of the perf pass (+ realign 2 stale tests)
 
 Ran the trusted regression specs (interactions/invariants/smoke/coverage) after rebuilding wasm

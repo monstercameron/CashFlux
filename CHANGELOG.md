@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Per-page performance framework + v1.0.14 baseline ratings (2026-07-11):** a Lighthouse-style harness (`e2e/perf/`) that boots the real wasm app in Chromium and rates every route from the browser's own Performance timeline — no source instrumentation. Per page it measures a **warm SPA navigation** (route mount, main-thread blocking/TBT, layout shift/CLS, settle time, DOM weight) and scores each metric on Lighthouse's log-normal curve (p10→90, median→50), combined into a 0–100 page score + letter grade. A separate **cold-load** section scores the one-time wasm boot (FCP/LCP/TBT/transfer weight). Ratings are stored per version under `e2e/perf/results/` (`v<version>.json` machine data, `v<version>.md` detailed analysis, `index.json` history). **v1.0.14 baseline:** average page score **85/100** (46/46 routes rated); best `/plans` 100; worst `/` dashboard 46 (mount 771ms, blocking 970ms). Cold-load **39/100** — dominated by the **78 MB** transfer (wasm 74 MB) and ~7.8s of boot-time main-thread blocking; FCP 68ms and CLS ~0 are excellent. Run: `node perf/perf-audit.mjs` from `e2e/`.
 - **Standardized `debounce` package (2026-07-11):** a small, keyed trailing-edge debouncer (`debounce.Call(key, delay, fn)` / `Flush(key)`) built on `time.AfterFunc` — collapses a burst of events (keystrokes, drags) into a single trailing call, keyed so per-field debounces stay independent, unit-tested on native Go.
 
 ### Changed
