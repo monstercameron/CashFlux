@@ -53,6 +53,11 @@ type FlipPanelProps struct {
 	// SaveLabel overrides the primary button text ("Save" by default) — e.g. "Add goal",
 	// "Apply". Applies to the FormID and the OnSave footers.
 	SaveLabel string
+	// SaveTestID / CancelTestID override the footer buttons' data-testid, so a form that
+	// moved its own submit/cancel into the standard footer keeps the ids its e2e tests
+	// target (e.g. "rec-save"/"rec-cancel"). Save defaults to "flip-save"; Cancel has none.
+	SaveTestID   string
+	CancelTestID string
 	OnSave    func() // invoked on Save (then the panel closes)
 	OnClose   func() // invoked on Cancel/close (and after Save)
 	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
@@ -273,6 +278,14 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	if saveLabel == "" {
 		saveLabel = uistate.T("action.save")
 	}
+	saveTestID := props.SaveTestID
+	if saveTestID == "" {
+		saveTestID = "flip-save"
+	}
+	cancelArgs := []any{css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")}
+	if props.CancelTestID != "" {
+		cancelArgs = append(cancelArgs, Attr("data-testid", props.CancelTestID))
+	}
 	var foot uic.Node
 	switch {
 	case props.NoFooter:
@@ -281,12 +294,12 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	case props.FormID != "":
 		// Standard pinned footer whose Save is a native submit for the body form — the
 		// form does the work in OnSubmit and closes via OnDone, so no auto-close here.
-		saveArgs := []any{css.Class("set-btn save"), Type("submit"), Attr("form", props.FormID), Attr("data-testid", "flip-save"), saveLabel}
+		saveArgs := []any{css.Class("set-btn save"), Type("submit"), Attr("form", props.FormID), Attr("data-testid", saveTestID), saveLabel}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(cancelArgs...),
 			Button(saveArgs...),
 		)
 	case props.CloseOnly:
@@ -297,12 +310,12 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			Button(css.Class("set-btn close"), Type("button"), OnClick(save), uistate.T("action.close")),
 		)
 	default:
-		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), saveLabel}
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", saveTestID), OnClick(save), saveLabel}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(cancelArgs...),
 			Button(saveArgs...),
 		)
 	}
