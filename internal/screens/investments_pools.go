@@ -312,23 +312,12 @@ func InvestPoolForm(props InvestPoolFormProps) ui.Node {
 			props.OnDone()
 		}
 	}))
-	cancel := ui.UseEvent(Prevent(func() {
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-	}))
-
 	toggles := MapKeyed(accounts, func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
 		return ui.CreateElement(poolAccountToggle, poolAccountToggleProps{Account: a, Checked: selS.Get()[a.ID], OnToggle: toggle})
 	})
 
-	saveLabel := uistate.T("investments.createPool")
-	if !isNew {
-		saveLabel = uistate.T("investments.savePool")
-	}
-
 	return Div(css.Class("inv-pool-modal"),
-		Form(css.Class("inv-pool-modal-form"), OnSubmit(save),
+		Form(css.Class("inv-pool-modal-form"), Attr("id", "invest-pool-form"), OnSubmit(save),
 			labeledField(uistate.T("investments.poolNameLabel"),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "pool-name"), Attr("autofocus", "true"),
 					Placeholder(uistate.T("investments.poolNamePlaceholder")), Value(nameS.Get()), OnInput(onName))),
@@ -336,10 +325,6 @@ func InvestPoolForm(props InvestPoolFormProps) ui.Node {
 			If(len(accounts) == 0, P(css.Class("empty"), uistate.T("investments.noAccountsBody"))),
 			Div(css.Class("pool-acct-list"), toggles),
 			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "pool-save"), saveLabel),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "pool-cancel"), OnClick(cancel), uistate.T("action.cancel")),
-			),
 		),
 	)
 }

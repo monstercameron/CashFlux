@@ -25,17 +25,20 @@ func RecurringEditHost() uic.Node {
 		return Fragment()
 	}
 	closeModal := func() { edit.Set("") }
-	title := uistate.T("recurring.newTitle")
+	title, saveLabel := uistate.T("recurring.newTitle"), uistate.T("recurring.add")
 	if rid != "new" {
-		title = uistate.T("recurring.editTitleModal")
+		title, saveLabel = uistate.T("recurring.editTitleModal"), uistate.T("recurring.saveFlow")
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    title,
-		Width:    "560px",
-		Height:   "min(90vh, 700px)",
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.RecurringForm, screens.RecurringFormProps{ID: rid, OnDone: closeModal}),
+		Title:        title,
+		Width:        uiw.FlipMediumW,
+		Height:       uiw.FlipMediumH,
+		FormID:       "recurring-form",
+		SaveLabel:    saveLabel,
+		SaveTestID:   "rec-save",
+		CancelTestID: "rec-cancel",
+		OnClose:      closeModal,
+		Back:         uic.CreateElement(screens.RecurringForm, screens.RecurringFormProps{ID: rid, OnDone: closeModal}),
 	})
 }
 

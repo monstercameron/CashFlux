@@ -30,16 +30,19 @@ func InvestPoolEditHost() uic.Node {
 	// trigger buttons (newChartButton / poolEditButton), not the heavy pools grid — so the
 	// close doesn't have to wait behind an expensive chart re-render.
 	closeModal := func() { edit.Set("") }
-	title := uistate.T("investments.newPoolTitle")
+	title, saveLabel := uistate.T("investments.newPoolTitle"), uistate.T("investments.createPool")
 	if pid != "new" {
-		title = uistate.T("investments.editPoolTitle")
+		title, saveLabel = uistate.T("investments.editPoolTitle"), uistate.T("investments.savePool")
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    title,
-		Width:    "480px",
-		Height:   "560px",
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.InvestPoolForm, screens.InvestPoolFormProps{ID: pid, OnDone: closeModal}),
+		Title:        title,
+		Width:        uiw.FlipMediumW,
+		Height:       uiw.FlipMediumH,
+		FormID:       "invest-pool-form",
+		SaveLabel:    saveLabel,
+		SaveTestID:   "pool-save",
+		CancelTestID: "pool-cancel",
+		OnClose:      closeModal,
+		Back:         uic.CreateElement(screens.InvestPoolForm, screens.InvestPoolFormProps{ID: pid, OnDone: closeModal}),
 	})
 }

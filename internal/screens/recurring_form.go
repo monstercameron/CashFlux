@@ -15,7 +15,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -133,11 +132,6 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 			props.OnDone()
 		}
 	}))
-	cancel := ui.UseEvent(Prevent(func() {
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-	}))
 
 	cadenceOpts := []ui.Node{}
 	for _, c := range []domain.RecurringCadence{
@@ -160,13 +154,8 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 		}
 	}
 
-	saveLabel := uistate.T("recurring.add")
-	if !isNew {
-		saveLabel = uistate.T("recurring.saveFlow")
-	}
-
 	return Div(css.Class("rec-modal"), Attr("data-testid", "recurring-form"),
-		Form(css.Class("form-grid rec-modal-form"), OnSubmit(save),
+		Form(css.Class("form-grid rec-modal-form"), Attr("id", "recurring-form"), OnSubmit(save),
 			labeledField(uistate.T("recurring.labelPlaceholder"),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "rec-label"), Attr("autofocus", "true"),
 					Placeholder(uistate.T("recurring.labelPlaceholder")), Value(labelS.Get()), OnInput(onLabel))),
@@ -206,10 +195,6 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: autopayS.Get(), OnChange: func(v bool) { autopayS.Set(v) }}),
 			),
 			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "rec-save"), saveLabel),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "rec-cancel"), OnClick(cancel), uistate.T("action.cancel")),
-			),
 		),
 	)
 }
