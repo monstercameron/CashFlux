@@ -1,3 +1,13 @@
+## 2026-07-11 — Debounce the smart-bills setup inputs
+
+Finding #3: the smart-schedule modal's "min balance to keep" (typed digit-by-digit) and payday
+anchor inputs each did SetConfig + BumpDataRevision per keystroke, and the revision bump re-runs
+`computeBillsSmart` (the whole billsched optimizer over the horizon) + re-renders the modal. Split
+each handler into a `commit*` closure + a debounced OnInput (300ms) + an OnChange flush-and-commit,
+same pattern as the savings and txn-filter fields. The OnChange flush matters here specifically
+because clicking "Use plan" blurs the amount field → fires `change` before the button's `click`,
+so the config is committed before the button reads it (no lost last edit). Build clean.
+
 ## 2026-07-11 — Memoize the heavy derived surface views (invest/debt/goal/engine-vars)
 
 Follow-on to the accessor cache. Those functions each walk the full ledger, and a surface

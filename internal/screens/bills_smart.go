@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -148,7 +149,10 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	// what re-renders the plan preview as the answers change.
 	_ = uistate.UseDataRevision().Get()
 
-	onAnchor := ui.UseEvent(func(v string) {
+	// commitAnchor saves the payday anchor and re-renders the preview. Bumping the
+	// data revision re-renders the whole modal (and recomputes the schedule), so per
+	// keystroke it's debounced; blur/change flushes it immediately.
+	commitAnchor := func(v string) {
 		v = strings.TrimSpace(v)
 		if v == "" {
 			return
@@ -157,6 +161,13 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		pr.PayCycleAnchor = v
 		uistate.SetPrefs(pr)
 		uistate.BumpDataRevision()
+	}
+	onAnchor := ui.UseEvent(func(v string) {
+		debounce.Call("bills-anchor", 300*time.Millisecond, func() { commitAnchor(v) })
+	})
+	onAnchorCommit := ui.UseEvent(func(v string) {
+		debounce.Flush("bills-anchor")
+		commitAnchor(v)
 	})
 	onFreq := func(v string) {
 		c := uistate.BillsSmartConfigGet()
@@ -206,7 +217,10 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	dec := currency.Decimals(base)
 	res := plan.Res
 
-	onKeep := ui.UseEvent(func(v string) {
+	// commitKeep saves the minimum-balance-to-keep and refreshes the plan. Same story
+	// as the anchor: each keystroke would re-run the scheduler over the whole horizon,
+	// so it's debounced while typing and flushed on blur/change.
+	commitKeep := func(v string) {
 		c := uistate.BillsSmartConfigGet()
 		c.MinKeepMinor, _ = money.ParseMinor(strings.TrimSpace(v), dec)
 		if c.MinKeepMinor < 0 {
@@ -214,6 +228,13 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		}
 		uistate.SetBillsSmartConfig(c)
 		uistate.BumpDataRevision()
+	}
+	onKeep := ui.UseEvent(func(v string) {
+		debounce.Call("bills-minkeep", 300*time.Millisecond, func() { commitKeep(v) })
+	})
+	onKeepCommit := ui.UseEvent(func(v string) {
+		debounce.Flush("bills-minkeep")
+		commitKeep(v)
 	})
 	explain := ui.UseEvent(func() {
 		settings := app.Settings()
@@ -264,7 +285,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	setup := Div(css.Class("bills-smart-setup"),
 		labeledField(uistate.T("bills.smartAnchorLabel"),
 			Input(css.Class("field"), Type("date"), Attr("data-testid", "bills-smart-anchor"),
-				Attr("aria-label", uistate.T("bills.smartAnchorLabel")), Value(anchorVal), OnInput(onAnchor))),
+				Attr("aria-label", uistate.T("bills.smartAnchorLabel")), Value(anchorVal), OnInput(onAnchor), OnChange(onAnchorCommit))),
 		labeledField(uistate.T("bills.smartFreq"),
 			uiw.Segmented(uiw.SegmentedProps{
 				Label:    uistate.T("bills.smartFreq"),
@@ -400,7 +421,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 			labeledField(uistate.T("bills.smartKeep", base),
 				Input(css.Class("field bills-smart-keep"), Type("number"), Attr("min", "0"), Step("0.01"),
 					Attr("aria-label", uistate.T("bills.smartKeep", base)), Attr("data-testid", "bills-smart-keep"),
-					Value(minorInput(plan.Cfg.MinKeepMinor, dec)), OnInput(onKeep))),
+					Value(minorInput(plan.Cfg.MinKeepMinor, dec)), OnInput(onKeep), OnChange(onKeepCommit))),
 			labeledField(uistate.T("bills.smartVarsLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "bills-smart-vars"),
 					Span(css.Class("rec-flow-var"), Title(uistate.T("bills.smartVarHint")), "bills_even_gain"),
