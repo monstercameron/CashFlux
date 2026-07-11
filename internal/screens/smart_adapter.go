@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -13,11 +14,34 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 )
 
+// smartInputCache memoizes buildSmartInput. Gathering the Input copies nine dataset
+// slices (including every transaction) on every render, and the Smart strip renders on
+// ~10 pages plus the dashboard, anomaly detectors, and digest driver — all with the
+// same (data, weekStart). The rule engines read the Input strictly read-only (verified:
+// no engine mutates in.<slice>), so sharing one instance is safe. Keyed on the store
+// revision (covers all data + base-currency/FX), the week start, and a 1-minute bucket
+// for the wall-clock Now — the same 60s staleness the dashboard engine memo accepts for
+// time-relative figures. wasm is single-threaded, so no lock is needed.
+var smartInputCache = map[string]smartengine.Input{}
+
 // buildSmartInput gathers the live dataset into the pure smartengine.Input the
 // rule engines compute over. It reads only through the appstate accessors (no
 // hooks), so it is safe to call anywhere in a render. weekStart is passed in by
 // the caller (which reads it from the prefs hook at a stable render position).
 func buildSmartInput(app *appstate.App, weekStart time.Weekday) smartengine.Input {
+	key := strconv.FormatUint(app.Rev(), 10) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(time.Now().Unix()/60, 10)
+	if v, ok := smartInputCache[key]; ok {
+		return v
+	}
+	if len(smartInputCache) > 4 {
+		smartInputCache = map[string]smartengine.Input{}
+	}
+	v := buildSmartInputRaw(app, weekStart)
+	smartInputCache[key] = v
+	return v
+}
+
+func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.Input {
 	s := app.Settings()
 	base := s.BaseCurrency
 	if base == "" {

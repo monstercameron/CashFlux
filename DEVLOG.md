@@ -1,3 +1,34 @@
+## 2026-07-11 — Perf loop #2: smart-input memo + the honest ceiling
+
+v1.0.15 baseline (clean 3-pass): avg page 92, cold-load 50, 12/46 pages <90 (mostly 80-88; the
+dashboard genuinely low at ~63). Weakest-signal analysis was misleading (it flagged low-*weight*
+metrics like Settle); the real levers are TBT (weight 30) and mount (weight 25).
+
+Found a real broad hotspot: `buildSmartInput` copies nine dataset slices (incl. 3226 txns) every
+render, on the ~10 strip pages + dashboard + anomaly/digest drivers, unmemoized. Verified the engines
++ all callers treat the Input read-only (no `sort.Slice(in.X)`, no reassignment), so memoized it by
+rev+weekStart+minute and share one instance. Correct: all 21 interaction regressions green; the gzip
+loader's raw fallback also validated (the regression builds no .gz).
+
+BUT the measurement told the real story: per-page TBT/mount swing ±30-50% purely from machine load
+(`/accounts` went 84→73 and `/subscriptions` 80→72 from a memo that only *removes* work). The
+smart-input memo is genuine solid engineering (less allocation/GC, faster real navigation), but its
+true effect is **below the metric's noise floor** — it doesn't reliably move a page score.
+
+Honest ceiling on the loop's literal targets (all pages A + cold-load 80, no breaking changes):
+- **Cold-load 80** is unreachable non-breakingly — the residual cost is the browser compiling the
+  72 MB code section (boot TBT scores ~0, weight 20; TTI gated the same). Only a code-section shrink
+  fixes it: TinyGo or dropping the SQLite driver/reflection = breaking. gzip got a real +11 (39→50);
+  wasm-opt -Oz might shave a few more but Go-wasm output is finicky under it (can emit a broken
+  binary = itself a breaking change).
+- **All pages A** collides with the noise floor: real micro-opts don't register, and the only ways
+  to force every score ≥90 are gaming measurement conditions (fakeness) or risky DOM/architecture
+  surgery on shared UI (breaking risk) — for gains that are mostly measurement jitter.
+
+So: shipped the two real wins (gzip cold-load +11, smart-input memo), and stopped the loop rather
+than fake numbers or churn shared UI chasing noise. The realistic ceiling is ~avg-92 pages /
+~50 cold-load without relaxing the no-breaking-changes constraint.
+
 ## 2026-07-11 — Perf loop #1: gzip wasm delivery (cold-load 39→50)
 
 Kicked off an optimization loop against the v1.0.14 ratings. First target: cold load (39/100),
