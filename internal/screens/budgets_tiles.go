@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -787,14 +788,15 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 		cur = props.Base
 	}
 
-	// Commit on change (blur/Enter), NOT on every keystroke: writing the account +
-	// BumpDataRevision (which re-renders the whole budgets surface and re-runs the heavy
-	// computeBudgetView for every tile) + RequestPersist (serialize the dataset) per
-	// keystroke made typing lag badly. Between renders the native input holds what you
-	// type, so typing stays smooth; the store write + recompute + persist happen once
-	// when you leave the field. The no-change guard skips all of it when nothing changed.
-	onEdit := ui.UseEvent(func(e ui.Event) {
-		v, ok := majorStrToMinor(e.GetValue(), cur)
+	// commit writes the account + BumpDataRevision (re-renders the whole budgets surface
+	// and re-runs the heavy computeBudgetView for every tile) + RequestPersist (serialize
+	// the dataset). Doing that per keystroke made typing lag badly, so it's DEBOUNCED:
+	// each keystroke reschedules the commit ~300ms out, so a burst of typing collapses
+	// into one commit + one recompute + one persist, and the total updates live once you
+	// pause. onCommit flushes the pending debounce and commits immediately on blur/Enter,
+	// so tabbing away is instant. The no-change guard skips the work when nothing changed.
+	commit := func(s string) {
+		v, ok := majorStrToMinor(s, cur)
 		if !ok {
 			return
 		}
@@ -807,6 +809,15 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()
 		}
+	}
+	dbKey := "acct-savings:" + sa.AccountID
+	onEdit := ui.UseEvent(func(e ui.Event) {
+		s := e.GetValue()
+		debounce.Call(dbKey, 300*time.Millisecond, func() { commit(s) })
+	})
+	onCommit := ui.UseEvent(func(e ui.Event) {
+		debounce.Flush(dbKey)
+		commit(e.GetValue())
 	})
 	onSync := ui.UseEvent(Prevent(func() {
 		g, found := findGoal(app, sa.GoalID)
@@ -838,7 +849,7 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 				Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(cur)),
 				Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
 					Attr("data-testid", "budgets-savings-amt-"+sa.AccountID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria", sa.Name)),
-					Value(val), OnChange(onEdit)),
+					Value(val), OnInput(onEdit), OnChange(onCommit)),
 				Span(css.Class("zbb-savings-per", tw.TextDim), uistate.T("budgets.savingsPerMonth")))),
 		goalNode,
 	)

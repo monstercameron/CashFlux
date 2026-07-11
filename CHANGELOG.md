@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Standardized `debounce` package (2026-07-11):** a small, keyed trailing-edge debouncer (`debounce.Call(key, delay, fn)` / `Flush(key)`) built on `time.AfterFunc` — collapses a burst of events (keystrokes, drags) into a single trailing call, keyed so per-field debounces stay independent, unit-tested on native Go.
+
+### Fixed
+- **Savings & investments monthly fields no longer lag while typing (2026-07-11):** each keystroke used to write the account, `BumpDataRevision` (re-rendering the whole budgets surface and re-running the heavy per-tile budget computation), and persist the dataset — a full recompute-and-save per character. The commit is now **debounced** (~300ms after typing settles) and flushed immediately on blur, so typing is smooth and the total updates live once you pause.
+- **Planning page in-page links no longer reload the app (force a passcode re-entry) (2026-07-11):** the "Manage recurring" / "Net worth" pills and runway "suggest" links were raw `<a href>` anchors that triggered a full page reload — dropping the in-memory app-lock passcode. They now navigate client-side via the router (keeping the href for accessibility), so no reload and no re-unlock.
+
 ## [1.0.14] - 2026-07-11
 
 ### Changed
