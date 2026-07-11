@@ -1,0 +1,900 @@
+<style>
+  :root{
+    --bg:#f3f6f3; --card:#ffffff; --card2:#f7faf8; --border:#e0e6e1;
+    --text:#161c19; --muted:#5f6b64; --faint:#8b968f;
+    --accent:#3f7d63; --track:#e6ebe7;
+    --good:#2f9f6a; --avg:#c68a1e; --poor:#d8503a;
+    --shadow:0 1px 2px rgba(20,40,30,.06),0 8px 24px rgba(20,40,30,.05);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0e1311; --card:#161d19; --card2:#1a221e; --border:#28322c;
+      --text:#e9efeb; --muted:#8f9a92; --faint:#5f6a62;
+      --accent:#6fb392; --track:#232d27;
+      --good:#43b581; --avg:#e0a340; --poor:#e5634d;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f3f6f3; --card:#ffffff; --card2:#f7faf8; --border:#e0e6e1;
+    --text:#161c19; --muted:#5f6b64; --faint:#8b968f;
+    --accent:#3f7d63; --track:#e6ebe7;
+    --good:#2f9f6a; --avg:#c68a1e; --poor:#d8503a;
+    --shadow:0 1px 2px rgba(20,40,30,.06),0 8px 24px rgba(20,40,30,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1311; --card:#161d19; --card2:#1a221e; --border:#28322c;
+    --text:#e9efeb; --muted:#8f9a92; --faint:#5f6a62;
+    --accent:#6fb392; --track:#232d27;
+    --good:#43b581; --avg:#e0a340; --poor:#e5634d;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.28);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased;}
+  .mono{font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;}
+  .wrap{max-width:940px;margin:0 auto;padding:40px 24px 72px;}
+
+  header.rep{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  .brand{font-weight:700;font-size:15px;letter-spacing:.02em;}
+  .brand b{color:var(--accent);}
+  .ver{font-family:ui-monospace,monospace;font-size:12px;color:var(--muted);border:1px solid var(--border);
+    border-radius:999px;padding:2px 9px;}
+  h1{font-size:30px;line-height:1.15;letter-spacing:-.02em;margin:14px 0 4px;text-wrap:balance;font-weight:650;}
+  .sub{color:var(--muted);font-size:13.5px;margin-bottom:28px;}
+  .sub .mono{color:var(--faint);}
+
+  .heroes{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;}
+  .hero{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 24px;
+    box-shadow:var(--shadow);display:flex;align-items:center;gap:20px;}
+  .hero .htext{min-width:0;}
+  .hlabel{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:3px;}
+  .hval{font-size:15px;color:var(--text);font-weight:600;margin-top:2px;}
+  .hval .mono{font-size:15px;}
+  .hnote{font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.45;}
+
+  .dist{display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 30px;}
+  .chip{font-family:ui-monospace,monospace;font-size:11.5px;padding:3px 9px;border-radius:6px;
+    border:1px solid var(--border);color:var(--muted);background:var(--card2);}
+
+  section{margin-top:34px;}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+    font-weight:600;margin:0 0 14px;display:flex;align-items:center;gap:10px;}
+  h2::after{content:"";flex:1;height:1px;background:var(--border);}
+
+  /* cold load */
+  .load{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:8px 20px 14px;box-shadow:var(--shadow);}
+  .lrow{display:grid;grid-template-columns:170px 96px 1fr 40px;align-items:center;gap:14px;
+    padding:11px 0;border-bottom:1px solid var(--border);}
+  .lrow:last-child{border-bottom:none;}
+  .llabel{font-size:13.5px;color:var(--text);}
+  .lval{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);text-align:right;}
+  .lval .u,.pm .u{font-size:10px;color:var(--faint);margin-left:1px;}
+  .lbar{height:7px;background:var(--track);border-radius:99px;overflow:hidden;}
+  .lbarfill{display:block;height:100%;border-radius:99px;}
+  .lsub{font-family:ui-monospace,monospace;font-size:12.5px;text-align:right;font-weight:600;}
+
+  /* pages table */
+  .tablecard{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;}
+  .scroll{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;min-width:620px;}
+  thead th{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
+    font-weight:600;text-align:right;padding:12px 12px 10px;border-bottom:1px solid var(--border);}
+  thead th.l{text-align:left;}
+  .prow{border-bottom:1px solid var(--border);}
+  .prow:last-child{border-bottom:none;}
+  .prow:hover{background:var(--card2);}
+  td{padding:9px 12px;}
+  .pgauge{width:56px;padding-left:16px;}
+  .proute code{font-family:ui-monospace,monospace;font-size:13px;color:var(--text);}
+  .pgrade{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;margin-left:8px;padding:1px 6px;border-radius:5px;}
+  .pnote{font-size:11px;color:var(--faint);margin-top:2px;}
+  .pm{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:12.5px;
+    color:var(--muted);text-align:right;white-space:nowrap;}
+
+  /* gauges + semantic color */
+  .gauge .gnum{font-family:ui-monospace,monospace;font-weight:700;fill:var(--text);}
+  .g-good{--ring:var(--good)} .g-avg{--ring:var(--avg)} .g-poor{--ring:var(--poor)} .g-na{--ring:var(--faint)}
+  .hero .gauge .gnum{font-size:22px;}
+  .prow .gauge .gnum{font-size:15px;}
+  .b-good{color:var(--good)} .b-avg{color:var(--avg)} .b-poor{color:var(--poor)}
+  .lbarfill.b-good{background:var(--good)} .lbarfill.b-avg{background:var(--avg)} .lbarfill.b-poor{background:var(--poor)}
+  .pgrade.b-good{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);}
+  .pgrade.b-avg{background:color-mix(in srgb,var(--avg) 16%,transparent);color:var(--avg);}
+  .pgrade.b-poor{background:color-mix(in srgb,var(--poor) 18%,transparent);color:var(--poor);}
+  .chip.b-good{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,var(--border));}
+  .chip.b-poor{color:var(--poor);border-color:color-mix(in srgb,var(--poor) 40%,var(--border));}
+
+  .method{margin-top:30px;font-size:12.5px;color:var(--muted);line-height:1.6;
+    background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+  .method b{color:var(--text);font-weight:600;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;color:var(--muted);}
+  .dot{width:9px;height:9px;border-radius:99px;display:inline-block;}
+  @media (max-width:640px){.heroes{grid-template-columns:1fr;}.lrow{grid-template-columns:130px 70px 1fr 34px;gap:10px;}}
+</style>
+
+<div class="wrap">
+  <header class="rep">
+    <span class="brand"><b>CashFlux</b> · performance</span>
+    <span class="ver">v1.0.15</span>
+  </header>
+  <h1>Page performance ratings</h1>
+  <p class="sub">Every route scored on Lighthouse-style curves from the browser's own performance timeline · <span class="mono">2026-07-11 17:11 UTC</span> · median of 3 passes · 1440x900</p>
+
+  <div class="heroes">
+    <div class="hero">
+      <svg class="gauge g-good" viewBox="0 0 92 92" width="92" height="92" role="img" aria-label="score 93">
+    <circle cx="46" cy="46" r="41.5" fill="none" stroke="var(--track)" stroke-width="9"/>
+    <circle cx="46" cy="46" r="41.5" fill="none" stroke="var(--ring)" stroke-width="9"
+      stroke-linecap="round" stroke-dasharray="260.8" stroke-dashoffset="18.3"
+      transform="rotate(-90 46 46)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">93</text>
+  </svg>
+      <div class="htext">
+        <div class="hlabel">Average page</div>
+        <div class="hval">46 of 46 routes rated</div>
+        <div class="hnote">Warm navigation — the cost of arriving on a page with the app already running.</div>
+      </div>
+    </div>
+    <div class="hero">
+      <svg class="gauge g-poor" viewBox="0 0 92 92" width="92" height="92" role="img" aria-label="score 48">
+    <circle cx="46" cy="46" r="41.5" fill="none" stroke="var(--track)" stroke-width="9"/>
+    <circle cx="46" cy="46" r="41.5" fill="none" stroke="var(--ring)" stroke-width="9"
+      stroke-linecap="round" stroke-dasharray="260.8" stroke-dashoffset="135.6"
+      transform="rotate(-90 46 46)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">48</text>
+  </svg>
+      <div class="htext">
+        <div class="hlabel">Cold load</div>
+        <div class="hval"><span class="mono">19MB</span> to first interactive</div>
+        <div class="hnote">One-time wasm boot. The payload and instantiate blocking dominate — not the UI.</div>
+      </div>
+    </div>
+  </div>
+  <div class="dist"><span class="chip b-good">A+ · 21</span><span class="chip b-good">A · 15</span><span class="chip b-avg">B · 5</span><span class="chip b-avg">C · 5</span></div>
+
+  <section>
+    <h2>Cold load — the one-time wasm boot</h2>
+    <div class="load"><div class="lrow">
+      <div class="llabel">Time to interactive</div>
+      <div class="lval">5066<span class="u">ms</span></div>
+      <div class="lbar"><span class="lbarfill b-poor" style="width:38%"></span></div>
+      <div class="lsub b-poor">38</div>
+    </div><div class="lrow">
+      <div class="llabel">First Contentful Paint</div>
+      <div class="lval">64<span class="u">ms</span></div>
+      <div class="lbar"><span class="lbarfill b-good" style="width:100%"></span></div>
+      <div class="lsub b-good">100</div>
+    </div><div class="lrow">
+      <div class="llabel">Largest Contentful Paint</div>
+      <div class="lval">1036<span class="u">ms</span></div>
+      <div class="lbar"><span class="lbarfill b-good" style="width:93%"></span></div>
+      <div class="lsub b-good">93</div>
+    </div><div class="lrow">
+      <div class="llabel">Blocking time (boot)</div>
+      <div class="lval">5300<span class="u">ms</span></div>
+      <div class="lbar"><span class="lbarfill b-poor" style="width:1%"></span></div>
+      <div class="lsub b-poor">1</div>
+    </div><div class="lrow">
+      <div class="llabel">Transfer weight</div>
+      <div class="lval">18.6<span class="u">MB</span></div>
+      <div class="lbar"><span class="lbarfill b-poor" style="width:22%"></span></div>
+      <div class="lsub b-poor">22</div>
+    </div></div>
+    <p class="method"><b>Transfer weight is the headline.</b> The app ships <b>15 MB</b> of WebAssembly, served uncompressed here. First paint (64ms) and layout stability are excellent — the shell is instant; it's the binary download and ~5.3s of instantiate blocking that gate time-to-interactive. Host-side brotli typically cuts the wasm 3–4×; shrinking the binary is the real lever.</p>
+  </section>
+
+  <section>
+    <h2>Every page — ranked by score, lowest first</h2>
+    <div class="tablecard"><div class="scroll">
+      <table>
+        <thead><tr>
+          <th class="l" colspan="2">Route</th>
+          <th>Mount</th><th>Blocking</th><th>Settle</th><th>CLS</th><th>DOM</th>
+        </tr></thead>
+        <tbody><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 62">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="46.6"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">62</text>
+  </svg></td>
+      <td class="proute"><code>/insights</code><span class="pgrade b-avg">C</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">219<span class="u">ms</span></td>
+      <td class="pm">689<span class="u">ms</span></td>
+      <td class="pm">854<span class="u">ms</span></td>
+      <td class="pm">0.025</td>
+      <td class="pm">368</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 64">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="44.1"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">64</text>
+  </svg></td>
+      <td class="proute"><code>/assistant</code><span class="pgrade b-avg">C</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">230<span class="u">ms</span></td>
+      <td class="pm">567<span class="u">ms</span></td>
+      <td class="pm">740<span class="u">ms</span></td>
+      <td class="pm">0.026</td>
+      <td class="pm">349</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 68">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="39.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">68</text>
+  </svg></td>
+      <td class="proute"><code>/</code><span class="pgrade b-avg">C</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">309<span class="u">ms</span></td>
+      <td class="pm">379<span class="u">ms</span></td>
+      <td class="pm">493<span class="u">ms</span></td>
+      <td class="pm">0.002</td>
+      <td class="pm">1095</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 72">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="34.3"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">72</text>
+  </svg></td>
+      <td class="proute"><code>/p/side-hustle</code><span class="pgrade b-avg">C</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">370<span class="u">ms</span></td>
+      <td class="pm">312<span class="u">ms</span></td>
+      <td class="pm">389<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">391</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 74">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="31.9"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">74</text>
+  </svg></td>
+      <td class="proute"><code>/investments</code><span class="pgrade b-avg">C</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">328<span class="u">ms</span></td>
+      <td class="pm">271<span class="u">ms</span></td>
+      <td class="pm">354<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">779</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 78">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="27.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">78</text>
+  </svg></td>
+      <td class="proute"><code>/subscriptions</code><span class="pgrade b-avg">B</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">261<span class="u">ms</span></td>
+      <td class="pm">204<span class="u">ms</span></td>
+      <td class="pm">284<span class="u">ms</span></td>
+      <td class="pm">0.029</td>
+      <td class="pm">524</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 85">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="18.4"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">85</text>
+  </svg></td>
+      <td class="proute"><code>/debt</code><span class="pgrade b-avg">B</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">198<span class="u">ms</span></td>
+      <td class="pm">139<span class="u">ms</span></td>
+      <td class="pm">210<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">1042</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 88">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="14.7"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">88</text>
+  </svg></td>
+      <td class="proute"><code>/accounts</code><span class="pgrade b-avg">B</span>
+        <div class="pnote">weakest: Layout shift</div></td>
+      <td class="pm">145<span class="u">ms</span></td>
+      <td class="pm">90<span class="u">ms</span></td>
+      <td class="pm">154<span class="u">ms</span></td>
+      <td class="pm">0.029</td>
+      <td class="pm">891</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 88">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="14.7"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">88</text>
+  </svg></td>
+      <td class="proute"><code>/smart</code><span class="pgrade b-avg">B</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">180<span class="u">ms</span></td>
+      <td class="pm">123<span class="u">ms</span></td>
+      <td class="pm">186<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">369</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-avg" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 89">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="13.5"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">89</text>
+  </svg></td>
+      <td class="proute"><code>/artifacts</code><span class="pgrade b-avg">B</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">172<span class="u">ms</span></td>
+      <td class="pm">114<span class="u">ms</span></td>
+      <td class="pm">190<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">561</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 90">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="12.3"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">90</text>
+  </svg></td>
+      <td class="proute"><code>/widget-builder</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">173<span class="u">ms</span></td>
+      <td class="pm">98<span class="u">ms</span></td>
+      <td class="pm">202<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">286</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 91">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="11.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">91</text>
+  </svg></td>
+      <td class="proute"><code>/workflows</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">139<span class="u">ms</span></td>
+      <td class="pm">84<span class="u">ms</span></td>
+      <td class="pm">151<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">757</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 91">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="11.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">91</text>
+  </svg></td>
+      <td class="proute"><code>/p/priya-business</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">139<span class="u">ms</span></td>
+      <td class="pm">83<span class="u">ms</span></td>
+      <td class="pm">163<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">909</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 91">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="11.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">91</text>
+  </svg></td>
+      <td class="proute"><code>/p/marcus-hobbies</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">155<span class="u">ms</span></td>
+      <td class="pm">94<span class="u">ms</span></td>
+      <td class="pm">180<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">569</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 92">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="9.8"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">92</text>
+  </svg></td>
+      <td class="proute"><code>/rules</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">117<span class="u">ms</span></td>
+      <td class="pm">104<span class="u">ms</span></td>
+      <td class="pm">136<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">571</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 93">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="8.6"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">93</text>
+  </svg></td>
+      <td class="proute"><code>/recurring</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">126<span class="u">ms</span></td>
+      <td class="pm">69<span class="u">ms</span></td>
+      <td class="pm">137<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">812</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 94">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="7.4"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">94</text>
+  </svg></td>
+      <td class="proute"><code>/reports</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">121<span class="u">ms</span></td>
+      <td class="pm">58<span class="u">ms</span></td>
+      <td class="pm">146<span class="u">ms</span></td>
+      <td class="pm">0</td>
+      <td class="pm">617</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 94">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="7.4"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">94</text>
+  </svg></td>
+      <td class="proute"><code>/studio</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">124<span class="u">ms</span></td>
+      <td class="pm">68<span class="u">ms</span></td>
+      <td class="pm">139<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">527</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 95">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="6.1"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">95</text>
+  </svg></td>
+      <td class="proute"><code>/transactions</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">101<span class="u">ms</span></td>
+      <td class="pm">48<span class="u">ms</span></td>
+      <td class="pm">121<span class="u">ms</span></td>
+      <td class="pm">0.002</td>
+      <td class="pm">794</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 95">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="6.1"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">95</text>
+  </svg></td>
+      <td class="proute"><code>/todo</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Layout shift</div></td>
+      <td class="pm">75<span class="u">ms</span></td>
+      <td class="pm">20<span class="u">ms</span></td>
+      <td class="pm">92<span class="u">ms</span></td>
+      <td class="pm">0.027</td>
+      <td class="pm">706</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 95">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="6.1"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">95</text>
+  </svg></td>
+      <td class="proute"><code>/allocate</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Layout shift</div></td>
+      <td class="pm">77<span class="u">ms</span></td>
+      <td class="pm">21<span class="u">ms</span></td>
+      <td class="pm">97<span class="u">ms</span></td>
+      <td class="pm">0.029</td>
+      <td class="pm">819</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 96">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="4.9"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">96</text>
+  </svg></td>
+      <td class="proute"><code>/goals</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Layout shift</div></td>
+      <td class="pm">63<span class="u">ms</span></td>
+      <td class="pm">7<span class="u">ms</span></td>
+      <td class="pm">84<span class="u">ms</span></td>
+      <td class="pm">0.029</td>
+      <td class="pm">443</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 96">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="4.9"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">96</text>
+  </svg></td>
+      <td class="proute"><code>/categories</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">83<span class="u">ms</span></td>
+      <td class="pm">26<span class="u">ms</span></td>
+      <td class="pm">104<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">1000</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 96">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="4.9"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">96</text>
+  </svg></td>
+      <td class="proute"><code>/customize</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Settle time</div></td>
+      <td class="pm">103<span class="u">ms</span></td>
+      <td class="pm">48<span class="u">ms</span></td>
+      <td class="pm">119<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">418</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 96">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="4.9"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">96</text>
+  </svg></td>
+      <td class="proute"><code>/bills</code><span class="pgrade b-good">A</span>
+        <div class="pnote">weakest: Layout shift</div></td>
+      <td class="pm">79<span class="u">ms</span></td>
+      <td class="pm">24<span class="u">ms</span></td>
+      <td class="pm">91<span class="u">ms</span></td>
+      <td class="pm">0.029</td>
+      <td class="pm">423</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 97">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="3.7"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">97</text>
+  </svg></td>
+      <td class="proute"><code>/budgets</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">87<span class="u">ms</span></td>
+      <td class="pm">32<span class="u">ms</span></td>
+      <td class="pm">109<span class="u">ms</span></td>
+      <td class="pm">0.002</td>
+      <td class="pm">603</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 98">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="2.5"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">98</text>
+  </svg></td>
+      <td class="proute"><code>/notifications</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">64<span class="u">ms</span></td>
+      <td class="pm">7<span class="u">ms</span></td>
+      <td class="pm">73<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">573</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 98">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="2.5"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">98</text>
+  </svg></td>
+      <td class="proute"><code>/planning</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">63<span class="u">ms</span></td>
+      <td class="pm">7<span class="u">ms</span></td>
+      <td class="pm">74<span class="u">ms</span></td>
+      <td class="pm">0.002</td>
+      <td class="pm">613</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 98">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="2.5"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">98</text>
+  </svg></td>
+      <td class="proute"><code>/widget-manager</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">67<span class="u">ms</span></td>
+      <td class="pm">10<span class="u">ms</span></td>
+      <td class="pm">86<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">615</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/networth</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">50<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">54<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">388</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/health</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">41<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">57<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">330</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/household</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">58<span class="u">ms</span></td>
+      <td class="pm">1<span class="u">ms</span></td>
+      <td class="pm">73<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">263</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/settings</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">53<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">69<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">289</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/appearance</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">52<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">70<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">296</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/credit</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">47<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">53<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">329</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 99">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="1.2"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">99</text>
+  </svg></td>
+      <td class="proute"><code>/documents</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">43<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">59<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">263</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/activity</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">35<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">53<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">336</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/help</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">36<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">53<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">310</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/about</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">28<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">40<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">230</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/fields</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">40<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">53<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">267</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/setup</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">38<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">52<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">192</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/loans</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">26<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">38<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">272</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/members</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">38<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">52<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">287</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/split</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">32<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">43<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">201</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/duplicates</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">33<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">51<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">181</td>
+    </tr><tr class="prow">
+      <td class="pgauge"><svg class="gauge g-good" viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="score 100">
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--track)" stroke-width="5"/>
+    <circle cx="22" cy="22" r="19.5" fill="none" stroke="var(--ring)" stroke-width="5"
+      stroke-linecap="round" stroke-dasharray="122.5" stroke-dashoffset="0.0"
+      transform="rotate(-90 22 22)"/>
+    <text x="50%" y="50%" class="gnum" dominant-baseline="central" text-anchor="middle">100</text>
+  </svg></td>
+      <td class="proute"><code>/plans</code><span class="pgrade b-good">A+</span>
+        <div class="pnote">weakest: DOM size</div></td>
+      <td class="pm">23<span class="u">ms</span></td>
+      <td class="pm">0<span class="u">ms</span></td>
+      <td class="pm">40<span class="u">ms</span></td>
+      <td class="pm">0.001</td>
+      <td class="pm">195</td>
+    </tr></tbody>
+      </table>
+    </div></div>
+  </section>
+
+  <div class="method">
+    <b>How to read this.</b> Each page is measured as a <b>warm single-page navigation</b> from the dashboard: with the wasm runtime already booted, how long until the route's body mounts (Mount), how much the main thread is blocked by long tasks (Blocking / TBT), how much content jumps as it renders (CLS), how long until it's visually stable (Settle), and how heavy its DOM is. Every metric is scored on Lighthouse's log-normal curve and weighted into the 0–100 score. Nothing is measured from Go source — only from the browser's performance timeline.
+    <div class="legend">
+      <span><span class="dot" style="background:var(--good)"></span>90–100 good</span>
+      <span><span class="dot" style="background:var(--avg)"></span>50–89 needs work</span>
+      <span><span class="dot" style="background:var(--poor)"></span>0–49 poor</span>
+    </div>
+  </div>
+</div>
