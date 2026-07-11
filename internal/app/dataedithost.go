@@ -5,7 +5,6 @@
 package app
 
 import (
-	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -50,41 +49,31 @@ func CategoryEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseCategoryEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("categories.editTitle"),
-		Width:    "460px",
-		Height:   "520px",
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.CategoryEditForm, screens.CategoryEditFormProps{CategoryID: id, OnDone: closeModal}),
+		Title:   uistate.T("categories.editTitle"),
+		Width:   uiw.FlipMediumW,
+		Height:  uiw.FlipMediumH,
+		FormID:  "category-edit-form",
+		OnClose: closeModal,
+		Back:    uic.CreateElement(screens.CategoryEditForm, screens.CategoryEditFormProps{CategoryID: id, OnDone: closeModal}),
 	})
 }
 
-// RuleEditHost renders the rule editor flip modal. The panel height tracks the
-// rule's content: a plain phrase rule gets a snug panel (no dead space below
-// the actions), while a condition-bearing rule opens taller; growth past the
-// panel (enabling more slots) scrolls with the sticky action bar in view.
+// RuleEditHost renders the rule editor flip modal at a standard size; the body
+// scrolls under the pinned Save/Cancel footer when a condition-bearing rule opens
+// taller than the panel.
 func RuleEditHost() uic.Node {
 	id := uistate.UseRuleEdit().Get()
 	if id == "" {
 		return Fragment()
 	}
-	height := "470px"
-	if appstate.Default != nil {
-		for _, r := range appstate.Default.Rules() {
-			if r.ID == id && len(r.Conditions) > 0 {
-				height = "640px"
-				break
-			}
-		}
-	}
 	closeModal := func() { uistate.CloseRuleEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("rules.editTitle"),
-		Width:    "480px",
-		Height:   height,
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.RuleEditForm, screens.RuleEditFormProps{RuleID: id, OnDone: closeModal}),
+		Title:   uistate.T("rules.editTitle"),
+		Width:   uiw.FlipMediumW,
+		Height:  uiw.FlipMediumH,
+		FormID:  "rule-edit-form",
+		OnClose: closeModal,
+		Back:    uic.CreateElement(screens.RuleEditForm, screens.RuleEditFormProps{RuleID: id, OnDone: closeModal}),
 	})
 }
 
@@ -96,11 +85,11 @@ func ArtifactEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseArtifactEdit() }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("artifacts.renameModalTitle"),
-		Width:    "420px",
-		Height:   "230px",
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.ArtifactRenameForm, screens.ArtifactRenameFormProps{ArtifactID: id, OnDone: closeModal}),
+		Title:   uistate.T("artifacts.renameModalTitle"),
+		Width:   uiw.FlipSmallW,
+		Height:  uiw.FlipSmallH,
+		FormID:  "artifact-rename-form",
+		OnClose: closeModal,
+		Back:    uic.CreateElement(screens.ArtifactRenameForm, screens.ArtifactRenameFormProps{ArtifactID: id, OnDone: closeModal}),
 	})
 }

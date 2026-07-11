@@ -98,7 +98,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 		parentOpts = append(parentOpts, uiw.SelectOption{Value: f.Category.ID, Label: uiw.IndentLabel(f.Depth) + f.Category.Name})
 	}
 
-	return Form(css.Class("form-grid"), Attr("data-testid", "category-add-form"), OnSubmit(add),
+	return Form(css.Class("form-grid"), Attr("id", "category-add-form"), Attr("data-testid", "category-add-form"), OnSubmit(add),
 		Input(append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
 		uiw.FormField("Category type",
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -119,7 +119,6 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 			Input(Type("checkbox"), Attr("id", "cat-add-deductible"), Attr("aria-label", uistate.T("categories.deductible")), CheckedIf(deductible.Get()), OnChange(onDeductible)),
 			Text(" "+uistate.T("categories.deductible")),
 		),
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		errText("cat-err", errMsg.Get()),
 	)
 }

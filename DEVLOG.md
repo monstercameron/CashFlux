@@ -1,3 +1,31 @@
+## 2026-07-10 — Standardize flip-modal footers (pinned Cancel+Save via FormID)
+
+Cam wants every flip modal to have a Save/Apply + Cancel footer, standardized buttons + sizing,
+semi-custom where needed. Inventoried all ~25 FlipPanel usages: sizes were ad-hoc (360–900 wide),
+footers a mix of standard OnSave, CloseOnly (single "Close"), and NoFooter with the form's own
+(often scrolling) action bar.
+
+Key decision: rather than wrap every form's fields (the budget/goal FlushBody approach — a lot of
+per-form surgery), centralize a pinned footer in FlipPanel via a `FormID` prop. Verified an external
+`<button type=submit form=ID>` fires the form's OnSubmit here (GWC uses a delegated `submit` listener
+and the submit event bubbles) — so the panel's Save button can submit a form rendered in the (already-
+pinned) `.set-foot` slot, and the form needs NO action bar. The form's OnDone closes on success and it
+stays open on a validation error; Enter calls `form.requestSubmit()`. Added `SaveLabel` too.
+
+Converted to this standard footer: add modals (account/category/member/rule — dropped their CloseOnly
+"Close" + scrolling submit) and edit modals (task/category/rule/artifact) — add `id=<form>` to the
+`<form>`, delete the internal Cancel+Save bar (and the now-unused `cancel` hook), and set the host's
+`FormID` + `SaveLabel` + a standard size. `dataedit_forms.go` was a duplicate-text minefield (four
+near-identical forms) — edited each with field-unique context. Verified end-to-end with Playwright:
+account-add and task-edit both submit via the footer Save AND via Enter, at Medium 560×680, footer
+pinned, body scrolling under it. `go test ./...` green.
+
+Deferred to follow-ups: multi-mode forms (account edit, member edit + its PIN sub-form), the custom-
+footer forms that carry e2e-referenced submit testids (recurring `rec-save`, invest pool `pool-save`,
+allocate `allocate-strategy-done`, task-add) — those stay semi-custom but need their footers pinned —
+txn-edit (has Delete → semi-custom), and the config panels (columns/smart-cat/settings). Also a
+button-styling unification pass so `.modal-foot` bars match `.set-btn`.
+
 ## 2026-07-10 — Fix budgets/goals surface tile-order race on load
 
 Cam: on loading /budgets the widget render order can vary — the income summary tile sometimes

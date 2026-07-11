@@ -247,7 +247,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 	catOpts := categorySelectOptions(cats, categoryID.Get())
 
-	return Form(css.Class("form-grid"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
+	return Form(css.Class("form-grid"), Attr("id", "rule-add-form"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
 		// No static id (C107): RuleAddForm renders both inline on /rules and inside the
 		// AddHost modal, so a hardcoded id="rule-add" produced a duplicate id when the
 		// modal opened over the screen. Nothing references the id (the aria-label is the
@@ -311,7 +311,6 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			),
 		),
 
-		Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.add")),
 		// Live preview: evaluate the draft exactly as the engine will (conditions
 		// override the phrase when set), so an amount rule can't read "Matches 0".
 		func() ui.Node {

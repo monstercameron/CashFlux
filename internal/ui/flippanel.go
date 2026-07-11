@@ -42,6 +42,17 @@ type FlipPanelProps struct {
 	// the bottom when the form is taller than the panel. Only meaningful with NoFooter
 	// (a form that supplies its own footer); ignored by the standard Save/Cancel footer.
 	FlushBody bool
+	// FormID pins a STANDARD Save/Cancel footer (identical across the app) whose Save is
+	// a native submit for the form with this id (rendered in the scrollable body). Save
+	// submits the form — the form's OnSubmit does the work and its OnDone closes the
+	// panel on success, leaving it open on a validation error — so the form needs no
+	// action bar of its own. Cancel dismisses via OnClose. Preferred for simple
+	// Cancel+Save forms; use FlushBody + a `.modal-foot` bar only when the footer needs an
+	// extra action (e.g. Delete).
+	FormID string
+	// SaveLabel overrides the primary button text ("Save" by default) — e.g. "Add goal",
+	// "Apply". Applies to the FormID and the OnSave footers.
+	SaveLabel string
 	OnSave    func() // invoked on Save (then the panel closes)
 	OnClose   func() // invoked on Cancel/close (and after Save)
 	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
@@ -86,6 +97,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	onCloseRef := props.OnClose
 	onSaveRef := props.OnSave
 	closeOnly := props.CloseOnly
+	formID := props.FormID
 	uic.UseEffect(func() func() {
 		doc := js.Global().Get("document")
 		if doc.IsNull() || doc.IsUndefined() {
@@ -154,6 +166,14 @@ func flipPanel(props FlipPanelProps) uic.Node {
 					}
 				}
 				e.Call("preventDefault")
+				// A FormID footer submits its form (native submit → OnSubmit); the form's
+				// OnDone closes on success and it stays open on a validation error.
+				if formID != "" {
+					if f := doc.Call("getElementById", formID); !f.IsNull() && !f.IsUndefined() {
+						f.Call("requestSubmit")
+					}
+					return nil
+				}
 				if onSaveRef != nil {
 					onSaveRef()
 				}
@@ -249,19 +269,35 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			onClose()
 		}
 	}
+	saveLabel := props.SaveLabel
+	if saveLabel == "" {
+		saveLabel = uistate.T("action.save")
+	}
 	var foot uic.Node
-	if props.NoFooter {
+	switch {
+	case props.NoFooter:
 		// The Back body owns its own actions; render no footer at all.
 		foot = Fragment()
-	} else if props.CloseOnly {
+	case props.FormID != "":
+		// Standard pinned footer whose Save is a native submit for the body form — the
+		// form does the work in OnSubmit and closes via OnDone, so no auto-close here.
+		saveArgs := []any{css.Class("set-btn save"), Type("submit"), Attr("form", props.FormID), Attr("data-testid", "flip-save"), saveLabel}
+		if props.SaveDisabled {
+			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
+		}
+		foot = Div(css.Class("set-foot"),
+			Button(css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(saveArgs...),
+		)
+	case props.CloseOnly:
 		// Nothing to save: a single Close button (no Cancel/Save pair).
 		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
 		// (green/primary styling) — so the button reads as "dismiss" not "submit".
 		foot = Div(css.Class("set-foot"),
 			Button(css.Class("set-btn close"), Type("button"), OnClick(save), uistate.T("action.close")),
 		)
-	} else {
-		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), uistate.T("action.save")}
+	default:
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", "flip-save"), OnClick(save), saveLabel}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}

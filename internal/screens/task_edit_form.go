@@ -65,7 +65,6 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
 	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
-	cancel := ui.UseEvent(Prevent(func() { done() }))
 
 	save := ui.UseEvent(Prevent(func() {
 		if app == nil {
@@ -139,7 +138,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 		errLine = P(css.Class("err"), Attr("role", "alert"), errS.Get())
 	}
 
-	return Form(css.Class("acct-edit-form"), OnSubmit(save),
+	return Form(css.Class("acct-edit-form"), Attr("id", "task-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("todo.taskLabel"),
 			Input(css.Class("field"), Attr("id", "task-edit-"+t.ID), Attr("autofocus", ""), Type("text"),
 				Placeholder(uistate.T("todo.taskPlaceholder")), Value(titleS.Get()), OnInput(onTitle))),
@@ -164,9 +163,5 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 			})),
 		entitySelect,
 		errLine,
-		Div(css.Class("acct-edit-actions"),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-		),
 	)
 }

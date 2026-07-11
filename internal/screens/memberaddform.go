@@ -93,7 +93,7 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 	}))
 
 	return Fragment(
-		Form(css.Class("form-grid"), Attr("data-testid", "member-add-form"), OnSubmit(add),
+		Form(css.Class("form-grid"), Attr("id", "member-add-form"), Attr("data-testid", "member-add-form"), OnSubmit(add),
 			labeledField(uistate.T("members.name"),
 				Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("members.color"),
@@ -109,7 +109,6 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 			MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("members.add")),
 		),
 		errText("member-err", errMsg.Get()),
 	)

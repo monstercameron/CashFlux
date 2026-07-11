@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Standardized flip-modal footers — pinned Cancel + Save everywhere (2026-07-10):** `FlipPanel` gained a standard, pinned Cancel + Save footer (via a new `FormID` — the Save button submits the body form natively, so the form needs no action bar of its own) plus a `SaveLabel` override. Converted the add modals (account, category, member, rule — which previously had only a single "Close" and a separate scrolling "Add" button) and several edit modals (task, category, rule, artifact rename) to this footer: identical Cancel + Save/Add buttons, pinned to the bottom so they never scroll off, at standard sizes (Small 440×440 / Medium 560×680). Save and Enter both submit; a validation error keeps the modal open. (Modals with an extra footer action — e.g. a Delete — keep their own semi-custom pinned bar.)
+
 ### Fixed
 - **Budgets/Goals: income summary tile no longer renders below the cards on load (2026-07-10):** the widget order on the `/budgets` (and `/goals`) surface could vary between loads — the income/To-Assign summary tile sometimes appeared *after* the budget cards. Cause: the summary tile self-hides (renders nothing) until data loads, and a keyed child that renders empty first then fills can lose its DOM anchor and get appended after the later tiles; the grid then auto-places it last. Pinned each surface tile's CSS `order` so grid placement follows the intended sequence (summary → toolbar → cards → savings) regardless of when each tile's node arrives — proven with the summary tile forced to be the last DOM child.
 

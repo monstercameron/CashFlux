@@ -26,11 +26,11 @@ func TaskEditHost() uic.Node {
 	closeModal := func() { uistate.CloseTaskEdit() }
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("todo.editTitle"),
-		Width:    "460px",
-		Height:   "580px",
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.TaskEditForm, screens.TaskEditFormProps{TaskID: e.ID, OnDone: closeModal}),
+		Title:   uistate.T("todo.editTitle"),
+		Width:   uiw.FlipMediumW,
+		Height:  uiw.FlipMediumH,
+		FormID:  "task-edit-form",
+		OnClose: closeModal,
+		Back:    uic.CreateElement(screens.TaskEditForm, screens.TaskEditFormProps{TaskID: e.ID, OnDone: closeModal}),
 	})
 }

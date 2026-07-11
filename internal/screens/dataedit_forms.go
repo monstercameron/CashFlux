@@ -278,7 +278,6 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 		dataEditSaved()
 		done()
 	}))
-	cancel := ui.UseEvent(Prevent(func() { done() }))
 	ui.UseEffect(func() func() {
 		focusByID("cat-edit-" + c.ID)
 		return nil
@@ -303,7 +302,7 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 		{Value: string(domain.KindExpense), Label: uistate.T("category.expense")},
 		{Value: string(domain.KindIncome), Label: uistate.T("category.income")},
 	}
-	return Form(css.Class("form-grid"), OnSubmit(saveEdit),
+	return Form(css.Class("form-grid"), Attr("id", "category-edit-form"), OnSubmit(saveEdit),
 		// Visible label for the name field (C63 labelling gap: placeholder-only
 		// is insufficient for screen readers and sighted users who clear the field).
 		labeledField(uistate.T("common.name"),
@@ -329,10 +328,6 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 			Text(" "+uistate.T("categories.deductible")),
 		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Div(css.Class("dataedit-actions"),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-		),
 	)
 }
 
@@ -456,7 +451,6 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		dataEditSaved()
 		done()
 	}))
-	cancel := ui.UseEvent(Prevent(func() { done() }))
 	ui.UseEffect(func() func() {
 		focusByID("rule-edit-" + r.ID)
 		return nil
@@ -466,7 +460,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
-	return Form(css.Class("form-grid"), OnSubmit(saveEdit),
+	return Form(css.Class("form-grid"), Attr("id", "rule-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("rules.matchFieldLabel"),
 			Input(css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch))),
 		labeledField(uistate.T("rules.categoryFieldLabel"),
@@ -518,10 +512,6 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 			),
 		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Div(css.Class("dataedit-actions"),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-		),
 	)
 }
 
@@ -572,7 +562,6 @@ func ArtifactRenameForm(props ArtifactRenameFormProps) ui.Node {
 		dataEditSaved()
 		done()
 	}))
-	cancel := ui.UseEvent(Prevent(func() { done() }))
 	ui.UseEffect(func() func() {
 		focusByID("artifact-rename-" + a.ID)
 		return nil
@@ -582,14 +571,10 @@ func ArtifactRenameForm(props ArtifactRenameFormProps) ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
-	return Form(css.Class("form-grid"), OnSubmit(saveRename),
+	return Form(css.Class("form-grid"), Attr("id", "artifact-rename-form"), OnSubmit(saveRename),
 		labeledField(uistate.T("artifacts.renameLabel"),
 			Input(css.Class("field"), Attr("id", "artifact-rename-"+a.ID), Attr("aria-label", uistate.T("artifacts.renameLabel")),
 				Value(nameS.Get()), OnInput(onName), Attr("data-testid", "artifact-rename-input"))),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
-		Div(css.Class("dataedit-actions"),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-		),
 	)
 }

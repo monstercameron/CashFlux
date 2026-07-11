@@ -42,11 +42,13 @@ func AddHost() uic.Node {
 			Back:      uic.CreateElement(screens.GoalAddForm, screens.GoalAddFormProps{OnDone: close}),
 		})
 	case "account":
+		// Standard pinned Cancel + Add account footer (submits the body form by id).
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("accounts.addTitle"),
-			Width:     "560px",
-			Height:    "820px",
-			CloseOnly: true,
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			FormID:    "account-add-form",
+			SaveLabel: uistate.T("accounts.addTitle"),
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
 		})
@@ -76,21 +78,30 @@ func AddHost() uic.Node {
 	case "category":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("categories.add"),
-			CloseOnly: true,
+			Width:     uiw.FlipSmallW,
+			Height:    uiw.FlipSmallH,
+			FormID:    "category-add-form",
+			SaveLabel: uistate.T("categories.add"),
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.CategoryAddForm, screens.CategoryAddFormProps{OnDone: close}),
 		})
 	case "member":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("members.add"),
-			CloseOnly: true,
+			Width:     uiw.FlipSmallW,
+			Height:    uiw.FlipSmallH,
+			FormID:    "member-add-form",
+			SaveLabel: uistate.T("members.add"),
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.MemberAddForm, screens.MemberAddFormProps{OnDone: close}),
 		})
 	case "rule":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:     uistate.T("rules.add"),
-			CloseOnly: true,
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			FormID:    "rule-add-form",
+			SaveLabel: uistate.T("rules.add"),
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.RuleAddForm, screens.RuleAddFormProps{OnDone: close}),
 		})
