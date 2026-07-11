@@ -787,17 +787,25 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 		cur = props.Base
 	}
 
+	// Commit on change (blur/Enter), NOT on every keystroke: writing the account +
+	// BumpDataRevision (which re-renders the whole budgets surface and re-runs the heavy
+	// computeBudgetView for every tile) + RequestPersist (serialize the dataset) per
+	// keystroke made typing lag badly. Between renders the native input holds what you
+	// type, so typing stays smooth; the store write + recompute + persist happen once
+	// when you leave the field. The no-change guard skips all of it when nothing changed.
 	onEdit := ui.UseEvent(func(e ui.Event) {
-		if v, ok := majorStrToMinor(e.GetValue(), cur); ok {
-			ac, found := findAccount(app, sa.AccountID)
-			if !found {
-				return
-			}
-			ac.MonthlySavings = money.New(v, cur)
-			if err := app.PutAccount(ac); err == nil {
-				uistate.BumpDataRevision()
-				uistate.RequestPersist()
-			}
+		v, ok := majorStrToMinor(e.GetValue(), cur)
+		if !ok {
+			return
+		}
+		ac, found := findAccount(app, sa.AccountID)
+		if !found || (ac.MonthlySavings.Amount == v && ac.MonthlySavings.Currency == cur) {
+			return
+		}
+		ac.MonthlySavings = money.New(v, cur)
+		if err := app.PutAccount(ac); err == nil {
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
 		}
 	})
 	onSync := ui.UseEvent(Prevent(func() {
@@ -830,7 +838,7 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 				Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(cur)),
 				Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
 					Attr("data-testid", "budgets-savings-amt-"+sa.AccountID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria", sa.Name)),
-					Value(val), OnInput(onEdit)),
+					Value(val), OnChange(onEdit)),
 				Span(css.Class("zbb-savings-per", tw.TextDim), uistate.T("budgets.savingsPerMonth")))),
 		goalNode,
 	)
