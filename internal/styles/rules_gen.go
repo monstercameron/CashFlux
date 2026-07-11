@@ -2580,13 +2580,49 @@ func registerGenerated() {
 	// Pinned custom footer button sizing (shared by every .modal-foot action bar), so
 	// the primary "Add"/"Save" button reads as a comfortable, prominent target.
 	rule(".modal-foot .ba-submit",
-		padding("0 1.5rem"),
-		fontWeight("600"),
-		fontSize("0.95rem"),
 		minWidth("150px"),
 	)
-	rule(".modal-foot .btn",
+	// Unify semi-custom footer buttons (.modal-foot .btn / .btn-primary / .btn-del) with
+	// the standard footer (.set-btn) so every modal's Cancel/Save/Delete look identical —
+	// same size, the muted-green primary, the ghost secondary, the danger delete.
+	rule(".modal-foot .btn, .modal-foot .btn-primary, .modal-foot .btn-del",
+		minWidth("96px"),
 		minHeight("44px"),
+		padding("var(--btn-py,0.5rem) 1rem"),
+		borderRadius("4px"),
+		fontSize("0.9rem"),
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+	)
+	rule(".modal-foot .btn",
+		background("transparent"),
+		border("1px solid #34343a"),
+		color("#a6a6ac"),
+		fontWeight("500"),
+	)
+	rule(".modal-foot .btn:hover",
+		color("#f4f4f5"),
+		borderColor("#44444c"),
+	)
+	rule(".modal-foot .btn-primary",
+		background("#1f2c24"),
+		border("1px solid #356b50"),
+		color("#7fd0a3"),
+		fontWeight("600"),
+	)
+	rule(".modal-foot .btn-primary:hover",
+		background("#26382d"),
+	)
+	rule(".modal-foot .btn-del",
+		background("transparent"),
+		border("1px solid #6b3535"),
+		color("#d08a8a"),
+		fontWeight("500"),
+	)
+	rule(".modal-foot .btn-del:hover",
+		background("#2c1f1f"),
+		color("#f4d0d0"),
 	)
 	rule(".field",
 		width("100%"),
