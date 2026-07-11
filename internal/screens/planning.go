@@ -29,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -70,6 +71,14 @@ func Planning() ui.Node {
 
 	_ = uistate.UseDataRevision().Get()
 	_ = uistate.UsePrefs().Get() // re-render when the accent/theme changes
+
+	// Client-side navigation for the in-page links: a raw <a href> does a full page
+	// reload, which drops the in-memory app-lock passcode and forces a re-unlock. These
+	// keep the href for accessibility (focus, open-in-new-tab) but intercept the click.
+	nav := router.UseNavigate()
+	goRecurring := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/recurring")) }))
+	goNetworth := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/networth")) }))
+	goTransactions := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/transactions")) }))
 	accent := chartLineColor(uistate.CurrentAccent())
 	dec := currency.Decimals(base)
 	cfg := uistate.PlanningConfigGet()
@@ -424,7 +433,7 @@ func Planning() ui.Node {
 								fmtMoney(money.New(sug.AmountMinor, base)),
 								sug.SourceName,
 							)),
-							A(css.Class("btn btn-sm"), Href("/transactions"), uistate.T("planning.runwaySuggestAction")),
+							A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
 						)
 					case sug.Found:
 						sugNode = Div(css.Class("runway-suggest"),
@@ -433,7 +442,7 @@ func Planning() ui.Node {
 								fmtMoney(money.New(sug.AmountMinor, base)),
 								sug.SourceName,
 							)),
-							A(css.Class("btn btn-sm"), Href("/transactions"), uistate.T("planning.runwaySuggestAction")),
+							A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
 						)
 					default:
 						sugNode = P(css.Class("muted"),
@@ -554,8 +563,8 @@ func Planning() ui.Node {
 			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
 				Attr("data-testid", "planning-toggle-formulas"), Title(uistate.T("planning.metricsTitle")),
 				OnClick(toggleFormulas), Text(planMetricsLabel(showFormulas.Get()))),
-			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/recurring")), uistate.T("planning.manageRecurring")),
-			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/networth")), uistate.T("debt.linkNetWorth")),
+			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/recurring")), OnClick(goRecurring), uistate.T("planning.manageRecurring")),
+			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/networth")), OnClick(goNetworth), uistate.T("debt.linkNetWorth")),
 		),
 	))
 
