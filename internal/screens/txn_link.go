@@ -105,7 +105,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 	if !found {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
 			P(css.Class("muted"), Attr("data-testid", "txnlink-missing"), uistate.T("txnlink.missing")),
-			Div(css.Class("txnlink-footer"),
+			Div(css.Class("modal-sticky-foot"),
 				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
 	}
 
@@ -239,7 +239,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 		seg,
 		picker,
 		preview,
-		Div(css.Class("txnlink-footer"),
+		Div(css.Class("modal-sticky-foot"),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), OnClick(onSave), uistate.T("txnlink.save"))),
 	)

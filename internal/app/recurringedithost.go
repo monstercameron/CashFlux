@@ -54,8 +54,8 @@ func BillsSmartHost() uic.Node {
 	closeModal := func() { open.Set(false) }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("bills.smartTitle"),
-		Width:    "620px",
-		Height:   "min(90vh, 720px)",
+		Width:    uiw.FlipMediumW,
+		Height:   uiw.FlipMediumH,
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.BillsSmartForm, screens.BillsSmartFormProps{OnDone: closeModal}),
@@ -74,8 +74,8 @@ func SubsPrefsHost() uic.Node {
 	closeModal := func() { open.Set(false) }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("subs.detectPrefsTitle"),
-		Width:    "560px",
-		Height:   "min(90vh, 620px)",
+		Width:    uiw.FlipMediumW,
+		Height:   uiw.FlipMediumH,
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.SubsDetectPrefsForm, screens.SubsDetectPrefsFormProps{OnDone: closeModal}),

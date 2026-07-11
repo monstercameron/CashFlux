@@ -416,7 +416,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		advanced,
 		If(plan.HasAnchor, P(css.Class("muted", tw.Mt3), Attr("data-testid", "bills-smart-usehint"),
 			uistate.T("bills.smartUseHint"))),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
+		Div(css.Class("modal-sticky-foot"),
 			If(plan.HasAnchor, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "bills-smart-use"),
 				OnClick(usePlan), uistate.T("bills.smartUsePlan"))),
 			If(plan.Cfg.Enabled, Button(css.Class("btn"), Type("button"), Attr("data-testid", "bills-smart-off"),

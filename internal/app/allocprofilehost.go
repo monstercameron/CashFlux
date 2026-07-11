@@ -26,8 +26,8 @@ func AllocProfileHost() uic.Node {
 	closeModal := func() { open.Set(false) }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("allocate.strategyTitle"),
-		Width:    "560px",
-		Height:   "min(90vh, 640px)",
+		Width:    uiw.FlipMediumW,
+		Height:   uiw.FlipMediumH,
 		NoFooter: true,
 		OnClose:  closeModal,
 		Back:     uic.CreateElement(screens.AllocProfileForm, screens.AllocProfileFormProps{OnDone: closeModal}),

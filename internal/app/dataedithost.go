@@ -27,9 +27,9 @@ func MemberEditHost() uic.Node {
 		return Fragment()
 	}
 	closeModal := func() { uistate.CloseMemberEdit() }
-	title, width, height := uistate.T("members.editTitle"), "460px", "560px"
+	title, width, height := uistate.T("members.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	if e.Mode == uistate.MemberEditModePIN {
-		title, width, height = uistate.T("profileSwitch.setPIN"), "420px", "300px"
+		title, width, height = uistate.T("profileSwitch.setPIN"), uiw.FlipSmallW, uiw.FlipSmallH
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    title,

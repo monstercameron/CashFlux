@@ -188,7 +188,7 @@ func AllocProfileForm(props AllocProfileFormProps) ui.Node {
 				),
 				If(profMsg.Get() != "", P(css.Class("muted"), profMsg.Get())),
 			),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
+			Div(css.Class("modal-sticky-foot"),
 				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "allocate-strategy-done"), uistate.T("allocate.strategyDone")),
 			),
 		),

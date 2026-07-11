@@ -2585,7 +2585,28 @@ func registerGenerated() {
 	// Unify semi-custom footer buttons (.modal-foot .btn / .btn-primary / .btn-del) with
 	// the standard footer (.set-btn) so every modal's Cancel/Save/Delete look identical —
 	// same size, the muted-green primary, the ghost secondary, the danger delete.
-	rule(".modal-foot .btn, .modal-foot .btn-primary, .modal-foot .btn-del",
+	// A pinned footer (alias of .modal-foot) for forms converted via FlushBody + a
+	// .modal-scroll field region: a flex-shrink:0 bar so it never scrolls with the fields.
+	// (position:sticky can't pin a last-child footer — its containing block has no room
+	// below it — so the reliable pin is this flex sibling of the scroll region.)
+	rule(".modal-sticky-foot",
+		flexShrink("0"),
+		marginTop("auto"),
+		display("flex"),
+		justifyContent("flex-end"),
+		alignItems("center"),
+		gap("0.5rem"),
+		padding("0.75rem 1rem"),
+		borderTop("1px solid #2a2a2c"),
+		background("#121214"),
+	)
+	// A left-pushed Delete (destructive) so it sits apart from Cancel/Save on the right.
+	rule(".modal-sticky-foot .btn-del, .modal-foot .btn-del",
+		marginRight("auto"),
+	)
+	// Unify footer buttons across the standard (.set-btn), flex (.modal-foot) and sticky
+	// (.modal-sticky-foot) footers so every modal's Cancel/Save/Delete look identical.
+	rule(".modal-foot .btn, .modal-foot .btn-primary, .modal-foot .btn-del, .modal-sticky-foot .btn, .modal-sticky-foot .btn-primary, .modal-sticky-foot .btn-del",
 		minWidth("96px"),
 		minHeight("44px"),
 		padding("var(--btn-py,0.5rem) 1rem"),
@@ -2595,32 +2616,32 @@ func registerGenerated() {
 		alignItems("center"),
 		justifyContent("center"),
 	)
-	rule(".modal-foot .btn",
+	rule(".modal-foot .btn, .modal-sticky-foot .btn",
 		background("transparent"),
 		border("1px solid #34343a"),
 		color("#a6a6ac"),
 		fontWeight("500"),
 	)
-	rule(".modal-foot .btn:hover",
+	rule(".modal-foot .btn:hover, .modal-sticky-foot .btn:hover",
 		color("#f4f4f5"),
 		borderColor("#44444c"),
 	)
-	rule(".modal-foot .btn-primary",
+	rule(".modal-foot .btn-primary, .modal-sticky-foot .btn-primary",
 		background("#1f2c24"),
 		border("1px solid #356b50"),
 		color("#7fd0a3"),
 		fontWeight("600"),
 	)
-	rule(".modal-foot .btn-primary:hover",
+	rule(".modal-foot .btn-primary:hover, .modal-sticky-foot .btn-primary:hover",
 		background("#26382d"),
 	)
-	rule(".modal-foot .btn-del",
+	rule(".modal-foot .btn-del, .modal-sticky-foot .btn-del",
 		background("transparent"),
 		border("1px solid #6b3535"),
 		color("#d08a8a"),
 		fontWeight("500"),
 	)
-	rule(".modal-foot .btn-del:hover",
+	rule(".modal-foot .btn-del:hover, .modal-sticky-foot .btn-del:hover",
 		background("#2c1f1f"),
 		color("#f4d0d0"),
 	)
@@ -8515,6 +8536,13 @@ func registerGenerated() {
 		minHeight("0"),
 		display("flex"),
 		flexDirection("column"),
+		gap("0"),
+	)
+	// The form roots carry their own min-height:100%/gap for the non-flush layout; inside
+	// a flush body the flex chain owns sizing, so neutralize them or the fields overflow
+	// and push the footer off the panel.
+	rule(".set-body-flush > .acct-edit-form, .set-body-flush > form, .set-body-flush > .form-grid",
+		minHeight("0"),
 		gap("0"),
 	)
 	rule(".modal-scroll",

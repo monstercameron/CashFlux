@@ -233,11 +233,11 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-attach"), OnClick(attach), uistate.T("transactions.attachReceiptTitle")),
 			If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
 		),
-		Div(css.Class("form-actions"),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+		errText("txn-edit-err", errMsg.Get()),
+		Div(css.Class("modal-sticky-foot"),
 			Button(css.Class("btn-del"), Type("button"), OnClick(del), uistate.T("action.delete")),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
-		errText("txn-edit-err", errMsg.Get()),
 	)
 }

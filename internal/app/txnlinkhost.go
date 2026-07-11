@@ -24,8 +24,8 @@ func TxnLinkHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("txnlink.title"),
-		Width:    "420px",
-		Height:   "500px",
+		Width:    uiw.FlipMediumW,
+		Height:   uiw.FlipMediumH,
 		NoFooter: true,
 		OnClose:  func() { target.Set(uistate.TxnLinkTarget{}) },
 		Back:     uic.CreateElement(screens.TxnLinkBody, struct{}{}),

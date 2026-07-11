@@ -58,8 +58,8 @@ type FlipPanelProps struct {
 	// target (e.g. "rec-save"/"rec-cancel"). Save defaults to "flip-save"; Cancel has none.
 	SaveTestID   string
 	CancelTestID string
-	OnSave    func() // invoked on Save (then the panel closes)
-	OnClose   func() // invoked on Cancel/close (and after Save)
+	OnSave       func() // invoked on Save (then the panel closes)
+	OnClose      func() // invoked on Cancel/close (and after Save)
 	// CloseOnly replaces the Cancel/Save footer with a single Close button — for
 	// panels that have nothing to save (e.g. a widget with no settings), so the UI
 	// doesn't imply there's something to commit.

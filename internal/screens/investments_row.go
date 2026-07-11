@@ -275,9 +275,9 @@ func InvestAddForm(props InvestAddFormProps) ui.Node {
 		),
 		If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
 		If(errS.Get() == "" && savedS.Get() != "", P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), savedS.Get())),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
-			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "hld-save"), uistate.T("investments.addHolding")),
+		Div(css.Class("modal-sticky-foot"),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "hld-cancel"), OnClick(cancel), uistate.T("investments.doneAdding")),
+			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "hld-save"), uistate.T("investments.addHolding")),
 		),
 	)
 	return Div(css.Class("inv-add-modal"), Attr("data-testid", "invest-add-form"), form)

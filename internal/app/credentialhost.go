@@ -46,11 +46,11 @@ func CredentialVaultHost() uic.Node {
 	// Gate: no passcode / locked ⇒ can't encrypt, so don't offer storage.
 	if !credVaultAvailable() {
 		return uiw.FlipPanel(uiw.FlipPanelProps{
-			Title: uistate.T("creds.title"), Width: "420px", Height: "380px", NoFooter: true, OnClose: closeModal,
+			Title: uistate.T("creds.title"), Width: uiw.FlipSmallW, Height: uiw.FlipSmallH, NoFooter: true, OnClose: closeModal,
 			Back: Div(css.Class("acct-edit-form"),
 				credWarningBanner(),
 				P(css.Class("muted"), uistate.T("creds.needPasscode")),
-				Div(css.Class("acct-edit-actions"),
+				Div(css.Class("modal-sticky-foot"),
 					Button(css.Class("btn"), Type("button"), OnClick(gateCancel), uistate.T("action.cancel")),
 					Button(css.Class("btn btn-primary"), Type("button"), OnClick(gateOpenSettings), uistate.T("creds.setPasscode")),
 				),
@@ -72,7 +72,7 @@ func CredentialVaultHost() uic.Node {
 		title = uistate.T("creds.titleFor", acctName)
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title: title, Width: "460px", Height: "560px", NoFooter: true, OnClose: closeModal,
+		Title: title, Width: uiw.FlipMediumW, Height: uiw.FlipMediumH, NoFooter: true, OnClose: closeModal,
 		Back: uic.CreateElement(credentialForm, credentialFormProps{AccountID: accountID, OnDone: closeModal}),
 	})
 }
@@ -258,7 +258,7 @@ func credentialForm(props credentialFormProps) uic.Node {
 			uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("creds.notesPh"),
 				AriaLabel: uistate.T("creds.notes"), OnInput: onNotes})),
 		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
-		Div(css.Class("acct-edit-actions"),
+		Div(css.Class("modal-sticky-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			If(existing.Get(), Button(css.Class("btn-del"), Type("button"), Attr("data-testid", "cred-remove"), OnClick(removeCreds), uistate.T("creds.remove"))),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "cred-save"), OnClick(save), uistate.T("action.save")),
