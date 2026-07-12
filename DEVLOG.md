@@ -1,3 +1,39 @@
+## 2026-07-11 — Cancel + Save footer on the import modal
+
+Cam: "still need a save and cancel for the modal." The import modal had `NoFooter` — you dismissed it
+via ✕/Escape/backdrop only, unlike every other modal in the app. He wants the standard pinned footer.
+
+The wrinkle: this panel isn't a single-form editor. It's a multi-flow importer — CSV paste commits
+inline (its own Import button), while statement paste / receipt vision / column-wizard all converge on
+a reviewed *draft* that gets committed by the draft card's Import button. So there's no one action a
+footer "Save" maps to cleanly. Design decision (noted in the commit): footer **Save** commits whatever
+is *ready* — a reviewed draft (as a split receipt if receipt-mode is on, else N transactions), else the
+pasted CSV — then closes. With nothing entered it just closes (acts as Done). A failed commit returns
+false and leaves the modal open so its error message stays visible. **Cancel** dismisses without
+importing. The per-flow inner buttons stay for in-place use; the footer is the pinned chrome Cam asked
+for and the standard the other modals share.
+
+Wiring: I wanted FlipPanel's *real* pinned footer (consistent `.set-foot` styling), but Save lives in
+FlipPanel (app package) while the commit handlers + draft/CSV state live in `DocumentsPanel` (screens
+package, rendered as the modal's Back body). Rather than bridge funcs through atoms, I used the DOM:
+`DocumentsPanel` renders a hidden empty `<form id=ImportModalFormID>` whose OnSubmit is the "commit
+ready import + close" handler, and `ImportPanelHost` sets `FlipPanelProps.FormID` to that same id. The
+footer Save is then a native `type=submit form=<id>` button — it submits the panel's form across the
+component boundary by plain id association. FormID mode deliberately does *not* auto-close (the form's
+handler owns closing), so the commit runs before dismiss. The panel closes itself via the shared
+`transactions:importPanel` atom (grabbed unconditionally at the top; on the /documents route it's just
+an always-false no-op). To make the handlers reusable from both the inner buttons and the footer, I
+extracted the draft/receipt import bodies into plain `doImportDraft()/doImportReceipt() bool` funcs and
+made `commitCSVImport` return success (and clear the paste box on success). The hidden form is rendered
+unconditionally so its OnSubmit hook keeps a stable position; it's inert on /documents (nothing submits
+it).
+
+Verified with a headless Playwright smoke on the deployed wasm: footer shows Cancel + Save; Cancel,
+empty-Save (Done), and ✕/Escape all dismiss; a valid CSV pasted into the modal and committed via footer
+Save lands in the ledger (searchable afterward) and closes the modal; zero console errors. Note the
+CSV-Save→close is itself proof the import succeeded — saveModalImport only closes when the commit
+returns true.
+
 ## 2026-07-11 — CSV import moved into a double-wide flip modal
 
 Cam: the standard CSV import "takes over the transactions page instead of being in a double-wide flip

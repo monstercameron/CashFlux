@@ -24,11 +24,15 @@ func ImportPanelHost() uic.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("transactions.importBtn"),
-		Width:    "900px",
-		Height:   "660px",
-		NoFooter: true,
-		OnClose:  func() { open.Set(false) },
-		Back:     uic.CreateElement(screens.ImportPanelBody, struct{}{}),
+		Title:  uistate.T("transactions.importBtn"),
+		Width:  "900px",
+		Height: "660px",
+		// Standard pinned footer: Cancel dismisses; Save natively submits the panel's
+		// hidden form (ImportModalFormID), whose handler commits the ready import
+		// (reviewed draft or pasted CSV) and closes. FormID mode doesn't auto-close, so
+		// the commit runs first and a failed commit keeps the modal open.
+		FormID:  screens.ImportModalFormID,
+		OnClose: func() { open.Set(false) },
+		Back:    uic.CreateElement(screens.ImportPanelBody, struct{}{}),
 	})
 }

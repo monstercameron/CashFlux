@@ -103,6 +103,12 @@ const textExtractionSystemPrompt = "You extract bank/credit-card transactions fr
 // embedded via ui.CreateElement and have its hook state isolated from parents.
 type documentsPanelProps struct{}
 
+// ImportModalFormID is the id of the hidden form DocumentsPanel renders so the
+// transactions Import flip modal's footer Save (rendered by FlipPanel, outside this
+// component) can submit it by id and commit the ready import. Shared with
+// ImportPanelHost's FlipPanelProps.FormID.
+const ImportModalFormID = "import-modal-form"
+
 // ImportPanelBody is the exported handle for mounting the import panel inside the
 // shell-root import flip modal (ImportPanelHost). DocumentsPanel's props type is
 // unexported, so the app package embeds this wrapper instead. The empty struct keeps
@@ -123,6 +129,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	nav := router.UseNavigate()
 	rev := state.UseAtom("rev:documents", 0)
+	// When this panel is shown inside the transactions Import flip modal, its footer
+	// Save/Cancel dismiss the modal by flipping this shared atom. On the /documents
+	// route the atom is simply always false and never read, so this is a no-op there.
+	importModalOpen := uistate.UseImportPanelOpen()
 	csvText := ui.UseState("")
 	stmtText := ui.UseState("")
 	msg := ui.UseState("")
@@ -201,14 +211,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// commitCSVImport is the shared write path used by both the paste and file-picker
 	// flows after any duplicate warning has been acknowledged. It calls
 	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
-	commitCSVImport := func(data []byte) {
+	commitCSVImport := func(data []byte) bool {
 		n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
 		csvDupWarn.Set("")
 		pendingCSV.Set(nil)
 		if err != nil {
 			friendly := strings.TrimPrefix(err.Error(), "store: ")
 			msg.Set(uistate.T("documents.csvError", friendly))
-			return
+			return false
 		}
 		if n > 0 {
 			recordDocument(domain.DocCSV, importAcct.Get(), nil, n)
@@ -221,7 +231,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			}
 		}
 		msg.Set(summary)
+		csvText.Set("") // clear the paste box after a successful import
 		rev.Set(rev.Get() + 1)
+		return true
 	}
 
 	// confirmCSV is the "Import anyway" handler: commits the pending CSV bytes
@@ -681,12 +693,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 	})
 
-	importDraft := ui.UseEvent(Prevent(func() {
+	// doImportDraft imports the reviewed draft rows as N standalone transactions.
+	// Returns whether the import succeeded (false leaves the modal open so the error
+	// shows). Wrapped by importDraft (the draft card's button) and reused by the
+	// modal footer's Save.
+	doImportDraft := func() bool {
 		rows := draft.Get()
 		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
 		if err != nil {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
-			return
+			return false
 		}
 		draft.Set([]extract.Row{})
 		imageURL.Set("")
@@ -698,11 +714,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		msg.Set(summary)
 		rev.Set(rev.Get() + 1)
-	}))
+		return true
+	}
+	importDraft := ui.UseEvent(Prevent(func() { doImportDraft() }))
 
 	// importReceipt imports the reviewed lines as ONE transaction split across
 	// categories (receipt mode), instead of N standalone transactions.
-	importReceipt := ui.UseEvent(Prevent(func() {
+	// doImportReceipt imports the reviewed lines as ONE transaction split across
+	// categories (receipt mode). Returns whether it succeeded. Wrapped by
+	// importReceipt and reused by the modal footer's Save.
+	doImportReceipt := func() bool {
 		rows := draft.Get()
 		lines := make([]extract.ReceiptLine, 0, len(rows))
 		for _, r := range rows {
@@ -712,7 +733,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
 		if err != nil {
 			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
-			return
+			return false
 		}
 		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows))
 		draft.Set([]extract.Row{})
@@ -724,6 +745,32 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		aiErr.Set("")
 		msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
 		rev.Set(rev.Get() + 1)
+		return true
+	}
+	importReceipt := ui.UseEvent(Prevent(func() { doImportReceipt() }))
+
+	// saveModalImport is the transactions Import flip modal's footer Save: it commits
+	// whatever is ready — a reviewed draft (as split receipt or N transactions), else
+	// pasted CSV — then closes the modal. With nothing entered it just closes (Done).
+	// A failed commit keeps the modal open so its error message stays visible. The
+	// per-flow inner buttons (CSV Import, Import draft) remain for in-place use; this
+	// is the pinned footer action the standardized modals all have. It submits a
+	// dedicated hidden form (importModalFormID) so FlipPanel's footer Save can drive it.
+	saveModalImport := ui.UseEvent(Prevent(func() {
+		ok := true
+		switch {
+		case len(draft.Get()) > 0 && receiptMode.Get():
+			ok = doImportReceipt()
+		case len(draft.Get()) > 0:
+			ok = doImportDraft()
+		default:
+			if raw := []byte(strings.TrimSpace(csvText.Get())); len(raw) > 0 {
+				ok = commitCSVImport(raw)
+			}
+		}
+		if ok {
+			importModalOpen.Set(false)
+		}
 	}))
 
 	removeDraft := func(i int) {
@@ -821,6 +868,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
 
 	return Div(
+		// Hidden form the transactions Import flip modal's footer Save submits (by id)
+		// to commit the ready import and close. Empty and invisible; on the /documents
+		// route nothing references it, so it's inert. Kept unconditional so its OnSubmit
+		// hook stays at a stable render position.
+		Form(Attr("id", ImportModalFormID), OnSubmit(saveModalImport)),
 		// §8.9: lead with the no-key CSV import so a user without an OpenAI key is never
 		// blocked from importing; the (key-gated) AI image/statement import follows as the
 		// richer option. This also tightens the flow — importing populates the review draft
