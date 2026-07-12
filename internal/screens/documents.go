@@ -242,12 +242,23 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	pdfName := ui.UseState("")
 	pdfSaveCopy := ui.UseState(false)
 
+	// Stage-1 source selection. "" shows the visual document-type picker (a grid of
+	// tiles grouped into the Smart / Smart+ branches); a non-empty value shows that one
+	// source's form, animated in over the grid. The set: "csv", "stmt", "pdf", "receipt".
+	source := ui.UseState("")
+	onPickCSV := ui.UseEvent(Prevent(func() { source.Set("csv") }))
+	onPickStmt := ui.UseEvent(Prevent(func() { source.Set("stmt") }))
+	onPickPDF := ui.UseEvent(Prevent(func() { source.Set("pdf") }))
+	onPickReceipt := ui.UseEvent(Prevent(func() { source.Set("receipt") }))
+	backToTypes := ui.UseEvent(Prevent(func() { source.Set("") }))
+
 	// Wizard stage navigation. goReview/goInput move between the two stages without
-	// touching the draft (so "← Back" then "Review →" is lossless). goArtifacts closes
-	// the modal and navigates to the Artifacts vault — the replacement for the old
-	// inline import-history list.
+	// touching the draft (so "← Back" then "Review →" is lossless). goInput also resets
+	// the source picker to the grid, so "Add more data" lands on the type chooser.
+	// goArtifacts closes the modal and navigates to the Artifacts vault — the
+	// replacement for the old inline import-history list.
 	goReview := ui.UseEvent(Prevent(func() { stage.Set("review") }))
-	goInput := ui.UseEvent(Prevent(func() { stage.Set("input") }))
+	goInput := ui.UseEvent(Prevent(func() { stage.Set("input"); source.Set("") }))
 	goArtifacts := ui.UseEvent(Prevent(func() {
 		importModalOpen.Set(false)
 		nav.Navigate(uistate.RoutePath("/artifacts"))
@@ -1075,134 +1086,162 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		// hook stays at a stable render position.
 		Form(Attr("id", ImportModalFormID), OnSubmit(saveModalImport)),
 
-		// STAGE 1 — "Add your data": every import source in one hub. AI extractions
-		// (statement text, statement PDF, receipt image) advance to the review stage;
-		// the lossless CSV path imports directly from here and never enters review.
+		// STAGE 1 — "Add your data": a visual document-type picker split into a Smart
+		// (deterministic) branch and a Smart+ (generative-AI) branch. Picking a type
+		// animates in that one source's form; AI/parse extractions advance to the review
+		// stage, while the lossless CSV path imports directly.
 		If(!inReview, Fragment(
-			// §8.9: lead with the no-key CSV import so a user without an OpenAI key is never
-			// blocked from importing; the (key-gated) AI image/statement import follows as the
-			// richer option. This also tightens the flow — importing populates the review draft
-			// rendered just below — instead of stranding the CSV card at the bottom of the page.
-			CsvImportCard(csvImportCardProps{
-				Accounts:     accounts,
-				ImportAcctID: importAcct.Get(),
-				Msg:          msg.Get(),
-				DupWarn:      csvDupWarn.Get(),
-				OnChooseFile: chooseCsvFile,
-				OnAcctChange: onAcct,
-				OnCsvInput:   onCsv,
-				OnImportCSV:  importCSV,
-				OnConfirmCSV: confirmCSV,
-			}),
-			uiw.EntityListSection(uiw.EntityListSectionProps{
-				Title: uistate.T("documents.stmtTitle"),
-				Body: Fragment(
-					P(css.Class("muted"), uistate.T("documents.stmtDesc")),
-					Form(OnSubmit(parseStatement),
-						// G14 §5: parse actions above the textarea so they are always
-						// visible at 768px — the tall textarea no longer pushes them off-screen.
-						Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
-							Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
-							Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
-								OnClick(extractWithAI), uistate.T("documents.extractAI")),
-						),
-						// G14 §2: collapsed to 3 rows by default (was 8) to avoid pushing action
-						// buttons off-screen on short viewports. Expands naturally as the user types.
-						Textarea(css.Class("field field-wide"), Attr("rows", "3"),
-							Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
-							OnInput(onStmt),
-						),
-					),
-					// C74 — per-bank import cadence reminder: creates a monthly to-do so the
-					// user is nudged to import next cycle. Off by default; single click.
-					Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-						P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
-						Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
-							OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
-						If(cadenceMsg.Get() != "",
-							Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
-								Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
-					),
-				),
-			}),
-			// C13: the AI-powered image import comes LAST, after both no-AI paths (CSV +
-			// statement paste), behind a labelled separator — so a user without an OpenAI
-			// key is never led with a gated feature.
-			Div(css.Class("doc-section-sep"), Attr("role", "separator"),
-				Span(uistate.T("documents.aiSectionLabel"))),
-			// Statement PDF (formerly the standalone "Import statement" modal) sits with the
-			// receipt-image import as the two AI extraction sources.
-			pdfCard,
-			ImageImportCard(imageImportCardProps{
-				ImageURL:  imageURL.Get(),
-				AILoading: aiLoading.Get(),
-				AIErr:     aiErr.Get(),
-				NeedsKey:  needsKey.Get(),
-				OnChoose:  chooseImage,
-				OnReadAI:  readAI,
-				Nav:       nav,
-			}),
-			// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
-			// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
-			// a variable-length loop, so UseEvent hooks stay at stable render positions.
-			If(wizardVisible.Get(),
-				wizardCard(
-					wizardHeader.Get(),
-					wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
-					wizardDebit.Get(), wizardCredit.Get(),
-					onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
-					applyWizard,
-					profileName.Get(), onProfileName, saveProfile,
-				),
-			),
-			// C74 — Saved profile picker: shown/hidden via the "Saved mappings" toggle.
-			// Each profile row is its own component (owns its Apply/Delete handlers).
-			If(wizardVisible.Get() || showProfiles.Get(),
-				savedProfilesCard(app, accounts, importAcct.Get(),
-					showProfiles.Get(),
-					func() { showProfiles.Set(!showProfiles.Get()) },
-					func(sp importmap.SavedProfile) {
-						// Apply a saved profile to the current raw rows.
-						rawRecs := wizardRawRows.Get()
-						flat := make([][]string, 0)
-						for _, g := range rawRecs {
-							flat = append(flat, g...)
-						}
-						if len(flat) == 0 {
-							msg.Set("Paste a statement above, then click Parse before applying a profile.")
-							return
-						}
-						dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
-						sp.Profile.Decimals = dec
-						stRows := importmap.Apply(sp.Profile, flat)
-						if len(stRows) == 0 {
-							msg.Set("No rows matched with that profile — check column assignments.")
-							return
-						}
-						rows2 := make([]extract.Row, 0, len(stRows))
-						for _, r := range stRows {
-							rows2 = append(rows2, extract.Row{
-								Date:        r.Date.Format("2006-01-02"),
-								Description: r.Description,
-								Amount:      money.FormatMinor(r.Amount, dec),
-							})
-						}
-						wizardVisible.Set(false)
-						setDraft(rows2)
-						msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
-						rev.Set(rev.Get() + 1)
-					},
-					func(id string) {
-						_ = app.DeleteImportProfile(id)
-						rev.Set(rev.Get() + 1)
-					},
-				),
-			),
-			// If a draft already exists (e.g. the user stepped back to add more sources),
-			// offer a shortcut forward to the review stage.
-			If(len(rows) > 0, Div(css.Class(tw.Mt2, tw.Flex, tw.JustifyEnd),
+			// A standing "Review →" shortcut whenever a draft already exists (e.g. after
+			// stepping back from review to add another source).
+			If(len(rows) > 0, Div(css.Class(tw.Mb2, tw.Flex, tw.JustifyEnd),
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "import-review-btn"),
 					OnClick(goReview), uistate.T("documents.reviewStage")))),
+
+			IfElse(source.Get() == "",
+				// ---- the document-type picker grid ----
+				Div(css.Class("doc-picker"), Attr("data-testid", "import-type-picker"),
+					// Smart branch — deterministic helpers based on predictions.
+					Div(css.Class("doc-branch"),
+						Div(css.Class("doc-branch-head"),
+							Span(css.Class("doc-branch-title"), uistate.T("documents.smartBranch")),
+							Span(css.Class("doc-tier-pill"), uistate.T("documents.smartBranchTier")),
+							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartBranchDesc"))),
+						Div(css.Class("doc-type-grid"),
+							docTypeTile("import-type-csv", onPickCSV, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)),
+								uistate.T("documents.typeCsvTitle"), uistate.T("documents.typeCsvDesc"), false),
+							docTypeTile("import-type-stmt", onPickStmt, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
+								uistate.T("documents.typeStmtTitle"), uistate.T("documents.typeStmtDesc"), false),
+						),
+					),
+					// Smart+ branch — generative AI.
+					Div(css.Class("doc-branch"),
+						Div(css.Class("doc-branch-head"),
+							Span(css.Class("doc-branch-title", "plus"), uistate.T("documents.smartPlusBranch")),
+							Span(css.Class("doc-tier-pill", "plus"), smartGlyph(true), Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("documents.smartPlusBranchTier"))),
+							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartPlusBranchDesc"))),
+						Div(css.Class("doc-type-grid"),
+							docTypeTile("import-type-pdf", onPickPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
+								uistate.T("documents.typePdfTitle"), uistate.T("documents.typePdfDesc"), true),
+							docTypeTile("import-type-receipt", onPickReceipt, uiw.Icon(icon.Receipt, css.Class(tw.W5, tw.H5)),
+								uistate.T("documents.typeReceiptTitle"), uistate.T("documents.typeReceiptDesc"), true),
+						),
+					),
+				),
+				// ---- the selected source's form (animates in over the grid) ----
+				Div(css.Class("doc-form"), Attr("data-testid", "import-source-form"),
+					Div(css.Class("doc-form-head"),
+						Button(css.Class("btn"), Type("button"), Attr("data-testid", "import-back-types"),
+							OnClick(backToTypes), uistate.T("documents.backToTypes"))),
+
+					// Smart · CSV / spreadsheet — lossless, imports directly.
+					If(source.Get() == "csv", CsvImportCard(csvImportCardProps{
+						Accounts:     accounts,
+						ImportAcctID: importAcct.Get(),
+						Msg:          msg.Get(),
+						DupWarn:      csvDupWarn.Get(),
+						OnChooseFile: chooseCsvFile,
+						OnAcctChange: onAcct,
+						OnCsvInput:   onCsv,
+						OnImportCSV:  importCSV,
+						OnConfirmCSV: confirmCSV,
+					})),
+
+					// Smart · statement text — deterministic column auto-mapping (with an
+					// AI-extract escalation for layouts the parser can't map).
+					If(source.Get() == "stmt", uiw.EntityListSection(uiw.EntityListSectionProps{
+						Title: uistate.T("documents.stmtTitle"),
+						Body: Fragment(
+							P(css.Class("muted"), uistate.T("documents.stmtDesc")),
+							Form(OnSubmit(parseStatement),
+								Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
+									Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+									Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
+										OnClick(extractWithAI), uistate.T("documents.extractAI")),
+								),
+								Textarea(css.Class("field field-wide"), Attr("rows", "3"),
+									Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+									OnInput(onStmt),
+								),
+							),
+							Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+								P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
+								Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
+									OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
+								If(cadenceMsg.Get() != "",
+									Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
+										Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
+							),
+						),
+					})),
+
+					// Smart+ · statement PDF (AI reads the file natively).
+					If(source.Get() == "pdf", pdfCard),
+
+					// Smart+ · receipt photo (vision AI).
+					If(source.Get() == "receipt", ImageImportCard(imageImportCardProps{
+						ImageURL:  imageURL.Get(),
+						AILoading: aiLoading.Get(),
+						AIErr:     aiErr.Get(),
+						NeedsKey:  needsKey.Get(),
+						OnChoose:  chooseImage,
+						OnReadAI:  readAI,
+						Nav:       nav,
+					})),
+
+					// Column-map wizard + saved profiles belong to the statement-text flow.
+					If(source.Get() == "stmt" && wizardVisible.Get(),
+						wizardCard(
+							wizardHeader.Get(),
+							wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
+							wizardDebit.Get(), wizardCredit.Get(),
+							onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
+							applyWizard,
+							profileName.Get(), onProfileName, saveProfile,
+						),
+					),
+					If(source.Get() == "stmt" && (wizardVisible.Get() || showProfiles.Get()),
+						savedProfilesCard(app, accounts, importAcct.Get(),
+							showProfiles.Get(),
+							func() { showProfiles.Set(!showProfiles.Get()) },
+							func(sp importmap.SavedProfile) {
+								// Apply a saved profile to the current raw rows.
+								rawRecs := wizardRawRows.Get()
+								flat := make([][]string, 0)
+								for _, g := range rawRecs {
+									flat = append(flat, g...)
+								}
+								if len(flat) == 0 {
+									msg.Set("Paste a statement above, then click Parse before applying a profile.")
+									return
+								}
+								dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+								sp.Profile.Decimals = dec
+								stRows := importmap.Apply(sp.Profile, flat)
+								if len(stRows) == 0 {
+									msg.Set("No rows matched with that profile — check column assignments.")
+									return
+								}
+								rows2 := make([]extract.Row, 0, len(stRows))
+								for _, r := range stRows {
+									rows2 = append(rows2, extract.Row{
+										Date:        r.Date.Format("2006-01-02"),
+										Description: r.Description,
+										Amount:      money.FormatMinor(r.Amount, dec),
+									})
+								}
+								wizardVisible.Set(false)
+								setDraft(rows2)
+								msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
+								rev.Set(rev.Get() + 1)
+							},
+							func(id string) {
+								_ = app.DeleteImportProfile(id)
+								rev.Set(rev.Get() + 1)
+							},
+						),
+					),
+				),
+			),
 		)),
 
 		// STAGE 2 — "Review & import": the shared editable draft table + spend summary,
@@ -1408,6 +1447,25 @@ func DraftRow(props draftRowProps) ui.Node {
 				uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
+	)
+}
+
+// docTypeTile renders one clickable document-type tile in the Stage-1 picker: an icon,
+// a title, and a one-line description. smartPlus tints it with the brand/AI accent and
+// adds the ✦ glyph, marking it as a generative-AI (Smart+) source. The click handler is
+// passed in already-hooked, so the tile is a pure render helper (no hooks) that's safe to
+// render several times in the picker grid.
+func docTypeTile(testid string, onClick ui.Handler, ic ui.Node, title, desc string, smartPlus bool) ui.Node {
+	classes := []any{"doc-type-tile"}
+	if smartPlus {
+		classes = append(classes, "smartplus")
+	}
+	return Button(css.Class(classes...), Type("button"), Attr("data-testid", testid), OnClick(onClick),
+		Div(css.Class("dt-icon"), ic),
+		Div(css.Class("dt-body"),
+			Div(css.Class("dt-title"), title),
+			Div(css.Class("dt-desc"), desc)),
+		If(smartPlus, Span(css.Class("dt-badge"), smartGlyph(true))),
 	)
 }
 

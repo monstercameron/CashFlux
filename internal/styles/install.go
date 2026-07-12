@@ -37,6 +37,7 @@ func Register() {
 	registerRecordSurface()
 	registerSystemSurface()
 	registerBudgetsSurface()
+	registerImportWizard()
 	inject(Build())
 }
 

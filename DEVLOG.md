@@ -1,3 +1,37 @@
+## 2026-07-12 — Visual document-type picker for import Stage 1 (Smart / Smart+ branches)
+
+Cam didn't like Stage 1's stacked forms: "make it more visual, show a grid of document types to
+import, create the smart and smart+ branches ... smart is deterministic helpers based on predictions
+and smart+ is generative ai ... I wanna see a list of docs, click on it and see it animate to a
+form/fields."
+
+Redesigned Stage 1 as a picker → form with a sub-state. `source` (""/csv/stmt/pdf/receipt): "" shows
+the grid, a value shows that one form. The grid is two branches keyed to the app's existing Smart tiers:
+- **Smart** (deterministic, green accent): CSV / spreadsheet, Statement text (auto-mapped columns).
+- **Smart+** (generative AI, brand/violet accent + the ✦ smartGlyph): Statement PDF, Receipt photo.
+Each tile is a `docTypeTile(testid, handler, icon, title, desc, smartPlus)` — a pure render helper (the
+click handler is passed in already-hooked, so the grid stays hook-free and safe to render N tiles).
+Clicking a tile sets `source`, which swaps the grid for `.doc-form` — a container with a `docFormIn`
+slide/scale keyframe (reduced-motion respected) — holding a "← Choose a different type" button + that
+source's existing form. Producing a draft still funnels through `setDraft` → Stage 2. "Add more data"
+from review now resets `source` to "", landing back on the grid.
+
+Styling is a new type-safe rules file, `internal/styles/rules_import.go` (registered in install.go):
+`.doc-picker`/`.doc-branch`/`.doc-tier-pill`/`.doc-type-grid`/`.doc-type-tile` (hover lift, focus ring,
+`.smartplus` brand tint on icon + border) + the `docFormIn` keyframe.
+
+Hook-safety note: the grid↔form swap is `IfElse(source=="", grid, form)` and the form's sources are
+`If(source==…, card)`. Since If/IfElse evaluate both node args eagerly, every card (CsvImportCard,
+statement section, pdfCard, ImageImportCard) and every tile's OnClick is *built* every render regardless
+of which is shown — so DocumentsPanel's hook order is invariant. Confirmed the card funcs have zero
+internal hooks first.
+
+Verified with a Playwright smoke + screenshots on the deployed wasm: Stage 1 shows the picker (not
+stacked forms) with both branches and all four tiles; Smart+ tiles carry the `.smartplus` accent;
+clicking Statement-text/CSV/PDF each reveals the right form with a working back-to-grid button; and a
+full statement-text → Parse → Stage 2 → Save flow still imports the rows. Zero console errors. The
+screenshots show the green-Smart / violet-Smart+ grid and the animated PDF form.
+
 ## 2026-07-12 — Merged the two importers into one two-stage wizard
 
 Cam: "merge the smart and smart+ imports into a single 2-stage flip modal, then remove the import
