@@ -42,4 +42,10 @@ export default function globalSetup() {
     env: { ...process.env, GOOS: "js", GOARCH: "wasm" },
   });
   renameSync(tmp, path.join(binDir, "main.wasm"));
+
+  // 3. Drop any stale gzip-compressed binary. index.html PREFERS ./bin/main.wasm.gz
+  //    and only falls back to the raw main.wasm — so a leftover main.wasm.gz (from a
+  //    deploy or `gwc dev`) would make the whole suite silently run OLD code against
+  //    the freshly-built main.wasm we just wrote. Removing it forces the raw binary.
+  rmSync(path.join(binDir, "main.wasm.gz"), { force: true });
 }

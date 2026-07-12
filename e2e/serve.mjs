@@ -29,6 +29,11 @@ const MIME = {
 function sendFile(res, full) {
   const ext = path.extname(full).toLowerCase();
   res.setHeader("Content-Type", MIME[ext] || "application/octet-stream");
+  // No caching: the suite rebuilds the wasm between runs, and Chromium's HTTP +
+  // compiled-wasm caches otherwise serve a stale main.wasm (surviving even a fresh
+  // origin), which silently runs old code against a new test. no-store forces a
+  // fresh fetch + compile every load.
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   createReadStream(full).pipe(res);
 }
 
