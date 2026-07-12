@@ -62,6 +62,9 @@ func SmartSurface() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get() // re-render on data or settings change
+	// Defer the below-the-fold opt-in catalog + digest config off the initial mount;
+	// the findings feed (the reason people open this page) paints immediately.
+	catalogReady := useAfterSettle("smart-hub")
 
 	pr := uistate.UsePrefs().Get()
 	weekStart := pr.WeekStartWeekday()
@@ -131,10 +134,30 @@ func SmartSurface() ui.Node {
 	if counts.AIOn > 0 {
 		blocks = append(blocks, smartAISection(settings, conn, hasProvider))
 	}
-	blocks = append(blocks,
-		smartManageSection(settings, hasProvider),
-		SmartDigestSection(settings),
-	)
+	// The opt-in catalog + digest config are the page's heaviest DOM (every feature
+	// row) and sit at the bottom — deferred to a child that mounts after first paint,
+	// so they never block the feed's initial render.
+	if catalogReady {
+		blocks = append(blocks, ui.CreateElement(smartCatalogDeferred, smartCatalogDeferredProps{
+			Settings: settings, HasProvider: hasProvider,
+		}))
+	}
 
 	return Div(css.Class("smt-deck"), Attr("data-testid", "smart-hub"), blocks)
+}
+
+// smartCatalogDeferredProps carries what the deferred catalog needs.
+type smartCatalogDeferredProps struct {
+	Settings    smart.Settings
+	HasProvider bool
+}
+
+// smartCatalogDeferred renders the opt-in catalog + digest config as an isolated
+// child component, so mounting it a beat after the page's first paint keeps its
+// heavy DOM off the mount critical path without touching the parent's hook order.
+func smartCatalogDeferred(props smartCatalogDeferredProps) ui.Node {
+	return Fragment(
+		smartManageSection(props.Settings, props.HasProvider),
+		SmartDigestSection(props.Settings),
+	)
 }

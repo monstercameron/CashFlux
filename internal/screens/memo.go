@@ -6,14 +6,33 @@ package screens
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // revKey returns the store's mutation revision as a string — the base cache key for a
 // derived view that depends only on stored data. Append any non-store inputs (member,
 // date window) to it before passing to memoByRev.
 func revKey(app *appstate.App) string { return strconv.FormatUint(app.Rev(), 10) }
+
+// useAfterSettle returns false on a component's first paint and true ~300ms later (past
+// the 160ms route cross-fade), via a Go timer. Gate a page's heavy secondary / below-
+// the-fold content on it so the primary content paints immediately on mount and the
+// rest fills in once the page has settled — keeping expensive work (full-transaction
+// scans, chart builds, long lists) off the mount critical path. `key` just names the
+// deferral for the effect's dependency; hooks stay unconditional either way.
+func useAfterSettle(key string) bool {
+	ready := ui.UseState(false)
+	ui.UseEffect(func() func() {
+		if !ready.Get() {
+			time.AfterFunc(300*time.Millisecond, func() { ready.Set(true) })
+		}
+		return nil
+	}, "aftersettle:"+key)
+	return ready.Get()
+}
 
 // memoByRev caches a derived view by a string key. The key MUST include the store's
 // mutation revision (app.Rev()) so an entry is dropped the moment any data changes;

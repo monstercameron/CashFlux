@@ -68,6 +68,9 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// Drill from a detected subscription to its underlying charges.
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
+	// Defer the page-level smart-insight scan off the initial mount — it's a
+	// full-transaction engine pass that only feeds secondary badges.
+	subReady := useAfterSettle("subscriptions")
 	viewCharges := func(payee string) {
 		f := uistate.TxFilter{Text: payee}.Normalize()
 		txFilter.Set(f)
@@ -415,7 +418,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// future engines that do set RelatedID = subscription.Name or a real ID.
 	subSmartSettings := uistate.LoadSmartSettings()
 	subSmartIn := buildSmartInput(app, pr.WeekStartWeekday())
-	subInsights := smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageSubscriptions)
+	var subInsights []smart.Insight
+	if subReady {
+		subInsights = smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageSubscriptions)
+	}
 	subByEntity := insightsByEntity(subInsights)
 
 	// C162: the "Renewing soon" section reuses the same SubscriptionRow, so any sub
