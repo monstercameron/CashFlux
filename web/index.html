@@ -225,6 +225,18 @@
         const app = document.getElementById("app");
         const errorBox = document.getElementById("boot-error");
 
+        // Swallow the benign "Transition was skipped" AbortError the browser emits
+        // when the DOM changes while a View Transition cross-fade is mid-flight (e.g.
+        // a deferred below-the-fold render landing during the route transition). It's
+        // a non-actionable browser artifact, not an app error — Chrome's own docs say
+        // to catch it. Scoped tightly so real rejections still surface.
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e && e.reason;
+          if (r && r.name === "AbortError" && /transition|skipped/i.test(String(r.message || r))) {
+            e.preventDefault();
+          }
+        });
+
         // Dismiss the boot splash once the app has rendered. We fade it (CSS) AND
         // then pull it out of the layer (display:none) so a slow or interrupted
         // transition can never leave a translucent #boot stuck over the app — the

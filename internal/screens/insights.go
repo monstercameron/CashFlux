@@ -203,6 +203,24 @@ func Insights() ui.Node {
 	// The hook itself (openPrompt) is always registered; only the button is gated.
 	advancedOpen := ui.UseState(false)
 
+	// railReady defers the periphery rail's heavy detectors (spend-anomaly + the four
+	// SMART anomaly detectors, each a full-transaction scan) to just after first paint.
+	// On the initial mount it's false, so the chat renders immediately without those
+	// scans on the critical path; the effect flips it true, and the rail fills in a
+	// frame later. The hooks below stay unconditional (rule of hooks); only the work
+	// inside them is gated.
+	railReady := ui.UseState(false)
+	ui.UseEffect(func() func() {
+		if !railReady.Get() {
+			// Fill the rail once the page has settled — after first paint AND the 160ms
+			// route cross-fade (var(--wonder-dur)), so the deferred re-render doesn't
+			// abort the entrance transition. A Go timer keeps the primary chat
+			// interactive immediately; the secondary rail loads a beat later.
+			time.AfterFunc(300*time.Millisecond, func() { railReady.Set(true) })
+		}
+		return nil
+	}, "rail-defer-once")
+
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
 	// when the user asks, C82.)
@@ -801,14 +819,17 @@ func Insights() ui.Node {
 	// transaction) on the data revision + scope + month, so the chat page doesn't re-run
 	// it on each keystroke — only when the underlying data actually changes.
 	spendingAnoms := ui.UseMemo(func() []insights.Anomaly {
+		if !railReady.Get() {
+			return nil // deferred to just after first paint (see railReady)
+		}
 		return detectSpendingAnomalies(scopedTxns, app.Categories(), rates)
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
+	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), railReady.Get())
 	highlights := spendingHighlights(spendingAnoms, base, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
 	// pr is already declared above (UsePrefs hook at stable position).
-	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday())
+	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday(), railReady.Get())
 
 	// Pinned insights, newest first. The rail shows a SCANNABLE PREVIEW — the three
 	// most recent, each clamped to a couple of lines — and cross-links to the
@@ -1613,16 +1634,20 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 // missing transaction) unconditionally — no Smart opt-in gate — and renders
 // their findings as a "Flagged activity" card on /insights. Returns an empty
 // node when the detectors find nothing.
-func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday) ui.Node {
+func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready bool) ui.Node {
 	nav := router.UseNavigate()
 	// Run with all Free features enabled so the four anomaly detectors always
 	// fire regardless of the user's per-feature SMART opt-in state. Memoized on the
 	// data revision + week start: the detectors scan every transaction, and this card
 	// re-renders on every chat keystroke — recomputing per character was pure waste.
-	// The result is read-only (iterated to build rows below).
+	// The result is read-only (iterated to build rows below). `ready` is false on the
+	// caller's first paint so the scan is deferred off the initial mount.
 	flagged := ui.UseMemo(func() []smart.Insight {
+		if !ready {
+			return nil
+		}
 		return runAnomalyDetectors(app, weekStart)
-	}, app.Rev(), int(weekStart))
+	}, app.Rev(), int(weekStart), ready)
 	if len(flagged) == 0 {
 		return Fragment()
 	}
