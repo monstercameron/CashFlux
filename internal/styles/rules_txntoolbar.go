@@ -106,11 +106,11 @@ func registerTxnToolbar() {
 	)
 
 	// Bulk-action bar: one compact flat row. The category/member selects are capped
-	// narrow so the whole row fits without a horizontal scrollbar.
+	// narrow so the whole row fits without needing to scroll — and crucially WITHOUT an
+	// overflow clip, which would cut off the glyph buttons' hover tooltips (they sit
+	// just below each button).
 	rule(".bulk-bar",
 		flexWrap("nowrap"),
-		overflowX("auto"),
-		paddingBottom(".2rem"),
 	)
 	rule(".bulk-bar select",
 		maxWidth("150px"),
