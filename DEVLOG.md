@@ -1,3 +1,18 @@
+## 2026-07-12 — Sleek glyph toolbar on Transactions
+
+Cam: "instead of unevenly sized text inside the buttons, use glyphs and on hover text on the
+transactions page, make it look sleek." The toolbar action row was Add / Export CSV / Import / Review
+duplicates / Columns / Categorize as uneven-width text buttons.
+
+Added a reusable `toolbarIconBtn(testid, icon, label, onClick, primary)` + a new `rules_txntoolbar.go`
+(`registerTxnToolbar`): fixed-size 2.25rem square `.tbar-btn` glyph buttons (even row), each with its
+label as the `aria-label` (accessibility kept) plus a `.tbar-tip` styled tooltip that fades in below the
+glyph on hover/focus — no layout shift, `--z-popover` so it isn't clipped. Add stays accent-green
+(`.primary`); the rest neutral. Glyphs: Plus / ArrowDown (export) / Upload (import) / Copy (duplicates)
+/ List (columns) / Sparkles (categorize). Testids preserved (Export gained `txn-export-btn`), so no e2e
+churn — import + duplicates suites stay green. Screenshot-verified the even row + the "Review 1
+duplicate" tooltip revealing on hover, unclipped.
+
 ## 2026-07-12 — "Review duplicates" → flip modal (+ a real confirm-dialog z-index bug)
 
 Cam: do the same for review duplicates — move that logic + UI to a flip modal, e2e test, and

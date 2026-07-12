@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -69,6 +70,27 @@ func actionBtn(label, title, class, testID string, onClick ui.Handler) ui.Node {
 		args = append(args, Attr("data-testid", testID))
 	}
 	args = append(args, label)
+	return Button(args...)
+}
+
+// toolbarIconBtn renders one sleek transactions-toolbar action: a fixed-size glyph
+// button whose text label reveals on hover/focus as a styled tooltip (.tbar-tip). The
+// label doubles as the aria-label so the icon-only control stays accessible. primary
+// paints it as the accent action (the "Add" button).
+func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, primary bool) ui.Node {
+	classes := []any{"tbar-btn"}
+	if primary {
+		classes = append(classes, "primary")
+	}
+	args := []any{
+		css.Class(classes...), Type("button"),
+		Attr("aria-label", label), OnClick(onClick),
+		uiw.Icon(ic, css.Class(tw.W4, tw.H4)),
+		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), label),
+	}
+	if testID != "" {
+		args = append(args, Attr("data-testid", testID))
+	}
 	return Button(args...)
 }
 
@@ -336,15 +358,17 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		OnClearAll:    clearAllFilters,
 		ClearAllLabel: uistate.T("transactions.clearAllFilters"),
 		RemoveLabel:   uistate.T("transactions.removeFilter"),
+		// Sleek icon toolbar: each action is a fixed-size glyph button whose label
+		// reveals on hover/focus (a styled tooltip), so the row reads evenly instead of
+		// as a run of uneven-width text buttons. aria-label keeps them accessible.
 		Actions: []ui.Node{
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-add-btn"), OnClick(onAdd), uistate.T("transactions.addTitle")),
-			If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
-			Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(openImportPanel), Text(importBtnLabel)),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(openDuplicates), Text(dupBtnLabel)),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-columns-btn"), Title(uistate.T("transactions.columnsTitle")), OnClick(openCols), uistate.T("transactions.columns")),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-smartcat-btn"), Title(uistate.T("smartcat.title")), OnClick(openSmartCat),
-				smartGlyph(false, tw.Fold(tw.W4, tw.H4)), Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("smartcat.button"))),
+			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, true),
+			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, false)),
+			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), exportFiltered, false),
+			toolbarIconBtn("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, false),
+			toolbarIconBtn("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, false),
+			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, false),
+			toolbarIconBtn("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, false),
 		},
 	})
 

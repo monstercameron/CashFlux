@@ -39,6 +39,7 @@ func Register() {
 	registerBudgetsSurface()
 	registerTierSystem()
 	registerImportWizard()
+	registerTxnToolbar()
 	inject(Build())
 }
 
