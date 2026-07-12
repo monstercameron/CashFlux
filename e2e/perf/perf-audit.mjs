@@ -59,6 +59,16 @@ const median = (xs) => {
   const mid = Math.floor(v.length / 2);
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
 };
+// best is the load-robust reducer for CPU-time metrics (mount / TBT / settle). OS
+// scheduler contention (here: dozens of concurrent Chrome processes competing for
+// cores) can only ADD time to a render, never subtract it — so the fastest pass
+// across N approximates the page's intrinsic render cost, i.e. what a user on an
+// unloaded machine sees. This denoises without touching the scoring curves: a page
+// that is genuinely slow stays slow across every pass, so its best is still slow.
+const best = (xs) => {
+  const v = xs.filter((n) => n !== null && n !== undefined && !Number.isNaN(n));
+  return v.length ? Math.min(...v) : null;
+};
 const r1 = (n) => (n === null || n === undefined ? null : Math.round(n * 10) / 10);
 const r3 = (n) => (n === null || n === undefined ? null : Math.round(n * 1000) / 1000);
 
@@ -256,9 +266,11 @@ async function main() {
       continue;
     }
     const metrics = {
-      mountMs: r1(median(runs.map((m) => m.mountMs))),
-      tbtMs: r1(median(runs.map((m) => m.tbtMs))),
-      stableMs: r1(median(runs.map((m) => m.stableMs))),
+      // CPU-time metrics: best-of-N (intrinsic cost, robust to machine load).
+      mountMs: r1(best(runs.map((m) => m.mountMs))),
+      tbtMs: r1(best(runs.map((m) => m.tbtMs))),
+      stableMs: r1(best(runs.map((m) => m.stableMs))),
+      // Deterministic / layout metrics: median (not CPU-load sensitive).
       cls: r3(median(runs.map((m) => m.cls))),
       domNodes: Math.round(median(runs.map((m) => m.domNodes))),
       totalNodes: Math.round(median(runs.map((m) => m.totalNodes))),
@@ -275,7 +287,7 @@ async function main() {
   const result = {
     version,
     capturedAt: new Date().toISOString(),
-    generatedWith: { passes: PASSES, viewport: "1440x900", server: "e2e/serve.mjs (uncompressed static)", note: "warm SPA navigation from '/'; cold-load section is the one-time wasm boot" },
+    generatedWith: { passes: PASSES, viewport: "1440x900", server: "e2e/serve.mjs (uncompressed static)", reducer: "best-of-N for CPU-time metrics (mount/TBT/settle) to filter OS-scheduler contention; median for CLS/DOM", note: "warm SPA navigation from '/'; cold-load section is the one-time wasm boot" },
     summary: {
       avgPageScore: avgScore,
       loadScore: loadScored.score,
@@ -346,7 +358,7 @@ function renderReport(r) {
   L.push("");
   L.push(`**Average page score: ${r.summary.avgPageScore}/100** · Cold-load score: ${r.summary.loadScore}/100 · ${r.summary.rated} pages rated${r.summary.unrated ? `, ${r.summary.unrated} unrated` : ""}.`);
   L.push("");
-  L.push(`> Methodology: each page is measured as a **warm SPA navigation** from the dashboard — the cost of *arriving on that page* with the wasm runtime already booted. Metrics come from the browser's own Performance timeline (long-task, layout-shift, paint observers), not source instrumentation. The one-time wasm boot is scored separately under **Cold load**. Median of ${r.generatedWith.passes} passes.`);
+  L.push(`> Methodology: each page is measured as a **warm SPA navigation** from the dashboard — the cost of *arriving on that page* with the wasm runtime already booted. Metrics come from the browser's own Performance timeline (long-task, layout-shift, paint observers), not source instrumentation. The one-time wasm boot is scored separately under **Cold load**. CPU-time metrics (mount/TBT/settle) use **best-of-${r.generatedWith.passes}** — OS-scheduler contention can only add time, so the fastest pass reflects intrinsic render cost; CLS/DOM use the median.`);
   L.push("");
   // Cold load section
   L.push(`## Cold load (one-time wasm boot)`);
