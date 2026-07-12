@@ -71,6 +71,17 @@ test.describe("wave-2 fixes", () => {
 
   test("costs chart plots positive magnitudes (no negative $ axis)", async ({ app }) => {
     await nav(app, "/p/priya-business");
+    // Custom-page tiles below the fold hydrate ~300ms after first paint (useAfterSettle),
+    // so wait for the costs tile to mount before inspecting its axis.
+    await app
+      .waitForFunction(
+        () => [...document.querySelectorAll("*")].some(
+          (e) => e.textContent && e.textContent.trim() === "Shop costs (live, 12 months)",
+        ),
+        null,
+        { timeout: 8000 },
+      )
+      .catch(() => {});
     const hasNeg = await app.evaluate(() => {
       const tiles = [...document.querySelectorAll("*")].filter(
         (e) => e.textContent && e.textContent.trim() === "Shop costs (live, 12 months)",
