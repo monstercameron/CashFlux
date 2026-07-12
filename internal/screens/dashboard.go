@@ -598,12 +598,12 @@ func Dashboard() ui.Node {
 	// as the former UseActiveMember call it replaces.
 	sc := uistate.UseActiveScope().Get()
 	instOf := func(a domain.Account) string { return a.Institution }
-	// Render the first few grid tiles on mount; the rest of the bento (each an
-	// isolated widget hydrating its own data/chart) mounts ~300ms after first paint,
-	// so the hero + top row paint immediately. Placements are still built for every
-	// tile below (persistence unaffected) — only the expensive render defers.
+	// The net-worth hero is the dashboard's primary glance; the entire bento grid
+	// (KPIs, charts, the Needs-attention ranking — each an isolated widget that
+	// hydrates its own data over every transaction) is detail that mounts ~300ms
+	// after first paint. Placements are still built for every tile below (persistence
+	// unaffected) — only the expensive per-widget render defers.
 	dashReady := useAfterSettle("dashboard")
-	dashRendered := 0
 	ids := scope.ResolveScope(accounts, sc, instOf)
 	kpiTxns := scope.ApplyScopeToTxns(txns, ids)
 	scopedAccounts := scope.ApplyScopeToAccounts(accounts, ids)
@@ -743,16 +743,24 @@ func Dashboard() ui.Node {
 	// the wall clock only through bills_due/goal_needs, which don't move minute to
 	// minute).
 	varsKey := fmt.Sprintf("%d|%v|%s", app.Rev(), w, scopeSig)
-	vars := memoEngineVars(varsKey, func() map[string]float64 {
-		return engineenv.Vars(engineenv.Data{
-			Accounts: scopedAccounts, Transactions: kpiTxns,
-			Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
-			Recurring: app.Recurring(), Rates: rates, Now: time.Now(),
-			PeriodStart: start, PeriodEnd: end,
-			CustomDefs: app.CustomFieldDefs(),
-			Molecules:  app.Molecules(),
+	// The engine-variable surface (atoms + molecules + custom fields over every
+	// transaction) is the dashboard's single heaviest body compute, and it's consumed
+	// ONLY by the grid tiles via rctx.Vars — the hero reads the direct figures (net,
+	// income, expense), not Vars. So defer it with the grid: nil on the initial mount,
+	// computed once the page has settled.
+	var vars map[string]float64
+	if dashReady {
+		vars = memoEngineVars(varsKey, func() map[string]float64 {
+			return engineenv.Vars(engineenv.Data{
+				Accounts: scopedAccounts, Transactions: kpiTxns,
+				Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
+				Recurring: app.Recurring(), Rates: rates, Now: time.Now(),
+				PeriodStart: start, PeriodEnd: end,
+				CustomDefs: app.CustomFieldDefs(),
+				Molecules:  app.Molecules(),
+			})
 		})
-	})
+	}
 
 	// Build the render context once: the live data + callbacks every tile needs.
 	// Each tile body is a renderer registered with the engine (internal/widgetrender,
@@ -795,6 +803,15 @@ func Dashboard() ui.Node {
 	}
 	placements := make([]domain.Placement, 0, len(layoutItems))
 	for _, it := range layoutItems {
+		// Defer the whole grid off the initial mount: building each placement (hydrate
+		// + schema-validate ~20 widgets) is the bulk of the dashboard's mount cost, and
+		// it's infrastructure, not the primary net-worth glance. On the first paint we
+		// build nothing here; the effect flips dashReady and the grid + persistence run
+		// a beat later. The stored placements stay intact (we also gate the persist
+		// below, so the mount never writes an incomplete set).
+		if !dashReady {
+			continue
+		}
 		// Each built-in tile is a validated domain.Placement: its spec comes from the
 		// widget registry (the single source of truth) and carries this instance's
 		// saved settings/style (widgetcfg, incl. the reserved style keys); its body is
@@ -820,11 +837,10 @@ func Dashboard() ui.Node {
 			if pl.Hidden {
 				continue
 			}
-			if dashReady || dashRendered < 3 {
+			if dashReady {
 				rctx.Spec = pl.Spec
 				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
 					tiles = append(tiles, node)
-					dashRendered++
 				}
 			}
 		} else if strings.HasPrefix(it.ID, userSpecPrefix) {
@@ -850,21 +866,19 @@ func Dashboard() ui.Node {
 			if pl.Hidden {
 				continue
 			}
-			if dashReady || dashRendered < 3 {
+			if dashReady {
 				rctx.Spec = pl.Spec
 				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
 					tiles = append(tiles, node)
-					dashRendered++
 				}
 			}
 		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
 			if hidden.IsHidden(it.ID) {
 				continue
 			}
-			if dashReady || dashRendered < 3 {
+			if dashReady {
 				if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
 					tiles = append(tiles, w)
-					dashRendered++
 				}
 			}
 		}
@@ -900,7 +914,10 @@ func Dashboard() ui.Node {
 	plSig, _ := json.Marshal(placements)
 	placementsToPersist := placements
 	ui.UseEffect(func() func() {
-		if app != nil {
+		// Only persist once the full grid has been built (dashReady). On the initial
+		// mount the placement set is intentionally just the hero, so skipping the write
+		// keeps the stored layout intact.
+		if app != nil && dashReady {
 			if err := app.PutPlacements(placementsToPersist); err != nil {
 				slog.Warn("dashboard: persist placements failed", "err", err)
 			}

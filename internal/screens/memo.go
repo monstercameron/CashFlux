@@ -24,13 +24,18 @@ func revKey(app *appstate.App) string { return strconv.FormatUint(app.Rev(), 10)
 // scans, chart builds, long lists) off the mount critical path. `key` just names the
 // deferral for the effect's dependency; hooks stay unconditional either way.
 func useAfterSettle(key string) bool {
+	_ = key // descriptive only; the effect re-arms via the ready state below
 	ready := ui.UseState(false)
+	// Depend on ready itself so the effect fires on mount (ready=false → schedule the
+	// flip) AND re-arms on every re-mount (navigating away and back gives a fresh
+	// ready=false), then no-ops once flipped. A constant dep could fire only once and
+	// leave deferred content missing on a return visit.
 	ui.UseEffect(func() func() {
 		if !ready.Get() {
 			time.AfterFunc(300*time.Millisecond, func() { ready.Set(true) })
 		}
 		return nil
-	}, "aftersettle:"+key)
+	}, ready.Get())
 	return ready.Get()
 }
 
