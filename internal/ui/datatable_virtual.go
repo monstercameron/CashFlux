@@ -72,6 +72,30 @@ func deferMacrotask(fn func()) {
 	js.Global().Call("setTimeout", cb, 0)
 }
 
+// scrollAnchorIntoView smoothly scrolls the element with the given id to the top of its
+// scroll container. The pager calls it after a prev/next so a user who paged from the
+// bottom of a long list lands on the top of the new page instead of staying stranded at
+// the bottom. It's a no-op when id is empty or the element is gone. The scroll is
+// deferred one macrotask so the new page's rows render first (their height can shift the
+// layout), and any panic is contained so a raw callback can't take down the wasm app.
+func scrollAnchorIntoView(id string) {
+	if id == "" {
+		return
+	}
+	deferMacrotask(func() {
+		defer recoverVirtual()
+		doc := js.Global().Get("document")
+		if !doc.Truthy() {
+			return
+		}
+		el := doc.Call("getElementById", id)
+		if !el.Truthy() {
+			return
+		}
+		el.Call("scrollIntoView", js.ValueOf(map[string]any{"block": "start", "behavior": "smooth"}))
+	})
+}
+
 // dtVirtualBody is DataTable's windowed <tbody>. It owns the scroll listener +
 // window state (its own component, so the scroll-driven re-renders stay local to the
 // table body rather than re-rendering the whole surface). It measures its own tbody's

@@ -496,6 +496,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			// On a multi-page ledger, mirror the pager above the table too so rows-per-page
 			// (and "All") is reachable without scrolling to the very bottom of a long list.
 			TopPager: total > txnfilter.DefaultPageSize,
+			// Paging from the bottom pager scrolls the list back to the top, so the user
+			// sees the new page's first rows instead of being stranded at the bottom.
+			AnchorID: "txn-ledger-anchor",
 		}
 		if virtualize {
 			dtp.Virtual = &uiw.VirtualSpec{

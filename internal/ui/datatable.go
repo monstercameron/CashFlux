@@ -74,6 +74,12 @@ type DataTableProps struct {
 	// only below it — so on a long list the rows-per-page control is reachable without
 	// scrolling all the way to the bottom. No effect when OnPage is nil.
 	TopPager bool
+
+	// AnchorID, when set, is the id put on the <table> element and used by the pager:
+	// clicking prev/next scrolls this element back to the top of its scroll container,
+	// so a user who paged from the bottom lands on the top of the new page instead of
+	// being stranded at the bottom. Empty (default) disables the scroll.
+	AnchorID string
 }
 
 // DataTable renders the table chrome around the caller-rendered Body rows. It is a
@@ -146,6 +152,11 @@ func dataTable(props DataTableProps) ui.Node {
 	if sortingKey != "" {
 		tableArgs = append(tableArgs, Attr("aria-busy", "true"))
 	}
+	// The scroll anchor rides on the <table> element so the pager can scroll it back
+	// to the top of its container on page nav (see dtPager). Empty AnchorID = no anchor.
+	if props.AnchorID != "" {
+		tableArgs = append(tableArgs, Attr("id", props.AnchorID))
+	}
 	table := Table(tableArgs...)
 	if props.OnPage == nil {
 		return table
@@ -154,7 +165,7 @@ func dataTable(props DataTableProps) ui.Node {
 		return ui.CreateElement(dtPager, dtPagerProps{
 			Page: props.Page, Total: props.Total, PageSize: props.PageSize,
 			PageSizes: props.PageSizes, OnPage: props.OnPage, OnPageSize: props.OnPageSize,
-			Top: top,
+			Top: top, AnchorID: props.AnchorID,
 		})
 	}
 	if props.TopPager {
@@ -213,7 +224,8 @@ type dtPagerProps struct {
 	PageSizes             []int
 	OnPage                func(int)
 	OnPageSize            func(int)
-	Top                   bool // rendered above the table (adds the data-pager-top class)
+	Top                   bool   // rendered above the table (adds the data-pager-top class)
+	AnchorID              string // if set, prev/next scroll this element to the top of its scroll container
 }
 
 type pagerSizeBtnProps struct {
@@ -246,8 +258,16 @@ func pagerSizeBtn(props pagerSizeBtnProps) ui.Node {
 
 // dtPager renders the prev/next + "from-to of total" + rows-per-page footer.
 func dtPager(props dtPagerProps) ui.Node {
-	onPrev := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page - 1) })
-	onNext := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnPage(props.Page + 1) })
+	onPrev := ui.UseEvent(func(e ui.Event) {
+		e.PreventDefault()
+		props.OnPage(props.Page - 1)
+		scrollAnchorIntoView(props.AnchorID)
+	})
+	onNext := ui.UseEvent(func(e ui.Event) {
+		e.PreventDefault()
+		props.OnPage(props.Page + 1)
+		scrollAnchorIntoView(props.AnchorID)
+	})
 
 	from, to := pagination.Window(props.Page, props.Total, props.PageSize)
 	totalPages := pagination.TotalPages(props.Total, props.PageSize)

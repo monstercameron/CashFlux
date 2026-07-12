@@ -486,6 +486,41 @@ test.describe("review duplicates", () => {
   });
 });
 
+test.describe("pager scroll-to-top", () => {
+  // Delta between the ledger anchor's top and the scroll container's top, in px.
+  // ~0 means the table is pinned to the top of the viewport (i.e. we scrolled to it).
+  const anchorDelta = (app) =>
+    app.evaluate(() => {
+      const anchor = document.getElementById("txn-ledger-anchor");
+      const sc = document.querySelector("main.cf-scroll");
+      if (!anchor || !sc) return 99999;
+      return Math.round(anchor.getBoundingClientRect().top - sc.getBoundingClientRect().top);
+    });
+
+  test("clicking Next from the bottom jumps the ledger back to the top", async ({ app }) => {
+    await nav(app, "/transactions");
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+    const scroller = app.locator("main.cf-scroll");
+    // Multi-page seed → the pager's Next is present and enabled on page 1.
+    const nextBtn = app.locator('button[aria-label="Next page"]').last();
+    await expect(nextBtn).toBeEnabled();
+
+    // Strand the user at the very bottom of the page, so the ledger's top is scrolled
+    // far above the viewport (a large negative delta).
+    await scroller.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    expect(await scroller.evaluate((el) => el.scrollTop), "scrolled well down").toBeGreaterThan(200);
+    expect(await anchorDelta(app), "ledger top scrolled above the viewport").toBeLessThan(-100);
+
+    // Paging forward scrolls the ledger anchor back to the top of the scroll container.
+    await nextBtn.click();
+    await expect
+      .poll(() => anchorDelta(app), { timeout: 5000 })
+      .toBeLessThan(60);
+    // And it settled at the top, not somewhere in the middle.
+    expect(Math.abs(await anchorDelta(app)), "ledger pinned to the container top").toBeLessThan(60);
+  });
+});
+
 test.describe("multi-value filters", () => {
   test("multiple account pills filter OR-within, with per-value chips + a count badge", async ({ app }) => {
     await nav(app, "/transactions");

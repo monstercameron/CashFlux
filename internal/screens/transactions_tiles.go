@@ -217,10 +217,14 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// once you pause typing rather than on every character; the native input holds what
 	// you type between renders, so search-as-you-type stays smooth on a large ledger. The
 	// date fields commit a single value from the picker, so they set immediately.
-	debFilter := func(key string, mut func(*uistate.TxFilter)) {
-		debounce.Call("txn-filter:"+key, 250*time.Millisecond, func() { setFilter(mut) })
+	debFilterD := func(key string, delay time.Duration, mut func(*uistate.TxFilter)) {
+		debounce.Call("txn-filter:"+key, delay, func() { setFilter(mut) })
 	}
-	onFilterText := func(v string) { debFilter("text", func(x *uistate.TxFilter) { x.Text = v }) }
+	debFilter := func(key string, mut func(*uistate.TxFilter)) { debFilterD(key, 250*time.Millisecond, mut) }
+	// Search gets a longer debounce than the numeric fields: it's the most-typed filter
+	// and re-filtering the whole ledger on each pause is the heaviest, so 400ms coalesces
+	// more keystrokes (including deliberate typing that pauses past the shorter delay).
+	onFilterText := func(v string) { debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAmountMin := ui.UseEvent(func(v string) { debFilter("amtmin", func(x *uistate.TxFilter) { x.AmountMin = v }) })
 	onFilterAmountMax := ui.UseEvent(func(v string) { debFilter("amtmax", func(x *uistate.TxFilter) { x.AmountMax = v }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
