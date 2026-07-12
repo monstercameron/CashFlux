@@ -257,10 +257,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 				// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
 				If(financial, labeledField(uistate.T("goals.sinkingFund"),
 					func() ui.Node {
-						cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund)}
-						if isSinkingFund.Get() {
-							cbArgs = append(cbArgs, Attr("checked", ""))
-						}
+						cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund), Checked(isSinkingFund.Get())}
 						return Div(
 							Input(cbArgs...),
 							Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),

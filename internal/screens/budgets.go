@@ -753,8 +753,8 @@ func ownerSelectOptions(members []domain.Member, selected string) []uiw.SelectOp
 }
 
 func checkedAttr(checked bool) []any {
-	if !checked {
-		return nil
-	}
-	return []any{Attr("checked", "checked")}
+	// Use the Checked() boolean prop (sets the DOM `checked` PROPERTY), not the
+	// `checked` content attribute — an attribute only seeds defaultChecked and doesn't
+	// update the live property on a keyed re-render, so the tick wouldn't show/clear.
+	return []any{Checked(checked)}
 }

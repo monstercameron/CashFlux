@@ -8,13 +8,12 @@ import (
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 )
 
-// CheckedIf renders the `checked` attribute on a checkbox when on is true, and a
-// harmless no-op attribute otherwise — the checkbox analogue of SelectedIf for
-// <option>s. (The framework has SelectedIf but no CheckedIf; this fills the gap so
-// controlled checkboxes can be written inline.)
+// CheckedIf sets a checkbox's checked state — the checkbox analogue of SelectedIf for
+// <option>s. It uses the framework's Checked() boolean prop, which sets the DOM
+// `checked` PROPERTY (not the `checked` content attribute): an attribute only seeds
+// defaultChecked and does NOT update the live property when a keyed input re-renders,
+// so a selected row's checkbox never appeared ticked. Checked(false) also clears it,
+// so unchecking works too.
 func CheckedIf(on bool) any {
-	if on {
-		return Attr("checked", "")
-	}
-	return Attr("aria-checked", "false")
+	return Checked(on)
 }

@@ -240,10 +240,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		linkedName := accountName(app.Accounts(), g.AccountID)
 		var ledgerRow ui.Node = Fragment()
 		if linkedName != "" {
-			cbArgs := []any{Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger)}
-			if postLedgerS.Get() {
-				cbArgs = append(cbArgs, Attr("checked", ""))
-			}
+			cbArgs := []any{Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger), Checked(postLedgerS.Get())}
 			ledgerRow = Label(css.Class("field", "ba-check"),
 				Input(cbArgs...),
 				Span(uistate.T("goals.contributePostLedger", linkedName)),

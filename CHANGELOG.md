@@ -6,6 +6,10 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Checkboxes now show (and clear) their checked state (2026-07-12):** row-selection checkboxes in the ledger — and several form checkboxes (quick-add "reviewed", goal sinking-fund / post-to-ledger, scope-selector accounts, import "keep a copy") — never appeared ticked even when on. The `CheckedIf`/`checkedAttr` helpers set the `checked` HTML *attribute*, which only seeds `defaultChecked` and doesn't update the live `checked` *property* when a keyed input re-renders; switched them (and the four inline sites) to the framework's `Checked(bool)` boolean prop, which sets the property. Verified: select-all now ticks all 25 visible row checkboxes, and toggling one off unticks it.
+- **Hover highlights work in dark mode — kebab/overflow menus, glyph toolbar buttons (2026-07-12):** `--hover` was only defined in the light theme, so in dark mode (the default) every `background: var(--hover)` hover — the kebab/overflow menu items, the glyph toolbar buttons — resolved to nothing and showed no highlight. Added `--hover` to the dark `:root`, so hovering a menu option now clearly highlights it.
+
 ### Changed
 - **Toolbar trigger buttons stay highlighted while their panel/modal is open (2026-07-12):** the Filters trigger and the flip-modal glyph buttons (Import, Review duplicates, Columns, Categorize) now keep an accent-tinted "open" state until the panel or modal they opened is dismissed, so it's clear which control is currently active (the Filters trigger is the visible case — its panel is inline). The toolbar reads each modal's open atom so the highlight tracks open/close, and `aria-expanded` reflects the state.
 

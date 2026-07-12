@@ -15,6 +15,10 @@ func registerGenerated() {
 		customProp("--bg", "#0e0e0f"),
 		customProp("--bg-elev", "#1a1a1d"),
 		customProp("--bg-card", "#121214"),
+		// Hover surface — a touch brighter than the card. Previously only defined in the
+		// light theme, so `var(--hover)` was undefined in dark mode and every hover that
+		// used it (kebab/overflow menu items, glyph toolbar buttons) had no background.
+		customProp("--hover", "#26262b"),
 		customProp("--border", "#2a2a2c"),
 		customProp("--text", "#f4f4f5"),
 		customProp("--text-dim", "#ababb3"),

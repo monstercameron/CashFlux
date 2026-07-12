@@ -214,10 +214,7 @@ func QuickAddHost() uic.Node {
 	// The original label key ("quickAdd.reviewed") was too terse — users couldn't tell
 	// what "reviewed" meant or what leaving it unchecked would do. Replaced with a clear
 	// primary label + a muted helper caption so the field is self-explanatory.
-	reviewedArgs := []any{Type("checkbox"), OnChange(onReviewed)}
-	if reviewed.Get() {
-		reviewedArgs = append(reviewedArgs, Attr("checked", ""))
-	}
+	reviewedArgs := []any{Type("checkbox"), OnChange(onReviewed), Checked(reviewed.Get())}
 
 	// SMART field assists (Wave 3 / Free):
 	//  (a) Clean-merchant: suggests a normalised merchant name when the raw

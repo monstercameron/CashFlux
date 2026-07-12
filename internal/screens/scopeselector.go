@@ -66,14 +66,10 @@ type scopeAcctRowProps struct {
 // UseEvent is its only hook (hook 1).
 func scopeAcctRow(p scopeAcctRowProps) ui.Node {
 	click := ui.UseEvent(func() { p.OnToggle() })
-	chk := ""
-	if p.Checked {
-		chk = "true"
-	}
 	return Label(css.Class("scope-acct-row"),
 		Input(
 			Type("checkbox"),
-			Attr("checked", chk),
+			Checked(p.Checked),
 			Attr("aria-label", p.Name),
 			OnClick(click),
 		),
