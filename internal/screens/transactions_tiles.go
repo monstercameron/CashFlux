@@ -97,6 +97,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
 	stmtImportAtom := uistate.UseStatementImportOpen()
 	openStatementImport := ui.UseEvent(Prevent(func() { stmtImportAtom.Set(true) }))
+	importPanelAtom := uistate.UseImportPanelOpen()
+	openImportPanel := ui.UseEvent(Prevent(func() { importPanelAtom.Set(true) }))
 
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
@@ -171,7 +173,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			}
 		}
 	}
-	onShowImport := ui.UseEvent(Prevent(toggleView(uistate.TxnViewImport)))
 	onShowDuplicates := ui.UseEvent(Prevent(toggleView(uistate.TxnViewDuplicates)))
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
@@ -321,10 +322,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	// Import / duplicates sub-view toggle labels (badge the dupes button with a count).
 	dupCount := dedupe.Count(dedupe.FindDuplicates(props.Shown))
+	// The Import button now opens a flip modal (ImportPanelHost), so it's a plain
+	// "Import" action — no more open/close view-toggle label.
 	importBtnLabel := uistate.T("transactions.importBtn")
-	if viewAtom.Get() == uistate.TxnViewImport {
-		importBtnLabel = uistate.T("transactions.importBtnClose")
-	}
 	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
 	if viewAtom.Get() == uistate.TxnViewDuplicates {
 		dupBtnLabel = uistate.T("transactions.dupReviewClose")
@@ -354,7 +354,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-add-btn"), OnClick(onAdd), uistate.T("transactions.addTitle")),
 			If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(onShowImport), Text(importBtnLabel)),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(openImportPanel), Text(importBtnLabel)),
 			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "txn-statement-import-btn"),
 				Title(uistate.T("statementimport.title")), OnClick(openStatementImport),
 				smartGlyph(false, tw.Fold(tw.W4, tw.H4)), Span(uistate.T("statementimport.button"))),

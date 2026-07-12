@@ -116,11 +116,20 @@ func UseStatementImportOpen() state.Atom[bool] {
 	return state.UseAtom("transactions:statementImport", false)
 }
 
-// TxnViewLedger / Import / Duplicates are the mutually exclusive sub-views the
-// transactions surface can show in its main tile slot. Ledger is the default.
+// UseImportPanelOpen returns the shared atom selecting whether the main "Import"
+// panel (CSV / receipt / import history) flip modal is open. The transactions
+// toolbar's Import button sets it; the shell-root ImportPanelHost renders the modal
+// when true. (Previously this panel took over the page as an in-place TxnViewImport
+// sub-view; it's now a double-wide flip modal like the statement importer.)
+func UseImportPanelOpen() state.Atom[bool] {
+	return state.UseAtom("transactions:importPanel", false)
+}
+
+// TxnViewLedger / Duplicates are the mutually exclusive sub-views the transactions
+// surface can show in its main tile slot. Ledger is the default. (Import used to be a
+// third sub-view; it now opens as a shell-root flip modal over the ledger instead.)
 const (
 	TxnViewLedger     = "ledger"
-	TxnViewImport     = "import"
 	TxnViewDuplicates = "duplicates"
 )
 
@@ -154,8 +163,8 @@ func UseTxnBulkCat() state.Atom[string] { return state.UseAtom(txnBulkCatAtomID,
 func UseTxnBulkMember() state.Atom[string] { return state.UseAtom(txnBulkMemAtomID, "") }
 
 // UseTxnView returns the shared atom selecting the active sub-view (ledger /
-// import / duplicates). The toolbar tile toggles it; the host swaps which tile
-// fills the main slot accordingly.
+// duplicates). The toolbar tile toggles it; the host swaps which tile fills the
+// main slot accordingly.
 func UseTxnView() state.Atom[string] { return state.UseAtom(txnViewAtomID, TxnViewLedger) }
 
 // UseTxnUndo returns the shared atom holding the last bulk operation's snapshot.

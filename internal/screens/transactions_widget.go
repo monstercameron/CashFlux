@@ -46,11 +46,14 @@ const (
 // spec/render pipeline the dashboard uses (safeRenderSpec). Every visible block is
 // its own engine widget tile —
 //
-//   - txn-toolbar   (Native): search, filters, chips, add/export, import & dupes toggles
+//   - txn-toolbar   (Native): search, filters, chips, add/export, import (flip modal) & dupes toggle
 //   - txn-bulkbar   (Native): bulk recategorize / clear / export / delete (when a selection exists)
 //   - txn-undobar   (Native): undo the last bulk op (when one is pending)
 //   - txn-table     (Table) : the engine-hydrated ledger frame, paginated, with row drill-edit
-//   - txn-import / txn-duplicates (Native): fill the table slot when those sub-views are active
+//   - txn-duplicates (Native): fills the table slot when the duplicates review sub-view is active
+//
+// (Import is no longer an in-place sub-view — the toolbar's Import button opens a
+// shell-root double-wide flip modal, ImportPanelHost, over the ledger.)
 //
 // The tiles share their interaction state (filter, selection, sub-view, undo,
 // receipt preview) through atoms in uistate, so no tile embeds another — the host
@@ -123,9 +126,10 @@ func Transactions() ui.Node {
 	if len(undoAtom.Get().Prior) > 0 {
 		specs = append(specs, txnNativeSpec("txn-undobar"))
 	}
+	// Import now opens a shell-root flip modal (ImportPanelHost), not an in-place
+	// sub-view — so the ledger table stays in the main slot behind it. Duplicates
+	// remains an in-place review sub-view.
 	switch viewAtom.Get() {
-	case uistate.TxnViewImport:
-		specs = append(specs, txnNativeSpec("txn-import"))
 	case uistate.TxnViewDuplicates:
 		specs = append(specs, txnNativeSpec("txn-duplicates"))
 	default:
@@ -168,12 +172,6 @@ func init() {
 	})
 	R("txn-undobar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(txnUndoBarWidget, txnUndoBarProps{App: c.App})
-	})
-	R("txn-import", func(c widgetrender.RenderCtx) ui.Node {
-		return uiw.Widget(uiw.WidgetProps{
-			ID: "txn-import", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-			Body: ui.CreateElement(DocumentsPanel, documentsPanelProps{}),
-		})
 	})
 	R("txn-duplicates", func(c widgetrender.RenderCtx) ui.Node {
 		return uiw.Widget(uiw.WidgetProps{

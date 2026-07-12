@@ -1,3 +1,30 @@
+## 2026-07-11 — CSV import moved into a double-wide flip modal
+
+Cam: the standard CSV import "takes over the transactions page instead of being in a double-wide flip
+modal." It did — the toolbar's Import button toggled a `TxnViewImport` sub-view that replaced the
+ledger tile with a full-width `txn-import` Native tile embedding `DocumentsPanel`. You couldn't see
+your transactions while importing.
+
+Fix: relocate the panel to a shell-root flip modal, mirroring the already-working "Import statement"
+modal (`StatementImportHost`) exactly, since fixed modals must mount at the shell root — a bento tile's
+CSS transform otherwise clips/de-centers them. New pieces: `uistate.UseImportPanelOpen()`
+(`transactions:importPanel` bool atom), an exported `screens.ImportPanelBody(_ struct{})` wrapper
+(because `documentsPanelProps` is unexported, the app package can't `CreateElement(DocumentsPanel, …)`
+directly), and `app.ImportPanelHost()` rendering a 900×660 `FlipPanel` (NoFooter; ✕/Escape/backdrop
+dismiss) mounted next to `StatementImportHost` in `shell.go`. The toolbar Import button now sets the
+atom instead of `toggleView(TxnViewImport)`, and its open/close label toggle is gone (it's a plain
+action now). Retired the dead machinery: the `TxnViewImport` case in the widget main-slot switch, the
+`R("txn-import", …)` tile registration, and the `TxnViewImport` const itself. Duplicates stays an
+in-place sub-view. `DocumentsPanel` is untouched — it was already a self-contained hook-state panel, so
+it renders identically inside the modal.
+
+Verified with a headless Playwright smoke on the real wasm build (served via `e2e/serve.go`): Import
+opens `[role="dialog"][aria-label="Import"]` with the CSV/receipt textareas inside, the ledger table
+stays mounted behind it, the old full-width `txn-import` tile is gone, and both ✕ and Escape close it —
+zero console errors across open/close/reopen. `txn-import-btn` testid preserved (no e2e specs asserted
+the old take-over behavior). Built with the standard `-ldflags="-s -w" -trimpath`, deployed to
+`web/bin` (temp+atomic-move) with a gzip sibling.
+
 ## 2026-07-11 — Perf loop #3: all 46 pages to A (v1.0.16, avg 98)
 
 Pushed every page to A. The winning technique was below-the-fold deferral behind a reusable

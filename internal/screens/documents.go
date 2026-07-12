@@ -103,6 +103,14 @@ const textExtractionSystemPrompt = "You extract bank/credit-card transactions fr
 // embedded via ui.CreateElement and have its hook state isolated from parents.
 type documentsPanelProps struct{}
 
+// ImportPanelBody is the exported handle for mounting the import panel inside the
+// shell-root import flip modal (ImportPanelHost). DocumentsPanel's props type is
+// unexported, so the app package embeds this wrapper instead. The empty struct keeps
+// it CreateElement-compatible, matching StatementImportBody.
+func ImportPanelBody(_ struct{}) ui.Node {
+	return ui.CreateElement(DocumentsPanel, documentsPanelProps{})
+}
+
 // DocumentsPanel is the registered component that owns the full import UI:
 // CSV paste, statement paste/wizard, receipt vision, draft review, and import
 // history. Extracted from Documents() so it can be embedded on /transactions
