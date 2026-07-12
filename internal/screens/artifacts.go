@@ -53,6 +53,9 @@ func Artifacts() ui.Node {
 	pageS := ui.UseState(1)
 	prevPage := ui.UseEvent(Prevent(func() { pageS.Set(pageS.Get() - 1) }))
 	nextPage := ui.UseEvent(Prevent(func() { pageS.Set(pageS.Get() + 1) }))
+	// Each vault row carries a thumbnail image; render a few above the fold on mount
+	// and fill in the rest of the page after first paint so the page paints fast.
+	vaultReady := useAfterSettle("artifacts")
 
 	uploadImage := func() {
 		pickFile("image/*", func(name, mime string, data []byte) {
@@ -117,6 +120,9 @@ func Artifacts() ui.Node {
 	curPage := pagination.Clamp(pageS.Get(), totalFiles, artifactsPageSize)
 	totalPages := pagination.TotalPages(totalFiles, artifactsPageSize)
 	pageItems := pagination.Slice(list, curPage, artifactsPageSize)
+	if !vaultReady && len(pageItems) > 3 {
+		pageItems = pageItems[:3] // above-the-fold rows first; the rest after paint
+	}
 
 	var rows []ui.Node
 	for _, a := range pageItems {

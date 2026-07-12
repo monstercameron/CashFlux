@@ -438,7 +438,13 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 	}
 
-	rows := MapKeyed(mainSubs,
+	// Above the fold on mount: cap the rendered rows; the rest render after first
+	// paint (subReady) so a long subscription list paints immediately.
+	displayMain := mainSubs
+	if !subReady && len(mainSubs) > 6 {
+		displayMain = mainSubs[:6]
+	}
+	rows := MapKeyed(displayMain,
 		func(s subscriptions.Subscription) any { return s.Name + "|" + fmt.Sprint(s.Amount) },
 		func(s subscriptions.Subscription) ui.Node {
 			cancelledOn, isCancelled := cancelMap[strings.ToLower(strings.TrimSpace(s.Name))]

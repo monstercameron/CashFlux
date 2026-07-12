@@ -125,9 +125,15 @@ func SmartSurface() ui.Node {
 			freeEnabled++
 		}
 	}
+	// Cap the feed above the fold on mount; the rest of the findings render after
+	// first paint (catalogReady). The masthead count still reflects the full set.
+	feedInsights := insights
+	if !catalogReady && len(feedInsights) > 5 {
+		feedInsights = feedInsights[:5]
+	}
 	blocks := []ui.Node{
 		masthead,
-		smartInsightsSection(insights, freeEnabled, counts.FreeOn+counts.AIOn > 0),
+		smartInsightsSection(feedInsights, freeEnabled, counts.FreeOn+counts.AIOn > 0),
 	}
 	// AI feature outputs are content — they follow the feed; the digest is config,
 	// so it rides with the catalog at the bottom.
