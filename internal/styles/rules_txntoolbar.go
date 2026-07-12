@@ -97,4 +97,19 @@ func registerTxnToolbar() {
 		borderColor("var(--accent)"),
 		color("var(--accent)"),
 	)
+
+	// Bulk-action bar: one flat row that scrolls horizontally instead of wrapping.
+	rule(".bulk-bar",
+		flexWrap("nowrap"),
+		overflowX("auto"),
+		paddingBottom(".2rem"),
+	)
+
+	// Tooltip stacking: a ledger tile establishes a transform stacking context on hover
+	// (the lift), which would otherwise trap a .tbar-tip below the tile beneath it. Lift
+	// the hovered tile's layer above its siblings so the tooltip paints on top.
+	rule(".bento-ledger > .w:hover",
+		position("relative"),
+		zIndex("5"),
+	)
 }

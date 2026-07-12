@@ -183,20 +183,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 		selAtom.Set(nm)
 	}))
-	selectDuplicates := ui.UseEvent(Prevent(func() {
-		nm := map[string]bool{}
-		for _, g := range dedupe.FindDuplicates(props.Shown) {
-			for _, dupID := range g.IDs[1:] {
-				nm[dupID] = true
-			}
-		}
-		selAtom.Set(nm)
-		if n := len(nm); n > 0 {
-			uistate.PostNotice(uistate.T("transactions.dupSelected", plural(n, "duplicate")), false)
-		} else {
-			uistate.PostNotice(uistate.T("transactions.dupNoneSelected"), false)
-		}
-	}))
 
 	// Filter option lists, built once from the entity slices via the reusable
 	// OptionsFrom helper (value extractor + label extractor) rather than per-field loops.
@@ -360,18 +346,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			toolbarIconBtn("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, ""),
 			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, ""),
 			toolbarIconBtn("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, ""),
+			// Select-all now lives in the single toolbar row with the other glyphs
+			// (shown once there are rows to select).
+			If(len(props.Shown) > 0,
+				toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllTitle"), selectAllFiltered, "")),
 		},
 	})
-
-	// Select-all + duplicate notice controls row (below the toolbar proper) — glyph
-	// buttons with hover labels, matching the toolbar.
-	selectAllNode := If(len(props.Shown) > 0,
-		toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllTitle"), selectAllFiltered, ""))
-	dupNotice := If(dupCount > 0, Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Span(css.Class("muted", tw.Text13), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
-		toolbarIconBtn("txn-selectdupes-btn", icon.Copy, uistate.T("transactions.selectDuplicatesTitle"), selectDuplicates, "")))
-	controlsRow := If(len(props.Shown) > 0 || dupCount > 0,
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Mt2), selectAllNode, dupNotice))
 
 	// Screen-reader live region announcing the match count + net as filters change.
 	var shownNet int64
@@ -393,7 +373,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(toolbar, controlsRow, statusLine),
+		Body: Div(toolbar, statusLine),
 	})
 }
 
@@ -584,11 +564,12 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		uiw.OptionsFrom(app.Members(), func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
 
 	n := len(selAtom.Get())
-	// Bulk-action bar: keep the category/member pickers as selects, but the actions are
-	// sleek glyph buttons with hover labels (matching the toolbar). "Clear selection" is
-	// the escape action, kept as a plain text link.
-	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-		Span(css.Class("muted", tw.Text13), uistate.T("transactions.selected", plural(n, "transaction"))),
+	// Bulk-action bar: a single flat row — the category/member pickers stay as selects,
+	// the actions are sleek glyph buttons with hover labels (matching the toolbar), and it
+	// scrolls horizontally rather than wrapping. "Clear selection" is the escape action,
+	// kept as a plain text link.
+	body := Div(css.Class("bulk-bar", tw.Flex, tw.Gap2, tw.ItemsCenter),
+		Span(css.Class("muted", tw.Text13, tw.ShrinkO), uistate.T("transactions.selected", plural(n, "transaction"))),
 		uiw.SelectInput(uiw.SelectInputProps{
 			Options: bulkCatOpts, Selected: bulkCatAtom.Get(), AriaLabel: uistate.T("transactions.categoryToApply"),
 			OnChange: func(v string) { bulkCatAtom.Set(v) },
