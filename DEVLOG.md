@@ -1,3 +1,36 @@
+## 2026-07-12 — Refined the 4 import forms + a project-wide Smart/Smart+ tier design system
+
+Cam: the per-source forms (after clicking a picker tile) "feel unpolished — refine the content." Then:
+"Smart should also get its own design a la Smart+ and set them as project-wide tokens to be reused
+elsewhere."
+
+Screenshotted all four forms first. Shared problems: a redundant big heading (you'd already picked the
+type via the tile), a wall of description text before the input, awkward button placement, and lots of
+dead vertical space. Also, Smart+ already had a violet identity but Smart was just "neutral."
+
+**Tier design system (project-wide).** New `internal/styles/rules_tier.go` (registered in install.go):
+fixed tier tokens `--tier-smart*` (green) and `--tier-smartplus*` (violet) — fixed, not tied to the
+user accent, so the tier brand is stable across themes/accents. Reusable primitives: `.tier-chip`
+(the uppercase pill; its ✦ inherits the tier hue via currentColor), `.tier-icon` (tinted rounded
+square), and `.btn-plus` (the violet AI-action button). Go helpers `tierChip(plus,label)` /
+`tierIcon(plus,ic)` in smart_brand.go so any surface can adopt the tier look. The import picker's tiles
++ branch pills now route through these (Smart finally has its own green identity), and I dropped the
+redundant corner ✦ badge on Smart+ tiles.
+
+**Refined forms.** Added a shared `importFormHeader(plus, icon, title, desc)` — tier icon + title +
+tier chip + one-line desc — and gave each form a `.doc-form-body` (tidy flex-column). Trimmed the copy
+hard (moved column details to a terse hint + the collapsible; cut the redundant headings). `CsvImportCard`
+and `ImageImportCard` were slimmed to return just their inputs (no more EntityListSection card/title —
+the header owns those; dropped their now-unused `uiw` import). The generative-AI actions became violet
+Smart+ `btn-plus` buttons with the ✦ glyph, so a form like Statement text now visibly pairs a green
+**Parse statement** with a violet **✦ Extract with AI** — the deterministic/AI split reads instantly.
+Fixed one layout bug the flex-column introduced: a direct `<button>` child stretched full-width (the PDF
+"Read statement" became a heavy violet bar) — added `.doc-form-body > button { align-self: flex-start }`
+and a disabled-dim for `.btn-plus:disabled`.
+
+Verified with screenshots of all four forms + the picker, and re-ran the 4 import-wizard e2e (green).
+Testids all preserved (docTypeTile still emits `.smartplus`; form testids unchanged).
+
 ## 2026-07-12 — Import wizard: e2e coverage, design review, v1.0.17
 
 Cam: "e2e test and review with fe design skill to verify, then when good version bump and remote push."

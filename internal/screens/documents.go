@@ -1057,25 +1057,25 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	if n := strings.TrimSpace(pdfName.Get()); n != "" {
 		pdfFileLabel = n
 	}
-	pdfCard := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("statementimport.title"),
-		Body: Div(css.Class(tw.FlexCol, tw.Gap3),
-			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("statementimport.intro")),
+	pdfCard := Fragment(
+		importFormHeader(true, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
+			uistate.T("documents.typePdfTitle"), uistate.T("documents.pdfFormDesc")),
+		Div(css.Class("doc-form-body"),
 			Div(css.Class("statement-drop"),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "statementimport-choose"), OnClick(choosePDF),
 					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("statementimport.choose"))),
 				Span(css.Class("statement-file", tw.TextDim), Attr("data-testid", "statementimport-filename"), pdfFileLabel)),
 			If(aiLoading.Get(), P(css.Class("muted"), Attr("data-testid", "statementimport-loading"), uistate.T("statementimport.reading"))),
 			buttonWithDisabled(pdfData.Get() == "" || aiLoading.Get(),
-				[]any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "statementimport-run"), OnClick(runPDFAI)},
-				uistate.T("statementimport.run")),
+				[]any{css.Class("btn btn-plus", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "statementimport-run"), OnClick(runPDFAI)},
+				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("statementimport.run"))),
 			If(pdfData.Get() != "", Label(css.Class("statement-savedoc", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "statementimport-savedoc"), OnChange(onTogglePdfSave)}, checkedAttr(pdfSaveCopy.Get())...)...),
 				Div(css.Class("row-main"),
 					Span(uistate.T("statementimport.saveDoc")),
 					Span(css.Class("row-meta", tw.TextDim), uistate.T("statementimport.saveDocHint"))))),
 		),
-	})
+	)
 
 	inReview := stage.Get() == "review"
 
@@ -1103,8 +1103,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					// Smart branch — deterministic helpers based on predictions.
 					Div(css.Class("doc-branch"),
 						Div(css.Class("doc-branch-head"),
-							Span(css.Class("doc-branch-title"), uistate.T("documents.smartBranch")),
-							Span(css.Class("doc-tier-pill"), uistate.T("documents.smartBranchTier")),
+							Span(css.Class("doc-branch-title", "smart"), uistate.T("documents.smartBranch")),
+							tierChip(false, uistate.T("documents.smartBranchTier")),
 							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartBranchDesc"))),
 						Div(css.Class("doc-type-grid"),
 							docTypeTile("import-type-csv", onPickCSV, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)),
@@ -1117,7 +1117,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					Div(css.Class("doc-branch"),
 						Div(css.Class("doc-branch-head"),
 							Span(css.Class("doc-branch-title", "plus"), uistate.T("documents.smartPlusBranch")),
-							Span(css.Class("doc-tier-pill", "plus"), smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(uistate.T("documents.smartPlusBranchTier"))),
+							tierChip(true, uistate.T("documents.smartPlusBranchTier")),
 							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartPlusBranchDesc"))),
 						Div(css.Class("doc-type-grid"),
 							docTypeTile("import-type-pdf", onPickPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
@@ -1134,59 +1134,68 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 							OnClick(backToTypes), uistate.T("documents.backToTypes"))),
 
 					// Smart · CSV / spreadsheet — lossless, imports directly.
-					If(source.Get() == "csv", CsvImportCard(csvImportCardProps{
-						Accounts:     accounts,
-						ImportAcctID: importAcct.Get(),
-						Msg:          msg.Get(),
-						DupWarn:      csvDupWarn.Get(),
-						OnChooseFile: chooseCsvFile,
-						OnAcctChange: onAcct,
-						OnCsvInput:   onCsv,
-						OnImportCSV:  importCSV,
-						OnConfirmCSV: confirmCSV,
-					})),
+					If(source.Get() == "csv", Fragment(
+						importFormHeader(false, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)),
+							uistate.T("documents.typeCsvTitle"), uistate.T("documents.csvFormDesc")),
+						CsvImportCard(csvImportCardProps{
+							Accounts:     accounts,
+							ImportAcctID: importAcct.Get(),
+							Msg:          msg.Get(),
+							DupWarn:      csvDupWarn.Get(),
+							OnChooseFile: chooseCsvFile,
+							OnAcctChange: onAcct,
+							OnCsvInput:   onCsv,
+							OnImportCSV:  importCSV,
+							OnConfirmCSV: confirmCSV,
+						}),
+					)),
 
-					// Smart · statement text — deterministic column auto-mapping (with an
-					// AI-extract escalation for layouts the parser can't map).
-					If(source.Get() == "stmt", uiw.EntityListSection(uiw.EntityListSectionProps{
-						Title: uistate.T("documents.stmtTitle"),
-						Body: Fragment(
-							P(css.Class("muted"), uistate.T("documents.stmtDesc")),
+					// Smart · statement text — deterministic column auto-mapping (with a
+					// Smart+ AI-extract escalation for layouts the parser can't map).
+					If(source.Get() == "stmt", Fragment(
+						importFormHeader(false, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
+							uistate.T("documents.typeStmtTitle"), uistate.T("documents.stmtFormDesc")),
+						Div(css.Class("doc-form-body"),
 							Form(OnSubmit(parseStatement),
-								Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
+								Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2), Style(map[string]string{"margin-bottom": "0.5rem"}),
 									Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
-									Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
-										OnClick(extractWithAI), uistate.T("documents.extractAI")),
+									Button(css.Class("btn btn-plus", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "extract-ai-btn"),
+										OnClick(extractWithAI),
+										uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("documents.extractAI"))),
 								),
-								Textarea(css.Class("field field-wide"), Attr("rows", "3"),
+								Textarea(css.Class("field field-wide"), Attr("rows", "4"),
 									Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
 									OnInput(onStmt),
 								),
 							),
-							Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-								P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
-								Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
+							Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+								P(css.Class("muted", tw.Text12), uistate.T("documents.cadenceDesc")),
+								Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
 									OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
 								If(cadenceMsg.Get() != "",
 									Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
 										Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
 							),
 						),
-					})),
+					)),
 
 					// Smart+ · statement PDF (AI reads the file natively).
 					If(source.Get() == "pdf", pdfCard),
 
 					// Smart+ · receipt photo (vision AI).
-					If(source.Get() == "receipt", ImageImportCard(imageImportCardProps{
-						ImageURL:  imageURL.Get(),
-						AILoading: aiLoading.Get(),
-						AIErr:     aiErr.Get(),
-						NeedsKey:  needsKey.Get(),
-						OnChoose:  chooseImage,
-						OnReadAI:  readAI,
-						Nav:       nav,
-					})),
+					If(source.Get() == "receipt", Fragment(
+						importFormHeader(true, uiw.Icon(icon.Receipt, css.Class(tw.W5, tw.H5)),
+							uistate.T("documents.typeReceiptTitle"), uistate.T("documents.receiptFormDesc")),
+						ImageImportCard(imageImportCardProps{
+							ImageURL:  imageURL.Get(),
+							AILoading: aiLoading.Get(),
+							AIErr:     aiErr.Get(),
+							NeedsKey:  needsKey.Get(),
+							OnChoose:  chooseImage,
+							OnReadAI:  readAI,
+							Nav:       nav,
+						}),
+					)),
 
 					// Column-map wizard + saved profiles belong to the statement-text flow.
 					If(source.Get() == "stmt" && wizardVisible.Get(),
@@ -1456,16 +1465,32 @@ func DraftRow(props draftRowProps) ui.Node {
 // passed in already-hooked, so the tile is a pure render helper (no hooks) that's safe to
 // render several times in the picker grid.
 func docTypeTile(testid string, onClick ui.Handler, ic ui.Node, title, desc string, smartPlus bool) ui.Node {
-	classes := []any{"doc-type-tile"}
+	tileTier := "smart"
 	if smartPlus {
-		classes = append(classes, "smartplus")
+		tileTier = "smartplus"
 	}
-	return Button(css.Class(classes...), Type("button"), Attr("data-testid", testid), OnClick(onClick),
-		Div(css.Class("dt-icon"), ic),
+	return Button(css.Class("doc-type-tile", tileTier), Type("button"), Attr("data-testid", testid), OnClick(onClick),
+		tierIcon(smartPlus, ic),
 		Div(css.Class("dt-body"),
 			Div(css.Class("dt-title"), title),
 			Div(css.Class("dt-desc"), desc)),
-		If(smartPlus, Span(css.Class("dt-badge"), smartGlyph(true))),
+	)
+}
+
+// importFormHeader is the shared header for each import-source form: the source's tier
+// icon + title + tier chip, and a one-line description. It ties the form back to the
+// tile that opened it and carries the Smart / Smart+ identity into the form.
+func importFormHeader(plus bool, ic ui.Node, title, desc string) ui.Node {
+	tierLabel := uistate.T("documents.smartBranch")
+	if plus {
+		tierLabel = uistate.T("documents.smartPlusBranch")
+	}
+	return Div(css.Class("doc-form-title"),
+		tierIcon(plus, ic),
+		Div(css.Class("doc-form-titletext"),
+			H3(css.Class("doc-form-h"), Span(title), tierChip(plus, tierLabel)),
+			P(css.Class("doc-form-desc"), desc),
+		),
 	)
 }
 

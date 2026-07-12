@@ -33,6 +33,31 @@ func smartGlyph(ai bool, sizeTone ...string) ui.Node {
 	return uiw.Icon(icon.Sparkles, css.Class(cls), Attr("aria-hidden", "true"))
 }
 
+// tierClass maps the plus flag to the shared tier modifier class ("smart" / "plus")
+// used by the project-wide .tier-chip / .tier-icon primitives.
+func tierClass(plus bool) string {
+	if plus {
+		return "plus"
+	}
+	return "smart"
+}
+
+// tierChip renders the reusable Smart / Smart+ pill: the sparkle glyph (inheriting the
+// tier hue via currentColor) + a label. Project-wide primitive — use it anywhere a
+// surface needs to be marked as the deterministic (Smart) or generative-AI (Smart+) tier.
+func tierChip(plus bool, label string) ui.Node {
+	return Span(css.Class("tier-chip", tierClass(plus)),
+		uiw.Icon(icon.Sparkles, css.Class(tw.Fold(tw.W3, tw.H3)), Attr("aria-hidden", "true")),
+		Span(label),
+	)
+}
+
+// tierIcon wraps a glyph in the tier-tinted rounded square (.tier-icon). Project-wide
+// primitive shared by the import picker tiles and the import-source form headers.
+func tierIcon(plus bool, ic ui.Node) ui.Node {
+	return Span(css.Class("tier-icon", tierClass(plus)), ic)
+}
+
 // smartBrandHeader builds a branded card header: the sparkle brand glyph + the
 // title (matching the auto `.card-head`/`.card-title` styling), with an optional
 // trailing action node on the right. Pass ai=true for the AI ("Smart AI") tone.
