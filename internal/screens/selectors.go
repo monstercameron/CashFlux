@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -15,6 +17,24 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
+
+// netWorthCache lets useNetWorth share one computation across components in a single
+// render. The dashboard computes net worth twice per mount — once for the widget
+// context, once for the hero — and (with no active scope) they're identical; this
+// collapses them to one full-ledger pass. Keyed on the store revision PLUS the account
+// set, so a scoped view and the household total never share an entry, and a scope
+// change recomputes (which the previous rev-only memo key missed).
+var netWorthCache = map[string]ledger.NetWorthResult{}
+
+// acctSig is a cheap, order-independent signature of an account set for the cache key.
+func acctSig(accounts []domain.Account) string {
+	ids := make([]string, len(accounts))
+	for i, a := range accounts {
+		ids[i] = a.ID
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, ",")
+}
 
 // This file holds the dashboard's render-time *derived selectors* — net worth,
 // period totals, budget health — wrapped in ui.UseMemo so each recomputes
@@ -31,10 +51,13 @@ import (
 // useNetWorth returns a memoized net-worth breakdown. Net worth spans all accounts
 // and all time, so the data/FX revision (app.Rev()) is a complete key.
 func useNetWorth(app *appstate.App, accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) ledger.NetWorthResult {
+	sig := acctSig(accounts)
 	return ui.UseMemo(func() ledger.NetWorthResult {
-		nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
-		return nw
-	}, app.Rev())
+		return memoByRev(netWorthCache, revKey(app)+"|"+sig, func() ledger.NetWorthResult {
+			nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
+			return nw
+		})
+	}, app.Rev(), sig)
 }
 
 // usePeriodTotals returns memoized income/expense for the period over the given
