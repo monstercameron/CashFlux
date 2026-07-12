@@ -242,6 +242,9 @@ func InvestmentsScreen() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get()
 	formulasAtom := uistate.UseInvestShowFormulas()
+	// Defer the growth chart (a d3 time-series, the page's heaviest single render)
+	// off the initial mount; the summary + holdings paint immediately.
+	chartReady := useAfterSettle("investments")
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -261,10 +264,14 @@ func InvestmentsScreen() ui.Node {
 
 	specs := []domain.WidgetSpec{
 		investNativeSpec("invest-summary"),
-		investNativeSpec("invest-growth"),
+	}
+	if chartReady {
+		specs = append(specs, investNativeSpec("invest-growth"))
+	}
+	specs = append(specs,
 		investNativeSpec("invest-toolbar"),
 		investNativeSpec("invest-securities"),
-	}
+	)
 	if len(v.Securities) > 0 {
 		specs = append(specs, investNativeSpec("invest-allocation"))
 	}
