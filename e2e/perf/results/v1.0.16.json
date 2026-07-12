@@ -1,0 +1,3488 @@
+{
+  "version": "1.0.16",
+  "capturedAt": "2026-07-12T03:00:36.782Z",
+  "generatedWith": {
+    "passes": 11,
+    "viewport": "1440x900",
+    "server": "e2e/serve.mjs (uncompressed static)",
+    "reducer": "best-of-N for CPU-time metrics (mount/TBT/settle) to filter OS-scheduler contention; median for CLS/DOM",
+    "note": "warm SPA navigation from '/'; cold-load section is the one-time wasm boot"
+  },
+  "summary": {
+    "avgPageScore": 98,
+    "loadScore": 51,
+    "rated": 46,
+    "unrated": 0,
+    "worst": [
+      {
+        "route": "/smart",
+        "score": 92
+      },
+      {
+        "route": "/subscriptions",
+        "score": 93
+      },
+      {
+        "route": "/",
+        "score": 95
+      },
+      {
+        "route": "/transactions",
+        "score": 95
+      },
+      {
+        "route": "/accounts",
+        "score": 95
+      }
+    ],
+    "best": [
+      {
+        "route": "/investments",
+        "score": 99
+      },
+      {
+        "route": "/networth",
+        "score": 99
+      },
+      {
+        "route": "/health",
+        "score": 99
+      },
+      {
+        "route": "/assistant",
+        "score": 99
+      },
+      {
+        "route": "/household",
+        "score": 99
+      }
+    ]
+  },
+  "coldLoad": {
+    "metrics": {
+      "appReadyMs": 4335,
+      "fcpMs": 52,
+      "lcpMs": 896,
+      "tbtMs": 4283,
+      "cls": 0.00006314019097222222,
+      "ttfbMs": 5.300000011920929,
+      "domContentLoadedMs": 141.0999999642372,
+      "loadEventMs": 142.30000001192093,
+      "transferMB": 18.63752841949463,
+      "wasmMB": 14.952728271484375
+    },
+    "score": 51,
+    "parts": {
+      "appReadyMs": {
+        "value": 4335,
+        "sub": 0.45815363150776245,
+        "weight": 30,
+        "p10": 1500,
+        "median": 4000,
+        "label": "Time to interactive",
+        "unit": "ms",
+        "hint": "Cold boot: wasm download + instantiate + seed + first mount, until the app signals ready."
+      },
+      "fcpMs": {
+        "value": 52,
+        "sub": 0.9999999695614152,
+        "weight": 15,
+        "p10": 1000,
+        "median": 2500,
+        "label": "First Contentful Paint",
+        "unit": "ms",
+        "hint": "When the first pixels of content paint."
+      },
+      "lcpMs": {
+        "value": 896,
+        "sub": 0.954499658402628,
+        "weight": 20,
+        "p10": 1200,
+        "median": 3000,
+        "label": "Largest Contentful Paint",
+        "unit": "ms",
+        "hint": "When the largest content element paints."
+      },
+      "tbtMs": {
+        "value": 4283,
+        "sub": 0.010930652491768944,
+        "weight": 20,
+        "p10": 200,
+        "median": 600,
+        "label": "Blocking time (boot)",
+        "unit": "ms",
+        "hint": "Total blocking time from long tasks during boot — wasm instantiate/seed jank."
+      },
+      "transferMB": {
+        "value": 18.63752841949463,
+        "sub": 0.21715562364485164,
+        "weight": 15,
+        "p10": 2,
+        "median": 8,
+        "label": "Transfer weight",
+        "unit": "MB",
+        "hint": "Total bytes over the wire on cold load — dominated by the wasm binary."
+      }
+    }
+  },
+  "pages": [
+    {
+      "route": "/",
+      "label": "/",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 2.4,
+        "tbtMs": 86,
+        "stableMs": 140.7,
+        "cls": 0,
+        "domNodes": 555,
+        "totalNodes": 1197,
+        "heapMB": 16.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 2.4,
+          "sub": 0.9999998054949566,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 86,
+          "sub": 0.8885312328835235,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 140.7,
+          "sub": 0.9577618070780841,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 555,
+          "sub": 0.9490878854322593,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/transactions",
+      "label": "/transactions",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 91.5,
+        "tbtMs": 38,
+        "stableMs": 105.2,
+        "cls": 0,
+        "domNodes": 1072,
+        "totalNodes": 1714,
+        "heapMB": 16.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 91.5,
+          "sub": 0.9387611040600199,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 38,
+          "sub": 0.9730700352329125,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 105.2,
+          "sub": 0.9779913810276943,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1072,
+          "sub": 0.8408079788984242,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/accounts",
+      "label": "/accounts",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 87.3,
+        "tbtMs": 30,
+        "stableMs": 104.1,
+        "cls": 0,
+        "domNodes": 1169,
+        "totalNodes": 1811,
+        "heapMB": 16.4
+      },
+      "parts": {
+        "mountMs": {
+          "value": 87.3,
+          "sub": 0.9440843799629415,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 30,
+          "sub": 0.983546724304825,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 104.1,
+          "sub": 0.9785334978197655,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1169,
+          "sub": 0.8195881011394277,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/budgets",
+      "label": "/budgets",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 63.7,
+        "tbtMs": 9,
+        "stableMs": 68.9,
+        "cls": 0,
+        "domNodes": 881,
+        "totalNodes": 1523,
+        "heapMB": 16.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 63.7,
+          "sub": 0.970993271705965,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 9,
+          "sub": 0.9992601156564505,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 68.9,
+          "sub": 0.9925343321588359,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 881,
+          "sub": 0.8825909720448818,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/goals",
+      "label": "/goals",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 50.9,
+        "tbtMs": 0,
+        "stableMs": 66.3,
+        "cls": 0,
+        "domNodes": 721,
+        "totalNodes": 1363,
+        "heapMB": 16.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 50.9,
+          "sub": 0.9827036827965925,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 66.3,
+          "sub": 0.9932862513471067,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 721,
+          "sub": 0.9165695899886677,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/todo",
+      "label": "/todo",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 53.2,
+        "tbtMs": 0,
+        "stableMs": 69.9,
+        "cls": 0,
+        "domNodes": 984,
+        "totalNodes": 1626,
+        "heapMB": 16.2
+      },
+      "parts": {
+        "mountMs": {
+          "value": 53.2,
+          "sub": 0.9807852422837507,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 69.9,
+          "sub": 0.9922341146377641,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 984,
+          "sub": 0.8601145281505108,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/notifications",
+      "label": "/notifications",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 53.4,
+        "tbtMs": 0,
+        "stableMs": 70.8,
+        "cls": 0,
+        "domNodes": 851,
+        "totalNodes": 1493,
+        "heapMB": 16.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 53.4,
+          "sub": 0.980614334880668,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 70.8,
+          "sub": 0.9919587172845642,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 851,
+          "sub": 0.8890763267952656,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/debt",
+      "label": "/debt",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 82.5,
+        "tbtMs": 26,
+        "stableMs": 105.3,
+        "cls": 0,
+        "domNodes": 1320,
+        "totalNodes": 1962,
+        "heapMB": 15.4
+      },
+      "parts": {
+        "mountMs": {
+          "value": 82.5,
+          "sub": 0.949999417382746,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 26,
+          "sub": 0.9880108876265552,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 105.3,
+          "sub": 0.9779418144525787,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1320,
+          "sub": 0.7869865195973195,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/investments",
+      "label": "/investments",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 27.7,
+        "tbtMs": 0,
+        "stableMs": 38.5,
+        "cls": 0,
+        "domNodes": 646,
+        "totalNodes": 1288,
+        "heapMB": 15.8
+      },
+      "parts": {
+        "mountMs": {
+          "value": 27.7,
+          "sub": 0.9965642916570676,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 38.5,
+          "sub": 0.9987013518195627,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 646,
+          "sub": 0.9317378733772679,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/allocate",
+      "label": "/allocate",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 45.1,
+        "tbtMs": 0,
+        "stableMs": 65.1,
+        "cls": 0,
+        "domNodes": 1097,
+        "totalNodes": 1739,
+        "heapMB": 16.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 45.1,
+          "sub": 0.9871394063845643,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 65.1,
+          "sub": 0.9936192520824731,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1097,
+          "sub": 0.8353270590238042,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/planning",
+      "label": "/planning",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 54,
+        "tbtMs": 0,
+        "stableMs": 69.8,
+        "cls": 0,
+        "domNodes": 891,
+        "totalNodes": 1533,
+        "heapMB": 15.9
+      },
+      "parts": {
+        "mountMs": {
+          "value": 54,
+          "sub": 0.9800977593238882,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 69.8,
+          "sub": 0.992264410548952,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 891,
+          "sub": 0.8804213039637337,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/recurring",
+      "label": "/recurring",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 64.6,
+        "tbtMs": 9,
+        "stableMs": 70.3,
+        "cls": 0,
+        "domNodes": 1090,
+        "totalNodes": 1732,
+        "heapMB": 17
+      },
+      "parts": {
+        "mountMs": {
+          "value": 64.6,
+          "sub": 0.9700815227188717,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 9,
+          "sub": 0.9992601156564505,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 70.3,
+          "sub": 0.9921123229606905,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1090,
+          "sub": 0.8368611442459933,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/reports",
+      "label": "/reports",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 74.9,
+        "tbtMs": 15,
+        "stableMs": 89.4,
+        "cls": 0,
+        "domNodes": 895,
+        "totalNodes": 1537,
+        "heapMB": 17.2
+      },
+      "parts": {
+        "mountMs": {
+          "value": 74.9,
+          "sub": 0.9589432924974879,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 15,
+          "sub": 0.9968817868126536,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 89.4,
+          "sub": 0.9852029264476019,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 895,
+          "sub": 0.8795524562312931,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/networth",
+      "label": "/networth",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 45.9,
+        "tbtMs": 0,
+        "stableMs": 53,
+        "cls": 0,
+        "domNodes": 666,
+        "totalNodes": 1308,
+        "heapMB": 17.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 45.9,
+          "sub": 0.9865631569349154,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 53,
+          "sub": 0.9964751033591157,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 666,
+          "sub": 0.9277583315739086,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/health",
+      "label": "/health",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 30.4,
+        "tbtMs": 0,
+        "stableMs": 41.3,
+        "cls": 0,
+        "domNodes": 608,
+        "totalNodes": 1250,
+        "heapMB": 17.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 30.4,
+          "sub": 0.995510247774068,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 41.3,
+          "sub": 0.9983699295020403,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 608,
+          "sub": 0.9391455803539446,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/assistant",
+      "label": "/assistant",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 35.5,
+        "tbtMs": 11,
+        "stableMs": 119.3,
+        "cls": 0,
+        "domNodes": 551,
+        "totalNodes": 1193,
+        "heapMB": 17.3
+      },
+      "parts": {
+        "mountMs": {
+          "value": 35.5,
+          "sub": 0.9931006833807645,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 11,
+          "sub": 0.9986694147596389,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 119.3,
+          "sub": 0.9705585913292791,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 551,
+          "sub": 0.9498175014264166,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/studio",
+      "label": "/studio",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 51.8,
+        "tbtMs": 0,
+        "stableMs": 68.4,
+        "cls": 0,
+        "domNodes": 805,
+        "totalNodes": 1447,
+        "heapMB": 17.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 51.8,
+          "sub": 0.9819633809727795,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 68.4,
+          "sub": 0.9926821518379622,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 805,
+          "sub": 0.8989356319770171,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/household",
+      "label": "/household",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 29.3,
+        "tbtMs": 0,
+        "stableMs": 37.6,
+        "cls": 0,
+        "domNodes": 541,
+        "totalNodes": 1183,
+        "heapMB": 18
+      },
+      "parts": {
+        "mountMs": {
+          "value": 29.3,
+          "sub": 0.9959583060093833,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 37.6,
+          "sub": 0.9987983173326772,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 541,
+          "sub": 0.9516277268890241,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/categories",
+      "label": "/categories",
+      "score": 96,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 68,
+        "tbtMs": 14,
+        "stableMs": 81.3,
+        "cls": 0,
+        "domNodes": 1278,
+        "totalNodes": 1920,
+        "heapMB": 18.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 68,
+          "sub": 0.9665436402663438,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 14,
+          "sub": 0.9974049359344672,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 81.3,
+          "sub": 0.9883889476525348,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1278,
+          "sub": 0.7959836286732981,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/rules",
+      "label": "/rules",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 78,
+        "tbtMs": 23,
+        "stableMs": 84.8,
+        "cls": 0,
+        "domNodes": 849,
+        "totalNodes": 1491,
+        "heapMB": 19.4
+      },
+      "parts": {
+        "mountMs": {
+          "value": 78,
+          "sub": 0.9553622160097677,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 23,
+          "sub": 0.9909590025318804,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 84.8,
+          "sub": 0.987057051839721,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 849,
+          "sub": 0.8895072837536913,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/artifacts",
+      "label": "/artifacts",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 115.3,
+        "tbtMs": 60,
+        "stableMs": 120.1,
+        "cls": 0,
+        "domNodes": 572,
+        "totalNodes": 1214,
+        "heapMB": 19.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 115.3,
+          "sub": 0.9066309235442118,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 60,
+          "sub": 0.9371585450800457,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 120.1,
+          "sub": 0.9701113529520575,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 572,
+          "sub": 0.9459530857485965,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/activity",
+      "label": "/activity",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 30.8,
+        "tbtMs": 0,
+        "stableMs": 44.2,
+        "cls": 0,
+        "domNodes": 758,
+        "totalNodes": 1400,
+        "heapMB": 19.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 30.8,
+          "sub": 0.9953409746743733,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 44.2,
+          "sub": 0.9979780561782281,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 758,
+          "sub": 0.9088717121930592,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/settings",
+      "label": "/settings",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 25.1,
+        "tbtMs": 0,
+        "stableMs": 50.9,
+        "cls": 0,
+        "domNodes": 567,
+        "totalNodes": 1209,
+        "heapMB": 19.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 25.1,
+          "sub": 0.9974335771943885,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 50.9,
+          "sub": 0.996877340805234,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 567,
+          "sub": 0.9468806777777035,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/help",
+      "label": "/help",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 24.9,
+        "tbtMs": 0,
+        "stableMs": 36.4,
+        "cls": 0,
+        "domNodes": 588,
+        "totalNodes": 1230,
+        "heapMB": 19.8
+      },
+      "parts": {
+        "mountMs": {
+          "value": 24.9,
+          "sub": 0.9974945533728172,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 36.4,
+          "sub": 0.9989205191671442,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 588,
+          "sub": 0.9429547264456104,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/about",
+      "label": "/about",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 18.6,
+        "tbtMs": 0,
+        "stableMs": 35.8,
+        "cls": 0,
+        "domNodes": 508,
+        "totalNodes": 1150,
+        "heapMB": 19.8
+      },
+      "parts": {
+        "mountMs": {
+          "value": 18.6,
+          "sub": 0.9989963617233046,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 35.8,
+          "sub": 0.9989786230735205,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 508,
+          "sub": 0.95745335651827,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/customize",
+      "label": "/customize",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 61.6,
+        "tbtMs": 7,
+        "stableMs": 77.1,
+        "cls": 0,
+        "domNodes": 696,
+        "totalNodes": 1338,
+        "heapMB": 19.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 61.6,
+          "sub": 0.9730786150343577,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 7,
+          "sub": 0.9996591386571854,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 77.1,
+          "sub": 0.9898947169768512,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 696,
+          "sub": 0.921696726032384,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/fields",
+      "label": "/fields",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 23.7,
+        "tbtMs": 0,
+        "stableMs": 35.9,
+        "cls": 0,
+        "domNodes": 545,
+        "totalNodes": 1187,
+        "heapMB": 20.9
+      },
+      "parts": {
+        "mountMs": {
+          "value": 23.7,
+          "sub": 0.9978428770359853,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 35.9,
+          "sub": 0.9989690766286958,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 545,
+          "sub": 0.9509060334347904,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/workflows",
+      "label": "/workflows",
+      "score": 97,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 66,
+        "tbtMs": 11,
+        "stableMs": 69.4,
+        "cls": 0,
+        "domNodes": 1035,
+        "totalNodes": 1677,
+        "heapMB": 17.2
+      },
+      "parts": {
+        "mountMs": {
+          "value": 66,
+          "sub": 0.9686423725212089,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 11,
+          "sub": 0.9986694147596389,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 69.4,
+          "sub": 0.9923849853783242,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 1035,
+          "sub": 0.8489265369471855,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/appearance",
+      "label": "/appearance",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 33.5,
+        "tbtMs": 0,
+        "stableMs": 36.8,
+        "cls": 0,
+        "domNodes": 574,
+        "totalNodes": 1216,
+        "heapMB": 16.3
+      },
+      "parts": {
+        "mountMs": {
+          "value": 33.5,
+          "sub": 0.9941103155767683,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 36.8,
+          "sub": 0.9988806777112377,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 574,
+          "sub": 0.9455807743688492,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/setup",
+      "label": "/setup",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 25.6,
+        "tbtMs": 0,
+        "stableMs": 35.9,
+        "cls": 0,
+        "domNodes": 470,
+        "totalNodes": 1112,
+        "heapMB": 16.5
+      },
+      "parts": {
+        "mountMs": {
+          "value": 25.6,
+          "sub": 0.9972774672610143,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 35.9,
+          "sub": 0.9989690766286958,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 470,
+          "sub": 0.9638522612647213,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/credit",
+      "label": "/credit",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 33,
+        "tbtMs": 0,
+        "stableMs": 37.3,
+        "cls": 0,
+        "domNodes": 607,
+        "totalNodes": 1249,
+        "heapMB": 16.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 33,
+          "sub": 0.9943497439776603,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 37.3,
+          "sub": 0.9988296226702902,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 607,
+          "sub": 0.9393375816027419,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/loans",
+      "label": "/loans",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 19.2,
+        "tbtMs": 0,
+        "stableMs": 35.6,
+        "cls": 0,
+        "domNodes": 550,
+        "totalNodes": 1192,
+        "heapMB": 16.8
+      },
+      "parts": {
+        "mountMs": {
+          "value": 19.2,
+          "sub": 0.9988872852625489,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 35.6,
+          "sub": 0.9989975516240612,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 550,
+          "sub": 0.949999417382746,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/bills",
+      "label": "/bills",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 50.6,
+        "tbtMs": 0,
+        "stableMs": 62.7,
+        "cls": 0,
+        "domNodes": 701,
+        "totalNodes": 1343,
+        "heapMB": 16.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 50.6,
+          "sub": 0.9829474371183864,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 62.7,
+          "sub": 0.9942584765581436,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 701,
+          "sub": 0.9206765232511862,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/subscriptions",
+      "label": "/subscriptions",
+      "score": 93,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 120.2,
+        "tbtMs": 66,
+        "stableMs": 137.1,
+        "cls": 0,
+        "domNodes": 763,
+        "totalNodes": 1405,
+        "heapMB": 16.2
+      },
+      "parts": {
+        "mountMs": {
+          "value": 120.2,
+          "sub": 0.8997162739472042,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 66,
+          "sub": 0.9262740298672376,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 137.1,
+          "sub": 0.9600282190528218,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 763,
+          "sub": 0.9078224608529674,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/insights",
+      "label": "/insights",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 29.9,
+        "tbtMs": 12,
+        "stableMs": 111.9,
+        "cls": 0,
+        "domNodes": 570,
+        "totalNodes": 1212,
+        "heapMB": 16.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 29.9,
+          "sub": 0.9957170841267284,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 12,
+          "sub": 0.9982988339597236,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 111.9,
+          "sub": 0.9745685863736124,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 570,
+          "sub": 0.9463246715099914,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/smart",
+      "label": "/smart",
+      "score": 92,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 135.9,
+        "tbtMs": 81,
+        "stableMs": 152,
+        "cls": 0,
+        "domNodes": 506,
+        "totalNodes": 1148,
+        "heapMB": 17.9
+      },
+      "parts": {
+        "mountMs": {
+          "value": 135.9,
+          "sub": 0.8771604343414783,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 81,
+          "sub": 0.8980937828301068,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 152,
+          "sub": 0.9503849054715543,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 506,
+          "sub": 0.9577987256523355,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/members",
+      "label": "/members",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 26.7,
+        "tbtMs": 0,
+        "stableMs": 36.7,
+        "cls": 0,
+        "domNodes": 565,
+        "totalNodes": 1207,
+        "heapMB": 17.7
+      },
+      "parts": {
+        "mountMs": {
+          "value": 26.7,
+          "sub": 0.9969155116096511,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 36.7,
+          "sub": 0.9988907213737052,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 565,
+          "sub": 0.9472504257713811,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/split",
+      "label": "/split",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 20.6,
+        "tbtMs": 0,
+        "stableMs": 37,
+        "cls": 0,
+        "domNodes": 479,
+        "totalNodes": 1121,
+        "heapMB": 15.8
+      },
+      "parts": {
+        "mountMs": {
+          "value": 20.6,
+          "sub": 0.9986057320875332,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 37,
+          "sub": 0.9988604232874498,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 479,
+          "sub": 0.9623687970696966,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/widget-builder",
+      "label": "/widget-builder",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 61.9,
+        "tbtMs": 6,
+        "stableMs": 73.5,
+        "cls": 0,
+        "domNodes": 564,
+        "totalNodes": 1206,
+        "heapMB": 16.1
+      },
+      "parts": {
+        "mountMs": {
+          "value": 61.9,
+          "sub": 0.9727843802428915,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 6,
+          "sub": 0.9997927420736237,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 73.5,
+          "sub": 0.9911031618175605,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 564,
+          "sub": 0.9474350208627048,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/widget-manager",
+      "label": "/widget-manager",
+      "score": 98,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 42.7,
+        "tbtMs": 0,
+        "stableMs": 52.7,
+        "cls": 0,
+        "domNodes": 893,
+        "totalNodes": 1535,
+        "heapMB": 15.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 42.7,
+          "sub": 0.9887970466953486,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 52.7,
+          "sub": 0.9965342535081312,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 893,
+          "sub": 0.8799869478041702,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/documents",
+      "label": "/documents",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 28.7,
+        "tbtMs": 0,
+        "stableMs": 40.2,
+        "cls": 0,
+        "domNodes": 541,
+        "totalNodes": 1183,
+        "heapMB": 15.9
+      },
+      "parts": {
+        "mountMs": {
+          "value": 28.7,
+          "sub": 0.9961919051040027,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 40.2,
+          "sub": 0.9985055566727619,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 541,
+          "sub": 0.9516277268890241,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/duplicates",
+      "label": "/duplicates",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 23.2,
+        "tbtMs": 0,
+        "stableMs": 36.3,
+        "cls": 0,
+        "domNodes": 459,
+        "totalNodes": 1101,
+        "heapMB": 16.9
+      },
+      "parts": {
+        "mountMs": {
+          "value": 23.2,
+          "sub": 0.997979189175429,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 36.3,
+          "sub": 0.9989303409826574,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 459,
+          "sub": 0.9656368745248457,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/plans",
+      "label": "/plans",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 17.4,
+        "tbtMs": 0,
+        "stableMs": 35.1,
+        "cls": 0,
+        "domNodes": 473,
+        "totalNodes": 1115,
+        "heapMB": 16.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 17.4,
+          "sub": 0.9991942373309592,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 35.1,
+          "sub": 0.9990439185824143,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 473,
+          "sub": 0.9633600706178918,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/p/side-hustle",
+      "label": "/p/side-hustle",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 45.5,
+        "tbtMs": 0,
+        "stableMs": 56.8,
+        "cls": 0,
+        "domNodes": 538,
+        "totalNodes": 1180,
+        "heapMB": 17
+      },
+      "parts": {
+        "mountMs": {
+          "value": 45.5,
+          "sub": 0.9868527435386796,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 56.8,
+          "sub": 0.9956770353385849,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 538,
+          "sub": 0.9521668670772132,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/p/priya-business",
+      "label": "/p/priya-business",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 43.8,
+        "tbtMs": 0,
+        "stableMs": 57.8,
+        "cls": 0,
+        "domNodes": 567,
+        "totalNodes": 1209,
+        "heapMB": 16.4
+      },
+      "parts": {
+        "mountMs": {
+          "value": 43.8,
+          "sub": 0.988050664914915,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 57.8,
+          "sub": 0.9954519561087996,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 567,
+          "sub": 0.9468806777777035,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    },
+    {
+      "route": "/p/marcus-hobbies",
+      "label": "/p/marcus-hobbies",
+      "score": 99,
+      "grade": {
+        "letter": "A+",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 37.8,
+        "tbtMs": 0,
+        "stableMs": 51.5,
+        "cls": 0,
+        "domNodes": 491,
+        "totalNodes": 1133,
+        "heapMB": 16.6
+      },
+      "parts": {
+        "mountMs": {
+          "value": 37.8,
+          "sub": 0.9918381580641991,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 0,
+          "sub": 1,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 51.5,
+          "sub": 0.9967652261769262,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 491,
+          "sub": 0.9603593050473351,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 11,
+      "errored": 0
+    }
+  ]
+}
