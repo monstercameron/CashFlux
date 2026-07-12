@@ -177,8 +177,23 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}))
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
+		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
+		cur := selAtom.Get()
+		// Toggle: if every shown row is already selected, clear the selection;
+		// otherwise select all shown rows.
+		allSelected := len(shown) > 0
+		for _, t := range shown {
+			if !cur[t.ID] {
+				allSelected = false
+				break
+			}
+		}
+		if allSelected {
+			selAtom.Set(map[string]bool{})
+			return
+		}
 		nm := map[string]bool{}
-		for _, t := range txnfilter.Apply(app.Transactions(), filterAtom.Get()) {
+		for _, t := range shown {
 			nm[t.ID] = true
 		}
 		selAtom.Set(nm)

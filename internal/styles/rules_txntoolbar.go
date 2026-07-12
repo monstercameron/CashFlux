@@ -98,11 +98,16 @@ func registerTxnToolbar() {
 		color("var(--accent)"),
 	)
 
-	// Bulk-action bar: one flat row that scrolls horizontally instead of wrapping.
+	// Bulk-action bar: one compact flat row. The category/member selects are capped
+	// narrow so the whole row fits without a horizontal scrollbar.
 	rule(".bulk-bar",
 		flexWrap("nowrap"),
 		overflowX("auto"),
 		paddingBottom(".2rem"),
+	)
+	rule(".bulk-bar select",
+		maxWidth("150px"),
+		minWidth("0"),
 	)
 
 	// Tooltip stacking: a ledger tile establishes a transform stacking context on hover

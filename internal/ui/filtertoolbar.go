@@ -113,9 +113,13 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if n > 0 {
 		triggerCls += " active"
 	}
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
+	}
 	trigger := Button(css.Class(triggerCls), Type("button"),
-		Attr("aria-haspopup", "dialog"), Attr("aria-label", ariaLabel),
-		OnClick(func() { open.Set(true) }),
+		Attr("aria-haspopup", "dialog"), Attr("aria-expanded", expanded), Attr("aria-label", ariaLabel),
+		OnClick(func() { open.Set(!open.Get()) }),
 		Icon(icon.Filter, css.Class(tw.W4, tw.H4)),
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
 		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), props.FiltersLabel),
