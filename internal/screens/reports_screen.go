@@ -504,7 +504,7 @@ func Reports() ui.Node {
 	// Reuses the shared insights detector (also behind the Insights highlights and
 	// dashboard widget), filtered to overspending.
 	var anomalyNodes []ui.Node
-	for _, a := range detectSpendingAnomalies(scopedTxns, cats, rates) {
+	for _, a := range detectSpendingAnomaliesMemo(appstate.Default.Rev(), "reports:"+fmt.Sprintf("%v", sc), scopedTxns, cats, rates) {
 		if a.Direction != insights.Up {
 			continue
 		}
