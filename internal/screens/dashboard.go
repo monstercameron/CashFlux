@@ -598,6 +598,12 @@ func Dashboard() ui.Node {
 	// as the former UseActiveMember call it replaces.
 	sc := uistate.UseActiveScope().Get()
 	instOf := func(a domain.Account) string { return a.Institution }
+	// Render the first few grid tiles on mount; the rest of the bento (each an
+	// isolated widget hydrating its own data/chart) mounts ~300ms after first paint,
+	// so the hero + top row paint immediately. Placements are still built for every
+	// tile below (persistence unaffected) — only the expensive render defers.
+	dashReady := useAfterSettle("dashboard")
+	dashRendered := 0
 	ids := scope.ResolveScope(accounts, sc, instOf)
 	kpiTxns := scope.ApplyScopeToTxns(txns, ids)
 	scopedAccounts := scope.ApplyScopeToAccounts(accounts, ids)
@@ -814,9 +820,12 @@ func Dashboard() ui.Node {
 			if pl.Hidden {
 				continue
 			}
-			rctx.Spec = pl.Spec
-			if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-				tiles = append(tiles, node)
+			if dashReady || dashRendered < 3 {
+				rctx.Spec = pl.Spec
+				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
+					tiles = append(tiles, node)
+					dashRendered++
+				}
 			}
 		} else if strings.HasPrefix(it.ID, userSpecPrefix) {
 			// A Studio-designed widget: its full WidgetSpec is the persisted placement
@@ -841,16 +850,22 @@ func Dashboard() ui.Node {
 			if pl.Hidden {
 				continue
 			}
-			rctx.Spec = pl.Spec
-			if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-				tiles = append(tiles, node)
+			if dashReady || dashRendered < 3 {
+				rctx.Spec = pl.Spec
+				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
+					tiles = append(tiles, node)
+					dashRendered++
+				}
 			}
 		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
 			if hidden.IsHidden(it.ID) {
 				continue
 			}
-			if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
-				tiles = append(tiles, w)
+			if dashReady || dashRendered < 3 {
+				if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
+					tiles = append(tiles, w)
+					dashRendered++
+				}
 			}
 		}
 	}
