@@ -1714,6 +1714,36 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(
 	})
 }
 
+// spendAnomaliesCache backs detectSpendingAnomaliesMemo (single dashboard surface;
+// wasm is single-threaded, so no lock).
+var spendAnomaliesCache = map[string][]insights.Anomaly{}
+
+// detectSpendingAnomaliesMemo wraps detectSpendingAnomalies with a revision-keyed
+// cache. The detection builds four monthly per-category spend series over every
+// transaction — heavy — and the dashboard calls it more than once per render (the
+// top-highlight widget and the attention widget), re-running on every dashboard
+// re-render. scopeKey distinguishes callers that pass different transaction sets so
+// they never share an entry. Returns a fresh copy, so a caller that takes
+// &result[0] can't mutate the cached slice. The month is part of the key (the
+// series are month-relative); any data edit bumps rev and invalidates.
+func detectSpendingAnomaliesMemo(rev uint64, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
+	key := strconv.FormatUint(rev, 10) + "|" + scopeKey + "|" + time.Now().Format("2006-01")
+	v, ok := spendAnomaliesCache[key]
+	if !ok {
+		if len(spendAnomaliesCache) > 6 {
+			spendAnomaliesCache = map[string][]insights.Anomaly{}
+		}
+		v = detectSpendingAnomalies(txns, categories, rates)
+		spendAnomaliesCache[key] = v
+	}
+	if len(v) == 0 {
+		return nil
+	}
+	out := make([]insights.Anomaly, len(v))
+	copy(out, v)
+	return out
+}
+
 // detectSpendingAnomalies builds the last four monthly per-category spend series
 // and returns the detected anomalies (most significant first). Shared by the
 // Insights highlights card and the dashboard top-highlight widget. Returns nil

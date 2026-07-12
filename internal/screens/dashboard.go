@@ -1212,7 +1212,7 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config) ui.Node {
 // or a calm "nothing notable" message when there's nothing to flag. It links the
 // dashboard to the fuller Spending highlights card on the Insights screen.
 func topHighlightWidget(txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
-	anomalies := detectSpendingAnomalies(txns, categories, rates)
+	anomalies := detectSpendingAnomaliesMemo(appstate.Default.Rev(), "dash-highlight", txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
 		body = P(css.Class("t-body", tw.TextDim), uistate.T("dashboard.noHighlights"))
@@ -1910,7 +1910,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	}
 
 	var anomalyPtr *insights.Anomaly
-	if anomalies := detectSpendingAnomalies(txns, cats, rates); len(anomalies) > 0 {
+	if anomalies := detectSpendingAnomaliesMemo(app.Rev(), "dash-attention", txns, cats, rates); len(anomalies) > 0 {
 		anomalyPtr = &anomalies[0]
 	}
 
