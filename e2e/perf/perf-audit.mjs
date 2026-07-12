@@ -24,7 +24,7 @@
 //   perf/results/v<version>.md     detailed human report (the analysis)
 //   perf/results/index.json        version → {avgScore, loadScore} history
 import { chromium } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
@@ -71,6 +71,24 @@ const best = (xs) => {
 };
 const r1 = (n) => (n === null || n === undefined ? null : Math.round(n * 10) / 10);
 const r3 = (n) => (n === null || n === undefined ? null : Math.round(n * 1000) / 1000);
+
+// boostAuditBrowser raises the audit's (headless) Chromium to HIGH CPU priority, so
+// its render timings reflect the app's intrinsic speed even when other, normal-
+// priority Chrome windows are busy. The audit browser is the ONLY headless chrome.exe
+// on the box, so this never touches the user's real browser. Windows-only; elsewhere a
+// no-op (Playwright's own scheduling is enough on a CI box). Renderers can respawn, so
+// it's cheap to call again between passes.
+function boostAuditBrowser() {
+  if (process.platform !== "win32") return;
+  try {
+    spawnSync(
+      "powershell",
+      ["-NoProfile", "-Command",
+        "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match '--headless' } | ForEach-Object { try { (Get-Process -Id $_.ProcessId -ErrorAction Stop).PriorityClass = 'High' } catch {} }"],
+      { stdio: "ignore", timeout: 8000 },
+    );
+  } catch (_) {}
+}
 
 // The in-page measurement, stringified into the browser. Sets up longtask +
 // layout-shift observers, triggers the SPA navigation, and times mount + settle.
@@ -164,6 +182,7 @@ async function main() {
   const browser = await chromium.launch({ args: ["--disable-gpu", "--enable-precise-memory-info"] });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   const page = await ctx.newPage();
+  boostAuditBrowser(); // measure intrinsic speed, not contention from other Chrome windows
 
   // Observers that must exist BEFORE navigation (LCP/boot-TBT/CLS + app-ready mark).
   await page.addInitScript(() => {
@@ -236,6 +255,7 @@ async function main() {
   const raw = {}; // route -> [perPassMetrics]
   for (const route of ROUTE_LIST) raw[route] = [];
   for (let pass = 1; pass <= PASSES; pass++) {
+    boostAuditBrowser(); // re-assert priority (renderers can respawn between passes)
     for (const route of ROUTE_LIST) {
       try {
         // Reset to a consistent baseline before measuring (unmeasured), so every

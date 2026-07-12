@@ -71,6 +71,11 @@ func dashboardHero() ui.Node {
 	w := uistate.UsePeriod().Get()
 	start, end := w.Range()
 	income, expense := usePeriodTotals(app, txns, start, end, rates, "")
+	// The hero sparkline is a trailing 6-month net-worth series over every transaction
+	// — heavy, and secondary to the net-worth figure itself. Defer it off the initial
+	// mount so the headline number + KPIs paint immediately; the sparkline + delta chip
+	// fill in after first paint (they already degrade gracefully when absent).
+	sparkReady := useAfterSettle("hero")
 
 	netMoney := money.New(income.Amount-expense.Amount, income.Currency)
 	savingsPct := ledger.SavingsRate(income.Amount, expense.Amount)
@@ -86,7 +91,11 @@ func dashboardHero() ui.Node {
 	// since the start of the current month becomes the delta chip — both turn the
 	// flat figure into a living, contextual headline. Both degrade gracefully: if
 	// the series can't be computed the spark/chip simply don't render.
-	spark, delta, deltaTone := heroNetWorthTrend(accounts, txns, rates, nw.Net.Currency)
+	var spark []float64
+	var delta, deltaTone string
+	if sparkReady {
+		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates, nw.Net.Currency)
+	}
 
 	return ui.CreateElement(heroSummary, heroSummaryProps{
 		NetWorth:     fmtMoney(nw.Net),
