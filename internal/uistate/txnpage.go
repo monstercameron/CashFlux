@@ -109,18 +109,12 @@ func UseTxnColsModalOpen() state.Atom[bool] { return state.UseAtom(txnColsModalA
 // sets it; the shell-root host renders the flip modal when true.
 func UseTxnSmartCatOpen() state.Atom[bool] { return state.UseAtom(txnSmartCatAtomID, false) }
 
-// UseStatementImportOpen returns the shared atom selecting whether the "Import
-// statement" (AI PDF import) flip modal is open. The transactions toolbar's button sets
-// it; the shell-root StatementImportHost renders the modal when true.
-func UseStatementImportOpen() state.Atom[bool] {
-	return state.UseAtom("transactions:statementImport", false)
-}
-
-// UseImportPanelOpen returns the shared atom selecting whether the main "Import"
-// panel (CSV / receipt / import history) flip modal is open. The transactions
-// toolbar's Import button sets it; the shell-root ImportPanelHost renders the modal
-// when true. (Previously this panel took over the page as an in-place TxnViewImport
-// sub-view; it's now a double-wide flip modal like the statement importer.)
+// UseImportPanelOpen returns the shared atom selecting whether the single, merged
+// "Import" flip modal is open. The transactions toolbar's Import button sets it; the
+// shell-root ImportPanelHost renders the modal when true. This is now the ONLY import
+// entry point — a two-stage wizard (add-your-data hub → review) that absorbed both the
+// former in-place CSV/receipt panel and the standalone statement-PDF ("Import
+// statement") modal.
 func UseImportPanelOpen() state.Atom[bool] {
 	return state.UseAtom("transactions:importPanel", false)
 }

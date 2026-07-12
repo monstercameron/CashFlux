@@ -1,3 +1,53 @@
+## 2026-07-12 — Merged the two importers into one two-stage wizard
+
+Cam: "merge the smart and smart+ imports into a single 2-stage flip modal, then remove the import
+history and make it a link to the artifacts." He asked me to analyze first, so I mapped the two
+entry points — **Import** (`DocumentsPanel`: CSV/statement-text/receipt + inline history) and **Import
+statement** (`StatementImportBody`: AI statement-PDF). They already overlapped (both end in the same
+review→import table), so merging was natural. I asked one clarifying question on the ambiguous part —
+what "2-stage" means — and he picked the **Source → Review wizard** (Stage 1 = add data, Stage 2 =
+review), over the "two flip faces" alternative.
+
+Design decisions (noted because they shaped the build):
+- **CSV stays a direct, lossless import from Stage 1** — it does *not* route through the review table.
+  The review draft is `extract.Row` (date/desc/amount/category only); CSV can carry account/member/
+  tags/transfer columns, and CLAUDE.md makes export→import losslessness a hard rule. So only the AI/
+  parse extractions (statement text, statement PDF, receipt image — which genuinely need human review)
+  advance to Stage 2; structured CSV imports straight away.
+- **Folded the statement-PDF flow into `DocumentsPanel`** rather than the reverse (DocumentsPanel was
+  already the richer importer). Ported its file-attach + `SendStructuredFileChat` call + the opt-in
+  "keep a copy in Artifacts" save; reused DocumentsPanel's existing shared `aiLoading/aiErr/needsKey`
+  states so the fold added only four new states (pdfData/pdfBytes/pdfName/pdfSaveCopy).
+
+Implementation notes:
+- **Stage machinery via a `setDraft` funnel.** A single `setDraft(rows)` helper replaced all 13
+  `draft.Set(` sites; it syncs the wizard stage to the draft (non-empty → review, empty → input), so
+  every AI/parse success auto-advances and clearing/importing returns to the hub. Stage nav
+  (`goReview`/`goInput`/`goArtifacts`) are pre-hooked `ui.UseEvent`s.
+- **Hook safety.** The stage split is `If(!inReview, Fragment(...inputs...))` + `If(inReview,
+  Fragment(...review...))`. I first confirmed every card function (`CsvImportCard`, `ImageImportCard`,
+  `DraftReviewList`, `SpendSummaryCard`, `wizardCard`, `savedProfilesCard`) has **zero internal hooks**
+  — they're pure render funcs called directly (not via `CreateElement`) — so conditionally rendering
+  them can't shift `DocumentsPanel`'s hook order. All `On*` handlers referenced inside the stages are
+  pre-created `ui.UseEvent`s at stable top-level positions; the hidden `import-modal-form` (footer Save)
+  stays rendered unconditionally.
+- **History → Artifacts.** Dropped `ImportHistoryList`/`DocHistoryRow` and the `deleteDoc`/`docs`
+  plumbing; Stage 2 now shows a "Past imports →" link that closes the modal and routes to `/artifacts`.
+  (Note: the old history was `app.Documents()` audit records, a different store from the Artifacts
+  vault — only opt-in saved PDFs actually land in Artifacts. Recording still happens; just no inline
+  list.)
+- **Retired** `txn-statement-import-btn`, `StatementImportHost`+`StatementImportBody` (files deleted),
+  the now-dead `docKindLabel`/`docStatusLabel`, and the orphaned `UseStatementImportOpen` atom. Moved
+  `statementImportSchema` + `statementSystemPrompt` into `documents.go`.
+
+Verified with two headless Playwright smokes on the deployed wasm: (1) one toolbar Import button and no
+statement button; Stage 1 shows CSV + statement-text + PDF-choose + receipt; a non-AI statement **Parse**
+produces 2 draft rows and auto-advances to Stage 2 (Back/Save/Artifacts-link all present, Stage-1-only
+cards hidden); Back preserves the draft and shows the "Review →" shortcut, which returns forward; footer
+Save imports the rows (searchable after) and closes. (2) CSV pasted in Stage 1 imports **directly**
+(summary shown, stays Stage 1, modal open, row searchable); the Artifacts link navigates to `/artifacts`
+and closes the modal. Zero console errors across both.
+
 ## 2026-07-11 — Cancel + Save footer on the import modal
 
 Cam: "still need a save and cancel for the modal." The import modal had `NoFooter` — you dismissed it

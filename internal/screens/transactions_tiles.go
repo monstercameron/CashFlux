@@ -95,8 +95,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	openCols := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
 	smartCatAtom := uistate.UseTxnSmartCatOpen()
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
-	stmtImportAtom := uistate.UseStatementImportOpen()
-	openStatementImport := ui.UseEvent(Prevent(func() { stmtImportAtom.Set(true) }))
 	importPanelAtom := uistate.UseImportPanelOpen()
 	openImportPanel := ui.UseEvent(Prevent(func() { importPanelAtom.Set(true) }))
 
@@ -355,9 +353,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(openImportPanel), Text(importBtnLabel)),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "txn-statement-import-btn"),
-				Title(uistate.T("statementimport.title")), OnClick(openStatementImport),
-				smartGlyph(false, tw.Fold(tw.W4, tw.H4)), Span(uistate.T("statementimport.button"))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(onShowDuplicates), Text(dupBtnLabel)),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-columns-btn"), Title(uistate.T("transactions.columnsTitle")), OnClick(openCols), uistate.T("transactions.columns")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-smartcat-btn"), Title(uistate.T("smartcat.title")), OnClick(openSmartCat),

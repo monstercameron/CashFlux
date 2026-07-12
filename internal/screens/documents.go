@@ -5,8 +5,8 @@
 package screens
 
 import (
+	"encoding/base64"
 	"errors"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
@@ -39,6 +40,51 @@ import (
 const visionSystemPrompt = "You extract transactions from receipt and bank-statement images. " +
 	"Return each transaction with: date (YYYY-MM-DD), description, amount (negative for money out / " +
 	"expenses, positive for money in, as a string), and category."
+
+// statementImportSchema constrains the model's reply to a transactions array (strict
+// structured outputs) for the statement-PDF source. Category is a free string here; it's
+// constrained to the user's EXISTING categories by the prompt and enforced on import
+// (unknown → unmapped), so the model can't create orphan categories. (Moved here from the
+// former standalone statement-import screen when the PDF flow was folded into DocumentsPanel.)
+const statementImportSchema = `{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["transactions"],
+  "properties": {
+    "transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "description", "amount", "category"],
+        "properties": {
+          "date": {"type": "string"},
+          "description": {"type": "string"},
+          "amount": {"type": "string"},
+          "category": {"type": "string"}
+        }
+      }
+    }
+  }
+}`
+
+// statementSystemPrompt builds the statement-PDF extraction instruction, listing the
+// household's existing category names so the model maps to them best-effort and leaves the
+// category blank otherwise — never inventing a new one.
+func statementSystemPrompt(catNames []string) string {
+	base := "You extract EVERY transaction from an attached bank or credit-card statement (a PDF). " +
+		"For each transaction return: date (YYYY-MM-DD), description (the merchant/payee, tidied), " +
+		"amount as a string (negative for money out/expenses like \"-45.00\", positive for money in), and category. " +
+		"Skip non-transaction lines (opening/closing balance, totals, interest summaries, payment-due notices). "
+	if len(catNames) > 0 {
+		base += "For category, use EXACTLY one of these existing categories when one clearly fits, " +
+			"otherwise return an empty string \"\" — NEVER invent a category not in this list. " +
+			"Existing categories: " + strings.Join(catNames, ", ") + "."
+	} else {
+		base += "Return an empty string \"\" for every category."
+	}
+	return base
+}
 
 // csvSkipDetail turns the per-row CSV import errors into a short, plain-English
 // "which/why" clause (C16) — e.g. "line 3: bad amount; line 7: bad date (+2 more)".
@@ -170,6 +216,42 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	receiptMode := ui.UseState(false)  // import the draft as ONE split transaction
 	receiptTotal := ui.UseState("")    // the receipt's single total (defaults to the line sum)
 	receiptMerchant := ui.UseState("") // optional store name
+
+	// Two-stage import wizard: "input" (the Add-your-data hub — CSV, statement text,
+	// statement PDF, receipt image) → "review" (the shared draft table). Any AI
+	// extraction that yields rows advances to review; the lossless CSV path imports
+	// directly from the input stage and never enters review.
+	stage := ui.UseState("input")
+	// setDraft is the single place draft rows are set, so the wizard stage stays in
+	// lockstep with the draft: non-empty rows show the review stage, an emptied draft
+	// (import done, cleared, or last row removed) returns to the input hub.
+	setDraft := func(rows []extract.Row) {
+		draft.Set(rows)
+		if len(rows) > 0 {
+			stage.Set("review")
+		} else {
+			stage.Set("input")
+		}
+	}
+
+	// Statement-PDF source, folded in from the former standalone "Import statement"
+	// modal (StatementImportBody): the attached PDF as a data URL for the AI call, its
+	// raw bytes for the optional Artifacts copy, its name, and whether to keep a copy.
+	pdfData := ui.UseState("")
+	pdfBytes := ui.UseState([]byte(nil))
+	pdfName := ui.UseState("")
+	pdfSaveCopy := ui.UseState(false)
+
+	// Wizard stage navigation. goReview/goInput move between the two stages without
+	// touching the draft (so "← Back" then "Review →" is lossless). goArtifacts closes
+	// the modal and navigates to the Artifacts vault — the replacement for the old
+	// inline import-history list.
+	goReview := ui.UseEvent(Prevent(func() { stage.Set("review") }))
+	goInput := ui.UseEvent(Prevent(func() { stage.Set("input") }))
+	goArtifacts := ui.UseEvent(Prevent(func() {
+		importModalOpen.Set(false)
+		nav.Navigate(uistate.RoutePath("/artifacts"))
+	}))
 
 	// C74 — import-map wizard state: populated when statement auto-map fails or
 	// the user explicitly opens the wizard. wizardHeader holds the parsed column
@@ -377,7 +459,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		// Successful parse — hide wizard, populate draft.
 		wizardVisible.Set(false)
-		draft.Set(rows)
+		setDraft(rows)
 		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
 		rev.Set(rev.Get() + 1)
 	}))
@@ -422,7 +504,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			})
 		}
 		wizardVisible.Set(false)
-		draft.Set(rows)
+		setDraft(rows)
 		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
 		rev.Set(rev.Get() + 1)
 	}))
@@ -497,7 +579,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				imageDraftAtom.Set(u) // C98: persist across navigation
 				aiErr.Set("")
 				needsKey.Set(false)
-				draft.Set([]extract.Row{})
+				setDraft([]extract.Row{})
 			},
 			func(e string) { aiErr.Set(e) },
 		)
@@ -533,7 +615,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				aiErr.Set(uistate.T("documents.noneFound"))
 				return
 			}
-			draft.Set(rows)
+			setDraft(rows)
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
 		// Temperature 0 → omitted (omitempty) → the model's default. gpt-5.x rejects any
@@ -547,6 +629,80 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				"Extract every transaction you can read from this image.", imageURL.Get(), 0,
 				"transactions", []byte(visionExtractionSchema), onResult, onError)
 		}
+	})
+
+	// choosePDF attaches a statement PDF (folded in from the former Import-statement
+	// modal). The AI reads the PDF's text + page images natively, so there's no
+	// client-side rendering; we just keep the data URL for the call and the raw bytes
+	// for the optional Artifacts copy.
+	choosePDF := ui.UseEvent(func() {
+		pickFile(".pdf,application/pdf", func(name, mime string, data []byte) {
+			if len(data) == 0 {
+				aiErr.Set(uistate.T("statementimport.readErr"))
+				return
+			}
+			if len(data) > 45*1024*1024 { // OpenAI caps files at 50MB; stay under it
+				aiErr.Set(uistate.T("statementimport.tooLarge"))
+				return
+			}
+			mt := mime
+			if mt == "" {
+				mt = "application/pdf"
+			}
+			pdfData.Set("data:" + mt + ";base64," + base64.StdEncoding.EncodeToString(data))
+			pdfBytes.Set(data)
+			pdfName.Set(name)
+			aiErr.Set("")
+			needsKey.Set(false)
+			setDraft([]extract.Row{})
+		})
+	})
+	onTogglePdfSave := ui.UseEvent(func() { pdfSaveCopy.Set(!pdfSaveCopy.Get()) })
+
+	// runPDFAI sends the attached statement PDF to the model for extraction, mapping
+	// categories to the household's existing expense/income set (unmatched → blank).
+	// Statement PDF import is BYO-key only — the optional cloud proxy doesn't carry
+	// file uploads — so it gates on the OpenAI key, not the backend.
+	runPDFAI := ui.UseEvent(func() {
+		if pdfData.Get() == "" {
+			aiErr.Set(uistate.T("statementimport.chooseFirst"))
+			return
+		}
+		if settings.OpenAIKey == "" {
+			needsKey.Set(true)
+			return
+		}
+		var catNames []string
+		for _, c := range app.Categories() {
+			if c.Kind == domain.KindExpense || c.Kind == domain.KindIncome {
+				catNames = append(catNames, c.Name)
+			}
+		}
+		pdfModel := aiModel
+		if pdfModel == "" {
+			pdfModel = "gpt-5.5" // needs a vision-capable model to read the PDF's pages
+		}
+		aiLoading.Set(true)
+		aiErr.Set("")
+		needsKey.Set(false)
+		ai.SendStructuredFileChat(settings.OpenAIKey, ai.DefaultBaseURL, pdfModel,
+			statementSystemPrompt(catNames), "Extract every transaction from this statement.",
+			firstNonEmpty(pdfName.Get(), "statement.pdf"), pdfData.Get(), 0,
+			"transactions", []byte(statementImportSchema),
+			func(content string, _ ai.Usage) {
+				aiLoading.Set(false)
+				rows, err := extract.ParseRows(content)
+				if err != nil {
+					aiErr.Set(err.Error())
+					return
+				}
+				if len(rows) == 0 {
+					aiErr.Set(uistate.T("statementimport.noneFound"))
+					return
+				}
+				setDraft(rows)
+			},
+			func(e string) { aiLoading.Set(false); aiErr.Set(e) })
 	})
 
 	// extractWithAI (C74) sends the pasted statement text to the LLM for extraction,
@@ -584,7 +740,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				aiErr.Set(uistate.T("documents.noneFound"))
 				return
 			}
-			draft.Set(rows)
+			setDraft(rows)
 			msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
@@ -617,7 +773,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			}
 		}
 		if changed {
-			draft.Set(updated)
+			setDraft(updated)
 		}
 		// Pass 2: AI for still-uncategorized rows (BYO-key, opt-in)
 		if settings.OpenAIKey == "" && !useBackendAI {
@@ -682,7 +838,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					}
 				}
 			}
-			draft.Set(next)
+			setDraft(next)
 			msg.Set(uistate.T("documents.categorizing"))
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
@@ -704,9 +860,38 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
 			return false
 		}
-		draft.Set([]extract.Row{})
+		// If the draft came from a statement PDF and the user asked to keep a copy,
+		// store the source PDF in the Artifacts vault. Its bytes go to the IndexedDB
+		// blob store (not the SQLite dataset) via StoreBlobForArtifact, so the record
+		// stays lightweight; the Put blocks on IDB, so run it off the event goroutine.
+		if pdfSaveCopy.Get() && len(pdfBytes.Get()) > 0 {
+			pdf := domain.Artifact{
+				ID: id.New(), Name: firstNonEmpty(pdfName.Get(), "statement.pdf"),
+				Kind: artifacts.KindPDF, MIME: "application/pdf",
+				Bytes: pdfBytes.Get(), CreatedAt: time.Now(),
+			}
+			pdf.Size = artifacts.Size(pdf)
+			go func() {
+				stored, serr := app.StoreBlobForArtifact(pdf)
+				if serr != nil {
+					uistate.PostNotice(serr.Error(), true)
+					return
+				}
+				if perr := app.PutArtifact(stored); perr != nil {
+					uistate.PostNotice(perr.Error(), true)
+					return
+				}
+				app.RefreshBlobUsage()
+				uistate.RequestPersist()
+			}()
+		}
+		setDraft([]extract.Row{})
 		imageURL.Set("")
 		imageDraftAtom.Set("") // C98: clear persisted image after successful import
+		pdfData.Set("")
+		pdfBytes.Set(nil)
+		pdfName.Set("")
+		pdfSaveCopy.Set(false)
 		aiErr.Set("")
 		summary := uistate.T("documents.importedImage", plural(result.Imported, "transaction"))
 		if result.Skipped > 0 {
@@ -736,7 +921,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			return false
 		}
 		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows))
-		draft.Set([]extract.Row{})
+		setDraft([]extract.Row{})
 		imageURL.Set("")
 		imageDraftAtom.Set("") // C98: clear persisted image after successful import
 		receiptTotal.Set("")
@@ -781,7 +966,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		next := make([]extract.Row, 0, len(cur)-1)
 		next = append(next, cur[:i]...)
 		next = append(next, cur[i+1:]...)
-		draft.Set(next)
+		setDraft(next)
 	}
 
 	updateDraft := func(i int, r extract.Row) {
@@ -791,7 +976,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		next := append([]extract.Row{}, cur...)
 		next[i] = r
-		draft.Set(next)
+		setDraft(next)
 	}
 
 	// Draft review list: each row can be removed before importing.
@@ -851,21 +1036,37 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	// G14 §1 / §7: "Start over" clears the draft when persisted sample rows appear
 	// on first load. Declared here so it can close over draft.
-	clearDraft := ui.UseEvent(func() { draft.Set([]extract.Row{}) })
+	clearDraft := ui.UseEvent(func() { setDraft([]extract.Row{}) })
 
-	// Import history: sort newest first before rendering.
-	deleteDoc := func(docID string) {
-		// Removing an import record is permanent — confirm first (v1.0).
-		uistate.ConfirmModal(uistate.T("documents.deleteConfirm"), true, func(ok bool) {
-			if !ok {
-				return
-			}
-			_ = app.DeleteDocument(docID)
-			rev.Set(rev.Get() + 1)
-		})
+	// Statement-PDF source card (Stage 1), folded in from the former standalone
+	// "Import statement" modal. Choose a PDF → the AI reads it natively → rows land in
+	// the shared review draft (which advances to Stage 2). Optionally keeps a copy of
+	// the source PDF in the Artifacts vault on import.
+	pdfFileLabel := uistate.T("statementimport.noFile")
+	if n := strings.TrimSpace(pdfName.Get()); n != "" {
+		pdfFileLabel = n
 	}
-	docs := app.Documents()
-	sort.Slice(docs, func(i, j int) bool { return docs[i].UploadedAt.After(docs[j].UploadedAt) })
+	pdfCard := uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title: uistate.T("statementimport.title"),
+		Body: Div(css.Class(tw.FlexCol, tw.Gap3),
+			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("statementimport.intro")),
+			Div(css.Class("statement-drop"),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "statementimport-choose"), OnClick(choosePDF),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("statementimport.choose"))),
+				Span(css.Class("statement-file", tw.TextDim), Attr("data-testid", "statementimport-filename"), pdfFileLabel)),
+			If(aiLoading.Get(), P(css.Class("muted"), Attr("data-testid", "statementimport-loading"), uistate.T("statementimport.reading"))),
+			buttonWithDisabled(pdfData.Get() == "" || aiLoading.Get(),
+				[]any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "statementimport-run"), OnClick(runPDFAI)},
+				uistate.T("statementimport.run")),
+			If(pdfData.Get() != "", Label(css.Class("statement-savedoc", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "statementimport-savedoc"), OnChange(onTogglePdfSave)}, checkedAttr(pdfSaveCopy.Get())...)...),
+				Div(css.Class("row-main"),
+					Span(uistate.T("statementimport.saveDoc")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("statementimport.saveDocHint"))))),
+		),
+	})
+
+	inReview := stage.Get() == "review"
 
 	return Div(
 		// Hidden form the transactions Import flip modal's footer Save submits (by id)
@@ -873,166 +1074,188 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		// route nothing references it, so it's inert. Kept unconditional so its OnSubmit
 		// hook stays at a stable render position.
 		Form(Attr("id", ImportModalFormID), OnSubmit(saveModalImport)),
-		// §8.9: lead with the no-key CSV import so a user without an OpenAI key is never
-		// blocked from importing; the (key-gated) AI image/statement import follows as the
-		// richer option. This also tightens the flow — importing populates the review draft
-		// rendered just below — instead of stranding the CSV card at the bottom of the page.
-		CsvImportCard(csvImportCardProps{
-			Accounts:     accounts,
-			ImportAcctID: importAcct.Get(),
-			Msg:          msg.Get(),
-			DupWarn:      csvDupWarn.Get(),
-			OnChooseFile: chooseCsvFile,
-			OnAcctChange: onAcct,
-			OnCsvInput:   onCsv,
-			OnImportCSV:  importCSV,
-			OnConfirmCSV: confirmCSV,
-		}),
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("documents.stmtTitle"),
-			Body: Fragment(
-				P(css.Class("muted"), uistate.T("documents.stmtDesc")),
-				Form(OnSubmit(parseStatement),
-					// G14 §5: parse actions above the textarea so they are always
-					// visible at 768px — the tall textarea no longer pushes them off-screen.
-					Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
-						Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
-						Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
-							OnClick(extractWithAI), uistate.T("documents.extractAI")),
+
+		// STAGE 1 — "Add your data": every import source in one hub. AI extractions
+		// (statement text, statement PDF, receipt image) advance to the review stage;
+		// the lossless CSV path imports directly from here and never enters review.
+		If(!inReview, Fragment(
+			// §8.9: lead with the no-key CSV import so a user without an OpenAI key is never
+			// blocked from importing; the (key-gated) AI image/statement import follows as the
+			// richer option. This also tightens the flow — importing populates the review draft
+			// rendered just below — instead of stranding the CSV card at the bottom of the page.
+			CsvImportCard(csvImportCardProps{
+				Accounts:     accounts,
+				ImportAcctID: importAcct.Get(),
+				Msg:          msg.Get(),
+				DupWarn:      csvDupWarn.Get(),
+				OnChooseFile: chooseCsvFile,
+				OnAcctChange: onAcct,
+				OnCsvInput:   onCsv,
+				OnImportCSV:  importCSV,
+				OnConfirmCSV: confirmCSV,
+			}),
+			uiw.EntityListSection(uiw.EntityListSectionProps{
+				Title: uistate.T("documents.stmtTitle"),
+				Body: Fragment(
+					P(css.Class("muted"), uistate.T("documents.stmtDesc")),
+					Form(OnSubmit(parseStatement),
+						// G14 §5: parse actions above the textarea so they are always
+						// visible at 768px — the tall textarea no longer pushes them off-screen.
+						Div(Style(map[string]string{"margin-bottom": "0.5rem"}),
+							Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
+							Button(css.Class("btn"), Type("button"), Attr("data-testid", "extract-ai-btn"),
+								OnClick(extractWithAI), uistate.T("documents.extractAI")),
+						),
+						// G14 §2: collapsed to 3 rows by default (was 8) to avoid pushing action
+						// buttons off-screen on short viewports. Expands naturally as the user types.
+						Textarea(css.Class("field field-wide"), Attr("rows", "3"),
+							Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+							OnInput(onStmt),
+						),
 					),
-					// G14 §2: collapsed to 3 rows by default (was 8) to avoid pushing action
-					// buttons off-screen on short viewports. Expands naturally as the user types.
-					Textarea(css.Class("field field-wide"), Attr("rows", "3"),
-						Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
-						OnInput(onStmt),
+					// C74 — per-bank import cadence reminder: creates a monthly to-do so the
+					// user is nudged to import next cycle. Off by default; single click.
+					Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+						P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
+						Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
+							OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
+						If(cadenceMsg.Get() != "",
+							Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
+								Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
 					),
 				),
-				// C74 — per-bank import cadence reminder: creates a monthly to-do so the
-				// user is nudged to import next cycle. Off by default; single click.
+			}),
+			// C13: the AI-powered image import comes LAST, after both no-AI paths (CSV +
+			// statement paste), behind a labelled separator — so a user without an OpenAI
+			// key is never led with a gated feature.
+			Div(css.Class("doc-section-sep"), Attr("role", "separator"),
+				Span(uistate.T("documents.aiSectionLabel"))),
+			// Statement PDF (formerly the standalone "Import statement" modal) sits with the
+			// receipt-image import as the two AI extraction sources.
+			pdfCard,
+			ImageImportCard(imageImportCardProps{
+				ImageURL:  imageURL.Get(),
+				AILoading: aiLoading.Get(),
+				AIErr:     aiErr.Get(),
+				NeedsKey:  needsKey.Get(),
+				OnChoose:  chooseImage,
+				OnReadAI:  readAI,
+				Nav:       nav,
+			}),
+			// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
+			// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
+			// a variable-length loop, so UseEvent hooks stay at stable render positions.
+			If(wizardVisible.Get(),
+				wizardCard(
+					wizardHeader.Get(),
+					wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
+					wizardDebit.Get(), wizardCredit.Get(),
+					onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
+					applyWizard,
+					profileName.Get(), onProfileName, saveProfile,
+				),
+			),
+			// C74 — Saved profile picker: shown/hidden via the "Saved mappings" toggle.
+			// Each profile row is its own component (owns its Apply/Delete handlers).
+			If(wizardVisible.Get() || showProfiles.Get(),
+				savedProfilesCard(app, accounts, importAcct.Get(),
+					showProfiles.Get(),
+					func() { showProfiles.Set(!showProfiles.Get()) },
+					func(sp importmap.SavedProfile) {
+						// Apply a saved profile to the current raw rows.
+						rawRecs := wizardRawRows.Get()
+						flat := make([][]string, 0)
+						for _, g := range rawRecs {
+							flat = append(flat, g...)
+						}
+						if len(flat) == 0 {
+							msg.Set("Paste a statement above, then click Parse before applying a profile.")
+							return
+						}
+						dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+						sp.Profile.Decimals = dec
+						stRows := importmap.Apply(sp.Profile, flat)
+						if len(stRows) == 0 {
+							msg.Set("No rows matched with that profile — check column assignments.")
+							return
+						}
+						rows2 := make([]extract.Row, 0, len(stRows))
+						for _, r := range stRows {
+							rows2 = append(rows2, extract.Row{
+								Date:        r.Date.Format("2006-01-02"),
+								Description: r.Description,
+								Amount:      money.FormatMinor(r.Amount, dec),
+							})
+						}
+						wizardVisible.Set(false)
+						setDraft(rows2)
+						msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
+						rev.Set(rev.Get() + 1)
+					},
+					func(id string) {
+						_ = app.DeleteImportProfile(id)
+						rev.Set(rev.Get() + 1)
+					},
+				),
+			),
+			// If a draft already exists (e.g. the user stepped back to add more sources),
+			// offer a shortcut forward to the review stage.
+			If(len(rows) > 0, Div(css.Class(tw.Mt2, tw.Flex, tw.JustifyEnd),
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "import-review-btn"),
+					OnClick(goReview), uistate.T("documents.reviewStage")))),
+		)),
+
+		// STAGE 2 — "Review & import": the shared editable draft table + spend summary,
+		// reached when any AI source yields rows. The footer Save commits; "← Add more
+		// data" returns to the hub; "Past imports →" opens the Artifacts vault (the
+		// replacement for the old inline import-history list).
+		If(inReview, Fragment(
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "import-back-btn"),
+					OnClick(goInput), uistate.T("documents.backToInput")),
+				A(css.Class("btn", "btn-ghost"), Href(uistate.RoutePath("/artifacts")),
+					Attr("data-testid", "import-artifacts-link"), OnClick(goArtifacts),
+					uistate.T("documents.pastImportsLink"))),
+			// C74 — Suggest categories button: shown when draft is non-empty.
+			// Pass 1 (deterministic rules) runs free; Pass 2 (AI) only fires with a key.
+			If(len(rows) > 0,
 				Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-					P(css.Class("muted"), uistate.T("documents.cadenceDesc")),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "cadence-reminder-btn"),
-						OnClick(createCadenceReminder), uistate.T("documents.cadenceBtn")),
-					If(cadenceMsg.Get() != "",
-						Span(css.Class("text-up", tw.Text12), Attr("role", "status"),
-							Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "suggest-categories-btn"),
+						OnClick(categorizeDraft), uistate.T("documents.suggestCategories")),
+					If(aiLoading.Get(), Span(css.Class("muted"), uistate.T("documents.categorizing"))),
 				),
 			),
-		}),
-		// C13: the AI-powered image import comes LAST, after both no-AI paths (CSV +
-		// statement paste), behind a labelled separator — so a user without an OpenAI
-		// key is never led with a gated feature.
-		Div(css.Class("doc-section-sep"), Attr("role", "separator"),
-			Span(uistate.T("documents.aiSectionLabel"))),
-		ImageImportCard(imageImportCardProps{
-			ImageURL:  imageURL.Get(),
-			AILoading: aiLoading.Get(),
-			AIErr:     aiErr.Get(),
-			NeedsKey:  needsKey.Get(),
-			OnChoose:  chooseImage,
-			OnReadAI:  readAI,
-			Nav:       nav,
-		}),
-		// C74 — Map columns wizard: shown when auto-detect fails or user requests it.
-		// Exactly 5 fixed selects (Date / Desc / Amount / Debit / Credit) — never in
-		// a variable-length loop, so UseEvent hooks stay at stable render positions.
-		If(wizardVisible.Get(),
-			wizardCard(
-				wizardHeader.Get(),
-				wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
-				wizardDebit.Get(), wizardCredit.Get(),
-				onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
-				applyWizard,
-				profileName.Get(), onProfileName, saveProfile,
-			),
-		),
-		// C74 — Saved profile picker: shown/hidden via the "Saved mappings" toggle.
-		// Each profile row is its own component (owns its Apply/Delete handlers).
-		If(wizardVisible.Get() || showProfiles.Get(),
-			savedProfilesCard(app, accounts, importAcct.Get(),
-				showProfiles.Get(),
-				func() { showProfiles.Set(!showProfiles.Get()) },
-				func(sp importmap.SavedProfile) {
-					// Apply a saved profile to the current raw rows.
-					rawRecs := wizardRawRows.Get()
-					flat := make([][]string, 0)
-					for _, g := range rawRecs {
-						flat = append(flat, g...)
-					}
-					if len(flat) == 0 {
-						msg.Set("Paste a statement above, then click Parse before applying a profile.")
-						return
-					}
-					dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
-					sp.Profile.Decimals = dec
-					stRows := importmap.Apply(sp.Profile, flat)
-					if len(stRows) == 0 {
-						msg.Set("No rows matched with that profile — check column assignments.")
-						return
-					}
-					rows2 := make([]extract.Row, 0, len(stRows))
-					for _, r := range stRows {
-						rows2 = append(rows2, extract.Row{
-							Date:        r.Date.Format("2006-01-02"),
-							Description: r.Description,
-							Amount:      money.FormatMinor(r.Amount, dec),
-						})
-					}
-					wizardVisible.Set(false)
-					draft.Set(rows2)
-					msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
-					rev.Set(rev.Get() + 1)
-				},
-				func(id string) {
-					_ = app.DeleteImportProfile(id)
-					rev.Set(rev.Get() + 1)
-				},
-			),
-		),
-		// C74 — Suggest categories button: shown when draft is non-empty.
-		// Pass 1 (deterministic rules) runs free; Pass 2 (AI) only fires with a key.
-		If(len(rows) > 0,
-			Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "suggest-categories-btn"),
-					OnClick(categorizeDraft), uistate.T("documents.suggestCategories")),
-				If(aiLoading.Get(), Span(css.Class("muted"), uistate.T("documents.categorizing"))),
-			),
-		),
-		// Review results sit below the import inputs that produce them (G14 §1): a
-		// parsed statement / scanned receipt's draft rows no longer pop in *above* the
-		// card the user just acted in.
-		DraftReviewList(draftReviewListProps{
-			Rows:              rows,
-			Accounts:          accounts,
-			Categories:        app.Categories(),
-			ReviewCur:         reviewCur,
-			ImportAcctID:      importAcct.Get(),
-			ReceiptMode:       receiptMode.Get(),
-			ReceiptTotal:      receiptTotal.Get(),
-			ReceiptMerchant:   receiptMerchant.Get(),
-			RecBaseCur:        recBaseCur,
-			SeenSigs:          seenSigs,
-			ClearDraft:        clearDraft,
-			Toggle:            receiptToggle,
-			OnAcctChange:      onAcct,
-			OnReceiptTotal:    onReceiptTotal,
-			OnReceiptMerchant: onReceiptMerchant,
-			OnImportDraft:     importDraft,
-			OnImportReceipt:   importReceipt,
-			OnRemoveDraft:     removeDraft,
-			OnUpdateDraft:     updateDraft,
-		}),
-		SpendSummaryCard(spendSummaryCardProps{
-			Rows:         rows,
-			Accounts:     accounts,
-			ImportAcctID: importAcct.Get(),
-			BaseCurrency: app.Settings().BaseCurrency,
-		}),
-		ImportHistoryList(importHistoryListProps{
-			Docs:     docs,
-			Accounts: accounts,
-			OnDelete: deleteDoc,
-		}),
+			// Review results sit below the import inputs that produce them (G14 §1): a
+			// parsed statement / scanned receipt's draft rows no longer pop in *above* the
+			// card the user just acted in.
+			DraftReviewList(draftReviewListProps{
+				Rows:              rows,
+				Accounts:          accounts,
+				Categories:        app.Categories(),
+				ReviewCur:         reviewCur,
+				ImportAcctID:      importAcct.Get(),
+				ReceiptMode:       receiptMode.Get(),
+				ReceiptTotal:      receiptTotal.Get(),
+				ReceiptMerchant:   receiptMerchant.Get(),
+				RecBaseCur:        recBaseCur,
+				SeenSigs:          seenSigs,
+				ClearDraft:        clearDraft,
+				Toggle:            receiptToggle,
+				OnAcctChange:      onAcct,
+				OnReceiptTotal:    onReceiptTotal,
+				OnReceiptMerchant: onReceiptMerchant,
+				OnImportDraft:     importDraft,
+				OnImportReceipt:   importReceipt,
+				OnRemoveDraft:     removeDraft,
+				OnUpdateDraft:     updateDraft,
+			}),
+			SpendSummaryCard(spendSummaryCardProps{
+				Rows:         rows,
+				Accounts:     accounts,
+				ImportAcctID: importAcct.Get(),
+				BaseCurrency: app.Settings().BaseCurrency,
+			}),
+		)),
 	)
 }
 
@@ -1186,60 +1409,6 @@ func DraftRow(props draftRowProps) ui.Node {
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
-}
-
-type docHistoryRowProps struct {
-	Doc         domain.Document
-	AccountName string
-	OnDelete    func(string)
-}
-
-// DocHistoryRow renders one recorded import in the history list, with a remove
-// button. It owns its own click handler (per the no-hooks-in-loops rule).
-func DocHistoryRow(props docHistoryRowProps) ui.Node {
-	d := props.Doc
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(d.ID) }))
-	meta := docKindLabel(d.Kind) + " · " + d.UploadedAt.Format("Jan 2, 2006") + " · " + docStatusLabel(d.Status)
-	// CSV imports don't retain raw rows, so fall back to RowCount for the count (C11).
-	count := len(d.Extracted)
-	if count == 0 {
-		count = d.RowCount
-	}
-	if count > 0 {
-		meta += " · " + plural(count, "transaction")
-	}
-	if props.AccountName != "" {
-		meta += " · " + props.AccountName
-	}
-	return Div(css.Class("row"),
-		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), textutil.FirstNonEmpty(d.Filename, docKindLabel(d.Kind))),
-			Span(css.Class("row-meta"), meta),
-		),
-		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.deleteHistTitle")), Title(uistate.T("documents.deleteHistTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
-	)
-}
-
-// docKindLabel localizes a document kind.
-func docKindLabel(k domain.DocumentKind) string {
-	if k == domain.DocImage {
-		return uistate.T("documents.kindImage")
-	}
-	return uistate.T("documents.kindCsv")
-}
-
-// docStatusLabel localizes a document status.
-func docStatusLabel(s domain.DocumentStatus) string {
-	switch s {
-	case domain.DocPending:
-		return uistate.T("documents.statusPending")
-	case domain.DocExtracted:
-		return uistate.T("documents.statusExtracted")
-	case domain.DocFailed:
-		return uistate.T("documents.statusFailed")
-	default:
-		return uistate.T("documents.statusImported")
-	}
 }
 
 // csvAcctSelect renders the account picker used by the CSV import form. It is
