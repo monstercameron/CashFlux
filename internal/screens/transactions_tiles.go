@@ -89,7 +89,6 @@ type txnToolbarProps struct {
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseTxFilter()
-	viewAtom := uistate.UseTxnView()
 	selAtom := uistate.UseTxnSelection()
 	colsModalAtom := uistate.UseTxnColsModalOpen()
 	openCols := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
@@ -97,6 +96,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
 	importPanelAtom := uistate.UseImportPanelOpen()
 	openImportPanel := ui.UseEvent(Prevent(func() { importPanelAtom.Set(true) }))
+	dupModalAtom := uistate.UseDuplicatesModalOpen()
+	openDuplicates := ui.UseEvent(Prevent(func() { dupModalAtom.Set(true) }))
 
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
@@ -161,17 +162,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 		downloadBytes("transactions.csv", "text/csv", data)
 	}))
-
-	toggleView := func(v string) func() {
-		return func() {
-			if viewAtom.Get() == v {
-				viewAtom.Set(uistate.TxnViewLedger)
-			} else {
-				viewAtom.Set(v)
-			}
-		}
-	}
-	onShowDuplicates := ui.UseEvent(Prevent(toggleView(uistate.TxnViewDuplicates)))
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
 		nm := map[string]bool{}
@@ -318,15 +308,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		customFilterNode,
 	)
 
-	// Import / duplicates sub-view toggle labels (badge the dupes button with a count).
+	// The Import and duplicates-review buttons both open flip modals now, so they're
+	// plain actions — no open/close view-toggle labels. The dupes button badges its
+	// count when there are possible duplicates to review.
 	dupCount := dedupe.Count(dedupe.FindDuplicates(props.Shown))
-	// The Import button now opens a flip modal (ImportPanelHost), so it's a plain
-	// "Import" action — no more open/close view-toggle label.
 	importBtnLabel := uistate.T("transactions.importBtn")
 	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
-	if viewAtom.Get() == uistate.TxnViewDuplicates {
-		dupBtnLabel = uistate.T("transactions.dupReviewClose")
-	} else if dupCount > 0 {
+	if dupCount > 0 {
 		dupBtnLabel = uistate.T("transactions.dupReviewBadge", plural(dupCount, "duplicate"))
 	}
 
@@ -353,7 +341,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			If(len(active) > 0, Button(css.Class("btn"), Type("button"), OnClick(clearFilters), uistate.T("transactions.clear"))),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.exportTitle")), OnClick(exportFiltered), uistate.T("transactions.exportCsv")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-import-btn"), Attr("aria-label", importBtnLabel), OnClick(openImportPanel), Text(importBtnLabel)),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(onShowDuplicates), Text(dupBtnLabel)),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-dupes-btn"), Attr("aria-label", dupBtnLabel), OnClick(openDuplicates), Text(dupBtnLabel)),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-columns-btn"), Title(uistate.T("transactions.columnsTitle")), OnClick(openCols), uistate.T("transactions.columns")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-smartcat-btn"), Title(uistate.T("smartcat.title")), OnClick(openSmartCat),
 				smartGlyph(false, tw.Fold(tw.W4, tw.H4)), Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("smartcat.button"))),

@@ -28,7 +28,6 @@ const (
 	txnSelAnchorAtomID = "transactions:selAnchor"
 	txnBulkCatAtomID   = "transactions:bulkCat"
 	txnBulkMemAtomID   = "transactions:bulkMember"
-	txnViewAtomID      = "transactions:view"
 	txnUndoAtomID      = "transactions:undo"
 	txnPreviewAtomID   = "transactions:preview"
 	txnColsAtomID      = "transactions:cols"
@@ -119,13 +118,14 @@ func UseImportPanelOpen() state.Atom[bool] {
 	return state.UseAtom("transactions:importPanel", false)
 }
 
-// TxnViewLedger / Duplicates are the mutually exclusive sub-views the transactions
-// surface can show in its main tile slot. Ledger is the default. (Import used to be a
-// third sub-view; it now opens as a shell-root flip modal over the ledger instead.)
-const (
-	TxnViewLedger     = "ledger"
-	TxnViewDuplicates = "duplicates"
-)
+// UseDuplicatesModalOpen returns the shared atom selecting whether the "Review
+// duplicates" flip modal is open. The transactions toolbar's duplicates button sets it;
+// the shell-root DuplicatesHost renders the modal when true. (Duplicates used to be an
+// in-place TxnViewDuplicates sub-view that took over the ledger slot; like import, it's
+// now a shell-root flip modal over the ledger.)
+func UseDuplicatesModalOpen() state.Atom[bool] {
+	return state.UseAtom("transactions:duplicatesModal", false)
+}
 
 // BulkSnapshot is the before-state of the last bulk operation, captured so the
 // undo tile can restore it. Label is the human-readable description shown in the
@@ -155,11 +155,6 @@ func UseTxnBulkCat() state.Atom[string] { return state.UseAtom(txnBulkCatAtomID,
 // UseTxnBulkMember returns the shared atom holding the member id chosen in the
 // bulk-action tile's "assign to" picker (empty = nobody / unassigned).
 func UseTxnBulkMember() state.Atom[string] { return state.UseAtom(txnBulkMemAtomID, "") }
-
-// UseTxnView returns the shared atom selecting the active sub-view (ledger /
-// duplicates). The toolbar tile toggles it; the host swaps which tile fills the
-// main slot accordingly.
-func UseTxnView() state.Atom[string] { return state.UseAtom(txnViewAtomID, TxnViewLedger) }
 
 // UseTxnUndo returns the shared atom holding the last bulk operation's snapshot.
 // A snapshot with no Prior rows means "nothing to undo" (the undo tile is hidden).

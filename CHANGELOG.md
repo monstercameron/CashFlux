@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **"Review duplicates" moved from an in-place page takeover to a flip modal (2026-07-12):** the Transactions toolbar's duplicates button used to swap the ledger out for an in-place `TxnViewDuplicates` sub-view; it now opens the review UI as a **shell-root double-wide flip modal** over the ledger (mirroring the Import modal), with a single **Close** footer (each merge/delete is an immediate, undoable action — nothing to stage). This retires the last in-place sub-view, so the ledger is always the main slot: the whole `UseTxnView`/`TxnView*` sub-view system, the `txn-duplicates` tile, and the button's open/close label toggle are gone. **Design pass on the review UI:** the "Merge (keep one)" and "Delete duplicate" actions were bare `btn-sm`/`btn-danger-sm` classes that rendered as plain text (no button chrome) — they're now a proper green primary **Merge** (the recommended one-click resolve) and a red danger **Delete**, with testids for coverage. Verified with two new e2e (open-over-ledger + merge-resolves-to-empty-state) and a screenshot.
+
+### Fixed
+- **Confirm/prompt dialogs are now reachable from inside a flip modal (2026-07-12):** the shared confirm dialog (`.cf-dialog-backdrop`) sat at `z-index: 90`, far below flip-panel modals (`--z-modal` = 3000) — so a confirm triggered from within a modal (e.g. Merge/Delete in the new Review-duplicates modal, or a Delete inside any edit modal) was trapped behind the modal's backdrop and un-clickable. Added a `--z-dialog` (3500) token between `--z-modal` and `--z-toast` and moved the dialog onto it, so confirms always render above the modal that opened them. Fixes it app-wide, not just for duplicates.
+
 ### Added
 - **Project-wide Smart / Smart+ tier design system (2026-07-12):** the two feature tiers now have first-class, reusable design tokens and primitives (`internal/styles/rules_tier.go`). **Smart** (deterministic) is green, **Smart+** (generative AI) is violet — fixed hues (`--tier-smart*` / `--tier-smartplus*`) so the tier identity is stable across themes and any user-customized accent. Reusable pieces: the `.tier-chip` pill, the `.tier-icon` tinted square, and the `.btn-plus` (violet AI-action) button, plus Go helpers `tierChip()` / `tierIcon()` — usable anywhere in the app, not just the importer.
 

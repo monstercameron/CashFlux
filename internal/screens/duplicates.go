@@ -89,8 +89,9 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 		Div(css.Class(tw.Flex1)),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("duplicates.keepNote")),
 		Button(
-			css.Class("btn-sm"),
+			css.Class("btn btn-primary btn-sm"),
 			Attr("type", "button"),
+			Attr("data-testid", "dup-merge-btn"),
 			Attr("aria-label", uistate.T("duplicates.mergeAria")),
 			OnClick(merge),
 			uistate.T("duplicates.mergeBtn"),
@@ -169,8 +170,9 @@ func dupeRow(props dupeRowProps) ui.Node {
 			Span(css.Class("t-caption", tw.TextFaint), props.Date),
 		),
 		Button(
-			css.Class("btn-danger-sm"),
+			css.Class("btn btn-danger btn-sm"),
 			Attr("type", "button"),
+			Attr("data-testid", "dup-delete-btn"),
 			Attr("aria-label", fmt.Sprintf(uistate.T("duplicates.deleteAria"), props.TxnID)),
 			OnClick(del),
 			uistate.T("duplicates.deleteBtn"),
@@ -321,5 +323,13 @@ func dupHeadline(total, groups int) string {
 }
 
 func DuplicatesScreen() ui.Node {
+	return ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{})
+}
+
+// DuplicatesPanelBody is the exported handle for mounting the duplicates review inside
+// the shell-root "Review duplicates" flip modal (app.DuplicatesHost). DuplicatesPanel's
+// props type is unexported, so the app package embeds this wrapper instead. The empty
+// struct keeps it CreateElement-compatible, matching ImportPanelBody.
+func DuplicatesPanelBody(_ struct{}) ui.Node {
 	return ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{})
 }

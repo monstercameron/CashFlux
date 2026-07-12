@@ -448,3 +448,40 @@ test.describe("import wizard", () => {
     await expect(app.locator("#main")).toContainText("REGRESSION CSV IMPORT", { timeout: 20_000 });
   });
 });
+
+test.describe("review duplicates", () => {
+  const MODAL = '[role="dialog"][aria-label="Review duplicates"]';
+
+  test("the duplicates button opens the review modal over the ledger", async ({ app }) => {
+    await nav(app, "/transactions");
+    const btn = app.getByTestId("txn-dupes-btn");
+    await expect(btn).toBeVisible();
+    await btn.click();
+    await app.waitForTimeout(650); // past the FlipPanel flip
+    const modal = app.locator(MODAL);
+    await expect(modal).toBeVisible();
+    // The review UI: a duplicate group with proper Merge + Delete buttons.
+    await expect(modal.getByTestId("dup-merge-btn").first()).toBeVisible();
+    await expect(modal.getByTestId("dup-delete-btn").first()).toBeVisible();
+    // The ledger stays mounted behind the modal (not an in-place takeover).
+    await expect(app.locator('[data-testid="txn-table"], table').first()).toBeVisible();
+    // The old in-place duplicates tile is gone.
+    await expect(app.locator('[data-testid="txn-duplicates"], #txn-duplicates')).toHaveCount(0);
+    // The Close footer dismisses.
+    await modal.locator(".set-btn.close").click();
+    await expect(app.locator(MODAL)).toHaveCount(0);
+  });
+
+  test("merging a duplicate group resolves it, leaving the empty state", async ({ app }) => {
+    await nav(app, "/transactions");
+    await app.getByTestId("txn-dupes-btn").click();
+    await app.waitForTimeout(650);
+    const modal = app.locator(MODAL);
+    await expect(modal.getByTestId("dup-merge-btn").first()).toBeVisible();
+    await modal.getByTestId("dup-merge-btn").first().click();
+    // Confirm the destructive merge in the shared confirm dialog.
+    await app.locator("#cf-dialog-confirm").click();
+    // The resolved group drops off; the still-open modal shows the empty state.
+    await expect(modal).toContainText("No duplicate transactions found", { timeout: 20_000 });
+  });
+});

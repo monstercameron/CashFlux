@@ -46,18 +46,18 @@ const (
 // spec/render pipeline the dashboard uses (safeRenderSpec). Every visible block is
 // its own engine widget tile —
 //
-//   - txn-toolbar   (Native): search, filters, chips, add/export, import (flip modal) & dupes toggle
+//   - txn-toolbar   (Native): search, filters, chips, add/export, import & duplicates (both flip modals)
 //   - txn-bulkbar   (Native): bulk recategorize / clear / export / delete (when a selection exists)
 //   - txn-undobar   (Native): undo the last bulk op (when one is pending)
 //   - txn-table     (Table) : the engine-hydrated ledger frame, paginated, with row drill-edit
-//   - txn-duplicates (Native): fills the table slot when the duplicates review sub-view is active
 //
-// (Import is no longer an in-place sub-view — the toolbar's Import button opens a
-// shell-root double-wide flip modal, ImportPanelHost, over the ledger.)
+// (Both import and duplicates review open as shell-root flip modals over the ledger —
+// ImportPanelHost and DuplicatesHost — so the ledger is always the main slot; there are
+// no in-place sub-views left.)
 //
-// The tiles share their interaction state (filter, selection, sub-view, undo,
-// receipt preview) through atoms in uistate, so no tile embeds another — the host
-// just decides which specs are present and the engine renders each. The receipt
+// The tiles share their interaction state (filter, selection, undo, receipt preview)
+// through atoms in uistate, so no tile embeds another — the host just decides which
+// specs are present and the engine renders each. The receipt
 // preview is a modal overlay (like the edit host), not a bento tile.
 func Transactions() ui.Node {
 	app := appstate.Default
@@ -70,7 +70,6 @@ func Transactions() ui.Node {
 	// receipt preview opening all flow through these atoms.
 	_ = uistate.UseDataRevision().Get()
 	selAtom := uistate.UseTxnSelection()
-	viewAtom := uistate.UseTxnView()
 	undoAtom := uistate.UseTxnUndo()
 	previewAtom := uistate.UseTxnPreview()
 	filterAtom := uistate.UseTxFilter()
@@ -117,8 +116,9 @@ func Transactions() ui.Node {
 	}
 
 	// The fixed placement set for the transactions surface. The toolbar is always
-	// present; the bulk and undo tiles appear with selection / a pending undo; the
-	// main slot is the ledger table unless an import/duplicates sub-view is active.
+	// present; the bulk and undo tiles appear with selection / a pending undo; the main
+	// slot is always the ledger table. Import and duplicates review both open as shell-
+	// root flip modals over the ledger now, so there are no in-place sub-views left.
 	specs := []domain.WidgetSpec{txnNativeSpec("txn-toolbar")}
 	if len(selAtom.Get()) > 0 {
 		specs = append(specs, txnNativeSpec("txn-bulkbar"))
@@ -126,15 +126,7 @@ func Transactions() ui.Node {
 	if len(undoAtom.Get().Prior) > 0 {
 		specs = append(specs, txnNativeSpec("txn-undobar"))
 	}
-	// Import now opens a shell-root flip modal (ImportPanelHost), not an in-place
-	// sub-view — so the ledger table stays in the main slot behind it. Duplicates
-	// remains an in-place review sub-view.
-	switch viewAtom.Get() {
-	case uistate.TxnViewDuplicates:
-		specs = append(specs, txnNativeSpec("txn-duplicates"))
-	default:
-		specs = append(specs, txnTableSpec())
-	}
+	specs = append(specs, txnTableSpec())
 
 	// Render each spec through the engine's per-widget error boundary. Keyed on the
 	// spec id so inserting the bulk/undo tiles never shifts the table's identity (its
@@ -172,12 +164,6 @@ func init() {
 	})
 	R("txn-undobar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(txnUndoBarWidget, txnUndoBarProps{App: c.App})
-	})
-	R("txn-duplicates", func(c widgetrender.RenderCtx) ui.Node {
-		return uiw.Widget(uiw.WidgetProps{
-			ID: "txn-duplicates", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-			Body: ui.CreateElement(DuplicatesPanel, duplicatesPanelProps{}),
-		})
 	})
 
 	widgetrender.RegisterFrame("txn-table", func(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {

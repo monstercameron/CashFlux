@@ -1,3 +1,33 @@
+## 2026-07-12 — "Review duplicates" → flip modal (+ a real confirm-dialog z-index bug)
+
+Cam: do the same for review duplicates — move that logic + UI to a flip modal, e2e test, and
+screenshot-review the UI. Mirrored the import move exactly: new `uistate.UseDuplicatesModalOpen()` atom,
+an exported `screens.DuplicatesPanelBody(_ struct{})` wrapper, `app.DuplicatesHost` rendering a 900×660
+`FlipPanel` (CloseOnly — each merge/delete is immediate + undoable, nothing to stage) mounted in
+shell.go, and the toolbar's dupes button now sets the atom. Since duplicates was the *last* in-place
+sub-view (import already left), I removed the whole `UseTxnView`/`TxnView*` system: the widget-host
+switch collapses to always-ledger, the `txn-duplicates` tile registration is gone, and the button's
+open/close label toggle with it.
+
+**FE-design pass.** Screenshotted the modal. The "Merge (keep one)" and "Delete duplicate" actions used
+bare `btn-sm` / `btn-danger-sm` classes — but `.btn-sm` is only a size modifier (no bg/border) and
+`.btn-danger-sm` doesn't even exist, so both rendered as plain bold text, not buttons. Fixed to a proper
+green primary **Merge** (`btn btn-primary btn-sm`, the recommended one-click resolve) and a red danger
+**Delete** (`btn btn-danger btn-sm`), and added `dup-merge-btn` / `dup-delete-btn` testids.
+
+**Real bug the move surfaced.** Writing the merge e2e, the confirm dialog's click kept being intercepted
+by `.flip-backdrop`. Root cause: `.cf-dialog-backdrop` was `z-index: 90`, but flip modals are
+`--z-modal` = 3000 — so *any* confirm/prompt triggered from inside a flip modal (Merge/Delete here, but
+also e.g. a Delete inside the transaction-edit modal) was trapped behind the modal backdrop and
+un-clickable. Added a `--z-dialog` (3500) token between modal and toast and moved the dialog onto it.
+Verified in-browser (elementFromPoint at the confirm button now returns the confirm button; cfZ 3500 >
+fbZ 3000). App-wide fix.
+
+E2E: two new tests (`review duplicates`) — opens over the ledger with real Merge/Delete buttons and the
+old `txn-duplicates` tile gone + Close dismisses; and merge→confirm resolves the group to the empty
+state. Both green. (Hit the known zombie-server-serves-stale-wasm gotcha mid-iteration — a clean
+kill-by-PID + rebuild sorted it; confirmed with a single-worker full-build run.)
+
 ## 2026-07-12 — Refined the 4 import forms + a project-wide Smart/Smart+ tier design system
 
 Cam: the per-source forms (after clicking a picker tile) "feel unpolished — refine the content." Then:

@@ -31,6 +31,7 @@ func registerGenerated() {
 		customProp("--z-overlay", "60"),   // in-page overlays
 		customProp("--z-popover", "2000"), // floating explainers / tooltips (over content)
 		customProp("--z-modal", "3000"),   // flip-panel modals + their backdrop
+		customProp("--z-dialog", "3500"),  // confirm/prompt dialogs — above modals so they're answerable from within one
 		customProp("--z-toast", "4000"),   // toasts / notices (above everything)
 		colorScheme("dark"),
 		customProp("--font-ui", "Inter"),
@@ -10453,7 +10454,10 @@ func registerGenerated() {
 	rule(".cf-dialog-backdrop",
 		position("fixed"),
 		inset("0"),
-		zIndex("90"),
+		// Above flip-panel modals (--z-modal) so a confirm/prompt triggered from inside a
+		// modal — e.g. Merge/Delete in the Review-duplicates modal — is reachable, not
+		// trapped behind the modal's backdrop.
+		zIndex("var(--z-dialog)"),
 		display("flex"),
 		alignItems("center"),
 		justifyContent("center"),
