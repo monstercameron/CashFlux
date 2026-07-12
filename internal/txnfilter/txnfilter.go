@@ -88,12 +88,23 @@ type Criteria struct {
 	Source string `json:"source,omitempty"`
 	// Tag filters to transactions carrying this exact tag (C49). Empty = no tag
 	// filter. Matched case-insensitively against each of a transaction's Tags.
-	Tag     string `json:"tag,omitempty"`
-	From    string `json:"from,omitempty"`
-	To      string `json:"to,omitempty"`
-	Sort    string `json:"sort,omitempty"`
-	Dir     string `json:"dir,omitempty"`
-	Cleared string `json:"cleared,omitempty"`
+	Tag string `json:"tag,omitempty"`
+	// Accounts / Members / Sources / Tags are the MULTI-value counterparts of the
+	// single Account/Member/Source/Tag fields — a comma-joined set of values matched
+	// OR-within the dimension (a transaction passes if it matches ANY selected value),
+	// AND across dimensions. They're comma-joined strings (not slices) so Criteria
+	// stays comparable for ScopeChanged. When a multi field is non-empty it takes
+	// precedence over its single counterpart. (Categories already does this for
+	// category.) Accounts also matches BillAccountID, like the single Account.
+	Accounts string `json:"accounts,omitempty"`
+	Members  string `json:"members,omitempty"`
+	Sources  string `json:"sources,omitempty"`
+	Tags     string `json:"tags,omitempty"`
+	From     string `json:"from,omitempty"`
+	To       string `json:"to,omitempty"`
+	Sort     string `json:"sort,omitempty"`
+	Dir      string `json:"dir,omitempty"`
+	Cleared  string `json:"cleared,omitempty"`
 	// CustomKey/CustomVal filter by a transaction custom field's value (L18): a
 	// row matches when its Custom[CustomKey] stringifies to CustomVal. Both empty
 	// = no custom-field filter.
@@ -191,16 +202,14 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 		}
 	}
 	add(FieldText, c.Text)
-	add(FieldAccount, c.Account)
-	add(FieldCategory, c.Category)
-	// A multi-category filter shows one removable chip per category (each resolves
-	// to a name); the chip ✕ clears the whole category dimension via Without.
-	for _, id := range splitCSV(c.Categories) {
-		out = append(out, ActiveFilter{Field: FieldCategory, Value: id})
+	// Each categorical dimension shows one removable chip per selected value (each
+	// resolves to a display name in the view); the chip ✕ removes just that value via
+	// RemoveValue.
+	for _, f := range categoricalFields {
+		for _, v := range c.SelectedValues(f) {
+			out = append(out, ActiveFilter{Field: f, Value: v})
+		}
 	}
-	add(FieldMember, c.Member)
-	add(FieldSource, c.Source)
-	add(FieldTag, c.Tag)
 	add(FieldFrom, c.From)
 	add(FieldTo, c.To)
 	add(FieldAmountMin, c.AmountMin)
@@ -227,15 +236,19 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.Text = ""
 	case FieldAccount:
 		c.Account = ""
+		c.Accounts = ""
 	case FieldCategory:
 		c.Category = ""
 		c.Categories = ""
 	case FieldMember:
 		c.Member = ""
+		c.Members = ""
 	case FieldSource:
 		c.Source = ""
+		c.Sources = ""
 	case FieldTag:
 		c.Tag = ""
+		c.Tags = ""
 	case FieldFrom:
 		c.From = ""
 	case FieldTo:
@@ -275,6 +288,122 @@ func csvHas(csv, val string) bool {
 		}
 	}
 	return false
+}
+
+// csvHasAccount reports whether any account id in csv matches the transaction's booked
+// account or its bill-linked account (mirroring the single Account filter's dual match).
+func csvHasAccount(csv string, t domain.Transaction) bool {
+	for _, id := range splitCSV(csv) {
+		if t.AccountID == id || t.BillAccountID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAnyTagCSV reports whether the transaction carries any of the comma-joined tags
+// (case-insensitive) — the multi-value counterpart of hasTag.
+func hasAnyTagCSV(t domain.Transaction, csv string) bool {
+	for _, tag := range splitCSV(csv) {
+		if hasTag(t, strings.ToLower(strings.TrimSpace(tag))) {
+			return true
+		}
+	}
+	return false
+}
+
+// toggleCSV adds value to a comma-joined set if absent, or removes it if present.
+func toggleCSV(csv, value string) string {
+	if csvHas(csv, value) {
+		return removeFromCSV(csv, value)
+	}
+	return strings.Join(append(splitCSV(csv), value), ",")
+}
+
+// removeFromCSV removes value from a comma-joined set (no-op if absent).
+func removeFromCSV(csv, value string) string {
+	parts := splitCSV(csv)
+	out := parts[:0]
+	for _, p := range parts {
+		if p != value {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+// mergeSingleIntoMulti folds a set single-value field into the multi set, so a filter
+// arrived at via a single-value drill-through is preserved once the user starts
+// multi-selecting the same dimension.
+func mergeSingleIntoMulti(csv, single string) string {
+	if single != "" && !csvHas(csv, single) {
+		return strings.Join(append(splitCSV(csv), single), ",")
+	}
+	return csv
+}
+
+// categoricalFields are the filter dimensions that support multi-value selection.
+var categoricalFields = []FilterField{FieldAccount, FieldCategory, FieldMember, FieldSource, FieldTag}
+
+// multiPtr returns pointers to the multi (comma-joined) and single fields for a
+// categorical dimension, or (nil, nil) for a non-categorical field.
+func (c *Criteria) multiPtr(f FilterField) (multi, single *string) {
+	switch f {
+	case FieldAccount:
+		return &c.Accounts, &c.Account
+	case FieldCategory:
+		return &c.Categories, &c.Category
+	case FieldMember:
+		return &c.Members, &c.Member
+	case FieldSource:
+		return &c.Sources, &c.Source
+	case FieldTag:
+		return &c.Tags, &c.Tag
+	}
+	return nil, nil
+}
+
+// ToggleValue adds or removes value in a categorical dimension's multi set — the action
+// of clicking a filter option. Any set single counterpart is folded in first (then
+// cleared) so the multi set becomes the single source of truth. Non-categorical fields
+// are returned unchanged.
+func (c Criteria) ToggleValue(f FilterField, value string) Criteria {
+	multi, single := c.multiPtr(f)
+	if multi == nil {
+		return c
+	}
+	*multi = toggleCSV(mergeSingleIntoMulti(*multi, *single), value)
+	*single = ""
+	return c
+}
+
+// SelectedValues returns the currently-selected values for a categorical dimension (the
+// multi set, plus the single value if set and not already present), for highlighting the
+// chosen options and rendering per-value chips.
+func (c Criteria) SelectedValues(f FilterField) []string {
+	multi, single := c.multiPtr(f)
+	if multi == nil {
+		return nil
+	}
+	out := splitCSV(*multi)
+	if *single != "" && !csvHas(*multi, *single) {
+		out = append(out, *single)
+	}
+	return out
+}
+
+// RemoveValue removes one value from a categorical dimension (a per-value chip ✕),
+// clearing the single counterpart if it matches. Non-categorical fields clear entirely.
+func (c Criteria) RemoveValue(f FilterField, value string) Criteria {
+	multi, single := c.multiPtr(f)
+	if multi == nil {
+		return c.Without(f)
+	}
+	*multi = removeFromCSV(*multi, value)
+	if *single == value {
+		*single = ""
+	}
+	return c
 }
 
 // Labels resolves entity IDs to display names for name-aware sorting (category,
@@ -333,14 +462,18 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		// one linked to it as a bill payment (BillAccountID) — so filtering by an account
 		// that only receives linked bill payments (e.g. an HOA obligation the money is
 		// paid FROM another account) still surfaces those payments.
-		case c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
+		case c.Accounts != "" && !csvHasAccount(c.Accounts, t):
+		case c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
 		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
 		case c.Categories != "" && !csvHas(c.Categories, t.CategoryID):
 		case c.Categories == "" && c.Category != "" && t.CategoryID != c.Category:
-		case c.Member != "" && t.MemberID != c.Member:
-		case c.Source != "" && string(t.Source) != c.Source:
-		case tagF != "" && !hasTag(t, tagF):
+		case c.Members != "" && !csvHas(c.Members, t.MemberID):
+		case c.Members == "" && c.Member != "" && t.MemberID != c.Member:
+		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
+		case c.Sources == "" && c.Source != "" && string(t.Source) != c.Source:
+		case c.Tags != "" && !hasAnyTagCSV(t, c.Tags):
+		case c.Tags == "" && tagF != "" && !hasTag(t, tagF):
 		case hasMin && AbsAmount(t) < currency.MinorFromMajor(minMajor, t.Amount.Currency):
 		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
 		case !fromT.IsZero() && t.Date.Before(fromT):

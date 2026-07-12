@@ -31,6 +31,10 @@ import (
 // toolbar stays declarative — "label + options + a plain handler" — instead of
 // repeating the hand-rolled Select/aria/Option-loop pattern per field.
 
+// chipKeySep joins a filter chip's field and value into its stable key (an unlikely
+// character so it never collides with an entity id, tag, or date value).
+const chipKeySep = "\x1f"
+
 // withAllOption prepends the empty-value "all / none" choice to an option list.
 func withAllOption(allLabel string, opts []uiw.SelectOption) []uiw.SelectOption {
 	return append([]uiw.SelectOption{{Value: "", Label: allLabel}}, opts...)
@@ -62,8 +66,64 @@ func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
 		Attr("aria-label", label), Placeholder(placeholder), Value(value), OnInput(onInput)))
 }
 
-// actionBtn is one labelled action button (used by the bulk-action bar) — collapses
-// the repeated Button(class, type, title, [testid], onClick, label) boilerplate.
+// containsStr reports whether ss contains v.
+func containsStr(ss []string, v string) bool {
+	for _, s := range ss {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+// filterPillProps configures one toggle pill in a multi-select filter group. It is its
+// own component so its OnClick hook sits at a stable position (the pill list is
+// variable-length — see the framework loop-hook gotcha).
+type filterPillProps struct {
+	Field    txnfilter.FilterField
+	Value    string
+	Label    string
+	Selected bool
+	OnToggle func(txnfilter.FilterField, string)
+}
+
+// FilterPill renders one selectable filter value as a toggle pill: neutral when off,
+// accent-filled when on. Clicking toggles the value in its dimension's multi set.
+func FilterPill(props filterPillProps) ui.Node {
+	onClick := ui.UseEvent(Prevent(func() { props.OnToggle(props.Field, props.Value) }))
+	cls := "filter-pill"
+	pressed := "false"
+	if props.Selected {
+		cls = "filter-pill on"
+		pressed = "true"
+	}
+	return Button(css.Class(cls), Type("button"), Attr("aria-pressed", pressed), OnClick(onClick), props.Label)
+}
+
+// filterMultiGroup renders one filter dimension as a labelled group of toggle pills —
+// the multi-select control replacing the old single <select>. Multiple values can be
+// on at once (OR-within the dimension). The empty-value "All" option is skipped (an
+// empty set already means "all").
+func filterMultiGroup(label string, field txnfilter.FilterField, selected []string, opts []uiw.SelectOption, onToggle func(txnfilter.FilterField, string)) ui.Node {
+	return Div(css.Class("filter-group"),
+		Span(css.Class("filter-group-label"), label),
+		Div(css.Class("filter-pills"),
+			MapKeyed(opts,
+				func(o uiw.SelectOption) any { return o.Value },
+				func(o uiw.SelectOption) ui.Node {
+					if o.Value == "" {
+						return Fragment()
+					}
+					return ui.CreateElement(FilterPill, filterPillProps{
+						Field: field, Value: o.Value, Label: o.Label,
+						Selected: containsStr(selected, o.Value), OnToggle: onToggle,
+					})
+				},
+			),
+		),
+	)
+}
+
 // toolbarIconBtn renders one sleek transactions-toolbar action: a fixed-size glyph
 // button whose text label reveals on hover/focus as a styled tooltip (.tbar-tip). The
 // label doubles as the aria-label so the icon-only control stays accessible. variant is
@@ -136,9 +196,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}
 
 	setFilter := func(mut func(*uistate.TxFilter)) { setTxFilterOn(filterAtom, mut) }
-	removeFilter := func(field txnfilter.FilterField) {
-		setFilter(func(x *uistate.TxFilter) { *x = x.Without(field) })
-	}
 	clearAllFilters := func() {
 		cleared := uistate.TxFilter{}.Normalize()
 		filterAtom.Set(cleared)
@@ -265,7 +322,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	active := f.ActiveFilters()
 	chips := make([]uiw.Chip, 0, len(active))
 	for _, af := range active {
-		chips = append(chips, uiw.Chip{Key: string(af.Field), Label: chipLabel(af)})
+		// Key encodes field + value so a per-value chip ✕ removes just that value
+		// (RemoveValue), not the whole dimension.
+		chips = append(chips, uiw.Chip{Key: string(af.Field) + chipKeySep + af.Value, Label: chipLabel(af)})
 	}
 
 	// Custom-field filter (L18): a field picker + a value control shaped by the field's
@@ -308,17 +367,29 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		customFilterNode = withFieldLabel(uistate.T("transactions.filterCustomField"), Fragment(keySelect, valControl))
 	}
 
-	filtersBody := Div(css.Class("filter-fields"),
-		filterSelect(uistate.T("transactions.filterAccount"), f.Account, accOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Account = v }) }),
-		filterSelect(uistate.T("transactions.filterCategory"), f.Category, catOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Category = v; x.Categories = "" }) }),
-		filterSelect(uistate.T("transactions.member"), f.Member, memberOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Member = v }) }),
-		filterSelect(uistate.T("transactions.filterSource"), f.Source, sourceOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Source = v }) }),
-		If(len(tagList) > 0, filterSelect(uistate.T("transactions.filterTag"), f.Tag, tagOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Tag = v }) })),
-		dateField(uistate.T("transactions.fromDate"), f.From, onFilterFrom),
-		dateField(uistate.T("transactions.toDate"), f.To, onFilterTo),
-		amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
-		amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
-		filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
+	// Toggling a value in a categorical dimension (account/category/member/source/tag)
+	// adds or removes it from that dimension's multi set — multiple values allowed.
+	onToggleFilter := func(field txnfilter.FilterField, value string) {
+		setFilter(func(x *uistate.TxFilter) { *x = x.ToggleValue(field, value) })
+	}
+	// Redesigned filter panel: each categorical dimension is a group of toggle pills
+	// (multi-select), followed by the date/amount ranges, the cleared status, and any
+	// custom-field filter.
+	filtersBody := Div(css.Class("filter-panel"),
+		Div(css.Class("filter-groups"),
+			filterMultiGroup(uistate.T("transactions.filterAccount"), txnfilter.FieldAccount, f.SelectedValues(txnfilter.FieldAccount), accOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.filterCategory"), txnfilter.FieldCategory, f.SelectedValues(txnfilter.FieldCategory), catOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.member"), txnfilter.FieldMember, f.SelectedValues(txnfilter.FieldMember), memberOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.filterSource"), txnfilter.FieldSource, f.SelectedValues(txnfilter.FieldSource), sourceOpts, onToggleFilter),
+			If(len(tagList) > 0, filterMultiGroup(uistate.T("transactions.filterTag"), txnfilter.FieldTag, f.SelectedValues(txnfilter.FieldTag), tagOpts, onToggleFilter)),
+		),
+		Div(css.Class("filter-ranges"),
+			dateField(uistate.T("transactions.fromDate"), f.From, onFilterFrom),
+			dateField(uistate.T("transactions.toDate"), f.To, onFilterTo),
+			amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
+			amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
+			filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
+		),
 		customFilterNode,
 	)
 
@@ -344,9 +415,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			}
 			return uistate.T("transactions.filtersActiveAria", plural(n, "filter"))
 		},
-		FilterFields:  filtersBody,
-		Chips:         chips,
-		OnRemoveChip:  func(key string) { removeFilter(txnfilter.FilterField(key)) },
+		FilterFields: filtersBody,
+		Chips:        chips,
+		OnRemoveChip: func(key string) {
+			field, value, _ := strings.Cut(key, chipKeySep)
+			setFilter(func(x *uistate.TxFilter) { *x = x.RemoveValue(txnfilter.FilterField(field), value) })
+		},
 		OnClearAll:    clearAllFilters,
 		ClearAllLabel: uistate.T("transactions.clearAllFilters"),
 		RemoveLabel:   uistate.T("transactions.removeFilter"),

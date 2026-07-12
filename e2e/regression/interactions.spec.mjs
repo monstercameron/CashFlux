@@ -485,3 +485,24 @@ test.describe("review duplicates", () => {
     await expect(modal).toContainText("No duplicate transactions found", { timeout: 20_000 });
   });
 });
+
+test.describe("multi-value filters", () => {
+  test("multiple account pills filter OR-within, with per-value chips + a count badge", async ({ app }) => {
+    await nav(app, "/transactions");
+    // Open the filter panel (the funnel trigger toggles it).
+    await app.locator(".filters-trigger").first().click();
+    await expect(app.locator(".filter-panel")).toBeVisible();
+    // The account group is first — select its first two pills (multi-select).
+    const pills = app.locator(".filter-pill");
+    await pills.nth(0).click();
+    await pills.nth(1).click();
+    // Both read as selected; each is a removable per-value chip; the trigger badges 2.
+    await expect(app.locator(".filter-pill.on")).toHaveCount(2);
+    await expect(app.locator(".filter-chip")).toHaveCount(2);
+    await expect(app.locator(".filters-trigger .filter-badge")).toHaveText("2");
+    // Removing one chip drops just that value (not the whole dimension).
+    await app.locator(".filter-chip .chip-x").first().click();
+    await expect(app.locator(".filter-pill.on")).toHaveCount(1);
+    await expect(app.locator(".filter-chip")).toHaveCount(1);
+  });
+});

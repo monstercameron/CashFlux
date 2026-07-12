@@ -117,4 +117,65 @@ func registerTxnToolbar() {
 		position("relative"),
 		zIndex("5"),
 	)
+
+	// Redesigned filter panel: each categorical dimension is a labelled group of toggle
+	// pills (multi-select), then the date/amount ranges.
+	rule(".filter-panel",
+		display("flex"),
+		flexDirection("column"),
+		gap("1.25rem"),
+	)
+	rule(".filter-groups",
+		display("flex"),
+		flexDirection("column"),
+		gap("1rem"),
+	)
+	rule(".filter-group",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".filter-group-label",
+		fontSize("0.7rem"),
+		fontWeight("600"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-dim)"),
+	)
+	rule(".filter-pills",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+		maxHeight("8.5rem"),
+		overflowY("auto"),
+	)
+	rule(".filter-pill",
+		padding("0.3rem 0.7rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-card)"),
+		color("var(--text)"),
+		fontSize("0.82rem"),
+		cursor("pointer"),
+		whiteSpace("nowrap"),
+		transition("background .12s ease, border-color .12s ease, color .12s ease"),
+	)
+	rule(".filter-pill:hover",
+		borderColor("var(--text-dim)"),
+	)
+	rule(".filter-pill.on",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
+		color("#fff"),
+	)
+	rule(".filter-pill:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	rule(".filter-ranges",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.75rem"),
+		alignItems("flex-end"),
+	)
 }

@@ -1,3 +1,40 @@
+## 2026-07-12 — Multi-value filters + redesigned filter panel (and quick fixes)
+
+Cam, in a few rapid messages: move select-all into the toolbar row; check the tooltip z-index; the
+select-all/bulk "widget" is ugly, flatten to one row; make the filters multi-value ("select multiple
+values for each category"); redesign the filter widget; then — bulk bar "scrolls, ew", make the selects
+smaller; and make the filter + select-all buttons toggle.
+
+Quick fixes first: select-all moved into the single toolbar glyph row (dropped the separate controls row
++ the redundant select-duplicates — the duplicates modal covers it). Bulk bar flattened to one row.
+Tooltip z-index: a ledger tile makes a transform stacking context on hover, trapping the `.tbar-tip`
+below the tile beneath it — the hovered tile now lifts its z-index above siblings. Bulk-bar selects
+capped at 150px so the row fits without a scrollbar. Filters button toggles (aria-expanded); select-all
+toggles (second click clears when everything shown is already selected).
+
+**Multi-value filters (the big one).** There was already a `MultiCriteria` type (C83) but it only covered
+4 dimensions and wasn't wired in. I went with extending the single-value `Criteria` instead — it already
+handles dates/amounts/cleared/text/custom and persists — following its existing multi-`Categories`
+precedent (a comma-joined string, kept as a string so `Criteria` stays `==`-comparable for
+`ScopeChanged`). Added `Accounts/Members/Sources/Tags` comma-joined fields; match is OR-within a
+dimension, AND across, with the multi field taking precedence over its single counterpart (accounts
+still also match `BillAccountID`). Added `ToggleValue` (folds a pre-existing single value in, then clears
+it), `SelectedValues` (multi + single fallback), `RemoveValue` (per-value chip ✕), and updated
+`ActiveFilters`/`Without`. Table-driven native tests cover multi-match on every dimension, precedence,
+toggle/remove, and per-value chips.
+
+**Redesigned panel (E).** Each categorical dimension is now a labelled group of toggle **pills**
+(`FilterPill` — its own component so the per-pill OnClick hook stays stable in the variable-length list;
+rendered via `MapKeyed` keyed on value). Selected pills are accent-filled; a click calls
+`Criteria.ToggleValue`. Chips became per-value: the chip key encodes `field\x1fvalue` and the remove
+handler calls `RemoveValue`, so a chip ✕ drops just that value. Dates/amounts/cleared stay range/single
+controls in a `.filter-ranges` row. New `.filter-panel`/`.filter-group`/`.filter-pill` styles.
+
+Verified: native logic tests green; full interactions (27) green including a new `multi-value filters`
+e2e (select two account pills → 2 on-pills + 2 chips + a "2" badge; removing one chip drops just that
+value) and the existing account-filter test (single-value drill-throughs still work). Screenshot shows
+the green-pill account/category/member groups + the per-value chips + the count badge.
+
 ## 2026-07-12 — Glyph-ified the filter, select-all, and bulk controls
 
 Cam: "refine select button and the select all widget that appears and refine the filter and the
