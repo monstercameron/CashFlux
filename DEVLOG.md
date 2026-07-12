@@ -1,3 +1,33 @@
+## 2026-07-12 — Import wizard: e2e coverage, design review, v1.0.17
+
+Cam: "e2e test and review with fe design skill to verify, then when good version bump and remote push."
+
+**E2E.** The old `statement import` interactions test drove the retired `txn-statement-import-btn` and
+`statementimport-cancel` (both gone). Replaced it with an `import wizard` describe of four tests covering
+the whole merged flow: the Smart/Smart+ picker (all four tiles + single Import button + `.smartplus`
+accent), PDF-tile → form → back-to-grid, statement-text Parse → review → footer Save imports (row
+searchable after), and the CSV lossless direct path. All four green. Ran the full `interactions` +
+`smoke` specs too (26 passed) — no regressions from the toolbar/transactions changes; the all-routes
+smoke confirms `/documents` + `/transactions` render clean.
+
+Coverage ratchet (`coverage.spec.mjs`) fails, but it's the **pre-existing, team-deferred** drift: a
+regen showed changes on routes I never touched (dashboard `untestided` 139→29, app-wide
+`smart-strip-menu`/snooze controls) — the CHANGELOG already notes this ratchet is "intentionally left for
+a separate regeneration ... a rise in untestable controls that deserve testids first." Regenerating would
+paper over exactly what they want visible, so I discarded the regen and left the manifest untouched. My
+import controls all carry testids, so I add no untestable debt. (The picker tiles live in the shell-root
+modal, outside `#main`, so they aren't harvested anyway; the only `#main` delta is the retired statement
+button, which the team's eventual regen will capture.)
+
+**FE-design review.** Screenshotted the picker. One real cohesion nit: the Smart tier used a text pill
+but Smart+ rendered `smartGlyph(true)` at default size — a big mismatched circular badge. Sized the ✦
+inline and made `.doc-tier-pill` an inline-flex, so both branches now read as matching pills
+(`INSTANT · NO AI` vs violet `✦ AI`). Re-ran the 4 import-wizard e2e (still green) and re-screenshotted
+to confirm. Otherwise the design holds up: clear hierarchy, brand-consistent green/violet accents, plain
+copy, accessible buttons, reduced-motion honored.
+
+**Release.** Bumped `internal/version` 1.0.16 → 1.0.17.
+
 ## 2026-07-12 — Visual document-type picker for import Stage 1 (Smart / Smart+ branches)
 
 Cam didn't like Stage 1's stacked forms: "make it more visual, show a grid of document types to

@@ -40,6 +40,9 @@ func registerImportWizard() {
 		color("var(--text-dim)"),
 	)
 	rule(".doc-tier-pill",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
 		fontSize("0.68rem"),
 		fontWeight("600"),
 		letterSpacing("0.04em"),

@@ -1117,7 +1117,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					Div(css.Class("doc-branch"),
 						Div(css.Class("doc-branch-head"),
 							Span(css.Class("doc-branch-title", "plus"), uistate.T("documents.smartPlusBranch")),
-							Span(css.Class("doc-tier-pill", "plus"), smartGlyph(true), Span(ClassStr(tw.Fold(tw.Ml1)), uistate.T("documents.smartPlusBranchTier"))),
+							Span(css.Class("doc-tier-pill", "plus"), smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(uistate.T("documents.smartPlusBranchTier"))),
 							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartPlusBranchDesc"))),
 						Div(css.Class("doc-type-grid"),
 							docTypeTile("import-type-pdf", onPickPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),

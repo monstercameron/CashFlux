@@ -375,15 +375,76 @@ test.describe("budgets last-month toggle", () => {
   });
 });
 
-test.describe("statement import", () => {
-  test("the Import statement modal opens with the upload UI", async ({ app }) => {
+test.describe("import wizard", () => {
+  const MODAL = '[role="dialog"][aria-label="Import"]';
+
+  // Open the single merged Import flip modal and wait past the ~550ms 3D flip.
+  async function openImport(app) {
     await nav(app, "/transactions");
-    const btn = app.getByTestId("txn-statement-import-btn");
+    const btn = app.getByTestId("txn-import-btn");
     await expect(btn).toBeVisible();
     await btn.click();
+    await app.waitForTimeout(650); // past the FlipPanel flip
+  }
+
+  test("Stage 1 is a Smart / Smart+ document-type picker (one Import button)", async ({ app }) => {
+    await openImport(app);
+    await expect(app.getByTestId("import-type-picker")).toBeVisible();
+    // All four sources across the two branches are offered.
+    for (const id of ["import-type-csv", "import-type-stmt", "import-type-pdf", "import-type-receipt"]) {
+      await expect(app.getByTestId(id)).toBeVisible();
+    }
+    // The two Smart+ (generative-AI) tiles carry the brand accent class.
+    await expect(app.locator('[data-testid="import-type-pdf"].smartplus')).toHaveCount(1);
+    await expect(app.locator('[data-testid="import-type-receipt"].smartplus')).toHaveCount(1);
+    // The old standalone "Import statement" toolbar button is retired.
+    await expect(app.getByTestId("txn-statement-import-btn")).toHaveCount(0);
+  });
+
+  test("picking the Statement PDF tile reveals its form; back returns to the grid", async ({ app }) => {
+    await openImport(app);
+    await app.getByTestId("import-type-pdf").click();
+    await expect(app.getByTestId("import-source-form")).toBeVisible();
     await expect(app.getByTestId("statementimport-choose")).toBeVisible();
     await expect(app.getByTestId("statementimport-run")).toBeVisible();
-    await app.getByTestId("statementimport-cancel").click();
+    // Back to the type chooser hides the form and re-shows the grid.
+    await app.getByTestId("import-back-types").click();
+    await expect(app.getByTestId("import-type-picker")).toBeVisible();
     await expect(app.getByTestId("statementimport-choose")).toHaveCount(0);
+  });
+
+  test("statement-text Parse advances to review, and footer Save imports the rows", async ({ app }) => {
+    await openImport(app);
+    await app.getByTestId("import-type-stmt").click();
+    const ta = app.locator(`${MODAL} textarea[placeholder^="Posting Date"]`);
+    await expect(ta).toBeVisible();
+    await ta.fill("Posting Date,Description,Debit,Credit\n2026-07-01,REGRESSION STMT IMPORT,,64.00\n");
+    // Deterministic Parse (no AI) yields a draft and advances to Stage 2 review.
+    await app.locator(MODAL).getByRole("button", { name: "Parse statement" }).click();
+    await expect(app.getByTestId("flip-save")).toBeVisible({ timeout: 20_000 });
+    await expect(app.locator(MODAL)).toContainText("REGRESSION STMT IMPORT");
+    // "Add more data" returns to Stage 1 (keeping the draft) → the review shortcut appears.
+    await app.getByTestId("import-back-btn").click();
+    await expect(app.getByTestId("import-review-btn")).toBeVisible();
+    await app.getByTestId("import-review-btn").click();
+    // Footer Save commits the reviewed draft and closes the modal.
+    await app.getByTestId("flip-save").click();
+    await expect(app.locator(MODAL)).toHaveCount(0, { timeout: 20_000 });
+    // The imported row is now in the ledger.
+    await app.locator('input[placeholder="Search description, payee, or tag"]').fill("REGRESSION STMT IMPORT");
+    await expect(app.locator("#main")).toContainText("REGRESSION STMT IMPORT", { timeout: 20_000 });
+  });
+
+  test("the CSV tile imports pasted rows directly (lossless path, no review)", async ({ app }) => {
+    await openImport(app);
+    await app.getByTestId("import-type-csv").click();
+    const ta = app.locator(`${MODAL} textarea[placeholder^="date,payee"]`);
+    await expect(ta).toBeVisible();
+    await ta.fill("date,desc,amount\n2026-07-03,REGRESSION CSV IMPORT,-9.99\n");
+    // Footer Save commits the ready CSV directly and closes.
+    await app.getByTestId("flip-save").click();
+    await expect(app.locator(MODAL)).toHaveCount(0, { timeout: 20_000 });
+    await app.locator('input[placeholder="Search description, payee, or tag"]').fill("REGRESSION CSV IMPORT");
+    await expect(app.locator("#main")).toContainText("REGRESSION CSV IMPORT", { timeout: 20_000 });
   });
 });
