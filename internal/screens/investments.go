@@ -262,24 +262,29 @@ func InvestmentsScreen() ui.Node {
 
 	v := computeInvestView(app)
 
+	// Above the fold on mount: the portfolio summary, the toolbar, and the holdings
+	// list. The growth chart, allocation breakdown, per-account pools, and the formula
+	// tile are below-the-fold detail — mounted ~300ms after first paint so the page is
+	// interactive immediately (chartReady).
 	specs := []domain.WidgetSpec{
 		investNativeSpec("invest-summary"),
-	}
-	if chartReady {
-		specs = append(specs, investNativeSpec("invest-growth"))
-	}
-	specs = append(specs,
 		investNativeSpec("invest-toolbar"),
 		investNativeSpec("invest-securities"),
-	)
-	if len(v.Securities) > 0 {
-		specs = append(specs, investNativeSpec("invest-allocation"))
 	}
-	// The accounts tile (per-account growth cards + pool grouping) is the single account
-	// list — it covers every investment account, so there is no separate "traditional" list.
-	specs = append(specs, investNativeSpec("invest-pools"))
-	if formulasAtom.Get() {
-		specs = append(specs, investNativeSpec("invest-formula"))
+	if chartReady {
+		specs = []domain.WidgetSpec{
+			investNativeSpec("invest-summary"),
+			investNativeSpec("invest-growth"),
+			investNativeSpec("invest-toolbar"),
+			investNativeSpec("invest-securities"),
+		}
+		if len(v.Securities) > 0 {
+			specs = append(specs, investNativeSpec("invest-allocation"))
+		}
+		specs = append(specs, investNativeSpec("invest-pools"))
+		if formulasAtom.Get() {
+			specs = append(specs, investNativeSpec("invest-formula"))
+		}
 	}
 
 	return Div(css.Class("bento bento-invest"),

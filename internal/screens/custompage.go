@@ -65,6 +65,11 @@ func CustomPage(slug string) ui.Node {
 	// can reorder the page's layout. Held here so it survives across the tiles.
 	dragSrc := ui.UseState("")
 
+	// Above the fold on mount: the first couple of widgets. The rest of the grid
+	// (each an isolated tile that hydrates its own data/chart) mounts ~300ms after
+	// first paint, so a widget-heavy custom page paints immediately.
+	pageReady := useAfterSettle("custompage:" + slug)
+
 	// reorderWidget moves the dragged widget in front of the drop target in the
 	// page's layout, then persists. resizeWidget cycles a widget's width/height.
 	reorderWidget := func(targetID string) {
@@ -155,9 +160,13 @@ func CustomPage(slug string) ui.Node {
 		}))
 	}
 
+	visible := tiles
+	if !pageReady && len(tiles) > 2 {
+		visible = tiles[:2] // above-the-fold widgets first; the rest hydrate after paint
+	}
 	return Div(
 		toolbar,
-		Div(css.Class("bento"), tiles),
+		Div(css.Class("bento"), visible),
 	)
 }
 
