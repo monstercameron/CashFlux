@@ -113,6 +113,9 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if n > 0 {
 		triggerCls += " active"
 	}
+	if open.Get() {
+		triggerCls += " open" // stays highlighted while the filter panel is open
+	}
 	expanded := "false"
 	if open.Get() {
 		expanded = "true"

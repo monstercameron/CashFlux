@@ -49,6 +49,13 @@ func registerTxnToolbar() {
 		background("rgba(216,113,111,0.12)"),
 		borderColor("var(--danger)"),
 	)
+	// Open state — a glyph button whose flip modal / panel is currently open stays
+	// highlighted (accent tint) until it's dismissed, so the trigger reads as active.
+	rule(".tbar-btn.open",
+		background("var(--accent-dim)"),
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+	)
 
 	// Hover/focus tooltip revealing the action's label below the glyph.
 	rule(".tbar-tip",

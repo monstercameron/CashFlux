@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Toolbar trigger buttons stay highlighted while their panel/modal is open (2026-07-12):** the Filters trigger and the flip-modal glyph buttons (Import, Review duplicates, Columns, Categorize) now keep an accent-tinted "open" state until the panel or modal they opened is dismissed, so it's clear which control is currently active (the Filters trigger is the visible case — its panel is inline). The toolbar reads each modal's open atom so the highlight tracks open/close, and `aria-expanded` reflects the state.
+
 ### Added
 - **Multi-value transaction filters + a redesigned filter panel (2026-07-12):** the transaction filter now lets you select **multiple values per dimension** — account, category, member, source, and tag — matched OR-within a dimension and AND across dimensions (e.g. "Checking OR Savings, AND Groceries OR Dining"). The filter panel was redesigned around it: each dimension is a labelled group of **toggle pills** (accent-filled when on) instead of a single dropdown, each selected value is its own removable chip, and the "Filters" trigger badges the total count. Under the hood `Criteria` gained comma-joined `Accounts/Members/Sources/Tags` multi fields (mirroring the existing multi-`Categories`, kept as strings so `Criteria` stays comparable for `ScopeChanged`), with `ToggleValue`/`SelectedValues`/`RemoveValue` helpers and OR-within matching (a set multi field takes precedence over its single counterpart; accounts still also match bill-linked payments). Fully unit-tested (native) + an e2e covering multi-select, per-value chips, the count badge, and per-value removal. The single-value drill-throughs (from a budget/account/debt page) still work and fold into the multi set on first interaction.
 

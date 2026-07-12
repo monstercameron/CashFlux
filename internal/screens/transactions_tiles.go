@@ -129,13 +129,23 @@ func filterMultiGroup(label string, field txnfilter.FilterField, selected []stri
 // label doubles as the aria-label so the icon-only control stays accessible. variant is
 // "" (neutral), "primary" (accent — the Add action), or "danger" (delete).
 func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
+	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
+}
+
+// toolbarIconBtnOpen is toolbarIconBtn with an explicit open flag: when true the button
+// stays highlighted (the .open state) — used for the glyphs that open a flip modal /
+// panel so the trigger reads as "currently open" until it's dismissed.
+func toolbarIconBtnOpen(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, open bool) ui.Node {
 	classes := []any{"tbar-btn"}
 	if variant != "" {
 		classes = append(classes, variant)
 	}
+	if open {
+		classes = append(classes, "open")
+	}
 	args := []any{
 		css.Class(classes...), Type("button"),
-		Attr("aria-label", label), OnClick(onClick),
+		Attr("aria-label", label), Attr("aria-expanded", boolStr(open)), OnClick(onClick),
 		uiw.Icon(ic, css.Class(tw.W4, tw.H4)),
 		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), label),
 	}
@@ -431,10 +441,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
 			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), exportFiltered, ""),
-			toolbarIconBtn("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, ""),
-			toolbarIconBtn("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, ""),
-			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, ""),
-			toolbarIconBtn("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, ""),
+			toolbarIconBtnOpen("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, "", importPanelAtom.Get()),
+			toolbarIconBtnOpen("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, "", dupModalAtom.Get()),
+			toolbarIconBtnOpen("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, "", colsModalAtom.Get()),
+			toolbarIconBtnOpen("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, "", smartCatAtom.Get()),
 			// Select-all now lives in the single toolbar row with the other glyphs
 			// (shown once there are rows to select).
 			If(len(props.Shown) > 0,
