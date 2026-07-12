@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -104,11 +106,19 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.ActiveAriaLabel != nil {
 		ariaLabel = props.ActiveAriaLabel(n)
 	}
-	trigger := Button(css.Class("btn filters-trigger"), Type("button"),
-		Attr("aria-haspopup", "dialog"), Title(props.FiltersTitle+" (f)"), Attr("aria-label", ariaLabel),
+	// Sleek glyph trigger (matches the transactions toolbar): a filter icon with the
+	// active-filter count as a corner badge and the label revealed on hover/focus. Tints
+	// accent when filters are active.
+	triggerCls := "tbar-btn filters-trigger"
+	if n > 0 {
+		triggerCls += " active"
+	}
+	trigger := Button(css.Class(triggerCls), Type("button"),
+		Attr("aria-haspopup", "dialog"), Attr("aria-label", ariaLabel),
 		OnClick(func() { open.Set(true) }),
-		props.FiltersLabel,
+		Icon(icon.Filter, css.Class(tw.W4, tw.H4)),
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
+		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), props.FiltersLabel),
 	)
 
 	chips := MapKeyed(props.Chips,
@@ -143,9 +153,11 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		If(open.Get(), Div(css.Class("filter-inline-panel"),
 			Attr("role", "region"), Attr("aria-label", props.FiltersTitle),
 			Div(css.Class("filter-inline-header"),
-				H3(css.Class("filter-inline-title"), props.FiltersTitle),
-				Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")),
-					OnClick(func() { open.Set(false) }), "✕"),
+				H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(props.FiltersTitle)),
+				Button(css.Class("set-close"), Type("button"), Attr("aria-label", uistate.T("action.close")),
+					Attr("title", uistate.T("action.close")),
+					OnClick(func() { open.Set(false) }), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 			Div(css.Class("filter-inline-body"), props.FilterFields),
 		)),
@@ -171,6 +183,6 @@ func filterChip(props filterChipProps) uic.Node {
 					props.OnRemove(props.Key)
 				}
 			}),
-			"✕"),
+			Icon(icon.Close, css.Class(tw.W3, tw.H3))),
 	)
 }

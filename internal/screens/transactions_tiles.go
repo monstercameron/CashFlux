@@ -64,23 +64,14 @@ func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
 
 // actionBtn is one labelled action button (used by the bulk-action bar) — collapses
 // the repeated Button(class, type, title, [testid], onClick, label) boilerplate.
-func actionBtn(label, title, class, testID string, onClick ui.Handler) ui.Node {
-	args := []any{css.Class(class), Type("button"), Title(title), OnClick(onClick)}
-	if testID != "" {
-		args = append(args, Attr("data-testid", testID))
-	}
-	args = append(args, label)
-	return Button(args...)
-}
-
 // toolbarIconBtn renders one sleek transactions-toolbar action: a fixed-size glyph
 // button whose text label reveals on hover/focus as a styled tooltip (.tbar-tip). The
-// label doubles as the aria-label so the icon-only control stays accessible. primary
-// paints it as the accent action (the "Add" button).
-func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, primary bool) ui.Node {
+// label doubles as the aria-label so the icon-only control stays accessible. variant is
+// "" (neutral), "primary" (accent — the Add action), or "danger" (delete).
+func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
 	classes := []any{"tbar-btn"}
-	if primary {
-		classes = append(classes, "primary")
+	if variant != "" {
+		classes = append(classes, variant)
 	}
 	args := []any{
 		css.Class(classes...), Type("button"),
@@ -362,23 +353,23 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// reveals on hover/focus (a styled tooltip), so the row reads evenly instead of
 		// as a run of uneven-width text buttons. aria-label keeps them accessible.
 		Actions: []ui.Node{
-			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, true),
-			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, false)),
-			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), exportFiltered, false),
-			toolbarIconBtn("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, false),
-			toolbarIconBtn("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, false),
-			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, false),
-			toolbarIconBtn("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, false),
+			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
+			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
+			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), exportFiltered, ""),
+			toolbarIconBtn("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, ""),
+			toolbarIconBtn("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, ""),
+			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, ""),
+			toolbarIconBtn("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, ""),
 		},
 	})
 
-	// Select-all + duplicate notice controls row (below the toolbar proper).
-	selectAllNode := If(len(props.Shown) > 0, Button(css.Class("btn"), Type("button"),
-		Attr("aria-label", uistate.T("transactions.selectAllTitle")), Title(uistate.T("transactions.selectAllTitle")),
-		OnClick(selectAllFiltered), uistate.T("transactions.selectAllFiltered")))
+	// Select-all + duplicate notice controls row (below the toolbar proper) — glyph
+	// buttons with hover labels, matching the toolbar.
+	selectAllNode := If(len(props.Shown) > 0,
+		toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllTitle"), selectAllFiltered, ""))
 	dupNotice := If(dupCount > 0, Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Span(css.Class("muted"), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
-		Button(css.Class("btn"), Type("button"), Title(uistate.T("transactions.selectDuplicatesTitle")), OnClick(selectDuplicates), uistate.T("transactions.selectDuplicates"))))
+		Span(css.Class("muted", tw.Text13), uistate.T("transactions.dupNotice", plural(dupCount, "possible duplicate"))),
+		toolbarIconBtn("txn-selectdupes-btn", icon.Copy, uistate.T("transactions.selectDuplicatesTitle"), selectDuplicates, "")))
 	controlsRow := If(len(props.Shown) > 0 || dupCount > 0,
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Mt2), selectAllNode, dupNotice))
 
@@ -593,23 +584,26 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		uiw.OptionsFrom(app.Members(), func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
 
 	n := len(selAtom.Get())
+	// Bulk-action bar: keep the category/member pickers as selects, but the actions are
+	// sleek glyph buttons with hover labels (matching the toolbar). "Clear selection" is
+	// the escape action, kept as a plain text link.
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-		Span(css.Class("muted"), uistate.T("transactions.selected", plural(n, "transaction"))),
+		Span(css.Class("muted", tw.Text13), uistate.T("transactions.selected", plural(n, "transaction"))),
 		uiw.SelectInput(uiw.SelectInputProps{
 			Options: bulkCatOpts, Selected: bulkCatAtom.Get(), AriaLabel: uistate.T("transactions.categoryToApply"),
 			OnChange: func(v string) { bulkCatAtom.Set(v) },
 		}),
-		actionBtn(uistate.T("transactions.applyCategory"), uistate.T("transactions.applyCategoryTitle"), "btn", "", bulkRecategorize),
+		toolbarIconBtn("", icon.Check, uistate.T("transactions.applyCategoryTitle"), bulkRecategorize, ""),
 		If(len(app.Members()) > 0, uiw.SelectInput(uiw.SelectInputProps{
 			Options: bulkMemOpts, Selected: bulkMemAtom.Get(), AriaLabel: uistate.T("transactions.memberToAssign"), TestID: "bulk-member-select",
 			OnChange: func(v string) { bulkMemAtom.Set(v) },
 		})),
-		If(len(app.Members()) > 0, actionBtn(uistate.T("transactions.assignMember"), uistate.T("transactions.assignMemberTitle"), "btn", "bulk-assign-member", bulkAssignMember)),
-		actionBtn(uistate.T("transactions.markCleared"), uistate.T("transactions.markClearedTitle"), "btn", "", bulkMarkCleared),
-		actionBtn(uistate.T("transactions.markUncleared"), uistate.T("transactions.markUnclearedTitle"), "btn", "", bulkMarkUncleared),
-		actionBtn(uistate.T("transactions.exportSelected"), uistate.T("transactions.exportSelectedTitle"), "btn", "bulk-export-selected", exportSelected),
-		actionBtn(uistate.T("transactions.deleteSelected"), uistate.T("transactions.deleteSelectedTitle"), "btn-del", "", bulkDelete),
-		Button(css.Class("btn"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.assignMemberTitle"), bulkAssignMember, "")),
+		toolbarIconBtn("", icon.CheckCircle, uistate.T("transactions.markClearedTitle"), bulkMarkCleared, ""),
+		toolbarIconBtn("", icon.Ban, uistate.T("transactions.markUnclearedTitle"), bulkMarkUncleared, ""),
+		toolbarIconBtn("bulk-export-selected", icon.ArrowDown, uistate.T("transactions.exportSelectedTitle"), exportSelected, ""),
+		toolbarIconBtn("", icon.Close, uistate.T("transactions.deleteSelectedTitle"), bulkDelete, "danger"),
+		Button(css.Class("btn-link"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-bulkbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

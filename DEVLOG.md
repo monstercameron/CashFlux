@@ -1,3 +1,28 @@
+## 2026-07-12 — Glyph-ified the filter, select-all, and bulk controls
+
+Cam: "refine select button and the select all widget that appears and refine the filter and the
+filterwidget as well, use glyphs." Extended the icon-button treatment to the rest of the transactions
+surface.
+
+- **FilterToolbar** (reusable — also on Accounts): the "Filters" text trigger is now a funnel glyph
+  (`.tbar-btn filters-trigger`) with the active count as a corner `.filter-badge`, an `.active` accent
+  tint when filters are on, and the "Filters" label revealed on hover. The inline panel header title
+  gained a filter glyph and its close is a real `icon.Close` glyph (was a unicode "✕"); chip remove
+  buttons likewise use the Close glyph. Kept it generic so Accounts benefits too.
+- **Select-all / select-duplicates** (controlsRow): now `toolbarIconBtn` glyphs (check-circle / copy)
+  with hover labels + testids (`txn-selectall-btn` / `txn-selectdupes-btn`).
+- **Bulk-action bar** (the widget that appears on a selection): kept the category/member selects, but
+  the actions are glyph buttons — apply (Check), assign (Users), mark cleared (CheckCircle), mark
+  uncleared (Ban), export (ArrowDown), and a **danger** delete (Close, red). "Clear selection" stays a
+  text link (the escape action). Preserved the `bulk-assign-member` / `bulk-export-selected` /
+  `bulk-member-select` testids.
+- Generalized `toolbarIconBtn(…, variant string)` ("" / "primary" / "danger") and added
+  `.tbar-btn.danger` styling; removed the now-dead `actionBtn`.
+
+Screenshot-verified the funnel trigger + "Filters" tooltip, the glyph-close filter panel, and the bulk
+bar (cleared / uncleared / export / red-delete + Clear-selection link). Ran interactions + a11y — 38
+green — so the FilterToolbar change is safe on Accounts and the budget filter paths too.
+
 ## 2026-07-12 — Sleek glyph toolbar on Transactions
 
 Cam: "instead of unevenly sized text inside the buttons, use glyphs and on hover text on the

@@ -41,6 +41,14 @@ func registerTxnToolbar() {
 		background("#276f47"),
 		borderColor("#276f47"),
 	)
+	// Danger variant — destructive actions (e.g. bulk delete).
+	rule(".tbar-btn.danger",
+		color("var(--danger)"),
+	)
+	rule(".tbar-btn.danger:hover",
+		background("rgba(216,113,111,0.12)"),
+		borderColor("var(--danger)"),
+	)
 
 	// Hover/focus tooltip revealing the action's label below the glyph.
 	rule(".tbar-tip",
@@ -64,5 +72,29 @@ func registerTxnToolbar() {
 	rule(".tbar-btn:hover .tbar-tip, .tbar-btn:focus-visible .tbar-tip",
 		opacity("1"),
 		transform("translateX(-50%) translateY(0)"),
+	)
+
+	// Filters glyph trigger: the active-filter count as a corner badge, and an accent
+	// tint on the glyph when any filter is active.
+	rule(".tbar-btn.filters-trigger .filter-badge",
+		position("absolute"),
+		top("-5px"),
+		right("-5px"),
+		minWidth("1rem"),
+		height("1rem"),
+		padding("0 .25rem"),
+		borderRadius("999px"),
+		background("var(--accent)"),
+		color("#fff"),
+		fontSize(".6rem"),
+		fontWeight("700"),
+		lineHeight("1"),
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+	)
+	rule(".tbar-btn.filters-trigger.active",
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
 	)
 }
