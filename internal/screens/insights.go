@@ -6,6 +6,7 @@ package screens
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -93,52 +94,59 @@ func Insights() ui.Node {
 	// Starter questions for the Ask box (L8): tailored to the user's live data so
 	// a blank box never stalls them — top spend category, a near-limit budget, and
 	// a near-target goal (C59: fuller context means more useful starter questions).
-	topCatSpend := map[string]int64{}
-	for _, t := range scopedTxns {
-		if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
-			if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
-				topCatSpend[t.CategoryID] += conv.Amount
+	// Starter questions are derived from three full-dataset scans (top spend
+	// category, nearest-limit budget, soonest goal). They're pure over the data +
+	// scope + month, so memoize them: the chat page re-renders on every keystroke,
+	// send, and effect, and recomputing these each time (a topCatSpend scan of every
+	// transaction + budget evaluation + a goals pass) was pure waste.
+	starters := ui.UseMemo(func() []string {
+		topCatSpend := map[string]int64{}
+		for _, t := range scopedTxns {
+			if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
+				if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
+					topCatSpend[t.CategoryID] += conv.Amount
+				}
 			}
 		}
-	}
-	topCat := ""
-	var topAmt int64
-	for _, c := range app.Categories() { // category order → deterministic on ties
-		if topCatSpend[c.ID] > topAmt {
-			topAmt, topCat = topCatSpend[c.ID], c.Name
-		}
-	}
-
-	// Near-limit budget: the budget closest to (or over) its limit this month.
-	nearLimitBudget := ""
-	if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
-		for _, s := range statuses {
-			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
-				nearLimitBudget = s.Budget.Name
-				break // first near/over budget (EvaluateAll order matches Budgets order)
+		topCat := ""
+		var topAmt int64
+		for _, c := range app.Categories() { // category order → deterministic on ties
+			if topCatSpend[c.ID] > topAmt {
+				topAmt, topCat = topCatSpend[c.ID], c.Name
 			}
 		}
-	}
 
-	// Upcoming goal: the active goal with the nearest non-zero target date.
-	upcomingGoal := ""
-	now := time.Now()
-	var soonest time.Time
-	for _, g := range app.Goals() {
-		if g.Archived || g.TargetDate.IsZero() || !g.TargetDate.After(now) {
-			continue
+		// Near-limit budget: the budget closest to (or over) its limit this month.
+		nearLimitBudget := ""
+		if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
+			for _, s := range statuses {
+				if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
+					nearLimitBudget = s.Budget.Name
+					break // first near/over budget (EvaluateAll order matches Budgets order)
+				}
+			}
 		}
-		if soonest.IsZero() || g.TargetDate.Before(soonest) {
-			soonest = g.TargetDate
-			upcomingGoal = g.Name
-		}
-	}
 
-	starters := insights.SuggestedQuestions(insights.QuestionContext{
-		TopCategory:     topCat,
-		NearLimitBudget: nearLimitBudget,
-		UpcomingGoal:    upcomingGoal,
-	})
+		// Upcoming goal: the active goal with the nearest non-zero target date.
+		upcomingGoal := ""
+		now := time.Now()
+		var soonest time.Time
+		for _, g := range app.Goals() {
+			if g.Archived || g.TargetDate.IsZero() || !g.TargetDate.After(now) {
+				continue
+			}
+			if soonest.IsZero() || g.TargetDate.Before(soonest) {
+				soonest = g.TargetDate
+				upcomingGoal = g.Name
+			}
+		}
+
+		return insights.SuggestedQuestions(insights.QuestionContext{
+			TopCategory:     topCat,
+			NearLimitBudget: nearLimitBudget,
+			UpcomingGoal:    upcomingGoal,
+		})
+	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
 
 	nav := router.UseNavigate()
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
