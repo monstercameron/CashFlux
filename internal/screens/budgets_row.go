@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -67,6 +68,25 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	openCover := ui.UseEvent(Prevent(func() {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
 	}))
+	// Notes + Formulas open their own modes of the same shell-root editor modal.
+	openNotes := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
+	}))
+	openFormulas := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
+	}))
+	// Transactions drill is a menu action (navigation), so it closes the menu first.
+	drillMenu := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnDrill != nil {
+			props.OnDrill(s.Budget.TrackedCategoryIDs())
+		}
+	}))
+	// Notes render as a readable, clickable-to-expand line on the card (like /accounts).
+	notesExpanded := ui.UseState(false)
+	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
 	removeRecurring := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
@@ -235,26 +255,44 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
-	// card reads top-to-bottom: title → amount → bar → status → actions.
+	// card reads top-to-bottom: title → amount → bar → status → actions. The proactive
+	// money action (Cover when over, else Top up) stays inline; everything else — incl.
+	// Transactions — lives in the ⋯ menu.
 	actionsRow := Div(css.Class("budget-actions"),
-		// Quick review: jump to /transactions filtered to this budget's category
-		// (the category title is also a drill link, but a labelled button is discoverable).
-		If(canDrill, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drill),
-			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
 		coverBtn,
 		topupBtn,
 		Div(css.Class("add-wrap"), Attr("id", menuID),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+				If(canDrill, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu), uistate.T("nav.transactions"))),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
 				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 			),
 		),
 	)
+
+	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
+	// card when the budget has a note — mirrors the /accounts notes affordance.
+	var notesNode ui.Node = Fragment()
+	if notes := strings.TrimSpace(s.Budget.Notes); notes != "" {
+		notesCls := "acct-notes budget-notes"
+		toggleLabel := uistate.T("accounts.notesReadMore")
+		if notesExpanded.Get() {
+			notesCls += " open"
+			toggleLabel = uistate.T("accounts.notesReadLess")
+		}
+		notesNode = Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "budget-notes-"+s.Budget.ID),
+			Attr("aria-expanded", ariaBool(notesExpanded.Get())), Attr("aria-label", uistate.T("budgets.notesAction")),
+			Title(toggleLabel), OnClick(toggleNotes),
+			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
+			Span(css.Class("acct-notes-text"), notes),
+		)
+	}
 
 	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
 		Div(css.Class("budget-head"),
@@ -300,6 +338,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine,
 		effectiveCapLine,
 		envLine,
+		notesNode,
 		actionsRow,
 	)
 }

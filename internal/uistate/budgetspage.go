@@ -18,9 +18,11 @@ const budgetEditAtomID = "budgets:edit"
 
 // Budget-editor modes (which form the shell-root flip modal shows).
 const (
-	BudgetEditModeEdit  = "edit"  // full edit form (name/limit/period/owner/rollover/method/custom)
-	BudgetEditModeTopup = "topup" // raise this budget's limit by an entered amount
-	BudgetEditModeCover = "cover" // move limit from another budget to clear an overspend
+	BudgetEditModeEdit     = "edit"     // full edit form (name/limit/period/owner/rollover/method/custom)
+	BudgetEditModeTopup    = "topup"    // raise this budget's limit (this month / permanent, optionally covered)
+	BudgetEditModeCover    = "cover"    // move limit from another budget to clear an overspend
+	BudgetEditModeNotes    = "notes"    // add / edit the budget's free-text note
+	BudgetEditModeFormulas = "formulas" // read-only: the budget's engine variables + values (copyable)
 )
 
 // BudgetEdit selects the budget + editor a modal should show. A zero value (empty ID)
@@ -161,6 +163,23 @@ func CommitBudgetBasisDraft(d BudgetBasisDraft) {
 	p.BudgetRolloverLeftover = d.Rollover
 	SetPrefs(p)
 }
+
+// Budget sort keys the budget list can be ordered by (the toolbar's Sort control sets
+// the atom; the list reads it). "health" is the default (over → near → at-risk → on
+// track), the others let the user surface what matters: what's over, closest to the
+// edge, most underused, biggest, or by name.
+const (
+	BudgetSortHealth        = "health"    // over → near → at-risk → on-track (default)
+	BudgetSortOverage       = "overage"   // most over budget first
+	BudgetSortNearOverage   = "near"      // closest to the limit first (highest % used, under 100)
+	BudgetSortUnderutilized = "underused" // most room left (lowest % used) first
+	BudgetSortAmount        = "amount"    // largest limit first
+	BudgetSortName          = "name"      // alphabetical
+)
+
+// UseBudgetSort returns the shared atom holding the budget-list sort key (default
+// BudgetSortHealth). Ephemeral (resets on reload) — a transient view choice.
+func UseBudgetSort() state.Atom[string] { return state.UseAtom("budgets:sort", BudgetSortHealth) }
 
 // UseBudgetsLastMonth returns the shared atom for the budgets "Last month's spend"
 // toggle: when true, each budget row OVERLAYS last period's actual spending in its

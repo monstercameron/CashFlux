@@ -473,6 +473,45 @@ type Budget struct {
 	// Empty = a single-category budget tracking CategoryID (the historical shape). New
 	// field, additive — existing budgets load with nil and behave exactly as before.
 	CategoryIDs []string `json:"categoryIds,omitempty"`
+	// Notes is a free-text note attached to the budget (why it exists, review reminders).
+	// Plain text; rides the dataset export/sync. Empty = no note. Additive.
+	Notes string `json:"notes,omitempty"`
+	// PeriodBoosts is a one-time, PER-PERIOD limit adjustment keyed by the period's start
+	// date ("2006-01-02"): the effective cap for that period is Limit + PeriodBoosts[key].
+	// A "top up this month only" adds to the current period's entry without touching the
+	// base Limit (so next period reverts). Values are minor units in the budget's currency
+	// and may be negative (this-period cover pulled FROM this budget). Additive; existing
+	// budgets load with nil (no boosts).
+	PeriodBoosts map[string]int64 `json:"periodBoosts,omitempty"`
+}
+
+// PeriodBoost returns the one-time limit adjustment recorded for the period starting on
+// the given date (0 if none) — the amount added to the base Limit for that period only.
+func (b Budget) PeriodBoost(periodStart time.Time) int64 {
+	if b.PeriodBoosts == nil {
+		return 0
+	}
+	return b.PeriodBoosts[periodStart.Format("2006-01-02")]
+}
+
+// WithPeriodBoost returns a copy of the budget with delta added to the period-start's
+// one-time boost (creating the map on first use, and dropping the entry when it nets to
+// zero so the map doesn't accumulate cleared boosts).
+func (b Budget) WithPeriodBoost(periodStart time.Time, delta int64) Budget {
+	key := periodStart.Format("2006-01-02")
+	m := make(map[string]int64, len(b.PeriodBoosts)+1)
+	for k, v := range b.PeriodBoosts {
+		m[k] = v
+	}
+	m[key] += delta
+	if m[key] == 0 {
+		delete(m, key)
+	}
+	if len(m) == 0 {
+		m = nil
+	}
+	b.PeriodBoosts = m
+	return b
 }
 
 // TrackedCategoryIDs is the set of categories a budget counts spend against: the

@@ -21,6 +21,28 @@ test.describe("accounts: transfer flip modal", () => {
   });
 });
 
+test.describe("accounts: toolbar glyph buttons", () => {
+  test("toolbar actions are glyph buttons that flag modal vs navigation", async ({ app }) => {
+    await nav(app, "/accounts");
+    // Transfer is a glyph button that opens a flip modal: .opens-modal + aria-haspopup.
+    const transfer = app.getByTestId("page-transfer-btn");
+    await expect(transfer).toHaveClass(/tbar-btn/);
+    await expect(transfer).toHaveClass(/opens-modal/);
+    await expect(transfer).toHaveAttribute("aria-haspopup", "dialog");
+    // Its label + behavior surface in the hover tooltip.
+    await expect(transfer.locator(".tbar-tip-label")).toHaveText("Transfer money");
+    await expect(transfer.locator(".tbar-tip-kind")).toHaveText(/dialog/i);
+    // Manage exchange rates is a glyph button that NAVIGATES: .opens-page, no haspopup.
+    const fx = app.getByTestId("acct-fx-btn");
+    if (await fx.count()) {
+      await expect(fx).toHaveClass(/opens-page/);
+      await expect(fx).not.toHaveAttribute("aria-haspopup", "dialog");
+      await fx.click();
+      await expect(app.locator('#main[data-route="/settings"]').first()).toBeVisible();
+    }
+  });
+});
+
 test.describe("accounts: kebab + quick actions", () => {
   test("Transactions lives in the ⋯ menu; no inline Transactions button", async ({ app }) => {
     await nav(app, "/accounts");

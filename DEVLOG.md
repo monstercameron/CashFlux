@@ -1,3 +1,43 @@
+## 2026-07-12 — Budgets redesign + accounts toolbar glyphs (v1.0.19)
+
+**Accounts toolbar.** Glyph-ified the three toolbar actions with hover labels (matching the txn
+toolbar), then added a two-signal language so you can tell what a button DOES before clicking:
+colour = importance (accent Transfer / amber Mark-all / neutral Exchange), a persistent corner badge
++ a tooltip sub-line = behaviour (⧉ "Opens a dialog" for the flip modal, ↗ "Goes to Settings" for the
+nav button, nothing for the in-place bulk action). `OpenGlobalSettingsAt` confirmed Exchange rates is
+a route nav, not a modal. Also fixed the glyph tooltips clipping: the `.w:hover` transform makes each
+tile a stacking context, trapping the tooltip behind the tile below — generalized the ledger-only
+`z-index` lift to any bento tile with a hovered `.tbar-btn`, and right-anchored the last action's
+tooltip so it stays on-screen.
+
+**Budgets redesign (the big one).** Cam's list: top-up should offer this-month vs permanent + a
+cover-from-categories checklist; move Transactions into the kebab; notes modal; a sort button
+(importance/overage/near/underused…); 50/30/20 belongs in the add-budget modal; drop the metrics
+button; a formulas modal with copy-to-clipboard.
+
+- **This-month top-up** needed a per-period mechanism. Added `Budget.PeriodBoosts map[string]int64`
+  (period-start → extra minor), injected in ONE place — `computeBudgetViewRaw` sets `eval.Limit +=
+  eval.PeriodBoost(bs)` right before the status eval — so the row reflects it and it reverts next
+  period. Permanent still does `Limit += amt`; funded top-ups route through `CoverBudget` (permanent)
+  or `WithPeriodBoost` on both sides (this-month).
+- Notes (`Budget.Notes`) + Formulas got their own modes on the shared `BudgetEditHost`; both open from
+  the kebab. Formulas lists `budget_<slug>_*` with `copyToClipboard` (new screens/clipboard.go).
+  Removed the "Budget metrics" toggle and the whole FormulaBuilder tile. 50/30/20 moved into the add
+  form (`applyBudget503020`).
+
+**The sort saga (own the miss).** First pass: over=$overage, near=%-desc — Cam: "sorting anything,
+dog shit." The real bug was near sorting by %-desc (re-surfacing the most-over, same as over budget).
+Second pass I used dollar `|remaining|` for near — which put a 0%-used $25 budget FIRST (above the
+actually-over one). Cam again: "dog shit, e2e check the sort order." Re-read his "1/-1 higher than
+-100" as PERCENTAGE POINTS from the limit → near = `|% used − 100|` ascending (99%/101% beats 200%,
+0%-used ranks last). over = severity ($ over desc, % tiebreak). Then wrote a REAL regression that reads
+each card's on-screen spent/limit/% and asserts the rendered order is monotonic per the metric —
+should have led with that. (Caveat logged: the sample period has only one budget with spend, so the
+two sorts both top out on Groceries until usage varies; the metric is proven by the monotonicity
+assertions, not eyeballing.)
+
+12 budgets e2e (6 new spec + updated) + accounts specs + native domain/budgeting tests all green.
+
 ## 2026-07-12 — Accounts refinements + search debounce / pager scroll (v1.0.18)
 
 Two rounds of Cam requests, shipped as v1.0.18.

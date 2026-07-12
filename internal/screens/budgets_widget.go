@@ -42,9 +42,8 @@ func Budgets() ui.Node {
 	}
 
 	// Re-render on any data mutation (a budget CRUD, a transaction added elsewhere, a
-	// method switch) or the Formulas toggle.
+	// method switch).
 	_ = uistate.UseDataRevision().Get()
-	formulasAtom := uistate.UseBudgetsShowFormulas()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -70,9 +69,6 @@ func Budgets() ui.Node {
 		// Self-gating: renders nothing unless the method is zero-based (savings/
 		// investment goals counted toward the assigned total).
 		budgetNativeSpec("budget-savings"),
-	}
-	if formulasAtom.Get() {
-		specs = append(specs, budgetNativeSpec("budget-formula"))
 	}
 
 	return Div(css.Class("bento bento-budgets"),
@@ -104,9 +100,6 @@ func init() {
 	})
 	R("budget-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetListWidget, budgetListProps{App: c.App})
-	})
-	R("budget-formula", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(budgetFormulaWidget, budgetFormulaProps{App: c.App})
 	})
 	R("budget-savings", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetSavingsWidget, budgetSummaryProps{App: c.App})

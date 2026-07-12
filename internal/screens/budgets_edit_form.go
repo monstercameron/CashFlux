@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -93,10 +94,13 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// keeps hooks stable).
 	var coverSrcs []budgetCoverSource
 	coverDefaultStr, coverShortfallStr := "", ""
+	var selfStatus budgeting.Status // this budget's live status (for the formulas view)
+	selfFound := false
 	if app != nil {
 		cv := computeBudgetView(app, activeMemberID, vw, pr, false)
 		for _, s := range cv.Statuses {
 			if s.Budget.ID == props.BudgetID {
+				selfStatus, selfFound = s, true
 				sf := budgeting.CoverAmount(s)
 				coverShortfallStr = fmtMoney(sf)
 				if sf.IsPositive() {
@@ -141,6 +145,13 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	}
 	customEditVals := ui.UseState(customMapToStrings(b.Custom))
 	topupAmt := ui.UseState("")
+	// Top-up: whether the raise is permanent (changes the base Limit) or just this period
+	// (a one-time boost via PeriodBoosts), and an optional "fund it from other budgets" panel.
+	topupPermanentS := ui.UseState(false)
+	topupCoverOpenS := ui.UseState(false)
+	// Notes mode: the budget's free-text note.
+	notesS := ui.UseState(b.Notes)
+	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
 	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
@@ -156,6 +167,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
 	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
+	onToggleTopupCover := ui.UseEvent(func() { topupCoverOpenS.Set(!topupCoverOpenS.Get()) })
 	onCoverAmt := ui.UseEvent(func(v string) { coverAmtS.Set(v) })
 	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
 	toggleAmtFx := ui.UseEvent(func() { amtFxS.Set(!amtFxS.Get()) })
@@ -403,6 +415,26 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		done()
 	}))
 
+	saveNotes := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			done()
+			return
+		}
+		for _, bb := range app.Budgets() {
+			if bb.ID != props.BudgetID {
+				continue
+			}
+			bb.Notes = strings.TrimSpace(notesS.Get())
+			if err := app.PutBudget(bb); err != nil {
+				errS.Set(err.Error())
+				return
+			}
+			break
+		}
+		uistate.BumpDataRevision()
+		done()
+	}))
+
 	submitTopup := ui.UseEvent(Prevent(func() {
 		if app == nil {
 			done()
@@ -413,20 +445,86 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			errS.Set(uistate.T("budgets.limitRequired"))
 			return
 		}
-		for _, bb := range app.Budgets() {
-			if bb.ID != props.BudgetID {
-				continue
+		permanent := topupPermanentS.Get()
+		periodStart, _ := budgeting.PeriodRange(b.Period, time.Now(), pr.WeekStartWeekday())
+
+		// Optional funding: pull the amount from other budgets (equal split across the
+		// checked sources). Without any source, the top-up adds new limit from income.
+		sel := coverSelS.Get()
+		var funded bool
+		for _, sc := range coverSrcs {
+			if sel[sc.ID] {
+				funded = true
+				break
 			}
-			bb.Limit = money.New(bb.Limit.Amount+amt, cur)
-			if err := app.PutBudget(bb); err != nil {
-				errS.Set(err.Error())
-				return
-			}
-			uistate.BumpDataRevision()
-			uistate.PostNotice(uistate.T("budgets.toppedUpToast", fmtMoney(money.New(amt, cur))), false)
-			done()
-			return
 		}
+		if funded {
+			weights := map[string]int{}
+			for _, sc := range coverSrcs {
+				if sel[sc.ID] {
+					weights[sc.ID] = 1
+				}
+			}
+			shares := splitCoverAmount(amt, coverSrcs, sel, weights, map[string]bool{})
+			// A permanent move must leave each source with a positive base limit.
+			if permanent {
+				for _, sc := range coverSrcs {
+					if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
+						errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
+						return
+					}
+				}
+			}
+			for _, sc := range coverSrcs {
+				share, ok := shares[sc.ID]
+				if !ok || share <= 0 {
+					continue
+				}
+				if permanent {
+					// CoverBudget moves limit source→dest permanently (adds to dest.Limit too).
+					if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
+						errS.Set(err.Error())
+						return
+					}
+				} else {
+					// This period only: reduce the source's effective cap for this period.
+					for _, nb := range app.Budgets() {
+						if nb.ID == sc.ID {
+							_ = app.PutBudget(nb.WithPeriodBoost(periodStart, -share))
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// Raise the destination. For a permanent FUNDED top-up, CoverBudget already added
+		// the amount to dest.Limit, so don't double-count — only the unfunded-permanent and
+		// the this-month cases still need to bump the destination here.
+		if !(permanent && funded) {
+			for _, nb := range app.Budgets() {
+				if nb.ID != props.BudgetID {
+					continue
+				}
+				if permanent {
+					nb.Limit = money.New(nb.Limit.Amount+amt, cur)
+				} else {
+					nb = nb.WithPeriodBoost(periodStart, amt)
+				}
+				if err := app.PutBudget(nb); err != nil {
+					errS.Set(err.Error())
+					return
+				}
+				break
+			}
+		}
+		uistate.BumpDataRevision()
+		toastKey := "budgets.toppedUpMonthToast"
+		if permanent {
+			toastKey = "budgets.toppedUpToast"
+		}
+		uistate.PostNotice(uistate.T(toastKey, fmtMoney(money.New(amt, cur))), false)
+		done()
 	}))
 
 	if app == nil || !found {
@@ -436,6 +534,29 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	var errLine ui.Node = Fragment()
 	if errS.Get() != "" {
 		errLine = P(css.Class("err"), Attr("role", "alert"), errS.Get())
+	}
+
+	// --- Notes: a free-text note on the budget. The textarea grows to fill the modal. ---
+	if props.Mode == uistate.BudgetEditModeNotes {
+		return Form(css.Class("acct-edit-form", "budget-notes-form"), OnSubmit(saveNotes),
+			Div(css.Class("modal-scroll", "budget-notes-scroll"),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+					uistate.T("budgets.notesHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
+				labeledField(uistate.T("budgets.notesLabel"),
+					uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("budgets.notesPlaceholder"),
+						AriaLabel: uistate.T("budgets.notesLabel"), OnInput: onNotes})),
+				errLine,
+			),
+			Div(css.Class("modal-foot"),
+				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-notes-save"), uistate.T("action.save")),
+			),
+		)
+	}
+
+	// --- Formulas: the budget's engine variables + live values, each copyable. ---
+	if props.Mode == uistate.BudgetEditModeFormulas {
+		return budgetFormulasView(b, selfStatus, selfFound, cur, dec, cancel)
 	}
 
 	// --- Cover: spread the overspend across one or more source budgets. ---
@@ -581,8 +702,28 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		)
 	}
 
-	// --- Top-up: a single amount that raises the budget's limit. ---
+	// --- Top-up: raise the budget's cap (this period only or permanently), optionally
+	// funded by pulling from other budgets. ---
 	if props.Mode == uistate.BudgetEditModeTopup {
+		durVal := "month"
+		if topupPermanentS.Get() {
+			durVal = "perm"
+		}
+		durHint := "budgets.topupThisMonthHint"
+		if topupPermanentS.Get() {
+			durHint = "budgets.topupPermanentHint"
+		}
+		selNow := coverSelS.Get()
+		selCount := 0
+		for _, sc := range coverSrcs {
+			if selNow[sc.ID] {
+				selCount++
+			}
+		}
+		coverToggleLabel := uistate.T("budgets.topupCoverShow")
+		if topupCoverOpenS.Get() {
+			coverToggleLabel = uistate.T("budgets.topupCoverHide")
+		}
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
@@ -591,6 +732,35 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
 						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
 						Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
+				// Duration: this period only (a one-time boost) vs a permanent cap change.
+				labeledField(uistate.T("budgets.topupDuration"),
+					uiw.Segmented(uiw.SegmentedProps{
+						Label:    uistate.T("budgets.topupDuration"),
+						Selected: durVal,
+						Options: []uiw.SegOption{
+							{Value: "month", Label: uistate.T("budgets.topupThisMonth"), TestID: "topup-dur-month"},
+							{Value: "perm", Label: uistate.T("budgets.topupPermanent"), TestID: "topup-dur-perm"},
+						},
+						OnSelect: func(v string) { topupPermanentS.Set(v == "perm") },
+					})),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"), uistate.T(durHint)),
+				// Optional: fund the top-up by pulling from budgets that have room to give.
+				If(len(coverSrcs) > 0, Fragment(
+					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(topupCoverOpenS.Get())),
+						Attr("data-testid", "topup-cover-toggle"), OnClick(onToggleTopupCover), Text(coverToggleLabel)),
+					If(topupCoverOpenS.Get(), Div(css.Class("budget-topup-cover"),
+						P(css.Class("t-caption", tw.TextDim), uistate.T("budgets.topupCoverHint")),
+						Div(css.Class("cover-sources"),
+							MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
+								return ui.CreateElement(budgetTopupSourceRow, budgetTopupSourceRowProps{
+									ID: sc.ID, Label: sc.Label, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)),
+									Selected: selNow[sc.ID], OnToggle: onToggleSrc,
+								})
+							})),
+						If(selCount > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cover-split"),
+							uistate.T("budgets.topupCoverSplit", plural(selCount, "budget")))),
+					)),
+				)),
 				errLine,
 			),
 			Div(css.Class("modal-foot"),
@@ -651,6 +821,89 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+		),
+	)
+}
+
+// budgetTopupSourceRowProps carries data + the toggle callback for one fundable source
+// budget in the top-up "cover from other budgets" checklist.
+type budgetTopupSourceRowProps struct {
+	ID, Label, AvailStr string
+	Selected            bool
+	OnToggle            func(string) // plain func — never an On* hook (no-On*-in-loop rule)
+}
+
+// budgetTopupSourceRow is one checkbox row in the top-up funding list. Its own component
+// so the checkbox's change hook stays at a stable call-site (per the no-On*-in-loop rule).
+func budgetTopupSourceRow(props budgetTopupSourceRowProps) ui.Node {
+	toggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
+	return Label(css.Class("budget-topup-src"),
+		Input(append([]any{Type("checkbox"), Attr("data-testid", "topup-src-"+props.ID), OnChange(toggle)}, checkedAttr(props.Selected)...)...),
+		Div(css.Class("row-main"),
+			Span(props.Label),
+			Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.topupSrcAvail", props.AvailStr)),
+		),
+	)
+}
+
+// budgetFormulaRowProps carries one engine-variable name + its formatted value and the
+// raw value to copy.
+type budgetFormulaRowProps struct {
+	Name, Value, Raw string
+}
+
+// budgetFormulaRow renders one copyable variable → value line: clicking the variable
+// name copies the name, the copy button copies the value. Its own component so the copy
+// hooks sit at stable call-sites inside the keyed list.
+func budgetFormulaRow(props budgetFormulaRowProps) ui.Node {
+	copyName := ui.UseEvent(Prevent(func() { copyToClipboard(props.Name, uistate.T("budgets.formulaCopied", props.Name)) }))
+	copyVal := ui.UseEvent(Prevent(func() { copyToClipboard(props.Raw, uistate.T("budgets.formulaCopied", props.Name)) }))
+	return Div(css.Class("budget-formula-row"),
+		Button(css.Class("budget-formula-name"), Type("button"), Attr("data-testid", "budget-formula-name-"+props.Name),
+			Title(uistate.T("budgets.copyName")), OnClick(copyName), props.Name),
+		Span(css.Class("budget-formula-val"), props.Value),
+		Button(css.Class("btn btn-sm btn-ghost budget-formula-copy"), Type("button"), Attr("data-testid", "budget-formula-copy-"+props.Name),
+			Title(uistate.T("budgets.copyValue")), OnClick(copyVal), uiw.Icon(icon.Copy, css.Class(tw.W4, tw.H4))),
+	)
+}
+
+// budgetFormulasView is the read-only "Formulas" modal body: the budget's engine
+// variables (budget_<slug>_limit/spent/remaining/over/percent) with their live values,
+// each copyable — a quick reference for building formulas/widgets over this budget.
+func budgetFormulasView(b domain.Budget, st budgeting.Status, haveStatus bool, cur string, dec int, cancel ui.Handler) ui.Node {
+	slugSrc := b.VarName
+	if slugSrc == "" {
+		slugSrc = b.Name
+	}
+	prefix := "budget_" + engineenv.BudgetVarSlug(slugSrc) + "_"
+	var rows []any
+	if haveStatus {
+		limit, _ := st.Spent.Add(st.Remaining)
+		over := money.New(0, cur)
+		if st.Remaining.IsNegative() {
+			over = st.Remaining.Abs()
+		}
+		pairs := []struct{ suffix, val, raw string }{
+			{"limit", fmtMoney(limit), money.FormatMinor(limit.Amount, dec)},
+			{"spent", fmtMoney(st.Spent), money.FormatMinor(st.Spent.Amount, dec)},
+			{"remaining", fmtMoney(st.Remaining), money.FormatMinor(st.Remaining.Amount, dec)},
+			{"over", fmtMoney(over), money.FormatMinor(over.Amount, dec)},
+			{"percent", strconv.Itoa(st.Percent) + "%", strconv.Itoa(st.Percent)},
+		}
+		for _, p := range pairs {
+			rows = append(rows, ui.CreateElement(budgetFormulaRow, budgetFormulaRowProps{Name: prefix + p.suffix, Value: p.val, Raw: p.raw}))
+		}
+	}
+	listArgs := []any{css.Class("budget-formulas"), Attr("data-testid", "budget-formulas")}
+	listArgs = append(listArgs, rows...)
+	return Div(css.Class("acct-edit-form"),
+		Div(css.Class("modal-scroll"),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.25rem"}), uistate.T("budgets.formulasHint")),
+			If(!haveStatus, P(css.Class("empty"), uistate.T("common.notReady"))),
+			Div(listArgs...),
+		),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.done")),
 		),
 	)
 }

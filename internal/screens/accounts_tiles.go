@@ -328,6 +328,47 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 
 // --- acct-toolbar ---------------------------------------------------------------
 
+// acctToolbarGlyph renders one accounts-toolbar action as a fixed-size glyph button
+// (the .tbar-btn treatment shared with the transactions toolbar) whose label reveals on
+// hover/focus — plus a persistent corner badge and a tooltip sub-line that say what the
+// button DOES: kind "modal" opens a flip modal (⧉ + "Opens a dialog"), "nav" navigates
+// to another page (↗ + "Goes to Settings"), "action" acts in place (no badge). variant
+// tints the glyph ("" neutral, "primary" accent, "stale" amber); open keeps a modal
+// opener highlighted while its modal is showing.
+func acctToolbarGlyph(testID string, ic icon.Name, label, kind, variant string, open bool, onClick ui.Handler) ui.Node {
+	classes := []any{"tbar-btn"}
+	if variant != "" {
+		classes = append(classes, variant)
+	}
+	switch kind {
+	case "modal":
+		classes = append(classes, "opens-modal")
+	case "nav":
+		classes = append(classes, "opens-page")
+	}
+	if open {
+		classes = append(classes, "open")
+	}
+	var kindHint ui.Node = Fragment()
+	switch kind {
+	case "modal":
+		kindHint = Span(css.Class("tbar-tip-kind"), uistate.T("accounts.opensDialog"))
+	case "nav":
+		kindHint = Span(css.Class("tbar-tip-kind"), uistate.T("accounts.opensPage"))
+	}
+	args := []any{
+		css.Class(classes...), Type("button"), Attr("data-testid", testID),
+		Attr("aria-label", label), OnClick(onClick),
+		uiw.Icon(ic, css.Class(tw.W4, tw.H4)),
+		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"),
+			Span(css.Class("tbar-tip-label"), label), kindHint),
+	}
+	if kind == "modal" {
+		args = append(args, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))
+	}
+	return Button(args...)
+}
+
 // acctToolbarWidget is the filter toolbar tile, modelled on the /transactions
 // toolbar: a search box, a Filters popover (account type + show-archived), active
 // chips, and the page actions (Transfer money, Mark all updated, Manage exchange
@@ -457,14 +498,15 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		ClearAllLabel: uistate.T("accounts.clearFilters"),
 		RemoveLabel:   uistate.T("accounts.removeFilter"),
 		Actions: []ui.Node{
-			If(len(accounts) >= 2, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
-				Type("button"), Attr("data-testid", "page-transfer-btn"), Title(uistate.T("accounts.transferTitle")),
-				OnClick(openTransfer), uiw.Icon(icon.Accounts, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("accounts.transferMoney")))),
-			If(staleCount > 0, Button(css.Class("btn btn-stale"), Type("button"), Title(uistate.T("accounts.markAllTitle")),
-				OnClick(markAll), Text(uistate.T("accounts.markAll", plural(staleCount, "account"))))),
-			If(showFX, Button(css.Class("btn btn-ghost"), Type("button"), Title(uistate.T("accounts.manageFXRatesTitle")),
-				OnClick(openFX), uistate.T("accounts.manageFXRates"))),
+			// Glyph buttons with hover labels. A corner badge + a tooltip sub-line say what
+			// each does: Transfer opens a flip modal (⧉), Manage exchange rates navigates to
+			// Settings (↗), and Mark-all is an in-place bulk action (amber, no badge).
+			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
+				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),
+			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
+				uistate.T("accounts.markAll", plural(staleCount, "account")), "action", "stale", false, markAll)),
+			If(showFX, acctToolbarGlyph("acct-fx-btn", icon.Scale,
+				uistate.T("accounts.manageFXRates"), "nav", "", false, openFX)),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{

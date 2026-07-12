@@ -374,6 +374,12 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 				}
 			}
 		}
+		// This-month top-up: a one-time boost recorded for THIS period only raises the
+		// effective cap without touching the base Limit (so it reverts next period). It
+		// stacks on any rollover carry-in already folded into eval.Limit above.
+		if boost := eval.PeriodBoost(bs); boost != 0 {
+			eval.Limit = money.New(eval.Limit.Amount+boost, eval.Limit.Currency)
+		}
 		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
 			continue

@@ -295,4 +295,139 @@ func registerBudgetsSurface() {
 		fontSize("0.85rem"),
 		lineHeight("1.45"),
 	)
+
+	// --- 2026-07-12 refinements: sort picker, formulas modal, top-up funding, add template ---
+
+	// Toolbar: the methodology + sort pickers sit side by side on the left.
+	rule(".budgets-toolbar-pickers",
+		display("flex"),
+		alignItems("flex-end"),
+		gap("0.9rem"),
+		flexWrap("wrap"),
+	)
+
+	// Formulas modal: copyable variable → value rows.
+	rule(".budget-formulas",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+		marginTop("0.4rem"),
+	)
+	rule(".budget-formula-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		padding("0.45rem 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-card)"),
+	)
+	// The variable name is itself a click-to-copy control, monospace + accent so it reads
+	// as a code token.
+	rule(".budget-formula-name",
+		flex("1"),
+		minWidth("0"),
+		prop("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace"),
+		fontSize("0.8rem"),
+		color("var(--accent)"),
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		prop("text-align", "left"),
+		cursor("pointer"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-formula-name:hover", textDecoration("underline"))
+	rule(".budget-formula-val",
+		prop("font-variant-numeric", "tabular-nums"),
+		fontWeight("600"),
+		color("var(--text)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-formula-copy",
+		flexShrink("0"),
+		padding("0.2rem 0.4rem"),
+	)
+
+	// Top-up: "fund from other budgets" checklist.
+	rule(".budget-topup-cover",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		marginTop("0.5rem"),
+		padding("0.65rem 0.7rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("var(--hover)"),
+	)
+	rule(".budget-topup-src",
+		display("flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		padding("0.3rem 0.15rem"),
+		cursor("pointer"),
+	)
+	rule(".budget-topup-src .row-main",
+		flexDirection("row"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+		flex("1"),
+		minWidth("0"),
+	)
+
+	// Add-budget: the 50/30/20 template banner + the "or" divider.
+	rule(".budget-add-tmpl",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.9rem"),
+		padding("0.75rem 0.9rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("var(--hover)"),
+	)
+	rule(".budget-add-tmpl-title",
+		display("block"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".budget-add-tmpl .btn", flexShrink("0"))
+	rule(".budget-add-or",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		margin("0.15rem 0"),
+		color("var(--text-dim)"),
+		fontSize("0.7rem"),
+		textTransform("uppercase"),
+		letterSpacing("0.06em"),
+	)
+	rule(".budget-add-or::before, .budget-add-or::after",
+		content("\"\""),
+		flex("1"),
+		height("1px"),
+		background("var(--border)"),
+	)
+
+	// Budget-card notes line reuses the /accounts .acct-notes treatment; a touch of
+	// separation from the metadata above.
+	rule(".budget-notes", marginTop("0.5rem"))
+
+	// Notes modal: the textarea grows to fill the modal so there's room to write. The
+	// scroll region is a flex column; the labeled field and its textarea both flex-grow.
+	rule(".budget-notes-scroll > .labeled-field",
+		flex("1"),
+		display("flex"),
+		flexDirection("column"),
+		minHeight("0"),
+	)
+	rule(".budget-notes-scroll textarea",
+		flex("1"),
+		width("100%"),
+		minHeight("12rem"),
+		prop("resize", "none"),
+	)
 }

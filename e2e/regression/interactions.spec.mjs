@@ -375,6 +375,27 @@ test.describe("budgets last-month toggle", () => {
   });
 });
 
+test.describe("budgets actions widget", () => {
+  test("icon+label actions, a Sort picker, and no metrics/template/smart buttons", async ({ app }) => {
+    await nav(app, "/budgets");
+    const actions = app.locator(".budgets-toolbar-actions");
+    await expect(actions).toBeVisible();
+    // Retired from the toolbar: the Smart sparkle shortcut, the Budget-metrics toggle,
+    // and the 50/30/20 template (moved into the Add-budget modal).
+    await expect(actions.locator('[data-testid="smart-section-action"]')).toHaveCount(0);
+    await expect(app.locator('[data-testid="budgets-toggle-formulas"]')).toHaveCount(0);
+    await expect(actions.locator('[data-testid="budgets-template-503020"]')).toHaveCount(0);
+    // The remaining actions each carry a glyph beside their text.
+    for (const id of ["budgets-last-month", "budgets-autobudget", "budgets-add"]) {
+      await expect(actions.locator(`[data-testid="${id}"] svg`)).toBeVisible();
+    }
+    // The Sort picker is present with the health/overage/underused options.
+    const sort = app.getByTestId("budgets-sort");
+    await expect(sort).toBeVisible();
+    await expect(sort.locator("option")).toHaveCount(6);
+  });
+});
+
 test.describe("import wizard", () => {
   const MODAL = '[role="dialog"][aria-label="Import"]';
 

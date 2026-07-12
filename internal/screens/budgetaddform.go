@@ -12,10 +12,13 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -207,6 +210,18 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 	}))
 
+	// One-click 50/30/20 starter template (moved here from the toolbar): a shortcut that
+	// bulk-creates budgets from last month's income instead of adding one by hand. It's a
+	// mutation of up to ~10 budgets, so it previews the count and confirms first; on
+	// success it closes the add modal.
+	applyTemplate := ui.UseEvent(Prevent(func() {
+		applyBudget503020(app, base, func() {
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+		})
+	}))
+
 	// The picker leads with "➕ Create a new category" (the default), then every existing
 	// expense category, so the common case (a budget for something new) is one step.
 	catOptions := []uiw.SelectOption{{Value: budgetNewCatSentinel, Label: uistate.T("budgets.newCategoryOption")}}
@@ -222,6 +237,18 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 
 	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), OnSubmit(add),
 		Div(css.Class("modal-scroll"),
+			// Template shortcut: skip the single-budget form and generate a 50/30/20 set
+			// from last month's income in one click.
+			Div(css.Class("budget-add-tmpl"), Attr("data-testid", "budget-add-tmpl"),
+				Div(css.Class("row-main"),
+					Span(css.Class("budget-add-tmpl-title"), uistate.T("budgets.tmplBannerTitle")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.tmplBannerHint")),
+				),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-template-503020"),
+					Title(uistate.T("budgets.tmplTitle")), OnClick(applyTemplate),
+					uiw.Icon(icon.Split, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.tmpl503020"))),
+			),
+			Div(css.Class("budget-add-or"), Span(uistate.T("budgets.tmplOr"))),
 			Div(css.Class("form-grid", "budget-add-grid"),
 				// Name + Variable name (the budget's identity) stack full-width at the top, so
 				// the var-name field reads directly under the name rather than in a grid column.
@@ -296,4 +323,60 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), uistate.T("budgets.add")),
 		),
 	)
+}
+
+// applyBudget503020 bulk-creates a 50/30/20 starter budget set from last full month's
+// income (skipping categories that already have a budget), confirming first since it's a
+// multi-budget mutation. onApplied runs after the create (used to close the add modal).
+// A plain function (no hooks) so it can be called from a click handler.
+func applyBudget503020(app *appstate.App, base string, onApplied func()) {
+	if app == nil {
+		return
+	}
+	txns := app.Transactions()
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	now := time.Now()
+	curStart := dateutil.MonthStart(now)
+	prevStart := dateutil.AddMonths(curStart, -1)
+	income := budgeting.IncomeForBudgets(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
+	if income <= 0 {
+		uistate.PostNotice(uistate.T("budgets.tmplNoIncome"), true)
+		return
+	}
+	res := budgeting.Generate5030(income, app.Categories(), txns, now)
+	existing := map[string]bool{}
+	for _, b := range app.Budgets() {
+		existing[b.CategoryID] = true
+	}
+	var toAdd []domain.Budget
+	for _, prop := range res.Proposals {
+		if prop.LimitMinor <= 0 || existing[prop.Category.ID] {
+			continue
+		}
+		toAdd = append(toAdd, domain.Budget{
+			ID: id.New(), Name: prop.Category.Name, CategoryID: prop.Category.ID,
+			Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+			Period: domain.PeriodMonthly, Limit: money.New(prop.LimitMinor, base),
+		})
+	}
+	if len(toAdd) == 0 {
+		uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
+		return
+	}
+	uistate.ConfirmModalLabeled(uistate.T("budgets.tmplConfirm", plural(len(toAdd), "budget")), uistate.T("budgets.tmplConfirmBtn"), false, func(ok bool) {
+		if !ok {
+			return
+		}
+		n := 0
+		for _, nb := range toAdd {
+			if err := app.PutBudget(nb); err == nil {
+				n++
+			}
+		}
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("budgets.tmplApplied", plural(n, "budget")), false)
+		if onApplied != nil {
+			onApplied()
+		}
+	})
 }

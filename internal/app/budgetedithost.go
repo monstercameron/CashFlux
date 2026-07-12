@@ -31,13 +31,18 @@ func BudgetEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseBudgetEdit() }
 
-	// Standard sizes: full edit + cover use Medium, the short top-up uses Small.
+	// All budget editors are Medium (the top-up grew a duration picker + optional
+	// fund-from-budgets checklist, so it's no longer the short Small form).
 	title, width, height := uistate.T("budgets.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	switch e.Mode {
 	case uistate.BudgetEditModeTopup:
-		title, width, height = uistate.T("budgets.topupTitle"), uiw.FlipSmallW, uiw.FlipSmallH
+		title = uistate.T("budgets.topupTitle")
 	case uistate.BudgetEditModeCover:
 		title = uistate.T("budgets.coverModalTitle")
+	case uistate.BudgetEditModeNotes:
+		title = uistate.T("budgets.notesTitle")
+	case uistate.BudgetEditModeFormulas:
+		title = uistate.T("budgets.formulasTitle")
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{

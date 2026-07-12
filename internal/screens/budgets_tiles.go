@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,11 +14,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -39,8 +38,6 @@ type budgetSummaryProps struct{ App *appstate.App }
 type budgetToolbarProps struct{ App *appstate.App }
 
 type budgetListProps struct{ App *appstate.App }
-
-type budgetFormulaProps struct{ App *appstate.App }
 
 // --- budget-summary --------------------------------------------------------------
 
@@ -993,15 +990,16 @@ func budgetFundSetAsideNode(v budgetView) ui.Node {
 
 // --- budget-toolbar --------------------------------------------------------------
 
-// budgetToolbarWidget is the actions tile: the in-context methodology picker, the
-// one-click 50/30/20 starter template, an "Add budget" button, a Formulas reveal
-// toggle, and the smart-insights action. It writes the shared method setting + the
-// Formulas atom so the summary/list/formula tiles react in step.
+// budgetToolbarWidget is the actions tile: the in-context methodology picker, a
+// last-month toggle, the Auto-budget review, the one-click 50/30/20 starter template,
+// a Formulas reveal toggle, and an "Add budget" button — each an icon-and-label
+// button. It writes the shared method setting + the Formulas atom so the
+// summary/list/formula tiles react in step.
 func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	formulasAtom := uistate.UseBudgetsShowFormulas()
-	smartSettings := uistate.LoadSmartSettings()
+	sortAtom := uistate.UseBudgetSort()
+	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
 	activeMemberID := uistate.UseActiveMember().Get()
 
 	base := app.Settings().BaseCurrency
@@ -1035,72 +1033,30 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		_ = app.PutSettings(s)
 		uistate.BumpDataRevision()
 	})
-	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
-	// C114: one-click 50/30/20 starter template over last full month's income.
-	// v1.0: this is a bulk mutation (up to ~10 new budgets), so it previews the
-	// count and confirms before creating anything.
-	apply503020 := ui.UseEvent(Prevent(func() {
-		txns := app.Transactions()
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		now := time.Now()
-		curStart := dateutil.MonthStart(now)
-		prevStart := dateutil.AddMonths(curStart, -1)
-		configuredIncome := uistate.CurrentPrefs().MonthlyIncomeMinor
-		income := budgeting.IncomeForBudgets(configuredIncome, txns, prevStart, curStart, base, rates)
-		if income <= 0 {
-			uistate.PostNotice(uistate.T("budgets.tmplNoIncome"), true)
-			return
-		}
-		res := budgeting.Generate5030(income, app.Categories(), txns, now)
-		existing := map[string]bool{}
-		for _, b := range app.Budgets() {
-			existing[b.CategoryID] = true
-		}
-		var toAdd []domain.Budget
-		for _, prop := range res.Proposals {
-			if prop.LimitMinor <= 0 || existing[prop.Category.ID] {
-				continue
-			}
-			toAdd = append(toAdd, domain.Budget{
-				ID: id.New(), Name: prop.Category.Name, CategoryID: prop.Category.ID,
-				Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
-				Period: domain.PeriodMonthly, Limit: money.New(prop.LimitMinor, base),
-			})
-		}
-		if len(toAdd) == 0 {
-			uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
-			return
-		}
-		uistate.ConfirmModalLabeled(uistate.T("budgets.tmplConfirm", plural(len(toAdd), "budget")), uistate.T("budgets.tmplConfirmBtn"), false, func(ok bool) {
-			if !ok {
-				return
-			}
-			n := 0
-			for _, nb := range toAdd {
-				if err := app.PutBudget(nb); err == nil {
-					n++
-				}
-			}
-			uistate.BumpDataRevision()
-			uistate.PostNotice(uistate.T("budgets.tmplApplied", plural(n, "budget")), false)
-		})
-	}))
-
-	formulasLabel := uistate.T("budgets.showFormulas")
-	if formulasAtom.Get() {
-		formulasLabel = uistate.T("budgets.hideFormulas")
-	}
-
+	sortVal := sortAtom.Get()
 	toolbar := Div(css.Class("budgets-toolbar"),
-		// Left: a compact, labelled methodology picker — no longer a full-width bar that
-		// read like a search box (C112: standard / zero-based / envelope).
-		Div(css.Class("budgets-toolbar-method"),
-			Span(css.Class("budgets-toolbar-label"), uistate.T("settings.budgetMethod")),
-			Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-method"),
-				Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
-				Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
-				Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
-				Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+		// Left: the methodology picker + a "Sort by" picker — the two view controls.
+		Div(css.Class("budgets-toolbar-pickers"),
+			Div(css.Class("budgets-toolbar-method"),
+				Span(css.Class("budgets-toolbar-label"), uistate.T("settings.budgetMethod")),
+				Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-method"),
+					Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+					Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
+					Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+					Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+				),
+			),
+			Div(css.Class("budgets-toolbar-method"),
+				Span(css.Class("budgets-toolbar-label"), uistate.T("budgets.sortLabel")),
+				Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-sort"),
+					Attr("aria-label", uistate.T("budgets.sortLabel")), Title(uistate.T("budgets.sortLabel")), OnChange(onSort),
+					Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortHealth")),
+					Option(Value(uistate.BudgetSortOverage), SelectedIf(sortVal == uistate.BudgetSortOverage), uistate.T("budgets.sortOverage")),
+					Option(Value(uistate.BudgetSortNearOverage), SelectedIf(sortVal == uistate.BudgetSortNearOverage), uistate.T("budgets.sortNear")),
+					Option(Value(uistate.BudgetSortUnderutilized), SelectedIf(sortVal == uistate.BudgetSortUnderutilized), uistate.T("budgets.sortUnderused")),
+					Option(Value(uistate.BudgetSortAmount), SelectedIf(sortVal == uistate.BudgetSortAmount), uistate.T("budgets.sortAmount")),
+					Option(Value(uistate.BudgetSortName), SelectedIf(sortVal == uistate.BudgetSortName), uistate.T("budgets.sortName")),
+				),
 			),
 		),
 		// Right: the actions, uniform-height and right-aligned, with the primary
@@ -1111,15 +1067,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
 				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
-			smartSectionAction(smartSettings),
 			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
 				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
 				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgets-template-503020"),
-				Title(uistate.T("budgets.tmplTitle")), OnClick(apply503020), uistate.T("budgets.tmpl503020")),
-			Button(css.Class("btn"), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-				Attr("data-testid", "budgets-toggle-formulas"), Title(uistate.T("budgets.formulaTitle")),
-				OnClick(onToggleFormulas), Text(formulasLabel)),
 			If(hasBudgets, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -1150,6 +1100,16 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	// planning — it no longer re-windows the view to last month.
 	showLastMonth := uistate.UseBudgetsLastMonth().Get()
 	v := computeBudgetView(app, activeMemberID, vw, pr, showLastMonth)
+	// The default view is health-sorted (over → near → at-risk → on-track, from
+	// computeBudgetView); the toolbar's Sort picker can re-order by overage, closeness to
+	// the limit, how underused a budget is, size, or name.
+	sortKey := uistate.UseBudgetSort().Get()
+	if sortKey != uistate.BudgetSortHealth {
+		sorted := make([]budgeting.Status, len(v.Statuses))
+		copy(sorted, v.Statuses)
+		sortBudgetStatuses(sorted, sortKey)
+		v.Statuses = sorted
+	}
 	smartSettings := uistate.LoadSmartSettings()
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
@@ -1219,19 +1179,56 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	})
 }
 
-// --- budget-formula --------------------------------------------------------------
-
-// budgetFormulaWidget is the opt-in "Budget metrics" tile (revealed by the toolbar's
-// Formulas toggle). It embeds the reusable FormulaBuilder, which evaluates against the
-// live engine variable surface — so it ties custom fields and formulas together for
-// budgets: every number-typed budget custom field surfaces as a cf_budget_<key>
-// variable (alongside budget count + the household aggregates), ready to compute over.
-func budgetFormulaWidget(props budgetFormulaProps) ui.Node {
-	body := Div(
-		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("budgets.formulaTitle"), ShowSaved: true}),
-	)
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "budget-formula", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: body,
-	})
+// sortBudgetStatuses re-orders the budget list in place for the toolbar's Sort picker.
+// "health" is the default order (left untouched — computeBudgetView already sorts by it).
+func sortBudgetStatuses(sts []budgeting.Status, key string) {
+	// overAmt is how far a budget is OVER its limit (0 when under) — the severity of an
+	// overspend, in money.
+	overAmt := func(s budgeting.Status) int64 {
+		if s.Remaining.IsNegative() {
+			return -s.Remaining.Amount
+		}
+		return 0
+	}
+	// distFromLimit is how far a budget's usage is from its limit line, in PERCENTAGE
+	// POINTS, either way — |% used − 100|. So a budget at 99% or 101% (1 point off) reads
+	// as "closest", while one at 0% used (100 points under) OR 200% (100 points over) reads
+	// as farthest — proportional proximity, not raw dollars, so a barely-touched small
+	// budget doesn't masquerade as "close to the limit".
+	distFromLimit := func(s budgeting.Status) int {
+		if d := s.Percent - 100; d < 0 {
+			return -d
+		} else {
+			return d
+		}
+	}
+	limitOf := func(s budgeting.Status) int64 { return s.Spent.Amount + s.Remaining.Amount }
+	switch key {
+	case uistate.BudgetSortOverage:
+		// Severity: the worst overspends first — by how far over in money, then by how far
+		// over proportionally (% used) as a tiebreak. Budgets that aren't over (overAmt 0)
+		// fall to the end, keeping their health order.
+		sort.SliceStable(sts, func(i, j int) bool {
+			oi, oj := overAmt(sts[i]), overAmt(sts[j])
+			if oi != oj {
+				return oi > oj
+			}
+			return sts[i].Percent > sts[j].Percent
+		})
+	case uistate.BudgetSortNearOverage:
+		// Closest to the limit line first, sign-agnostic and PROPORTIONAL: smallest
+		// |% used − 100| wins, so a budget at 99%/101% ranks above one at 200% (or at 0%).
+		sort.SliceStable(sts, func(i, j int) bool { return distFromLimit(sts[i]) < distFromLimit(sts[j]) })
+	case uistate.BudgetSortUnderutilized:
+		// Least used first, proportionally: lowest % used (a budget at 5% used is more
+		// underutilized than one at 50%, regardless of dollar size); over budgets (highest
+		// %) fall to the end.
+		sort.SliceStable(sts, func(i, j int) bool { return sts[i].Percent < sts[j].Percent })
+	case uistate.BudgetSortAmount:
+		sort.SliceStable(sts, func(i, j int) bool { return limitOf(sts[i]) > limitOf(sts[j]) })
+	case uistate.BudgetSortName:
+		sort.SliceStable(sts, func(i, j int) bool {
+			return strings.ToLower(sts[i].Budget.Name) < strings.ToLower(sts[j].Budget.Name)
+		})
+	}
 }

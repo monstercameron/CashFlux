@@ -56,13 +56,68 @@ func registerTxnToolbar() {
 		borderColor("var(--accent)"),
 		color("var(--accent)"),
 	)
+	// Stale variant — a bulk "catch-up" action (e.g. Mark all updated), tinted amber
+	// like the row's stale affordance so it reads as an attention action.
+	rule(".tbar-btn.stale",
+		borderColor("#c2870b"),
+		color("#d98c00"),
+	)
+	rule(".tbar-btn.stale:hover",
+		background("rgba(245,158,11,0.12)"),
+		borderColor("#d98c00"),
+	)
 
-	// Hover/focus tooltip revealing the action's label below the glyph.
+	// Behavior badge — a small corner mark tells you what a toolbar action DOES before
+	// you click it: an overlapping-windows glyph for buttons that open a flip modal
+	// (⧉), an up-right arrow for buttons that navigate to another page (↗). It's
+	// persistent (not hover-only) so the toolbar stays scannable; the hover tooltip then
+	// spells it out in words.
+	rule(".tbar-btn.opens-modal::after, .tbar-btn.opens-page::after",
+		position("absolute"),
+		bottom("-3px"),
+		right("-3px"),
+		width("0.9rem"),
+		height("0.9rem"),
+		borderRadius("5px"),
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		fontSize("0.62rem"),
+		lineHeight("1"),
+		fontWeight("700"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		color("var(--text-dim)"),
+		pointerEvents("none"),
+	)
+	rule(".tbar-btn.opens-modal::after",
+		content("\"⧉\""),
+	)
+	rule(".tbar-btn.opens-page::after",
+		content("\"↗\""),
+	)
+	// The badge takes on the button's emphasis on hover so it reads as one control.
+	rule(".tbar-btn.opens-modal:hover::after",
+		borderColor("var(--accent)"),
+		color("var(--accent)"),
+	)
+	rule(".tbar-btn.opens-page:hover::after",
+		borderColor("var(--text)"),
+		color("var(--text)"),
+	)
+
+	// Hover/focus tooltip revealing the action's label below the glyph. A flex column so
+	// a button that opens a modal / navigates can add a dim second line naming that
+	// behavior under the label.
 	rule(".tbar-tip",
 		position("absolute"),
 		top("calc(100% + 6px)"),
 		left("50%"),
 		transform("translateX(-50%) translateY(-2px)"),
+		display("flex"),
+		flexDirection("column"),
+		alignItems("center"),
+		rowGap("1px"),
 		padding(".25rem .5rem"),
 		borderRadius("6px"),
 		background("var(--bg-elev)"),
@@ -76,9 +131,26 @@ func registerTxnToolbar() {
 		zIndex("var(--z-popover)"),
 		boxShadow("0 4px 12px rgba(0,0,0,.25)"),
 	)
+	// Second line: a dim "Opens a dialog" / "Opens a page" hint that echoes the corner
+	// badge in words, so the modal-vs-navigation distinction is unmistakable on hover.
+	rule(".tbar-tip-kind",
+		fontSize(".62rem"),
+		color("var(--text-dim)"),
+	)
 	rule(".tbar-btn:hover .tbar-tip, .tbar-btn:focus-visible .tbar-tip",
 		opacity("1"),
 		transform("translateX(-50%) translateY(0)"),
+	)
+	// The right-most toolbar action sits at the edge of the content column, so a
+	// center-anchored tooltip would spill past the viewport. Anchor the last action's
+	// tooltip to its own right edge instead so it always stays fully on-screen.
+	rule(".filter-toolbar > .tbar-btn:last-child .tbar-tip",
+		left("auto"),
+		right("0"),
+		transform("translateY(-2px)"),
+	)
+	rule(".filter-toolbar > .tbar-btn:last-child:hover .tbar-tip, .filter-toolbar > .tbar-btn:last-child:focus-visible .tbar-tip",
+		transform("translateY(0)"),
 	)
 
 	// Filters glyph trigger: the active-filter count as a corner badge, and an accent
@@ -123,6 +195,15 @@ func registerTxnToolbar() {
 	rule(".bento-ledger > .w:hover",
 		position("relative"),
 		zIndex("5"),
+	)
+	// General glyph-tooltip stacking: ANY toolbar tile (accounts, budgets, subscriptions —
+	// every FilterToolbar surface) gets the same hover transform, so its glyph tooltips
+	// would be covered by the tile below. Lift a tile whenever one of its .tbar-btn glyphs
+	// is hovered/focused (so its .tbar-tip is showing) above the raised-tile level (30, the
+	// open-menu lift), so the tooltip always paints on top.
+	rule(".bento > .w:has(.tbar-btn:hover), .bento > .w:has(.tbar-btn:focus-visible)",
+		position("relative"),
+		zIndex("30"),
 	)
 
 	// Redesigned filter panel: each categorical dimension is a labelled group of toggle
