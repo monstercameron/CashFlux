@@ -135,7 +135,12 @@ func AccountRow(props accountRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(a.ID) }))
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
-	view := ui.UseEvent(Prevent(func() { props.OnView(a.ID) }))
+	view := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnView(a.ID) }))
+	// Notes are shown inline as a readable, clamped line that expands on click (a
+	// disclosure), so a note is actually legible in the row rather than hidden in a
+	// hover tooltip on a tiny glyph.
+	notesExpanded := ui.UseState(false)
+	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -218,6 +223,35 @@ func AccountRow(props accountRowProps) ui.Node {
 				uistate.T("accounts.billCount", plural(props.BillPayment.Count, "payment"))))
 	}
 
+	// Readable notes line: the note text itself, clamped to a couple of lines and
+	// expandable on click, so an attached note is legible in the row instead of being
+	// hidden behind a hover tooltip on a tiny glyph (replaces acct-notes-dot).
+	var notesNode ui.Node = Fragment()
+	if notes := strings.TrimSpace(a.Notes); notes != "" {
+		notesCls := "acct-notes"
+		toggleLabel := uistate.T("accounts.notesReadMore")
+		if notesExpanded.Get() {
+			notesCls += " open"
+			toggleLabel = uistate.T("accounts.notesReadLess")
+		}
+		notesNode = Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "acct-notes-"+a.ID),
+			Attr("aria-expanded", ariaBool(notesExpanded.Get())), Attr("aria-label", uistate.T("accounts.notesBadge")),
+			Title(toggleLabel), OnClick(toggleNotes),
+			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
+			Span(css.Class("acct-notes-text"), notes),
+		)
+	}
+
+	// Inline quick actions (everything else lives in the ⋯ menu). "Edit" is always
+	// inline; "Update value/balance" is inline for the accounts you actively maintain —
+	// stale ones (emphasized) and valuation-type assets you revalue by hand — and lives
+	// in the menu for the rest so it's never duplicated.
+	showValueInline := (props.Stale || isValuationType(a.Type)) && !a.Archived
+	updBtnCls := "btn"
+	if props.Stale {
+		updBtnCls = "btn btn-stale"
+	}
+
 	return Div(
 		Div(css.Class("row"),
 			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
@@ -227,10 +261,6 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(css.Class("row-main"),
 				Span(css.Class("row-desc"), a.Name,
 					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
-					// A quiet note glyph when the account has notes attached.
-					If(strings.TrimSpace(a.Notes) != "", Span(css.Class("acct-notes-dot", tw.TextDim), Style(map[string]string{"margin-left": "0.4rem"}),
-						Attr("data-testid", "acct-notes-dot-"+a.ID), Attr("aria-label", uistate.T("accounts.notesBadge")), Title(strings.TrimSpace(a.Notes)),
-						uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
@@ -242,6 +272,8 @@ func AccountRow(props accountRowProps) ui.Node {
 				If(customSummary(props.AccountDefs, a.Custom) != "",
 					Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
 						customSummary(props.AccountDefs, a.Custom))),
+				// Readable, clickable-to-expand notes line (the attached note itself).
+				notesNode,
 				// MIA-extend (#445-10): nudge to fill missing institution.
 				If(a.Institution == "" && !a.Archived,
 					Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
@@ -259,18 +291,20 @@ func AccountRow(props accountRowProps) ui.Node {
 				Title(uistate.T("accounts.balanceTitle")),
 				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 				fmtMoney(dispBal)),
-			// Stale accounts get the reconcile action surfaced inline (G3 §6) rather than
-			// buried in the ⋯ menu, since "update my balance" is the whole reason a stale
-			// account is flagged.
-			If(props.Stale && !a.Archived, Button(css.Class("btn btn-stale", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T(updateActionKey(a.Type))), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
-			// Primary actions inline; everything else in the ⋯ menu.
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.viewTitle")), OnClick(view), uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+			// Quick actions inline: "Update value/balance" for stale/valuation accounts
+			// (emphasized when stale), then "Edit" (always). Everything else — including
+			// Transactions — lives in the ⋯ menu.
+			If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 			Div(css.Class("add-wrap"), Attr("id", menuID),
 				Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
+					// Transactions moved into the menu (it's navigation, not a per-row edit).
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), OnClick(view), uistate.T("nav.transactions")),
+					// "Update value" lives in the menu only when it's not already an inline
+					// quick action (i.e. fresh cash accounts), so it's never duplicated.
+					If(!a.Archived && !showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-menu-"+a.ID), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
 					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),

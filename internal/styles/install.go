@@ -40,6 +40,7 @@ func Register() {
 	registerTierSystem()
 	registerImportWizard()
 	registerTxnToolbar()
+	registerAccountsSurface()
 	inject(Build())
 }
 

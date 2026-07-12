@@ -34,11 +34,14 @@ func AccountEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseAccountEdit() }
 
-	// Standard sizes: the short "update balance" form is Small, the rest Medium.
+	// All the account editors are Medium. "Update value" now opens the same merged
+	// edit form (value update + full details), so it is no longer the short Small form.
 	title, width, height := uistate.T("accounts.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	switch e.Mode {
 	case uistate.AcctEditModeSetBal:
-		title, width, height = uistate.T("accounts.updateBalance"), uiw.FlipSmallW, uiw.FlipSmallH
+		// Match the row button's wording ("Update value" for estimated-asset types,
+		// "Update balance" for cash accounts) so the title isn't at odds with it.
+		title = screens.AccountUpdateActionLabel(e.ID)
 	case uistate.AcctEditModeReconcile:
 		title = uistate.T("accounts.reconcileTitle")
 	case uistate.AcctEditModeTransfer:
@@ -49,11 +52,12 @@ func AccountEditHost() uic.Node {
 	// so the modal isn't double-chromed with a redundant Close footer. The header ✕,
 	// Escape, and backdrop-click still dismiss via OnClose.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    title,
-		Width:    width,
-		Height:   height,
-		NoFooter: true,
-		OnClose:  closeModal,
-		Back:     uic.CreateElement(screens.AccountEditForm, screens.AccountEditFormProps{AccountID: e.ID, Mode: e.Mode, OnDone: closeModal}),
+		Title:     title,
+		Width:     width,
+		Height:    height,
+		NoFooter:  true,
+		FlushBody: true, // the form splits into a scrolling field region + a pinned .modal-foot
+		OnClose:   closeModal,
+		Back:      uic.CreateElement(screens.AccountEditForm, screens.AccountEditFormProps{AccountID: e.ID, Mode: e.Mode, OnDone: closeModal}),
 	})
 }

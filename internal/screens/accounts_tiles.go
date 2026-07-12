@@ -49,7 +49,12 @@ type acctSummaryProps struct {
 
 type acctToolbarProps struct{ App *appstate.App }
 
-type acctTransferProps struct{ App *appstate.App }
+// AccountPageTransferProps drives the page-level transfer form rendered inside the
+// shell-root flip modal (see internal/app AccountTransferHost). OnDone closes it.
+type AccountPageTransferProps struct {
+	App    *appstate.App
+	OnDone func()
+}
 
 type acctListProps struct {
 	App   *appstate.App
@@ -468,16 +473,20 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	})
 }
 
-// --- acct-transfer --------------------------------------------------------------
+// --- page transfer form ---------------------------------------------------------
 
-// acctTransferWidget is the page-level transfer sub-view tile, shown when the
-// transfer-open atom is set (the toolbar's "Transfer money" action). It owns its own
-// form-field hooks and reuses doAccountTransfer / CreateTransferPair, then closes the
-// sub-view. From/To option lists each exclude the other side so the same account
-// can't be picked twice (C69).
-func acctTransferWidget(props acctTransferProps) ui.Node {
+// AccountPageTransferForm is the page-level "Transfer money" editor: pick any two
+// accounts and move money between them. It owns its own field hooks and reuses
+// doAccountTransfer / CreateTransferPair, then calls OnDone. It renders inside the
+// shell-root flip modal (AccountTransferHost) — not an inline tile — so it centers on
+// the viewport like the other account editors. From/To option lists each exclude the
+// other side so the same account can't be picked twice (C69).
+func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	app := props.App
-	transferAtom := uistate.UseAcctTransferOpen()
+	done := props.OnDone
+	if done == nil {
+		done = func() {}
+	}
 	fromS := ui.UseState("")
 	toS := ui.UseState("")
 	amtS := ui.UseState("")
@@ -486,14 +495,14 @@ func acctTransferWidget(props acctTransferProps) ui.Node {
 	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
-	cancel := ui.UseEvent(Prevent(func() { transferAtom.Set(false) }))
+	cancel := ui.UseEvent(Prevent(func() { done() }))
 	submit := ui.UseEvent(Prevent(func() {
 		from, to := fromS.Get(), toS.Get()
 		if from == "" || to == "" || from == to {
 			return
 		}
 		doAccountTransfer(app, from, to, amtS.Get(), dateS.Get(), descS.Get())
-		transferAtom.Set(false)
+		done()
 	}))
 
 	pfrom, pto := fromS.Get(), toS.Get()
@@ -514,9 +523,9 @@ func acctTransferWidget(props acctTransferProps) ui.Node {
 	sameAcct := pfrom != "" && pto != "" && pfrom == pto
 	submitDisabled := sameAcct || pfrom == "" || pto == ""
 
-	body := Div(css.Class("row-edit"), Attr("data-testid", "page-transfer-form"),
-		H3(Style(map[string]string{"margin": "0.5rem 0 0.25rem"}), uistate.T("accounts.transferTitle")),
-		Form(css.Class("form-grid"), Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
+	return Form(css.Class("acct-edit-form"), Attr("data-testid", "page-transfer-form"),
+		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
+		Div(css.Class("modal-scroll"),
 			labeledField(uistate.T("accounts.transferFromLabel"),
 				uiw.SelectInput(uiw.SelectInputProps{Options: fromOpts, Selected: pfrom, OnChange: func(v string) { fromS.Set(v) },
 					AriaLabel: uistate.T("accounts.transferFromLabel"), TestID: "page-xfer-from-select"})),
@@ -525,7 +534,7 @@ func acctTransferWidget(props acctTransferProps) ui.Node {
 					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})),
 			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
 			labeledField(uistate.T("accounts.transferAmount"),
-				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"),
+				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")), Value(amtS.Get()),
 					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt))),
 			labeledField(uistate.T("accounts.transferDateLabel"),
@@ -534,16 +543,14 @@ func acctTransferWidget(props acctTransferProps) ui.Node {
 			labeledField(uistate.T("accounts.transferDescLabel"),
 				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")),
 					Value(descS.Get()), OnInput(onDesc))),
+		),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			IfElse(submitDisabled,
 				Button(css.Class("btn btn-primary"), Type("submit"), Attr("disabled", "disabled"), uistate.T("accounts.transferSubmit")),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("accounts.transferSubmit"))),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 		),
 	)
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "acct-transfer", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: body,
-	})
 }
 
 // --- acct-list ------------------------------------------------------------------
@@ -713,8 +720,11 @@ func acctListWidget(props acctListProps) ui.Node {
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title:        title,
-		HeaderAction: Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2), classSeg, smartSectionAction(smartSettings)),
+		Title: title,
+		// The class filter (All / Assets / Liabilities) is the only header action; the
+		// old "Smart" sparkle shortcut was dropped here as noise (the Smart hub is one
+		// nav click away and the page already carries the inline Smart strip up top).
+		HeaderAction: classSeg,
 		Body:         bodyContent,
 	})
 

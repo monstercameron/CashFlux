@@ -26,13 +26,14 @@ import (
 //   - acct-welcome  (Native): first-run load-sample CTA (only when there are no accounts)
 //   - acct-summary  (Native): net-worth hero + assets/liabilities + month-to-date trend
 //   - acct-toolbar  (Native): search, type/archived filters, chips, transfer/mark-all/FX actions
-//   - acct-transfer (Native): the page-level transfer form (when the transfer sub-view is open)
 //   - acct-list     (Native): the owner-scoped, filtered account rows (AccountRow), with an All/Assets/Liabilities toggle
 //   - acct-archived (Native): archived accounts (when "show archived" is on and any exist)
 //
-// The tiles share interaction state (the search/type filter and the transfer
-// sub-view) through atoms in uistate, so no tile embeds another — the host just
-// decides which specs are present and the engine renders each.
+// The page-level "Transfer money" action opens a shell-root flip modal
+// (app.AccountTransferHost) rather than an inline tile, consistent with the account
+// row editors. The tiles share the search/type filter through a uistate atom, so no
+// tile embeds another — the host just decides which specs are present and the engine
+// renders each.
 func Accounts() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -44,7 +45,6 @@ func Accounts() ui.Node {
 	// flow through these atoms.
 	_ = uistate.UseDataRevision().Get()
 	filterAtom := uistate.UseAccountsFilter()
-	transferAtom := uistate.UseAcctTransferOpen()
 	formulasAtom := uistate.UseAcctShowFormulas()
 	f := filterAtom.Get()
 
@@ -74,9 +74,6 @@ func Accounts() ui.Node {
 		specs = append(specs, acctNativeSpec("acct-welcome"))
 	}
 	specs = append(specs, acctNativeSpec("acct-summary"), acctNativeSpec("acct-toolbar"))
-	if transferAtom.Get() {
-		specs = append(specs, acctNativeSpec("acct-transfer"))
-	}
 	specs = append(specs, acctNativeSpec("acct-list"))
 	if f.ShowArchived && len(archived) > 0 {
 		specs = append(specs, acctNativeSpec("acct-archived"))
@@ -117,9 +114,6 @@ func init() {
 	})
 	R("acct-toolbar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(acctToolbarWidget, acctToolbarProps{App: c.App})
-	})
-	R("acct-transfer", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(acctTransferWidget, acctTransferProps{App: c.App})
 	})
 	R("acct-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(acctListWidget, acctListProps{App: c.App, Base: c.Base, Rates: c.Rates})

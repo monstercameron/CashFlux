@@ -1,3 +1,42 @@
+## 2026-07-12 — Accounts refinements + search debounce / pager scroll (v1.0.18)
+
+Two rounds of Cam requests, shipped as v1.0.18.
+
+**Transactions (from the prior turn).** "Debounce the search field" — it already was (250ms trailing-edge
+via `debounce.Call`; a live test confirmed results only update after the delay). But a slow, deliberate
+typist who pauses >250ms between keys still fires a re-filter per char, which *reads* as undebounced — so
+search got its own **400ms** debounce while the numeric filters stay at 250ms. "When paging at the bottom,
+jump to the top of the list" — added an opt-in `DataTable.AnchorID`: the id rides the `<table>` element
+(the component-root wrapper's DOM props get dropped in the memoized tile context, but a child element's
+attrs render fine), and the pager smooth-scrolls it into view on Prev/Next.
+
+**The stale-gz rabbit hole.** Verifying the pager scroll, *every* change I made appeared to no-op — fresh
+builds, fresh ports, `no-store`, all still ran old code. Root cause: `index.html` prefers
+`bin/main.wasm.gz`, and neither `global-setup.mjs` nor `gwc dev` rebuilds the gz — so a stale gz silently
+shadows the freshly-built `main.wasm`. Fixed global-setup to `rm` the gz after building, added `no-store`
+to `serve.mjs`, and now deploy both files. (Also: an in-page `fetch` showed FRESH bytes while the DOM ran
+OLD code — the tell that the app never loaded the binary I was rebuilding.)
+
+**Accounts page.** Cam: move Transactions into the kebab; merge update-value + edit into one modal that
+does either/both; make notes readable; keep the per-account metadata (payments / gain-loss); transfer
+should be a flip modal; drop the useless Smart button beside the filter; and — "only quick actions live
+outside the kebab, pick 1–3." Result: inline = **Edit** (always) + **Update value** (stale/valuation only,
+amber when stale); everything else, incl. Transactions, in the ⋯ menu. The update-value form folded into
+the top of the edit form (`acctValueUpdateSection`); on save a non-empty value goes through
+`OnSetBalance(cp,…)` — which persists cp's edits **and** posts the adjustment in one write, so I must *not*
+also call `OnSave` (double-write would clobber the freshness). Page transfer became a shell-root
+`AccountTransferHost` flip modal (retired the inline `acct-transfer` tile). Notes now render as a clamped,
+click-to-expand `.acct-notes` line. Removed `smartSectionAction` from the accounts list header only.
+
+Then two follow-ups: the merged form is taller, so its Cancel/Save scrolled off — split every account
+editor form into `.modal-scroll` + a pinned `.modal-foot` (`FlushBody` on the hosts), matching the
+budget/goal modals. And the "Update value" vs "Update balance" wording is intentional (estimated assets
+vs reconciled cash), but the setbal modal *title* was hardcoded to "Update balance" — now
+`AccountUpdateActionLabel(id)` makes the title match the row button per account type.
+
+6 new e2e in `accounts.spec.mjs` (transfer modal, kebab, no-smart-button, merged-edit+notes, pinned
+footer, value-adjustment) + the 28-test interactions suite all green; no regressions.
+
 ## 2026-07-12 — Multi-value filters + redesigned filter panel (and quick fixes)
 
 Cam, in a few rapid messages: move select-all into the toolbar row; check the tooltip z-index; the
