@@ -797,7 +797,13 @@ func Insights() ui.Node {
 	// findings become the rail's "what I noticed" observations. (The merchants
 	// table and trend chart live on the hub's Insights tab — they were duplicated
 	// here and buried the conversation.)
-	highlights := spendingHighlights(scopedTxns, app.Categories(), base, rates, viewCategoryTransactions)
+	// Memoize the spend-anomaly detection (four monthly per-category series over every
+	// transaction) on the data revision + scope + month, so the chat page doesn't re-run
+	// it on each keystroke — only when the underlying data actually changes.
+	spendingAnoms := ui.UseMemo(func() []insights.Anomaly {
+		return detectSpendingAnomalies(scopedTxns, app.Categories(), rates)
+	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
+	highlights := spendingHighlights(spendingAnoms, base, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
@@ -1610,8 +1616,13 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday) ui.Node {
 	nav := router.UseNavigate()
 	// Run with all Free features enabled so the four anomaly detectors always
-	// fire regardless of the user's per-feature SMART opt-in state.
-	flagged := runAnomalyDetectors(app, weekStart)
+	// fire regardless of the user's per-feature SMART opt-in state. Memoized on the
+	// data revision + week start: the detectors scan every transaction, and this card
+	// re-renders on every chat keystroke — recomputing per character was pure waste.
+	// The result is read-only (iterated to build rows below).
+	flagged := ui.UseMemo(func() []smart.Insight {
+		return runAnomalyDetectors(app, weekStart)
+	}, app.Rev(), int(weekStart))
 	if len(flagged) == 0 {
 		return Fragment()
 	}
@@ -1673,8 +1684,12 @@ func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 // empty node when there's nothing notable, so the card simply doesn't appear.
 // Each row is wrapped in its own component so the OnClick hook stays at a
 // stable render position (C228 drill-through).
-func spendingHighlights(txns []domain.Transaction, categories []domain.Category, base string, rates currency.Rates, onDrill func(catName string)) ui.Node {
-	anomalies := detectSpendingAnomalies(txns, categories, rates)
+//
+// Anomalies are computed by the caller (and memoized there) rather than here: the
+// detection builds four monthly per-category spend series over every transaction,
+// and this card re-renders on every chat keystroke — so recomputing it inline was
+// per-character waste. This function is now a pure renderer of pre-computed data.
+func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(catName string)) ui.Node {
 	if len(anomalies) == 0 {
 		return Fragment()
 	}
