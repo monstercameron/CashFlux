@@ -584,7 +584,7 @@ func Planning() ui.Node {
 	if planAddOpen.Get() {
 		addModal = uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:    uistate.T("plans.addTitle"),
-			Width:    "560px",
+			Width:    uiw.FlipMediumW, // standard entity-add width
 			Height:   "min(90vh, 520px)",
 			NoFooter: true,
 			OnClose:  closePlanAdd,

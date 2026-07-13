@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.21 (2026-07-13):** cuts the flip-modal size standardization + a debt-toolbar polish into a release.
+- **Flip modals use the 3 standard sizes (2026-07-13):** snapped the remaining hand-tuned modals to `FlipSmall` / `FlipMedium` / `FlipLarge` so every config/edit panel is one of three consistent sizes — the columns picker (→ Small), the Smart-categorize review, the assistant prompt editor, and the new-task compose form (→ Medium), and Settings + the plan-add form now reference `FlipLargeW` / `FlipMediumW` instead of the same literals. The two genuinely-wide **data-table** modals (Review duplicates, Import) stay double-wide (900px) on purpose — squeezing a review/import table into 760px would truncate it; the 3 sizes target config/edit panels, not data tables.
+- **Debt "Manage accounts" is a labeled button (2026-07-13):** it was a bare ghost text-link sitting between pilled toolbar buttons — now a `.btn-tool` with a bank glyph and an ↗ "navigates" badge, matching the accounts page's "Manage exchange rates ↗".
+
+### Changed
 - **Version bumped to v1.0.20 (2026-07-12):** cuts a large UI-refinement batch into a release — goals virtual-allocation (earmarks), the to-do overhaul, the standard pager, the unified control-pill + labeled-button toolbar language, the collapsible Smart peek, and the single-group toolbar layout.
 
 ### Added

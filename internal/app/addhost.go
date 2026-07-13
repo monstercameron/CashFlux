@@ -77,8 +77,8 @@ func AddHost() uic.Node {
 		}
 		return uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:    taskTitle,
-			Width:    "720px",
-			Height:   "560px",
+			Width:    uiw.FlipMediumW, // standard entity-add form
+			Height:   uiw.FlipMediumH,
 			NoFooter: true,
 			OnClose:  close,
 			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close, ParentID: taskParent.Get()}),

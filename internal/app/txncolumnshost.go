@@ -24,8 +24,8 @@ func TxnColumnsHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("transactions.columnsTitle"),
-		Width:     "360px",
-		Height:    "420px",
+		Width:     uiw.FlipSmallW, // compact toggle list
+		Height:    uiw.FlipSmallH,
 		CloseOnly: true,
 		OnClose:   func() { open.Set(false) },
 		Back:      uic.CreateElement(screens.TxnColumnsBody, struct{}{}),

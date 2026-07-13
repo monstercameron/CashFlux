@@ -77,8 +77,10 @@ func SettingsHost() uic.Node {
 	switch target.Kind {
 	case "global":
 		return ui.FlipPanel(ui.FlipPanelProps{
-			Title:  uistate.T("settings.panelTitle"),
-			Width:  "760px",
+			Title: uistate.T("settings.panelTitle"),
+			// FlipLarge width (the standard for global settings); a taller responsive
+			// height for this, the densest panel in the app.
+			Width:  ui.FlipLargeW,
 			Height: "min(90vh, 900px)",
 			Back:   uic.CreateElement(globalSettingsForm),
 			// Every setting in this panel applies live on change (currency, FX, screens,

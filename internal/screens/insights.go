@@ -1159,8 +1159,8 @@ func Insights() ui.Node {
 		// injected automatically by buildMessages).
 		If(promptOpen.Get(), uiw.FlipPanel(uiw.FlipPanelProps{
 			Title:   uistate.T("insights.promptTitle"),
-			Width:   "640px",
-			Height:  "520px",
+			Width:   uiw.FlipMediumW, // a prompt editor: a textarea + hint
+			Height:  uiw.FlipMediumH,
 			OnSave:  savePrompt,
 			OnClose: closePrompt,
 			Back: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),

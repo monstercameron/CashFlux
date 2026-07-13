@@ -23,8 +23,8 @@ func TxnSmartCatHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("smartcat.title"),
-		Width:     "460px",
-		Height:    "620px",
+		Width:     uiw.FlipMediumW, // review list of suggestions
+		Height:    uiw.FlipMediumH,
 		CloseOnly: true,
 		OnClose:   func() { open.Set(false) },
 		Back:      uic.CreateElement(screens.TxnSmartCatBody, struct{}{}),

@@ -1,3 +1,26 @@
+## 2026-07-13 — Flip-modal size standardization + toolbar polish (v1.0.21)
+
+Cam asked to "do the same for all the other pages" — the 3 flip-modal sizes, the refined
+selects/buttons, and tooltip z-index. Audited the lot and found most of it was already done by the
+v1.0.20 button-standardization + control-pill back-port: `.btn-tool` is on every list page, toolbar
+selects are `.fctrl`/`.todo-select` (the `.field` selects are all form fields, which correctly stay
+`.field`), and every tooltip (`.tbar-tip`, `.smart-tip-pop`) already sits on `var(--z-popover)` — plus
+labeling the toolbars removed most hover tooltips outright.
+
+The one dimension that wasn't fully consistent was flip-modal sizes. Snapped the strays to the three
+`Flip{Small,Medium,Large}` constants: columns picker → Small; smart-categorize review, assistant
+prompt editor, and the new-task compose form → Medium; Settings + plan-add now use the `FlipLargeW` /
+`FlipMediumW` constants instead of the same literals. Verified the biggest shrink (task modal 720→560):
+its two-column layout still reads well, not cramped. Left the two double-wide data-table modals
+(Review duplicates, Import) at 900px — a table squeezed into 760 truncates; the 3 sizes are for config
+panels, not tables.
+
+One blemish fixed: debt's "Manage accounts" was a bare ghost text-link between pilled buttons → made it
+a `.btn-tool` with an ↗ nav badge (matching accounts' "Manage exchange rates ↗").
+
+Validated: `go build` clean; 42 e2e green (interactions incl. import/duplicates/columns modals, todo
+incl. the sub-task modal, smoke across all routes) + 1 unrelated pre-existing flake.
+
 ## 2026-07-12 — Earmarks, to-do overhaul, unified toolbar language, Smart peek (v1.0.20)
 
 A long UI-refinement session, cut as one release.
