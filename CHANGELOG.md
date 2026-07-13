@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.24 (2026-07-13):** cuts the Responses-API assistant tool-loop fix into a release — the thinking level now works with function tools for gpt-5.x / o-series (no more `reasoning_effort` rejection).
 - **Version bumped to v1.0.23 (2026-07-13):** cuts the Assistant agent overhaul — full-height chat, an in-thread model + thinking-level switch, a live model list, canonical-dedupe duplicate tools, and formula-metric tools — into a release.
 
 ### Added
