@@ -36,6 +36,19 @@ Delivery gotcha at the end: Cam kept seeing an already-fixed `reasoning_effort` 
 Killed it, restarted fresh (serves the disk gz byte-for-byte = the verified build), and bumped the SW
 cache to `v297`.
 
+Even after the restart Cam kept hitting the `reasoning_effort` rejection (browser SW cache serving old
+wasm) and — rightly — asked to just use the Responses API. So I stopped fighting the endpoint and
+switched the assistant's tool loop to **`/v1/responses`**, which accepts `reasoning.effort` WITH function
+tools. `ai.SendResponsesChatTools` keeps the exact SendChatTools signature/callback shape, so the loop
+was a one-line swap; a codec converts the message history to the Responses `input` array (role msgs,
+`function_call`, `function_call_output`) and the tools to the flat Responses form, and parses the output
+back into an `ai.Message`. The subtle bit: the Responses API **requires the reasoning items echoed** in
+follow-up input for reasoning models with tools — so `ParseResponsesChat` stashes them verbatim in
+`Message.ReasoningRaw` and the input builder re-emits them before the function_call. `store:false` for
+privacy. Un-hid the Thinking control for all reasoning models. Verified via a live `:8080` e2e:
+gpt-5.6-sol sends `reasoning.effort:"high"` to `/responses`, the tool loop runs, and the reasoning item
+is echoed on the follow-up — no rejection. (Can only mock-test the request shape here, not real OpenAI.)
+
 ## 2026-07-13 — /health factor composition (formula = atoms, why, example) (v1.0.22)
 
 First scrutinized the health formulas to see if they land — they do: every factor scorer is continuous

@@ -34,6 +34,12 @@ type Message struct {
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`
+	// ReasoningRaw carries the Responses API "reasoning" output items verbatim, so an
+	// assistant tool-call turn can echo them in the next request's input (the Responses
+	// API requires the reasoning items alongside their function_call for reasoning
+	// models). It never serializes on the chat-completions path (json:"-") and is unused
+	// there; it only rides along in-memory during a Responses tool loop.
+	ReasoningRaw []json.RawMessage `json:"-"`
 }
 
 // ChatRequest is an OpenAI chat-completions request body.

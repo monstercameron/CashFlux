@@ -89,10 +89,10 @@ func Insights() ui.Node {
 	if reasoningModel(model) {
 		chatTemp = 0
 	}
-	// Thinking level (reasoning_effort) applies only to reasoning models that accept it
-	// with tools on /chat/completions (some require /v1/responses — those are hidden and
-	// skipped). Medium is the default when the user hasn't chosen one.
-	thinkingApplies := reasoningModel(model) && !ai.EffortRejectedWithTools(model)
+	// Thinking level (reasoning effort) applies to any reasoning model (o-series /
+	// gpt-5.x). The assistant sends it via the Responses API, which accepts effort with
+	// function tools, so it works for all reasoning models. Medium is the default.
+	thinkingApplies := reasoningModel(model)
 	chatEffort := ""
 	if thinkingApplies {
 		if chatEffort = effortSel.Get(); chatEffort == "" {
@@ -330,7 +330,11 @@ func Insights() ui.Node {
 			return ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp,
 				func(content string, u ai.Usage) { onResult(ai.Message{Role: ai.RoleAssistant, Content: content}, u) }, onErr)
 		}
-		return ai.SendChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
+		// Route the tool loop through the Responses API: it's the only endpoint that
+		// accepts reasoning.effort together with function tools for the reasoning models
+		// (gpt-5.x / o-series), so the thinking level actually works instead of being
+		// rejected by /chat/completions.
+		return ai.SendResponsesChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,

@@ -214,6 +214,29 @@ func SendResponsesWebSearch(apiKey, baseURL, model, input string, onResult func(
 	}, onError)
 }
 
+// SendResponsesChatTools posts a tool-calling turn to the Responses API (POST
+// /responses). Its signature and callback contract match SendChatTools, so the
+// assistant's tool loop uses it unchanged — but because Responses accepts
+// reasoning.effort ALONGSIDE function tools (which /chat/completions rejects for the
+// reasoning models), the thinking level works here for gpt-5.x / o-series. On success
+// it calls onResult with the assistant's Message (content and/or tool_calls) and the
+// token usage; the caller drives the tool loop. Returns a cancel function.
+func SendResponsesChatTools(apiKey, baseURL, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
+	body, err := BuildResponsesToolRequest(model, messages, temperature, reasoningEffort, tools)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	return postResponses(apiKey, baseURL, body, func(data []byte) {
+		msg, usage, err := ParseResponsesChat(data)
+		if err != nil {
+			onError(err.Error())
+			return
+		}
+		onResult(msg, usage)
+	}, onError)
+}
+
 // postResponses is the low-level fetch helper for the Responses API endpoint
 // (POST /responses). It mirrors postCompletions in structure — AbortController,
 // retry-on-transient, js.Func lifecycle — but targets /responses instead of
