@@ -39,6 +39,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
+	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -2539,6 +2540,23 @@ func (a *App) PutTask(t domain.Task) error {
 		return err
 	}
 	a.log.Info("task saved", "id", t.ID)
+	return nil
+}
+
+// ReorderTask moves a task to another sibling's position (drag-and-drop in the "Custom
+// order" view), persisting only the tasks whose manual Order changed. A drop onto a
+// non-sibling (different parent), onto itself, or onto a missing task is a safe no-op.
+func (a *App) ReorderTask(srcID, targetID string) error {
+	changed, ok := tasksort.Reorder(a.Tasks(), srcID, targetID)
+	if !ok {
+		return nil
+	}
+	for _, t := range changed {
+		if err := a.PutTask(t); err != nil {
+			return fmt.Errorf("appstate: reorder task: %w", err)
+		}
+	}
+	a.log.Info("tasks reordered", "src", srcID, "target", targetID, "changed", len(changed))
 	return nil
 }
 

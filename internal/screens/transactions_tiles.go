@@ -124,30 +124,37 @@ func filterMultiGroup(label string, field txnfilter.FilterField, selected []stri
 	)
 }
 
-// toolbarIconBtn renders one sleek transactions-toolbar action: a fixed-size glyph
-// button whose text label reveals on hover/focus as a styled tooltip (.tbar-tip). The
-// label doubles as the aria-label so the icon-only control stays accessible. variant is
-// "" (neutral), "primary" (accent — the Add action), or "danger" (delete).
+// toolbarIconBtn renders one transactions-toolbar action as a standard labeled
+// button (.btn-tool): a slightly-grayed leading glyph followed by an always-visible
+// text label, so the action reads at a glance instead of needing a hover to decode a
+// bare icon. The label also serves as the aria-label. variant is "" (neutral),
+// "primary" (accent — the Add action), or "danger" (delete).
 func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
 	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
 }
 
 // toolbarIconBtnOpen is toolbarIconBtn with an explicit open flag: when true the button
-// stays highlighted (the .open state) — used for the glyphs that open a flip modal /
+// stays highlighted (the .is-open state) — used for the buttons that open a flip modal /
 // panel so the trigger reads as "currently open" until it's dismissed.
 func toolbarIconBtnOpen(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, open bool) ui.Node {
-	classes := []any{"tbar-btn"}
-	if variant != "" {
-		classes = append(classes, variant)
+	// Labeled toolbar buttons (the .btn-tool standard): a slightly-grayed left glyph + the
+	// text label, so the action reads at a glance instead of needing a hover to decode a
+	// bare glyph. variant tints it: primary = accent, danger = red.
+	cls := "btn btn-tool"
+	switch variant {
+	case "primary":
+		cls += " btn-primary"
+	case "danger":
+		cls += " bt-danger"
 	}
 	if open {
-		classes = append(classes, "open")
+		cls += " is-open"
 	}
 	args := []any{
-		css.Class(classes...), Type("button"),
+		css.Class(cls), Type("button"),
 		Attr("aria-label", label), Attr("aria-expanded", boolStr(open)), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.W4, tw.H4)),
-		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), label),
+		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(label),
 	}
 	if testID != "" {
 		args = append(args, Attr("data-testid", testID))
@@ -174,7 +181,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	filterAtom := uistate.UseTxFilter()
 	selAtom := uistate.UseTxnSelection()
 	colsModalAtom := uistate.UseTxnColsModalOpen()
-	openCols := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
 	smartCatAtom := uistate.UseTxnSmartCatOpen()
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
 	importPanelAtom := uistate.UseImportPanelOpen()
@@ -233,7 +239,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	clearFilters := ui.UseEvent(Prevent(clearAllFilters))
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 
-	exportFiltered := ui.UseEvent(Prevent(func() {
+	// doExportCSV downloads the filtered ledger as CSV. It's a plain closure (not a
+	// UseEvent hook) because it's invoked from the "More" overflow menu's OnSelect
+	// (a func()), not wired directly to a button's OnClick.
+	doExportCSV := func() {
 		rows := txnfilter.Apply(app.Transactions(), filterAtom.Get())
 		if len(rows) == 0 {
 			uistate.PostNotice(uistate.T("transactions.noExport"), true)
@@ -245,7 +254,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			return
 		}
 		downloadBytes("transactions.csv", "text/csv", data)
-	}))
+	}
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
 		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
@@ -417,6 +426,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		dupBtnLabel = uistate.T("transactions.dupReviewBadge", plural(dupCount, "duplicate"))
 	}
 
+	// The transactions toolbar has the most actions of any page — too many to fit one
+	// row at typical widths. The two least-frequent utilities (Export CSV, Columns) live
+	// in a labeled "⋯ More" overflow so the row stays single-line with the primary Add at
+	// its right end, matching the other pages' toolbars.
+	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerText:   uistate.T("action.more"),
+		TriggerClass:  "btn btn-tool",
+		TriggerTestID: "txn-more-btn",
+		Items: []uiw.OverflowMenuItem{
+			{Label: uistate.T("transactions.exportCsv"), Icon: icon.ArrowDown, TestID: "txn-export-btn", OnSelect: doExportCSV},
+			{Label: uistate.T("transactions.columns"), Icon: icon.List, TestID: "txn-columns-btn", OnSelect: func() { colsModalAtom.Set(true) }},
+		},
+	})
+
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Text,
 		SearchLabel:  uistate.T("transactions.searchPlaceholder"),
@@ -438,21 +461,25 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		OnClearAll:    clearAllFilters,
 		ClearAllLabel: uistate.T("transactions.clearAllFilters"),
 		RemoveLabel:   uistate.T("transactions.removeFilter"),
-		// Sleek icon toolbar: each action is a fixed-size glyph button whose label
-		// reveals on hover/focus (a styled tooltip), so the row reads evenly instead of
-		// as a run of uneven-width text buttons. aria-label keeps them accessible.
+		// Standard labeled toolbar buttons (.btn-tool): a slightly-grayed leading glyph
+		// plus an always-visible text label, so each action reads at a glance instead of
+		// needing a hover to decode a bare icon. All left-justified as one group, with the
+		// primary "+ Add transaction" LAST so it anchors the right end of the group.
 		Actions: []ui.Node{
-			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
-			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), exportFiltered, ""),
 			toolbarIconBtnOpen("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, "", importPanelAtom.Get()),
 			toolbarIconBtnOpen("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, "", dupModalAtom.Get()),
-			toolbarIconBtnOpen("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openCols, "", colsModalAtom.Get()),
 			toolbarIconBtnOpen("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, "", smartCatAtom.Get()),
-			// Select-all now lives in the single toolbar row with the other glyphs
-			// (shown once there are rows to select).
+			// Select-all lives in the toolbar row with the other labeled actions (shown
+			// once there are rows to select). Uses the SHORT "Select all" label — the
+			// verbose "…in the current filtered view" form was fine as a hover tooltip but
+			// is too long as an always-visible button label.
 			If(len(props.Shown) > 0,
-				toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllTitle"), selectAllFiltered, "")),
+				toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllFiltered"), selectAllFiltered, "")),
+			// Overflow for the least-frequent utilities (Export CSV, Columns).
+			moreMenu,
+			// Primary action last → right end of the left-justified group.
+			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 		},
 	})
 

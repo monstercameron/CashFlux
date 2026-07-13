@@ -1037,18 +1037,20 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	toolbar := Div(css.Class("budgets-toolbar"),
 		// Left: the methodology picker + a "Sort by" picker — the two view controls.
 		Div(css.Class("budgets-toolbar-pickers"),
-			Div(css.Class("budgets-toolbar-method"),
-				Span(css.Class("budgets-toolbar-label"), uistate.T("settings.budgetMethod")),
-				Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-method"),
+			Label(css.Class("fctrl"),
+				uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(css.Class("fctrl-label"), uistate.T("settings.budgetMethod")),
+				Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-method"),
 					Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
 					Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 					Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
 					Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
 				),
 			),
-			Div(css.Class("budgets-toolbar-method"),
-				Span(css.Class("budgets-toolbar-label"), uistate.T("budgets.sortLabel")),
-				Select(css.Class("field", "budgets-method-select"), Attr("data-testid", "budgets-sort"),
+			Label(css.Class("fctrl"),
+				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(css.Class("fctrl-label"), uistate.T("budgets.sortLabel")),
+				Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-sort"),
 					Attr("aria-label", uistate.T("budgets.sortLabel")), Title(uistate.T("budgets.sortLabel")), OnChange(onSort),
 					Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortHealth")),
 					Option(Value(uistate.BudgetSortOverage), SelectedIf(sortVal == uistate.BudgetSortOverage), uistate.T("budgets.sortOverage")),
@@ -1062,17 +1064,17 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		// Right: the actions, uniform-height and right-aligned, with the primary
 		// "+ Add budget" last so it clearly outranks the ghost controls.
 		Div(css.Class("budgets-toolbar-actions"),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
 				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
 				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
+			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
 				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
 				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
-			If(hasBudgets, Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
-				uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("budgets.addBudget")))),
 		),
 	)
@@ -1137,6 +1139,15 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		cbs := buildBudgetRowCallbacks(app, v.Base, v.CatName)
 		budgetDefs := app.CustomFieldDefsFor("budget")
 		members := app.Members()
+		// Count to-dos linked to each budget (Task.RelatedType=budget) so a card can offer a
+		// jump to the To-dos page when it has any attached.
+		todoCounts := map[string]int{}
+		for _, t := range app.Tasks() {
+			if t.RelatedType == domain.RelatedBudget && t.RelatedID != "" {
+				todoCounts[t.RelatedID]++
+			}
+		}
+		viewTodos := func() { nav.Navigate(uistate.RoutePath("/todo")) }
 		rows := MapKeyed(v.Statuses,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
@@ -1159,6 +1170,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
+					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
 				})
 			},
 		)

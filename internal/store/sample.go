@@ -833,8 +833,13 @@ func SampleDataset() Dataset {
 		},
 		Goals: []domain.Goal{
 			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(1150000), TargetDate: date(2029, time.June, 1), AccountID: hysa},
-			{ID: "goal-baby", Name: "Baby fund (due Dec 2026)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(280000), TargetDate: date(2026, time.December, 1), AccountID: hysa},
-			{ID: "goal-emergency", Name: "Emergency fund (3 months)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1500000), CurrentAmount: usd(480000), TargetDate: date(2027, time.June, 1), AccountID: hysa},
+			// Virtual allocation ("earmarks"): the Hartleys have mentally reserved part of their
+			// savings + checking toward the baby and emergency funds WITHOUT moving the money —
+			// so the Goals page shows partly-earmarked coverage and the Earmarks tab has real data.
+			{ID: "goal-baby", Name: "Baby fund (due Dec 2026)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(280000), TargetDate: date(2026, time.December, 1), AccountID: hysa,
+				Allocations: []domain.GoalAllocation{{AccountID: hysa, Amount: usd(300000)}, {AccountID: checking, Amount: usd(200000)}}},
+			{ID: "goal-emergency", Name: "Emergency fund (3 months)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1500000), CurrentAmount: usd(480000), TargetDate: date(2027, time.June, 1), AccountID: hysa,
+				Allocations: []domain.GoalAllocation{{AccountID: hysa, Amount: usd(250000)}}},
 			{ID: "goal-studentloan", Name: "Pay off Priya's student loan", Scope: domain.ScopeIndividual, OwnerID: priya, TargetAmount: usd(3400000), CurrentAmount: usd(900000), TargetDate: date(2029, time.December, 1)},
 			{ID: "goal-car", Name: "Pay off Marcus's car loan", Scope: domain.ScopeIndividual, OwnerID: marcus, TargetAmount: usd(3800000), CurrentAmount: usd(600000), TargetDate: date(2030, time.January, 1)},
 		},

@@ -51,14 +51,14 @@ type Data struct {
 	Recurring    []domain.Recurring
 	// Categories are the household's category tree — needed by variables that
 	// evaluate budgets with sub-category rollup (the health_* factor atoms).
-	Categories []domain.Category
-	Rates      currency.Rates
-	Now          time.Time
-	PeriodStart  time.Time
-	PeriodEnd    time.Time
-	WeekStart    time.Weekday // week anchor for per-budget period windows (default Sunday)
-	CustomDefs   []customfields.Def
-	Molecules    []domain.Molecule
+	Categories  []domain.Category
+	Rates       currency.Rates
+	Now         time.Time
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+	WeekStart   time.Weekday // week anchor for per-budget period windows (default Sunday)
+	CustomDefs  []customfields.Def
+	Molecules   []domain.Molecule
 	// Pools are user-defined groups of accounts (see the investments page); each becomes a
 	// pool_<slug>_value engine variable so a group's combined value is usable in formulas.
 	Pools []PoolDef
@@ -127,6 +127,7 @@ var atomNames = []string{
 	"expense_count",      // count of expense (negative non-transfer) transactions in the period
 	"bills_due",          // Σ bills due before this calendar month-end
 	"goal_needs",         // Σ prorated monthly goal contributions
+	"earmarked_total",    // Σ virtual goal earmarks across all goals (reserved-in-place, uncommitted)
 	"accounts",           // count of non-archived accounts
 	"asset_accounts",     // count of non-archived asset-class accounts
 	"liability_accounts", // count of non-archived liability-class accounts
@@ -150,6 +151,7 @@ func DefaultMolecules() []domain.Molecule {
 		{Name: "cashflow_net", Formula: "income - expense", Doc: "Net cash flow for the period (income minus spending)."},
 		{Name: "savings_rate", Formula: "clamp(safediv(income - expense, income, 0) * 100, -100, 100)", Doc: "Percent of income kept this period."},
 		{Name: "safe_to_spend", Formula: "liquid_cash - max(bills_due, 0) - max(goal_needs, 0)", Doc: "Liquid cash after this month's bills and goal set-asides."},
+		{Name: "unreserved_cash", Formula: "liquid_cash - max(earmarked_total, 0)", Doc: "Liquid cash not virtually reserved (earmarked) for any goal — what's genuinely unspoken-for."},
 		{Name: "credit_utilization", Formula: "clamp(safediv(revolving_balance, credit_limit_total, 0) * 100, 0, 100)", Doc: "Percent of your total credit-card limit you're using (30%+ starts to weigh on a credit score)."},
 		{Name: "debt_to_asset_pct", Formula: "clamp(safediv(liabilities, assets, 0) * 100, 0, 1000)", Doc: "What you owe as a percent of what you own — lower is healthier."},
 		// The financial-health score IS this formula: each health_* factor is a 0–100
@@ -251,6 +253,15 @@ func computeAtoms(d Data) map[string]float64 {
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
 	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
+	// earmarked_total: Σ virtual allocations across all goals (base minor units). Money
+	// reserved-in-place for goals but NOT moved — the pool a decision layer can subtract
+	// from liquid cash to see what's genuinely unspoken-for.
+	var earmarkedTotal int64
+	for _, g := range d.Goals {
+		for _, al := range g.Allocations {
+			earmarkedTotal += toBase(al.Amount.Amount, al.Amount.Currency)
+		}
+	}
 
 	active, assetAccts, liabAccts, debtCount := 0, 0, 0, 0
 	var revolvingBal, creditLimitTotal, minPaymentsTotal int64
@@ -288,6 +299,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"expense_count":      float64(expCount),
 		"bills_due":          major(billsDue),
 		"goal_needs":         major(goalNeeds),
+		"earmarked_total":    major(earmarkedTotal),
 		"accounts":           float64(active),
 		"asset_accounts":     float64(assetAccts),
 		"liability_accounts": float64(liabAccts),
@@ -584,6 +596,9 @@ func addAllocVars(out map[string]float64, d Data, major func(int64) float64) {
 //   - goal_<slug>_tasks_total number of to-dos linked to the goal (all kinds)
 //   - goal_<slug>_done        1 when the goal has reached its objective, else 0
 //   - goal_<slug>_streak      current habit check-in streak (0 for non-habit goals)
+//   - goal_<slug>_earmarked   virtually reserved toward the goal (no txn posted)
+//   - goal_<slug>_coverage    saved + earmarked (committed plus reserved-in-place)
+//   - goal_<slug>_covered_pct coverage ÷ target × 100 (0 when target is 0)
 //
 // Money amounts are FX-converted to the base currency. Name collisions are disambiguated
 // with a numeric suffix in stable goal order; archived goals still expose their variables.
@@ -609,6 +624,15 @@ func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBa
 		if prog.Complete {
 			done = 1
 		}
+		// Virtual allocation ("earmarks") as first-class formula context: how much of the
+		// goal is reserved in place, committed+earmarked coverage, and that coverage as a
+		// percent of target — so assessments can reason about reserved-but-uncommitted funds.
+		earmarked := major(toBase(g.AllocatedMinor(), g.TargetAmount.Currency))
+		coverage := saved + earmarked
+		coveredPct := 0.0
+		if target != 0 {
+			coveredPct = coverage / target * 100
+		}
 		out[base.Prefix+"target"] = target
 		out[base.Prefix+"saved"] = saved
 		out[base.Prefix+"remaining"] = remaining
@@ -618,12 +642,15 @@ func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBa
 		out[base.Prefix+"tasks_total"] = float64(tasksTotal)
 		out[base.Prefix+"done"] = done
 		out[base.Prefix+"streak"] = float64(prog.Streak)
+		out[base.Prefix+"earmarked"] = earmarked
+		out[base.Prefix+"coverage"] = coverage
+		out[base.Prefix+"covered_pct"] = coveredPct
 	}
 }
 
 // GoalVarFields are the per-goal metric suffixes exposed on the surface. Shared with the
 // widget/formula catalog so the picker matches the surface.
-var GoalVarFields = []string{"target", "saved", "remaining", "percent", "progress", "tasks_done", "tasks_total", "done", "streak"}
+var GoalVarFields = []string{"target", "saved", "remaining", "percent", "progress", "tasks_done", "tasks_total", "done", "streak", "earmarked", "coverage", "covered_pct"}
 
 // GoalVarBase pairs a goal with the disambiguated variable prefix its values are keyed
 // under ("goal_<slug>_"). Single source of truth for per-goal naming.
@@ -831,25 +858,46 @@ func BudgetVarSlug(s string) string { return budgetVarSlug(s) }
 //
 //   - account_<slug>_balance   the account's current balance (major units, base currency)
 //   - account_<slug>_cleared   the balance counting only cleared transactions
+//   - account_<slug>_earmarked how much of this account is reserved toward goals (no txn)
+//   - account_<slug>_free      balance minus earmarks — what's not spoken for (≥ 0)
 //
 // Balances are FX-converted to the base currency (same as net worth) so accounts in
 // different currencies compare on one scale. Name collisions are disambiguated with a
 // numeric suffix (…_2, …_3) in stable account order.
 func addAccountVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+	// How much of each account is virtually earmarked toward goals (base minor units),
+	// precomputed once so a formula can ask "how much of this account is spoken for?".
+	earmarkByAcct := map[string]int64{}
+	for _, g := range d.Goals {
+		for _, al := range g.Allocations {
+			if al.AccountID != "" {
+				earmarkByAcct[al.AccountID] += toBase(al.Amount.Amount, al.Amount.Currency)
+			}
+		}
+	}
 	for _, base := range AccountVarBases(d.Accounts) {
 		a := base.Account
+		balBase := 0.0
 		if bal, err := ledger.Balance(a, d.Transactions); err == nil {
-			out[base.Prefix+"balance"] = major(toBase(bal.Amount, bal.Currency))
+			balBase = major(toBase(bal.Amount, bal.Currency))
+			out[base.Prefix+"balance"] = balBase
 		}
 		if cl, err := ledger.ClearedBalance(a, d.Transactions); err == nil {
 			out[base.Prefix+"cleared"] = major(toBase(cl.Amount, cl.Currency))
 		}
+		earmarked := major(earmarkByAcct[a.ID])
+		out[base.Prefix+"earmarked"] = earmarked
+		free := balBase - earmarked
+		if free < 0 {
+			free = 0
+		}
+		out[base.Prefix+"free"] = free // balance not earmarked toward any goal (never negative)
 	}
 }
 
 // AccountVarFields are the per-account metric suffixes exposed on the surface. Shared
 // with the widget/formula catalog so the picker matches the surface.
-var AccountVarFields = []string{"balance", "cleared"}
+var AccountVarFields = []string{"balance", "cleared", "earmarked", "free"}
 
 // AccountVarBase pairs an account with the disambiguated variable prefix its values are
 // keyed under ("account_<slug>_"). Single source of truth for per-account naming —
@@ -1031,6 +1079,7 @@ var atomSources = map[string]string{
 	"expense_count":      "count of expense transactions in the period",
 	"bills_due":          "Σ bills due before this calendar month-end",
 	"goal_needs":         "Σ prorated monthly goal contributions",
+	"earmarked_total":    "Σ virtual goal earmarks (reserved-in-place, uncommitted)",
 	"accounts":           "count of non-archived accounts",
 	"asset_accounts":     "count of non-archived asset-class accounts",
 	"liability_accounts": "count of non-archived liability-class accounts",

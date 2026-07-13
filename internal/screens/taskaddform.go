@@ -87,6 +87,9 @@ type TaskAddFormProps struct {
 	// close the modal. On a validation error the form stays open and OnDone is
 	// not called.
 	OnDone func()
+	// ParentID, when set, makes the created task a sub-task of that parent — so the
+	// full compose form (not a bare prompt) can create a nested to-do.
+	ParentID string
 }
 
 // TaskAddForm is the standalone add-a-task form. It owns all its state and
@@ -156,7 +159,8 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 		}
 		t := domain.Task{
 			ID: id.New(), Title: strings.TrimSpace(title.Get()), Notes: strings.TrimSpace(notes.Get()),
-			Status: domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
+			ParentID: props.ParentID,
+			Status:   domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 			RelatedType: rt, RelatedID: rid,
 			Recurrence: domain.RecurringCadence(addRecur.Get()),
 		}

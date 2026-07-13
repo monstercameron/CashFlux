@@ -328,40 +328,40 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 
 // --- acct-toolbar ---------------------------------------------------------------
 
-// acctToolbarGlyph renders one accounts-toolbar action as a fixed-size glyph button
-// (the .tbar-btn treatment shared with the transactions toolbar) whose label reveals on
-// hover/focus — plus a persistent corner badge and a tooltip sub-line that say what the
-// button DOES: kind "modal" opens a flip modal (⧉ + "Opens a dialog"), "nav" navigates
-// to another page (↗ + "Goes to Settings"), "action" acts in place (no badge). variant
-// tints the glyph ("" neutral, "primary" accent, "stale" amber); open keeps a modal
-// opener highlighted while its modal is showing.
+// acctToolbarGlyph renders one accounts-toolbar action as a standard labeled button
+// (the .btn-tool treatment shared with the transactions toolbar): a slightly-grayed
+// leading glyph, an always-visible text label, and a small muted trailing badge that
+// says what the button DOES — kind "modal" opens a flip modal (⧉), "nav" navigates to
+// another page (↗), "action" acts in place (no badge). The visible label removes the
+// hover-to-decode step of the old icon-only treatment. variant tints it ("" neutral,
+// "primary" accent, "stale" amber); open keeps a modal opener highlighted while its
+// modal is showing.
 func acctToolbarGlyph(testID string, ic icon.Name, label, kind, variant string, open bool, onClick ui.Handler) ui.Node {
-	classes := []any{"tbar-btn"}
-	if variant != "" {
-		classes = append(classes, variant)
-	}
-	switch kind {
-	case "modal":
-		classes = append(classes, "opens-modal")
-	case "nav":
-		classes = append(classes, "opens-page")
+	cls := "btn btn-tool"
+	switch variant {
+	case "primary":
+		cls += " btn-primary"
+	case "stale":
+		cls += " bt-stale"
 	}
 	if open {
-		classes = append(classes, "open")
+		cls += " is-open"
 	}
-	var kindHint ui.Node = Fragment()
+	// Muted trailing badge conveys the button's behaviour without a hover: a dialog
+	// glyph for modal openers, a diagonal arrow for page navigations.
+	var kindBadge ui.Node = Fragment()
 	switch kind {
 	case "modal":
-		kindHint = Span(css.Class("tbar-tip-kind"), uistate.T("accounts.opensDialog"))
+		kindBadge = Span(css.Class("bt-kind"), Attr("aria-hidden", "true"), "⧉")
 	case "nav":
-		kindHint = Span(css.Class("tbar-tip-kind"), uistate.T("accounts.opensPage"))
+		kindBadge = Span(css.Class("bt-kind"), Attr("aria-hidden", "true"), "↗")
 	}
 	args := []any{
-		css.Class(classes...), Type("button"), Attr("data-testid", testID),
+		css.Class(cls), Type("button"), Attr("data-testid", testID),
 		Attr("aria-label", label), OnClick(onClick),
-		uiw.Icon(ic, css.Class(tw.W4, tw.H4)),
-		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"),
-			Span(css.Class("tbar-tip-label"), label), kindHint),
+		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(label),
+		kindBadge,
 	}
 	if kind == "modal" {
 		args = append(args, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))
@@ -498,15 +498,18 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		ClearAllLabel: uistate.T("accounts.clearFilters"),
 		RemoveLabel:   uistate.T("accounts.removeFilter"),
 		Actions: []ui.Node{
-			// Glyph buttons with hover labels. A corner badge + a tooltip sub-line say what
-			// each does: Transfer opens a flip modal (⧉), Manage exchange rates navigates to
-			// Settings (↗), and Mark-all is an in-place bulk action (amber, no badge).
-			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
-				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),
+			// Labeled toolbar buttons (.btn-tool): a grayed leading glyph + a visible text
+			// label, plus a small trailing badge for behaviour — Transfer opens a flip modal
+			// (⧉), Manage exchange rates navigates to Settings (↗), and Mark-all is an
+			// in-place bulk action (amber, no badge). All left-justified as one group, with
+			// the primary "Transfer money" LAST so it anchors the right end of the group.
 			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
 				uistate.T("accounts.markAll", plural(staleCount, "account")), "action", "stale", false, markAll)),
 			If(showFX, acctToolbarGlyph("acct-fx-btn", icon.Scale,
 				uistate.T("accounts.manageFXRates"), "nav", "", false, openFX)),
+			// Primary action last → right end of the left-justified group.
+			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
+				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{

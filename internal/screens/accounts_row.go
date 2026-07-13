@@ -274,10 +274,14 @@ func AccountRow(props accountRowProps) ui.Node {
 						customSummary(props.AccountDefs, a.Custom))),
 				// Readable, clickable-to-expand notes line (the attached note itself).
 				notesNode,
-				// MIA-extend (#445-10): nudge to fill missing institution.
+				// MIA-extend (#445-10): nudge to fill missing institution. A <button> in the
+				// column stretches full-width and centers its text by default, which made the
+				// link float mid-row — align-self:flex-start shrinks it to content and left-
+				// aligns it under the account meta like the other rows.
 				If(a.Institution == "" && !a.Archived,
 					Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
 						Attr("data-testid", "set-institution-"+a.ID),
+						Style(map[string]string{"align-self": "flex-start", "text-align": "left"}),
 						Title(uistate.T("accounts.setInstitution")),
 						OnClick(startEdit),
 						uistate.T("accounts.setInstitution"),

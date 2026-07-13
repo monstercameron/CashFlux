@@ -16,6 +16,7 @@ var i18nSweepKeys = Catalog{
 	// Shared actions.
 	"action.done":  "Done",
 	"action.clear": "Clear",
+	"action.more":  "More",
 
 	// Global period-resolution picker (top bar).
 	"period.week":    "Week",
@@ -121,10 +122,13 @@ var i18nSweepKeys = Catalog{
 	"budgets.topupBtn": "Top up…",
 
 	// Shared component library (second sweep pass — components + helpers).
-	"ui.table.all":  "All",
-	"ui.table.prev": "Prev",
-	"ui.table.next": "Next",
-	"ui.kbdHint":    "Enter to save · Esc to cancel",
+	"ui.table.all":      "All",
+	"ui.table.prev":     "Prev",
+	"ui.table.next":     "Next",
+	"ui.table.of":       "of",
+	"ui.table.pageWord": "Page",
+	"ui.table.jumpAria": "Jump to page",
+	"ui.kbdHint":        "Enter to save · Esc to cancel",
 
 	// Field labels previously passed as bare helper args.
 	"members.roleLabel":   "Role",

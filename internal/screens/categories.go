@@ -83,9 +83,9 @@ func Categories() ui.Node {
 	smartCatOpen := uistate.UseTxnSmartCatOpen()
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatOpen.Set(true) }))
 	addCatBtn := func() ui.Node {
-		return Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		return Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "categories-add"), Title(uistate.T("categories.add")), OnClick(addCategory),
-			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("categories.addCategory")))
 	}
 	smartCatBtn := func() ui.Node {

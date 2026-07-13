@@ -684,9 +684,11 @@ type budgetRowProps struct {
 	LastMonthOver     bool                  // last month's spend exceeded this month's budget → danger tone
 	LastMonthPct      int                   // last month's spend as % of this month's budget (uncapped) — the "%" figure
 	LastMonthFill     int                   // same, clamped 0..100 — the bar width
+	LinkedTodos       int                   // count of to-dos linked to this budget (Task.RelatedType=budget); 0 hides the link
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)
+	OnViewTodos       func()                     // open the To-dos page (shown when LinkedTodos > 0)
 }
 
 // budgetLeftValue formats a budget's remaining amount for the summary "Left" stat

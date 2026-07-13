@@ -2460,20 +2460,61 @@ func registerGenerated() {
 	rule(".chip-clear-all:hover",
 		textDecoration("underline"),
 	)
+	// Accounts + transactions filter panels: each labeled field is a "control pill" (the
+	// same language as the /todo + /goals + /budgets toolbars) — a bordered capsule with a
+	// small uppercase label tag and a borderless control, flowing in a wrap row.
 	rule(".filter-fields",
 		display("flex"),
-		flexDirection("column"),
-		gap("0.7rem"),
+		flexDirection("row"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
 	)
 	rule(".filter-fields .field-label",
 		display("flex"),
-		flexDirection("column"),
-		gap("0.25rem"),
-		fontSize("0.8rem"),
-		color("var(--muted)"),
+		flexDirection("row"),
+		alignItems("center"),
+		gap("0.45rem"),
+		minHeight("38px"),
+		padding("0.3rem 0.6rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("9px"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
 	)
-	rule(".filter-fields .field-label .field",
+	rule(".filter-fields .field-label .field, .filter-fields .field-label select",
+		width("auto"),
+		minWidth("0"),
+		minHeight("0"),
+		padding("0.1rem 0.2rem"),
+		background("transparent"),
+		border("0"),
 		color("var(--text)"),
+		fontSize("0.86rem"),
+		fontWeight("500"),
+		prop("text-transform", "none"),
+		letterSpacing("normal"),
+	)
+	rule(".filter-fields .field-label .field:focus, .filter-fields .field-label select:focus",
+		prop("outline", "none"),
+		boxShadow("none"),
+	)
+	// Toggle buttons that sit inside a filter pill (archived / formulas) read as the pill's
+	// value — strip their own chrome so they don't look like a button-in-a-button.
+	rule(".filter-fields .field-label .btn",
+		minHeight("0"),
+		padding("0.05rem 0.2rem"),
+		background("transparent"),
+		border("0"),
+		color("var(--text)"),
+		fontSize("0.86rem"),
+		fontWeight("500"),
+		prop("text-transform", "none"),
+		letterSpacing("normal"),
 	)
 	rule(".filter-inline-panel",
 		background("var(--bg-elev)"),
@@ -2506,12 +2547,13 @@ func registerGenerated() {
 		gridTemplateColumns("repeat(auto-fill, minmax(180px, 1fr))"),
 		gap("0.7rem"),
 	)
+	// Inside the filter flyout, keep the same inline control-pill look as the base
+	// .filter-fields rule (this selector is more specific, so it must re-assert row layout).
 	rule(".filter-inline-body .filter-fields .field-label",
 		display("flex"),
-		flexDirection("column"),
-		gap("0.25rem"),
-		fontSize("0.8rem"),
-		color("var(--muted)"),
+		flexDirection("row"),
+		alignItems("center"),
+		gap("0.45rem"),
 	)
 	rule(".filter-inline-body .filter-fields .field-label .field",
 		color("var(--text)"),
@@ -2801,6 +2843,50 @@ func registerGenerated() {
 		opacity("0.5"),
 		cursor("not-allowed"),
 		filter("none"),
+	)
+	// .btn-tool is the standard toolbar-action-button treatment (paired with .btn): the same
+	// 38px height as the pill controls next to it, a tidy gap, and a SINGLE leading glyph
+	// rendered slightly grayed (like the select-tag icons) so the label leads. Applied to
+	// every page's toolbar action buttons for one consistent control language.
+	rule(".btn-tool",
+		minHeight("38px"),
+		padding("0.35rem 0.75rem"),
+		gap("0.4rem"),
+		borderRadius("8px"),
+	)
+	rule(".btn-tool svg",
+		opacity("0.6"),
+	)
+	// Danger-tinted toolbar button (e.g. Delete selected): red text + border, still the
+	// same .btn-tool footprint so it lines up with its neighbours.
+	rule(".btn-tool.bt-danger",
+		color("var(--danger)"),
+		borderColor("color-mix(in srgb, var(--danger) 45%, var(--border))"),
+	)
+	rule(".btn-tool.bt-danger:hover",
+		background("color-mix(in srgb, var(--danger) 10%, var(--bg-elev))"),
+	)
+	// Stale/amber-tinted toolbar button (e.g. Mark all updated when balances are stale).
+	rule(".btn-tool.bt-stale",
+		color("var(--warn, #d97706)"),
+		borderColor("color-mix(in srgb, var(--warn, #d97706) 45%, var(--border))"),
+	)
+	rule(".btn-tool.bt-stale:hover",
+		background("color-mix(in srgb, var(--warn, #d97706) 12%, var(--bg-elev))"),
+	)
+	// A modal-opening toolbar button stays highlighted while its flip modal is showing.
+	rule(".btn-tool.is-open",
+		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
+		color("var(--text)"),
+	)
+	// .bt-kind is the small muted trailing badge on a toolbar button that signals its
+	// behaviour (⧉ opens a dialog, ↗ navigates) without a hover.
+	rule(".bt-kind",
+		marginLeft("0.1rem"),
+		fontSize("0.85em"),
+		opacity("0.45"),
+		color("var(--text-dim)"),
 	)
 	rule(".btn-primary",
 		background("linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, #000 10%), color-mix(in srgb, var(--accent) 78%, #000 22%))"),
@@ -3625,6 +3711,16 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
 	)
+	// "Review due" chip — an attention (amber) tone distinct from the pace states, so a
+	// goal that's gone stale under its review cadence reads at a glance.
+	rule(".pace-review",
+		background("rgba(245,158,11,0.16)"),
+		color("#d98c00"),
+		borderColor("rgba(245,158,11,0.4)"),
+	)
+	rule("[data-theme=\"light\"] .pace-review",
+		color("#b45309"),
+	)
 	rule(".sev-pill",
 		display("inline-block"),
 		fontSize("0.68rem"),
@@ -3658,6 +3754,51 @@ func registerGenerated() {
 	)
 	rule("[data-theme=\"light\"] .sev-critical",
 		color("#991b1b"),
+	)
+	// The collapsed Smart "peek" bar: a slim rounded pill signalling there are alerts for
+	// the page, with near-zero vertical footprint (replaces the always-open Smart card).
+	rule(".smart-peek",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		minHeight("30px"),
+		padding("0.25rem 0.7rem"),
+		marginBottom("0.6rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("999px"),
+		color("var(--text-dim)"),
+		fontSize("0.82rem"),
+		fontWeight("500"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".smart-peek:hover",
+		borderColor("color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		background("color-mix(in srgb, var(--bg-elev) 82%, transparent)"),
+	)
+	rule(".smart-peek-title",
+		color("var(--text)"),
+		fontWeight("600"),
+	)
+	rule(".smart-peek-badge",
+		minWidth("1.2rem"),
+		padding("0.05rem 0.35rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, currentColor 16%, transparent)"),
+		fontSize("0.72rem"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+		textAlign("center"),
+	)
+	rule(".smart-peek-chev",
+		opacity("0.55"),
+	)
+	// Stable wrapper for the Smart strip: keeps the component root a <div> across the
+	// peek↔card swap so the reconciler updates in place (see smartStripSlot). Purely
+	// structural — no box of its own.
+	rule(".smart-strip-slot",
+		display("block"),
 	)
 	ruleMedia("(max-width: 760px)", ".budget-head",
 		flexWrap("wrap"),
@@ -6996,6 +7137,28 @@ func registerGenerated() {
 	)
 	// Disclosure chevron on parent rows (collapse/expand sub-tasks) + an equal-width
 	// spacer on leaves so every checkbox lines up. The chevron rotates down when open.
+	// Drag handle for "Custom order" reordering — a dim grip that brightens on hover; the
+	// row it leads is the drop target.
+	rule(".todo-grip",
+		flex("none"),
+		alignSelf("center"),
+		display("grid"),
+		placeItems("center"),
+		width("20px"),
+		height("22px"),
+		marginRight("-0.15rem"),
+		color("var(--text-faint)"),
+		cursor("grab"),
+	)
+	rule(".todo-grip:hover",
+		color("var(--text)"),
+	)
+	rule(".todo-grip:active",
+		cursor("grabbing"),
+	)
+	rule(".bento-todo .todo-item[data-testid]:has(.todo-grip)",
+		prop("scroll-margin-top", "80px"),
+	)
 	rule(".todo-disclose",
 		flex("none"),
 		alignSelf("center"),
@@ -7256,14 +7419,134 @@ func registerGenerated() {
 		opacity("0.4"),
 		cursor("default"),
 	)
-	// To-do toolbar: one compact row — sort + priority filter as small labelled "pill"
-	// selects (auto-width, NOT full-width bars), a hide-done toggle, and Add task pushed
-	// right. Replaces the earlier unstyled full-width stacked selects.
-	rule(".filter-strip",
+	// --- The app-standard Pager (.std-pager): the /todo pager look, extended with a
+	// rows-per-page control + a jump-to-page box, mirrored above and below every paged list. ---
+	rule(".std-pager",
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
-		gap("0.75rem"),
+		gap("1rem"),
+		flexWrap("wrap"),
+		marginTop("0.85rem"),
+		paddingTop("0.85rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".std-pager.std-pager-top",
+		marginTop("0"),
+		marginBottom("0.85rem"),
+		paddingTop("0"),
+		paddingBottom("0.85rem"),
+		borderTop("0"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".std-pager-info",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem 1rem"),
+	)
+	rule(".std-pager-range",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		fontVariantNumeric("tabular-nums"),
+		whiteSpace("nowrap"),
+	)
+	rule(".std-pager-sizes",
+		display("flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		flexWrap("wrap"),
+	)
+	rule(".std-pager-size-label",
+		fontSize("0.68rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-faint)"),
+		marginRight("0.15rem"),
+	)
+	rule(".std-pager .pager-size",
+		minHeight("0"),
+		padding("0.2rem 0.5rem"),
+		fontSize("0.78rem"),
+		fontWeight("600"),
+		borderRadius("7px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".std-pager .pager-size:hover",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
+	rule(".std-pager .pager-size.active",
+		background("var(--accent)"),
+		color("#04140c"),
+		borderColor("var(--accent)"),
+	)
+	rule("[data-theme=\"light\"] .std-pager .pager-size.active",
+		color("#ffffff"),
+	)
+	rule(".std-pager-nav",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".std-page-btn",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		fontSize("0.82rem"),
+		padding("0.35rem 0.7rem"),
+		borderRadius("8px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text)"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".std-page-btn:hover:not(:disabled)",
+		borderColor("var(--accent)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".std-page-btn:disabled",
+		opacity("0.4"),
+		cursor("default"),
+	)
+	rule(".std-pager-jump",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.35rem"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".std-pager-jump-input",
+		width("3.4rem"),
+		minHeight("0"),
+		padding("0.25rem 0.35rem"),
+		textAlign("center"),
+		borderRadius("7px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		fontVariantNumeric("tabular-nums"),
+		fontSize("0.82rem"),
+	)
+	rule(".std-pager-jump-total",
+		whiteSpace("nowrap"),
+	)
+	// Toolbar row (to-do, goals, and the other list pages): ONE left-justified group of
+	// controls — pill selects, toggles, and the primary action — packed together from the
+	// left with a uniform gap (no split into a left cluster and a far-right cluster). The
+	// primary "+ Add" button is placed last in each toolbar's markup, so it sits at the
+	// right end OF THE GROUP rather than floated to the window edge.
+	rule(".filter-strip",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("flex-start"),
+		gap("0.5rem"),
 		flexWrap("wrap"),
 	)
 	rule(".filter-strip-controls",
@@ -7272,7 +7555,11 @@ func registerGenerated() {
 		gap("0.5rem"),
 		flexWrap("wrap"),
 	)
-	rule(".todo-ctrl",
+	// .fctrl is the reusable "control pill" (shared with .todo-ctrl): a bordered, auto-width
+	// capsule holding an icon + uppercase label + a borderless select or search input. Used
+	// on the to-do, goals, budgets, accounts, and transactions toolbars for one calm control
+	// language across pages (instead of full-width field bars).
+	rule(".todo-ctrl, .fctrl",
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.4rem"),
@@ -7283,14 +7570,58 @@ func registerGenerated() {
 		borderRadius("9px"),
 		color("var(--text-faint)"),
 	)
-	rule(".todo-ctrl-label",
+	rule(".todo-ctrl-label, .fctrl-label",
 		fontSize("0.72rem"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
 		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
 	)
-	rule(".todo-ctrl select.todo-select",
+	// The search box (a .todo-ctrl variant): a borderless input inside the pill, an accent
+	// ring when it holds a query, and a small clear (×) affordance.
+	rule(".todo-ctrl-search, .fctrl-search",
+		// A smaller flex-basis than the search's comfortable width: it still GROWS to fill
+		// (flex-grow 1, up to max-width) on roomy toolbars, but the smaller basis stops a
+		// crowded toolbar (transactions has the most actions) from wrapping the trailing
+		// primary button to a second row — flex-wrap breaks at the basis, so a large basis
+		// forced a premature wrap even though everything fits once the search shrinks.
+		flex("1 1 10rem"),
+		maxWidth("22rem"),
+		minWidth("9rem"),
+	)
+	rule(".todo-ctrl-search.is-active, .fctrl-search.is-active",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	rule(".todo-search-input, .fctrl-input",
+		flex("1 1 auto"),
+		minWidth("0"),
+		border("0"),
+		outline("0"),
+		background("transparent"),
+		color("var(--text)"),
+		fontSize("0.9rem"),
+	)
+	rule(".todo-search-input::placeholder, .fctrl-input::placeholder",
+		color("var(--text-faint)"),
+	)
+	rule(".todo-search-clear, .fctrl-clear",
+		display("grid"),
+		placeItems("center"),
+		flex("none"),
+		width("18px"),
+		height("18px"),
+		border("0"),
+		borderRadius("50%"),
+		background("transparent"),
+		color("var(--text-faint)"),
+		cursor("pointer"),
+	)
+	rule(".todo-search-clear:hover, .fctrl-clear:hover",
+		background("var(--bg)"),
+		color("var(--text)"),
+	)
+	rule(".todo-ctrl select.todo-select, .fctrl select.fctrl-select",
 		width("auto"),
 		minWidth("0"),
 		minHeight("0"),
@@ -7303,7 +7634,7 @@ func registerGenerated() {
 		fontWeight("500"),
 		cursor("pointer"),
 	)
-	rule(".todo-ctrl select.todo-select:focus, .todo-ctrl select.todo-select:focus-visible",
+	rule(".todo-ctrl select.todo-select:focus, .todo-ctrl select.todo-select:focus-visible, .fctrl select.fctrl-select:focus, .fctrl select.fctrl-select:focus-visible",
 		prop("outline", "none"),
 		boxShadow("none"),
 	)
@@ -7558,10 +7889,10 @@ func registerGenerated() {
 		display("grid"),
 		gridTemplateColumns("repeat(auto-fill, minmax(460px, 1fr))"),
 		gap("0.75rem"),
-		// Each card sizes to its own content (min-height still applies) instead
-		// of stretching to the tallest in its row — no dead whitespace when one
-		// card has a linked to-do list and its row-mate doesn't.
-		alignItems("start"),
+		// Cards stretch to the tallest in their row so every card in a row shares one
+		// height — the footer actions pin to the bottom (margin-top:auto) rather than
+		// floating mid-card. Capping the steps list at 3 keeps that shared height sane.
+		alignItems("stretch"),
 	)
 	rule(".bento-goals .goal-card",
 		position("relative"),
@@ -7579,6 +7910,13 @@ func registerGenerated() {
 		borderColor("color-mix(in srgb, var(--accent) 34%, var(--border))"),
 		background("color-mix(in srgb, var(--bg-elev) 85%, transparent)"),
 		transform("translateY(-1px)"),
+	)
+	// When a card's ⋯ menu is open, lift the whole card above its neighbours so the
+	// popover paints over sibling cards instead of being covered by a later card in the
+	// grid (the hover transform makes each card its own stacking context). The card is
+	// position:relative, so z-index applies.
+	rule(".bento-goals .goal-card:has(.add-wrap [aria-expanded=\"true\"])",
+		zIndex("30"),
 	)
 	rule(".bento-goals .goal-card.is-soon",
 		boxShadow("inset 5px 0 0 #f59e0b"),
@@ -7715,6 +8053,449 @@ func registerGenerated() {
 		margin("0"),
 		fontSize("0.82rem"),
 		color("var(--text-faint)"),
+	)
+	// "+N more" line under a capped (top-3) steps list — a quiet count of the remainder.
+	rule(".goal-todos-more",
+		margin("0.1rem 0 0 0.15rem"),
+		fontSize("0.75rem"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	// Multi-link checklists in the goal editor (accounts / budgets). A bounded, scrolling
+	// column of checkbox rows so a household with many accounts doesn't blow out the modal.
+	rule(".goal-link-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		maxHeight("11rem"),
+		overflowY("auto"),
+		padding("0.15rem"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+	)
+	rule(".goal-link-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		padding("0.35rem 0.4rem"),
+		borderRadius("6px"),
+		cursor("pointer"),
+	)
+	rule(".goal-link-row:hover",
+		background("var(--bg-elev)"),
+	)
+	// Virtual-allocation modal: one row per linked account (name + free balance, then an
+	// amount input), and a summary line totalling the earmark against the target.
+	rule(".goal-alloc-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+		margin("0.2rem 0"),
+	)
+	rule(".goal-alloc-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.75rem"),
+		padding("0.5rem 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("9px"),
+		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
+	)
+	rule(".goal-alloc-row-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+		minWidth("0"),
+	)
+	rule(".goal-alloc-acct",
+		fontWeight("600"),
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".goal-alloc-avail",
+		fontSize("0.78rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	// Specific enough (0,3,0) to beat the form's ".acct-edit-form .field { width:100% }"
+	// rule, which would otherwise stretch the amount field over the account name.
+	rule(".goal-allocate .goal-alloc-row .goal-alloc-input",
+		width("9rem"),
+		minWidth("9rem"),
+		flex("0 0 9rem"),
+		textAlign("right"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".goal-alloc-summary",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+		marginTop("0.6rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 70%, transparent)"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".goal-alloc-cover",
+		fontVariantNumeric("tabular-nums"),
+		color("var(--up)"),
+	)
+	// Allocate modal: the master enable toggle row + selectable per-account rows.
+	rule(".goal-alloc-enable",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.6rem"),
+		padding("0.6rem 0.7rem"),
+		margin("0 0 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
+		cursor("pointer"),
+	)
+	rule(".goal-alloc-enable input",
+		marginTop("0.15rem"),
+		flex("none"),
+	)
+	rule(".goal-alloc-enable-txt",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+	)
+	rule(".goal-alloc-enable-title",
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".goal-alloc-row.is-on",
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 8%, var(--bg-elev))"),
+	)
+	// Smart-split control: a "total to earmark" field + even/proportional buttons.
+	rule(".goal-alloc-split",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+		margin("0 0 0.7rem"),
+		padding("0.6rem 0.7rem"),
+		border("1px dashed var(--border)"),
+		borderRadius("10px"),
+	)
+	rule(".goal-alloc-split-row",
+		display("flex"),
+		alignItems("flex-end"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.6rem"),
+	)
+	rule(".goal-alloc-split-field",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+		flex("1 1 12rem"),
+		minWidth("0"),
+	)
+	rule(".goal-allocate .goal-alloc-split-field .goal-alloc-total",
+		width("100%"),
+	)
+	rule(".goal-alloc-split-btns",
+		display("flex"),
+		gap("0.4rem"),
+		flexShrink("0"),
+	)
+	rule(".goal-alloc-pick",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flex("1 1 auto"),
+		minWidth("0"),
+		cursor("pointer"),
+	)
+	rule(".goal-alloc-pick input",
+		flex("none"),
+	)
+	rule(".goal-alloc-input:disabled",
+		opacity("0.4"),
+		cursor("not-allowed"),
+	)
+	// Earmark status badge tones (pace-badge base): none = quiet outline, partial = amber,
+	// full = accent-green — a glanceable read of how reserved a goal is.
+	rule(".earmark-none",
+		background("transparent"),
+		color("var(--text-faint)"),
+		borderColor("var(--border)"),
+	)
+	rule(".earmark-partial",
+		background("rgba(245,158,11,0.14)"),
+		color("#d98c00"),
+		borderColor("rgba(245,158,11,0.35)"),
+	)
+	rule("[data-theme=\"light\"] .earmark-partial",
+		color("#b45309"),
+	)
+	rule(".earmark-full",
+		background("color-mix(in srgb, var(--up) 16%, transparent)"),
+		color("var(--up)"),
+		borderColor("color-mix(in srgb, var(--up) 40%, var(--border))"),
+	)
+	// Goals-page tab strip (Goals · Earmarks) — a pill-segmented control.
+	rule(".goals-tabs",
+		display("inline-flex"),
+		gap("0.15rem"),
+		padding("0.15rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+	)
+	rule(".goals-tab",
+		padding("0.35rem 0.85rem"),
+		border("0"),
+		borderRadius("8px"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.85rem"),
+		fontWeight("600"),
+		cursor("pointer"),
+		transition("background 0.12s ease, color 0.12s ease"),
+	)
+	rule(".goals-tab:hover",
+		color("var(--text)"),
+	)
+	rule(".goals-tab.is-active",
+		background("var(--accent)"),
+		color("#04140c"),
+	)
+	rule("[data-theme=\"light\"] .goals-tab.is-active",
+		color("#ffffff"),
+	)
+	// --- Earmarks manager (the "Earmarks" tab) ---
+	rule(".earmarks-mgr",
+		display("flex"),
+		flexDirection("column"),
+		gap("1rem"),
+	)
+	rule(".ea-exp-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+	)
+	rule(".ea-exp-row",
+		display("grid"),
+		gridTemplateColumns("1fr auto auto"),
+		alignItems("center"),
+		gap("1rem"),
+		padding("0.4rem 0.2rem"),
+		borderBottom("1px solid color-mix(in srgb, var(--border) 55%, transparent)"),
+	)
+	rule(".ea-exp-head",
+		fontSize("0.72rem"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-dim)"),
+		fontWeight("600"),
+	)
+	rule(".ea-exp-name",
+		fontWeight("600"),
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".ea-exp-earmarked",
+		fontVariantNumeric("tabular-nums"),
+		color("var(--up)"),
+		fontWeight("600"),
+	)
+	rule(".ea-exp-free",
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text-dim)"),
+		fontSize("0.85rem"),
+	)
+	rule(".ea-goals",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
+	)
+	rule(".ea-goal",
+		border("1px solid var(--border)"),
+		borderRadius("11px"),
+		padding("0.6rem 0.8rem"),
+		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
+	)
+	rule(".ea-goal-head",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+		marginBottom("0.4rem"),
+	)
+	rule(".ea-goal-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+		fontWeight("700"),
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".ea-goal-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+	)
+	rule(".ea-row",
+		display("grid"),
+		gridTemplateColumns("1fr auto auto"),
+		alignItems("center"),
+		gap("0.75rem"),
+		padding("0.3rem 0.4rem"),
+		borderRadius("7px"),
+	)
+	rule(".ea-row:hover",
+		background("var(--bg)"),
+	)
+	rule(".ea-row-acct",
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".ea-row-amt",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".ea-row-del",
+		display("grid"),
+		placeItems("center"),
+		width("26px"),
+		height("26px"),
+		border("0"),
+		borderRadius("6px"),
+		background("transparent"),
+		color("var(--text-faint)"),
+		cursor("pointer"),
+		transition("background 0.12s ease, color 0.12s ease"),
+	)
+	rule(".ea-row-del:hover",
+		background("color-mix(in srgb, var(--danger) 14%, transparent)"),
+		color("var(--danger)"),
+	)
+	rule(".ea-empty",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("center"),
+		gap("0.4rem"),
+		padding("1.5rem 1rem"),
+		textAlign("center"),
+	)
+	rule(".ea-empty-title",
+		margin("0"),
+		fontWeight("700"),
+		fontSize("1rem"),
+		color("var(--text)"),
+	)
+	// Add-goal modal: a calm 2-column grid, top-aligned so a tall hint never bottom-shifts
+	// its row-mates; the lead + hint-bearing fields span the full width via .fg-span.
+	rule(".goal-add .form-grid",
+		gridTemplateColumns("repeat(2, minmax(0, 1fr))"),
+		alignItems("start"),
+		gap("0.8rem 0.9rem"),
+	)
+	rule(".goal-add .fg-span",
+		gridColumn("1 / -1"),
+	)
+	// A checkbox + inline hint row (sinking fund, contribute ledger) with proper spacing
+	// and a normal-weight label — replaces the cramped bold .ba-check block.
+	rule(".goal-check-row",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.5rem"),
+		cursor("pointer"),
+		fontWeight("400"),
+		color("var(--text-dim)"),
+		lineHeight("1.4"),
+	)
+	rule(".goal-check-row input",
+		marginTop("0.2rem"),
+		flex("none"),
+	)
+	// Contribute modal: a self-contained progress bar (the modal isn't under .bento-goals,
+	// so the card-loader styles don't reach it), a quick-fill chip, and the amount row.
+	rule(".contrib-loader",
+		position("relative"),
+		overflow("hidden"),
+		height("40px"),
+		margin("0 0 0.7rem"),
+		borderRadius("10px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".contrib-loader .bar-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		bottom("0"),
+		height("100%"),
+		background("var(--accent)"),
+		zIndex("0"),
+	)
+	rule(".contrib-loader-figs",
+		position("relative"),
+		zIndex("1"),
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		height("100%"),
+		padding("0 0.75rem"),
+		gap("0.5rem"),
+	)
+	rule(".contrib-saved",
+		fontVariantNumeric("tabular-nums"),
+		fontSize("0.9rem"),
+		color("var(--text-dim)"),
+		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
+	)
+	rule(".contrib-saved .budget-spent",
+		color("var(--text)"),
+		fontWeight("700"),
+	)
+	rule(".contrib-pct",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("700"),
+		fontSize("0.8rem"),
+		color("color-mix(in srgb, var(--accent) 40%, #ffffff)"),
+		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
+	)
+	rule("[data-theme=\"light\"] .contrib-pct",
+		color("color-mix(in srgb, var(--accent) 78%, #000000)"),
+		prop("text-shadow", "none"),
+	)
+	rule(".contrib-amount-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".contrib-amount-row .field",
+		flex("1 1 auto"),
+	)
+	rule(".contrib-chip",
+		flex("none"),
+		padding("0.45rem 0.8rem"),
+		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		borderRadius("8px"),
+		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
+		color("var(--accent)"),
+		fontWeight("600"),
+		fontSize("0.85rem"),
+		whiteSpace("nowrap"),
+		cursor("pointer"),
+		transition("background 0.12s ease, border-color 0.12s ease"),
+	)
+	rule(".contrib-chip:hover",
+		background("color-mix(in srgb, var(--accent) 18%, transparent)"),
+		borderColor("var(--accent)"),
 	)
 	rule(".goal-todo",
 		display("flex"),
@@ -8082,30 +8863,31 @@ func registerGenerated() {
 	rule(".bento-budgets .stat-value.is-hero",
 		fontSize("2.6rem"),
 	)
-	// Toolbar: a clean single row — a compact labelled method picker on the left and
-	// right-aligned, uniform-height actions. The method select is no longer .field's
-	// full width (which read like a giant search bar and wrapped the buttons below).
+	// Toolbar: ONE left-justified group — the method + sort pickers and the actions all
+	// packed together from the left with a uniform gap (not split into a left picker
+	// cluster and a right action cluster). The primary "+ Add budget" is last in the
+	// markup, so it sits at the right end of the group.
 	rule(".bento-budgets .budgets-toolbar",
 		display("flex"),
 		alignItems("center"),
-		justifyContent("space-between"),
-		flexWrap("nowrap"),
-		gap("1rem"),
+		justifyContent("flex-start"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
 	)
-	rule(".bento-budgets .budgets-toolbar-method",
+	rule(".bento-budgets .budgets-toolbar-method, .bento-goals .budgets-toolbar-method",
 		display("flex"),
 		alignItems("center"),
 		gap("0.5rem"),
 		minWidth("0"),
 		flexShrink("1"),
 	)
-	rule(".bento-budgets .budgets-toolbar-label",
+	rule(".bento-budgets .budgets-toolbar-label, .bento-goals .budgets-toolbar-label",
 		fontSize("0.8rem"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
-	rule(".bento-budgets .budgets-method-select",
+	rule(".bento-budgets .budgets-method-select, .bento-goals .budgets-method-select",
 		width("auto"),
 		minWidth("0"),
 		maxWidth("280px"),

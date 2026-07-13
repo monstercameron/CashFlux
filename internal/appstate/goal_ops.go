@@ -80,6 +80,7 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 	}
 
 	g = g.RecordContribution(domain.GoalContribution{Amount: amt, TxnID: txnID, At: time.Now()})
+	g.LastReviewedAt = time.Now() // a contribution counts as touching the goal (review freshness)
 	if err := a.PutGoal(g); err != nil {
 		return ContributeResult{}, fmt.Errorf("appstate: contribute: save goal: %w", err)
 	}
@@ -118,6 +119,47 @@ func (a *App) UndoLastContribution(g domain.Goal) (money.Money, bool, error) {
 		}
 	}
 	return last.Amount, true, nil
+}
+
+// MarkGoalReviewed stamps the goal's LastReviewedAt to now, clearing its "review due"
+// flag until the ReviewCadence elapses again — the goal's version of "I've looked at
+// this". A missing goal id is a silent no-op.
+func (a *App) MarkGoalReviewed(goalID string) error {
+	for _, g := range a.Goals() {
+		if g.ID != goalID {
+			continue
+		}
+		g.LastReviewedAt = time.Now()
+		if err := a.PutGoal(g); err != nil {
+			return fmt.Errorf("appstate: mark goal reviewed: save goal: %w", err)
+		}
+		return nil
+	}
+	return nil
+}
+
+// SetGoalAllocations replaces a goal's virtual earmarks and persists it. The amounts are
+// trusted (the allocate modal caps each to the account's free balance via
+// goals.AvailableToEarmarkMinor); zero-amount entries are dropped so cleared rows don't
+// linger. No transaction is posted — earmarks never move money.
+func (a *App) SetGoalAllocations(goalID string, allocs []domain.GoalAllocation) error {
+	for _, g := range a.Goals() {
+		if g.ID != goalID {
+			continue
+		}
+		kept := make([]domain.GoalAllocation, 0, len(allocs))
+		for _, al := range allocs {
+			if al.AccountID != "" && al.Amount.Amount > 0 {
+				kept = append(kept, al)
+			}
+		}
+		g.Allocations = kept
+		if err := a.PutGoal(g); err != nil {
+			return fmt.Errorf("appstate: set goal allocations: save goal: %w", err)
+		}
+		return nil
+	}
+	return nil
 }
 
 // ResetGoalToZero clears a goal's saved progress back to zero and empties its

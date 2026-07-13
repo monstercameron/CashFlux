@@ -25,10 +25,21 @@ func GoalEditHost() uic.Node {
 	}
 	closeModal := func() { uistate.CloseGoalEdit() }
 
-	// Standard sizes: full edit uses Medium, the short contribute form uses Small.
+	// Standard sizes: full edit + allocate use Medium, the short contribute form uses Small.
 	title, width, height := uistate.T("goals.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
-	if e.Mode == uistate.GoalEditModeContribute {
+	switch e.Mode {
+	case uistate.GoalEditModeContribute:
 		title, width, height = uistate.T("goals.contributeTitle"), uiw.FlipSmallW, uiw.FlipSmallH
+	case uistate.GoalEditModeAllocate:
+		title = uistate.T("goals.allocateTitle")
+	}
+
+	// Allocate has its own body (per-account earmark inputs); edit/contribute share GoalEditForm.
+	var back uic.Node
+	if e.Mode == uistate.GoalEditModeAllocate {
+		back = uic.CreateElement(screens.GoalAllocateForm, screens.GoalAllocateFormProps{GoalID: e.ID, OnDone: closeModal})
+	} else {
+		back = uic.CreateElement(screens.GoalEditForm, screens.GoalEditFormProps{GoalID: e.ID, Mode: e.Mode, OnDone: closeModal})
 	}
 
 	return uiw.FlipPanel(uiw.FlipPanelProps{
@@ -38,6 +49,6 @@ func GoalEditHost() uic.Node {
 		NoFooter:  true,
 		FlushBody: true,
 		OnClose:   closeModal,
-		Back:      uic.CreateElement(screens.GoalEditForm, screens.GoalEditFormProps{GoalID: e.ID, Mode: e.Mode, OnDone: closeModal}),
+		Back:      back,
 	})
 }

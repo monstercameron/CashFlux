@@ -260,6 +260,7 @@ type Plan struct {
 type RecurringCadence string
 
 const (
+	CadenceDaily       RecurringCadence = "daily" // every day — used by the goal review cadence
 	CadenceWeekly      RecurringCadence = "weekly"
 	CadenceBiweekly    RecurringCadence = "biweekly" // every 14 days (C152) — common payday/bill cycle
 	CadenceMonthly     RecurringCadence = "monthly"
@@ -273,6 +274,8 @@ const (
 // monthly.
 func (c RecurringCadence) Next(from time.Time) time.Time {
 	switch c {
+	case CadenceDaily:
+		return from.AddDate(0, 0, 1)
 	case CadenceWeekly:
 		return from.AddDate(0, 0, 7)
 	case CadenceBiweekly:
@@ -624,6 +627,67 @@ type Goal struct {
 	// This lets an open-ended savings/investing goal (no target date) still take a
 	// flat monthly assignment. Optional/additive — existing goals load with zero.
 	MonthlyContribution money.Money `json:"monthlyContribution,omitempty"`
+	// AccountIDs are the accounts this goal is funded from / draws on (0..N). It
+	// generalises the single AccountID (kept for the linked-account drill-down and
+	// back-compat); LinkedAccountIDs unions the two so readers see one list. Additive.
+	AccountIDs []string `json:"accountIds,omitempty"`
+	// BudgetIDs are the budgets this goal is associated with (0..N) — the budget
+	// lines that feed it. Additive; JSON round-trips; no store migration.
+	BudgetIDs []string `json:"budgetIds,omitempty"`
+	// Allocations are VIRTUAL earmarks: amounts of specific accounts' existing
+	// balances reserved for this goal WITHOUT moving money or posting a transaction.
+	// Their sum is how much of the target is already "set aside in place" — distinct
+	// from CurrentAmount (committed contributions) and Contributions (the undo log).
+	// Additive; JSON round-trips.
+	Allocations []GoalAllocation `json:"allocations,omitempty"`
+	// ReviewCadence is how often the household wants to revisit this goal (weekly,
+	// monthly, quarterly, …). When set, the Goals screen flags the goal for review
+	// once the cadence has elapsed since LastReviewedAt. Empty = never nags. Additive.
+	ReviewCadence RecurringCadence `json:"reviewCadence,omitempty"`
+	// LastReviewedAt is when the goal was last created, edited, contributed to, or
+	// explicitly marked reviewed — the anchor the ReviewCadence staleness check counts
+	// from. Zero on legacy goals (which carry no cadence, so they never nag). Additive.
+	LastReviewedAt time.Time `json:"lastReviewedAt,omitempty"`
+}
+
+// GoalAllocation is one virtual earmark: Amount of AccountID's balance reserved for a
+// goal. No transaction is posted — it is a non-destructive reservation the user can add
+// or clear freely. Callers guard the reservation so the sum earmarked against a given
+// account across all goals never exceeds that account's balance.
+type GoalAllocation struct {
+	AccountID string      `json:"accountId"`
+	Amount    money.Money `json:"amount"`
+}
+
+// LinkedAccountIDs returns the goal's linked accounts as one de-duplicated list — the
+// multi-select AccountIDs unioned with the legacy single AccountID (when set). Order is
+// stable: the legacy AccountID first (if present and not already listed), then AccountIDs.
+func (g Goal) LinkedAccountIDs() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	add(g.AccountID)
+	for _, id := range g.AccountIDs {
+		add(id)
+	}
+	return out
+}
+
+// AllocatedMinor sums the goal's virtual earmarks in minor units. All allocations share
+// the goal's target currency (the allocate UI stores them in it), so this is a plain sum
+// with no FX; a zero-value goal yields 0.
+func (g Goal) AllocatedMinor() int64 {
+	var sum int64
+	for _, a := range g.Allocations {
+		sum += a.Amount.Amount
+	}
+	return sum
 }
 
 // GoalContribution is one recorded contribution to a financial goal, retained so
@@ -802,6 +866,11 @@ type Task struct {
 	// a fresh open occurrence is created with Due advanced one cadence step.
 	// Empty (zero value) means the task is a one-shot and no successor is spawned.
 	Recurrence RecurringCadence `json:"recurrence,omitempty"`
+	// Order is the manual position of this task among its siblings (same ParentID), used by
+	// the "Custom order" sort mode and set by drag-and-drop reordering. Lower sorts first;
+	// ties fall back to the smart order. Additive — existing tasks load with 0. JSON
+	// round-trips; no store migration.
+	Order int `json:"order,omitempty"`
 }
 
 // SubscriptionIgnore records that the user has marked a detected subscription as

@@ -15,6 +15,11 @@ var smartKeys = Catalog{
 	// Inline per-page strip.
 	"smart.stripTitle": "Smart",
 	"smart.viewAll":    "View all",
+	// Collapsed "peek" bar (default) — a slim signal that there are alerts for the page.
+	"smart.collapse":       "Collapse",
+	"smart.peekTools":      "Smart tools",
+	"smart.peekAlertsAria": "%d smart alerts for this page — click to show",
+	"smart.peekToolsAria":  "Smart tools for this page — click to show",
 
 	// Empty-state helper (AffordanceEmptyState).
 	"smart.emptyHint": "Smart has a tip for this section:",

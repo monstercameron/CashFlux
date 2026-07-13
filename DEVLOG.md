@@ -1,3 +1,39 @@
+## 2026-07-12 — Earmarks, to-do overhaul, unified toolbar language, Smart peek (v1.0.20)
+
+A long UI-refinement session, cut as one release.
+
+**Goals — virtual allocation ("earmarks").** The sophisticated one. Reserve account balance toward a
+goal without moving money: coverage now = committed + earmarked, with a Not/Partly/Fully badge. Kept it
+first-class rather than a flat number — a CRUD Earmarks tab, a smart split (even or proportional to
+each account's balance, largest-remainder apportioned), and earmarks exposed as formula variables
+(`goal_*_earmarked/_coverage/_covered_pct`, `account_*_free`, `earmarked_total`, `unreserved_cash`) so
+later decision-making can read the reserved context. Guardrails from an adversarial UX pass: only liquid
+account types are eligible, and a live overbooked check warns when an earmark outruns the live balance.
+Logic is pure + table-tested in `internal/goals`.
+
+**To-do.** Search + a linked-feature filter (budgets/goals/categories), a real New-sub-task modal, and
+drag-to-reorder for Custom order. Native HTML5 DnD can't be driven in headless Chromium (verified every
+which way), so the reorder logic is unit-tested and the e2e covers grip/draggable presence.
+
+**Toolbar language, unified.** The to-do control pills were the nicest on the app, so I back-ported them
+everywhere: `.fctrl` pill inputs/selects + `.btn-tool` labeled buttons (grayed leading glyph + visible
+label). Then unified the search (transactions/accounts now use the same `.fctrl` pill as to-do) and the
+layout — one left-justified group, green Add at the right end, no more left/right split. Transactions
+has too many actions to fit one row at 1440 (measured: ~1202px needed vs 1156px available with the rail
+open), so Export CSV + Columns went into a labeled "⋯ More" overflow (added an optional labeled trigger
+to `OverflowMenu`) — one row, Add rightmost, matching every other page.
+
+**Smart peek + a reconciler bug.** The per-page Smart strip was too heavy, so it collapses to a slim
+one-line peek that expands in place. First cut had a nasty bug (Cam caught it): the strip's root flipped
+`<button>`↔`<div>` across the peek/card swap and GWC re-anchored the replacement at the *bottom* of the
+page. Fix: a stable `smartStripSlot` `<div>` wrapper so the reconciler only swaps the inner child.
+
+**Blemish sweep (top-7 pages, both themes).** Screenshot review turned up the accounts "Set institution"
+link floating centered — a `<button>` stretching in a flex column — fixed with `align-self:flex-start`.
+
+Validated: `go build` clean (js/wasm), 56 e2e across interactions/accounts/smart/budgets/goals/to-do.
+Coverage ratchet left stale (spans many prior tickets; shipping-consistent with v1.0.19).
+
 ## 2026-07-12 — Budgets redesign + accounts toolbar glyphs (v1.0.19)
 
 **Accounts toolbar.** Glyph-ified the three toolbar actions with hover labels (matching the txn

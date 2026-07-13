@@ -64,6 +64,13 @@ func FilterToolbar(props FilterToolbarProps) uic.Node {
 func filterToolbar(props FilterToolbarProps) uic.Node {
 	open := uic.UseState(false)
 	onSearch := uic.UseEvent(props.OnSearch)
+	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
+	// position even though the button itself only renders when there's a query.
+	onClear := uic.UseEvent(func() {
+		if props.OnSearch != nil {
+			props.OnSearch("")
+		}
+	})
 	n := len(props.Chips)
 
 	// C56: press "f" to open the filter panel (ignored while typing in a field or
@@ -106,15 +113,15 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.ActiveAriaLabel != nil {
 		ariaLabel = props.ActiveAriaLabel(n)
 	}
-	// Sleek glyph trigger (matches the transactions toolbar): a filter icon with the
-	// active-filter count as a corner badge and the label revealed on hover/focus. Tints
-	// accent when filters are active.
-	triggerCls := "tbar-btn filters-trigger"
+	// Standard labeled trigger (.btn-tool, matching the transactions/accounts toolbar):
+	// a filter glyph, an always-visible "Filters" label, and the active-filter count as
+	// an accent badge. Stays highlighted (is-open) while the filter panel is open.
+	triggerCls := "btn btn-tool filters-trigger"
 	if n > 0 {
 		triggerCls += " active"
 	}
 	if open.Get() {
-		triggerCls += " open" // stays highlighted while the filter panel is open
+		triggerCls += " is-open"
 	}
 	expanded := "false"
 	if open.Get() {
@@ -123,9 +130,9 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	trigger := Button(css.Class(triggerCls), Type("button"),
 		Attr("aria-haspopup", "dialog"), Attr("aria-expanded", expanded), Attr("aria-label", ariaLabel),
 		OnClick(func() { open.Set(!open.Get()) }),
-		Icon(icon.Filter, css.Class(tw.W4, tw.H4)),
+		Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(props.FiltersLabel),
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
-		Span(css.Class("tbar-tip"), Attr("aria-hidden", "true"), props.FiltersLabel),
 	)
 
 	chips := MapKeyed(props.Chips,
@@ -137,11 +144,25 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		},
 	)
 
+	searchCls := "fctrl fctrl-search"
+	if props.Search != "" {
+		searchCls += " is-active"
+	}
 	return Div(
 		Div(css.Class("filter-toolbar"),
-			Input(css.Class("field filter-search"), Type("search"),
-				Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
-				Value(props.Search), OnInput(onSearch)),
+			// Unified search control: the shared .fctrl "control pill" (identical markup to
+			// the to-do page) — a leading magnifier, a borderless input, and a clear (×)
+			// that appears only when it holds a query — so every toolbar's search reads the
+			// same instead of a bare full-width field.
+			Label(css.Class(searchCls),
+				Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Input(css.Class("fctrl-input"), Type("search"),
+					Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
+					Value(props.Search), OnInput(onSearch)),
+				If(props.Search != "", Button(css.Class("fctrl-clear"), Type("button"),
+					Attr("aria-label", uistate.T("action.clear")), OnClick(onClear),
+					Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+			),
 			trigger,
 			props.Actions,
 		),

@@ -7,6 +7,23 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.20 (2026-07-12):** cuts a large UI-refinement batch into a release — goals virtual-allocation (earmarks), the to-do overhaul, the standard pager, the unified control-pill + labeled-button toolbar language, the collapsible Smart peek, and the single-group toolbar layout.
+
+### Added
+- **Virtual allocation ("earmarks") on Goals (2026-07-12):** reserve account balances toward a goal without posting a transaction. Coverage = committed contributions + earmarked; a status badge reads **Not / Partly / Fully earmarked**. Earmarks are a first-class concept: a full CRUD **Earmarks** tab on /goals, a **smart split** (even or proportional-to-balance across eligible accounts), and per-goal / per-account **formula-engine variables** (`goal_*_earmarked/_coverage/_covered_pct`, `account_*_earmarked/_free`, `earmarked_total`, `unreserved_cash`) so the reserved context is reusable for later assessments. Only liquid account types (checking/savings/cash/debit) are earmark-eligible; a live **overbooked** check warns when an earmark exceeds the account's current balance. Pure logic in `internal/goals` (`split.go` / `allocation.go`, table-tested); sample data seeded with earmarks.
+- **To-do overhaul (2026-07-12):** a search box, a filter by linked feature (budgets / goals / categories / accounts), a full **New sub-task** compose modal (not a bare prompt), and **drag-to-reorder** for Custom order.
+- **Standard list pager (2026-07-12):** the to-do pager — mirrored top+bottom controls, rows-per-page, and jump-to-page — is now the shared `internal/ui/pager.go`, used by the ledger DataTable and the list pages (fixes the page-size picker vanishing when a bigger size collapses to one page).
+
+### Changed
+- **One control language across the list toolbars (2026-07-12):** back-ported the to-do page's control pills — the `.fctrl` bordered "pill" inputs/selects and the `.btn-tool` labeled action buttons (a slightly-grayed leading glyph + an always-visible text label) — to goals / budgets / accounts / transactions. The transactions + accounts search became the same `.fctrl` pill as to-do (leading magnifier, borderless input, clear ×). The accounts/transactions toolbar buttons that had gone icon-only got their text labels back, each with a small **⧉ / ↗** badge telling you whether it opens a dialog or navigates.
+- **Toolbars are one left-justified group with the primary action at the right end (2026-07-12):** dropped the left-cluster / far-right-cluster split (`.filter-strip` / `.budgets-toolbar` → `flex-start`); the green **Add** / **Transfer** button is last so it anchors the right of the group. Transactions has the most actions — its two least-frequent utilities (Export CSV, Columns) moved into a labeled **⋯ More** overflow (new optional labeled trigger on `OverflowMenu`) so it stays a single row with Add rightmost.
+- **The per-page Smart strip collapses to a slim "peek" bar (2026-07-12):** each page's Smart insights now default to a one-line peek (**✦ Smart** + an alert count) with near-zero vertical footprint; clicking it expands the full card in place, and a header control re-collapses it.
+
+### Fixed
+- **Smart strip no longer detaches to the bottom of the page (2026-07-12):** the strip's root element flipped `<button>`↔`<div>` between the collapsed peek and the open card, and GWC's reconciler re-anchored the replacement at the page bottom (or dropped it). A stable `smartStripSlot` wrapper keeps the root a `<div>`, so it updates in place.
+- **Accounts "Set institution" link is left-aligned (2026-07-12):** it's a `<button>` in the row's flex column, which stretched full-width and centered its text — so it floated mid-row. `align-self: flex-start` shrinks it to content and left-aligns it under the account meta.
+
+### Changed
 - **Version bumped to v1.0.19 (2026-07-12):** cuts the budgets-page redesign + the accounts toolbar glyphs / tooltip fixes into a release.
 - **Budgets page redesign (2026-07-12):** a batch of budgets improvements Cam asked for.
   - **Top-up is a real decision.** The top-up modal now offers **"Just this month" vs "Permanently"** (a one-time per-period boost that reverts vs a permanent `Limit` change) plus an optional **"Fund it from another budget"** checklist that pulls the amount from budgets with room (split evenly). Mechanically, "this month" uses a new additive `Budget.PeriodBoosts` map keyed by period start — the effective cap for the current period is `Limit + PeriodBoosts[key]`, injected once in `computeBudgetViewRaw` (base limit untouched, so it reverts next period).

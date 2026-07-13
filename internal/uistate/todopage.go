@@ -46,6 +46,32 @@ func SetTaskEdit(e TaskEdit) {
 // CloseTaskEdit clears the task-editor atom (dismisses the modal).
 func CloseTaskEdit() { SetTaskEdit(TaskEdit{}) }
 
+// capturedTaskAddParent lets a task row's "New sub-task" button set the parent for the next
+// add-task modal from a click handler, without calling state.UseAtom outside a render.
+var (
+	capturedTaskAddParent state.Atom[string]
+	taskAddParentCaptured bool
+)
+
+// UseTaskAddParent returns the atom holding the parent task id for the add-task modal ("" =
+// a top-level task). AddHost reads it to seed TaskAddForm.ParentID (so the full compose form
+// — not a bare prompt — creates a sub-task); a row's "New sub-task" button sets it. Calling
+// it in a render also captures the atom for SetTaskAddParent.
+func UseTaskAddParent() state.Atom[string] {
+	a := state.UseAtom("todo:addParent", "")
+	capturedTaskAddParent = a
+	taskAddParentCaptured = true
+	return a
+}
+
+// SetTaskAddParent sets (or clears with "") the parent for the next add-task modal. Safe from
+// a click handler (uses the captured atom, not UseAtom).
+func SetTaskAddParent(parentID string) {
+	if taskAddParentCaptured {
+		capturedTaskAddParent.Set(parentID)
+	}
+}
+
 // UseTodoHideDone is the shared "hide completed tasks" toggle. The widgetized to-do
 // surface splits the controls (toolbar tile) from the list (list tile), so this state
 // lives in an atom both tiles read — mirroring UseGoalsShowFormulas on /goals.
@@ -58,6 +84,29 @@ func UseTodoFilterPrio() state.Atom[string] { return state.UseAtom("todo:filterP
 // UseTodoSortMode is the shared task ordering for the to-do surface (a tasksort.Mode
 // string: "smart" / "priority" / "az" / "due"). Read by both the toolbar and list tiles.
 func UseTodoSortMode() state.Atom[string] { return state.UseAtom("todo:sortMode", "smart") }
+
+// UseTodoPageSize is the shared rows-per-page for the to-do list (default 20; a value <= 0
+// means "show all"). The pager's rows-per-page buttons set it; the list slices by it.
+func UseTodoPageSize() state.Atom[int] { return state.UseAtom("todo:pageSize", 20) }
+
+// UseTodoSearch is the shared free-text search for the to-do surface ("" = no search).
+// The toolbar's search box sets it; the list tile filters task titles (and notes) by it.
+func UseTodoSearch() state.Atom[string] { return state.UseAtom("todo:search", "") }
+
+// Linked-feature filter values for the to-do surface. "" = all; "none" = only unlinked
+// tasks; otherwise a domain.RelatedType string (goal / budget / account / transaction).
+const (
+	TodoLinkAll     = ""     // every task, linked or not
+	TodoLinkNone    = "none" // only tasks not linked to any feature
+	TodoLinkGoal    = "goal"
+	TodoLinkBudget  = "budget"
+	TodoLinkAccount = "account"
+)
+
+// UseTodoFilterLink is the shared "linked to" filter for the to-do surface — show only
+// tasks tied to a given feature (goals / budgets / accounts), only unlinked ones, or all.
+// Read by both the toolbar and list tiles.
+func UseTodoFilterLink() state.Atom[string] { return state.UseAtom("todo:filterLink", TodoLinkAll) }
 
 // UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
 // top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.

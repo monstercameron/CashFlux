@@ -87,6 +87,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Notes render as a readable, clickable-to-expand line on the card (like /accounts).
 	notesExpanded := ui.UseState(false)
 	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
+	// Jump to the To-dos page when this budget has linked to-dos (Task.RelatedType=budget).
+	openTodos := ui.UseEvent(Prevent(func() {
+		if props.OnViewTodos != nil {
+			props.OnViewTodos()
+		}
+	}))
 	removeRecurring := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
@@ -294,6 +300,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		)
 	}
 
+	// A quiet link to the To-dos page when this budget has linked to-dos.
+	var todosLine ui.Node = Fragment()
+	if props.LinkedTodos > 0 {
+		todosLine = Span(css.Class("budget-sub"),
+			Button(css.Class("budget-drill"), Type("button"), Attr("data-testid", "budget-todos-link-"+s.Budget.ID), OnClick(openTodos),
+				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
+				uistate.T("budgets.viewTodos", props.LinkedTodos)))
+	}
+
 	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
 		Div(css.Class("budget-head"),
 			// The title gets the whole header line now (the spent/limit amount and the
@@ -338,6 +353,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine,
 		effectiveCapLine,
 		envLine,
+		todosLine,
 		notesNode,
 		actionsRow,
 	)

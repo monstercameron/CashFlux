@@ -232,9 +232,9 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 				OnClick(toggleFormulas), Text(formulasLabel)),
 			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/accounts")), uistate.T("debt.linkAccounts")),
 		),
-		Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "invest-add"), Title(uistate.T("investments.addHoldingTitle")), OnClick(openAdd),
-			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("investments.addSecurity"))),
 	)
 	return uiw.Widget(uiw.WidgetProps{

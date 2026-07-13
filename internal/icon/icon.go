@@ -44,11 +44,13 @@ const (
 
 	// Controls — real glyphs for the ad-hoc Unicode the chrome used (▾ ‹ › ✕ ⋯).
 	ChevronDown  Name = "chevron-down"
+	ChevronUp    Name = "chevron-up"
 	ChevronLeft  Name = "chevron-left"
 	ChevronRight Name = "chevron-right"
 	Close        Name = "x"
 	MoreH        Name = "more-horizontal"
-	Grip         Name = "grip" // six-dot drag handle (signals draggable, vs MoreH = menu)
+	Grip         Name = "grip"   // six-dot drag handle (signals draggable, vs MoreH = menu)
+	Search       Name = "search" // magnifier for search/filter inputs
 
 	// Status + trend glyphs (carry meaning at a glance; color via caller classes).
 	Check           Name = "check"
@@ -134,11 +136,13 @@ var inner = map[Name]string{
 	Split:         `<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.17-2.83L3 3"/><path d="M21 3l-7.83 7.83A4 4 0 0 0 12 13.67V22"/>`,
 
 	ChevronDown:  `<path d="M6 9l6 6 6-6"/>`,
+	ChevronUp:    `<path d="M18 15l-6-6-6 6"/>`,
 	ChevronLeft:  `<path d="M15 18l-6-6 6-6"/>`,
 	ChevronRight: `<path d="M9 18l6-6-6-6"/>`,
 	Close:        `<path d="M18 6 6 18"/><path d="M6 6l12 12"/>`,
 	MoreH:        `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 	Grip:         `<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>`,
+	Search:       `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>`,
 
 	Check:           `<path d="M20 6 9 17l-5-5"/>`,
 	CheckCircle:     `<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>`,

@@ -7,11 +7,13 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -83,6 +85,110 @@ func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 	return v
 }
 
+// overbookedGoals returns the set of goal IDs whose virtual earmarks no longer fit the
+// live account balances backing them — i.e. an account they reserve from has been spent
+// down so the total earmarked against it now exceeds its current balance. Computed once
+// per render (all figures normalised to base currency) so a card never trusts a stale
+// reservation. Goals that don't earmark are absent from the map (false).
+func overbookedGoals(app *appstate.App) map[string]bool {
+	out := map[string]bool{}
+	if app == nil {
+		return out
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	toBase := func(m money.Money) int64 {
+		if m.Currency == base || m.Currency == "" {
+			return m.Amount
+		}
+		if conv, err := rates.Convert(m, base); err == nil {
+			return conv.Amount
+		}
+		return m.Amount
+	}
+	goalsList := app.Goals()
+	// Total earmarked against each account (base minor units), across all goals.
+	earmark := map[string]int64{}
+	for _, g := range goalsList {
+		for _, al := range g.Allocations {
+			if al.AccountID != "" {
+				earmark[al.AccountID] += toBase(al.Amount)
+			}
+		}
+	}
+	// An account is over-earmarked when its current balance can't back the reservations.
+	txns := app.Transactions()
+	overAcct := map[string]bool{}
+	for _, a := range app.Accounts() {
+		if earmark[a.ID] <= 0 {
+			continue
+		}
+		bal, _ := ledger.Balance(a, txns)
+		if earmark[a.ID] > toBase(bal) {
+			overAcct[a.ID] = true
+		}
+	}
+	for _, g := range goalsList {
+		for _, al := range g.Allocations {
+			if overAcct[al.AccountID] {
+				out[g.ID] = true
+				break
+			}
+		}
+	}
+	return out
+}
+
+// sortGoals re-orders the active-goals list in place for the toolbar's Sort picker.
+// It is kind-agnostic — percent, step counts and deadlines are read the same way the
+// cards render them (EvaluateProgress / TaskCounts) so the on-screen order matches the
+// figures. Ties fall back to LessForList then name for a stable, sensible result.
+func sortGoals(gs []domain.Goal, key string, tasks []domain.Task, now time.Time) {
+	pct := func(g domain.Goal) int { return goalsvc.EvaluateProgress(g, tasks, now).Percent }
+	steps := func(g domain.Goal) int { _, total := goalsvc.TaskCounts(tasks, g.ID); return total }
+	switch key {
+	case uistate.GoalSortClosest:
+		sort.SliceStable(gs, func(i, j int) bool {
+			if pi, pj := pct(gs[i]), pct(gs[j]); pi != pj {
+				return pi > pj // nearly-there first
+			}
+			return goalsvc.LessForList(gs[i], gs[j])
+		})
+	case uistate.GoalSortFarthest:
+		sort.SliceStable(gs, func(i, j int) bool {
+			if pi, pj := pct(gs[i]), pct(gs[j]); pi != pj {
+				return pi < pj // just-getting-started first
+			}
+			return goalsvc.LessForList(gs[i], gs[j])
+		})
+	case uistate.GoalSortComplexity:
+		sort.SliceStable(gs, func(i, j int) bool {
+			if si, sj := steps(gs[i]), steps(gs[j]); si != sj {
+				return si > sj // most steps to work through first
+			}
+			return goalsvc.LessForList(gs[i], gs[j])
+		})
+	case uistate.GoalSortDeadline:
+		sort.SliceStable(gs, func(i, j int) bool {
+			ai, aj := gs[i].TargetDate.IsZero(), gs[j].TargetDate.IsZero()
+			if ai != aj {
+				return !ai // dated goals before undated
+			}
+			if !ai && !aj && !gs[i].TargetDate.Equal(gs[j].TargetDate) {
+				return gs[i].TargetDate.Before(gs[j].TargetDate)
+			}
+			return gs[i].Name < gs[j].Name
+		})
+	case uistate.GoalSortName:
+		sort.SliceStable(gs, func(i, j int) bool { return gs[i].Name < gs[j].Name })
+	default: // GoalSortActionable
+		sort.SliceStable(gs, func(i, j int) bool { return goalsvc.LessForList(gs[i], gs[j]) })
+	}
+}
+
 type goalRowProps struct {
 	Goal               domain.Goal
 	Accounts           []domain.Account
@@ -99,6 +205,10 @@ type goalRowProps struct {
 	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).
 	FundSetAside       int64
 	LinkedCategoryName string
+	// EarmarkOverbooked is true when this goal earmarks from an account whose CURRENT
+	// balance no longer covers the total earmarked against it (e.g. the account was spent
+	// down after the earmark) — the card flags the stale reservation instead of trusting it.
+	EarmarkOverbooked bool
 }
 
 // goalKindOptions builds the goal-type SelectOptions (savings / checklist /

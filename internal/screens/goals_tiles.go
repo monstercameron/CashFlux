@@ -26,7 +26,6 @@ import (
 type goalSummaryProps struct{ App *appstate.App }
 type goalToolbarProps struct{ App *appstate.App }
 type goalListProps struct{ App *appstate.App }
-type goalFormulaProps struct{ App *appstate.App }
 
 // --- goal-summary ----------------------------------------------------------------
 
@@ -86,36 +85,51 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 
 // --- goal-toolbar ----------------------------------------------------------------
 
-// goalToolbarWidget is the actions row: the smart-insights action, a "Goal metrics"
-// FormulaBuilder reveal toggle (parity with the budgets toolbar), and the primary
-// "Add goal" button.
+// goalToolbarWidget is the actions row: a "Sort by" picker (how to order the active
+// goals) on the left and the primary "Add goal" button on the right.
 func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	smartSettings := uistate.LoadSmartSettings()
-	formulasAtom := uistate.UseGoalsShowFormulas()
+	sortAtom := uistate.UseGoalSort()
+	viewAtom := uistate.UseGoalsView()
 	addGoal := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("goal") }))
-	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
-	formulasLabel := uistate.T("goals.metricsShow")
-	if formulasAtom.Get() {
-		formulasLabel = uistate.T("goals.metricsHide")
+	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
+	showGoals := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewGoals) }))
+	showEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
+	sortVal := sortAtom.Get()
+	view := viewAtom.Get()
+	goalsActive, earmarksActive := "goals-tab", "goals-tab"
+	if view == uistate.GoalsViewGoals {
+		goalsActive += " is-active"
+	} else {
+		earmarksActive += " is-active"
 	}
-
-	metricsCls := "strip-toggle"
-	if formulasAtom.Get() {
-		metricsCls += " is-on"
-	}
-	// Same compact filter strip as /todo: the Smart action + a "Goal metrics" toggle on
-	// the left, the primary "Add goal" pushed to the right.
+	// A tab strip (Goals · Earmarks) + a "Sort by" picker (goals view only) on the left, the
+	// primary "Add goal" pushed to the right.
 	toolbar := Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
-			smartSectionAction(smartSettings),
-			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-				Attr("data-testid", "goals-toggle-formulas"), Title(uistate.T("goals.metricsTitle")),
-				OnClick(onToggleFormulas), Text(formulasLabel)),
+			Div(css.Class("goals-tabs"), Attr("role", "tablist"),
+				Button(ClassStr(goalsActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-goals"),
+					Attr("aria-selected", ariaBool(view == uistate.GoalsViewGoals)), OnClick(showGoals), uistate.T("goals.viewGoals")),
+				Button(ClassStr(earmarksActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-earmarks"),
+					Attr("aria-selected", ariaBool(view == uistate.GoalsViewEarmarks)), OnClick(showEarmarks), uistate.T("goals.viewEarmarks")),
+			),
+			If(view == uistate.GoalsViewGoals, Label(css.Class("fctrl"),
+				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(css.Class("fctrl-label"), uistate.T("goals.sortLabel")),
+				Select(css.Class("fctrl-select"), Attr("data-testid", "goals-sort"),
+					Attr("aria-label", uistate.T("goals.sortLabel")), Title(uistate.T("goals.sortLabel")), OnChange(onSort),
+					Option(Value(uistate.GoalSortActionable), SelectedIf(sortVal == uistate.GoalSortActionable), uistate.T("goals.sortActionable")),
+					Option(Value(uistate.GoalSortClosest), SelectedIf(sortVal == uistate.GoalSortClosest), uistate.T("goals.sortClosest")),
+					Option(Value(uistate.GoalSortFarthest), SelectedIf(sortVal == uistate.GoalSortFarthest), uistate.T("goals.sortFarthest")),
+					Option(Value(uistate.GoalSortComplexity), SelectedIf(sortVal == uistate.GoalSortComplexity), uistate.T("goals.sortComplexity")),
+					Option(Value(uistate.GoalSortDeadline), SelectedIf(sortVal == uistate.GoalSortDeadline), uistate.T("goals.sortDeadline")),
+					Option(Value(uistate.GoalSortName), SelectedIf(sortVal == uistate.GoalSortName), uistate.T("goals.sortName")),
+				),
+			)),
 		),
-		Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
-			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("goals.addGoal"))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
@@ -138,8 +152,14 @@ func goalListWidget(props goalListProps) ui.Node {
 	errMsg := ui.UseState("")
 	achievedOpen := ui.UseState(true)
 	toggleAchieved := ui.UseEvent(Prevent(func() { achievedOpen.Set(!achievedOpen.Get()) }))
+	goalSort := uistate.UseGoalSort().Get()
 
 	v := computeGoalView(app, activeMemberID)
+	// Apply the toolbar's Sort picker to the active list. Sort a copy — computeGoalView is
+	// memoized and its slices are shared with the summary tile, so we must not reorder the
+	// cached backing array in place.
+	activeSorted := append([]domain.Goal(nil), v.Active...)
+	sortGoals(activeSorted, goalSort, v.Tasks, time.Now())
 
 	viewAccountTxns := func(accountID string) {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
@@ -221,6 +241,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			}
 		})
 	}
+	overbooked := overbookedGoals(app)
 	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
@@ -228,6 +249,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
 			OnUndoContribution: undoContribution, OnResetGoal: resetGoal,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
+			EarmarkOverbooked: overbooked[g.ID],
 		})
 	}
 
@@ -260,7 +282,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			smartEmptyStateFor(smartSettings, smart.PageGoals, in),
 		)
 	} else {
-		rows := MapKeyed(v.Active, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+		rows := MapKeyed(activeSorted, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 			return rowFor(g, 0, "")
 		})
 		listBody = Div(css.Class("goal-list"), rows)
@@ -286,33 +308,21 @@ func goalListWidget(props goalListProps) ui.Node {
 		})
 	}
 
-	body := Div(
+	var body ui.Node = Div(
 		fundsSection,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title:        uistate.T("nav.goals"),
-			HeaderAction: smartSectionAction(smartSettings),
-			Body:         listBody,
+			Title: uistate.T("nav.goals"),
+			Body:  listBody,
 		}),
 		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		achievedSection,
 	)
+	// The toolbar's tab strip can swap the whole list area over to the earmarks manager.
+	if uistate.UseGoalsView().Get() == uistate.GoalsViewEarmarks {
+		body = ui.CreateElement(goalEarmarksManager, goalEarmarksProps{App: app})
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: body,
-	})
-}
-
-// --- goal-formula ----------------------------------------------------------------
-
-// goalFormulaWidget is the opt-in "Goal metrics" tile (revealed by the toolbar toggle):
-// the reusable FormulaBuilder over the live engine surface, so goal custom fields
-// (cf_goal_<key>) and each goal's variables (goal_<slug>_*) can be computed over.
-func goalFormulaWidget(props goalFormulaProps) ui.Node {
-	body := Div(
-		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("goals.metricsTitle"), ShowSaved: true}),
-	)
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "goal-formula", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
 }

@@ -123,7 +123,8 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			Kind: kind, TargetDate: targetDate,
 			TargetAmount: money.New(0, base), CurrentAmount: money.New(0, base),
-			Custom: customValuesToMap(goalDefs, customVals.Get()),
+			Custom:         customValuesToMap(goalDefs, customVals.Get()),
+			LastReviewedAt: time.Now(), // a freshly-created goal counts as just reviewed
 		}
 		switch kind {
 		case domain.GoalKindFinancial:
@@ -209,20 +210,24 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	kind := domain.GoalKind(kindS.Get())
 	financial := kind.IsFinancial()
 
-	return Form(css.Class("acct-edit-form"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
+	return Form(css.Class("acct-edit-form", "goal-add"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
 		Div(css.Class("modal-scroll"),
 			Div(css.Class("form-grid"),
-				labeledField(uistate.T("common.name"),
-					Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...)),
+				// Name + goal-type both span the full width — they lead the form and their
+				// hint would otherwise ragged-align the paired fields beside them.
+				Div(css.Class("fg-span"),
+					labeledField(uistate.T("common.name"),
+						Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...))),
 				// Goal type picker (savings / checklist / milestone / habit) with a one-line hint.
-				labeledField(uistate.T("goals.kindLabel"),
-					Div(
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options: goalKindOptions(), Selected: kindS.Get(), TestID: "goal-add-kind",
-							OnChange: func(v string) { kindS.Set(v) }, AriaLabel: uistate.T("goals.kindLabel"),
-						}),
-						Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-kind-hint"), goalKindHint(kind)),
-					)),
+				Div(css.Class("fg-span"),
+					labeledField(uistate.T("goals.kindLabel"),
+						Div(
+							uiw.SelectInput(uiw.SelectInputProps{
+								Options: goalKindOptions(), Selected: kindS.Get(), TestID: "goal-add-kind",
+								OnChange: func(v string) { kindS.Set(v) }, AriaLabel: uistate.T("goals.kindLabel"),
+							}),
+							Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-kind-hint"), goalKindHint(kind)),
+						))),
 				// --- Financial-only: target / saved / linked account / sinking fund / category. ---
 				If(financial, wishAssist),
 				If(financial, labeledField(uistate.T("goals.targetLabel"),
@@ -255,14 +260,12 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 						AriaLabel: uistate.T("goals.linkedOptional"),
 					}))),
 				// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
-				If(financial, labeledField(uistate.T("goals.sinkingFund"),
-					func() ui.Node {
-						cbArgs := []any{Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund), Checked(isSinkingFund.Get())}
-						return Div(
-							Input(cbArgs...),
+				If(financial, Div(css.Class("fg-span"),
+					labeledField(uistate.T("goals.sinkingFund"),
+						Label(css.Class("goal-check-row"),
+							Input(Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund), Checked(isSinkingFund.Get())),
 							Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
-						)
-					}())),
+						)))),
 				// C192: optional linked spending category for the fund (meaningful mainly for sinking funds).
 				If(financial, labeledField(uistate.T("goals.linkedCategory"),
 					uiw.SelectInput(uiw.SelectInputProps{

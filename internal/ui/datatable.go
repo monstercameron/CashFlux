@@ -5,12 +5,8 @@
 package ui
 
 import (
-	"strconv"
-
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
@@ -161,14 +157,24 @@ func dataTable(props DataTableProps) ui.Node {
 	if props.OnPage == nil {
 		return table
 	}
+	// Use the app-standard Pager (range + rows-per-page + prev/next + jump-to-page). The
+	// bottom pager always shows (it carries the range + rows-per-page); the TOP one mirrors it
+	// only when there's more than one page, so a short list isn't topped with a dead pager.
 	pager := func(top bool) ui.Node {
-		return ui.CreateElement(dtPager, dtPagerProps{
+		return Pager(PagerProps{
 			Page: props.Page, Total: props.Total, PageSize: props.PageSize,
 			PageSizes: props.PageSizes, OnPage: props.OnPage, OnPageSize: props.OnPageSize,
-			Top: top, AnchorID: props.AnchorID,
+			Top: top, AnchorID: props.AnchorID, IDPrefix: "dt",
 		})
 	}
-	if props.TopPager {
+	// Show the top pager when the list has more rows than the SMALLEST page size — i.e. when
+	// paging/sizing is meaningful. Guarding on total (not the current page count) means
+	// clicking a bigger size never makes the top pager vanish under the cursor.
+	minSize := 0
+	if len(props.PageSizes) > 0 {
+		minSize = props.PageSizes[0]
+	}
+	if props.Total > minSize {
 		return Div(pager(true), table, pager(false))
 	}
 	return Div(table, pager(false))
@@ -219,15 +225,6 @@ func dtHeader(props dtHeaderProps) ui.Node {
 	return Th(args...)
 }
 
-type dtPagerProps struct {
-	Page, Total, PageSize int
-	PageSizes             []int
-	OnPage                func(int)
-	OnPageSize            func(int)
-	Top                   bool   // rendered above the table (adds the data-pager-top class)
-	AnchorID              string // if set, prev/next scroll this element to the top of its scroll container
-}
-
 type pagerSizeBtnProps struct {
 	Size   int // the page-size value (AllPageSize for "All")
 	Label  string
@@ -254,57 +251,4 @@ func pagerSizeBtn(props pagerSizeBtnProps) ui.Node {
 	}
 	args = append(args, props.Label)
 	return Button(args...)
-}
-
-// dtPager renders the prev/next + "from-to of total" + rows-per-page footer.
-func dtPager(props dtPagerProps) ui.Node {
-	onPrev := ui.UseEvent(func(e ui.Event) {
-		e.PreventDefault()
-		props.OnPage(props.Page - 1)
-		scrollAnchorIntoView(props.AnchorID)
-	})
-	onNext := ui.UseEvent(func(e ui.Event) {
-		e.PreventDefault()
-		props.OnPage(props.Page + 1)
-		scrollAnchorIntoView(props.AnchorID)
-	})
-
-	from, to := pagination.Window(props.Page, props.Total, props.PageSize)
-	totalPages := pagination.TotalPages(props.Total, props.PageSize)
-
-	sizeBtns := make([]any, 0, len(props.PageSizes)+1)
-	for _, s := range props.PageSizes {
-		sizeBtns = append(sizeBtns, ui.CreateElement(pagerSizeBtn, pagerSizeBtnProps{
-			Size: s, Label: strconv.Itoa(s), Active: props.PageSize == s, OnPick: props.OnPageSize,
-		}))
-	}
-	sizeBtns = append(sizeBtns, ui.CreateElement(pagerSizeBtn, pagerSizeBtnProps{
-		Size: AllPageSize, Label: uistate.T("ui.table.all"), Active: props.PageSize < 0, OnPick: props.OnPageSize,
-	}))
-
-	prevArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.prevPage")), OnClick(onPrev)}
-	if props.Page <= 1 {
-		prevArgs = append(prevArgs, Attr("disabled", "disabled"))
-	}
-	prevArgs = append(prevArgs, uistate.T("ui.table.prev"))
-	nextArgs := []any{css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("ui.table.nextPage")), OnClick(onNext)}
-	if props.Page >= totalPages {
-		nextArgs = append(nextArgs, Attr("disabled", "disabled"))
-	}
-	nextArgs = append(nextArgs, uistate.T("ui.table.next"))
-
-	pos := strconv.Itoa(from) + "–" + strconv.Itoa(to) + " of " + strconv.Itoa(props.Total)
-	groupArgs := []any{css.Class("pager-sizes"), Attr("role", "group"), Attr("aria-label", uistate.T("ui.table.rowsPerPage"))}
-	groupArgs = append(groupArgs, sizeBtns...)
-	pagerCls := "data-pager"
-	if props.Top {
-		pagerCls += " data-pager-top"
-	}
-	return Div(css.Class(pagerCls),
-		Button(prevArgs...),
-		Span(css.Class("muted data-pos"), pos),
-		Button(nextArgs...),
-		Span(css.Class("muted data-pager-label"), uistate.T("ui.table.rowsPerPage")),
-		Div(groupArgs...),
-	)
 }

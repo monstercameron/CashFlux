@@ -191,9 +191,9 @@ func recurStatChip(label, value, valueCls string) ui.Node {
 func addRecurringButton() ui.Node {
 	edit := uistate.UseRecurringEditID()
 	open := ui.UseEvent(Prevent(func() { edit.Set("new") }))
-	return Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+	return Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 		Attr("data-testid", "recurring-add"), Title(uistate.T("recurring.addFlowTitle")), OnClick(open),
-		uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("recurring.addFlow")))
+		uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("recurring.addFlow")))
 }
 
 // recurScheduledSurface is the Scheduled tab: a bento host of tiles over the shared

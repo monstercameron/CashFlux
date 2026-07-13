@@ -21,21 +21,24 @@ test.describe("accounts: transfer flip modal", () => {
   });
 });
 
-test.describe("accounts: toolbar glyph buttons", () => {
-  test("toolbar actions are glyph buttons that flag modal vs navigation", async ({ app }) => {
+test.describe("accounts: labeled toolbar buttons", () => {
+  test("toolbar actions carry a visible text label + a behavior badge (modal vs navigation)", async ({ app }) => {
     await nav(app, "/accounts");
-    // Transfer is a glyph button that opens a flip modal: .opens-modal + aria-haspopup.
+    // Transfer is a standard labeled button (.btn-tool) that opens a flip modal: it
+    // shows its text label inline (no hover needed), a ⧉ behavior badge, and
+    // aria-haspopup="dialog".
     const transfer = app.getByTestId("page-transfer-btn");
-    await expect(transfer).toHaveClass(/tbar-btn/);
-    await expect(transfer).toHaveClass(/opens-modal/);
+    await expect(transfer).toHaveClass(/btn-tool/);
+    await expect(transfer).not.toHaveClass(/tbar-btn/);
+    await expect(transfer).toContainText("Transfer money"); // label is visible, not hover-only
     await expect(transfer).toHaveAttribute("aria-haspopup", "dialog");
-    // Its label + behavior surface in the hover tooltip.
-    await expect(transfer.locator(".tbar-tip-label")).toHaveText("Transfer money");
-    await expect(transfer.locator(".tbar-tip-kind")).toHaveText(/dialog/i);
-    // Manage exchange rates is a glyph button that NAVIGATES: .opens-page, no haspopup.
+    await expect(transfer.locator(".bt-kind")).toHaveText("⧉");
+    // Manage exchange rates is a labeled button that NAVIGATES: ↗ badge, no dialog popup.
     const fx = app.getByTestId("acct-fx-btn");
     if (await fx.count()) {
-      await expect(fx).toHaveClass(/opens-page/);
+      await expect(fx).toHaveClass(/btn-tool/);
+      await expect(fx).toContainText("Manage exchange rates");
+      await expect(fx.locator(".bt-kind")).toHaveText("↗");
       await expect(fx).not.toHaveAttribute("aria-haspopup", "dialog");
       await fx.click();
       await expect(app.locator('#main[data-route="/settings"]').first()).toBeVisible();

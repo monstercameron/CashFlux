@@ -410,9 +410,9 @@ func Rules() ui.Node {
 	// Section header actions: apply-to-existing + the add-rule modal button.
 	headerActions := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 		If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "rules-add"), Title(uistate.T("rules.add")), OnClick(addRule),
-			uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("rules.addRule"))),
 	)
 

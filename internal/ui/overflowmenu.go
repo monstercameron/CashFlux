@@ -43,6 +43,13 @@ type OverflowMenuProps struct {
 	TriggerLabel string
 	// TriggerTestID is an optional data-testid on the trigger button.
 	TriggerTestID string
+	// TriggerText, when non-empty, renders the trigger as a LABELED button (the ⋯
+	// glyph followed by this text) instead of the default icon-only ⋯. Use it in a
+	// labeled toolbar where a bare glyph would be ambiguous.
+	TriggerText string
+	// TriggerClass overrides the trigger button's class (default "btn"). Pass e.g.
+	// "btn btn-tool" so the overflow trigger matches a labeled toolbar's buttons.
+	TriggerClass string
 }
 
 // OverflowMenu renders the standard CashFlux "⋯" overflow pattern: a trigger
@@ -92,15 +99,24 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		expanded = "true"
 	}
 
+	trigClass := props.TriggerClass
+	if trigClass == "" {
+		trigClass = "btn"
+	}
 	triggerArgs := []any{
-		css.Class("btn"),
+		css.Class(trigClass),
 		Type("button"),
 		Attr("title", triggerLabel),
 		Attr("aria-label", triggerLabel),
 		Attr("aria-haspopup", "menu"),
 		Attr("aria-expanded", expanded),
 		OnClick(toggleOpen),
-		Icon(icon.MoreH, css.Class(tw.W4, tw.H4)),
+		Icon(icon.MoreH, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+	}
+	// Labeled variant: append the visible text after the glyph (glyph + label), so the
+	// overflow reads as "⋯ More" rather than a bare, ambiguous dots button.
+	if props.TriggerText != "" {
+		triggerArgs = append(triggerArgs, Span(props.TriggerText))
 	}
 	if props.TriggerTestID != "" {
 		triggerArgs = append(triggerArgs, Attr("data-testid", props.TriggerTestID))

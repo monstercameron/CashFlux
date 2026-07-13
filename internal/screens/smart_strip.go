@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -98,6 +99,32 @@ func SmartStrip(props smartStripProps) ui.Node {
 	expanded := ui.UseState(false)
 	toggleExpand := ui.UseEvent(func() { expanded.Set(!expanded.Get()) })
 
+	// Collapsed by DEFAULT to a slim one-line "peek" bar: the Smart layer just signals that
+	// there are N alerts for this page without eating vertical space above its content.
+	// Clicking the peek opens the full strip in place; a header control re-collapses it.
+	open := ui.UseState(false)
+	toggleOpen := ui.UseEvent(func() { open.Set(!open.Get()) })
+	collapse := ui.UseEvent(func() { open.Set(false) })
+
+	pageKey := string(props.Page)
+	if pageKey == "" {
+		pageKey = "all"
+	}
+	// Render into a STABLE wrapper element (smartStripSlot) whose type never changes
+	// between the collapsed peek (a <button>) and the open card (a <div>). Without it
+	// the component's ROOT element type flips button↔div across renders, and GWC's
+	// reconciler re-anchors the replacement at the wrong position — the opened card
+	// detached to the BOTTOM of the page (and sometimes vanished) instead of updating
+	// in place where the peek sat. Keeping the root a <div> lets the reconciler swap
+	// only the inner child, so opening/closing stays put. (User-reported regression.)
+	if !open.Get() {
+		var sev smart.Severity
+		if len(insights) > 0 {
+			sev = insights[0].Severity
+		}
+		return smartStripSlot(pageKey, smartPeekBar(props.Page, total, len(aiFeats), sev, toggleOpen))
+	}
+
 	// "View all (N)" link in the card header — the count suffix only when more exist
 	// than shown inline.
 	viewAllLabel := uistate.T("smart.viewAll")
@@ -139,12 +166,11 @@ func SmartStrip(props smartStripProps) ui.Node {
 		TriggerTestID: "smart-strip-menu",
 	})
 
-	headerAction := Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap1)), viewAllBtn, panelMenu)
-
-	pageKey := string(props.Page)
-	if pageKey == "" {
-		pageKey = "all"
-	}
+	collapseBtn := Button(css.Class("btn btn-sm btn-ghost"), Type("button"),
+		Attr("data-testid", "smart-strip-collapse"), Attr("aria-label", uistate.T("smart.collapse")),
+		Title(uistate.T("smart.collapse")), OnClick(collapse),
+		uiw.Icon(icon.ChevronUp, css.Class(tw.W35, tw.H35)))
+	headerAction := Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap1)), viewAllBtn, collapseBtn, panelMenu)
 
 	// Body: the Free insight cards, then the page's AI run-controls (gated on a
 	// configured provider — an honest hint instead of dead controls otherwise).
@@ -197,12 +223,23 @@ func SmartStrip(props smartStripProps) ui.Node {
 		classParts = []any{"smart-strip-bento"}
 	}
 	bodyArgs := append([]any{ClassStr(tw.Fold(tw.FlexCol, tw.Gap3))}, bodyParts...)
-	return uiw.Card(uiw.CardProps{
+	return smartStripSlot(pageKey, uiw.Card(uiw.CardProps{
 		Header:     smartBrandHeader(uistate.T("smart.stripTitle"), false, headerAction),
 		TestID:     "smart-strip-" + pageKey,
 		ClassParts: classParts,
 		Body:       Div(bodyArgs...),
-	})
+	}))
+}
+
+// smartStripSlot wraps the strip's content (collapsed peek or open card) in a
+// single stable <div> so the SmartStrip component's ROOT element type never changes
+// between renders. GWC's reconciler re-anchors a node when a component's root
+// element type flips (here <button>↔<div>): opening the peek orphaned the card to
+// the bottom of the page. Keeping the root a <div> and swapping only the inner child
+// keeps it in place. The slot itself is layout-neutral (a plain block).
+func smartStripSlot(pageKey string, inner ui.Node) ui.Node {
+	return Div(css.Class("smart-strip-slot"),
+		Attr("data-testid", "smart-strip-slot-"+pageKey), inner)
 }
 
 // stripPageForPath maps an app route path to the SMART page whose insights belong
@@ -246,6 +283,34 @@ func SmartStripForPath(path string) ui.Node {
 		return Fragment()
 	}
 	return ui.CreateElement(SmartStrip, smartStripProps{Page: page})
+}
+
+// smartPeekBar is the COLLAPSED Smart strip: a slim one-line bar that merely signals there
+// are N alerts (or AI tools) for the page and opens the full strip on click. Its whole point
+// is a near-zero vertical footprint — the Smart layer is present but never buries the page's
+// own content the way the always-open card did.
+func smartPeekBar(page smart.Page, alerts, aiTools int, sev smart.Severity, onOpen ui.Handler) ui.Node {
+	pageKey := string(page)
+	if pageKey == "" {
+		pageKey = "all"
+	}
+	title := uistate.T("smart.stripTitle")
+	aria := uistate.T("smart.peekToolsAria")
+	var badge ui.Node = Fragment()
+	if alerts > 0 {
+		badge = Span(ClassStr("smart-peek-badge " + tw.ColorClass(severityTone(sev))), itoaStrip(alerts))
+		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), alerts)
+	} else {
+		title = uistate.T("smart.peekTools")
+	}
+	return Button(css.Class("smart-peek"), Type("button"),
+		Attr("data-testid", "smart-peek-"+pageKey), Attr("aria-expanded", "false"),
+		Attr("aria-label", aria), Title(aria), OnClick(onOpen),
+		smartGlyph(false, tw.Fold(tw.W35, tw.H35)),
+		Span(css.Class("smart-peek-title"), title),
+		badge,
+		uiw.Icon(icon.ChevronDown, css.Class("smart-peek-chev", tw.W35, tw.H35)),
+	)
 }
 
 // itoaStrip formats a small non-negative count for the "(N)" badge.

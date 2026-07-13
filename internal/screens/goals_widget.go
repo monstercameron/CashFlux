@@ -24,18 +24,15 @@ import (
 //
 //   - goal-summary (Native): the saved-of-target "loader" bar with Saved/Target/Left
 //     inside it (hides itself when there are no goals)
-//   - goal-toolbar (Native): the smart action, a "Goal metrics" Formulas toggle, and
-//     the "Add goal" button
+//   - goal-toolbar (Native): the "Sort by" picker and the "Add goal" button
 //   - goal-list    (Native): the sinking-funds card, the active GoalRow list (or the
 //     first-run empty CTA), and the collapsible achieved card
-//   - goal-formula (Native): the opt-in "Goal metrics" FormulaBuilder (toolbar toggle)
 func Goals() ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
-	formulasAtom := uistate.UseGoalsShowFormulas()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -55,9 +52,6 @@ func Goals() ui.Node {
 		goalNativeSpec("goal-summary"),
 		goalNativeSpec("goal-toolbar"),
 		goalNativeSpec("goal-list"),
-	}
-	if formulasAtom.Get() {
-		specs = append(specs, goalNativeSpec("goal-formula"))
 	}
 
 	return Div(css.Class("bento bento-goals"),
@@ -86,9 +80,6 @@ func init() {
 	})
 	R("goal-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(goalListWidget, goalListProps{App: c.App})
-	})
-	R("goal-formula", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(goalFormulaWidget, goalFormulaProps{App: c.App})
 	})
 }
 

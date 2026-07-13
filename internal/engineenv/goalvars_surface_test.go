@@ -90,6 +90,43 @@ func TestAddGoalVarsKindAware(t *testing.T) {
 	}
 }
 
+func TestEarmarkSurface(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	accounts := []domain.Account{
+		{ID: "acc-check", Name: "Checking", Type: domain.TypeChecking, Class: domain.ClassAsset, Currency: "USD"},
+	}
+	txns := []domain.Transaction{
+		{ID: "t1", AccountID: "acc-check", Amount: usd(100000), Date: now.AddDate(0, 0, -5)}, // $1,000 balance
+	}
+	// Trip: target $2,000, saved $500, plus a $300 earmark against Checking.
+	goals := []domain.Goal{
+		{ID: "g1", Name: "Trip", TargetAmount: usd(200000), CurrentAmount: usd(50000),
+			Allocations: []domain.GoalAllocation{{AccountID: "acc-check", Amount: usd(30000)}}},
+	}
+	vars := Vars(Data{Accounts: accounts, Transactions: txns, Goals: goals,
+		Rates: currency.Rates{Base: "USD"}, Now: now})
+
+	want := map[string]float64{
+		"goal_trip_earmarked":        300,
+		"goal_trip_coverage":         800, // saved 500 + earmarked 300
+		"goal_trip_covered_pct":      40,  // 800 / 2000 * 100
+		"earmarked_total":            300,
+		"account_checking_balance":   1000,
+		"account_checking_earmarked": 300,
+		"account_checking_free":      700, // 1000 − 300
+		"liquid_cash":                1000,
+		"unreserved_cash":            700, // liquid_cash − earmarked_total
+	}
+	for name, exp := range want {
+		if got, ok := vars[name]; !ok {
+			t.Errorf("missing surface var %q", name)
+		} else if got != exp {
+			t.Errorf("%s = %v, want %v", name, got, exp)
+		}
+	}
+}
+
 func TestGoalVarBasesCollision(t *testing.T) {
 	goals := []domain.Goal{{ID: "g1", Name: "House"}, {ID: "g2", Name: "House"}}
 	bases := GoalVarBases(goals)

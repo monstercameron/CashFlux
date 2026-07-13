@@ -11,8 +11,9 @@ const goalEditAtomID = "goals:edit"
 
 // Goal-editor modes (which form the shell-root flip modal shows).
 const (
-	GoalEditModeEdit       = "edit"       // full edit form (name/target/date/owner/linked account)
+	GoalEditModeEdit       = "edit"       // full edit form (name/target/date/owner/links/review cadence)
 	GoalEditModeContribute = "contribute" // add an amount toward the goal (optionally posting to the ledger)
+	GoalEditModeAllocate   = "allocate"   // virtual allocation: earmark account balances toward the goal (no txn)
 )
 
 // GoalEdit selects the goal + editor a modal should show. A zero value (empty ID) means
@@ -52,3 +53,31 @@ func SetGoalEdit(e GoalEdit) {
 
 // CloseGoalEdit clears the goal-editor atom (dismisses the modal).
 func CloseGoalEdit() { SetGoalEdit(GoalEdit{}) }
+
+// Goal sort keys the active-goals list can be ordered by (the toolbar's Sort control
+// sets the atom; the list reads it). "actionable" is the default (nearest deadline →
+// highest %); the others let the user surface what matters: closest to done, furthest
+// away, most steps to work through, soonest deadline, or by name.
+const (
+	GoalSortActionable = "actionable" // nearest deadline, then highest % (default)
+	GoalSortClosest    = "closest"    // highest % complete first (nearly there)
+	GoalSortFarthest   = "farthest"   // lowest % complete first (just getting started)
+	GoalSortComplexity = "complexity" // most linked steps (to-dos) first
+	GoalSortDeadline   = "deadline"   // soonest target date first
+	GoalSortName       = "name"       // alphabetical
+)
+
+// UseGoalSort returns the shared atom holding the active-goals sort key (default
+// GoalSortActionable). Ephemeral (resets on reload) — a transient view choice, like
+// the budgets sort.
+func UseGoalSort() state.Atom[string] { return state.UseAtom("goals:sort", GoalSortActionable) }
+
+// Goals-page top-level views (the tab strip): the goal cards, or the earmarks manager.
+const (
+	GoalsViewGoals    = "goals"    // the goal cards (default)
+	GoalsViewEarmarks = "earmarks" // full-CRUD manager for virtual allocations across all goals
+)
+
+// UseGoalsView returns the shared atom selecting the goals-page tab (cards vs earmarks
+// manager). Ephemeral (resets on reload) — a transient view choice.
+func UseGoalsView() state.Atom[string] { return state.UseAtom("goals:view", GoalsViewGoals) }

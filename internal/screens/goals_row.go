@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	openContribute := ui.UseEvent(Prevent(func() {
 		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModeContribute})
 	}))
+	// Virtual allocation: earmark account balances toward the goal (no transaction posted).
+	openAllocate := ui.UseEvent(Prevent(func() {
+		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModeAllocate})
+	}))
+	doMarkReviewed := ui.UseEvent(Prevent(func() { markGoalReviewed(g.ID) }))
 	doUndoContribution := ui.UseEvent(Prevent(func() {
 		if props.OnUndoContribution != nil {
 			props.OnUndoContribution(g.ID)
@@ -155,6 +161,30 @@ func GoalRow(props goalRowProps) ui.Node {
 		streakChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-streak-"+g.ID),
 			uistate.T("goals.streakFmt", prog.Streak))
 	}
+	// Review-due chip (any kind, when the review cadence has elapsed) + a linked-budgets
+	// count chip (financial goals that feed one or more budgets).
+	var reviewChip, budgetChip ui.Node = Fragment(), Fragment()
+	if goalsvc.ReviewDue(g, now) {
+		reviewChip = Span(ClassStr("pace-badge pace-review"), Attr("data-testid", "goal-review-due-"+g.ID),
+			uistate.T("goals.reviewDue"))
+	}
+	if len(g.BudgetIDs) > 0 {
+		budgetChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-budgets-"+g.ID),
+			uistate.T("goals.linkedBudgetChip", len(g.BudgetIDs)))
+	}
+	// Earmark status badge (financial, not-yet-complete goals only): partly / fully
+	// earmarked. We deliberately show NOTHING when nothing is earmarked — the absence of the
+	// chip already says "not earmarked", so every card isn't cluttered with a dead badge. A
+	// complete goal is funded, so its earmark state is moot and suppressed entirely.
+	var earmarkChip ui.Node = Fragment()
+	if financial && !g.Archived && !complete {
+		switch goalsvc.EarmarkOf(g) {
+		case goalsvc.EarmarkFull:
+			earmarkChip = Span(ClassStr("pace-badge earmark-full"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkFull"))
+		case goalsvc.EarmarkPartial:
+			earmarkChip = Span(ClassStr("pace-badge earmark-partial"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkPartial"))
+		}
+	}
 
 	// Sub-section under the bar. Financial keeps its rich actionable copy (remaining,
 	// deadline, monthly, over-fund, what-next, linked account, fund category). Non-
@@ -192,22 +222,45 @@ func GoalRow(props goalRowProps) ui.Node {
 		linkedName := accountName(props.Accounts, g.AccountID)
 		var linkedLine ui.Node = Fragment()
 		if linkedName != "" {
+			// When several accounts are linked, name the primary (drillable) and note the rest,
+			// rather than the singular "linked to X" implying it's the only one.
+			var moreNode ui.Node = Fragment()
+			if extra := len(g.LinkedAccountIDs()) - 1; extra > 0 {
+				moreNode = Span(css.Class("goal-sub-dim"), uistate.T("goals.linkedMore", extra))
+			}
 			linkedLine = Span(css.Class("budget-sub"),
 				Button(css.Class("budget-drill"), Type("button"), Title(uistate.T("nav.transactions")), OnClick(drillAcct),
 					Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
-					uistate.T("goals.linkedSuffix", linkedName)))
+					uistate.T("goals.linkedSuffix", linkedName)),
+				moreNode)
 		}
 		var catLine ui.Node = Fragment()
 		if g.IsSinkingFund && props.LinkedCategoryName != "" {
 			catLine = Span(css.Class("budget-sub"), Attr("data-testid", "fund-category-"+g.ID),
 				uistate.T("goals.fundLinkedCategory", props.LinkedCategoryName))
 		}
+		// Virtual allocation payoff: how much is earmarked (reserved in place, no txn) and
+		// what committed-plus-earmarked coverage that buys toward the target. Suppressed on a
+		// complete goal (already funded). If the earmark no longer fits the account balance
+		// (spent down since), flag it in a warning tone rather than claiming false coverage.
+		var earmarkLine ui.Node = Fragment()
+		if am := g.AllocatedMinor(); am > 0 && !complete {
+			earmarkMoney := fmtMoney(money.New(am, g.TargetAmount.Currency))
+			if props.EarmarkOverbooked {
+				earmarkLine = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
+					uistate.T("goals.earmarkOverbooked", earmarkMoney))
+			} else {
+				earmarkLine = Span(css.Class("budget-sub"), Attr("data-testid", "goal-earmarked-"+g.ID),
+					Style(map[string]string{"color": "var(--up)"}),
+					uistate.T("goals.earmarkedLine", earmarkMoney, plural(len(g.Allocations), "account"), goalsvc.CoveragePercent(g)))
+			}
+		}
 		subSection = Fragment(
 			Div(css.Class("budget-sub goal-sub"),
 				Span(subPrimary),
 				If(subSecondary != "", Span(css.Class("goal-sub-dim"), " · "+subSecondary)),
 			),
-			overfundNote, whatNext, linkedLine, catLine,
+			overfundNote, whatNext, linkedLine, catLine, earmarkLine,
 		)
 	} else {
 		var line string
@@ -245,6 +298,29 @@ func GoalRow(props goalRowProps) ui.Node {
 		}
 	}
 
+	// Edit lives at the top of the ⋯ menu (it opens the shell-root flip editor). It used
+	// to be an inline footer button; moving it declutters the footer to just the primary
+	// kind action + the menu.
+	var editItem ui.Node = Fragment()
+	if !g.Archived {
+		editItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "goal-edit-btn-"+g.ID), Attr("aria-label", uistate.T("goals.editTitle")),
+			OnClick(openEdit), uistate.T("action.edit"))
+	}
+
+	// Allocate funds (financial goals): earmark account balances toward the goal without
+	// posting a transaction. Mark reviewed (any goal with a review cadence): clears the
+	// "review due" flag. Both hidden on archived goals.
+	var allocateItem, reviewItem ui.Node = Fragment(), Fragment()
+	if financial && !g.Archived {
+		allocateItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "goal-allocate-btn-"+g.ID), OnClick(openAllocate), uistate.T("goals.allocate"))
+	}
+	if g.ReviewCadence != "" && !g.Archived {
+		reviewItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "goal-review-btn-"+g.ID), OnClick(doMarkReviewed), uistate.T("goals.markReviewed"))
+	}
+
 	// Archive / Unarchive live in the ⋯ menu (archive shows on any complete active goal).
 	var archiveItem ui.Node = Fragment()
 	if g.Archived {
@@ -278,8 +354,23 @@ func GoalRow(props goalRowProps) ui.Node {
 	stepsDone, stepsTotal := goalsvc.TaskCounts(props.Tasks, g.ID)
 	var todosSection ui.Node = Fragment()
 	if len(linked) > 0 || kind == domain.GoalKindChecklist {
+		// Show only the top 3 steps so a long list never dictates the card's height;
+		// open steps come first (most actionable), then completed. A "+N more" line notes
+		// the remainder — the full list stays manageable on the to-do page.
+		display := append([]domain.Task(nil), linked...)
+		sort.SliceStable(display, func(i, j int) bool {
+			di := display[i].Status == domain.StatusDone
+			dj := display[j].Status == domain.StatusDone
+			return !di && dj // open steps before completed ones
+		})
+		const maxSteps = 3
+		hidden := 0
+		if len(display) > maxSteps {
+			hidden = len(display) - maxSteps
+			display = display[:maxSteps]
+		}
 		var items []ui.Node
-		for _, lt := range linked {
+		for _, lt := range display {
 			items = append(items, ui.CreateElement(GoalTodoItem, goalTodoProps{Task: lt, OnToggle: toggleTodo}))
 		}
 		var body ui.Node
@@ -287,6 +378,10 @@ func GoalRow(props goalRowProps) ui.Node {
 			body = P(css.Class("goal-todos-empty"), uistate.T("goals.noSteps"))
 		} else {
 			body = Div(css.Class("goal-todos-list"), items)
+		}
+		var moreLine ui.Node = Fragment()
+		if hidden > 0 {
+			moreLine = P(css.Class("goal-todos-more"), Attr("data-testid", "goal-todos-more-"+g.ID), uistate.T("goals.stepsMore", hidden))
 		}
 		var addBtn ui.Node = Fragment()
 		if !g.Archived && kind == domain.GoalKindChecklist {
@@ -299,6 +394,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				Span(css.Class("goal-todos-count"), fmt.Sprintf("%d/%d", stepsDone, stepsTotal)),
 			),
 			body,
+			moreLine,
 			addBtn,
 		)
 	}
@@ -312,6 +408,9 @@ func GoalRow(props goalRowProps) ui.Node {
 			monthlyChip,
 			fundChip,
 			streakChip,
+			budgetChip,
+			earmarkChip,
+			reviewChip,
 		),
 		// The card's "loader": a progress bar with a kind-appropriate label + percent inside it.
 		Div(css.Class("goal-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")),
@@ -323,16 +422,19 @@ func GoalRow(props goalRowProps) ui.Node {
 		),
 		subSection,
 		todosSection,
-		// Footer: the primary kind action + Edit open the flip modal; the shared
-		// viewport-aware ⋯ KebabMenu holds archive + the destructive delete.
+		// Footer: the primary kind action + the shared viewport-aware ⋯ KebabMenu, which
+		// now holds Edit (opens the flip editor), the contribution controls, archive, and
+		// the destructive delete.
 		Div(css.Class("goal-card-actions"),
 			primaryAction,
-			If(!g.Archived, Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-edit-btn-"+g.ID), Attr("aria-label", uistate.T("goals.editTitle")), Title(uistate.T("goals.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit")))),
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "goal-menu-" + g.ID,
 				AriaLabel:    uistate.T("goals.moreActions"),
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
+					editItem,
+					allocateItem,
+					reviewItem,
 					undoItem,
 					resetItem,
 					archiveItem,
@@ -422,6 +524,26 @@ func addGoalStep(goalID string) {
 			uistate.BumpDataRevision()
 		}
 	})
+}
+
+// markGoalReviewed stamps the goal's LastReviewedAt (via the appstate seam), clearing its
+// "review due" flag until the next cadence step, and surfaces a confirmation toast.
+func markGoalReviewed(goalID string) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	name := uistate.T("goals.thisGoal")
+	for _, g := range app.Goals() {
+		if g.ID == goalID && g.Name != "" {
+			name = g.Name
+			break
+		}
+	}
+	if err := app.MarkGoalReviewed(goalID); err == nil {
+		uistate.PostNotice(uistate.T("goals.reviewedToast", name), false)
+		uistate.BumpDataRevision()
+	}
 }
 
 // setMilestoneDone marks a milestone goal complete (done=true, stamping DoneAt) or

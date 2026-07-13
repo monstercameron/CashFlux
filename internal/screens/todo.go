@@ -38,6 +38,12 @@ type taskRowProps struct {
 	ChildDone        int
 	Collapsed        bool
 	OnToggleCollapse func(string)
+	// Drag-to-reorder (only in the "Custom order" sort). Draggable shows a grip handle and
+	// makes the row a drop target; OnDragStart marks this row as the one being dragged and
+	// OnDrop asks the list to move the dragged row into this row's slot.
+	Draggable   bool
+	OnDragStart func()
+	OnDrop      func()
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
@@ -67,6 +73,19 @@ func TaskRow(props taskRowProps) ui.Node {
 	// shifts across renders (framework rule).
 	linkRoute := tasklink.Route(t.RelatedType)
 	goLink := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(linkRoute)) }))
+	// Drag-to-reorder hooks (declared unconditionally; wired into the row only when
+	// props.Draggable, i.e. the "Custom order" sort is active).
+	dragStart := ui.UseEvent(func() {
+		if props.OnDragStart != nil {
+			props.OnDragStart()
+		}
+	})
+	dragOver := ui.UseEvent(Prevent(func() {}))
+	drop := ui.UseEvent(Prevent(func() {
+		if props.OnDrop != nil {
+			props.OnDrop()
+		}
+	}))
 
 	// Linked entity → a quiet inline text-link on the meta line (leading per-type icon).
 	// A linked goal is accent-toned so the goal↔to-do connection stands out among the
@@ -171,6 +190,15 @@ func TaskRow(props taskRowProps) ui.Node {
 		// Indent via padding (border-box) — NOT margin-left, which pushes the full-width
 		// row past its container and scrolls the whole page sideways.
 		rowArgs = append(rowArgs, Style(map[string]string{"padding-left": strconv.Itoa(12+props.Depth*24) + "px"}))
+	}
+	// Drag-to-reorder: the row is a drop target and leads with a grip handle you pick up.
+	// Only in "Custom order" — otherwise the algorithmic sort owns the order.
+	if props.Draggable {
+		rowArgs = append(rowArgs, OnDragOver(dragOver), OnDrop(drop),
+			Span(css.Class("todo-grip"), Attr("draggable", "true"), Attr("role", "button"),
+				Attr("data-testid", "task-grip-"+t.ID), Attr("aria-label", uistate.T("todo.dragReorder")),
+				Title(uistate.T("todo.dragReorder")), OnDragStart(dragStart),
+				uiw.Icon(icon.Grip, css.Class(tw.W35, tw.H35))))
 	}
 	// A leading connector glyph makes a nested sub-task unmistakable as a child of the
 	// row above it (paired with the indent + left guide rail in CSS).

@@ -22,12 +22,15 @@ import (
 // closing the modal. On a validation error the form stays open.
 func AddHost() uic.Node {
 	target := uistate.UseAddTarget()
+	taskParent := uistate.UseTaskAddParent() // hook — must run every render, before the early return
 
 	if target.Get() == "" {
 		return Fragment()
 	}
 
-	close := func() { uistate.SetAddTarget("") }
+	// Closing the add modal also clears any pending sub-task parent so the next plain "Add
+	// task" starts at the top level.
+	close := func() { uistate.SetAddTarget(""); uistate.SetTaskAddParent("") }
 
 	switch target.Get() {
 	case "goal":
@@ -66,14 +69,19 @@ func AddHost() uic.Node {
 		})
 	case "task":
 		// NoFooter: the form is a two-zone "compose slip" that bleeds to the panel edges
-		// and owns its own footer (summary + Cancel + Add).
+		// and owns its own footer (summary + Cancel + Add). When a parent is set the same
+		// full form composes a sub-task (title reflects that).
+		taskTitle := uistate.T("todo.addTitle")
+		if taskParent.Get() != "" {
+			taskTitle = uistate.T("todo.subtaskTitle")
+		}
 		return uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:    uistate.T("todo.addTitle"),
+			Title:    taskTitle,
 			Width:    "720px",
 			Height:   "560px",
 			NoFooter: true,
 			OnClose:  close,
-			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close}),
+			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close, ParentID: taskParent.Get()}),
 		})
 	case "category":
 		return uiw.FlipPanel(uiw.FlipPanelProps{

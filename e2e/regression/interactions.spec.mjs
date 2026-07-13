@@ -562,3 +562,76 @@ test.describe("multi-value filters", () => {
     await expect(app.locator(".filter-chip")).toHaveCount(1);
   });
 });
+
+test.describe("unified search control", () => {
+  // The transactions + accounts toolbars share the FilterToolbar search, which was
+  // switched to the same .fctrl "control pill" markup the to-do page uses (a leading
+  // magnifier, a borderless input, and a clear × that appears only when it holds a
+  // query) so every toolbar speaks one control language.
+  for (const route of ["/transactions", "/accounts"]) {
+    test(`${route} search uses the shared .fctrl pill (magnifier + input + clear)`, async ({ app }) => {
+      await nav(app, route);
+      const pill = app.locator(".filter-toolbar .fctrl.fctrl-search").first();
+      await expect(pill).toBeVisible();
+      // A leading magnifier icon and a borderless input inside the pill.
+      await expect(pill.locator("svg")).toBeVisible();
+      const input = pill.locator("input.fctrl-input");
+      await expect(input).toBeVisible();
+      // No clear affordance until there's a query.
+      await expect(pill.locator(".fctrl-clear")).toHaveCount(0);
+      // Typing lights the accent ring and reveals the clear (×).
+      await input.fill("coffee");
+      await expect(pill).toHaveClass(/is-active/);
+      const clear = pill.locator(".fctrl-clear");
+      await expect(clear).toBeVisible();
+      // Clearing empties the field and hides the affordance again.
+      await clear.click();
+      await expect(input).toHaveValue("");
+      await expect(pill.locator(".fctrl-clear")).toHaveCount(0);
+    });
+  }
+});
+
+test.describe("labeled toolbar buttons", () => {
+  test("transactions toolbar actions show visible text labels (not icon-only)", async ({ app }) => {
+    await nav(app, "/transactions");
+    // The Add action is a labeled .btn-tool with its text visible inline.
+    const add = app.getByTestId("txn-add-btn");
+    await expect(add).toHaveClass(/btn-tool/);
+    await expect(add).not.toHaveClass(/tbar-btn/);
+    await expect(add).not.toBeEmpty(); // carries a visible text label, not just a glyph
+    const label = (await add.innerText()).trim();
+    expect(label.length, "the Add button shows a readable text label").toBeGreaterThan(1);
+    // Exactly one icon glyph on the button (single-glyph rule).
+    await expect(add.locator("svg")).toHaveCount(1);
+    // The Filters trigger is also labeled now (not a bare funnel glyph).
+    const filters = app.locator(".filters-trigger").first();
+    await expect(filters).toHaveClass(/btn-tool/);
+    expect((await filters.innerText()).trim().length, "Filters trigger shows its label").toBeGreaterThan(1);
+  });
+
+  test("the toolbar is one left-justified group with the green Add at the right end", async ({ app }) => {
+    await nav(app, "/transactions");
+    const info = await app.locator(".filter-toolbar").first().evaluate((t) => {
+      const kids = [...t.children];
+      const tops = new Set(kids.map((k) => Math.round(k.getBoundingClientRect().top)));
+      const add = t.querySelector('[data-testid="txn-add-btn"]');
+      return { rows: tops.size, addIsLast: kids[kids.length - 1] === add };
+    });
+    // Single row at the standard desktop width — the primary action doesn't wrap below.
+    expect(info.rows, "toolbar is a single row").toBe(1);
+    expect(info.addIsLast, "the green Add is the last (rightmost) control in the group").toBe(true);
+  });
+
+  test("the least-used utilities live in a labeled ⋯ More overflow", async ({ app }) => {
+    await nav(app, "/transactions");
+    const more = app.getByTestId("txn-more-btn");
+    await expect(more).toHaveClass(/btn-tool/);
+    await expect(more).toContainText("More"); // labeled, not a bare glyph
+    // Export CSV / Columns are not inline — they surface only when the menu opens.
+    await expect(app.getByTestId("txn-export-btn")).toBeHidden();
+    await more.click();
+    await expect(app.getByTestId("txn-export-btn")).toBeVisible();
+    await expect(app.getByTestId("txn-columns-btn")).toBeVisible();
+  });
+});
