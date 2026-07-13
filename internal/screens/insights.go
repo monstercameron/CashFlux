@@ -52,16 +52,52 @@ func Insights() ui.Node {
 	// spend calcs below can be pre-filtered consistently.
 	insightsScopeAtom := uistate.UseActiveScope()
 	useBackendAI := pr.BackendActive()
-	model := settings.OpenAIModel
-	if model == "" {
-		model = "gpt-5.4-mini"
+	// Model + thinking level are adjustable inline from the assistant header (a quick
+	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
+	// they stick and stay in sync with Settings. modelList is populated live from
+	// OpenAI's /v1/models when a key is set (falls back to the built-in defaults).
+	initModel := settings.OpenAIModel
+	if initModel == "" {
+		initModel = "gpt-5.4-mini"
 	}
+	modelSel := ui.UseState(initModel)
+	effortSel := ui.UseState(settings.OpenAIReasoningEffort)
+	modelList := ui.UseState([]string{})
+	ui.UseEffect(func() func() {
+		if k := strings.TrimSpace(settings.OpenAIKey); k != "" {
+			ai.FetchModels(k, ai.DefaultBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
+		}
+		return nil
+	}, "")
+	pickModel := func(v string) {
+		modelSel.Set(v)
+		s := app.Settings()
+		s.OpenAIModel = v
+		_ = app.PutSettings(s)
+	}
+	pickEffort := func(v string) {
+		effortSel.Set(v)
+		s := app.Settings()
+		s.OpenAIReasoningEffort = v
+		_ = app.PutSettings(s)
+	}
+	model := modelSel.Get()
 	// Reasoning models (o-series, gpt-5.x) reject a non-default temperature on
 	// /chat/completions, so omit it (0 is dropped by omitempty) for them; other
 	// models get a mild 0.4. This keeps the chat working whatever model is picked.
 	chatTemp := 0.4
 	if reasoningModel(model) {
 		chatTemp = 0
+	}
+	// Thinking level (reasoning_effort) applies only to reasoning models that accept it
+	// with tools on /chat/completions (some require /v1/responses — those are hidden and
+	// skipped). Medium is the default when the user hasn't chosen one.
+	thinkingApplies := reasoningModel(model) && !ai.EffortRejectedWithTools(model)
+	chatEffort := ""
+	if thinkingApplies {
+		if chatEffort = effortSel.Get(); chatEffort == "" {
+			chatEffort = "medium"
+		}
 	}
 	base := settings.BaseCurrency
 	if base == "" {
@@ -173,6 +209,24 @@ func Insights() ui.Node {
 	// with Up/Down (-1 = not cycling); histDraft preserves the in-progress draft.
 	histIdx := ui.UseState(-1)
 	histDraft := ui.UseState("")
+	// fillAsk drops a question into the Ask box and focuses it (used by the starter chips
+	// and the "Discuss" action on a flagged-activity row) so the user can review or edit
+	// before sending.
+	fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
+	// ctxAttach holds flagged-activity items attached to the composer as context
+	// bubbles (the "Discuss" action). They ride along above the input — never dumped
+	// into it — and fold into the next message the user sends. removeCtx drops one.
+	ctxAttach := ui.UseState([]flagContext{})
+	removeCtx := func(cid string) {
+		cur := ctxAttach.Get()
+		next := make([]flagContext, 0, len(cur))
+		for _, c := range cur {
+			if c.ID != cid {
+				next = append(next, c)
+			}
+		}
+		ctxAttach.Set(next)
+	}
 	// Conversation id whose AI title generation has been attempted (once per chat).
 	namingDone := ui.UseState("")
 	onInput := ui.UseEvent(func(v string) { input.Set(v) })
@@ -199,9 +253,6 @@ func Insights() ui.Node {
 	promptDraft := ui.UseState("")
 	// A mutating tool awaiting the user's approval in the thread (nil = none pending).
 	pendingApproval := ui.UseState((*approvalReq)(nil))
-	// C251: "Advanced" expander controls visibility of the system-prompt editor.
-	// The hook itself (openPrompt) is always registered; only the button is gated.
-	advancedOpen := ui.UseState(false)
 
 	// railReady defers the periphery rail's heavy detectors (spend-anomaly + the four
 	// SMART anomaly detectors, each a full-transaction scan) to just after first paint.
@@ -279,7 +330,7 @@ func Insights() ui.Node {
 			return ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp,
 				func(content string, u ai.Usage) { onResult(ai.Message{Role: ai.RoleAssistant, Content: content}, u) }, onErr)
 		}
-		return ai.SendChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, tools, onResult, onErr)
+		return ai.SendChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
@@ -399,6 +450,7 @@ func Insights() ui.Node {
 			)
 			turns.Set(hist)
 			input.Set("")
+			ctxAttach.Set(nil)
 			histIdx.Set(-1)
 			return
 		}
@@ -418,6 +470,7 @@ func Insights() ui.Node {
 					)
 					turns.Set(hist)
 					input.Set("")
+					ctxAttach.Set(nil)
 					histIdx.Set(-1)
 					return
 				}
@@ -428,8 +481,53 @@ func Insights() ui.Node {
 		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
 		turns.Set(hist)
 		input.Set("")
+		ctxAttach.Set(nil)
 		histIdx.Set(-1)
 		run(hist)
+	}
+
+	// withContext folds any attached flag-context bubbles into a short preamble ahead
+	// of a message body (the bubbles never live in the editable input); with nothing
+	// attached it returns the body unchanged.
+	withContext := func(body string) string {
+		atts := ctxAttach.Get()
+		if len(atts) == 0 {
+			return body
+		}
+		var b strings.Builder
+		b.WriteString(uistate.T("assistant.contextPreamble"))
+		for _, c := range atts {
+			b.WriteString("\n• ")
+			b.WriteString(c.Title)
+			if c.Detail != "" {
+				b.WriteString(": ")
+				b.WriteString(c.Detail)
+			}
+		}
+		b.WriteString("\n\n")
+		b.WriteString(body)
+		return b.String()
+	}
+	// submitChat sends the composer as one user turn, folding in any attached context.
+	submitChat := func() {
+		typed := strings.TrimSpace(input.Get())
+		if typed == "" && len(ctxAttach.Get()) == 0 {
+			return
+		}
+		body := typed
+		if body == "" {
+			body = uistate.T("assistant.contextDefaultAsk")
+		}
+		sendText(withContext(body))
+	}
+	// sendRemediation starts a one-click fix for the attached flag: it sends the chosen
+	// remediation instruction (with the flag folded in as context) so the agent proposes
+	// the concrete change for the user to approve in-thread — it never mutates directly.
+	sendRemediation := func(instruction string) {
+		if loading.Get() {
+			return
+		}
+		sendText(withContext(instruction))
 	}
 
 	// resendLast re-answers the latest user prompt: drop any trailing assistant
@@ -615,7 +713,7 @@ func Insights() ui.Node {
 			k := ev.Get("key").String()
 			if k == "Enter" && !ev.Get("shiftKey").Bool() {
 				ev.Call("preventDefault")
-				sendText(input.Get())
+				submitChat()
 				return nil
 			}
 			if k != "ArrowUp" && k != "ArrowDown" {
@@ -764,9 +862,8 @@ func Insights() ui.Node {
 		return nil
 	}, namingSig)
 
-	onSubmit := ui.UseEvent(Prevent(func() { sendText(input.Get()) }))
+	onSubmit := ui.UseEvent(Prevent(func() { submitChat() }))
 	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
-	toggleAdvanced := ui.UseEvent(Prevent(func() { advancedOpen.Set(!advancedOpen.Get()) }))
 	// System-prompt editor handlers.
 	onPromptInput := ui.UseEvent(func(v string) { promptDraft.Set(v) })
 	openPrompt := ui.UseEvent(Prevent(func() {
@@ -829,7 +926,22 @@ func Insights() ui.Node {
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
 	// pr is already declared above (UsePrefs hook at stable position).
-	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday(), railReady.Get())
+	flagged := smartAnomalyHighlights(app, pr.WeekStartWeekday(), railReady.Get(),
+		func(ins smart.Insight) {
+			// Discuss ATTACHES the flag as a context bubble on the composer (not raw
+			// text in the input). Dedupe by title so tapping twice doesn't stack it.
+			detail := strings.TrimRight(strings.TrimSpace(ins.Detail), ".")
+			cur := ctxAttach.Get()
+			for _, c := range cur {
+				if c.Title == ins.Title {
+					focusByID("cf-chat-input")
+					return
+				}
+			}
+			ctxAttach.Set(append(append([]flagContext{}, cur...),
+				flagContext{ID: id.New(), Title: ins.Title, Detail: detail, Kind: ins.Feature}))
+			focusByID("cf-chat-input")
+		})
 
 	// Pinned insights, newest first. The rail shows a SCANNABLE PREVIEW — the three
 	// most recent, each clamped to a couple of lines — and cross-links to the
@@ -848,22 +960,20 @@ func Insights() ui.Node {
 	// "see all" link, and the clamped pin previews — margin notes, not tiles.
 	pinnedCard := Fragment()
 	if len(pins) > 0 {
-		pinnedCard = Div(css.Class("ask-note"),
-			Div(css.Class("ask-note-head"),
-				Span(css.Class("ask-note-label"), uistate.T("insights.pinnedTitle")),
-				Button(css.Class("ask-note-link"), Type("button"),
-					Attr("data-testid", "assistant-see-insights"),
-					OnClick(openInsightsTab), uistate.T("assistant.seeAllInsights")),
-			),
-			Div(css.Class("ask-note-body"),
-				MapKeyed(railPins,
-					func(p domain.SavedInsight) any { return p.ID },
-					func(p domain.SavedInsight) ui.Node {
-						return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
-					},
-				),
-			),
-		)
+		pinnedCard = collapsibleNote(collapsibleNoteProps{
+			Label:  uistate.T("insights.pinnedTitle"),
+			TestID: "assistant-note-pins",
+			Count:  len(railPins),
+			Link: Button(css.Class("ask-note-link"), Type("button"),
+				Attr("data-testid", "assistant-see-insights"),
+				OnClick(openInsightsTab), uistate.T("assistant.seeAllInsights")),
+			Body: Fragment(MapKeyed(railPins,
+				func(p domain.SavedInsight) any { return p.ID },
+				func(p domain.SavedInsight) ui.Node {
+					return ui.CreateElement(PinnedInsightRow, pinnedInsightRowProps{Insight: p, OnDelete: deletePinned})
+				},
+			)),
+		})
 	}
 
 	convo := turns.Get()
@@ -947,6 +1057,40 @@ func Insights() ui.Node {
 		composer = Fragment(inputRow, If(len(turns.Get()) > 0, keyHintNode()))
 	}
 
+	// Attached flag-context bubbles ride ABOVE the composer: each shows it's context
+	// (styled distinctly from an editable field) with a remove control, and folds into
+	// the next send. Wrapped per-row in ctxBubble so the remove hook stays stable (L-gotcha).
+	atts := ctxAttach.Get()
+	ctxBubbles := Fragment()
+	if len(atts) > 0 {
+		ctxBubbles = Div(css.Class("asst-ctx-row"), Attr("data-testid", "assistant-ctx-row"),
+			Span(css.Class("asst-ctx-lead", tw.TextFaint), uistate.T("assistant.contextLabel")),
+			MapKeyed(atts,
+				func(c flagContext) any { return c.ID },
+				func(c flagContext) ui.Node {
+					return ui.CreateElement(ctxBubble, ctxBubbleProps{ID: c.ID, Title: c.Title, Detail: c.Detail, OnRemove: removeCtx})
+				},
+			),
+		)
+	}
+	// Remediation action chips for the most-recently-attached flag: one-click ways to
+	// kick off a fix. Clicking sends the remediation (with the flag as context) so the
+	// agent proposes the concrete change to approve — the chip starts it, doesn't do it.
+	remedyChips := Fragment()
+	if len(atts) > 0 {
+		if rs := remediationsFor(atts[len(atts)-1].Kind); len(rs) > 0 {
+			remedyChips = Div(css.Class("asst-remedy-row"), Attr("data-testid", "assistant-remedy-row"),
+				MapKeyed(rs,
+					func(r remediation) any { return r.Label },
+					func(r remediation) ui.Node {
+						instr := r.Instruction
+						return remedyChip(remedyChipProps{Label: r.Label, OnPick: func() { sendRemediation(instr) }})
+					},
+				),
+			)
+		}
+	}
+
 	// Starter chips (L8, C231): shown on an EMPTY thread only (with an empty Ask
 	// box). Replaying the same fixed chips after real exchanges read as a bot
 	// ignoring the conversation — an agent's follow-ups should come from the
@@ -954,7 +1098,6 @@ func Insights() ui.Node {
 	// Tapping a chip FILLS the Ask box (doesn't send) so the user can review/edit first.
 	chips := Fragment()
 	if len(starters) > 0 && input.Get() == "" && empty {
-		fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
 		chips = Div(css.Class(tw.Mb2),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
 				MapKeyed(starters,
@@ -971,45 +1114,37 @@ func Insights() ui.Node {
 	// the saved-conversation pills moved to the rail so the thread stays the page.
 	convs := app.Conversations()
 	sort.Slice(convs, func(i, j int) bool { return convs[i].UpdatedAt.After(convs[j].UpdatedAt) })
-	// chat-pill pins a --border outline so the New-chat / Edit-prompt pills stay
-	// visible in light mode (the BorderBlack10 tint vanished on white) (G13).
-	pill := tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border, tw.HoverBgBlack03) + " chat-pill"
-	// C251: "Edit prompt" lives inside an "Advanced" expander so the header bar
-	// stays clean for everyday use. The openPrompt hook is always registered above;
-	// only the button's visibility is gated here.
-	advancedLabel := uistate.T("insights.showAdvanced")
-	advancedExpanded := "false"
-	advancedCaret := " ▸"
-	if advancedOpen.Get() {
-		advancedLabel = uistate.T("insights.hideAdvanced")
-		advancedExpanded = "true"
-		advancedCaret = " ▾"
-	}
-	pillFaint := pill + " " + tw.Fold(tw.TextFaint)
+	// Standard header actions: New chat + Edit prompt as labeled .btn-tool buttons (the
+	// app-wide toolbar-button standard). The old "Advanced" expander that only revealed
+	// Edit prompt is gone — it was a click to hide a single option.
 	chatControls := Div(css.Class("ask-head-actions", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-		Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt), uiw.Icon(icon.PlusCircle, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-		Button(ClassStr(pillFaint), Type("button"), Attr("aria-expanded", advancedExpanded), Attr("data-testid", "assistant-advanced"),
-			Title(uistate.T("insights.advancedTitle")), OnClick(toggleAdvanced),
-			Span(advancedLabel), Span(css.Class(tw.TextFaint), advancedCaret)),
-		If(advancedOpen.Get(),
-			Button(ClassStr(pill), Type("button"), Attr("data-testid", "assistant-edit-prompt"), Title(uistate.T("insights.editPrompt")), OnClick(openPrompt), uiw.Icon(icon.Settings, css.Class(tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
-		),
+		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
+		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
+			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
+			Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
+			uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
 	)
 	// Bespoke aside group: the saved conversations as a quiet vertical index.
 	railConvs := Fragment()
 	if len(convs) > 0 {
-		railConvs = Div(css.Class("ask-note"),
-			Span(css.Class("ask-note-label"), uistate.T("assistant.conversations")),
-			Div(css.Class("ask-note-body", "asst-convs"), Attr("data-testid", "assistant-convs"),
-				MapKeyed(convs,
-					func(c domain.Conversation) any { return c.ID },
-					func(c domain.Conversation) ui.Node {
-						return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
-					},
+		railConvs = collapsibleNote(collapsibleNoteProps{
+			Label:  uistate.T("assistant.conversations"),
+			TestID: "assistant-note-convs",
+			Count:  len(convs),
+			Body: Fragment(
+				Div(css.Class("asst-convs"), Attr("data-testid", "assistant-convs"),
+					MapKeyed(convs,
+						func(c domain.Conversation) any { return c.ID },
+						func(c domain.Conversation) ui.Node {
+							return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+						},
+					),
 				),
+				P(css.Class("ask-note-hint"), uistate.T("assistant.railHint")),
 			),
-			P(css.Class("ask-note-hint"), uistate.T("assistant.railHint")),
-		)
+		})
 	}
 
 	// Backend/OpenAI mode toggle — only meaningful when a backend is configured;
@@ -1108,6 +1243,8 @@ func Insights() ui.Node {
 		),
 		Div(css.Class("chat-dock"),
 			Div(css.Class("chat-measure"),
+				ctxBubbles,
+				remedyChips,
 				composer,
 				P(css.Class("chat-dock-hint", tw.TextFaint), uistate.T("assistant.composerHint")),
 			),
@@ -1262,6 +1399,113 @@ type chatTurn struct {
 	Usage ai.Usage
 }
 
+// flagContext is a flagged-activity item attached to the composer as a context
+// bubble (the "Discuss" action). It rides above the input and is folded into the
+// prompt at send time — never typed into the input field itself. Kind is the SMART
+// detector's feature code (e.g. "SMART-T2"), which drives the remediation chips.
+type flagContext struct {
+	ID     string
+	Title  string
+	Detail string
+	Kind   string
+}
+
+// remediation is a one-click fix offered as an action chip for a flagged activity.
+// Label is the chip text; Instruction is the message sent to the agent to start it.
+type remediation struct {
+	Label       string
+	Instruction string
+}
+
+// remediationsFor returns the remediation action chips for a flagged-activity kind,
+// keyed by the SMART detector's feature code. Mutating fixes are phrased to route
+// through the agent's in-thread approval — the chip starts the fix, it never acts
+// silently. Returns nil for kinds without a canned remediation set.
+func remediationsFor(feature string) []remediation {
+	switch feature {
+	case "SMART-T2": // duplicate transaction
+		return []remediation{
+			{uistate.T("remedy.dupRemove"), uistate.T("remedy.dupRemoveMsg")},
+			{uistate.T("remedy.dupMerge"), uistate.T("remedy.dupMergeMsg")},
+			{uistate.T("remedy.dupKeep"), uistate.T("remedy.dupKeepMsg")},
+			{uistate.T("remedy.dupReverse"), uistate.T("remedy.dupReverseMsg")},
+		}
+	case "SMART-T7": // missing / expected transaction
+		return []remediation{
+			{uistate.T("remedy.missAdd"), uistate.T("remedy.missAddMsg")},
+			{uistate.T("remedy.missPaused"), uistate.T("remedy.missPausedMsg")},
+			{uistate.T("remedy.missLater"), uistate.T("remedy.missLaterMsg")},
+		}
+	case "SMART-T6": // spending spike
+		return []remediation{
+			{uistate.T("remedy.spikeExplain"), uistate.T("remedy.spikeExplainMsg")},
+			{uistate.T("remedy.spikeExpected"), uistate.T("remedy.spikeExpectedMsg")},
+			{uistate.T("remedy.spikeGuard"), uistate.T("remedy.spikeGuardMsg")},
+		}
+	case "SMART-A1": // balance anomaly
+		return []remediation{
+			{uistate.T("remedy.balReconcile"), uistate.T("remedy.balReconcileMsg")},
+			{uistate.T("remedy.balUpdate"), uistate.T("remedy.balUpdateMsg")},
+			{uistate.T("remedy.balExplain"), uistate.T("remedy.balExplainMsg")},
+		}
+	}
+	return nil
+}
+
+type remedyChipProps struct {
+	Label  string
+	OnPick func()
+}
+
+// remedyChip is one clickable remediation action. Own component so its click hook
+// stays at a stable position across the (variable-length) chip list.
+func remedyChip(p remedyChipProps) ui.Node { return ui.CreateElement(remedyChipComp, p) }
+
+func remedyChipComp(p remedyChipProps) ui.Node {
+	onClick := ui.UseEvent(func() {
+		if p.OnPick != nil {
+			p.OnPick()
+		}
+	})
+	return Button(css.Class("asst-remedy"), Type("button"), Attr("data-testid", "assistant-remedy-chip"), OnClick(onClick),
+		uiw.Icon(icon.Sparkles, css.Class("asst-remedy-icon", tw.ShrinkO, tw.W3, tw.H3)),
+		Span(p.Label),
+	)
+}
+
+type ctxBubbleProps struct {
+	ID       string
+	Title    string
+	Detail   string
+	OnRemove func(string)
+}
+
+// ctxBubble renders one attached flag-context as a removable chip above the
+// composer. Its own component so the remove-click hook sits at a stable position
+// across the (variable-length) attachment list (framework loop-hook gotcha).
+func ctxBubble(p ctxBubbleProps) ui.Node {
+	return ui.CreateElement(ctxBubbleComp, p)
+}
+
+func ctxBubbleComp(p ctxBubbleProps) ui.Node {
+	onRemove := ui.UseEvent(func() {
+		if p.OnRemove != nil {
+			p.OnRemove(p.ID)
+		}
+	})
+	tip := strings.TrimSpace(p.Title)
+	if p.Detail != "" {
+		tip += " — " + p.Detail
+	}
+	return Div(css.Class("asst-ctx"), Attr("data-testid", "assistant-ctx-bubble"), Title(tip),
+		uiw.Icon(icon.Paperclip, css.Class("asst-ctx-icon", tw.ShrinkO, tw.W3, tw.H3)),
+		Span(css.Class("asst-ctx-label"), p.Title),
+		Button(css.Class("asst-ctx-x"), Type("button"), Attr("data-testid", "assistant-ctx-remove"),
+			Attr("aria-label", uistate.T("assistant.ctxRemove")), Title(uistate.T("assistant.ctxRemove")), OnClick(onRemove),
+			uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+	)
+}
+
 type userBubbleProps struct {
 	ID       string
 	Text     string
@@ -1389,6 +1633,79 @@ func renderMarkdown(elemID, mdText string) {
 func reasoningModel(model string) bool {
 	m := strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
+}
+
+// assistantModelIDs returns the ids for the header model picker: the live list from
+// OpenAI when available, else the built-in defaults, always including the current
+// selection so a custom/older model stays visible even if it's not in the list.
+func assistantModelIDs(models []string, cur string) []string {
+	ids := models
+	if len(ids) == 0 {
+		ids = []string{"gpt-5.4-mini", "gpt-5.5", "o4-mini"}
+	}
+	cur = strings.TrimSpace(cur)
+	if cur != "" {
+		for _, m := range ids {
+			if m == cur {
+				return ids
+			}
+		}
+		ids = append([]string{cur}, ids...)
+	}
+	return ids
+}
+
+type modelPickerProps struct {
+	Models  []string
+	Current string
+	OnPick  func(string)
+}
+
+// modelPicker is the inline model switcher in the assistant header. Its own component
+// so the select's change hook sits at a stable position (the option list is variable).
+func modelPicker(p modelPickerProps) ui.Node { return ui.CreateElement(modelPickerComp, p) }
+
+func modelPickerComp(p modelPickerProps) ui.Node {
+	onChange := ui.UseEvent(func(e ui.Event) {
+		if p.OnPick != nil {
+			p.OnPick(e.GetValue())
+		}
+	})
+	return Label(css.Class("ask-quickctl"), Title(uistate.T("assistant.modelPick")),
+		Span(css.Class("ask-quickctl-lbl"), uistate.T("assistant.modelLabel")),
+		Select(css.Class("ask-quickctl-sel"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
+			MapKeyed(assistantModelIDs(p.Models, p.Current),
+				func(m string) any { return m },
+				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
+			),
+		),
+	)
+}
+
+type thinkPickerProps struct {
+	Effort string
+	OnPick func(string)
+}
+
+// thinkPicker is the inline thinking-level (reasoning_effort) switcher, shown only for
+// reasoning models. Its own component so its change hook stays isolated — the parent
+// mounts/unmounts it as the model changes without disturbing its own hook order.
+func thinkPicker(p thinkPickerProps) ui.Node { return ui.CreateElement(thinkPickerComp, p) }
+
+func thinkPickerComp(p thinkPickerProps) ui.Node {
+	onChange := ui.UseEvent(func(e ui.Event) {
+		if p.OnPick != nil {
+			p.OnPick(e.GetValue())
+		}
+	})
+	return Label(css.Class("ask-quickctl"), Title(uistate.T("assistant.thinkPick")),
+		Span(css.Class("ask-quickctl-lbl"), uistate.T("assistant.thinkLabel")),
+		Select(css.Class("ask-quickctl-sel"), Attr("aria-label", uistate.T("assistant.thinkPick")), Attr("data-testid", "assistant-think"), OnChange(onChange),
+			Option(Value("low"), SelectedIf(p.Effort == "low"), uistate.T("assistant.thinkLow")),
+			Option(Value("medium"), SelectedIf(p.Effort == "medium" || p.Effort == ""), uistate.T("assistant.thinkMedium")),
+			Option(Value("high"), SelectedIf(p.Effort == "high"), uistate.T("assistant.thinkHigh")),
+		),
+	)
 }
 
 // scrollChatToEnd scrolls the bounded canvas (#cf-chat-scroll — the single
@@ -1600,9 +1917,10 @@ func exampleConversationsNode() ui.Node {
 // component. The route is the page the action navigates to; OnClick holds the
 // handler so On* never lives inside a loop.
 type smartAnomalyInsightRowProps struct {
-	Insight smart.Insight
-	Route   string
-	OnClick func()
+	Insight   smart.Insight
+	Route     string
+	OnClick   func() // navigate to the finding's source (transactions / accounts)
+	OnDiscuss func() // drop the finding's context into the chat for a discussion
 }
 
 // SmartAnomalyInsightRow renders one flagged-activity row with a click-through
@@ -1610,23 +1928,91 @@ type smartAnomalyInsightRowProps struct {
 // stable hook position across the list (no On* in loops).
 func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 	navigate := ui.UseEvent(func() { p.OnClick() })
+	discuss := ui.UseEvent(func() {
+		if p.OnDiscuss != nil {
+			p.OnDiscuss()
+		}
+	})
 	iconName := icon.AlertTriangle
 	if p.Insight.Severity == smart.SeverityInfo {
 		iconName = icon.AlertCircle
 	}
-	return Button(
-		css.Class("insight-row insight-row-action"),
-		Type("button"),
-		Attr("aria-label", p.Insight.Title),
-		OnClick(navigate),
+	// A row is no longer a single click-through button — it carries two explicit
+	// actions: "Source" navigates to the finding's transaction/account, and "Discuss"
+	// drops its context into the chat so the user can talk it through with the agent.
+	return Div(css.Class("insight-row insight-row-flagged"),
 		Span(ClassStr("insight-dot text-down"), uiw.Icon(iconName, css.Class(tw.W4, tw.H4))),
-		// WFull + default stretch (no ItemsStart) so the Truncate children fill
-		// the row and the ellipsis engages instead of overflowing the card.
 		Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0, tw.WFull),
 			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
 			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
+			Div(css.Class("insight-row-actions"),
+				Button(css.Class("insight-row-btn"), Type("button"),
+					Attr("data-testid", "flag-source"), Attr("aria-label", uistate.T("assistant.flagSourceAria")),
+					Title(uistate.T("assistant.flagSourceAria")), OnClick(navigate),
+					uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Span(uistate.T("assistant.flagSource")),
+				),
+				// "Discuss" only where there's a chat to drop the context into (the Ask
+				// tab); the Insights data panel reuses this row without a chat, so it
+				// passes no OnDiscuss and the button is omitted.
+				If(p.OnDiscuss != nil, Button(css.Class("insight-row-btn"), Type("button"),
+					Attr("data-testid", "flag-discuss"), Attr("aria-label", uistate.T("assistant.flagDiscussAria")),
+					Title(uistate.T("assistant.flagDiscussAria")), OnClick(discuss),
+					uiw.Icon(icon.MessageCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Span(uistate.T("assistant.flagDiscuss")),
+				)),
+			),
 		),
 	)
+}
+
+// collapsibleNoteProps configures a collapsible aside "margin note" section: a label
+// (with an optional count badge + trailing link) that toggles a body. It starts
+// COLLAPSED so the assistant rail is compact by default and the user expands only what
+// they want to see.
+type collapsibleNoteProps struct {
+	Label  string
+	TestID string
+	Count  int
+	Link   ui.Node
+	Body   ui.Node
+}
+
+// collapsibleNote renders one collapsible aside section. It's its own component so the
+// toggle's UseState survives the aside's frequent re-renders (the aside re-runs on every
+// chat keystroke) rather than resetting the way native <details> would.
+func collapsibleNote(props collapsibleNoteProps) ui.Node {
+	return ui.CreateElement(collapsibleNoteComp, props)
+}
+
+func collapsibleNoteComp(p collapsibleNoteProps) ui.Node {
+	open := ui.UseState(false) // start collapsed
+	toggle := ui.UseEvent(func() { open.Set(!open.Get()) })
+	chev := icon.ChevronRight
+	if open.Get() {
+		chev = icon.ChevronDown
+	}
+	btn := []any{
+		css.Class("ask-note-toggle"), Type("button"),
+		Attr("aria-expanded", fmt.Sprintf("%v", open.Get())), OnClick(toggle),
+		uiw.Icon(chev, css.Class("ask-note-chev", tw.W3, tw.H3)),
+		Span(css.Class("ask-note-label"), p.Label),
+	}
+	if p.Count > 0 {
+		btn = append(btn, Span(css.Class("ask-note-count"), fmt.Sprintf("%d", p.Count)))
+	}
+	if p.TestID != "" {
+		btn = append(btn, Attr("data-testid", p.TestID))
+	}
+	head := []any{css.Class("ask-note-head"), Button(btn...)}
+	if p.Link != nil && open.Get() {
+		head = append(head, p.Link)
+	}
+	var body ui.Node = Fragment()
+	if open.Get() {
+		body = Div(css.Class("ask-note-body"), p.Body)
+	}
+	return Div(css.Class("ask-note"), Div(head...), body)
 }
 
 // smartAnomalyHighlights runs the four anomaly-type SMART detectors (SMART-A1
@@ -1634,7 +2020,7 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 // missing transaction) unconditionally — no Smart opt-in gate — and renders
 // their findings as a "Flagged activity" card on /insights. Returns an empty
 // node when the detectors find nothing.
-func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready bool) ui.Node {
+func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready bool, onDiscuss func(smart.Insight)) ui.Node {
 	nav := router.UseNavigate()
 	// Run with all Free features enabled so the four anomaly detectors always
 	// fire regardless of the user's per-feature SMART opt-in state. Memoized on the
@@ -1664,11 +2050,18 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready boo
 			Insight: capturedIns,
 			Route:   capturedRoute,
 			OnClick: func() { nav.Navigate(uistate.RoutePath(capturedRoute)) },
+			OnDiscuss: func() {
+				if onDiscuss != nil {
+					onDiscuss(capturedIns)
+				}
+			},
 		}))
 	}
 
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("insights.flaggedTitle"),
+	return collapsibleNote(collapsibleNoteProps{
+		Label:  uistate.T("insights.flaggedTitle"),
+		TestID: "assistant-note-flagged",
+		Count:  len(flagged),
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("insights.flaggedHint")),
 			Div(css.Class("insight-list"), rows),
@@ -1730,8 +2123,10 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(
 		},
 	)
 
-	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("insights.highlightsTitle"),
+	return collapsibleNote(collapsibleNoteProps{
+		Label:  uistate.T("insights.highlightsTitle"),
+		TestID: "assistant-note-highlights",
+		Count:  len(anomalies),
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("insights.highlightsHint")),
 			Div(css.Class("insight-list"), rows),

@@ -44,6 +44,30 @@ func liveEngineVars(app *appstate.App) map[string]float64 {
 	return memoByRev(liveEngineVarsCache, key, func() map[string]float64 { return liveEngineVarsRaw(app) })
 }
 
+// allFormulaMetrics assembles the full metric catalog — every atom, molecule, custom
+// field, and per-entity variable a formula can reference — in group order. Shared by
+// the FormulaBuilder reference panel and the assistant's list_formula_metrics tool so
+// both see exactly the same names.
+func allFormulaMetrics(app *appstate.App) []widgetcatalog.Metric {
+	metrics := widgetcatalog.Metrics(app.CustomFieldDefs(), app.Molecules())
+	metrics = append(metrics, widgetcatalog.BudgetMetrics(app.Budgets())...)
+	metrics = append(metrics, widgetcatalog.AccountMetrics(app.Accounts())...)
+	metrics = append(metrics, widgetcatalog.GoalMetrics(app.Goals())...)
+	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
+	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
+	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
+	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
+	metrics = append(metrics, widgetcatalog.RecurringMetrics(app.Recurring())...)
+	metrics = append(metrics, widgetcatalog.ReportsMetrics()...)
+	metrics = append(metrics, widgetcatalog.NetWorthMetrics()...)
+	metrics = append(metrics, widgetcatalog.HealthMetrics()...)
+	metrics = append(metrics, widgetcatalog.CreditMetrics()...)
+	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
+	metrics = append(metrics, widgetcatalog.AssistantMetrics()...)
+	metrics = append(metrics, widgetcatalog.SmartMetrics()...)
+	return metrics
+}
+
 func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 	now := time.Now()
 	start, end := dateutil.MonthRange(now)
@@ -152,22 +176,7 @@ func FormulaBuilder(props FormulaBuilderProps) ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	vars := liveEngineVars(app)
-	metrics := widgetcatalog.Metrics(app.CustomFieldDefs(), app.Molecules())
-	metrics = append(metrics, widgetcatalog.BudgetMetrics(app.Budgets())...)
-	metrics = append(metrics, widgetcatalog.AccountMetrics(app.Accounts())...)
-	metrics = append(metrics, widgetcatalog.GoalMetrics(app.Goals())...)
-	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
-	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
-	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
-	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
-	metrics = append(metrics, widgetcatalog.RecurringMetrics(app.Recurring())...)
-	metrics = append(metrics, widgetcatalog.ReportsMetrics()...)
-	metrics = append(metrics, widgetcatalog.NetWorthMetrics()...)
-	metrics = append(metrics, widgetcatalog.HealthMetrics()...)
-	metrics = append(metrics, widgetcatalog.CreditMetrics()...)
-	metrics = append(metrics, widgetcatalog.BillsSmartMetrics()...)
-	metrics = append(metrics, widgetcatalog.AssistantMetrics()...)
-	metrics = append(metrics, widgetcatalog.SmartMetrics()...)
+	metrics := allFormulaMetrics(app)
 
 	expr := ui.UseState(props.Initial)
 	fName := ui.UseState("")

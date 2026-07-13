@@ -44,18 +44,21 @@ type ToolCall struct {
 
 // toolRequest is a chat request that advertises tools to the model.
 type toolRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	ToolChoice  string    `json:"tool_choice,omitempty"` // "auto" | "none" | "required"
+	Model           string    `json:"model"`
+	Messages        []Message `json:"messages"`
+	Temperature     float64   `json:"temperature,omitempty"`
+	ReasoningEffort string    `json:"reasoning_effort,omitempty"` // "low"|"medium"|"high"; reasoning models only
+	Tools           []Tool    `json:"tools,omitempty"`
+	ToolChoice      string    `json:"tool_choice,omitempty"` // "auto" | "none" | "required"
 }
 
 // BuildToolRequest marshals a chat request that offers the given tools to the
 // model with tool_choice=auto, so the model may answer directly or ask to call
-// one or more tools. With no tools it is equivalent to BuildRequest.
-func BuildToolRequest(model string, messages []Message, temperature float64, tools []Tool) ([]byte, error) {
-	req := toolRequest{Model: model, Messages: messages, Temperature: temperature, Tools: tools}
+// one or more tools. With no tools it is equivalent to BuildRequest. reasoningEffort
+// ("low"/"medium"/"high") is included only when non-empty — pass "" for models that
+// don't accept it (non-reasoning models reject reasoning_effort).
+func BuildToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool) ([]byte, error) {
+	req := toolRequest{Model: model, Messages: messages, Temperature: temperature, ReasoningEffort: reasoningEffort, Tools: tools}
 	if len(tools) > 0 {
 		req.ToolChoice = "auto"
 	}

@@ -7,6 +7,21 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.23 (2026-07-13):** cuts the Assistant agent overhaul — full-height chat, an in-thread model + thinking-level switch, a live model list, canonical-dedupe duplicate tools, and formula-metric tools — into a release.
+
+### Added
+- **Assistant agent — duplicate tools wired to the app's canonical de-duper (2026-07-13):** the chat can now actually clean up duplicates. New `find_duplicate_transactions`, `merge_duplicate_transactions`, and `delete_transaction` tools — all keyed off `internal/dedupe` (date · signed amount · currency · description), the **same signature the "possible duplicate" flags, the Duplicates page, and the CSV importer use** — so the agent's view is always consistent with the flags (it previously rolled its own account+payee signature and could disagree). Merge mirrors the Duplicates page exactly: keep the survivor, union its tags/cleared via `dedupe.Merge`, delete the extras. Every change is preview-then-approve in the thread. The system prompt was rewritten from exploratory to enabling ("you ACT… never say you can't do something a tool covers") with an explicit DUPLICATES playbook.
+- **Assistant agent — formula tools (2026-07-13):** `list_formula_metrics` lists every engine ATOM (assets, income, liquid_cash…) and MOLECULE (net_worth = assets − liabilities, with its formula) plus per-entity metrics with live values; `evaluate_formula` computes any expression over the full surface (e.g. `net_worth * 0.04 / 12`) and, for a bare variable, reports its derivation. Both reuse the same catalog + engine surface the FormulaBuilder uses (`allFormulaMetrics` / `liveEngineVars`).
+- **Assistant — in-thread model + thinking-level switch (2026-07-13):** a compact **Model** and **Thinking** (reasoning-effort: Low/Medium/High) picker in the chat header, so you can switch without a trip to Settings; the picks persist to settings. The model list is fetched **live from OpenAI's `/v1/models`** (`ai.ChatModelIDs` filters to chat-capable ids) with a Reload button on the Settings picker, falling back to the built-in defaults offline.
+- **Assistant — flagged-activity actions (2026-07-13):** each flagged item gets a **Source** button (jump to it) and a **Discuss** button that attaches the flag to the composer as a **context bubble** (styled chip, not raw text dumped into the input); the bubble folds into the next message. Per-kind **remediation action chips** (e.g. Remove the duplicate · Merge the entries for a duplicate) kick off a fix through the agent in one click.
+
+### Changed
+- **Assistant page fills the viewport and never scrolls (2026-07-13):** the chat surface takes the full height with the composer docked at the bottom and the thread scrolling inside it; the right rail's note sections are collapsible and start collapsed, scrolling internally on overflow. The left nav's groups (Tools, System, My Pages) are each collapsible. The Advanced expander was removed in favour of standard `btn btn-tool` header buttons.
+- **Thinking level respects OpenAI's endpoint limits (2026-07-13):** the whole **gpt-5.x** family rejects `reasoning_effort` with function tools on `/v1/chat/completions` (it needs `/v1/responses`), so the effort is stripped by prefix and the Thinking control is hidden for those models; the o-series (o1/o3/o4) keeps it. A transport-level one-time retry-without-effort (plus a learned-model memo) backstops any other model that rejects it.
+- **Assistant header controls match the app's standard toolbar (2026-07-13):** the Model/Thinking selects adopt the standard toolbar-select treatment (bg-elev chip, hairline border, 8px radius, native arrow — the same language as the workspace switcher) sized to the `.btn-tool` footprint, beside standard `btn btn-tool` buttons.
+- **Service worker cache bumped to `cashflux-v297` (2026-07-13):** evicts stale precached assets so a redeploy reliably reaches clients.
+
+### Changed
 - **Version bumped to v1.0.22 (2026-07-13):** cuts the /health factor-composition detail into a release.
 
 ### Added

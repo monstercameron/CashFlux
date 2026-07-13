@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -271,4 +272,107 @@ func apiErrorMessage(body []byte) string {
 		return strings.TrimSpace(r.Error.Message)
 	}
 	return ""
+}
+
+// modelListResponse is the shape of OpenAI's GET /v1/models body: {"data":[{"id":...}]}.
+type modelListResponse struct {
+	Data []struct {
+		ID string `json:"id"`
+	} `json:"data"`
+}
+
+// nonChatModelHints are id fragments that mark a model as NOT a chat/completions
+// model (embeddings, audio, image, moderation, etc.), so ChatModelIDs can drop them.
+var nonChatModelHints = []string{
+	"embedding", "whisper", "tts", "audio", "realtime", "transcribe",
+	"image", "dall-e", "moderation", "-search", "instruct", "codex",
+	"davinci", "babbage", "computer-use",
+}
+
+// isChatModelID reports whether an OpenAI model id names a chat/completions-capable
+// model: a gpt-* / chatgpt-* / o-series id that isn't one of the non-chat families.
+func isChatModelID(id string) bool {
+	id = strings.ToLower(strings.TrimSpace(id))
+	if id == "" {
+		return false
+	}
+	chatFamily := strings.HasPrefix(id, "gpt-") || strings.HasPrefix(id, "chatgpt") ||
+		strings.HasPrefix(id, "o1") || strings.HasPrefix(id, "o3") ||
+		strings.HasPrefix(id, "o4") || strings.HasPrefix(id, "o5")
+	if !chatFamily {
+		return false
+	}
+	for _, h := range nonChatModelHints {
+		if strings.Contains(id, h) {
+			return false
+		}
+	}
+	return true
+}
+
+// ParseModelIDs extracts every model id from an OpenAI /v1/models response body,
+// de-duplicated. Returns an error if the body isn't the expected list shape.
+func ParseModelIDs(data []byte) ([]string, error) {
+	var r modelListResponse
+	if err := json.Unmarshal(data, &r); err != nil {
+		return nil, fmt.Errorf("parse model list: %w", err)
+	}
+	seen := map[string]bool{}
+	ids := make([]string, 0, len(r.Data))
+	for _, m := range r.Data {
+		id := strings.TrimSpace(m.ID)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// modelsRejectingEffort remembers non-gpt-5 models learned at runtime to reject
+// reasoning_effort alongside function tools on /chat/completions. The whole gpt-5.x
+// family is handled by prefix in EffortRejectedWithTools (no learning needed). Reset
+// each page load (a fresh wasm instance).
+var modelsRejectingEffort = map[string]bool{}
+
+// EffortRejectedWithTools reports whether a model rejects reasoning_effort when
+// function tools are advertised on /chat/completions. The entire gpt-5.x family does
+// — it requires /v1/responses for that combination (confirmed for gpt-5.4-mini and
+// gpt-5.6-luna) — so we skip it by prefix; other models are learned at runtime via a
+// one-time failed request. Callers use this to skip the effort AND to hide the
+// thinking-level control where it has no effect. o-series (o1/o3/o4) DO accept it.
+func EffortRejectedWithTools(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if strings.HasPrefix(m, "gpt-5") {
+		return true
+	}
+	return modelsRejectingEffort[m]
+}
+
+// noteEffortRejected records that a model rejects reasoning_effort with tools.
+func noteEffortRejected(model string) { modelsRejectingEffort[strings.TrimSpace(model)] = true }
+
+// mentionsEffortUnsupported reports whether an API error is the "reasoning_effort not
+// supported with function tools" rejection (so we can retry without the effort).
+func mentionsEffortUnsupported(msg string) bool {
+	return strings.Contains(strings.ToLower(msg), "reasoning_effort")
+}
+
+// ChatModelIDs parses an OpenAI /v1/models response and returns the ids usable for
+// chat (the gpt-* and o-series families), excluding non-chat endpoints (embeddings,
+// audio, image, moderation, …). Sorted descending so newer families surface first.
+func ChatModelIDs(data []byte) ([]string, error) {
+	all, err := ParseModelIDs(data)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(all))
+	for _, id := range all {
+		if isChatModelID(id) {
+			out = append(out, id)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(out)))
+	return out, nil
 }

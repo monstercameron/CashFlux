@@ -554,8 +554,18 @@ func Sidebar(props sidebarProps) uic.Node {
 	}
 	var toolNodes []any
 	if len(visibleTools) > 0 {
-		toolNodes = append(toolNodes, railHeader(uistate.T("rail.tools")))
+		// The whole Tools group collapses too (keyed "tools"), so every labelled rail
+		// section — Tools, its sub-groups, and System — has a collapsible header.
+		toolsCollapsed := collapsed["tools"]
+		toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
+			Label:     uistate.T("rail.tools"),
+			Collapsed: toolsCollapsed,
+			OnToggle:  func() { setCollapsed("tools", !toolsCollapsed) },
+		}))
 		for _, sg := range screens.ToolsSubGroups {
+			if toolsCollapsed {
+				break
+			}
 			sg := sg
 			items := toolsByGroup[sg]
 			if len(items) == 0 {

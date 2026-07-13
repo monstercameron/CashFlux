@@ -1568,7 +1568,12 @@ var english = Catalog{
 	"settings.billingFailed":      "Billing couldn't start: %s",
 	"settings.aiModel":            "AI model",
 	// C250: BYOK transparency — active model + token-billing disclosure.
-	"settings.aiModelNote":              "Active model: %s · You pay OpenAI directly per token used — CashFlux is never charged for your AI use.",
+	"settings.aiModelNote": "Active model: %s · You pay OpenAI directly per token used — CashFlux is never charged for your AI use.",
+	// Dynamic model list, fetched live from OpenAI's /v1/models (no hardcoded list).
+	"settings.aiModelReload":            "Reload",
+	"settings.aiModelLoading":           "Loading…",
+	"settings.aiModelLive":              "%d models loaded live from OpenAI.",
+	"settings.aiModelLoadFailed":        "Couldn't load models from OpenAI — showing the built-in defaults. Check your key and reload.",
 	"settings.displayScale":             "Text & display size",
 	"settings.scaleDefault":             "%d%% (default)",
 	"settings.appearance":               "Appearance",

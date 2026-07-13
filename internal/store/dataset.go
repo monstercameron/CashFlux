@@ -32,15 +32,16 @@ const SchemaVersion = 1
 
 // Settings holds app-wide configuration persisted alongside the data.
 type Settings struct {
-	BaseCurrency       string               `json:"baseCurrency"`
-	FXRates            map[string]float64   `json:"fxRates,omitempty"`
-	FXUpdatedAt        map[string]time.Time `json:"fxUpdatedAt,omitempty"` // when each FX rate was last set (L4 staleness)
-	OpenAIKey          string               `json:"openAiKey,omitempty"`
-	OpenAIModel        string               `json:"openAiModel,omitempty"`
-	FreshnessOverrides map[string]int       `json:"freshnessOverrides,omitempty"`
-	BudgetMethodology  string               `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
-	PayoffBaseline     *PayoffBaseline      `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
-	Music              *MusicState          `json:"music,omitempty"`             // background-music resume point (checkpointed)
+	BaseCurrency          string               `json:"baseCurrency"`
+	FXRates               map[string]float64   `json:"fxRates,omitempty"`
+	FXUpdatedAt           map[string]time.Time `json:"fxUpdatedAt,omitempty"` // when each FX rate was last set (L4 staleness)
+	OpenAIKey             string               `json:"openAiKey,omitempty"`
+	OpenAIModel           string               `json:"openAiModel,omitempty"`
+	OpenAIReasoningEffort string               `json:"openAiReasoningEffort,omitempty"` // "low"|"medium"|"high"; thinking level for reasoning models
+	FreshnessOverrides    map[string]int       `json:"freshnessOverrides,omitempty"`
+	BudgetMethodology     string               `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
+	PayoffBaseline        *PayoffBaseline      `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
+	Music                 *MusicState          `json:"music,omitempty"`             // background-music resume point (checkpointed)
 }
 
 // MusicState is the background music's durable resume point: the on/off choice,

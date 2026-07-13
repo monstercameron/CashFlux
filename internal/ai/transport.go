@@ -13,6 +13,67 @@ const DefaultBaseURL = "https://api.openai.com/v1"
 // callers can always invoke the returned cancel safely.
 func noopCancel() {}
 
+// FetchModels GETs the available model list from baseURL using apiKey and returns
+// the chat-capable model ids (via ChatModelIDs) through onResult, or a plain-English
+// message through onError. Single-shot (no retry). Returns a cancel function that
+// aborts the in-flight request and suppresses the callbacks.
+func FetchModels(apiKey, baseURL string, onResult func([]string), onError func(string)) func() {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	controller := js.Global().Get("AbortController").New()
+	opts := map[string]any{
+		"method":  "GET",
+		"headers": map[string]any{"Authorization": "Bearer " + apiKey},
+		"signal":  controller.Get("signal"),
+	}
+	cancelled := false
+	cancel := func() {
+		if !cancelled {
+			cancelled = true
+			controller.Call("abort")
+		}
+	}
+	var onResp, onText, onCatch js.Func
+	release := func() { onResp.Release(); onText.Release(); onCatch.Release() }
+	status := 0
+	onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		status = args[0].Get("status").Int()
+		return args[0].Call("text")
+	})
+	onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		data := []byte(args[0].String())
+		release()
+		if cancelled {
+			return nil
+		}
+		if status >= 400 {
+			onError(ErrorMessage(status, data))
+			return nil
+		}
+		ids, err := ChatModelIDs(data)
+		if err != nil {
+			onError("Couldn't read the model list from OpenAI.")
+			return nil
+		}
+		onResult(ids)
+		return nil
+	})
+	onCatch = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		release()
+		if cancelled {
+			return nil
+		}
+		onError("Couldn't reach OpenAI to load the model list.")
+		return nil
+	})
+	js.Global().Call("fetch", baseURL+"/models", opts).
+		Call("then", onResp).
+		Call("then", onText).
+		Call("catch", onCatch)
+	return cancel
+}
+
 // SendChat posts a chat-completions request to baseURL using the user's apiKey,
 // asynchronously. On success it calls onResult with the assistant's content and
 // the call's token usage; on any failure (build, network, API, or empty response)
@@ -43,24 +104,53 @@ func parseContent(onResult func(string, Usage), onError func(string)) func([]byt
 }
 
 // SendChatTools posts a chat-completions request that advertises the given tools,
-// so the model may answer directly or ask to run one or more of them. On success it
-// calls onResult with the assistant's full Message (its content and/or tool_calls)
-// and the call's token usage; the caller drives the tool loop. Same async contract
-// as SendChat; returns a cancel function.
-func SendChatTools(apiKey, baseURL, model string, messages []Message, temperature float64, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
-	body, err := BuildToolRequest(model, messages, temperature, tools)
-	if err != nil {
-		onError(err.Error())
-		return noopCancel
+// so the model may answer directly or ask to run one or more of them. reasoningEffort
+// ("low"/"medium"/"high", or "" to omit) sets the thinking level for reasoning models.
+// On success it calls onResult with the assistant's full Message (its content and/or
+// tool_calls) and the call's token usage; the caller drives the tool loop. Same async
+// contract as SendChat; returns a cancel function.
+func SendChatTools(apiKey, baseURL, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
+	// Some reasoning models reject reasoning_effort when function tools are advertised
+	// on /chat/completions (they'd need /v1/responses). Skip a known-incompatible model
+	// upfront; otherwise try with the effort and, if OpenAI rejects it for that reason,
+	// remember the model and retry once without it — so the chat never breaks over it.
+	effort := reasoningEffort
+	if effort != "" && EffortRejectedWithTools(model) {
+		effort = ""
 	}
-	return postCompletions(apiKey, baseURL, body, func(data []byte) {
+	success := func(data []byte) {
 		msg, _, _, err := ParseChat(data)
 		if err != nil {
 			onError(err.Error())
 			return
 		}
 		onResult(msg, ParseUsage(data))
-	}, onError)
+	}
+	cancelled := false
+	active := noopCancel
+	cancel := func() {
+		cancelled = true
+		active()
+	}
+	var start func(eff string)
+	start = func(eff string) {
+		body, err := BuildToolRequest(model, messages, temperature, eff, tools)
+		if err != nil {
+			onError(err.Error())
+			return
+		}
+		onErr := func(msg string) {
+			if !cancelled && eff != "" && mentionsEffortUnsupported(msg) {
+				noteEffortRejected(model)
+				start("") // retry once without the effort
+				return
+			}
+			onError(msg)
+		}
+		active = postCompletions(apiKey, baseURL, body, success, onErr)
+	}
+	start(effort)
+	return cancel
 }
 
 // SendVisionChat posts a multimodal chat-completions request (a system prompt, a

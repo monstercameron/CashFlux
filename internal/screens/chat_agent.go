@@ -18,7 +18,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -56,11 +58,21 @@ type agentStep struct {
 // defaultChatSystemPrompt is the assistant's persona + tool-use instructions. The
 // user can override it from the chat's "Edit prompt" panel; the live data context is
 // always appended separately so a custom prompt never loses it.
-const defaultChatSystemPrompt = `You are CashFlux, a friendly, concise personal-finance assistant built into the user's own budgeting app. You can call tools to read the user's real, on-device figures — ALWAYS use a tool for any specific figure (a category total, an account balance, net worth, affordability) instead of guessing. If unsure which category a question means, call list_categories first. You may also COMBINE your own general knowledge (tax brackets, rates, formulas) with the calculator tool and the user's figures to ESTIMATE things the data doesn't directly contain (e.g. taxes) — never refuse; compute a clear estimate and state your assumptions. Use web_search for current or external facts, and the calculator for arithmetic. Never invent the user's own numbers.
+const defaultChatSystemPrompt = `You are CashFlux, a capable, confident personal-finance agent built into the user's own budgeting app. You ACT — you don't just describe. You have tools to READ the user's real, on-device figures and to CHANGE their data, and every change is previewed for the user's one-tap approval, so proposing an action is safe and expected. Never say you "can't" do something the tools cover, and never tell the user to go do it manually when a tool exists — do it and let the approval confirm.
 
-You can also CHANGE the user's data with tools (every change asks the user to approve first): add/complete tasks, record transactions, create accounts (assets and liabilities), transfer between accounts, set account balances, add goal contributions, create categories, and categorize transactions. When the user asks you to categorize their transactions: call list_uncategorized_transactions to see what's uncovered, group them by merchant, create_category for anything not already covered, then categorize_transactions(match, category) per merchant phrase. To fix mis-categorized transactions, call categorize_transactions with only_uncategorized set to false. Propose the plan and let the approvals confirm each change. Think in double-entry terms so net worth stays correct. Key rule: borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL at the moment you borrow — model it as a new liability for the amount owed PLUS the cash you received (add_transfer or update_account_balance), not as a one-sided loss. When an event spans multiple accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
+Use a tool for every specific figure (category totals, balances, net worth, affordability) — never guess or invent the user's numbers. Combine your own general knowledge (tax brackets, rates, formulas) with the calculator and the user's figures to ESTIMATE things the data doesn't hold (e.g. taxes); state your assumptions rather than refusing. Use web_search / fetch_webpage for current or external facts.
 
-Before creating anything, the tools check for an existing or near-duplicate item; if one is found they return it instead of making a clone — relay that to the user rather than forcing a duplicate. Whenever a creation tool's result contains a Markdown link (e.g. "[Open it](/todo#id)"), ALWAYS include that exact link in your reply so the user can jump straight to the new (or existing) item.
+You can change data with these tools (each asks the user to approve first): add/complete tasks; record, delete, and merge/de-duplicate transactions; categorize transactions; create accounts (assets and liabilities); transfer between accounts; set account balances; add goal contributions; create categories.
+
+DUPLICATES: when the user reports a possible duplicate (or a flag mentions one), call find_duplicate_transactions to see the exact entries, then merge_duplicate_transactions to keep one and remove the identical extras — for an exact duplicate, "merge" and "remove the extra" are the same thing, so just do it. Use delete_transaction to remove one specific entry. Always pass the amount and date so you target the right entries.
+
+CATEGORIZING: call list_uncategorized_transactions, group by merchant, create_category for anything not covered, then categorize_transactions(match, category) per merchant. To fix mis-categorized ones, pass only_uncategorized=false.
+
+FORMULAS: the app derives every figure from named engine variables — ATOMS (indivisible reductions like assets, income, liquid_cash) and MOLECULES (formulas over atoms, like net_worth = assets - liabilities). Call list_formula_metrics to see what's available (with live values and molecule formulas), and evaluate_formula to compute any expression over them (e.g. net_worth * 0.04 / 12). Prefer these for derived math over guessing.
+
+Think in double-entry terms so net worth stays correct. Borrowing against an account (e.g. a 401(k) loan) is roughly NET-WORTH-NEUTRAL the moment you borrow — model it as a new liability for the amount owed PLUS the cash received (add_transfer or update_account_balance), not a one-sided loss. When an event spans accounts, plan the steps, do them in order, and tell the user what you changed. If a detail is missing, pick a sensible default and say so rather than refusing.
+
+Before creating anything, the tools check for an existing or near-duplicate item and return it instead of cloning — relay that rather than forcing a duplicate. Whenever a tool result contains a Markdown link (e.g. "[Open it](/todo#id)"), ALWAYS include that exact link in your reply.
 
 Answer in plain English as short Markdown. The user's money is private and never leaves their device except for these requests.`
 
@@ -86,6 +98,69 @@ func countTxnMatches(txns []domain.Transaction, match string, onlyUncat bool) in
 	return n
 }
 
+// sameYMD reports whether two times fall on the same calendar day.
+func sameYMD(a, b time.Time) bool {
+	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
+}
+
+// dupGroupMatches reports whether a canonical duplicate group (dedupe.FindDuplicates)
+// is the one the user means: its description or any member's payee/description contains
+// the match phrase, and — when given — its absolute amount and calendar date agree. This
+// keeps the agent's merge/delete targeting consistent with the "possible duplicate" flags
+// and the Duplicates page, which all key off dedupe.Signature.
+func dupGroupMatches(g dedupe.Group, byID map[string]domain.Transaction, match string, amount float64, hasAmount, hasDate bool, dateStr string) bool {
+	q := strings.ToLower(strings.TrimSpace(match))
+	if q != "" {
+		hit := strings.Contains(strings.ToLower(g.Description), q)
+		for _, id := range g.IDs {
+			if t, ok := byID[id]; ok && strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), q) {
+				hit = true
+			}
+		}
+		if !hit {
+			return false
+		}
+	}
+	if hasAmount && absMinor(g.Amount) != absMinor(currency.MinorFromMajor(amount, g.Currency)) {
+		return false
+	}
+	if hasDate && g.Date != strings.TrimSpace(dateStr) {
+		return false
+	}
+	return true
+}
+
+// removalMatches returns non-transfer transactions whose payee/description contains
+// match, optionally constrained to an absolute amount (major units) and a calendar
+// day (YYYY-MM-DD). It backs the delete_transaction / merge_duplicate_transactions
+// tools so they target the exact entries the user means.
+func removalMatches(txns []domain.Transaction, match string, amount float64, hasAmount bool, dateStr string) []domain.Transaction {
+	q := strings.ToLower(strings.TrimSpace(match))
+	day, hasDay := time.Time{}, false
+	if strings.TrimSpace(dateStr) != "" {
+		if d, err := dateutil.ParseDate(dateStr); err == nil {
+			day, hasDay = d, true
+		}
+	}
+	var out []domain.Transaction
+	for _, t := range txns {
+		if t.IsTransfer() {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), q) {
+			continue
+		}
+		if hasAmount && absMinor(t.Amount.Amount) != absMinor(currency.MinorFromMajor(amount, t.Amount.Currency)) {
+			continue
+		}
+		if hasDay && !sameYMD(t.Date, day) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
 // categoryNames returns a comma-separated list of the user's category names.
 func categoryNames(cats []domain.Category) string {
 	ns := make([]string, 0, len(cats))
@@ -106,6 +181,16 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 	catByID := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catByID[c.ID] = c.Name
+	}
+	accNameByID := make(map[string]string, len(accounts))
+	for _, ac := range accounts {
+		accNameByID[ac.ID] = ac.Name
+	}
+	accLabel := func(id string) string {
+		if n := accNameByID[id]; n != "" {
+			return n
+		}
+		return "an account"
 	}
 	catLabel := func(id string) string {
 		if n := catByID[id]; n != "" {
@@ -542,6 +627,119 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					fmt.Fprintf(&b, "%s: %s\n", catLabel(r.id), fmtMoney(money.New(r.amt, base)))
 				}
 				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("list_formula_metrics",
+				"List the engine's formula variables: ATOMS (indivisible reductions over the user's data — e.g. assets, liabilities, liquid_cash, income, expense) and MOLECULES (compound figures defined as a formula over atoms — e.g. net_worth = assets - liabilities), plus per-entity metrics (budgets, goals, accounts, pools, plans). Each row shows the name, current value, and — for molecules — the formula. Use any name with evaluate_formula. Optionally filter by a substring, or set molecules_only.",
+				json.RawMessage(`{"type":"object","properties":{"filter":{"type":"string","description":"optional substring matched on name/label/doc"},"molecules_only":{"type":"boolean"}}}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Filter        string `json:"filter"`
+					MoleculesOnly bool   `json:"molecules_only"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				metrics := allFormulaMetrics(app)
+				vars := liveEngineVars(app)
+				q := strings.ToLower(strings.TrimSpace(a.Filter))
+				groupOrder := []string{}
+				byGroup := map[string][]string{}
+				total := 0
+				for _, m := range metrics {
+					if a.MoleculesOnly && !m.Molecule {
+						continue
+					}
+					if q != "" && !strings.Contains(strings.ToLower(m.Name+" "+m.Label+" "+m.Doc), q) {
+						continue
+					}
+					val := "—"
+					if v, ok := vars[m.Name]; ok {
+						val = formatFormulaValue(v)
+					}
+					line := fmt.Sprintf("%s = %s", m.Name, val)
+					if m.Molecule && m.Formula != "" {
+						line += "  [" + m.Formula + "]"
+					}
+					if m.Label != "" {
+						line += "  — " + m.Label
+					}
+					g := string(m.Group)
+					if _, ok := byGroup[g]; !ok {
+						groupOrder = append(groupOrder, g)
+					}
+					byGroup[g] = append(byGroup[g], line)
+					total++
+				}
+				if total == 0 {
+					return "No matching formula metrics."
+				}
+				const cap = 140
+				var b strings.Builder
+				b.WriteString("Formula metrics — atoms + molecules (use any name in evaluate_formula):\n")
+				shown := 0
+				for _, g := range groupOrder {
+					if shown >= cap {
+						break
+					}
+					fmt.Fprintf(&b, "\n[%s]\n", g)
+					for _, line := range byGroup[g] {
+						if shown >= cap {
+							break
+						}
+						b.WriteString(line + "\n")
+						shown++
+					}
+				}
+				if shown < total {
+					fmt.Fprintf(&b, "\n… %d more — narrow with the filter argument.", total-shown)
+				}
+				return strings.TrimRight(b.String(), "\n")
+			},
+		},
+		{
+			spec: ai.FunctionTool("evaluate_formula",
+				"Evaluate an arithmetic/logic expression over the engine's formula variables (the atoms + molecules from list_formula_metrics), computed from the user's live data. Supports + - * / parentheses and comparisons, e.g. 'net_worth * 0.04 / 12', or a bare variable name like 'liquid_cash'. Money variables are in the base currency's major units. A single variable also reports how it's derived.",
+				json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Expression string `json:"expression"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Expression) == "" {
+					return "Provide an expression to evaluate."
+				}
+				expr := strings.TrimSpace(a.Expression)
+				vars := liveEngineVars(app)
+				val, err := formula.Eval(expr, formula.Env{Vars: vars})
+				if err != nil {
+					return "Couldn't evaluate “" + expr + "”: " + err.Error()
+				}
+				out := fmt.Sprintf("%s = %s", expr, formatFormulaValue(val))
+				// A bare variable name: show how it's derived (atom source or molecule formula).
+				if _, ok := vars[expr]; ok {
+					if d, ok := engineenv.Explain(expr, vars, app.Molecules()); ok {
+						switch d.Kind {
+						case "molecule":
+							out += fmt.Sprintf("\nMolecule: %s = %s", d.Name, d.Formula)
+							if len(d.Inputs) > 0 {
+								names := make([]string, 0, len(d.Inputs))
+								for k := range d.Inputs {
+									names = append(names, k)
+								}
+								sort.Strings(names)
+								parts := make([]string, 0, len(names))
+								for _, k := range names {
+									parts = append(parts, fmt.Sprintf("%s=%s", k, formatFormulaValue(d.Inputs[k])))
+								}
+								out += " (with " + strings.Join(parts, ", ") + ")"
+							}
+						case "atom":
+							if d.Source != "" {
+								out += "\nAtom: " + d.Source
+							}
+						}
+					}
+				}
+				return out
 			},
 		},
 
@@ -1016,7 +1214,220 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return fmt.Sprintf("Set %s balance to %s (adjusted by %s).", acc.Name, fmtMoney(money.New(target, acc.Currency)), fmtMoney(money.New(delta, acc.Currency)))
 			},
 		},
+		{
+			spec: ai.FunctionTool("find_duplicate_transactions",
+				"Find groups of likely-duplicate transactions — same calendar date, signed amount, and description — the app's CANONICAL duplicate definition (identical to the 'possible duplicate' flags and the Duplicates page). Call this to locate the duplicates behind a flag before merging or deleting them. Optionally filter by a description/payee phrase.",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"optional description/payee phrase to filter"}}}`)),
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Match string `json:"match"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				byID := make(map[string]domain.Transaction, len(txns))
+				for _, t := range txns {
+					byID[t.ID] = t
+				}
+				var b strings.Builder
+				n := 0
+				for _, g := range dedupe.FindDuplicates(txns) {
+					if !dupGroupMatches(g, byID, a.Match, 0, false, false, "") {
+						continue
+					}
+					n++
+					label := strings.TrimSpace(g.Description)
+					acct := ""
+					if t, ok := byID[g.IDs[0]]; ok {
+						if label == "" {
+							label = strings.TrimSpace(t.Payee)
+						}
+						acct = accLabel(t.AccountID)
+					}
+					fmt.Fprintf(&b, "- %d× %s  %s  on %s%s\n", len(g.IDs), label, fmtMoney(money.New(absMinor(g.Amount), g.Currency)), g.Date, ifStr(acct != "", "  in "+acct, ""))
+				}
+				if n == 0 {
+					return "No duplicate transactions found."
+				}
+				return fmt.Sprintf("%d duplicate group(s):\n%sTo fix one, call merge_duplicate_transactions with its description phrase, amount, and date.", n, b.String())
+			},
+		},
+		{
+			spec: ai.FunctionTool("merge_duplicate_transactions",
+				"Merge a duplicate group: keep one entry (unioning its tags and cleared flag) and delete the identical extras — exactly the merge the Duplicates page performs. This is the fix for a 'possible duplicate' flag. Match by a description/payee phrase; pass the amount (absolute major units, e.g. 38.49) and date (YYYY-MM-DD) to target one group precisely. Only touches true duplicates (same date, amount, description).",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string"},"amount":{"type":"number","description":"absolute amount in major units, e.g. 38.49"},"date":{"type":"string","description":"YYYY-MM-DD"}},"required":["match"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Match  string  `json:"match"`
+					Amount float64 `json:"amount"`
+					Date   string  `json:"date"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				byID := make(map[string]domain.Transaction, len(txns))
+				for _, t := range txns {
+					byID[t.ID] = t
+				}
+				extras := 0
+				for _, g := range dedupe.FindDuplicates(txns) {
+					if dupGroupMatches(g, byID, a.Match, a.Amount, a.Amount != 0, strings.TrimSpace(a.Date) != "", a.Date) {
+						extras += len(g.IDs) - 1
+					}
+				}
+				if extras == 0 {
+					return fmt.Sprintf("Merge duplicates of “%s” — none found to merge.", strings.TrimSpace(a.Match))
+				}
+				return fmt.Sprintf("Merge duplicates of “%s”: keep one, remove %d extra %s.", strings.TrimSpace(a.Match), extras, entryWord(extras))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Match  string  `json:"match"`
+					Amount float64 `json:"amount"`
+					Date   string  `json:"date"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the details."
+				}
+				if strings.TrimSpace(a.Match) == "" {
+					return "Give a description or payee phrase to find the duplicates."
+				}
+				byID := make(map[string]domain.Transaction, len(txns))
+				for _, t := range txns {
+					byID[t.ID] = t
+				}
+				removed := 0
+				// Mirror the Duplicates page: keep g.IDs[0], union its metadata from the
+				// others (dedupe.Merge), then delete the extras.
+				for _, g := range dedupe.FindDuplicates(txns) {
+					if !dupGroupMatches(g, byID, a.Match, a.Amount, a.Amount != 0, strings.TrimSpace(a.Date) != "", a.Date) {
+						continue
+					}
+					survivor, ok := byID[g.IDs[0]]
+					if !ok {
+						continue
+					}
+					others := make([]domain.Transaction, 0, len(g.IDs)-1)
+					for _, oid := range g.IDs[1:] {
+						if t, ok := byID[oid]; ok {
+							others = append(others, t)
+						}
+					}
+					if merged := dedupe.Merge(survivor, others); app.PutTransaction(merged) != nil {
+						return fmt.Sprintf("Merged %d, then hit an error saving the kept entry.", removed)
+					}
+					for _, o := range others {
+						if err := app.DeleteTransactionWithTransferPair(o.ID); err != nil {
+							return fmt.Sprintf("Merged %d, then hit an error: %s", removed, err.Error())
+						}
+						removed++
+					}
+				}
+				if removed == 0 {
+					return fmt.Sprintf("No duplicates matched “%s” — nothing to merge.", strings.TrimSpace(a.Match))
+				}
+				return fmt.Sprintf("Merged duplicates: removed %d extra %s, keeping one of each.", removed, entryWord(removed))
+			},
+		},
+		{
+			spec: ai.FunctionTool("delete_transaction",
+				"Delete a transaction, matched by a payee/description phrase and (strongly recommended) an amount (absolute major units) and date (YYYY-MM-DD). Use to remove one specific entry — e.g. the extra copy of a duplicate. If several NON-identical transactions match, it lists them and asks you to narrow down rather than guessing.",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string"},"amount":{"type":"number","description":"absolute amount in major units, e.g. 38.49"},"date":{"type":"string","description":"YYYY-MM-DD"}},"required":["match"]}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Match  string  `json:"match"`
+					Amount float64 `json:"amount"`
+					Date   string  `json:"date"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				m := removalMatches(txns, a.Match, a.Amount, a.Amount != 0, a.Date)
+				if len(m) == 0 {
+					return fmt.Sprintf("Delete a transaction matching “%s” — none found.", strings.TrimSpace(a.Match))
+				}
+				t := m[0]
+				label := strings.TrimSpace(t.Payee)
+				if label == "" {
+					label = strings.TrimSpace(t.Desc)
+				}
+				if len(m) == 1 || distinctSignatures(m) == 1 {
+					return fmt.Sprintf("Delete: %s %s on %s", label, fmtMoney(t.Amount.Abs()), t.Date.Format("2006-01-02"))
+				}
+				return fmt.Sprintf("Delete one transaction matching “%s” (%d match — will ask to narrow if not identical).", strings.TrimSpace(a.Match), len(m))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Match  string  `json:"match"`
+					Amount float64 `json:"amount"`
+					Date   string  `json:"date"`
+				}
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the details."
+				}
+				if strings.TrimSpace(a.Match) == "" {
+					return "Give a payee or description phrase for the transaction to delete."
+				}
+				m := removalMatches(txns, a.Match, a.Amount, a.Amount != 0, a.Date)
+				if len(m) == 0 {
+					return fmt.Sprintf("No transaction matched “%s”.", strings.TrimSpace(a.Match))
+				}
+				del := func(t domain.Transaction) string {
+					label := strings.TrimSpace(t.Payee)
+					if label == "" {
+						label = strings.TrimSpace(t.Desc)
+					}
+					if err := app.DeleteTransactionWithTransferPair(t.ID); err != nil {
+						return "Couldn't delete the transaction: " + err.Error()
+					}
+					return fmt.Sprintf("Deleted %s %s on %s.", label, fmtMoney(t.Amount.Abs()), t.Date.Format("2006-01-02"))
+				}
+				if len(m) == 1 {
+					return del(m[0])
+				}
+				// Several match. If they are all identical, delete one extra; otherwise ask
+				// the user to narrow it down rather than guessing which to remove.
+				if distinctSignatures(m) == 1 {
+					sort.Slice(m, func(i, j int) bool {
+						if !m[i].Date.Equal(m[j].Date) {
+							return m[i].Date.After(m[j].Date)
+						}
+						return m[i].ID > m[j].ID
+					})
+					out := del(m[0])
+					return out + fmt.Sprintf(" (%d identical %s remain).", len(m)-1, entryWord(len(m)-1))
+				}
+				var b strings.Builder
+				for i, t := range m {
+					if i >= 6 {
+						break
+					}
+					label := strings.TrimSpace(t.Payee)
+					if label == "" {
+						label = strings.TrimSpace(t.Desc)
+					}
+					fmt.Fprintf(&b, "- %s  %s  on %s\n", label, fmtMoney(t.Amount.Abs()), t.Date.Format("2006-01-02"))
+				}
+				return fmt.Sprintf("%d transactions match “%s” and they differ. Tell me the amount and date of the one to delete:\n%s", len(m), strings.TrimSpace(a.Match), strings.TrimRight(b.String(), "\n"))
+			},
+		},
 	}
+}
+
+// distinctSignatures counts how many distinct canonical duplicate signatures
+// (dedupe.Signature) appear across txns — 1 means every entry is a duplicate of the
+// others. Used by delete_transaction to tell "the extra copy of one charge" (safe to
+// remove one) from "several different charges that happen to match" (ask to narrow).
+func distinctSignatures(txns []domain.Transaction) int {
+	seen := map[string]bool{}
+	for _, t := range txns {
+		seen[dedupe.Signature(t)] = true
+	}
+	return len(seen)
+}
+
+// entryWord returns "entry" or "entries" for a count (plural() would produce "entrys").
+func entryWord(n int) string {
+	if n == 1 {
+		return "entry"
+	}
+	return "entries"
 }
 
 // openLink returns a Markdown deep link to an entity's screen, anchored to its id so

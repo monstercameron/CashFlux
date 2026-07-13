@@ -1,3 +1,41 @@
+## 2026-07-13 — Assistant agent overhaul: layout, model/thinking switch, canonical-dedupe tools, formula tools (v1.0.23)
+
+A long iterative session on the Assistant. Started with layout (full-height chat, no page scroll,
+collapsible right-rail notes that start collapsed, collapsible left-nav groups), then flagged-activity
+actions: Source + Discuss, where Discuss attaches the flag as a **context bubble** on the composer
+(not raw text in the input — Cam was explicit about that) that folds into the next send, plus per-kind
+**remediation chips**. Removed the Advanced expander for standard `btn-tool` buttons.
+
+Then the agent's actual capability. Cam hit "I can't merge it directly from here" — the agent had read
++ create/update tools but **no delete/merge**. Added `find_/merge_/delete_` duplicate tools. First pass
+used my own signature (account+payee); the e2e (mock-OpenAI interception to drive the tool loop) showed
+the flow *worked* on the seed, but the real bug was **inconsistency**: the flags, the Duplicates page,
+and the CSV importer all key off `dedupe.Signature` (date · signed amount · currency · **description**),
+so my account+payee key could disagree on real imports → "no other dupes" while a flag still shows one.
+Rewired all three tools to `internal/dedupe` (merge mirrors the Duplicates page: survivor + `dedupe.Merge`
+tag/cleared union + delete extras). Now the agent, flags, and Duplicates page are one source of truth.
+
+Also added `list_formula_metrics` / `evaluate_formula` over the engine atom/molecule surface (reusing
+`allFormulaMetrics` + `liveEngineVars`), and rewrote the system prompt to be enabling, not exploratory.
+
+Model + thinking-level: a header switch, a live `/v1/models` fetch (`ai.ChatModelIDs`), persisted to
+settings. The sharp edge was `reasoning_effort`: the **whole gpt-5.x family** rejects it with function
+tools on `/v1/chat/completions` (needs `/v1/responses`) — confirmed for gpt-5.4-mini, gpt-5.6-luna,
+gpt-5.6-sol. So `EffortRejectedWithTools` strips it by `gpt-5` prefix and hides the Thinking control for
+those models (o-series keeps it), with a transport retry-without-effort + learned-model memo as backstop.
+Verified via mock-OpenAI e2e that gpt-5.6-sol sends no `reasoning_effort` on send *and* replay.
+
+Header controls were iterated to match the app's real standards (scanned the first 7 pages): the selects
+are the standard toolbar-select (native arrow, bg-elev chip, 8px radius — the member-switcher language),
+`.btn-tool` buttons. The earlier custom-chevron detour lost to CSS specificity (the generated
+`select:not(.set-input):not(.seg-btn)` rule out-ranked a bare class) — scoped the rule to
+`.ask-head-actions select.ask-quickctl-sel` to win.
+
+Delivery gotcha at the end: Cam kept seeing an already-fixed `reasoning_effort` error because an
+**orphaned `gwc dev`** (parent `gwc.exe` exited, `-hot true`) was serving a stale in-memory wasm on :8080.
+Killed it, restarted fresh (serves the disk gz byte-for-byte = the verified build), and bumped the SW
+cache to `v297`.
+
 ## 2026-07-13 — /health factor composition (formula = atoms, why, example) (v1.0.22)
 
 First scrutinized the health formulas to see if they land — they do: every factor scorer is continuous

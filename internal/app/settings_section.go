@@ -96,17 +96,21 @@ type settingsRightProps struct {
 	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
 	OnMonthlyIncome  func(string) // sets MonthlyIncomeMinor from a major-unit string (empty = 0)
 	// AI
-	AiOn          bool
-	OnAiToggle    func(bool)
-	AiKey         string
-	OnKey         uic.Handler // UseEvent
-	KeySet        bool        // a cloud AI key is stored server-side (§7.11)
-	OnRemoveKey   uic.Handler // UseEvent — clears the server-side key
-	OnRememberKey func(bool)
-	OnModel       uic.Handler // UseEvent
-	CurModel      string
-	WsKey         string
-	OnWsKey       uic.Handler // UseEvent
+	AiOn           bool
+	OnAiToggle     func(bool)
+	AiKey          string
+	OnKey          uic.Handler // UseEvent
+	KeySet         bool        // a cloud AI key is stored server-side (§7.11)
+	OnRemoveKey    uic.Handler // UseEvent — clears the server-side key
+	OnRememberKey  func(bool)
+	OnModel        uic.Handler // UseEvent
+	CurModel       string
+	Models         []string    // model ids fetched live from OpenAI (empty = fall back to built-in defaults)
+	OnReloadModels uic.Handler // UseEvent — refetch the model list
+	ModelsLoading  bool
+	ModelsErr      string
+	WsKey          string
+	OnWsKey        uic.Handler // UseEvent
 	// Cloud & server
 	BackendOn         bool
 	OnBackendToggle   func(bool)
@@ -157,14 +161,39 @@ type settingsRightProps struct {
 // model ID. Falls back to the raw ID for any future models not yet listed.
 func aiModelDisplayName(model string) string {
 	switch model {
+	case "", "gpt-5.4-mini":
+		// Covers "" (unset) and the default selection.
+		return "GPT-5.4 mini"
 	case "gpt-5.5":
 		return "GPT-5.5"
 	case "o4-mini":
 		return "o4-mini (reasoning)"
 	default:
-		// Covers "" (unset) and "gpt-5.4-mini" — the default selection.
-		return "GPT-5.4 mini"
+		// A dynamically-fetched model with no friendly label — show its raw id
+		// rather than mislabelling it as the default.
+		return model
 	}
+}
+
+// modelIDList returns the model ids to show in the picker: the live list fetched
+// from OpenAI when available, else the built-in defaults. The current selection is
+// always included so a custom or older model stays visible even when it isn't in
+// the fetched list.
+func modelIDList(models []string, cur string) []string {
+	ids := models
+	if len(ids) == 0 {
+		ids = []string{"gpt-5.4-mini", "gpt-5.5", "o4-mini"}
+	}
+	cur = strings.TrimSpace(cur)
+	if cur != "" {
+		for _, m := range ids {
+			if m == cur {
+				return ids
+			}
+		}
+		ids = append([]string{cur}, ids...)
+	}
+	return ids
 }
 
 // settingsPreferencesPane renders the Preferences tab: the appearance link,
@@ -250,14 +279,28 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
-		Select(css.Class("set-input", tw.Mt045), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(p.OnModel),
-			Option(Value("gpt-5.4-mini"), SelectedIf(p.CurModel == "gpt-5.4-mini" || p.CurModel == ""), "GPT-5.4 mini"),
-			Option(Value("gpt-5.5"), SelectedIf(p.CurModel == "gpt-5.5"), "GPT-5.5"),
-			Option(Value("o4-mini"), SelectedIf(p.CurModel == "o4-mini"), "o4-mini (reasoning)"),
+		// The model list is fetched live from OpenAI's /v1/models (when a key is set),
+		// so new models appear without a code change; it falls back to the built-in
+		// defaults offline / before it loads. Reload refetches on demand.
+		Div(css.Class("set-model-row", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt045),
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(p.OnModel),
+				MapKeyed(modelIDList(p.Models, p.CurModel),
+					func(m string) any { return m },
+					func(m string) uic.Node {
+						return Option(Value(m), SelectedIf(p.CurModel == m || (p.CurModel == "" && m == "gpt-5.4-mini")), aiModelDisplayName(m))
+					},
+				),
+			),
+			Button(css.Class("btn btn-tool btn-sm"), Type("button"), Attr("aria-label", uistate.T("settings.aiModelReload")), Title(uistate.T("settings.aiModelReload")), OnClick(p.OnReloadModels),
+				If(p.ModelsLoading, Span(uistate.T("settings.aiModelLoading"))),
+				If(!p.ModelsLoading, Span(uistate.T("settings.aiModelReload"))),
+			),
 		),
 		// C250: surface the active model and BYOK billing transparency so users know
 		// which model is active and that they pay OpenAI directly per token used.
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelNote", aiModelDisplayName(p.CurModel))),
+		If(strings.TrimSpace(p.ModelsErr) != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLoadFailed"))),
+		If(len(p.Models) > 0, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLive", len(p.Models)))),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(p.WsKey), OnInput(p.OnWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),

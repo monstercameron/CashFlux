@@ -653,6 +653,34 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	})
+	// The model picker is populated live from OpenAI's /v1/models endpoint (no
+	// hardcoded list): fetch the chat-capable ids with the user's key, fall back to
+	// the built-in defaults offline or before it loads. Loaded once on open and via
+	// the Reload button (so a freshly-entered key can refresh it).
+	modelList := uic.UseState([]string{})
+	modelsLoading := uic.UseState(false)
+	modelsErr := uic.UseState("")
+	fetchModels := func() {
+		a := appstate.Default
+		if a == nil {
+			return
+		}
+		k := strings.TrimSpace(a.Settings().OpenAIKey)
+		if k == "" {
+			modelList.Set(nil)
+			modelsErr.Set("")
+			return
+		}
+		modelsLoading.Set(true)
+		modelsErr.Set("")
+		ai.FetchModels(k, ai.DefaultBaseURL,
+			func(ids []string) { modelsLoading.Set(false); modelList.Set(ids) },
+			func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) },
+		)
+	}
+	onReloadModels := uic.UseEvent(func() { fetchModels() })
+	// Load the list once when the panel opens (no-ops without a key).
+	uic.UseEffect(func() func() { fetchModels(); return nil }, "")
 	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
 	// access); kept on-device in its own localStorage entry.
 	wsKey := uic.UseState(uistate.LoadWebSearchKey())
@@ -1015,10 +1043,14 @@ func globalSettingsForm() uic.Node {
 				uistate.ClearAIKey()
 			}
 		},
-		OnModel:  onModel,
-		CurModel: curModel,
-		WsKey:    wsKey.Get(),
-		OnWsKey:  onWsKey,
+		OnModel:        onModel,
+		CurModel:       curModel,
+		Models:         modelList.Get(),
+		OnReloadModels: onReloadModels,
+		ModelsLoading:  modelsLoading.Get(),
+		ModelsErr:      modelsErr.Get(),
+		WsKey:          wsKey.Get(),
+		OnWsKey:        onWsKey,
 
 		BackendOn:         backendOn.Get(),
 		OnBackendToggle:   onBackendToggle,

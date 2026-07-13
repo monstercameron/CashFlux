@@ -11,7 +11,7 @@ import (
 func TestBuildToolRequest(t *testing.T) {
 	params := json.RawMessage(`{"type":"object","properties":{"category":{"type":"string"}}}`)
 	tools := []Tool{FunctionTool("spend_by_category", "Spend for a category", params)}
-	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0.4, tools)
+	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0.4, "high", tools)
 	if err != nil {
 		t.Fatalf("BuildToolRequest: %v", err)
 	}
@@ -25,18 +25,24 @@ func TestBuildToolRequest(t *testing.T) {
 	if _, ok := got["tools"]; !ok {
 		t.Error("tools missing from request")
 	}
+	if got["reasoning_effort"] != "high" {
+		t.Errorf("reasoning_effort = %v, want high", got["reasoning_effort"])
+	}
 	if !strings.Contains(string(body), "spend_by_category") {
 		t.Error("function name not serialized")
 	}
 }
 
 func TestBuildToolRequestNoTools(t *testing.T) {
-	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0, nil)
+	body, err := BuildToolRequest("gpt-5.4-mini", []Message{{Role: RoleUser, Content: "hi"}}, 0, "", nil)
 	if err != nil {
 		t.Fatalf("BuildToolRequest: %v", err)
 	}
 	if strings.Contains(string(body), "tool_choice") {
 		t.Error("tool_choice should be omitted when no tools are offered")
+	}
+	if strings.Contains(string(body), "reasoning_effort") {
+		t.Error("reasoning_effort should be omitted when empty")
 	}
 }
 
