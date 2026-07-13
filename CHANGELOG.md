@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.22 (2026-07-13):** cuts the /health factor-composition detail into a release.
+
+### Added
+- **Each /health factor now shows its composition, scoring, and a worked example (2026-07-13):** the "How it's measured & scored" disclosure on every factor tile now breaks into three labelled blocks. **Composition** shows the value's actual equation — a *live molecule* pulled from the engine for the molecule-backed factors (`savings_rate = clamp(safediv(income - expense, income, 0) * 100, …)`, `credit_utilization`, `net_worth`), or the on-device expression over atoms for the rest (`health_obligation_pct = Σ minimum_payments ÷ monthly_income`) — with an honest note distinguishing an editable molecule from an on-device variable. **Scoring** keeps the plain-English curve, the live score, and the weight share. **Example** is a new worked illustration of the factor's impact on the overall number (e.g. "$6,000 balance on $10,000 of limits = 60% → 28; pay it to 30% and it jumps to 70 — about +4 points overall"). Answers "I see `health_debt` but what's it made of?" — you can now trace value → curve → score for every factor.
+
+### Changed
 - **Version bumped to v1.0.21 (2026-07-13):** cuts the flip-modal size standardization + a debt-toolbar polish into a release.
 - **Flip modals use the 3 standard sizes (2026-07-13):** snapped the remaining hand-tuned modals to `FlipSmall` / `FlipMedium` / `FlipLarge` so every config/edit panel is one of three consistent sizes — the columns picker (→ Small), the Smart-categorize review, the assistant prompt editor, and the new-task compose form (→ Medium), and Settings + the plan-add form now reference `FlipLargeW` / `FlipMediumW` instead of the same literals. The two genuinely-wide **data-table** modals (Review duplicates, Import) stay double-wide (900px) on purpose — squeezing a review/import table into 760px would truncate it; the 3 sizes target config/edit panels, not data tables.
 - **Debt "Manage accounts" is a labeled button (2026-07-13):** it was a bare ghost text-link sitting between pilled toolbar buttons — now a `.btn-tool` with a bank glyph and an ↗ "navigates" badge, matching the accounts page's "Manage exchange rates ↗".

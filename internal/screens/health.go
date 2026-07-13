@@ -251,10 +251,36 @@ func healthFactorVarName(key string) string {
 
 // healthFactorTileProps drives one factor tile: the model factor plus its act
 // route; its own component so the drill OnClick hook sits at a stable position.
+// MolFormula maps molecule name → formula so the tile can show a factor's live
+// composition (molecule = atoms) for the molecule-backed factors.
 type healthFactorTileProps struct {
-	Factor healthscore.Factor
-	Route  string
-	OnOpen func()
+	Factor     healthscore.Factor
+	Route      string
+	OnOpen     func()
+	MolFormula map[string]string
+}
+
+// healthFactorEq returns a factor's underlying value variable, the right-hand side
+// of its composition, and whether that value variable is a real engine MOLECULE.
+// Molecule-backed factors (savings_rate, credit_utilization, net_worth) show their
+// live formula pulled from the engine; the rest are Go-scored on-device, so their
+// composition is the conceptual expression over the atoms that feed it.
+func healthFactorEq(key string, molF map[string]string) (lhs, rhs string, isMol bool) {
+	switch key {
+	case "savings":
+		return "savings_rate", molF["savings_rate"], true
+	case "utilization":
+		return "credit_utilization", molF["credit_utilization"], true
+	case "nw-trend":
+		return "net_worth", molF["net_worth"], true
+	case "emergency":
+		return "health_emergency_months", "liquid_cash ÷ avg_monthly_spend", false
+	case "debt":
+		return "health_obligation_pct", "Σ minimum_payments ÷ monthly_income", false
+	case "budget":
+		return "health_budget", "budgets_within_limit ÷ total_budgets × 100", false
+	}
+	return healthFactorVarName(key), "", false
 }
 
 // healthFactorTile renders one factor in depth: the current value vs its
@@ -296,6 +322,13 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 		targetLine = Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "hf-unmet-"+f.Key),
 			uistate.T("health.target", f.Target))
 	}
+	// The factor's composition: value variable = its formula (a live molecule for the
+	// molecule-backed factors, else the on-device expression over atoms).
+	eqLHS, eqRHS, eqIsMol := healthFactorEq(f.Key, p.MolFormula)
+	eqNote := uistate.T("health.derivedNote")
+	if eqIsMol {
+		eqNote = uistate.T("health.molNote")
+	}
 	return hltSection("sec-hf-"+f.Key, f.Label, nil, Fragment(
 		Div(css.Class("hlt-factor-head"),
 			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
@@ -305,11 +338,32 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
 		Details(css.Class("hlt-curve"),
 			Summary(uistate.T("health.curveSummary")),
-			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".curve")),
-			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", f.Score, f.ContributionPct)),
-			Div(css.Class("hlt-varchip"), Attr("data-testid", "hf-var-"+f.Key),
-				Title(uistate.T("health.varChipTitle")),
-				Code(varName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", f.Score)),
+			// Composition: plain-language formula, then the actual equation — a live
+			// molecule for the molecule-backed factors, else the on-device composition
+			// over atoms — so "= atoms" is visible, not just an opaque variable name.
+			Div(css.Class("hlt-detail"),
+				Span(css.Class("hlt-detail-label"), uistate.T("health.formulaLabel")),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".formula")),
+				If(eqRHS != "", Fragment(
+					Code(css.Class("hlt-eq"), Attr("data-testid", "hf-eq-"+f.Key), eqLHS+" = "+eqRHS),
+					Span(css.Class("hlt-eq-note", tw.TextFaint), eqNote),
+				)),
+			),
+			// Scoring: the curve that maps the value to 0–100, plus this factor's live
+			// score variable and its weight share of the overall number.
+			Div(css.Class("hlt-detail"),
+				Span(css.Class("hlt-detail-label"), uistate.T("health.scoringLabel")),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".curve")),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", f.Score, f.ContributionPct)),
+				Div(css.Class("hlt-varchip"), Attr("data-testid", "hf-var-"+f.Key),
+					Title(uistate.T("health.varChipTitle")),
+					Code(varName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", f.Score)),
+				),
+			),
+			// Example: a worked illustration of this factor's impact on the overall score.
+			Div(css.Class("hlt-detail"),
+				Span(css.Class("hlt-detail-label"), uistate.T("health.exampleLabel")),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.f."+f.Key+".example")),
 			),
 		),
 		Div(css.Class("hlt-factor-foot"), Span(), act),
@@ -344,10 +398,11 @@ func HealthScreen() ui.Node {
 	// The score's formula identity: the health_score molecule as persisted (a user
 	// edit under Formulas travels here too — the page reads what the engine reads).
 	scoreFormula := ""
+	molF := make(map[string]string)
 	for _, m := range app.Molecules() {
+		molF[m.Name] = m.Formula
 		if m.Name == "health_score" {
 			scoreFormula = m.Formula
-			break
 		}
 	}
 
@@ -389,7 +444,7 @@ func HealthScreen() ui.Node {
 		route := healthStepRoute(f.Key)
 		tiles = append(tiles, hltTile("hlt-"+f.Key, "span 2",
 			ui.CreateElement(healthFactorTile, healthFactorTileProps{
-				Factor: f, Route: route,
+				Factor: f, Route: route, MolFormula: molF,
 				OnOpen: func() {
 					if route != "" {
 						nav.Navigate(uistate.RoutePath(route))

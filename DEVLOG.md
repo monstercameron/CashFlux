@@ -1,3 +1,26 @@
+## 2026-07-13 — /health factor composition (formula = atoms, why, example) (v1.0.22)
+
+First scrutinized the health formulas to see if they land — they do: every factor scorer is continuous
+and hits its breakpoints, weights sum to 1 with proportional re-normalization, and the `health_score`
+molecule reproduces `healthscore.Evaluate` exactly (same `math.Round`, single-source inputs via
+`liveHealthInputs → engineenv.HealthInputs`, the inner clamp is a provable no-op). Hand-checked the
+sample: 25+25+1.4+10+2.8+10 = 74.2 → 74, matching the ring and the live formula evaluator.
+
+Then Cam wanted each factor to expose its composition ("I see `health_debt` but there's no context —
+show molecule = atoms"). Enriched the per-factor disclosure into three labelled blocks:
+- **Composition** — the value's real equation. For the molecule-backed factors (savings_rate,
+  credit_utilization, net_worth) I pull the LIVE formula from `app.Molecules()`; the rest are Go-scored
+  on-device, so I show the conceptual expression (`health_obligation_pct = Σ minimum_payments ÷
+  monthly_income`) with an honest note that it's a live variable but not an editable molecule (health_*
+  score atoms aren't molecules — clearing up the misconception directly).
+- **Scoring** — the curve + live score + weight share (kept from before).
+- **Example** — a new worked illustration tied to the factor's weight (verified the point-impact math).
+
+`healthFactorEq(key, molF)` returns (lhs, rhs, isMolecule); the molecule map is built once in
+HealthScreen and threaded to each tile. New `.hlt-eq` / `.hlt-detail` styles.
+
+Validated: build clean, healthscore/engineenv/formula tests pass, 14 e2e (smoke + a11y all routes).
+
 ## 2026-07-13 — Flip-modal size standardization + toolbar polish (v1.0.21)
 
 Cam asked to "do the same for all the other pages" — the 3 flip-modal sizes, the refined

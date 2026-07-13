@@ -70,6 +70,41 @@ func registerHealthSurface() {
 		prop("opacity", "0.7"),
 		prop("margin-top", "0.35rem"),
 	)
+	// Composition / Scoring / Example blocks inside the disclosure, each with a small
+	// uppercase label.
+	rule(".hlt-detail",
+		prop("margin-top", "0.7rem"),
+	)
+	rule(".hlt-detail-label",
+		prop("display", "block"),
+		prop("font-size", "0.64rem"),
+		prop("font-weight", "700"),
+		prop("letter-spacing", "0.05em"),
+		prop("text-transform", "uppercase"),
+		prop("color", "var(--text-faint)"),
+		prop("margin-bottom", "0.15rem"),
+	)
+	// The factor's composition equation (variable = molecule / atoms).
+	rule(".hlt-eq",
+		prop("display", "block"),
+		prop("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace"),
+		prop("font-size", "0.72rem"),
+		prop("line-height", "1.5"),
+		prop("color", "var(--text)"),
+		prop("background", "color-mix(in srgb, var(--accent) 6%, var(--bg-elev))"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "6px"),
+		prop("padding", "0.4rem 0.55rem"),
+		prop("margin-top", "0.3rem"),
+		prop("overflow-x", "auto"),
+		prop("white-space", "pre-wrap"),
+		prop("overflow-wrap", "anywhere"),
+	)
+	rule(".hlt-eq-note",
+		prop("display", "block"),
+		prop("font-size", "0.66rem"),
+		prop("margin-top", "0.2rem"),
+	)
 	rule(".hlt-formula > summary",
 		prop("cursor", "pointer"),
 	)
