@@ -1,3 +1,20 @@
+## 2026-07-14 — One math path for the assistant + description that can't drift
+
+Closes the last two review items in chat_agent.go. The legacy 'calculator' tool was the review's
+"two divergent code paths" find: its own formula.Env from raw ledger.NetWorth/PeriodTotals over
+dateutil.MonthRange(now), blind to Studio molecule overrides and the active period. Deleted rather
+than fixed — evaluate_formula strictly supersedes it (liveEngineVars surface + Explain
+derivations), and keeping a "fixed" duplicate would just be the same drift risk wearing a new
+coat. The prompt's one 'calculator' mention now names evaluate_formula. Its description is built
+by evalFormulaToolDesc() from formula.Functions() — the drift already caught by the review (text
+said "+ - * / parentheses and comparisons"; the engine has 17 functions) is now structurally
+impossible.
+
+Process note: chat_agent.go carries another session's uncommitted work (dismiss_flagged_activity),
+so this commit was staged selectively — backup the combined file, materialize HEAD's version,
+re-apply only these hunks, git add, restore the combined working file. `git status` shows MM on
+the file with exactly the other session's +45 left unstaged, verified by diff --stat both ways.
+
 ## 2026-07-14 — Studio delete errors surfaced
 
 Tiny follow-up flagged in the validation commit: studioMoleculeRow's OnRemove dropped

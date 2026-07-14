@@ -60,7 +60,7 @@ type agentStep struct {
 // always appended separately so a custom prompt never loses it.
 const defaultChatSystemPrompt = `You are CashFlux, a capable, confident personal-finance agent built into the user's own budgeting app. You ACT — you don't just describe. You have tools to READ the user's real, on-device figures and to CHANGE their data, and every change is previewed for the user's one-tap approval, so proposing an action is safe and expected. Never say you "can't" do something the tools cover, and never tell the user to go do it manually when a tool exists — do it and let the approval confirm.
 
-Use a tool for every specific figure (category totals, balances, net worth, affordability) — never guess or invent the user's numbers. Combine your own general knowledge (tax brackets, rates, formulas) with the calculator and the user's figures to ESTIMATE things the data doesn't hold (e.g. taxes); state your assumptions rather than refusing. Use web_search / fetch_webpage for current or external facts.
+Use a tool for every specific figure (category totals, balances, net worth, affordability) — never guess or invent the user's numbers. Combine your own general knowledge (tax brackets, rates, formulas) with evaluate_formula and the user's figures to ESTIMATE things the data doesn't hold (e.g. taxes); state your assumptions rather than refusing. Use web_search / fetch_webpage for current or external facts.
 
 You can change data with these tools (each asks the user to approve first): add/complete tasks; record, delete, and merge/de-duplicate transactions; categorize transactions; create accounts (assets and liabilities); transfer between accounts; set account balances; add goal contributions; create categories.
 
@@ -349,37 +349,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 					return fmt.Sprintf("Not yet: short %s now; affordable in about %d months at the current pace.", fmtM(res.Shortfall), res.MonthsNeeded)
 				}
 				return fmt.Sprintf("Not affordable: short %s, and the current cash flow won't close the gap.", fmtM(res.Shortfall))
-			},
-		},
-		{
-			spec: ai.FunctionTool("calculator",
-				"Evaluate a finance/math expression. Variables in dollars: net_worth, assets, liabilities, income, spending, net_cashflow (this month). Supports + - * / and parentheses, e.g. 'net_worth * 0.04 / 12'.",
-				json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Expression string `json:"expression"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Expression) == "" {
-					return "Could not read the expression."
-				}
-				net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
-				income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
-				env := formula.Env{Vars: map[string]float64{
-					"net_worth":    currency.MajorFromMinor(net.Amount, base),
-					"assets":       currency.MajorFromMinor(assets.Amount, base),
-					"liabilities":  currency.MajorFromMinor(liab.Amount, base),
-					"income":       currency.MajorFromMinor(income.Amount, base),
-					"spending":     currency.MajorFromMinor(expense.Amount, base),
-					"net_cashflow": currency.MajorFromMinor(income.Amount-expense.Amount, base),
-				}}
-				v, err := formula.Eval(a.Expression, env)
-				if err != nil {
-					return "Calculation error: " + err.Error()
-				}
-				if n, ok := v.(float64); ok {
-					return fmt.Sprintf("%s = %.2f", a.Expression, n)
-				}
-				return fmt.Sprintf("%s = %v", a.Expression, v)
 			},
 		},
 		{
@@ -698,7 +667,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 		},
 		{
 			spec: ai.FunctionTool("evaluate_formula",
-				"Evaluate an arithmetic/logic expression over the engine's formula variables (the atoms + molecules from list_formula_metrics), computed from the user's live data. Supports + - * / parentheses and comparisons, e.g. 'net_worth * 0.04 / 12', or a bare variable name like 'liquid_cash'. Money variables are in the base currency's major units. A single variable also reports how it's derived.",
+				evalFormulaToolDesc(),
 				json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -1496,6 +1465,22 @@ func parseTaskPriority(s string) domain.TaskPriority {
 }
 
 // ifStr returns a when cond, else b.
+// evalFormulaToolDesc builds the evaluate_formula tool description from the
+// engine's real function list (formula.Functions()), so the description the
+// model sees can never drift from what the evaluator actually supports.
+func evalFormulaToolDesc() string {
+	var b strings.Builder
+	b.WriteString("Evaluate an arithmetic/logic expression over the engine's formula variables (the atoms + molecules from list_formula_metrics), computed from the user's live data. Supports + - * / % parentheses, comparisons, and these functions: ")
+	for i, f := range formula.Functions() {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(f.Signature)
+	}
+	b.WriteString(". e.g. 'net_worth * 0.04 / 12' or 'safediv(expense, income, 0) * 100', or a bare variable name like 'liquid_cash' (a single variable also reports how it's derived). Money variables are in the base currency's major units.")
+	return b.String()
+}
+
 func ifStr(cond bool, a, b string) string {
 	if cond {
 		return a
