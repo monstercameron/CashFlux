@@ -1,3 +1,18 @@
+## 2026-07-14 — Molecule save/delete validation in appstate
+
+Third commit of the arc: stop bad molecules at the door instead of only surviving them at eval.
+`PutMolecule` now checks self-reference, cross-molecule cycles (DFS over `formula.References`,
+error message carries the path), and reserved names. The reserved set is computed once as
+`engineenv.Vars(empty Data)` minus `DefaultMolecules()` — the empty-data surface IS the complete
+static name set (atoms + factor vars + alloc/planning/recurring/bills/smart), which beats
+hand-listing and can't drift; default molecule names are subtracted because override-by-name is
+the Studio contract. Dynamic names (acct_*, cf_*, pool_*) can't be enumerated at save time — the
+eval-side atom-shadow guard from the previous commit covers those. `DeleteMolecule` blocks only
+when a FULLY-CUSTOM molecule still has dependents (an overridden built-in restores its default on
+delete, so nothing dangles). The Studio UI already routes PutMolecule errors into the form message;
+OnRemove currently drops the error silently — the row just stays, which is safe but mute; noted as
+a small UI follow-up rather than widening this commit into screens.
+
 ## 2026-07-14 — Molecule pass: fixpoint evaluation, atom-shadow guard, loud failures
 
 Second commit of the formula-robustness arc, this one in `engineenv`. The review's nastiest find:

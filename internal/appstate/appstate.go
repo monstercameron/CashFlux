@@ -1451,25 +1451,132 @@ func (a *App) Molecules() []domain.Molecule {
 	return out
 }
 
-// PutMolecule persists a compound-variable definition (a name + formula over the
-// engine atoms). The formula is validated for parseability before saving.
+// reservedVarNames are the built-in variable names a molecule may not take:
+// the full empty-data engine surface (atoms, alloc/planning/recurring/bills/
+// smart vars, health & credit factors) minus the default molecules, which ARE
+// override-by-name by design. Evaluation has its own atom-shadow guard; this
+// check exists so the save path can say no with a reason instead of silently
+// losing the fight later.
+var reservedVarNames = func() map[string]bool {
+	out := map[string]bool{}
+	for name := range engineenv.Vars(engineenv.Data{Now: time.Unix(0, 0).UTC()}) {
+		out[name] = true
+	}
+	for _, m := range engineenv.DefaultMolecules() {
+		delete(out, m.Name)
+	}
+	return out
+}()
+
+// PutMolecule persists a compound-variable definition (a name + formula over
+// the engine atoms). Validated before saving: the formula must parse, the name
+// may not shadow a built-in non-molecule variable, and the molecule may not
+// reference itself or close a reference cycle with other molecules — a cycle
+// never evaluates, so every member would silently read as missing downstream.
 func (a *App) PutMolecule(m domain.Molecule) error {
 	if strings.TrimSpace(m.Name) == "" || strings.TrimSpace(m.Formula) == "" {
 		return fmt.Errorf("appstate: molecule needs a name and a formula")
 	}
-	if _, err := formula.References(m.Formula); err != nil {
+	refs, err := formula.References(m.Formula)
+	if err != nil {
 		return fmt.Errorf("appstate: molecule %q has an invalid formula: %w", m.Name, err)
 	}
+	if reservedVarNames[m.Name] {
+		return fmt.Errorf("appstate: %q is a built-in variable — pick another name", m.Name)
+	}
+	for _, r := range refs {
+		if r == m.Name {
+			return fmt.Errorf("appstate: molecule %q references itself", m.Name)
+		}
+	}
+	if cycle := moleculeCycle(a.Molecules(), m); len(cycle) > 0 {
+		return fmt.Errorf("appstate: molecule %q would create a reference cycle (%s)", m.Name, strings.Join(cycle, " → "))
+	}
 	return a.store.PutMolecule(m)
+}
+
+// moleculeCycle reports the reference cycle the candidate molecule would
+// create, as the name path back to itself — or nil. existing is the current
+// set; the candidate replaces its own entry by name. Only molecule names can
+// extend the walk (atoms and unknown references terminate it).
+func moleculeCycle(existing []domain.Molecule, candidate domain.Molecule) []string {
+	refsOf := make(map[string][]string, len(existing)+1)
+	for _, m := range existing {
+		if m.Name == candidate.Name {
+			continue
+		}
+		if r, err := formula.References(m.Formula); err == nil {
+			refsOf[m.Name] = r
+		}
+	}
+	cr, err := formula.References(candidate.Formula)
+	if err != nil {
+		return nil
+	}
+	refsOf[candidate.Name] = cr
+
+	seen := map[string]bool{candidate.Name: true}
+	var walk func(from string, trail []string) []string
+	walk = func(from string, trail []string) []string {
+		for _, r := range refsOf[from] {
+			if r == candidate.Name {
+				return append(append([]string(nil), trail...), r)
+			}
+			if seen[r] {
+				continue
+			}
+			seen[r] = true
+			if _, isMol := refsOf[r]; !isMol {
+				continue
+			}
+			if c := walk(r, append(append([]string(nil), trail...), r)); c != nil {
+				return c
+			}
+		}
+		return nil
+	}
+	return walk(candidate.Name, []string{candidate.Name})
 }
 
 // DeleteMolecule removes a persisted compound-variable row by name. For an
 // overridden built-in this RESTORES the default definition (Molecules layers
 // DefaultMolecules under the persisted set); for a user-created molecule it
-// removes it entirely. Returns whether a persisted row existed.
+// removes it entirely — unless another molecule still references it, which is
+// an error naming the dependents, since deleting would silently zero them out
+// downstream. Returns whether a persisted row existed.
 func (a *App) DeleteMolecule(name string) (bool, error) {
 	if strings.TrimSpace(name) == "" {
 		return false, fmt.Errorf("appstate: molecule name is required")
+	}
+	// An overridden built-in keeps existing after delete (the default returns),
+	// so only a fully-custom molecule can leave dependents dangling.
+	isBuiltIn := false
+	for _, m := range engineenv.DefaultMolecules() {
+		if m.Name == name {
+			isBuiltIn = true
+			break
+		}
+	}
+	if !isBuiltIn {
+		var dependents []string
+		for _, m := range a.Molecules() {
+			if m.Name == name {
+				continue
+			}
+			refs, err := formula.References(m.Formula)
+			if err != nil {
+				continue
+			}
+			for _, r := range refs {
+				if r == name {
+					dependents = append(dependents, m.Name)
+					break
+				}
+			}
+		}
+		if len(dependents) > 0 {
+			return false, fmt.Errorf("appstate: %q is still used by %s — update or delete those formulas first", name, strings.Join(dependents, ", "))
+		}
 	}
 	return a.store.DeleteMolecule(name)
 }
