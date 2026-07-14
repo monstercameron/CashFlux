@@ -94,6 +94,13 @@ func Run() {
 	// workspace) BEFORE mounting, so the player reads the restored point on init.
 	seedMusicFromDataset()
 	hydrateAIKey()
+	// Fold any legacy standalone language selection into the loaded dataset (the single
+	// source of truth). Only safe when the dataset is actually loaded — for an encrypted
+	// dataset still awaiting unlock, defer to hydrateFromPasscode so a later ImportJSON
+	// can't clobber the migrated value.
+	if pendingEnvelopeRaw == "" {
+		uistate.MigrateLegacyLanguage()
+	}
 	// Populate the lock-screen "quote of the day" cache on boot when unlocked (or
 	// when a remembered on-device key is available while locked), so the lock screen
 	// shows a fresh AI quote next time rather than the static fallback.
@@ -222,6 +229,11 @@ func Run() {
 
 	// Expose the music checkpoint bridge (window.cashfluxMusicSave) for the JS player.
 	registerMusicBridge()
+
+	// Expose the dataset app-KV bridge (window.cashfluxData*) so the widget-builder
+	// canvas shim persists node positions + viewport into the dataset (single source
+	// of truth), not a separate browser-store entry.
+	registerDatasetKVBridge()
 
 	// Surface "while you were away" reminders (stale balances, bills due soon)
 	// once on load, deduped via the persisted delivered log (B19). Boot-safe.

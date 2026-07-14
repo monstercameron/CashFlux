@@ -1,3 +1,47 @@
+## 2026-07-14 — Single source of truth: route all app state through the SQLite dataset (v1.0.25)
+
+Cam's rule, stated bluntly: the in-memory SQLite dataset is the ONE state blob — serialized → encrypted
+(if a passcode) → IndexedDB — so it can be shared and hydrate many clients. His complaint that kicked
+this off: "every time I refresh the page my oai key doesn't persist." The key lived in a standalone
+browser-store entry that the dataset autosave deliberately *redacts*, so it never travelled with the
+state and reads raced a fire-and-forget write. Fixed by making `Settings.OpenAIKey` the only home:
+removed the `PersistAIKey` writer, and `onKey`/`OnRememberKey` now write the key only to the dataset and
+`RequestPersist()`. `RememberAIKey` now controls only whether the *local* save keeps or redacts the key.
+
+The subtle part was migration for existing installs, especially encrypted ones. Reading+migrating a
+legacy value while the dataset is still locked (`pendingEnvelopeRaw != ""`) would write into an empty
+store that the post-unlock `ImportJSON` then clobbers — losing both the migrated value and the browser
+copy. So the destructive fold is gated on the dataset actually being loaded: `hydrateAIKey` no-ops while
+locked, and `migrateStandaloneAIKey` runs again from `hydrateFromPasscode` after decrypt. Same pattern
+for language (`MigrateLegacyLanguage`), with a non-destructive `settingPeek` for the first-paint read so
+the lock screen can still show the right language without triggering the destructive migrate.
+
+Then the breadth pass (#62–69): web-search key, backup cadence + last-backup, browser-notification
+toggle, onboarding-dismissed, widget-builder toggles, canvas positions/viewport, language + bundles, and
+the sample-active flag all moved into the dataset app/settings KV. settingsState survives a wipe with the
+dataset; appState clears with it — which is why `sampleActive` moved to appState (a wiped dataset is
+correctly no longer "the sample") and dropped out of `keptOnWipeKeys`.
+
+Music was the interesting boundary and where I had to correct my own framing. The durable music state
+(on/off, volume, track, position) already lives in `Settings.Music`; only the *live, between-checkpoint
+position* stages in browserstore. Cam pushed: why can't it be in SQLite? The honest answer: the autosave
+re-serializes and (for passcode users) **re-encrypts the whole dataset** on any byte change, so a per-tick
+song position in the dataset would re-encrypt your entire financial file every ~4s just while music plays
+— even idle. Plus the lock screen reads `cashflux:muzak` to label its mute button *before* the dataset is
+decrypted. So the checkpoint stays; documented it (and the other exemptions: seed gate, workspace
+registry, lock gate, device-bound credentials, sync identity) in `kvbridge.go`.
+
+Canvas positions got a dedicated low-frequency `cashfluxData*` bridge (→ dataset app KV) so they stop
+sharing the music player's high-frequency `cashfluxStore*` browserstore bridge. An API-signature sweep of
+every persistence write (`browserstore.Set/Remove`, `setItem`, `sessionStorage`, IDB `put`) confirmed the
+eight were the live breaches and surfaced one latent landmine: `web/wb-canvas.js`, an orphaned unloaded
+duplicate drag shim writing raw localStorage — deleted (zero references).
+
+Verified end-to-end with Playwright against a fresh no-store build: fresh key → dataset blob, no
+standalone entry, survives reload; legacy standalone → migrated in + cleared; boot error-free; the
+`cashfluxData*` bridge registered. SW cache → v298. Next (offered, not yet done): route music volume
+straight to SQLite and drop the position browserstore staging in favour of coarse-event checkpoints.
+
 ## 2026-07-13 — Assistant agent overhaul: layout, model/thinking switch, canonical-dedupe tools, formula tools (v1.0.23)
 
 A long iterative session on the Assistant. Started with layout (full-height chat, no page scroll,

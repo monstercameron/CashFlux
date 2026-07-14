@@ -628,20 +628,19 @@ func globalSettingsForm() uic.Node {
 			s.OpenAIKey = v
 			_ = a.PutSettings(s)
 		}
-		// Persist the key across reloads by default: entering a key means you want to
-		// use it, and the dataset autosave deliberately REDACTS the key, so the
-		// on-device browser store is its only persistence path. Turning a key ON also
-		// turns "Remember AI key" on (its opt-out still lets you keep it session-only —
-		// toggling it off clears the stored copy). Clearing the key clears storage.
+		// The key lives in Settings.OpenAIKey — the SQLite dataset, the single source of
+		// truth — and rides the dataset autosave like every other setting; there is no
+		// separate key store. Entering a key means you want to use it across reloads, so
+		// turn "Remember AI key" on by default (its opt-out keeps the key session-only by
+		// making the LOCAL dataset save redact it). RequestPersist re-saves immediately so
+		// the on-device copy reflects the new key/redaction without waiting for autosave.
 		if strings.TrimSpace(v) != "" {
 			if p := prefsAtom.Get(); !p.RememberAIKey {
 				p.RememberAIKey = true
 				savePrefs(p)
 			}
-			uistate.PersistAIKey(v)
-		} else {
-			uistate.ClearAIKey()
 		}
+		uistate.RequestPersist()
 		// A newly configured key can now drive the lock-screen quote-of-the-day —
 		// generate + cache it right away so the user doesn't have to wait for a reload.
 		refreshDailyLockQuote()
@@ -1037,11 +1036,10 @@ func globalSettingsForm() uic.Node {
 			p := prefsAtom.Get()
 			p.RememberAIKey = v
 			savePrefs(p)
-			if v {
-				uistate.PersistAIKey(aiKey.Get())
-			} else {
-				uistate.ClearAIKey()
-			}
+			// The key already lives in the dataset (Settings.OpenAIKey). RememberAIKey only
+			// controls whether the LOCAL dataset save keeps it (on) or redacts it (off,
+			// session-only) — so re-persist now to apply the new redaction decision.
+			uistate.RequestPersist()
 		},
 		OnModel:        onModel,
 		CurModel:       curModel,

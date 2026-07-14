@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **OpenAI key now persists in the SQLite dataset (2026-07-14):** the key lived in a standalone browser-store entry that the dataset autosave redacted, so it didn't travel with the state and could vanish on reload. It now lives in `Settings.OpenAIKey` — the single source of truth — riding the dataset autosave like every other setting. The standalone writer (`PersistAIKey`) was removed, and a boot / post-unlock migration folds any pre-existing standalone key into the dataset and clears it (deferred past unlock for encrypted users so a later `ImportJSON` can't clobber it). Verified end-to-end: a freshly entered key lands in the dataset blob, leaves no standalone entry, and survives a reload; a legacy standalone key is migrated in and cleared.
+
+### Changed
+- **Version bumped to v1.0.25 (2026-07-14):** cuts the single-source persistence pass into a release — every app/UI setting now lives in the one SQLite dataset (so it exports, syncs, and hydrates as a unit), with the OpenAI key, language, and modal choices no longer stranded in separate browser-store entries.
+- **Single source of truth — app/UI state routed through the SQLite dataset (2026-07-14):** the web-search key, backup cadence + last-backup timestamp, the browser-notification toggle, onboarding-dismissed, widget-builder toggles + canvas positions/viewport, the language selection + imported bundles, and the sample-active flag all moved out of scattered browser-store entries into the dataset's app/settings KV (settingsState is preserved by a wipe; appState is cleared with the data). Reads transparently migrate any legacy browser-store value in on first access; language keeps a non-destructive first-paint read + a gated post-load fold so an encrypted/locked boot can't lose it. The deliberate exemptions (seed bootstrap gate, workspace registry, lock gate, device-bound credentials, sync identity, and the music state that is checkpointed into the dataset) are now documented in `internal/uistate/kvbridge.go`. The widget-builder canvas got its own low-frequency `cashfluxData*` JS bridge (dataset app KV) so it no longer shares the music player's high-frequency browser-store bridge.
+- **Service worker cache bumped to `cashflux-v298` (2026-07-14):** evicts stale precached assets after the persistence redeploy.
+
+### Removed
+- **Dead `web/wb-canvas.js` deleted (2026-07-14):** an orphaned, unloaded duplicate of the widget-builder drag shim that wrote canvas positions to raw `localStorage`, bypassing the dataset entirely. It was referenced nowhere (not in `index.html`, no dynamic loader), so it never ran — removed as a latent single-source landmine surfaced by an API-signature sweep of every persistence write site.
+
 ### Changed
 - **Version bumped to v1.0.24 (2026-07-13):** cuts the Responses-API assistant tool-loop fix into a release — the thinking level now works with function tools for gpt-5.x / o-series (no more `reasoning_effort` rejection).
 - **Version bumped to v1.0.23 (2026-07-13):** cuts the Assistant agent overhaul — full-height chat, an in-thread model + thinking-level switch, a live model list, canonical-dedupe duplicate tools, and formula-metric tools — into a release.

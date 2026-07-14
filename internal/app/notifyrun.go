@@ -15,7 +15,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
-	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -236,7 +235,7 @@ const backupCadenceKey = "cashflux:backupCadence"
 // loadBackupCadence reads the chosen reminder cadence, defaulting to the gentle
 // monthly cadence when unset (an explicit "off" disables reminders).
 func loadBackupCadence() backup.Cadence {
-	raw := browserstore.GetString(backupCadenceKey)
+	raw := uistate.SettingKVGet(backupCadenceKey)
 	if raw == "" {
 		return backup.DefaultCadence
 	}
@@ -245,19 +244,19 @@ func loadBackupCadence() backup.Cadence {
 
 // saveBackupCadence persists the chosen reminder cadence (Settings → Data).
 func saveBackupCadence(c backup.Cadence) {
-	browserstore.Set(backupCadenceKey, string(c))
+	uistate.SettingKVSet(backupCadenceKey, string(c))
 }
 
 // recordBackupNow stamps the current time as the last backup — called after a
 // successful data export.
 func recordBackupNow() {
-	browserstore.Set(lastBackupKey, time.Now().Format(time.RFC3339))
+	uistate.SettingKVSet(lastBackupKey, time.Now().Format(time.RFC3339))
 }
 
 // loadLastBackup reads the last-backup timestamp, or the zero time when never set
 // or unparseable (which reads as "never backed up").
 func loadLastBackup() time.Time {
-	raw := browserstore.GetString(lastBackupKey)
+	raw := uistate.SettingKVGet(lastBackupKey)
 	if raw == "" {
 		return time.Time{}
 	}

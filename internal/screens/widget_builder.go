@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cardgraph"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -40,8 +39,8 @@ import (
 
 const vbCellPx, vbGapPx = 152, 10               // bento cell geometry (true tile proportions)
 const vbNodeW, vbNodeH = 168.0, 64.0            // canvas node box size
-const vbGraphKey = "cashflux:wb-graph"          // localStorage: the whole card graph
-const vbCanvasPosKey = "cashflux:wb-canvas-pos" // localStorage: node positions (drag shim)
+const vbGraphKey = "cashflux:wb-graph"          // dataset app KV: the whole card graph
+const vbCanvasPosKey = "cashflux:wb-canvas-pos" // dataset app KV: node positions (drag shim, via cashfluxData* bridge)
 
 // vbDragShimJS is the canvas drag behavior, evaluated once. It delegates pointer events
 // on the document so it survives Go re-rendering the canvas: mousedown on a .wb-node
@@ -52,8 +51,8 @@ const vbDragShimJS = `
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
   var POS_KEY = "cashflux:wb-canvas-pos", VIEW_KEY = "cashflux:wb-canvas-view";
-  function load(k){ try { var r = (typeof window.cashfluxStoreGet==="function") ? window.cashfluxStoreGet(k) : localStorage.getItem(k); return JSON.parse(r || "{}"); } catch(e){ return {}; } }
-  function save(k,v){ try { var s = JSON.stringify(v); if (typeof window.cashfluxStoreSet==="function") window.cashfluxStoreSet(k,s); else localStorage.setItem(k,s); } catch(e){} }
+  function load(k){ try { var r = (typeof window.cashfluxDataGet==="function") ? window.cashfluxDataGet(k) : ((typeof window.cashfluxStoreGet==="function") ? window.cashfluxStoreGet(k) : localStorage.getItem(k)); return JSON.parse(r || "{}"); } catch(e){ return {}; } }
+  function save(k,v){ try { var s = JSON.stringify(v); if (typeof window.cashfluxDataSet==="function") window.cashfluxDataSet(k,s); else if (typeof window.cashfluxStoreSet==="function") window.cashfluxStoreSet(k,s); else localStorage.setItem(k,s); } catch(e){} }
   function getView(){ var v = load(VIEW_KEY); return { tx: v.tx||0, ty: v.ty||0, s: v.s||1 }; }
   function applyView(world, v){ world.style.transformOrigin="0 0"; world.style.transform="translate("+v.tx+"px,"+v.ty+"px) scale("+v.s+")"; }
   function clampS(s){ return Math.max(0.3, Math.min(2.5, s)); }
@@ -962,7 +961,7 @@ func vbNextPos(g cardgraph.Graph) cardgraph.Point {
 
 func vbLoadPositions() map[string]cardgraph.Point {
 	out := map[string]cardgraph.Point{}
-	raw := browserstore.GetString(vbCanvasPosKey)
+	raw := uistate.KVGet(vbCanvasPosKey) // dataset app KV (single source of truth); migrates legacy browser-store
 	if raw == "" {
 		return out
 	}
@@ -1590,7 +1589,7 @@ const vbViewKey = "cashflux:wb-canvas-view"
 // the identity view (no pan, 100% zoom).
 func vbLoadView() vbView {
 	out := vbView{S: 1}
-	if raw := browserstore.GetString(vbViewKey); raw != "" {
+	if raw := uistate.KVGet(vbViewKey); raw != "" { // dataset app KV; migrates legacy browser-store
 		var saved struct{ TX, TY, S float64 }
 		if err := json.Unmarshal([]byte(raw), &saved); err == nil {
 			out.TX, out.TY = saved.TX, saved.TY
@@ -2272,18 +2271,19 @@ func vbToggle(p vbActionButtonProps) ui.Node {
 
 const vbTogglePrefix = "cashflux:wb-toggle:"
 
-// vbToggleState reads a toggle's persisted checked state from localStorage.
+// vbToggleState reads a toggle's persisted checked state from the dataset KV
+// (a legacy browserstore value migrates in on first read).
 func vbToggleState(action string) bool {
-	return browserstore.GetString(vbTogglePrefix+action) == "1"
+	return uistate.KVGet(vbTogglePrefix+action) == "1"
 }
 
-// vbSetToggleState persists a toggle's checked state.
+// vbSetToggleState persists a toggle's checked state into the dataset KV.
 func vbSetToggleState(action string, on bool) {
 	val := "0"
 	if on {
 		val = "1"
 	}
-	browserstore.Set(vbTogglePrefix+action, val)
+	uistate.KVSet(vbTogglePrefix+action, val)
 }
 
 // vbRunAction applies a builder button/toggle action to app state, then bumps the data

@@ -7,7 +7,6 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
@@ -229,7 +228,7 @@ func UnreadNotifyCount(items []FeedItem) int {
 // BrowserNotifyEnabled reports whether the user has opted into OS/browser
 // notifications (defaults off until explicitly enabled).
 func BrowserNotifyEnabled() bool {
-	return browserstore.GetString(notifyBrowserKey) == "1"
+	return SettingKVGet(notifyBrowserKey) == "1"
 }
 
 // SetBrowserNotifyEnabled persists the browser-notification opt-in.
@@ -238,5 +237,5 @@ func SetBrowserNotifyEnabled(on bool) {
 	if on {
 		val = "1"
 	}
-	browserstore.Set(notifyBrowserKey, val)
+	SettingKVSet(notifyBrowserKey, val)
 }

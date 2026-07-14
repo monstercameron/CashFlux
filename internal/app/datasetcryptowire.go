@@ -98,6 +98,11 @@ func hydrateFromPasscode(passcode string) {
 			return
 		}
 		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
+		// The dataset is loaded now, so it's safe to fold any legacy standalone OpenAI
+		// key + language selection into it (encrypted users couldn't migrate at boot
+		// while still locked).
+		migrateStandaloneAIKey()
+		uistate.MigrateLegacyLanguage()
 		seedMusicFromDataset()
 		initUndo()
 		uistate.BumpDataRevision()

@@ -6,19 +6,18 @@ package uistate
 
 import "github.com/monstercameron/CashFlux/internal/browserstore"
 
-// aiKeyStore is the browser-store entry (IndexedDB) holding the OpenAI key when the
-// user has opted into remembering it on this device (prefs.RememberAIKey). It is
-// kept OUT of the autosaved dataset (which always redacts the key), so the secret
-// never rides along in an export/sync — but it is still in IndexedDB, not
-// localStorage, so the app depends on no localStorage.
+// aiKeyStore is the LEGACY browser-store entry (IndexedDB) that used to hold the
+// OpenAI key separately from the dataset. The key now lives in Settings.OpenAIKey
+// inside the SQLite dataset — the single source of truth — so nothing writes here
+// anymore. LoadAIKey/ClearAIKey remain solely for the one-time boot/unlock migration
+// (see app.migrateStandaloneAIKey) that folds any pre-existing standalone key into
+// the dataset and then deletes this entry.
 const aiKeyStore = "cashflux:openai-key"
 
-// PersistAIKey stores the OpenAI key (only call this when the user has opted in via
-// the "remember on this device" toggle).
-func PersistAIKey(key string) { browserstore.Set(aiKeyStore, key) }
-
-// ClearAIKey removes any persisted OpenAI key (remember-key toggle off).
+// ClearAIKey removes the legacy standalone OpenAI-key entry. Called by the migration
+// once the key has been adopted into the dataset.
 func ClearAIKey() { browserstore.Remove(aiKeyStore) }
 
-// LoadAIKey reads the persisted OpenAI key, or "" if none is stored.
+// LoadAIKey reads the legacy standalone OpenAI key, or "" if none is stored. Used
+// only by the migration to detect a pre-existing standalone key to adopt.
 func LoadAIKey() string { return browserstore.GetString(aiKeyStore) }

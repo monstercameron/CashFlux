@@ -62,14 +62,13 @@ func refreshDailyLockQuote() {
 		}
 	}
 
-	// Provider: the live session key when unlocked, else the on-device remembered key
-	// (readable while locked). A configured backend proxy also counts.
+	// Provider: the session key from the loaded dataset (the single source of truth), or
+	// a configured backend proxy. While an encrypted dataset is still locked the key
+	// isn't available, so no fresh quote is generated then — the last cached quote shows
+	// and a new one is generated right after unlock (see hydrateFromPasscode).
 	prefs := uistate.LoadPrefs().Normalize()
 	useBackend := prefs.BackendActive()
 	aiKey := strings.TrimSpace(app.Settings().OpenAIKey)
-	if aiKey == "" {
-		aiKey = strings.TrimSpace(uistate.LoadAIKey())
-	}
 	if aiKey == "" && !useBackend {
 		return
 	}

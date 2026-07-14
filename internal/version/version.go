@@ -11,7 +11,7 @@ package version
 //	go build -ldflags "-X github.com/monstercameron/CashFlux/internal/version.Version=$(git describe --tags)"
 //
 // The default applies for local/dev builds where no tag is injected.
-var Version = "1.0.24"
+var Version = "1.0.25"
 
 // Label returns the version prefixed with "v" for display (e.g. "v0.1.0"). An
 // injected tag that already starts with "v" is returned unchanged.

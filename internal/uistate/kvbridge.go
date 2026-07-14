@@ -16,6 +16,41 @@ import (
 // the browser store (IndexedDB, ex-localStorage) into SQLite on first access, so
 // existing installs carry their state forward once. No localStorage is touched —
 // the only non-SQLite store is browserstore (IndexedDB), used purely for migration.
+//
+// Intentional single-source exemptions
+// ------------------------------------
+// The dataset is the ONE shareable/hydratable state blob, so nearly everything routes
+// through this bridge (or the store.Settings struct / Settings.Music checkpoint). A
+// small, deliberate set of keys stays OUTSIDE the dataset in the browser store because
+// they cannot or should not live inside the very thing they gate, secure, or index:
+//
+//   - Seed bootstrap gate — "cashflux:seeded". Read in app.hydrateDataset BEFORE the
+//     dataset is imported to decide whether an absent/empty dataset means first-run
+//     (seed the sample) or an intentional wipe (stay empty). It gates dataset creation,
+//     so it can't be read from the dataset. (Contrast cashflux:sampleActive, which
+//     merely DESCRIBES a loaded dataset and so lives in the dataset app KV.)
+//   - Workspace registry — "cashflux:workspaces" and the "cashflux:ws-data:" /
+//     "cashflux:sync-meta:" families. This is the INDEX of all datasets plus each
+//     inactive workspace's bundled blob; a single dataset can't contain the registry
+//     of every dataset (including itself).
+//   - Lock gate config — "cashflux:applock". Must be readable before the (possibly
+//     encrypted) dataset can be decrypted, to decide whether to show the passcode gate
+//     at all. A lock config sealed inside the thing it locks is unreachable.
+//   - Device-bound security material — "cashflux:webauthn-credid/salt/vault" (a passkey
+//     bound to THIS authenticator), "cashflux:member-pins" (device access control), the
+//     encrypted credential vault, and the per-install artifact salt ("cf.artifactSalt").
+//     These are scoped to this device/authenticator and must not travel in a shared blob.
+//   - Sync identity/transport — "cashflux:sync-device-id/status/queue". Per-device
+//     transport bookkeeping, not user content; sharing it across clients is meaningless.
+//
+// Two more categories are NOT exemptions — the state DOES live in the dataset, with a
+// browser-store copy kept only as a fast device-local cache:
+//   - Music playback — the high-frequency live position streams to browserstore
+//     ("cashflux:muzak-pos", …) but is folded into Settings.Music at coarse checkpoints
+//     (app.checkpointMusic), so the durable state travels with the dataset.
+//   - Artifact bytes — binary blobs live in the "cashflux-artifacts" IndexedDB store to
+//     keep the JSON dataset under the storage quota, but they are referenced by the
+//     dataset and round-trip through export/import.
 
 // kvGet returns the persisted value for key (empty when absent), preferring SQLite
 // and migrating a legacy browser-store value into it on first read.

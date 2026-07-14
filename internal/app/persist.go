@@ -15,12 +15,22 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
-// keptOnWipeKeys are the localStorage keys preserved by a data wipe: genuine
-// settings/config, sync identity, the workspace registry, and the sample/seed
-// control flags. Everything else under "cashflux:" is financial data or derived
-// from it — the dataset blob, the activity feed, dashboard layout/widget config,
-// the widget-builder pages, filters, period, freshness dismissals — and is removed
-// so a wipe leaves nothing behind on reload. ("non-settings data" must die.)
+// keptOnWipeKeys are the browser-store keys preserved by a data wipe: genuine
+// settings/config, sync identity, the workspace registry, and the seed bootstrap
+// gate. Everything else under "cashflux:" is financial data or derived from it — the
+// dataset blob, the activity feed, dashboard layout/widget config, the widget-builder
+// pages, filters, period, freshness dismissals — and is removed so a wipe leaves
+// nothing behind on reload. ("non-settings data" must die.)
+//
+// Migration note: most of the config entries below (prefs, theme, fonts, language,
+// the OpenAI/web-search keys, backup cadence, the notification toggle, …) now live in
+// the dataset's PRESERVED settings KV (settingskv), so they survive a wipe WITH the
+// dataset (see store.preservedOnWipe) rather than via these entries. The browser-store
+// keys are retained here only as legacy migration sources — kept so a pre-migration
+// install that wipes before those values have been read+migrated doesn't lose them.
+// The entries that genuinely CANNOT live in the dataset (the single-source exemptions)
+// are the seed gate, the workspace registry, the lock gate, and device-bound
+// credentials / sync identity — see internal/uistate/kvbridge.go for the rationale.
 var keptOnWipeKeys = map[string]bool{
 	"cashflux:prefs":                 true,
 	"cashflux:theme":                 true,
@@ -41,8 +51,9 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:muzak-volume":          true,
 	"cashflux:banner":                true,
 	"cashflux:notify:browser":        true,
-	"cashflux:sampleActive":          true,
-	"cashflux:seeded":                true,
+	// cashflux:sampleActive is NOT kept: it moved into the dataset's app KV, so a wipe
+	// clears it with the data (a wiped dataset is correctly no longer "the sample").
+	"cashflux:seeded": true,
 	"cashflux:sync-device-id":        true,
 	"cashflux:sync-status":           true,
 	"cashflux:sync-queue":            true,
@@ -175,33 +186,64 @@ func hydrateDataset() {
 	}
 }
 
-// hydrateAIKey restores the saved OpenAI key into the session. The key is stored
-// directly in the browser store (the dataset autosave redacts it), and the mere
-// presence of a stored key IS the "remember" signal — restoring on it (rather than
-// on the RememberAIKey pref) makes persistence robust even if the pref, which rides
-// the slower dataset autosave, hasn't been written back yet. Turning "Remember AI
-// key" off clears the stored copy, so nothing is restored. No-op when nothing is
-// stored. Call after hydrateDataset so it lands on the loaded settings.
+// hydrateAIKey folds the legacy standalone OpenAI-key entry into the single source of
+// truth (Settings.OpenAIKey in the SQLite dataset). The key used to be stored in a
+// separate browser-store entry; it now lives in the dataset like every other setting.
+// An encrypted dataset isn't loaded until the user unlocks, so defer the migration to
+// onAppUnlocked in that case — never adopt into (or clear against) an unloaded store.
+// Call after hydrateDataset so it lands on the loaded settings.
 func hydrateAIKey() {
+	if pendingEnvelopeRaw != "" {
+		return // encrypted dataset awaiting unlock — migrate in onAppUnlocked instead
+	}
+	migrateStandaloneAIKey()
+}
+
+// migrateStandaloneAIKey adopts the legacy standalone OpenAI key into the loaded
+// dataset (if the dataset doesn't already carry one) and then drops the standalone
+// copy, so the dataset is the single source of truth. No-op once migrated.
+func migrateStandaloneAIKey() {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
-	key := uistate.LoadAIKey()
-	if key == "" {
+	legacy := strings.TrimSpace(uistate.LoadAIKey())
+	if legacy == "" {
 		return
 	}
 	s := app.Settings()
-	s.OpenAIKey = key
-	if err := app.PutSettings(s); err != nil {
-		app.Log().Error("restore ai key failed", "err", err)
+	if strings.TrimSpace(s.OpenAIKey) == "" {
+		s.OpenAIKey = legacy
+		if err := app.PutSettings(s); err != nil {
+			app.Log().Error("migrate ai key failed", "err", err)
+			return // couldn't adopt — keep the standalone so the key isn't lost
+		}
+		// Flush the adopted key into the (possibly encrypted) dataset now, before we
+		// drop the standalone, so closing the tab before the next autosave tick can't
+		// lose it. No-op at boot (the autosave hook isn't wired yet); effective on the
+		// post-unlock path, where the standalone is the only copy of the key.
+		uistate.RequestPersist()
 	}
+	uistate.ClearAIKey()
 }
 
 // startDatasetAutosave persists the dataset (OpenAI key redacted) to localStorage
 // so it survives a reload. It snapshots on a short ticker — which catches every
 // mutation regardless of code path, without instrumenting each write — and on
 // page hide, writing only when the serialized bytes change.
+// localDatasetExport serializes the dataset for ON-DEVICE persistence. It keeps the
+// OpenAI key with the data when the user has opted into remembering it (so the key
+// rides the reliable autosave and is restored on the next boot alongside everything
+// else, instead of depending on a single fire-and-forget key write). When "remember
+// key" is off, the key is redacted so it stays session-only. The BACKEND push always
+// uses ExportJSONRedacted — the key never leaves the device.
+func localDatasetExport(app *appstate.App) ([]byte, error) {
+	if uistate.LoadPrefs().RememberAIKey {
+		return app.ExportJSON()
+	}
+	return app.ExportJSONRedacted()
+}
+
 func startDatasetAutosave() {
 	app := appstate.Default
 	if app == nil {
@@ -209,7 +251,7 @@ func startDatasetAutosave() {
 	}
 	last := ""
 	if hadLocalDataset {
-		data, err := app.ExportJSONRedacted()
+		data, err := localDatasetExport(app)
 		if err != nil {
 			return
 		}
@@ -229,7 +271,7 @@ func startDatasetAutosave() {
 				app.Log().Error("dataset autosave failed", "err", r)
 			}
 		}()
-		data, err := app.ExportJSONRedacted()
+		data, err := localDatasetExport(app)
 		if err != nil {
 			return
 		}
@@ -239,10 +281,13 @@ func startDatasetAutosave() {
 		}
 		captureUndoPoint() // record an undo point for this mutation (C78)
 		// afterWrite mirrors the post-save bookkeeping (backend push / first-save
-		// flag) shared by the plaintext and encrypted paths.
+		// flag) shared by the plaintext and encrypted paths. The cloud copy is always
+		// redacted so the OpenAI key never leaves the device.
 		afterWrite := func() {
 			if hadLocalDataset {
-				pushActiveWorkspaceToBackend(data, time.Now().UTC())
+				if redacted, rErr := app.ExportJSONRedacted(); rErr == nil {
+					pushActiveWorkspaceToBackend(redacted, time.Now().UTC())
+				}
 			} else {
 				hadLocalDataset = true
 			}

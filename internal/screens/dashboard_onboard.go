@@ -6,7 +6,6 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -41,7 +40,7 @@ func dashOnboardCard() ui.Node {
 	}
 	// Persisted dismissal: read once into session state so a click hides it instantly
 	// AND it stays hidden on reload.
-	dismissed := ui.UseState(browserstore.GetString(onboardDismissKey) == "1")
+	dismissed := ui.UseState(uistate.SettingKVGet(onboardDismissKey) == "1")
 	nav := router.UseNavigate()
 
 	if dismissed.Get() {
@@ -67,7 +66,7 @@ func dashOnboardCard() ui.Node {
 	}
 
 	onDismiss := ui.UseEvent(func() {
-		browserstore.Set(onboardDismissKey, "1")
+		uistate.SettingKVSet(onboardDismissKey, "1")
 		dismissed.Set(true)
 	})
 	onTour := ui.UseEvent(func() {
