@@ -1,3 +1,21 @@
+## 2026-07-14 — Molecule pass: fixpoint evaluation, atom-shadow guard, loud failures
+
+Second commit of the formula-robustness arc, this one in `engineenv`. The review's nastiest find:
+`ListMolecules` returns rows `ORDER BY id` where id = name, so custom molecules arrive
+alphabetically — and the old single linear pass meant "a_summary references z_base" failed on
+EVERY render, silently, forever (map-miss reads as 0 downstream). Chose a fixpoint loop over a
+topological sort deliberately: no graph code, handles chains of any depth, and cycles fall out
+naturally as "a full pass resolved nothing" — at which point each leftover is slog-Warned with its
+real eval error. Warnings dedupe via a package sync.Map keyed on (name, failure) because Vars runs
+per render and per chart-month; one loud line beats ten thousand.
+
+The atom-shadow guard also lives here rather than in the Studio form (which already checks) or the
+import path (which doesn't): enforcing "a molecule may never overwrite an atom" at the point of
+evaluation closes every write path at once, present and future. Worth remembering: the fixture
+math in my first test draft was wrong (1000+4200−50=5150, not 5200) — the code was right, the test
+was wrong, and the failure output made that obvious in seconds. Downstream consumers
+(healthscore/credithealth/coverformula/widgetspec/workflow) all green.
+
 ## 2026-07-14 — Formula engine hardening: fast, reliable, robust, flexible
 
 A deep review of the formula subsystem (parser/evaluator + engineenv atoms/molecules) surfaced a

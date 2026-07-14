@@ -19,9 +19,11 @@
 package engineenv
 
 import (
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/bills"
@@ -184,30 +186,88 @@ var Names = func() []string {
 	return out
 }()
 
-// Vars computes the full variable surface: the atoms, then each molecule formula
-// evaluated over the running map (so a molecule may reference atoms and any
-// molecule declared before it). Money figures are major units of the base
-// currency. Deterministic for a given Data.
+// Vars computes the full variable surface: the atoms, then the molecule
+// formulas evaluated over the running map. Molecules may reference atoms and
+// each other in ANY declaration order — persisted customs load in name order,
+// not dependency order, so the pass runs to a fixpoint: molecules that fail
+// (typically on a not-yet-evaluated sibling) are retried while passes make
+// progress. Cycles and unknown references never resolve; those are logged
+// (once per distinct failure) rather than silently dropped, because every
+// downstream reader of a missing name sees a quiet 0. A molecule may never
+// overwrite an atom: enforcing that here — not just in the Studio create form
+// — closes every write path, including dataset import, which persists
+// molecules unvalidated. Money figures are major units of the base currency.
+// Deterministic for a given Data.
 func Vars(d Data) map[string]float64 {
 	out := computeAtoms(d)
 	mols := d.Molecules
 	if len(mols) == 0 {
 		mols = DefaultMolecules()
 	}
+	atoms := make(map[string]bool, len(out))
+	for k := range out {
+		atoms[k] = true
+	}
+	pending := make([]domain.Molecule, 0, len(mols))
 	for _, m := range mols {
-		if v, err := formula.Eval(m.Formula, formula.Env{Vars: out}); err == nil {
-			if f, ok := v.(float64); ok {
-				out[m.Name] = f
-			} else if b, ok := v.(bool); ok {
-				if b {
+		if atoms[m.Name] {
+			warnMoleculeOnce(m.Name, "molecule shadows an atom; ignored", nil)
+			continue
+		}
+		pending = append(pending, m)
+	}
+	errs := make(map[string]error, len(pending))
+	for len(pending) > 0 {
+		next := pending[:0:0]
+		for _, m := range pending {
+			v, err := formula.Eval(m.Formula, formula.Env{Vars: out})
+			if err != nil {
+				errs[m.Name] = err
+				next = append(next, m)
+				continue
+			}
+			switch t := v.(type) {
+			case float64:
+				out[m.Name] = t
+			case bool:
+				if t {
 					out[m.Name] = 1
 				} else {
 					out[m.Name] = 0
 				}
 			}
 		}
+		if len(next) == len(pending) {
+			// A full pass resolved nothing: what's left is cyclic, references an
+			// unknown name, or genuinely errors. Surface it and stop.
+			for _, m := range next {
+				warnMoleculeOnce(m.Name, "molecule failed to evaluate", errs[m.Name])
+			}
+			break
+		}
+		pending = next
 	}
 	return out
+}
+
+// warnedMolecules dedupes molecule warnings: Vars runs on every render (and
+// per month in chart loops), so a broken molecule would otherwise flood the
+// log with the same line. One warning per distinct (name, failure) is enough.
+var warnedMolecules sync.Map
+
+func warnMoleculeOnce(name, msg string, err error) {
+	key := name + "|" + msg
+	if err != nil {
+		key += "|" + err.Error()
+	}
+	if _, seen := warnedMolecules.LoadOrStore(key, true); seen {
+		return
+	}
+	if err != nil {
+		slog.Warn("engineenv: "+msg, "molecule", name, "err", err)
+		return
+	}
+	slog.Warn("engineenv: "+msg, "molecule", name)
 }
 
 // computeAtoms reduces the fundamental data to the indivisible atoms.
