@@ -114,12 +114,13 @@ func StudioFormulas() ui.Node {
 				bump()
 				return nil
 			},
-			OnRemove: func(name string) {
+			OnRemove: func(name string) error {
 				if _, err := app.DeleteMolecule(name); err != nil {
-					return
+					return err
 				}
 				uistate.BumpDataRevision()
 				bump()
+				return nil
 			},
 		}))
 	}
@@ -172,7 +173,7 @@ type studioMoleculeRowProps struct {
 	Kind     string // "builtin" | "overridden" | "custom"
 	Eval     func(string) (string, error)
 	OnSave   func(domain.Molecule) error
-	OnRemove func(string) // reset (overridden built-in) or delete (custom)
+	OnRemove func(string) error // reset (overridden built-in) or delete (custom); an error (e.g. dependents) is shown in the row
 }
 
 // studioMoleculeRow renders one compound variable: its name, provenance tag,
@@ -201,7 +202,12 @@ func studioMoleculeRow(p studioMoleculeRowProps) ui.Node {
 		msg.Set("")
 	}))
 	remove := ui.UseEvent(Prevent(func() {
-		p.OnRemove(p.M.Name)
+		// A refused delete (e.g. other formulas still reference this molecule)
+		// keeps the editor open with the reason — not a silent no-op.
+		if err := p.OnRemove(p.M.Name); err != nil {
+			msg.Set(err.Error())
+			return
+		}
 		editing.Set(false)
 	}))
 

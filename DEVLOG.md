@@ -1,3 +1,10 @@
+## 2026-07-14 — Studio delete errors surfaced
+
+Tiny follow-up flagged in the validation commit: studioMoleculeRow's OnRemove dropped
+DeleteMolecule's error on the floor, so the new dependents-block read as a dead button. OnRemove
+now returns error and the row routes it into the same role="alert" message line save errors use,
+keeping the editor open. One-line contract change, zero new UI surface.
+
 ## 2026-07-14 — One-pass balances: the deep intra-Vars dedupe
 
 The refactor I'd deferred as "wider" — done. ledger gets a bulk layer: Balances/ClearedBalances
