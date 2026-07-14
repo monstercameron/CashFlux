@@ -3280,6 +3280,93 @@ TX9's expected-occurrence machinery if revisited.
 the big one — full bottom-up entity work; scope-confirm before starting. TX16 is a good
 release-filler; TX17 pairs naturally with TX14 in one arc.
 
+<!-- ===== BG SERIES (budgets competitive features, appended 2026-07-14) ===== -->
+
+## ★ BG series — Budgets: competitive features (LATER IMPL — curated from big-name comps 2026-07-14)
+
+**Provenance & scope.** Third ideation pass 2026-07-14, /budgets focus, same competitor sourcing
+and local-first/anti-sprawl adaptation rules as the TX series. Cam kept 9 of 10; DROPPED:
+monthly/seasonal budget overrides (Actual-style per-month amounts — December ≠ March). BG9's
+annual grid therefore ships VIEW-ONLY (it was the natural editing surface for overrides; if
+overrides are ever revived, revisit the grid as their editor). Overlap guard: committed-vs-free
+is XC4, leftover sweep is XC6, annual smoothing is XC3 — BG items must compose with those, not
+duplicate them.
+
+- [ ] **BG1 [MAJOR]** Target types per budget *(YNAB "needed for spending")*. A budget gains an
+  optional TARGET SHAPE beyond its amount: **refill up to** $X each period (rollover-aware top-
+  up), **set aside** $Y per period regardless of balance, or **have $Z by <date>** (accumulation
+  with a deadline). The type drives how underfunding, rollover, and pace are computed, and
+  feeds BG4's "underfunded" quick-fill. SCOPING BOUNDARY to settle first: a by-date target is a
+  goal wearing a budget's clothes — decide the budget-target vs goal boundary explicitly
+  (proposal: by-date targets DELEGATE to a linked goal via Task.RelatedGoal-style reference,
+  so the accumulation logic isn't duplicated). Domain + budgeting-pkg logic first, tests, then
+  the edit-form UI (a "target" select + shape-specific fields).
+- [ ] **BG2 [MAJOR]** Flex budgeting *(Monarch's fixed/flex/non-monthly)*. A fourth methodology
+  alongside Simple/Zero-based/Envelope (the C112 method-picker seam exists): categories
+  classify as **fixed** (rent, insurance — expected, not managed), **non-monthly** (irregular —
+  compose with XC3's smoothing accruals), or **flex** — and the user manages ONE flex number
+  for all day-to-day discretionary spending instead of twenty category budgets. Evaluation:
+  flex spent = Σ expense in flex categories; fixed rows render as expected-vs-actual checkoffs
+  (composes with TX9 bill matching); non-monthly rows show their smoothed accrual. The
+  methodology for people who aren't budget hobbyists — likely the highest-retention item in
+  this series. Needs a classification pass on categories (default heuristics from recurring
+  mappings + a one-time assignment sheet; per-category override).
+- [ ] **BG3 [MED — BEST EFFORT/VALUE]** Pacing indicator per budget *(Monarch / Copilot)*. A
+  second tick on the existing budget meter marking where spending SHOULD be today (elapsed
+  period fraction, `PeriodRange`-aware so weekly/quarterly work), with the row's tone keyed to
+  ahead/behind-pace rather than only over/under-limit. Copy stays plain-English ("on pace" /
+  "running $38 hot"). Pure read-model + MeterBar rendering; zero new data. Interacts with
+  XC4: the committed segment should be excluded from the pace comparison (committed money
+  isn't "spent fast", it's pre-spoken-for).
+- [ ] **BG4 [MED]** Quick-budget fill actions *(YNAB)*. One-tap amount fills in the budget edit
+  form and (bulk) on the page: **last month's spending**, **average of last 3/6 months**,
+  **last period's budget**, **underfunded to target** (needs BG1). Each is one reports-package
+  query; render as chips beside the amount field with the computed value visible on the chip
+  ("Avg 6 mo · $438") so the choice is informed, not blind. Kills the blank-page problem each
+  period; also the natural companion surface for BG6's true-up suggestions.
+- [ ] **BG5 [MED]** Rollover caps + envelope-debt visibility *(Monarch rollover controls, YNAB
+  "stealing from the future")*. Two refinements to existing rollover/envelope machinery:
+  (a) CAPS — roll over at most N× the period amount (default 1×) or reset each quarter, so a
+  neglected budget can't accumulate a fictional cushion; (b) DEBT VISIBILITY — a negative
+  envelope explicitly shows what next period starts down ("Dining starts March −$32") instead
+  of the overdraft quietly vanishing at the period boundary. Both are budgeting-pkg logic +
+  row copy; cap config lives on the budget (edit form), default preserves current behavior.
+- [ ] **BG6 [MED — SMART-SERIES FLAGS]** Seasonal-aware auto-budget true-up *(Mint suggestions,
+  honest version)*. Periodic re-fit on top of the existing auto-budget host: "Groceries has run
+  $480/mo for 6 months against a $400 budget — raise it?" One-tap accept per row, preview-
+  approve, shipped as SMART flags with standard opt-in/dismissal. Seasonality: compare against
+  same-month-last-year when ≥13 months of data exist, else trailing average. Dismissal keys
+  encode the suggested level so a further drift re-flags (the smart_adapter dismissal-key
+  lesson). Budgets drifting from reality is why people abandon budgeting — this is the
+  retention feature of the series.
+- [ ] **BG7 [MAJOR — NEEDS PLANNING (R-ticket before impl)]** Credit-card payment budgeting
+  *(YNAB's hardest mechanic)*. Card spending moves budgeted money into a per-card PAYMENT
+  envelope, so "can I pay the statement in full?" is always an envelope balance. PLANNING GATE
+  — spec must resolve: interaction with transfers (payment txn = transfer today), the
+  statement-period concept (needed to answer "in full"; nb: the YNAB-style reconcile-session
+  idea was DROPPED from TX — don't resurrect it implicitly, define the minimal statement
+  notion this needs), envelope math when a card was carrying pre-existing debt, methodology
+  scoping (envelope/flex only?), and how the cover machinery (coverformula) participates when
+  grocery money wasn't there to move. The deepest moat on the list precisely because it's
+  hard; write the R-ticket findings into this entry before code.
+- [ ] **BG8 [SMALL]** Daily allowance *(PocketSmith / nudget)*. One behavioral number,
+  recomputed daily: remaining discretionary ÷ days left in period → "**$23/day until the
+  1st**". Remaining = flex remainder (BG2) when flex mode is on, else a safe-to-spend slice.
+  Implementation is a MOLECULE (`daily_allowance = safediv(remaining_discretionary, days_left,
+  0)`) + a days_left atom, so it's formula/widget-addressable and explainable for free;
+  placement: budgets header + optional dashboard KPI tile. For day-to-day decisions this beats
+  every chart in the app.
+- [ ] **BG9 [MED — VIEW-ONLY (overrides dropped)]** Annual grid *(Quicken's 12-month
+  plan-vs-actual matrix)*. Categories × months grid: plan vs actual per cell, row/column
+  totals, current month highlighted, over-cells toned. A PROJECTION of per-period evaluations
+  the engine already computes — no new state. Desktop-first layout (wide table with sticky
+  header/first-column, horizontal scroll inside the card). Since seasonal overrides were
+  dropped, cells are read-only; clicking a cell drills to that month's filtered transactions.
+
+**BG ordering note.** BG3, BG8 are quick wins (read-model only). BG1 before BG4's underfunded
+fill; BG2 is the strategic centerpiece and wants its category-classification pass scoped first;
+BG7 blocked on its planning ticket. Cross-links: BG2↔XC3/XC4/TX9, BG3↔XC4, BG6↔BG4.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]

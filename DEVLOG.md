@@ -1,3 +1,17 @@
+## 2026-07-14 — BG series: budgets competitive ideation → backlog
+
+Third curation round, /budgets. Cam kept 9 of 10; the one drop (seasonal per-month overrides)
+had a knock-on I recorded explicitly: BG9's annual grid was pitched as the overrides' editing
+surface, so it ships VIEW-ONLY with a note to revisit if overrides revive. Two design boundaries
+worth remembering: BG1's by-date target is a goal wearing budget clothes — the proposal on the
+ticket is to DELEGATE to a linked goal rather than duplicate accumulation logic (concept-dedup
+in the spirit of XC0b); BG7 (YNAB card-payment budgeting) needs a minimal statement-period
+notion, and the ticket explicitly warns not to resurrect the dropped reconcile-session idea
+through the back door. BG2 (flex) is the strategic centerpiece — the methodology for
+non-hobbyists — and composes with XC3 (non-monthly smoothing), XC4 (committed segments), TX9
+(fixed-row checkoffs). Quick wins flagged: BG3 pacing and BG8 daily-allowance (a molecule +
+an atom — the engine can already express it).
+
 ## 2026-07-14 — TX batch 2: nine more, with Cam's reframes recorded
 
 Second curation round on transactions. The consequential call: EVENTS ARE A TOP-LEVEL CONCEPT
