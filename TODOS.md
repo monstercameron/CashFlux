@@ -3196,6 +3196,90 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
 **Ordering note.** TX1 unlocks TX2/TX4/TX6/TX7 quality; TX4 is gated on its planning ticket;
 the rest are independent. Cross-links: TX4→XC1/XC11, TX5→XC11, TX6→XC5.
 
+**Second batch (curated 2026-07-14, same session).** Cam kept 9 of 10; DROPPED: planned/ghost
+one-off future transactions (Simplifi "upcoming") — can be re-proposed later, note it overlaps
+TX9's expected-occurrence machinery if revisited.
+
+- [ ] **TX9 [MED — ENHANCE EXISTING]** Bill matching: expected ↔ actual linking *(Simplifi bill
+  reminders, Actual Budget schedules)*. Partial machinery exists — bills occurrence expansion +
+  the SMART missing-transaction detector already reason about expected occurrences; what's
+  missing is the durable LINK. Formalize: match an incoming txn to its expected recurring
+  occurrence (amount tolerance ~5% + date window; alias-keyed payee match via TX1), persist via
+  the XC0b link primitive (`kind: bill-match`), and derive paid/unpaid states per occurrence +
+  variance ("ran $2 over"). Consumers: /recurring occurrence rows get paid checkmarks, XC9's
+  payday pre-flight gets real paid-state, XC5's price-creep gets per-occurrence actuals, the
+  missing-txn detector stops re-flagging matched bills. Guardrail: a txn matches ≤1 occurrence;
+  manual match/unmatch affordance for the detector's misses.
+- [ ] **TX10 [MAJOR — TOP-LEVEL CONCEPT (Cam's reframe)]** Events: first-class entity with
+  transaction mapping *(Lunch Money trips, Monarch events)*. NOT just a saved filter — a
+  domain-level `Event` (name, date range, optional note/icon), stored + exported like any
+  entity, with transactions MAPPED to it. Auto-associate txns inside the range at creation
+  (with per-txn opt-out), manual add/remove beyond the range (the airfare booked two months
+  early). Design question for scoping: mapping = EventID field on the txn vs the XC0b link
+  table (lean link-table — a txn conceivably belongs to an event AND other relations; keep the
+  txn core schema untouched per the strong-schema rule). Surfaces: collapsible event band in
+  the ledger, event total + per-category breakdown (engine-derived, explainable), an
+  `event_<slug>_total` engine variable family so events are formula/widget-addressable like
+  pools/goals. Per-entity CRUD follows the house rule (add/inline-edit/delete + reassign-on-
+  delete = unmap txns). Bottom-up: domain → eventing logic pkg w/ tests → store → state → UI.
+- [ ] **TX11 [MED]** Round-ups to goals *(Acorns, Chime, Emma)*. Each expense rounds up to the
+  next dollar; the accrued spare change becomes a goal earmark on a weekly/monthly sweep —
+  VIRTUAL (no txn mutation, no real transfer): an accrual counter + XC6's sweep machinery with
+  a different accumulator. Config: on/off, target goal, sweep cadence, which accounts
+  participate. Show the running jar ("$6.37 in round-ups this week") on the goal row and/or
+  dashboard. Guardrail: transfers/refunds excluded from accrual; explainable breakdown
+  (determinism rule) — list the contributing txns.
+- [ ] **TX12 [MED]** Register mode: running-balance column *(Quicken's checkbook register)*.
+  When the ledger is filtered to ONE account, offer a register view: running balance after each
+  row (chronological order enforced while active), styled into the existing column system
+  (txncolumnshost). Cheap now — the one-pass `ledger.Balances`/date-ordered fold makes the
+  computation trivial; compute from the account's full history then slice to the visible
+  filter so the running figure is TRUE even when rows are filtered. Answers "when did this
+  account dip" without a chart.
+- [ ] **TX13 [MED — SMART-SERIES FLAGS]** New-merchant + trial-conversion alerts *(Rocket
+  Money, Mint)*. Two cheap detectors on the txn stream, shipped as SMART flags with standard
+  opt-in/dismissal: (a) "first time you've ever paid X" (new-merchant awareness/fraud signal;
+  alias-keyed via TX1 so processor noise doesn't false-positive); (b) "X looks like a new
+  subscription" — a second similar charge ~28-33 days after the first → one-tap "track as
+  recurring" (prefilled recurring add). (b) is the missing on-ramp from ledger → /recurring.
+  Dismissal keys must encode merchant identity so a DIFFERENT new merchant still flags
+  (dismissal-key lesson from smart_adapter).
+- [ ] **TX14 [MED]** Inline overspend cover *(YNAB's move-money flow)*. On the transaction that
+  just pushed a budget over its limit, show a quiet affordance: "this put Dining at 104% —
+  cover $12 from…" → one tap opens the existing budget-cover machinery (coverformula, cover
+  sources with weights) scoped to the shortfall. The insight from YNAB: fixing overspend AT THE
+  MOMENT YOU SEE THE CAUSE is what keeps envelope discipline alive. Read-side: needs "which
+  budget did this txn push over" — derivable from the txn's category + the budget evaluation
+  already computed for the row's period. Never nags: render only on the triggering rows,
+  dismiss per-instance.
+- [ ] **TX15 [MED — MULTI-USER STUBBED (Cam's call)]** Comments on transactions, mentions
+  stubbed *(Monarch household collaboration)*. A comment thread on a transaction (author =
+  active member, timestamped, stored + exported with the dataset). V1 stubs the multi-user
+  reality: no presence/notifications — a mention (@member) simply creates a to-do assigned to
+  that member (task machinery exists; composes with XC8 so the task auto-resolves when someone
+  replies on that txn or recategorizes it). Full multi-user (sync-aware threads, unread
+  states) explicitly OUT OF SCOPE until the sync backend lands; model the comment shape so it
+  survives that upgrade (IDs + author + ts, no derived state).
+- [ ] **TX16 [SMALL — USE THE FORMULA ENGINE (Cam's call)]** Math in amount fields *(Actual
+  Budget, Copilot)*. Type `45.99*3` or `120/4` in an amount input → evaluates on blur/Enter via
+  the app's OWN sandboxed `formula` engine (Compile/Eval with an empty Env — no variables, just
+  arithmetic; parse failure = leave input untouched, no error nag). Wire once at the shared
+  amount-input component level so Quick-Add, inline edit, split editor, budget amounts, and
+  goal forms all inherit it. ~Tiny effort, outsized delight; the finite-result guard already
+  protects against overflow garbage.
+- [ ] **TX17 [MED]** Entry-time budget impact *(PocketGuard "in my pocket", Simplifi spending
+  plan)*. As Quick-Add is filled, a live caption answers the real question: "leaves $142 in
+  Dining this month · safe-to-spend $890". Inputs are already in hand at entry (category +
+  amount) and both figures exist (budget evaluation for the period; the `safe_to_spend`
+  molecule). Recompute on amount/category change, debounced; omit the budget clause when the
+  category has no budget; tone shifts (warn) when the entry would cross the limit — which is
+  TX14's moment, so offer the cover affordance right there on save. Converts data entry from
+  bookkeeping into a decision aid.
+
+**Batch-2 ordering note.** TX9 and TX13 want TX1's aliases first (matching quality). TX10 is
+the big one — full bottom-up entity work; scope-confirm before starting. TX16 is a good
+release-filler; TX17 pairs naturally with TX14 in one arc.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]

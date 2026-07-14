@@ -1,3 +1,18 @@
+## 2026-07-14 — TX batch 2: nine more, with Cam's reframes recorded
+
+Second curation round on transactions. The consequential call: EVENTS ARE A TOP-LEVEL CONCEPT
+(TX10) — Cam explicitly rejected the "just a saved filter" framing in favor of a first-class
+domain entity with txn mapping, engine variables (event_<slug>_total family), and full CRUD.
+Scoping note captured inline: mapping via the XC0b link table rather than an EventID field on
+the txn, to keep the core schema untouched. Other reframes: TX15 comments ship with multi-user
+STUBBED (mention → member task now; sync-aware threads wait for the backend — model the comment
+shape so it survives), TX16 math-in-amounts must use OUR formula engine (empty Env, parse-fail =
+no-op), TX9 is an ENHANCE not a build (occurrence expansion + missing-txn detector already
+reason about expected bills; the durable link + paid states are what's new). Dropped: planned/
+ghost future txns. Batch-2 ordering: TX9/TX13 want TX1 aliases first; TX10 is real bottom-up
+entity work needing scope confirmation; TX14+TX17 are one natural arc (impact preview at entry →
+cover affordance at the same moment).
+
 ## 2026-07-14 — TX series: transactions competitive ideation → backlog
 
 Second ideation pass, /transactions only, sourced from named competitors and adapted to
