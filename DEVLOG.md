@@ -1,3 +1,15 @@
+## 2026-07-14 — Health atoms: exclude-on-FX-failure, not raw-fallback
+
+Small commit, big blast radius when it fires: `HealthInputs` had the only two spots in engineenv
+that fell back to raw minor units on `ConvertBetween` failure (grep confirmed no others). A JPY
+min payment with a missing rate walked into the obligation sum as 5,000,000 "cents" — health_debt
+and the overall score went nonsense with zero user-visible signal. Both sites now exclude the
+figure, matching the convention everywhere else; for utilization the whole card drops (adding a
+converted balance against an unconvertible limit is just a subtler version of the same lie).
+Test note: my first expectation mis-derived monthly income (the lookback divides the 3-month flow
+by 3 → $3,000/mo, so $200 minimum payments = 6%, not 20%) — worth remembering that
+healthLookbackMonths averages, it doesn't sum.
+
 ## 2026-07-14 — Molecule save/delete validation in appstate
 
 Third commit of the arc: stop bad molecules at the door instead of only surviving them at eval.

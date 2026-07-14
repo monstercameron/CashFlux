@@ -109,7 +109,10 @@ func HealthInputs(d Data) healthscore.Inputs {
 			anyLiab = true
 			conv, cerr := currency.ConvertBetween(a.MinPayment.Amount, a.MinPayment.Currency, base, rates)
 			if cerr != nil {
-				conv = a.MinPayment.Amount
+				// No usable rate: exclude the payment (the same convention as
+				// every other atom) — a raw foreign amount added as if it were
+				// base-currency cents (¥50,000 ≠ $50,000) corrupts the ratio.
+				continue
 			}
 			minSum += conv
 		}
@@ -154,13 +157,13 @@ func HealthInputs(d Data) healthscore.Inputs {
 		if owed < 0 {
 			owed = -owed
 		}
-		ob, cerr := currency.ConvertBetween(owed, bal.Currency, base, rates)
-		if cerr != nil {
-			ob = owed
-		}
-		ol, cerr := currency.ConvertBetween(a.CreditLimit.Amount, a.CreditLimit.Currency, base, rates)
-		if cerr != nil {
-			ol = a.CreditLimit.Amount
+		ob, oerr := currency.ConvertBetween(owed, bal.Currency, base, rates)
+		ol, lerr := currency.ConvertBetween(a.CreditLimit.Amount, a.CreditLimit.Currency, base, rates)
+		if oerr != nil || lerr != nil {
+			// No usable rate for the balance or the limit: exclude the whole
+			// card — adding raw foreign minor units (or half a card) into a
+			// base-currency ratio corrupts the utilization percentage.
+			continue
 		}
 		balSum += ob
 		limitSum += ol
