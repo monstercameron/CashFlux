@@ -1,3 +1,33 @@
+## 2026-07-14 — Formula engine hardening: fast, reliable, robust, flexible
+
+A deep review of the formula subsystem (parser/evaluator + engineenv atoms/molecules) surfaced a
+cluster of edge-case defects, all empirically confirmed with adversarial probes before touching
+anything: eager `if()` broke the natural zero-guard idiom (`if(count == 0, 0, total/count)` errored
+on the division it guards — the existence of `safediv` was the workaround-shaped evidence);
+`safediv(1, nan, 42)` returned NaN because only `b == 0` was checked; overflow leaked `+Inf` into
+results with no caller anywhere sanitizing; `5 < 3 < 10` evaluated to `true` via bool→0/1 coercion;
+paren nesting at 1M depth was a **fatal uncatchable stack overflow** (100k was fine — measured);
+and every `Eval` re-tokenized+re-parsed, multiplied by molecules × widgets × chart months per render.
+
+This commit is the core-language pass (engineenv/appstate integration comes next, separately):
+lazy `if`/`and`/`or`; a top-level finite-result guarantee (intermediates may still be rescued by
+`clamp`/`safediv` — guarding every op would break `clamp(big*10, 0, 100)`, which callers legitimately
+write); tolerant `==` (1e-9 relative — far below money's 0.01 granularity, so real cents still
+differ); chained comparisons rejected at parse with a "write and(a < b, b < c)" hint; `maxDepth`
+2000 + `MaxSourceLen` 32KB (both orders of magnitude above real formulas, both far below the crash
+threshold); scientific notation; structured `*Error{Pos}` for future editor squiggles; and the
+flexibility layer — `Compile`/`Program` for parse-once, `Validate(expr, known)` for save paths,
+`Functions()` so the chat tool description / editor palette can stop hand-maintaining drifting
+copies of the function set, plus a bounded AST memo inside `Eval` (reset-when-full; wholesale reset
+beats an LRU here because entries are one cheap parse to rebuild).
+
+Deliberate compatibility choices: division by zero stays an ERROR (molecules currently read as 0
+downstream when they fail — silently returning 0 from `/` would hide real problems); `and`/`or`
+short-circuiting means an error in a later argument no longer surfaces when an earlier one decides
+the answer — strictly more forgiving, matches every mainstream language; chained-comparison
+rejection can break a saved formula that used it, but any such formula was already computing the
+wrong answer. Full native suite green, js/wasm builds of all consumer packages green.
+
 ## 2026-07-14 — Single source of truth: route all app state through the SQLite dataset (v1.0.25)
 
 Cam's rule, stated bluntly: the in-memory SQLite dataset is the ONE state blob — serialized → encrypted

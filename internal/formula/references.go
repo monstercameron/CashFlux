@@ -14,6 +14,11 @@ func References(expr string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return collectRefs(ast), nil
+}
+
+// collectRefs walks an AST and returns its distinct identifiers, sorted.
+func collectRefs(ast Node) []string {
 	seen := map[string]bool{}
 	var walk func(Node)
 	walk = func(n Node) {
@@ -37,5 +42,5 @@ func References(expr string) ([]string, error) {
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out, nil
+	return out
 }

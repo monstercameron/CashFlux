@@ -2,10 +2,7 @@
 
 package formula
 
-import (
-	"fmt"
-	"strconv"
-)
+import "strconv"
 
 // Node is an expression AST node. Concrete types: NumberLit, StringLit, Ident,
 // Unary, Binary, Call.
@@ -38,6 +35,12 @@ type Call struct {
 	Args []Node
 }
 
+// maxDepth bounds expression nesting. Recursive descent means nesting depth is
+// recursion depth; without a bound, a pathological input (deep parentheses or a
+// long unary chain, e.g. from a corrupted import) overflows the goroutine stack
+// — a fatal, unrecoverable crash. Real formulas nest a handful of levels.
+const maxDepth = 2000
+
 // Parse tokenizes and parses an expression into an AST, enforcing operator
 // precedence (comparison < additive < multiplicative < unary < primary).
 func Parse(input string) (Node, error) {
@@ -51,17 +54,29 @@ func Parse(input string) (Node, error) {
 		return nil, err
 	}
 	if p.cur().Kind != TEOF {
-		return nil, fmt.Errorf("formula: unexpected %q at position %d", p.cur().Text, p.cur().Pos)
+		return nil, errAt(p.cur().Pos, "unexpected %q", p.cur().Text)
 	}
 	return n, nil
 }
 
 type parser struct {
-	toks []Token
-	pos  int
+	toks  []Token
+	pos   int
+	depth int
 }
 
 func (p *parser) cur() Token { return p.toks[p.pos] }
+
+// enter guards a recursive descent step; every enter pairs with a leave.
+func (p *parser) enter() error {
+	p.depth++
+	if p.depth > maxDepth {
+		return errAt(p.cur().Pos, "formula is nested too deeply")
+	}
+	return nil
+}
+
+func (p *parser) leave() { p.depth-- }
 
 func (p *parser) advance() Token {
 	t := p.toks[p.pos]
@@ -86,11 +101,17 @@ func (p *parser) parseComparison() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.cur().Kind == TOp && isCompare(p.cur().Text) {
+	if p.cur().Kind == TOp && isCompare(p.cur().Text) {
 		op := p.advance().Text
 		right, err := p.parseAdditive()
 		if err != nil {
 			return nil, err
+		}
+		// Chaining ("a < b < c") is rejected rather than parsed: the C-style
+		// reading — compare the first result's 0/1 against c — is never what a
+		// between-check means, and silently returning it is worse than an error.
+		if p.cur().Kind == TOp && isCompare(p.cur().Text) {
+			return nil, errAt(p.cur().Pos, "chained comparisons are not supported; write and(a %s b, b %s c)", op, p.cur().Text)
 		}
 		left = Binary{Op: op, L: left, R: right}
 	}
@@ -130,6 +151,10 @@ func (p *parser) parseMultiplicative() (Node, error) {
 }
 
 func (p *parser) parseUnary() (Node, error) {
+	if err := p.enter(); err != nil {
+		return nil, err
+	}
+	defer p.leave()
 	if p.cur().Kind == TOp && (p.cur().Text == "-" || p.cur().Text == "+") {
 		op := p.advance().Text
 		x, err := p.parseUnary()
@@ -148,7 +173,7 @@ func (p *parser) parsePrimary() (Node, error) {
 		p.advance()
 		v, err := strconv.ParseFloat(t.Text, 64)
 		if err != nil {
-			return nil, fmt.Errorf("formula: bad number %q at position %d", t.Text, t.Pos)
+			return nil, errAt(t.Pos, "bad number %q", t.Text)
 		}
 		return NumberLit{Value: v}, nil
 	case TString:
@@ -161,22 +186,30 @@ func (p *parser) parsePrimary() (Node, error) {
 		}
 		return Ident{Name: t.Text}, nil
 	case TLParen:
+		if err := p.enter(); err != nil {
+			return nil, err
+		}
+		defer p.leave()
 		p.advance()
 		inner, err := p.parseExpr()
 		if err != nil {
 			return nil, err
 		}
 		if p.cur().Kind != TRParen {
-			return nil, fmt.Errorf("formula: expected ) at position %d", p.cur().Pos)
+			return nil, errAt(p.cur().Pos, "expected )")
 		}
 		p.advance()
 		return inner, nil
 	default:
-		return nil, fmt.Errorf("formula: unexpected %q at position %d", t.Text, t.Pos)
+		return nil, errAt(t.Pos, "unexpected %q", t.Text)
 	}
 }
 
 func (p *parser) parseCall(name string) (Node, error) {
+	if err := p.enter(); err != nil {
+		return nil, err
+	}
+	defer p.leave()
 	p.advance() // consume '('
 	var args []Node
 	if p.cur().Kind != TRParen {
@@ -194,7 +227,7 @@ func (p *parser) parseCall(name string) (Node, error) {
 		}
 	}
 	if p.cur().Kind != TRParen {
-		return nil, fmt.Errorf("formula: expected ) to close %s( at position %d", name, p.cur().Pos)
+		return nil, errAt(p.cur().Pos, "expected ) to close %s(", name)
 	}
 	p.advance()
 	return Call{Name: name, Args: args}, nil

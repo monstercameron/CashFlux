@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 )
 
 // Value is a formula result: float64, string, or bool. Nothing else can be
@@ -22,13 +23,61 @@ type Env struct {
 
 // Eval parses and evaluates an expression against env, returning a number,
 // string, or bool. Errors on parse failure, unknown variable/function, arity
-// mismatch, division by zero, or a type mismatch.
+// mismatch, division by zero, a type mismatch, or a non-finite (NaN/Inf)
+// numeric result — a formula can never hand a garbage number to a caller.
+// Parsed ASTs are cached by source text, so re-evaluating the same formula
+// (molecules and widget bindings do, every render) skips tokenize+parse; use
+// Compile to hold a parsed formula explicitly.
 func Eval(input string, env Env) (Value, error) {
-	ast, err := Parse(input)
+	ast, err := parseCached(input)
 	if err != nil {
 		return nil, err
 	}
-	return eval(ast, env)
+	return finishEval(ast, env)
+}
+
+// finishEval evaluates an AST and applies the finite-result guarantee shared by
+// Eval and Program.Eval. The guard is at the top level only: intermediate
+// non-finite values may still be rescued by clamp()/safediv() on the way up.
+func finishEval(ast Node, env Env) (Value, error) {
+	v, err := eval(ast, env)
+	if err != nil {
+		return nil, err
+	}
+	if f, ok := v.(float64); ok && (math.IsNaN(f) || math.IsInf(f, 0)) {
+		return nil, fmt.Errorf("formula: result is not a finite number")
+	}
+	return v, nil
+}
+
+// astCache memoizes Parse results. Entries are immutable value-type ASTs, safe
+// to share across goroutines. Bounded by wholesale reset when full — simpler
+// than an LRU, and rebuilding an entry costs one parse.
+var astCache = struct {
+	sync.Mutex
+	m map[string]Node
+}{m: map[string]Node{}}
+
+const astCacheMax = 512
+
+func parseCached(input string) (Node, error) {
+	astCache.Lock()
+	n, ok := astCache.m[input]
+	astCache.Unlock()
+	if ok {
+		return n, nil
+	}
+	parsed, err := Parse(input)
+	if err != nil {
+		return nil, err
+	}
+	astCache.Lock()
+	if len(astCache.m) >= astCacheMax {
+		astCache.m = map[string]Node{}
+	}
+	astCache.m[input] = parsed
+	astCache.Unlock()
+	return parsed, nil
 }
 
 func eval(n Node, env Env) (Value, error) {
@@ -88,9 +137,9 @@ func evalBinary(b Binary, env Env) (Value, error) {
 			return nil, fmt.Errorf("formula: cannot compare %v and %v", l, r)
 		}
 		if b.Op == "==" {
-			return ln == rn, nil
+			return nearlyEqual(ln, rn), nil
 		}
-		return ln != rn, nil
+		return !nearlyEqual(ln, rn), nil
 	}
 
 	l, err := evalNumber(b.L, env)
@@ -131,6 +180,57 @@ func evalBinary(b Binary, env Env) (Value, error) {
 }
 
 func evalCall(c Call, env Env) (Value, error) {
+	// if/and/or evaluate lazily, before the eager argument pass below: the
+	// untaken branch of a guard must not run, or the natural zero-guard idiom —
+	// if(count == 0, 0, total / count) — errors on the division it guards.
+	switch c.Name {
+	case "if":
+		if len(c.Args) != 3 {
+			return nil, fmt.Errorf("formula: if() takes 3 arguments")
+		}
+		cond, err := eval(c.Args[0], env)
+		if err != nil {
+			return nil, err
+		}
+		if truthy(cond) {
+			return eval(c.Args[1], env)
+		}
+		return eval(c.Args[2], env)
+	case "and":
+		// and(a, b, …) — true when every argument is truthy, stopping at the
+		// first falsy one. The language has no && operator; this is how a
+		// workflow condition (or any formula) expresses a conjunction:
+		// and(txn_abs > 100, contains(txn_payee, "uber")).
+		if len(c.Args) < 2 {
+			return nil, fmt.Errorf("formula: and() needs at least 2 arguments")
+		}
+		for _, a := range c.Args {
+			v, err := eval(a, env)
+			if err != nil {
+				return nil, err
+			}
+			if !truthy(v) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "or":
+		// or(a, b, …) — true when any argument is truthy, stopping there.
+		if len(c.Args) < 2 {
+			return nil, fmt.Errorf("formula: or() needs at least 2 arguments")
+		}
+		for _, a := range c.Args {
+			v, err := eval(a, env)
+			if err != nil {
+				return nil, err
+			}
+			if truthy(v) {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
 	args := make([]Value, len(c.Args))
 	for i, a := range c.Args {
 		v, err := eval(a, env)
@@ -252,8 +352,10 @@ func evalCall(c Call, env Env) (Value, error) {
 		}
 		return math.Max(lo, math.Min(hi, v)), nil
 	case "safediv":
-		// safediv(a, b, fallback) → a/b, or fallback when b == 0. The zero-guarded
-		// division every ratio KPI needs (savings rate, utilization, …).
+		// safediv(a, b, fallback) → a/b, or fallback when the division can't
+		// produce a finite number (b zero or NaN, or a non-finite quotient).
+		// The guarded division every ratio KPI needs (savings rate,
+		// utilization, …) — its whole contract is "never garbage".
 		if len(args) != 3 {
 			return nil, fmt.Errorf("formula: safediv() takes 3 arguments")
 		}
@@ -269,42 +371,13 @@ func evalCall(c Call, env Env) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		if b == 0 {
+		if b == 0 || math.IsNaN(b) {
 			return fb, nil
 		}
-		return a / b, nil
-	case "if":
-		if len(args) != 3 {
-			return nil, fmt.Errorf("formula: if() takes 3 arguments")
+		if q := a / b; !math.IsNaN(q) && !math.IsInf(q, 0) {
+			return q, nil
 		}
-		if truthy(args[0]) {
-			return args[1], nil
-		}
-		return args[2], nil
-	case "and":
-		// and(a, b, …) — true when every argument is truthy. The language has
-		// no && operator; this is how a workflow condition (or any formula)
-		// expresses a conjunction: and(txn_abs > 100, contains(txn_payee, "uber")).
-		if len(args) < 2 {
-			return nil, fmt.Errorf("formula: and() needs at least 2 arguments")
-		}
-		for _, a := range args {
-			if !truthy(a) {
-				return false, nil
-			}
-		}
-		return true, nil
-	case "or":
-		// or(a, b, …) — true when any argument is truthy.
-		if len(args) < 2 {
-			return nil, fmt.Errorf("formula: or() needs at least 2 arguments")
-		}
-		for _, a := range args {
-			if truthy(a) {
-				return true, nil
-			}
-		}
-		return false, nil
+		return fb, nil
 	case "not":
 		// not(a) — logical negation of a truthy value.
 		if len(args) != 1 {
@@ -343,6 +416,20 @@ func evalNumber(n Node, env Env) (float64, error) {
 		return 0, err
 	}
 	return asNumber(v)
+}
+
+// nearlyEqual is the == / != semantics for numbers: exact equality, or equal
+// within a small relative tolerance. Every variable here is a derived float —
+// two mathematically equal figures computed along different paths routinely
+// differ by binary rounding (0.1 + 0.2 vs 0.3), and a formula author writing
+// "savings_rate == 0.2" means the arithmetic value, not the bit pattern. The
+// tolerance (1e-9 relative) is far below money's 0.01 granularity.
+func nearlyEqual(a, b float64) bool {
+	if a == b {
+		return true
+	}
+	scale := math.Max(1, math.Max(math.Abs(a), math.Abs(b)))
+	return math.Abs(a-b) <= 1e-9*scale
 }
 
 func asNumber(v Value) (float64, error) {
