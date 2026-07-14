@@ -2968,6 +2968,155 @@ ALREADY DONE: per-bubble token+cost ("Used N tokens ~$X", insights.go:1074-1081)
 
 <!-- ===== GRANULAR DECOMPOSITION (batch 17 — final clusters, appended 2026-06-25) ===== -->
 
+<!-- ===== XC SERIES (cross-concept workflows, appended 2026-07-14) ===== -->
+
+## ★ XC series — Cross-concept workflows (LATER IMPL — ideation captured 2026-07-14, not yet prioritized)
+
+**Provenance & scope.** Ideation session 2026-07-14 with Cam: stick to the first seven pages
+(Dashboard, Transactions, Accounts, Budgets, Goals, To-do, Recurring; Planning only as a landing
+spot) and find workflows where a REAL-WORLD money object doesn't map 1:1 onto the app's atomic
+concepts — in the same spirit as the in-flight transaction split (one atomic Amazon txn whose
+line items belong in different categories/budgets, solved without category sprawl).
+
+**Governing principle (anti-sprawl).** Every XC item must bridge concepts by REUSING existing
+machinery (links, earmarks, rollover accounting, the workflow engine, vision import, rules,
+billsched) rather than minting new entities. If an idea needs a new table, it must justify why an
+existing primitive can't carry it. Per CLAUDE.md: agree spec before feature code; each item below
+still needs a scope-confirmation pass before implementation.
+
+**Two framing decisions to settle FIRST (XC0):**
+- [ ] **XC0a [DESIGN-GATE]** Rituals vs. mechanics: decide per-item whether it ships as a guided,
+  dismissible FLOW (like the payday pre-flight) or an always-on MECHANIC that silently corrects
+  read models (like refund netting / annual smoothing). Proposed default: mechanics for
+  correctness items (XC2, XC3), rituals for habit items (XC6, XC9); record the choice on each
+  ticket when scoped.
+- [ ] **XC0b [DESIGN-GATE]** One generalized transaction-link concept: XC1 (order grouping),
+  XC2 (refund pairing), and the in-flight split all need txn-to-txn relations. Decide ONE link
+  primitive (one persisted relation with a `kind` enum: `split-line` / `order-group` /
+  `refund-pair`) instead of three bespoke mechanisms — the data-model version of category sprawl.
+  Seams already exist: `internal/app/txnlinkhost.go` plus the split model being built in
+  `internal/uistate/txnsplit.go` / `internal/app/txnsplithost.go`. Settle this WHILE the split
+  data model is still soft; retrofitting later is expensive.
+
+### Transactions ↔ Transactions (the split's mirror twins)
+- [ ] **XC1 [MAJOR]** Order grouping (N:1 — the dual of the split). One Amazon order ships in
+  three boxes → three card charges, none matching the order total; the ledger shows three
+  meaningless rows. Link N transactions into one logical "purchase": renders as a single
+  collapsible row in /transactions (opt-in per group), reconciles the group sum against an
+  entered order total (remainder line like the split editor's Balanced / left-to-assign), and
+  reports/budgets can attribute at either grain. Reuse: the XC0b link primitive; txnlinkhost;
+  the split editor's reconcile UX pattern (SplitsReconcile). Guardrails: a txn belongs to at
+  most one group; grouping never mutates the underlying atoms; deleting a group releases (not
+  deletes) its members. Detection assist (later): candidate groups = same payee within N days
+  whose sum matches a round order total.
+- [ ] **XC2 [MAJOR]** Refund/reimbursement pairing with period-true netting. Buy a $120 jacket in
+  March, return it in April: March shows a clothing blowout, April shows negative spending;
+  annual totals are right only by accident. Pair the refund txn to its original purchase (link
+  kind `refund-pair`, partial amounts allowed — a $40 partial refund nets $40); budgets and
+  reports treat the pair as netted IN THE ORIGINAL month, while the ledger keeps both atoms
+  untouched (single-source rule: netting is a READ-MODEL adjustment in budgeting/reports, never
+  a data rewrite). Work-expense reimbursements = same mechanism with a longer delay; consider an
+  "awaiting reimbursement" state that feeds a self-resolving task (XC8). Candidate detection:
+  positive txn, same payee, amount ≤ original, within 90 days. Surfaces: budget row math,
+  reports period totals, category drill-downs; a pair badge on both rows links each to its twin.
+  HIGHEST TRUTH-PER-EFFORT on this list — fixes numbers that are currently WRONG.
+
+### Transactions ↔ Recurring ↔ Budgets
+- [ ] **XC3 [MAJOR]** Annual-bill smoothing (sinking-fund accrual). A $600 yearly premium lands
+  in June and nukes June's budget; it's really $50/mo of living. An annual/quarterly recurring
+  item can opt into "smooth into budgets": the off months accrue a virtual monthly set-aside and
+  the landing month reads roughly on-pace instead of a 400% blowout. Reuse: the goals earmark
+  machinery — a system-managed sinking fund owned by the recurring item (created/maintained
+  automatically; plain-English label "Set aside for [bill]"). Read-model changes: budget
+  evaluation counts the accrual as committed in off months and offsets the posted amount in the
+  landing month; safe_to_spend already subtracts earmarks so it follows for free. Guardrails:
+  opt-in per recurring; deleting the recurring dissolves the fund (releases earmarks);
+  explainability — the budget row must show "includes $50 set-aside for Insurance (Jun)"
+  (determinism rule, SPEC §5).
+- [ ] **XC4 [MED]** Committed vs. truly-free, per budget. Entertainment budget $100 with
+  Netflix+Spotify pre-committing $45: "remaining $80" overstates freedom. Each budget row splits
+  remaining into COMMITTED (recurring mapped into this budget's categories, not yet posted this
+  period, derived from the recurring schedule) vs. FREE. Pure read-model + row UI; zero new
+  data. Inputs: each recurring's category → budget mapping; period window from the budget's own
+  PeriodRange. Render as a second segment on the existing meter (MeterBar accent-tone family) +
+  caption "committed $45 · free $55". Safe-to-spend philosophy at budget grain.
+- [ ] **XC5 [MED]** Price-creep watch (expected vs. actual, with a budget-impact accept flow).
+  Recurring knows the EXPECTED amount; transactions show the ACTUAL. When actual exceeds
+  expected for N consecutive cycles (start N=2, ~1% tolerance): flag with two one-tap paths —
+  "Accept new price" (updates the recurring amount AND previews the budget impact before commit:
+  "Entertainment goes to 103% — also raise the budget?") or "Make it a task: cancel/downgrade"
+  (feeds XC8: the task auto-completes if a later cycle posts at/below the old price or the
+  recurring is deleted). Reuse: SMART flag surface for detection, the assistant's
+  preview-approve pattern, workflow-engine task creation. Dismissal keys must encode the price
+  level so a FURTHER increase re-flags (lesson from the smart_adapter dismissal-key work).
+
+### Budgets ↔ Goals
+- [ ] **XC6 [MED]** Leftover sweep (month-close ritual). Month closes with $87 unspent across
+  selected budgets; today it evaporates (or rolls over). End-of-month ritual: "sweep leftovers
+  to a goal" — one approval earmarks the residue toward a chosen goal (default: last-used;
+  suggest emergency fund). Converts budget discipline into goal progress — the motivational loop
+  budgeting apps usually miss. Reuse: rollover accounting already computes per-budget leftover
+  (BudgetRolloverLeftover); goal allocations/earmarks take the write; ritual surface = a
+  dismissible month-boundary card (dashboard or /budgets), never naggy (CLAUDE.md tone rule).
+  Config: which budgets participate + target goal, per household. Interaction with rollover:
+  sweep and rollover are mutually exclusive per budget (decide precedence in scoping).
+
+### Goals ↔ Accounts
+- [ ] **XC7 [MED]** Earmark integrity check (is the goal money actually there?). Goals say
+  "$2,000 saved" but the money sits commingled in checking. If earmarks attributed to an account
+  exceed its REAL balance, the user has silently spent goal money and nothing says so.
+  Per-account reconciliation: flag the breach ("Checking holds $1,400 but $2,000 is earmarked —
+  $600 of goal money has been spent"), offer "transfer to savings" (existing transfer flow) or
+  "re-plan the goal" (reduce allocations). All inputs already exist (earmarked_total,
+  per-account balances, addAccountVars' earmarkByAcct). Surfaces: accounts-page row warning + a
+  SMART flag; also gate the XC6 sweep (don't sweep into a goal whose account is already
+  over-earmarked).
+
+### To-do ↔ everything
+- [ ] **XC8 [MAJOR]** Self-resolving tasks (data-conditions on COMPLETION). Tasks link to goals
+  and the workflow engine creates tasks from conditions — but nothing ever closes them, so money
+  to-do lists rot. Add an optional resolve-condition to a task: "chase the duplicate charge"
+  auto-completes when a matching refund posts (amount/payee match); "update HSBC balance" when
+  that account is reconciled (BalanceAsOf moves); "cancel subscription" when the recurring is
+  deleted or a cycle passes with no charge. Model: reuse the workflow engine's condition
+  language/evaluator (formula conditions over txnContext-style vars) stored on the task;
+  evaluate on data mutation (store rev bump), never on a timer; completion posts a quiet,
+  undoable toast ("Done for you: …"). Guardrails: resolve-conditions are supplied by whatever
+  creates the task (flag / assistant / rule); manually-created tasks stay manual unless the user
+  picks a template.
+- [ ] **XC9 [MED]** Payday pre-flight (per-paycheck checklist ritual). billsched already knows
+  paydays, the bills due before the next one, and the projected low point (bills_low_raw, keep
+  floor). Compose them into a generated checklist at each pay-cycle boundary: bills due this
+  cycle (autopay marked), projected low point vs. keep floor, any account dipping below floor,
+  one-tap moves (existing transfer flow) and one-tap "mark planned" per bill. Ritual surface:
+  dismissible card (dashboard or /recurring), regenerated per cycle, never modal. Reuse:
+  billsched optimizer outputs, bills occurrence expansion, XC8 for the checklist items (a paid
+  bill auto-checks when its transaction posts).
+
+### Members ↔ the split (compose with the in-flight split work)
+- [ ] **XC10 [MED — DECIDE DURING SPLIT DESIGN]** Split lines carry an Owner (member), not just a
+  category. The Costco run: half household groceries, half a member's personal hobby budget.
+  Once a txn splits into lines, a line carrying Owner decouples "whose budget it hits" from
+  "whose card paid." Cheap to include while the split data model is soft (persist the field +
+  owner-aware budget/report attribution); expensive to retrofit. Minimum viable: the field +
+  attribution; per-line owner-picking UI can follow. If the split model is already frozen when
+  this is read: file the migration cost explicitly before deciding.
+- [ ] **XC11 [MAJOR]** Receipt → proposed split (vision import feeds the split editor). The
+  vision importer already reads line items off receipts/invoices. Attach a receipt image (or
+  Amazon invoice) to an EXISTING atomic transaction → the app PROPOSES the split lines: items
+  grouped, categories assigned via the existing rules engine (AutoCategorizeTransaction family),
+  remainder auto-balanced (tax/shipping as the remainder line), preview-then-approve into the
+  split editor. Makes the split feature self-driving instead of data-entry. Reuse: documents
+  vision pipeline (draft-review pattern), rules for categorization, the split editor as the
+  approval surface. Guardrails: line-total vs. txn-amount mismatch handling; BYO-key gate
+  applies (vision is AI-tier); the no-key path (manual split) is unchanged.
+
+**Suggested first wave when this series is picked up** (from the ideation session's read):
+XC2 (refund pairing — fixes numbers that are wrong today), XC3 (annual smoothing — the biggest
+"budgets feel broken" cause in real use), XC11 (multiplies the split feature already being
+built), with XC8 as the sleeper (small surface, keeps /todo alive). XC0b must be settled before
+XC1/XC2 begin — and ideally before the split data model freezes.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]

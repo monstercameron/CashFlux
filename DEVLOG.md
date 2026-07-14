@@ -1,3 +1,20 @@
+## 2026-07-14 — XC series: cross-concept workflow ideation → backlog
+
+Ideation session with Cam, deliberately BEFORE any spec/code (process rule): stick to the first
+seven pages and hunt for impedance mismatches between real-world money objects and the app's
+atoms, in the spirit of the in-flight transaction split. Captured as TODOS.md's new XC series
+(XC0–XC11) with enough detail per ticket to survive months of shelf time — the mismatch, the
+workflow, the machinery to REUSE (the governing anti-sprawl rule: no new entities where links/
+earmarks/rollover/workflow-engine/vision/rules/billsched already carry it), and guardrails.
+
+The two ideas most worth remembering the reasoning for: (1) refund pairing nets in the ORIGINAL
+month as a read-model adjustment — the ledger atoms never change, which is what keeps it honest
+and undoable; (2) XC0b argues split/order-group/refund-pair should be ONE link primitive with a
+kind enum, and it's time-sensitive: it wants deciding while the split data model (txnsplit.go,
+in flight in another session) is still soft. Also flagged XC10 (split lines carrying a member
+Owner) as a decide-during-split-design item for the same reason. First-wave suggestion recorded
+in the series footer: XC2, XC3, XC11, with XC8 (self-resolving tasks) as the sleeper.
+
 ## 2026-07-14 — One math path for the assistant + description that can't drift
 
 Closes the last two review items in chat_agent.go. The legacy 'calculator' tool was the review's
