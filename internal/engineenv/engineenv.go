@@ -36,6 +36,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 )
@@ -282,8 +283,15 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	major := func(amount int64) float64 { return float64(amount) / div }
 
+	// Every account's balance (and cleared balance) in ONE pass over the
+	// transactions — the shared input for the net-worth, liquid, revolving,
+	// per-account, per-debt, pool, health, and credit variables below, each of
+	// which used to re-scan the full ledger per account.
+	bals, _ := ledger.Balances(d.Accounts, d.Transactions)
+	clearedBals, _ := ledger.ClearedBalances(d.Accounts, d.Transactions)
+
 	// Assets/liabilities: explaining variant excludes missing-FX accounts gracefully.
-	nw, _ := ledger.NetWorthExplained(d.Accounts, d.Transactions, d.Rates)
+	nw, _ := ledger.NetWorthFromBalances(d.Accounts, bals, d.Rates)
 
 	// Income/expense over the active period (falls back to the calendar month).
 	start, end := d.PeriodStart, d.PeriodEnd
@@ -308,9 +316,9 @@ func computeAtoms(d Data) map[string]float64 {
 
 	// Safe-to-spend atoms — fundamental, FX-converted to base. Bills/goals are a
 	// this-calendar-month commitment, independent of the dashboard's period.
-	// Computed once and threaded into addBillsSmartVars/addReportsVars below —
-	// each LiquidBalance call is a full transaction scan.
-	liquid, liquidErr := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
+	// Computed once (from the shared balance map) and threaded into
+	// addBillsSmartVars/addReportsVars below.
+	liquid, liquidErr := ledger.LiquidFromBalances(d.Accounts, bals, d.Rates)
 	_, monthEnd := dateutil.MonthRange(d.Now)
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
@@ -338,7 +346,7 @@ func computeAtoms(d Data) map[string]float64 {
 			minPaymentsTotal += toBase(a.MinPayment.Amount, a.MinPayment.Currency)
 			if a.Type == domain.TypeCreditCard {
 				creditLimitTotal += toBase(a.CreditLimit.Amount, a.CreditLimit.Currency)
-				if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+				if bal, ok := bals[a.ID]; ok {
 					mag := bal.Amount
 					if mag < 0 {
 						mag = -mag
@@ -377,18 +385,18 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
-	addAccountVars(out, d, major, toBase)
+	addAccountVars(out, d, major, toBase, bals, clearedBals)
 	addGoalVars(out, d, major, toBase)
-	addDebtVars(out, d, major, toBase)
-	addPoolVars(out, d, major, toBase)
+	addDebtVars(out, d, major, toBase, bals)
+	addPoolVars(out, d, major, toBase, bals)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)
 	addBillsSmartVars(out, d, major, toBase, liquid.Amount)
 	addReportsVars(out, d, major, liquid.Amount, liquidErr)
-	addNetWorthVars(out, d, major, toBase)
-	addHealthVars(out, d)
-	addCreditVars(out, d, major, toBase)
+	addNetWorthVars(out, d, major, toBase, bals)
+	addHealthVars(out, d, bals)
+	addCreditVars(out, d, major, toBase, bals)
 	addAssistantVars(out, d, major)
 	addSmartVars(out, d)
 	return out
@@ -757,7 +765,7 @@ func GoalVarSlug(s string) string { return budgetVarSlug(s) }
 // addPoolVars exposes each account pool as a pool_<slug>_value variable: the combined
 // current balance of its member accounts (FX-converted to base), so a custom group like
 // "Retirement" (401k + Roth IRA) can be referenced by name in any formula or widget.
-func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
 	if len(d.Pools) == 0 {
 		return
 	}
@@ -772,7 +780,7 @@ func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBa
 			if !ok || a.Archived {
 				continue
 			}
-			if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+			if bal, ok := bals[a.ID]; ok {
 				total += toBase(bal.Amount, bal.Currency)
 			}
 		}
@@ -925,7 +933,7 @@ func BudgetVarSlug(s string) string { return budgetVarSlug(s) }
 // Balances are FX-converted to the base currency (same as net worth) so accounts in
 // different currencies compare on one scale. Name collisions are disambiguated with a
 // numeric suffix (…_2, …_3) in stable account order.
-func addAccountVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addAccountVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals, clearedBals map[string]money.Money) {
 	// How much of each account is virtually earmarked toward goals (base minor units),
 	// precomputed once so a formula can ask "how much of this account is spoken for?".
 	earmarkByAcct := map[string]int64{}
@@ -939,11 +947,11 @@ func addAccountVars(out map[string]float64, d Data, major func(int64) float64, t
 	for _, base := range AccountVarBases(d.Accounts) {
 		a := base.Account
 		balBase := 0.0
-		if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+		if bal, ok := bals[a.ID]; ok {
 			balBase = major(toBase(bal.Amount, bal.Currency))
 			out[base.Prefix+"balance"] = balBase
 		}
-		if cl, err := ledger.ClearedBalance(a, d.Transactions); err == nil {
+		if cl, ok := clearedBals[a.ID]; ok {
 			out[base.Prefix+"cleared"] = major(toBase(cl.Amount, cl.Currency))
 		}
 		earmarked := major(earmarkByAcct[a.ID])
@@ -1019,11 +1027,11 @@ func AccountVarSlug(s string) string { return budgetVarSlug(s) }
 // Money amounts are FX-converted to the base currency so debts in different currencies
 // compare on one scale. Name collisions are disambiguated with a numeric suffix in stable
 // account order (same scheme as accounts/goals).
-func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
 	for _, base := range DebtVarBases(d.Accounts) {
 		a := base.Account
 		var balance float64
-		if bal, err := ledger.Balance(a, d.Transactions); err == nil {
+		if bal, ok := bals[a.ID]; ok {
 			mag := bal.Amount
 			if mag < 0 {
 				mag = -mag

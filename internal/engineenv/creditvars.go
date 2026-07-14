@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/credithealth"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // CreditVarNames are the fixed credit atoms addCreditVars exposes, in a stable
@@ -31,19 +32,24 @@ var CreditVarNames = []string{
 func init() { Names = append(Names, CreditVarNames...) }
 
 // CreditInputs derives the credit-health signals from the fundamental Data —
-// the pure port of the /credit screen's assembly: per-card running balances via
-// ledger.Balance plus the transaction history for the on-time proxy.
+// the pure port of the /credit screen's assembly: per-card running balances
+// plus the transaction history for the on-time proxy.
 func CreditInputs(d Data) credithealth.Inputs {
+	bals, _ := ledger.Balances(d.Accounts, d.Transactions)
+	return creditInputs(d, bals)
+}
+
+// creditInputs is CreditInputs over a precomputed balance map, so Vars() can
+// share its single-pass Balances result instead of re-scanning the ledger.
+func creditInputs(d Data, bals map[string]money.Money) credithealth.Inputs {
 	balances := make(map[string]int64, len(d.Accounts))
 	for _, a := range d.Accounts {
 		if a.Type != domain.TypeCreditCard || a.Archived {
 			continue
 		}
-		bal, err := ledger.Balance(a, d.Transactions)
-		if err != nil {
-			continue
+		if bal, ok := bals[a.ID]; ok {
+			balances[a.ID] = bal.Amount
 		}
-		balances[a.ID] = bal.Amount
 	}
 	return credithealth.Inputs{
 		Accounts:     d.Accounts,
@@ -58,11 +64,11 @@ func CreditInputs(d Data) credithealth.Inputs {
 // or age factor scores 0 with zero weight), plus the pay-down targets summed
 // across cards in the base currency. The credit_proxy molecule then reproduces
 // credithealth.Evaluate's ProxyScore exactly.
-func addCreditVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addCreditVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
 	for _, name := range CreditVarNames {
 		out[name] = 0
 	}
-	r := credithealth.Evaluate(CreditInputs(d))
+	r := credithealth.Evaluate(creditInputs(d, bals))
 	out["credit_util_score"] = float64(credithealth.UtilScore(r.Agg.UtilPct))
 	out["credit_util_weight"] = r.Weights.Util
 	if r.OnTimeScore >= 0 {

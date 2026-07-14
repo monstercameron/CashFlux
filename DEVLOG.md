@@ -1,3 +1,25 @@
+## 2026-07-14 — One-pass balances: the deep intra-Vars dedupe
+
+The refactor I'd deferred as "wider" — done. ledger gets a bulk layer: Balances/ClearedBalances
+(one O(A+T) sweep building the per-account map; an account whose balance errors is ABSENT from
+the map + first error returned, matching how every consumer treated per-account errors as skip),
+NetWorthFromBalances and LiquidFromBalances over the map, and NetWorthExplained refactored onto a
+shared netWorthAccumulate core with a balanceOf callback — the liability .Abs() subtlety lives in
+exactly one place now (I nearly dropped it in the first draft of the map variant; sharing the core
+is what makes that class of drift impossible). Equivalence tests pin bulk == per-account across
+multi-currency, cleared/uncleared, corrupt-opening, and missing-rate accounts.
+
+engineenv.Vars builds the map once at the top of computeAtoms and threads it through eight
+consumers (net-worth atoms, liquid, revolving loop, addAccountVars incl. cleared, addDebtVars,
+addPoolVars, addNetWorthVars composition, healthInputs utilization, creditInputs). HealthInputs/
+CreditInputs keep their exported signatures as thin wrappers that do one bulk pass — external
+callers (/health, /credit, insights QA) get the win for free. Previous concern about sharing
+LiquidBalance with healthvars was rates-normalization; Balances takes no rates (native-currency
+sums), so sharing the MAP is safe and healthInputs converts with its own normalized rates as
+before. Rough math: a 20k-txn, 25-account dataset went from ~8 full-ledger walks × 25 accounts to
+2 walks total per Vars() call — on top of the previous commit's memoization this is the last big
+constant factor in the engine.
+
 ## 2026-07-14 — Engine perf: custompage on the shared surface, month-window memo, LiquidBalance once
 
 Perf commit of the formula arc, with one two-for-one: custompage.go was building its own PARTIAL

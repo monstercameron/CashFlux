@@ -29,13 +29,24 @@ type NetWorthResult struct {
 // in MissingCurrencies/ExcludedAccounts — never treated as base or zero. Other
 // errors (e.g. a corrupt balance) still propagate.
 func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (NetWorthResult, error) {
+	return netWorthAccumulate(accounts, rates, func(a domain.Account) (money.Money, error) {
+		return Balance(a, all)
+	})
+}
+
+// netWorthAccumulate is the shared net-worth core: balanceOf supplies each
+// non-archived account's balance (a live scan for NetWorthExplained, a map
+// lookup for NetWorthFromBalances), and the accumulation — missing-rate
+// exclusion, liability magnitude via Abs, net = assets − liabilities — lives
+// in exactly one place.
+func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balanceOf func(domain.Account) (money.Money, error)) (NetWorthResult, error) {
 	res := NetWorthResult{Assets: money.Zero(rates.Base), Liabilities: money.Zero(rates.Base)}
 	missing := map[string]bool{}
 	for _, a := range accounts {
 		if a.Archived {
 			continue
 		}
-		bal, err := Balance(a, all)
+		bal, err := balanceOf(a)
 		if err != nil {
 			return NetWorthResult{}, err
 		}

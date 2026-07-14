@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // NetWorthVarNames are the fixed net-worth variables addNetWorthVars exposes,
@@ -50,7 +51,7 @@ func netWorthClassBucket(t domain.AccountType) string {
 // from a two-point NetWorthSeries, and the asset composition by summing FX-converted
 // per-account balances into type buckets (accounts with no exchange rate are
 // skipped, matching NetWorthExplained's exclusion semantics).
-func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
 	for _, name := range NetWorthVarNames {
 		out[name] = 0
 	}
@@ -74,8 +75,8 @@ func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, 
 		if a.Archived || a.Class == domain.ClassLiability {
 			continue
 		}
-		bal, err := ledger.Balance(a, d.Transactions)
-		if err != nil {
+		bal, ok := bals[a.ID]
+		if !ok {
 			continue
 		}
 		conv := toBase(bal.Amount, a.Currency)

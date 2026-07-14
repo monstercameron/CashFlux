@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
 )
 
@@ -64,6 +65,13 @@ func healthFactorVar(key string) string {
 // applicability flag so the model can drop what doesn't apply (e.g. no cards)
 // and re-normalize, rather than penalizing a household for something it lacks.
 func HealthInputs(d Data) healthscore.Inputs {
+	bals, _ := ledger.Balances(d.Accounts, d.Transactions)
+	return healthInputs(d, bals)
+}
+
+// healthInputs is HealthInputs over a precomputed balance map, so Vars() can
+// share its single-pass Balances result instead of re-scanning the ledger.
+func healthInputs(d Data, bals map[string]money.Money) healthscore.Inputs {
 	rates := d.Rates
 	if rates.Base == "" {
 		rates.Base = "USD"
@@ -91,7 +99,7 @@ func HealthInputs(d Data) healthscore.Inputs {
 
 	// Emergency fund: liquid cash ÷ average monthly spending.
 	if avgMonthlySpend > 0 {
-		if liquid, lerr := ledger.LiquidBalance(d.Accounts, d.Transactions, rates); lerr == nil {
+		if liquid, lerr := ledger.LiquidFromBalances(d.Accounts, bals, rates); lerr == nil {
 			in.HasLiquidData = true
 			in.EmergencyMonths = float64(liquid.Amount) / float64(avgMonthlySpend)
 		}
@@ -149,8 +157,8 @@ func HealthInputs(d Data) healthscore.Inputs {
 		if a.Archived || a.CreditLimit.Amount <= 0 {
 			continue
 		}
-		bal, berr := ledger.Balance(a, d.Transactions)
-		if berr != nil {
+		bal, ok := bals[a.ID]
+		if !ok {
 			continue
 		}
 		owed := bal.Amount
@@ -192,11 +200,11 @@ func HealthInputs(d Data) healthscore.Inputs {
 // the not-enough-data case), the deficit penalty, and the two raw values. The
 // health_score molecule then reproduces healthscore.Evaluate's headline exactly
 // (guarded by healthscore.TestWeightFormulaIdentity and this package's tests).
-func addHealthVars(out map[string]float64, d Data) {
+func addHealthVars(out map[string]float64, d Data, bals map[string]money.Money) {
 	for _, name := range HealthVarNames {
 		out[name] = 0
 	}
-	in := HealthInputs(d)
+	in := healthInputs(d, bals)
 	r := healthscore.Evaluate(in)
 	for _, f := range r.Factors {
 		name := healthFactorVar(f.Key)
