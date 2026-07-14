@@ -1,3 +1,18 @@
+## 2026-07-14 — TX series: transactions competitive ideation → backlog
+
+Second ideation pass, /transactions only, sourced from named competitors and adapted to
+local-first (no bank feeds → all enrichment is import/rules-based). Cam curated 8 of 10 into
+TODOS.md's TX series; the two dropped (Copilot-style review inbox, YNAB reconciliation sessions)
+are recorded as dropped so a future session doesn't re-pitch them cold. Decisions worth the ink:
+TX1 (merchant aliases) is marked do-first because TX2/TX4/TX6/TX7 and recurring detection all key
+on clean merchant names — it's the dependency root of the series; TX2 ships as a SMART-series
+feature with the standard Free/AI two-tier shape (local grammar parser vs assistant fallback,
+both compiling to txnfilter.Criteria so results stay deterministic and explainable — the AI
+produces FILTERS, never rows); TX4 (Amazon enrichment) got an explicit planning gate because
+Amazon's export formats are a moving target and the matching/storage questions (shipment-level
+charges, gift cards, where order metadata lives — likely the XC0b link table) need answers
+before code. Cross-links into XC recorded inline (TX4→XC1/XC11, TX5→XC11, TX6→XC5).
+
 ## 2026-07-14 — XC series: cross-concept workflow ideation → backlog
 
 Ideation session with Cam, deliberately BEFORE any spec/code (process rule): stick to the first

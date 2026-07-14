@@ -3117,6 +3117,85 @@ XC2 (refund pairing — fixes numbers that are wrong today), XC3 (annual smoothi
 built), with XC8 as the sleeper (small surface, keeps /todo alive). XC0b must be settled before
 XC1/XC2 begin — and ideally before the split data model freezes.
 
+<!-- ===== TX SERIES (transactions competitive features, appended 2026-07-14) ===== -->
+
+## ★ TX series — Transactions: competitive features (LATER IMPL — curated from big-name comps 2026-07-14)
+
+**Provenance & scope.** Second ideation pass 2026-07-14, focused on /transactions: ten ideas
+drawn from what big-name competitors (Copilot, Monarch, Mint, YNAB, Simplifi, Rocket Money,
+Emma/Cleo, Lunch Money, Empower, Actual) have proven, adapted to CashFlux's constraints —
+local-first (NO bank feeds; all enrichment is import/rules-based), BYO-key AI, desktop-first,
+and the XC anti-sprawl rule (reuse links/rules/artifacts/widget-engine/billsched machinery).
+Cam curated: kept 8 of 10 (dropped the Copilot-style review inbox and YNAB-style reconciliation
+sessions — can be re-proposed later if wanted). Same discipline as XC: agree spec before code.
+
+- [ ] **TX1 [MAJOR — DO FIRST]** Merchant cleanup + alias learning *(Mint / Monarch / Copilot)*.
+  "AMZN Mktp US*2K4RT0" → "Amazon". Local-first version: a payee ALIAS table — a starter rule
+  pack for the ugly common processor patterns (AMZN, SQ *, TST*, PAYPAL *, SP , CKE*) plus
+  learned aliases (rename a payee once → offer "always show X as Y"). Aliases apply at DISPLAY
+  and at rules/search/recurring matching, so one clean name unifies filtering, reports, and the
+  recurring detector. Rides the rules engine + the existing C102 rename-payee ticket; do this
+  FIRST — TX2/TX4/TX6 and recurring detection all get better the moment names are clean.
+  Guardrails: alias is a view-layer mapping (raw payee preserved on the txn — single-source
+  rule); alias management UI can live with rules; export keeps both raw + display names.
+- [ ] **TX2 [MAJOR — SMART-SERIES FEATURE]** Natural-language search → filter chips *(Copilot)*.
+  "coffee last month over $20" becomes structured filters. Ship as a SMART-series entry with the
+  standard two tiers: FREE tier = a small local parser for the common grammar (amount
+  comparators, month names / "last month" / date ranges, category/payee/tag words, cleared/
+  uncleared) that compiles to the existing `txnfilter.Criteria` and materializes as the normal
+  removable chips (fully deterministic, no key); AI tier (opt-in, BYO key) = assistant fallback
+  for phrasings the parser can't handle, returning the same Criteria shape (never raw results —
+  the parser/AI produce FILTERS, the engine produces rows, so results stay explainable).
+  Register in the SMART catalog with the usual opt-in/dismissal plumbing.
+- [ ] **TX3 [MED]** Saved views / watchlists → pinnable dashboard widgets *(Simplifi)*. Save the
+  current filter set as a named view ("Amazon this month", "All fees", "Cash > $100") with a
+  live total; list views in the filter panel; one-tap re-apply. Multipliers: a saved view is
+  pinnable as a declarative dashboard widget (spec = criteria + display mode, hydrated by the
+  widget engine), and an optional threshold on the view's total becomes a workflow-engine
+  condition (alert/task when crossed). Reuse: persisted filter state + chips, widgetspec/
+  widgetengine, workflow engine. Anti-sprawl: a view stores Criteria, not copies of txns.
+- [ ] **TX4 [MAJOR — NEEDS PLANNING (R-ticket before impl)]** Amazon order-history import +
+  line-item enrichment *(Copilot's Amazon integration, local-first)*. Import Amazon's
+  order-history export (CSV / order-page paste), match orders to card charges by amount+date
+  (the dedupe-signature machinery is exactly this shape), enrich matched txns with what was
+  actually bought, and feed the split/group flows: line items → XC11 proposed splits;
+  multi-shipment orders → XC1 order groups. PLANNING GATE — spec first: which Amazon export
+  formats still exist and their schemas (order history report availability changes), matching
+  tolerance (shipment-level charges vs order totals, gift cards/promotions), storage shape for
+  order metadata (artifact? custom fields? the XC0b link table?), retailer generalization
+  (same pipeline for Walmart/Target exports?), and privacy note (all local). Write the R-ticket
+  findings into this entry before starting any code.
+- [ ] **TX5 [MED]** Receipt attachments on the transaction row *(Monarch / YNAB)*. Attach a
+  receipt photo/PDF to a transaction: thumbnail in the row detail, full view on click. This is
+  a JOIN, not a subsystem — the artifacts/blobstore system already stores images; add a
+  txn↔artifact reference + the detail-surface rendering. Guardrails: attachment survives
+  export/import (blob GC must respect txn references); on-ramp for XC11 (attached receipt →
+  offer the proposed split); optional total-check nudge when the receipt's OCR total (vision,
+  AI-tier) disagrees with the txn amount.
+- [ ] **TX6 [MED]** Merchant context panel *(Rocket Money / Emma / Cleo)*. Expanding a txn shows
+  the merchant's story: usual amount ("+$4 vs your typical"), frequency ("3rd visit this week"),
+  $ this month vs typical month, tiny 12-charge sparkline. All derivable from the ledger —
+  per-merchant stats keyed on the TX1 alias (not the raw payee string). Give XC5's price-creep
+  flag its transaction-level home here. Reuse: atoms/explain conventions, alias table (TX1),
+  the existing row-detail surface. Keep it read-only + dismissible-free (context, not nag).
+- [ ] **TX7 [MED]** "Apply to N similar" recategorize preview *(Mint's rules flow, refined by
+  Monarch)*. When a category is changed inline, immediately offer: "23 more transactions look
+  like this — recategorize them too?" with a scoped preview list, plus "always do this" →
+  prefilled rule (the C32 funnel flow already exists). Similarity = alias/payee match first
+  (TX1), then the rules-engine matcher. Respect C104/C108 semantics for already-categorized
+  rows (offer, never silently overwrite). The value over today's bulk-recategorize is
+  PROACTIVITY at the moment of correction with an explicit preview.
+- [ ] **TX8 [MED]** Calendar view of transactions *(Empower / Copilot)*. A month-grid view mode
+  on /transactions: day cells with net spend + dot density, click a day → that day's rows
+  (the ledger filtered to the day), recurring items projected forward as GHOSTS on their due
+  dates (billsched already computes occurrences). The calendar is just another projection of
+  the current filtered set — filter chips stay active and scope it. Reuse: bill-calendar
+  rendering habits, txnfilter, billsched occurrence expansion. Desktop-first layout (no
+  mobile work — standing rule).
+
+**Ordering note.** TX1 unlocks TX2/TX4/TX6/TX7 quality; TX4 is gated on its planning ticket;
+the rest are independent. Cross-links: TX4→XC1/XC11, TX5→XC11, TX6→XC5.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]
