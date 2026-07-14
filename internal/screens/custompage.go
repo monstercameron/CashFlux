@@ -115,12 +115,15 @@ func CustomPage(slug string) ui.Node {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	// The FULL memoized engine surface — the same one the dashboard, Studio, and
+	// formula builder evaluate against. A partial hand-rolled Data here used to
+	// silently fall back to the default molecules (ignoring Studio overrides) and
+	// miss the cf_*/pool_*/recurring_* var families, so a KPI tile could disagree
+	// with a chart of the same figure on the same page — while also recomputing
+	// the whole surface on every re-render.
 	ctx := pageCtx{
-		Vars: engineenv.Vars(engineenv.Data{
-			Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
-			Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Rates: rates, Now: time.Now(),
-		}),
-		App: app, Rates: rates, Base: base,
+		Vars: liveEngineVars(app),
+		App:  app, Rates: rates, Base: base,
 	}
 
 	toolbar := ui.CreateElement(addWidgetBar, addWidgetBarProps{PageID: page.ID, Refresh: refresh})
@@ -513,14 +516,18 @@ func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
 		Budgets: app.Budgets(), Categories: app.Categories(), Recurring: app.Recurring(),
 		Rates: ctx.Rates, Start: start, End: start.AddDate(0, 1, 0), Now: now,
 		// The per-month variable surface behind "formula" series charts: the
-		// same engineenv inputs the page's KPIs use, re-windowed per month.
+		// same engineenv inputs the page's KPIs use, re-windowed per month and
+		// memoized per (revision, window) — custom pages are unscoped, so the
+		// store revision alone identifies the data.
 		MonthVars: func(s, e time.Time) map[string]float64 {
-			return engineenv.Vars(engineenv.Data{
-				Accounts: app.Accounts(), Transactions: app.Transactions(),
-				Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
-				Recurring: app.Recurring(), Categories: app.Categories(), Rates: ctx.Rates,
-				Now: now, PeriodStart: s, PeriodEnd: e,
-				CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
+			return memoMonthVars(revKey(app)+"|custompage", s, e, func() map[string]float64 {
+				return engineenv.Vars(engineenv.Data{
+					Accounts: app.Accounts(), Transactions: app.Transactions(),
+					Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
+					Recurring: app.Recurring(), Categories: app.Categories(), Rates: ctx.Rates,
+					Now: now, PeriodStart: s, PeriodEnd: e,
+					CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
+				})
 			})
 		},
 	}

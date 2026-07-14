@@ -48,7 +48,9 @@ func init() { Names = append(Names, ReportsVarNames...) }
 // same DURATION immediately before the active period (a close approximation of
 // the screen's calendar-aware period shift; for month/quarter/year windows the
 // figures agree in practice because transactions cluster inside the window).
-func addReportsVars(out map[string]float64, d Data, major func(int64) float64) {
+// liquidMinor/liquidErr are computeAtoms' LiquidBalance result, threaded in so
+// the full-transaction scan runs once per Vars call, not per helper.
+func addReportsVars(out map[string]float64, d Data, major func(int64) float64, liquidMinor int64, liquidErr error) {
 	start, end := d.PeriodStart, d.PeriodEnd
 	if start.IsZero() || end.IsZero() {
 		start, end = dateutil.MonthRange(d.Now)
@@ -101,9 +103,8 @@ func addReportsVars(out map[string]float64, d Data, major func(int64) float64) {
 	burn := reports.AverageMonthlyExpense(flows)
 	out["report_burn"] = major(burn)
 	out["report_runway_months"] = 0
-	liquid, err := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
-	if err == nil && burn > 0 {
-		rw := reports.EstimateRunway(liquid.Amount, burn)
+	if liquidErr == nil && burn > 0 {
+		rw := reports.EstimateRunway(liquidMinor, burn)
 		if !rw.Sustainable {
 			out["report_runway_months"] = float64(rw.Months) + float64(rw.Days)/30
 		}

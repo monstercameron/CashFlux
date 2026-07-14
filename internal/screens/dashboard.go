@@ -74,6 +74,35 @@ func memoEngineVars(key string, compute func() map[string]float64) map[string]fl
 	return v
 }
 
+// monthVarsMemo caches the per-month engine surfaces behind "formula" series
+// charts. A chart asks for the same trailing windows on every render, and each
+// miss is a FULL engineenv.Vars pass — 6–24 of them per chart render without
+// this. The whole cache resets when the key (revision + scope) changes or the
+// TTL lapses, mirroring engineVarsMemo's freshness rules for the few
+// wall-clock-sensitive atoms. wasm is single-threaded, so no lock.
+var monthVarsMemo struct {
+	key string
+	at  time.Time
+	m   map[string]map[string]float64
+}
+
+// memoMonthVars returns the cached surface for a (key, window) pair, computing
+// and caching on miss.
+func memoMonthVars(key string, s, e time.Time, compute func() map[string]float64) map[string]float64 {
+	now := time.Now()
+	if monthVarsMemo.m == nil || monthVarsMemo.key != key || now.Sub(monthVarsMemo.at) >= engineVarsTTL {
+		monthVarsMemo.key, monthVarsMemo.at = key, now
+		monthVarsMemo.m = map[string]map[string]float64{}
+	}
+	wk := s.Format("20060102") + "|" + e.Format("20060102")
+	if v, ok := monthVarsMemo.m[wk]; ok {
+		return v
+	}
+	v := compute()
+	monthVarsMemo.m[wk] = v
+	return v
+}
+
 // safeRender dispatches a widget through the render registry inside a recover, so a
 // panic in one tile (a nil deref, a divide-by-zero, a bad slice index in its body)
 // renders a contained "unavailable" tile instead of taking down the whole
@@ -140,14 +169,19 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 		Rates:        ctx.Rates,
 		Start:        ctx.Start, End: ctx.End, Now: time.Now(),
 		// The per-month variable surface behind "formula" series charts —
-		// scoped like the KPI tiles, re-windowed per month.
+		// scoped like the KPI tiles, re-windowed per month, and memoized per
+		// (revision, scope, window) so a chart's trailing months compute once,
+		// not on every render.
 		MonthVars: func(s, e time.Time) map[string]float64 {
-			return engineenv.Vars(engineenv.Data{
-				Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
-				Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
-				Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
-				Now: time.Now(), PeriodStart: s, PeriodEnd: e,
-				CustomDefs: ctx.App.CustomFieldDefs(), Molecules: ctx.App.Molecules(),
+			key := revKey(ctx.App) + "|" + acctSig(ctx.ScopedAccounts)
+			return memoMonthVars(key, s, e, func() map[string]float64 {
+				return engineenv.Vars(engineenv.Data{
+					Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
+					Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
+					Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
+					Now: time.Now(), PeriodStart: s, PeriodEnd: e,
+					CustomDefs: ctx.App.CustomFieldDefs(), Molecules: ctx.App.Molecules(),
+				})
 			})
 		},
 	}

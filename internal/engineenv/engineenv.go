@@ -308,7 +308,9 @@ func computeAtoms(d Data) map[string]float64 {
 
 	// Safe-to-spend atoms — fundamental, FX-converted to base. Bills/goals are a
 	// this-calendar-month commitment, independent of the dashboard's period.
-	liquid, _ := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
+	// Computed once and threaded into addBillsSmartVars/addReportsVars below —
+	// each LiquidBalance call is a full transaction scan.
+	liquid, liquidErr := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
 	_, monthEnd := dateutil.MonthRange(d.Now)
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
@@ -382,8 +384,8 @@ func computeAtoms(d Data) map[string]float64 {
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)
-	addBillsSmartVars(out, d, major, toBase)
-	addReportsVars(out, d, major)
+	addBillsSmartVars(out, d, major, toBase, liquid.Amount)
+	addReportsVars(out, d, major, liquid.Amount, liquidErr)
 	addNetWorthVars(out, d, major, toBase)
 	addHealthVars(out, d)
 	addCreditVars(out, d, major, toBase)
@@ -414,7 +416,7 @@ const BillsSmartHorizonDays = 60
 // recurring in the window, not just each bill's next due) against the
 // configured pay cycle, exposing the schedule as engine variables. With no
 // paydays configured the raw and smart figures coincide and the gains are 0.
-func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, liquidMinor int64) {
 	const horizonDays = BillsSmartHorizonDays
 	occurrences := bills.OccurrencesWithin(d.Accounts, d.Recurring, d.Now, d.Now.AddDate(0, 0, horizonDays))
 	items := make([]billsched.Item, 0, len(occurrences))
@@ -427,8 +429,7 @@ func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64
 			Movable: !b.Autopay,
 		})
 	}
-	liquid, _ := ledger.LiquidBalance(d.Accounts, d.Transactions, d.Rates)
-	res := billsched.Optimize(liquid.Amount, items, d.BillsSmart.Paydays, d.BillsSmart.IncomePerPayday, d.Now, horizonDays, d.BillsSmart.MinKeepMinor)
+	res := billsched.Optimize(liquidMinor, items, d.BillsSmart.Paydays, d.BillsSmart.IncomePerPayday, d.Now, horizonDays, d.BillsSmart.MinKeepMinor)
 
 	maxLoad := func(loads []billsched.PeriodLoad) int64 {
 		var m int64

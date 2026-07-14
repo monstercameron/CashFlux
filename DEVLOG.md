@@ -1,3 +1,23 @@
+## 2026-07-14 — Engine perf: custompage on the shared surface, month-window memo, LiquidBalance once
+
+Perf commit of the formula arc, with one two-for-one: custompage.go was building its own PARTIAL
+engineenv.Data (8 of ~15 fields, unmemoized, in the render body) — swapping it for the existing
+liveEngineVars(app) simultaneously fixed the "KPI tile shows default net_worth while the chart
+next to it shows the Studio override" divergence AND put the page on the shared rev+month memo.
+Lesson encoded: engineenv.Data's silent zero-value optionality makes partial call sites look
+correct; prefer the shared builders (liveEngineVars / memoEngineVars) over hand-rolled Data.
+
+MonthVars was the multiplier: widgetengine's FormulaSeries calls it once per chart month
+(default 12), and both closures (dashboard scoped, custompage unscoped) ran a full Vars() per
+call, per render. New memoMonthVars caches per (revKey+scope, window) with the same 60s TTL as
+engineVarsMemo; the dashboard key includes acctSig(ScopedAccounts) so member/institution scope
+switches miss correctly. Inside Vars() itself, LiquidBalance (full txn scan) ran 4x — computeAtoms
+now threads its result into addBillsSmartVars/addReportsVars. HealthInputs keeps its own call
+deliberately: it's exported with external callers and normalizes rates.Base before scanning, so
+sharing computeAtoms' unnormalized-rates result could change behavior when Base is empty. The
+bigger intra-Vars dedupe (per-account ledger.Balance across ~5 helpers) is real but a wider
+refactor — left for a dedicated pass rather than riding a perf commit.
+
 ## 2026-07-14 — Health atoms: exclude-on-FX-failure, not raw-fallback
 
 Small commit, big blast radius when it fires: `HealthInputs` had the only two spots in engineenv
