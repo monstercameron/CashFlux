@@ -1,3 +1,29 @@
+## 2026-07-15 — v1.0.42: browser-only competitive-parity features (Age of Money, task reminders)
+
+Followed the gap assessment: build the browser-only, no-third-party-service gaps; defer the PWA
+background-notification path (documented as CP1). Recon shrank the list sharply — holdings/portfolio,
+OFX/QFX import, subscription cancellation-tracking, and forecasting already exist; bank aggregation /
+credit score / bill negotiation inherently need a service. That left two genuine gaps, built by two
+parallel opus agents on disjoint territories, then coordinator-verified + design-critiqued.
+
+Age of Money (new `internal/agemoney`, FIFO dollar-aging, table-tested) surfaced a real trap: the
+5-year sample seed runs a persistent surplus, so pure FIFO ages recent spends against ~2-year-old
+income → "725 days", which reads as broken. Added a 1-year cap (beyond a year of buffer the exact
+number is meaningless) → "365+ days — an exceptional buffer". The recurring-task agent found
+recurrence already existed and added the missing reminder-LEAD, wired into the attention ranker for
+in-app surfacing.
+
+Three aggressive design-critic rounds (13→2→0-ish; the feature critic went NEEDS-WORK → NEEDS-WORK →
+SHIP): round 1 flagged the Age-of-Money card competing as a 4th hero (demoted the figure 2rem→1.25rem)
+and Repeat/Remind with no due date (gated both on a due date, decoupled the reminder so it works for
+any dated task, reordered Due→Remind→Repeat); round 2 flagged a mismatched explain affordance (unified
+Age of Money to the shared `smartTooltipFor` "?" icon the LEFT stat uses) and a dangling-ellipsis
+footer summary (shortened the slip so it fits the modal footer); round 3 = SHIP, zero findings.
+Functional e2e (`_gaps_verify.mjs`) all pass, native tests + screenlint green, zero console errors,
+concurrent-session trio untouched. Also, per the earlier turn: workspace switcher restyle, rail
+"Tools" header removal, kebab→direct toolbar buttons, dashboard hero glyph buttons, assistant control
+pills — all shipped in the v1.0.37–1.0.41 run.
+
 ## 2026-07-15 — v1.0.36: adversarial design loop converges to ALL-SHIP
 
 Round 2 of the hostile critic returned only 4 rejects (down from 13), and 6 of 8 pages already

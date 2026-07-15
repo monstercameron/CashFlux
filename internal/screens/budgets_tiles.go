@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -187,6 +188,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Div(css.Class("zbb-spend"),
 				IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap"))),
 				statGrid),
+			budgetAgeOfMoneyNode(v, smartSettings),
 			rangeHint,
 			budgetFundSetAsideNode(v),
 			pills,
@@ -195,6 +197,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		body = Div(
 			lastMonthTag,
 			statGrid,
+			budgetAgeOfMoneyNode(v, smartSettings),
 			rangeHint,
 			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
 			budgetFundSetAsideNode(v),
@@ -206,6 +209,64 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// budgetAgeOfMoneyNode renders the Age-of-Money stat for the budgets summary: a
+// serif day-count (the app's hero-figure signature) with a plain-English read of
+// whether the buffer is healthy or tight, plus a quiet "Why?" affordance whose
+// tooltip explains the FIFO matching. Before there's enough matched history it
+// shows a low-pressure nudge instead of a misleading number. Pure node builder.
+func budgetAgeOfMoneyNode(v budgetView, smartSettings smart.Settings) ui.Node {
+	am := v.AgeMoney
+	label := Span(css.Class("budget-agemoney-label"), uistate.T("budgets.ageMoneyLabel"))
+	if !am.Ready {
+		return Div(css.Class("budget-agemoney", "is-empty"), Attr("data-testid", "budgets-agemoney"),
+			label,
+			P(css.Class("budget-agemoney-explain", tw.TextDim), Attr("data-testid", "budgets-agemoney-empty"),
+				uistate.T("budgets.ageMoneyNotReady")),
+		)
+	}
+	// A larger age reads as a healthier buffer; a small one, tighter. Tone is a calm
+	// accent, never an alarm — money moving fast isn't an error, just less cushioned.
+	figCls := "budget-agemoney-fig"
+	var explain string
+	switch {
+	case am.Capped:
+		// The buffer hit the one-year ceiling — the exact number stops mattering.
+		figCls += " is-healthy"
+		explain = uistate.T("budgets.ageMoneyCapped")
+	case am.Days <= 1:
+		figCls += " is-tight"
+		explain = uistate.T("budgets.ageMoneyOneDay")
+	case am.Days >= 14:
+		figCls += " is-healthy"
+		explain = uistate.T("budgets.ageMoneyHealthy", am.Days)
+	default:
+		figCls += " is-tight"
+		explain = uistate.T("budgets.ageMoneyTight", am.Days)
+	}
+	// "365+" when capped, so the figure reads as a ceiling rather than an exact age.
+	num := strconv.Itoa(am.Days)
+	if am.Capped {
+		num += "+"
+	}
+	unit := uistate.T("budgets.ageMoneyUnit")
+	if am.Days == 1 && !am.Capped {
+		unit = uistate.T("budgets.ageMoneyUnitOne")
+	}
+	return Div(css.Class("budget-agemoney"), Attr("data-testid", "budgets-agemoney"),
+		Div(css.Class("budget-agemoney-head"),
+			label,
+			// Same explainer affordance as the LEFT hero stat (the app-wide "?" info-icon
+			// tooltip), not a one-off text link — one vocabulary for "explain this figure".
+			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), uistate.T("budgets.ageMoneyWhy")),
+		),
+		Div(ClassStr(figCls), Attr("data-testid", "budgets-agemoney-days"),
+			Span(css.Class("budget-agemoney-num"), num),
+			Span(css.Class("budget-agemoney-unit"), unit),
+		),
+		P(css.Class("budget-agemoney-explain"), explain),
+	)
 }
 
 // lastMonthLabelKey picks the toolbar toggle's label: a call-to-action when off,

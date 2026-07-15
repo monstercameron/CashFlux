@@ -48,6 +48,25 @@ func NextOccurrence(done domain.Task, newID string, now time.Time) (domain.Task,
 		MemberID:    done.MemberID,
 		Source:      done.Source,
 		Recurrence:  done.Recurrence,
+		// The reminder lead is a property of the recurring series, so each spawned
+		// occurrence inherits it and surfaces its own reminder window.
+		ReminderLeadDays: done.ReminderLeadDays,
 	}
 	return next, true
+}
+
+// ReminderDue reports whether an open task's in-app reminder window has opened as
+// of now — i.e. it is not done, has a Due date, and (Due − ReminderLeadDays) is on
+// or before now. A ReminderLeadDays of 0 means the window opens on the due date
+// itself; a positive lead opens it that many days earlier. Tasks with no Due date
+// are never reminder-due (there is nothing to count back from).
+//
+// This is the pure predicate the needs-attention digest uses to surface tasks
+// whose deadline is approaching, before they tip into overdue.
+func ReminderDue(t domain.Task, now time.Time) bool {
+	if t.Status != domain.StatusOpen || t.Due.IsZero() {
+		return false
+	}
+	window := t.Due.AddDate(0, 0, -t.ReminderLeadDays)
+	return !window.After(now)
 }

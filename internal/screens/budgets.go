@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/agemoney"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -85,6 +86,11 @@ type budgetView struct {
 	// including any XC3 smoothing set-aside folded into the committed figure. Absent
 	// entries mean nothing is committed (a fully-free budget).
 	Committed map[string]budgetCommitted
+	// AgeMoney is the household's Age of Money — how long, on average, a dollar sits
+	// between being earned and being spent (YNAB's signature buffer metric). Computed
+	// over the whole ledger (transfers excluded), so it is scope-independent; the
+	// summary tile shows it plain-English when Ready, or a "need more history" nudge.
+	AgeMoney agemoney.Result
 }
 
 // budgetCommitted is the per-budget committed-vs-free breakdown the row renders as a
@@ -598,6 +604,11 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		}
 	}
 
+	// Age of Money (YNAB's signature buffer metric): built from the whole ledger's
+	// income/expense flows, FX-converted to base and time-ordered, with transfers
+	// excluded (they move money, they don't earn or spend it).
+	ageMoney := computeAgeOfMoney(txns, base, rates)
+
 	return budgetView{
 		Base: base, Method: method, Statuses: statuses, CatName: catName,
 		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap,
@@ -611,7 +622,34 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		LastMonthMode:  showLastMonth,
 		LastTotalSpent: lastTotalSpent,
 		Committed:      committedMap,
+		AgeMoney:       ageMoney,
 	}
+}
+
+// computeAgeOfMoney builds the age-of-money input from the ledger and runs the
+// pure agemoney.Compute. Every non-transfer transaction becomes a Flow in base-
+// currency minor units (income positive, expense negative); transfers are skipped
+// because they neither earn nor spend money. Flows are sorted oldest-first, which
+// is what the FIFO metric requires, so the store's ordering doesn't matter here.
+// An unconvertible amount (missing FX rate) is dropped rather than mis-aged.
+func computeAgeOfMoney(txns []domain.Transaction, base string, rates currency.Rates) agemoney.Result {
+	flows := make([]agemoney.Flow, 0, len(txns))
+	for _, t := range txns {
+		if t.IsTransfer() || t.Amount.Amount == 0 {
+			continue
+		}
+		minor := t.Amount.Amount
+		if t.Amount.Currency != base {
+			conv, err := currency.ConvertBetween(minor, t.Amount.Currency, base, rates)
+			if err != nil {
+				continue // no rate — don't fabricate an age from an unconvertible flow
+			}
+			minor = conv
+		}
+		flows = append(flows, agemoney.Flow{Date: t.Date, AmountMinor: minor})
+	}
+	sort.SliceStable(flows, func(i, j int) bool { return flows[i].Date.Before(flows[j].Date) })
+	return agemoney.Compute(flows, agemoney.Opts{})
 }
 
 // computeIncomeSources builds the income-source menu the "by source" basis presents:

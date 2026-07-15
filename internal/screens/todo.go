@@ -145,6 +145,12 @@ func TaskRow(props taskRowProps) ui.Node {
 		metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "recur-badge-"+t.ID),
 			uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(taskCadenceLabel(t.Recurrence))))
 	}
+	// Reminder chip — only when a positive lead is set (0 = on the due date is the
+	// quiet default and gets no chip, keeping the row clean).
+	if t.ReminderLeadDays > 0 {
+		metaParts = append(metaParts, Span(css.Class("todo-meta-item", "is-reminder"), Attr("data-testid", "remind-badge-"+t.ID),
+			uiw.Icon(icon.Bell, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(taskReminderLabel(t.ReminderLeadDays))))
+	}
 	if linkPresent {
 		metaParts = append(metaParts, linkNode)
 	}
@@ -312,5 +318,24 @@ func taskCadenceLabel(c domain.RecurringCadence) string {
 		return uistate.T("todo.repeatYearly")
 	default:
 		return string(c)
+	}
+}
+
+// taskReminderLabel returns the human-readable lead label for a recurring task's
+// ReminderLeadDays, used in the add-form summary and the row reminder chip. Known
+// leads (1 / 3 / 7 days) map to their friendly phrasing; any other positive value
+// falls back to an "N days early" form. 0 (remind on the due date) returns "".
+func taskReminderLabel(days int) string {
+	switch {
+	case days <= 0:
+		return ""
+	case days == 1:
+		return uistate.T("todo.remind1Day")
+	case days == 3:
+		return uistate.T("todo.remind3Days")
+	case days == 7:
+		return uistate.T("todo.remind1Week")
+	default:
+		return uistate.T("todo.reminderBadgeLead", fmt.Sprintf("%dd", days))
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/taskrecur"
 )
 
 // Severity ranks how urgent an item is; higher is more urgent.
@@ -161,7 +162,10 @@ func Rank(in Inputs, cfg Config) []Item {
 			}
 			overdue := !t.Due.IsZero() && t.Due.Before(today)
 			high := t.Priority == domain.PriorityHigh
-			if !overdue && !high {
+			// A task also surfaces once its reminder window opens (Due − lead ≤ now),
+			// so a dated to-do is nudged before it tips into overdue.
+			reminder := taskrecur.ReminderDue(t, in.Now)
+			if !overdue && !high && !reminder {
 				continue
 			}
 			sev := SeverityWarning

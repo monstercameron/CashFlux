@@ -1053,6 +1053,13 @@ type Task struct {
 	// a fresh open occurrence is created with Due advanced one cadence step.
 	// Empty (zero value) means the task is a one-shot and no successor is spawned.
 	Recurrence RecurringCadence `json:"recurrence,omitempty"`
+	// ReminderLeadDays is how many days before Due the task should start surfacing
+	// in the in-app needs-attention digest. 0 (the zero value) means remind on the
+	// due date itself; a positive value opens the reminder window that many days
+	// early (e.g. 3 = "remind me 3 days before"). Ignored when Due is zero.
+	// Additive — existing tasks load with 0 (remind on the due date). JSON
+	// round-trips; no store migration. See taskrecur.ReminderDue.
+	ReminderLeadDays int `json:"reminderLeadDays,omitempty"`
 	// Order is the manual position of this task among its siblings (same ParentID), used by
 	// the "Custom order" sort mode and set by drag-and-drop reordering. Lower sorts first;
 	// ties fall back to the smart order. Additive — existing tasks load with 0. JSON

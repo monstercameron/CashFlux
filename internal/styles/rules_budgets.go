@@ -474,4 +474,82 @@ func registerBudgetsSurface() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 	)
+
+	// --- Age of Money stat (budgets summary) -----------------------------------------
+	// YNAB's signature buffer metric, surfaced as a calm insight card just under the
+	// spend bar. An accent spine on the left marks it as a distinct read without
+	// shouting; the day count borrows the page's serif hero-figure signature so it
+	// speaks the same typographic language as the spent/left figures above it.
+	rule(".budget-agemoney",
+		// A subordinate INSIGHT strip, not a fourth hero stat — sits under the
+		// SPENT/BUDGETED/LEFT hero with a quiet accent stripe and a compact figure.
+		marginTop("0.55rem"),
+		padding("0.5rem 0.75rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		prop("border-left", "2px solid var(--accent)"),
+		borderRadius("var(--radius)"),
+	)
+	rule(".budget-agemoney-head",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+	)
+	rule(".budget-agemoney-label",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	// The "Why?" affordance: a quiet, keyboard-reachable dotted-underline note whose
+	// title tooltip explains the FIFO matching. Accent-toned but understated.
+	rule(".budget-agemoney-why",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		color("var(--accent)"),
+		cursor("help"),
+		prop("border-bottom", "1px dotted var(--accent)"),
+		prop("flex-shrink", "0"),
+	)
+	rule(".budget-agemoney-why:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "2px"),
+		borderRadius("3px"),
+	)
+	// The figure: a large serif numeral (the app's clearest typographic signature) with
+	// a small unit word riding the baseline beside it.
+	rule(".budget-agemoney-fig",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.3rem"),
+		marginTop("0.35rem"),
+	)
+	rule(".budget-agemoney-num",
+		// Serif (consistent with the budget hero figures) but sized as an insight, not a
+		// hero — clearly smaller than the 2rem SPENT/BUDGETED/LEFT numbers above it.
+		prop("font-family", "var(--font-display), Fraunces, Georgia, serif"),
+		fontSize("1.25rem"),
+		fontWeight("700"),
+		letterSpacing("-0.01em"),
+		prop("line-height", "1"),
+		prop("font-variant-numeric", "tabular-nums"),
+		color("var(--text)"),
+	)
+	// Tone the count by buffer health: a healthy buffer reads positive-green; a tight
+	// one takes the on-brand accent — calm, never the danger red of an error.
+	rule(".budget-agemoney-fig.is-healthy .budget-agemoney-num", color("var(--money-positive)"))
+	rule(".budget-agemoney-fig.is-tight .budget-agemoney-num", color("var(--accent)"))
+	rule(".budget-agemoney-unit",
+		fontSize("0.9rem"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+	)
+	rule(".budget-agemoney-explain",
+		marginTop("0.3rem"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		prop("line-height", "1.4"),
+	)
 }

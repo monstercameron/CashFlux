@@ -156,3 +156,70 @@ func TestNextOccurrence(t *testing.T) {
 		})
 	}
 }
+
+func TestNextOccurrence_CarriesReminderLead(t *testing.T) {
+	done := domain.Task{
+		ID: "r", Title: "pay rent", Status: domain.StatusDone,
+		Recurrence: domain.CadenceMonthly, Due: date(2026, 6, 1),
+		ReminderLeadDays: 3,
+	}
+	got, ok := NextOccurrence(done, "next", date(2026, 6, 1))
+	if !ok {
+		t.Fatal("expected a spawned occurrence")
+	}
+	if got.ReminderLeadDays != 3 {
+		t.Errorf("ReminderLeadDays = %d, want 3", got.ReminderLeadDays)
+	}
+}
+
+func TestReminderDue(t *testing.T) {
+	now := date(2026, 6, 10)
+	cases := []struct {
+		name string
+		task domain.Task
+		want bool
+	}{
+		{
+			name: "no due date → never due",
+			task: domain.Task{Status: domain.StatusOpen},
+			want: false,
+		},
+		{
+			name: "done task → never due",
+			task: domain.Task{Status: domain.StatusDone, Due: date(2026, 6, 1)},
+			want: false,
+		},
+		{
+			name: "lead 0, due today → due",
+			task: domain.Task{Status: domain.StatusOpen, Due: date(2026, 6, 10)},
+			want: true,
+		},
+		{
+			name: "lead 0, due tomorrow → not yet",
+			task: domain.Task{Status: domain.StatusOpen, Due: date(2026, 6, 11)},
+			want: false,
+		},
+		{
+			name: "lead 3, due in 3 days → window opens exactly today",
+			task: domain.Task{Status: domain.StatusOpen, Due: date(2026, 6, 13), ReminderLeadDays: 3},
+			want: true,
+		},
+		{
+			name: "lead 3, due in 4 days → not yet",
+			task: domain.Task{Status: domain.StatusOpen, Due: date(2026, 6, 14), ReminderLeadDays: 3},
+			want: false,
+		},
+		{
+			name: "overdue is still reminder-due",
+			task: domain.Task{Status: domain.StatusOpen, Due: date(2026, 6, 1), ReminderLeadDays: 3},
+			want: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ReminderDue(tc.task, now); got != tc.want {
+				t.Errorf("ReminderDue = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

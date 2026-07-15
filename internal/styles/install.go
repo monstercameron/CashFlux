@@ -20,6 +20,7 @@ func Register() {
 	resetSheet()
 	registerGenerated()
 	registerRecurringSurface()
+	registerRecurTasksSurface()
 	registerReportsSurface()
 	registerNetWorthSurface()
 	registerHealthSurface()

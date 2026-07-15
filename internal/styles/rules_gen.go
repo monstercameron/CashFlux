@@ -7840,6 +7840,11 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 	)
 	rule(".tc-summary",
+		// Fill the footer's free width so the live summary shows in full (it was
+		// truncating to a dangling "· …" while empty space sat before the actions).
+		flex("1 1 auto"),
+		minWidth("0"),
+		marginRight("0.75rem"),
 		fontSize("0.8rem"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),

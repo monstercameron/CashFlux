@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,18 @@ func cadenceSelectOptions(selected string) []uiw.SelectOption {
 		{Value: string(domain.CadenceMonthly), Label: uistate.T("todo.repeatMonthly")},
 		{Value: string(domain.CadenceQuarterly), Label: uistate.T("todo.repeatQuarterly")},
 		{Value: string(domain.CadenceYearly), Label: uistate.T("todo.repeatYearly")},
+	}
+}
+
+// reminderLeadSelectOptions returns the fixed "Remind me" lead choices for a
+// recurring task, mapping a days-before-due value (as a string) to a plain label.
+// 0 = on the due date; the positive values open the reminder window early.
+func reminderLeadSelectOptions() []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: "0", Label: uistate.T("todo.remindOnDue")},
+		{Value: "1", Label: uistate.T("todo.remind1Day")},
+		{Value: "3", Label: uistate.T("todo.remind3Days")},
+		{Value: "7", Label: uistate.T("todo.remind1Week")},
 	}
 }
 
@@ -123,6 +136,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	addLinkType := ui.UseState(string(domain.RelatedNone))
 	addLinkID := ui.UseState("")
 	addRecur := ui.UseState("")
+	addRemind := ui.UseState("0") // ReminderLeadDays as a string; only meaningful when recurring
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
@@ -162,7 +176,15 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			ParentID: props.ParentID,
 			Status:   domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 			RelatedType: rt, RelatedID: rid,
-			Recurrence: domain.RecurringCadence(addRecur.Get()),
+		}
+		// Repeat + reminder are anchored to a due date, so they only take effect when one
+		// is set (the UI hides both controls otherwise). A reminder applies to any dated
+		// task; a recurrence advances the due date.
+		if !due.IsZero() {
+			t.Recurrence = domain.RecurringCadence(addRecur.Get())
+			if n, perr := strconv.Atoi(addRemind.Get()); perr == nil {
+				t.ReminderLeadDays = n
+			}
 		}
 		if err := app.PutTask(t); err != nil {
 			errMsg.Set(err.Error())
@@ -175,6 +197,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 		addLinkType.Set(string(domain.RelatedNone))
 		addLinkID.Set("")
 		addRecur.Set("")
+		addRemind.Set("0")
 		errMsg.Set("")
 		// The add form is a shell-root sibling (AddHost), so the /todo list won't
 		// re-render on its own — bump the shared data revision (and confirm) so the
@@ -207,17 +230,49 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 		})
 	}
 
+	// The reminder-lead control only appears once the task is set to repeat — a
+	// one-shot has nothing to remind against beyond its own due date.
+	// Repeat + Remind me are both anchored to a DUE DATE (a reminder fires N days
+	// before it; a recurrence advances it), so they only appear once a due date is
+	// set — and a reminder works for any dated task, recurring or not.
+	hasDue := strings.TrimSpace(dueStr.Get()) != ""
+	var remindRow, repeatRow ui.Node = Fragment(), Fragment()
+	if hasDue {
+		remindRow = Div(css.Class("tc-rail-row"),
+			Span(css.Class("tc-rail-label"), uistate.T("todo.remind")),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: reminderLeadSelectOptions(), Selected: addRemind.Get(),
+				OnChange: func(v string) { addRemind.Set(v) }, AriaLabel: uistate.T("todo.remind"), TestID: "task-add-remind",
+			}),
+		)
+		repeatRow = Div(css.Class("tc-rail-row"),
+			Span(css.Class("tc-rail-label"), uistate.T("todo.repeat")),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: cadenceSelectOptions(addRecur.Get()), Selected: addRecur.Get(),
+				OnChange: func(v string) { addRecur.Set(v) }, AriaLabel: uistate.T("todo.repeat"), TestID: "task-add-repeat",
+			}),
+		)
+	}
+
 	// Live summary shown in the footer — reads back the slip as you build it
 	// ("High priority · due Jul 1 · Weekly · Links to").
+	// Kept compact so the whole slip fits the modal footer without truncating to a
+	// dangling "· …": the priority word alone (the coloured spine already signals it)
+	// and a bare date (no "due" prefix).
 	plabel, _ := priorityMeta(domain.TaskPriority(priority.Get()))
-	sum := []string{plabel + " " + strings.ToLower(uistate.T("priority.label"))}
+	sum := []string{plabel}
 	if ds := strings.TrimSpace(dueStr.Get()); ds != "" {
 		if d, derr := dateutil.ParseDate(ds); derr == nil {
-			sum = append(sum, uistate.T("todo.due")+" "+pr.FormatDate(d))
+			sum = append(sum, pr.FormatDate(d))
 		}
 	}
-	if addRecur.Get() != "" {
-		sum = append(sum, taskCadenceLabel(domain.RecurringCadence(addRecur.Get())))
+	if hasDue {
+		if addRecur.Get() != "" {
+			sum = append(sum, taskCadenceLabel(domain.RecurringCadence(addRecur.Get())))
+		}
+		if n, perr := strconv.Atoi(addRemind.Get()); perr == nil && n > 0 {
+			sum = append(sum, taskReminderLabel(n))
+		}
 	}
 	if curAddType != domain.RelatedNone && curAddType != "" {
 		sum = append(sum, uistate.T("todo.linkTo"))
@@ -253,13 +308,9 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 						Button(css.Class("task-quick-chip", "is-clear"), Type("button"), Attr("data-testid", "task-quick-clear"), OnClick(quickClear), uistate.T("todo.quickClear")),
 					),
 				),
-				Div(css.Class("tc-rail-row"),
-					Span(css.Class("tc-rail-label"), uistate.T("todo.repeat")),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options: cadenceSelectOptions(addRecur.Get()), Selected: addRecur.Get(),
-						OnChange: func(v string) { addRecur.Set(v) }, AriaLabel: uistate.T("todo.repeat"), TestID: "task-add-repeat",
-					}),
-				),
+				// Remind me sits directly under Due date (it's anchored to it), then Repeat.
+				remindRow,
+				repeatRow,
 				Div(css.Class("tc-rail-row"),
 					Span(css.Class("tc-rail-label"), uistate.T("todo.linkTo")),
 					uiw.SelectInput(uiw.SelectInputProps{

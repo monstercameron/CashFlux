@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,6 +61,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 	linkTypeS := ui.UseState(string(t.RelatedType))
 	linkIDS := ui.UseState(t.RelatedID)
 	recurS := ui.UseState(string(t.Recurrence))
+	remindS := ui.UseState(strconv.Itoa(t.ReminderLeadDays))
 	errS := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
@@ -100,7 +102,19 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 				tt.RelatedType = rt
 				tt.RelatedID = linkIDS.Get()
 			}
-			tt.Recurrence = domain.RecurringCadence(recurS.Get())
+			// Repeat + reminder are anchored to a due date; without one, neither applies
+			// (the UI hides both controls). A reminder works for any dated task.
+			if !tt.Due.IsZero() {
+				tt.Recurrence = domain.RecurringCadence(recurS.Get())
+				if n, perr := strconv.Atoi(remindS.Get()); perr == nil {
+					tt.ReminderLeadDays = n
+				} else {
+					tt.ReminderLeadDays = 0
+				}
+			} else {
+				tt.Recurrence = ""
+				tt.ReminderLeadDays = 0
+			}
 			if err := app.PutTask(tt); err != nil {
 				errS.Set(err.Error())
 				return
@@ -133,6 +147,24 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 			}))
 	}
 
+	// Repeat + Remind me are anchored to a due date (a reminder fires N days before it;
+	// a recurrence advances it), so both appear only once a due date is set — a reminder
+	// works for any dated task, recurring or not.
+	editHasDue := strings.TrimSpace(dueS.Get()) != ""
+	var remindField, repeatField ui.Node = Fragment(), Fragment()
+	if editHasDue {
+		remindField = labeledField(uistate.T("todo.remind"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: reminderLeadSelectOptions(), Selected: remindS.Get(),
+				OnChange: func(v string) { remindS.Set(v) }, AriaLabel: uistate.T("todo.remind"), TestID: "task-edit-remind-" + t.ID,
+			}))
+		repeatField = labeledField(uistate.T("todo.repeat"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: cadenceSelectOptions(recurS.Get()), Selected: recurS.Get(),
+				OnChange: func(v string) { recurS.Set(v) }, AriaLabel: uistate.T("todo.repeat"), TestID: "task-edit-repeat-" + t.ID,
+			}))
+	}
+
 	var errLine ui.Node = Fragment()
 	if errS.Get() != "" {
 		errLine = P(css.Class("err"), Attr("role", "alert"), errS.Get())
@@ -149,13 +181,11 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 			})),
 		labeledField(uistate.T("common.dueDate"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), Value(dueS.Get()), OnInput(onDue))),
+		// Remind me sits directly under Due date (it's anchored to it), then Repeat.
+		remindField,
+		repeatField,
 		labeledField(uistate.T("todo.notesEdit"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes))),
-		labeledField(uistate.T("todo.repeat"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: cadenceSelectOptions(recurS.Get()), Selected: recurS.Get(),
-				OnChange: func(v string) { recurS.Set(v) }, AriaLabel: uistate.T("todo.repeat"), TestID: "task-edit-repeat-" + t.ID,
-			})),
 		labeledField(uistate.T("todo.linkTo"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: linkTypeSelectOptions(linkTypeS.Get()), Selected: linkTypeS.Get(),
