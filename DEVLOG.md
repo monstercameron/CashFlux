@@ -1,3 +1,15 @@
+## 2026-07-14 — AC batch 2: the filing-cabinet arc completes
+
+Sixth curation round. Kept 8 of 10 (dropped interest-posting proposals and guided closure).
+The through-line of this batch is /accounts becoming the household's filing cabinet and truth
+anchor: AC10 institutions + AC8 docs + AC16 emergency pack + AC17 expiries form one arc only a
+local-first app can credibly ship — AC16 is flagged for its own privacy/tone scoping since an
+encrypted executor pack is the most sensitive artifact the app would ever produce. AC12
+(amortization × split machinery = principal/interest auto-split) is the strongest cross-concept
+join of the whole session: two shipped systems, one missing bridge, and a feature Quicken users
+miss everywhere else. Next up per Cam: the assistant/chat-agent ideation (20 asked), which
+closes the seven-page sweep.
+
 ## 2026-07-14 — AC series: accounts ideation → backlog
 
 Fifth curation round, /accounts — the highest keep-rate yet (9 of 10; only the standalone keep

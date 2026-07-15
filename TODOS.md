@@ -3549,6 +3549,60 @@ AC7's sweep rules therefore carry their OWN keep amount instead of referencing a
 engine-shaped quick wins. AC6 blocked on its planning ticket; AC2 should anticipate AC6's
 anchored series. AC7 scopes jointly with GL1 (one proposal surface).
 
+**Second batch (curated 2026-07-14, same session).** Cam kept 8 of 10; DROPPED: expected-
+interest posting proposals (month-end "record ~$12.40 interest?" — revisit after GL2's APY
+field exists if wanted) and the guided account-closure ritual.
+
+- [ ] **AC10 [MED]** Institution directory *(Copilot's institution layer)*. A lightweight
+  institution entity (name, color/icon, support phone/URL, notes) that accounts reference —
+  gives the ★★ Multi-Institution Analytics feature a real entity instead of string matching,
+  colors account rows, and lets AC8's docs drawer roll up per institution ("everything about
+  Chase in one place"). Full CRUD + reassign-on-delete (accounts fall back to no-institution).
+- [ ] **AC11 [SMALL]** Exclude-from-net-worth toggle *(Monarch)*. One flag per account: still
+  visible in class views, omitted from the `net_worth`/`assets`/`liabilities` atoms. Engine
+  work is small (the atoms flow through one accumulation now); the real requirement is
+  EXPLAINABILITY — the net-worth tile must disclose "excludes 2 accounts by your choice"
+  exactly as it discloses missing FX rates. Flag rides the account edit form.
+- [ ] **AC12 [MAJOR — STRONGEST CROSS-CONCEPT OF THE BATCH]** Loan payment principal/interest
+  auto-split *(Quicken escrow-grade detail)*. Join two existing systems: the R21 amortization
+  schedule (computes each payment's principal/interest split) and the transaction split
+  machinery. A payment matched to a loan (TX9 matching) gets a PROPOSED split: principal
+  (transfer-to-liability leg) + interest (expense) per the amortization row — preview-approve.
+  Result: interest paid shows honestly in spending reports; payoff progress is exact.
+  Guardrails: escrow/extra-principal remainder handling; mismatched payment amounts re-fit
+  against the schedule; never auto-applies.
+- [ ] **AC13 [MED]** Projected balance on the row *(PocketSmith)*. "Checking: $2,340 today →
+  ~$1,150 low on the 28th" — a 30-day per-account projection from recurring + billsched
+  occurrences scoped to that account (the forecast pkg exists; this is its per-account slice),
+  rendered as hover/expand detail listing the drivers ("rent −$1,400 on the 1st"). AC7's sweep
+  proposals must respect the projected low, not just today's balance.
+- [ ] **AC14 [MED — SMART-SERIES FLAGS]** Dormant account + fee-bleed detectors. Two flags:
+  "no activity in 6 months — still need this open?" and the sharp one — "this dormant account
+  is paying a monthly fee" (recurring fee-like txn on an account with no other activity).
+  One-tap paths: archive, or create a close-it task (XC8 auto-resolves when balance zeroes and
+  activity stops). Standard opt-in/dismissal; keys encode the account so a different dormant
+  account still flags.
+- [ ] **AC15 [MED]** Idle-cash flag *(Wealthfront's cash-drag argument, honest local version)*.
+  Checking holds $12k; bills + committed needs ≈ $4k → "≈$8k idle — could earn ~$350/yr at
+  your benchmark rate." Benchmark is USER-ENTERED (no live feeds; assumption stated in the
+  copy). AC4's mirror: carrying cost prices debt, this prices idle cash; both link to
+  /allocate as the action. Derivation via atoms (liquid, committed via billsched/XC4);
+  explainable breakdown required.
+- [ ] **AC16 [MAJOR — PRIVACY/TONE PASS REQUIRED IN SCOPING]** Beneficiary & estate notes +
+  emergency pack *(Kubera's differentiator)*. Per-account beneficiary/TOD notes, plus an
+  "in case of emergency" EXPORT: one encrypted, printable pack — accounts, institutions
+  (AC10), contacts, documents (AC8), notes — for a spouse or executor. Only a local-first app
+  can credibly ship this; it is also the most sensitive artifact the app would produce, so
+  scoping must cover encryption-at-export, plain-language framing, and zero cloud contact.
+- [ ] **AC17 [SMALL]** Document expiry reminders. AC8 documents gain an optional expiry/renewal
+  date (insurance policy, registration, warranty) generating a task with per-doc lead time;
+  XC8 auto-resolves it when a newer doc with the same label is attached. Turns the filing
+  cabinet from passive storage into the thing that remembers renewals.
+
+**Batch-2 ordering note.** AC11/AC17 are quick wins. AC12 wants R21's amortization + TX9
+matching + the split machinery all landed. AC15 pairs with AC4 (one "price of money" story).
+AC16 is its own scoping conversation.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]
