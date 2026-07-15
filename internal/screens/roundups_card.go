@@ -315,7 +315,9 @@ func roundupConfigForm(props roundupConfigFormProps) ui.Node {
 				},
 			}))
 		}
-		accountRows = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), rows)
+		// Boxed, scrollable checklist — same container as the Sweep-leftovers modal's
+		// "Budgets to sweep" list, so the two modals speak one checklist vocabulary.
+		accountRows = Div(css.Class("sweep-budgets"), rows)
 	}
 
 	// FlushBody layout: a scrolling field region (.modal-scroll) + a pinned action bar
@@ -324,7 +326,10 @@ func roundupConfigForm(props roundupConfigFormProps) ui.Node {
 	return Div(css.Class("roundup-config-form", tw.Flex, tw.FlexCol),
 		Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configIntro")),
-			Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+			// Enable toggle as a standard bordered .field row (matches the Sweep-leftovers
+			// modal's enable toggle) so both modals present the same "enable" affordance.
+			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Attr("style", "flex-wrap:nowrap;cursor:pointer"),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"),
 					Attr("data-testid", "roundups-config-enable"), OnChange(onToggleEnabled)},
 					checkedAttr(enabled.Get())...)...),

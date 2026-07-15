@@ -141,8 +141,11 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	// A cohesive filter strip: a search box leads, then sort + priority + "linked to" pill
 	// selects and a hide-done toggle, with the primary Add task pushed to the right. The
 	// strip layout is shared with /goals (.filter-strip).
-	toolbar := Div(css.Class("filter-strip"),
-		Div(css.Class("filter-strip-controls"),
+	toolbar := Div(css.Class("filter-toolbar"),
+		// Row 1: the search fills the line (standard two-row toolbar, matching
+		// transactions/accounts/budgets). Row 2 holds the sort/priority/linked selects,
+		// the hide-done toggle, and the primary Add task.
+		Div(css.Class("filter-toolbar-primary"),
 			Label(ClassStr(searchCls),
 				uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
@@ -151,6 +154,8 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 				If(search.Get() != "", Button(css.Class("todo-search-clear"), Type("button"), Attr("data-testid", "todo-search-clear"),
 					Attr("aria-label", uistate.T("todo.searchClear")), OnClick(clearSearch), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
 			),
+		),
+		Div(css.Class("filter-toolbar-actions"),
 			Label(css.Class("todo-ctrl"),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
@@ -184,11 +189,11 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			),
 			Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
 				Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel)),
+			Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("todo.addTask"))),
 		),
-		Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
-			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("todo.addTask"))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "todo-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

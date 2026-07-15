@@ -2393,9 +2393,12 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.5rem"),
 	)
-	// The search pill grows to fill the line; the Filters trigger holds its natural size.
-	rule(".filter-toolbar-primary .fctrl-search",
+	// The search pill grows to fill the WHOLE line; the Filters trigger holds its natural
+	// size. The base .fctrl-search caps at max-width:22rem (to avoid premature wrap in the
+	// old single-row toolbar) — here it's on its own row, so lift the cap and let it fill.
+	rule(".filter-toolbar-primary .fctrl-search, .filter-toolbar-primary .todo-ctrl-search",
 		flex("1 1 auto"),
+		maxWidth("none"),
 		minWidth("0"),
 	)
 	rule(".filter-toolbar-primary .filters-trigger",
@@ -10512,6 +10515,18 @@ func registerGenerated() {
 	)
 	rule(".add-item:hover, .add-item:focus-visible",
 		background("var(--hover)"),
+	)
+	// A bento tile whose overflow ("⋯ More") menu is open must rise above its neighbours,
+	// or the dropdown is painted UNDER the next tile and its items can't be clicked (each
+	// tile is its own stacking context). Scope to the open state via the trigger's
+	// aria-expanded so closed tiles keep their normal stacking.
+	rule(".w:has(.add-wrap button[aria-expanded=\"true\"])",
+		position("relative"),
+		zIndex("40"),
+	)
+	// The open menu itself sits above sibling content within the raised tile.
+	rule(".add-wrap button[aria-expanded=\"true\"] + .add-menu",
+		zIndex("41"),
 	)
 	// Destructive overflow-menu item (e.g. Delete account): red text, red hover.
 	rule(".add-item.danger",

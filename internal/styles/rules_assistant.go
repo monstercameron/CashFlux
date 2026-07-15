@@ -442,11 +442,12 @@ func registerAssistantSurface() {
 	// The header bar: status dot + serif agent name on the left, quiet ghost
 	// actions on the right, a hairline rule beneath.
 	rule(".ask-head",
+		// Stack: the agent name (with its live-status dot) on line 1, the on-device
+		// caption as a quiet subtitle on line 2 — not crammed onto one baseline.
 		prop("display", "flex"),
-		prop("align-items", "center"),
-		prop("justify-content", "space-between"),
-		prop("gap", "1rem"),
-		prop("flex-wrap", "wrap"),
+		prop("flex-direction", "column"),
+		prop("align-items", "flex-start"),
+		prop("gap", "0.15rem"),
 		prop("padding-bottom", "0.85rem"),
 		prop("margin-bottom", "0.9rem"),
 		prop("border-bottom", "1px solid var(--border)"),

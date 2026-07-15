@@ -1324,8 +1324,10 @@ func Insights() ui.Node {
 		Div(css.Class("ask-head-id"),
 			Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
 			H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
-			Span(css.Class("ask-status"), uistate.T(statusKey)),
 		),
+		// The status/caption sits on its own subtitle line below the agent name, rather
+		// than sharing the title's baseline at a clashing scale.
+		Span(css.Class("ask-status"), uistate.T(statusKey)),
 	)
 	askMain := Div(css.Class("ask-main"),
 		askHead,

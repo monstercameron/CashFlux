@@ -22,15 +22,16 @@ func SweepRulesHost() uic.Node {
 		return Fragment()
 	}
 	closeModal := func() { open.Set(false) }
-	// Compact modal sized to the short add-form (FlipSmall), and a single Close button:
-	// each "Add sweep rule" persists immediately, so there is nothing to Save/Cancel —
-	// Close just dismisses. This replaces the tall NoFooter panel that left a large empty
-	// void below the content.
+	// The form supplies its own .modal-scroll body + a pinned .modal-foot (Done + the
+	// primary "Add sweep rule"), so FlushBody keeps that action visible instead of pushing
+	// it below the fold. FlipSmall was too short for the intro + rule list + four fields;
+	// FlipMedium fits, and the pinned footer means there is never an empty void.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("acctSweepCfg.title"),
-		Width:     uiw.FlipSmallW,
-		Height:    uiw.FlipSmallH,
-		CloseOnly: true,
+		Width:     uiw.FlipMediumW,
+		Height:    uiw.FlipMediumH,
+		NoFooter:  true,
+		FlushBody: true,
 		OnClose:   closeModal,
 		Back:      uic.CreateElement(screens.SweepRulesForm, screens.SweepRulesFormProps{OnDone: closeModal}),
 	})

@@ -464,22 +464,11 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	// straight to editing the first (its header carries per-group edit too); with
 	// none, start a new group.
 	groupEditAtom := uistate.UseAccountGroupEdit()
-	openGroups := ui.UseEvent(Prevent(func() {
-		target := "new"
-		if gs := app.AccountGroups(); len(gs) > 0 {
-			target = gs[0].ID
-		}
-		groupEditAtom.Set(target)
-	}))
-	// AC10: open the institution directory (add/rename/color/delete banks and
-	// lenders). Grounds the ★★ Multi-Institution Analytics feature with a real
-	// entity instead of matching on the free-text Account.Institution string.
+	// AC10: the institution directory (add/rename/color/delete banks and lenders) and
+	// AC7: the surplus-sweep rules manager. Their open actions now live in the "⋯ More"
+	// overflow (built below), so only the atoms are held here.
 	institutionsAtom := uistate.UseInstitutionsManager()
-	openInstitutions := ui.UseEvent(Prevent(func() { institutionsAtom.Set(true) }))
-	// AC7: open the surplus-sweep rules manager (keep $X in an account, move the
-	// excess elsewhere on a cadence — the proposal card fires from these rules).
 	sweepAtom := uistate.UseSweepRulesOpen()
-	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
 	openFX := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
 	markAll := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
@@ -564,6 +553,31 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 
 	showFX := hasForeign || len(app.Settings().FXRates) > 0
 
+	// The less-frequent "manager" actions (Groups, Institutions, Sweep rules) live in a
+	// "⋯ More" overflow — like the transactions toolbar — so the actions row stays a tidy
+	// single line (Mark all / Exchange rates / More / Transfer money) instead of six wide
+	// buttons wrapping the primary action onto a lonely second line.
+	var acctMoreItems []uiw.OverflowMenuItem
+	if len(accounts) >= 1 {
+		acctMoreItems = append(acctMoreItems,
+			uiw.OverflowMenuItem{Label: uistate.T("accounts.groupsAction"), Icon: icon.Tag, TestID: "acct-groups-btn", OnSelect: func() {
+				target := "new"
+				if gs := app.AccountGroups(); len(gs) > 0 {
+					target = gs[0].ID
+				}
+				groupEditAtom.Set(target)
+			}},
+			uiw.OverflowMenuItem{Label: uistate.T("accounts.institutionsAction"), Icon: icon.Landmark, TestID: "acct-institutions-btn", OnSelect: func() { institutionsAtom.Set(true) }},
+		)
+	}
+	if len(accounts) >= 2 {
+		acctMoreItems = append(acctMoreItems, uiw.OverflowMenuItem{Label: uistate.T("acctSweepCfg.title"), Icon: icon.TrendingUp, TestID: "acct-sweep-btn", OnSelect: func() { sweepAtom.Set(true) }})
+	}
+	acctMoreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerText: uistate.T("action.more"), TriggerClass: "btn btn-tool", TriggerTestID: "acct-more-btn",
+		Items: acctMoreItems,
+	})
+
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Search,
 		SearchLabel:  uistate.T("accounts.searchPlaceholder"),
@@ -592,15 +606,9 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				uistate.T("accounts.markAll", plural(staleCount, "account")), "action", "stale", false, markAll)),
 			If(showFX, acctToolbarGlyph("acct-fx-btn", icon.Scale,
 				uistate.T("accounts.manageFXRates"), "nav", "", false, openFX)),
-			// AC1: organize accounts into named groups (opens a shell-root flip modal).
-			If(len(accounts) >= 1, acctToolbarGlyph("acct-groups-btn", icon.Tag,
-				uistate.T("accounts.groupsAction"), "modal", "", groupEditAtom.Get() != "", openGroups)),
-			// AC10: manage the institution directory (opens a shell-root flip modal).
-			If(len(accounts) >= 1, acctToolbarGlyph("acct-institutions-btn", icon.Landmark,
-				uistate.T("accounts.institutionsAction"), "modal", "", institutionsAtom.Get(), openInstitutions)),
-			// AC7: manage surplus-sweep rules (opens a shell-root flip modal).
-			If(len(accounts) >= 2, acctToolbarGlyph("acct-sweep-btn", icon.TrendingUp,
-				uistate.T("acctSweepCfg.title"), "modal", "", sweepAtom.Get(), openSweep)),
+			// Groups (AC1), Institutions (AC10), and Sweep rules (AC7) now live in the
+			// "⋯ More" overflow so the row stays a single tidy line.
+			If(len(acctMoreItems) > 0, acctMoreMenu),
 			// Primary action last → right end of the left-justified group.
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
 				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),

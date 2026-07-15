@@ -225,14 +225,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	var rolloverLine ui.Node = Fragment()
 	if props.RolloverCarry != "" {
-		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
-		if props.RolloverNeg {
-			// C134: a carried-in deficit is a heads-up about where the period STARTED,
-			// not a "you've overspent now" alert — render it in the caution amber
-			// (TextWarn) so it reads distinctly from the danger-red overspend badge,
-			// instead of conflating the two as the same alarming red.
-			cls += " " + tw.Fold(tw.TextWarn)
-		}
+		// A carried-in deficit is historical context about where the period STARTED, not a
+		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
+		// signal (the red status line) rather than several caption lines competing for the eye.
+		cls := "budget-sub " + tw.Fold(tw.FontDisplay, tw.TextDim)
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
 

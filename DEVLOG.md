@@ -1,3 +1,27 @@
+## 2026-07-15 — v1.0.35: adversarial design loop, round 1
+
+Spawned an aggressive, deliberately-hard-to-impress design critic (sonnet, load frontend-design) over
+the 8 primary pages + the redesigned modals. It returned 13 findings; I triaged (3 were false
+positives or design-intent — widget titles are centered by design, net-worth bars are pixel-accurate,
+condo action cluster is right-anchored) and fixed the rest. The keystone was my own toolbar bug: the
+2-row search "filled" via flex-grow but the base `.fctrl-search` has `max-width:22rem`, so it stopped
+a third of the way across — lifting the cap inside `.filter-toolbar-primary` made it truly fill.
+
+The accounts button-wrap fix (move Groups/Institutions/Sweep into a "⋯ More" overflow) surfaced a
+REAL latent bug the e2e caught: the overflow popover rendered UNDER the adjacent bento tile (each tile
+is its own stacking context), so its items were unclickable — pointer events hit the next tile's
+`.card-head`. Fixed generally with `.w:has(.add-wrap button[aria-expanded="true"]) { z-index }`, which
+also hardens every other tile overflow. Lesson reaffirmed: drive the real control in a browser, don't
+trust that a menu "renders" — the screenshot showed the menu, but it wasn't clickable.
+
+Also restructured the Sweep-rules modal to FlushBody + a pinned footer (Done + Add) so the primary
+action can't hide below the fold; unified the Round-ups modal's toggle/checklist boxing with
+Sweep-leftovers; left-aligned the Goals paycheck card; moved the Assistant caption to its own line;
+demoted the over-budget "carried" line to neutral; unified the earmarks bars; and converted the To-do
+toolbar to the 2-row standard. A test-selector trap cost a cycle: `clickText("More")` matched the
+sidebar's "Learn more" and navigated to /plans — switched to the `acct-more-btn` testid. Functional
+e2e all green, zero console errors. Critic round 2 in flight.
+
 ## 2026-07-15 — v1.0.34: first-8-pages UX overhaul via 4 parallel opus agents
 
 User reported a batch of bugs + redesign asks (dashboard add-view, three broken/non-standard modals,

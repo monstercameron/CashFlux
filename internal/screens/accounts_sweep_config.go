@@ -105,36 +105,50 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 		return opts
 	}
 
-	return Form(css.Class(tw.Flex, tw.FlexCol, tw.Gap3), Attr("id", "sweep-rules-form"),
+	var onDone ui.Handler
+	if props.OnDone != nil {
+		onDone = ui.UseEvent(func() { props.OnDone() })
+	}
+	// FlushBody form: the intro, existing rules, and the add-form fields scroll in
+	// .modal-scroll, while the primary "Add sweep rule" action stays pinned in the
+	// .modal-foot so it is always reachable (the small modal would otherwise push it
+	// below the fold). A submit there fires the form's OnSubmit — adding a rule without
+	// closing — so several rules can be added in a row; Done closes the modal.
+	return Form(css.Class("acct-edit-form"), Attr("id", "sweep-rules-form"),
 		Attr("data-testid", "sweep-rules-form"), OnSubmit(add),
-		P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.intro")),
-		If(len(ruleNodes) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2), ruleNodes)),
-		If(len(ruleNodes) == 0, P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.empty"))),
-		// The add form: one field per line (label over control) so the picks read in the
-		// order the sentence does — keep money in X, hold $Y, sweep the rest to Z, this
-		// often — with standard field spacing and a full-width primary submit.
-		Div(css.Class("sweep-add"),
-			labeledField(uistate.T("accountsRedesign.sweepKeepIn"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.source")),
-					Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), acctOpt(src.Get()))),
-			labeledField(uistate.T("acctSweepCfg.keepAmount"),
-				Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
-					Attr("aria-label", uistate.T("acctSweepCfg.keepAmount")), Placeholder("3,000"),
-					Attr("data-testid", "sweep-cfg-keep"), Value(keep.Get()), OnInput(onKeep))),
-			labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.dest")),
-					Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), acctOpt(dst.Get()))),
-			labeledField(uistate.T("acctSweepCfg.cadence"),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.cadence")),
-					Attr("data-testid", "sweep-cfg-cadence"), OnInput(onCadence),
-					sweepCadenceOption(domain.SweepWeekly, cadence.Get()),
-					sweepCadenceOption(domain.SweepBiweekly, cadence.Get()),
-					sweepCadenceOption(domain.SweepMonthly, cadence.Get()),
-					sweepCadenceOption(domain.SweepQuarterly, cadence.Get()))),
-			Button(css.Class("btn btn-primary sweep-add-btn"), Type("submit"),
+		Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
+			P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.intro")),
+			If(len(ruleNodes) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2), ruleNodes)),
+			If(len(ruleNodes) == 0, P(css.Class("t-caption", tw.TextDim), uistate.T("acctSweepCfg.empty"))),
+			// The add form: one field per line (label over control) so the picks read in the
+			// order the sentence does — keep money in X, hold $Y, sweep the rest to Z, this often.
+			Div(css.Class("sweep-add"),
+				labeledField(uistate.T("accountsRedesign.sweepKeepIn"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.source")),
+						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), acctOpt(src.Get()))),
+				labeledField(uistate.T("acctSweepCfg.keepAmount"),
+					Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
+						Attr("aria-label", uistate.T("acctSweepCfg.keepAmount")), Placeholder("3,000"),
+						Attr("data-testid", "sweep-cfg-keep"), Value(keep.Get()), OnInput(onKeep))),
+				labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.dest")),
+						Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), acctOpt(dst.Get()))),
+				labeledField(uistate.T("acctSweepCfg.cadence"),
+					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.cadence")),
+						Attr("data-testid", "sweep-cfg-cadence"), OnInput(onCadence),
+						sweepCadenceOption(domain.SweepWeekly, cadence.Get()),
+						sweepCadenceOption(domain.SweepBiweekly, cadence.Get()),
+						sweepCadenceOption(domain.SweepMonthly, cadence.Get()),
+						sweepCadenceOption(domain.SweepQuarterly, cadence.Get()))),
+			),
+			If(msg.Get() != "", P(css.Class("t-caption", tw.TextDown), Attr("role", "alert"), msg.Get())),
+		),
+		Div(css.Class("modal-foot", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			If(props.OnDone != nil, Button(css.Class("btn"), Type("button"),
+				Attr("data-testid", "sweep-cfg-close"), OnClick(onDone), uistate.T("action.done"))),
+			Button(css.Class("btn btn-primary"), Type("submit"),
 				Attr("data-testid", "sweep-cfg-add"), uistate.T("acctSweepCfg.add")),
 		),
-		If(msg.Get() != "", P(css.Class("t-caption", tw.TextDown), Attr("role", "alert"), msg.Get())),
 	)
 }
 

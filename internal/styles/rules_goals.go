@@ -234,9 +234,11 @@ func registerGoalsSurface() {
 	)
 	// Per-goal coverage bar in each goal's earmark block header, beside the % chip.
 	rule(".ea-cover",
+		// Same bar treatment as .ea-acct-bar (10px, same track/fill) — one coverage-bar
+		// language across both earmark views, just inline-width here vs full-width there.
 		position("relative"),
-		width("120px"),
-		height("8px"),
+		width("140px"),
+		height("10px"),
 		borderRadius("999px"),
 		overflow("hidden"),
 		background(track),

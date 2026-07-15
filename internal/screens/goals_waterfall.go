@@ -96,7 +96,10 @@ func goalsWaterfallCard() ui.Node {
 		Attr("role", "status"),
 		Attr("data-testid", "goals-waterfall-card"),
 		Attr("aria-label", uistate.T("goals.waterfallAria")),
-		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol),
+		// ItemsStart: this card lays out as a column, so left-align every row — the shared
+		// .catchup-card-body centers children (for its single-row variant), which would
+		// otherwise center the plan lines + action buttons against the left-aligned intro.
+		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol, tw.ItemsStart),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Span(css.Class("catchup-card-icon"), "💧"),
 				Div(css.Class("catchup-card-text"),
