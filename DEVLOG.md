@@ -1,3 +1,16 @@
+## 2026-07-14 — GL series: goals ideation → backlog
+
+Fourth curation round, /goals. Cam dropped the two I'd ranked highest (Qapital save-triggers,
+balance-target goal kind) and catch-up plans — kept the projection/planning cluster (waterfall,
+interest-aware ETA, auto-sized emergency fund, contribution slider) plus the household + texture
+items (per-member pledges, vision images, pause). Recorded the one hard dependency prominently:
+GL1 (payday waterfall) MUST reconcile with the pre-existing R19 automated-savings impl plan
+(C183-C188) before scoping — the ticket says "one automated-savings story, not two," which is
+the backlog-level version of the XC0b one-primitive rule. GL2 gets the savings mirror of the
+payoff amortization math (same-family pkg, rate=0 must degrade to linear). The multi-user-
+stubbed precedent from TX15 is now cited twice (GL5) — it's become the house pattern for
+household features until the sync backend exists.
+
 ## 2026-07-14 — BG batch 2: seven more; the engine keeps absorbing features
 
 Second budgets curation. Notable: Cam dropped the month-end projection (the one I'd ranked

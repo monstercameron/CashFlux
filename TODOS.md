@@ -3421,6 +3421,68 @@ enhancement, and budget streaks. If projection is revisited, it rides BG3's paci
 UI). BG11/BG13 are read-model quick wins. BG12 depends on BG2's classification for its best
 form but has a recurring-based fallback; BG16 pairs with BG9.
 
+<!-- ===== GL SERIES (goals competitive features, appended 2026-07-14) ===== -->
+
+## ★ GL series — Goals: competitive features (LATER IMPL — curated from big-name comps 2026-07-14)
+
+**Provenance & scope.** Fourth ideation pass 2026-07-14, /goals focus, same sourcing and
+adaptation rules. Cam kept 7 of 10; DROPPED: Qapital-style save-trigger rules (workflow-engine
+earmark actions — strong machinery fit, re-proposable), balance-target goal kind (buffer /
+debt-to-zero direction), and catch-up plans for behind-pace goals. Overlap guard: R19 automated
+savings and R20 sinking funds have existing impl plans — GL items compose with them; XC6 sweep,
+XC7 earmark integrity, TX11 round-ups, and BG1's by-date target delegation all interlock here.
+
+- [ ] **GL1 [MAJOR]** Payday waterfall *(Ally buckets, Chime split-deposit)*. When income lands
+  (detected via recurring / TX9 bill-match machinery on the income side), propose funding goals
+  in PRIORITY ORDER until each period quota is met, cascading the remainder: a preview-approve
+  card — "Fund goals from this $2,400 paycheck? Emergency $200 → Vacation $150 → House $300."
+  Reuse: the allocate page's rank/exclude/split as the priority source; earmarks as the write;
+  R19's automated-savings plan as the sibling (this is its trigger-and-ordering layer — check
+  C183-C188 for overlap BEFORE scoping so the two don't fork). Guardrails: never auto-commits
+  (approve-first); respects XC7 (won't earmark past an account's real balance).
+- [ ] **GL2 [MED]** Interest-aware ETA *(Marcus/Ally savings framing)*. Optional APY field on
+  accounts; a goal linked to an APY-bearing account projects with compounding: "at $200/mo +
+  4.4% you'll hit $10k in 38 months, not 42 — interest contributes $612." Pure logic first
+  (the payoff package already amortizes debt; this is its savings mirror — same pkg or sibling,
+  table-driven tests incl. rate=0 degradation to the linear math). Also unlocks the honest
+  "move this to savings" argument beside XC7's misplaced-earmark nudge. Explainable breakdown
+  required (contributions vs interest share).
+- [ ] **GL3 [MED — SMART-SERIES FLAG for the re-suggest]** Emergency-fund auto-sizing
+  *(Monarch/NerdWallet guidance, computed honestly)*. Derive the user's ESSENTIAL month —
+  fixed commitments + essential-classified spending (BG2 classification; BG12 machinery;
+  recurring-based fallback) — then: "your essential month is $2,900; a 3-month fund is $8,700"
+  with one-tap set-as-target on the emergency goal (3/6-month choice). Re-suggest as a
+  preview-approve SMART flag when the derived essential figure drifts >10% from the target's
+  basis (dismissal key encodes the suggested level). Turns the most important goal target from
+  a guess into a derived, explainable number (`essential_monthly` atom/molecule).
+- [ ] **GL4 [MED]** Contribution slider with live ETA. On the goal card/editor: drag the
+  monthly contribution, the finish date moves live ("$150/mo → Aug 2027; $250/mo → Nov 2026"),
+  one-tap "make it so" persists the plan. Math is the existing MonthlyNeeded/pace inverted
+  (+ GL2's compounding when an APY is present). Optional reverse bridge: "where does the extra
+  $100 come from?" links to /budgets (BG15's sibling). Read-model + one slider; the goal
+  page's explorable-explanation moment.
+- [ ] **GL5 [MED — MULTI-USER STUBBED (TX15 precedent)]** Shared goals with per-member
+  commitments *(Monarch)*. A household goal where each member pledges a share ("$200/mo each"):
+  small data (member → pledged amount on the goal), attribution of ACTUAL contributions per
+  member (contributions already carry the member; render the BG13 split-bar), and a quiet
+  fairness readout ("you're 2 months ahead of pledge; Priya's on pace") — attribution, never
+  blame-toned. No presence/notifications until the sync backend lands; model the pledge shape
+  to survive that upgrade.
+- [ ] **GL6 [SMALL]** Goal vision images *(Monarch's most-loved cosmetic)*. Attach a photo to a
+  goal, rendered on the goal card. Same artifacts/blobstore join as TX5 (goal ↔ artifact
+  reference; blob GC respects it; export round-trips). Disproportionately motivating for the
+  cost; goal cards stop being spreadsheets. Respect reduced-data exports (image optional).
+- [ ] **GL7 [SMALL]** Goal pause/snooze with honest recalc. Pause a goal for N months:
+  contributions stop being expected, pace stops scolding, ETA recalcs and SHOWS THE COST
+  ("pausing 2 months moves the finish to March") before confirming. State: pausedUntil on the
+  goal; read-model does the rest. Guardrail vs quiet abandonment: at pause end the goal
+  resurfaces once (gentle, dismissible). Makes "off-track" a CHOSEN state instead of a failure
+  — consistent with the never-naggy rule.
+
+**GL ordering note.** GL6/GL7 are quick wins. GL2 before GL4's best form (slider with
+compounding). GL3 wants BG2/BG12 but has a fallback. GL1 must reconcile with R19's plan
+(C183-C188) before scoping — one automated-savings story, not two.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]
