@@ -200,7 +200,15 @@ func Events() ui.Node {
 
 	var list ui.Node
 	if len(evs) == 0 {
-		list = Div(css.Class("empty"), Attr("data-testid", "events-empty"), uistate.T("events.empty"))
+		// A dignified zero-state (centered icon + message + CTA), matching the empty
+		// states elsewhere — not a lone italic line on an otherwise blank page.
+		list = Div(css.Class("empty-cta"), Attr("data-testid", "events-empty"),
+			uiw.Icon(icon.Calendar, css.Class(tw.W8, tw.H8, "empty-icon")),
+			P(css.Class("empty"), uistate.T("events.empty")),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "events-empty-add"),
+				OnClick(openAdd),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("events.add"))),
+		)
 	} else {
 		list = Div(css.Class(tw.Grid, tw.Gap2), Attr("data-testid", "events-list"),
 			MapKeyed(evs,

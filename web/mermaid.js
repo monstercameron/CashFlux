@@ -52,6 +52,29 @@
     return true;
   }
 
+  // Mermaid's Sankey renders values as bare digit runs after the prefix ("$5901").
+  // Every other figure in the app groups thousands, so reformat the value labels to
+  // "$5,901" once the SVG is in the DOM — the one chart with raw numbers otherwise
+  // stands out. Only touches text nodes matching <prefix><4+ digits>.
+  function groupThousands(s) {
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+  function formatSankeyValues(el, prefix) {
+    if (!prefix) return;
+    var esc = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var hasBig = new RegExp(esc + "\\d{4,}");
+    var all = new RegExp(esc + "(\\d+)", "g");
+    var nodes = el.querySelectorAll("text, tspan");
+    for (var i = 0; i < nodes.length; i++) {
+      var txt = nodes[i].textContent;
+      if (hasBig.test(txt)) {
+        nodes[i].textContent = txt.replace(all, function (m, d) {
+          return prefix + groupThousands(d);
+        });
+      }
+    }
+  }
+
   window.cashfluxRenderMermaid = function (el, source, valuePrefix) {
     if (!el || !source || !ensureInit(valuePrefix)) return;
     var id = "cf-mmd-" + seq++;
@@ -61,6 +84,7 @@
         .render(id, source)
         .then(function (res) {
           el.innerHTML = res && res.svg ? res.svg : "";
+          formatSankeyValues(el, valuePrefix);
         })
         .catch(function () {
           el.textContent = ""; // never inject error HTML (strict)

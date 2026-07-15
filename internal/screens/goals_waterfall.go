@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -24,9 +23,11 @@ import (
 // user's explicit approval, calls appstate.ApplyWaterfall (which writes virtual
 // earmarks — never a transaction, never auto-committed).
 
-// waterfallAmount formats a base-currency minor amount for the card.
+// waterfallAmount formats a base-currency minor amount for the card in the same
+// accounting style as every other figure on screen (symbol + thousands grouping)
+// — never the bare-decimal editable-input form.
 func waterfallAmount(minor int64, base string) string {
-	return money.FormatMinor(minor, currency.Decimals(base))
+	return fmtMoney(money.New(minor, base))
 }
 
 // goalsWaterfallCard renders the payday funding card, or Fragment() when there is

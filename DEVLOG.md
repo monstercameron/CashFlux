@@ -1,3 +1,29 @@
+## 2026-07-15 — v1.0.33: design-agent UX/UI refinement loop to release-quality
+
+Ran the frontend-design skill as an independent gate: a Sonnet design lead reviewed full-page
+screenshots of all 14 primary pages (served from the isolated :8099 review root), returned a
+prioritized issue list, I fixed + redeployed + re-screenshotted, and it re-reviewed to a
+`RELEASE-QUALITY` verdict. Two loops. The discipline that paid off: verifying every finding at the
+code/DOM level before touching anything — 3 of round-1's 15 findings were false positives from
+full-page-screenshot compression and the review harness. The net-worth "What you own" bars looked
+wrong (Cash 12% appeared ~half-width) but an in-browser probe measured them pixel-exact
+(51px/428px = 12%); the "no active nav item on Tools pages" was a pushState-navigation artifact (real
+clicks highlight fine, verified by clicking); transaction amounts were already `text-align:right`.
+Fixing those would have been pure churn.
+
+Real fixes: the serif-numeral signature was missing on Budgets/Goals summary tiles (added
+`font-family: var(--font-display)` to the shared `.budget-loader-value` rule — one edit, both pages);
+the Goals paycheck card was rendering raw floats ("385373.00") because it used `money.FormatMinor`
+(the editable-input formatter) for display instead of `fmtMoney` — a bug the review missed and I
+caught reading the screenshot; Allocate's inert "$0.00" hero now dims when zero so the "$5,900" nudge
+leads; over-budget budget cards dropped the red body-wash (accent-bar only); Events got a real
+empty-state; the Reports Sankey groups thousands via a post-render pass in the mermaid shim; plus
+overdue-pill contrast, settings-list dividers, and the smart-badge kerning gap. The rail now
+auto-reveals a collapsed Tools/System group holding the current route (render-time only, doesn't
+persist over the user's collapse preference). Deferred one POLISH item (recurring overdue-vs-upcoming
+grouping). None of the edits touched the concurrent session's three files; committed via the same
+path-scoped staging, forbidden trio left untouched. → v1.0.33.
+
 ## 2026-07-15 — AG series + v1.0.32: the assistant becomes an agent (13 tickets, forbidden-file dance)
 
 Last of the six competitive sections, and the one with the tightest structural constraint: the

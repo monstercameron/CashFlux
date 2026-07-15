@@ -47,7 +47,7 @@ func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), p.MemberChips),
 		H4(css.Class("set-label"), uistate.T("settings.screens")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
-		Div(p.ScreenToggles),
+		Div(css.Class("set-toggle-list"), p.ScreenToggles),
 		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("settings.baseCurrency")),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.baseCurrency")), Title(uistate.T("settings.baseCurrency")), OnChange(p.OnBase), baseCurrencyOptions(p.Base)),

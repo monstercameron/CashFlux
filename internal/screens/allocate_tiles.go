@@ -63,6 +63,18 @@ type allocHeroProps struct {
 	OnDismissIncome any
 }
 
+// allocAmountIsZero reports whether the hero amount string carries no value — an
+// empty field or one whose digits are all zero (e.g. "", "0", "0.00"). Used to dim
+// the inert zero-state hero so it doesn't read as "nothing to allocate."
+func allocAmountIsZero(s string) bool {
+	for _, r := range s {
+		if r >= '1' && r <= '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // allocHeroTile is the command center: the amount to put to work (a prominent input) with an
 // income pre-fill nudge, and the derived split figures (allocatable / reserve / destinations).
 func allocHeroTile(props allocHeroProps) ui.Node {
@@ -93,10 +105,17 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 		allocStatChip(uistate.T("allocate.figDestinations"), fmt.Sprintf("%d", len(v.Ranked)), ""),
 	)
 
+	// When the amount is still zero, dim the hero figure so an inert "$0.00" doesn't
+	// read as "nothing to do here" — the actionable income nudge (Put $X to work)
+	// should carry the eye instead. The field stays fully editable.
+	fieldCls := "alloc-amount-field"
+	if allocAmountIsZero(props.AmountStr) {
+		fieldCls += " is-zero"
+	}
 	body := Div(css.Class("alloc-hero"), Attr("id", "sec-plan"),
 		Div(css.Class("alloc-hero-main"),
 			Div(css.Class("alloc-hero-label", tw.TextDim), uistate.T("allocate.heroLabel")),
-			Div(css.Class("alloc-amount-field"),
+			Div(ClassStr(fieldCls),
 				Span(css.Class("alloc-amount-affix", tw.FontDisplay), Attr("aria-hidden", "true"), currency.Symbol(base)),
 				Input(css.Class("alloc-amount-input", tw.FontDisplay), Type("number"), Attr("min", "0"), Step("0.01"),
 					Attr("data-testid", "allocate-amount"), Attr("aria-label", uistate.T("allocate.heroLabel")),

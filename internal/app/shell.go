@@ -558,11 +558,25 @@ func Sidebar(props sidebarProps) uic.Node {
 	for _, it := range visibleTools {
 		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
 	}
+	// "You are here": if the current route lives inside the Tools group, auto-reveal
+	// its section for this render (without persisting) so the active item is visible
+	// and highlighted — otherwise deep-linking to a Tools page (Reports, Net worth,
+	// Planning, …) leaves no active cue anywhere in the rail. The user's manual
+	// collapse preference is untouched and reasserts once they navigate away.
+	currentInTools := false
+	currentToolSubGroup := ""
+	for _, it := range visibleTools {
+		if it.Path == current {
+			currentInTools = true
+			currentToolSubGroup = it.SubGroup
+			break
+		}
+	}
 	var toolNodes []any
 	if len(visibleTools) > 0 {
 		// The whole Tools group collapses too (keyed "tools"), so every labelled rail
 		// section — Tools, its sub-groups, and System — has a collapsible header.
-		toolsCollapsed := collapsed["tools"]
+		toolsCollapsed := collapsed["tools"] && !currentInTools
 		toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 			Label:     uistate.T("rail.tools"),
 			Collapsed: toolsCollapsed,
@@ -577,7 +591,8 @@ func Sidebar(props sidebarProps) uic.Node {
 			if len(items) == 0 {
 				continue
 			}
-			isCollapsed := collapsed[sg]
+			// Keep the sub-group open when it holds the current route (see above).
+			isCollapsed := collapsed[sg] && sg != currentToolSubGroup
 			toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 				Label:     toolSubGroupLabel(sg),
 				Collapsed: isCollapsed,
@@ -603,9 +618,17 @@ func Sidebar(props sidebarProps) uic.Node {
 		}
 	}
 	// System is a collapsible section too (C67), keyed "system" in the same store.
+	currentInSystem := false
+	for _, it := range visibleSystem {
+		if it.Path == current {
+			currentInSystem = true
+			break
+		}
+	}
 	var systemNodes []any
 	if len(visibleSystem) > 0 {
-		sysCollapsed := collapsed["system"]
+		// Auto-reveal System when the current route lives there (see the Tools note).
+		sysCollapsed := collapsed["system"] && !currentInSystem
 		systemNodes = append(systemNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 			Label: uistate.T("rail.system"), Collapsed: sysCollapsed,
 			OnToggle: func() { setCollapsed("system", !sysCollapsed) },

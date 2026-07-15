@@ -5820,6 +5820,15 @@ func registerGenerated() {
 	rule(".alloc-amount-field:focus-within",
 		prop("border-bottom-color", "var(--accent)"),
 	)
+	// Zero-state: the amount hasn't been set yet, so mute the big figure — an inert
+	// bright "$0.00" otherwise reads as "there's nothing to allocate" when the income
+	// nudge below is offering money to put to work.
+	rule(".alloc-amount-field.is-zero .alloc-amount-affix",
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".alloc-amount-field.is-zero .alloc-amount-input",
+		prop("color", "var(--text-faint)"),
+	)
 	rule(".alloc-amount-affix",
 		prop("font-size", "1.6rem"),
 		prop("font-weight", "700"),
@@ -8731,9 +8740,14 @@ func registerGenerated() {
 		letterSpacing("0.06em"),
 	)
 	rule(".budget-loader-value",
+		// Serif display numerals, matching the hero figures on every other page
+		// (rpt-hero-value etc.) — this is the app's clearest typographic signature,
+		// so the budgets/goals summary tiles must speak it too.
+		prop("font-family", "var(--font-display), Fraunces, Georgia, serif"),
 		fontSize("1.45rem"),
 		fontWeight("700"),
 		letterSpacing("-0.015em"),
+		prop("font-variant-numeric", "tabular-nums"),
 		whiteSpace("nowrap"),
 		prop("text-shadow", "0 1px 4px rgba(0,0,0,0.35)"),
 	)
@@ -8852,7 +8866,9 @@ func registerGenerated() {
 		boxShadow("inset 5px 0 0 #f59e0b, 0 10px 28px -16px rgba(0,0,0,0.75)"),
 	)
 	rule(".bento-budgets .budget.is-over",
-		background("color-mix(in srgb, var(--danger) 11%, var(--bg-elev))"),
+		// Confine "over budget" to the left accent bar + the progress fill — a full-card
+		// red wash otherwise fights the amber pace copy ("Running $X hot") layered on top.
+		// This mirrors the at-risk (amber) card, which keeps a neutral body.
 		boxShadow("inset 5px 0 0 var(--danger)"),
 	)
 	rule(".bento-budgets .budget.is-over:hover",
@@ -9501,8 +9517,16 @@ func registerGenerated() {
 		alignItems("center"),
 		justifyContent("space-between"),
 		padding(".55rem 0"),
-		borderBottom("1px solid #1f1f22"),
+		// The standard hairline token — the old near-black #1f1f22 was invisible on the
+		// dark surface, so long toggle lists read as one undivided wall.
+		borderBottom("1px solid var(--border)"),
 		fontSize(".9rem"),
+	)
+	// A bounded, ruled block for the settings module-visibility list (top cap; the rows
+	// carry their own dividers) so it scans as a discrete group, not loose text.
+	rule(".set-toggle-list",
+		borderTop("1px solid var(--border)"),
+		marginTop(".35rem"),
 	)
 	rule(".switch",
 		width("40px"),

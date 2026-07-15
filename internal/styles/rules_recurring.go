@@ -140,8 +140,10 @@ func registerRecurringSurface() {
 	)
 	rule(".rec-tag-overdue",
 		prop("border-color", "color-mix(in srgb, var(--danger) 55%, var(--border))"),
-		prop("color", "color-mix(in srgb, var(--danger) 75%, var(--text))"),
-		prop("background", "color-mix(in srgb, var(--danger) 10%, transparent)"),
+		// Lift the text toward white for legibility parity with the Dashboard's overdue
+		// treatment — pure-danger rose on a maroon fill sat a shade too low-contrast.
+		prop("color", "color-mix(in srgb, var(--danger) 42%, var(--text))"),
+		prop("background", "color-mix(in srgb, var(--danger) 12%, transparent)"),
 	)
 
 	// Flow cards.

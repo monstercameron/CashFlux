@@ -51,6 +51,9 @@ func smartBadge(props smartBadgeProps) ui.Node {
 	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/smart")) })
 	tone := severityTone(props.Ins.Severity)
 	return Button(ClassStr("btn-icon-bare "+tw.Fold(tw.InlineFlex, tw.ItemsCenter)), Type("button"),
+		// A trailing affordance after a label — keep a small gap so the glyph never
+		// glues to the preceding name (e.g. "Joint Checking✦").
+		Style(map[string]string{"margin-left": "0.35rem"}),
 		Attr("data-testid", "smart-badge-"+props.Ins.Feature),
 		Attr("aria-label", props.Ins.Title),
 		Attr("title", props.Ins.Title),
