@@ -434,6 +434,9 @@ func Rules() ui.Node {
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 				list,
 			))),
+		// TX1: merchant-name (payee alias) management — clean up processor-noise
+		// payee names once; they display cleanly everywhere. Additive tile.
+		PayeeAliasSection(),
 		// Suggestions surface above the precedence chain (C38): users discover
 		// AI-suggested rules before the power-user precedence view.
 		If(len(suggestions) > 0, rptTile("rules-suggest", "1 / span 4", suggestCard)),

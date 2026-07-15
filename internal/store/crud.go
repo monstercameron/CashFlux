@@ -565,6 +565,28 @@ func (s *SQLiteStore) ListTxnLinks() ([]domain.TxnLink, error) {
 	return loadRows[domain.TxnLink](s.db, "txnlinks")
 }
 
+// --- Payee aliases (merchant-name cleanup — TX1) ---
+
+// PutPayeeAlias inserts or updates a payee-alias row by id.
+func (s *SQLiteStore) PutPayeeAlias(p domain.PayeeAlias) error {
+	return putJSON(s.db, "payeealiases", p.ID, p)
+}
+
+// GetPayeeAlias returns the payee alias with the given id.
+func (s *SQLiteStore) GetPayeeAlias(id string) (domain.PayeeAlias, bool, error) {
+	return getJSON[domain.PayeeAlias](s.db, "payeealiases", id)
+}
+
+// DeletePayeeAlias removes a payee-alias row by id.
+func (s *SQLiteStore) DeletePayeeAlias(id string) (bool, error) {
+	return deleteRow(s.db, "payeealiases", id)
+}
+
+// ListPayeeAliases returns all payee-alias rows.
+func (s *SQLiteStore) ListPayeeAliases() ([]domain.PayeeAlias, error) {
+	return loadRows[domain.PayeeAlias](s.db, "payeealiases")
+}
+
 // --- Subscription cancellations ---
 
 func (s *SQLiteStore) PutSubscriptionCancellation(c domain.SubscriptionCancellation) error {

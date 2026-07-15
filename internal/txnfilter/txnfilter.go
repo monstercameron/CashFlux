@@ -265,6 +265,28 @@ func (c Criteria) Without(f FilterField) Criteria {
 	return c
 }
 
+// SingleAccount reports the account the filter is scoped to when it targets
+// EXACTLY ONE account, and ok=false otherwise. It is the gate for register mode
+// (TX12): the running-balance column only makes sense against a single account's
+// chronological history. A single-value multi set (Accounts with one id) counts,
+// as does the single Account field; any other account facet (multiple accounts,
+// or none) is not a single-account scope. Other filter dimensions (date, text,
+// category, …) are irrelevant here — they narrow which of that account's rows are
+// visible, which register mode handles by folding over the full history.
+func (c Criteria) SingleAccount() (id string, ok bool) {
+	multi := splitCSV(c.Accounts)
+	switch {
+	case len(multi) == 1:
+		return multi[0], true
+	case len(multi) > 1:
+		return "", false
+	case c.Account != "":
+		return c.Account, true
+	default:
+		return "", false
+	}
+}
+
 // splitCSV splits a comma-joined value into its non-empty, trimmed parts (nil for
 // an empty string). Used for the multi-category filter's ID set.
 func splitCSV(s string) []string {

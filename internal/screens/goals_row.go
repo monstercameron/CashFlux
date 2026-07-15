@@ -278,6 +278,12 @@ func GoalRow(props goalRowProps) ui.Node {
 			subSection = Fragment()
 		}
 	}
+	// TX11: show the running round-up jar on the target goal's row ("$6.37 in
+	// round-ups"), only when this is the round-up target goal and something has
+	// accrued this cadence period.
+	if jar, ok := goalRoundUpJar(appstate.Default, g.ID); ok {
+		subSection = Fragment(subSection, Div(css.Class("goal-sub"), jar))
+	}
 
 	// Primary footer action, per kind: Contribute (financial), Mark done / Reopen
 	// (milestone), Check in (habit). Checklist has no direct action — its steps come

@@ -1,3 +1,17 @@
+## 2026-07-14 — TX wave A: eight tickets, four agents, the loop is tuned
+
+Second section underway. The coordinator loop caught its usual crop at the seams: a missing
+js/wasm build tag on a uistate file (kvGet/kvSet are wasm-only — native go test failed the whole
+package), zero-size calendar chevrons (uiw.Icon without the W4/H4 classes renders an invisible
+SVG — worth remembering as a checklist item), and an unformatted safe-to-spend figure in the
+quick-add caption (fmtMoney or nothing; manual Symbol+FormatMinor skips thousands grouping).
+The e2e probe is earning its keep: "137.97" back from "45.99*3" through the REAL input, the
+impact caption reading correct live numbers, calendar grid + ghosts rendering, views popover
+gating its save button on active filters. Notable agent judgment worth keeping: TX3's threshold
+went as a lazily-evaluated dismissible notice rather than plumbing the full notify engine —
+the ticket's "cheapest honest version" clause doing its job. TX1's aliases are display-layer
+with raw payees preserved (single-source rule), which five downstream features key on.
+
 ## 2026-07-14 — XC wave 2 + v1.0.27: the section ships
 
 XC10/XC11 closed the series with 2 parallel agents. XC10 threaded a per-line MemberID through

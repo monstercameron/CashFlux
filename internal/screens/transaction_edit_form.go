@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -21,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -80,6 +82,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	tagsS := ui.UseState(strings.Join(txn.Tags, ", "))
 	clearedS := ui.UseState(txn.Cleared)
 	errMsg := ui.UseState("")
+	// TX7: after a category change is saved, hold the similar-transaction candidates
+	// so the inline "N more look like this" offer can render. Empty means no offer.
+	simState := ui.UseState[[]similartxns.Candidate](nil)
+	// simTarget is the just-saved transaction the offer would recategorize others to
+	// match (its new category is the one applied on "Recategorize them").
+	simTarget := ui.UseState(domain.Transaction{})
 	// C58: the split-into-categories editor, revealed by a toggle inside this modal
 	// so the breakdown is visible and editable without leaving the edit form.
 	splitOpen := ui.UseState(false)
@@ -153,6 +161,41 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 		uistate.PostNotice(uistate.T("toast.txnUpdated"), false)
+
+		// TX1 learning flow: when the user renamed the payee, quietly offer to always
+		// show the original (raw) name as the new one — creating a view-layer alias so
+		// every transaction with that raw name reads cleanly (the raw stays on the txn).
+		origPayee := strings.TrimSpace(txn.Payee)
+		newPayee := strings.TrimSpace(payeeS.Get())
+		if origPayee != "" && newPayee != "" && !strings.EqualFold(origPayee, newPayee) &&
+			!app.PayeeResolver().HasLearned(origPayee) {
+			uistate.ConfirmModal(uistate.T("payeealias.learnPrompt", origPayee, newPayee), false, func(ok bool) {
+				if !ok {
+					return
+				}
+				if err := app.PutPayeeAlias(domain.PayeeAlias{RawPayee: origPayee, Display: newPayee}); err != nil {
+					uistate.PostNotice(err.Error(), true)
+					return
+				}
+				uistate.BumpDataRevision()
+				uistate.PostNotice(uistate.T("payeealias.learned", origPayee, newPayee), false)
+			})
+		}
+
+		// TX7: when the category changed to a real category, proactively find similar
+		// transactions (alias/payee match via TX1, else the rules matcher) that carry a
+		// different or no category, and offer to recategorize them too. The offer keeps
+		// the modal open (inline preview + Apply); already-categorized rows are listed
+		// but never overwritten without the click.
+		if t.CategoryID != "" && t.CategoryID != txn.CategoryID {
+			cands := similartxns.Find(t, app.Transactions(), t.CategoryID, app.PayeeResolver(), app.Rules())
+			if len(cands) > 0 {
+				simTarget.Set(t)
+				simState.Set(cands)
+				return // hold the modal open to show the offer
+			}
+		}
+
 		if props.OnDone != nil {
 			props.OnDone()
 		}
@@ -181,6 +224,49 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 	}))
 
+	// TX7 offer actions. applySimilar recategorizes every listed candidate to the
+	// saved transaction's new category (an explicit click — already-categorized rows
+	// are only changed here, never silently). alwaysRule routes to the prefilled-rule
+	// flow (C32). dismissSimilar closes the offer and the modal.
+	applySimilar := ui.UseEvent(func() {
+		target := simTarget.Get()
+		n := 0
+		for _, c := range simState.Get() {
+			t := c.Txn
+			t.CategoryID = target.CategoryID
+			if err := app.PutTransaction(t); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				continue
+			}
+			n++
+		}
+		simState.Set(nil)
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("similartxns.applied", n), false)
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	})
+	alwaysRule := ui.UseEvent(func() {
+		target := simTarget.Get()
+		phrase := strings.TrimSpace(target.Payee)
+		if phrase == "" {
+			phrase = strings.TrimSpace(target.Desc)
+		}
+		uistate.SetRuleDraft(phrase, target.CategoryID)
+		simState.Set(nil)
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+		router.Navigate(uistate.RoutePath("/rules"))
+	})
+	dismissSimilar := ui.UseEvent(func() {
+		simState.Set(nil)
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+	})
+
 	// Attach a receipt image (L29): upload it as an Artifact, link it to the live
 	// transaction, and bump the shared data revision so both this modal and the
 	// table (whose paperclip opens the preview) reflect it. Operates on the stored
@@ -207,6 +293,48 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		return Div(css.Class("form-grid"),
 			P(css.Class("empty"), uistate.T("txnwidget.notFound")),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+		)
+	}
+
+	// TX7: the apply-to-similar offer replaces the form body once a category change
+	// has saved and similar transactions were found. It shows a short preview (up to
+	// 5) + Apply / Always-do-this / dismiss. Rendered here so the modal stays a
+	// single surface (the footer Save/Cancel are inert while it shows).
+	if cands := simState.Get(); len(cands) > 0 {
+		resolver := app.PayeeResolver()
+		catNames := make(map[string]string, len(categories))
+		for _, c := range categories {
+			catNames[c.ID] = c.Name
+		}
+		const previewMax = 5
+		var rows []ui.Node
+		for i, c := range cands {
+			if i >= previewMax {
+				break
+			}
+			name := resolver.Resolve(firstNonEmpty(c.Txn.Payee, c.Txn.Desc))
+			rows = append(rows, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Span(css.Class(tw.Flex1), name),
+				Span(css.Class("muted"), c.Txn.Date.Format("Jan 2")),
+				Span(css.Class("muted"), fmtMoney(c.Txn.Amount)),
+				If(c.AlreadyCategorized, Span(css.Class("muted"), uistate.T("similartxns.hasCategory"))),
+			))
+		}
+		if len(cands) > previewMax {
+			rows = append(rows, P(css.Class("muted"), uistate.T("similartxns.moreCount", len(cands)-previewMax)))
+		}
+		offer := uistate.T("similartxns.offer", len(cands))
+		if len(cands) == 1 {
+			offer = uistate.T("similartxns.offerOne")
+		}
+		return Div(css.Class("form-grid"), Attr("data-testid", "txn-recat-offer"), Attr("role", "status"),
+			P(css.Class("t-body"), offer),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), rows),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-recat-apply"), OnClick(applySimilar), uistate.T("similartxns.apply")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-recat-rule"), OnClick(alwaysRule), uistate.T("similartxns.alwaysDo")),
+				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-recat-dismiss"), OnClick(dismissSimilar), uistate.T("similartxns.dismiss")),
+			),
 		)
 	}
 

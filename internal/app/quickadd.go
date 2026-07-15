@@ -48,6 +48,13 @@ func QuickAddHost() uic.Node {
 	onReviewed := uic.UseEvent(func(e uic.Event) { reviewed.Set(e.IsChecked()) })
 	onAcct := uic.UseEvent(func(e uic.Event) { acctID.Set(e.GetValue()) })
 	onAmount := uic.UseEvent(func(v string) { amount.Set(v) })
+	// TX16: on blur/Enter, evaluate an arithmetic entry ("45.99*3", "(12+8)*2")
+	// and replace it with the result; a plain number or parse failure is left as-is.
+	onAmountBlur := uic.UseEvent(func(e uic.Event) {
+		if s, ok := screens.EvalAmountField(e.GetValue()); ok {
+			amount.Set(s)
+		}
+	})
 	onPayee := uic.UseEvent(func(v string) { payee.Set(v) })
 	onDesc := uic.UseEvent(func(v string) { desc.Set(v) })
 	onCat := uic.UseEvent(func(e uic.Event) { catID.Set(e.GetValue()) })
@@ -282,6 +289,18 @@ func QuickAddHost() uic.Node {
 		}
 	}
 
+	// TX17: entry-time budget impact. When a category and a non-zero amount are both
+	// present, show a live caption ("Leaves $142 in Dining this month · safe to spend
+	// $890"). Computed on render (the engine surface is memoized); the helper returns
+	// an empty fragment until both inputs exist.
+	var impactMinor int64
+	if acc, ok := accountByID(accounts, effAcct); ok {
+		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr == nil {
+			impactMinor = v
+		}
+	}
+	budgetImpact := screens.QuickAddBudgetImpact(app, catID.Get(), impactMinor)
+
 	// Form validity (L78-T1): Save is disabled until Description and a non-zero
 	// Amount are present, so an invalid submit can't close the panel or lose input.
 	// Computed before the body so "Save & add another" (C40) shares the same gate.
@@ -321,7 +340,7 @@ func QuickAddHost() uic.Node {
 			OnSelect: func(v string) { kind.Set(v) },
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			Input(css.Class("field"), Type("number"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), Step("0.01"), OnInput(onAmount))),
+			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), OnInput(onAmount), OnBlur(onAmountBlur))),
 		ui.FormField(uistate.T("quickAdd.payee"),
 			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), Value(payee.Get()), OnInput(onPayee))),
 		ui.FormField(uistate.T("quickAdd.description"),
@@ -331,6 +350,7 @@ func QuickAddHost() uic.Node {
 			Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
 		catAssist,
 		learnedCatAssist,
+		budgetImpact,
 		ui.FormField(uistate.T("quickAdd.date"),
 			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
 		// C47: wrap the checkbox in a block container so the helper caption sits

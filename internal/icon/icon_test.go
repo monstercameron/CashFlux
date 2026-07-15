@@ -13,7 +13,7 @@ var curated = []Name{
 	Dashboard, Accounts, Transactions, Budgets, Goals, Todo, Settings, Page,
 	Plus, Menu, Tag, Users, Planning, Allocate, Insights, Customize, Reports, Subscriptions, Bills, Split,
 	ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Close, MoreH, Grip, Search,
-	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, TrendingUp, TrendingDown,
+	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, Calendar, TrendingUp, TrendingDown,
 	ArrowUp, ArrowDown, ArrowUpCircle, ArrowDownCircle,
 	Pencil, Refresh, List, PlusCircle,
 	Sparkles, MessageCircle, FileText, Copy,

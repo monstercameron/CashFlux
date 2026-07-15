@@ -298,7 +298,7 @@ func smartPeekBar(page smart.Page, alerts, aiTools int, sev smart.Severity, onOp
 	aria := uistate.T("smart.peekToolsAria")
 	var badge ui.Node = Fragment()
 	if alerts > 0 {
-		badge = Span(ClassStr("smart-peek-badge " + tw.ColorClass(severityTone(sev))), itoaStrip(alerts))
+		badge = Span(ClassStr("smart-peek-badge "+tw.ColorClass(severityTone(sev))), itoaStrip(alerts))
 		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), alerts)
 	} else {
 		title = uistate.T("smart.peekTools")

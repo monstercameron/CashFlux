@@ -87,6 +87,7 @@ type Dataset struct {
 	Settlements               []domain.Settlement               `json:"settlements,omitempty"`
 	Earmarks                  []domain.Earmark                  `json:"earmarks,omitempty"`
 	TxnLinks                  []domain.TxnLink                  `json:"txnLinks,omitempty"`
+	PayeeAliases              []domain.PayeeAlias               `json:"payeeAliases,omitempty"`
 	SubscriptionIgnores       []domain.SubscriptionIgnore       `json:"subscriptionIgnores,omitempty"`
 	SubscriptionCancellations []domain.SubscriptionCancellation `json:"subscriptionCancellations,omitempty"`
 	AuditEntries              []auditlog.Entry                  `json:"auditEntries,omitempty"`

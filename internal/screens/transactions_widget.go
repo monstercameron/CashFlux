@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
@@ -92,6 +93,17 @@ func Transactions() ui.Node {
 		f.Member = am
 	}
 
+	// Register mode (TX12): when the filter scopes to exactly one account, the
+	// running-balance column is available; while it's ON the ledger is forced into
+	// chronological order (date ascending) so each row's running figure reads down
+	// the column. The override lives here so the frame the table hydrates is already
+	// in register order; the table restores the user's sort on exit (register off).
+	_, singleAcct := f.SingleAccount()
+	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
+	if registerActive {
+		f.Sort, f.Dir = "date", txnfilter.Asc
+	}
+
 	// The filtered + sorted set drives both the engine frame (the table) and the
 	// duplicate/selection affordances in the toolbar/bulk tiles. RichTransactions
 	// preserves this order, so the filter's sort flows straight through the frame.
@@ -127,7 +139,14 @@ func Transactions() ui.Node {
 	if len(undoAtom.Get().Prior) > 0 {
 		specs = append(specs, txnNativeSpec("txn-undobar"))
 	}
-	specs = append(specs, txnTableSpec())
+	// The main slot is the ledger table, or the month calendar (TX8) when the view
+	// mode is set to it. The calendar is a Native tile projecting the same filtered
+	// set (ScopedTxns) — so active filter chips scope it exactly like the table.
+	if uistate.UseTxnViewMode().Get() == uistate.TxnViewCalendar {
+		specs = append(specs, txnNativeSpec("txn-calendar"))
+	} else {
+		specs = append(specs, txnTableSpec())
+	}
 
 	// Render each spec through the engine's per-widget error boundary. Keyed on the
 	// spec id so inserting the bulk/undo tiles never shifts the table's identity (its
@@ -165,6 +184,9 @@ func init() {
 	})
 	R("txn-undobar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(txnUndoBarWidget, txnUndoBarProps{App: c.App})
+	})
+	R("txn-calendar", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(txnCalendarWidget, txnCalendarProps{App: c.App, Base: c.Base, Shown: c.ScopedTxns})
 	})
 
 	widgetrender.RegisterFrame("txn-table", func(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
@@ -266,6 +288,26 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	previewAtom := uistate.UseTxnPreview()
 	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
 
+	// Register mode (TX12): when the ledger is scoped to exactly one account and the
+	// toggle is on, compute each transaction's running balance from the account's FULL
+	// chronological history (ledger.RegisterBalances), so a paginated/filtered slice
+	// still shows the TRUE figure. A multi-currency account (whose fold errors) leaves
+	// runBal nil, and the column is simply not shown.
+	regID, singleAcct := f.SingleAccount()
+	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
+	var runBal map[string]money.Money
+	if registerActive {
+		for _, a := range props.App.Accounts() {
+			if a.ID == regID {
+				if m, err := ledger.RegisterBalances(a, props.App.Transactions()); err == nil {
+					runBal = m
+				}
+				break
+			}
+		}
+	}
+	showBalance := runBal != nil
+
 	setPage := func(p int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Page = p }) }
 	setPageSize := func(s int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.PageSize, x.Page = s, 1 }) }
 	// A plain sort handler — the spinner-while-sorting behaviour is the DataTable's
@@ -366,6 +408,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	for _, t := range props.Shown {
 		txByID[t.ID] = t
 	}
+	// Payee-alias resolver (TX1): raw payee → clean display name (learned alias →
+	// rule pack → raw). Applied at DISPLAY only; the raw payee stays on the txn.
+	payeeResolver := props.App.PayeeResolver()
 	// Member id → name, for the optional "User" column (the frame carries no member).
 	memberName := make(map[string]string)
 	for _, m := range props.App.Members() {
@@ -429,7 +474,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		amt := money.New(amtCol.Int64(i), curCol.Str(i))
 		desc := descFull.Str(i)
 		if strings.TrimSpace(desc) == "" {
-			desc = payeeCol.Str(i)
+			// Show the cleaned payee name (TX1) in the ledger, not the raw
+			// processor string. Raw payee is preserved on the transaction.
+			desc = payeeResolver.Resolve(payeeCol.Str(i))
 		}
 		cat := catCol.Str(i)
 		if strings.TrimSpace(cat) == "" {
@@ -492,6 +539,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			IsIncome:         txByID[rid].IsIncome(),
 			IsRefund:         refundSide[rid],
 			IsRefunded:       refundedSide[rid],
+			ShowBalance:      showBalance,
+			Balance:          balanceStr(runBal, rid),
+			BalTone:          balanceTone(runBal, rid),
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -543,6 +593,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		}
 		if colVis.Amount {
 			cols = append(cols, uiw.Column{Label: "Amount", SortKey: "amount", Class: "td-amount"})
+		}
+		// Register mode (TX12): a running-balance column right after Amount. No SortKey —
+		// register mode locks the ledger to chronological order, so the figure only reads
+		// correctly down the column and the header is not a sort control.
+		if showBalance {
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colBalance"), Class: "td-amount"})
 		}
 		cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee"})
 		if colVis.Account {
@@ -653,6 +709,13 @@ type txnFrameRowProps struct {
 	OnPairRefund func(txnID string)
 	OnUnpair     func(txnID string)
 	OnUngroup    func(txnID string)
+	// Register mode (TX12): ShowBalance adds a running-balance cell after Amount
+	// (only in register mode, when the ledger is scoped to one account). Balance is
+	// the pre-formatted running figure after this row; BalTone colours a negative
+	// running balance so a dip into the red reads at a glance.
+	ShowBalance bool
+	Balance     string
+	BalTone     string
 }
 
 // txnFrameRow renders one clickable transaction row. It owns its click/select/
@@ -731,6 +794,7 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("transactions.selectRow", props.Desc)), CheckedIf(props.Selected), OnClick(selToggle))),
 		Td(props.Date),
 		If(props.Vis.Amount, Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
+		If(props.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(props.BalTone)), props.Balance)),
 		Td(props.Desc,
 			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),

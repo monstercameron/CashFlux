@@ -254,6 +254,13 @@ type splitRowProps struct {
 func splitRow(props splitRowProps) ui.Node {
 	onCat := func(v string) { props.OnCat(props.Index, v) }
 	onAmt := ui.UseEvent(func(v string) { props.OnAmt(props.Index, v) })
+	// TX16: on blur, evaluate an arithmetic entry ("12+8", "45.99*3") and replace
+	// it with the result; a plain number or a parse failure is left untouched.
+	onAmtBlur := ui.UseEvent(func(e ui.Event) {
+		if s, ok := EvalAmountField(e.GetValue()); ok {
+			props.OnAmt(props.Index, s)
+		}
+	})
 	onOwner := func(v string) { props.OnOwner(props.Index, v) }
 	onRemove := ui.UseEvent(func() { props.OnRemove(props.Index) })
 	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
@@ -276,9 +283,9 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-owner-" + strconv.Itoa(props.Index),
 				OnChange:  onOwner,
 			}))),
-		Input(css.Class("field"), Type("number"), Step("0.01"), Style(map[string]string{"max-width": "8rem"}),
+		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"max-width": "8rem"}),
 			Attr("aria-label", uistate.T("splitEditor.amount")), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
-			Placeholder(uistate.T("splitEditor.amount")), Value(props.Amt), OnInput(onAmt)),
+			Placeholder(uistate.T("splitEditor.amount")), Value(props.Amt), OnInput(onAmt), OnBlur(onAmtBlur)),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("splitEditor.remove")),
 			Title(uistate.T("splitEditor.remove")), Attr("data-testid", "split-remove-"+strconv.Itoa(props.Index)),
 			OnClick(onRemove), "✕"),

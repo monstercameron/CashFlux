@@ -127,10 +127,14 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 				),
 			)),
 		),
-		Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
-			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T("goals.addGoal"))),
+		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+			// TX11: round-up config lives in the goals toolbar (flip modal, staged Save/Cancel).
+			roundupConfigToolbarButton(),
+			Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("goals.addGoal"))),
+		),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

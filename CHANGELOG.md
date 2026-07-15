@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Transactions competitive wave A — TX1/3/7/8/11/12/16/17 (2026-07-14):** **merchant aliases** (a processor-noise rule pack — AMZN MKTP, SQ *, PAYPAL *, APLPAY… — plus learned aliases with an "always show X as Y" offer on rename; display-layer only, raw payees preserved; managed from /rules); **apply-to-similar** (after a category change, an inline "N more look like this" preview offers one-tap recategorize or the prefilled-rule flow); **saved views / watchlists** (name the current filter set; live count + total per view; one-tap apply; pin any view to the dashboard as a widget; optional threshold with a dismissible notice); **calendar view** (month grid of the filtered ledger — day nets toned, recurring bills as ghosts on their due dates, click a day to filter, Today + month paging); **register mode** (single-account filter unlocks a true running-balance column computed from the account's full history — correct even when rows are filtered); **math in amount fields** (`45.99*3` evaluates via the app's own formula engine on blur — quick-add and split editor; junk left untouched, no nag); **entry-time budget impact** ("Leaves $69.53 in Groceries this month · safe to spend $40,654.30" live under Quick-Add, warn-toned when the entry would go over); and **round-ups** (virtual ceil-to-dollar accrual on chosen accounts sweeping to a goal on a weekly/monthly ritual card — skips transfers and refund-paired rows). All engines pure + table-tested; e2e-verified (e2e/_tx_waveA_verify.mjs), zero console errors.
+
+### Fixed
+- **Calendar month-paging chevrons rendered zero-size (2026-07-14):** the prev/next icons were missing their size classes; **safe-to-spend in the Quick-Add impact caption lacked thousands grouping** — both now match the app's money/icon conventions. **Saved-views state file missed its js/wasm build tag**, breaking native `go test` for uistate — tagged.
+
 ### Changed
 - **Version bumped to v1.0.27 (2026-07-14):** cuts the complete XC cross-concept series (XC0–XC11) into a release — transaction links (grouping + refund netting), annual-bill smoothing, committed-vs-free meters, price-creep watch, leftover sweep, earmark integrity, self-resolving tasks, payday pre-flight, split-line owners, and receipt→proposed splits.
 - **Service worker cache bumped to `cashflux-v300` (2026-07-14):** evicts stale precached assets for this release.

@@ -188,6 +188,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
 	openDuplicates := ui.UseEvent(Prevent(func() { dupModalAtom.Set(true) }))
 
+	// View-mode toggles: Calendar swaps the main slot (TX8); Register adds a running-
+	// balance column (TX12) and is only offered when the filter scopes to one account.
+	viewAtom := uistate.UseTxnViewMode()
+	registerAtom := uistate.UseTxnRegisterMode()
+	calActive := viewAtom.Get() == uistate.TxnViewCalendar
+	toggleCalendar := ui.UseEvent(Prevent(func() {
+		if viewAtom.Get() == uistate.TxnViewCalendar {
+			viewAtom.Set(uistate.TxnViewTable)
+		} else {
+			viewAtom.Set(uistate.TxnViewCalendar)
+		}
+	}))
+	toggleRegister := ui.UseEvent(Prevent(func() { registerAtom.Set(!registerAtom.Get()) }))
+
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
 		f.Member = am
@@ -476,6 +490,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// is too long as an always-visible button label.
 			If(len(props.Shown) > 0,
 				toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllFiltered"), selectAllFiltered, "")),
+			// View mode: Calendar toggles the month grid (TX8); Register (shown only when
+			// scoped to one account) toggles the running-balance column (TX12).
+			toolbarIconBtnOpen("txn-calendar-btn", icon.Calendar, uistate.T("transactions.calendarView"), toggleCalendar, "", calActive),
+			func() ui.Node {
+				if _, ok := f.SingleAccount(); ok && !calActive {
+					return toolbarIconBtnOpen("txn-register-btn", icon.List, uistate.T("transactions.registerView"), toggleRegister, "", registerAtom.Get())
+				}
+				return Fragment()
+			}(),
+			// Saved views / watchlists (TX3): list saved filter sets with their live
+			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
+			// amount alerts. Own component so its popover + list hooks stay stable.
+			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: f, Rates: props.Rates, Base: props.Base}),
 			// Overflow for the least-frequent utilities (Export CSV, Columns).
 			moreMenu,
 			// Primary action last → right end of the left-justified group.

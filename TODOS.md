@@ -3139,7 +3139,7 @@ and the XC anti-sprawl rule (reuse links/rules/artifacts/widget-engine/billsched
 Cam curated: kept 8 of 10 (dropped the Copilot-style review inbox and YNAB-style reconciliation
 sessions — can be re-proposed later if wanted). Same discipline as XC: agree spec before code.
 
-- [ ] **TX1 [MAJOR — DO FIRST]** Merchant cleanup + alias learning *(Mint / Monarch / Copilot)*.
+- [x] **TX1 [MAJOR — DO FIRST]** Merchant cleanup + alias learning *(Mint / Monarch / Copilot)*.
   "AMZN Mktp US*2K4RT0" → "Amazon". Local-first version: a payee ALIAS table — a starter rule
   pack for the ugly common processor patterns (AMZN, SQ *, TST*, PAYPAL *, SP , CKE*) plus
   learned aliases (rename a payee once → offer "always show X as Y"). Aliases apply at DISPLAY
@@ -3157,24 +3157,36 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
   for phrasings the parser can't handle, returning the same Criteria shape (never raw results —
   the parser/AI produce FILTERS, the engine produces rows, so results stay explainable).
   Register in the SMART catalog with the usual opt-in/dismissal plumbing.
-- [ ] **TX3 [MED]** Saved views / watchlists → pinnable dashboard widgets *(Simplifi)*. Save the
+- [x] **TX3 [MED]** Saved views / watchlists → pinnable dashboard widgets *(Simplifi)*. Save the
   current filter set as a named view ("Amazon this month", "All fees", "Cash > $100") with a
   live total; list views in the filter panel; one-tap re-apply. Multipliers: a saved view is
   pinnable as a declarative dashboard widget (spec = criteria + display mode, hydrated by the
   widget engine), and an optional threshold on the view's total becomes a workflow-engine
   condition (alert/task when crossed). Reuse: persisted filter state + chips, widgetspec/
   widgetengine, workflow engine. Anti-sprawl: a view stores Criteria, not copies of txns.
-- [ ] **TX4 [MAJOR — NEEDS PLANNING (R-ticket before impl)]** Amazon order-history import +
-  line-item enrichment *(Copilot's Amazon integration, local-first)*. Import Amazon's
-  order-history export (CSV / order-page paste), match orders to card charges by amount+date
-  (the dedupe-signature machinery is exactly this shape), enrich matched txns with what was
-  actually bought, and feed the split/group flows: line items → XC11 proposed splits;
-  multi-shipment orders → XC1 order groups. PLANNING GATE — spec first: which Amazon export
-  formats still exist and their schemas (order history report availability changes), matching
-  tolerance (shipment-level charges vs order totals, gift cards/promotions), storage shape for
-  order metadata (artifact? custom fields? the XC0b link table?), retailer generalization
-  (same pipeline for Walmart/Target exports?), and privacy note (all local). Write the R-ticket
-  findings into this entry before starting any code.
+- [ ] **TX4 [MAJOR — PLANNING DONE 2026-07-14, ready to implement]** Amazon order-history import +
+  line-item enrichment *(Copilot's Amazon integration, local-first)*.
+  **R-FINDINGS (coordinator, 2026-07-14):** Amazon retired the self-serve "Order History
+  Reports" CSV (2023); the two dependable local-first inputs are (a) the PRIVACY EXPORT
+  ("Request My Data" → `Retail.OrderHistory.*.csv`: Order ID, Order Date, Total Owed,
+  Shipment/item rows with Product Name, Unit Price, Quantity — column names drift, so map by
+  fuzzy header match, not position) and (b) PASTE from the orders page (semi-structured text:
+  "ORDER PLACED <date> / TOTAL $x / Order # / item lines" — parse leniently, best-effort).
+  IMPLEMENTATION SPEC: new pure pkg `internal/orderimport` — `ParseRetailCSV` + `ParseOrdersPaste`
+  → `[]Order{ID, Date, TotalMinor, Items[]{Name, UnitMinor, Qty}}`, table-tested on synthetic
+  fixtures of both shapes. MATCHING: order → card txns by amount+date window (±3 days, exact
+  total first, then shipment-charge sums: a subset-sum over the order's txn-candidates capped
+  at 3 charges — multi-shipment). Matched multi-charge orders → propose an XC1 ORDER GROUP
+  (existing TxnLink); matched single txns → enrich + offer the XC11-style PROPOSED SPLIT built
+  from items via the receiptsplit.Propose machinery (categories via rules matcher; remainder =
+  tax/shipping onto the txn's category). Gift cards/promos make totals drift — treat any
+  unmatched residue like the receipt-mismatch note (state it, never hide it). STORAGE: order
+  metadata does NOT get a new entity — the import is a one-shot proposal flow (documents-style
+  draft review listing matched orders with per-order Apply); an applied enrichment lives as the
+  split lines + a note on the txn. Retailer generalization deferred (the parser interface takes
+  named formats; Walmart/Target land as new parsers later). Privacy: all parsing local; copy
+  states it. UI entry: /documents (a third import card: "Amazon order history"). NO network
+  calls, NO scraping.
 - [ ] **TX5 [MED]** Receipt attachments on the transaction row *(Monarch / YNAB)*. Attach a
   receipt photo/PDF to a transaction: thumbnail in the row detail, full view on click. This is
   a JOIN, not a subsystem — the artifacts/blobstore system already stores images; add a
@@ -3188,14 +3200,14 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
   per-merchant stats keyed on the TX1 alias (not the raw payee string). Give XC5's price-creep
   flag its transaction-level home here. Reuse: atoms/explain conventions, alias table (TX1),
   the existing row-detail surface. Keep it read-only + dismissible-free (context, not nag).
-- [ ] **TX7 [MED]** "Apply to N similar" recategorize preview *(Mint's rules flow, refined by
+- [x] **TX7 [MED]** "Apply to N similar" recategorize preview *(Mint's rules flow, refined by
   Monarch)*. When a category is changed inline, immediately offer: "23 more transactions look
   like this — recategorize them too?" with a scoped preview list, plus "always do this" →
   prefilled rule (the C32 funnel flow already exists). Similarity = alias/payee match first
   (TX1), then the rules-engine matcher. Respect C104/C108 semantics for already-categorized
   rows (offer, never silently overwrite). The value over today's bulk-recategorize is
   PROACTIVITY at the moment of correction with an explicit preview.
-- [ ] **TX8 [MED]** Calendar view of transactions *(Empower / Copilot)*. A month-grid view mode
+- [x] **TX8 [MED]** Calendar view of transactions *(Empower / Copilot)*. A month-grid view mode
   on /transactions: day cells with net spend + dot density, click a day → that day's rows
   (the ledger filtered to the day), recurring items projected forward as GHOSTS on their due
   dates (billsched already computes occurrences). The calendar is just another projection of
@@ -3232,14 +3244,14 @@ TX9's expected-occurrence machinery if revisited.
   `event_<slug>_total` engine variable family so events are formula/widget-addressable like
   pools/goals. Per-entity CRUD follows the house rule (add/inline-edit/delete + reassign-on-
   delete = unmap txns). Bottom-up: domain → eventing logic pkg w/ tests → store → state → UI.
-- [ ] **TX11 [MED]** Round-ups to goals *(Acorns, Chime, Emma)*. Each expense rounds up to the
+- [x] **TX11 [MED]** Round-ups to goals *(Acorns, Chime, Emma)*. Each expense rounds up to the
   next dollar; the accrued spare change becomes a goal earmark on a weekly/monthly sweep —
   VIRTUAL (no txn mutation, no real transfer): an accrual counter + XC6's sweep machinery with
   a different accumulator. Config: on/off, target goal, sweep cadence, which accounts
   participate. Show the running jar ("$6.37 in round-ups this week") on the goal row and/or
   dashboard. Guardrail: transfers/refunds excluded from accrual; explainable breakdown
   (determinism rule) — list the contributing txns.
-- [ ] **TX12 [MED]** Register mode: running-balance column *(Quicken's checkbook register)*.
+- [x] **TX12 [MED]** Register mode: running-balance column *(Quicken's checkbook register)*.
   When the ledger is filtered to ONE account, offer a register view: running balance after each
   row (chronological order enforced while active), styled into the existing column system
   (txncolumnshost). Cheap now — the one-pass `ledger.Balances`/date-ordered fold makes the
@@ -3270,14 +3282,14 @@ TX9's expected-occurrence machinery if revisited.
   replies on that txn or recategorizes it). Full multi-user (sync-aware threads, unread
   states) explicitly OUT OF SCOPE until the sync backend lands; model the comment shape so it
   survives that upgrade (IDs + author + ts, no derived state).
-- [ ] **TX16 [SMALL — USE THE FORMULA ENGINE (Cam's call)]** Math in amount fields *(Actual
+- [x] **TX16 [SMALL — USE THE FORMULA ENGINE (Cam's call)]** Math in amount fields *(Actual
   Budget, Copilot)*. Type `45.99*3` or `120/4` in an amount input → evaluates on blur/Enter via
   the app's OWN sandboxed `formula` engine (Compile/Eval with an empty Env — no variables, just
   arithmetic; parse failure = leave input untouched, no error nag). Wire once at the shared
   amount-input component level so Quick-Add, inline edit, split editor, budget amounts, and
   goal forms all inherit it. ~Tiny effort, outsized delight; the finite-result guard already
   protects against overflow garbage.
-- [ ] **TX17 [MED]** Entry-time budget impact *(PocketGuard "in my pocket", Simplifi spending
+- [x] **TX17 [MED]** Entry-time budget impact *(PocketGuard "in my pocket", Simplifi spending
   plan)*. As Quick-Add is filled, a live caption answers the real question: "leaves $142 in
   Dining this month · safe-to-spend $890". Inputs are already in hand at entry (category +
   amount) and both figures exist (budget evaluation for the period; the `safe_to_spend`

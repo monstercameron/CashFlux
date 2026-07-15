@@ -40,6 +40,8 @@ func Register() {
 	registerTierSystem()
 	registerImportWizard()
 	registerTxnToolbar()
+	registerTxnCalendar()
+	registerSavedViews()
 	registerAccountsSurface()
 	inject(Build())
 }

@@ -412,3 +412,24 @@ func TestApplyCustomFieldFilter(t *testing.T) {
 		t.Fatalf("empty custom value should not filter; got %d", len(all))
 	}
 }
+
+func TestSingleAccount(t *testing.T) {
+	cases := []struct {
+		name   string
+		c      Criteria
+		wantID string
+		wantOK bool
+	}{
+		{"single field", Criteria{Account: "a1"}, "a1", true},
+		{"single multi", Criteria{Accounts: "a2"}, "a2", true},
+		{"multi two", Criteria{Accounts: "a1,a2"}, "", false},
+		{"none", Criteria{}, "", false},
+		{"multi wins over single", Criteria{Account: "a1", Accounts: "a2,a3"}, "", false},
+	}
+	for _, tc := range cases {
+		id, ok := tc.c.SingleAccount()
+		if id != tc.wantID || ok != tc.wantOK {
+			t.Errorf("%s: got (%q,%v), want (%q,%v)", tc.name, id, ok, tc.wantID, tc.wantOK)
+		}
+	}
+}

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sharedexpenses (id TEXT PRIMARY KEY, data TEXT NOT NU
 CREATE TABLE IF NOT EXISTS settlements  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS earmarks         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS txnlinks            (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS payeealiases        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subcancellations  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subignores        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -195,6 +196,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "txnlinks", ds.TxnLinks, func(l domain.TxnLink) string { return l.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "payeealiases", ds.PayeeAliases, func(p domain.PayeeAlias) string { return p.ID }); err != nil {
+		return err
+	}
 	if err := replaceRows(tx, "subcancellations", ds.SubscriptionCancellations, func(c domain.SubscriptionCancellation) string { return c.ID }); err != nil {
 		return err
 	}
@@ -326,6 +330,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.TxnLinks, err = loadRows[domain.TxnLink](s.db, "txnlinks"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.PayeeAliases, err = loadRows[domain.PayeeAlias](s.db, "payeealiases"); err != nil {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionCancellations, err = loadRows[domain.SubscriptionCancellation](s.db, "subcancellations"); err != nil {
