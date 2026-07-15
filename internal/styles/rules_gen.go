@@ -10329,6 +10329,12 @@ func registerGenerated() {
 		bottom("calc(100% + 6px)"),
 	)
 	rule(".add-item",
+		// Flex row so an optional leading icon sits INLINE with the label — without
+		// this the icon svg breaks onto its own line and every icon-bearing overflow
+		// menu (e.g. the transactions "⋯ More") renders as stacked two-line items.
+		display("flex"),
+		alignItems("center"),
+		gap(".45rem"),
 		textAlign("left"),
 		padding(".5rem .7rem"),
 		borderRadius("5px"),
