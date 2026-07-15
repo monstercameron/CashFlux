@@ -253,4 +253,52 @@ func registerGoalsSurface() {
 		background("var(--accent)"),
 		transition("width 0.25s ease"),
 	)
+
+	// "Earmarks by goal": each goal's account rows are NESTED under its header, not flush
+	// with the goal title. Indent them and hang a connector rail on the left so the
+	// parent/child relationship is unambiguous (money routed to a goal — legibility matters).
+	rule(".ea-goals",
+		display("flex"),
+		flexDirection("column"),
+		gap("1.1rem"),
+	)
+	rule(".ea-goal-head",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem 0.75rem"),
+		marginBottom("0.5rem"),
+	)
+	rule(".ea-goal-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".ea-goal-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		marginLeft("0.4rem"),
+		paddingLeft("1rem"),
+		borderLeft("2px solid color-mix(in srgb, var(--border) 80%, transparent)"),
+	)
+	rule(".ea-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.75rem"),
+	)
+	rule(".ea-row-acct",
+		flex("1 1 auto"),
+		minWidth("0"),
+		color("var(--text-dim)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".ea-row-amt",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
 }

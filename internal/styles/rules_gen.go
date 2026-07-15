@@ -10963,7 +10963,14 @@ func registerGenerated() {
 		display("flex"),
 		flexWrap("wrap"),
 		gap(".5rem"),
-		alignItems("center"),
+		alignItems("stretch"),
+	)
+	// Let the pills grow to fill each row (two per row on a wide card) so a lone trailing
+	// item stretches to fill instead of stranding a half-empty row — on a card whose whole
+	// job is to signal urgency, a dead row undercuts it.
+	rule(".attention-chips .attention-item",
+		flex("1 1 40%"),
+		minWidth("280px"),
 	)
 	rule(".attention-item",
 		display("inline-flex"),

@@ -27,9 +27,12 @@ func SweepRulesHost() uic.Node {
 	// it below the fold. FlipSmall was too short for the intro + rule list + four fields;
 	// FlipMedium fits, and the pinned footer means there is never an empty void.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     uistate.T("acctSweepCfg.title"),
-		Width:     uiw.FlipMediumW,
-		Height:    uiw.FlipMediumH,
+		Title: uistate.T("acctSweepCfg.title"),
+		Width: uiw.FlipSmallW,
+		// FlipSmall shrink-wraps the short add-form (intro + four fields) so there is no
+		// dead space above the pinned footer; the FlushBody body still scrolls once several
+		// saved rules stack up.
+		Height:    uiw.FlipSmallH,
 		NoFooter:  true,
 		FlushBody: true,
 		OnClose:   closeModal,

@@ -286,18 +286,20 @@ func registerAssistantSurface() {
 		prop("align-items", "flex-start"),
 	)
 	rule(".chat-avatar",
+		// The assistant's identity mark. Deliberately a rounded SQUARE (not a circle) with a
+		// soft accent fill and no button-style outline — so it reads as an AI chip, not the
+		// app's round green "+" add-button, whose vocabulary it must not borrow.
 		prop("flex", "0 0 auto"),
 		prop("width", "1.7rem"),
 		prop("height", "1.7rem"),
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("justify-content", "center"),
-		prop("border-radius", "50%"),
-		prop("border", "1px solid color-mix(in srgb, var(--accent) 55%, var(--border))"),
+		prop("border-radius", "7px"),
 		prop("color", "var(--accent)"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "0.85rem"),
 		prop("margin-top", "0.1rem"),
-		prop("background", "color-mix(in srgb, var(--accent) 8%, transparent)"),
+		prop("background", "color-mix(in srgb, var(--accent) 15%, transparent)"),
 	)
 	rule(".chat-agent-body",
 		prop("line-height", "1.65"),
