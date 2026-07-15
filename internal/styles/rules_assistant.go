@@ -489,8 +489,9 @@ func registerAssistantSurface() {
 	rule(".ask-controls",
 		prop("display", "flex"),
 		prop("flex-wrap", "wrap"),
-		prop("align-items", "flex-end"),
-		prop("gap", "0.7rem 0.9rem"),
+		// The controls are now .todo-ctrl pills (single-height), so center them.
+		prop("align-items", "center"),
+		prop("gap", "0.6rem"),
 		prop("width", "100%"),
 		prop("padding", "0.7rem 0.85rem"),
 		prop("margin-bottom", "0.9rem"),
@@ -542,34 +543,26 @@ func registerAssistantSurface() {
 		prop("outline", "2px solid var(--accent)"),
 		prop("outline-offset", "1px"),
 	)
-	// PRIVACY is a standard styled control sharing the selects' height/shape.
-	rule(".ask-ctrl-btn",
+	// PRIVACY: the value inside its .todo-ctrl pill — a borderless toggle button matching
+	// the borderless .todo-select value (the pill supplies the border/background), so it
+	// reads as one more standard control rather than a nested button.
+	rule(".asst-privacy-btn",
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
-		prop("gap", "0.4rem"),
-		prop("height", "38px"),
-		prop("padding", "0 0.8rem"),
-		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "8px"),
-		prop("background", "var(--bg-elev)"),
+		prop("gap", "0.35rem"),
+		prop("padding", "0"),
+		prop("border", "0"),
+		prop("background", "transparent"),
 		prop("color", "var(--text)"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "0.86rem"),
 		prop("font-weight", "500"),
 		prop("cursor", "pointer"),
-		prop("transition", "border-color 120ms ease, background 120ms ease"),
 	)
-	rule(".ask-ctrl-btn:hover",
-		prop("border-color", "color-mix(in srgb, var(--accent) 45%, var(--border))"),
-	)
-	rule(".ask-ctrl-btn svg",
+	rule(".asst-privacy-btn svg",
 		prop("color", "var(--text-faint)"),
 	)
 	// Aggregates-only reads in the accent tone so the tighter privacy is legible.
-	rule(".asst-privacy-btn.is-aggregates",
-		prop("border-color", "color-mix(in srgb, var(--accent) 40%, var(--border))"),
-		prop("color", "var(--accent)"),
-	)
-	rule(".asst-privacy-btn.is-aggregates svg",
+	rule(".asst-privacy-btn.is-aggregates, .asst-privacy-btn.is-aggregates svg",
 		prop("color", "var(--accent)"),
 	)
 	// The action buttons group pushes to the right edge and sits on the fields' baseline.

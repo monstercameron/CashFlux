@@ -1738,12 +1738,12 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 			p.OnPick(e.GetValue())
 		}
 	})
-	// A standard control-cell field: an uppercase caption over the app's STANDARD
-	// styled select (.set-input, the same control Settings uses) — no raw OS-native
-	// dropdown, so the model switcher reads like every other select in the app.
-	return Label(css.Class("ask-ctrl-field"), Title(uistate.T("assistant.modelPick")),
-		Span(css.Class("ask-ctrl-lbl"), uistate.T("assistant.modelLabel")),
-		Select(css.Class("set-input ask-ctrl-sel"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
+	// The shared control-pill (.todo-ctrl + .todo-select) used on To-do/Goals/Budgets/
+	// Accounts/Transactions: an uppercase label + a borderless in-pill select, so the
+	// model switcher reads identically to every other page's controls.
+	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.modelPick")),
+		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.modelLabel")),
+		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
 			MapKeyed(assistantModelIDs(p.Models, p.Current),
 				func(m string) any { return m },
 				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
@@ -1777,19 +1777,19 @@ func privacyChipComp(p privacyChipProps) ui.Node {
 		label = uistate.T("insights.privacyAggregates")
 		title = uistate.T("insights.privacyAggregatesHint")
 	}
-	cls := "ask-ctrl-btn asst-privacy-btn"
+	cls := "asst-privacy-btn"
 	if agg {
 		cls += " is-aggregates"
 	}
-	// A control-cell field matching the model/thinking selects: an uppercase caption
-	// over a standard styled control. The value itself is the toggle button (a lock
-	// glyph + the active tier), so it sits flush with the selects in the cell.
-	return Div(css.Class("ask-ctrl-field"),
-		Span(css.Class("ask-ctrl-lbl"), uistate.T("insights.privacyLabel")),
+	// Same control-pill (.todo-ctrl) as the model/thinking selects: an uppercase label
+	// with the value — here a toggle button (lock glyph + active tier) — sitting
+	// borderless inside the pill, so privacy reads as one more standard control.
+	return Div(css.Class("todo-ctrl"),
+		Span(css.Class("todo-ctrl-label"), uistate.T("insights.privacyLabel")),
 		Button(css.Class(cls), Type("button"), Attr("data-testid", "assistant-privacy-chip"),
 			Attr("role", "status"), Attr("aria-live", "polite"),
 			Attr("aria-label", uistate.T("insights.privacyAria", label)), Title(title), OnClick(onClick),
-			uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 			Span(label),
 		),
 	)
@@ -1811,9 +1811,9 @@ func thinkPickerComp(p thinkPickerProps) ui.Node {
 			p.OnPick(e.GetValue())
 		}
 	})
-	return Label(css.Class("ask-ctrl-field"), Title(uistate.T("assistant.thinkPick")),
-		Span(css.Class("ask-ctrl-lbl"), uistate.T("assistant.thinkLabel")),
-		Select(css.Class("set-input ask-ctrl-sel"), Attr("aria-label", uistate.T("assistant.thinkPick")), Attr("data-testid", "assistant-think"), OnChange(onChange),
+	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.thinkPick")),
+		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.thinkLabel")),
+		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.thinkPick")), Attr("data-testid", "assistant-think"), OnChange(onChange),
 			Option(Value("low"), SelectedIf(p.Effort == "low"), uistate.T("assistant.thinkLow")),
 			Option(Value("medium"), SelectedIf(p.Effort == "medium" || p.Effort == ""), uistate.T("assistant.thinkMedium")),
 			Option(Value("high"), SelectedIf(p.Effort == "high"), uistate.T("assistant.thinkHigh")),
