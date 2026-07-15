@@ -105,6 +105,10 @@ type Criteria struct {
 	Sort     string `json:"sort,omitempty"`
 	Dir      string `json:"dir,omitempty"`
 	Cleared  string `json:"cleared,omitempty"`
+	// Flow filters by money direction: "out" keeps expenses (a negative amount),
+	// "in" keeps income (a positive amount). Empty = both. Drives the natural-
+	// language search's "spent" / "received" clause (TX2).
+	Flow string `json:"flow,omitempty"`
 	// CustomKey/CustomVal filter by a transaction custom field's value (L18): a
 	// row matches when its Custom[CustomKey] stringifies to CustomVal. Both empty
 	// = no custom-field filter.
@@ -177,6 +181,7 @@ const (
 	FieldFrom      FilterField = "from"
 	FieldTo        FilterField = "to"
 	FieldCleared   FilterField = "cleared"
+	FieldFlow      FilterField = "flow"
 	FieldAmountMin FilterField = "amountMin"
 	FieldAmountMax FilterField = "amountMax"
 	FieldCustom    FilterField = "custom"
@@ -216,6 +221,9 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	add(FieldAmountMax, c.AmountMax)
 	if c.Cleared == "yes" || c.Cleared == "no" {
 		out = append(out, ActiveFilter{Field: FieldCleared, Value: c.Cleared})
+	}
+	if c.Flow == "in" || c.Flow == "out" {
+		out = append(out, ActiveFilter{Field: FieldFlow, Value: c.Flow})
 	}
 	if c.CustomKey != "" && c.CustomVal != "" {
 		out = append(out, ActiveFilter{Field: FieldCustom, Value: c.CustomVal})
@@ -259,6 +267,8 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.AmountMax = ""
 	case FieldCleared:
 		c.Cleared = ""
+	case FieldFlow:
+		c.Flow = ""
 	case FieldCustom:
 		c.CustomKey, c.CustomVal = "", ""
 	}
@@ -507,6 +517,10 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case ft != "" && !matchText(t, ft):
 		case c.Cleared == "yes" && !t.Cleared:
 		case c.Cleared == "no" && t.Cleared:
+		// Flow keeps only expenses ("out", a negative amount) or only income ("in",
+		// a positive amount); a zero-amount row matches neither direction.
+		case c.Flow == "out" && t.Amount.Amount >= 0:
+		case c.Flow == "in" && t.Amount.Amount <= 0:
 		case c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal:
 		default:
 			out = append(out, t)

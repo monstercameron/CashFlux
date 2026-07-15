@@ -250,6 +250,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	onPickStmt := ui.UseEvent(Prevent(func() { source.Set("stmt") }))
 	onPickPDF := ui.UseEvent(Prevent(func() { source.Set("pdf") }))
 	onPickReceipt := ui.UseEvent(Prevent(func() { source.Set("receipt") }))
+	onPickAmazon := ui.UseEvent(Prevent(func() { source.Set("amazon") })) // TX4
 	backToTypes := ui.UseEvent(Prevent(func() { source.Set("") }))
 
 	// Wizard stage navigation. goReview/goInput move between the two stages without
@@ -1111,6 +1112,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 								uistate.T("documents.typeCsvTitle"), uistate.T("documents.typeCsvDesc"), false),
 							docTypeTile("import-type-stmt", onPickStmt, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
 								uistate.T("documents.typeStmtTitle"), uistate.T("documents.typeStmtDesc"), false),
+							docTypeTile("import-type-amazon", onPickAmazon, uiw.Icon(icon.Box, css.Class(tw.W5, tw.H5)),
+								uistate.T("orderimport.cardTitle"), uistate.T("orderimport.cardDesc"), false),
 						),
 					),
 					// Smart+ branch — generative AI.
@@ -1177,6 +1180,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 										Attr("data-testid", "cadence-reminder-msg"), cadenceMsg.Get())),
 							),
 						),
+					)),
+
+					// Smart · Amazon order history (TX4) — local parse + charge matching.
+					If(source.Get() == "amazon", Fragment(
+						importFormHeader(false, uiw.Icon(icon.Box, css.Class(tw.W5, tw.H5)),
+							uistate.T("orderimport.cardTitle"), uistate.T("orderimport.cardDesc")),
+						ui.CreateElement(OrderImportCard, orderImportCardProps{}),
 					)),
 
 					// Smart+ · statement PDF (AI reads the file natively).

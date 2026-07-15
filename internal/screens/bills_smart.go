@@ -32,6 +32,18 @@ func billItemID(b bills.Bill) string {
 	return b.AccountID + "|" + b.DueDate.Format("2006-01-02") + "|" + b.Name
 }
 
+// recurringIDFromBillAccount extracts the recurring-rule id from a bill
+// occurrence's AccountID when the bill was derived from a recurring rule
+// (bills.OccurrencesWithin tags those "recurring:<id>"); ok is false for
+// liability-statement bills, which have no recurring rule.
+func recurringIDFromBillAccount(accountID string) (string, bool) {
+	const p = "recurring:"
+	if strings.HasPrefix(accountID, p) {
+		return accountID[len(p):], true
+	}
+	return "", false
+}
+
 // billsSmartPlan bundles everything the bills views need from the scheduler.
 type billsSmartPlan struct {
 	Cfg       uistate.BillsSmartConfig

@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nlfilter"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -353,6 +354,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				return uistate.T("transactions.cleared")
 			}
 			return uistate.T("transactions.notCleared")
+		case txnfilter.FieldFlow:
+			if af.Value == "in" {
+				return uistate.T("transactions.chipFlowIn")
+			}
+			return uistate.T("transactions.chipFlowOut")
 		}
 		return af.Value
 	}
@@ -362,6 +368,99 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// Key encodes field + value so a per-value chip ✕ removes just that value
 		// (RemoveValue), not the whole dimension.
 		chips = append(chips, uiw.Chip{Key: string(af.Field) + chipKeySep + af.Value, Label: chipLabel(af)})
+	}
+
+	// Natural-language search (TX2 / SMART-T3F, Free tier): when the typed query
+	// compiles into at least one structured clause, offer a quiet row that turns
+	// the words into the normal removable filter chips. This teaches the filter
+	// system — users watch their sentence become chips they can then tweak. Gated
+	// on the Free-tier feature toggle so it can be turned off.
+	//
+	// nlContext builds the parser's vocabulary + clock from the live entity lists.
+	// It's a closure (not precomputed) so the apply handler below re-reads the
+	// current query at click time rather than capturing a stale render's value.
+	nlContext := func() nlfilter.Context {
+		nlCats := make([]nlfilter.NameID, 0, len(categories))
+		for _, c := range categories {
+			nlCats = append(nlCats, nlfilter.NameID{Name: c.Name, ID: c.ID})
+		}
+		resolver := app.PayeeResolver()
+		payeeSet := map[string]struct{}{}
+		payeeNames := make([]string, 0)
+		for _, t := range txns {
+			if name := resolver.Resolve(t.Payee); name != "" {
+				if _, seen := payeeSet[name]; !seen {
+					payeeSet[name] = struct{}{}
+					payeeNames = append(payeeNames, name)
+				}
+			}
+		}
+		return nlfilter.Context{
+			Now:          time.Now().UTC(),
+			WeekStart:    uistate.CurrentPrefs().WeekStartWeekday(),
+			Categories:   nlCats,
+			Tags:         tagList,
+			Payees:       payeeNames,
+			ResolvePayee: func(raw string) string { return resolver.Resolve(raw) },
+		}
+	}
+	// applyNL compiles the current query and overwrites only the dimensions the
+	// parser recognized, replacing the raw typed text with structured chips. The
+	// hook is created every render (stable position); the button that fires it is
+	// conditional (see below).
+	applyNL := ui.UseEvent(Prevent(func() {
+		parsed, ok := nlfilter.Parse(strings.TrimSpace(filterAtom.Get().Text), nlContext())
+		if !ok {
+			return
+		}
+		setFilter(func(x *uistate.TxFilter) {
+			x.Text = parsed.Text
+			if parsed.AmountMin != "" {
+				x.AmountMin = parsed.AmountMin
+			}
+			if parsed.AmountMax != "" {
+				x.AmountMax = parsed.AmountMax
+			}
+			if parsed.From != "" {
+				x.From = parsed.From
+			}
+			if parsed.To != "" {
+				x.To = parsed.To
+			}
+			if parsed.Cleared != "" {
+				x.Cleared = parsed.Cleared
+			}
+			if parsed.Flow != "" {
+				x.Flow = parsed.Flow
+			}
+			if parsed.Categories != "" {
+				x.Categories = parsed.Categories
+			}
+			if parsed.Tags != "" {
+				x.Tags = parsed.Tags
+			}
+		})
+	}))
+	var interpretRow ui.Node = Fragment()
+	if q := strings.TrimSpace(f.Text); q != "" && uistate.LoadSmartSettings().IsEnabled("SMART-T3F") {
+		if parsed, nlOK := nlfilter.Parse(q, nlContext()); nlOK {
+			var previews []string
+			for _, af := range parsed.ActiveFilters() {
+				previews = append(previews, chipLabel(af))
+			}
+			preview := strings.Join(previews, " · ")
+			interpretRow = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Text13),
+				Style(map[string]string{"padding": "0.4rem 0.1rem 0.1rem"}),
+				Attr("role", "status"),
+				Span(css.Class(tw.TextDim, tw.ShrinkO), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+				Button(css.Class("btn", "btn-tool"), Type("button"),
+					Attr("data-testid", "nl-interpret"),
+					Attr("aria-label", uistate.T("transactions.nlInterpretAria", preview)),
+					OnClick(applyNL),
+					Text(uistate.T("transactions.nlInterpret", preview)),
+				),
+			)
+		}
 	}
 
 	// Custom-field filter (L18): a field picker + a value control shaped by the field's
@@ -530,7 +629,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(toolbar, statusLine),
+		Body: Div(toolbar, interpretRow, statusLine),
 	})
 }
 

@@ -31,12 +31,19 @@ const (
 	// recurring/bills work). Declared here so the enum is designed to grow
 	// without a schema change; no logic consumes it yet.
 	TxnLinkBillMatch TxnLinkKind = "bill-match"
+
+	// TxnLinkEventTxn maps ONE transaction to an Event (TX10). TxnIDs holds the
+	// single member transaction and EventID names the event it belongs to. Using
+	// the link table — not a field on the transaction — keeps the txn core schema
+	// untouched and lets a transaction belong to an event alongside any other
+	// relation. A transaction may map to at most one link per event.
+	TxnLinkEventTxn TxnLinkKind = "event-member"
 )
 
 // KnownTxnLinkKind reports whether k is a kind this build understands.
 func KnownTxnLinkKind(k TxnLinkKind) bool {
 	switch k {
-	case TxnLinkOrderGroup, TxnLinkRefundPair, TxnLinkBillMatch:
+	case TxnLinkOrderGroup, TxnLinkRefundPair, TxnLinkBillMatch, TxnLinkEventTxn:
 		return true
 	default:
 		return false
@@ -70,8 +77,32 @@ type TxnLink struct {
 	// band can reconcile the member sum against it (remainder line). Zero means
 	// none entered. Unused by refund pairs.
 	EnteredTotal money.Money `json:"enteredTotal,omitempty"`
+	// RecurringID references the recurring rule (domain.Recurring.ID) a
+	// bill-match link ties its single transaction to. Empty for every other kind
+	// — order groups and refund pairs relate transactions to each other, not to a
+	// recurring occurrence. Additive: pre-existing links load with it empty.
+	RecurringID string `json:"recurringId,omitempty"`
+	// OccurrenceDate is the calendar due-date of the recurring occurrence a
+	// bill-match link settles (time-of-day ignored; see domain.OccurrenceKey).
+	// Zero for every other kind. Together with RecurringID it identifies exactly
+	// which expected occurrence the linked transaction paid.
+	OccurrenceDate time.Time `json:"occurrenceDate,omitempty"`
+	// EventID references the Event (domain.Event.ID) an event-member link maps its
+	// single transaction to (TX10). Empty for every other kind. Additive:
+	// pre-existing links load with it empty.
+	EventID string `json:"eventId,omitempty"`
 	// CreatedAt is when the link was made.
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+// OccurrenceRef returns the recurring-occurrence key a bill-match link settles
+// (RecurringID + OccurrenceDate via domain.OccurrenceKey), and ok=false when the
+// link is not a bill-match or carries no occurrence reference.
+func (l TxnLink) OccurrenceRef() (recurringID string, due time.Time, ok bool) {
+	if l.Kind != TxnLinkBillMatch || l.RecurringID == "" || l.OccurrenceDate.IsZero() {
+		return "", time.Time{}, false
+	}
+	return l.RecurringID, l.OccurrenceDate, true
 }
 
 // Primary returns the primary/original transaction id (TxnIDs[0]) or "" if the

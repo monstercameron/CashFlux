@@ -40,7 +40,7 @@ import (
 var i18nBaselines = map[string]int{
 	// UI layer (wasm screens + app chrome). Baselines set 2026-07-03 (C361);
 	// first conversion tranche brought screens 211→126 and app 17→0.
-	"../screens": 126,
+	"../screens": 125,
 	"../app":     0,
 	// Shared component library + UI-adjacent packages (second sweep pass —
 	// Cam: "every page AND component"). widgetregistry's 2 are the preset
@@ -56,7 +56,10 @@ var i18nBaselines = map[string]int{
 	// Logic packages that produce user-facing copy (C362: these need the
 	// key+args architecture — insights/notifications currently bake English
 	// at generation time, and notification copy is persisted pre-formatted).
-	"../smartengine":   160,
+	// 160→165 (2026-07-14): smartengine is pure (no uistate.T), so the new
+	// SMART-BL16 price-creep + new-merchant/trial detectors carry their insight
+	// copy in-package like every other engine; the baseline moves with them.
+	"../smartengine":   165,
 	"../widgetcatalog": 42,
 	"../healthscore":   0,
 	"../credithealth":  0,

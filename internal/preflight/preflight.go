@@ -51,6 +51,12 @@ type Input struct {
 	ProjectedLowDate  time.Time
 	KeepFloorMinor    int64
 	Accounts          []AccountBalance
+	// Paid is the set of BillItem.IDs already settled — a bill whose expected
+	// occurrence carries a durable bill-match link (TX9). Those bills are dropped
+	// from the checklist: they are done, not "still due this cycle". Empty/nil
+	// means nothing is known-paid (the pre-TX9 behavior). Their amount is also
+	// excluded from TotalDueMinor.
+	Paid map[string]bool
 }
 
 // BillRow is one checklist line: a bill due this cycle. It is checklist-quiet —
@@ -117,6 +123,9 @@ func Build(in Input) Checklist {
 		}
 		if !in.NextPayday.IsZero() && !d.Before(day(in.NextPayday)) {
 			continue
+		}
+		if in.Paid[b.ID] {
+			continue // already settled by a matched transaction (TX9)
 		}
 		c.Bills = append(c.Bills, BillRow{
 			ID: b.ID, Name: b.Name, AmountMinor: b.AmountMinor, Due: d,

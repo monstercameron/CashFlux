@@ -3129,7 +3129,15 @@ XC1/XC2 begin — and ideally before the split data model freezes.
 
 <!-- ===== TX SERIES (transactions competitive features, appended 2026-07-14) ===== -->
 
-## ★ TX series — Transactions: competitive features (LATER IMPL — curated from big-name comps 2026-07-14)
+## ★ TX series — Transactions: competitive features (IMPLEMENTED 2026-07-14 — COMPLETE, shipped v1.0.28)
+
+> **Status:** all 17 tickets built across two waves + a Sonnet UX pass, e2e-verified
+> (e2e/_tx_waveA_verify.mjs, _tx_waveB_verify.mjs), shipped v1.0.28. TX4's planning gate was
+> closed inline (Amazon privacy-export CSV + orders-paste, ±3-day subset-sum matching, reuse of
+> XC1 groups + receiptsplit). Notable during integration: the smartengine i18n ratchet moved
+> 160→165 (pure package, insight copy in-package by design); events show SIGNED net (not
+> spend-only, which read a false $0.00 when a range caught income); merchant-panel deltas fixed
+> from accounting-parens to +/- prefix; false "typical $0.00" baseline guarded.
 
 **Provenance & scope.** Second ideation pass 2026-07-14, focused on /transactions: ten ideas
 drawn from what big-name competitors (Copilot, Monarch, Mint, YNAB, Simplifi, Rocket Money,
@@ -3148,7 +3156,7 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
   FIRST — TX2/TX4/TX6 and recurring detection all get better the moment names are clean.
   Guardrails: alias is a view-layer mapping (raw payee preserved on the txn — single-source
   rule); alias management UI can live with rules; export keeps both raw + display names.
-- [ ] **TX2 [MAJOR — SMART-SERIES FEATURE]** Natural-language search → filter chips *(Copilot)*.
+- [x] **TX2 [MAJOR — SMART-SERIES FEATURE]** Natural-language search → filter chips *(Copilot)*.
   "coffee last month over $20" becomes structured filters. Ship as a SMART-series entry with the
   standard two tiers: FREE tier = a small local parser for the common grammar (amount
   comparators, month names / "last month" / date ranges, category/payee/tag words, cleared/
@@ -3164,7 +3172,7 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
   widget engine), and an optional threshold on the view's total becomes a workflow-engine
   condition (alert/task when crossed). Reuse: persisted filter state + chips, widgetspec/
   widgetengine, workflow engine. Anti-sprawl: a view stores Criteria, not copies of txns.
-- [ ] **TX4 [MAJOR — PLANNING DONE 2026-07-14, ready to implement]** Amazon order-history import +
+- [x] **TX4 [MAJOR — PLANNING DONE 2026-07-14, ready to implement]** Amazon order-history import +
   line-item enrichment *(Copilot's Amazon integration, local-first)*.
   **R-FINDINGS (coordinator, 2026-07-14):** Amazon retired the self-serve "Order History
   Reports" CSV (2023); the two dependable local-first inputs are (a) the PRIVACY EXPORT
@@ -3187,14 +3195,14 @@ sessions — can be re-proposed later if wanted). Same discipline as XC: agree s
   named formats; Walmart/Target land as new parsers later). Privacy: all parsing local; copy
   states it. UI entry: /documents (a third import card: "Amazon order history"). NO network
   calls, NO scraping.
-- [ ] **TX5 [MED]** Receipt attachments on the transaction row *(Monarch / YNAB)*. Attach a
+- [x] **TX5 [MED]** Receipt attachments on the transaction row *(Monarch / YNAB)*. Attach a
   receipt photo/PDF to a transaction: thumbnail in the row detail, full view on click. This is
   a JOIN, not a subsystem — the artifacts/blobstore system already stores images; add a
   txn↔artifact reference + the detail-surface rendering. Guardrails: attachment survives
   export/import (blob GC must respect txn references); on-ramp for XC11 (attached receipt →
   offer the proposed split); optional total-check nudge when the receipt's OCR total (vision,
   AI-tier) disagrees with the txn amount.
-- [ ] **TX6 [MED]** Merchant context panel *(Rocket Money / Emma / Cleo)*. Expanding a txn shows
+- [x] **TX6 [MED]** Merchant context panel *(Rocket Money / Emma / Cleo)*. Expanding a txn shows
   the merchant's story: usual amount ("+$4 vs your typical"), frequency ("3rd visit this week"),
   $ this month vs typical month, tiny 12-charge sparkline. All derivable from the ledger —
   per-merchant stats keyed on the TX1 alias (not the raw payee string). Give XC5's price-creep
@@ -3222,7 +3230,7 @@ the rest are independent. Cross-links: TX4→XC1/XC11, TX5→XC11, TX6→XC5.
 one-off future transactions (Simplifi "upcoming") — can be re-proposed later, note it overlaps
 TX9's expected-occurrence machinery if revisited.
 
-- [ ] **TX9 [MED — ENHANCE EXISTING]** Bill matching: expected ↔ actual linking *(Simplifi bill
+- [x] **TX9 [MED — ENHANCE EXISTING]** Bill matching: expected ↔ actual linking *(Simplifi bill
   reminders, Actual Budget schedules)*. Partial machinery exists — bills occurrence expansion +
   the SMART missing-transaction detector already reason about expected occurrences; what's
   missing is the durable LINK. Formalize: match an incoming txn to its expected recurring
@@ -3232,7 +3240,7 @@ TX9's expected-occurrence machinery if revisited.
   payday pre-flight gets real paid-state, XC5's price-creep gets per-occurrence actuals, the
   missing-txn detector stops re-flagging matched bills. Guardrail: a txn matches ≤1 occurrence;
   manual match/unmatch affordance for the detector's misses.
-- [ ] **TX10 [MAJOR — TOP-LEVEL CONCEPT (Cam's reframe)]** Events: first-class entity with
+- [x] **TX10 [MAJOR — TOP-LEVEL CONCEPT (Cam's reframe)]** Events: first-class entity with
   transaction mapping *(Lunch Money trips, Monarch events)*. NOT just a saved filter — a
   domain-level `Event` (name, date range, optional note/icon), stored + exported like any
   entity, with transactions MAPPED to it. Auto-associate txns inside the range at creation
@@ -3258,7 +3266,7 @@ TX9's expected-occurrence machinery if revisited.
   computation trivial; compute from the account's full history then slice to the visible
   filter so the running figure is TRUE even when rows are filtered. Answers "when did this
   account dip" without a chart.
-- [ ] **TX13 [MED — SMART-SERIES FLAGS]** New-merchant + trial-conversion alerts *(Rocket
+- [x] **TX13 [MED — SMART-SERIES FLAGS]** New-merchant + trial-conversion alerts *(Rocket
   Money, Mint)*. Two cheap detectors on the txn stream, shipped as SMART flags with standard
   opt-in/dismissal: (a) "first time you've ever paid X" (new-merchant awareness/fraud signal;
   alias-keyed via TX1 so processor noise doesn't false-positive); (b) "X looks like a new

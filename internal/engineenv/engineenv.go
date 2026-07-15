@@ -82,6 +82,11 @@ type Data struct {
 	// Smart holds the Smart layer's enabled-feature counts (from the persisted
 	// Smart settings), surfaced as the smart_* variables.
 	Smart SmartCounts
+	// Events are the user's spending events with their transaction membership (from
+	// the persisted events + event-member links), each surfaced as
+	// event_<slug>_{total,spend,count} variables so an event is formula/widget-
+	// addressable like a pool or goal (TX10).
+	Events []EventDef
 }
 
 // BillsSmartData is the smart-schedule input the wasm layer feeds in. Empty
@@ -389,6 +394,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase, bals)
 	addPoolVars(out, d, major, toBase, bals)
+	addEventVars(out, d, major, toBase)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)

@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/payeealias"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 )
@@ -50,9 +51,34 @@ type Input struct {
 	Tasks         []domain.Task
 	Subscriptions []domain.SubscriptionCancellation // recorded cancellations
 
+	// Aliases is the learned payee-alias table (TX1). Engines that key on
+	// merchant identity resolve raw payees through it (via in.payeeResolver) so
+	// processor noise ("AMZN Mktp US*2K4RT0") collapses to one clean merchant and
+	// a user rename unifies matching. Empty is valid — resolution then falls back
+	// to the built-in normalizer rule pack.
+	Aliases []domain.PayeeAlias
+
 	// Subs is the detected subscription set (from subscriptions.Detect), passed in
 	// so the subscription engines don't re-run detection per feature.
 	Subs []subscriptions.Subscription
+
+	// PaidOccurrences is the set of recurring-occurrence keys (billmatch.Key:
+	// "recurringID|YYYY-MM-DD") that carry a durable bill-match link (TX9) — the
+	// occurrences already settled by a matched transaction. A missing-payment
+	// detector should skip these so a matched bill is not re-flagged as missed.
+	// Populated by the wasm adapter from appstate.BillMatchPaidOccurrences().
+	PaidOccurrences map[string]bool
+}
+
+// OccurrencePaid reports whether the recurring occurrence (recurringID + due
+// date) has been settled by a matched transaction (TX9). Detectors call it to
+// avoid re-flagging a bill that is already paid. It is safe on a nil map.
+func (in Input) OccurrencePaid(recurringID string, due time.Time) bool {
+	if in.PaidOccurrences == nil {
+		return false
+	}
+	key := recurringID + "|" + time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	return in.PaidOccurrences[key]
 }
 
 // engineFn is one Free feature's rule engine.
@@ -188,6 +214,13 @@ func activeAssetAccounts(accounts []domain.Account) []domain.Account {
 		out = append(out, a)
 	}
 	return out
+}
+
+// payeeResolver builds a payee-alias resolver over the Input's alias table. When
+// Aliases is empty it still resolves through the built-in normalizer rule pack,
+// so merchant keying is alias-aware even before the user has learned any names.
+func (in Input) payeeResolver() *payeealias.Resolver {
+	return payeealias.NewResolver(in.Aliases)
 }
 
 // abs64 returns the absolute value of an int64.

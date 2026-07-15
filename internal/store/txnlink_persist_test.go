@@ -55,3 +55,33 @@ func TestTxnLinkCRUDAndRoundTrip(t *testing.T) {
 		t.Fatalf("txnlink not deleted: %+v", g3)
 	}
 }
+
+// TestTxnLinkBillMatchRoundTrip pins that the TX9 bill-match fields (RecurringID +
+// OccurrenceDate) survive a store round-trip — they persist via JSON, so a new
+// field must reload intact.
+func TestTxnLinkBillMatchRoundTrip(t *testing.T) {
+	s := newStore(t)
+	due := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
+	l := domain.TxnLink{
+		ID:             "bm1",
+		Kind:           domain.TxnLinkBillMatch,
+		TxnIDs:         []string{"t1"},
+		RecurringID:    "r-net",
+		OccurrenceDate: due,
+		CreatedAt:      time.Now().UTC().Truncate(time.Second),
+	}
+	if err := s.PutTxnLink(l); err != nil {
+		t.Fatalf("PutTxnLink: %v", err)
+	}
+	got, ok, err := s.GetTxnLink("bm1")
+	if err != nil || !ok {
+		t.Fatalf("GetTxnLink: ok=%v err=%v", ok, err)
+	}
+	if got.RecurringID != "r-net" || !got.OccurrenceDate.Equal(due) {
+		t.Fatalf("bill-match fields lost: %+v", got)
+	}
+	rid, d, refOK := got.OccurrenceRef()
+	if !refOK || rid != "r-net" || !d.Equal(due) {
+		t.Fatalf("OccurrenceRef = %q,%v,%v", rid, d, refOK)
+	}
+}

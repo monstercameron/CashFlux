@@ -33,6 +33,7 @@ const (
 	GroupAllocate  Group = "Allocate"
 	GroupPlanning  Group = "Planning"
 	GroupRecurring Group = "Recurring"
+	GroupEvents    Group = "Events"
 )
 
 // billsSmartMeta labels the smart-bill-schedule variables for the picker.
@@ -354,6 +355,33 @@ func PoolMetrics(pools []engineenv.PoolDef) []Metric {
 				Label: base.Pool.Name + " — value",
 				Doc:   "Combined current value of the accounts in this pool.",
 				Group: GroupPools,
+			})
+		}
+	}
+	return out
+}
+
+// eventFieldMeta labels the per-event metric suffixes for the picker.
+var eventFieldMeta = map[string]struct{ Suffix, Doc string }{
+	"total": {"total", "Net money (income minus spending) across the transactions mapped to this event."},
+	"spend": {"spend", "How much this event cost — the magnitude of its net spending."},
+	"count": {"count", "How many transactions are mapped to this event."},
+}
+
+// EventMetrics returns the per-event metrics (event_<slug>_{total,spend,count}) so a
+// spending event can be referenced by name in a formula or dashboard widget (TX10).
+// Built from engineenv's naming so labels always match the resolved variables.
+func EventMetrics(evs []engineenv.EventDef) []Metric {
+	bases := engineenv.EventVarBases(evs)
+	out := make([]Metric, 0, len(bases)*len(engineenv.EventVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.EventVarFields {
+			meta := eventFieldMeta[field]
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Event.Name + " — " + meta.Suffix,
+				Doc:   meta.Doc,
+				Group: GroupEvents,
 			})
 		}
 	}

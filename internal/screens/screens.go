@@ -78,6 +78,7 @@ func All() []Route {
 		{Path: "/allocate", Label: "nav.allocate", Title: "nav.allocate", Subtitle: "screen.allocateSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Allocate},
 		{Path: "/planning", Label: "nav.planning", Title: "nav.planning", Subtitle: "screen.planningSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Planning},
 		{Path: "/recurring", Label: "nav.recurring", Title: "nav.recurring", Subtitle: "screen.recurringSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Recurring},
+		{Path: "/events", Label: "nav.events", Title: "nav.events", Subtitle: "screen.eventsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Events},
 
 		// TOOLS / Understand — reporting, net worth, and health. (The AI assistant
 		// moved to PRIMARY — it's an everyday surface, not a report.)

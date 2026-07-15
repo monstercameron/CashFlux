@@ -436,10 +436,27 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	links := props.App.TxnLinks()
 	groupByTxn := txnlinks.GroupsByTxn(links)
 	refundSide, refundedSide := map[string]bool{}, map[string]bool{}
+	billMatched := map[string]bool{} // TX9: rows that settle a recurring occurrence
+	// TX10: map each transaction to the name of the event it belongs to, so the row
+	// shows a small event chip. A transaction maps to at most one link per event; the
+	// first event found wins the chip.
+	eventName := map[string]string{}
+	eventNameByID := map[string]string{}
+	for _, e := range props.App.Events() {
+		eventNameByID[e.ID] = e.Name
+	}
 	for _, l := range links {
 		if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) == 2 {
 			refundedSide[l.TxnIDs[0]] = true // the original purchase
 			refundSide[l.TxnIDs[1]] = true   // the refund
+		}
+		if l.Kind == domain.TxnLinkBillMatch && len(l.TxnIDs) == 1 {
+			billMatched[l.TxnIDs[0]] = true
+		}
+		if l.Kind == domain.TxnLinkEventTxn && len(l.TxnIDs) == 1 && l.EventID != "" {
+			if _, ok := eventName[l.TxnIDs[0]]; !ok {
+				eventName[l.TxnIDs[0]] = eventNameByID[l.EventID]
+			}
 		}
 	}
 	pairRefundRow := func(id string) { refundAtom.Set(id) }
@@ -462,6 +479,15 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			uistate.PostNotice(uistate.T("txnlinks.unpaired"), false)
 			uistate.BumpDataRevision()
 		}
+	}
+	// TX9: release a bill-match link so the occurrence reads unpaid again.
+	unlinkBillRow := func(id string) {
+		if err := props.App.UnlinkBill(id); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("billmatch.unlinkLogged"), false)
+		uistate.BumpDataRevision()
 	}
 
 	sel := selAtom.Get()
@@ -539,6 +565,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			IsIncome:         txByID[rid].IsIncome(),
 			IsRefund:         refundSide[rid],
 			IsRefunded:       refundedSide[rid],
+			IsBillMatched:    billMatched[rid],
+			EventName:        eventName[rid],
 			ShowBalance:      showBalance,
 			Balance:          balanceStr(runBal, rid),
 			BalTone:          balanceTone(runBal, rid),
@@ -559,6 +587,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnPairRefund = pairRefundRow
 		r.OnUnpair = unpairRow
 		r.OnUngroup = ungroupRow
+		r.OnUnlinkBill = unlinkBillRow
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -709,6 +738,13 @@ type txnFrameRowProps struct {
 	OnPairRefund func(txnID string)
 	OnUnpair     func(txnID string)
 	OnUngroup    func(txnID string)
+	// IsBillMatched (TX9) is true when this row settles a recurring occurrence via a
+	// durable bill-match link; OnUnlinkBill releases that link.
+	IsBillMatched bool
+	OnUnlinkBill  func(txnID string)
+	// EventName (TX10) is the name of the event this transaction belongs to, shown as
+	// a small chip beside the description. Empty = not mapped to any event.
+	EventName string
 	// Register mode (TX12): ShowBalance adds a running-balance cell after Amount
 	// (only in register mode, when the ledger is scoped to one account). Balance is
 	// the pre-formatted running figure after this row; BalTone colours a negative
@@ -800,7 +836,9 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
 				Attr("data-testid", "txn-row-receipt"), OnClick(view),
 				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
-			linkBadge),
+			linkBadge,
+			If(props.EventName != "", Span(css.Class("badge"), Attr("data-testid", "txn-event-chip"),
+				Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName))),
 		If(props.Vis.Account, Td(props.Account)),
 		If(props.Vis.Category, Td(props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
@@ -873,6 +911,14 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label:    uistate.T("txnlinks.unpairAction"),
 			TestID:   "txn-unpair",
 			OnSelect: func() { props.OnUnpair(props.ID) },
+		})
+	}
+	// TX9: release this row's bill-match link (the occurrence reads unpaid again).
+	if props.OnUnlinkBill != nil && props.IsBillMatched {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("billmatch.unlink"),
+			TestID:   "txn-unlink-bill",
+			OnSelect: func() { props.OnUnlinkBill(props.ID) },
 		})
 	}
 	// XC1: release this row's order group (keeps the transactions).

@@ -2374,6 +2374,10 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	// that closes a "chase the duplicate charge" task).
 	if !existed && !a.triggersSuspended {
 		a.resolveTasksForTxn(t)
+		// TX9: a posting transaction may settle an expected recurring occurrence —
+		// auto-create bill-match links for unambiguous 1:1 pairs (a data event,
+		// never a timer). Ambiguous occurrences are left for a manual match.
+		a.autoMatchBills(a.clock())
 	}
 	return nil
 }

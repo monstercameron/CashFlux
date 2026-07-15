@@ -61,6 +61,26 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildSkipsPaidBills(t *testing.T) {
+	in := Input{
+		Now:        d(2026, 7, 1),
+		CycleStart: d(2026, 7, 1),
+		NextPayday: d(2026, 7, 15),
+		Bills: []BillItem{
+			{ID: "b1", Name: "Rent", AmountMinor: 120000, Due: d(2026, 7, 3)},
+			{ID: "b2", Name: "Netflix", AmountMinor: 1599, Due: d(2026, 7, 10)},
+		},
+		Paid: map[string]bool{"b2": true}, // already settled by a matched txn (TX9)
+	}
+	c := Build(in)
+	if len(c.Bills) != 1 || c.Bills[0].ID != "b1" {
+		t.Fatalf("paid bill should be dropped, got %+v", c.Bills)
+	}
+	if c.TotalDueMinor != 120000 {
+		t.Fatalf("total due = %d, want 120000 (paid bill excluded)", c.TotalDueMinor)
+	}
+}
+
 func TestBuildEmpty(t *testing.T) {
 	c := Build(Input{Now: d(2026, 7, 1), NextPayday: d(2026, 7, 15), KeepFloorMinor: 100, ProjectedLowMinor: 5000})
 	if c.HasItems() {

@@ -5,14 +5,18 @@
 package screens
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/merchantstats"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -25,6 +29,194 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
+
+// merchantContextPanel renders the TX6 merchant "story" inside the edit modal:
+// typical amount, this charge vs typical, visits this week/month, this month vs a
+// typical month, and a tiny sparkline of recent charges. It is read-only and
+// quiet, and returns an empty fragment for transfers or one-off merchants (fewer
+// than merchantstats.MinCharges charges), so it never nags. All amounts are
+// converted to the household base currency via the FX table so a multi-currency
+// history reads as one figure.
+func merchantContextPanel(app *appstate.App, txn domain.Transaction) ui.Node {
+	if txn.IsTransfer() {
+		return Fragment()
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	resolver := app.PayeeResolver()
+	merchant := strings.TrimSpace(resolver.Resolve(firstNonEmpty(txn.Payee, txn.Desc)))
+	if merchant == "" {
+		return Fragment()
+	}
+	target := strings.ToLower(merchant)
+
+	toBase := func(m money.Money) (int64, bool) {
+		if m.Currency == "" || m.Currency == base {
+			return absMinor(m.Amount), true
+		}
+		v, err := currency.ConvertBetween(m.Amount, m.Currency, base, rates)
+		if err != nil {
+			return 0, false
+		}
+		return absMinor(v), true
+	}
+
+	var charges []merchantstats.Charge
+	for _, t := range app.Transactions() {
+		if t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(resolver.Resolve(firstNonEmpty(t.Payee, t.Desc)))) != target {
+			continue
+		}
+		mag, ok := toBase(t.Amount)
+		if !ok {
+			continue
+		}
+		charges = append(charges, merchantstats.Charge{Date: t.Date, Minor: mag})
+	}
+
+	stats := merchantstats.Compute(charges, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+	if !stats.Enough {
+		return Fragment() // one-off merchant — nothing worth showing
+	}
+
+	// Delta of THIS charge vs the merchant's typical amount.
+	var deltaLine ui.Node = Fragment()
+	if txnMag, ok := toBase(txn.Amount); ok {
+		delta := stats.DeltaVsTypical(txnMag)
+		switch {
+		case delta > 0:
+			deltaLine = Span(css.Class("badge"), uistate.T("merchantPanel.aboveUsual", "+"+fmtMoney(money.New(delta, base))))
+		case delta < 0:
+			// Mirror the "+$4.00" styling used above rather than fmtMoney's
+			// accounting parens — "($4.00) vs your usual" reads like a ledger
+			// figure, not a sentence a person wrote.
+			deltaLine = Span(css.Class("muted"), uistate.T("merchantPanel.belowUsual", "-"+fmtMoney(money.New(-delta, base))))
+		default:
+			deltaLine = Span(css.Class("muted"), uistate.T("merchantPanel.atUsual"))
+		}
+	}
+
+	// Visit frequency: "3rd visit this week · 5 this month".
+	var visitLine ui.Node = Fragment()
+	if stats.VisitsThisWeek > 0 {
+		freq := uistate.T("merchantPanel.visitThisWeek", ordinalDay(stats.VisitsThisWeek))
+		if stats.VisitsThisMonth > 0 {
+			freq += " · " + uistate.T("merchantPanel.visitsThisMonth", stats.VisitsThisMonth)
+		}
+		visitLine = Span(css.Class("muted"), freq)
+	} else if stats.VisitsThisMonth > 0 {
+		visitLine = Span(css.Class("muted"), uistate.T("merchantPanel.visitsThisMonth", stats.VisitsThisMonth))
+	}
+
+	// TypicalMonth is 0 only when there's no prior completed month to compare
+	// against (every charge on record falls in the current calendar month) —
+	// every real prior month has a positive total, so this is a safe proxy.
+	// Comparing to a "typical $0.00" in that case would misread as "you're
+	// spending way over usual" when there's simply no history yet.
+	var monthLine string
+	if stats.TypicalMonth > 0 {
+		monthLine = uistate.T("merchantPanel.monthVsTypical",
+			fmtMoney(money.New(stats.SpentThisMonth, base)), fmtMoney(money.New(stats.TypicalMonth, base)))
+	} else {
+		monthLine = uistate.T("merchantPanel.monthSpentOnly", fmtMoney(money.New(stats.SpentThisMonth, base)))
+	}
+
+	return Div(css.Class("card", tw.P3, tw.FlexCol, tw.Gap15), Attr("data-testid", "merchant-context-panel"),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2),
+			Strong(uistate.T("merchantPanel.title", merchant)),
+			deltaLine,
+		),
+		visitLine,
+		Span(css.Class("muted"), monthLine),
+		sparklineSVG(stats.Last12),
+	)
+}
+
+// sparklineSVG draws a tiny polyline of the last-N charge magnitudes with no
+// chart library — a bare SVG scaled to the min/max of the series. A series of one
+// point (or all-equal values) draws a flat baseline.
+func sparklineSVG(series []int64) ui.Node {
+	if len(series) < 2 {
+		return Fragment()
+	}
+	const w, h = 120, 24
+	min, max := series[0], series[0]
+	for _, v := range series {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	span := max - min
+	pts := make([]string, len(series))
+	for i, v := range series {
+		x := float64(i) * float64(w) / float64(len(series)-1)
+		var y = float64(h) / 2
+		if span > 0 {
+			// Higher spend → higher on screen (smaller y).
+			y = float64(h) - float64(v-min)*float64(h-2)/float64(span) - 1
+		}
+		pts[i] = fmt.Sprintf("%.1f,%.1f", x, y)
+	}
+	return Svg(
+		Attr("viewBox", fmt.Sprintf("0 0 %d %d", w, h)),
+		Attr("width", strconv.Itoa(w)), Attr("height", strconv.Itoa(h)),
+		Attr("role", "img"), Attr("aria-label", uistate.T("merchantPanel.sparklineAlt")),
+		Attr("preserveAspectRatio", "none"),
+		Polyline(Attr("points", strings.Join(pts, " ")),
+			Attr("fill", "none"), Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5")),
+	)
+}
+
+// receiptThumbnails renders the transaction's attached receipts as small
+// clickable thumbnails (TX5). Each thumbnail is its own component so its click
+// handler is loop-hook-safe. Bytes are resolved from the live artifact set.
+func receiptThumbnails(app *appstate.App, txn domain.Transaction) ui.Node {
+	byID := map[string]domain.Artifact{}
+	for _, a := range app.Artifacts() {
+		byID[a.ID] = a
+	}
+	var thumbs []ui.Node
+	for _, ref := range txn.Attachments {
+		art, ok := byID[ref.ArtifactID]
+		var dataURL string
+		if ok && len(art.Bytes) > 0 {
+			dataURL = artifacts.DataURL(art.MIME, art.Bytes)
+		}
+		thumbs = append(thumbs, ui.CreateElement(receiptThumb, receiptThumbProps{Ref: ref, DataURL: dataURL}))
+	}
+	return Div(css.Class(tw.Flex, tw.Gap2), Attr("data-testid", "txn-receipt-thumbs"), thumbs)
+}
+
+// receiptThumbProps configures one receipt thumbnail.
+type receiptThumbProps struct {
+	Ref     domain.AttachmentRef
+	DataURL string // empty when the artifact bytes aren't available
+}
+
+// receiptThumb is a single receipt thumbnail: an image button that opens the
+// shared receipt preview overlay (the same full-view the table's paperclip uses)
+// on click. Owning its own OnClick hook keeps it safe inside the attachments loop.
+func receiptThumb(props receiptThumbProps) ui.Node {
+	preview := uistate.UseTxnPreview()
+	ref := props.Ref
+	open := ui.UseEvent(Prevent(func() { preview.Set(ref) }))
+	label := uistate.T("merchantPanel.openReceipt", firstNonEmpty(ref.Name, ref.ArtifactID))
+	inner := Span(css.Class("muted", tw.P1), "📎")
+	if props.DataURL != "" {
+		inner = Img(Attr("src", props.DataURL), Attr("alt", label),
+			css.Class(tw.W10, tw.H10), Attr("style", "object-fit:cover;border-radius:4px;"))
+	}
+	return Button(css.Class("btn btn-icon"), Type("button"), Attr("data-testid", "txn-receipt-thumb"),
+		Attr("aria-label", label), Title(label), OnClick(open), inner)
+}
 
 // TransactionEditFormProps configures the TransactionEditForm component.
 type TransactionEditFormProps struct {
@@ -419,11 +611,20 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		Label(css.Class("txn-check"),
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")), CheckedIf(clearedS.Get()), OnChange(onCleared)),
 			Span(uistate.T("txnwidget.clearedLabel"))),
-		// Receipts: attach a new image; the count of existing receipts is shown so the
-		// user can confirm it took (viewing opens from the table's row paperclip).
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-attach"), OnClick(attach), uistate.T("transactions.attachReceiptTitle")),
-			If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
+		// TX6: the merchant context panel — the merchant's story (typical amount,
+		// this charge vs typical, visits this week/month, this month vs a typical
+		// month, a tiny sparkline). Read-only, omitted for transfers and one-off
+		// merchants (< 3 charges).
+		merchantContextPanel(app, txn),
+		// Receipts: attach a new image; existing receipts render as thumbnails that
+		// open a full view on click (TX5), so the modal shows the receipt itself, not
+		// just a count.
+		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-attach"), OnClick(attach), uistate.T("transactions.attachReceiptTitle")),
+				If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
+			),
+			If(len(txn.Attachments) > 0, receiptThumbnails(app, txn)),
 		),
 		// C58: split-into-categories, right in the modal — the current breakdown is
 		// always visible; the toggle reveals the full editor (kept as type=button

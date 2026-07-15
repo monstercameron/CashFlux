@@ -55,6 +55,7 @@ func allFormulaMetrics(app *appstate.App) []widgetcatalog.Metric {
 	metrics = append(metrics, widgetcatalog.GoalMetrics(app.Goals())...)
 	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
 	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
+	metrics = append(metrics, widgetcatalog.EventMetrics(liveEventDefs(app))...)
 	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
 	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
 	metrics = append(metrics, widgetcatalog.RecurringMetrics(app.Recurring())...)
@@ -84,7 +85,25 @@ func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
 		Alloc: liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
 		BillsSmart: liveBillsSmartData(app), Smart: liveSmartCounts(),
+		Events: liveEventDefs(app),
 	})
+}
+
+// liveEventDefs converts the persisted events + their transaction membership into
+// engine EventDefs, so each event exposes event_<slug>_{total,spend,count}
+// variables across the formula/widget surface (TX10).
+func liveEventDefs(app *appstate.App) []engineenv.EventDef {
+	evs := app.Events()
+	out := make([]engineenv.EventDef, 0, len(evs))
+	for _, e := range evs {
+		members := app.EventMembers(e.ID)
+		ids := make([]string, 0, len(members))
+		for id := range members {
+			ids = append(ids, id)
+		}
+		out = append(out, engineenv.EventDef{Name: e.Name, TxnIDs: ids})
+	}
+	return out
 }
 
 // liveBillsSmartData builds the smart-bill-schedule inputs for the engine

@@ -88,10 +88,22 @@ func paydayPreflightCard() ui.Node {
 		}
 	}
 
+	// TX9: drop bills already settled by a matched transaction. A recurring bill's
+	// occurrence carries a durable bill-match link when a real payment matched it;
+	// treat those as done rather than "still due this cycle".
+	paid := map[string]bool{}
+	for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, nextPay) {
+		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
+			if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
+				paid[billItemID(b)] = true
+			}
+		}
+	}
+
 	cl := preflight.Build(preflight.Input{
 		Now: now, CycleStart: nextPaydayOnOrBefore(bd.Paydays, now), NextPayday: nextPay,
 		Bills: items, ProjectedLowMinor: plan.Res.Smart.Low, ProjectedLowDate: plan.Res.Smart.LowDate,
-		KeepFloorMinor: bd.MinKeepMinor, Accounts: accts,
+		KeepFloorMinor: bd.MinKeepMinor, Accounts: accts, Paid: paid,
 	})
 	if !cl.HasItems() {
 		return nil

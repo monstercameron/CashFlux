@@ -61,6 +61,9 @@ func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.I
 		Members:       app.Members(),
 		Tasks:         app.Tasks(),
 		Subscriptions: app.Cancellations(),
+		// TX9: matched bill occurrences read as PAID, so the missing-transaction
+		// detector skips what a bill-match link already settled.
+		PaidOccurrences: app.BillMatchPaidOccurrences(),
 	}
 }
 

@@ -55,6 +55,12 @@ type recurOccurrence struct {
 	R       domain.Recurring
 	Date    time.Time
 	Overdue bool
+	// Paid is true when this occurrence carries a durable bill-match link (TX9) —
+	// a real transaction settled it. Variance is that payment's actual magnitude
+	// minus the expected amount (signed; positive = ran over), valid only when
+	// Paid.
+	Paid     bool
+	Variance int64
 }
 
 // recurView is the derived render model every Scheduled-tab tile shares. Pure —
@@ -122,6 +128,16 @@ func computeRecurView(app *appstate.App, now time.Time) recurView {
 		d := r.NextDue
 		for i := 0; i < 8 && !d.After(cutoff); i++ {
 			occ := recurOccurrence{R: r, Date: d, Overdue: d.Before(today)}
+			// TX9: surface whether a real transaction has already settled this
+			// occurrence (paid check + variance).
+			if r.Amount.IsNegative() {
+				if _, ok := app.BillMatchForOccurrence(r.ID, d); ok {
+					occ.Paid = true
+					if variance, vok := app.BillMatchVariance(r.ID, d, r.Amount.Amount); vok {
+						occ.Variance = variance
+					}
+				}
+			}
 			v.Upcoming = append(v.Upcoming, occ)
 			if r.Amount.Amount >= 0 {
 				v.UpcomingIn += r.Amount.Amount

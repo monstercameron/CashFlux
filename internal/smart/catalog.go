@@ -73,7 +73,8 @@ var catalog = []Feature{
 	// ── Transactions ──────────────────────────────────────────────────────────
 	ai("SMART-T1", PageTransactions, "Auto-categorization", "Assign a category from merchant, amount, and your history. Learns from corrections.", true, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T2", PageTransactions, "Smart duplicate detection", "Flag likely duplicate entries and offer one-tap merge or dismiss."),
-	ai("SMART-T3", PageTransactions, "Natural-language search", "Type \"coffee over $10 last month\" and get a structured filter.", false, tokLanguageIn, tokLanguageOut),
+	rule("SMART-T3F", PageTransactions, "Natural-language search", "Type \"coffee over $20 last month\" and turn it into removable filter chips — fully local, no key."),
+	ai("SMART-T3", PageTransactions, "Natural-language search (AI)", "When the local parser can't read a phrasing, the assistant compiles it into the same filter chips.", false, tokLanguageIn, tokLanguageOut),
 	rule("SMART-T4", PageTransactions, "Bulk-edit suggestions", "After one edit, offer to apply it to other similar untouched entries."),
 	ai("SMART-T5", PageTransactions, "Merchant name cleanup", "Normalize raw import gibberish into clean merchant names.", true, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T6", PageTransactions, "Spending-spike alerts", "Flag a transaction that is unusually large for its category."),
@@ -88,6 +89,8 @@ var catalog = []Feature{
 	ai("SMART-T16", PageTransactions, "Auto-categorize (with review)", "Scan your uncategorized transactions and propose a category for each — you confirm before anything changes.", false, tokClassifyIn, tokClassifyOut),
 	ai("SMART-T17", PageTransactions, "Miscategorization review", "Scan your categorized transactions for likely mistakes and propose fixes — you confirm each change.", false, tokClassifyIn, tokClassifyOut),
 	ai("SMART-T18", PageTransactions, "Statement import", "Attach a bank or credit-card statement PDF; the AI reads it and lists the transactions to review — categories mapped to your existing ones — before you import.", false, tokVisionIn, tokVisionOut),
+	rule("SMART-T19", PageTransactions, "New-merchant awareness", "Flag the first time you've ever paid a merchant — a fraud/awareness signal keyed on the clean merchant name."),
+	rule("SMART-T20", PageTransactions, "New-subscription detection", "Notice a second similar charge about a month after the first and offer to track it as recurring."),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────
 	rule("SMART-B7", PageBudgets, "Seasonal budget adjustment", "Detect seasonal categories and suggest month-specific budget amounts."),

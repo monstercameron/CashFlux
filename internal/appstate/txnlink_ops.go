@@ -49,9 +49,40 @@ func (a *App) PutTxnLink(l domain.TxnLink) error {
 		if len(l.TxnIDs) < 2 {
 			return fmt.Errorf("appstate: an order group needs at least 2 transactions")
 		}
-	case domain.TxnLinkRefundPair, domain.TxnLinkBillMatch:
+	case domain.TxnLinkRefundPair:
 		if len(l.TxnIDs) != 2 {
 			return fmt.Errorf("appstate: a %s links exactly 2 transactions", l.Kind)
+		}
+	case domain.TxnLinkBillMatch:
+		// A bill-match ties ONE transaction to ONE recurring occurrence (TX9): the
+		// single member is the paying transaction; the occurrence lives on the
+		// RecurringID/OccurrenceDate fields, not as a second transaction member.
+		if len(l.TxnIDs) != 1 {
+			return fmt.Errorf("appstate: a bill-match links exactly 1 transaction")
+		}
+		if strings.TrimSpace(l.RecurringID) == "" || l.OccurrenceDate.IsZero() {
+			return fmt.Errorf("appstate: a bill-match needs a recurring id and occurrence date")
+		}
+	case domain.TxnLinkEventTxn:
+		// An event link maps ONE transaction to ONE Event (TX10): the single
+		// member is the transaction; the event lives on the EventID field.
+		if len(l.TxnIDs) != 1 {
+			return fmt.Errorf("appstate: an event link maps exactly 1 transaction")
+		}
+		if strings.TrimSpace(l.EventID) == "" {
+			return fmt.Errorf("appstate: an event link needs an event id")
+		}
+		if _, ok, _ := a.store.GetEvent(l.EventID); !ok {
+			return fmt.Errorf("appstate: event %q does not exist", l.EventID)
+		}
+		// One event-link per transaction per event.
+		for _, other := range a.TxnLinks() {
+			if other.ID == l.ID || other.Kind != domain.TxnLinkEventTxn || other.EventID != l.EventID {
+				continue
+			}
+			if other.HasTxn(l.TxnIDs[0]) {
+				return fmt.Errorf("appstate: transaction %q is already in this event", l.TxnIDs[0])
+			}
 		}
 	}
 

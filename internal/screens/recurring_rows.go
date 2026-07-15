@@ -38,12 +38,30 @@ func recurUpcomingRow(occ recurOccurrence, showDate bool) ui.Node {
 		Div(css.Class("rec-up-main"),
 			Span(css.Class("rec-up-name"), r.Label),
 			Div(css.Class("rec-up-tags"),
-				If(occ.Overdue, Span(css.Class("rec-tag rec-tag-overdue"), uistate.T("recurring.overdue"))),
+				If(occ.Paid, Span(css.Class("rec-tag rec-tag-paid"), Title(uistate.T("billmatch.paidBadgeTitle")),
+					uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W3, tw.H3)), uistate.T("billmatch.paidBadge"))),
+				If(occ.Paid && occ.Variance != 0, Span(css.Class("rec-tag"), recurVarianceText(occ.Variance, r.Amount.Currency))),
+				If(occ.Overdue && !occ.Paid, Span(css.Class("rec-tag rec-tag-overdue"), uistate.T("recurring.overdue"))),
 				If(r.Autopay, Span(css.Class("rec-tag"), Title(uistate.T("recurring.autopayHint")), uistate.T("recurring.autopayBadge"))),
 			),
 		),
 		Span(ClassStr("rec-up-amount "+recurAmountTone(r.Amount)), fmtMoney(r.Amount)),
 	)
+}
+
+// recurVarianceText renders the plain-English variance chip for a paid
+// occurrence: "ran $2 over" when the payment exceeded the expected bill, or
+// "$1 under" when it came in below. variance is signed minor units.
+func recurVarianceText(variance int64, cur string) string {
+	mag := variance
+	if mag < 0 {
+		mag = -mag
+	}
+	amt := fmtMoney(money.New(mag, cur))
+	if variance > 0 {
+		return uistate.T("billmatch.ranOver", amt)
+	}
+	return uistate.T("billmatch.ranUnder", amt)
 }
 
 // recurAmountTone returns the semantic tone class for a signed money amount.

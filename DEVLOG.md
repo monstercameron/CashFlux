@@ -1,3 +1,19 @@
+## 2026-07-14 — TX wave B + v1.0.28: Section 2 ships (17 tickets)
+
+Wave B closed the TX series — NL search, bill matching, Amazon import (planning gate closed
+inline by the coordinator: privacy-export CSV + orders-paste, ±3-day subset-sum), the Events
+entity, and the merchant surfaces. Integration catches this round: two agents both added link
+kinds to txnlink.go (bill-match + event-txn) — coexisted cleanly because each is an additive
+switch case; the smartengine i18n ratchet needed bumping 160→165 (pure package, insight strings
+in-package by design — the honest fix is to move the baseline, not to fake-translate); the
+TX9-wire TODO in the forbidden smart_adapter.go got the selective-edit treatment (one line
+populating PaidOccurrences). The Sonnet UX pass on the two surfaces I couldn't seed-verify
+(merchant panel, receipt thumbs) earned its keep: it found the events $0.00 issue's cousin in
+the panel (accounting-parens negatives read as spreadsheet cells mid-sentence) and a false
+"typical $0.00" when a merchant has no prior month. Both real, both fixed. Events themselves had
+the signed-vs-spend bug — a range that catches a paycheck shouldn't zero out a trip's cost.
+Section 2 of 6 done; v1.0.28 deployed.
+
 ## 2026-07-14 — TX wave A: eight tickets, four agents, the loop is tuned
 
 Second section underway. The coordinator loop caught its usual crop at the seams: a missing
