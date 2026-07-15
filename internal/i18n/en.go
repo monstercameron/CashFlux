@@ -1969,7 +1969,7 @@ var english = Catalog{
 	"accounts.addFirst":               "Add your first account",
 	"accounts.noLiabilities":          "No liabilities — nice.",
 	"accounts.archived":               "Archived",
-	"accounts.markAll":                "Mark all updated (%s stale)",
+	"accounts.markAll":                "Mark all updated",
 	"accounts.markAllTitle":           "Mark every stale balance as checked today",
 	"accounts.markedUpdated":          "Marked %s as updated just now.",
 	"accounts.markErr":                "Couldn't mark some balances updated: %s",

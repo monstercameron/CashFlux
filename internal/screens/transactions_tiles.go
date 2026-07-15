@@ -270,6 +270,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 		downloadBytes("transactions.csv", "text/csv", data)
 	}
+	// The 2-row toolbar has room for every action, so Export CSV and Columns are direct
+	// buttons now (no "⋯ More" overflow needed).
+	onExportCSV := ui.UseEvent(Prevent(doExportCSV))
+	openColumns := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
 		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
@@ -543,16 +547,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// row at typical widths. The two least-frequent utilities (Export CSV, Columns) live
 	// in a labeled "⋯ More" overflow so the row stays single-line with the primary Add at
 	// its right end, matching the other pages' toolbars.
-	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
-		TriggerText:   uistate.T("action.more"),
-		TriggerClass:  "btn btn-tool",
-		TriggerTestID: "txn-more-btn",
-		Items: []uiw.OverflowMenuItem{
-			{Label: uistate.T("transactions.exportCsv"), Icon: icon.ArrowDown, TestID: "txn-export-btn", OnSelect: doExportCSV},
-			{Label: uistate.T("transactions.columns"), Icon: icon.List, TestID: "txn-columns-btn", OnSelect: func() { colsModalAtom.Set(true) }},
-		},
-	})
-
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Text,
 		SearchLabel:  uistate.T("transactions.searchPlaceholder"),
@@ -602,8 +596,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
 			// amount alerts. Own component so its popover + list hooks stay stable.
 			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: f, Rates: props.Rates, Base: props.Base}),
-			// Overflow for the least-frequent utilities (Export CSV, Columns).
-			moreMenu,
+			// Export CSV + Columns as direct buttons (the 2-row toolbar has the space).
+			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), onExportCSV, ""),
+			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openColumns, ""),
 			// Primary action last → right end of the left-justified group.
 			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 		},
