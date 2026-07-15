@@ -36,6 +36,10 @@ func b7Seasonal(in Input) []smart.Insight {
 		s := dateutil.AddMonths(curStart, -k)
 		e := dateutil.AddMonths(curStart, -k+1)
 		month := map[string]int64{}
+		// TODO(splits): sums the whole-transaction category only, so these insights can
+		// disagree with the splits-aware budget page for split transactions. See the
+		// split contract in domain/category_split.go; fix = mirror the HasSplits branch
+		// of budgeting.spentCovered / reports.categoryTotals.
 		for _, t := range in.Transactions {
 			if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
 				continue

@@ -466,6 +466,10 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
 		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
+		// TODO(splits): matches only the whole-transaction category — a split line's
+		// category won't surface its transaction here, so a budget's drill-through can
+		// disagree with its splits-aware bar. See the split contract in
+		// domain/category_split.go; fix = also match any Splits[i].CategoryID.
 		case c.Categories != "" && !csvHas(c.Categories, t.CategoryID):
 		case c.Categories == "" && c.Category != "" && t.CategoryID != c.Category:
 		case c.Members != "" && !csvHas(c.Members, t.MemberID):

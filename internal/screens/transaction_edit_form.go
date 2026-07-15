@@ -80,6 +80,25 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	tagsS := ui.UseState(strings.Join(txn.Tags, ", "))
 	clearedS := ui.UseState(txn.Cleared)
 	errMsg := ui.UseState("")
+	// C58: the split-into-categories editor, revealed by a toggle inside this modal
+	// so the breakdown is visible and editable without leaving the edit form.
+	splitOpen := ui.UseState(false)
+	toggleSplit := ui.UseEvent(func() { splitOpen.Set(!splitOpen.Get()) })
+	// saveSplits persists a breakdown set in the embedded SplitEditor. It writes the
+	// stored transaction directly (the editor validated Σ=amount), so it is
+	// independent of this form's unsaved field drafts.
+	saveSplits := func(updated domain.Transaction) {
+		if err := app.PutTransaction(updated); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		uistate.BumpDataRevision()
+		if updated.HasSplits() {
+			uistate.PostNotice(uistate.T("splitEditor.saved"), false)
+		} else {
+			uistate.PostNotice(uistate.T("splitEditor.cleared"), false)
+		}
+	}
 
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onPayee := ui.UseEvent(func(v string) { payeeS.Set(v) })
@@ -113,6 +132,13 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 		t.Tags = textutil.CommaFields(tagsS.Get())
 		t.Cleared = clearedS.Get()
+		// C58: an amount edit must not silently desync an existing category breakdown —
+		// budgets attribute per split line, so a mismatched total would misreport. Block
+		// and point at the split section below instead of quietly dropping the split.
+		if t.HasSplits() && !t.SplitsReconcile() {
+			errMsg.Set(uistate.T("transactions.splitAmountMismatch"))
+			return
+		}
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -199,7 +225,28 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		memberS.Get(),
 	)
 
-	return Form(css.Class("form-grid txn-edit"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
+	// The current breakdown, listed read-only so a split is visible the moment the
+	// modal opens; the full editor is one tap away on the toggle. Category id → name
+	// resolves against the live category list (unknown/empty ids read as
+	// uncategorized). Static text only, so a plain loop is loop-hook-safe.
+	catNameByID := make(map[string]string, len(categories))
+	for _, c := range categories {
+		catNameByID[c.ID] = c.Name
+	}
+	var splitLines []ui.Node
+	for _, s := range txn.Splits {
+		n := catNameByID[s.CategoryID]
+		if n == "" {
+			n = uistate.T("transactions.uncategorized")
+		}
+		splitLines = append(splitLines, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Span(css.Class("badge badge-split"), "⑂"),
+			Span(n),
+			Span(css.Class("muted"), fmtMoney(s.Amount)),
+		))
+	}
+
+	return Form(css.Class("form-grid txn-edit"), Attr("id", "txn-edit-form"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("transactions.descPlaceholder"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
 		labeledField(uistate.T("transactions.payeeLabel"),
@@ -233,11 +280,24 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-attach"), OnClick(attach), uistate.T("transactions.attachReceiptTitle")),
 			If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
 		),
+		// C58: split-into-categories, right in the modal — the current breakdown is
+		// always visible; the toggle reveals the full editor (kept as type=button
+		// children so nothing here submits the form).
+		Div(Attr("data-testid", "txn-edit-splits"),
+			If(len(splitLines) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), splitLines)),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-split-toggle"),
+				Attr("aria-expanded", ariaBool(splitOpen.Get())), OnClick(toggleSplit),
+				uistate.T(splitToggleKey(splitOpen.Get(), txn.HasSplits()))),
+			If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
+				Txn: txn, Categories: categories, OnSave: saveSplits,
+			})),
+		),
 		errText("txn-edit-err", errMsg.Get()),
-		Div(css.Class("modal-sticky-foot"),
-			Button(css.Class("btn-del"), Type("button"), OnClick(del), uistate.T("action.delete")),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+		// Delete stays in the body (left-aligned, apart from the panel footer's
+		// Cancel/Save): the FlipPanel's pinned .set-foot owns Cancel + Save now (via
+		// FormID → native submit), fixing the old floating mid-panel button row.
+		Div(css.Class(tw.Flex, tw.Mt2, tw.Mb2),
+			Button(css.Class("btn btn-del"), Type("button"), Attr("data-testid", "txn-edit-delete"), OnClick(del), uistate.T("action.delete")),
 		),
 	)
 }

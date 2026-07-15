@@ -321,6 +321,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		anchorAtom.Set(txnID)
 	}
 	openEdit := func(id string) { uistate.SetTxnEdit(id) }
+	openSplit := func(id string) { uistate.SetTxnSplit(id) }
 	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
 
 	frame := props.Frame
@@ -365,6 +366,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	for _, m := range props.App.Members() {
 		memberName[m.ID] = m.Name
 	}
+	// Category id → name, so a split row can list its per-line categories.
+	catName := make(map[string]string)
+	for _, c := range props.App.Categories() {
+		catName[c.ID] = c.Name
+	}
 	// openLink opens the payment-link flip modal (shell-root host) for a transaction,
 	// pre-set to Bill or Subscription mode. The modal owns the actual write, so the row
 	// ⋯ menu just sets the shared target atom.
@@ -388,6 +394,25 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		cat := catCol.Str(i)
 		if strings.TrimSpace(cat) == "" {
 			cat = uistate.T("transactions.uncategorized")
+		}
+		// A split transaction lists its per-line categories (deduped, in split order)
+		// so the breakdown reads at a glance without opening the editor.
+		if t, ok := txByID[rid]; ok && t.HasSplits() {
+			seen := make(map[string]bool, len(t.Splits))
+			names := make([]string, 0, len(t.Splits))
+			for _, s := range t.Splits {
+				n := catName[s.CategoryID]
+				if n == "" {
+					n = uistate.T("transactions.uncategorized")
+				}
+				if !seen[n] {
+					seen[n] = true
+					names = append(names, n)
+				}
+			}
+			if len(names) > 0 {
+				cat = strings.Join(names, ", ")
+			}
 		}
 		cleared := false
 		if b, ok := clearedCol.Values[i].(bool); ok {
@@ -422,6 +447,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Vis:              colVis,
 			BillAccountID:    txByID[rid].BillAccountID,
 			SubscriptionName: txByID[rid].SubscriptionName,
+			HasSplits:        txByID[rid].HasSplits(),
+			IsTransfer:       txByID[rid].IsTransfer(),
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -430,6 +457,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnToggleSelect = toggleSelect
 		r.OnViewReceipt = viewReceipt
 		r.OnOpenLink = openLink
+		r.OnOpenSplit = openSplit
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -547,11 +575,18 @@ type txnFrameRowProps struct {
 	BillAccountID    string
 	SubscriptionName string
 	OnOpenLink       func(txnID, mode string)
-	Receipts         int                  // attachment count (drives the paperclip)
-	Attachment       domain.AttachmentRef // first attachment, opened by the paperclip
-	OnOpen           func(id string)
-	OnToggleSelect   func(id string, shift bool)
-	OnViewReceipt    func(domain.AttachmentRef)
+	// Split-into-categories (the ⋯ row menu): HasSplits shows a ✓ when the
+	// transaction already carries a category breakdown; OnOpenSplit opens the split
+	// flip modal. IsTransfer hides the entry — a transfer leg has no category to
+	// split (mirroring the classic view, which gates every category action on it).
+	HasSplits      bool
+	IsTransfer     bool
+	OnOpenSplit    func(txnID string)
+	Receipts       int                  // attachment count (drives the paperclip)
+	Attachment     domain.AttachmentRef // first attachment, opened by the paperclip
+	OnOpen         func(id string)
+	OnToggleSelect func(id string, shift bool)
+	OnViewReceipt  func(domain.AttachmentRef)
 }
 
 // txnFrameRow renders one clickable transaction row. It owns its click/select/
@@ -622,33 +657,48 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	)
 }
 
-// txnRowMenu is the row's ⋯ kebab: two entries that open the payment-link flip modal
-// for this transaction, pre-set to Bill or Subscription mode. A ✓ prefixes an entry
-// whose link is already set. The picking/clearing happens in the modal, so the menu
-// stays short. Built with OverflowMenu (loop-safe: it owns each item's click hook).
+// txnRowMenu is the row's ⋯ kebab: entries that open the payment-link flip modal
+// (pre-set to Bill or Subscription mode) and the split-into-categories flip modal.
+// A ✓ prefixes an entry whose link/breakdown is already set. The picking/clearing
+// happens in the modal, so the menu stays short. Built with OverflowMenu
+// (loop-safe: it owns each item's click hook).
 func txnRowMenu(props txnFrameRowProps) ui.Node {
-	if props.OnOpenLink == nil {
+	var items []uiw.OverflowMenuItem
+	if props.OnOpenLink != nil {
+		billLabel := uistate.T("transactions.markBill")
+		if props.BillAccountID != "" {
+			billLabel = "✓ " + billLabel
+		}
+		subLabel := uistate.T("transactions.markSub")
+		if props.SubscriptionName != "" {
+			subLabel = "✓ " + subLabel
+		}
+		items = append(items,
+			uiw.OverflowMenuItem{
+				Label:    billLabel,
+				TestID:   "txn-markbill-open",
+				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) },
+			},
+			uiw.OverflowMenuItem{
+				Label:    subLabel,
+				TestID:   "txn-marksub-open",
+				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) },
+			})
+	}
+	// Split-into-categories: not offered on transfer legs (no category to split).
+	if props.OnOpenSplit != nil && !props.IsTransfer {
+		splitLabel := uistate.T("splitEditor.toggle")
+		if props.HasSplits {
+			splitLabel = "✓ " + splitLabel
+		}
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    splitLabel,
+			TestID:   "txn-split-open",
+			OnSelect: func() { props.OnOpenSplit(props.ID) },
+		})
+	}
+	if len(items) == 0 {
 		return Fragment()
-	}
-	billLabel := uistate.T("transactions.markBill")
-	if props.BillAccountID != "" {
-		billLabel = "✓ " + billLabel
-	}
-	subLabel := uistate.T("transactions.markSub")
-	if props.SubscriptionName != "" {
-		subLabel = "✓ " + subLabel
-	}
-	items := []uiw.OverflowMenuItem{
-		{
-			Label:    billLabel,
-			TestID:   "txn-markbill-open",
-			OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) },
-		},
-		{
-			Label:    subLabel,
-			TestID:   "txn-marksub-open",
-			OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) },
-		},
 	}
 	return uiw.OverflowMenu(uiw.OverflowMenuProps{
 		Items:         items,
