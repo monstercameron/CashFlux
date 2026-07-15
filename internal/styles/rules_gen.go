@@ -2380,12 +2380,32 @@ func registerGenerated() {
 	rule(".amount-expense",
 		color("var(--money-negative)"),
 	)
+	// Two-row standard toolbar: primary row (search fills + Filters trigger), then an
+	// actions row beneath. A column so the two rows stack; each row is its own flex line.
 	rule(".filter-toolbar",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+		marginBottom("0.6rem"),
+	)
+	rule(".filter-toolbar-primary",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	// The search pill grows to fill the line; the Filters trigger holds its natural size.
+	rule(".filter-toolbar-primary .fctrl-search",
+		flex("1 1 auto"),
+		minWidth("0"),
+	)
+	rule(".filter-toolbar-primary .filters-trigger",
+		flexShrink("0"),
+	)
+	rule(".filter-toolbar-actions",
 		display("flex"),
 		flexWrap("wrap"),
 		alignItems("center"),
 		gap("0.5rem"),
-		marginBottom("0.6rem"),
 	)
 	rule(".filter-search",
 		flex("1 1 220px"),

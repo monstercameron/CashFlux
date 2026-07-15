@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"fmt"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -103,8 +105,11 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		})
 	}
 
-	// Account exposure rows (only accounts that carry an earmark), with a free figure and an
-	// over-earmarked flag when the live balance no longer backs the reservations.
+	// Account exposure cards (only accounts that carry an earmark): a name + earmarked/free
+	// figures over a coverage BAR that fills to the earmarked share of the balance — so the
+	// reserved-vs-free split reads at a glance. When the live balance no longer backs the
+	// reservations (over-earmarked), the bar fills fully in the danger tone and the free
+	// figure is flagged.
 	var exposureRows []ui.Node
 	for _, a := range accounts {
 		em := earmarkByAcct[a.ID]
@@ -122,24 +127,37 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		if over {
 			freeCls += " " + tw.Fold(tw.TextWarn)
 		}
-		exposureRows = append(exposureRows, Div(css.Class("ea-exp-row"), Attr("data-testid", "ea-exp-"+a.ID),
-			Span(css.Class("ea-exp-name"), a.Name),
-			Span(css.Class("ea-exp-earmarked"), fmtMoney(money.New(em, base))),
-			Span(css.Class(freeCls), uistate.T("goals.earmarksFreeOf", fmtMoney(money.New(free, base)), fmtMoney(money.New(balBase, base)))),
+		// Earmarked share of the balance (0..100). Over-earmarked reads as a full danger bar.
+		coverPct := 100
+		if balBase > 0 && !over {
+			coverPct = int(em * 100 / balBase)
+		}
+		if coverPct > 100 {
+			coverPct = 100
+		}
+		barCls := "ea-bar-fill"
+		if over {
+			barCls += " is-over"
+		}
+		exposureRows = append(exposureRows, Div(css.Class("ea-acct"), Attr("data-testid", "ea-exp-"+a.ID),
+			Div(css.Class("ea-acct-top"),
+				Span(css.Class("ea-acct-name"), a.Name),
+				Span(css.Class("ea-acct-figs"),
+					Span(css.Class("ea-acct-earmarked"), fmtMoney(money.New(em, base))),
+					Span(css.Class(freeCls), uistate.T("goals.earmarksFreeOf", fmtMoney(money.New(free, base)), fmtMoney(money.New(balBase, base)))),
+				),
+			),
+			Div(css.Class("ea-acct-bar"), Attr("role", "img"),
+				Attr("aria-label", uistate.T("goalsredesign.earmarkBarLabel", a.Name, fmtMoney(money.New(em, base)), fmtMoney(money.New(balBase, base)))),
+				Div(ClassStr(barCls), Attr("style", fmt.Sprintf("width:%d%%", coverPct))),
+			),
 		))
 	}
 
 	exposureCard := uiw.Card(uiw.CardProps{
 		Header: H2(css.Class("card-title"), uistate.T("goals.earmarksExposure"),
 			Span(css.Class("budget-sub"), uistate.T("goals.earmarksTotal", fmtMoney(money.New(grandTotal, base)), plural(len(goalsWithEarmarks), "goal")))),
-		Body: Div(css.Class("ea-exp-list"),
-			Div(css.Class("ea-exp-row ea-exp-head"),
-				Span(css.Class("ea-exp-name"), uistate.T("common.name")),
-				Span(css.Class("ea-exp-earmarked"), uistate.T("goals.earmarksColEarmarked")),
-				Span(css.Class("ea-exp-free"), uistate.T("goals.earmarksColFree")),
-			),
-			exposureRows,
-		),
+		Body: Div(css.Class("ea-exp-list"), exposureRows),
 	})
 
 	overbooked := overbookedGoals(app)
@@ -192,10 +210,18 @@ func goalEarmarkGroup(props goalEarmarkGroupProps) ui.Node {
 			AmountStr: fmtMoney(al.Amount), OnDelete: props.OnDelete,
 		})
 	})
+	cov := goalsvc.CoveragePercent(g)
+	covFill := cov
+	if covFill > 100 {
+		covFill = 100
+	}
 	return Div(css.Class("ea-goal"), Attr("data-testid", "ea-goal-"+g.ID),
 		Div(css.Class("ea-goal-head"),
 			Span(css.Class("ea-goal-name"), g.Name),
-			Span(css.Class("goal-alloc-cover"), uistate.T("goals.coverageChip", goalsvc.CoveragePercent(g))),
+			// Coverage as a mini bar beside the % chip, so how-close-to-covered reads at a glance.
+			Div(css.Class("ea-cover"), Attr("role", "img"), Attr("aria-label", uistate.T("goalsredesign.coverageBarLabel", cov)),
+				Div(css.Class("ea-cover-fill"), Attr("style", fmt.Sprintf("width:%d%%", covFill)))),
+			Span(css.Class("goal-alloc-cover"), uistate.T("goals.coverageChip", cov)),
 			warn,
 			Button(css.Class("btn btn-sm", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "ea-manage-"+g.ID), OnClick(manage),

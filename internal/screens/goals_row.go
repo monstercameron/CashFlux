@@ -91,6 +91,12 @@ func GoalRow(props goalRowProps) ui.Node {
 	// GoalTodoItem child which owns its own click hook — no On* in a loop here).
 	toggleTodo := func(taskID string) { toggleGoalTodo(taskID) }
 
+	// GL redesign (Task 2): the contribution planner is opt-in per card — hidden by
+	// default and revealed by the "Plan contribution" disclosure chip below the figures.
+	// The open state lives in a stable top-of-component hook so it never reorders.
+	planOpen := ui.UseState(false)
+	togglePlan := ui.UseEvent(Prevent(func() { planOpen.Set(!planOpen.Get()) }))
+
 	now := time.Now()
 	kind := g.EffectiveKind()
 	financial := kind.IsFinancial()
@@ -204,18 +210,25 @@ func GoalRow(props goalRowProps) ui.Node {
 	if financial {
 		rem, _ := goalsvc.Remaining(g)
 		overfund, _ := goalsvc.Overfund(g)
-		var subPrimary, subSecondary string
-		if complete {
-			subPrimary = uistate.T("goals.complete")
-		} else {
-			subPrimary = uistate.T("goals.remaining", fmtMoney(rem))
-			subSecondary = fmt.Sprintf("%d%%", pct)
-			if !g.TargetDate.IsZero() {
-				subPrimary += uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
-				if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-					subPrimary += uistate.T("goals.saveSuffix", fmtMoney(per))
-				}
+		// Figures grid (redesign): the key numbers as scannable stat cells instead of a
+		// run-on "$X to go · by date · save $X/mo" sentence. Only cells with real data
+		// appear, so the grid stays honest and adapts per goal. A completed goal drops the
+		// figures entirely — its loader already reads 100% and the meta strip says what's next.
+		var figs []ui.Node
+		if !complete {
+			figs = append(figs, goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(rem)))
+			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
+				figs = append(figs, goalFig(uistate.T("goalsredesign.figMonthly"), fmtMoney(per)))
+			} else if g.MonthlyContribution.Amount > 0 {
+				figs = append(figs, goalFig(uistate.T("goalsredesign.figMonthly"), fmtMoney(g.MonthlyContribution)))
 			}
+			if !g.TargetDate.IsZero() {
+				figs = append(figs, goalFig(uistate.T("goalsredesign.figTarget"), pr.FormatDate(g.TargetDate)))
+			}
+		}
+		var figsNode ui.Node = Fragment()
+		if len(figs) > 0 {
+			figsNode = Div(css.Class("goal-figs"), Attr("data-testid", "goal-figs-"+g.ID), figs)
 		}
 		var whatNext ui.Node = Fragment()
 		if complete && !g.Archived {
@@ -267,12 +280,11 @@ func GoalRow(props goalRowProps) ui.Node {
 			}
 		}
 		subSection = Fragment(
-			Div(css.Class("budget-sub goal-sub"),
-				Span(subPrimary),
-				If(subSecondary != "", Span(css.Class("goal-sub-dim"), " · "+subSecondary)),
+			figsNode,
+			Div(css.Class("goal-meta"),
+				overfundNote, whatNext, linkedLine, catLine, earmarkLine,
+				goalInterestEtaLine(g, props.Accounts, now),
 			),
-			overfundNote, whatNext, linkedLine, catLine, earmarkLine,
-			goalInterestEtaLine(g, props.Accounts, now),
 		)
 	} else {
 		var line string
@@ -431,6 +443,16 @@ func GoalRow(props goalRowProps) ui.Node {
 		)
 	}
 
+	// GL redesign (Task 2): the contribution planner is opt-in. Show its disclosure chip
+	// only when the slider itself would render (financial, active, with a sensible range),
+	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
+	_, _, _, sliderOK := goalsvc.SliderRange(g, now)
+	showPlanner := financial && !g.Archived && sliderOK
+	planLabel := uistate.T("goalsredesign.planShow")
+	if planOpen.Get() {
+		planLabel = uistate.T("goalsredesign.planHide")
+	}
+
 	return Div(ClassStr("goal-card "+cardState),
 		Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
 		// GL6: the goal's vision image as a small banner atop the card (when attached).
@@ -458,8 +480,20 @@ func GoalRow(props goalRowProps) ui.Node {
 		subSection,
 		// GL3: one-tap emergency-fund sizing from the derived essential month.
 		ui.CreateElement(GoalEmergencySizer, goalEmergencyProps{App: appstate.Default, Goal: g}),
-		// GL4: contribution slider with a live finish-date ETA + "use this plan".
-		ui.CreateElement(GoalContribSlider, goalSliderProps{App: appstate.Default, Goal: g}),
+		// GL4 + Task 2: the contribution slider is opt-in — a disclosure chip reveals it
+		// inline, so the default card stays clean. Hidden entirely for goals with no plan.
+		If(showPlanner,
+			Button(css.Class("goal-plan-toggle"), Type("button"),
+				Attr("data-testid", "goal-plan-toggle-"+g.ID),
+				Attr("aria-expanded", ariaBool(planOpen.Get())),
+				Attr("aria-controls", "goal-plan-"+g.ID),
+				OnClick(togglePlan),
+				uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(planLabel),
+			),
+		),
+		If(showPlanner && planOpen.Get(),
+			ui.CreateElement(GoalContribSlider, goalSliderProps{App: appstate.Default, Goal: g})),
 		// GL5: shared-goal per-member pledge split bar (renders only when pledged).
 		ui.CreateElement(GoalPledgeBar, goalPledgeProps{App: appstate.Default, Goal: g, Members: props.Members}),
 		todosSection,
@@ -634,6 +668,15 @@ func addHabitCheckIn(goalID string) {
 		}
 		return
 	}
+}
+
+// goalFig renders one stat cell in a goal card's figures grid (redesign): a small
+// uppercase label above a prominent serif value.
+func goalFig(label, value string) ui.Node {
+	return Div(css.Class("goal-fig"),
+		Span(css.Class("goal-fig-k"), label),
+		Span(css.Class("goal-fig-v"), value),
+	)
 }
 
 // goalCardStateClass tints a goal card by its pace: a green stripe on-track, amber when

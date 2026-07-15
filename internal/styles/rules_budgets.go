@@ -298,12 +298,21 @@ func registerBudgetsSurface() {
 
 	// --- 2026-07-12 refinements: sort picker, formulas modal, top-up funding, add template ---
 
-	// Toolbar: the methodology + sort pickers sit side by side on the left.
-	rule(".budgets-toolbar-pickers",
-		display("flex"),
-		alignItems("flex-end"),
-		gap("0.9rem"),
+	// Toolbar: budgets now uses the shared two-row .filter-toolbar (matching the
+	// transactions/accounts toolbar). It has no free-text search, so the primary row
+	// carries the two view-shaping pickers (budgeting method + sort). They share the
+	// line — each grows equally — and each picker's <select> fills its pill so the two
+	// controls read as one deliberate row instead of two small huddled capsules.
+	rule(".budgets-tb .filter-toolbar-primary",
 		flexWrap("wrap"),
+	)
+	rule(".budgets-tb .filter-toolbar-primary .fctrl",
+		flex("1 1 0"),
+		minWidth("13rem"),
+	)
+	rule(".budgets-tb .filter-toolbar-primary .fctrl .fctrl-select",
+		flex("1 1 auto"),
+		width("auto"),
 	)
 
 	// Formulas modal: copyable variable → value rows.
@@ -429,5 +438,40 @@ func registerBudgetsSurface() {
 		width("100%"),
 		minHeight("12rem"),
 		prop("resize", "none"),
+	)
+
+	// --- Sweep-leftovers config modal ------------------------------------------------
+	// The "Budgets to sweep" participation list is a bordered inset box (like the top-up
+	// funding checklist), scrolling once a household has many budgets so it never balloons
+	// the modal. Each row is an aligned checkbox + name with a quiet hover.
+	rule(".sweep-budgets",
+		display("flex"),
+		flexDirection("column"),
+		maxHeight("15rem"),
+		overflowY("auto"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("var(--bg-elev)"),
+		padding("0.2rem 0.35rem"),
+	)
+	rule(".sweep-check-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		padding("0.4rem 0.35rem"),
+		borderRadius("7px"),
+		cursor("pointer"),
+		color("var(--text)"),
+		transition("background .12s ease"),
+	)
+	rule(".sweep-check-row:hover",
+		background("var(--bg-card)"),
+	)
+	rule(".sweep-check-row .t-body",
+		flex("1"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
 	)
 }

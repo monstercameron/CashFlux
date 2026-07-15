@@ -857,24 +857,31 @@ func HouseholdCard() uic.Node {
 				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 			),
 		)),
-		// The household summary keeps its rail-foot spot as a QUIET, non-interactive
-		// line (people still glance here for "2 members · USD base").
-		Div(css.Class("hh-quiet", tw.Mt3, tw.Mb2, tw.Px3, tw.TextCenter, tw.LeadingTight),
-			Span(css.Class(tw.FontDisplay, tw.Text13, tw.TextDim, tw.Block), name),
-			Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
+		// The footer proper: one intentional, grouped block separated from the nav by a
+		// hairline — the quiet household identity, the local-first privacy assurance, and
+		// a tidy meta row (About & privacy on the left, the version on the right). Hidden
+		// as a unit when the rail is collapsed (rules_system.go).
+		Div(css.Class("rail-foot-info"),
+			// Household identity: people glance here for "2 members · USD base".
+			Div(css.Class("rail-foot-hh"),
+				Span(css.Class("rail-foot-hh-name"), name),
+				Span(css.Class("rail-foot-hh-sub"), summary),
+			),
+			// Local-first trust line (C289 / R34-trust): the privacy differentiator,
+			// surfaced where every user sees it. A lock glyph anchors it as an assurance.
+			Div(css.Class("rail-foot-privacy"),
+				ui.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(uistate.T("trust.localFooter")),
+			),
+			// Meta row: the /about entry point (C290) and the app version, aligned to the
+			// footer's two edges so both stay legible and deliberate.
+			Div(css.Class("rail-foot-meta"),
+				A(css.Class("rail-foot-about"),
+					Attr("href", uistate.RoutePath("/about")), uistate.T("nav.aboutPrivacyLink")),
+				Span(css.Class("app-version"),
+					Attr("title", "CashFlux "+version.Label()), version.Label()),
+			),
 		),
-		// Local-first trust line (C289 / R34-trust): the privacy differentiator was
-		// only in the admin console; surface it where every user sees it. Muted so it
-		// reassures without shouting.
-		Span(css.Class(tw.TextDim, tw.Text11, tw.Block, tw.TextCenter, tw.Px3, tw.Pb1, tw.LeadingTight),
-			uistate.T("trust.localFooter")),
-		// C290: "About & privacy" footer link so users can reach the /about page
-		// from the sidebar — a discoverable, persistent entry point that doesn't
-		// depend on knowing the ? shortcut or the nav list order.
-		A(css.Class(tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb1, tw.HoverTextFg, tw.Underline),
-			Attr("href", uistate.RoutePath("/about")), uistate.T("nav.aboutPrivacyLink")),
-		Span(css.Class("app-version", tw.TextFaint, tw.Text11, tw.Block, tw.TextCenter, tw.Pb2),
-			Attr("title", "CashFlux "+version.Label()), version.Label()),
 	)
 }
 

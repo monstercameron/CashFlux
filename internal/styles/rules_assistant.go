@@ -473,39 +473,109 @@ func registerAssistantSurface() {
 	rule(".ask-head-actions",
 		prop("flex", "0 0 auto"),
 	)
-	// Inline quick-controls in the header: a small caption + a <select> (model + thinking
-	// level) beside the New chat / Edit prompt buttons — a fast switch without a trip to
-	// Settings. Styled to match the app's STANDARD toolbar select (the topbar member-
-	// switcher): bg-elev chip, 1px border, 8px radius, NATIVE arrow (no custom chevron),
-	// sized to the .btn-tool footprint so the row is uniform. The selector out-specifies
-	// the generated bare-<select> rule (which forces a 44px look).
-	rule(".ask-quickctl",
+	// ── The assistant CONTROL CELL: a full-width bordered toolbar that groups the
+	// model / thinking / privacy selectors and the New chat / Edit prompt actions into
+	// one aligned row — the app's control-cell language, not a loose inline strip. ──
+	// With the controls now in their own cell below the title, the title bar drops its
+	// divider so the two don't read as stacked rules.
+	rule(".ask-head",
+		prop("border-bottom", "none"),
+		prop("padding-bottom", "0.2rem"),
+		prop("margin-bottom", "0.55rem"),
+	)
+	rule(".ask-controls",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "flex-end"),
+		prop("gap", "0.7rem 0.9rem"),
+		prop("width", "100%"),
+		prop("padding", "0.7rem 0.85rem"),
+		prop("margin-bottom", "0.9rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "12px"),
+		prop("background", "color-mix(in srgb, var(--text) 2.5%, transparent)"),
+	)
+	// Each captioned field stacks an uppercase label over its control.
+	rule(".ask-ctrl-field",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.3rem"),
+		prop("min-width", "0"),
+	)
+	rule(".ask-ctrl-lbl",
+		prop("font-size", "0.62rem"),
+		prop("font-weight", "600"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.07em"),
+		prop("color", "var(--text-faint)"),
+	)
+	// MODEL + THINKING use the app's STANDARD styled select (.set-input, the Settings
+	// control), given a custom chevron so the raw OS-native arrow never shows. Scoped
+	// to the cell so the global .set-input elsewhere is untouched. This selector
+	// out-specifies both .set-input and the generated bare-<select> rule.
+	rule(".ask-controls select.ask-ctrl-sel",
+		prop("width", "auto"),
+		prop("min-width", "9rem"),
+		prop("max-width", "13rem"),
+		prop("height", "38px"),
+		prop("min-height", "38px"),
+		prop("padding", "0 1.9rem 0 0.7rem"),
+		prop("border-radius", "8px"),
+		prop("font-size", "0.82rem"),
+		prop("cursor", "pointer"),
+		prop("appearance", "none"),
+		prop("-webkit-appearance", "none"),
+		prop("-moz-appearance", "none"),
+		prop("background-image", "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238a8a92' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")"),
+		prop("background-repeat", "no-repeat"),
+		prop("background-position", "right 0.6rem center"),
+		prop("background-size", "0.72rem"),
+		prop("transition", "border-color 120ms ease, box-shadow 120ms ease"),
+	)
+	rule(".ask-controls select.ask-ctrl-sel:hover",
+		prop("border-color", "color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	rule(".ask-controls select.ask-ctrl-sel:focus-visible",
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "1px"),
+	)
+	// PRIVACY is a standard styled control sharing the selects' height/shape.
+	rule(".ask-ctrl-btn",
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("gap", "0.4rem"),
-	)
-	rule(".ask-quickctl-lbl",
-		prop("font-size", "0.68rem"),
-		prop("font-weight", "600"),
-		prop("text-transform", "uppercase"),
-		prop("letter-spacing", "0.05em"),
-		prop("color", "var(--text-faint)"),
-	)
-	rule(".ask-head-actions select.ask-quickctl-sel",
 		prop("height", "38px"),
-		prop("min-height", "38px"),
+		prop("padding", "0 0.8rem"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "8px"),
 		prop("background", "var(--bg-elev)"),
 		prop("color", "var(--text)"),
 		prop("font-size", "0.82rem"),
-		prop("padding", "0 1.5rem 0 0.6rem"),
-		prop("max-width", "12rem"),
+		prop("font-weight", "500"),
 		prop("cursor", "pointer"),
-		prop("transition", "border-color 120ms ease"),
+		prop("transition", "border-color 120ms ease, background 120ms ease"),
 	)
-	rule(".ask-head-actions select.ask-quickctl-sel:hover",
+	rule(".ask-ctrl-btn:hover",
 		prop("border-color", "color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	rule(".ask-ctrl-btn svg",
+		prop("color", "var(--text-faint)"),
+	)
+	// Aggregates-only reads in the accent tone so the tighter privacy is legible.
+	rule(".asst-privacy-btn.is-aggregates",
+		prop("border-color", "color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		prop("color", "var(--accent)"),
+	)
+	rule(".asst-privacy-btn.is-aggregates svg",
+		prop("color", "var(--accent)"),
+	)
+	// The action buttons group pushes to the right edge and sits on the fields' baseline.
+	rule(".ask-ctrl-actions",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "center"),
+		prop("gap", "0.5rem"),
+		prop("margin-left", "auto"),
 	)
 	// The canvas FILLS the viewport: a fixed full height (rather than content-height)
 	// so the input dock sits at the bottom of the screen and the thread scrolls inside

@@ -193,7 +193,7 @@ const vbStyleCSS = `
 .vb-publish{padding:.4rem .9rem;font-size:.82rem}
 .vb-danger{color:var(--danger,#dc2626);border-color:color-mix(in srgb, var(--danger,#dc2626) 45%, var(--border,#2a2a2d))}
 .vb-danger:hover{background:color-mix(in srgb, var(--danger,#dc2626) 10%, transparent)}
-.vb-status{font-size:.8rem;color:var(--accent,#3b82f6)}
+.vb-status{font-size:.8rem;color:var(--accent,#3b82f6);display:flex;align-items:center;flex-wrap:wrap;gap:.5rem}
 .vb-main{display:flex;gap:.8rem;flex:1;min-height:0}
 .vb-palette{width:180px;flex:0 0 180px;overflow:auto;display:flex;flex-direction:column;gap:.3rem;padding:.7rem;border:1px solid var(--border,#2a2a2d);border-radius:14px;background:color-mix(in srgb, var(--text,#e5e7eb) 2.5%, transparent)}
 .vb-pane-title{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--accent,#3b82f6);margin-bottom:.25rem}
@@ -594,7 +594,15 @@ func VisualBuilder() ui.Node {
 				wmStepper("H", row.Get(), "Shorter", "Taller", func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
 			),
 		),
-		If(published.Get() != "", Div(css.Class("vb-status"), Attr("role", "status"), published.Get())),
+		If(published.Get() != "", Div(css.Class("vb-status"), Attr("role", "status"),
+			Span(published.Get()),
+			// On a successful publish, offer a direct jump to the dashboard so the user
+			// can see the new tile land in the custom-cards band at the foot of the grid.
+			If(strings.HasPrefix(published.Get(), "Published"),
+				A(css.Class("btn btn-sm"), Attr("data-testid", "vb-open-dashboard"),
+					Href(uistate.RoutePath("/")), "Open dashboard"),
+			),
+		)),
 		// Workspace: palette | canvas | right dock (inspector over the live
 		// preview) — the canvas keeps the full workspace height and the preview
 		// stays in view while wiring.
@@ -856,10 +864,10 @@ const vbCardPrefix = "wb:"
 // vbPublishedWidget renders a published builder card (by saved name) as a
 // dashboard tile. Returns nil if the named card no longer exists in the library
 // (e.g. the user deleted it after publishing) so the tile silently drops out.
-// vbPublishedWidget renders a published builder card at the given dashboard-grid span
-// (colSpan×rowSpan from the layout item). A zero span falls back to the size saved with
-// the card, then to 2×2 — so a custom card honors its chosen width/height like the
-// built-in tiles, instead of collapsing to a single cell.
+// The colSpan×rowSpan come from the layout item; a zero span falls back to the size
+// saved with the card, then to 4×3 — so a custom card honors its chosen width/height
+// like the built-in tiles. The dashboard grid packer (dashlayout.Pack) places the
+// tile from the persisted layout sequence, so it flows in right after the built-ins.
 func vbPublishedWidget(name string, colSpan, rowSpan int) ui.Node {
 	g, ok := vbLoadCards()[name]
 	if !ok {

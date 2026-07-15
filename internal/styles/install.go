@@ -44,6 +44,7 @@ func Register() {
 	registerTxnCalendar()
 	registerSavedViews()
 	registerAccountsSurface()
+	registerGoalsSurface()
 	inject(Build())
 }
 

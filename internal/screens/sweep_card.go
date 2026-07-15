@@ -180,7 +180,7 @@ func budgetsSweepConfigModal() ui.Node {
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:    uistate.T("sweep.configTitle"),
 		Width:    uiw.FlipMediumW,
-		Height:   "min(90vh, 600px)",
+		Height:   uiw.FlipMediumH,
 		NoFooter: true,
 		OnClose:  func() { openAtom.Set(false) },
 		Back:     ui.CreateElement(sweepConfigForm, sweepConfigFormProps{OnDone: func() { openAtom.Set(false) }}),
@@ -212,12 +212,11 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 	selected := ui.UseState(seed)
 
 	onToggleEnabled := ui.UseEvent(func() { enabled.Set(!enabled.Get()) })
-	onGoal := ui.UseEvent(func(e ui.Event) { goalID.Set(e.GetValue()) })
 
 	budgets := app.Budgets()
 	goals := app.Goals()
 
-	onSave := ui.UseEvent(func() {
+	onSave := ui.UseEvent(Prevent(func() {
 		ids := make([]string, 0, len(selected.Get()))
 		for _, b := range budgets { // stable, store order
 			if selected.Get()[b.ID] {
@@ -234,14 +233,15 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 		if props.OnDone != nil {
 			props.OnDone()
 		}
-	})
+	}))
 	onCancel := ui.UseEvent(func() {
 		if props.OnDone != nil {
 			props.OnDone()
 		}
 	})
 
-	// Budget checkbox rows — each its own component (no On* in a loop).
+	// Budget checkbox rows — each its own component (no On* in a loop). They sit in a
+	// bordered inset list so the participation choices read as one aligned group.
 	var budgetRows ui.Node
 	if len(budgets) == 0 {
 		budgetRows = P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configNoBudgets"))
@@ -261,44 +261,53 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 				},
 			}))
 		}
-		budgetRows = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), rows)
+		budgetRows = Div(css.Class("sweep-budgets"), rows)
 	}
 
-	// Goal picker.
+	// Destination goal — the standard bordered .field select (via SelectInput), matching
+	// every other config modal's picker.
 	var goalPicker ui.Node
 	if len(goals) == 0 {
 		goalPicker = P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configNoGoals"))
 	} else {
-		opts := make([]ui.Node, 0, len(goals)+1)
-		opts = append(opts, Option(Value(""), SelectedIf(goalID.Get() == ""), uistate.T("sweep.configGoalNone")))
+		opts := make([]uiw.SelectOption, 0, len(goals)+1)
+		opts = append(opts, uiw.SelectOption{Value: "", Label: uistate.T("sweep.configGoalNone")})
 		for _, g := range goals {
-			opts = append(opts, Option(Value(g.ID), SelectedIf(goalID.Get() == g.ID), g.Name))
+			opts = append(opts, uiw.SelectOption{Value: g.ID, Label: g.Name})
 		}
-		goalPicker = Select(css.Class("field"), Attr("data-testid", "sweep-config-goal"),
-			Attr("aria-label", uistate.T("sweep.configGoal")), OnChange(onGoal), opts)
+		goalPicker = uiw.SelectInput(uiw.SelectInputProps{
+			Options: opts, Selected: goalID.Get(),
+			OnChange:  func(v string) { goalID.Set(v) },
+			AriaLabel: uistate.T("sweep.configGoal"), TestID: "sweep-config-goal",
+		})
 	}
 
-	return Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
-		P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configIntro")),
-		Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"),
-				Attr("data-testid", "sweep-config-enable"), OnChange(onToggleEnabled)},
-				checkedAttr(enabled.Get())...)...),
-			Span(css.Class("t-body"), uistate.T("sweep.configEnable")),
+	// Standard config-modal shell: an .acct-edit-form with a scrolling body and a pinned
+	// Save/Cancel foot, identical-in-kind to the budget edit modal.
+	return Form(css.Class("acct-edit-form"), OnSubmit(onSave),
+		Div(css.Class("modal-scroll"),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+				uistate.T("sweep.configIntro")),
+			// Enable toggle as a standard bordered toggle row (matches the budget editor's
+			// rollover row).
+			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Attr("style", "flex-wrap:nowrap;cursor:pointer"),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"),
+					Attr("data-testid", "sweep-config-enable"), OnChange(onToggleEnabled)},
+					checkedAttr(enabled.Get())...)...),
+				Span(css.Class("t-body"), uistate.T("sweep.configEnable")),
+			),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+				Span(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configBudgets")),
+				budgetRows,
+			),
+			labeledField(uistate.T("sweep.configGoal"), goalPicker),
 		),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configBudgets")),
-			budgetRows,
-		),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configGoal")),
-			goalPicker,
-		),
-		Div(css.Class("modal-foot", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"),
 				Attr("data-testid", "sweep-config-cancel"), OnClick(onCancel), uistate.T("sweep.cancel")),
-			Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-				Attr("data-testid", "sweep-config-save"), OnClick(onSave), uistate.T("sweep.save")),
+			Button(css.Class("btn btn-primary"), Type("submit"),
+				Attr("data-testid", "sweep-config-save"), uistate.T("sweep.save")),
 		),
 	)
 }
@@ -318,7 +327,7 @@ func sweepBudgetCheckRow(props sweepBudgetRowProps) ui.Node {
 			props.OnToggle()
 		}
 	})
-	return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+	return Label(css.Class("sweep-check-row"),
 		Attr("data-testid", "sweep-config-budget-"+props.ID),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("aria-label", props.Name),
 			OnChange(onChange)}, checkedAttr(props.Checked)...)...),

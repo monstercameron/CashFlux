@@ -1,3 +1,39 @@
+## 2026-07-15 — v1.0.34: first-8-pages UX overhaul via 4 parallel opus agents
+
+User reported a batch of bugs + redesign asks (dashboard add-view, three broken/non-standard modals,
+dense accounts list, ugly goals, optional goal contributions, full-width goals, visual earmarks,
+assistant control cell, standard 2-row toolbars everywhere, footer). Ran it as a 4-agent parallel
+fan-out (opus): A=accounts, B=goals, C=transactions+budgets, D=assistant+dashboard+footer, with me
+as coordinator building the shared primitive first and integrating after.
+
+Two coordinator moves made the parallelism safe on a shared tree (no worktrees allowed here): (1) I
+converted the shared `uiw.FilterToolbar` to the two-row layout MYSELF before dispatch, so the toolbar
+standard was set once and Transactions/Accounts inherited it for free; (2) each agent routed ALL its
+CSS to a dedicated per-surface `rules_*.go` file (I pre-created + registered `rules_goals.go`), never
+the shared `rules_gen.go` — per-surface files register after the generated sheet, so same-selector
+rules override cleanly. Result: the integrated wasm build compiled first try with zero conflicts
+across ~20 files from 4 agents. The only shared hotspots (install.go register line, the FilterToolbar
+change) I owned.
+
+Territory highlights: A rebuilt each account row from a ~12-line dump into a 3-tier hierarchy with a
+"Details" disclosure, and fixed the Sweep-rules void (FlipMedium+NoFooter → FlipSmall+CloseOnly). B
+made goal cards full-width with a serif figures-strip, put the contribution planner behind an opt-in
+chip, fixed the Round-ups modal to FlushBody+pinned footer (checklist was clipped), and gave earmarks
+coverage bars. C converted the budgets toolbar to the 2-row standard and standardized the
+Sweep-leftovers modal. D built the assistant control cell (standard styled selects, no raw OS
+dropdown), tidied the footer, and — after tracing it live — found the dashboard "add view" (Widget
+Builder publish→dashboard) ISN'T broken (the tile is added, persisted, and rendered; verified by e2e:
+a published tile appears on the dashboard); it just lands below the fold, so D added an "Open
+dashboard" link for discoverability.
+
+Verification: integrated build clean, native tests + screenlint green (bumped the ../screens i18n
+baseline 125→126 for D's one un-i18n'd Studio-page "Open dashboard" link — that page is entirely
+hardcoded by design), and a functional e2e (_goal_verify.mjs) passed all 11 checks with zero console
+errors: 2-row toolbars, all three modal footers, the accounts Details disclosure, the goals
+contribution toggle (hidden→revealed), the styled assistant select, and publish→dashboard. None of
+the three concurrent-session files were touched; committed via path-scoped staging. Next: the
+aggressive adversarial design loop across all 8 pages.
+
 ## 2026-07-15 — v1.0.33: design-agent UX/UI refinement loop to release-quality
 
 Ran the frontend-design skill as an independent gate: a Sonnet design lead reviewed full-page

@@ -1159,7 +1159,13 @@ func Insights() ui.Node {
 	// Standard header actions: New chat + Edit prompt as labeled .btn-tool buttons (the
 	// app-wide toolbar-button standard). The old "Advanced" expander that only revealed
 	// Edit prompt is gone — it was a click to hide a single option.
-	chatControls := Div(css.Class("ask-head-actions", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+	// The assistant CONTROLS as one clean, full-width bordered control cell (the
+	// app's toolbar/control-cell language): captioned model + thinking + privacy
+	// fields on the left, the New chat / Edit prompt actions grouped on the right —
+	// all standard styled controls, aligned on a single baseline. No loose inline
+	// label+select pairs, no raw OS-native dropdown.
+	chatControls := Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
 		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
 		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
 		privacyChip(privacyChipProps{Tier: tier, OnToggle: func() {
@@ -1170,11 +1176,13 @@ func Insights() ui.Node {
 			privacyTier.Set(next)
 			uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
 		}}),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
-			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
-			Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
-			uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
+		Div(css.Class("ask-ctrl-actions"),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
+				Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
+				uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
+		),
 	)
 	// Bespoke aside group: the saved conversations as a quiet vertical index.
 	railConvs := Fragment()
@@ -1318,10 +1326,12 @@ func Insights() ui.Node {
 			H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
 			Span(css.Class("ask-status"), uistate.T(statusKey)),
 		),
-		chatControls,
 	)
 	askMain := Div(css.Class("ask-main"),
 		askHead,
+		// The controls sit in their own full-width cell below the title bar so they
+		// read as one aligned toolbar spanning the conversation column.
+		chatControls,
 		chatConsole,
 	)
 
@@ -1726,9 +1736,12 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 			p.OnPick(e.GetValue())
 		}
 	})
-	return Label(css.Class("ask-quickctl"), Title(uistate.T("assistant.modelPick")),
-		Span(css.Class("ask-quickctl-lbl"), uistate.T("assistant.modelLabel")),
-		Select(css.Class("ask-quickctl-sel"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
+	// A standard control-cell field: an uppercase caption over the app's STANDARD
+	// styled select (.set-input, the same control Settings uses) — no raw OS-native
+	// dropdown, so the model switcher reads like every other select in the app.
+	return Label(css.Class("ask-ctrl-field"), Title(uistate.T("assistant.modelPick")),
+		Span(css.Class("ask-ctrl-lbl"), uistate.T("assistant.modelLabel")),
+		Select(css.Class("set-input ask-ctrl-sel"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
 			MapKeyed(assistantModelIDs(p.Models, p.Current),
 				func(m string) any { return m },
 				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
@@ -1762,16 +1775,21 @@ func privacyChipComp(p privacyChipProps) ui.Node {
 		label = uistate.T("insights.privacyAggregates")
 		title = uistate.T("insights.privacyAggregatesHint")
 	}
-	cls := "ask-quickctl asst-privacy-chip"
+	cls := "ask-ctrl-btn asst-privacy-btn"
 	if agg {
 		cls += " is-aggregates"
 	}
-	return Button(css.Class(cls), Type("button"), Attr("data-testid", "assistant-privacy-chip"),
-		Attr("role", "status"), Attr("aria-live", "polite"),
-		Attr("aria-label", uistate.T("insights.privacyAria", label)), Title(title), OnClick(onClick),
-		uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(css.Class("ask-quickctl-lbl"), uistate.T("insights.privacyLabel")),
-		Span(label),
+	// A control-cell field matching the model/thinking selects: an uppercase caption
+	// over a standard styled control. The value itself is the toggle button (a lock
+	// glyph + the active tier), so it sits flush with the selects in the cell.
+	return Div(css.Class("ask-ctrl-field"),
+		Span(css.Class("ask-ctrl-lbl"), uistate.T("insights.privacyLabel")),
+		Button(css.Class(cls), Type("button"), Attr("data-testid", "assistant-privacy-chip"),
+			Attr("role", "status"), Attr("aria-live", "polite"),
+			Attr("aria-label", uistate.T("insights.privacyAria", label)), Title(title), OnClick(onClick),
+			uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(label),
+		),
 	)
 }
 
@@ -1791,9 +1809,9 @@ func thinkPickerComp(p thinkPickerProps) ui.Node {
 			p.OnPick(e.GetValue())
 		}
 	})
-	return Label(css.Class("ask-quickctl"), Title(uistate.T("assistant.thinkPick")),
-		Span(css.Class("ask-quickctl-lbl"), uistate.T("assistant.thinkLabel")),
-		Select(css.Class("ask-quickctl-sel"), Attr("aria-label", uistate.T("assistant.thinkPick")), Attr("data-testid", "assistant-think"), OnChange(onChange),
+	return Label(css.Class("ask-ctrl-field"), Title(uistate.T("assistant.thinkPick")),
+		Span(css.Class("ask-ctrl-lbl"), uistate.T("assistant.thinkLabel")),
+		Select(css.Class("set-input ask-ctrl-sel"), Attr("aria-label", uistate.T("assistant.thinkPick")), Attr("data-testid", "assistant-think"), OnChange(onChange),
 			Option(Value("low"), SelectedIf(p.Effort == "low"), uistate.T("assistant.thinkLow")),
 			Option(Value("medium"), SelectedIf(p.Effort == "medium" || p.Effort == ""), uistate.T("assistant.thinkMedium")),
 			Option(Value("high"), SelectedIf(p.Effort == "high"), uistate.T("assistant.thinkHigh")),

@@ -149,22 +149,28 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		searchCls += " is-active"
 	}
 	return Div(
+		// Standard two-row toolbar (every page): row 1 is the search field filling the
+		// line with the Filters trigger at its end; row 2 holds the remaining actions.
+		// Pages accrued many buttons, so a single wrapping row read as a ragged pile —
+		// this keeps search prominent and the actions on their own tidy line.
 		Div(css.Class("filter-toolbar"),
-			// Unified search control: the shared .fctrl "control pill" (identical markup to
-			// the to-do page) — a leading magnifier, a borderless input, and a clear (×)
-			// that appears only when it holds a query — so every toolbar's search reads the
-			// same instead of a bare full-width field.
-			Label(css.Class(searchCls),
-				Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Input(css.Class("fctrl-input"), Type("search"),
-					Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
-					Value(props.Search), OnInput(onSearch)),
-				If(props.Search != "", Button(css.Class("fctrl-clear"), Type("button"),
-					Attr("aria-label", uistate.T("action.clear")), OnClick(onClear),
-					Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+			Div(css.Class("filter-toolbar-primary"),
+				// Unified search control: the shared .fctrl "control pill" (identical markup to
+				// the to-do page) — a leading magnifier, a borderless input, and a clear (×)
+				// that appears only when it holds a query — so every toolbar's search reads the
+				// same instead of a bare full-width field.
+				Label(css.Class(searchCls),
+					Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Input(css.Class("fctrl-input"), Type("search"),
+						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
+						Value(props.Search), OnInput(onSearch)),
+					If(props.Search != "", Button(css.Class("fctrl-clear"), Type("button"),
+						Attr("aria-label", uistate.T("action.clear")), OnClick(onClear),
+						Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+				),
+				trigger,
 			),
-			trigger,
-			props.Actions,
+			If(len(props.Actions) > 0, Div(css.Class("filter-toolbar-actions"), props.Actions)),
 		),
 		If(n > 0, Div(css.Class("filter-chips"), chips,
 			Button(css.Class("btn-link chip-clear-all"), Type("button"),

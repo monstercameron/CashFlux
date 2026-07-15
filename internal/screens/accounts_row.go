@@ -167,6 +167,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	// loop-level hook).
 	projExpanded := ui.UseState(false)
 	toggleProj := ui.UseEvent(Prevent(func() { projExpanded.Set(!projExpanded.Get()) }))
+	// AC-series detail (90-day trend, this-period flow, projection, filed documents,
+	// notes, custom fields) is folded behind a quiet per-row disclosure so the resting
+	// list reads as name → balance and nothing competes; one click reveals the rest.
+	detailsOpen := ui.UseState(false)
+	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -324,86 +329,112 @@ func AccountRow(props accountRowProps) ui.Node {
 		rowStyle["border-left"] = "3px solid " + institutionSwatchColor(inst)
 	}
 
-	return Div(
-		Div(css.Class("row"), Style(rowStyle),
+	// The detail disclosure sits on the quiet secondary line; its label flips with state.
+	detailsLabel := uistate.T("accountsRedesign.detailsShow")
+	if detailsOpen.Get() {
+		detailsLabel = uistate.T("accountsRedesign.detailsHide")
+	}
+	// The revealed block collects every AC-series extra. It mounts only while open so the
+	// resting row stays a clean name → balance line (child components' hooks are their own,
+	// so conditional mounting here is safe).
+	var detailsNode ui.Node = Fragment()
+	if detailsOpen.Get() {
+		detailsNode = Div(css.Class("acct-row-details"), Attr("data-testid", "acct-details-"+a.ID),
+			valChange,
+			projNode,
+			billNode,
+			flowNode,
+			sparkNode,
+			// XC7: warn when goals have earmarked more against this account than it
+			// holds (goal money has been spent). Own component; healthy → Fragment().
+			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
+			// Read-only summary of the account's custom-field values (a compact
+			// "Label: value · …" line), shown only when any are set.
+			If(customSummary(props.AccountDefs, a.Custom) != "",
+				Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
+					customSummary(props.AccountDefs, a.Custom))),
+			// Readable, clickable-to-expand notes line (the attached note itself).
+			notesNode,
+			// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
+			// payoff letters) with an attach form carrying an optional renewal date.
+			ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
+			// MIA-extend (#445-10): nudge to fill missing institution.
+			If(a.Institution == "" && !a.Archived,
+				Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
+					Attr("data-testid", "set-institution-"+a.ID),
+					Style(map[string]string{"align-self": "flex-start", "text-align": "left"}),
+					Title(uistate.T("accounts.setInstitution")),
+					OnClick(startEdit),
+					uistate.T("accounts.setInstitution"),
+				)),
+		)
+	}
+
+	return Div(css.Class("row acct-row"), Style(rowStyle),
+		// PRIMARY line: type glyph + name/badges on the left, the balance figure and the
+		// row actions right-aligned. Everything else is demoted to the sub-line or details.
+		Div(css.Class("acct-row-head"),
 			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
 			// Credit Card are distinguishable without reading the meta-line.
 			Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
 				uiw.Icon(accountTypeIcon(a.Type), css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-			Div(css.Class("row-main"),
-				Span(css.Class("row-desc"), a.Name,
-					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Style(map[string]string{"margin-left": "0.5rem"}), uistate.T(staleBadgeKey(a.Type)))),
+			Div(css.Class("acct-row-id"),
+				Div(css.Class("acct-row-name"),
+					Span(css.Class("row-desc"), a.Name),
+					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), uistate.T(staleBadgeKey(a.Type)))),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
+					If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
 				),
-				If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
-				Span(css.Class("row-meta"), meta),
-				valChange,
-				projNode,
-				billNode,
-				flowNode,
-				sparkNode,
-				// XC7: warn when goals have earmarked more against this account than it
-				// holds (goal money has been spent). Own component; healthy → Fragment().
-				ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
-				// Read-only summary of the account's custom-field values (a compact
-				// "Label: value · …" line), shown only when any are set.
-				If(customSummary(props.AccountDefs, a.Custom) != "",
-					Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "acct-custom-summary-"+a.ID),
-						customSummary(props.AccountDefs, a.Custom))),
-				// Readable, clickable-to-expand notes line (the attached note itself).
-				notesNode,
-				// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
-				// payoff letters) with an attach form carrying an optional renewal date.
-				ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
-				// MIA-extend (#445-10): nudge to fill missing institution. A <button> in the
-				// column stretches full-width and centers its text by default, which made the
-				// link float mid-row — align-self:flex-start shrinks it to content and left-
-				// aligns it under the account meta like the other rows.
-				If(a.Institution == "" && !a.Archived,
-					Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
-						Attr("data-testid", "set-institution-"+a.ID),
-						Style(map[string]string{"align-self": "flex-start", "text-align": "left"}),
-						Title(uistate.T("accounts.setInstitution")),
-						OnClick(startEdit),
-						uistate.T("accounts.setInstitution"),
-					)),
+				// SECONDARY line: the quiet meta (type · currency · utilization) plus the
+				// details disclosure — the only two things allowed to sit under the name.
+				Div(css.Class("acct-row-sub"),
+					Span(css.Class("row-meta"), meta),
+					Button(css.Class("btn-link acct-details-toggle"), Type("button"),
+						Attr("data-testid", "acct-details-toggle-"+a.ID),
+						Attr("aria-expanded", ariaBool(detailsOpen.Get())),
+						Attr("aria-label", uistate.T("accountsRedesign.detailsAria", a.Name)),
+						OnClick(toggleDetails), detailsLabel),
+				),
 			),
 			// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
 			// render parenthesized for liabilities, so give the current balance an explicit accessible name
 			// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
 			// and screen-reader users without cluttering the row with a visible label.
-			Span(ClassStr(amountClass(dispBal)),
+			Span(ClassStr(amountClass(dispBal)+" acct-row-figure"),
 				Title(uistate.T("accounts.balanceTitle")),
 				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 				fmtMoney(dispBal)),
 			// Quick actions inline: "Update value/balance" for stale/valuation accounts
 			// (emphasized when stale), then "Edit" (always). Everything else — including
 			// Transactions — lives in the ⋯ menu.
-			If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
-			Div(css.Class("add-wrap"), Attr("id", menuID),
-				Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-				Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-				Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-					// Transactions moved into the menu (it's navigation, not a per-row edit).
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), OnClick(view), uistate.T("nav.transactions")),
-					// "Update value" lives in the menu only when it's not already an inline
-					// quick action (i.e. fresh cash accounts), so it's never duplicated.
-					If(!a.Archived && !showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-menu-"+a.ID), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
-					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
-					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
-						uistate.T("accounts.transferAction"))),
-					If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
-					// Delete moved out of the standalone ✕ column and into the menu as a
-					// destructive item (last, red) so a row's actions are all in one place.
-					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
+			Div(css.Class("acct-row-actions"),
+				If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+				Div(css.Class("add-wrap"), Attr("id", menuID),
+					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+						// Transactions moved into the menu (it's navigation, not a per-row edit).
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), OnClick(view), uistate.T("nav.transactions")),
+						// "Update value" lives in the menu only when it's not already an inline
+						// quick action (i.e. fresh cash accounts), so it's never duplicated.
+						If(!a.Archived && !showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-menu-"+a.ID), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+							Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
+							uistate.T("accounts.transferAction"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
+						// Delete moved out of the standalone ✕ column and into the menu as a
+						// destructive item (last, red) so a row's actions are all in one place.
+						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
+					),
 				),
 			),
 		),
+		detailsNode,
 	)
 }
 

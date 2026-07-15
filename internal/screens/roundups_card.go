@@ -206,12 +206,16 @@ func goalsRoundUpConfigModal() ui.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("roundups.configTitle"),
-		Width:    uiw.FlipMediumW,
-		Height:   "min(90vh, 600px)",
-		NoFooter: true,
-		OnClose:  func() { openAtom.Set(false) },
-		Back:     ui.CreateElement(roundupConfigForm, roundupConfigFormProps{OnDone: func() { openAtom.Set(false) }}),
+		Title:  uistate.T("roundups.configTitle"),
+		Width:  uiw.FlipMediumW,
+		Height: uiw.FlipMediumH,
+		// NoFooter + FlushBody: the form splits into a scrolling field region (.modal-scroll)
+		// and a pinned Cancel/Save bar (.modal-foot), so the account checklist scrolls inside
+		// the body instead of being clipped by the panel edge (matches the sweep-config modal).
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   func() { openAtom.Set(false) },
+		Back:      ui.CreateElement(roundupConfigForm, roundupConfigFormProps{OnDone: func() { openAtom.Set(false) }}),
 	})
 }
 
@@ -314,26 +318,31 @@ func roundupConfigForm(props roundupConfigFormProps) ui.Node {
 		accountRows = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), rows)
 	}
 
-	return Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
-		P(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configIntro")),
-		Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"),
-				Attr("data-testid", "roundups-config-enable"), OnChange(onToggleEnabled)},
-				checkedAttr(enabled.Get())...)...),
-			Span(css.Class("t-body"), uistate.T("roundups.configEnable")),
-		),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configGoal")),
-			goalPicker,
-		),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configCadence")),
-			cadencePicker,
-		),
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configAccounts")),
-			P(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configAllAccounts")),
-			accountRows,
+	// FlushBody layout: a scrolling field region (.modal-scroll) + a pinned action bar
+	// (.modal-foot) as SIBLINGS, so the long account checklist scrolls inside the body
+	// and the Cancel/Save footer stays put instead of being clipped by the panel edge.
+	return Div(css.Class("roundup-config-form", tw.Flex, tw.FlexCol),
+		Div(css.Class("modal-scroll", tw.Flex, tw.FlexCol, tw.Gap3),
+			P(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configIntro")),
+			Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"),
+					Attr("data-testid", "roundups-config-enable"), OnChange(onToggleEnabled)},
+					checkedAttr(enabled.Get())...)...),
+				Span(css.Class("t-body"), uistate.T("roundups.configEnable")),
+			),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+				Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configGoal")),
+				goalPicker,
+			),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+				Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configCadence")),
+				cadencePicker,
+			),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+				Span(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configAccounts")),
+				P(css.Class("t-caption", tw.TextDim), uistate.T("roundups.configAllAccounts")),
+				accountRows,
+			),
 		),
 		Div(css.Class("modal-foot", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Button(css.Class("btn btn-ghost btn-sm"), Type("button"),

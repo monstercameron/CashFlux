@@ -1034,9 +1034,12 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		uistate.BumpDataRevision()
 	})
 	sortVal := sortAtom.Get()
-	toolbar := Div(css.Class("budgets-toolbar"),
-		// Left: the methodology picker + a "Sort by" picker — the two view controls.
-		Div(css.Class("budgets-toolbar-pickers"),
+	// Standard two-row toolbar (matches the transactions/accounts toolbar): budgets has
+	// no free-text search, so row 1 (the primary line) holds the two view-shaping pickers
+	// — budgeting method + sort — each growing to fill the width, and row 2 holds the
+	// action buttons with "+ Add budget" anchoring the end.
+	toolbar := Div(css.Class("filter-toolbar budgets-tb"),
+		Div(css.Class("filter-toolbar-primary"),
 			Label(css.Class("fctrl"),
 				uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("fctrl-label"), uistate.T("settings.budgetMethod")),
@@ -1062,9 +1065,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 				),
 			),
 		),
-		// Right: the actions, uniform-height and right-aligned, with the primary
-		// "+ Add budget" last so it clearly outranks the ghost controls.
-		Div(css.Class("budgets-toolbar-actions"),
+		// Row 2: the actions on their own tidy line, with the primary "+ Add budget"
+		// last so it clearly outranks the ghost controls.
+		Div(css.Class("filter-toolbar-actions"),
 			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
 				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),

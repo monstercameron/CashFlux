@@ -58,4 +58,77 @@ func registerSystemSurface() {
 		prop("top", "3.5rem"),
 		prop("background", "var(--bg)"),
 	)
+
+	// ── Sidebar footer (shell.go HouseholdCard) ──────────────────────────────────
+	// A tidy, intentional footer: the household identity, a local-first privacy
+	// assurance, and a meta row (About & privacy / version), grouped under a hairline
+	// so the foot of the rail reads as one deliberate block rather than loose lines.
+	rule(".rail-foot-info",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.6rem"),
+		prop("margin-top", "0.85rem"),
+		prop("padding-top", "0.8rem"),
+		prop("padding-bottom", "0.5rem"),
+		prop("border-top", "1px solid var(--border)"),
+	)
+	// Collapsed rail: hide the whole footer block as a unit (the old per-element
+	// hide rules targeted direct span/a children this wrapper now nests).
+	rule("aside.rail.collapsed .rail-foot-info",
+		prop("display", "none"),
+	)
+	rule(".rail-foot-hh",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.1rem"),
+	)
+	rule(".rail-foot-hh-name",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "0.82rem"),
+		prop("font-weight", "600"),
+		prop("line-height", "1.2"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".rail-foot-hh-sub",
+		prop("font-size", "0.7rem"),
+		prop("line-height", "1.2"),
+		prop("color", "var(--text-faint)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	// The privacy assurance: a small lock glyph beside a muted two-line note.
+	rule(".rail-foot-privacy",
+		prop("display", "flex"),
+		prop("align-items", "flex-start"),
+		prop("gap", "0.4rem"),
+		prop("font-size", "0.68rem"),
+		prop("line-height", "1.4"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".rail-foot-privacy svg",
+		prop("color", "var(--text-faint)"),
+		prop("margin-top", "0.12rem"),
+	)
+	// Meta row: About & privacy pinned left, version pinned right, on one baseline.
+	rule(".rail-foot-meta",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.5rem"),
+	)
+	rule(".rail-foot-about",
+		prop("font-size", "0.7rem"),
+		prop("color", "var(--text-faint)"),
+		prop("text-decoration", "none"),
+		prop("transition", "color 120ms ease"),
+	)
+	rule(".rail-foot-about:hover",
+		prop("color", "var(--text)"),
+		prop("text-decoration", "underline"),
+	)
+	rule(".rail-foot .app-version",
+		prop("font-size", "0.68rem"),
+		prop("color", "var(--text-faint)"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("letter-spacing", "0.02em"),
+	)
 }

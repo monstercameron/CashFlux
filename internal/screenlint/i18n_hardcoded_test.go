@@ -40,7 +40,7 @@ import (
 var i18nBaselines = map[string]int{
 	// UI layer (wasm screens + app chrome). Baselines set 2026-07-03 (C361);
 	// first conversion tranche brought screens 211→126 and app 17→0.
-	"../screens": 125,
+	"../screens": 126,
 	"../app":     0,
 	// Shared component library + UI-adjacent packages (second sweep pass —
 	// Cam: "every page AND component"). widgetregistry's 2 are the preset
