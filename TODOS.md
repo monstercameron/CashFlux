@@ -20,6 +20,45 @@ packages have no `syscall/js` and ship with table-driven tests.
   OVERDUE pill. Add a short "Overdue" sub-label / visual break above those rows so it doesn't
   momentarily read as a contradiction. (POLISH; non-blocking — the release-quality gate passed.)
 
+### Competitive-parity backlog — browser-only, local-first (2026-07-15 assessment; DEFERRED)
+Gap review of the first-8 pages found feature depth at/above the leaders; the real losses are
+INFRASTRUCTURE. Recorded here for later; nothing built yet. Things that need a 3rd-party service
+(bank aggregation, credit score, bill-negotiation) are OUT of the local-first model — the *may-someday*
+sync backend must only ever store **encrypted payloads**. Already covered, so NOT gaps: holdings/
+portfolio (`internal/portfolio` + `domain.Holding`, Investments page), OFX/QFX import (`internal/ofx`
++ `internal/statement`), page-level browser notifications (`app/notifyrun.go postBrowserNotifications`).
+
+- [ ] **CP1 — PWA background notifications (local-first, no server).** *Feasibility answered 2026-07-15.*
+  Today notifications only fire while the tab is OPEN (`postBrowserNotifications` uses `new Notification()`
+  in the page). The browser reality for firing when the app isn't foregrounded:
+  - An in-page clock (setTimeout/interval) is throttled when hidden and **stops entirely** when the
+    tab/PWA window is CLOSED — cannot be relied on for closed-app timing.
+  - Only pure-browser, no-server path for closed-app delivery: **Service Worker `showNotification`**
+    (display) woken by **Periodic Background Sync** (`periodicSync`) — **installed PWA + Chromium
+    (Chrome/Edge desktop, Chrome Android) only**, engagement-gated, **coarse cadence (~12h floor, the
+    browser decides)**, NOT exact-time, NOT on iOS Safari/Firefox.
+  - **Notification Triggers** (`TimestampTrigger`, exact-time + no-server) never shipped stably.
+  - **Push API** gives precise closed-app delivery but needs a push server — off-limits now; could
+    ride the future encrypted-sync backend as a **content-free "wake and check locally" ping**
+    (precise timing, data stays on-device).
+  - **Detached/installed PWA window (Chrome/Edge)** is the best case: while OPEN-but-minimized the
+    page process stays alive (throttled ~1/min, not frozen like a bg tab) so a coarse in-page check
+    still fires; while CLOSED only periodicSync applies — and installing is exactly what *unlocks* it.
+  - **Planned architecture (deferred):** wasm precomputes a reminder schedule (bills / near-over
+    budgets / stale balances / due tasks), shifted out of quiet hours, into an **IndexedDB queue**;
+    the **Service Worker delivers** due items via `showNotification` (+`notificationclick`
+    deep-link), woken by `periodicsync` + `activate` + a page `postMessage` on app-open. Foreground
+    stays precise (as today). Prefs: enable toggle, per-type toggles, quiet hours; an **install
+    nudge** + honest **capability explainer** that detects standalone/installed mode and states the
+    ~12h coarse ceiling. Skeleton contract drafted (page globals `cashfluxWriteReminders` /
+    `cashfluxEnableReminders` / `cashfluxReminderCapability`; SW `deliverDue()` over the queue).
+- [ ] **CP2 — Recurring tasks + reminders (To-do gap).** Tasks have no recurrence today (only recurring
+  *transactions* do). Add cadence + next-due + optional reminder lead to `domain.Task`; completing a
+  recurring task spawns the next occurrence; feed the CP1 reminder queue. SDLC: domain → tested logic →
+  store → state → UI (recurrence controls in the task add/edit form + a recurring chip on rows).
+- [ ] **CP3 — Notification delivery preferences.** The Notifications page has no per-type thresholds /
+  quiet-hours UI; fold this into CP1's prefs.
+
 ### Review F1 — Frictionless signup / first-run (6/10)
 - [x] **C1 [MAJOR]** Sample banner permanently cleared after first reload — DONE: `persist.go` hydrateImport no longer force-clears `SetSampleActive(false)`. Autosave persists the seeded sample, so a reload lands on hydrateImport even when un-personalised; clearing the flag there made the "viewing sample data" chip vanish forever after one reload. The IndexedDB-backed flag is authoritative (set on seed; cleared on personalise/dismiss/wipe/own-import) so it now stands. MEASURED live: load sample → reload → `sample-data-banner` still mounted (before & after), 0 console errors; `go test ./internal/app` ok, build rc=0.
 - [x] **C2 [MAJOR]** Data-loss race: hero "Load sample data" + reload &lt;1s loses the sample — DONE: added `uistate.RequestPersist()`/`CapturePersistNow` hook (new `internal/uistate/persistnow.go`) wired to the app's `resaveDataset` closure, and called it after every sample-load path (`dashboard_hero.go`, `accounts.go`, settings.go) so the dataset is flushed immediately instead of waiting for the 4s autosave ticker. Also mark sample-active on the accounts/settings load paths for banner consistency. MEASURED live: wipe → welcome CTA appears → click load-sample → reload after **250ms** → sample-data-banner present, empty CTA not back (data persisted), 0 console errors; `go test ./internal/uistate` ok, build rc=0.
