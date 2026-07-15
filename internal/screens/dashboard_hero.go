@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smartai"
@@ -247,20 +248,23 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		),
 
 		// Quick actions — the two most common entry points, surfaced without hunting.
+		// Standard glyph buttons (leading icon + label, like the page toolbars).
 		Div(css.Class("home-hero-actions"),
-			Button(css.Class("btn btn-primary"), Type("button"),
+			Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", uistate.T("home.quickAddTxnAria")),
 				Attr("title", uistate.T("home.quickAddTxnAria")),
 				Attr("data-testid", "hero-add-txn"),
 				OnClick(openQuickAdd),
-				uistate.T("home.quickAddTxn"),
+				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("home.quickAddTxn")),
 			),
-			Button(css.Class("btn"), Type("button"),
+			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", uistate.T("home.quickAddAccountAria")),
 				Attr("title", uistate.T("home.quickAddAccountAria")),
 				Attr("data-testid", "hero-add-account"),
 				OnClick(openAddAccount),
-				uistate.T("home.quickAddAccount"),
+				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T("home.quickAddAccount")),
 			),
 		),
 
