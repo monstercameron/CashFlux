@@ -32,6 +32,7 @@ func (f PeriodFlow) SavingsRate() int { return ledger.SavingsRate(f.Income, f.Ex
 // [start, end) in the base currency (transfers excluded), reusing
 // ledger.PeriodTotals so it matches the rest of the app.
 func IncomeVsExpense(txns []domain.Transaction, start, end time.Time, rates currency.Rates) (PeriodFlow, error) {
+	txns = netted(txns) // XC2: fold refund-pair netting into period totals
 	inc, exp, err := ledger.PeriodTotals(txns, start, end, rates)
 	if err != nil {
 		return PeriodFlow{}, err

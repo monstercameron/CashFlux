@@ -328,6 +328,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// figures are last period's spend against this month's budget.
 		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")),
 			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
+			// XC4: the committed band sits just past the spent fill (hidden in last-month
+			// mode, where the bar shows a different period's spend).
+			If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedPct > 0,
+				Div(css.Class("bar-committed"), Attr("data-testid", "budget-committed-seg-"+s.Budget.ID),
+					Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", props.Committed.SpentPct, props.Committed.CommittedPct)))),
 			Div(css.Class("budget-card-loader-figs"),
 				// Spent carries foreground weight; the "/ limit" reads as muted context.
 				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), barSpent), " / "+fmtMoney(limit)),
@@ -343,6 +348,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// Multi-category budgets: list the tracked categories so the combined total reads clearly.
 		If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
 			uistate.T("budgets.catsTracking", props.TrackedCats))),
+		// XC4: quiet committed-vs-free caption; XC3: the plain-English set-aside explainer.
+		// (A landing-month entry may carry only the explainer — no committed split.)
+		If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
+			Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
+				uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
+		If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
+			Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
+				props.Committed.SetAsideNote)),
 		thisMonthRef,
 		coverageLine,
 		ownerLine,

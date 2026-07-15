@@ -315,6 +315,32 @@ type Recurring struct {
 	// ledger): Autopay is informational — it relaxes "you need to pay this" framing
 	// and lets reminders read "Autopay — make sure funds are available" (C157).
 	Autopay bool `json:"autopay,omitempty"`
+	// SmoothIntoBudgets opts an annual/quarterly bill into sinking-fund smoothing
+	// (XC3): instead of a single large hit landing in one budget period, the off
+	// periods accrue a virtual monthly set-aside and the landing period is offset so
+	// it reads roughly on-pace. Only annual and quarterly cadences smooth; monthly and
+	// shorter cadences ignore the flag. A system-managed sinking-fund goal ("Set aside
+	// for <label>") is created and maintained while this is on, and dissolved when the
+	// recurring is deleted or the flag is cleared. Additive; existing recurrings load
+	// with it off. JSON round-trips; no store migration needed.
+	SmoothIntoBudgets bool `json:"smoothIntoBudgets,omitempty"`
+}
+
+// Smooths reports whether this recurring participates in sinking-fund smoothing:
+// the opt-in flag is set AND the cadence is one that benefits from smoothing
+// (annual or quarterly — a large amount spread over several off periods). Monthly
+// and shorter cadences never smooth even with the flag set, because there are no
+// off periods to accrue across.
+func (r Recurring) Smooths() bool {
+	if !r.SmoothIntoBudgets {
+		return false
+	}
+	switch r.Cadence {
+	case CadenceQuarterly, CadenceYearly:
+		return true
+	default:
+		return false
+	}
 }
 
 // Advance returns a copy with NextDue moved one cadence forward — used after a
@@ -871,6 +897,12 @@ type Task struct {
 	// ties fall back to the smart order. Additive — existing tasks load with 0. JSON
 	// round-trips; no store migration.
 	Order int `json:"order,omitempty"`
+	// Resolve is an optional data-condition that auto-completes the task when the
+	// underlying money situation resolves (a refund posts, an account is
+	// reconciled, a recurring is cancelled). Set by whatever creates the task
+	// (a smart flag, the assistant, or the workflow engine); nil = manual task,
+	// closed only by hand. Additive — existing tasks load with nil. See XC8.
+	Resolve *TaskResolve `json:"resolve,omitempty"`
 }
 
 // SubscriptionIgnore records that the user has marked a detected subscription as

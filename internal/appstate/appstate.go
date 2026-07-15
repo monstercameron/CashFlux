@@ -113,6 +113,9 @@ func New(w io.Writer, seed bool) (*App, error) {
 		}
 		logger.Info("loaded sample dataset")
 	}
+	// Install any persisted refund-pair links into the read-model netting
+	// overlays so pre-existing pairs net from the first render (XC2).
+	app.SyncTxnLinkNetting()
 	return app, nil
 }
 
@@ -167,6 +170,7 @@ func (a *App) ImportJSON(data []byte) error {
 		return err
 	}
 	a.log.Info("imported dataset", "accounts", len(ds.Accounts), "transactions", len(ds.Transactions))
+	a.SyncTxnLinkNetting()
 	return nil
 }
 
@@ -380,6 +384,7 @@ func (a *App) Wipe() error {
 		return err
 	}
 	a.log.Info("wiped all data")
+	a.SyncTxnLinkNetting()
 	return nil
 }
 
@@ -1254,6 +1259,11 @@ func (a *App) PutRecurring(r domain.Recurring) error {
 		return err
 	}
 	a.log.Info("recurring saved", "id", r.ID)
+	// XC3: keep the system-managed sinking-fund goal in sync with the smoothing flag
+	// (create/maintain when smoothing is on, dissolve when it is off).
+	if err := a.syncSmoothingGoal(r); err != nil {
+		a.log.Warn("smoothing goal sync failed", "recurring", r.ID, "err", err)
+	}
 	return nil
 }
 
@@ -1297,6 +1307,14 @@ func (a *App) DeleteRecurring(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
+	// XC3: dissolve the system-managed sinking fund (releasing its earmarks) before
+	// the recurring itself is removed.
+	if err := a.dissolveSmoothingGoal(id); err != nil {
+		a.log.Warn("smoothing goal dissolve failed", "recurring", id, "err", err)
+	}
+	// XC5→XC8: deleting a crept recurring satisfies the "cancel" intent, so
+	// auto-resolve any price-creep task watching it.
+	a.resolvePriceCreepTasksForDeletedRecurring(id)
 	return a.del("recurring", id, a.store.DeleteRecurring)
 }
 
@@ -1819,10 +1837,16 @@ func (a *App) applyEffect(e workflow.Effect) {
 				return
 			}
 		}
-		_ = a.PutTask(domain.Task{
+		task := domain.Task{
 			ID: id.New(), Title: e.Title, Notes: e.Notes,
 			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceManual,
-		})
+		}
+		// XC8: a workflow-created task may carry a self-resolve condition so it
+		// auto-completes when the underlying situation resolves.
+		if e.ResolveCondition != "" {
+			task.Resolve = &domain.TaskResolve{Condition: e.ResolveCondition}
+		}
+		_ = a.PutTask(task)
 	case workflow.ActionApplyRules:
 		if _, err := a.ApplyRules(); err != nil {
 			a.logErr("workflowApplyRules", err)
@@ -2345,6 +2369,12 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		}
 	}
 	a.fireTxnMutated()
+	// XC8: a posting transaction is a data event — evaluate self-resolving tasks
+	// and auto-complete any whose rule the transaction satisfies (e.g. a refund
+	// that closes a "chase the duplicate charge" task).
+	if !existed && !a.triggersSuspended {
+		a.resolveTasksForTxn(t)
+	}
 	return nil
 }
 

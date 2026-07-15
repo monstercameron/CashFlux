@@ -1,3 +1,27 @@
+## 2026-07-14 — XC wave 1 built: 4 parallel agents, one coordinator, three classic traps
+
+First implementation wave of the backlog sweep, per Cam's directive: 4 opus low-effort agents on
+disjoint feature arcs (links / smoothing / sweeps / tasks+bills), me integrating, e2e-verifying,
+and closing the gaps they deliberately left. All four returned green on their own packages; the
+interesting work was in the seams. Gaps closed at integration: the XC2 netting bootstrap (wired
+into New/ImportJSON/ImportJSONWithBlobs/Wipe), the XC3 landing-month offset (new
+budgeting.SmoothingLandingItems/ApplySmoothingOffset applied at the budgets view seam — spent
+drops, state/percent re-derive, explainer names the covering fund), and mounting XC5's accept
+flow (it was built but unreachable — priceCreepNotices on /recurring now hosts it).
+
+Three traps the e2e pass caught that unit tests never would: (1) agent A wired row badges into
+the RETIRED classic transactions table — the same live-vs-classic trap as the split saga; the
+live widgetized rows (transactions_widget.go) got badges, tie-line, and ⋯-menu actions at
+integration. (2) After ungroup, badges stayed — the memoized table body doesn't re-render on a
+link-only change; UseDataRevision subscription in txnTableWidget fixed it (the third occurrence
+of this trap in the codebase; it's earned its house-pattern status). (3) The price-creep matcher
+SUMMED a category's expenses per cycle, so two property-tax installments read as one bill
+charging double and a streaming bundle "crept" to its category total — five false warn bars on
+sample data. Rewrote matching to pick the single best-representative charge (label matches beat
+category matches, nearest-to-expected wins) with a 3× plausibility cap, and collapsed >2 notices
+into one line (the never-naggy rule applies to warnings too). Sample data now flags zero creeps,
+which is the correct answer.
+
 ## 2026-07-14 — AG series: the assistant finale — all twenty kept
 
 Last leg of the ideation sweep (XC → TX → BG → GL → AC → AG), and the only round with a 100%

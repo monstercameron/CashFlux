@@ -267,6 +267,9 @@ func AccountRow(props accountRowProps) ui.Node {
 				Span(css.Class("row-meta"), meta),
 				valChange,
 				billNode,
+				// XC7: warn when goals have earmarked more against this account than it
+				// holds (goal money has been spent). Own component; healthy → Fragment().
+				ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
 				// Read-only summary of the account's custom-field values (a compact
 				// "Label: value · …" line), shown only when any are set.
 				If(customSummary(props.AccountDefs, a.Custom) != "",

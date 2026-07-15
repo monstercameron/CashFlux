@@ -258,6 +258,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(TxnColumnsHost),
 		uic.CreateElement(TxnSmartCatHost),
 		uic.CreateElement(TxnLinkHost),
+		uic.CreateElement(RefundPairHost),
 		uic.CreateElement(ImportPanelHost),
 		uic.CreateElement(DuplicatesHost),
 		uic.CreateElement(AccountEditHost),

@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -254,6 +255,10 @@ type txnTableProps struct {
 // bulk tiles stay in step. Rows drill into the edit modal; the leading checkbox
 // toggles bulk selection; the paperclip opens a receipt.
 func txnTableWidget(props txnTableProps) ui.Node {
+	// Subscribe to the data revision: link changes (XC1/XC2 group/pair badges)
+	// mutate no row content, so without this the memoized table body renders
+	// stale badges after an ungroup/unpair.
+	_ = uistate.UseDataRevision().Get()
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
 	selAtom := uistate.UseTxnSelection()
@@ -379,6 +384,41 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		linkAtom.Set(uistate.TxnLinkTarget{TxnID: txnID, Mode: linkMode})
 	}
 
+	// XC1/XC2 transaction links: per-row badge data + the ⋯-menu actions. The atom
+	// is captured during render (never inside a callback); handlers mutate through
+	// appstate and bump the revision so every consumer re-reads.
+	refundAtom := uistate.UseRefundPairTarget()
+	links := props.App.TxnLinks()
+	groupByTxn := txnlinks.GroupsByTxn(links)
+	refundSide, refundedSide := map[string]bool{}, map[string]bool{}
+	for _, l := range links {
+		if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) == 2 {
+			refundedSide[l.TxnIDs[0]] = true // the original purchase
+			refundSide[l.TxnIDs[1]] = true   // the refund
+		}
+	}
+	pairRefundRow := func(id string) { refundAtom.Set(id) }
+	ungroupRow := func(id string) {
+		if l, ok := txnlinks.GroupOf(id, props.App.TxnLinks()); ok {
+			if err := props.App.DeleteTxnLink(l.ID); err != nil {
+				uistate.PostNotice(uistate.T("txnlinks.groupErr", err.Error()), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("txnlinks.ungrouped"), false)
+			uistate.BumpDataRevision()
+		}
+	}
+	unpairRow := func(id string) {
+		if l, ok := txnlinks.PairOf(id, props.App.TxnLinks()); ok {
+			if err := props.App.DeleteTxnLink(l.ID); err != nil {
+				uistate.PostNotice(uistate.T("txnlinks.pairErr", err.Error()), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("txnlinks.unpaired"), false)
+			uistate.BumpDataRevision()
+		}
+	}
+
 	sel := selAtom.Get()
 
 	// rowPropsAt builds one row's display props from the frame on demand. Factored out
@@ -449,15 +489,25 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			SubscriptionName: txByID[rid].SubscriptionName,
 			HasSplits:        txByID[rid].HasSplits(),
 			IsTransfer:       txByID[rid].IsTransfer(),
+			IsIncome:         txByID[rid].IsIncome(),
+			IsRefund:         refundSide[rid],
+			IsRefunded:       refundedSide[rid],
 		}
 	}
 	renderRow := func(i int) ui.Node {
 		r := rowPropsAt(i)
+		if g, ok := groupByTxn[r.ID]; ok {
+			r.GroupSize = len(g.TxnIDs)
+			r.GroupTotal = fmtMoney(txnlinks.GroupSum(txnlinks.GroupMembers(g, txByID)))
+		}
 		r.OnOpen = openEdit
 		r.OnToggleSelect = toggleSelect
 		r.OnViewReceipt = viewReceipt
 		r.OnOpenLink = openLink
 		r.OnOpenSplit = openSplit
+		r.OnPairRefund = pairRefundRow
+		r.OnUnpair = unpairRow
+		r.OnUngroup = ungroupRow
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -587,6 +637,17 @@ type txnFrameRowProps struct {
 	OnOpen         func(id string)
 	OnToggleSelect func(id string, shift bool)
 	OnViewReceipt  func(domain.AttachmentRef)
+	// Transaction links (XC1 order groups / XC2 refund pairs): badge data plus the
+	// ⋯-menu actions. GroupTotal is pre-formatted; IsIncome gates the pair action
+	// (only money-in can be a refund).
+	GroupSize    int
+	GroupTotal   string
+	IsRefund     bool // this row is the refund side of a pair
+	IsRefunded   bool // this row is the original purchase of a pair
+	IsIncome     bool
+	OnPairRefund func(txnID string)
+	OnUnpair     func(txnID string)
+	OnUngroup    func(txnID string)
 }
 
 // txnFrameRow renders one clickable transaction row. It owns its click/select/
@@ -620,6 +681,21 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		rowClass += " cleared"
 	}
 
+	// XC1/XC2: link badges beside the description, mirroring the classic view.
+	var linkBadge ui.Node = Fragment()
+	switch {
+	case props.GroupSize > 1:
+		title := uistate.T("txnlinks.groupBadgeTitle", props.GroupSize, props.GroupTotal)
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-group-badge"), Attr("title", title),
+			"◱ "+uistate.T("txnlinks.groupBadge", props.GroupSize))
+	case props.IsRefund:
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-refund-badge"),
+			Attr("title", uistate.T("txnlinks.refundBadge")), "↩ "+uistate.T("txnlinks.refundBadge"))
+	case props.IsRefunded:
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-refunded-badge"),
+			Attr("title", uistate.T("txnlinks.refundedBadge")), "↩ "+uistate.T("txnlinks.refundedBadge"))
+	}
+
 	// Untagged rows show a muted em dash so "where did this come from?" reads as
 	// "not recorded" rather than a real source.
 	srcClass := "td-source"
@@ -639,7 +715,13 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	if member == "—" {
 		memClass += " text-dim"
 	}
-	return Tr(ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), OnClick(open),
+	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-" + props.ID), OnClick(open)}
+	// XC1: a grouped member reads as a physical grouping — a quiet accent tie-line
+	// on the left rail shared by every member of the purchase.
+	if props.GroupSize > 1 {
+		rowArgs = append(rowArgs, Style(map[string]string{"box-shadow": "inset 3px 0 0 0 var(--accent)"}))
+	}
+	rowArgs = append(rowArgs,
 		Td(OnClick(stop),
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("transactions.selectRow", props.Desc)), CheckedIf(props.Selected), OnClick(selToggle))),
 		Td(props.Date),
@@ -648,13 +730,15 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
 				Attr("data-testid", "txn-row-receipt"), OnClick(view),
-				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts))))),
+				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
+			linkBadge),
 		If(props.Vis.Account, Td(props.Account)),
 		If(props.Vis.Category, Td(props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
 		Td(ClassStr("td-actions"), OnClick(stop), txnRowMenu(props)),
 	)
+	return Tr(rowArgs...)
 }
 
 // txnRowMenu is the row's ⋯ kebab: entries that open the payment-link flip modal
@@ -695,6 +779,30 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label:    splitLabel,
 			TestID:   "txn-split-open",
 			OnSelect: func() { props.OnOpenSplit(props.ID) },
+		})
+	}
+	// XC2: pair a money-in transaction as the refund of an earlier purchase; or
+	// remove an existing pairing (offered on either side of the pair).
+	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("txnlinks.pairAction"),
+			TestID:   "txn-pair-refund",
+			OnSelect: func() { props.OnPairRefund(props.ID) },
+		})
+	}
+	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("txnlinks.unpairAction"),
+			TestID:   "txn-unpair",
+			OnSelect: func() { props.OnUnpair(props.ID) },
+		})
+	}
+	// XC1: release this row's order group (keeps the transactions).
+	if props.OnUngroup != nil && props.GroupSize > 1 {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("txnlinks.ungroupAction"),
+			TestID:   "txn-ungroup",
+			OnSelect: func() { props.OnUngroup(props.ID) },
 		})
 	}
 	if len(items) == 0 {

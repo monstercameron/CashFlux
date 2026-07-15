@@ -157,6 +157,7 @@ func (a *App) ImportJSONWithBlobs(data []byte) error {
 		return err
 	}
 	a.log.Info("imported dataset with blob migration", "accounts", len(ds.Accounts), "transactions", len(ds.Transactions), "artifacts", len(ds.Artifacts))
+	a.SyncTxnLinkNetting()
 	return nil
 }
 

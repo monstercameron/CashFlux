@@ -638,6 +638,31 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		uistate.BumpDataRevision()
 	}))
 
+	// XC1: group the selected transactions into one logical purchase (an order
+	// that posted as several card charges). Order-group members keep their atoms;
+	// the link is a read-model overlay. First selected (in ledger order) is the
+	// group's primary/original.
+	bulkGroupOrder := ui.UseEvent(Prevent(func() {
+		sel := selAtom.Get()
+		var ids []string
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && !t.IsTransfer() {
+				ids = append(ids, t.ID)
+			}
+		}
+		if len(ids) < 2 {
+			uistate.PostNotice(uistate.T("txnlinks.groupNeedTwo"), true)
+			return
+		}
+		if err := app.PutTxnLink(domain.TxnLink{Kind: domain.TxnLinkOrderGroup, TxnIDs: ids}); err != nil {
+			uistate.PostNotice(uistate.T("txnlinks.groupErr", err.Error()), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("txnlinks.grouped", len(ids)), false)
+		clearSel()
+		uistate.BumpDataRevision()
+	}))
+
 	exportSelected := ui.UseEvent(Prevent(func() {
 		sel := selAtom.Get()
 		if len(sel) == 0 {
@@ -712,6 +737,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.assignMemberTitle"), bulkAssignMember, "")),
 		toolbarIconBtn("", icon.CheckCircle, uistate.T("transactions.markClearedTitle"), bulkMarkCleared, ""),
 		toolbarIconBtn("", icon.Ban, uistate.T("transactions.markUnclearedTitle"), bulkMarkUncleared, ""),
+		toolbarIconBtn("bulk-group-order", icon.Box, uistate.T("txnlinks.groupAction"), bulkGroupOrder, ""),
 		toolbarIconBtn("bulk-export-selected", icon.ArrowDown, uistate.T("transactions.exportSelectedTitle"), exportSelected, ""),
 		toolbarIconBtn("", icon.Close, uistate.T("transactions.deleteSelectedTitle"), bulkDelete, "danger"),
 		Button(css.Class("btn-link"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),

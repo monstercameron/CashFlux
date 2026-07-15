@@ -1072,6 +1072,8 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
 				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
 				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
+			// XC6: open the leftover-sweep config (own component so its click hook is stable).
+			sweepConfigToolbarButton(),
 			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -1171,6 +1173,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
+					Committed: v.Committed[s.Budget.ID], HasCommitted: func() bool { _, ok := v.Committed[s.Budget.ID]; return ok }(),
 				})
 			},
 		)

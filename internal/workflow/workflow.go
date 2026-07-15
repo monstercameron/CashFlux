@@ -102,6 +102,11 @@ type Action struct {
 	// per period (e.g. "pyf:wf-abc:2026-06"). The apply layer skips the transfer if
 	// a prior run for the same workflow already carried this key.
 	DedupeKey string `json:"dedupeKey,omitempty"`
+	// ResolveCondition, on an ActionCreateTask, is an optional formula-language
+	// condition that makes the created task self-resolving (XC8): the task
+	// auto-completes when the condition holds against a later data event. Empty
+	// leaves the task manual.
+	ResolveCondition string `json:"resolveCondition,omitempty"`
 }
 
 // Context is what a workflow is evaluated against: numeric variables (the engine
@@ -146,6 +151,9 @@ type Effect struct {
 	TransferToAccountID   string `json:"transferToAccountId,omitempty"`
 	TransferAmount        int64  `json:"transferAmount,omitempty"`
 	DedupeKey             string `json:"dedupeKey,omitempty"`
+	// ResolveCondition carries an ActionCreateTask's self-resolve condition
+	// through to the apply layer (XC8), which stamps it onto the created task.
+	ResolveCondition string `json:"resolveCondition,omitempty"`
 }
 
 // Run is the audit record of one workflow execution: what it did (or would do, if
@@ -255,7 +263,8 @@ func Expand(s string, ctx Context) string {
 // {{expr}} templates resolve against the live context.
 func planAction(a Action, ctx Context) Effect {
 	e := Effect{Kind: a.Kind, Title: Expand(a.Title, ctx), Notes: Expand(a.Notes, ctx),
-		Message: Expand(a.Message, ctx), CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID}
+		Message: Expand(a.Message, ctx), CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID,
+		ResolveCondition: a.ResolveCondition}
 	switch a.Kind {
 	case ActionCreateTask:
 		e.Summary = "Create task: " + fallback(e.Title, "(untitled)")

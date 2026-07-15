@@ -542,6 +542,29 @@ func (s *SQLiteStore) ListEarmarks() ([]domain.Earmark, error) {
 	return loadRows[domain.Earmark](s.db, "earmarks")
 }
 
+// --- Transaction links (order groups, refund pairs — XC0b) ---
+
+// PutTxnLink inserts or updates a transaction-link row by id.
+func (s *SQLiteStore) PutTxnLink(l domain.TxnLink) error {
+	return putJSON(s.db, "txnlinks", l.ID, l)
+}
+
+// GetTxnLink returns the transaction link with the given id.
+func (s *SQLiteStore) GetTxnLink(id string) (domain.TxnLink, bool, error) {
+	return getJSON[domain.TxnLink](s.db, "txnlinks", id)
+}
+
+// DeleteTxnLink removes a transaction-link row by id (releasing its members;
+// the transactions themselves are never touched).
+func (s *SQLiteStore) DeleteTxnLink(id string) (bool, error) {
+	return deleteRow(s.db, "txnlinks", id)
+}
+
+// ListTxnLinks returns all transaction-link rows.
+func (s *SQLiteStore) ListTxnLinks() ([]domain.TxnLink, error) {
+	return loadRows[domain.TxnLink](s.db, "txnlinks")
+}
+
 // --- Subscription cancellations ---
 
 func (s *SQLiteStore) PutSubscriptionCancellation(c domain.SubscriptionCancellation) error {

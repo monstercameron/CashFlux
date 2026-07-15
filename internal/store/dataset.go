@@ -86,6 +86,7 @@ type Dataset struct {
 	SharedExpenses            []domain.SharedExpense            `json:"sharedExpenses,omitempty"`
 	Settlements               []domain.Settlement               `json:"settlements,omitempty"`
 	Earmarks                  []domain.Earmark                  `json:"earmarks,omitempty"`
+	TxnLinks                  []domain.TxnLink                  `json:"txnLinks,omitempty"`
 	SubscriptionIgnores       []domain.SubscriptionIgnore       `json:"subscriptionIgnores,omitempty"`
 	SubscriptionCancellations []domain.SubscriptionCancellation `json:"subscriptionCancellations,omitempty"`
 	AuditEntries              []auditlog.Entry                  `json:"auditEntries,omitempty"`

@@ -71,18 +71,25 @@ func Budgets() ui.Node {
 		budgetNativeSpec("budget-savings"),
 	}
 
-	return Div(css.Class("bento bento-budgets"),
-		MapKeyed(specs,
-			func(sp domain.WidgetSpec) any { return sp.ID },
-			func(sp domain.WidgetSpec) ui.Node {
-				c := rctx
-				c.Spec = sp
-				if node, ok := safeRenderSpec(sp, c); ok {
-					return node
-				}
-				return Fragment()
-			},
+	// XC6: the dismissible month-close sweep card sits above the bento; the sweep
+	// config flip modal renders as a sibling of the bento (outside any tile
+	// transform) so its centering isn't broken.
+	return Fragment(
+		budgetsSweepCard(),
+		Div(css.Class("bento bento-budgets"),
+			MapKeyed(specs,
+				func(sp domain.WidgetSpec) any { return sp.ID },
+				func(sp domain.WidgetSpec) ui.Node {
+					c := rctx
+					c.Spec = sp
+					if node, ok := safeRenderSpec(sp, c); ok {
+						return node
+					}
+					return Fragment()
+				},
+			),
 		),
+		budgetsSweepConfigModal(),
 	)
 }
 

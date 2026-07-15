@@ -79,6 +79,21 @@ type budgetView struct {
 	LastMonth      map[string]budgetLastMonth
 	LastMonthMode  bool
 	LastTotalSpent int64
+	// Committed holds the XC4 committed-vs-free split per budget (keyed by budget ID),
+	// including any XC3 smoothing set-aside folded into the committed figure. Absent
+	// entries mean nothing is committed (a fully-free budget).
+	Committed map[string]budgetCommitted
+}
+
+// budgetCommitted is the per-budget committed-vs-free breakdown the row renders as a
+// second meter segment plus a quiet caption (XC4), with an optional plain-English
+// set-aside explainer for smoothed annual/quarterly bills (XC3).
+type budgetCommitted struct {
+	CommittedStr string // formatted committed amount, e.g. "$45.00"
+	FreeStr      string // formatted truly-free amount, e.g. "$55.00"
+	CommittedPct int    // committed as a percent of the limit (0..100), for the segment width
+	SpentPct     int    // spent as a percent of the limit (0..100), where the committed segment starts
+	SetAsideNote string // XC3 explainer, e.g. "includes $50 set-aside for Insurance (Dec)"; "" hides it
 }
 
 // budgetLastMonth is the "Last month's spend" overlay for one budget: the formatted
@@ -336,6 +351,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	rollEffCap := map[string]string{}
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
+	committedMap := map[string]budgetCommitted{}
+	recurrings := app.Recurring()
 	// lastMonth (populated only when the "Last month's spend" overlay is on): each
 	// budget's ACTUAL spend last period plus how it compares to this month's budget, so
 	// the user can plan this month's amounts against what they really spent.
@@ -384,7 +401,38 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		if err != nil {
 			continue
 		}
+		// XC3: in a smoothed bill's landing period, the accrued set-aside pays the
+		// posted charge — offset it so the row (and totals/pace below) read on-pace
+		// instead of a one-period blowout. Only POSTED occurrences offset.
+		landOff, landItems := budgeting.SmoothingLandingItems(b, recurrings, txns, bs, be)
+		if landOff > 0 {
+			st = budgeting.ApplySmoothingOffset(st, landOff, budgeting.DefaultNearThreshold)
+		}
 		statuses = append(statuses, st)
+		// XC4: split this budget's remaining into committed (recurring expected but not
+		// yet posted this period, plus XC3 smoothing set-asides) vs. truly free.
+		bc, hasBC := buildBudgetCommitted(st, b, recurrings, txns, bs, be)
+		// XC3 explainability: name what the landing offset covered, so the on-pace
+		// read is never a black box ("covered by $600 set aside for Car insurance").
+		if len(landItems) > 0 {
+			var landNotes []string
+			for _, it := range landItems {
+				landNotes = append(landNotes, uistate.T("budgets.landedNote", fmtMoney(it.Amount), it.Label))
+			}
+			note := strings.Join(landNotes, "; ")
+			if hasBC {
+				if bc.SetAsideNote != "" {
+					bc.SetAsideNote += "; " + note
+				} else {
+					bc.SetAsideNote = note
+				}
+			} else {
+				bc, hasBC = budgetCommitted{SetAsideNote: note}, true
+			}
+		}
+		if hasBC {
+			committedMap[b.ID] = bc
+		}
 		// Last-month spend overlay (planning): what was actually spent in this budget's
 		// categories LAST period, and how that lines up against this month's budget.
 		if showLastMonth {
@@ -545,6 +593,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		LastMonth:      lastMonth,
 		LastMonthMode:  showLastMonth,
 		LastTotalSpent: lastTotalSpent,
+		Committed:      committedMap,
 	}
 }
 
@@ -685,6 +734,8 @@ type budgetRowProps struct {
 	LastMonthPct      int                   // last month's spend as % of this month's budget (uncapped) — the "%" figure
 	LastMonthFill     int                   // same, clamped 0..100 — the bar width
 	LinkedTodos       int                   // count of to-dos linked to this budget (Task.RelatedType=budget); 0 hides the link
+	Committed         budgetCommitted       // XC4 committed-vs-free split (+ XC3 set-aside note); zero value hides it
+	HasCommitted      bool                  // whether Committed carries a figure to render
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)
@@ -708,6 +759,57 @@ func budgetRemainPhrase(m money.Money) string {
 		return fmtMoney(m.Abs()) + " " + uistate.T("budgets.overWord")
 	}
 	return fmtMoney(m) + " " + uistate.T("budgets.leftWord")
+}
+
+// buildBudgetCommitted derives the XC4 committed-vs-free split for one budget and
+// formats it for the row. It returns ok=false (nothing to show) when the budget is
+// already met/over or nothing is committed, so a fully-free budget stays quiet. The
+// committed figure folds in any XC3 smoothing set-aside, and smoothed items produce a
+// plain-English "includes $50 set-aside for Insurance (Dec)" explainer.
+func buildBudgetCommitted(st budgeting.Status, b domain.Budget, recurrings []domain.Recurring, txns []domain.Transaction, bs, be time.Time) (budgetCommitted, bool) {
+	if st.Remaining.IsNegative() || st.Remaining.IsZero() {
+		return budgetCommitted{}, false
+	}
+	cr := budgeting.Committed(b, recurrings, txns, st.Remaining, bs, be)
+	if cr.Committed.Amount <= 0 {
+		return budgetCommitted{}, false
+	}
+	limit := st.Spent.Amount + st.Remaining.Amount
+	var committedPct, spentPct int
+	if limit > 0 {
+		committedPct = int(cr.Committed.Amount * 100 / limit)
+		spentPct = int(st.Spent.Amount * 100 / limit)
+	}
+	if spentPct > 100 {
+		spentPct = 100
+	}
+	if spentPct+committedPct > 100 {
+		committedPct = 100 - spentPct
+	}
+	if committedPct < 0 {
+		committedPct = 0
+	}
+	var notes []string
+	for _, it := range cr.Items {
+		if !it.Smoothed {
+			continue
+		}
+		month := ""
+		for _, r := range recurrings {
+			if r.ID == it.RecurringID {
+				month = r.NextDue.Format("Jan")
+				break
+			}
+		}
+		notes = append(notes, uistate.T("budgets.setAsideNote", fmtMoney(it.Amount), it.Label, month))
+	}
+	return budgetCommitted{
+		CommittedStr: fmtMoney(cr.Committed),
+		FreeStr:      fmtMoney(cr.Free),
+		CommittedPct: committedPct,
+		SpentPct:     spentPct,
+		SetAsideNote: strings.Join(notes, "; "),
+	}, true
 }
 
 // budgetTitle renders a budget's display title: its name, or its category when

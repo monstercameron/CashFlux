@@ -8658,6 +8658,17 @@ func registerGenerated() {
 		boxShadow("none"),
 		zIndex("0"),
 	)
+	// XC4: the committed segment — a muted, hatched accent band sitting just past the
+	// spent fill, showing the slice of remaining money already claimed by recurring
+	// commitments. Deliberately quiet so the primary fill still reads at a glance.
+	rule(".bento-budgets .budget-card-loader .bar-committed",
+		position("absolute"),
+		top("0"),
+		bottom("0"),
+		height("100%"),
+		zIndex("0"),
+		prop("background", "repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 30%, transparent) 0, color-mix(in srgb, var(--accent) 30%, transparent) 6px, color-mix(in srgb, var(--accent) 16%, transparent) 6px, color-mix(in srgb, var(--accent) 16%, transparent) 12px)"),
+	)
 	rule(".bento-budgets .budget-card-loader-figs",
 		position("relative"),
 		zIndex("1"),

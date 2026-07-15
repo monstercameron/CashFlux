@@ -50,6 +50,18 @@ type transactionRowProps struct {
 	// The badge key is the transaction ID (Action.RelatedID set by transaction engines).
 	SmartSettings smart.Settings
 	SmartByEntity map[string][]smart.Insight
+	// Transaction-link overlays (XC1/XC2). GroupSize > 0 marks this row as a
+	// member of an N-charge order group; GroupTotal is the group's summed amount.
+	// IsRefund marks the row as the refund side of a refund pair; IsRefunded marks
+	// it as an original purchase that has a paired refund. The On* callbacks drive
+	// the row's link affordances (nil = affordance hidden).
+	GroupSize    int
+	GroupTotal   money.Money
+	IsRefund     bool
+	IsRefunded   bool
+	OnPairRefund func(domain.Transaction)
+	OnUngroup    func(domain.Transaction)
+	OnUnpair     func(domain.Transaction)
 }
 
 // TransactionRow is a per-transaction row. Income/expense rows can be edited
@@ -95,6 +107,21 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	viewReceipt := ui.UseEvent(Prevent(func() {
 		if props.OnViewReceipt != nil && len(t.Attachments) > 0 {
 			props.OnViewReceipt(t.Attachments[0])
+		}
+	}))
+	pairRefund := ui.UseEvent(Prevent(func() {
+		if props.OnPairRefund != nil {
+			props.OnPairRefund(t)
+		}
+	}))
+	ungroup := ui.UseEvent(Prevent(func() {
+		if props.OnUngroup != nil {
+			props.OnUngroup(t)
+		}
+	}))
+	unpair := ui.UseEvent(Prevent(func() {
+		if props.OnUnpair != nil {
+			props.OnUnpair(t)
 		}
 	}))
 	pr := uistate.UsePrefs().Get()
@@ -267,7 +294,32 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	if !props.ShowTags && tagsText != "" {
 		descTags = Span(css.Class("td-tags-inline"), " "+tagsText)
 	}
-	return Tr(ClassStr(rowClass), Attr("data-id", props.Txn.ID),
+	// XC1/XC2 link badges shown in the Description cell.
+	var linkBadge ui.Node = Fragment()
+	switch {
+	case props.GroupSize > 1:
+		title := uistate.T("txnlinks.groupBadgeTitle", props.GroupSize, fmtMoney(props.GroupTotal))
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-group-badge"), Attr("title", title),
+			"◱ "+uistate.T("txnlinks.groupBadge", props.GroupSize))
+	case props.IsRefund:
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-refund-badge"), Attr("title", uistate.T("txnlinks.refundBadge")),
+			"↩ "+uistate.T("txnlinks.refundBadge"))
+	case props.IsRefunded:
+		linkBadge = Span(css.Class("badge"), Attr("data-testid", "txn-refunded-badge"), Attr("title", uistate.T("txnlinks.refundedBadge")),
+			"↩ "+uistate.T("txnlinks.refundedBadge"))
+	}
+
+	// A grouped row reads as a physical grouping: a quiet accent tie-line on the
+	// left with a small indent (the one signature moment; everything else stays
+	// calm). Members share the same left rail so the eye ties them together.
+	rowArgs := []any{ClassStr(rowClass), Attr("data-id", props.Txn.ID)}
+	if props.GroupSize > 1 {
+		rowArgs = append(rowArgs, Style(map[string]string{
+			"box-shadow":  "inset 3px 0 0 0 var(--accent)",
+			"padding-left": "0.25rem",
+		}))
+	}
+	rowArgs = append(rowArgs,
 		// C65: the row-select control was a bare glyph button — no accessible name, no
 		// pressed state, no row context. Give it an aria-label naming the row and an
 		// aria-pressed reflecting selection so screen-reader users know what they're
@@ -284,7 +336,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			// breakdown, so the user can see at a glance which rows are split without
 			// having to open the inline editor.
 			If(t.HasSplits(), Span(css.Class("badge badge-split"), Attr("data-testid", "txn-split-badge"), Attr("title", "Split across categories"), "⑂ Split")),
-			smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID)),
+			smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID), linkBadge),
 		Td(css.Class("td-cat"), cat),
 		Td(css.Class("td-acct"), props.Account),
 		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),
@@ -295,9 +347,19 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon tx-2nd"), Type("button"), Attr("aria-label", uistate.T("transactions.createRuleTitle")), Title(uistate.T("transactions.createRuleTitle")), Attr("data-testid", "txn-create-rule"), OnClick(createRule), uiw.Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon tx-2nd"), Type("button"), Attr("aria-label", uistate.T("transactions.attachReceiptTitle")), Title(uistate.T("transactions.attachReceiptTitle")), Attr("data-testid", "txn-attach"), OnClick(attach), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 			If(len(props.Txn.Attachments) > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("aria-label", receiptCountLabel(len(props.Txn.Attachments))), Title(receiptCountLabel(len(props.Txn.Attachments))), Attr("data-testid", "txn-attach-marker"), OnClick(viewReceipt), uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(len(props.Txn.Attachments))))),
+			// XC2: pair a positive (money-in) transaction as the refund of a purchase.
+			If(props.OnPairRefund != nil && props.Txn.IsIncome() && !props.IsRefund,
+				Button(css.Class("btn btn-icon tx-2nd"), Type("button"), Attr("aria-label", uistate.T("txnlinks.pairAction")), Title(uistate.T("txnlinks.pairAction")), Attr("data-testid", "txn-pair-refund"), OnClick(pairRefund), uiw.Icon(icon.Repeat, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			// XC2: remove an existing refund pairing (shown on either side of the pair).
+			If(props.OnUnpair != nil && (props.IsRefund || props.IsRefunded),
+				Button(css.Class("btn btn-icon tx-2nd"), Type("button"), Attr("aria-label", uistate.T("txnlinks.unpairAction")), Title(uistate.T("txnlinks.unpairAction")), Attr("data-testid", "txn-unpair"), OnClick(unpair), uiw.Icon(icon.Repeat, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			// XC1: ungroup an order-group member (releases the group; keeps the atoms).
+			If(props.OnUngroup != nil && props.GroupSize > 1,
+				Button(css.Class("btn btn-icon tx-2nd"), Type("button"), Attr("aria-label", uistate.T("txnlinks.ungroupAction")), Title(uistate.T("txnlinks.ungroupAction")), Attr("data-testid", "txn-ungroup"), OnClick(ungroup), uiw.Icon(icon.Box, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 			Button(css.Class("btn-del tx-2nd"), Type("button"), Attr("aria-label", uistate.T("transactions.deleteTitle")), Title(uistate.T("transactions.deleteTitle")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 	)
+	return Tr(rowArgs...)
 }
 
 // receiptCountLabel is the plain-English label for a transaction's attached

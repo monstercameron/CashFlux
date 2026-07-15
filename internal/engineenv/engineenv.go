@@ -961,12 +961,17 @@ func addAccountVars(out map[string]float64, d Data, major func(int64) float64, t
 			free = 0
 		}
 		out[base.Prefix+"free"] = free // balance not earmarked toward any goal (never negative)
+		over := earmarked - balBase
+		if over < 0 {
+			over = 0
+		}
+		out[base.Prefix+"overearmarked"] = over // goal money earmarked beyond the real balance (XC7 breach; 0 when healthy)
 	}
 }
 
 // AccountVarFields are the per-account metric suffixes exposed on the surface. Shared
 // with the widget/formula catalog so the picker matches the surface.
-var AccountVarFields = []string{"balance", "cleared", "earmarked", "free"}
+var AccountVarFields = []string{"balance", "cleared", "earmarked", "free", "overearmarked"}
 
 // AccountVarBase pairs an account with the disambiguated variable prefix its values are
 // keyed under ("account_<slug>_"). Single source of truth for per-account naming —

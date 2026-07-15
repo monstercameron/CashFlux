@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -347,6 +348,37 @@ func transactionsLegacy() ui.Node {
 		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
 	}
 
+	// XC2: open the refund-pairing picker for a positive transaction.
+	pairRefund := func(t domain.Transaction) {
+		if !t.IsIncome() {
+			notifyErr(uistate.T("txnlinks.notARefund"))
+			return
+		}
+		uistate.UseRefundPairTarget().Set(t.ID)
+	}
+	// XC1: release the order group a transaction belongs to (keeps the atoms).
+	ungroupTxn := func(t domain.Transaction) {
+		if l, ok := txnlinks.GroupOf(t.ID, app.TxnLinks()); ok {
+			if err := app.DeleteTxnLink(l.ID); err != nil {
+				notifyErr(uistate.T("txnlinks.groupErr", err.Error()))
+				return
+			}
+			uistate.PostNotice(uistate.T("txnlinks.ungrouped"), false)
+			bump()
+		}
+	}
+	// XC2: remove the refund pairing a transaction belongs to.
+	unpairTxn := func(t domain.Transaction) {
+		if l, ok := txnlinks.PairOf(t.ID, app.TxnLinks()); ok {
+			if err := app.DeleteTxnLink(l.ID); err != nil {
+				notifyErr(uistate.T("txnlinks.pairErr", err.Error()))
+				return
+			}
+			uistate.PostNotice(uistate.T("txnlinks.unpaired"), false)
+			bump()
+		}
+	}
+
 	toggleSelect := func(txnID string, shift bool) {
 		m := selected.Get()
 		nm := make(map[string]bool, len(m)+1)
@@ -632,10 +664,32 @@ func transactionsLegacy() ui.Node {
 				break
 			}
 		}
+		// XC1/XC2 link overlays: index the order-group and refund-pair links once
+		// so each row can show its band/badge and offer ungroup/unpair.
+		links := app.TxnLinks()
+		groupByTxn := txnlinks.GroupsByTxn(links)
+		txnByID := make(map[string]domain.Transaction, len(txns))
+		for _, t := range txns {
+			txnByID[t.ID] = t
+		}
+		refundOf := map[string]bool{}  // ids that are the refund side of a pair
+		refundedBy := map[string]bool{} // ids (originals) that have a paired refund
+		for _, l := range links {
+			if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) == 2 {
+				refundedBy[l.TxnIDs[0]] = true
+				refundOf[l.TxnIDs[1]] = true
+			}
+		}
 		rows := MapKeyed(page,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
 				acc := accByID[t.AccountID]
+				groupSize, groupTotal := 0, money.Money{}
+				if g, ok := groupByTxn[t.ID]; ok {
+					members := txnlinks.GroupMembers(g, txnByID)
+					groupSize = len(members)
+					groupTotal = txnlinks.GroupSum(members)
+				}
 				return ui.CreateElement(TransactionRow, transactionRowProps{
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
 					Members:  app.Members(),
@@ -645,6 +699,13 @@ func transactionsLegacy() ui.Node {
 					OnAttach: attachReceipt, OnViewReceipt: viewReceipt, OnSaveSplits: saveSplits,
 					SmartSettings: txnSmartSettings,
 					SmartByEntity: txnByEntity,
+					GroupSize:     groupSize,
+					GroupTotal:    groupTotal,
+					IsRefund:      refundOf[t.ID],
+					IsRefunded:    refundedBy[t.ID],
+					OnPairRefund:  pairRefund,
+					OnUngroup:     ungroupTxn,
+					OnUnpair:      unpairTxn,
 				})
 			},
 		)

@@ -70,6 +70,7 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 	categoryS := ui.UseState(existing.CategoryID)
 	autopostS := ui.UseState(existing.Autopost)
 	autopayS := ui.UseState(existing.Autopay)
+	smoothS := ui.UseState(existing.SmoothIntoBudgets)
 	dueS := ui.UseState(seedDue)
 	errS := ui.UseState("")
 
@@ -116,11 +117,16 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 		// Auto-post needs an account to post into; without one the toggle is inert
 		// (and shown disabled), so never persist it on.
 		autopost := autopostS.Get() && accountS.Get() != ""
+		// XC3: smoothing only applies to annual/quarterly bills; never persist it on for
+		// a monthly-or-shorter cadence even if the toggle was left on after a cadence change.
+		cadence := domain.RecurringCadence(cadenceS.Get())
+		smooth := smoothS.Get() && (cadence == domain.CadenceYearly || cadence == domain.CadenceQuarterly)
 		r := domain.Recurring{
 			ID: rid, Label: label, Amount: money.New(amt, base),
-			Cadence: domain.RecurringCadence(cadenceS.Get()), NextDue: nextDue,
+			Cadence: cadence, NextDue: nextDue,
 			AccountID: accountS.Get(), CategoryID: categoryS.Get(),
 			Autopost: autopost, Autopay: autopayS.Get(),
+			SmoothIntoBudgets: smooth,
 		}
 		if perr := app.PutRecurring(r); perr != nil {
 			errS.Set(perr.Error())
@@ -193,6 +199,12 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 				),
 				If(accountS.Get() == "", P(css.Class("muted rec-autopost-hint"), uistate.T("recurring.autopostNeedsAccount"))),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.autopay"), On: autopayS.Get(), OnChange: func(v bool) { autopayS.Set(v) }}),
+				// XC3: annual/quarterly bill smoothing — offered only for cadences with off
+				// periods to accrue across; a quiet explainer says what it does.
+				If(cadenceS.Get() == string(domain.CadenceYearly) || cadenceS.Get() == string(domain.CadenceQuarterly),
+					Div(css.Class("rec-smooth-field"), Attr("data-testid", "rec-smooth-field"),
+						uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("recurring.smoothLabel"), On: smoothS.Get(), OnChange: func(v bool) { smoothS.Set(v) }}),
+						P(css.Class("muted rec-autopost-hint"), uistate.T("recurring.smoothExplainer")))),
 			),
 			If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
 		),

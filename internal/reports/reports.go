@@ -36,6 +36,7 @@ type CategorySpend struct {
 // categoryTotals sums absolute expense amounts by category over [start, end),
 // converted to the base currency. Transfers and income are excluded (IsExpense).
 func categoryTotals(txns []domain.Transaction, start, end time.Time, rates currency.Rates) (map[string]int64, error) {
+	txns = netted(txns) // XC2: fold refund-pair netting into per-category totals
 	out := map[string]int64{}
 	for _, t := range txns {
 		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {

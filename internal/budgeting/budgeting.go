@@ -74,6 +74,7 @@ func matchesScope(budget domain.Budget, t domain.Transaction, start, end time.Ti
 // double-counting.
 func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
+	all = nettedForSpending(all) // XC2: fold refund-pair netting into read-model spend
 	total := money.Zero(limit.Currency)
 	add := func(amt money.Money) error {
 		conv, err := rates.Convert(amt.Abs(), limit.Currency)

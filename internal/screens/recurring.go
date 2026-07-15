@@ -476,6 +476,10 @@ func RecurringHub(p RecurringHubProps) ui.Node {
 	}
 
 	return Div(
+		// XC9: payday pre-flight ritual card, shown once per pay cycle.
+		ui.CreateElement(paydayPreflightCard),
+		// XC5: price-creep notices with the in-place accept flow.
+		ui.CreateElement(priceCreepNotices),
 		Div(css.Class(tw.Mb2),
 			uiw.Segmented(uiw.SegmentedProps{
 				Label:    "Recurring view",
