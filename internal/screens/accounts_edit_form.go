@@ -127,6 +127,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	lenderS := ui.UseState(a.Lender)
 	institutionS := ui.UseState(instInit)
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
+	apyS := ui.UseState(floatOrEmpty(a.APY))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
 	stabS := ui.UseState(intOrEmpty(a.StabilityScore))
 	lockS := ui.UseState(lockISO)
@@ -150,6 +151,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
 	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
+	onApy := ui.UseEvent(func(v string) { apyS.Set(v) })
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
 	onStab := ui.UseEvent(func(v string) { stabS.Set(v) })
 	onLock := ui.UseEvent(func(v string) { lockS.Set(v) })
@@ -217,11 +219,13 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
 			cp.Lender = strings.TrimSpace(lenderS.Get())
 			cp.ExpectedReturnAPR = 0
+			cp.APY = 0
 			cp.LiquidityScore = 0
 			cp.StabilityScore = 0
 			cp.LockUntil = time.Time{}
 		} else {
 			cp.ExpectedReturnAPR = textutil.ParseFloat(retS.Get())
+			cp.APY = textutil.ParseFloat(apyS.Get())
 			cp.LiquidityScore = textutil.ParseInt(liqS.Get())
 			cp.StabilityScore = textutil.ParseInt(stabS.Get())
 			if lu := strings.TrimSpace(lockS.Get()); lu != "" {
@@ -270,10 +274,10 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		// "Edit" the name field is. Both persist through the same saveEdit handler.
 		focusValue := props.Mode == uistate.AcctEditModeSetBal
 		return editForm(a, dec, curBal, app.Members(), app.Accounts(), app.Categories(), app.CustomFieldDefsFor("account"),
-			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS,
+			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS,
 			setBalAmtS, setBalCatS,
 			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals,
-			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock,
+			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock,
 			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt, onCustomEdit, saveEdit, cancel, focusValue)
 	}
 }
@@ -436,10 +440,10 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 // editForm is the full inline-edit editor (name, owner, balances, type-specific
 // attributes, institution, and custom fields).
 func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
-	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, liqS, stabS, lockS, notesS ui.State[string],
+	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS ui.State[string],
 	setBalAmtS, setBalCatS ui.State[string],
 	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt ui.Handler,
+	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler, focusValue bool) ui.Node {
 	// The type is editable; the shown attribute fields follow the SELECTED type's
 	// class (not the account's stored class), so switching e.g. a line of credit to a
@@ -540,6 +544,8 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced"))))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
+			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
+				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Value(apyS.Get()), Step("0.01"), OnInput(onApy)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
 				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),

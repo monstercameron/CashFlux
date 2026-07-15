@@ -30,6 +30,10 @@ const (
 	PaceDueSoon Pace = "soon"
 	// PaceOnTrack is a dated, incomplete goal with comfortable runway.
 	PaceOnTrack Pace = "ontrack"
+	// PacePaused is a goal the user has intentionally paused (GL7). It is a
+	// CHOSEN state, not a failure: the pace never reads overdue or due-soon while
+	// paused, so the card stops scolding until the pause ends.
+	PacePaused Pace = "paused"
 )
 
 // dueSoonDays is how close a target date must be (with the goal still well
@@ -46,6 +50,11 @@ const finalStretchPct = 90
 func ClassifyPace(goal domain.Goal, from time.Time) Pace {
 	if complete, err := IsComplete(goal); err == nil && complete {
 		return PaceComplete
+	}
+	// A paused goal is a chosen state: it never reads overdue/due-soon, so the
+	// pace stops scolding until the pause ends (GL7).
+	if goal.IsPaused(from) {
+		return PacePaused
 	}
 	pct := Percent(goal)
 	if goal.TargetDate.IsZero() {

@@ -14,6 +14,7 @@ const (
 	GoalEditModeEdit       = "edit"       // full edit form (name/target/date/owner/links/review cadence)
 	GoalEditModeContribute = "contribute" // add an amount toward the goal (optionally posting to the ledger)
 	GoalEditModeAllocate   = "allocate"   // virtual allocation: earmark account balances toward the goal (no txn)
+	GoalEditModePause      = "pause"      // pause the goal for N months, with an honest ETA-cost preview (GL7)
 )
 
 // GoalEdit selects the goal + editor a modal should show. A zero value (empty ID) means

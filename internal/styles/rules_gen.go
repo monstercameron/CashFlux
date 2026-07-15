@@ -3721,6 +3721,28 @@ func registerGenerated() {
 	rule("[data-theme=\"light\"] .pace-review",
 		color("#b45309"),
 	)
+	// "Paused until …" chip (GL7) — a calm, neutral tone (never an alarm): pausing is a
+	// chosen state, so it reads as a quiet status, not a warning.
+	rule(".pace-paused",
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
+		borderColor("var(--border)"),
+	)
+	// Goal vision image banner (GL6): a small rounded photo atop the card.
+	rule(".goal-card-photo",
+		marginBottom("0.5rem"),
+		borderRadius("8px"),
+		overflow("hidden"),
+	)
+	rule(".goal-card-photo.is-missing",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		height("88px"),
+		border("1px dashed var(--border)"),
+		background("var(--bg-elev)"),
+		fontSize("0.75rem"),
+	)
 	rule(".sev-pill",
 		display("inline-block"),
 		fontSize("0.68rem"),
@@ -8060,6 +8082,94 @@ func registerGenerated() {
 		fontSize("0.75rem"),
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
+	)
+	// GL4 contribution planner, GL5 pledge split-bar, GL3 emergency sizer: three
+	// optional card sections between the sub-line and the steps, each set off by a
+	// hairline and using the same quiet, uppercase section head as goal-todos.
+	rule(".goal-plan, .goal-pledge, .goal-essential",
+		marginTop("0.6rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 70%, transparent)"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	rule(".goal-plan-head, .goal-pledge-head, .goal-essential-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+	)
+	rule(".goal-plan-title, .goal-pledge-title, .goal-essential-title",
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		prop("text-transform", "uppercase"),
+		color("var(--text-dim)"),
+	)
+	rule(".goal-plan-amt",
+		fontSize("0.9rem"),
+		fontWeight("600"),
+		color("var(--text)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".goal-plan-readout",
+		fontSize("0.82rem"),
+		color("var(--text)"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+	rule(".goal-plan-actions, .goal-essential-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flexWrap("wrap"),
+	)
+	// GL5 split bar: a rounded track of proportional member segments, tinted by the
+	// accent with per-index opacity so members read apart without a hardcoded palette.
+	rule(".goal-pledge-bar",
+		display("flex"),
+		height("0.55rem"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("var(--bg-elev)"),
+	)
+	rule(".goal-pledge-seg-0", background("var(--accent)"))
+	rule(".goal-pledge-seg-1", background("color-mix(in srgb, var(--accent) 72%, var(--bg-card))"))
+	rule(".goal-pledge-seg-2", background("color-mix(in srgb, var(--accent) 52%, var(--bg-card))"))
+	rule(".goal-pledge-seg-3", background("color-mix(in srgb, var(--accent) 36%, var(--bg-card))"))
+	rule(".goal-pledge-seg-4", background("color-mix(in srgb, var(--accent) 24%, var(--bg-card))"))
+	rule(".goal-pledge-seg-5", background("color-mix(in srgb, var(--accent) 16%, var(--bg-card))"))
+	rule(".goal-pledge-legend",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+	)
+	rule(".goal-pledge-line",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		fontSize("0.8rem"),
+	)
+	rule(".goal-pledge-dot",
+		width("0.6rem"),
+		height("0.6rem"),
+		borderRadius("999px"),
+		flexShrink("0"),
+	)
+	rule(".goal-pledge-name",
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".goal-essential-body",
+		margin("0"),
+		fontSize("0.82rem"),
+		color("var(--text)"),
+	)
+	rule(".goal-essential-hint",
+		margin("0"),
+		fontSize("0.75rem"),
 	)
 	// Multi-link checklists in the goal editor (accounts / budgets). A bounded, scrolling
 	// column of checkbox rows so a household with many accounts doesn't blow out the modal.

@@ -33,6 +33,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/emergencyfund"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -135,6 +136,7 @@ var atomNames = []string{
 	"expense_count",      // count of expense (negative non-transfer) transactions in the period
 	"bills_due",          // Σ bills due before this calendar month-end
 	"goal_needs",         // Σ prorated monthly goal contributions
+	"essential_monthly",  // derived ESSENTIAL month: fixed recurring commitments + trailing essential (non-flex) spend (GL3)
 	"earmarked_total",    // Σ virtual goal earmarks across all goals (reserved-in-place, uncommitted)
 	"accounts",           // count of non-archived accounts
 	"asset_accounts",     // count of non-archived asset-class accounts
@@ -382,6 +384,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"expense_count":      float64(expCount),
 		"bills_due":          major(billsDue),
 		"goal_needs":         major(goalNeeds),
+		"essential_monthly":  major(essentialMonthly(d, toBase)),
 		"earmarked_total":    major(earmarkedTotal),
 		"accounts":           float64(active),
 		"asset_accounts":     float64(assetAccts),
@@ -585,6 +588,53 @@ func addRecurringVars(out map[string]float64, d Data, major func(int64) float64,
 		out[base.Prefix+"monthly"] = major(toBase(r.MonthlyEquivalent(), r.Amount.Currency))
 		out[base.Prefix+"amount"] = major(toBase(r.Amount.Amount, r.Amount.Currency))
 	}
+}
+
+// essentialMonthlyTrailingMonths is how many prior whole months of essential
+// spend feed the essential_monthly atom's trailing average.
+const essentialMonthlyTrailingMonths = 3
+
+// essentialMonthly derives the household's ESSENTIAL month in base-currency minor
+// units (GL3): every recurring EXPENSE normalized to a monthly cost, plus the
+// trailing average of essential-classified (ClassFixed / ClassNonMonthly, NOT
+// discretionary ClassFlex) categorized spend over the prior whole months. It is
+// the honest emergency-fund sizing figure, shared with the SMART-G21 re-suggest.
+func essentialMonthly(d Data, toBase func(int64, string) int64) int64 {
+	var fixed int64
+	for _, r := range d.Recurring {
+		me := toBase(r.MonthlyEquivalent(), r.Amount.Currency)
+		if me < 0 {
+			fixed += -me // only outflow commitments count toward the essential month
+		}
+	}
+
+	classOf := map[string]domain.CategoryClass{}
+	for _, c := range d.Categories {
+		classOf[c.ID] = c.ClassOf()
+	}
+
+	curStart := dateutil.MonthStart(d.Now)
+	var essentialSpend int64
+	for k := 1; k <= essentialMonthlyTrailingMonths; k++ {
+		s := dateutil.AddMonths(curStart, -k)
+		e := dateutil.AddMonths(curStart, -k+1)
+		for _, t := range d.Transactions {
+			if t.IsTransfer() || !t.Amount.IsNegative() || t.Date.Before(s) || !t.Date.Before(e) {
+				continue
+			}
+			cls, ok := classOf[t.CategoryID]
+			if !ok {
+				cls = domain.ClassFlex
+			}
+			if cls == domain.ClassFlex {
+				continue
+			}
+			essentialSpend += toBase(-t.Amount.Amount, t.Amount.Currency)
+		}
+	}
+	essentialSpend /= essentialMonthlyTrailingMonths
+
+	return emergencyfund.Basis{FixedMonthlyMinor: fixed, EssentialSpendMonthlyMinor: essentialSpend}.EssentialMonthlyMinor()
 }
 
 // PlanningVarNames are the fixed planning-policy variables addPlanningVars exposes.

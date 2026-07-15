@@ -32,7 +32,7 @@ func sampleDataset() Dataset {
 			Attachments: []domain.AttachmentRef{{ArtifactID: "art1", Name: "Receipt", Kind: "image", MIME: "image/png"}},
 		}},
 		Budgets: []domain.Budget{{ID: "b1", Name: "Food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}},
-		Goals:   []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf}},
+		Goals:   []domain.Goal{{ID: "g1", Name: "Trip", Scope: domain.ScopeIndividual, OwnerID: "m1", TargetAmount: money.New(200000, "USD"), CurrentAmount: money.New(50000, "USD"), TargetDate: asOf, GoalImageArtifactID: "art1", PausedUntil: asOf}},
 		Tasks:   []domain.Task{{ID: "k1", Title: "Pay rent", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceManual}},
 		CustomFields: []customfields.Def{{
 			ID: "cf1", EntityType: "account", Key: "branch", Label: "Branch",
@@ -138,6 +138,10 @@ func TestExportImportRoundTrip(t *testing.T) {
 		imported.Transactions[0].Attachments[0].ArtifactID != "art1" ||
 		imported.Transactions[0].Attachments[0].MIME != "image/png" {
 		t.Errorf("transaction attachments lost: %+v", imported.Transactions)
+	}
+	if len(imported.Goals) != 1 || imported.Goals[0].GoalImageArtifactID != "art1" ||
+		imported.Goals[0].PausedUntil.IsZero() {
+		t.Errorf("goal vision image / pause lost: %+v", imported.Goals)
 	}
 	if len(imported.Rules) != 1 || imported.Rules[0].Match != "coffee" || len(imported.Rules[0].SetTags) != 1 {
 		t.Errorf("rules lost: %+v", imported.Rules)

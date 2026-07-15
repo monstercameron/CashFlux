@@ -114,6 +114,9 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	onContrib := ui.UseEvent(func(v string) { contribS.Set(v) })
 	onPostLedger := ui.UseEvent(func(e ui.Event) { postLedgerS.Set(e.IsChecked()) })
 	cancel := ui.UseEvent(Prevent(func() { done() }))
+	// GL6: attach / replace / remove the goal's vision image via the shared picker.
+	attachPhoto := ui.UseEvent(Prevent(func() { attachGoalImage(props.GoalID, func(m string) { errS.Set(m) }) }))
+	removePhoto := ui.UseEvent(Prevent(func() { removeGoalImage(props.GoalID) }))
 	// Plain closures (not hooks) — passed down to each hook-owning goalLinkRow, so no On*
 	// hook is registered inside the checklist loop.
 	onToggleAcct := func(idv string) { acctSetS.Set(toggleInSet(acctSetS.Get(), idv)) }
@@ -339,6 +342,16 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	_ = pr
 	kind := domain.GoalKind(kindS.Get())
 	financial := kind.IsFinancial()
+	hasPhoto := g.GoalImageArtifactID != ""
+	photoBtnLabel := uistate.T("goals.addPhoto")
+	if hasPhoto {
+		photoBtnLabel = uistate.T("goals.changePhoto")
+	}
+	var removePhotoBtn ui.Node = Fragment()
+	if hasPhoto {
+		removePhotoBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "goal-remove-photo-"+g.ID), OnClick(removePhoto),
+			uistate.T("goals.removePhoto"))
+	}
 	return Form(css.Class("acct-edit-form"), OnSubmit(saveEdit),
 		Div(css.Class("modal-scroll"),
 			labeledField(uistate.T("common.name"),
@@ -371,6 +384,18 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("goals.owner"),
 				})),
+			// GL6: vision image. The photo saves to the stored goal immediately (its own
+			// artifact join), so it shows a live preview + change/remove; the button label
+			// reflects whether an image is already attached.
+			labeledField(uistate.T("goals.addPhoto"),
+				Div(
+					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+						goalImageBanner(app, g),
+						Button(css.Class("btn"), Type("button"), Attr("data-testid", "goal-add-photo-"+g.ID), OnClick(attachPhoto), photoBtnLabel),
+						removePhotoBtn,
+					),
+					Span(css.Class("budget-sub"), uistate.T("goals.photoHint")),
+				)),
 			// Review reminder (any kind) — how often to revisit this goal.
 			labeledField(uistate.T("goals.reviewCadenceLabel"),
 				Div(

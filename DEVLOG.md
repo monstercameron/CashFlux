@@ -1,3 +1,19 @@
+## 2026-07-14 — GL series + v1.0.30: goals ship (7 tickets, 3 agents)
+
+Section 4, smallest section, cleanest integration. The interesting coordination: three agents
+all needed to touch the goal card (goals_row.go) and the shared editor, and they self-organized
+around it — agent B wrote goals_planplus.go as a new file with self-guarding components that
+render Fragment() when N/A, so the single additive insertion into goals_row.go composed three
+features without collision. GL2/GL4 cross-coordinated live: GL4's slider calls GL2's
+goalinterest.Project when the linked account has an APY, linear otherwise — the agents discovered
+the dependency and wired it without me brokering. The mid-wave diagnostics (undefined pledge
+helpers, waterfall money import) were the now-familiar transient: agents temporarily move each
+other's untracked files aside to verify their own build, and the LSP snapshots that intermediate
+state — the real post-wave build was clean on the first check. GL7's pause modal is the standout:
+honest cost preview before confirming, never-naggy copy ("take a break... pause as long as you
+like"), a neutral chip not an alarm — exactly the tone gate the ticket demanded. No UX fix pass
+needed this section. Section 4 of 6 done; two left (accounts, assistant).
+
 ## 2026-07-14 — BG series + v1.0.29: budgets ship (16 tickets, one integration wave)
 
 Section 3, 4 agents, single wave — cleaner than the TX waves because the shared surface

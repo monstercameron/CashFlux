@@ -313,6 +313,7 @@ func goalListWidget(props goalListProps) ui.Node {
 	}
 
 	var body ui.Node = Div(
+		goalsWaterfallCard(),
 		fundsSection,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.goals"),

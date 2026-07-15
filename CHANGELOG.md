@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.30 (2026-07-14):** cuts the complete GL goals-competitive series (GL1–GL7). SW cache → `cashflux-v303`.
+
+### Added
+- **Goals competitive series — GL1–GL7 (2026-07-14):** a **payday waterfall** (when income lands, a preview-approve card funds goals in priority order — "Fund goals from this $2,400 paycheck? Emergency → $200 → Vacation → $150"; writes virtual earmarks, never auto-commits, respects account balances); **interest-aware ETAs** (an optional APY on savings accounts projects a goal's finish with monthly compounding — "at $200/mo + 4.4% you'll hit $10k in 38 months · interest adds $612"); **emergency-fund auto-sizing** (derives your essential month and offers one-tap 3-/6-month targets, re-suggesting via a SMART flag when it drifts); a **contribution slider** (drag the monthly amount, watch the finish date move live, "Use this plan" to commit, with a "where does this come from?" bridge to budgets); **shared goals with per-member pledges** (a blame-free split bar showing each member ahead-of/on-pace against their pledge); **goal photos** (attach an image, rendered as a card banner via the artifacts store); and **goal pause/snooze** (pick N months with an honest cost preview — "pausing 2 months moves the finish from Dec 2026 to Feb 2027" — pace stops scolding, a quiet "Paused until…" chip shows, and it resurfaces once at pause end). Pure logic table-tested; e2e-verified (e2e/_gl_verify.mjs), zero console errors.
+
+### Changed
 - **Version bumped to v1.0.29 (2026-07-14):** cuts the complete BG budgets-competitive series (BG1–BG16) into a release. SW cache → `cashflux-v302`.
 
 ### Added

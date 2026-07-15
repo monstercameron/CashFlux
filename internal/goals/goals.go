@@ -207,6 +207,11 @@ func OnTrack(goal domain.Goal, monthly money.Money, from time.Time) (onTrack, kn
 	if complete {
 		return true, true, nil
 	}
+	// A paused goal is not expected to be contributing, so it is never "behind"
+	// while paused — the pace stops scolding (GL7).
+	if goal.IsPaused(from) {
+		return true, true, nil
+	}
 	projected, ok, err := Project(goal, monthly, from)
 	if err != nil {
 		return false, false, err
@@ -337,6 +342,9 @@ func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, er
 	if !goal.TargetDate.IsZero() {
 		switch {
 		case complete:
+			onTrack, paceKnown = true, true
+		case goal.IsPaused(from):
+			// Paused goals aren't expected to contribute, so they're not behind (GL7).
 			onTrack, paceKnown = true, true
 		case has:
 			onTrack, paceKnown = !projected.After(goal.TargetDate), true

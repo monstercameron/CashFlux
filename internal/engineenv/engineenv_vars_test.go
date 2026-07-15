@@ -59,6 +59,33 @@ func TestDerivedFinancialVars(t *testing.T) {
 	}
 }
 
+func TestEssentialMonthlyAtom(t *testing.T) {
+	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
+	d := baseData(now)
+	// $1,500/mo recurring rent commitment.
+	d.Recurring = []domain.Recurring{
+		{ID: "r", Label: "Rent", Amount: usd(-1500), Cadence: domain.CadenceMonthly, NextDue: now},
+	}
+	// Essential groceries $300 in each of the 3 prior whole months (Mar/Apr/May),
+	// plus discretionary dining that must be excluded.
+	d.Categories = []domain.Category{
+		{ID: "groc", Name: "Groceries", CategoryClass: domain.ClassFixed},
+		{ID: "fun", Name: "Dining", CategoryClass: domain.ClassFlex},
+	}
+	for m := time.March; m <= time.May; m++ {
+		when := time.Date(2026, m, 10, 0, 0, 0, 0, time.UTC)
+		d.Transactions = append(d.Transactions,
+			domain.Transaction{ID: "g" + m.String(), AccountID: "chk", CategoryID: "groc", Date: when, Amount: usd(-300)},
+			domain.Transaction{ID: "d" + m.String(), AccountID: "chk", CategoryID: "fun", Date: when, Amount: usd(-100)},
+		)
+	}
+	v := Vars(d)
+	// $1,500 fixed + $300 essential trailing avg = $1,800.
+	if v["essential_monthly"] != 1800 {
+		t.Fatalf("essential_monthly = %v, want 1800", v["essential_monthly"])
+	}
+}
+
 func TestZeroIncomeSavingsRate(t *testing.T) {
 	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
 	d := baseData(now)

@@ -60,7 +60,9 @@ var i18nBaselines = map[string]int{
 	// carry their insight copy in-package like every other engine; the baseline
 	// moves with them — SMART-BL16 price-creep, new-merchant/trial, and the BG6
 	// seasonal auto-budget true-up.
-	"../smartengine":   166,
+	// 166→169 (2026-07-14): GL3 SMART-G21 emergency-fund resize re-suggest adds
+	// its three in-package insight strings (Title/Detail/Label).
+	"../smartengine":   169,
 	"../widgetcatalog": 42,
 	"../healthscore":   0,
 	"../credithealth":  0,

@@ -108,6 +108,16 @@ type Account struct {
 	Lender          string      `json:"lender,omitempty"`
 	IncludeInPayoff *bool       `json:"includeInPayoff,omitempty"` // nil = default (every liability but a mortgage)
 
+	// APY is the account's annual percentage yield as a percent (e.g. 4.4 for
+	// 4.4%). Optional and asset-side: when set on a savings/investment account it
+	// drives the interest-aware goal ETA (goalinterest.Project) — a goal linked to
+	// this account projects its finish date with monthly compounding. Distinct from
+	// ExpectedReturnAPR (the allocation-engine scoring input): APY is the concrete,
+	// user-entered yield the goal projection compounds. Zero (the default) means no
+	// yield and the goal falls back to linear pace math. Omitted from JSON when zero
+	// so existing rows round-trip with no migration needed.
+	APY float64 `json:"apy,omitempty"`
+
 	// Allocation-engine attributes (asset-side).
 	ExpectedReturnAPR float64   `json:"expectedReturnApr,omitempty"`
 	LiquidityScore    int       `json:"liquidityScore,omitempty"` // 0..100
@@ -138,12 +148,12 @@ func (a Account) IsLiability() bool { return a.Class == ClassLiability }
 
 // Category classifies transactions as income or expense; categories may nest.
 type Category struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Kind       CategoryKind   `json:"kind"`
-	Color      string         `json:"color,omitempty"`
-	ParentID   string         `json:"parentId,omitempty"`
-	Deductible bool           `json:"deductible,omitempty"`
+	ID         string       `json:"id"`
+	Name       string       `json:"name"`
+	Kind       CategoryKind `json:"kind"`
+	Color      string       `json:"color,omitempty"`
+	ParentID   string       `json:"parentId,omitempty"`
+	Deductible bool         `json:"deductible,omitempty"`
 	// CategoryClass groups the category for flex budgeting (BG2): fixed,
 	// non-monthly, or flex. Empty reads as ClassFlex — see Category.ClassOf.
 	CategoryClass CategoryClass  `json:"categoryClass,omitempty"`
@@ -743,6 +753,38 @@ type Goal struct {
 	// explicitly marked reviewed — the anchor the ReviewCadence staleness check counts
 	// from. Zero on legacy goals (which carry no cadence, so they never nag). Additive.
 	LastReviewedAt time.Time `json:"lastReviewedAt,omitempty"`
+	// GoalImageArtifactID references a domain.Artifact (an image) shown as a small
+	// "vision" banner on the goal card (GL6) — the picture of what you're saving for.
+	// It reuses the artifacts/blobstore join exactly like transaction receipts: the
+	// goal holds only the artifact ID, and the blob GC (internal/artifactref) counts
+	// it as a live reference so the image is never swept. Empty = no image. Optional/
+	// additive; JSON round-trips; no store migration needed.
+	GoalImageArtifactID string `json:"goalImageArtifactId,omitempty"`
+	// PausedUntil pauses the goal until this date (GL7). While paused, contributions
+	// aren't expected and the pace logic treats the goal as not-behind (it stops
+	// scolding) — pausing is a CHOSEN state, not a failure. Zero = not paused. The
+	// projected finish shifts by the paused span (see goals.PauseProjection), and the
+	// goal resurfaces once at pause end via a gentle, dismissible nudge. Optional/
+	// additive; JSON round-trips; no store migration needed.
+	PausedUntil time.Time `json:"pausedUntil,omitempty"`
+	// Pledges records each household member's pledged MONTHLY contribution toward a
+	// shared goal (GL5): memberID → pledged amount. Small, additive data that
+	// survives the multi-user sync upgrade (TX15-stubbed today). Empty on a solo or
+	// unpledged goal. The pledge shape is intentionally independent of actual
+	// contributions, which are attributed separately via GoalContribution.MemberID.
+	Pledges map[string]money.Money `json:"pledges,omitempty"`
+	// EssentialBasisMinor records the essential-month figure (base-currency minor
+	// units) an emergency-fund target was last derived from (GL3). The re-suggest
+	// flag compares a freshly derived figure against this to notice >10% drift.
+	// Zero when the target was never auto-derived. Optional/additive; JSON round-trips.
+	EssentialBasisMinor int64 `json:"essentialBasisMinor,omitempty"`
+}
+
+// IsPaused reports whether the goal is paused at reference time now — its
+// PausedUntil is set and still in the future. A paused goal's pace stops
+// scolding and its contributions aren't expected (GL7).
+func (g Goal) IsPaused(now time.Time) bool {
+	return !g.PausedUntil.IsZero() && g.PausedUntil.After(now)
 }
 
 // GoalAllocation is one virtual earmark: Amount of AccountID's balance reserved for a
@@ -792,6 +834,11 @@ type GoalContribution struct {
 	Amount money.Money `json:"amount"`
 	TxnID  string      `json:"txnId,omitempty"`
 	At     time.Time   `json:"at"`
+	// MemberID attributes this contribution to a household member on a shared goal
+	// (GL5), so actual funding can be measured against each member's pledge. Empty
+	// on solo goals or legacy contributions recorded before attribution — those
+	// fall back to the contributing member's context at read time. Additive.
+	MemberID string `json:"memberId,omitempty"`
 }
 
 // MaxGoalContributions bounds the retained contribution log per goal. Contributions

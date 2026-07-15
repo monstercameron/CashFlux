@@ -120,6 +120,7 @@ var catalog = []Feature{
 	rule("SMART-G18", PageGoals, "Goal feasibility traffic-light", "Green/amber/red on each goal: is its deadline realistic at current pace?"),
 	rule("SMART-G19", PageGoals, "Borrow-from-goal warning", "Warn about the setback before a withdrawal pulls from a goal-linked account."),
 	rule("SMART-G20", PageGoals, "Shared goal contributions", "Track who contributed what toward a shared household goal."),
+	rule("SMART-G21", PageGoals, "Emergency-fund resize", "Notice when your essential month has drifted and re-suggest the fund target."),
 
 	// ── To-dos ────────────────────────────────────────────────────────────────
 	rule("SMART-D1", PageTodos, "Auto-generated financial to-dos", "Turn detected events (spikes, missed bills, unused subs) into to-dos."),

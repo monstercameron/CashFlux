@@ -65,6 +65,10 @@ func GoalRow(props goalRowProps) ui.Node {
 	openAllocate := ui.UseEvent(Prevent(func() {
 		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModeAllocate})
 	}))
+	// Pause/snooze the goal for N months, with an honest ETA-cost preview (GL7).
+	openPause := ui.UseEvent(Prevent(func() {
+		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModePause})
+	}))
 	doMarkReviewed := ui.UseEvent(Prevent(func() { markGoalReviewed(g.ID) }))
 	doUndoContribution := ui.UseEvent(Prevent(func() {
 		if props.OnUndoContribution != nil {
@@ -160,6 +164,13 @@ func GoalRow(props goalRowProps) ui.Node {
 	} else if kind == domain.GoalKindHabit && prog.Streak > 0 {
 		streakChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-streak-"+g.ID),
 			uistate.T("goals.streakFmt", prog.Streak))
+	}
+	// Paused chip (GL7): a quiet, non-alarming note that the goal is intentionally
+	// paused until a date — a chosen state, not a scold. Shown for any kind.
+	var pausedChip ui.Node = Fragment()
+	if g.IsPaused(now) {
+		pausedChip = Span(ClassStr("pace-badge pace-paused"), Attr("data-testid", "goal-paused-chip-"+g.ID),
+			uistate.T("goals.pausedChip", pr.FormatDate(g.PausedUntil)))
 	}
 	// Review-due chip (any kind, when the review cadence has elapsed) + a linked-budgets
 	// count chip (financial goals that feed one or more budgets).
@@ -261,6 +272,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				If(subSecondary != "", Span(css.Class("goal-sub-dim"), " · "+subSecondary)),
 			),
 			overfundNote, whatNext, linkedLine, catLine, earmarkLine,
+			goalInterestEtaLine(g, props.Accounts, now),
 		)
 	} else {
 		var line string
@@ -325,6 +337,20 @@ func GoalRow(props goalRowProps) ui.Node {
 	if g.ReviewCadence != "" && !g.Archived {
 		reviewItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "goal-review-btn-"+g.ID), OnClick(doMarkReviewed), uistate.T("goals.markReviewed"))
+	}
+
+	// Pause / Resume (GL7): pause an active, not-yet-complete goal for N months
+	// (opens the cost-preview form), or resume one that's paused. A chosen state,
+	// framed as a choice — hidden on archived and complete goals.
+	var pauseItem ui.Node = Fragment()
+	if !g.Archived && !complete {
+		if g.IsPaused(now) {
+			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "goal-resume-btn-"+g.ID), OnClick(openPause), uistate.T("goals.resumeAction"))
+		} else {
+			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "goal-pause-btn-"+g.ID), OnClick(openPause), uistate.T("goals.pauseAction"))
+		}
 	}
 
 	// Archive / Unarchive live in the ⋯ menu (archive shows on any complete active goal).
@@ -407,10 +433,13 @@ func GoalRow(props goalRowProps) ui.Node {
 
 	return Div(ClassStr("goal-card "+cardState),
 		Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
+		// GL6: the goal's vision image as a small banner atop the card (when attached).
+		goalImageBanner(appstate.Default, g),
 		// Header: the goal name on its own line, with kind-appropriate chips.
 		Div(css.Class("goal-card-head"),
 			Span(css.Class("goal-card-title"), g.Name),
 			paceBadgeNode,
+			pausedChip,
 			monthlyChip,
 			fundChip,
 			streakChip,
@@ -427,6 +456,12 @@ func GoalRow(props goalRowProps) ui.Node {
 			),
 		),
 		subSection,
+		// GL3: one-tap emergency-fund sizing from the derived essential month.
+		ui.CreateElement(GoalEmergencySizer, goalEmergencyProps{App: appstate.Default, Goal: g}),
+		// GL4: contribution slider with a live finish-date ETA + "use this plan".
+		ui.CreateElement(GoalContribSlider, goalSliderProps{App: appstate.Default, Goal: g}),
+		// GL5: shared-goal per-member pledge split bar (renders only when pledged).
+		ui.CreateElement(GoalPledgeBar, goalPledgeProps{App: appstate.Default, Goal: g, Members: props.Members}),
 		todosSection,
 		// Footer: the primary kind action + the shared viewport-aware ⋯ KebabMenu, which
 		// now holds Edit (opens the flip editor), the contribution controls, archive, and
@@ -441,6 +476,7 @@ func GoalRow(props goalRowProps) ui.Node {
 					editItem,
 					allocateItem,
 					reviewItem,
+					pauseItem,
 					undoItem,
 					resetItem,
 					archiveItem,

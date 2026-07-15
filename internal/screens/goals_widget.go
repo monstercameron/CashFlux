@@ -34,6 +34,18 @@ func Goals() ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get()
 
+	// GL7: on entering the goals surface, resume any goal whose pause has elapsed and
+	// file a single gentle "pick it back up" nudge per goal. Clearing PausedUntil is the
+	// once-guard, so this converges after one pass. Runs on mount only.
+	ui.UseEffect(func() func() {
+		if n, err := app.SweepEndedGoalPauses(time.Now(), func(name string) string {
+			return uistate.T("goals.pauseEndedNudge", name)
+		}); err == nil && n > 0 {
+			uistate.BumpDataRevision()
+		}
+		return nil
+	})
+
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"

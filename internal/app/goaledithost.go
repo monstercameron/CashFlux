@@ -32,13 +32,18 @@ func GoalEditHost() uic.Node {
 		title, width, height = uistate.T("goals.contributeTitle"), uiw.FlipSmallW, uiw.FlipSmallH
 	case uistate.GoalEditModeAllocate:
 		title = uistate.T("goals.allocateTitle")
+	case uistate.GoalEditModePause:
+		title, width, height = uistate.T("goals.pauseTitle"), uiw.FlipSmallW, uiw.FlipSmallH
 	}
 
-	// Allocate has its own body (per-account earmark inputs); edit/contribute share GoalEditForm.
+	// Allocate + Pause have their own bodies; edit/contribute share GoalEditForm.
 	var back uic.Node
-	if e.Mode == uistate.GoalEditModeAllocate {
+	switch e.Mode {
+	case uistate.GoalEditModeAllocate:
 		back = uic.CreateElement(screens.GoalAllocateForm, screens.GoalAllocateFormProps{GoalID: e.ID, OnDone: closeModal})
-	} else {
+	case uistate.GoalEditModePause:
+		back = uic.CreateElement(screens.GoalPauseForm, screens.GoalPauseFormProps{GoalID: e.ID, OnDone: closeModal})
+	default:
 		back = uic.CreateElement(screens.GoalEditForm, screens.GoalEditFormProps{GoalID: e.ID, Mode: e.Mode, OnDone: closeModal})
 	}
 
