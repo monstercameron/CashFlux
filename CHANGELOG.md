@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.36 (2026-07-15):** design-review refinement round 2 — the aggressive adversarial critic now passes ALL 8 primary pages + all 4 modals (`ALL-SHIP`). SW cache → `cashflux-v309`.
+
+### Fixed
+- **Design-review refinements — round 2 (2026-07-15):** closed the adversarial critic's last four findings, after which a fresh full pass returned `ALL-SHIP` (Dashboard, Transactions, Accounts, Budgets, Goals, To-do, Notifications, Assistant + the Sweep-rules/Sweep-leftovers/Round-ups modals and Earmarks). The Sweep-rules modal now shrink-wraps to its short form (`FlipSmall`) so there's no dead space above the pinned Done/Add footer; the Assistant response avatar is a rounded-square accent chip (was a round outlined circle that read as the app's "+" add button); the Earmarks "by goal" allocation rows are indented under their goal with a left connector rail so the nesting is unambiguous; and the Dashboard "Needs attention" pills grow to fill each row so a lone trailing alert stretches instead of stranding a half-empty row.
+
+### Changed
 - **Version bumped to v1.0.35 (2026-07-15):** design-review refinement round 1 (adversarial critic). SW cache → `cashflux-v308`.
 
 ### Fixed

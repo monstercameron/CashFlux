@@ -1,3 +1,24 @@
+## 2026-07-15 — v1.0.36: adversarial design loop converges to ALL-SHIP
+
+Round 2 of the hostile critic returned only 4 rejects (down from 13), and 6 of 8 pages already
+passed. Fixed all four: the Sweep-rules modal went back to FlipSmall so it shrink-wraps its short
+form (the earlier FlipMedium fixed the below-fold Add button but left ~185px of void — the real fix
+was the pinned footer, so FlipSmall + FlushBody gives both); the Assistant avatar became a
+rounded-SQUARE accent chip so it stops reading as the round green "+" add button (the ✦ sparkle stays
+— it's the app's AI mark — but the button-like circle was the collision); the Earmarks "by goal" rows
+got an indent + left connector rail so the account allocations are visibly subordinate to their goal;
+and the Dashboard "Needs attention" pills now flex-grow to fill each row so a lone trailing alert
+stretches full-width instead of stranding a half-empty row.
+
+Round 3 (a full re-review) returned **ALL-SHIP** — every one of the 8 primary pages and all 4 modals
+passed the aggressive critic with zero rejects. The loop is done. Across the whole effort: 4 parallel
+opus agents did the initial territory work, then three adversarial-critic rounds (13 → 4 → 0 rejects)
+drove the polish, with a functional e2e (_goal_verify.mjs, 12 checks) and per-round screenshot review
+guarding correctness. Two real latent bugs surfaced only by driving the UI: the toolbar search never
+actually filled (a hidden 22rem max-width cap) and the accounts overflow menu was unclickable
+(painted under the next bento tile). Full native tests + screenlint green, zero console errors, none
+of the three concurrent-session files touched. Shipped v1.0.36.
+
 ## 2026-07-15 — v1.0.35: adversarial design loop, round 1
 
 Spawned an aggressive, deliberately-hard-to-impress design critic (sonnet, load frontend-design) over
