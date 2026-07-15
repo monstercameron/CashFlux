@@ -23,6 +23,34 @@ func Carryover(prevRemaining, limit money.Money) (money.Money, error) {
 	return prevRemaining.Add(limit)
 }
 
+// CapCarryover clamps a carried-forward rollover balance to at most
+// capPeriods × limit of surplus (BG5). capPeriods <= 0 means uncapped — the carry
+// passes through unchanged, preserving the historical behavior. A non-positive
+// carry (envelope debt) is never clamped: the cap limits an accumulating cushion,
+// not a deficit, so "Dining starts the month down $32" still shows in full. The
+// clamp keeps carry's currency.
+func CapCarryover(carry, limit money.Money, capPeriods int) money.Money {
+	if capPeriods <= 0 || carry.Amount <= 0 {
+		return carry
+	}
+	ceiling := limit.Amount * int64(capPeriods)
+	if carry.Amount > ceiling {
+		return money.New(ceiling, carry.Currency)
+	}
+	return carry
+}
+
+// CappedCarryover advances one rollover period like Carryover, but first clamps
+// the incoming surplus to the budget's RolloverCapPeriods ceiling (BG5). It is the
+// single-step recurrence a capped rollover budget uses: feed last period's
+// remaining and this period's limit to get the funds available, with any surplus
+// beyond the cap dropped so it can't compound. prevRemaining and limit must share
+// a currency.
+func CappedCarryover(prevRemaining, limit money.Money, capPeriods int) (money.Money, error) {
+	capped := CapCarryover(prevRemaining, limit, capPeriods)
+	return capped.Add(limit)
+}
+
 // PreviousPeriodRange returns the budget period immediately before the period
 // containing ref. It keeps rollover UI and tests on the same period math as
 // Evaluate/EnvelopeAvailable.

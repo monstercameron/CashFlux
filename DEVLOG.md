@@ -1,3 +1,19 @@
+## 2026-07-14 — BG series + v1.0.29: budgets ship (16 tickets, one integration wave)
+
+Section 3, 4 agents, single wave — cleaner than the TX waves because the shared surface
+(budgets.go/row/tiles) took additive edits from all four without collision, and three agents
+adding fields to entities.go (CategoryClass, TargetKind/target fields, PeriodNotes) coexisted
+because each is a distinct additive field. The mid-wave diagnostics screamed "CategoryClass
+undefined" but that was a transient during another agent's entities.go write — the real build
+was clean. Only ratchet bump needed (smartengine 165→166, BG6 true-up). The one real UX bug the
+screenshot caught: flex methodology with no number set painted a FULL GREEN meter labeled
+"$1,562 of $0.00" — reads as "you're doing great" when it's actually "you've spent $1,562 with
+no budget." Neutral empty rail + "spent so far" copy fixes it; the lesson is that a meter's
+Max=0 fallback (maxV=1) makes any spend look like 100% fill, so unset-target states need an
+explicit zero-value guard, not just a fallback denominator. The rest is genuinely strong:
+pace ticks, the committed hatched segment from XC4 composing with the new pace race, per-member
+attribution, and an annual grid that reads like a real year-at-a-glance. Section 3 of 6 done.
+
 ## 2026-07-14 — TX wave B + v1.0.28: Section 2 ships (17 tickets)
 
 Wave B closed the TX series — NL search, bill matching, Amazon import (planning gate closed

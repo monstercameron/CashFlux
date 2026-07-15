@@ -109,3 +109,65 @@ func TestProjectPace(t *testing.T) {
 		}
 	})
 }
+
+func TestProjectPaceMarker(t *testing.T) {
+	start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 0, 30)
+	half := start.AddDate(0, 0, 15)
+	zero := money.Zero("USD")
+
+	t.Run("on pace at half period", func(t *testing.T) {
+		// $500 spent of $1000 halfway → ideal $500, delta 0, not hot, marker 50%.
+		m := ProjectPaceMarker(status(50000, 100000), zero, start, end, half)
+		if m.Ideal.Amount != 50000 {
+			t.Errorf("Ideal = %d, want 50000", m.Ideal.Amount)
+		}
+		if m.Delta.Amount != 0 || m.Hot {
+			t.Errorf("expected on pace, got Delta=%d Hot=%v", m.Delta.Amount, m.Hot)
+		}
+		if m.MarkerPct != 50 {
+			t.Errorf("MarkerPct = %d, want 50", m.MarkerPct)
+		}
+	})
+
+	t.Run("running hot", func(t *testing.T) {
+		// $700 spent halfway of $1000 → ideal $500, delta +$200, hot.
+		m := ProjectPaceMarker(status(70000, 100000), zero, start, end, half)
+		if m.Delta.Amount != 20000 || !m.Hot {
+			t.Errorf("Delta = %d Hot = %v, want 20000/true", m.Delta.Amount, m.Hot)
+		}
+	})
+
+	t.Run("behind pace", func(t *testing.T) {
+		// $200 spent halfway → ideal $500, delta -$300, not hot.
+		m := ProjectPaceMarker(status(20000, 100000), zero, start, end, half)
+		if m.Delta.Amount != -30000 || m.Hot {
+			t.Errorf("Delta = %d Hot = %v, want -30000/false", m.Delta.Amount, m.Hot)
+		}
+	})
+
+	t.Run("committed excluded from the race", func(t *testing.T) {
+		// $1000 limit, $400 committed → discretionary limit $600. Halfway the ideal
+		// discretionary line is $300; spent $500 incl. $400 committed → disc spent
+		// $100, so it's actually BEHIND pace, not hot.
+		committed := money.New(40000, "USD")
+		m := ProjectPaceMarker(status(50000, 100000), committed, start, end, half)
+		if m.Ideal.Amount != 30000 {
+			t.Errorf("Ideal = %d, want 30000 (discretionary)", m.Ideal.Amount)
+		}
+		if m.Delta.Amount != -20000 || m.Hot {
+			t.Errorf("Delta = %d Hot = %v, want -20000/false", m.Delta.Amount, m.Hot)
+		}
+		// Marker tick is still expressed against the full $1000 limit → 30%.
+		if m.MarkerPct != 30 {
+			t.Errorf("MarkerPct = %d, want 30", m.MarkerPct)
+		}
+	})
+
+	t.Run("before any time elapsed ideal is zero", func(t *testing.T) {
+		m := ProjectPaceMarker(status(5000, 100000), zero, start, end, start)
+		if m.Ideal.Amount != 0 || !m.Hot {
+			t.Errorf("at start: Ideal=%d Hot=%v, want 0/true", m.Ideal.Amount, m.Hot)
+		}
+	})
+}

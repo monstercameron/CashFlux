@@ -192,6 +192,42 @@ func (s Scope) Valid() bool {
 	}
 }
 
+// TargetKind is the shape of a budget's optional funding target (BG1). It drives
+// how "still needed to fund this period" is computed beyond the plain limit:
+// refilling back up to a level, setting a fixed amount aside, or accumulating a
+// lump sum by a deadline (delegated to a linked goal).
+type TargetKind string
+
+const (
+	// TargetNone means the budget has no funding target beyond its limit.
+	TargetNone TargetKind = ""
+	// TargetRefillUpTo tops the budget up to TargetAmount each period, crediting
+	// whatever is already funded (rollover-aware) — "refill to $200".
+	TargetRefillUpTo TargetKind = "refill-up-to"
+	// TargetSetAside puts a fixed TargetAmount aside every period regardless of
+	// the current balance — "set aside $60".
+	TargetSetAside TargetKind = "set-aside"
+	// TargetByDate accumulates TargetAmount by TargetDate. Accumulation is not
+	// duplicated here: a by-date target delegates its pace to a linked goal
+	// (LinkedGoalID) so the goals package owns the math.
+	TargetByDate TargetKind = "by-date"
+)
+
+// AllTargetKinds lists every valid budget target kind (excluding the empty none).
+var AllTargetKinds = []TargetKind{TargetRefillUpTo, TargetSetAside, TargetByDate}
+
+func (k TargetKind) String() string { return string(k) }
+
+// Valid reports whether k is a known target kind (the empty "none" included).
+func (k TargetKind) Valid() bool {
+	switch k {
+	case TargetNone, TargetRefillUpTo, TargetSetAside, TargetByDate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Period is a budgeting period.
 type Period string
 

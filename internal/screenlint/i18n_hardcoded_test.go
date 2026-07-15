@@ -56,10 +56,11 @@ var i18nBaselines = map[string]int{
 	// Logic packages that produce user-facing copy (C362: these need the
 	// key+args architecture — insights/notifications currently bake English
 	// at generation time, and notification copy is persisted pre-formatted).
-	// 160→165 (2026-07-14): smartengine is pure (no uistate.T), so the new
-	// SMART-BL16 price-creep + new-merchant/trial detectors carry their insight
-	// copy in-package like every other engine; the baseline moves with them.
-	"../smartengine":   165,
+	// 160→166 (2026-07-14): smartengine is pure (no uistate.T), so new detectors
+	// carry their insight copy in-package like every other engine; the baseline
+	// moves with them — SMART-BL16 price-creep, new-merchant/trial, and the BG6
+	// seasonal auto-budget true-up.
+	"../smartengine":   166,
 	"../widgetcatalog": 42,
 	"../healthscore":   0,
 	"../credithealth":  0,

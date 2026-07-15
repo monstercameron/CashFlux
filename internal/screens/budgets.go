@@ -47,12 +47,14 @@ type budgetView struct {
 	Statuses          []budgeting.Status
 	CatName           map[string]string
 	PaceOver          map[string]string                // budgetID → projected overspend (in-progress only)
+	PaceMark          map[string]budgetPaceMark        // budgetID → even-pace tick + caption (BG3, in-progress only)
 	RollCarry         map[string]string                // budgetID → previous-period carry phrase
 	RollNeg           map[string]bool                  // budgetID → carry is negative
 	RollEffCap        map[string]string                // budgetID → effective cap (rollover, when it differs)
 	ProratedRest      map[string]string                // budgetID → even-pace amount left
 	EnvAvail          map[string]string                // budgetID → envelope balance (envelope method)
 	EnvNeg            map[string]bool                  // budgetID → envelope overdrawn
+	EnvDebtStart      map[string]string                // budgetID → BG5 "starts <month> down $X" when overdrawn
 	Covered           map[string]bool                  // budgetID → received cover money this period
 	EffMethod         map[string]budgeting.Methodology // budgetID → resolved method (override or global)
 	OverCount         int
@@ -346,6 +348,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 
 	statuses := make([]budgeting.Status, 0, len(budgets))
 	paceOver := map[string]string{}
+	paceMark := map[string]budgetPaceMark{}
 	rollCarry := map[string]string{}
 	rollNeg := map[string]bool{}
 	rollEffCap := map[string]string{}
@@ -372,7 +375,11 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		if b.Rollover {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
-				if eff, cerr := budgeting.Carryover(prev.Remaining, b.Limit); cerr == nil {
+				// BG5: clamp the carried-in surplus to the budget's rollover cap (N× the
+				// limit) so a neglected budget can't build an unbounded fictional cushion.
+				// CappedCarryover is uncapped when RolloverCapPeriods <= 0 (the default),
+				// preserving the historical behavior; a carried-in DEFICIT is never clamped.
+				if eff, cerr := budgeting.CappedCarryover(prev.Remaining, b.Limit, b.RolloverCapPeriods); cerr == nil {
 					eval.Limit = eff
 					if eff.Amount != b.Limit.Amount {
 						rollEffCap[b.ID] = fmtMoney(eff)
@@ -463,6 +470,11 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
 			paceOver[b.ID] = fmtMoney(p.OverBy)
 		}
+		// BG3: the even-pace tick + caption (committed money excluded from the race),
+		// shown only while the period is in progress.
+		if pm, ok := buildBudgetPaceMark(st, b, recurrings, txns, bs, be, now); ok {
+			paceMark[b.ID] = pm
+		}
 		// C143: even-pace per-category safe-to-spend, only while in progress and there's
 		// still room (paceOver owns the over case).
 		if !st.Remaining.IsNegative() && st.Remaining.Amount > 0 {
@@ -525,6 +537,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	effMethod := map[string]budgeting.Methodology{}
 	envAvail := map[string]string{}
 	envNeg := map[string]bool{}
+	envDebtStart := map[string]string{}
 	for _, b := range budgets {
 		em := effectiveMethod(b)
 		effMethod[b.ID] = em
@@ -534,6 +547,10 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		if av, err := budgeting.EnvelopeAvailable(b, txns, anchor, weekStart, rates, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
 			if av.IsNegative() {
 				envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
+				// BG5 debt visibility: name what NEXT period starts down, so the overdraft
+				// doesn't quietly vanish at the period boundary ("Starts March down $32").
+				_, curEnd := budgeting.PeriodRange(b.Period, anchor, weekStart)
+				envDebtStart[b.ID] = uistate.T("budgets.envelopeDebtStart", curEnd.Format("January"), fmtMoney(av.Abs()))
 			} else {
 				envAvail[b.ID] = fmtMoney(av)
 			}
@@ -583,8 +600,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 
 	return budgetView{
 		Base: base, Method: method, Statuses: statuses, CatName: catName,
-		PaceOver: paceOver, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap,
-		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, Covered: covered, EffMethod: effMethod,
+		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap,
+		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EnvDebtStart: envDebtStart, Covered: covered, EffMethod: effMethod,
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
@@ -721,7 +738,11 @@ type budgetRowProps struct {
 	BudgetDefs        []customfields.Def    // custom-field defs for the "budget" entity (display + inline edit)
 	Envelope          string                // formatted envelope balance (envelope methodology); "" hides the line
 	EnvelopeNeg       bool                  // envelope is overdrawn → danger tone
+	EnvelopeDebtStart string                // BG5: "Starts March down $32" when overdrawn; "" hides it
 	PaceOver          string                // formatted projected overspend (pace, in-progress only); "" hides the line
+	PaceMarkerPct     int                   // BG3: even-pace tick position as % of the limit (0 hides the tick)
+	PaceCaption       string                // BG3: "on pace" / "running $38 hot" caption; "" hides the line
+	PaceHot           bool                  // BG3: spending has outrun the even-pace line → caution tone
 	RolloverCarry     string                // formatted previous-period carry for per-budget rollover; "" hides the line
 	RolloverNeg       bool                  // previous-period carry is negative → danger tone
 	EffectiveCap      string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
@@ -759,6 +780,46 @@ func budgetRemainPhrase(m money.Money) string {
 		return fmtMoney(m.Abs()) + " " + uistate.T("budgets.overWord")
 	}
 	return fmtMoney(m) + " " + uistate.T("budgets.leftWord")
+}
+
+// budgetPaceMark is the BG3 even-pace read for one budget: where the meter's second
+// tick sits (MarkerPct, a percent of the limit) and a plain-English caption saying
+// whether spending is on pace, running hot, or has a cushion so far.
+type budgetPaceMark struct {
+	MarkerPct int    // ideal spend-to-date as a percent of the limit (0..100)
+	Caption   string // "on pace" / "running $38 hot" / "$12 under pace so far"
+	Hot       bool   // spending has outrun the even-pace line → caution tone
+}
+
+// buildBudgetPaceMark computes the BG3 even-pace tick + caption for a budget while
+// its period is in progress. Committed money (XC4) is excluded from the pace race —
+// pre-spoken-for recurring charges aren't "spent fast". Returns ok=false outside an
+// in-progress period so the marker only shows when it's meaningful.
+func buildBudgetPaceMark(st budgeting.Status, b domain.Budget, recurrings []domain.Recurring, txns []domain.Transaction, bs, be, now time.Time) (budgetPaceMark, bool) {
+	cur := st.Spent.Currency
+	committed := money.Zero(cur)
+	// Only a positive remaining can carry a committed segment (mirrors buildBudgetCommitted).
+	if st.Remaining.IsPositive() {
+		cr := budgeting.Committed(b, recurrings, txns, st.Remaining, bs, be)
+		if cr.Committed.Amount > 0 {
+			committed = cr.Committed
+		}
+	}
+	m := budgeting.ProjectPaceMarker(st, committed, bs, be, now)
+	// Only meaningful while the period is genuinely in progress.
+	if m.Elapsed <= 0 || m.Elapsed >= 1 {
+		return budgetPaceMark{}, false
+	}
+	mark := budgetPaceMark{MarkerPct: m.MarkerPct, Hot: m.Hot}
+	switch {
+	case m.Hot && m.Delta.Amount > 0:
+		mark.Caption = uistate.T("budgets.paceHot", fmtMoney(m.Delta))
+	case m.Delta.Amount < 0:
+		mark.Caption = uistate.T("budgets.paceCool", fmtMoney(money.New(-m.Delta.Amount, cur)))
+	default:
+		mark.Caption = uistate.T("budgets.paceOnPace")
+	}
+	return mark, true
 }
 
 // buildBudgetCommitted derives the XC4 committed-vs-free split for one budget and

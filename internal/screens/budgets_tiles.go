@@ -1045,6 +1045,7 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 					Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 					Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
 					Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+					Option(Value(string(budgeting.MethodFlex)), SelectedIf(method == budgeting.MethodFlex), uistate.T("settings.budgetMethodFlex")),
 				),
 			),
 			Label(css.Class("fctrl"),
@@ -1134,6 +1135,24 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
+	// BG9: drill from an annual-grid cell to that month's filtered transactions.
+	drillMonth := func(categoryIDs []string, from, to string) {
+		var f uistate.TxFilter
+		switch len(categoryIDs) {
+		case 0:
+			// no tracked category — open the ledger windowed to the month only
+		case 1:
+			f.Category = categoryIDs[0]
+		default:
+			f.Categories = strings.Join(categoryIDs, ",")
+		}
+		f.From, f.To = from, to
+		f = f.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+
 	var body ui.Node
 	if len(v.Statuses) == 0 {
 		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), AddTarget: "budget", Icon: icon.Budgets})
@@ -1165,7 +1184,8 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				}
 				return ui.CreateElement(BudgetRow, budgetRowProps{
 					Status: s, Category: v.CatName[s.Budget.CategoryID], TrackedCats: tracked, Members: members, BudgetDefs: budgetDefs,
-					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
+					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], EnvelopeDebtStart: v.EnvDebtStart[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
+					PaceMarkerPct: v.PaceMark[s.Budget.ID].MarkerPct, PaceCaption: v.PaceMark[s.Budget.ID].Caption, PaceHot: v.PaceMark[s.Budget.ID].Hot,
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
 					Covered:        v.Covered[s.Budget.ID],
@@ -1180,7 +1200,22 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		// Lay the budget cards out in a responsive grid so each is a compact 1-column
 		// block (several per row) rather than a full-width bar — budgets don't need the
 		// whole width, and a grid shows far more at a glance.
-		body = Div(css.Class("budget-grid"), rows)
+		// BG9: the view-only annual plan-vs-actual grid, a collapsible section below the
+		// cards. It projects the same per-month evaluations the engine already computes.
+		budgetsForGrid := make([]domain.Budget, 0, len(v.Statuses))
+		for _, s := range v.Statuses {
+			budgetsForGrid = append(budgetsForGrid, s.Budget)
+		}
+		annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
+			Budgets:   budgetsForGrid,
+			Txns:      app.Transactions(),
+			Cats:      app.Categories(),
+			Rates:     currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
+			WeekStart: pr.WeekStartWeekday(),
+			Now:       time.Now(),
+			OnCell:    drillMonth,
+		})
+		body = Fragment(Div(css.Class("budget-grid"), rows), annualGrid)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

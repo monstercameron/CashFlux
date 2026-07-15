@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -143,7 +144,10 @@ type Category struct {
 	Color      string         `json:"color,omitempty"`
 	ParentID   string         `json:"parentId,omitempty"`
 	Deductible bool           `json:"deductible,omitempty"`
-	Custom     map[string]any `json:"custom,omitempty"`
+	// CategoryClass groups the category for flex budgeting (BG2): fixed,
+	// non-monthly, or flex. Empty reads as ClassFlex — see Category.ClassOf.
+	CategoryClass CategoryClass  `json:"categoryClass,omitempty"`
+	Custom        map[string]any `json:"custom,omitempty"`
 }
 
 // Transaction is a single money movement. A positive Amount is income, a
@@ -512,6 +516,71 @@ type Budget struct {
 	// and may be negative (this-period cover pulled FROM this budget). Additive; existing
 	// budgets load with nil (no boosts).
 	PeriodBoosts map[string]int64 `json:"periodBoosts,omitempty"`
+	// PeriodNotes is a per-period journal keyed by the period's start date ("2006-01-02"):
+	// one short note explaining that period ("December was high because we hosted"). Distinct
+	// from Notes, which is the budget's standing note; these are anchored to a single period
+	// and surface in the row expand for the viewed period (BG16). Additive; existing budgets
+	// load with nil (no per-period notes) and export/import round-trips like every other map.
+	PeriodNotes map[string]string `json:"periodNotes,omitempty"`
+	// TargetKind is the budget's optional funding-target shape (BG1). Empty
+	// (TargetNone) means the budget has no target beyond its Limit. The kind
+	// drives how "still needed to fund this period" is computed and feeds BG4's
+	// underfunded quick-fill. Additive; existing budgets load with TargetNone.
+	TargetKind TargetKind `json:"targetKind,omitempty"`
+	// TargetAmount is the target level in minor units: the refill ceiling for
+	// TargetRefillUpTo, the fixed per-period amount for TargetSetAside, or the
+	// lump-sum goal for TargetByDate. Zero when TargetKind is TargetNone.
+	TargetAmount money.Money `json:"targetAmount,omitempty"`
+	// TargetDate is the deadline for a TargetByDate target — the date by which
+	// TargetAmount should be accumulated. Zero for other target kinds.
+	TargetDate time.Time `json:"targetDate,omitempty"`
+	// LinkedGoalID links a TargetByDate budget to a goal that owns the
+	// accumulation (a by-date target is a goal wearing a budget's clothes). When
+	// set, the by-date "needed" reads from the goal's pace instead of being
+	// re-derived here. Empty = no linked goal. Additive.
+	LinkedGoalID string `json:"linkedGoalId,omitempty"`
+	// RolloverCapPeriods caps how much unused budget a rollover budget may carry
+	// forward, as a multiple of the period limit: a neglected budget accumulates at
+	// most RolloverCapPeriods × limit of surplus, so a fictional cushion can't build
+	// up unbounded (BG5). Zero or negative means UNCAPPED, preserving the historical
+	// rollover behavior; existing budgets load with 0 and keep carrying without a
+	// ceiling. A carried-forward DEFICIT (envelope debt) is never clamped — the cap
+	// limits surplus, not debt. Additive.
+	RolloverCapPeriods int `json:"rolloverCapPeriods,omitempty"`
+}
+
+// HasTarget reports whether the budget has a funding target beyond its limit (BG1).
+func (b Budget) HasTarget() bool { return b.TargetKind != TargetNone && b.TargetKind != "" }
+
+// PeriodNote returns the journal note recorded for the period starting on the given date
+// (empty if none) — the per-period annotation shown in that period's row expand (BG16).
+func (b Budget) PeriodNote(periodStart time.Time) string {
+	if b.PeriodNotes == nil {
+		return ""
+	}
+	return b.PeriodNotes[periodStart.Format("2006-01-02")]
+}
+
+// WithPeriodNote returns a copy of the budget with the note set for the period starting on
+// the given date. Trimming to empty deletes the entry (and drops the map when it empties),
+// so a cleared note doesn't linger in the dataset.
+func (b Budget) WithPeriodNote(periodStart time.Time, note string) Budget {
+	key := periodStart.Format("2006-01-02")
+	note = strings.TrimSpace(note)
+	m := make(map[string]string, len(b.PeriodNotes)+1)
+	for k, v := range b.PeriodNotes {
+		m[k] = v
+	}
+	if note == "" {
+		delete(m, key)
+	} else {
+		m[key] = note
+	}
+	if len(m) == 0 {
+		m = nil
+	}
+	b.PeriodNotes = m
+	return b
 }
 
 // PeriodBoost returns the one-time limit adjustment recorded for the period starting on

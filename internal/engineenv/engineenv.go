@@ -148,6 +148,9 @@ var atomNames = []string{
 	"budgets",            // count of budgets
 	"goals",              // count of goals
 	"tasks",              // count of tasks
+
+	"days_left",               // whole days remaining in the active period (BG8)
+	"remaining_discretionary", // Σ money left across budgets this period (BG8; a safe-to-spend slice)
 }
 
 // DefaultMolecules are the built-in compound variables, defined as formulas over
@@ -160,6 +163,11 @@ func DefaultMolecules() []domain.Molecule {
 		{Name: "savings_rate", Formula: "clamp(safediv(income - expense, income, 0) * 100, -100, 100)", Doc: "Percent of income kept this period."},
 		{Name: "safe_to_spend", Formula: "liquid_cash - max(bills_due, 0) - max(goal_needs, 0)", Doc: "Liquid cash after this month's bills and goal set-asides."},
 		{Name: "unreserved_cash", Formula: "liquid_cash - max(earmarked_total, 0)", Doc: "Liquid cash not virtually reserved (earmarked) for any goal — what's genuinely unspoken-for."},
+		// BG8: one behavioral number, recomputed daily — the discretionary money still
+		// available divided by the days left in the period ("$23/day until the 1st").
+		// safediv falls back to 0 when the period has ended (days_left == 0), so a spent
+		// period reads as $0/day rather than dividing by zero.
+		{Name: "daily_allowance", Formula: "safediv(remaining_discretionary, days_left, 0)", Doc: "How much you can spend per day for the rest of the period — money left across your budgets divided by the days remaining."},
 		{Name: "credit_utilization", Formula: "clamp(safediv(revolving_balance, credit_limit_total, 0) * 100, 0, 100)", Doc: "Percent of your total credit-card limit you're using (30%+ starts to weigh on a credit score)."},
 		{Name: "debt_to_asset_pct", Formula: "clamp(safediv(liabilities, assets, 0) * 100, 0, 1000)", Doc: "What you owe as a percent of what you own — lower is healthier."},
 		// The financial-health score IS this formula: each health_* factor is a 0–100
@@ -390,6 +398,7 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
+	addDailyAllowanceVars(out, d, major, start, end)
 	addAccountVars(out, d, major, toBase, bals, clearedBals)
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase, bals)
@@ -406,6 +415,45 @@ func computeAtoms(d Data) map[string]float64 {
 	addAssistantVars(out, d, major)
 	addSmartVars(out, d)
 	return out
+}
+
+// addDailyAllowanceVars computes the two atoms behind the daily-allowance molecule
+// (BG8): days_left, the whole days still remaining in the active period, and
+// remaining_discretionary, the money still available to spend summed across every
+// budget's current period (each budget's limit minus its spend, floored at zero).
+// remaining_discretionary is a budget-derived safe-to-spend slice — the fallback the
+// ticket specifies when flex-mode (BG2) isn't driving the figure. Money is major
+// units of the base currency; the daily_allowance molecule divides the two.
+func addDailyAllowanceVars(out map[string]float64, d Data, major func(int64) float64, start, end time.Time) {
+	// Days left: ceil of the hours from Now to the period end, floored at 0 once the
+	// period has ended (a spent period yields a $0/day allowance via safediv).
+	daysLeft := 0
+	if end.After(d.Now) {
+		hours := end.Sub(d.Now).Hours()
+		daysLeft = int(hours / 24)
+		if hours > float64(daysLeft)*24 {
+			daysLeft++ // ceil so a partial final day still counts as a day to spread over
+		}
+		if daysLeft < 1 {
+			daysLeft = 1
+		}
+	}
+	out["days_left"] = float64(daysLeft)
+
+	// Remaining discretionary: Σ max(0, limit − spent) over each budget's own period.
+	var remaining int64
+	for _, b := range d.Budgets {
+		bs, be := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
+		spent, err := budgeting.Spent(b, d.Transactions, bs, be, d.Rates)
+		if err != nil {
+			continue
+		}
+		left := b.Limit.Amount - spent.Amount
+		if left > 0 {
+			remaining += left
+		}
+	}
+	out["remaining_discretionary"] = major(remaining)
 }
 
 // BillsSmartVarNames are the fixed smart-bill-schedule variables addBillsSmartVars
@@ -1172,6 +1220,9 @@ var atomSources = map[string]string{
 	"budgets":            "count of budgets",
 	"goals":              "count of goals",
 	"tasks":              "count of tasks",
+
+	"days_left":               "whole days remaining in the active period",
+	"remaining_discretionary": "Σ money left across budgets this period (limit − spent, floored at 0)",
 }
 
 // Explain returns how name is derived, given the computed vars and the molecule

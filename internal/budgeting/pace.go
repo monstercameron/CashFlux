@@ -82,3 +82,74 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 		OnTrack:   onTrack,
 	}
 }
+
+// PaceMarker locates the even-pace line for a budget: where spending SHOULD be
+// right now if the discretionary limit were spent at a steady rate across the
+// period, and how far actual spend is ahead of or behind it (BG3). It powers the
+// second tick on the budget meter plus an "on pace" / "running $X hot" caption.
+//
+// Committed money (XC4 — recurring charges pre-spoken-for this period) is excluded
+// from the race: it isn't "spent fast", it's already claimed, so the ideal line is
+// drawn against the discretionary limit (limit − committed) only, and actual spend
+// is likewise measured net of committed. The tick position (MarkerPct) is still
+// expressed against the FULL limit so it lines up with the meter's overall scale.
+type PaceMarker struct {
+	// Elapsed is the fraction of the period that has passed, in [0, 1].
+	Elapsed float64
+	// Ideal is the even-pace spend-to-date: discretionary limit × elapsed.
+	Ideal money.Money
+	// Delta is discretionary spend minus Ideal. Positive means spending is ahead
+	// of pace ("hot"); negative means behind pace (a cushion so far).
+	Delta money.Money
+	// Hot reports whether discretionary spend has outrun the even-pace line
+	// (Delta > 0) — the signal a row tones to ahead/behind-pace rather than only
+	// over/under-limit.
+	Hot bool
+	// MarkerPct is Ideal as a percent of the full limit, clamped to [0, 100] — the
+	// meter tick's left offset.
+	MarkerPct int
+}
+
+// ProjectPaceMarker builds the PaceMarker from a budget's Status, its committed
+// (XC4) amount, and the period bounds. Pass money.Zero(currency) for committed
+// when the budget has no committed split. Before any time elapses the ideal line
+// sits at zero (everything is "hot" if anything is spent); a degenerate period is
+// treated as fully elapsed.
+func ProjectPaceMarker(status Status, committed money.Money, start, end, now time.Time) PaceMarker {
+	cur := status.Spent.Currency
+	frac := elapsedFraction(start, end, now)
+
+	limit, _ := status.Spent.Add(status.Remaining) // limit = spent + remaining
+
+	// Discretionary limit and discretionary spend both net out committed money.
+	discLimit := limit.Amount - committed.Amount
+	if discLimit < 0 {
+		discLimit = 0
+	}
+	discSpent := status.Spent.Amount - committed.Amount
+	if discSpent < 0 {
+		discSpent = 0
+	}
+
+	idealAmt := int64(math.Round(float64(discLimit) * frac))
+	delta := discSpent - idealAmt
+
+	markerPct := 0
+	if limit.Amount > 0 {
+		markerPct = int(idealAmt * 100 / limit.Amount)
+	}
+	if markerPct > 100 {
+		markerPct = 100
+	}
+	if markerPct < 0 {
+		markerPct = 0
+	}
+
+	return PaceMarker{
+		Elapsed:   frac,
+		Ideal:     money.New(idealAmt, cur),
+		Delta:     money.New(delta, cur),
+		Hot:       delta > 0,
+		MarkerPct: markerPct,
+	}
+}

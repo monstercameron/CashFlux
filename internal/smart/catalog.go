@@ -99,6 +99,7 @@ var catalog = []Feature{
 	rule("SMART-B10", PageBudgets, "Uncovered-spending finder", "Surface recurring spending with no budget category yet."),
 	rule("SMART-B11", PageBudgets, "Auto budget", "Suggest a monthly budget per category from your recent spending, tunable with a slider before you create them."),
 	rule("SMART-B12", PageBudgets, "Healthy budget average", "Review each category's spending over time and suggest a sustainable monthly target that ignores one-off spikes."),
+	rule("SMART-B13", PageBudgets, "Budget true-up", "Notice when a budget has run persistently above its limit and suggest raising it to match — seasonal when there's a year of history, else your recent average."),
 
 	// ── Goals ─────────────────────────────────────────────────────────────────
 	rule("SMART-G1", PageGoals, "Suggested contribution amount", "Compute the per-month amount needed and check it against your slack."),

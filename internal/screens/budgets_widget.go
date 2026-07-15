@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -70,6 +71,15 @@ func Budgets() ui.Node {
 		// investment goals counted toward the assigned total).
 		budgetNativeSpec("budget-savings"),
 	}
+	// BG2: the flex methodology replaces the per-budget list with one pooled flex
+	// meter plus the fixed/non-monthly composition. Keep the toolbar (it holds the
+	// method picker to switch back) but swap the budget-heavy tiles for the flex view.
+	if budgeting.ParseMethodology(app.Settings().BudgetMethodology) == budgeting.MethodFlex {
+		specs = []domain.WidgetSpec{
+			budgetNativeSpec("budget-toolbar"),
+			budgetNativeSpec("budget-flex"),
+		}
+	}
 
 	// XC6: the dismissible month-close sweep card sits above the bento; the sweep
 	// config flip modal renders as a sibling of the bento (outside any tile
@@ -90,6 +100,7 @@ func Budgets() ui.Node {
 			),
 		),
 		budgetsSweepConfigModal(),
+		flexAssignSheet(),
 	)
 }
 
@@ -110,6 +121,9 @@ func init() {
 	})
 	R("budget-savings", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetSavingsWidget, budgetSummaryProps{App: c.App})
+	})
+	R("budget-flex", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(budgetFlexWidget, budgetSummaryProps{App: c.App})
 	})
 }
 

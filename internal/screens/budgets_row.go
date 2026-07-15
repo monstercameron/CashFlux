@@ -193,11 +193,34 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		envLine = Span(ClassStr(cls), uistate.T("budgets.envelopeRow", props.Envelope))
 	}
 
+	// BG5: an overdrawn envelope names what next period starts down, so the overdraft
+	// doesn't quietly vanish at the boundary. Caution amber (not danger red): it's a
+	// heads-up about where next period STARTS, not a "you're over now" alarm.
+	var envDebtLine ui.Node = Fragment()
+	if props.EnvelopeDebtStart != "" {
+		envDebtLine = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budget-envdebt-"+s.Budget.ID),
+			Attr("role", "status"), props.EnvelopeDebtStart)
+	}
+
 	// Pace projection (D2): a gentle heads-up when current spending would blow the
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
 	if props.PaceOver != "" {
 		paceLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.paceOver", props.PaceOver))
+	}
+
+	// BG3: the even-pace caption ("on pace" / "running $38 hot" / "$12 under pace so
+	// far"). A hot budget reads in the caution amber; on/under pace stays faint. Only
+	// shown while in progress and when the pace overspend warning isn't already owning
+	// the message (paceOver is the stronger signal).
+	var paceMarkLine ui.Node = Fragment()
+	if props.PaceCaption != "" && props.PaceOver == "" {
+		tone := tw.TextFaint
+		if props.PaceHot {
+			tone = tw.TextWarn
+		}
+		paceMarkLine = Span(css.Class("budget-sub", tone), Attr("data-testid", "budget-pace-caption-"+s.Budget.ID),
+			Attr("role", "status"), props.PaceCaption)
 	}
 
 	var rolloverLine ui.Node = Fragment()
@@ -333,6 +356,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedPct > 0,
 				Div(css.Class("bar-committed"), Attr("data-testid", "budget-committed-seg-"+s.Budget.ID),
 					Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", props.Committed.SpentPct, props.Committed.CommittedPct)))),
+			// BG3: the even-pace tick — a thin vertical marker at where discretionary
+			// spending SHOULD be right now (committed money excluded). Hidden in
+			// last-month mode (the bar then shows a different period).
+			If(!lastMonthMode && props.PaceMarkerPct > 0,
+				Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID),
+					Attr("aria-hidden", "true"),
+					Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.55;pointer-events:none", props.PaceMarkerPct)))),
 			Div(css.Class("budget-card-loader-figs"),
 				// Spent carries foreground weight; the "/ limit" reads as muted context.
 				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), barSpent), " / "+fmtMoney(limit)),
@@ -356,16 +386,20 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
 			Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
 				props.Committed.SetAsideNote)),
+		// BG1: funding-target summary ("Refill to $200 · $60 to go").
+		budgetTargetLine(s),
 		thisMonthRef,
 		coverageLine,
 		ownerLine,
 		methodLine,
 		customLine,
 		paceLine,
+		paceMarkLine,
 		proratedLine,
 		rolloverLine,
 		effectiveCapLine,
 		envLine,
+		envDebtLine,
 		todosLine,
 		notesNode,
 		actionsRow,

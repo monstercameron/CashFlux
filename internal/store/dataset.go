@@ -40,6 +40,7 @@ type Settings struct {
 	OpenAIReasoningEffort string               `json:"openAiReasoningEffort,omitempty"` // "low"|"medium"|"high"; thinking level for reasoning models
 	FreshnessOverrides    map[string]int       `json:"freshnessOverrides,omitempty"`
 	BudgetMethodology     string               `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
+	FlexBudget            int64                `json:"flexBudget,omitempty"`        // BG2: the single flex-budgeting number (minor units, base currency); 0 = unset
 	PayoffBaseline        *PayoffBaseline      `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
 	Music                 *MusicState          `json:"music,omitempty"`             // background-music resume point (checkpointed)
 }

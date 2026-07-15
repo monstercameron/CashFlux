@@ -127,6 +127,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	periodS := ui.UseState(string(b.Period))
 	ownerS := ui.UseState(b.OwnerID)
 	rolloverS := ui.UseState(b.Rollover)
+	rolloverCapS := ui.UseState(strconv.Itoa(b.RolloverCapPeriods)) // BG5: rollover cap, "0" = no cap
 	methodologyS := ui.UseState(b.Methodology)
 	// Tracked categories (multi-category budgets), seeded from the budget's current set.
 	trackSeed := make(map[string]bool)
@@ -163,6 +164,24 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	recurringS := ui.UseState(b.RecurringCover != nil)
 	coverCustomVals := ui.UseState(customMapToStrings(recurringCoverCustom(b))) // "cover" custom fields
 	errS := ui.UseState("")
+
+	// BG1 funding-target draft state, seeded from the budget.
+	targetAmtSeed := ""
+	if found && b.TargetAmount.Amount > 0 {
+		targetAmtSeed = money.FormatMinor(b.TargetAmount.Amount, dec)
+	}
+	targetDateSeed := ""
+	if !b.TargetDate.IsZero() {
+		targetDateSeed = dateutil.FormatDate(b.TargetDate)
+	}
+	targetKindS := ui.UseState(string(b.TargetKind))
+	targetAmtS := ui.UseState(targetAmtSeed)
+	targetDateS := ui.UseState(targetDateSeed)
+	linkedGoalS := ui.UseState(b.LinkedGoalID)
+	onTargetAmt := ui.UseEvent(func(v string) { targetAmtS.Set(v) })
+	onTargetDate := ui.UseEvent(func(v string) { targetDateS.Set(v) })
+	// BG4: a quick-fill chip seeds the amount field.
+	onFillPick := func(major string) { limitS.Set(major) }
 
 	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
 	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
@@ -380,6 +399,11 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				bb.Scope = domain.ScopeIndividual
 			}
 			bb.Rollover = rolloverS.Get()
+			// BG5: the rollover surplus cap (0 = no cap). Only meaningful with rollover on,
+			// but persisting it regardless keeps a re-enable from losing the prior choice.
+			if n, cerr := strconv.Atoi(rolloverCapS.Get()); cerr == nil && n >= 0 {
+				bb.RolloverCapPeriods = n
+			}
 			if m := budgeting.Methodology(methodologyS.Get()); m.Valid() {
 				bb.Methodology = methodologyS.Get()
 			} else {
@@ -387,6 +411,32 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			}
 			if defs := app.CustomFieldDefsFor("budget"); len(defs) > 0 {
 				bb.Custom = customValuesToMap(defs, customEditVals.Get())
+			}
+			// BG1: funding target. An invalid/none kind clears every target field so a
+			// budget switched back to "no target" doesn't keep a stale amount or date.
+			if tk := domain.TargetKind(targetKindS.Get()); tk.Valid() && tk != domain.TargetNone {
+				bb.TargetKind = tk
+				if tamt, terr := money.ParseMinor(strings.TrimSpace(targetAmtS.Get()), dec); terr == nil && tamt >= 0 {
+					bb.TargetAmount = money.New(tamt, cur)
+				} else {
+					bb.TargetAmount = money.Zero(cur)
+				}
+				if tk == domain.TargetByDate {
+					if td, derr := time.Parse("2006-01-02", strings.TrimSpace(targetDateS.Get())); derr == nil {
+						bb.TargetDate = td
+					} else {
+						bb.TargetDate = time.Time{}
+					}
+					bb.LinkedGoalID = strings.TrimSpace(linkedGoalS.Get())
+				} else {
+					bb.TargetDate = time.Time{}
+					bb.LinkedGoalID = ""
+				}
+			} else {
+				bb.TargetKind = domain.TargetNone
+				bb.TargetAmount = money.Zero(cur)
+				bb.TargetDate = time.Time{}
+				bb.LinkedGoalID = ""
 			}
 			// Tracked categories: rebuild from the picker (single → CategoryID, many →
 			// CategoryIDs). If the user cleared every box, keep the existing category
@@ -791,6 +841,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
 						OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
 					}))),
+			// BG4: one-tap fill chips (last month, 3/6-mo average, last period, to target).
+			budgetQuickFillRow(app, b, selfStatus, budgetTargetDraft{
+				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
+				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
+			}, onFillPick),
+			// BG1: optional funding target (refill-up-to, set-aside, or by-date via a goal).
+			budgetTargetSection(app, budgetTargetDraft{
+				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
+				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
+			}, func(v string) { targetKindS.Set(v) }, func(v string) { linkedGoalS.Set(v) }, onTargetAmt, onTargetDate),
 			Div(css.Class("budget-edit-row"),
 				labeledField(uistate.T("common.owner"),
 					uiw.SelectInput(uiw.SelectInputProps{
@@ -811,6 +871,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				Span(uistate.T("budgets.rollover")),
 			),
 			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
+			// BG5: cap how much unused budget can roll over, so a neglected budget can't
+			// build an unbounded fictional cushion. Only shown while rollover is on.
+			If(rolloverS.Get(),
+				labeledField(uistate.T("budgets.rolloverCapLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   rolloverCapOptions(),
+						Selected:  rolloverCapS.Get(),
+						OnChange:  func(v string) { rolloverCapS.Set(v) },
+						AriaLabel: uistate.T("budgets.rolloverCapLabel"),
+					}))),
 			// Custom fields: one input per user-defined "budget" field (renders nothing
 			// when there are no defs).
 			MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
@@ -1217,4 +1287,16 @@ func budgetCategoryName(app *appstate.App, categoryID string) string {
 		}
 	}
 	return ""
+}
+
+// rolloverCapOptions builds the BG5 rollover-cap picker options: no cap (the default,
+// value "0"), or a ceiling of 1×/2×/3× the period limit on how much surplus can carry
+// forward. Values are the RolloverCapPeriods integer as a string.
+func rolloverCapOptions() []uiw.SelectOption {
+	return []uiw.SelectOption{
+		{Value: "0", Label: uistate.T("budgets.rolloverCapNone")},
+		{Value: "1", Label: uistate.T("budgets.rolloverCap1x")},
+		{Value: "2", Label: uistate.T("budgets.rolloverCap2x")},
+		{Value: "3", Label: uistate.T("budgets.rolloverCap3x")},
+	}
 }

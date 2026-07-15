@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Version bumped to v1.0.29 (2026-07-14):** cuts the complete BG budgets-competitive series (BG1–BG16) into a release. SW cache → `cashflux-v302`.
+
+### Added
+- **Budgets competitive series — BG1–BG16 (2026-07-14):** **target types per budget** (refill-up-to / set-aside / by-date, the last delegating to a linked goal's pace; shows "Refill to $200 · $60 to go"); **quick-budget fill chips** (last month, 3/6-month average, last period, underfunded-to-target — each showing its computed value); **flex budgeting** as a fourth methodology (one managed number for day-to-day, with a fixed-commitments checklist, non-monthly set-asides, and a category classification sheet); **pacing indicators** (a second tick on every meter marking where spending should be today, "on pace / running $X hot / $X under pace", committed money excluded from the race); **rollover caps** (cap carryover at N× the period, quarterly reset) **+ envelope-debt visibility** ("Dining starts March −$32"); **seasonal auto-budget true-up** SMART flags ("Groceries ran $480/mo vs $400 — raise it?"); **credit-card payment budgeting** (a per-card payment-envelope funded figure, envelope/flex scope); a **daily-allowance** molecule + days-left atom ("$23/day until the 1st"); a view-only **annual grid** (categories × months, plan vs actual per cell, row/column totals, current month highlighted, click a cell to drill); an **unbudgeted-spending catch-all** row (per-category breakdown + one-tap "budget this"); **per-member attribution** in shared budgets; and **per-period budget notes**. Pure logic table-tested; e2e-verified (e2e/_bg_verify.mjs), zero console errors.
+
+### Fixed
+- **Flex budget meter showed a false "healthy" bar before a flex number was set (2026-07-14):** spending against an unset ($0) target painted a full green meter reading "on track"; it now shows a neutral empty rail with "spent so far this month" until a number is set.
+
+### Changed
 - **Version bumped to v1.0.28 (2026-07-14):** cuts the complete TX transactions-competitive series (TX1–TX17) into a release. SW cache → `cashflux-v301`.
 
 ### Added

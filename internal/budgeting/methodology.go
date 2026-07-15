@@ -16,12 +16,17 @@ const (
 	// MethodEnvelope treats budgets as envelopes that carry their unspent balance
 	// forward. Reserved for a future view; selecting it behaves like simple today.
 	MethodEnvelope Methodology = "envelope"
+	// MethodFlex (BG2) manages one pooled "flex" number for all day-to-day
+	// discretionary spending, while fixed commitments render as expected-vs-actual
+	// checkoffs and non-monthly costs show their smoothed accrual. The view is
+	// driven by each category's domain.CategoryClass rather than per-budget limits.
+	MethodFlex Methodology = "flex"
 )
 
 // Valid reports whether m is a known methodology.
 func (m Methodology) Valid() bool {
 	switch m {
-	case MethodSimple, MethodZeroBased, MethodEnvelope:
+	case MethodSimple, MethodZeroBased, MethodEnvelope, MethodFlex:
 		return true
 	default:
 		return false
