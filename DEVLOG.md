@@ -1,3 +1,18 @@
+## 2026-07-14 — AG series: the assistant finale — all twenty kept
+
+Last leg of the ideation sweep (XC → TX → BG → GL → AC → AG), and the only round with a 100%
+keep rate. The structural insight captured on the tickets: AG1 (changeset proposals — a PR for
+your money with per-item toggles and undo-all) is the ENABLING PRIMITIVE; AG2 (what-if sandbox
+on a workspace copy), AG6 (background auditor), AG10 (monthly review), and AG15 (goal coaching)
+all assume it exists, so it's marked do-first. The two differentiators only this architecture
+gets cheaply: AG2 rides the already-shipped workspace machinery (sandbox = dataset copy +
+engine-diff of the vars surface), and AG7 (explain-anything) is just a front door on
+engineenv.Explain — the no-black-boxes rule turned into a product feature. Trust package
+(AG17 privacy tiers in aicontext, AG19 inspectable memory, AG20 receipts into the audit log)
+is sequenced early in the ordering note because agent power without visible control is how
+these features get turned off. Sweep complete: 6 series, 71 tickets, all later-impl, all
+curated by Cam. Awaiting further orders.
+
 ## 2026-07-14 — AC batch 2: the filing-cabinet arc completes
 
 Sixth curation round. Kept 8 of 10 (dropped interest-posting proposals and guided closure).

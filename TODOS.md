@@ -3603,6 +3603,135 @@ field exists if wanted) and the guided account-closure ritual.
 matching + the split machinery all landed. AC15 pairs with AC4 (one "price of money" story).
 AC16 is its own scoping conversation.
 
+<!-- ===== AG SERIES (assistant / chat agent, appended 2026-07-14) ===== -->
+
+## ★ AG series — Assistant & chat agent (LATER IMPL — all 20 kept 2026-07-14)
+
+**Provenance & scope.** Final ideation pass of the 2026-07-14 sweep (XC → TX → BG → GL → AC →
+AG). Cam kept ALL 20. Existing machinery these build on: the BYO-key Responses-API tool loop
+with preview-approve mutations, the full tool set (txn/account/goal/category/duplicate/formula
+tools + web_search/fetch), flagged-activity Discuss chips, saved conversations, the model/
+thinking switcher, workspaces, scheduled workflows, the rules + workflow engines,
+engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan.
+**AG1 is the enabling primitive for AG2/AG6/AG10/AG15 — build it first.**
+
+### The agent as a working partner (act, not answer)
+- [ ] **AG1 [MAJOR — ENABLING PRIMITIVE, DO FIRST]** Changeset proposals. Multi-step agent
+  plans ("set up a vacation fund" = create goal + budget + sweep rule) render as ONE reviewable
+  changeset — a PR for your money: per-item toggles, apply-all, and a receipt card with one-tap
+  UNDO-ALL afterward (session undo stack composes). Today's per-tool approval doesn't scale
+  past two actions; this is the trust primitive the rest of the series assumes. Model: a
+  changeset = ordered list of pending tool calls + human-readable line each; partial apply
+  allowed; failures mid-apply stop and report (no silent partial state).
+- [ ] **AG2 [MAJOR — MOONSHOT, ARCHITECTURE ALREADY FITS]** What-if sandbox. "What if I moved
+  to a $1,800 apartment?" — the agent operates on a COPY of the dataset (workspace machinery),
+  mutates the copy, and shows the diff vs reality: runway, budgets, goal ETAs side by side.
+  Discard, or apply-as-changeset (AG1) to the real workspace. Guardrails: sandbox conversations
+  visibly badged; sandbox never autosaves over the real dataset; diff computed via the engine
+  surface (vars-to-vars comparison is free and explainable).
+- [ ] **AG3 [MED]** Natural-language rule authoring. "Always put Trader Joe's in Groceries and
+  tag it errands" → agent writes the rule, shows the C32-style preview ("would affect 23
+  existing transactions"), applies on approval. Reuse: rules engine, the apply-to-existing
+  semantics (C103/C104 family), TX7's preview pattern.
+- [ ] **AG4 [MED]** Natural-language workflow authoring. Same for the workflow engine: "when
+  any transaction over $500 hits, add a review task" → agent compiles NL to trigger/condition/
+  action, and the condition is validated through formula.Validate BEFORE saving (the engine's
+  conditions ARE the formula language — validation is free). Show the compiled workflow in the
+  editor's own vocabulary so the user learns the DSL by example.
+- [ ] **AG5 [MED]** Scheduled agent jobs. "Every Friday, summarize my week and flag anything
+  weird" → the agent authors a scheduled workflow (scheduledworkflows machinery) whose action
+  is an agent run with a saved prompt; results land as a conversation + optional notification.
+  Also covers conversation-to-future handoff ("remind me to revisit this in March" → one-shot
+  scheduled resurface). Cost guardrail: scheduled runs show estimated token cost at authoring
+  and skip silently when no key is present (queue a notice instead).
+- [ ] **AG6 [MAJOR — THE MARKETABLE HEADLINE]** The background auditor. On-demand or scheduled
+  (AG5) deep audit: sweep every detector family (fees, idle cash AC15, duplicate subscriptions,
+  budget drift BG6, dormant accounts AC14, unbudgeted spending BG11, earmark breaches XC7),
+  REASON over the combined results, and return a prioritized findings list where every row is a
+  one-tap fix (AG1 changesets for multi-part fixes). "Found $340/yr" is Rocket Money's whole
+  pitch; this runs locally on better data. Findings carry their evidence (explainability rule).
+
+### The agent as an explainer (no-black-boxes, weaponized)
+- [ ] **AG7 [MAJOR — THE PHILOSOPHICAL ONE]** Explain-anything. Every figure in the app is a
+  conversation entry point: click net worth / health score / a budget number → "explain this"
+  opens chat pre-seeded with the engineenv.Explain derivation, and the agent walks
+  molecule → atoms → transactions, answering follow-ups against the same grounded context.
+  The derivation engine exists; this is its front door. Needs a small UI affordance on
+  KPI/figure surfaces (long-press / kebab "Explain") that routes into chat with the seed.
+- [ ] **AG8 [MED]** Anomaly auto-investigation. Upgrade the flagged-activity Discuss chip: the
+  agent investigates BEFORE speaking — pulls related transactions, merchant history (TX6
+  stats), recurring context — and opens with a verdict + proposed fix ("this 'duplicate' is two
+  same-day Ubers; dismiss the flag?"). Triage agent, not chat-about-a-flag. Tool budget capped
+  per investigation; evidence listed with the verdict.
+- [ ] **AG9 [MED]** Web-grounded benchmarks. "Is my car insurance high?" → web_search for
+  current ranges + the user's actual figure → a comparison with ASSUMPTIONS STATED (region,
+  coverage unknowns). Tools exist; the ticket is prompt discipline + a response shape: local
+  figure, external range with source, explicit assumption list, never vibes.
+- [ ] **AG10 [MAJOR]** Monthly money review, agent-led. A ~10-minute guided ritual: month recap
+  vs typical, the auditor's top findings (AG6), budget true-ups (BG6), goal check (GL cadence)
+  — each step ends in an action (AG1 changeset) or an explicit skip. Dismissible, never modal,
+  resumable. Copilot/Origin bet their products on reviews; ours ends each step with an applied
+  fix instead of a chart.
+
+### The agent as an input surface
+- [ ] **AG11 [MED]** Rapid capture. Paste or dictate "coffee 4.50, gas 38, costco 122 split
+  with priya" → draft transactions (split flagged) into a bulk quick-add review. TX2's two-tier
+  pattern: local grammar first (amount+word pairs, no key needed), AI fallback for mess. Drafts
+  use the documents draft-review surface conventions (badge dupes, pick account).
+- [ ] **AG12 [MED]** Image-in-chat pipeline. Drop a receipt/statement photo into chat → vision
+  extract → the agent routes to the RIGHT existing pipeline based on what it sees: propose a
+  transaction, propose a split (XC11), or attach as a document (TX5/AC8). One entry point,
+  three existing flows; preview-approve throughout; BYO-key gated with the no-key path
+  explained.
+- [ ] **AG13 [MED]** Document Q&A. "What was on the March statement?" / "when does my insurance
+  renew?" — grounded answers over attached artifacts (AC8's drawer is the corpus), source doc
+  cited and opened on click. Text extraction cached per artifact (don't re-OCR per question);
+  answers refuse gracefully when the corpus doesn't contain it (no hallucinated documents).
+- [ ] **AG14 [MED]** Tax-season gather. "Get me ready for taxes" → sweep the year for
+  deductible-tagged/categorized items, charitable donations, interest paid (exact once AC12
+  lands), build the summary + CSV export (REPORT_EXPORTS conventions), and file a task list
+  for the gaps ("3 donations have no receipt attached" → XC8 tasks that resolve when receipts
+  attach). Seasonal ritual; regionally humble copy (no tax advice claims — it gathers, the
+  user files).
+
+### The agent as a coach (tone-guarded)
+- [ ] **AG15 [MED]** Goal coaching check-ins. Opt-in cadence per goal: the agent reviews pace,
+  celebrates quietly, and PROPOSES (never applies) adjustments — pulling GL4's slider math
+  into conversation ("$50 more/mo finishes by your birthday — want the changeset?"). Composes
+  GL7 pause states (a paused goal is not nagged). The never-naggy rule is a hard gate here.
+- [ ] **AG16 [MED]** Subscription negotiation prep. The honest local version of Rocket Money's
+  negotiators: the agent assembles leverage (price history via XC5/TX9, tenure from the
+  ledger, competitor pricing via web search), drafts the cancellation-threat script, and files
+  the call as a task with the script attached (XC8-resolvable when the recurring's price drops
+  or it's deleted).
+
+### Trust, privacy, and the machinery underneath
+- [ ] **AG17 [MED]** Privacy tiers per conversation. An "aggregates-only" mode: the agent sees
+  engine variables and category totals but ZERO transaction/payee detail — right-sized for
+  questions that don't need specifics ("am I saving enough?"). A visible chip states the
+  active tier; enforcement lives in aicontext (one choke point), not in prompt hopes. Tier is
+  per-conversation, default rememberable.
+- [ ] **AG18 [MED]** BYO endpoint + model routing. An OpenAI-COMPATIBLE base-URL setting
+  unlocks local models (Ollama/LM Studio) for the fully-local story; a router sends cheap
+  mechanical tool turns to a small/local model and reserves the big model for reasoning turns.
+  Generalizes the existing model/thinking switcher; provider quirks isolated in aiprovider.
+  The local-endpoint path is also the honest answer to "AI without any key leaving the house."
+- [ ] **AG19 [MED]** Transparent agent memory. Durable facts the user tells the agent ("paid
+  biweekly", "don't suggest cutting eating out") stored in a VISIBLE, editable list in
+  Settings, injected into the system prompt. Add via explicit "remember this" (user or agent
+  suggests, user approves) — never silent capture. Inspectable memory is the retention
+  feature; uninspectable memory is creepy. Travels with the dataset (settingsState).
+- [ ] **AG20 [MED]** Session receipts + audit trail. Every agent mutation lands in the existing
+  audit log tagged `via assistant`; each conversation shows a cumulative receipt ("this chat:
+  3 transactions categorized, 1 rule created, ~$0.04 spent" — the per-bubble cost machinery
+  already exists). Pairs with AG1's undo-all; this is what makes households comfortable
+  letting the agent touch shared money.
+
+**AG ordering note.** AG1 first (enabler for AG2/AG6/AG10/AG15). AG20 + AG17 early — trust
+surface before power features. AG2 is the differentiator moonshot; AG6+AG10 form the headline
+arc; AG3/AG4 are cheap because the engines already speak validated DSLs. AG18 unlocks the
+fully-local story and should precede any push to make agent features default-visible.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]
