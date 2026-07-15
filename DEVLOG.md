@@ -1,3 +1,16 @@
+## 2026-07-14 — AC series: accounts ideation → backlog
+
+Fifth curation round, /accounts — the highest keep-rate yet (9 of 10; only the standalone keep
+floor dropped, and AC7's sweep rules absorb its job by carrying their own keep amount). Two
+tickets carry structural weight: AC3 (statement/due days) is flagged DO-EARLY because three
+already-shipped features are starved of that data — the credit on-time proxy literally
+zero-weights itself today for lack of a due-day field; and AC6 (balance checkpoints) got the
+planning gate because anchored-series interpolation rewrites NetWorthSeries semantics — but
+it's also the ticket that decides whether balances-only users (no per-txn discipline) can live
+in CashFlux at all. Also recorded: AC7+GL1 must scope as ONE proposal-card surface (sweep vs
+fund-goals are the same decision with different sources) — third instance of the
+one-primitive-not-N rule this session.
+
 ## 2026-07-14 — GL series: goals ideation → backlog
 
 Fourth curation round, /goals. Cam dropped the two I'd ranked highest (Qapital save-triggers,
