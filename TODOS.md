@@ -14,6 +14,12 @@ packages have no `syscall/js` and ship with table-driven tests.
 > Note: C-IDs are unique and continuous (C1–C329); R1-R72 = research/spec. Full evidence + fix
 > detail for each is in the Claude Code task list; these are the durable one-line backlog entries.
 
+### UX polish backlog (deferred from the v1.0.33 design-review loop)
+- [ ] **DP1 — Recurring "Next 30 days" overdue grouping:** already-overdue occurrences (dates in the
+  past) surface under the forward-looking "Next 30 days" heading, disambiguated only by the small
+  OVERDUE pill. Add a short "Overdue" sub-label / visual break above those rows so it doesn't
+  momentarily read as a contradiction. (POLISH; non-blocking — the release-quality gate passed.)
+
 ### Review F1 — Frictionless signup / first-run (6/10)
 - [x] **C1 [MAJOR]** Sample banner permanently cleared after first reload — DONE: `persist.go` hydrateImport no longer force-clears `SetSampleActive(false)`. Autosave persists the seeded sample, so a reload lands on hydrateImport even when un-personalised; clearing the flag there made the "viewing sample data" chip vanish forever after one reload. The IndexedDB-backed flag is authoritative (set on seed; cleared on personalise/dismiss/wipe/own-import) so it now stands. MEASURED live: load sample → reload → `sample-data-banner` still mounted (before & after), 0 console errors; `go test ./internal/app` ok, build rc=0.
 - [x] **C2 [MAJOR]** Data-loss race: hero "Load sample data" + reload &lt;1s loses the sample — DONE: added `uistate.RequestPersist()`/`CapturePersistNow` hook (new `internal/uistate/persistnow.go`) wired to the app's `resaveDataset` closure, and called it after every sample-load path (`dashboard_hero.go`, `accounts.go`, settings.go) so the dataset is flushed immediately instead of waiting for the 4s autosave ticker. Also mark sample-active on the accounts/settings load paths for banner consistency. MEASURED live: wipe → welcome CTA appears → click load-sample → reload after **250ms** → sample-data-banner present, empty CTA not back (data persisted), 0 console errors; `go test ./internal/uistate` ok, build rc=0.
