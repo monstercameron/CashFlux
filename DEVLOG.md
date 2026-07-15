@@ -13,6 +13,87 @@ is sequenced early in the ordering note because agent power without visible cont
 these features get turned off. Sweep complete: 6 series, 71 tickets, all later-impl, all
 curated by Cam. Awaiting further orders.
 
+## 2026-07-14 — Split-transaction surfacing: the feature that already existed (v1.0.26)
+
+Marlon's idea via Cam: split a big Amazon charge into portions attributed to different budgets.
+Reasoned through the model first (one cash movement, many category meanings; Σ(parts)=whole;
+generate-child-outflows vs. attribution-sublines), then the mapping spike found the punchline:
+**CashFlux already shipped this** as `CategorySplit` — engine, persistence, budget attribution
+(`budgeting.spentCovered`), reports core (`reports.categoryTotals`), receipt-import writer, unit
+tests — but its ONLY UI entry point was the retired classic table's inline edit. The live
+widgetized /transactions never wired it. Fully built, unreachable. Lesson repeated from the
+dedupe-tools episode: audit what exists before building the parallel version; the child-row
+mechanism we'd sketched would have duplicated a safer, already-tested design.
+
+So the work became surfacing, not inventing: `UseTxnSplit` atom + `TxnSplitHost` shell-root flip
+modal (mirroring TxnEditHost) hosting the existing SplitEditor via a new exported
+`TransactionSplitForm`; a "Split into categories" row-menu entry (✓ when split, hidden on
+transfer legs); the Category column rendering a split row's per-line categories as a CSV list
+("Groceries, Auto loans"); and the edit-transaction modal showing the breakdown read-only with
+the editor a toggle away. One real hazard closed: the edit form's Save rides `t := txn` so splits
+survive, but an *amount* edit could silently desync Σ(splits) — now blocked via `SplitsReconcile`
+with a message pointing at the split section.
+
+The edit modal's "fix the button footer" turned out to be an architecture miss, not CSS: the
+modal used `NoFooter` and drew its own `.modal-sticky-foot` inside a grid form, where
+`margin-top:auto` pins nothing — buttons floated mid-panel. Switched to FlipPanel's native
+`FormID` footer (Cancel + Save-as-native-submit, the pattern all 11 other hosts use); Delete
+moved into the body. Related toolbar bug: `.add-item` had no display rule, so icon-bearing
+overflow-menu entries stacked icon-above-label; one flex-row rule fixed every OverflowMenu.
+
+Cam then asked the right architecture question — "where does the split apply across consumers?"
+The audit: budgets + SpendingByCategory/Trends/Rollup/Movers attribute per line; balance/dedupe
+are split-blind by design; and five consumers still read only whole-txn CategoryID (txnfilter's
+category matching — so a budget's drill-through can disagree with its own bar; smartengine
+insights; deductible/income/yeartax reports; widgetsource; CSV export drops splits entirely).
+Documented as a contract on `domain/category_split.go` (cash-side vs. category-side rule, writer
+invariants, dated known-gaps ledger) with TODO(splits) breadcrumbs at the two hotspots. Also:
+Assistant moved from Tools→Understand to PRIMARY item 8 (registry-driven rail meant one edit;
+Alt+8 badge came free). All e2e-verified with Playwright (split flow: carve → Balanced → save →
+Σ persisted → reload; edit modal: summary/pinned footer/guard). SW → v299.
+
+## 2026-07-14 — Split-transaction surfacing: the feature that already existed (v1.0.26)
+
+Marlon's idea via Cam: split a big Amazon charge into portions attributed to different budgets.
+Reasoned through the model first (one cash movement, many category meanings; Σ(parts)=whole;
+generate-child-outflows vs. attribution-sublines), then the mapping spike found the punchline:
+**CashFlux already shipped this** as `CategorySplit` — engine, persistence, budget attribution
+(`budgeting.spentCovered`), reports core (`reports.categoryTotals`), receipt-import writer, unit
+tests — but its ONLY UI entry point was the retired classic table's inline edit. The live
+widgetized /transactions never wired it. Fully built, unreachable. Lesson repeated from the
+dedupe-tools episode: audit what exists before building the parallel version; the child-row
+mechanism we'd sketched would have duplicated a safer, already-tested design.
+
+So the work became surfacing, not inventing: `UseTxnSplit` atom + `TxnSplitHost` shell-root flip
+modal (mirroring TxnEditHost) hosting the existing SplitEditor via a new exported
+`TransactionSplitForm`; a "Split into categories" row-menu entry (✓ when split, hidden on
+transfer legs); the Category column rendering a split row's per-line categories as a CSV list
+("Groceries, Auto loans"); and the edit-transaction modal showing the breakdown read-only with
+the editor a toggle away. One real hazard closed: the edit form's Save rides `t := txn` so splits
+survive, but an *amount* edit could silently desync Σ(splits) — now blocked via `SplitsReconcile`
+with a message pointing at the split section.
+
+The edit modal's "fix the button footer" turned out to be an architecture miss, not CSS: the
+modal used `NoFooter` and drew its own `.modal-sticky-foot` inside a grid form, where
+`margin-top:auto` pins nothing — buttons floated mid-panel. Switched to FlipPanel's native
+`FormID` footer (Cancel + Save-as-native-submit, the pattern all 11 other hosts use); Delete
+moved into the body. Related toolbar bug: `.add-item` had no display rule, so icon-bearing
+overflow-menu entries stacked icon-above-label; one flex-row rule fixed every OverflowMenu.
+
+Cam then asked the right architecture question — "where does the split apply across consumers?"
+The audit: budgets + SpendingByCategory/Trends/Rollup/Movers attribute per line; balance/dedupe
+are split-blind by design; and five consumers still read only whole-txn CategoryID (txnfilter's
+category matching — so a budget's drill-through can disagree with its own bar; smartengine
+insights; deductible/income/yeartax reports; widgetsource; CSV export drops splits entirely).
+Documented as a contract on `domain/category_split.go` (cash-side vs. category-side rule, writer
+invariants, dated known-gaps ledger) with TODO(splits) breadcrumbs at the two hotspots. Also:
+Assistant moved from Tools→Understand to PRIMARY item 8 (registry-driven rail meant one edit;
+Alt+8 badge came free). All e2e-verified with Playwright (split flow: carve → Balanced → save →
+Σ persisted → reload; edit modal: summary/pinned footer/guard). SW → v299.
+
+(Process note: this entry + the changelog block were re-applied after a concurrent session's
+docs commit landed over the first draft — content identical.)
+
 ## 2026-07-14 — AC batch 2: the filing-cabinet arc completes
 
 Sixth curation round. Kept 8 of 10 (dropped interest-posting proposals and guided closure).
