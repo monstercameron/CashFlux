@@ -114,15 +114,21 @@ func WorkspaceSwitcher() uic.Node {
 		)
 	}
 
+	// Standard-selector styling: a bordered control that shows BOTH an uppercase heading
+	// ("Workspace") and the selected option (colour dot + name), with a trailing chevron —
+	// so it reads like the app's other select controls instead of a bare name.
 	return Div(css.Class("ws-switch", tw.Relative, tw.Mx3, tw.Mt3),
-		Button(css.Class(tw.WFull, tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Px3, tw.Py2, tw.Rounded4, tw.Border, tw.BorderLine, tw.Text13, tw.HoverBgHover),
-			Type("button"), Title(uistate.T("ws.switch")),
+		Button(ClassStr("ws-switch-trigger"),
+			Type("button"), Title(uistate.T("ws.switch")), Attr("aria-label", uistate.T("ws.switch")),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
-				wsColorDot(active.Color),
-				Span(css.Class(tw.Truncate), active.Name),
+			Span(css.Class("ws-switch-head"), uistate.T("ws.railLabel")),
+			Span(css.Class("ws-switch-value"),
+				Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
+					wsColorDot(active.Color),
+					Span(css.Class(tw.Truncate), active.Name),
+				),
+				ui.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
 			),
-			ui.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
 		),
 		menu,
 	)

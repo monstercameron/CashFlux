@@ -2,7 +2,7 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v313";
+const CACHE = "cashflux-v314";
 const CORE = [
   // Precache the gzip binary (the loader's primary path) — ~4× smaller than the raw
   // .wasm, so the offline install cache shrinks with it. DecompressionStream is

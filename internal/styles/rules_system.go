@@ -131,4 +131,41 @@ func registerSystemSurface() {
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("letter-spacing", "0.02em"),
 	)
+
+	// Workspace switcher — styled like the app's standard select control: a bordered
+	// box that stacks an uppercase heading ("Workspace") over the selected option
+	// (colour dot + name) with a trailing chevron, so both the label and the value read.
+	rule(".ws-switch-trigger",
+		prop("width", "100%"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+		prop("padding", "0.4rem 0.7rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "9px"),
+		prop("background", "var(--bg-elev)"),
+		prop("cursor", "pointer"),
+		prop("text-align", "left"),
+		prop("transition", "border-color 0.14s ease, background 0.14s ease"),
+	)
+	rule(".ws-switch-trigger:hover",
+		prop("border-color", "color-mix(in srgb, var(--accent) 45%, var(--border))"),
+	)
+	rule(".ws-switch-head",
+		prop("font-size", "0.62rem"),
+		prop("font-weight", "600"),
+		prop("letter-spacing", "0.07em"),
+		prop("text-transform", "uppercase"),
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".ws-switch-value",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.5rem"),
+		prop("font-size", "0.9rem"),
+		prop("font-weight", "500"),
+		prop("color", "var(--text)"),
+		prop("min-width", "0"),
+	)
 }

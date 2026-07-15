@@ -1602,6 +1602,7 @@ var english = Catalog{
 	"settings.monthlyIncomePlaceholder": "0.00",
 	"settings.monthlyIncomeHint":        "Used for budgeting and safe-to-spend. Leave blank to estimate from your income transactions.",
 	"ws.switch":                         "Switch workspace",
+	"ws.railLabel":                      "Workspace",
 	"ws.new":                            "+ New workspace",
 	"ws.duplicate":                      "Duplicate this workspace",
 	"ws.newPrompt":                      "Name the new workspace",
