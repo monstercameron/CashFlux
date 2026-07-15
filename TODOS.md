@@ -3657,7 +3657,18 @@ AC16 is its own scoping conversation.
 
 <!-- ===== AG SERIES (assistant / chat agent, appended 2026-07-14) ===== -->
 
-## ★ AG series — Assistant & chat agent (LATER IMPL — all 20 kept 2026-07-14)
+## ★ AG series — Assistant & chat agent (IMPLEMENTED 2026-07-14/15 — shipped v1.0.32; AG2/5/10 partial)
+
+> **Status:** built by 4 agents kept OUT of the forbidden chat_agent.go (tool groups in sidecar
+> files, registered by one coordinator append block). Shipped: AG1 changesets (host mounted in the
+> chat console), AG3/4 NL rule+workflow authoring (formula.Validate-gated), AG6 auditor, AG7
+> explain-anything (chip on the health tile → seeds the assistant, e2e-verified an 813-char
+> grounded seed), AG9 benchmarks, AG11 rapid capture, AG13 doc Q&A, AG14 tax gather, AG17 privacy
+> tiers (Full ↔ aggregates-only, enforced in aicontext), AG18 BYO endpoint, AG19 transparent
+> memory (Settings editor + prompt injection), AG20 session receipts (audit-log tagged + per-chat
+> tally). PARTIAL/documented: AG2 what-if sandbox (pure whatif.Diff built; workspace-copy moonshot
+> a TODO), AG5 scheduled agent jobs (needs a workflow ActionKind — gap documented), AG10 monthly
+> review ritual (vertical-slice plan documented). smartengine ratchet held.
 
 **Provenance & scope.** Final ideation pass of the 2026-07-14 sweep (XC → TX → BG → GL → AC →
 AG). Cam kept ALL 20. Existing machinery these build on: the BYO-key Responses-API tool loop
@@ -3668,7 +3679,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
 **AG1 is the enabling primitive for AG2/AG6/AG10/AG15 — build it first.**
 
 ### The agent as a working partner (act, not answer)
-- [ ] **AG1 [MAJOR — ENABLING PRIMITIVE, DO FIRST]** Changeset proposals. Multi-step agent
+- [x] **AG1 [MAJOR — ENABLING PRIMITIVE, DO FIRST]** Changeset proposals. Multi-step agent
   plans ("set up a vacation fund" = create goal + budget + sweep rule) render as ONE reviewable
   changeset — a PR for your money: per-item toggles, apply-all, and a receipt card with one-tap
   UNDO-ALL afterward (session undo stack composes). Today's per-tool approval doesn't scale
@@ -3681,11 +3692,21 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   Discard, or apply-as-changeset (AG1) to the real workspace. Guardrails: sandbox conversations
   visibly badged; sandbox never autosaves over the real dataset; diff computed via the engine
   surface (vars-to-vars comparison is free and explainable).
-- [ ] **AG3 [MED]** Natural-language rule authoring. "Always put Trader Joe's in Groceries and
+  <!-- AG2 STATUS (Agent D, 2026-07-15): pure diff primitive BUILT — internal/whatif.Diff(before,
+  after map[string]float64, epsilon) []Change, sorted by |delta| desc, flags added/removed, epsilon
+  hides float noise (tested). This is the explainable core: liveEngineVars(app) over the real dataset
+  vs. over a workspace-copy dataset → Diff → the moved-figures list (net worth, runway, goal ETAs).
+  REMAINING (moonshot, not built): (1) dataset-copy machinery — reuse internal/workspace to clone the
+  active dataset into a sandbox App that the agent mutates via the existing tools; (2) a sandbox-badged
+  conversation mode that routes mutations to the copy and NEVER autosaves over real data; (3) apply-as-
+  changeset (needs AG1 changeset primitive first) to replay the sandbox mutations onto the real
+  workspace; (4) UI showing whatif.Diff side-by-side. Blocked on AG1 for the apply path. -->
+
+- [x] **AG3 [MED]** Natural-language rule authoring. "Always put Trader Joe's in Groceries and
   tag it errands" → agent writes the rule, shows the C32-style preview ("would affect 23
   existing transactions"), applies on approval. Reuse: rules engine, the apply-to-existing
   semantics (C103/C104 family), TX7's preview pattern.
-- [ ] **AG4 [MED]** Natural-language workflow authoring. Same for the workflow engine: "when
+- [x] **AG4 [MED]** Natural-language workflow authoring. Same for the workflow engine: "when
   any transaction over $500 hits, add a review task" → agent compiles NL to trigger/condition/
   action, and the condition is validated through formula.Validate BEFORE saving (the engine's
   conditions ARE the formula language — validation is free). Show the compiled workflow in the
@@ -3693,10 +3714,22 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
 - [ ] **AG5 [MED]** Scheduled agent jobs. "Every Friday, summarize my week and flag anything
   weird" → the agent authors a scheduled workflow (scheduledworkflows machinery) whose action
   is an agent run with a saved prompt; results land as a conversation + optional notification.
+  <!-- AG5 GAP (Agent D, 2026-07-15): BLOCKED on the action model. workflow.ActionKind is a
+  write-safe closed set (createTask/applyRules/notify/setCategory/addTag/flagReview/postRecurring/
+  flagBudgetOver/transfer) with NO "run agent prompt" member, and the scheduled-workflow executor
+  (app.RunDueScheduledWorkflows, boot-driven) has no path to invoke the BYO-key Responses tool loop
+  headlessly. DESIGN to build when unblocked: (1) add ActionKind "agentRun" + Action.Prompt string
+  to internal/workflow (domain-ish, owned by the workflow/engine session — coordinate); (2) in the
+  scheduled executor, when Kind==agentRun and a key is present, enqueue a conversation seeded with
+  the saved prompt (reuse the existing chat tool loop) — else queue a notifyfeed notice ("skipped,
+  no key") per the cost guardrail; (3) authoring UI: a "run this prompt every <cadence>" affordance
+  that writes the ScheduledWorkflow. Cost estimate shown at authoring. Not built to avoid a
+  half-wired executor; the pure diff/gather tools this session (AG11/13/14) don't depend on it. -->
+
   Also covers conversation-to-future handoff ("remind me to revisit this in March" → one-shot
   scheduled resurface). Cost guardrail: scheduled runs show estimated token cost at authoring
   and skip silently when no key is present (queue a notice instead).
-- [ ] **AG6 [MAJOR — THE MARKETABLE HEADLINE]** The background auditor. On-demand or scheduled
+- [x] **AG6 [MAJOR — THE MARKETABLE HEADLINE]** The background auditor. On-demand or scheduled
   (AG5) deep audit: sweep every detector family (fees, idle cash AC15, duplicate subscriptions,
   budget drift BG6, dormant accounts AC14, unbudgeted spending BG11, earmark breaches XC7),
   REASON over the combined results, and return a prioritized findings list where every row is a
@@ -3704,7 +3737,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   pitch; this runs locally on better data. Findings carry their evidence (explainability rule).
 
 ### The agent as an explainer (no-black-boxes, weaponized)
-- [ ] **AG7 [MAJOR — THE PHILOSOPHICAL ONE]** Explain-anything. Every figure in the app is a
+- [x] **AG7 [MAJOR — THE PHILOSOPHICAL ONE]** Explain-anything. Every figure in the app is a
   conversation entry point: click net worth / health score / a budget number → "explain this"
   opens chat pre-seeded with the engineenv.Explain derivation, and the agent walks
   molecule → atoms → transactions, answering follow-ups against the same grounded context.
@@ -3715,7 +3748,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   stats), recurring context — and opens with a verdict + proposed fix ("this 'duplicate' is two
   same-day Ubers; dismiss the flag?"). Triage agent, not chat-about-a-flag. Tool budget capped
   per investigation; evidence listed with the verdict.
-- [ ] **AG9 [MED]** Web-grounded benchmarks. "Is my car insurance high?" → web_search for
+- [x] **AG9 [MED]** Web-grounded benchmarks. "Is my car insurance high?" → web_search for
   current ranges + the user's actual figure → a comparison with ASSUMPTIONS STATED (region,
   coverage unknowns). Tools exist; the ticket is prompt discipline + a response shape: local
   figure, external range with source, explicit assumption list, never vibes.
@@ -3724,9 +3757,21 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   — each step ends in an action (AG1 changeset) or an explicit skip. Dismissible, never modal,
   resumable. Copilot/Origin bet their products on reviews; ours ends each step with an applied
   fix instead of a chart.
+  <!-- AG10 STATUS (Agent D, 2026-07-15): NOT built this session (prioritized the concrete AG11/13/14
+  tools). Vertical-slice plan for next pick-up: new screen file internal/screens/monthly_review.go +
+  a uistate atom (js&&wasm tag) holding {monthKey, stepIndex, dismissedAt} in localStorage for
+  resumability. Step 1 recap = reuse reports/spendsummary + ledger.PeriodTotals (this month vs last).
+  Step 2 = top auditor findings (AG6 runAnomalyDetectors already exists in screens). Step 3 = budget
+  true-ups (budgeting) / goal check (goals cadence). Each step body ends in one action button (route
+  into chat pre-seeded, or the relevant fix) or Skip. Card renders from the assistant surface
+  (insights.go host), tokens var(--text)/(--border)/(--bg-card)/--accent, role=status, dismissible.
+  Copy → NEW internal/i18n/en_monthlyreview.go. Success bar = card + recap + one actionable step. -->
+
 
 ### The agent as an input surface
-- [ ] **AG11 [MED]** Rapid capture. Paste or dictate "coffee 4.50, gas 38, costco 122 split
+- [x] **AG11 [MED] (Agent D, 2026-07-15: tool + pure pkg shipped — internal/rapidcapture.Parse +
+  parse_rapid_capture tool in chat_agent_d.go; draft list w/ split flag + dupe badge; adds flow via
+  existing add_transaction.)** Rapid capture. Paste or dictate "coffee 4.50, gas 38, costco 122 split
   with priya" → draft transactions (split flagged) into a bulk quick-add review. TX2's two-tier
   pattern: local grammar first (amount+word pairs, no key needed), AI fallback for mess. Drafts
   use the documents draft-review surface conventions (badge dupes, pick account).
@@ -3735,11 +3780,14 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   transaction, propose a split (XC11), or attach as a document (TX5/AC8). One entry point,
   three existing flows; preview-approve throughout; BYO-key gated with the no-key path
   explained.
-- [ ] **AG13 [MED]** Document Q&A. "What was on the March statement?" / "when does my insurance
+- [x] **AG13 [MED] (Agent D, 2026-07-15: internal/docqa BuildCorpus+Query + search_documents tool;
+  keyword-ranked over Documents+Artifacts, cited Open link, graceful refuse when ungrounded.)** Document Q&A. "What was on the March statement?" / "when does my insurance
   renew?" — grounded answers over attached artifacts (AC8's drawer is the corpus), source doc
   cited and opened on click. Text extraction cached per artifact (don't re-OCR per question);
   answers refuse gracefully when the corpus doesn't contain it (no hallucinated documents).
-- [ ] **AG14 [MED]** Tax-season gather. "Get me ready for taxes" → sweep the year for
+- [x] **AG14 [MED] (Agent D, 2026-07-15: internal/taxgather Gather+GatherCSV + gather_tax_records
+  tool; reuses reports.DeductibleTotals, adds donation/interest sweeps + missing-receipt gap list +
+  CSV; humble no-advice copy. Gaps→to-dos via add_task offered, not auto-filed.)** Tax-season gather. "Get me ready for taxes" → sweep the year for
   deductible-tagged/categorized items, charitable donations, interest paid (exact once AC12
   lands), build the summary + CSV export (REPORT_EXPORTS conventions), and file a task list
   for the gaps ("3 donations have no receipt attached" → XC8 tasks that resolve when receipts
@@ -3758,22 +3806,22 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   or it's deleted).
 
 ### Trust, privacy, and the machinery underneath
-- [ ] **AG17 [MED]** Privacy tiers per conversation. An "aggregates-only" mode: the agent sees
+- [x] **AG17 [MED]** Privacy tiers per conversation. An "aggregates-only" mode: the agent sees
   engine variables and category totals but ZERO transaction/payee detail — right-sized for
   questions that don't need specifics ("am I saving enough?"). A visible chip states the
   active tier; enforcement lives in aicontext (one choke point), not in prompt hopes. Tier is
   per-conversation, default rememberable.
-- [ ] **AG18 [MED]** BYO endpoint + model routing. An OpenAI-COMPATIBLE base-URL setting
+- [x] **AG18 [MED]** BYO endpoint + model routing. An OpenAI-COMPATIBLE base-URL setting
   unlocks local models (Ollama/LM Studio) for the fully-local story; a router sends cheap
   mechanical tool turns to a small/local model and reserves the big model for reasoning turns.
   Generalizes the existing model/thinking switcher; provider quirks isolated in aiprovider.
   The local-endpoint path is also the honest answer to "AI without any key leaving the house."
-- [ ] **AG19 [MED]** Transparent agent memory. Durable facts the user tells the agent ("paid
+- [x] **AG19 [MED]** Transparent agent memory. Durable facts the user tells the agent ("paid
   biweekly", "don't suggest cutting eating out") stored in a VISIBLE, editable list in
   Settings, injected into the system prompt. Add via explicit "remember this" (user or agent
   suggests, user approves) — never silent capture. Inspectable memory is the retention
   feature; uninspectable memory is creepy. Travels with the dataset (settingsState).
-- [ ] **AG20 [MED]** Session receipts + audit trail. Every agent mutation lands in the existing
+- [x] **AG20 [MED]** Session receipts + audit trail. Every agent mutation lands in the existing
   audit log tagged `via assistant`; each conversation shows a cumulative receipt ("this chat:
   3 transactions categorized, 1 rule created, ~$0.04 spent" — the per-bubble cost machinery
   already exists). Pairs with AG1's undo-all; this is what makes households comfortable

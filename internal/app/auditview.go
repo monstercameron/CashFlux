@@ -76,10 +76,20 @@ func RecordAuditPoint(cs history.ChangeSet) {
 	}
 	action, entityType, entityID := inferEntryFields(cs)
 	summary := buildSummary(cs, action, entityType)
+	// AG20: a mutation applied through the assistant is stamped "via assistant"
+	// (actor + a visible summary suffix) so the audit trail and the Activity
+	// screen show which changes the agent made.
+	actor := "user"
+	if sa := auditview.SessionActor(); sa != "" {
+		actor = sa
+		if sa == auditview.ActorAssistant {
+			summary += " · via assistant"
+		}
+	}
 	e := auditlog.Entry{
 		ID:         auditEntryID(),
 		At:         time.Now().UTC(),
-		Actor:      "user",
+		Actor:      actor,
 		Action:     action,
 		EntityType: entityType,
 		EntityID:   entityID,

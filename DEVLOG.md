@@ -1,3 +1,30 @@
+## 2026-07-15 — AG series + v1.0.32: the assistant becomes an agent (13 tickets, forbidden-file dance)
+
+Last of the six competitive sections, and the one with the tightest structural constraint: the
+assistant's tool registry lives in `internal/screens/chat_agent.go`, which a concurrent session is
+mid-edit on (its `dismiss_flagged_activity` work). CLAUDE-level rule: I must never commit that file's
+other-session hunks. So the four opus agents were told to build their tool groups as **sidecar
+files** — `agToolsTrust/Auditor/Authoring/Benchmark/Capture/Tax/DocQA(app, base, rates) []chatTool`
+in new `ag_*.go` / `chat_agent_*.go` files — and I, as coordinator, made the single registration edit
+into `chat_agent.go` via a selective-stage: `git checkout HEAD -- chat_agent.go` to a clean base,
+re-applied only my two AG hunks (`return []chatTool{` → `tools :=`, and an append block + `return
+tools`), leaving the other session's uncommitted dismiss work untouched in a scratchpad backup to
+restore after the commit. `smart_adapter.go` and `budgetspage.go` (also carrying that session's
+dismiss/persist hunks) stayed unstaged.
+
+The section's spine is honesty about what the agent does with your data. AG1 changesets mean a
+mutation is a reviewable card, not a silent write. AG17 privacy tiers (Full ↔ aggregates-only,
+enforced in `internal/aicontext` before any prompt is built) and AG18 BYO OpenAI-compatible endpoint
+give a real "nothing leaves the house" path; AG19 makes the remembered-facts list visible and
+editable instead of a hidden profile; AG20 stamps every agent-applied change "· via assistant" in the
+audit trail. AG7's explain chip was the e2e keystone — a "Why?" chip on the dashboard health tile
+seeds the assistant with a grounded 813-char prompt (verified landing on `/assistant` with the input
+pre-filled; a bento resize-handle overlay in the test viewport forced a dispatched click to exercise
+the handler). Pure logic table-tested across a dozen new packages; native + wasm green, zero console
+errors. Documented-not-built: AG2 sandbox (pure `whatif.Diff` exists; workspace-copy is the moonshot),
+AG5 scheduled jobs (needs a workflow ActionKind), AG10 monthly review (vertical-slice plan). Next:
+the design-agent UX/UI refinement loop to release quality.
+
 ## 2026-07-15 — AC metadata batch: AC3/AC4/AC11/AC15 (Agent B)
 
 Four account-metadata tickets, built bottom-up. AC3 was the keystone: rather than duplicate the

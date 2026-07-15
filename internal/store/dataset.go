@@ -38,6 +38,7 @@ type Settings struct {
 	OpenAIKey             string               `json:"openAiKey,omitempty"`
 	OpenAIModel           string               `json:"openAiModel,omitempty"`
 	OpenAIReasoningEffort string               `json:"openAiReasoningEffort,omitempty"` // "low"|"medium"|"high"; thinking level for reasoning models
+	OpenAIBaseURL         string               `json:"openAiBaseUrl,omitempty"`         // AG18: OpenAI-compatible base URL override (Ollama/LM Studio/proxy); empty = api.openai.com
 	FreshnessOverrides    map[string]int       `json:"freshnessOverrides,omitempty"`
 	BudgetMethodology     string               `json:"budgetMethodology,omitempty"` // budgeting.Methodology; empty = simple
 	FlexBudget            int64                `json:"flexBudget,omitempty"`        // BG2: the single flex-budgeting number (minor units, base currency); 0 = unset

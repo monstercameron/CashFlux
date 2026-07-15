@@ -251,7 +251,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 		}
 	}
 
-	return []chatTool{
+	tools := []chatTool{
 		{
 			spec: ai.FunctionTool("list_categories", "List the user's spending/income category names. Call this first when unsure which category a question refers to.", json.RawMessage(`{"type":"object","properties":{}}`)),
 			run: func(json.RawMessage) string {
@@ -1377,6 +1377,18 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 			},
 		},
 	}
+	// AG series — the assistant tool groups built in the ag_*.go / chat_agent_*.go
+	// sidecar files (registered here so those files never touched this one):
+	// trust (remember facts), the auditor, natural-language rule/workflow authoring,
+	// web-grounded benchmarks, rapid capture, tax gather, and document Q&A.
+	tools = append(tools, agToolsTrust(app, base, rates)...)
+	tools = append(tools, agToolsAuditor(app, base, rates)...)
+	tools = append(tools, agToolsAuthoring(app, base, rates)...)
+	tools = append(tools, agToolsBenchmark(app, base, rates)...)
+	tools = append(tools, agToolsCapture(app, base, rates)...)
+	tools = append(tools, agToolsTax(app, base, rates)...)
+	tools = append(tools, agToolsDocQA(app, base, rates)...)
+	return tools
 }
 
 // distinctSignatures counts how many distinct canonical duplicate signatures

@@ -653,6 +653,22 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	})
+	// AG18: the OpenAI-compatible base-URL override. Persisted in Settings (rides the
+	// dataset autosave); blank falls back to OpenAI. Trimmed on write so a stray space
+	// doesn't defeat the "blank = default" check.
+	curBaseURL := ""
+	if a := appstate.Default; a != nil {
+		curBaseURL = a.Settings().OpenAIBaseURL
+	}
+	baseURLState := uic.UseState(curBaseURL)
+	onBaseURL := uic.UseEvent(func(v string) {
+		baseURLState.Set(v)
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.OpenAIBaseURL = strings.TrimSpace(v)
+			_ = a.PutSettings(s)
+		}
+	})
 	// The model picker is populated live from OpenAI's /v1/models endpoint (no
 	// hardcoded list): fetch the chat-capable ids with the user's key, fall back to
 	// the built-in defaults offline or before it loads. Loaded once on open and via
@@ -1061,6 +1077,8 @@ func globalSettingsForm() uic.Node {
 		ModelsErr:      modelsErr.Get(),
 		WsKey:          wsKey.Get(),
 		OnWsKey:        onWsKey,
+		BaseURL:        baseURLState.Get(),
+		OnBaseURL:      onBaseURL,
 
 		BackendOn:         backendOn.Get(),
 		OnBackendToggle:   onBackendToggle,

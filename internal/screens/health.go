@@ -199,8 +199,10 @@ func healthWidgetNode(struct{}) ui.Node {
 			Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(r.Band))), string(r.Band)),
 			healthDeltaLine(r.Score, prior, hasPrior),
 			weakLine,
-			Div(css.Class(tw.Mt2),
-				Button(css.Class("btn-link"), OnClick(openSteps), uistate.T("health.viewSteps"))),
+			Div(css.Class(tw.Mt2, tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Button(css.Class("btn-link"), OnClick(openSteps), uistate.T("health.viewSteps")),
+				// AG7: ask the assistant to explain how this score is derived.
+				ExplainChip(ExplainChipProps{VarName: "health_score", Label: "health score"})),
 		)
 	}
 

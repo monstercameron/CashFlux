@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
+	"github.com/monstercameron/CashFlux/internal/aicontext"
+	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -47,6 +49,13 @@ func Insights() ui.Node {
 
 	settings := app.Settings()
 	key := settings.OpenAIKey
+	// AG18: resolve the effective endpoint — a user-supplied OpenAI-compatible base
+	// URL (Ollama/LM Studio/proxy) wins, else the OpenAI default.
+	aiBaseURL := aiprovider.ResolveBaseURL(settings.OpenAIBaseURL, ai.DefaultBaseURL)
+	// AG17: the active conversation's privacy tier (full | aggregates-only). Read at a
+	// stable hook slot; it gates both the injected context and which tools are offered.
+	privacyTier := uistate.UsePrivacyTier()
+	tier := privacyTier.Get()
 	pr := uistate.UsePrefs().Get().Normalize()
 	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
 	// spend calcs below can be pre-filtered consistently.
@@ -65,7 +74,7 @@ func Insights() ui.Node {
 	modelList := ui.UseState([]string{})
 	ui.UseEffect(func() func() {
 		if k := strings.TrimSpace(settings.OpenAIKey); k != "" {
-			ai.FetchModels(k, ai.DefaultBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
+			ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
 		}
 		return nil
 	}, "")
@@ -309,9 +318,20 @@ func Insights() ui.Node {
 			ctx += " The user's custom fields: " + cfSummary + "."
 		}
 		ctx += " For any specific number (a category total, an account balance, affordability), CALL A TOOL — never guess or say you lack the data."
+		// AG17: in aggregates-only mode, tell the model the boundary explicitly (the
+		// transaction/payee tools are also withheld from its tool list, so this is a
+		// belt-and-braces statement, not the enforcement itself).
+		if tier == aicontext.TierAggregatesOnly {
+			ctx += " PRIVACY: this is an aggregates-only conversation. You can see totals and KPIs but NOT individual transactions or payees; do not ask for or claim per-merchant detail."
+		}
 		msgs := []ai.Message{
 			{Role: ai.RoleSystem, Content: persona},
 			{Role: ai.RoleSystem, Content: ctx},
+		}
+		// AG19: inject the user's transparent, durable memory so standing preferences
+		// ("paid biweekly", "don't suggest cutting eating out") ride every turn.
+		if mem := uistate.LoadAgentMemory().Prompt(); mem != "" {
+			msgs = append(msgs, ai.Message{Role: ai.RoleSystem, Content: mem})
 		}
 		for _, t := range hist {
 			role := ai.RoleUser
@@ -334,7 +354,7 @@ func Insights() ui.Node {
 		// accepts reasoning.effort together with function tools for the reasoning models
 		// (gpt-5.x / o-series), so the thinking level actually works instead of being
 		// rejected by /chat/completions.
-		return ai.SendResponsesChatTools(key, ai.DefaultBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
+		return ai.SendResponsesChatTools(key, aiBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
@@ -346,7 +366,15 @@ func Insights() ui.Node {
 	run := func(hist []chatTurn) {
 		errMsg.Set("")
 		loading.Set(true)
-		tools := buildChatTools(app, base, rates)
+		allTools := buildChatTools(app, base, rates)
+		// AG17: under aggregates-only, withhold the transaction/payee-detail read tools
+		// so the privacy promise holds for tool results too, not just the injected context.
+		tools := allTools[:0:0]
+		for _, t := range allTools {
+			if aicontext.ToolAllowed(t.spec.Function.Name, tier) {
+				tools = append(tools, t)
+			}
+		}
 		specs := make([]ai.Tool, len(tools))
 		byName := make(map[string]chatTool, len(tools))
 		for i, t := range tools {
@@ -393,6 +421,10 @@ func Insights() ui.Node {
 					loading.Set(false)
 					reply := chatTurn{ID: id.New(), Role: "assistant", Text: r.msg.Content, Usage: total}
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
+					// AG20: feed this turn's token spend into the per-conversation
+					// receipt (cost estimated from the resolved model).
+					cost, costOK := ai.EstimateCostUSD(model, total)
+					uistate.AddAgentCost(convID.Get(), total.TotalTokens, cost, costOK)
 					return
 				}
 				msgs = append(msgs, r.msg)
@@ -675,6 +707,12 @@ func Insights() ui.Node {
 		if newest != "" {
 			switchTo(newest)
 		}
+		// AG7: an "Explain" chip elsewhere in the app seeds a grounded question and
+		// navigates here; consume it once and prefill the composer so the user lands
+		// with the derivation ready to send.
+		if seed, ok := uistate.ConsumeExplainSeed(); ok {
+			input.Set(seed)
+		}
 		return nil
 	}, "cf-insights-init")
 
@@ -861,7 +899,7 @@ func Insights() ui.Node {
 		if useBackendAI {
 			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0, onName, noErr)
 		} else {
-			ai.SendChat(key, ai.DefaultBaseURL, model, messages, 0, onName, noErr)
+			ai.SendChat(key, aiBaseURL, model, messages, 0, onName, noErr)
 		}
 		return nil
 	}, namingSig)
@@ -1124,6 +1162,14 @@ func Insights() ui.Node {
 	chatControls := Div(css.Class("ask-head-actions", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
 		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
+		privacyChip(privacyChipProps{Tier: tier, OnToggle: func() {
+			next := aicontext.TierAggregatesOnly
+			if tier == aicontext.TierAggregatesOnly {
+				next = aicontext.TierFull
+			}
+			privacyTier.Set(next)
+			uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
+		}}),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
 			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
@@ -1236,12 +1282,17 @@ func Insights() ui.Node {
 				backendToggle,
 				If(empty, heroBlock),
 				If(!empty, thread),
+				// AG1: a multi-step plan the agent proposed renders here as a
+				// reviewable changeset (per-item toggles + Apply all + undo-all).
+				PendingChangesetHost(),
 				// Approval card: a mutating tool is paused waiting for the user's yes/no.
 				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
 					Preview:   approvalPreview,
 					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
 					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
 				})),
+				// AG20: the running per-conversation receipt (actions taken + spend).
+				If(!empty, AgentSessionReceipt(convID.Get())),
 				If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 			),
 		),
@@ -1683,6 +1734,44 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
 			),
 		),
+	)
+}
+
+type privacyChipProps struct {
+	Tier     aicontext.ConversationTier
+	OnToggle func()
+}
+
+// privacyChip is the visible per-conversation privacy control (AG17): a chip that
+// states the active tier ("Full detail" / "Aggregates only") and toggles it on
+// click. Its own component so the click hook sits at a stable position. role=status
+// so assistive tech announces the active tier, and the title explains what each
+// tier shares so the control is self-documenting.
+func privacyChip(p privacyChipProps) ui.Node { return ui.CreateElement(privacyChipComp, p) }
+
+func privacyChipComp(p privacyChipProps) ui.Node {
+	onClick := ui.UseEvent(func() {
+		if p.OnToggle != nil {
+			p.OnToggle()
+		}
+	})
+	agg := p.Tier == aicontext.TierAggregatesOnly
+	label := uistate.T("insights.privacyFull")
+	title := uistate.T("insights.privacyFullHint")
+	if agg {
+		label = uistate.T("insights.privacyAggregates")
+		title = uistate.T("insights.privacyAggregatesHint")
+	}
+	cls := "ask-quickctl asst-privacy-chip"
+	if agg {
+		cls += " is-aggregates"
+	}
+	return Button(css.Class(cls), Type("button"), Attr("data-testid", "assistant-privacy-chip"),
+		Attr("role", "status"), Attr("aria-live", "polite"),
+		Attr("aria-label", uistate.T("insights.privacyAria", label)), Title(title), OnClick(onClick),
+		uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(css.Class("ask-quickctl-lbl"), uistate.T("insights.privacyLabel")),
+		Span(label),
 	)
 }
 

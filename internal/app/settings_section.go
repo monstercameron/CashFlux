@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -113,6 +114,9 @@ type settingsRightProps struct {
 	ModelsErr      string
 	WsKey          string
 	OnWsKey        uic.Handler // UseEvent
+	// AG18 — OpenAI-compatible base-URL override (Ollama/LM Studio/proxy).
+	BaseURL   string
+	OnBaseURL uic.Handler // UseEvent
 	// Cloud & server
 	BackendOn         bool
 	OnBackendToggle   func(bool)
@@ -321,6 +325,16 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelNote", aiModelDisplayName(p.CurModel))),
 		If(strings.TrimSpace(p.ModelsErr) != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLoadFailed"))),
 		If(len(p.Models) > 0, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLive", len(p.Models)))),
+		// AG18: point the app at any OpenAI-compatible endpoint (a local model or a
+		// proxy) — the honest "no key leaves the house" path. Blank = OpenAI direct.
+		H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
+		Input(css.Class("set-input", tw.Mt045), Type("text"), Attr("spellcheck", "false"),
+			Attr("aria-label", uistate.T("settings.aiBaseUrlTitle")), Attr("data-testid", "settings-ai-base-url"),
+			Placeholder(uistate.T("settings.aiBaseUrlPlaceholder")), Value(p.BaseURL), OnInput(p.OnBaseURL)),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
+		If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
+		// AG19: the assistant's transparent, editable memory.
+		uic.CreateElement(agentMemoryForm),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
 		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(p.WsKey), OnInput(p.OnWsKey)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
