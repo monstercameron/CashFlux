@@ -62,7 +62,9 @@ var i18nBaselines = map[string]int{
 	// seasonal auto-budget true-up.
 	// 166→169 (2026-07-14): GL3 SMART-G21 emergency-fund resize re-suggest adds
 	// its three in-package insight strings (Title/Detail/Label).
-	"../smartengine":   169,
+	// 169→171 (2026-07-14): AC14 SMART-A9 fee-bleed detector adds its in-package
+	// insight Detail and the close-it-task action Label.
+	"../smartengine":   171,
 	"../widgetcatalog": 42,
 	"../healthscore":   0,
 	"../credithealth":  0,

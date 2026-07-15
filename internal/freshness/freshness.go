@@ -57,6 +57,18 @@ func (w Windows) WindowDays(t domain.AccountType) (int, bool) {
 	return d, ok
 }
 
+// EffectiveWindowDays returns the staleness/revaluation window for a specific
+// account, honouring its per-account override (Account.RevalueDays, AC5). A
+// positive RevalueDays always wins over the type default — this lets a single
+// property or vehicle be re-estimated on its own schedule without a nag on the
+// shared clock. Zero RevalueDays falls back to the type window.
+func (w Windows) EffectiveWindowDays(a domain.Account) (int, bool) {
+	if a.RevalueDays > 0 {
+		return a.RevalueDays, true
+	}
+	return w.WindowDays(a.Type)
+}
+
 // Merge returns a copy of w with overrides applied (overrides win). Use this to
 // layer user settings over the defaults.
 func (w Windows) Merge(overrides Windows) Windows {
@@ -77,7 +89,7 @@ func IsStale(account domain.Account, windows Windows, now time.Time) bool {
 	if account.Archived {
 		return false
 	}
-	days, ok := windows.WindowDays(account.Type)
+	days, ok := windows.EffectiveWindowDays(account)
 	if !ok || days <= 0 {
 		return false
 	}

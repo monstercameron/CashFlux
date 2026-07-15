@@ -53,9 +53,12 @@ CREATE TABLE IF NOT EXISTS settlements  (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS earmarks         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS txnlinks            (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events              (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS accountgroups       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS payeealiases        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subcancellations  (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subignores        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS institutions       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sweeprules          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings          (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS audit_log         (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS appkv             (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -200,6 +203,12 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "events", ds.Events, func(e domain.Event) string { return e.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "accountgroups", ds.AccountGroups, func(g domain.AccountGroup) string { return g.ID }); err != nil {
+		return err
+	}
+	if err := replaceRows(tx, "sweeprules", ds.SweepRules, func(r domain.SweepRule) string { return r.ID }); err != nil {
+		return err
+	}
 	if err := replaceRows(tx, "payeealiases", ds.PayeeAliases, func(p domain.PayeeAlias) string { return p.ID }); err != nil {
 		return err
 	}
@@ -207,6 +216,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 		return err
 	}
 	if err := replaceRows(tx, "subignores", ds.SubscriptionIgnores, func(ig domain.SubscriptionIgnore) string { return ig.ID }); err != nil {
+		return err
+	}
+	if err := replaceRows(tx, "institutions", ds.Institutions, func(in domain.Institution) string { return in.ID }); err != nil {
 		return err
 	}
 	// Audit log: persist at most AuditLogCap entries (drop-oldest) so the table
@@ -339,10 +351,19 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 	if ds.Events, err = loadRows[domain.Event](s.db, "events"); err != nil {
 		return Dataset{}, err
 	}
+	if ds.AccountGroups, err = loadRows[domain.AccountGroup](s.db, "accountgroups"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.SweepRules, err = loadRows[domain.SweepRule](s.db, "sweeprules"); err != nil {
+		return Dataset{}, err
+	}
 	if ds.PayeeAliases, err = loadRows[domain.PayeeAlias](s.db, "payeealiases"); err != nil {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionCancellations, err = loadRows[domain.SubscriptionCancellation](s.db, "subcancellations"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.Institutions, err = loadRows[domain.Institution](s.db, "institutions"); err != nil {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionIgnores, err = loadRows[domain.SubscriptionIgnore](s.db, "subignores"); err != nil {

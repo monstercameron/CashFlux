@@ -72,7 +72,7 @@ func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, 
 	// exclusion semantics (a rate-less account never fakes a base-currency value).
 	var totalAssets, cashAssets int64
 	for _, a := range d.Accounts {
-		if a.Archived || a.Class == domain.ClassLiability {
+		if a.Archived || a.Class == domain.ClassLiability || a.ExcludeFromNetWorth {
 			continue
 		}
 		bal, ok := bals[a.ID]

@@ -792,6 +792,10 @@ func Dashboard() ui.Node {
 				PeriodStart: start, PeriodEnd: end,
 				CustomDefs: app.CustomFieldDefs(),
 				Molecules:  app.Molecules(),
+				// AC15: the user-entered idle-cash benchmark rate (Settings → Preferences),
+				// a stated assumption never a live feed. Zero leaves idle_cash_forgone_annual
+				// at 0 (nothing to compare to).
+				IdleBenchmarkAPRPercent: uistate.LoadPrefs().IdleCashBenchmarkAPR,
 			})
 		})
 	}

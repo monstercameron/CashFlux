@@ -42,6 +42,10 @@ func midnight(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
+// DayStart returns t's calendar day at 00:00 UTC — the start-of-day boundary
+// used for date-only bucketing (e.g. per-day balance series).
+func DayStart(t time.Time) time.Time { return midnight(t) }
+
 // MonthStart returns the first day of t's month at 00:00 UTC.
 func MonthStart(t time.Time) time.Time {
 	y, m, _ := t.Date()

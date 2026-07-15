@@ -416,11 +416,18 @@ func NetWorth() ui.Node {
 		}
 		chips = append(chips, rptChip(uistate.T("nw.figDebtRatio"), fmt.Sprintf("%d%%", ratio), tone))
 	}
-	var excludesNote ui.Node = Fragment()
+	var missingNote, byChoiceNote ui.Node = Fragment(), Fragment()
 	if len(nwRes.MissingCurrencies) > 0 {
-		excludesNote = P(css.Class("err"), Attr("role", "alert"),
+		missingNote = P(css.Class("err"), Attr("role", "alert"),
 			uistate.T("accounts.nwExcludes", plural(len(nwRes.ExcludedAccounts), "account"), strings.Join(nwRes.MissingCurrencies, ", ")))
 	}
+	// AC11: disclose accounts the household chose to leave out, so the figure is
+	// never silently reduced. Informational (role=status), not an error.
+	if n := len(nwRes.ExcludedByChoice); n > 0 {
+		byChoiceNote = P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "nw-excludes-by-choice"),
+			uistate.T(excludesByChoiceKey(n), n))
+	}
+	excludesNote := Fragment(missingNote, byChoiceNote)
 	heroTile := nwTile("nw-hero", "1 / span 4", nwSection("sec-nw-hero", uistate.T("dashboard.netWorth"), nil,
 		Div(css.Class("rpt-hero"),
 			P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("nw.asOf", pr.FormatDate(time.Now()))),

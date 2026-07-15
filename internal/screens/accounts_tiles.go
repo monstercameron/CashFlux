@@ -5,10 +5,13 @@
 package screens
 
 import (
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountflow"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -17,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/idlecash"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -38,6 +42,11 @@ import (
 // the same spec/render pipeline the dashboard and /transactions use. The rich
 // per-account row (AccountRow) is reused verbatim — these tiles only restructure the
 // page around it.
+//
+// AC7 sweep rules: the config manager lives in the "acct-sweep-btn" toolbar modal
+// (SweepRulesHost → SweepRulesForm, accounts_sweep_config.go), and the
+// preview-approve proposal card renders above the bento in accounts_widget.go
+// (accountsSweepCards, accounts_sweep_card.go), mirroring the GL1 waterfall card.
 
 // --- shared tile props ----------------------------------------------------------
 
@@ -277,6 +286,10 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// pointer across host renders, so without this the engine would memoize it stale.
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
+	nav := router.UseNavigate()
+	// AC15: client-side nav for the idle-cash line's "See allocation options" link,
+	// declared unconditionally (stable hook position) like acctListWidget's goToDebt.
+	goToAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
@@ -319,11 +332,63 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		),
 		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
 			uistate.T("accounts.nwExcludes", plural(len(nw.ExcludedAccounts), "account"), strings.Join(nw.MissingCurrencies, ", ")))),
+		// AC11: disclose accounts left out of net worth by the household's choice.
+		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
+			uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice)))),
+		// AC15: a quiet idle-cash line — liquid cash beyond this month's bills + goal
+		// set-asides, priced at the user's own benchmark rate (never a live feed).
+		// Renders nothing until a benchmark is set in Settings and there's enough
+		// idle cash to be worth naming.
+		acctIdleCashLine(app, props.Base, goToAllocate),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// excludesByChoiceKey picks the singular or plural AC11 disclosure key for n
+// accounts left out of net worth by the household's choice.
+func excludesByChoiceKey(n int) string {
+	if n == 1 {
+		return "accountsstmt.excludesByChoice"
+	}
+	return "accountsstmt.excludesByChoicePlural"
+}
+
+// moneyFromMajor rebuilds a money.Money from an engine-variable major-unit float
+// (the surface liveEngineVars/engineenv.Vars returns), rounding to the currency's
+// minor unit. Display-only — never used for ledger arithmetic.
+func moneyFromMajor(v float64, base string) money.Money {
+	dec := currency.Decimals(base)
+	mult := 1.0
+	for i := 0; i < dec; i++ {
+		mult *= 10
+	}
+	return money.New(int64(math.Round(v*mult)), base)
+}
+
+// acctIdleCashLine renders the AC15 idle-cash summary — liquid cash beyond this
+// month's committed bills and goal set-asides, priced at the user's own benchmark
+// rate — as a quiet line linking to /allocate. It renders nothing until a benchmark
+// is set (Settings → Preferences) and the idle amount clears the same buffer
+// idlecash.DefaultThresholdMinor uses, so a small cash cushion never reads as a nag.
+func acctIdleCashLine(app *appstate.App, base string, onAllocate ui.Handler) ui.Node {
+	vars := liveEngineVars(app)
+	benchmark := vars["idle_cash_benchmark"]
+	if benchmark <= 0 {
+		return Fragment()
+	}
+	idle := moneyFromMajor(vars["idle_cash"], base)
+	if idle.Amount < idlecash.DefaultThresholdMinor {
+		return Fragment()
+	}
+	forgone := moneyFromMajor(vars["idle_cash_forgone_annual"], base)
+	benchStr := strconv.FormatFloat(benchmark, 'f', -1, 64)
+	return P(css.Class("t-caption", tw.TextDim, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Attr("data-testid", "acct-idle-cash-line"),
+		Span(uistate.T("accounts.idleCashLine", fmtMoney(idle), fmtMoney(forgone), benchStr)),
+		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-idle-cash-link"), OnClick(onAllocate), uistate.T("accounts.idleCashLink")),
+	)
 }
 
 // --- acct-toolbar ---------------------------------------------------------------
@@ -395,6 +460,26 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
+	// AC1: open the account-group manager. When at least one group exists, jump
+	// straight to editing the first (its header carries per-group edit too); with
+	// none, start a new group.
+	groupEditAtom := uistate.UseAccountGroupEdit()
+	openGroups := ui.UseEvent(Prevent(func() {
+		target := "new"
+		if gs := app.AccountGroups(); len(gs) > 0 {
+			target = gs[0].ID
+		}
+		groupEditAtom.Set(target)
+	}))
+	// AC10: open the institution directory (add/rename/color/delete banks and
+	// lenders). Grounds the ★★ Multi-Institution Analytics feature with a real
+	// entity instead of matching on the free-text Account.Institution string.
+	institutionsAtom := uistate.UseInstitutionsManager()
+	openInstitutions := ui.UseEvent(Prevent(func() { institutionsAtom.Set(true) }))
+	// AC7: open the surplus-sweep rules manager (keep $X in an account, move the
+	// excess elsewhere on a cadence — the proposal card fires from these rules).
+	sweepAtom := uistate.UseSweepRulesOpen()
+	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
 	openFX := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
 	markAll := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
@@ -507,6 +592,15 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				uistate.T("accounts.markAll", plural(staleCount, "account")), "action", "stale", false, markAll)),
 			If(showFX, acctToolbarGlyph("acct-fx-btn", icon.Scale,
 				uistate.T("accounts.manageFXRates"), "nav", "", false, openFX)),
+			// AC1: organize accounts into named groups (opens a shell-root flip modal).
+			If(len(accounts) >= 1, acctToolbarGlyph("acct-groups-btn", icon.Tag,
+				uistate.T("accounts.groupsAction"), "modal", "", groupEditAtom.Get() != "", openGroups)),
+			// AC10: manage the institution directory (opens a shell-root flip modal).
+			If(len(accounts) >= 1, acctToolbarGlyph("acct-institutions-btn", icon.Landmark,
+				uistate.T("accounts.institutionsAction"), "modal", "", institutionsAtom.Get(), openInstitutions)),
+			// AC7: manage surplus-sweep rules (opens a shell-root flip modal).
+			If(len(accounts) >= 2, acctToolbarGlyph("acct-sweep-btn", icon.TrendingUp,
+				uistate.T("acctSweepCfg.title"), "modal", "", sweepAtom.Get(), openSweep)),
 			// Primary action last → right end of the left-justified group.
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
 				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),
@@ -698,7 +792,12 @@ func acctListWidget(props acctListProps) ui.Node {
 	cbs := buildAcctRowCallbacks(app)
 	viewTxns := acctViewTransactions(nav, txFilter)
 	viewBills := acctViewBillPayments(nav, txFilter)
+	// AC10: index the institution directory once so every row can color its edge
+	// and show a chip for its Account.InstitutionID.
+	instByID := domain.InstitutionByID(app.Institutions())
 
+	// AC2/AC9: the 90-day sparkline window and this-month flow window, computed once.
+	monthStart, monthEnd := dateutil.MonthRange(now)
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
@@ -708,11 +807,35 @@ func acctListWidget(props acctListProps) ui.Node {
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
 			SmartSettings: smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
-			AccountDefs: accDefs,
+			AccountDefs: accDefs, InstByID: instByID,
 			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
+			Sparkline:  accountflow.BalanceSeries(ac, txns, now, 90),
+			Flow:       accountflow.PeriodFlow(ac, txns, monthStart, monthEnd),
+			ShowFlow:   true,
+			Projection: app.ProjectAccount(ac.ID, now, 30),
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
+
+	// AC1: user-defined groups render as sections with a net subtotal each, followed
+	// by an "Ungrouped" catch-all. Built only for the "default" body case below.
+	groups := app.AccountGroups()
+	groupedBody := func() ui.Node {
+		sections := groupSections(shown, groups, txns, props.Rates, props.Base)
+		return Div(css.Class("acct-groups"),
+			MapKeyed(sections, func(s acctGroupSection) any {
+				if s.Group.ID == "" {
+					return "ungrouped"
+				}
+				return s.Group.ID
+			}, func(s acctGroupSection) ui.Node {
+				return Div(css.Class("acct-group"),
+					ui.CreateElement(acctGroupHeader, acctGroupHeaderProps{Section: s}),
+					Div(css.Class("rows"), MapKeyed(s.Accounts, keyOf, renderRow)),
+				)
+			}),
+		)
+	}
 
 	var bodyContent ui.Node
 	switch {
@@ -724,6 +847,8 @@ func acctListWidget(props acctListProps) ui.Node {
 		bodyContent = P(css.Class("empty"), uistate.T("accounts.noLiabilities"))
 	case len(shown) == 0:
 		bodyContent = P(css.Class("empty"), uistate.T("accounts.noAssets"))
+	case len(groups) > 0:
+		bodyContent = groupedBody()
 	default:
 		bodyContent = Div(css.Class("rows"), MapKeyed(shown, keyOf, renderRow))
 	}
@@ -836,6 +961,7 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	cbs := buildAcctRowCallbacks(app)
 	viewTxns := acctViewTransactions(nav, txFilter)
 	viewBills := acctViewBillPayments(nav, txFilter)
+	instByID := domain.InstitutionByID(app.Institutions())
 
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
@@ -845,7 +971,7 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 			Members: members, Accounts: accounts, Categories: categories,
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
-			ValuationHistory: app.BalanceHistory(ac.ID), AccountDefs: accDefs,
+			ValuationHistory: app.BalanceHistory(ac.ID), AccountDefs: accDefs, InstByID: instByID,
 			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
 		})
 	}

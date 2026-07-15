@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/emergencypack"
 	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -1027,6 +1028,17 @@ func globalSettingsForm() uic.Node {
 			p.MonthlyIncomeMinor = amt
 			savePrefs(p)
 		},
+		// AC15: the idle-cash benchmark rate. A blank/invalid/negative entry clears it
+		// (0 disables the idle_cash_forgone_annual figure — nothing to compare to).
+		OnIdleCashBenchmarkAPR: uic.UseEvent(func(v string) {
+			apr, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+			if err != nil || apr < 0 {
+				apr = 0
+			}
+			p := prefsAtom.Get()
+			p.IdleCashBenchmarkAPR = apr
+			savePrefs(p)
+		}),
 
 		AiOn:       aiOn.Get(),
 		OnAiToggle: func(v bool) { aiOn.Set(v) },
@@ -1080,8 +1092,17 @@ func globalSettingsForm() uic.Node {
 		OnStartCheckout:   startCheckout,
 		OnOpenPortal:      openPortal,
 
-		OnExportJSON:    func() { exportJSON(notify) },
-		OnExportCSV:     func() { exportCSV(notify) },
+		OnExportJSON: func() { exportJSON(notify) },
+		OnExportCSV:  func() { exportCSV(notify) },
+		// AC16: confirm before generating — the pack lists account names and balances,
+		// so it deserves a deliberate "yes, make this" moment, not a silent click.
+		OnExportPack: func() {
+			uistate.ConfirmModal(uistate.T("settings.emergencyPackConfirm"), false, func(ok bool) {
+				if ok {
+					exportEmergencyPack(notify)
+				}
+			})
+		},
 		OnBackupAll:     backupEverything,
 		OnImportJSON:    func() { importJSON(bump, notify) },
 		OnLoadSample:    func() { loadSample(bump, notify) },
@@ -1503,6 +1524,35 @@ func exportCSV(notify func(string, bool)) {
 	}
 	downloadBytes("transactions.csv", "text/csv", data)
 	notify(uistate.T("settings.exportedTxn", "transactions.csv"), false)
+}
+
+// exportEmergencyPack generates the AC16 "in case of emergency" pack — a calm,
+// plain-language HTML document for a spouse or executor who needs to step in — and
+// downloads it. It is built entirely from the local dataset and NEVER touches the
+// network; VaultHasEntries only says whether the encrypted credential vault holds
+// anything at all, so the pack can point the reader to it WITHOUT ever reading or
+// revealing its contents.
+func exportEmergencyPack(notify func(string, bool)) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	ownerName := ""
+	if ms := app.Members(); len(ms) > 0 {
+		ownerName = ms[0].Name
+	}
+	build := func(vaultHasEntries bool) {
+		pack := app.BuildEmergencyPack(ownerName, "", nil, vaultHasEntries, time.Now())
+		downloadBytes("cashflux-emergency-pack.html", "text/html", []byte(emergencypack.RenderHTML(pack)))
+		notify(uistate.T("settings.emergencyPackDone"), false)
+	}
+	if !credVaultAvailable() {
+		build(false)
+		return
+	}
+	loadCredVault(func(v credVault, err error) {
+		build(err == nil && len(v) > 0)
+	})
 }
 
 // exportLanguages downloads the whole language bundle (every supported language)

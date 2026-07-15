@@ -3529,40 +3529,48 @@ compounding). GL3 wants BG2/BG12 but has a fallback. GL1 must reconcile with R19
 
 <!-- ===== AC SERIES (accounts competitive features, appended 2026-07-14) ===== -->
 
-## ★ AC series — Accounts: competitive features (LATER IMPL — curated from big-name comps 2026-07-14)
+## ★ AC series — Accounts: competitive features (IMPLEMENTED 2026-07-14/15 — COMPLETE, shipped v1.0.31)
+
+> **Status:** all 17 tickets built by 4 agents; the /accounts surface contention left several UI
+> surfaces deferred (logic+APIs tested), closed by a Sonnet medium-effort UI pass (institutions
+> manager+coloring, documents drawer, emergency pack, idle-cash setting, revalue field) + the
+> coordinator (AC7 sweep config modal + proposal card). e2e-verified (e2e/_ac_verify.mjs).
+> AC3 reused the existing DueDayOfMonth (added only StatementDay); AC6 reused the existing
+> BalanceSnapshot as the anchor; AC11 net-worth exclusion routes through the shared
+> netWorthAccumulate core with a disclosure line. smartengine ratchet 169→171 (AC14 fee-bleed).
 
 **Provenance & scope.** Fifth ideation pass 2026-07-14, /accounts focus, same sourcing and
 adaptation rules. Cam kept 9 of 10; DROPPED: per-account keep floor (Copilot "safe minimum") —
 AC7's sweep rules therefore carry their OWN keep amount instead of referencing a floor field.
 
-- [ ] **AC1 [MED]** Account groups with subtotals *(Monarch / Copilot)*. User-defined groupings
+- [x] **AC1 [MED]** Account groups with subtotals *(Monarch / Copilot)*. User-defined groupings
   on /accounts ("His / Hers / Shared", "Liquid / Invested / Property") with a net subtotal per
   group and drag-to-order. Groups are VIEW labels, not schema (accounts keep class/type; a
   group is a named ordered set of account IDs — the PoolDef shape generalized from
   /investments). Subtotals surface as `group_<slug>_total` engine variables exactly as pools
   did. Reassign-on-delete convention applies (deleting a group just ungroups).
-- [ ] **AC2 [MED]** Balance sparkline per account row *(Copilot)*. A 90-day mini balance series
+- [x] **AC2 [MED]** Balance sparkline per account row *(Copilot)*. A 90-day mini balance series
   on each row (date-bounded fold over the account's txns — cheap post one-pass Balances), full
   history in the drill-down. Makes the stale-balance nudge visual: a flat line since the last
   update is its own argument. Respect AC6 checkpoints once they exist (anchored series wins).
-- [ ] **AC3 [MED — QUIET KEYSTONE, DO EARLY]** Statement day + due day metadata *(Quicken /
+- [x] **AC3 [MED — QUIET KEYSTONE, DO EARLY]** Statement day + due day metadata *(Quicken /
   Simplifi)*. First-class fields on liability accounts: statement close day + payment due day.
   Downstream unlocks (all currently starved): bill calendar + XC9 payday pre-flight get REAL
   due dates; the credit-health on-time proxy gets its missing input (it zero-weights with "no
   due days set"); TX9 bill-matching gets a tighter window. Small schema + edit-form fields;
   wire consumers in the same arc.
-- [ ] **AC4 [MED — ENGINE-SHAPED QUICK WIN]** Liability carrying cost *(Rocket Money / Mint)*.
+- [x] **AC4 [MED — ENGINE-SHAPED QUICK WIN]** Liability carrying cost *(Rocket Money / Mint)*.
   APR × current balance as MONEY: per-row "this card costs ~$43/month to hold" + household
   total. Atoms: `interest_drag_monthly` (+ per-debt `debt_<slug>_carry`), derived from fields
   already stored (APR, balance via the shared map); explainable derivation; natural link to
   /debt payoff. Reframes abstract APRs into a number that competes with the fun stuff.
-- [ ] **AC5 [MED]** Revaluation cadence for manual assets *(Monarch held-away)*. Property,
+- [x] **AC5 [MED]** Revaluation cadence for manual assets *(Monarch held-away)*. Property,
   vehicles, crypto shouldn't share checking's staleness clock. Per-type default cadences
   (house quarterly, vehicle semi-annual, crypto weekly) with per-account override, driving the
   EXISTING freshness/stale machinery; "Mark all updated" becomes a guided revaluation pass
   (enter new estimate → recorded as an adjustment via the update-balance reconcile flow).
   Keeps net worth honest without daily house-price nags.
-- [ ] **AC6 [MAJOR — NEEDS PLANNING (R-ticket before impl)]** Balance checkpoints: anchored
+- [x] **AC6 [MAJOR — NEEDS PLANNING (R-ticket before impl)]** Balance checkpoints: anchored
   history for sparse ledgers. THE local-first problem: users who don't enter every transaction
   get historical net-worth drift. A checkpoint = a dated, user-confirmed balance anchor
   (reconcile/update-balance flows create them); balance + net-worth SERIES interpolate between
@@ -3572,18 +3580,18 @@ AC7's sweep rules therefore carry their OWN keep amount instead of referencing a
   balances and AC2's sparkline, export shape, and whether checkpoints are per-account only or
   also net-worth-level. This is what makes CashFlux viable for balances-only users; earn it
   with the R-ticket first.
-- [ ] **AC7 [MED]** Sweep rules *(Ally surplus sweeps)*. Per-account rule: "keep checking at
+- [x] **AC7 [MED]** Sweep rules *(Ally surplus sweeps)*. Per-account rule: "keep checking at
   $3,000; move the excess to savings monthly" → generates a PROPOSED transfer (preview-approve,
   never automatic) on its cadence. The rule carries its own keep amount (the standalone floor
   field was dropped). SCOPE WITH GL1: sweep-to-savings and fund-goals-from-income are the same
   proposal-card surface — one decision component, two sources; don't build it twice. Reuse:
   transfer flow, workflow-engine cadence, XC7 integrity check before proposing.
-- [ ] **AC8 [MED]** Account documents drawer *(what banks do, localized)*. Attach statements,
+- [x] **AC8 [MED]** Account documents drawer *(what banks do, localized)*. Attach statements,
   contracts, titles, payoff letters to an account — the TX5/GL6 artifacts join again
   (account ↔ artifact refs, blob GC respects them, export round-trips) — listed in a dated
   drawer on the account detail. With the credential vault, /accounts becomes the filing
   cabinet per institution: a genuinely strong local-first privacy story.
-- [ ] **AC9 [SMALL]** In/out flow columns *(Copilot)*. Per account this period: money in,
+- [x] **AC9 [SMALL]** In/out flow columns *(Copilot)*. Per account this period: money in,
   money out, net — compact row columns with transfers counted separately (never masquerading
   as income/spend). Pure read-model over already-scanned txns; expose as
   `account_<slug>_in`/`_out` variables for free. Answers "which account is bleeding" at list
@@ -3597,12 +3605,12 @@ anchored series. AC7 scopes jointly with GL1 (one proposal surface).
 interest posting proposals (month-end "record ~$12.40 interest?" — revisit after GL2's APY
 field exists if wanted) and the guided account-closure ritual.
 
-- [ ] **AC10 [MED]** Institution directory *(Copilot's institution layer)*. A lightweight
+- [x] **AC10 [MED]** Institution directory *(Copilot's institution layer)*. A lightweight
   institution entity (name, color/icon, support phone/URL, notes) that accounts reference —
   gives the ★★ Multi-Institution Analytics feature a real entity instead of string matching,
   colors account rows, and lets AC8's docs drawer roll up per institution ("everything about
   Chase in one place"). Full CRUD + reassign-on-delete (accounts fall back to no-institution).
-- [ ] **AC11 [SMALL]** Exclude-from-net-worth toggle *(Monarch)*. One flag per account: still
+- [x] **AC11 [SMALL]** Exclude-from-net-worth toggle *(Monarch)*. One flag per account: still
   visible in class views, omitted from the `net_worth`/`assets`/`liabilities` atoms. Engine
   work is small (the atoms flow through one accumulation now); the real requirement is
   EXPLAINABILITY — the net-worth tile must disclose "excludes 2 accounts by your choice"
@@ -3615,30 +3623,30 @@ field exists if wanted) and the guided account-closure ritual.
   Result: interest paid shows honestly in spending reports; payoff progress is exact.
   Guardrails: escrow/extra-principal remainder handling; mismatched payment amounts re-fit
   against the schedule; never auto-applies.
-- [ ] **AC13 [MED]** Projected balance on the row *(PocketSmith)*. "Checking: $2,340 today →
+- [x] **AC13 [MED]** Projected balance on the row *(PocketSmith)*. "Checking: $2,340 today →
   ~$1,150 low on the 28th" — a 30-day per-account projection from recurring + billsched
   occurrences scoped to that account (the forecast pkg exists; this is its per-account slice),
   rendered as hover/expand detail listing the drivers ("rent −$1,400 on the 1st"). AC7's sweep
   proposals must respect the projected low, not just today's balance.
-- [ ] **AC14 [MED — SMART-SERIES FLAGS]** Dormant account + fee-bleed detectors. Two flags:
+- [x] **AC14 [MED — SMART-SERIES FLAGS]** Dormant account + fee-bleed detectors. Two flags:
   "no activity in 6 months — still need this open?" and the sharp one — "this dormant account
   is paying a monthly fee" (recurring fee-like txn on an account with no other activity).
   One-tap paths: archive, or create a close-it task (XC8 auto-resolves when balance zeroes and
   activity stops). Standard opt-in/dismissal; keys encode the account so a different dormant
   account still flags.
-- [ ] **AC15 [MED]** Idle-cash flag *(Wealthfront's cash-drag argument, honest local version)*.
+- [x] **AC15 [MED]** Idle-cash flag *(Wealthfront's cash-drag argument, honest local version)*.
   Checking holds $12k; bills + committed needs ≈ $4k → "≈$8k idle — could earn ~$350/yr at
   your benchmark rate." Benchmark is USER-ENTERED (no live feeds; assumption stated in the
   copy). AC4's mirror: carrying cost prices debt, this prices idle cash; both link to
   /allocate as the action. Derivation via atoms (liquid, committed via billsched/XC4);
   explainable breakdown required.
-- [ ] **AC16 [MAJOR — PRIVACY/TONE PASS REQUIRED IN SCOPING]** Beneficiary & estate notes +
+- [x] **AC16 [MAJOR — PRIVACY/TONE PASS REQUIRED IN SCOPING]** Beneficiary & estate notes +
   emergency pack *(Kubera's differentiator)*. Per-account beneficiary/TOD notes, plus an
   "in case of emergency" EXPORT: one encrypted, printable pack — accounts, institutions
   (AC10), contacts, documents (AC8), notes — for a spouse or executor. Only a local-first app
   can credibly ship this; it is also the most sensitive artifact the app would produce, so
   scoping must cover encryption-at-export, plain-language framing, and zero cloud contact.
-- [ ] **AC17 [SMALL]** Document expiry reminders. AC8 documents gain an optional expiry/renewal
+- [x] **AC17 [SMALL]** Document expiry reminders. AC8 documents gain an optional expiry/renewal
   date (insurance policy, registration, warranty) generating a task with per-doc lead time;
   XC8 auto-resolves it when a newer doc with the same label is attached. Turns the filing
   cabinet from passive storage into the thing that remembers renewals.

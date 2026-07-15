@@ -105,6 +105,9 @@ func ValidateAccount(a domain.Account) Issues {
 	if a.DueDayOfMonth < 0 || a.DueDayOfMonth > 28 {
 		is.add("dueDayOfMonth", "must be between 1 and 28")
 	}
+	if a.StatementDay < 0 || a.StatementDay > 31 {
+		is.add("statementDay", "must be between 1 and 31")
+	}
 	if a.InterestRateAPR < 0 {
 		is.add("interestRateApr", "cannot be negative")
 	}

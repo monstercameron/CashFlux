@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountflow"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -36,6 +37,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/emergencyfund"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/idlecash"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
@@ -66,6 +68,11 @@ type Data struct {
 	// Pools are user-defined groups of accounts (see the investments page); each becomes a
 	// pool_<slug>_value engine variable so a group's combined value is usable in formulas.
 	Pools []PoolDef
+	// Groups are the user-defined /accounts groupings (AC1); each becomes a
+	// group_<slug>_total engine variable carrying the group's net subtotal (assets
+	// positive, liabilities negative), so a grouping like "Retirement" is
+	// formula/widget-addressable by name.
+	Groups []AccountGroupDef
 	// Alloc holds the persisted allocate-page plan (amount to put to work + split controls),
 	// surfaced as the alloc_* engine variables so a plan figure is usable in formulas/widgets.
 	Alloc AllocData
@@ -88,6 +95,10 @@ type Data struct {
 	// event_<slug>_{total,spend,count} variables so an event is formula/widget-
 	// addressable like a pool or goal (TX10).
 	Events []EventDef
+	// IdleBenchmarkAPRPercent is the user-entered annual yield the idle-cash figure
+	// compares against (AC15) — a setting, never a live feed. Zero disables the
+	// idle_cash_forgone_annual atom (nothing to compare to).
+	IdleBenchmarkAPRPercent float64
 }
 
 // BillsSmartData is the smart-schedule input the wasm layer feeds in. Empty
@@ -124,32 +135,46 @@ type PoolDef struct {
 	AccountIDs []string
 }
 
+// AccountGroupDef is a named group of account IDs (an /accounts grouping, AC1),
+// passed in from the wasm layer, so the pure engine can expose a group's net
+// subtotal as group_<slug>_total. Same shape as PoolDef; separate type so the two
+// variable families stay independent.
+type AccountGroupDef struct {
+	Name       string
+	VarName    string
+	AccountIDs []string
+}
+
 // atomNames lists the indivisible variables computeAtoms produces, in a stable
 // order. Each is a reduction over the named fundamental source.
 var atomNames = []string{
-	"assets",             // Σ FX-converted balances of non-archived asset accounts
-	"liabilities",        // Σ magnitudes of non-archived liability-account balances (positive)
-	"liquid_cash",        // Σ balances of non-archived cash-type accounts (checking/debit/savings/cash)
-	"income",             // Σ positive non-transfer transactions in the period
-	"expense",            // Σ |negative non-transfer transactions| in the period (positive)
-	"income_count",       // count of income (positive non-transfer) transactions in the period
-	"expense_count",      // count of expense (negative non-transfer) transactions in the period
-	"bills_due",          // Σ bills due before this calendar month-end
-	"goal_needs",         // Σ prorated monthly goal contributions
-	"essential_monthly",  // derived ESSENTIAL month: fixed recurring commitments + trailing essential (non-flex) spend (GL3)
-	"earmarked_total",    // Σ virtual goal earmarks across all goals (reserved-in-place, uncommitted)
-	"accounts",           // count of non-archived accounts
-	"asset_accounts",     // count of non-archived asset-class accounts
-	"liability_accounts", // count of non-archived liability-class accounts
-	"debt_count",         // count of non-archived liability accounts (debts)
-	"revolving_balance",  // Σ magnitudes of non-archived credit-card balances (positive)
-	"credit_limit_total", // Σ credit limits of non-archived credit-card accounts
-	"min_payments_total", // Σ minimum monthly payments across non-archived liabilities
-	"transactions",       // count of transactions
-	"members",            // count of members
-	"budgets",            // count of budgets
-	"goals",              // count of goals
-	"tasks",              // count of tasks
+	"assets",                   // Σ FX-converted balances of non-archived asset accounts
+	"liabilities",              // Σ magnitudes of non-archived liability-account balances (positive)
+	"liquid_cash",              // Σ balances of non-archived cash-type accounts (checking/debit/savings/cash)
+	"income",                   // Σ positive non-transfer transactions in the period
+	"expense",                  // Σ |negative non-transfer transactions| in the period (positive)
+	"income_count",             // count of income (positive non-transfer) transactions in the period
+	"expense_count",            // count of expense (negative non-transfer) transactions in the period
+	"bills_due",                // Σ bills due before this calendar month-end
+	"goal_needs",               // Σ prorated monthly goal contributions
+	"essential_monthly",        // derived ESSENTIAL month: fixed recurring commitments + trailing essential (non-flex) spend (GL3)
+	"earmarked_total",          // Σ virtual goal earmarks across all goals (reserved-in-place, uncommitted)
+	"accounts",                 // count of non-archived accounts
+	"asset_accounts",           // count of non-archived asset-class accounts
+	"liability_accounts",       // count of non-archived liability-class accounts
+	"debt_count",               // count of non-archived liability accounts (debts)
+	"revolving_balance",        // Σ magnitudes of non-archived credit-card balances (positive)
+	"credit_limit_total",       // Σ credit limits of non-archived credit-card accounts
+	"min_payments_total",       // Σ minimum monthly payments across non-archived liabilities
+	"interest_drag_monthly",    // Σ monthly interest cost to hold every liability at its APR (AC4)
+	"idle_cash",                // liquid cash beyond this month's bills + goal set-asides (AC15)
+	"idle_cash_forgone_annual", // yearly yield left on the table on idle_cash at the benchmark (AC15)
+	"idle_cash_benchmark",      // the user-entered benchmark APR% the forgone figure uses (AC15)
+	"transactions",             // count of transactions
+	"members",                  // count of members
+	"budgets",                  // count of budgets
+	"goals",                    // count of goals
+	"tasks",                    // count of tasks
 
 	"days_left",               // whole days remaining in the active period (BG8)
 	"remaining_discretionary", // Σ money left across budgets this period (BG8; a safe-to-spend slice)
@@ -338,6 +363,14 @@ func computeAtoms(d Data) map[string]float64 {
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
 	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
+	// idle-cash figure (AC15): liquid cash beyond this month's committed bills + goal
+	// set-asides, priced at the user's benchmark yield. Same committed basis as the
+	// safe_to_spend molecule, so the two figures reconcile.
+	idle := idlecash.Evaluate(idlecash.Inputs{
+		LiquidMinor:         liquid.Amount,
+		CommittedMinor:      billsDue + goalNeeds,
+		BenchmarkAPRPercent: d.IdleBenchmarkAPRPercent,
+	})
 	// earmarked_total: Σ virtual allocations across all goals (base minor units). Money
 	// reserved-in-place for goals but NOT moved — the pool a decision layer can subtract
 	// from liquid cash to see what's genuinely unspoken-for.
@@ -375,37 +408,43 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 
 	out := map[string]float64{
-		"assets":             major(nw.Assets.Amount),
-		"liabilities":        major(nw.Liabilities.Amount),
-		"liquid_cash":        major(liquid.Amount),
-		"income":             major(income.Amount),
-		"expense":            major(expense.Amount),
-		"income_count":       float64(incCount),
-		"expense_count":      float64(expCount),
-		"bills_due":          major(billsDue),
-		"goal_needs":         major(goalNeeds),
-		"essential_monthly":  major(essentialMonthly(d, toBase)),
-		"earmarked_total":    major(earmarkedTotal),
-		"accounts":           float64(active),
-		"asset_accounts":     float64(assetAccts),
-		"liability_accounts": float64(liabAccts),
-		"debt_count":         float64(debtCount),
-		"revolving_balance":  major(revolvingBal),
-		"credit_limit_total": major(creditLimitTotal),
-		"min_payments_total": major(minPaymentsTotal),
-		"transactions":       float64(len(d.Transactions)),
-		"members":            float64(len(d.Members)),
-		"budgets":            float64(len(d.Budgets)),
-		"goals":              float64(len(d.Goals)),
-		"tasks":              float64(len(d.Tasks)),
+		"assets":                   major(nw.Assets.Amount),
+		"liabilities":              major(nw.Liabilities.Amount),
+		"liquid_cash":              major(liquid.Amount),
+		"income":                   major(income.Amount),
+		"expense":                  major(expense.Amount),
+		"income_count":             float64(incCount),
+		"expense_count":            float64(expCount),
+		"bills_due":                major(billsDue),
+		"goal_needs":               major(goalNeeds),
+		"essential_monthly":        major(essentialMonthly(d, toBase)),
+		"earmarked_total":          major(earmarkedTotal),
+		"accounts":                 float64(active),
+		"asset_accounts":           float64(assetAccts),
+		"liability_accounts":       float64(liabAccts),
+		"debt_count":               float64(debtCount),
+		"revolving_balance":        major(revolvingBal),
+		"credit_limit_total":       major(creditLimitTotal),
+		"min_payments_total":       major(minPaymentsTotal),
+		"interest_drag_monthly":    0, // accumulated per-debt in addDebtVars (AC4)
+		"idle_cash":                major(idle.IdleMinor),
+		"idle_cash_forgone_annual": major(idle.ForgoneAnnualMinor),
+		"idle_cash_benchmark":      idle.BenchmarkAPRPercent,
+		"transactions":             float64(len(d.Transactions)),
+		"members":                  float64(len(d.Members)),
+		"budgets":                  float64(len(d.Budgets)),
+		"goals":                    float64(len(d.Goals)),
+		"tasks":                    float64(len(d.Tasks)),
 	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
 	addDailyAllowanceVars(out, d, major, start, end)
 	addAccountVars(out, d, major, toBase, bals, clearedBals)
+	addAccountFlowVars(out, d, major, toBase, start, end)
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase, bals)
 	addPoolVars(out, d, major, toBase, bals)
+	addGroupVars(out, d, major, toBase, bals)
 	addEventVars(out, d, major, toBase)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
@@ -935,6 +974,101 @@ func PoolVarBases(pools []PoolDef) []PoolVarBase {
 // PoolVarSlug exposes the slugging used for per-pool variable names (for UI previews).
 func PoolVarSlug(s string) string { return budgetVarSlug(s) }
 
+// addGroupVars exposes each /accounts group as a group_<slug>_total variable: the
+// group's NET subtotal in the base currency — member assets add, member
+// liabilities subtract (by magnitude) — so a grouping like "Shared" or "Property"
+// contributes a single signed figure a formula or widget can reference by name.
+// Archived members and unknown IDs are skipped.
+func addGroupVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
+	if len(d.Groups) == 0 {
+		return
+	}
+	byID := make(map[string]domain.Account, len(d.Accounts))
+	for _, a := range d.Accounts {
+		byID[a.ID] = a
+	}
+	for _, base := range GroupVarBases(d.Groups) {
+		var total int64
+		for _, aid := range base.Group.AccountIDs {
+			a, ok := byID[aid]
+			if !ok || a.Archived {
+				continue
+			}
+			bal, ok := bals[a.ID]
+			if !ok {
+				continue
+			}
+			v := toBase(bal.Amount, bal.Currency)
+			if a.Class == domain.ClassLiability {
+				if v < 0 {
+					v = -v
+				}
+				total -= v
+			} else {
+				total += v
+			}
+		}
+		out[base.Prefix+"total"] = major(total)
+	}
+}
+
+// GroupVarFields are the per-group metric suffixes exposed on the surface.
+var GroupVarFields = []string{"total"}
+
+// GroupVarBase pairs a group with the disambiguated variable prefix its values are
+// keyed under ("group_<slug>_"). Single source of truth for per-group naming.
+type GroupVarBase struct {
+	Group  AccountGroupDef
+	Prefix string // e.g. "group_shared_"
+}
+
+// GroupVarBases returns one entry per named group, in stable order, with same-name
+// groups disambiguated by a numeric suffix. An explicit VarName wins over the name.
+func GroupVarBases(groups []AccountGroupDef) []GroupVarBase {
+	used := map[string]bool{}
+	out := make([]GroupVarBase, 0, len(groups))
+	for _, g := range groups {
+		src := g.Name
+		if g.VarName != "" {
+			src = g.VarName
+		}
+		slug := budgetVarSlug(src)
+		if slug == "" {
+			continue
+		}
+		for n := 1; ; n++ {
+			candidate := slug
+			if n > 1 {
+				candidate = slug + "_" + strconv.Itoa(n)
+			}
+			if !used[candidate] {
+				slug = candidate
+				used[candidate] = true
+				break
+			}
+		}
+		out = append(out, GroupVarBase{Group: g, Prefix: "group_" + slug + "_"})
+	}
+	return out
+}
+
+// GroupVarSlug exposes the slugging used for per-group variable names (for UI previews).
+func GroupVarSlug(s string) string { return budgetVarSlug(s) }
+
+// addAccountFlowVars exposes each account's this-period cash flow as
+// account_<slug>_in / _out variables (AC9): non-transfer money in and out over the
+// active period, FX-converted to the base currency. Transfers are excluded — a move
+// between your own accounts is not income or spending — so these answer "which
+// account is bleeding?" without a transfer masquerading as a paycheck. Slugging
+// matches AccountVarBases so the flow figures share an account's variable family.
+func addAccountFlowVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, start, end time.Time) {
+	for _, base := range AccountVarBases(d.Accounts) {
+		f := accountflow.PeriodFlow(base.Account, d.Transactions, start, end)
+		out[base.Prefix+"in"] = major(toBase(f.In.Amount, f.In.Currency))
+		out[base.Prefix+"out"] = major(toBase(f.Out.Amount, f.Out.Currency))
+	}
+}
+
 // addBudgetVars exposes each budget as its own set of named variables, so a formula or
 // dashboard widget can reference a specific budget directly — e.g. budget_groceries_remaining
 // or budget_rent_percent. Each budget contributes, keyed by a slug of its name:
@@ -1075,7 +1209,7 @@ func addAccountVars(out map[string]float64, d Data, major func(int64) float64, t
 
 // AccountVarFields are the per-account metric suffixes exposed on the surface. Shared
 // with the widget/formula catalog so the picker matches the surface.
-var AccountVarFields = []string{"balance", "cleared", "earmarked", "free", "overearmarked"}
+var AccountVarFields = []string{"balance", "cleared", "earmarked", "free", "overearmarked", "in", "out"}
 
 // AccountVarBase pairs an account with the disambiguated variable prefix its values are
 // keyed under ("account_<slug>_"). Single source of truth for per-account naming —
@@ -1157,18 +1291,26 @@ func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBa
 			}
 			utilization = balance / limit * 100
 		}
+		// Carrying cost (AC4): the monthly interest to hold this debt at its APR —
+		// balance × (APR/100) ÷ 12. A concrete dollar figure that competes with the
+		// discretionary spend it's quietly financing. Zero when APR or balance is zero.
+		carry := balance * (a.InterestRateAPR / 100) / 12
 		out[base.Prefix+"balance"] = balance
 		out[base.Prefix+"apr"] = a.InterestRateAPR
 		out[base.Prefix+"min_payment"] = major(toBase(a.MinPayment.Amount, a.MinPayment.Currency))
 		out[base.Prefix+"limit"] = limit
 		out[base.Prefix+"available"] = available
 		out[base.Prefix+"utilization"] = utilization
+		out[base.Prefix+"carry"] = carry
+		out[base.Prefix+"statement_day"] = float64(a.StatementDay)
+		out[base.Prefix+"due_day"] = float64(a.DueDayOfMonth)
+		out["interest_drag_monthly"] += carry
 	}
 }
 
 // DebtVarFields are the per-debt metric suffixes exposed on the surface. Shared with the
 // widget/formula catalog so the picker matches the surface.
-var DebtVarFields = []string{"balance", "apr", "min_payment", "limit", "available", "utilization"}
+var DebtVarFields = []string{"balance", "apr", "min_payment", "limit", "available", "utilization", "carry", "statement_day", "due_day"}
 
 // DebtVarBase pairs a liability account with the disambiguated variable prefix its values
 // are keyed under ("debt_<slug>_"). Single source of truth for per-debt variable naming —
@@ -1248,28 +1390,32 @@ type Derivation struct {
 
 // atomSources documents each atom's fundamental reduction (for the audit).
 var atomSources = map[string]string{
-	"assets":             "Σ FX-converted balances of non-archived asset accounts",
-	"liabilities":        "Σ magnitudes of non-archived liability-account balances",
-	"liquid_cash":        "Σ balances of non-archived cash-type accounts",
-	"income":             "Σ positive non-transfer transactions in the period",
-	"expense":            "Σ |negative non-transfer transactions| in the period",
-	"income_count":       "count of income transactions in the period",
-	"expense_count":      "count of expense transactions in the period",
-	"bills_due":          "Σ bills due before this calendar month-end",
-	"goal_needs":         "Σ prorated monthly goal contributions",
-	"earmarked_total":    "Σ virtual goal earmarks (reserved-in-place, uncommitted)",
-	"accounts":           "count of non-archived accounts",
-	"asset_accounts":     "count of non-archived asset-class accounts",
-	"liability_accounts": "count of non-archived liability-class accounts",
-	"debt_count":         "count of non-archived liability accounts",
-	"revolving_balance":  "Σ magnitudes of non-archived credit-card balances",
-	"credit_limit_total": "Σ credit limits of non-archived credit-card accounts",
-	"min_payments_total": "Σ minimum monthly payments across non-archived liabilities",
-	"transactions":       "count of transactions",
-	"members":            "count of members",
-	"budgets":            "count of budgets",
-	"goals":              "count of goals",
-	"tasks":              "count of tasks",
+	"assets":                   "Σ FX-converted balances of non-archived asset accounts",
+	"liabilities":              "Σ magnitudes of non-archived liability-account balances",
+	"liquid_cash":              "Σ balances of non-archived cash-type accounts",
+	"income":                   "Σ positive non-transfer transactions in the period",
+	"expense":                  "Σ |negative non-transfer transactions| in the period",
+	"income_count":             "count of income transactions in the period",
+	"expense_count":            "count of expense transactions in the period",
+	"bills_due":                "Σ bills due before this calendar month-end",
+	"goal_needs":               "Σ prorated monthly goal contributions",
+	"earmarked_total":          "Σ virtual goal earmarks (reserved-in-place, uncommitted)",
+	"accounts":                 "count of non-archived accounts",
+	"asset_accounts":           "count of non-archived asset-class accounts",
+	"liability_accounts":       "count of non-archived liability-class accounts",
+	"debt_count":               "count of non-archived liability accounts",
+	"revolving_balance":        "Σ magnitudes of non-archived credit-card balances",
+	"credit_limit_total":       "Σ credit limits of non-archived credit-card accounts",
+	"min_payments_total":       "Σ minimum monthly payments across non-archived liabilities",
+	"interest_drag_monthly":    "Σ per-debt monthly interest cost (balance × APR/100 ÷ 12)",
+	"idle_cash":                "liquid cash beyond this month's bills + goal set-asides",
+	"idle_cash_forgone_annual": "idle_cash × the user's benchmark APR (yearly forgone yield)",
+	"idle_cash_benchmark":      "the user-entered benchmark yield the forgone figure uses",
+	"transactions":             "count of transactions",
+	"members":                  "count of members",
+	"budgets":                  "count of budgets",
+	"goals":                    "count of goals",
+	"tasks":                    "count of tasks",
 
 	"days_left":               "whole days remaining in the active period",
 	"remaining_discretionary": "Σ money left across budgets this period (limit − spent, floored at 0)",

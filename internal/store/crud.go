@@ -624,6 +624,30 @@ func (s *SQLiteStore) ListSubscriptionIgnores() ([]domain.SubscriptionIgnore, er
 	return loadRows[domain.SubscriptionIgnore](s.db, "subignores")
 }
 
+// --- Institutions (AC10 institution directory) ---
+
+// PutInstitution upserts an institution directory entry by its ID.
+func (s *SQLiteStore) PutInstitution(in domain.Institution) error {
+	return putJSON(s.db, "institutions", in.ID, in)
+}
+
+// GetInstitution retrieves an institution by its ID.
+func (s *SQLiteStore) GetInstitution(id string) (domain.Institution, bool, error) {
+	return getJSON[domain.Institution](s.db, "institutions", id)
+}
+
+// DeleteInstitution removes an institution by its ID. Callers are responsible for
+// reassign-on-delete (clearing InstitutionID on referring accounts) via
+// domain.ReassignAccountsOnInstitutionDelete before/after this call.
+func (s *SQLiteStore) DeleteInstitution(id string) (bool, error) {
+	return deleteRow(s.db, "institutions", id)
+}
+
+// ListInstitutions returns every persisted institution directory entry.
+func (s *SQLiteStore) ListInstitutions() ([]domain.Institution, error) {
+	return loadRows[domain.Institution](s.db, "institutions")
+}
+
 // --- Shared expenses + settlements (the roommate "settle up" ledger) ---
 
 func (s *SQLiteStore) PutSharedExpense(e domain.SharedExpense) error {

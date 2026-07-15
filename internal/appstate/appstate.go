@@ -36,6 +36,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/revalue"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
@@ -593,14 +594,18 @@ func (a *App) CustomFieldDefsFor(entityType string) []customfields.Def {
 	return v
 }
 
-// FreshnessWindows returns the staleness windows with the household's per-type
-// overrides (from Settings) layered over the built-in defaults.
+// FreshnessWindows returns the staleness windows with the revaluation cadences
+// for manual-asset types (AC5) and then the household's per-type overrides (from
+// Settings) layered over the built-in defaults. Property/vehicle/crypto get their
+// revaluation cadence (quarterly / semi-annual / weekly) instead of sharing a cash
+// account's clock; a per-account override (Account.RevalueDays) is applied by
+// freshness.EffectiveWindowDays at the point of use and wins over all of these.
 func (a *App) FreshnessWindows() freshness.Windows {
 	overrides := freshness.Windows{}
 	for k, v := range a.Settings().FreshnessOverrides {
 		overrides[domain.AccountType(k)] = v
 	}
-	return freshness.DefaultWindows().Merge(overrides)
+	return freshness.DefaultWindows().Merge(revalue.DefaultCadences()).Merge(overrides)
 }
 
 // Settings returns the stored settings.

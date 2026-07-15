@@ -95,6 +95,8 @@ type settingsRightProps struct {
 	OnWeekStart      func(string)
 	OnPayCycleAnchor func(string) // sets PayCycleAnchor ("YYYY-MM-DD" or "")
 	OnMonthlyIncome  func(string) // sets MonthlyIncomeMinor from a major-unit string (empty = 0)
+	// OnIdleCashBenchmarkAPR: AC15's idle-cash benchmark rate (percent, e.g. "4.5").
+	OnIdleCashBenchmarkAPR uic.Handler // UseEvent
 	// AI
 	AiOn           bool
 	OnAiToggle     func(bool)
@@ -148,6 +150,7 @@ type settingsRightProps struct {
 	OnResetSample   func() // one-step wipe + reseed (the demo reset)
 	OnWipe          func()
 	OnBackupCadence uic.Handler // UseEvent
+	OnExportPack    func()      // AC16: generate + download the estate emergency pack
 	// Advanced
 	LangOptions   []uic.Node
 	LangCount     int         // number of installed languages; the picker hides at <2
@@ -258,7 +261,24 @@ func settingsPreferencesPane(p settingsRightProps) uic.Node {
 			OnChange:   p.OnMonthlyIncome,
 		}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.monthlyIncomeHint")),
+		// AC15: the idle-cash benchmark rate — a stated assumption (never a live feed)
+		// that the /accounts idle-cash line and the idle_cash_forgone_annual formula
+		// variable compare against. Blank/zero hides the figure entirely.
+		H4(css.Class("set-label"), uistate.T("settings.idleCashBenchmarkLabel")),
+		Input(css.Class("set-input", tw.Mt045), Type("number"), Attr("min", "0"), Attr("step", "0.1"),
+			Attr("data-testid", "idle-cash-benchmark"), Attr("aria-label", uistate.T("settings.idleCashBenchmarkLabel")),
+			Value(idleCashBenchmarkDisplay(p.Pr.IdleCashBenchmarkAPR)), OnInput(p.OnIdleCashBenchmarkAPR)),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.idleCashBenchmarkHint")),
 	)
+}
+
+// idleCashBenchmarkDisplay renders the idle-cash benchmark APR for the number input,
+// blank when unset (0) so the field shows its placeholder rather than a bare "0".
+func idleCashBenchmarkDisplay(apr float64) string {
+	if apr <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(apr, 'f', -1, 64)
 }
 
 // settingsAIPane renders the AI tab: the BYOK key, model choice, and the web
@@ -440,6 +460,16 @@ func settingsDataPane(p settingsRightProps) uic.Node {
 			Option(Value("weekly"), SelectedIf(loadBackupCadence() == backup.Weekly), uistate.T("settings.cadenceWeekly")),
 			Option(Value("off"), SelectedIf(loadBackupCadence() == backup.Off), uistate.T("settings.cadenceOff")),
 		),
+
+		ui.Divider(),
+		// AC16: the estate emergency pack — a plain-language document, generated on
+		// this device, for a spouse or executor who needs to step in. Framed with care
+		// and an explicit no-passwords guarantee before the action, and confirmed
+		// (p.OnExportPack) before anything is generated.
+		H4(css.Class("set-label"), uistate.T("settings.emergencyPackTitle")),
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.emergencyPackHint")),
+		Button(css.Class("btn", tw.Mt045), Type("button"), Attr("data-testid", "export-emergency-pack"),
+			OnClick(p.OnExportPack), uistate.T("settings.emergencyPackBtn")),
 
 		ui.Divider(),
 		H4(css.Class("set-label"), uistate.T("ws.section")),

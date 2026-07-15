@@ -30,6 +30,7 @@ const (
 	GroupGoals     Group = "Goals"
 	GroupDebt      Group = "Debts"
 	GroupPools     Group = "Pools"
+	GroupGroups    Group = "Account groups"
 	GroupAllocate  Group = "Allocate"
 	GroupPlanning  Group = "Planning"
 	GroupRecurring Group = "Recurring"
@@ -138,12 +139,15 @@ func AllocMetrics() []Metric {
 
 // debtFieldMeta labels + documents each per-debt metric suffix for the picker.
 var debtFieldMeta = map[string]struct{ Label, Doc string }{
-	"balance":     {"owed", "The amount currently owed on this debt (base currency)."},
-	"apr":         {"APR %", "The debt's annual interest rate, as entered."},
-	"min_payment": {"min payment", "The required minimum monthly payment."},
-	"limit":       {"credit limit", "The credit limit (0 for installment loans)."},
-	"available":   {"available", "Remaining credit = limit minus owed (0 when no limit)."},
-	"utilization": {"utilization %", "Owed as a percent of the credit limit (0 when no limit)."},
+	"balance":       {"owed", "The amount currently owed on this debt (base currency)."},
+	"apr":           {"APR %", "The debt's annual interest rate, as entered."},
+	"min_payment":   {"min payment", "The required minimum monthly payment."},
+	"limit":         {"credit limit", "The credit limit (0 for installment loans)."},
+	"available":     {"available", "Remaining credit = limit minus owed (0 when no limit)."},
+	"utilization":   {"utilization %", "Owed as a percent of the credit limit (0 when no limit)."},
+	"carry":         {"carrying cost / mo", "Monthly interest to hold this debt: owed × APR/100 ÷ 12."},
+	"statement_day": {"statement day", "Day of the month the statement closes (0 when unknown)."},
+	"due_day":       {"due day", "Day of the month the payment is due (0 when unknown)."},
 }
 
 // goalFieldMeta labels + documents each per-goal metric suffix for the picker.
@@ -163,6 +167,8 @@ var goalFieldMeta = map[string]struct{ Label, Doc string }{
 var accountFieldMeta = map[string]struct{ Label, Doc string }{
 	"balance": {"balance", "This account's current balance (base currency)."},
 	"cleared": {"cleared", "Balance counting only cleared transactions."},
+	"in":      {"money in", "Non-transfer money into this account this period (base currency)."},
+	"out":     {"money out", "Non-transfer money out of this account this period (base currency)."},
 }
 
 // budgetFieldMeta labels + documents each per-budget metric suffix for the picker.
@@ -355,6 +361,25 @@ func PoolMetrics(pools []engineenv.PoolDef) []Metric {
 				Label: base.Pool.Name + " — value",
 				Doc:   "Combined current value of the accounts in this pool.",
 				Group: GroupPools,
+			})
+		}
+	}
+	return out
+}
+
+// GroupMetrics returns the per-group net-subtotal metric (group_<slug>_total) so a
+// user-defined /accounts grouping (AC1) can be referenced by name in a formula or
+// dashboard widget. Built from engineenv's naming so labels match the surface.
+func GroupMetrics(groups []engineenv.AccountGroupDef) []Metric {
+	bases := engineenv.GroupVarBases(groups)
+	out := make([]Metric, 0, len(bases)*len(engineenv.GroupVarFields))
+	for _, base := range bases {
+		for _, field := range engineenv.GroupVarFields {
+			out = append(out, Metric{
+				Name:  base.Prefix + field,
+				Label: base.Group.Name + " — net total",
+				Doc:   "Net subtotal of the accounts in this group (assets minus liabilities, base currency).",
+				Group: GroupGroups,
 			})
 		}
 	}

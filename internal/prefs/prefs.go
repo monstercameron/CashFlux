@@ -153,6 +153,13 @@ type Prefs struct {
 	// budget to assign next month. Off by default.
 	BudgetRolloverLeftover bool `json:"budgetRolloverLeftover,omitempty"`
 
+	// IdleCashBenchmarkAPR is the user-entered annual yield (percent, e.g. 4.5) the
+	// idle-cash figure (AC15) compares against — what a high-yield savings account or
+	// money-market fund would pay. It is a stated assumption, never a live feed: the
+	// idle-cash copy names the rate. Zero (the default) disables the forgone-yield
+	// figure. Omitted from JSON when zero so existing prefs round-trip unchanged.
+	IdleCashBenchmarkAPR float64 `json:"idleCashBenchmarkApr,omitempty"`
+
 	// SweepEnabled turns on the monthly surplus-sweep job. When false (the
 	// default), RunDueSweeps is a no-op even if the other sweep fields are set.
 	SweepEnabled bool `json:"sweepEnabled,omitempty"`

@@ -40,7 +40,11 @@ var liveEngineVarsCache = map[string]map[string]float64{}
 // the whole ledger is expensive and several tiles request it per render.
 func liveEngineVars(app *appstate.App) map[string]float64 {
 	mk := time.Now()
-	key := revKey(app) + "|" + strconv.Itoa(mk.Year()*100+int(mk.Month()))
+	// The AC15 idle-cash benchmark is a prefs value (localStorage), not part of the
+	// dataset — it doesn't bump app.Rev() — so it rides along in the key too;
+	// otherwise setting a benchmark rate in Settings would show a stale (cached)
+	// idle_cash_forgone_annual until an unrelated data edit evicted the entry.
+	key := revKey(app) + "|" + strconv.Itoa(mk.Year()*100+int(mk.Month())) + "|" + strconv.FormatFloat(uistate.LoadPrefs().IdleCashBenchmarkAPR, 'f', -1, 64)
 	return memoByRev(liveEngineVarsCache, key, func() map[string]float64 { return liveEngineVarsRaw(app) })
 }
 
@@ -55,6 +59,7 @@ func allFormulaMetrics(app *appstate.App) []widgetcatalog.Metric {
 	metrics = append(metrics, widgetcatalog.GoalMetrics(app.Goals())...)
 	metrics = append(metrics, widgetcatalog.DebtMetrics(app.Accounts())...)
 	metrics = append(metrics, widgetcatalog.PoolMetrics(livePoolDefs())...)
+	metrics = append(metrics, widgetcatalog.GroupMetrics(liveGroupDefs(app))...)
 	metrics = append(metrics, widgetcatalog.EventMetrics(liveEventDefs(app))...)
 	metrics = append(metrics, widgetcatalog.AllocMetrics()...)
 	metrics = append(metrics, widgetcatalog.PlanningMetrics(app.Plans())...)
@@ -83,9 +88,13 @@ func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 		Categories: app.Categories(), WeekStart: uistate.LoadPrefs().WeekStartWeekday(),
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
-		Alloc: liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
+		Groups: liveGroupDefs(app),
+		Alloc:  liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
 		BillsSmart: liveBillsSmartData(app), Smart: liveSmartCounts(),
 		Events: liveEventDefs(app),
+		// AC15: the user-entered idle-cash benchmark rate (a Settings preference, not
+		// a live feed). Zero disables idle_cash_forgone_annual — nothing to compare to.
+		IdleBenchmarkAPRPercent: uistate.LoadPrefs().IdleCashBenchmarkAPR,
 	})
 }
 
@@ -170,6 +179,18 @@ func livePoolDefs() []engineenv.PoolDef {
 	out := make([]engineenv.PoolDef, 0, len(pools))
 	for _, p := range pools {
 		out = append(out, engineenv.PoolDef{Name: p.Name, AccountIDs: p.AccountIDs})
+	}
+	return out
+}
+
+// liveGroupDefs converts the persisted /accounts groups (AC1) into engine
+// AccountGroupDefs, so each group exposes a group_<slug>_total variable across the
+// formula/widget surface.
+func liveGroupDefs(app *appstate.App) []engineenv.AccountGroupDef {
+	groups := app.AccountGroups()
+	out := make([]engineenv.AccountGroupDef, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, engineenv.AccountGroupDef{Name: g.Name, VarName: g.VarName, AccountIDs: g.AccountIDs})
 	}
 	return out
 }

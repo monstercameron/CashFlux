@@ -124,8 +124,18 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	aprS := ui.UseState(floatOrEmpty(a.InterestRateAPR))
 	minpS := ui.UseState(moneyMajorOrEmpty(a.MinPayment, dec))
 	dueS := ui.UseState(intOrEmpty(a.DueDayOfMonth))
+	stmtDayS := ui.UseState(intOrEmpty(a.StatementDay))
+	exclNWS := ui.UseState(a.ExcludeFromNetWorth)
 	lenderS := ui.UseState(a.Lender)
 	institutionS := ui.UseState(instInit)
+	// AC10: the structured institution-directory picker, separate from the legacy
+	// free-text Institution/Lender field above (which stays as a fallback label).
+	instIDS := ui.UseState(a.InstitutionID)
+	// AC16: a beneficiary / transfer-on-death note, surfaced (never a password) in
+	// the estate emergency pack.
+	beneficiaryNoteS := ui.UseState(a.BeneficiaryNote)
+	// AC5: the per-account revaluation-cadence override (0 = the type default).
+	revalueDaysS := ui.UseState(intOrEmpty(a.RevalueDays))
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
 	apyS := ui.UseState(floatOrEmpty(a.APY))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
@@ -148,8 +158,13 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onApr := ui.UseEvent(func(v string) { aprS.Set(v) })
 	onMinp := ui.UseEvent(func(v string) { minpS.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
+	onStmtDay := ui.UseEvent(func(v string) { stmtDayS.Set(v) })
+	onToggleExclNW := ui.UseEvent(func() { exclNWS.Set(!exclNWS.Get()) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
 	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
+	onInstID := func(v string) { instIDS.Set(v) }
+	onBeneficiaryNote := ui.UseEvent(func(v string) { beneficiaryNoteS.Set(v) })
+	onRevalueDays := ui.UseEvent(func(v string) { revalueDaysS.Set(v) })
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
 	onApy := ui.UseEvent(func(v string) { apyS.Set(v) })
 	onLiq := ui.UseEvent(func(v string) { liqS.Set(v) })
@@ -170,6 +185,11 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	// ---- save / cancel handlers (own the modal's commit actions) ----
 	cancel := ui.UseEvent(Prevent(func() { done() }))
+	// AC10: "Manage institutions" jumps from the edit form straight to the
+	// institution-directory modal. Declared unconditionally here (not inside
+	// editForm) so the hook count stays stable across every switch branch below.
+	institutionsMgrAtom := uistate.UseInstitutionsManager()
+	openInstitutionsFromEditor := ui.UseEvent(Prevent(func() { institutionsMgrAtom.Set(true) }))
 	doTransfer := ui.UseEvent(Prevent(func() {
 		if xferFromS.Get() == xferToS.Get() || xferToS.Get() == "" {
 			return
@@ -217,6 +237,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			cp.InterestRateAPR = textutil.ParseFloat(aprS.Get())
 			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
 			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
+			cp.StatementDay = textutil.ParseInt(stmtDayS.Get())
 			cp.Lender = strings.TrimSpace(lenderS.Get())
 			cp.ExpectedReturnAPR = 0
 			cp.APY = 0
@@ -239,10 +260,18 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			cp.InterestRateAPR = 0
 			cp.MinPayment = money.Money{}
 			cp.DueDayOfMonth = 0
+			cp.StatementDay = 0
 			cp.Lender = ""
 		}
+		// AC11: exclude-from-net-worth applies to any account class.
+		cp.ExcludeFromNetWorth = exclNWS.Get()
 		cp.Institution = titleCaseWords(strings.TrimSpace(institutionS.Get()))
+		cp.InstitutionID = instIDS.Get()
 		cp.Notes = strings.TrimSpace(notesS.Get())
+		// AC16: beneficiary / transfer-on-death note — plain text, never a password.
+		cp.BeneficiaryNote = strings.TrimSpace(beneficiaryNoteS.Get())
+		// AC5: revaluation-cadence override (0 = the account type's default cadence).
+		cp.RevalueDays = textutil.ParseInt(revalueDaysS.Get())
 		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
 			cp.Custom = customValuesToMap(defs, customEditVals.Get())
 		}
@@ -278,7 +307,13 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			setBalAmtS, setBalCatS,
 			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals,
 			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock,
-			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt, onCustomEdit, saveEdit, cancel, focusValue)
+			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt, onCustomEdit, saveEdit, cancel, focusValue,
+			acctEditExtra{
+				stmtDayS: stmtDayS, exclNWS: exclNWS, onStmtDay: onStmtDay, onToggleExclNW: onToggleExclNW,
+				instIDS: instIDS, onInstID: onInstID, openInstitutions: openInstitutionsFromEditor,
+				beneficiaryNoteS: beneficiaryNoteS, onBeneficiaryNote: onBeneficiaryNote,
+				revalueDaysS: revalueDaysS, onRevalueDays: onRevalueDays,
+			})
 	}
 }
 
@@ -439,12 +474,32 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 
 // editForm is the full inline-edit editor (name, owner, balances, type-specific
 // attributes, institution, and custom fields).
+// acctEditExtra carries the account-editor fields added after the original
+// positional signature (AC3 statement day, AC11 exclude-from-net-worth), bundled
+// into one struct so the editForm signature stays additive.
+type acctEditExtra struct {
+	stmtDayS       ui.State[string]
+	exclNWS        ui.State[bool]
+	onStmtDay      ui.Handler
+	onToggleExclNW ui.Handler
+	// instIDS/onInstID: AC10's structured institution-directory picker.
+	instIDS          ui.State[string]
+	onInstID         func(string)
+	openInstitutions ui.Handler
+	// beneficiaryNoteS/onBeneficiaryNote: AC16's beneficiary / TOD note.
+	beneficiaryNoteS  ui.State[string]
+	onBeneficiaryNote ui.Handler
+	// revalueDaysS/onRevalueDays: AC5's per-account revaluation-cadence override.
+	revalueDaysS  ui.State[string]
+	onRevalueDays ui.Handler
+}
+
 func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
 	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS ui.State[string],
 	setBalAmtS, setBalCatS ui.State[string],
 	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
 	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt ui.Handler,
-	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler, focusValue bool) ui.Node {
+	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler, focusValue bool, x acctEditExtra) ui.Node {
 	// The type is editable; the shown attribute fields follow the SELECTED type's
 	// class (not the account's stored class), so switching e.g. a line of credit to a
 	// credit card, or a liability to an asset, reveals the right fields live.
@@ -530,16 +585,44 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp)))),
 			If(isLiab, labeledField(uistate.T("accounts.dueDay"),
 				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
+			// AC3: statement-close day — the day the billing cycle closes, distinct from the
+			// payment due day above. Powers real due dates in the bill calendar and a tighter
+			// on-time payment window.
+			If(isLiab, labeledField(uistate.T("accountsstmt.statementDay"),
+				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), Value(x.stmtDayS.Get()), OnInput(x.onStmtDay)))),
 			If(isLiab, labeledField(uistate.T("accounts.lender"),
 				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
 			labeledField(uistate.T("accounts.institution"),
 				uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
 					AriaLabel: uistate.T("accounts.institution"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID})),
+			// AC10: the structured institution directory — separate from the free-text
+			// field above — colors this account's row and grounds the ★★
+			// Multi-Institution Analytics feature with a real entity. "Manage
+			// institutions" opens the shell-root directory modal to add a new one.
+			labeledField(uistate.T("accounts.institutionDirectoryLabel"),
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+					uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: x.instIDS.Get(),
+						OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institutionDirectoryLabel"), TestID: "acct-edit-institution-select"}),
+					Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-edit-manage-institutions"),
+						OnClick(x.openInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
 			// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
 			// go in the encrypted credential vault, never here.
 			labeledField(uistate.T("accounts.notes"),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
 					AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
+			// AC16: who inherits this account — a plain beneficiary / transfer-on-death
+			// note surfaced (compassionately, never with a password) in the estate
+			// emergency pack.
+			labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
+				uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
+					AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
+			// AC11: keep this account visible in its class views but out of net worth.
+			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
+				Div(css.Class("row-main"),
+					Span(uistate.T("accountsstmt.excludeNetWorth")),
+					Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
 			If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
 				IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced"))))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
@@ -552,6 +635,14 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
+			// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
+			// crypto, or an "Other" you're treating as one) — 0/blank keeps the type's
+			// default cadence (internal/revalue). The freshness machinery already reads
+			// Account.RevalueDays; this is only the missing input.
+			If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
+				Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
+					Placeholder(uistate.T("accounts.revalueDaysPh")), Value(x.revalueDaysS.Get()), OnInput(x.onRevalueDays)))),
+			If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
 			If(len(accDefs) > 0, Fragment(
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
 				MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {

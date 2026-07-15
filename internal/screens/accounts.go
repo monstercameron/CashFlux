@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/revalue"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -137,6 +138,14 @@ func accountTypeIcon(t domain.AccountType) icon.Name {
 	default:
 		return icon.Accounts
 	}
+}
+
+// isRevaluableType reports whether an account type is periodically ESTIMATED rather
+// than reconciled (AC5): property, vehicle, crypto (internal/revalue's cadence-driven
+// types) plus "Other", which a household may also be using for a manually-valued
+// asset. Gates the RevalueDays override field on the edit form's advanced section.
+func isRevaluableType(t domain.AccountType) bool {
+	return revalue.IsRevaluable(t) || t == domain.TypeOther
 }
 
 // accountMeta builds an account row's subtitle: type · currency, plus credit

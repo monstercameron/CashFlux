@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/docexpiry"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -44,6 +45,18 @@ func Accounts() ui.Node {
 	// edit/delete/transfer, a filter change, or opening the transfer sub-view all
 	// flow through these atoms.
 	_ = uistate.UseDataRevision().Get()
+
+	// AC17: on entering /accounts, reconcile the document-expiry reminder tasks
+	// against the current document set — creates any newly-due renewal nudge and
+	// auto-resolves any whose document has since been renewed. Runs on mount only
+	// (per-mutation reconciles also happen from accounts_docs.go on attach/remove).
+	ui.UseEffect(func() func() {
+		if created, resolved, err := app.ReconcileDocExpiryTasks(time.Now(), docexpiry.DefaultLeadDays); err == nil && (created > 0 || resolved > 0) {
+			uistate.BumpDataRevision()
+		}
+		return nil
+	})
+
 	filterAtom := uistate.UseAccountsFilter()
 	formulasAtom := uistate.UseAcctShowFormulas()
 	f := filterAtom.Get()
@@ -84,18 +97,23 @@ func Accounts() ui.Node {
 
 	// Render each spec through the engine's per-widget error boundary, keyed on the
 	// spec id so inserting the transfer/archived tiles never shifts another tile's
-	// identity (its hooks stay aligned across renders).
-	return Div(css.Class("bento bento-accounts"),
-		MapKeyed(specs,
-			func(sp domain.WidgetSpec) any { return sp.ID },
-			func(sp domain.WidgetSpec) ui.Node {
-				c := rctx
-				c.Spec = sp
-				if node, ok := safeRenderSpec(sp, c); ok {
-					return node
-				}
-				return Fragment()
-			},
+	// identity (its hooks stay aligned across renders). AC7 sweep-proposal cards
+	// sit above the bento (like the GL1 waterfall card on /goals) — a quiet
+	// preview-approve moment, present only when a sweep rule is due.
+	return Div(
+		ui.CreateElement(accountsSweepCards),
+		Div(css.Class("bento bento-accounts"),
+			MapKeyed(specs,
+				func(sp domain.WidgetSpec) any { return sp.ID },
+				func(sp domain.WidgetSpec) ui.Node {
+					c := rctx
+					c.Spec = sp
+					if node, ok := safeRenderSpec(sp, c); ok {
+						return node
+					}
+					return Fragment()
+				},
+			),
 		),
 	)
 }

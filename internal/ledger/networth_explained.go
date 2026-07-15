@@ -22,6 +22,11 @@ type NetWorthResult struct {
 	Liabilities       money.Money
 	MissingCurrencies []string // sorted, unique currency codes with no rate
 	ExcludedAccounts  []string // names of accounts excluded for a missing rate
+	// ExcludedByChoice holds the names of accounts the household deliberately
+	// flagged out of net worth (Account.ExcludeFromNetWorth, AC11), in account
+	// order. The net-worth surface discloses the count so the figure is never
+	// silently reduced — the same contract as ExcludedAccounts above.
+	ExcludedByChoice []string
 }
 
 // NetWorthExplained is like NetWorth but never fails on a missing exchange rate:
@@ -44,6 +49,12 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 	missing := map[string]bool{}
 	for _, a := range accounts {
 		if a.Archived {
+			continue
+		}
+		// AC11: accounts the household flagged out of net worth are omitted from
+		// the totals and disclosed by name, never silently dropped.
+		if a.ExcludeFromNetWorth {
+			res.ExcludedByChoice = append(res.ExcludedByChoice, a.Name)
 			continue
 		}
 		bal, err := balanceOf(a)

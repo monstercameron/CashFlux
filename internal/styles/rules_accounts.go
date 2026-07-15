@@ -76,4 +76,47 @@ func registerAccountsSurface() {
 		prop("-webkit-line-clamp", "unset"),
 		prop("overflow", "visible"),
 	)
+
+	// --- AC1: account groups (sections + subtotal header) ---
+	rule(".acct-group",
+		prop("margin-bottom", "0.6rem"),
+	)
+	// A quiet section header above each group's rows: name on the left, net subtotal on
+	// the right, with a subtle rule underneath so the grouping reads without shouting.
+	rule(".acct-group-header",
+		prop("padding", "0.35rem 0.15rem 0.3rem"),
+		prop("margin-top", "0.2rem"),
+		prop("border-bottom", "1px solid var(--border)"),
+		prop("font-size", "0.85rem"),
+	)
+	rule(".acct-group-name",
+		prop("color", "var(--text)"),
+	)
+	rule(".acct-group-subtotal",
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+
+	// --- AC2: balance sparkline ---
+	// A compact trend line under the account meta; muted so it supports, not competes.
+	rule(".acct-spark",
+		prop("display", "block"),
+		prop("width", "120px"),
+		prop("height", "24px"),
+		prop("margin-top", "0.3rem"),
+		prop("opacity", "0.85"),
+		prop("overflow", "visible"),
+	)
+
+	// --- AC9: in / out / net flow figures ---
+	rule(".acct-flow",
+		prop("display", "inline-flex"),
+		prop("align-items", "baseline"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.15rem"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("margin-top", "0.2rem"),
+	)
+	rule(".acct-flow-net",
+		prop("font-weight", "500"),
+	)
 }

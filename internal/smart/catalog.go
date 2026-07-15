@@ -67,6 +67,7 @@ var catalog = []Feature{
 	ai("SMART-A5", PageAccounts, "Natural-language account Q&A", "Ask questions about your accounts in plain English.", false, tokLanguageIn, tokLanguageOut),
 	rule("SMART-A7", PageAccounts, "Recurring-charge detection", "Group recurring debits per account and flag price increases or new ones."),
 	rule("SMART-A8", PageAccounts, "Low-balance / overdraft forecast", "Project each account forward and warn before it dips below zero."),
+	rule("SMART-A9", PageAccounts, "Fee-bleed on a dormant account", "Catch a recurring fee draining an otherwise-inactive account, and offer to close it."),
 	ai("SMART-A10", PageAccounts, "Account health score", "A 0–100 health score per account, explained in plain language.", true, tokClassifyIn, tokClassifyOut),
 	ai("SMART-A11", PageAccounts, "AI credit-health analysis", "A personalized read of your credit-health estimate — the biggest demerits and the highest-impact fix.", true, tokLanguageIn, tokLanguageOut),
 

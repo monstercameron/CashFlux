@@ -1,3 +1,43 @@
+## 2026-07-15 — AC metadata batch: AC3/AC4/AC11/AC15 (Agent B)
+
+Four account-metadata tickets, built bottom-up. AC3 was the keystone: rather than duplicate the
+already-wired `DueDayOfMonth` (which IS the payment due day feeding credit-health), I added only
+the genuinely-missing `StatementDay` (statement-close day) and documented the reuse decision in the
+field comment. Consumers get real billing-cycle dates via new `debt_<slug>_statement_day`/`_due_day`
+engine vars; credit-health's on-time proxy was already fed by the due day.
+
+AC4 and AC15 are mirror images ("price of money"): AC4's carrying cost (`interest_drag_monthly` +
+per-debt `debt_<slug>_carry`, plus a per-debt-row "costs ~$43/mo to hold" line) prices debt; AC15's
+`internal/idlecash` (pure + table-tested) prices idle cash at a user-entered benchmark, surfaced as
+`idle_cash`/`idle_cash_forgone_annual` atoms. AC11 (exclude-from-net-worth) landed in the shared
+`netWorthAccumulate` core so every atom (`net_worth`/`assets`/`liabilities`) drops the account at
+once, with the required disclosure ("Excludes N accounts you chose to leave out") added to both
+net-worth tiles alongside the existing missing-FX notice.
+
+Concurrency: the tree was live — `engineenv` briefly didn't build (siblings' `addAccountFlowVars`/
+`addGroupVars` not yet defined) and `accounts_tiles.go` referenced not-yet-defined `Sparkline`/`Flow`
+row props (AC2/AC9 WIP). My edits were additive; native packages (domain/validate/ledger/engineenv/
+idlecash/prefs/i18n/widgetcatalog) all build + test green. Remaining: AC15's benchmark-rate Settings
+input and threading `prefs.IdleCashBenchmarkAPR` into the per-page Data builders (TODO(AC15-wire)).
+
+## 2026-07-14/15 — AC series + v1.0.31: accounts ship (17 tickets, and the section that hit the parallel-agent ceiling)
+
+Biggest section, and the one that exposed the limit of 4 agents on ONE shared surface. Unlike
+budgets (where budgets.go/row/tiles absorbed additive edits cleanly), the /accounts surface got
+so contended that all four agents deferred meaningful UI to TODO(AC-wire) — they could land and
+test the LOGIC + appstate APIs, but couldn't safely all edit accounts_tiles/row/edit_form at
+once. So the logic came in complete and tested, and the UI came in partial. The fix was the
+coordinator pattern working as designed: spawn ONE Sonnet medium-effort agent AFTER the parallel
+wave settled (uncontended now) to build the deferred surfaces over the tested APIs — it closed 6
+of 7 (institutions manager+coloring, documents drawer, emergency pack, idle-cash setting, revalue
+field) and even caught a memo-cache staleness bug (liveEngineVars key missing the benchmark
+pref). I closed the last one (AC7 sweep config modal + proposal card) myself, mirroring GL1's
+waterfall card. Lesson for AG (the last section): a 20-ticket section on the assistant surface
+will contend even worse, so I'll wave it more narrowly (fewer agents per shared file) and lean on
+the Sonnet-closer pattern from the start. Nice reuse wins the agents found: AC3 discovered
+DueDayOfMonth already existed (added only StatementDay), AC6 found BalanceSnapshot is already
+auto-created on reconcile (reused as the anchor — zero new persistence). Section 5 of 6 done.
+
 ## 2026-07-14 — GL series + v1.0.30: goals ship (7 tickets, 3 agents)
 
 Section 4, smallest section, cleanest integration. The interesting coordination: three agents

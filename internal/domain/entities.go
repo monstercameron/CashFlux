@@ -91,10 +91,29 @@ type Account struct {
 	// Institution is the name of the financial institution that holds this account
 	// (e.g. "Chase", "Wells Fargo", "Fidelity"). Optional; omitted from JSON when
 	// empty so existing stored rows round-trip to "" with no migration needed.
-	Institution    string      `json:"institution,omitempty"`
-	Currency       string      `json:"currency"`
-	OpeningBalance money.Money `json:"openingBalance"`
-	BalanceAsOf    time.Time   `json:"balanceAsOf"`
+	Institution string `json:"institution,omitempty"`
+	// InstitutionID references a domain.Institution entity (AC10) — the structured
+	// institution directory that grounds Multi-Institution Analytics with a real
+	// entity instead of the free-text Institution string. Optional; empty means the
+	// account belongs to no directory institution. When an institution is deleted,
+	// reassign-on-delete clears this back to "" (accounts fall back to no-institution).
+	// Additive: existing rows round-trip to "" with no migration.
+	InstitutionID string `json:"institutionId,omitempty"`
+	// DocRefs are the documents attached to this account (AC8): statements, contracts,
+	// titles, payoff letters — each a reference to a stored domain.Artifact plus dated
+	// filing metadata and an optional renewal/expiry date (AC17). The blob GC retains
+	// any artifact referenced here (see internal/artifactref). Additive; empty for
+	// existing rows.
+	DocRefs []AccountDocRef `json:"docRefs,omitempty"`
+	// BeneficiaryNote is a free-text beneficiary / transfer-on-death (TOD) note for
+	// this account (AC16) — e.g. "TOD to Jane Doe (spouse)", "beneficiary form on file
+	// with Fidelity". Plain text that travels in the estate emergency pack. NEVER store
+	// logins or passwords here — that is the encrypted credential vault's job. Additive;
+	// empty for existing rows.
+	BeneficiaryNote string      `json:"beneficiaryNote,omitempty"`
+	Currency        string      `json:"currency"`
+	OpeningBalance  money.Money `json:"openingBalance"`
+	BalanceAsOf     time.Time   `json:"balanceAsOf"`
 	// VarName is an optional explicit variable name for this account in the formula/widget
 	// engine. When set, the account's figures are exposed as account_<slug(VarName)>_* (e.g.
 	// account_checking_balance) instead of the name-derived slug. Empty = derive from Name.
@@ -105,8 +124,15 @@ type Account struct {
 	InterestRateAPR float64     `json:"interestRateApr,omitempty"`
 	MinPayment      money.Money `json:"minPayment,omitempty"`
 	DueDayOfMonth   int         `json:"dueDayOfMonth,omitempty"`
-	Lender          string      `json:"lender,omitempty"`
-	IncludeInPayoff *bool       `json:"includeInPayoff,omitempty"` // nil = default (every liability but a mortgage)
+	// StatementDay is the day of the month (1–31) a liability's statement closes —
+	// distinct from DueDayOfMonth, which is THE payment due day (the day a payment is
+	// owed). The statement-close day feeds the real billing cycle: the on-time payment
+	// window runs statement-close → due day, and TX9 bill-matching tightens its
+	// occurrence window to that cycle. Zero (the default) means unknown; omitted from
+	// JSON when zero so existing rows round-trip with no migration needed. Liability-only.
+	StatementDay    int    `json:"statementDay,omitempty"`
+	Lender          string `json:"lender,omitempty"`
+	IncludeInPayoff *bool  `json:"includeInPayoff,omitempty"` // nil = default (every liability but a mortgage)
 
 	// APY is the account's annual percentage yield as a percent (e.g. 4.4 for
 	// 4.4%). Optional and asset-side: when set on a savings/investment account it
@@ -130,6 +156,25 @@ type Account struct {
 	// in the account's own currency; omitted from JSON when zero so existing rows
 	// round-trip unchanged.
 	MonthlySavings money.Money `json:"monthlySavings,omitempty"`
+
+	// RevalueDays optionally overrides the staleness/revaluation cadence for this
+	// account, in whole days (AC5). Manual-asset accounts — property, vehicles,
+	// crypto — should not share checking's staleness clock: a house is worth
+	// re-estimating quarterly, not nagged monthly. Zero (the default) means "use
+	// the per-type cadence" (see internal/revalue); a positive value is an
+	// explicit per-account override that wins over the type default. Omitted from
+	// JSON when zero so existing rows round-trip with no migration needed.
+	RevalueDays int `json:"revalueDays,omitempty"`
+
+	// ExcludeFromNetWorth, when true, keeps this account visible in its class
+	// views but omits it from the net_worth / assets / liabilities figures (AC11).
+	// For accounts a household tracks but does not consider part of their own net
+	// worth — a managed trust, a child's custodial account, a business account.
+	// The net-worth surface DISCLOSES how many accounts are excluded by choice,
+	// exactly as it discloses accounts dropped for a missing exchange rate — the
+	// figure is never silently reduced. Omitted from JSON when false so existing
+	// rows round-trip with no migration needed.
+	ExcludeFromNetWorth bool `json:"excludeFromNetWorth,omitempty"`
 
 	Archived bool           `json:"archived,omitempty"`
 	Custom   map[string]any `json:"custom,omitempty"`

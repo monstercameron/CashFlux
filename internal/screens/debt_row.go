@@ -136,6 +136,14 @@ func DebtRow(props debtRowProps) ui.Node {
 	if a.DueDayOfMonth > 0 {
 		metaParts = append(metaParts, uistate.T("debt.dueDayMeta", ordinalDay(a.DueDayOfMonth)))
 	}
+	// AC4: carrying cost — the monthly interest to hold this debt (owed × APR/100 ÷ 12),
+	// a concrete dollar figure that competes with the discretionary spend it finances.
+	if a.InterestRateAPR > 0 && props.Owed.Amount > 0 {
+		carryMinor := int64(float64(props.Owed.Amount) * a.InterestRateAPR / 100 / 12)
+		if carryMinor > 0 {
+			metaParts = append(metaParts, uistate.T("accountsstmt.carryingCost", fmtMoney(money.New(carryMinor, props.Owed.Currency))))
+		}
+	}
 	var metaNode ui.Node = Fragment()
 	if len(metaParts) > 0 {
 		metaNode = Span(css.Class("debt-meta", tw.TextDim), strings.Join(metaParts, " · "))

@@ -5,10 +5,11 @@
 // nothing points at. It is the single source of truth for "what is still in
 // use", which keeps the sweep honest as new artifact holders are added.
 //
-// Three holders reference artifacts today:
+// Four holders reference artifacts today:
 //   - transaction receipts (domain.Transaction.Attachments → AttachmentRef.ArtifactID) — TX5;
 //   - custom-page Image/Table widgets (domain.PageWidget.Binding.ArtifactID);
-//   - goal vision images (domain.Goal.GoalImageArtifactID) — GL6.
+//   - goal vision images (domain.Goal.GoalImageArtifactID) — GL6;
+//   - account documents (domain.Account.DocRefs → AccountDocRef.ArtifactID) — AC8.
 //
 // The package is pure (no syscall/js), so it unit-tests on native Go and the GC
 // job can reuse it on either the wasm or a future backend side.
@@ -20,7 +21,7 @@ import "github.com/monstercameron/CashFlux/internal/domain"
 // receipt attachments, custom-page widget bindings, and goal vision images. The
 // returned set is what a blob GC must retain; anything not in it is safe to
 // delete. Blank IDs are ignored.
-func Referenced(txns []domain.Transaction, pages []domain.CustomPage, goals []domain.Goal) map[string]bool {
+func Referenced(txns []domain.Transaction, pages []domain.CustomPage, goals []domain.Goal, accounts []domain.Account) map[string]bool {
 	refs := map[string]bool{}
 	for _, t := range txns {
 		for _, a := range t.Attachments {
@@ -41,14 +42,21 @@ func Referenced(txns []domain.Transaction, pages []domain.CustomPage, goals []do
 			refs[g.GoalImageArtifactID] = true
 		}
 	}
+	for _, a := range accounts {
+		for _, d := range a.DocRefs {
+			if d.ArtifactID != "" {
+				refs[d.ArtifactID] = true
+			}
+		}
+	}
 	return refs
 }
 
 // Orphans returns the ids of artifacts that nothing in the dataset references —
 // the set a blob GC may delete. It is Referenced inverted over the artifact list,
 // exposed as a helper so callers don't re-implement the set difference.
-func Orphans(artifacts []domain.Artifact, txns []domain.Transaction, pages []domain.CustomPage, goals []domain.Goal) []string {
-	refs := Referenced(txns, pages, goals)
+func Orphans(artifacts []domain.Artifact, txns []domain.Transaction, pages []domain.CustomPage, goals []domain.Goal, accounts []domain.Account) []string {
+	refs := Referenced(txns, pages, goals, accounts)
 	var out []string
 	for _, a := range artifacts {
 		if a.ID != "" && !refs[a.ID] {

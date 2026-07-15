@@ -81,3 +81,24 @@ func TestNetWorthExplainedLiabilityExcluded(t *testing.T) {
 		t.Errorf("ExcludedAccounts = %v, want [GBP Loan]", res.ExcludedAccounts)
 	}
 }
+
+func TestNetWorthExplainedExcludesByChoice(t *testing.T) {
+	a2 := asset("a2", "Kid's custodial", "USD", 30000) // $300, excluded by choice
+	a2.ExcludeFromNetWorth = true
+	accounts := []domain.Account{
+		asset("a1", "Checking", "USD", 100000), // $1,000
+		a2,
+	}
+	rates := currency.Rates{Base: "USD"}
+
+	res, err := NetWorthExplained(accounts, nil, rates)
+	if err != nil {
+		t.Fatalf("NetWorthExplained: %v", err)
+	}
+	if res.Net.Amount != 100000 {
+		t.Errorf("net = %d, want 100000 (custodial account excluded by choice)", res.Net.Amount)
+	}
+	if len(res.ExcludedByChoice) != 1 || res.ExcludedByChoice[0] != "Kid's custodial" {
+		t.Errorf("ExcludedByChoice = %v, want [Kid's custodial]", res.ExcludedByChoice)
+	}
+}

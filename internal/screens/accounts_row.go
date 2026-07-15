@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountflow"
+	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -59,6 +61,25 @@ type accountRowProps struct {
 	// linkage is visible for every account, not just debts. OnViewBills drills to them.
 	BillPayment ledger.BillPaymentInfo
 	OnViewBills func(string)
+	// Projection is this account's 30-day balance projection from its recurring cash
+	// flows (AC13). When it shows a dip below today's balance, the row renders a
+	// "→ ~$X low on <date>" line that expands to list the drivers. Zero value renders
+	// nothing.
+	Projection acctproject.Projection
+	// Sparkline is the account's 90-day end-of-day balance series (AC2), oldest first,
+	// in the account's currency (minor units). Rendered as an inline SVG polyline; a
+	// flat run is itself the "nothing has posted since your last update" signal. Fewer
+	// than two points renders nothing.
+	Sparkline []int64
+	// Flow is this account's money-in / money-out / net for the current period (AC9),
+	// with transfers counted separately (never as income or spend). Rendered as compact
+	// row figures when ShowFlow is set.
+	Flow     accountflow.Flow
+	ShowFlow bool
+	// InstByID indexes the household's institution directory by id (AC10), so the
+	// row can color its edge and show a chip for Account.InstitutionID. Nil or a
+	// miss renders nothing extra — free-text-only institutions are unaffected.
+	InstByID map[string]domain.Institution
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -141,6 +162,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	// hover tooltip on a tiny glyph.
 	notesExpanded := ui.UseState(false)
 	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
+	// AC13: the projected-low "Why?" disclosure owns its own state at this stable
+	// render position (AccountRow is itself the per-row component, so this is not a
+	// loop-level hook).
+	projExpanded := ui.UseState(false)
+	toggleProj := ui.UseEvent(Prevent(func() { projExpanded.Set(!projExpanded.Get()) }))
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -242,6 +268,39 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	}
 
+	// AC13 projected-balance line: for cash-like asset accounts whose 30-day
+	// projection dips below today's balance, show "→ ~$X low on <date>" with a "Why?"
+	// disclosure that lists the recurring drivers ("Rent −$1,400 on Mar 1"). Skipped
+	// for liabilities and valuation-type assets, whose balances aren't cash curves.
+	var projNode ui.Node = Fragment()
+	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
+		dec := currency.Decimals(a.Currency)
+		low := money.New(props.Projection.Low, a.Currency)
+		toggleLabel := uistate.T("accounts.projectedShow")
+		if projExpanded.Get() {
+			toggleLabel = uistate.T("accounts.projectedHide")
+		}
+		var driverNode ui.Node = Fragment()
+		if projExpanded.Get() {
+			rows := []any{css.Class("acct-proj-drivers"), Attr("data-testid", "acct-proj-drivers-"+a.ID),
+				Div(css.Class("row-meta", tw.TextDim), uistate.T("accounts.projectedDrivers"))}
+			for _, d := range props.Projection.Drivers {
+				amt := money.New(d.Amount, a.Currency)
+				rows = append(rows, Div(css.Class("row-meta"),
+					uistate.T("accounts.projectedDriver", d.Label, signedMoney(amt, dec), fmtShortDate(d.Date))))
+			}
+			driverNode = Div(rows...)
+		}
+		projNode = Div(css.Class("acct-proj"), Attr("data-testid", "acct-proj-"+a.ID),
+			Span(css.Class("row-meta"), Title(uistate.T("accounts.projectedTitle")),
+				Attr("aria-label", uistate.T("accounts.projectedLowAria", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
+				uistate.T("accounts.projectedLow", fmtMoney(low), fmtShortDate(props.Projection.LowDate))),
+			Button(css.Class("btn-link", tw.Ml1), Type("button"), Attr("data-testid", "acct-proj-toggle-"+a.ID),
+				Attr("aria-expanded", ariaBool(projExpanded.Get())), OnClick(toggleProj), toggleLabel),
+			driverNode,
+		)
+	}
+
 	// Inline quick actions (everything else lives in the ⋯ menu). "Edit" is always
 	// inline; "Update value/balance" is inline for the accounts you actively maintain —
 	// stale ones (emphasized) and valuation-type assets you revalue by hand — and lives
@@ -252,8 +311,21 @@ func AccountRow(props accountRowProps) ui.Node {
 		updBtnCls = "btn btn-stale"
 	}
 
+	// AC2: a 90-day balance sparkline (inline SVG); AC9: this-period in/out/net figures.
+	sparkNode := accountSparkline(a, props.Sparkline)
+	flowNode := accountFlowFigures(a, props.Flow, props.ShowFlow)
+
+	// AC10: color the row's left edge by its institution when the account
+	// references one from the directory; a bare border-left is the least intrusive
+	// way to add the cue without disturbing the row's existing layout.
+	rowStyle := map[string]string{}
+	inst, hasInst := props.InstByID[a.InstitutionID]
+	if hasInst {
+		rowStyle["border-left"] = "3px solid " + institutionSwatchColor(inst)
+	}
+
 	return Div(
-		Div(css.Class("row"),
+		Div(css.Class("row"), Style(rowStyle),
 			// Account-type glyph (G3 §5): a quick visual tag so Checking / Investment /
 			// Credit Card are distinguishable without reading the meta-line.
 			Span(css.Class("acct-type-icon", tw.TextDim), Attr("aria-hidden", "true"),
@@ -264,9 +336,13 @@ func AccountRow(props accountRowProps) ui.Node {
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 				),
+				If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
 				Span(css.Class("row-meta"), meta),
 				valChange,
+				projNode,
 				billNode,
+				flowNode,
+				sparkNode,
 				// XC7: warn when goals have earmarked more against this account than it
 				// holds (goal money has been spent). Own component; healthy → Fragment().
 				ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
@@ -277,6 +353,9 @@ func AccountRow(props accountRowProps) ui.Node {
 						customSummary(props.AccountDefs, a.Custom))),
 				// Readable, clickable-to-expand notes line (the attached note itself).
 				notesNode,
+				// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
+				// payoff letters) with an attach form carrying an optional renewal date.
+				ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
 				// MIA-extend (#445-10): nudge to fill missing institution. A <button> in the
 				// column stretches full-width and centers its text by default, which made the
 				// link float mid-row — align-self:flex-start shrinks it to content and left-
