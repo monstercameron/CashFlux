@@ -558,34 +558,25 @@ func Sidebar(props sidebarProps) uic.Node {
 	for _, it := range visibleTools {
 		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
 	}
-	// "You are here": if the current route lives inside the Tools group, auto-reveal
-	// its section for this render (without persisting) so the active item is visible
+	// "You are here": if the current route lives inside a Tools sub-group, auto-reveal
+	// that sub-group for this render (without persisting) so the active item is visible
 	// and highlighted — otherwise deep-linking to a Tools page (Reports, Net worth,
 	// Planning, …) leaves no active cue anywhere in the rail. The user's manual
 	// collapse preference is untouched and reasserts once they navigate away.
-	currentInTools := false
 	currentToolSubGroup := ""
 	for _, it := range visibleTools {
 		if it.Path == current {
-			currentInTools = true
 			currentToolSubGroup = it.SubGroup
 			break
 		}
 	}
 	var toolNodes []any
 	if len(visibleTools) > 0 {
-		// The whole Tools group collapses too (keyed "tools"), so every labelled rail
-		// section — Tools, its sub-groups, and System — has a collapsible header.
-		toolsCollapsed := collapsed["tools"] && !currentInTools
-		toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
-			Label:     uistate.T("rail.tools"),
-			Collapsed: toolsCollapsed,
-			OnToggle:  func() { setCollapsed("tools", !toolsCollapsed) },
-		}))
+		// No redundant top-level "Tools" header: every tool already lives under a named
+		// sub-group (Plan & forecast, Understand, …), so those sub-group headers ARE the
+		// rail's section dividers. A parent "Tools" label above them just read as an empty
+		// heading, so it's dropped — the sub-groups render directly.
 		for _, sg := range screens.ToolsSubGroups {
-			if toolsCollapsed {
-				break
-			}
 			sg := sg
 			items := toolsByGroup[sg]
 			if len(items) == 0 {
