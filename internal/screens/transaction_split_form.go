@@ -56,6 +56,30 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		return Fragment()
 	}
 
+	// XC11: if a receipt-derived proposal is waiting for this transaction, capture it
+	// once (on mount) so the editor pre-fills with the proposed lines for review. The
+	// note explains any remainder/mismatch. Held in component state so it survives the
+	// host's re-renders without re-consuming the (already cleared) handoff.
+	proposedNote := ui.UseState("")
+	seededTxn := ui.UseState(domain.Transaction{})
+	haveSeed := ui.UseState(false)
+	ui.UseEffect(func() func() {
+		if splits, note, ok := uistate.TakeTxnSplitProposal(props.TxnID); ok {
+			t := txn
+			t.Splits = splits
+			seededTxn.Set(t)
+			proposedNote.Set(note)
+			haveSeed.Set(true)
+		}
+		return nil
+	}, "mount")
+
+	editorTxn := txn
+	if haveSeed.Get() {
+		// Keep the live transaction's mutable fields but carry the proposed splits.
+		editorTxn = seededTxn.Get()
+	}
+
 	save := func(updated domain.Transaction) {
 		if err := app.PutTransaction(updated); err != nil {
 			uistate.PostNotice(err.Error(), false)
@@ -72,9 +96,17 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		}
 	}
 
-	return ui.CreateElement(SplitEditor, splitEditorProps{
-		Txn:        txn,
-		Categories: app.Categories(),
-		OnSave:     save,
-	})
+	return Fragment(
+		If(proposedNote.Get() != "",
+			Div(css.Class("callout"), Attr("role", "status"), Attr("data-testid", "receipt-split-note"),
+				Style(map[string]string{"margin-bottom": "0.5rem", "padding": "0.6rem 0.75rem",
+					"border": "1px solid var(--border)", "border-radius": "8px", "background": "var(--bg-elev)"}),
+				P(css.Class("t-body"), proposedNote.Get()))),
+		ui.CreateElement(SplitEditor, splitEditorProps{
+			Txn:        editorTxn,
+			Categories: app.Categories(),
+			Members:    app.Members(),
+			OnSave:     save,
+		}),
+	)
 }

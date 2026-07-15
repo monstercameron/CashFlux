@@ -52,9 +52,39 @@ import "github.com/monstercameron/CashFlux/internal/money"
 //   - widgetsource: widget-builder category aggregations read CategoryID only.
 //   - store/csv.go: CSV export writes one category column — a breakdown is
 //     silently dropped on a CSV round-trip (the JSON dataset export keeps it).
+//
+// # Per-line owner (XC10)
+//
+// A split line may carry a MemberID, decoupling "whose budget the line hits"
+// from "whose card paid the charge." The Costco run — half household groceries,
+// half a member's personal hobby — is one transaction (paid by one member) whose
+// hobby line is attributed to a different member. An owner-carrying line
+// attributes to that member; a line with an empty MemberID falls back to the
+// transaction's own MemberID (the payer), the pre-XC10 behavior. Owner-aware
+// category-side consumers must resolve the line owner via LineOwner:
+//   - budget consumption: budgeting.spentCovered attributes each line to its
+//     effective owner, so an individual budget counts a line whose owner matches
+//     it even when the transaction's payer is someone else.
+//   - reports.categoryTotals is NOT member-scoped internally (report member
+//     scoping happens upstream on whole transactions); the per-line owner is a
+//     documented limitation there, not enforced.
 type CategorySplit struct {
 	CategoryID string      `json:"categoryId"`
 	Amount     money.Money `json:"amount"`
+	// MemberID optionally attributes this line to a household member (its owner),
+	// independent of the transaction's payer. Empty means "same as the
+	// transaction" — attribution falls back to the transaction's MemberID.
+	MemberID string `json:"memberId,omitempty"`
+}
+
+// LineOwner returns the effective owner of a split line: the line's own MemberID
+// when set, otherwise txnMember (the transaction's payer). This is the single
+// resolution point owner-aware consumers use to attribute a line.
+func (s CategorySplit) LineOwner(txnMember string) string {
+	if s.MemberID != "" {
+		return s.MemberID
+	}
+	return txnMember
 }
 
 // SplitsTotal returns the sum of the splits, in the currency of the first split

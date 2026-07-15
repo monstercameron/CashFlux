@@ -505,6 +505,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnViewReceipt = viewReceipt
 		r.OnOpenLink = openLink
 		r.OnOpenSplit = openSplit
+		r.OnReceiptSplit = func(id string) { startReceiptSplitFlow(props.App, txByID[id]) }
 		r.OnPairRefund = pairRefundRow
 		r.OnUnpair = unpairRow
 		r.OnUngroup = ungroupRow
@@ -629,9 +630,13 @@ type txnFrameRowProps struct {
 	// transaction already carries a category breakdown; OnOpenSplit opens the split
 	// flip modal. IsTransfer hides the entry — a transfer leg has no category to
 	// split (mirroring the classic view, which gates every category action on it).
-	HasSplits      bool
-	IsTransfer     bool
-	OnOpenSplit    func(txnID string)
+	HasSplits   bool
+	IsTransfer  bool
+	OnOpenSplit func(txnID string)
+	// OnReceiptSplit (XC11) opens the "Split from receipt…" flow: pick a receipt
+	// image, vision reads its line items, and a proposed breakdown pre-fills the
+	// split editor for review. Gated like OnOpenSplit (hidden on transfer legs).
+	OnReceiptSplit func(txnID string)
 	Receipts       int                  // attachment count (drives the paperclip)
 	Attachment     domain.AttachmentRef // first attachment, opened by the paperclip
 	OnOpen         func(id string)
@@ -715,7 +720,7 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	if member == "—" {
 		memClass += " text-dim"
 	}
-	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-" + props.ID), OnClick(open)}
+	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), OnClick(open)}
 	// XC1: a grouped member reads as a physical grouping — a quiet accent tie-line
 	// on the left rail shared by every member of the purchase.
 	if props.GroupSize > 1 {
@@ -779,6 +784,15 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label:    splitLabel,
 			TestID:   "txn-split-open",
 			OnSelect: func() { props.OnOpenSplit(props.ID) },
+		})
+	}
+	// XC11: propose a split from a receipt image (BYO-key AI). Same transfer-leg
+	// gating as the manual split — a transfer leg has no category to split.
+	if props.OnReceiptSplit != nil && !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("receiptsplit.menuAction"),
+			TestID:   "txn-receipt-split-open",
+			OnSelect: func() { props.OnReceiptSplit(props.ID) },
 		})
 	}
 	// XC2: pair a money-in transaction as the refund of an earlier purchase; or

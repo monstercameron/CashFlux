@@ -2970,7 +2970,7 @@ ALREADY DONE: per-bubble token+cost ("Used N tokens ~$X", insights.go:1074-1081)
 
 <!-- ===== XC SERIES (cross-concept workflows, appended 2026-07-14) ===== -->
 
-## ★ XC series — Cross-concept workflows (IMPLEMENTED 2026-07-14 wave 1: XC0a–XC9 ✓; XC10/XC11 in wave 2)
+## ★ XC series — Cross-concept workflows (IMPLEMENTED 2026-07-14 — COMPLETE, shipped v1.0.27)
 
 > **Implementation status (2026-07-14):** XC0a resolved as proposed (mechanics for XC2/XC3,
 > rituals for XC6/XC9). XC0b shipped as `domain.TxnLink` + `internal/txnlinks` (kinds:
@@ -3104,14 +3104,14 @@ still needs a scope-confirmation pass before implementation.
   bill auto-checks when its transaction posts).
 
 ### Members ↔ the split (compose with the in-flight split work)
-- [ ] **XC10 [MED — DECIDE DURING SPLIT DESIGN]** Split lines carry an Owner (member), not just a
+- [x] **XC10 [MED — DECIDE DURING SPLIT DESIGN]** Split lines carry an Owner (member), not just a
   category. The Costco run: half household groceries, half a member's personal hobby budget.
   Once a txn splits into lines, a line carrying Owner decouples "whose budget it hits" from
   "whose card paid." Cheap to include while the split data model is soft (persist the field +
   owner-aware budget/report attribution); expensive to retrofit. Minimum viable: the field +
   attribution; per-line owner-picking UI can follow. If the split model is already frozen when
   this is read: file the migration cost explicitly before deciding.
-- [ ] **XC11 [MAJOR]** Receipt → proposed split (vision import feeds the split editor). The
+- [x] **XC11 [MAJOR]** Receipt → proposed split (vision import feeds the split editor). The
   vision importer already reads line items off receipts/invoices. Attach a receipt image (or
   Amazon invoice) to an EXISTING atomic transaction → the app PROPOSES the split lines: items
   grouped, categories assigned via the existing rules engine (AutoCategorizeTransaction family),

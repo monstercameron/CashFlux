@@ -249,7 +249,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 						OnClick(toggleSplit),
 						uistate.T(splitToggleKey(splitOpen.Get(), t.HasSplits()))),
 					If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
-						Txn: t, Categories: props.Categories, OnSave: props.OnSaveSplits,
+						Txn: t, Categories: props.Categories, Members: props.Members, OnSave: props.OnSaveSplits,
 					})),
 				)),
 			),
@@ -315,7 +315,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	rowArgs := []any{ClassStr(rowClass), Attr("data-id", props.Txn.ID)}
 	if props.GroupSize > 1 {
 		rowArgs = append(rowArgs, Style(map[string]string{
-			"box-shadow":  "inset 3px 0 0 0 var(--accent)",
+			"box-shadow":   "inset 3px 0 0 0 var(--accent)",
 			"padding-left": "0.25rem",
 		}))
 	}

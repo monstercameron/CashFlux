@@ -23,11 +23,18 @@ import (
 type splitDraft struct {
 	Cat string
 	Amt string
+	// Owner is the member id this line is attributed to (XC10), or "" for "same as
+	// the transaction" — the parent applies the fallback to the txn's payer.
+	Owner string
 }
 
 type splitEditorProps struct {
 	Txn        domain.Transaction
 	Categories []domain.Category
+	// Members is the household roster used to populate the optional per-line owner
+	// picker. When empty (single-member household), no owner UI is shown and every
+	// line stays attributed to the transaction's payer.
+	Members []domain.Member
 	// OnSave persists the transaction with its Splits set (empty slice clears the
 	// breakdown). The parent (transactions screen) wires it to PutTransaction.
 	OnSave func(domain.Transaction)
@@ -47,7 +54,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		if props.Txn.HasSplits() {
 			out := make([]splitDraft, 0, len(props.Txn.Splits))
 			for _, s := range props.Txn.Splits {
-				out = append(out, splitDraft{Cat: s.CategoryID, Amt: money.FormatMinor(absMinor(s.Amount.Amount), dec)})
+				out = append(out, splitDraft{Cat: s.CategoryID, Amt: money.FormatMinor(absMinor(s.Amount.Amount), dec), Owner: s.MemberID})
 			}
 			return out
 		}
@@ -74,6 +81,13 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		cur := append([]splitDraft(nil), splits.Get()...)
 		if i >= 0 && i < len(cur) {
 			cur[i].Amt = v
+			splits.Set(cur)
+		}
+	}
+	setOwner := func(i int, v string) {
+		cur := append([]splitDraft(nil), splits.Get()...)
+		if i >= 0 && i < len(cur) {
+			cur[i].Owner = v
 			splits.Set(cur)
 		}
 	}
@@ -123,7 +137,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			if props.Txn.Amount.IsNegative() {
 				signed = -v
 			}
-			built = append(built, domain.CategorySplit{CategoryID: d.Cat, Amount: money.New(signed, props.Txn.Amount.Currency)})
+			built = append(built, domain.CategorySplit{CategoryID: d.Cat, Amount: money.New(signed, props.Txn.Amount.Currency), MemberID: d.Owner})
 			sum += v
 		}
 		if len(built) < 2 {
@@ -157,17 +171,34 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		"")
 	catOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}, catOpts...)
 
+	// Owner picker options (XC10): only when the household actually has members.
+	// The first option is "Same as transaction" (empty value → falls back to the
+	// txn's payer at attribution time).
+	var ownerOpts []uiw.SelectOption
+	showOwner := len(props.Members) > 0
+	if showOwner {
+		ownerOpts = uiw.OptionsFrom(props.Members,
+			func(m domain.Member) string { return m.ID },
+			func(m domain.Member) string { return m.Name },
+			"")
+		ownerOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("splitEditor.ownerSameAsTxn")}}, ownerOpts...)
+	}
+
 	var rows []ui.Node
 	for i, d := range splits.Get() {
 		rows = append(rows, ui.CreateElement(splitRow, splitRowProps{
-			Index:    i,
-			Cat:      d.Cat,
-			Amt:      d.Amt,
-			CatOpts:  catOpts,
-			Dec:      dec,
-			OnCat:    setCat,
-			OnAmt:    setAmt,
-			OnRemove: removeRow,
+			Index:     i,
+			Cat:       d.Cat,
+			Amt:       d.Amt,
+			Owner:     d.Owner,
+			CatOpts:   catOpts,
+			OwnerOpts: ownerOpts,
+			ShowOwner: showOwner,
+			Dec:       dec,
+			OnCat:     setCat,
+			OnAmt:     setAmt,
+			OnOwner:   setOwner,
+			OnRemove:  removeRow,
 		}))
 	}
 
@@ -203,14 +234,18 @@ func SplitEditor(props splitEditorProps) ui.Node {
 }
 
 type splitRowProps struct {
-	Index    int
-	Cat      string
-	Amt      string
-	CatOpts  []uiw.SelectOption
-	Dec      int
-	OnCat    func(int, string)
-	OnAmt    func(int, string)
-	OnRemove func(int)
+	Index     int
+	Cat       string
+	Amt       string
+	Owner     string
+	CatOpts   []uiw.SelectOption
+	OwnerOpts []uiw.SelectOption
+	ShowOwner bool
+	Dec       int
+	OnCat     func(int, string)
+	OnAmt     func(int, string)
+	OnOwner   func(int, string)
+	OnRemove  func(int)
 }
 
 // splitRow is one editable split line (category + amount + remove). It is its own
@@ -219,9 +254,10 @@ type splitRowProps struct {
 func splitRow(props splitRowProps) ui.Node {
 	onCat := func(v string) { props.OnCat(props.Index, v) }
 	onAmt := ui.UseEvent(func(v string) { props.OnAmt(props.Index, v) })
+	onOwner := func(v string) { props.OnOwner(props.Index, v) }
 	onRemove := ui.UseEvent(func() { props.OnRemove(props.Index) })
 	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
-		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "margin-bottom": "0.4rem"}),
+		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "margin-bottom": "0.4rem", "flex-wrap": "wrap"}),
 		Div(Style(map[string]string{"flex": "1 1 auto"}),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.CatOpts,
@@ -230,6 +266,16 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-cat-" + strconv.Itoa(props.Index),
 				OnChange:  onCat,
 			})),
+		// XC10: optional per-line owner. Only rendered for multi-member households;
+		// "Same as transaction" (empty) keeps the pre-XC10 payer attribution.
+		If(props.ShowOwner, Div(Style(map[string]string{"flex": "1 1 auto"}),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   props.OwnerOpts,
+				Selected:  props.Owner,
+				AriaLabel: uistate.T("splitEditor.owner"),
+				TestID:    "split-owner-" + strconv.Itoa(props.Index),
+				OnChange:  onOwner,
+			}))),
 		Input(css.Class("field"), Type("number"), Step("0.01"), Style(map[string]string{"max-width": "8rem"}),
 			Attr("aria-label", uistate.T("splitEditor.amount")), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
 			Placeholder(uistate.T("splitEditor.amount")), Value(props.Amt), OnInput(onAmt)),

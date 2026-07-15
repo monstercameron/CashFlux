@@ -10,6 +10,23 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+// budgetCoversTxn reports whether the budget draws any spend from the
+// transaction under pred, honoring per-line owners (XC10): for a split
+// transaction, at least one line must pass pred and be owned by the budget's
+// scope; for an atomic transaction, its category passes pred and its payer is in
+// scope.
+func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(string) bool) bool {
+	if t.HasSplits() {
+		for _, s := range t.Splits {
+			if pred(s.CategoryID) && ownsScope(budget, s.LineOwner(t.MemberID)) {
+				return true
+			}
+		}
+		return false
+	}
+	return pred(t.CategoryID) && ownsScope(budget, t.MemberID)
+}
+
 // maxEnvelopePeriods caps how far back the envelope accumulation looks, so a
 // budget with very old (or bad) transaction dates can't loop unboundedly. 240
 // covers 20 years of monthly periods.
@@ -34,10 +51,13 @@ func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef ti
 	var earliest time.Time
 	found := false
 	for _, t := range all {
-		if !t.IsExpense() || !pred(t.CategoryID) {
+		if !t.IsExpense() {
 			continue
 		}
-		if budget.Scope == domain.ScopeIndividual && t.MemberID != budget.OwnerID {
+		// XC10: a split transaction is covered when any owned line matches; an
+		// atomic transaction uses its own category and payer. Mirrors spentCovered
+		// so the envelope's first-funded period lines up with what it draws down.
+		if !budgetCoversTxn(budget, t, pred) {
 			continue
 		}
 		if !found || t.Date.Before(earliest) {

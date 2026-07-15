@@ -233,15 +233,32 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	for _, c := range categories {
 		catNameByID[c.ID] = c.Name
 	}
+	// XC10: resolve a line's owner name so the read-only breakdown shows who a
+	// line is attributed to when it carries an owner different from the payer.
+	memberNameByID := make(map[string]string, len(members))
+	for _, m := range members {
+		memberNameByID[m.ID] = m.Name
+	}
 	var splitLines []ui.Node
 	for _, s := range txn.Splits {
 		n := catNameByID[s.CategoryID]
 		if n == "" {
 			n = uistate.T("transactions.uncategorized")
 		}
+		// Only show the owner tag on lines that carry their own owner (an empty
+		// MemberID means "same as transaction" — nothing to disambiguate).
+		ownerTag := ""
+		if s.MemberID != "" {
+			name := memberNameByID[s.MemberID]
+			if name == "" {
+				name = s.MemberID
+			}
+			ownerTag = uistate.T("splitEditor.ownerFor", name)
+		}
 		splitLines = append(splitLines, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Span(css.Class("badge badge-split"), "⑂"),
 			Span(n),
+			If(ownerTag != "", Span(css.Class("muted"), ownerTag)),
 			Span(css.Class("muted"), fmtMoney(s.Amount)),
 		))
 	}
@@ -289,7 +306,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				Attr("aria-expanded", ariaBool(splitOpen.Get())), OnClick(toggleSplit),
 				uistate.T(splitToggleKey(splitOpen.Get(), txn.HasSplits()))),
 			If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
-				Txn: txn, Categories: categories, OnSave: saveSplits,
+				Txn: txn, Categories: categories, Members: members, OnSave: saveSplits,
 			})),
 		),
 		errText("txn-edit-err", errMsg.Get()),

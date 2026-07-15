@@ -1,3 +1,17 @@
+## 2026-07-14 — XC wave 2 + v1.0.27: the section ships
+
+XC10/XC11 closed the series with 2 parallel agents. XC10 threaded a per-line MemberID through
+CategorySplit with a single owner-resolution point (LineOwner) and moved the individual-budget
+owner check to per-line granularity — the subtle part was keeping envelope first-funded detection
+consistent with spentCovered (budgetCoversTxn). XC11 stayed honest to the reuse rule: no new AI
+path — the documents vision pipeline + rules matching feed a pure receiptsplit.Propose whose
+invariant is Σ(lines) == txn amount BY CONSTRUCTION (remainder onto the txn's own category), and
+the proposal lands in the shipped split editor as a pre-fill, preview-then-approve. E2E extended
+and green end-to-end (owner selects render for the 2-member sample; receipt entry gated correctly;
+zero console errors). v1.0.27 cut, SW cache v300, deployed to web/bin. Section 1 of 6 done —
+the coordinator loop (agents → integrate → e2e → fix the seams) is holding up well; the seams
+keep being where the real work is.
+
 ## 2026-07-14 — XC wave 1 built: 4 parallel agents, one coordinator, three classic traps
 
 First implementation wave of the backlog sweep, per Cam's directive: 4 opus low-effort agents on

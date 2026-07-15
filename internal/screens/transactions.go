@@ -672,7 +672,7 @@ func transactionsLegacy() ui.Node {
 		for _, t := range txns {
 			txnByID[t.ID] = t
 		}
-		refundOf := map[string]bool{}  // ids that are the refund side of a pair
+		refundOf := map[string]bool{}   // ids that are the refund side of a pair
 		refundedBy := map[string]bool{} // ids (originals) that have a paired refund
 		for _, l := range links {
 			if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) == 2 {

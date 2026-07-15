@@ -45,6 +45,14 @@ func categoryTotals(txns []domain.Transaction, start, end time.Time, rates curre
 		// Split transactions (C58) attribute each line's amount to its own
 		// category instead of the whole-transaction category, so per-category
 		// spend is correct (and receipt-imported splits stop being invisible).
+		//
+		// XC10 limitation: a split line may carry its own owner (MemberID), but
+		// this aggregation is NOT member-scoped — report member scoping happens
+		// upstream on whole transactions (the caller pre-filters by t.MemberID
+		// before passing txns here). A member-scoped report therefore attributes a
+		// shared transaction's split lines by the payer, not by each line's owner.
+		// Enforcing per-line owner here would require threading the member scope
+		// into categoryTotals; deferred until reports scope members per line.
 		if t.HasSplits() {
 			for _, s := range t.Splits {
 				conv, err := rates.Convert(s.Amount, rates.Base)

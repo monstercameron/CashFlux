@@ -49,21 +49,23 @@ func normalizedLimit(budget domain.Budget, rates currency.Rates) money.Money {
 }
 
 // matchesScope reports whether a transaction is in scope for the budget
-// independent of its category: it must be an expense within [start, end), and for
-// an individual budget it must belong to the owning member. The per-category test
-// is applied separately (on the transaction's category, or per split line for a
-// split transaction) by spentCovered.
+// independent of its category and owner: it must be an expense within
+// [start, end). The per-category test and the individual-budget owner test are
+// applied separately by spentCovered — the owner test is per split LINE (XC10),
+// so a shared transaction can still contribute the lines an individual budget
+// owns even when a different member paid.
 func matchesScope(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
 	if !t.IsExpense() {
 		return false
 	}
-	if !dateutil.InRange(t.Date, start, end) {
-		return false
-	}
-	if budget.Scope == domain.ScopeIndividual && t.MemberID != budget.OwnerID {
-		return false
-	}
-	return true
+	return dateutil.InRange(t.Date, start, end)
+}
+
+// ownsScope reports whether spend attributed to member counts against the budget
+// under its scope: a household budget counts everyone; an individual budget
+// counts only its owner (XC10 resolves member per split line before calling this).
+func ownsScope(budget domain.Budget, member string) bool {
+	return budget.Scope != domain.ScopeIndividual || member == budget.OwnerID
 }
 
 // spentCovered sums spend against the budget for transactions whose category
@@ -93,10 +95,20 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 				if !covers(s.CategoryID) {
 					continue
 				}
+				// XC10: attribute the line to its effective owner (the line's own
+				// MemberID, or the transaction's payer when the line carries none).
+				// An individual budget counts only the lines it owns — so a shared
+				// receipt paid by A can still feed B's personal budget line.
+				if !ownsScope(budget, s.LineOwner(t.MemberID)) {
+					continue
+				}
 				if err := add(s.Amount); err != nil {
 					return money.Money{}, err
 				}
 			}
+			continue
+		}
+		if !ownsScope(budget, t.MemberID) {
 			continue
 		}
 		if !covers(t.CategoryID) {
