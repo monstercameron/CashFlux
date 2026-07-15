@@ -70,6 +70,7 @@ func All() []Route {
 		{Path: "/goals", Label: "nav.goals", Title: "nav.goals", Subtitle: "screen.goalsSub", Phase: 1, Group: GroupPrimary, View: Goals},
 		{Path: "/todo", Label: "nav.todo", Title: "nav.todo", Subtitle: "screen.todoSub", Phase: 1, Group: GroupPrimary, View: Todo},
 		{Path: "/notifications", Label: "nav.notifications", Title: "nav.notifications", Subtitle: "screen.notificationsSub", Phase: 1, Group: GroupPrimary, View: NotificationCenter},
+		{Path: "/assistant", Label: "nav.assistant", Title: "nav.assistant", Subtitle: "screen.assistantSub", Phase: 1, Group: GroupPrimary, View: Assistant},
 
 		// TOOLS / Plan & forecast — debt management, investing, allocation, forecasting.
 		{Path: "/debt", Label: "nav.debt", Title: "nav.debt", Subtitle: "screen.debtSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: DebtPlanner},
@@ -78,11 +79,11 @@ func All() []Route {
 		{Path: "/planning", Label: "nav.planning", Title: "nav.planning", Subtitle: "screen.planningSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Planning},
 		{Path: "/recurring", Label: "nav.recurring", Title: "nav.recurring", Subtitle: "screen.recurringSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Recurring},
 
-		// TOOLS / Understand — reporting, net worth, health, and AI assistant.
+		// TOOLS / Understand — reporting, net worth, and health. (The AI assistant
+		// moved to PRIMARY — it's an everyday surface, not a report.)
 		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: Reports},
 		{Path: "/networth", Label: "nav.netWorth", Title: "nav.netWorth", Subtitle: "screen.netWorthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: NetWorth},
 		{Path: "/health", Label: "nav.health", Title: "nav.health", Subtitle: "screen.healthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: HealthScreen},
-		{Path: "/assistant", Label: "nav.assistant", Title: "nav.assistant", Subtitle: "screen.assistantSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: Assistant},
 
 		// TOOLS / Build — the Studio hub is the one rail entry: formulas, custom
 		// fields, and workflows live as its tabs (their standalone routes are
