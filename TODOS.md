@@ -3367,6 +3367,60 @@ duplicate them.
 fill; BG2 is the strategic centerpiece and wants its category-classification pass scoped first;
 BG7 blocked on its planning ticket. Cross-links: BG2↔XC3/XC4/TX9, BG3↔XC4, BG6↔BG4.
 
+**Second batch (curated 2026-07-14, same session).** Cam kept 7 of 10; DROPPED: month-end
+projection per budget (Copilot-style "on track to land at $520"), the YNAB To-Budget inbox
+enhancement, and budget streaks. If projection is revisited, it rides BG3's pacing plumbing.
+
+- [ ] **BG10 [MED]** Age of Money *(YNAB's signature metric)*. How many days old is the dollar
+  just spent — computed FIFO from income dates vs outflow dates; rising = breathing room,
+  falling = paycheck-to-paycheck drift. Implement as an engine ATOM (`age_of_money`, days) in a
+  pure logic pkg with table-driven tests (FIFO queue over income txns; spec the treatment of
+  transfers/refunds — refunds re-age at original income date via the XC2 pair when present).
+  Explainable derivation (which income the current spending draws from); widget/formula-
+  addressable; candidate input for a future health-score savings-buffer factor. Nobody outside
+  YNAB ships this — differentiator badge.
+- [ ] **BG11 [MED]** Unbudgeted-spending catch-all *(Mint's "Everything Else")*. Spending in
+  categories with NO budget is invisible on /budgets today. Add a synthetic bottom row:
+  "Unbudgeted: $312 this month" — expandable to its per-category breakdown, each with a one-tap
+  "budget this" (prefilled via BG4's average chips). Derivation: period expense in categories
+  not covered by any budget's tracked tree (reuse the rollup/descendants machinery to avoid
+  double-count with sub-category tracking). Makes budget COVERAGE GAPS visible — the failure
+  mode of per-category budgeting. Read-model + one synthetic row; no new entities.
+- [ ] **BG12 [MED]** True monthly cost of living *(Monarch's headline number)*. One figure:
+  fixed commitments + smoothed non-monthlies (XC3 accruals) + average flex spend = "your real
+  monthly burn is $4,230." Implement as a MOLECULE over BG2's classification (+ fallback
+  derivation from recurring + trailing averages when flex mode is off), so it's auditable via
+  Explain and addressable by /planning (better runway input than raw expense averages that
+  lump one-offs). Placement: budgets header + planning; expose as `true_monthly_cost`.
+- [ ] **BG13 [MED]** Per-member attribution inside shared budgets *(Monarch households)*. A
+  shared Dining budget's row expand shows who spent what share ("you $180 · Priya $140") as a
+  split bar — attribution, not blame; no per-member budget duplication. Uses the txn's member
+  (already on transactions); respects splits once XC10 lands (a split line's Owner overrides
+  the txn's). Same attribution view reusable for TX10 events. Read-model only.
+- [ ] **BG14 [MED — SMART-SERIES FLAGS]** Budget hygiene flags *(community YNAB Toolkit
+  spirit)*. Maintenance-debt detectors, each with a one-tap fix: budget untouched 90+ days
+  ("still right?" → BG4 chips), zero transactions in its categories for 3 straight periods
+  ("archive?"), two budgets whose tracked category trees OVERLAP (double-count risk — statically
+  detectable with the descendants machinery; fix = show the overlap), budget tracking a
+  deleted/renamed category (fix = re-pick). Standard SMART opt-in/dismissal; dismissal keys
+  include the specific condition so a new overlap re-flags. Keeps /budgets from silently
+  rotting — same philosophy as the molecule save-validation.
+- [ ] **BG15 [MED]** Budget what-if → planning bridge *(Quicken scenarios)*. On any budget:
+  "what if I cut this 20%?" → one tap spawns a /planning scenario seeded with the monthly delta
+  ("frees $80/mo → emergency fund full 3 months sooner; debt paid Nov instead of Feb"), using
+  the existing plan engine + plan_<slug>_* variables. A BRIDGE, not a new engine: button +
+  seeded scenario + a back-reference on the plan ("from Dining budget"). Answers the "why
+  bother cutting" question with the user's own numbers.
+- [ ] **BG16 [SMALL]** Per-period budget notes *(Actual Budget)*. One note per budget can't say
+  "December was high because we hosted." Add a small (periodStart → note) journal per budget:
+  surfaced in the row expand for the viewed period and as cell tooltips in BG9's annual grid —
+  which turns the grid into a reviewable year narrative. Tiny data (map on the budget), export/
+  import round-trips like everything else.
+
+**Batch-2 ordering note.** BG10 and BG12 are engine-first (atom/molecule + tests before any
+UI). BG11/BG13 are read-model quick wins. BG12 depends on BG2's classification for its best
+form but has a recurring-based fallback; BG16 pairs with BG9.
+
 # Granular todo decomposition — batch 17 (research, 2026-06-25) — FINAL
 
 ## MIA multi-institution analytics (#443/#444/#445 -> atomic) [USER REQUEST]

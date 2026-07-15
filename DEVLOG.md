@@ -1,3 +1,15 @@
+## 2026-07-14 — BG batch 2: seven more; the engine keeps absorbing features
+
+Second budgets curation. Notable: Cam dropped the month-end projection (the one I'd ranked
+strongest) and streaks/To-Budget inbox, kept the two engine-shaped numbers — Age of Money
+(BG10, an atom with a genuinely interesting FIFO derivation; ticket specs refund re-aging via
+XC2 pairs so returns don't artificially youthen the money) and true-monthly-cost (BG12, a
+molecule). A pattern is emerging across these series: the atoms/molecules engine keeps letting
+competitor "features" land as DERIVED NUMBERS plus a small surface, which is exactly the
+architecture bet paying off — BG8 (daily allowance), BG10, BG12 are all engine-first tickets
+with UI as an afterthought. BG14's hygiene flags also encode the dismissal-key lesson a third
+time (keys carry the condition so new conditions re-flag) — that's now a house pattern.
+
 ## 2026-07-14 — BG series: budgets competitive ideation → backlog
 
 Third curation round, /budgets. Cam kept 9 of 10; the one drop (seasonal per-month overrides)
