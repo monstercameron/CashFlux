@@ -917,33 +917,37 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		Td(props.Date),
 		If(props.Vis.Amount, Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
 		If(props.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(props.BalTone)), props.Balance)),
-		Td(
-			If(props.ExcludedFromReports, Span(css.Class("badge txn-excluded-badge"), Attr("data-testid", "txn-excluded-badge"),
-				Attr("title", uistate.T("transactions.excludeHint")), uistate.T("transactions.excludedBadge"))),
-			If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
-				Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
-			// Follow-up indicator (LEADING so it's never clipped by a long description): a
-			// chip with the open/total count that reveals a hover popover listing the linked
-			// to-dos, and links to the filtered To-do list on click. Own component (owns its
-			// state + hover hooks).
-			If(props.FollowUpTotal > 0, ui.CreateElement(txnFollowUpChip, txnFollowUpChipProps{
-				TxnID: props.ID, Open: props.FollowUpOpen, Total: props.FollowUpTotal,
-				Items: props.FollowUps, OnOpen: props.OnOpenFollowUps,
-			})),
-			props.Desc,
-			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
-				Attr("data-testid", "txn-row-receipt"), OnClick(view),
-				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
-			linkBadge,
-			If(props.EventName != "", Span(css.Class("badge"), Attr("data-testid", "txn-event-chip"),
-				Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName)),
-			// TX6b: spending-trend chip when this merchant has history — opens the merchant
-			// story (sparkline + this-vs-typical) that used to hide inside the edit modal.
-			// Deferred past route-settle (ShowTrend) so it never slows the ledger paint.
-			If(props.TrendMerchant != "" && props.ShowTrend, ui.CreateElement(merchantTrendChip, merchantTrendChipProps{
-				Merchant: props.TrendMerchant, TxnID: props.ID, Amount: props.AmountMoney,
-			}))),
+		// The description cell is a flex row: the description text truncates (min-width:0),
+		// while the badges and the follow-up pill after it stay at natural size so they're
+		// never clipped by a long description.
+		Td(ClassStr("row-desc-cell"),
+			Div(css.Class("row-desc-inner"),
+				If(props.ExcludedFromReports, Span(css.Class("badge txn-excluded-badge"), Attr("data-testid", "txn-excluded-badge"),
+					Attr("title", uistate.T("transactions.excludeHint")), uistate.T("transactions.excludedBadge"))),
+				If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
+					Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
+				Span(css.Class("row-desc-text"), props.Desc),
+				// Follow-up indicator, to the right of the description: a chip with the open/total
+				// count that reveals a hover popover listing the linked to-dos, and links to the
+				// filtered To-do list on click. Own component (owns its state + hover hooks); the
+				// popover anchors via JS so it escapes the cell's clipping even when trailing.
+				If(props.FollowUpTotal > 0, ui.CreateElement(txnFollowUpChip, txnFollowUpChipProps{
+					TxnID: props.ID, Open: props.FollowUpOpen, Total: props.FollowUpTotal,
+					Items: props.FollowUps, OnOpen: props.OnOpenFollowUps,
+				})),
+				If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
+					Attr("data-testid", "txn-row-receipt"), OnClick(view),
+					uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
+				linkBadge,
+				If(props.EventName != "", Span(css.Class("badge"), Attr("data-testid", "txn-event-chip"),
+					Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName)),
+				// TX6b: spending-trend chip when this merchant has history — opens the merchant
+				// story (sparkline + this-vs-typical) that used to hide inside the edit modal.
+				// Deferred past route-settle (ShowTrend) so it never slows the ledger paint.
+				If(props.TrendMerchant != "" && props.ShowTrend, ui.CreateElement(merchantTrendChip, merchantTrendChipProps{
+					Merchant: props.TrendMerchant, TxnID: props.ID, Amount: props.AmountMoney,
+				})))),
 		If(props.Vis.Account, Td(props.Account)),
 		If(props.Vis.Category, Td(props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),

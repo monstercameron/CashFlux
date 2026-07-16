@@ -226,4 +226,22 @@ func registerTxcFieldsSurface() {
 		opacity("0.75"),
 		fontVariantNumeric("tabular-nums"),
 	)
+	// Description cell as a flex row so the follow-up pill (and other trailing badges)
+	// stay to the RIGHT of the description at natural size: only the description text
+	// truncates, everything else keeps its intrinsic width instead of overflowing the cell.
+	rule(".txn-table td.row-desc-cell .row-desc-inner",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		minWidth("0"),
+	)
+	rule(".txn-table td.row-desc-cell .row-desc-text",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		minWidth("0"),
+	)
+	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text)",
+		flex("none"),
+	)
 }

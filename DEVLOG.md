@@ -1,3 +1,18 @@
+## 2026-07-16 — Follow-up pill moved to the right of the description
+
+Cam: "move the todos pill to the right of the description." It had been LEADING (before the desc text)
+precisely because the description cell truncates (`overflow:hidden`/nowrap/ellipsis) and a trailing
+inline element just overflows past the cell edge and gets clipped — a DOM probe confirmed it
+(`chipRight` 745 > `tdRight` 704, `chipVisible:false`). So placing it after the text needed a layout
+change, not just a reorder: the cell is now a flex row — `Td.row-desc-cell` wraps a `.row-desc-inner`
+flexbox, the description text goes in a `.row-desc-text` span that is the only flex child allowed to
+shrink/ellipsize (`min-width:0`), and everything after it (the follow-up pill + receipts/link/event/
+trend badges) is `flex:none` so it keeps its intrinsic width. Kept the `<td>` itself a table-cell so
+column alignment is untouched; the flex lives on the inner div. Re-probe: `chipVisible:true`,
+`chipRight` 687 < `tdRight` 704 — the pill sits right after the truncated "Car paym…" and the popover
+still opens on hover (verified, 0 console errors). Files: `transactions_widget.go`, `.row-desc-*` in
+`rules_txcfields.go`.
+
 ## 2026-07-16 — Budget rows: all actions inline, kebab removed (v1.0.51)
 
 Cam, mid budget-workflow analysis: "move more of the buttons out of the kebab now that there is more
