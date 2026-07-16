@@ -104,6 +104,8 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	// Which linked account a ledger-posted contribution debits (a goal linked to
 	// several accounts gets a picker; defaults to the primary).
 	ledgerAcctS := ui.UseState(g.AccountID)
+	notesS := ui.UseState(g.Notes)
+	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
 	errS := ui.UseState("")
 	kindS := ui.UseState(kindInit)
 	cadenceS := ui.UseState(cadenceInit)
@@ -146,6 +148,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 				gg.Name = n
 			}
 			gg.OwnerID = ownerS.Get()
+			gg.Notes = strings.TrimSpace(notesS.Get())
 			if ownerS.Get() == domain.GroupOwnerID {
 				gg.Scope = domain.ScopeShared
 			} else {
@@ -433,6 +436,10 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("goals.owner"),
 				})),
+			// A free-text note (why this goal exists, the plan) — shown on the goal card.
+			labeledField(uistate.T("goals.notesLabel"),
+				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("goals.notesPlaceholder"),
+					AriaLabel: uistate.T("goals.notesLabel"), OnInput: onNotes})),
 			// GL6: vision image. The photo saves to the stored goal immediately (its own
 			// artifact join), so it shows a live preview + change/remove; the button label
 			// reflects whether an image is already attached.

@@ -23,6 +23,10 @@ var goalsRedesignKeys = Catalog{
 	"goalsredesign.earmarkBarLabel": "%s: %s earmarked of %s balance",
 	// Per-goal coverage bar (accessible label). %d = coverage percent.
 	"goalsredesign.coverageBarLabel": "%d%% of the target is covered",
+
+	// Goal notes (free-text, shown on the card; edited in the goal editor).
+	"goals.notesLabel":       "Notes",
+	"goals.notesPlaceholder": "Why this goal matters, the plan, reminders…",
 }
 
 func init() {

@@ -883,6 +883,10 @@ type Goal struct {
 	// flag compares a freshly derived figure against this to notice >10% drift.
 	// Zero when the target was never auto-derived. Optional/additive; JSON round-trips.
 	EssentialBasisMinor int64 `json:"essentialBasisMinor,omitempty"`
+	// Notes is a free-text note attached to the goal (why it exists, the plan, reminders).
+	// Plain text; rides the dataset export/sync. Empty = no note. Additive/JSON-persisted;
+	// existing goals load with "".
+	Notes string `json:"notes,omitempty"`
 }
 
 // IsPaused reports whether the goal is paused at reference time now — its

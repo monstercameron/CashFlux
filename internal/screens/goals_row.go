@@ -496,7 +496,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	// kind action + the menu.
 	var editItem ui.Node = Fragment()
 	if !g.Archived {
-		editItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		editItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-edit-btn-"+g.ID), Attr("aria-label", uistate.T("goals.editTitle")),
 			OnClick(openEdit), uistate.T("action.edit"))
 	}
@@ -506,7 +506,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	// primary action; one action, one entry point, one name.)
 	var reviewItem ui.Node = Fragment()
 	if g.ReviewCadence != "" && !g.Archived {
-		reviewItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		reviewItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-review-btn-"+g.ID), OnClick(doMarkReviewed), uistate.T("goals.markReviewed"))
 	}
 
@@ -516,10 +516,10 @@ func GoalRow(props goalRowProps) ui.Node {
 	var pauseItem ui.Node = Fragment()
 	if !g.Archived && !complete {
 		if g.IsPaused(now) {
-			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			pauseItem = Button(css.Class("btn btn-tool"), Type("button"),
 				Attr("data-testid", "goal-resume-btn-"+g.ID), OnClick(openPause), uistate.T("goals.resumeAction"))
 		} else {
-			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			pauseItem = Button(css.Class("btn btn-tool"), Type("button"),
 				Attr("data-testid", "goal-pause-btn-"+g.ID), OnClick(openPause), uistate.T("goals.pauseAction"))
 		}
 	}
@@ -527,10 +527,10 @@ func GoalRow(props goalRowProps) ui.Node {
 	// Archive / Unarchive live in the ⋯ menu (archive shows on any complete active goal).
 	var archiveItem ui.Node = Fragment()
 	if g.Archived {
-		archiveItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		archiveItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-unarchive-"+g.ID), OnClick(doUnarchive), uistate.T("goals.unarchive"))
 	} else if complete {
-		archiveItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		archiveItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-archive-"+g.ID), OnClick(doArchive), uistate.T("goals.archive"))
 	}
 
@@ -540,11 +540,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	var undoItem, resetItem ui.Node = Fragment(), Fragment()
 	if financial && !g.Archived {
 		if len(g.Contributions) > 0 {
-			undoItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			undoItem = Button(css.Class("btn btn-tool"), Type("button"),
 				Attr("data-testid", "goal-undo-contrib-"+g.ID), OnClick(doUndoContribution), uistate.T("goals.undoContribution"))
 		}
 		if g.CurrentAmount.Amount > 0 {
-			resetItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			resetItem = Button(css.Class("btn btn-tool"), Type("button"),
 				Attr("data-testid", "goal-reset-"+g.ID), OnClick(doResetGoal), uistate.T("goals.resetToZero"))
 		}
 	}
@@ -614,6 +614,16 @@ func GoalRow(props goalRowProps) ui.Node {
 		planLabel = uistate.T("goalsredesign.planHide")
 	}
 
+	// A free-text note on the goal — a clamped preview that opens the goal editor on click
+	// (where the full note is read/edited), mirroring the budget card.
+	var goalNotesNode ui.Node = Fragment()
+	if notes := strings.TrimSpace(g.Notes); notes != "" {
+		goalNotesNode = Button(ClassStr("acct-notes goal-notes"), Type("button"), Attr("data-testid", "goal-notes-"+g.ID),
+			Attr("aria-label", uistate.T("goals.notesLabel")), Title(uistate.T("goals.editTitle")), OnClick(openEdit),
+			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
+			Span(css.Class("acct-notes-text"), notes))
+	}
+
 	return Div(ClassStr("goal-card "+cardState),
 		Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
 		// GL6: the goal's vision image as a small banner atop the card (when attached).
@@ -648,6 +658,7 @@ func GoalRow(props goalRowProps) ui.Node {
 		// remaining gap (capped at the account's free cash) without opening the modal.
 		quickFundChip,
 		subSection,
+		goalNotesNode,
 		// GL3: one-tap emergency-fund sizing from the derived essential month.
 		ui.CreateElement(GoalEmergencySizer, goalEmergencyProps{App: appstate.Default, Goal: g}),
 		// GL4 + Task 2: the contribution slider is opt-in — a disclosure chip reveals it
@@ -667,22 +678,23 @@ func GoalRow(props goalRowProps) ui.Node {
 		// GL5: shared-goal per-member pledge split bar (renders only when pledged).
 		ui.CreateElement(GoalPledgeBar, goalPledgeProps{App: appstate.Default, Goal: g, Members: props.Members}),
 		todosSection,
-		// Footer: the primary kind action + the shared viewport-aware ⋯ KebabMenu, which
-		// now holds Edit (opens the flip editor), the contribution controls, archive, and
-		// the destructive delete.
+		// Footer: the primary kind action, the everyday actions surfaced INLINE as labelled
+		// tool buttons (Edit / Mark reviewed / Pause / Undo / Reset / Archive), and a slim ⋯
+		// menu that now holds only the destructive Delete (standing directive: delete stays
+		// in the kebab, never an always-visible row button).
 		Div(css.Class("goal-card-actions"),
 			primaryAction,
+			editItem,
+			reviewItem,
+			pauseItem,
+			undoItem,
+			resetItem,
+			archiveItem,
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "goal-menu-" + g.ID,
 				AriaLabel:    uistate.T("goals.moreActions"),
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
-					editItem,
-					reviewItem,
-					pauseItem,
-					undoItem,
-					resetItem,
-					archiveItem,
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),
 				},
 			}),

@@ -1,3 +1,20 @@
+## 2026-07-16 — Notes on goals + goal actions moved out of the kebab
+
+Cam: "add notes to goals as well" + "move the non-delete menu opts outside of the kebab menu." Notes:
+added `Goal.Notes` (additive/JSON), a Notes textarea in the goal editor (`goals_edit_form.go`:
+`notesS`/`onNotes`, saved via `gg.Notes`), and a clamped note preview on the goal card that opens the
+editor on click (`goalNotesNode`, reusing the `.acct-notes` button + `.goal-notes`). Kebab: the goal
+card's ⋯ menu held Edit/Mark-reviewed/Pause/Undo/Reset/Archive + Delete; converted the six non-delete
+items from `add-item` menu buttons to inline `btn btn-tool` (replace-all of the shared
+`css.Class("add-item"),…menuitem` prefix — the danger Delete kept its own class) and moved them into the
+`.goal-card-actions` row, leaving only Delete in the kebab (standing directive). Seed: notes on
+goal-house + goal-emergency. Build note: `go build` is currently red from the concurrent session's
+in-flight reports/networth refactor (undefined `trendBuckets`/`tableau10`, unused imports in
+`networth.go`/`reports_screen.go`/`reports_annual.go`) — all uncommitted/untracked, NONE mine; a filtered
+build shows zero errors in my files and store/domain tests pass, so the commit (my files only) is clean
+and HEAD-compilable. Deploy is pending their build going green. `entities.go`, `goals_edit_form.go`,
+`goals_row.go`, `sample.go`, `en_goalsredesign.go`.
+
 ## 2026-07-16 — Budget to-dos deep-link to the To-do list filtered to that budget
 
 Cam: clicking a budget's follow-up should route to /todo filtered to THIS budget. The existing link
