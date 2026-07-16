@@ -89,11 +89,17 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
 	uiw.AnchorPopover(open.Get(), wrapID)
 
-	// Hover intent: reveal only after 500ms of CONTINUOUS hover, so a pointer merely
-	// passing over the row never flashes the popover. The timer callback re-reads the live
-	// hover flag, so leaving before 500ms cancels the reveal (no clearTimeout needed).
-	onEnter := ui.UseEvent(func(e ui.Event) {
+	// `hovering` tracks the pointer being over the chip OR the popover (one combined hover
+	// region), so the same enter/leave handlers wire to both — that's what lets the mouse
+	// cross the small gap from the chip into the popover without it despawning.
+	//
+	// enter: reveal only after 500ms of CONTINUOUS hover (a pointer merely passing over the
+	// row never flashes it) — and cancel any pending close.
+	enter := func() {
 		hovering.Set(true)
+		if open.Get() {
+			return // already open; the flag cancels the grace-period close
+		}
 		var cb js.Func
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
 			if hovering.Get() {
@@ -103,11 +109,24 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			return nil
 		})
 		js.Global().Call("setTimeout", cb, 500)
-	})
-	onLeave := ui.UseEvent(func(e ui.Event) {
+	}
+	// leave: don't despawn instantly — wait a short grace period so the pointer can bridge
+	// the chip→popover gap. The callback re-reads the live flag, so re-entering (chip or
+	// popover) within the window keeps it open.
+	leave := func() {
 		hovering.Set(false)
-		open.Set(false)
-	})
+		var cb js.Func
+		cb = js.FuncOf(func(js.Value, []js.Value) any {
+			if !hovering.Get() {
+				open.Set(false)
+			}
+			cb.Release()
+			return nil
+		})
+		js.Global().Call("setTimeout", cb, 240)
+	}
+	onEnter := ui.UseEvent(func(e ui.Event) { enter() })
+	onLeave := ui.UseEvent(func(e ui.Event) { leave() })
 	// Click still navigates (StopPropagation so the chip doesn't also open the row's edit
 	// modal). The popover is glance-only; the chip is the way to open the full list.
 	onClick := ui.UseEvent(func(e ui.Event) {
@@ -121,6 +140,9 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 	if open.Get() {
 		kids := []any{ClassStr("add-menu txnfu-pop"), Attr("role", "dialog"),
 			Attr("data-testid", "txn-followup-pop-"+props.TxnID),
+			// Hovering the popover keeps it open (cancels the grace-period close), so the
+			// pointer can move off the chip and read/interact with the list.
+			OnMouseEnter(onEnter), OnMouseLeave(onLeave),
 			Div(css.Class("txnfu-pop-head"), uistate.T("transactions.followUpsPopHead", props.Open, props.Total)),
 		}
 		for _, it := range props.Items {
@@ -136,7 +158,9 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 				If(it.Due != "", Span(css.Class("txnfu-item-due"), it.Due)),
 			))
 		}
-		kids = append(kids, Div(css.Class("txnfu-pop-foot"), uistate.T("transactions.followUpsPopLink")))
+		kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"),
+			Attr("data-testid", "txn-followup-pop-link-"+props.TxnID), OnClick(onClick),
+			uistate.T("transactions.followUpsPopLink")))
 		pop = Div(kids...)
 	}
 

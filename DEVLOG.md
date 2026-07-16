@@ -38,6 +38,15 @@ shown at 750ms with the items, route stays /transactions. Then Cam flagged the n
 "fighting" the popover — removed the chip's `title` attr (the popover is the rich hover content now),
 keeping `aria-label` for screen readers. Verified: `title` is null, popover still opens, 0 errors.
 
+Then Cam hit the classic hover-popover gap: a 1-5px gap between the chip and the anchored popover meant
+moving toward it fired `mouseleave` → instant despawn before you could reach it. Fix per his suggestion
+(a short TTL): `leave()` no longer closes immediately — it schedules a ~240ms grace-period close that
+re-reads the live hover flag, and the popover Div now carries the SAME enter/leave handlers, so entering
+it flips the flag back on and cancels the close. So the pointer can bridge the gap and read/interact;
+moving fully away still closes after the grace window. Made the popover's footer a real "open in To-do"
+button (now reachable). e2e-verified with stepped mouse moves: popover stays open after bridging into it,
+footer click → /todo filtered, and it closes when the pointer moves far away. 0 errors on all 8 pages.
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly

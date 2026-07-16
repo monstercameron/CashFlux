@@ -136,12 +136,24 @@ func registerTxcFieldsSurface() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".txnfu-pop-foot",
+		prop("appearance", "none"),
+		border("0"),
+		background("transparent"),
+		fontFamily("inherit"),
+		width("100%"),
+		cursor("pointer"),
 		marginTop("0.25rem"),
-		paddingTop("0.35rem"),
+		paddingTop("0.4rem"),
+		paddingBottom("0.15rem"),
 		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
-		fontSize("0.72rem"),
+		fontSize("0.74rem"),
+		fontWeight("600"),
 		color("var(--accent)"),
 		textAlign("center"),
+		transition("background .12s ease"),
+	)
+	rule(".txnfu-pop-foot:hover",
+		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 	)
 
 	// TXC-3: quick-filter preset chips above the ledger.
