@@ -241,8 +241,38 @@ func registerTxcFieldsSurface() {
 		whiteSpace("nowrap"),
 		minWidth("0"),
 	)
-	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text)",
+	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text):not(.txn-desc-tags)",
 		flex("none"),
+	)
+	// Tags appended after the description: a shrinkable, clipping group so they add
+	// information without ever stretching the column (min-width:0 + overflow:hidden means
+	// their min-content contribution is ~0, so an auto-layout column won't widen for them;
+	// a tight row clips the trailing tag instead of spilling).
+	rule(".txn-table td.row-desc-cell .txn-desc-tags",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		minWidth("0"),
+		overflow("hidden"),
+		flex("0 1 auto"),
+	)
+	rule(".txn-desc-tag",
+		flexShrink("0"),
+		maxWidth("8rem"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontSize("0.68rem"),
+		lineHeight("1"),
+		padding("0.15rem 0.4rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
+		color("var(--text-dim)"),
+	)
+	rule(".txn-desc-tag.txn-desc-tag-more",
+		background("transparent"),
+		color("var(--text-faint)"),
+		padding("0.15rem 0.2rem"),
 	)
 	// When a follow-up popover is open, lift the description cell above sibling cells/rows
 	// and stop it clipping the popover. The generated `td:has(> .add-wrap > .add-menu)` rule

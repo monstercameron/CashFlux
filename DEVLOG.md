@@ -1,3 +1,19 @@
+## 2026-07-16 — Transaction tags inline in the description column (no overflow / no stretch)
+
+Cam: "append tags attached to the transaction in the description col without overflowing or stretching the
+container." The description cell is already the flex row I built for the follow-up pill (`.row-desc-cell`
+→ `.row-desc-inner`, only `.row-desc-text` shrinks; everything else `flex:none`). Threaded the txn's
+`Tags` into the row props and rendered up to 3 `#tag` chips right after the description text, with a "+N"
+overflow chip beyond that. The no-stretch requirement is the interesting bit: in an auto-layout table a
+cell's column width grows with its min-content, so `flex:none` chips would *widen* the Description column.
+Fix: the tag group is `flex:0 1 auto; min-width:0; overflow:hidden`, so its min-content contribution is
+~0 — the column can't widen for it, and a tight row clips the trailing tag instead of spilling. That
+meant excluding `.txn-desc-tags` from the `> :not(.row-desc-text){flex:none}` rule (which otherwise, at
+(0,4,1) specificity, pinned it non-shrinkable). Verified: bonus rows show `#bonus`, honeymoon shows
+`#vacation #honeymoon`, the description ellipsizes to make room, the cell stays 166px (unchanged), no tag
+group overflows its cell, no page horizontal scroll, 0 console errors. `transactions_widget.go`,
+`rules_txcfields.go`, `en_txcfields.go`.
+
 ## 2026-07-16 — Seed: transaction follow-up links (populate the new chip out of the box)
 
 Cam: "refine the seed to add more links between the main 8 pages and more interesting links and errata."

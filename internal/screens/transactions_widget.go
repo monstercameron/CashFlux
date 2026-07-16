@@ -608,6 +608,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Amount:              fmtMoney(amt),
 			AmtTone:             figTone(amt),
 			Desc:                desc,
+			Tags:                txByID[rid].Tags,
 			Account:             accCol.Str(i),
 			Category:            cat,
 			Source:              srcCol.Str(i),
@@ -770,6 +771,7 @@ type txnFrameRowProps struct {
 	TrendMerchant string
 	ShowTrend     bool // defer chip mount until after the table settles (perf)
 	Desc          string
+	Tags          []string // appended after the description as small chips (capped, non-stretching)
 	Account       string
 	Category      string
 	Source        string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
@@ -886,6 +888,27 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			Attr("title", uistate.T("txnlinks.refundedBadge")), "↩ "+uistate.T("txnlinks.refundedBadge"))
 	}
 
+	// Tags appended after the description: up to 3 small chips in a shrinkable,
+	// overflow-hidden group so they never widen the column or spill — extras collapse
+	// to a "+N". The whole group can flex-shrink (min-width:0), so a tight row clips
+	// the tags cleanly rather than stretching the cell.
+	var tagsNode ui.Node = Fragment()
+	if len(props.Tags) > 0 {
+		const maxTags = 3
+		kids := []any{ClassStr("txn-desc-tags"), Attr("data-testid", "txn-row-tags")}
+		for i, tg := range props.Tags {
+			if i >= maxTags {
+				break
+			}
+			kids = append(kids, Span(css.Class("txn-desc-tag"), Attr("title", tg), "#"+tg))
+		}
+		if extra := len(props.Tags) - maxTags; extra > 0 {
+			kids = append(kids, Span(css.Class("txn-desc-tag txn-desc-tag-more"),
+				Attr("title", uistate.T("transactions.tagsMoreTitle", extra)), "+"+strconv.Itoa(extra)))
+		}
+		tagsNode = Span(kids...)
+	}
+
 	// Untagged rows show a muted em dash so "where did this come from?" reads as
 	// "not recorded" rather than a real source.
 	srcClass := "td-source"
@@ -927,6 +950,7 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
 					Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
 				Span(css.Class("row-desc-text"), props.Desc),
+				tagsNode,
 				// Follow-up indicator, to the right of the description: a chip with the open/total
 				// count that reveals a hover popover listing the linked to-dos, and links to the
 				// filtered To-do list on click. Own component (owns its state + hover hooks); the

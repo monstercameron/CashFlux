@@ -47,6 +47,8 @@ var txcFieldKeys = Catalog{
 	"transactions.followUpsAllDone": "All follow-ups done ✓",
 	// New "Transactions" option in the To-do link filter.
 	"todo.linkTransactionPl": "Linked to transactions",
+	// Overflow chip when a row has more tags than the description column shows inline.
+	"transactions.tagsMoreTitle": "%d more tag(s)",
 
 	// TXC-3 quick-filter presets.
 	"transactions.presetsLabel":        "Quick filters",
