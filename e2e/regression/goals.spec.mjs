@@ -44,19 +44,23 @@ test.describe("goals: decluttered toolbar", () => {
   });
 });
 
-test.describe("goals: card actions moved into the ⋯ menu", () => {
-  test("Edit lives in the kebab; Set aside is the card primary and NOT duplicated in the menu", async ({ app }) => {
+test.describe("goals: everyday actions inline, kebab keeps only Delete", () => {
+  // The contract flipped on 2026-07-16 (Cam: "move the non-delete menu opts
+  // outside of the kebab"): Edit and the other everyday actions are inline
+  // tool buttons on the card; the ⋯ menu holds only the destructive Delete.
+  test("Edit is inline on the card; the kebab holds Delete and nothing else duplicates Set aside", async ({ app }) => {
     await nav(app, "/goals");
     const gid = await firstGoalId(app);
-    // No inline Edit button directly in the card footer.
-    await expect(app.locator(`.goal-card-actions > [data-testid="goal-edit-btn-${gid}"]`)).toHaveCount(0);
+    await expect(app.locator(`.goal-card-actions [data-testid="goal-edit-btn-${gid}"]`)).toBeVisible();
     const fid = await firstFinancialGoalId(app);
     const target = fid || gid;
     await app.getByTestId(`goal-menu-btn-${target}`).click();
-    await expect(app.locator(`.add-menu [data-testid="goal-edit-btn-${target}"]`)).toBeVisible();
+    // Kebab: Delete present, Edit no longer duplicated there.
+    await expect(app.locator(`.add-menu [data-testid="goal-delete-btn-${target}"]`)).toBeVisible();
+    await expect(app.locator(`.add-menu [data-testid="goal-edit-btn-${target}"]`)).toHaveCount(0);
     if (fid) {
-      // One action, one entry point, one name: the old kebab "Allocate funds"
-      // duplicate is gone — Set aside lives on the card only.
+      // One action, one entry point, one name: no kebab "Allocate funds"
+      // duplicate — Set aside lives on the card only.
       await expect(app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`)).toHaveCount(0);
       await expect(app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"]`)).toBeVisible();
     }
@@ -79,8 +83,8 @@ test.describe("goals: edit form — review cadence + multi-link", () => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
-    await app.getByTestId(`goal-menu-btn-${fid}`).click();
-    await app.locator(`.add-menu [data-testid="goal-edit-btn-${fid}"]`).click();
+    // Edit is an inline card action since the 2026-07-16 kebab de-clutter.
+    await app.locator(`.goal-card-actions [data-testid="goal-edit-btn-${fid}"]`).click();
     await app.waitForTimeout(650); // flip
     const dialog = app.locator('[role="dialog"]');
     await expect(dialog.getByTestId("goal-edit-review")).toBeVisible();
@@ -181,18 +185,39 @@ test.describe("goals: virtual allocation", () => {
     await expect(app.locator(`[data-testid="ea-goal-${fid}"] .ea-row`)).toHaveCount(before - 1);
   });
 
-  test("the allocate picker lists only liquid cash accounts (no debts, 401k, property, brokerage)", async ({ app }) => {
+  test("the allocate picker offers any non-liability account — cash first, held assets tagged, never debts", async ({ app }) => {
+    // Contract change 2026-07-16 (Cam): an earmark is a virtual reservation,
+    // so ANY asset qualifies — liquid cash lists first, held assets (401k,
+    // property, brokerage) follow with a "held asset" tag. Liabilities never.
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
     await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const dialog = app.locator('[role="dialog"]');
-        const names = await dialog.locator(".goal-alloc-acct").allInnerTexts();
+    const names = await dialog.locator(".goal-alloc-acct").allInnerTexts();
     expect(names.length).toBeGreaterThan(0);
-    // You can only earmark spendable cash — not liabilities, retirement, property, or brokerage.
+    // Liabilities stay out.
     for (const n of names) {
-      expect(n.toLowerCase()).not.toMatch(/credit card|car loan|loan|mortgage|401|retirement|condo|property|stonks|brokerage|investment/);
+      expect(n.toLowerCase()).not.toMatch(/credit card|car loan|student loan|mortgage/);
+    }
+    // Held assets are offered (the seed has a 401(k) + a brokerage + the condo)…
+    expect(names.join(" ").toLowerCase()).toMatch(/401|stonks|condo/);
+    // …each carrying the held-asset tag, and always AFTER the liquid accounts.
+    const tags = await dialog.locator(".goal-alloc-type").allInnerTexts();
+    expect(tags.length).toBeGreaterThan(0);
+    for (const t of tags) {
+      expect(t.toLowerCase()).toContain("held asset");
+    }
+    const rows = dialog.locator(".goal-alloc-row");
+    const rowCount = await rows.count();
+    let seenHeld = false;
+    for (let i = 0; i < rowCount; i++) {
+      const isHeld = (await rows.nth(i).locator(".goal-alloc-type").count()) > 0;
+      if (seenHeld) {
+        expect(isHeld, `liquid row after a held-asset row at index ${i}`).toBe(true);
+      }
+      seenHeld = seenHeld || isHeld;
     }
   });
 });

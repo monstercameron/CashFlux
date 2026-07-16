@@ -1,3 +1,22 @@
+## 2026-07-16 — Earmarks open to any non-liability account
+
+Cam: "Set aside money modal should allow us to earmark money from any non liability account." The
+C7-era rule (liquid cash only) was right for money MOVEMENTS but wrong for earmarks — a reservation
+is virtual, and goal savings genuinely live in brokerages. Split the predicate in two:
+`earmarkEligibleType` (liquid) still gates every real movement (transfers, ledger-posted
+contributions, quick-fund), while new `earmarkSourceAccount` (non-archived + non-liability by the
+account's class AND its type — the class check matters because an "other" account can be user-marked
+as debt) gates earmark sources. Modal: liquid first, held assets after with a "%s · held asset" tag;
+the none-picked auto-split fallback deliberately stays liquid-only (one tap must never reserve
+against a house — the drain-everything lesson from the goals cycle, applied again). Earmarks tab
+money map widened to the same set so a brokerage earmark stays reconciled; that made "In accounts"
+jump from ~$48k to ~$383k (condo), which surfaced two knock-ons: the share bar floored to 0% and
+vanished (min 1% sliver now), and two goals e2e specs asserted the OLD contracts (picker excludes
+401k/property; Edit lives in the kebab — the latter stale from the other session's Cam-directed
+kebab de-clutter). Specs updated to the new contracts, 13/13 green. Verified live: 8 accounts
+offered (4 cash then 401(k)/Stonks/Condo/Roth tagged), split-even targets only the 4 cash accounts,
+$500 Stonks earmark saves and shows on the Earmarks tab. v1.0.60, SW v335.
+
 ## 2026-07-16 — Annual Review polish round: quiet §05, axes on everything, source links
 
 Three rapid Cam directives on the fresh Annual Review. (1) "Section 5 visually doesn't make sense —

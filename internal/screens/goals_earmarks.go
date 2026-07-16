@@ -94,12 +94,13 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		}
 	}
 
-	// Money map: the household-level reconciliation — everything in earmark-eligible
-	// accounts, how much of it is reserved (earmarked), and what's still free to assign.
+	// Money map: the household-level reconciliation — everything in earmarkable
+	// accounts (any non-liability asset, matching the Set-aside modal's list),
+	// how much of it is reserved (earmarked), and what's still free to assign.
 	// This is the "where does my money stand" answer the per-account cards below detail.
 	var totalBal int64
 	for _, a := range accounts {
-		if !earmarkEligibleType(a.Type) {
+		if !earmarkSourceAccount(a) {
 			continue
 		}
 		bal, _ := ledger.Balance(a, txns)
@@ -110,12 +111,17 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	if totalFree < 0 { // more earmarked than money on hand — over-committed
 		freeMod = " " + tw.Fold(tw.TextWarn)
 	}
-	// Earmarked share of the whole, for the split bar (clamped 0..100).
+	// Earmarked share of the whole, for the split bar (clamped 0..100). With
+	// held assets in the denominator a real-but-small earmark can floor to 0%
+	// — keep a 1% sliver so money that IS reserved never renders as nothing.
 	earmarkedShare := 0
 	if totalBal > 0 {
 		earmarkedShare = int(grandTotal * 100 / totalBal)
 		if earmarkedShare > 100 {
 			earmarkedShare = 100
+		}
+		if earmarkedShare == 0 && grandTotal > 0 {
+			earmarkedShare = 1
 		}
 	}
 	moneyMap := uiw.Card(uiw.CardProps{

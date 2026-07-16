@@ -896,7 +896,8 @@ var english = Catalog{
 	// Virtual allocation ("earmarks").
 	"goals.allocate":                  "Set aside money",
 	"goals.allocateTitle":             "Set aside money",
-	"goals.allocateIntro":             "Reserve money you already have — no transaction is posted. Earmark part of an account's balance toward this goal.",
+	"goals.allocateIntro":             "Reserve money you already have — no transaction is posted. Earmark part of any asset's balance toward this goal; cash accounts list first, held assets below them.",
+	"goals.allocHeldTag":              "%s · held asset",
 	"goals.allocateAvail":             "%s free",
 	"goals.allocateFooter":            "Earmarked %s of %s target",
 	"goals.allocateSave":              "Save earmarks",
@@ -934,7 +935,7 @@ var english = Catalog{
 	"goals.allocSplitLabel":           "Total to earmark",
 	"goals.allocSplitEven":            "Split evenly",
 	"goals.allocSplitProp":            "Split by balance",
-	"goals.allocSplitHint":            "Auto-fills the amounts across your picked accounts — or all of them if none are picked. Capped at each account's free balance.",
+	"goals.allocSplitHint":            "Auto-fills the amounts across your picked accounts — or your cash accounts if none are picked (held assets only join when you check them). Capped at each account's free balance.",
 	"goals.allocSplitBad":             "Enter a total amount to split first.",
 	"goals.earmarkNone":               "Not earmarked",
 	"goals.earmarkPartial":            "Partly earmarked",

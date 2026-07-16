@@ -86,14 +86,22 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 		txns = app.Transactions()
 		accounts = app.Accounts()
 	}
-	// You earmark from money you can actually MOVE — only liquid cash accounts (checking /
-	// debit / savings / cash), never liabilities, illiquid holdings (retirement, property,
-	// vehicle, brokerage estimates), or archived accounts. Showing a 401(k) or home equity
-	// as "free" to reserve toward a savings goal would be misleading. The picker and the
-	// save loop both iterate this eligible set.
+	// You can earmark from ANY non-liability account: an earmark is a virtual
+	// reservation, not a money movement, and savings for a goal can legitimately
+	// live in a brokerage or other held asset. Liquid cash (checking / debit /
+	// savings / cash) lists first; held assets (investment, retirement, crypto,
+	// property, vehicle, other) follow, each tagged with its type so reserving
+	// against a 401(k) or a home's estimated value is a deliberate, informed
+	// choice — never a hidden one. Liabilities and archived accounts stay out.
+	// The picker and the save loop both iterate this eligible set.
 	eligible := make([]domain.Account, 0, len(accounts))
 	for _, a := range accounts {
-		if !a.Archived && earmarkEligibleType(a.Type) {
+		if earmarkSourceAccount(a) && earmarkEligibleType(a.Type) {
+			eligible = append(eligible, a)
+		}
+	}
+	for _, a := range accounts {
+		if earmarkSourceAccount(a) && !earmarkEligibleType(a.Type) {
 			eligible = append(eligible, a)
 		}
 	}
@@ -176,7 +184,14 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 			}
 		}
 		if len(targets) == 0 {
-			targets = eligible
+			// Nothing picked: auto-fill spreads across LIQUID cash only. Held
+			// assets (401(k), property, brokerage) join a split only when
+			// explicitly checked — one tap must never reserve against a house.
+			for _, a := range eligible {
+				if earmarkEligibleType(a.Type) {
+					targets = append(targets, a)
+				}
+			}
 		}
 		avails := make([]int64, len(targets))
 		for i, a := range targets {
@@ -270,9 +285,14 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 				avail := availMinor(a.ID)
 				typed, terr := money.ParseMinor(strings.TrimSpace(amountsS.Get()[a.ID]), dec)
 				over := selS.Get()[a.ID] && terr == nil && typed > avail
+				typeTag := ""
+				if !earmarkEligibleType(a.Type) {
+					typeTag = uistate.T("goals.allocHeldTag", humanizeType(string(a.Type)))
+				}
 				return ui.CreateElement(goalAllocateRow, goalAllocateRowProps{
 					AccountID:   a.ID,
 					AccountName: a.Name,
+					TypeTag:     typeTag,
 					AvailStr:    uistate.T("goals.allocateAvail", fmtMoney(money.New(avail, cur))),
 					Value:       amountsS.Get()[a.ID],
 					Selected:    selS.Get()[a.ID],
@@ -333,9 +353,9 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 	)
 }
 
-// earmarkEligibleType reports whether an account type holds spendable cash you can
-// reserve toward a goal. Only truly liquid types qualify — not brokerage/retirement
-// (locked or market-risked) or property/vehicle (estimated value, not cash).
+// earmarkEligibleType reports whether an account type holds LIQUID spendable
+// cash. Liquid accounts lead the earmark picker and remain the only sources for
+// real money movements (transfers, ledger-posted contributions, quick-fund).
 func earmarkEligibleType(t domain.AccountType) bool {
 	switch t {
 	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings, domain.TypeCash:
@@ -343,6 +363,15 @@ func earmarkEligibleType(t domain.AccountType) bool {
 	default:
 		return false
 	}
+}
+
+// earmarkSourceAccount reports whether an account may be offered as an earmark
+// source at all: any non-archived account that isn't a liability — by its own
+// class (an "other" account can be user-marked as debt) or by its type. An
+// earmark is a virtual reservation, so held assets (brokerage, retirement,
+// property, …) qualify alongside liquid cash.
+func earmarkSourceAccount(a domain.Account) bool {
+	return !a.Archived && a.Class != domain.ClassLiability && !a.Type.IsLiability()
 }
 
 // sumAllocMinor totals a set of allocations in minor units (all share the goal currency).
@@ -357,6 +386,7 @@ func sumAllocMinor(allocs []domain.GoalAllocation) int64 {
 // goalAllocateRowProps drives one account's selectable earmark row.
 type goalAllocateRowProps struct {
 	AccountID, AccountName, AvailStr, Value string
+	TypeTag                                 string // non-empty on held-asset rows ("Retirement · held asset")
 	Selected                                bool
 	Over                                    bool                 // typed amount exceeds the account's free balance (blocks save)
 	OnToggle                                func(string)         // select/deselect the account
@@ -397,6 +427,7 @@ func goalAllocateRow(props goalAllocateRowProps) ui.Node {
 			Input(append([]any{Type("checkbox"), Attr("data-testid", "goal-alloc-pick-"+props.AccountID), OnChange(toggle)}, checkedAttr(props.Selected)...)...),
 			Div(css.Class("goal-alloc-row-main"),
 				Span(css.Class("goal-alloc-acct"), props.AccountName),
+				If(props.TypeTag != "", Span(css.Class("goal-alloc-type", tw.TextFaint), props.TypeTag)),
 				Span(css.Class("goal-alloc-avail", tw.TextDim), props.AvailStr),
 				overNote,
 			),

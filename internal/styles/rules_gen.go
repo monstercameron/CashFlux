@@ -8304,6 +8304,11 @@ func registerGenerated() {
 		fontSize("0.78rem"),
 		fontVariantNumeric("tabular-nums"),
 	)
+	// Held-asset tag on non-liquid earmark rows ("Retirement · held asset").
+	rule(".goal-alloc-type",
+		fontSize("0.72rem"),
+		whiteSpace("nowrap"),
+	)
 	// Specific enough (0,3,0) to beat the form's ".acct-edit-form .field { width:100% }"
 	// rule, which would otherwise stretch the amount field over the account name.
 	rule(".goal-allocate .goal-alloc-row .goal-alloc-input",
