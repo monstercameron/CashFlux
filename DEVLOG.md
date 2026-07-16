@@ -1,3 +1,18 @@
+## 2026-07-16 — Budget rows: all actions inline, kebab removed (v1.0.51)
+
+Cam, mid budget-workflow analysis: "move more of the buttons out of the kebab now that there is more
+horizontal space." The full-width budget card's kebab held only the two destructive actions (Remove
+recurring, Delete). Surfaced both inline and removed the overflow menu entirely — `budgets_row.go`
+loses the `menuOpen`/`UseId`/`DismissPopover`/`AnchorPopover` machinery and the `add-wrap` block; the
+destructive pair now render as `bt-danger` tool buttons inside a right-aligned `.budget-actions-danger`
+group (`margin-left:auto`), so they're visible but quiet and set apart from the constructive actions.
+This reverses the earlier "keep Delete out of the always-visible row" call — at Cam's explicit
+direction, tempered by the danger-tint + right-alignment so a red control never sits amid the everyday
+buttons. Updated budgets.spec (the stale "in the ⋯ menu" test → "every action inline, no kebab") and
+the two interactions.spec cat-picker tests (click the inline button, no kebab hop). Note: 4 other
+budgets tests fail on PRE-EXISTING toolbar drift (`.budgets-toolbar-actions` renamed by concurrent
+work), unrelated to this change.
+
 ## 2026-07-16 — Transactions surface their follow-up tasks + quick link
 
 Follow-on to the txn→follow-up-task feature: Cam wanted it apparent on the transactions which charges

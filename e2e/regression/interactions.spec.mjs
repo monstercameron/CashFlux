@@ -309,13 +309,12 @@ test.describe("bill auto-link rule", () => {
 });
 
 test.describe("multi-category budgets", () => {
-  test("edit a budget's tracked categories via the kebab modal", async ({ app }) => {
+  test("edit a budget's tracked categories via the inline row button", async ({ app }) => {
     await nav(app, "/budgets");
-    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
-    await kebab.scrollIntoViewIfNeeded();
-    const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
-    await kebab.click();
-    await app.locator(`[data-testid="edit-budget-cats-btn-${bid}"]`).click();
+    const catsBtn = app.locator('[data-testid^="edit-budget-cats-btn-"]').first();
+    await catsBtn.scrollIntoViewIfNeeded();
+    const bid = (await catsBtn.getAttribute("data-testid")).replace("edit-budget-cats-btn-", "");
+    await catsBtn.click();
     await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
     await app.waitForTimeout(650); // FlipPanel flip
 
@@ -337,12 +336,10 @@ test.describe("multi-category budgets", () => {
 test.describe("budget category picker", () => {
   test("search filters the list; add form embeds the picker", async ({ app }) => {
     await nav(app, "/budgets");
-    // Kebab modal: search narrows the checklist.
-    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
-    await kebab.scrollIntoViewIfNeeded();
-    const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
-    await kebab.click();
-    await app.locator(`[data-testid="edit-budget-cats-btn-${bid}"]`).click();
+    // Tracked-categories modal (opened from the inline row button): search narrows the checklist.
+    const catsBtn = app.locator('[data-testid^="edit-budget-cats-btn-"]').first();
+    await catsBtn.scrollIntoViewIfNeeded();
+    await catsBtn.click();
     await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
     await app.waitForTimeout(650);
     const before = await app.locator('[data-testid^="budgetcat-pick-"]').count();

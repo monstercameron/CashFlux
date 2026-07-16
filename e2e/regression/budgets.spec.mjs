@@ -1,26 +1,29 @@
-// budgets.spec.mjs — regressions for the budgets redesign: Transactions/Notes/Formulas
-// in the kebab, the enhanced top-up (this-month vs permanent + fund-from-budgets), the
-// notes modal, the copyable formulas modal, the sort picker, and the 50/30/20 template
-// living inside the Add-budget modal.
+// budgets.spec.mjs — regressions for the budgets redesign: the full-width row with every
+// action surfaced INLINE (no ⋯ overflow) — Transactions/Edit/Categories/Notes/Formulas and
+// a right-aligned danger group (Remove recurring, Delete); the enhanced top-up (this-month
+// vs permanent + fund-from-budgets); the notes modal; the copyable formulas modal; the sort
+// picker; and the 50/30/20 template living inside the Add-budget modal.
 import { test, expect, nav } from "./fixtures.mjs";
 
-async function firstKebab(app) {
-  const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
-  await kebab.scrollIntoViewIfNeeded();
-  const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
-  await kebab.click();
-  return bid;
+// firstBudgetId returns the id of the first budget row (derived from its inline Edit button).
+async function firstBudgetId(app) {
+  const edit = app.locator('[data-testid^="edit-budget-btn-"]').first();
+  await edit.scrollIntoViewIfNeeded();
+  return (await edit.getAttribute("data-testid")).replace("edit-budget-btn-", "");
 }
 
-test.describe("budgets: kebab + row actions", () => {
-  test("Transactions, Notes, and Formulas live in the ⋯ menu (not inline)", async ({ app }) => {
+test.describe("budgets: inline row actions (no kebab)", () => {
+  test("every action is surfaced inline in the footer — there is no ⋯ overflow menu", async ({ app }) => {
     await nav(app, "/budgets");
-    const bid = await firstKebab(app);
-    await expect(app.locator(`[data-testid="budget-view-txns-${bid}"]`)).toBeVisible();
-    await expect(app.locator(`[data-testid="budget-notes-btn-${bid}"]`)).toBeVisible();
-    await expect(app.locator(`[data-testid="budget-formulas-btn-${bid}"]`)).toBeVisible();
-    // No inline Transactions button in the card footer.
-    await expect(app.locator(`.budget-actions > [data-testid="budget-view-txns-${bid}"]`)).toHaveCount(0);
+    const bid = await firstBudgetId(app);
+    // The everyday + destructive actions are all direct children of the footer.
+    for (const t of ["budget-view-txns", "edit-budget-btn", "edit-budget-cats-btn", "budget-notes-btn", "budget-formulas-btn"]) {
+      await expect(app.locator(`.budget-actions [data-testid="${t}-${bid}"]`)).toBeVisible();
+    }
+    // Delete is inline (in the right-aligned danger group), not hidden in a menu.
+    await expect(app.locator(`.budget-actions .budget-actions-danger [data-testid="delete-budget-btn-${bid}"]`)).toBeVisible();
+    // The ⋯ kebab is gone entirely.
+    await expect(app.locator('[data-testid^="budget-kebab-"]')).toHaveCount(0);
   });
 });
 
@@ -45,7 +48,7 @@ test.describe("budgets: enhanced top-up", () => {
 test.describe("budgets: notes modal", () => {
   test("adding a note via the kebab modal shows a readable notes line on the card", async ({ app }) => {
     await nav(app, "/budgets");
-    const bid = await firstKebab(app);
+    const bid = await firstBudgetId(app);
     await app.locator(`[data-testid="budget-notes-btn-${bid}"]`).click();
     await app.waitForTimeout(650);
     const note = "Trim this once the baby-gear splurge settles — revisit in Q4.";
@@ -64,7 +67,7 @@ test.describe("budgets: notes modal", () => {
 test.describe("budgets: formulas modal", () => {
   test("shows the budget's variables with copy buttons", async ({ app }) => {
     await nav(app, "/budgets");
-    const bid = await firstKebab(app);
+    const bid = await firstBudgetId(app);
     await app.locator(`[data-testid="budget-formulas-btn-${bid}"]`).click();
     await app.waitForTimeout(650);
     await expect(app.getByTestId("budget-formulas")).toBeVisible();

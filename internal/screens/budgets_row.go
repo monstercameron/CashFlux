@@ -27,18 +27,13 @@ import (
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
 
-	// Secondary actions (Top up, Delete) live in a "⋯" overflow menu so the row stays
-	// uncluttered — matching the /accounts row. Selecting one closes the menu. Escape +
-	// outside-pointerdown dismiss it; AnchorPopover flips it left/up near the edge.
-	menuOpen := ui.UseState(false)
-	menuID := ui.UseId()
-	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
-	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
-	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
-	uiw.AnchorPopover(menuOpen.Get(), menuID)
+	// A full-width budget card has the horizontal room to surface every action inline,
+	// so there is no "⋯" overflow menu: the everyday actions are labelled tool buttons,
+	// and the destructive ones (Remove recurring, Delete) sit in a right-aligned, danger-
+	// tinted group — visible but quiet, and set apart from the constructive actions.
 	prefs := uistate.UsePrefs().Get()
 
-	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
+	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
 			// Pass EVERY tracked category so a multi-category budget drills to
@@ -55,11 +50,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// the lower-frequency action, so it lives in the ⋯ menu (and closes it); Top up is a
 	// visible card button.
 	openEdit := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
 	openCategories := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		uistate.SetBudgetCategoriesEdit(s.Budget.ID)
 	}))
 	openTopup := ui.UseEvent(Prevent(func() {
@@ -73,16 +66,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}))
 	// Notes + Formulas open their own modes of the same shell-root editor modal.
 	openNotes := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
 	}))
 	openFormulas := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
 	}))
-	// Transactions drill is a menu action (navigation), so it closes the menu first.
+	// Transactions drill navigates to the filtered ledger.
 	drillMenu := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		if props.OnDrill != nil {
 			props.OnDrill(s.Budget.TrackedCategoryIDs())
 		}
@@ -97,7 +87,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 	}))
 	removeRecurring := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
 			props.OnRemoveRecurring(s.Budget.ID)
 		}
@@ -267,27 +256,28 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// "Cover…" is offered on an over-budget row and opens the flip modal (which lists
 	// the other budgets to pull from). Top up is offered when not over.
 	isOver := s.State == budgeting.StateOver
-	menuHidden := ""
-	if !menuOpen.Get() {
-		menuHidden = " hidden-menu"
-	}
 	var coverBtn ui.Node = Fragment()
 	if isOver {
 		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))
 	}
 	// Top up is a visible card button (the frequent proactive action) on budgets that
-	// aren't over; Edit lives in the ⋯ menu as the lower-frequency action.
+	// aren't over.
 	var topupBtn ui.Node = Fragment()
 	if !isOver {
 		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
-	// card reads top-to-bottom: title → amount → bar → status → actions. Now that a budget
-	// card spans the full width, the everyday actions (Transactions, Edit, Categories,
-	// Notes, Formulas) are surfaced INLINE as labelled tool buttons instead of hiding in
-	// the ⋯ menu; only the rare/destructive actions (Remove recurring, Delete) stay in a
-	// slim overflow so a full-width card never carries an always-visible red Delete.
+	// card reads top-to-bottom: title → amount → bar → status → actions. A full-width card
+	// has room to surface EVERY action inline (no ⋯ overflow): the everyday actions are
+	// labelled tool buttons, and the destructive ones (Remove recurring, Delete) are pushed
+	// into a right-aligned, danger-tinted group — visible but quiet, set apart from the rest.
+	var removeRecurringBtn ui.Node = Fragment()
+	if hasRecurring {
+		removeRecurringBtn = Button(css.Class("btn btn-tool bt-danger"), Type("button"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID),
+			Title(uistate.T("budgets.removeRecurring")), OnClick(removeRecurring),
+			uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.removeRecurring")))
+	}
 	actionsRow := Div(css.Class("budget-actions"),
 		coverBtn,
 		topupBtn,
@@ -301,13 +291,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.notesAction"))),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas),
 			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.formulasAction"))),
-		Div(css.Class("add-wrap"), Attr("id", menuID),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
-				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
-			),
+		// Destructive group, right-aligned (margin-left:auto) and danger-tinted.
+		Div(css.Class("budget-actions-danger"),
+			removeRecurringBtn,
+			Button(css.Class("btn btn-tool bt-danger"), Type("button"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del),
+				uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.deleteAction"))),
 		),
 	)
 
