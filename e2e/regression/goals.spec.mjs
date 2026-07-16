@@ -191,3 +191,76 @@ test.describe("goals: virtual allocation", () => {
     }
   });
 });
+
+// earmarkGoal opens a financial goal's allocate modal, reserves `total` split evenly
+// across the liquid accounts, and saves. Used by the earmark-first UI tests below.
+async function earmarkGoal(app, fid, total) {
+  await app.getByTestId(`goal-menu-btn-${fid}`).click();
+  await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+  await app.waitForTimeout(650);
+  const d = app.locator('[role="dialog"]');
+  await d.getByTestId("goal-alloc-toggle").check();
+  await app.waitForTimeout(200);
+  await d.getByTestId("goal-alloc-total").fill(String(total));
+  await d.getByTestId("goal-alloc-split-even").click();
+  await app.waitForTimeout(200);
+  await d.getByTestId("goal-alloc-save").click();
+  await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
+}
+
+test.describe("goals: earmark-first reframe", () => {
+  test("Set aside is the primary action; earmarking draws the two-tone bar band", async ({ app }) => {
+    await nav(app, "/goals");
+    const fid = await firstFinancialGoalId(app);
+    test.skip(!fid, "no financial goal in the seed");
+
+    // "Set aside" (earmark) is the card's primary action; "Log saved" is the secondary
+    // — and the primary comes first in the footer (earmark-first ordering).
+    await expect(app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"]`)).toBeVisible();
+    await expect(app.locator(`.goal-card-actions [data-testid="goal-contribute-${fid}"]`)).toBeVisible();
+    const primaryFirst = await app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"], .goal-card-actions [data-testid="goal-contribute-${fid}"]`).first().getAttribute("data-testid");
+    expect(primaryFirst).toBe(`goal-setaside-${fid}`);
+
+    // After earmarking (the seed goal may already reserve some), the hatched earmark band
+    // extends the bar out to coverage, and the coverage line reports the reserved money.
+    await earmarkGoal(app, fid, 500);
+    await expect(app.locator(`[data-testid="goal-bar-earmark-${fid}"]`)).toBeVisible();
+    await expect(app.locator(`[data-testid="goal-earmarked-${fid}"]`)).toContainText(/earmarked/i);
+  });
+
+  test("the Earmarks tab opens with a money-map reconciliation (in accounts → earmarked → free)", async ({ app }) => {
+    await nav(app, "/goals");
+    const fid = await firstFinancialGoalId(app);
+    test.skip(!fid, "no financial goal in the seed");
+    await earmarkGoal(app, fid, 800);
+
+    await app.getByTestId("goals-tab-earmarks").click();
+    await app.waitForTimeout(400);
+    const map = app.getByTestId("earmarks-moneymap");
+    await expect(map).toBeVisible();
+    // All three reconciliation figures are present and labelled.
+    await expect(map).toContainText(/in accounts/i);
+    await expect(map).toContainText(/earmarked/i);
+    await expect(map).toContainText(/free to assign/i);
+    // The earmarked-share bar rendered.
+    await expect(map.locator(".ea-map-bar-fill")).toBeVisible();
+  });
+});
+
+test.describe("dashboard: Goals-at-a-glance widget", () => {
+  test("shows current / missed / completed counts and each opens Goals", async ({ app }) => {
+    await nav(app, "/");
+    // The tile is below the fold and its body renders on scroll-in (perf deferral).
+    const title = app.getByText("Goals at a glance", { exact: true }).first();
+    await title.scrollIntoViewIfNeeded();
+    await expect(app.getByTestId("goal-states-current")).toBeVisible({ timeout: 10000 });
+    await expect(app.getByTestId("goal-states-missed")).toBeVisible();
+    await expect(app.getByTestId("goal-states-completed")).toBeVisible();
+    // The current count is a positive number in the seed.
+    const cur = await app.locator('[data-testid="goal-states-current"] .dgs-n').innerText();
+    expect(parseInt(cur, 10)).toBeGreaterThan(0);
+    // Clicking a count opens the Goals page.
+    await app.getByTestId("goal-states-current").click();
+    await expect(app.locator('#main[data-route="/goals"]')).toBeVisible({ timeout: 10000 });
+  });
+});
