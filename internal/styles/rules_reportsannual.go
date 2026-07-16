@@ -144,6 +144,10 @@ func registerReportsAnnual() {
 		alignItems("center"),
 		gap("0.35rem"),
 		padding("0.25rem 0.55rem"),
+		border("none"),
+		background("transparent"),
+		fontFamily("inherit"),
+		cursor("pointer"),
 		borderRadius("999px"),
 		color("var(--text-dim)"),
 		textDecoration("none"),
@@ -172,7 +176,7 @@ func registerReportsAnnual() {
 	rule(".rpta-sec",
 		borderLeft("3px solid var(--rpta-zone)"),
 		paddingLeft("1.4rem"),
-		prop("scroll-margin-top", "6.5rem"),
+		prop("scroll-margin-top", "8.5rem"),
 	)
 	rule(".rpta-sec-head",
 		display("flex"),
@@ -295,10 +299,386 @@ func registerReportsAnnual() {
 		color("var(--text)"),
 	)
 
-	// ── Money flow: sankey + per-$100 companion ──────────────────────────────
+	// ── Money flow: in-house smooth-ribbon sankey + per-$100 companion ───────
 	rule(".rpta-sankey",
 		width("100%"),
 		overflowX("auto"),
+	)
+	rule(".rpta-flow-host",
+		display("block"),
+		width("100%"),
+	)
+	rule(".rpta-flow-svg",
+		display("block"),
+		width("100%"),
+		height("auto"),
+	)
+	// Labels sit directly on the ribbons; a background-colored stroke halo
+	// (paint-order) keeps them readable over any ribbon color in both themes.
+	rule(".rpta-flow-svg text",
+		fontSize("13px"),
+		prop("paint-order", "stroke"),
+		prop("stroke", "var(--bg)"),
+		prop("stroke-width", "4px"),
+		prop("stroke-linejoin", "round"),
+	)
+	rule(".rpta-flow-name",
+		fontWeight("600"),
+		fill("var(--text)"),
+	)
+	rule(".rpta-flow-amt",
+		fill("var(--text-dim)"),
+	)
+	rule(".rpta-flow-link",
+		prop("fill-opacity", "0.42"),
+		transition("fill-opacity 0.15s ease"),
+	)
+	rule(".rpta-flow-link:hover",
+		prop("fill-opacity", "0.74"),
+	)
+	rule(".rpta-flow-node",
+		prop("fill-opacity", "0.92"),
+	)
+	rule(".rpta-flow-key",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("1rem"),
+		marginTop("0.5rem"),
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".rpta-flow-key-item",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.35rem"),
+	)
+	rule(".rpta-flow-dot",
+		display("inline-block"),
+		width("10px"),
+		height("10px"),
+		borderRadius("999px"),
+		flexShrink("0"),
+	)
+	rule(".rpta-flow-key-note",
+		color("var(--text-faint)"),
+		fontStyle("italic"),
+	)
+	rule(".rpta-chart-legend",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		marginTop("0.35rem"),
+		fontSize("0.75rem"),
+		color("var(--text-dim)"),
+	)
+	// Spending-by-tag rows (§05): the tag reads as the chip it is elsewhere in
+	// the app; the delta column tones like the category table (spend up = red).
+	rule(".rpta-tag-chip",
+		display("inline-block"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-card)"),
+		fontSize("0.8rem"),
+	)
+	rule(".rpta-tag-delta",
+		fontSize("0.75rem"),
+		minWidth("3.4rem"),
+		textAlign("right"),
+		flexShrink("0"),
+	)
+	rule(".rpta-tag-note",
+		fontSize("0.75rem"),
+	)
+	// Win chips lead with a check glyph.
+	rule(".rpta-win-check",
+		color("var(--up, #4ea777)"),
+		fontWeight("700"),
+		marginRight("0.35rem"),
+	)
+	// Masthead net-worth sparkline sits quietly under the figure.
+	rule(".rpta-fig-spark",
+		marginTop("0.35rem"),
+		opacity("0.8"),
+	)
+	// Kept-% inline meter in the monthly review table.
+	rule(".rpta-td-kept",
+		minWidth("6.5rem"),
+	)
+	rule(".rpta-kept-meter",
+		height("3px"),
+		marginTop("0.25rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--border) 60%, transparent)"),
+		overflow("hidden"),
+	)
+	rule(".rpta-kept-fill",
+		height("100%"),
+		borderRadius("999px"),
+		background("var(--up, #4ea777)"),
+	)
+	rule(".rpta-kept-red",
+		background("var(--down, #d8716f)"),
+	)
+	// Spending-by-weekday mini bars.
+	rule(".rpta-weekday",
+		marginTop("0.9rem"),
+	)
+	rule(".rpta-wd-bars",
+		display("flex"),
+		alignItems("flex-end"),
+		gap("0.6rem"),
+		maxWidth("22rem"),
+	)
+	rule(".rpta-wd-col",
+		flex("1"),
+		display("flex"),
+		flexDirection("column"),
+		alignItems("center"),
+		gap("0.25rem"),
+	)
+	rule(".rpta-wd-track",
+		width("100%"),
+		height("56px"),
+		display("flex"),
+		alignItems("flex-end"),
+	)
+	rule(".rpta-wd-fill",
+		width("100%"),
+		borderRadius("3px 3px 0 0"),
+		background("color-mix(in srgb, var(--accent) 45%, transparent)"),
+	)
+	rule(".rpta-wd-peak",
+		background("var(--accent)"),
+	)
+	rule(".rpta-wd-day",
+		fontSize("0.66rem"),
+		color("var(--text-faint)"),
+	)
+	// Category dots reuse the flow-dot circle at a smaller row scale, inline
+	// with the name.
+	rule(".rpta-cat-dot",
+		width("8px"),
+		height("8px"),
+		marginRight("0.45rem"),
+	)
+	rule(".rpta-cat-title",
+		display("inline-flex"),
+		alignItems("center"),
+	)
+	// Section-header actions: existing controls + the ask-the-assistant button.
+	rule(".rpta-sec-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flexShrink("0"),
+	)
+	rule(".rpta-ask",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.3rem 0.7rem"),
+		border("1px solid color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+		borderRadius("999px"),
+		color("var(--text)"),
+		fontSize("0.78rem"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		whiteSpace("nowrap"),
+		transition("background 0.12s ease"),
+	)
+	rule(".rpta-ask:hover",
+		background("color-mix(in srgb, var(--accent) 18%, transparent)"),
+	)
+	// Year-spend histograms (§04 categories, §05 tags).
+	rule(".rpta-hist",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		marginTop("0.6rem"),
+	)
+	rule(".rpta-hist-row",
+		display("grid"),
+		prop("grid-template-columns", "minmax(9rem, 13rem) 1fr 7rem 4.5rem 5.5rem"),
+		alignItems("center"),
+		gap("0.75rem"),
+		padding("0.22rem 0.3rem"),
+		border("none"),
+		background("transparent"),
+		fontFamily("inherit"),
+		fontSize("0.85rem"),
+		color("var(--text)"),
+		textAlign("left"),
+		borderRadius("6px"),
+	)
+	rule(".rpta-hist-btn",
+		cursor("pointer"),
+	)
+	rule(".rpta-hist-btn:hover",
+		background("var(--hover)"),
+	)
+	rule(".rpta-hist-label",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".rpta-hist-track",
+		height("14px"),
+		borderRadius("4px"),
+		background("color-mix(in srgb, var(--border) 45%, transparent)"),
+		overflow("hidden"),
+	)
+	rule(".rpta-hist-fill",
+		height("100%"),
+		borderRadius("4px"),
+		prop("opacity", "0.85"),
+	)
+	rule(".rpta-hist-amt",
+		textAlign("right"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".rpta-hist-delta",
+		fontSize("0.75rem"),
+		textAlign("right"),
+	)
+	rule(".rpta-hist-meta",
+		fontSize("0.75rem"),
+		textAlign("right"),
+		whiteSpace("nowrap"),
+	)
+	rule(".rpta-hist-row .rpta-tag-chip",
+		prop("justify-self", "start"),
+		maxWidth("100%"),
+	)
+	// Goal progress rows (§06): a coverage track with a solid saved band.
+	rule(".rpta-goal-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.7rem"),
+		marginTop("0.6rem"),
+	)
+	rule(".rpta-goal-top",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+	)
+	rule(".rpta-goal-name",
+		fontWeight("600"),
+	)
+	rule(".rpta-goal-fig",
+		marginLeft("auto"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".rpta-goal-chip",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		padding("0.1rem 0.45rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+	)
+	rule(".rpta-chip-up",
+		color("var(--up, #4ea777)"),
+		borderColor("color-mix(in srgb, var(--up, #4ea777) 50%, var(--border))"),
+	)
+	rule(".rpta-chip-down",
+		color("var(--down, #d8716f)"),
+		borderColor("color-mix(in srgb, var(--down, #d8716f) 50%, var(--border))"),
+	)
+	rule(".rpta-chip-warn",
+		color("var(--warn, #d8a24a)"),
+		borderColor("color-mix(in srgb, var(--warn, #d8a24a) 50%, var(--border))"),
+	)
+	rule(".rpta-chip-dim",
+		color("var(--text-dim)"),
+	)
+	rule(".rpta-goal-track",
+		position("relative"),
+		height("8px"),
+		marginTop("0.35rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--border) 45%, transparent)"),
+		overflow("hidden"),
+	)
+	rule(".rpta-goal-cov",
+		position("absolute"),
+		inset("0 auto 0 0"),
+		prop("opacity", "0.35"),
+		borderRadius("999px"),
+	)
+	rule(".rpta-goal-saved",
+		position("absolute"),
+		inset("0 auto 0 0"),
+		borderRadius("999px"),
+	)
+	// Budget adherence strips (§07): twelve month cells per budget.
+	rule(".rpta-bud-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.45rem"),
+		marginTop("0.6rem"),
+	)
+	rule(".rpta-bud-row",
+		display("grid"),
+		prop("grid-template-columns", "minmax(9rem, 16rem) 1fr minmax(9rem, auto)"),
+		alignItems("center"),
+		gap("0.75rem"),
+		fontSize("0.85rem"),
+	)
+	rule(".rpta-bud-cells",
+		display("flex"),
+		gap("3px"),
+	)
+	rule(".rpta-bud-cell",
+		flex("1"),
+		maxWidth("2.2rem"),
+		height("14px"),
+		borderRadius("3px"),
+	)
+	rule(".rpta-bud-quiet",
+		background("color-mix(in srgb, var(--border) 45%, transparent)"),
+	)
+	rule(".rpta-bud-under",
+		background("color-mix(in srgb, var(--up, #4ea777) 65%, transparent)"),
+	)
+	rule(".rpta-bud-near",
+		background("color-mix(in srgb, var(--warn, #d8a24a) 75%, transparent)"),
+	)
+	rule(".rpta-bud-over",
+		background("var(--down, #d8716f)"),
+	)
+	rule(".rpta-bud-verdict",
+		fontSize("0.75rem"),
+		textAlign("right"),
+		whiteSpace("nowrap"),
+	)
+	// Fee/interest rows in the problem-spots section.
+	rule(".rpta-cost-kind",
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		letterSpacing("0.07em"),
+		padding("0.1rem 0.4rem"),
+		borderRadius("4px"),
+		background("color-mix(in srgb, var(--down, #d8716f) 14%, transparent)"),
+		color("var(--down, #d8716f)"),
+		marginRight("0.5rem"),
+		flexShrink("0"),
+	)
+	// Interest-drag bar under the debt table's yearly-interest figures.
+	rule(".rpta-bar-red",
+		height("3px"),
+		marginTop("0.25rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--border) 60%, transparent)"),
+		overflow("hidden"),
+	)
+	rule(".rpta-bar-red-fill",
+		height("100%"),
+		borderRadius("999px"),
+		background("var(--down, #d8716f)"),
 	)
 	rule(".rpta-flow-side",
 		display("flex"),

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/credithealth"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -18,7 +20,6 @@ import (
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -164,6 +165,43 @@ func Reports() ui.Node {
 	// Health: the deterministic score + factors + prioritized steps.
 	health := healthscore.Evaluate(liveHealthInputs(app, time.Now()))
 
+	// Credit proxy score at each month end (bounds[1..12] are the month-end
+	// cutoffs; transactions strictly before each cutoff count, mirroring
+	// NetWorthSeries). Household-wide like net worth — cards aren't scoped.
+	var creditSeries []int
+	hasCards := false
+	for _, a := range accounts {
+		if a.Type == domain.TypeCreditCard && !a.Archived {
+			hasCards = true
+			break
+		}
+	}
+	if hasCards {
+		for k := 1; k < len(bounds); k++ {
+			cutoff := bounds[k]
+			upto := make([]domain.Transaction, 0, len(txns))
+			for _, t := range txns {
+				if t.Date.Before(cutoff) {
+					upto = append(upto, t)
+				}
+			}
+			balances := make(map[string]int64, 4)
+			for _, a := range accounts {
+				if a.Type != domain.TypeCreditCard || a.Archived {
+					continue
+				}
+				if bal, err := ledger.Balance(a, upto); err == nil {
+					balances[a.ID] = bal.Amount
+				}
+			}
+			cr := credithealth.Evaluate(credithealth.Inputs{Accounts: accounts, Balances: balances, Transactions: upto, Now: cutoff})
+			creditSeries = append(creditSeries, cr.ProxyScore)
+		}
+	}
+
+	// The year's fee + interest charges ("money that bought nothing", §07).
+	costs, _ := reports.CostOfMoney(scopedTxns, cats, as, ae, rates)
+
 	// Runway (liquid ÷ 6-month burn) for the strengths/problems split.
 	liquid, _ := ledger.LiquidBalance(accounts, scopedTxns, rates)
 	burn := reports.AverageMonthlyExpense(lastN(monthFlows, 6))
@@ -175,6 +213,7 @@ func Reports() ui.Node {
 	bigIncome, _ := reports.LargestIncome(scopedTxns, as, ae, rates, 8)
 	incomeRows, _ := reports.IncomeByCategory(scopedTxns, as, ae, rates)
 	memberSpend, _ := reports.SpendingByMember(scopedTxns, as, ae, rates)
+	tagSpend, _ := reports.SpendingByTag(scopedTxns, as, ae, true, ps, pe, rates)
 	spendStats, _ := reports.SpendingStats(scopedTxns, as, ae, rates)
 	noSpendDays := reports.NoSpendDays(scopedTxns, as, ae, time.Now())
 	weekday, _ := reports.SpendingByWeekday(scopedTxns, as, ae, rates)
@@ -195,7 +234,9 @@ func Reports() ui.Node {
 	monthsRed := reports.MonthsNegative(monthFlows)
 	hiIdx, loIdx, seasonalOK := reports.SeasonalExtremes(monthFlows)
 	trims := reports.TrimTargets(catTrends, 2500, 3) // ≥$25/mo recent average
-	per100 := reports.Per100(rows, flow.Income, 6)
+	// Top-10 to match the money-flow diagram, so the table's "everything else"
+	// and the diagram's are the same number.
+	per100 := reports.Per100(rows, flow.Income, 10)
 
 	// Goals over the year (household-wide; classify is cheap).
 	gc := goalsvc.CountByState(app.Goals(), app.Tasks(), time.Now(), true)
@@ -273,10 +314,15 @@ func Reports() ui.Node {
 			}
 			sub = arrow + " " + fmtMinor(absMinor(nwChange)) + " " + uistate.T("rpta.overYear")
 		}
+		nwInts := make([]int64, 0, len(nwSeries))
+		for _, m := range nwSeries {
+			nwInts = append(nwInts, m.Amount)
+		}
 		mastFigs = append(mastFigs, Div(css.Class("rpta-fig"), Attr("data-testid", "reports-hero-networth"),
 			Span(css.Class("rpta-fig-k"), uistate.T("dashboard.netWorth")),
 			Span(css.Class("rpta-fig-v", tw.FontDisplay), fmtMoney(nwNet)),
 			If(sub != "", Span(ClassStr("rpta-fig-sub rpta-tone-"+tone), sub)),
+			If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), sparklineSVG(nwInts))),
 		))
 	}
 	masthead := Div(css.Class("rpta-masthead"), Attr("data-testid", "rpt-hero"), Attr("id", "rpta-top"),
@@ -327,21 +373,29 @@ func Reports() ui.Node {
 	if runway.Months >= 3 && burn > 0 {
 		wins = append(wins, rptaWin(uistate.T("rpta.winRunway", runway.Months)))
 	}
-	strengths := rptaSection("rpta-01", "01", uistate.T("rpta.secStrong"), "up", uistate.T("rpta.secStrongSub"), Fragment(
+	askStrong := fmt.Sprintf("health score %s; ", rptaScoreText(health))
+	for _, f := range health.Factors {
+		if f.Weight > 0 && f.Score >= 70 {
+			askStrong += fmt.Sprintf("%s = %s (score %d); ", f.Label, f.Value, f.Score)
+		}
+	}
+	strengths := rptaSection("rpta-01", "01", uistate.T("rpta.secStrong"), "up", uistate.T("rpta.secStrongSub"), askStrong, Fragment(
 		If(len(strongFacts) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.noStrong"))),
 		Div(css.Class("rpta-facts"), strongFacts),
 		If(len(wins) > 0, Div(css.Class("rpta-wins"), Attr("data-testid", "rpta-wins"), wins)),
 	))
 
-	// ── 02 · The flow of money (enhanced Sankey + per-$100). ─────────────────
+	// ── 02 · The flow of money (in-house smooth-ribbon sankey + per-$100). ───
 	sankeyFactor := int64(1)
 	for i := 0; i < decimals; i++ {
 		sankeyFactor *= 10
 	}
-	toMajor := func(minor int64) int64 { return (minor + sankeyFactor/2) / sankeyFactor }
-	var moneyFlows []mermaid.SankeyFlow
+	accent := chartLineColor(uistate.CurrentAccent())
+	flowColors := newRptaFlowColors(accent)
+	var moneyFlows []reports.Flow
 	// Sources → Income (the enhancement: where the money comes FROM).
 	incomeLabel := uistate.T("rpta.nodeIncome")
+	flowColors.hub(incomeLabel)
 	srcCount := 0
 	var srcRest int64
 	for _, r := range incomeRows {
@@ -349,14 +403,16 @@ func Reports() ui.Node {
 			continue
 		}
 		if srcCount < 5 {
-			moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: nameOf(r.CategoryID), To: incomeLabel, Value: toMajor(r.Amount)})
+			flowColors.source(nameOf(r.CategoryID))
+			moneyFlows = append(moneyFlows, reports.Flow{From: nameOf(r.CategoryID), To: incomeLabel, Value: r.Amount})
 			srcCount++
 		} else {
 			srcRest += r.Amount
 		}
 	}
 	if srcRest > 0 {
-		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: uistate.T("rpta.nodeOtherIncome"), To: incomeLabel, Value: toMajor(srcRest)})
+		flowColors.rest(uistate.T("rpta.nodeOtherIncome"))
+		moneyFlows = append(moneyFlows, reports.Flow{From: uistate.T("rpta.nodeOtherIncome"), To: incomeLabel, Value: srcRest})
 	}
 	// Income → categories (top 10 + rest) + Savings.
 	catCount := 0
@@ -367,17 +423,23 @@ func Reports() ui.Node {
 			continue
 		}
 		if catCount < 10 {
-			moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: incomeLabel, To: nameOf(r.CategoryID), Value: toMajor(v)})
+			flowColors.category(nameOf(r.CategoryID))
+			moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: nameOf(r.CategoryID), Value: v})
 			catCount++
 		} else {
 			catRest += v
 		}
 	}
 	if catRest > 0 {
-		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: incomeLabel, To: uistate.T("rpta.nodeEverythingElse"), Value: toMajor(catRest)})
+		flowColors.rest(uistate.T("rpta.nodeEverythingElse"))
+		moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: uistate.T("rpta.nodeEverythingElse"), Value: catRest})
 	}
 	if sav := flow.Net(); sav > 0 {
-		moneyFlows = append(moneyFlows, mermaid.SankeyFlow{From: incomeLabel, To: uistate.T("rpta.nodeSavings"), Value: toMajor(sav)})
+		flowColors.savings(uistate.T("rpta.nodeSavings"))
+		moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: uistate.T("rpta.nodeSavings"), Value: sav})
+	}
+	per100Dot := func(color string) ui.Node {
+		return Span(css.Class("rpta-flow-dot", "rpta-cat-dot"), Attr("aria-hidden", "true"), Style(map[string]string{"background": color}))
 	}
 	var per100Rows []ui.Node
 	for _, p := range per100 {
@@ -386,7 +448,7 @@ func Reports() ui.Node {
 			label = uistate.T("rpta.nodeEverythingElse")
 		}
 		per100Rows = append(per100Rows, Tr(
-			Td(css.Class("rpta-td-name"), label),
+			Td(css.Class("rpta-td-name"), per100Dot(flowColors.of(label)), label),
 			Td(css.Class("rpta-td-num"), fmt.Sprintf("$%d.%d0", p.Per100, p.Tenths)),
 			Td(css.Class("rpta-td-num", "rpta-muted"), fmtMinor(p.AmountMinor)),
 		))
@@ -394,14 +456,26 @@ func Reports() ui.Node {
 	if kv := flow.Net(); kv > 0 && flow.Income > 0 {
 		scaled := kv * 1000 / flow.Income
 		per100Rows = append(per100Rows, Tr(css.Class("rpta-tr-kept"),
-			Td(css.Class("rpta-td-name"), uistate.T("rpta.nodeSavings")),
+			Td(css.Class("rpta-td-name"), per100Dot("#4ea777"), uistate.T("rpta.nodeSavings")),
 			Td(css.Class("rpta-td-num"), fmt.Sprintf("$%d.%d0", scaled/10, scaled%10)),
 			Td(css.Class("rpta-td-num", "rpta-muted"), fmtMinor(kv)),
 		))
 	}
-	flowSec := rptaSection("rpta-02", "02", uistate.T("reports.moneyFlow"), "up", uistate.T("rpta.secFlowSub"), Fragment(
+	askFlow := fmt.Sprintf("income %s from %d sources; spending %s; savings %s (%d%% of income)",
+		fmtMinor(flow.Income), srcCount, fmtMinor(flow.Expense), fmtMinor(flow.Net()), flow.SavingsRate())
+	if len(rows) > 0 {
+		askFlow += fmt.Sprintf("; biggest category %s at %s", nameOf(rows[0].CategoryID), fmtMinor(absMinor(rows[0].Amount)))
+	}
+	flowSec := rptaSection("rpta-02", "02", uistate.T("reports.moneyFlow"), "up", uistate.T("rpta.secFlowSub"), askFlow, Fragment(
 		If(len(moneyFlows) > 1, Div(css.Class("rpta-sankey"),
-			uiw.Mermaid(uiw.MermaidProps{Source: mermaid.Sankey(moneyFlows), Label: "Income sources through income to spending categories and savings", ValuePrefix: currency.Symbol(base)}))),
+			rptaMoneyFlowSVG(moneyFlows, flowColors, flow.Income, fmtMinor, sankeyFactor, currency.Symbol(base)),
+			Div(css.Class("rpta-flow-key"),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaSrcPalette[0]})), uistate.T("rpta.keySources")),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": accent})), uistate.T("rpta.nodeIncome")),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaCatPalette[0]})), uistate.T("rpta.keyCats")),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": "#4ea777"})), uistate.T("rpta.nodeSavings")),
+				Span(css.Class("rpta-flow-key-note"), uistate.T("rpta.keyWidth")),
+			))),
 		Div(css.Class("rpta-flow-side"),
 			Div(css.Class("rpta-subhead"), uistate.T("rpta.per100Head")),
 			Table(css.Class("rpta-table", "rpta-per100"), Attr("data-testid", "rpta-per100"),
@@ -413,7 +487,6 @@ func Reports() ui.Node {
 	))
 
 	// ── 03 · The year in motion (monthly review table + trends). ─────────────
-	accent := chartLineColor(uistate.CurrentAccent())
 	var monthRows []ui.Node
 	for i := 0; i < 12 && i < len(monthFlows); i++ {
 		f := monthFlows[i]
@@ -428,12 +501,24 @@ func Reports() ui.Node {
 		if f.Net() < 0 {
 			rowCls = "rpta-tr-red"
 		}
+		var keptMeter ui.Node = Fragment()
+		if len(srInts) > i && f.Income > 0 {
+			pct := srInts[i]
+			if pct < 0 {
+				pct = 0
+			}
+			if pct > 100 {
+				pct = 100
+			}
+			keptMeter = Div(css.Class("rpta-kept-meter"), Attr("aria-hidden", "true"),
+				Div(ClassStr("rpta-kept-fill"+If2(f.Net() < 0, " rpta-kept-red", "")), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+		}
 		monthRows = append(monthRows, Tr(ClassStr(rowCls),
 			Td(css.Class("rpta-td-name"), bounds[i].Format("January 2006")),
 			Td(css.Class("rpta-td-num"), fmtMinor(f.Income)),
 			Td(css.Class("rpta-td-num"), fmtMinor(f.Expense)),
 			Td(ClassStr("rpta-td-num rpta-td-strong"+If2(f.Net() < 0, " rpta-tone-down", "")), fmtMinor(f.Net())),
-			Td(css.Class("rpta-td-num"), rate),
+			Td(css.Class("rpta-td-num", "rpta-td-kept"), rate, keptMeter),
 		))
 	}
 	netSeries := make([]float64, 0, 12)
@@ -462,6 +547,42 @@ func Reports() ui.Node {
 		}
 		return out
 	}
+	creditFloat := make([]float64, 0, len(creditSeries))
+	for _, v := range creditSeries {
+		creditFloat = append(creditFloat, float64(v))
+	}
+	pctlessVL := func(vals []float64) []string {
+		out := make([]string, len(vals))
+		for i, v := range vals {
+			out[i] = fmt.Sprintf("%d / 100", int(v))
+		}
+		return out
+	}
+	// Each trend chart takes the color of its verdict: green when the year's
+	// story is good, amber when it's borderline, red when it works against you.
+	cashStroke := rptaToneUp
+	if flow.Net() < 0 {
+		cashStroke = rptaToneDown
+	}
+	srStroke := rptaToneDown
+	if sr := flow.SavingsRate(); sr >= 15 {
+		srStroke = rptaToneUp
+	} else if sr >= 5 {
+		srStroke = rptaToneWarn
+	}
+	nwStroke := rptaToneUp
+	if nwChange < 0 {
+		nwStroke = rptaToneDown
+	}
+	creditStroke := rptaToneDown
+	if n := len(creditSeries); n > 0 {
+		switch last := creditSeries[n-1]; {
+		case last >= 70:
+			creditStroke = rptaToneUp
+		case last >= 40:
+			creditStroke = rptaToneWarn
+		}
+	}
 	seasonLine := ""
 	if seasonalOK {
 		seasonLine = uistate.T("rpta.seasonal", bounds[hiIdx].Format("January"), fmtMinor(monthFlows[hiIdx].Expense), bounds[loIdx].Format("January"), fmtMinor(monthFlows[loIdx].Expense))
@@ -476,23 +597,69 @@ func Reports() ui.Node {
 		}
 		statsLine += uistate.T("reports.peakWeekday", d.String(), fmtMinor(weekday[d]))
 	}
-	motion := rptaSection("rpta-03", "03", uistate.T("rpta.secMotion"), "neutral", uistate.T("rpta.secMotionSub"), Fragment(
+	// Spending-by-weekday mini bars: seven columns, the peak day toned warm.
+	var weekdayChart ui.Node = Fragment()
+	if peakDay, ok := reports.PeakWeekday(weekday); ok {
+		var maxWD int64
+		for _, v := range weekday {
+			if v > maxWD {
+				maxWD = v
+			}
+		}
+		var wdCols []ui.Node
+		for d := time.Sunday; d <= time.Saturday; d++ {
+			v := weekday[d]
+			pct := int64(0)
+			if maxWD > 0 {
+				pct = v * 100 / maxWD
+			}
+			if pct < 3 {
+				pct = 3
+			}
+			wdCols = append(wdCols, Div(css.Class("rpta-wd-col"), Title(d.String()+": "+fmtMinor(v)),
+				Div(css.Class("rpta-wd-track"),
+					Div(ClassStr("rpta-wd-fill"+If2(d == peakDay, " rpta-wd-peak", "")), Style(map[string]string{"height": fmt.Sprintf("%d%%", pct)}))),
+				Span(css.Class("rpta-wd-day"), d.String()[:1]),
+			))
+		}
+		weekdayChart = Div(css.Class("rpta-weekday"), Attr("data-testid", "rpta-weekday"),
+			Div(css.Class("rpta-subhead"), uistate.T("rpta.weekdayHead")),
+			Div(css.Class("rpta-wd-bars"), Attr("role", "img"), Attr("aria-label", uistate.T("rpta.weekdayHead")), wdCols),
+			rptaChartLegend(accent, uistate.T("rpta.legendWeekday")),
+		)
+	}
+	askMotion := seasonLine + " " + statsLine
+	if len(creditSeries) > 0 {
+		askMotion += fmt.Sprintf(" Credit proxy score ended at %d/100.", creditSeries[len(creditSeries)-1])
+	}
+	if monthsRed > 0 {
+		askMotion += fmt.Sprintf(" %d months were in the red.", monthsRed)
+	}
+	motion := rptaSection("rpta-03", "03", uistate.T("rpta.secMotion"), "neutral", uistate.T("rpta.secMotionSub"), askMotion, Fragment(
 		Table(css.Class("rpta-table", "rpta-months"), Attr("data-testid", "rpta-months"),
 			Thead(Tr(Th(uistate.T("rpta.colMonth")), Th(uistate.T("dashboard.income")), Th(uistate.T("dashboard.spending")), Th(uistate.T("reports.net")), Th(uistate.T("rpta.colKeptPct")))),
 			Tbody(monthRows),
 		),
 		If(seasonLine != "", P(css.Class("rpta-muted"), Attr("data-testid", "rpta-seasonal"), seasonLine)),
 		If(statsLine != "", P(css.Class("rpta-muted"), statsLine)),
+		weekdayChart,
 		Div(css.Class("rpta-charts3"),
 			If(len(netSeries) >= 2, Div(css.Class("rpta-chart"),
 				Div(css.Class("rpta-subhead"), uistate.T("dashboard.cashFlow")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Stroke: accent, GradientID: "rpta-net", Label: uistate.T("dashboard.cashFlow"), Labels: monthLabels, ValueLabels: moneyVL(netSeries)}))),
+				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Stroke: cashStroke, GradientID: "rpta-net", Label: uistate.T("dashboard.cashFlow"), Labels: monthLabels, ValueLabels: moneyVL(netSeries)}),
+				rptaChartLegend(cashStroke, uistate.T("rpta.legendCash")))),
 			If(len(srSeries) >= 2, Div(css.Class("rpta-chart"),
 				Div(css.Class("rpta-subhead"), uistate.T("reports.savingsTrend")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, Stroke: accent, GradientID: "rpta-sr", Label: uistate.T("reports.savingsTrend"), Labels: monthLabels, ValueLabels: pctVL(srSeries)}))),
+				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, Stroke: srStroke, GradientID: "rpta-sr", Label: uistate.T("reports.savingsTrend"), Labels: monthLabels, ValueLabels: pctVL(srSeries)}),
+				rptaChartLegend(srStroke, uistate.T("rpta.legendSR")))),
 			If(len(nwFloat) >= 2, Div(css.Class("rpta-chart"),
 				Div(css.Class("rpta-subhead"), uistate.T("dashboard.netWorth")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: nwFloat, Stroke: accent, GradientID: "rpta-nw", Label: uistate.T("dashboard.netWorth"), Labels: monthLabels, ValueLabels: moneyVL(nwFloat)}))),
+				uiw.AreaChart(uiw.AreaChartProps{Values: nwFloat, Stroke: nwStroke, GradientID: "rpta-nw", Label: uistate.T("dashboard.netWorth"), Labels: monthLabels, ValueLabels: moneyVL(nwFloat)}),
+				rptaChartLegend(nwStroke, uistate.T("rpta.legendNW")))),
+			If(len(creditSeries) >= 2, Div(css.Class("rpta-chart"), Attr("data-testid", "rpta-credit-chart"),
+				Div(css.Class("rpta-subhead"), uistate.T("rpta.creditHead")),
+				uiw.AreaChart(uiw.AreaChartProps{Values: creditFloat, Stroke: creditStroke, GradientID: "rpta-credit", Label: uistate.T("rpta.creditHead"), Labels: monthLabels, ValueLabels: pctlessVL(creditFloat)}),
+				rptaChartLegend(creditStroke, uistate.T("rpta.legendCredit")))),
 		),
 	))
 
@@ -511,6 +678,7 @@ func Reports() ui.Node {
 		}
 		node := ui.CreateElement(rptaCatRow, rptaCatRowProps{
 			CategoryID: r.CategoryID, Name: nameOf(r.CategoryID),
+			Dot:    flowColors.of(nameOf(r.CategoryID)),
 			Amount: r.Amount, Prior: r.Prior, HasDelta: r.HasDelta, DeltaPct: r.DeltaPct, PriorZero: r.PriorZero,
 			TotalSpend: flow.Expense, MaxCat: maxCat, Spark: trendByCat[r.CategoryID],
 			FmtMinor: fmtMinor, OnDrill: drillCategory,
@@ -521,25 +689,50 @@ func Reports() ui.Node {
 			catRows = append(catRows, node)
 		}
 	}
+	// The year histogram: one colored magnitude bar per category (sankey-palette
+	// hues for the diagram's top ten), replacing a page of airy rows. The full
+	// analytic table (run rates, sparklines) folds beneath it.
+	var catHist []ui.Node
+	for _, r := range rows {
+		if r.Amount == 0 {
+			continue
+		}
+		amt := absMinor(r.Amount)
+		share := int64(0)
+		if flow.Expense > 0 {
+			share = amt * 100 / flow.Expense
+		}
+		id := r.CategoryID
+		catHist = append(catHist, ui.CreateElement(rptaHistRow, rptaHistRowProps{
+			Label: nameOf(r.CategoryID), Color: flowColors.of(nameOf(r.CategoryID)),
+			Amount: amt, Max: maxCat, Meta: fmt.Sprintf("%d%%", share),
+			HasDelta: r.HasDelta, DeltaPct: r.DeltaPct, PriorZero: r.PriorZero,
+			FmtMinor: fmtMinor, OnSelect: func() { drillCategory(id) },
+		}))
+	}
 	catActions := Div(css.Class(tw.Flex, tw.Gap2),
 		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 			Attr("aria-pressed", boolStr(rollupCats.Get())), Title(uistate.T("reports.rollupTitle")),
 			OnClick(onToggleRollup), uistate.T(rollupLabelKey(rollupCats.Get()))),
 	)
-	categories := rptaSectionWithAction("rpta-04", "04", uistate.T("rpta.secCats"), "neutral", uistate.T("rpta.secCatsSub"), catActions, Fragment(
+	categories := rptaSectionWithAction("rpta-04", "04", uistate.T("rpta.secCats"), "neutral", uistate.T("rpta.secCatsSub"), narrative, catActions, Fragment(
 		P(css.Class("rpta-narrative", tw.FontDisplay), narrative),
-		Div(css.Class("rpta-cat-head"),
-			Span(css.Class("rpta-cat-h-name"), uistate.T("reports.viewCategories")),
-			Span(css.Class("rpta-cat-h"), uistate.T("rpta.colYear")),
-			Span(css.Class("rpta-cat-h"), uistate.T("rpta.colPerMonth")),
-			Span(css.Class("rpta-cat-h", "rpta-cat-h-spark"), uistate.T("rpta.colTrend")),
-			Span(css.Class("rpta-cat-h"), uistate.T("rpta.colVsPrior")),
-			Span(css.Class("rpta-cat-h"), uistate.T("rpta.colShare")),
+		Div(css.Class("rpta-hist"), Attr("data-testid", "rpta-cat-hist"), catHist),
+		Details(css.Class("rpta-zeroed"), Attr("data-testid", "rpta-cat-table"),
+			Summary(uistate.T("rpta.histTableFold")),
+			Div(css.Class("rpta-cat-head"),
+				Span(css.Class("rpta-cat-h-name"), uistate.T("reports.viewCategories")),
+				Span(css.Class("rpta-cat-h"), uistate.T("rpta.colYear")),
+				Span(css.Class("rpta-cat-h"), uistate.T("rpta.colPerMonth")),
+				Span(css.Class("rpta-cat-h", "rpta-cat-h-spark"), uistate.T("rpta.colTrend")),
+				Span(css.Class("rpta-cat-h"), uistate.T("rpta.colVsPrior")),
+				Span(css.Class("rpta-cat-h"), uistate.T("rpta.colShare")),
+			),
+			Div(css.Class("rpta-cat-rows"), catRows),
+			If(len(zeroCatRows) > 0, Details(css.Class("rpta-zeroed"), Attr("data-testid", "reports-zeroed"),
+				Summary(uistate.T("reports.zeroedSummary", len(zeroCatRows))),
+				Div(css.Class("rpta-cat-rows"), zeroCatRows))),
 		),
-		Div(css.Class("rpta-cat-rows"), catRows),
-		If(len(zeroCatRows) > 0, Details(css.Class("rpta-zeroed"), Attr("data-testid", "reports-zeroed"),
-			Summary(uistate.T("reports.zeroedSummary", len(zeroCatRows))),
-			Div(css.Class("rpta-cat-rows"), zeroCatRows))),
 	))
 
 	// ── 05 · Where it actually goes (payees, biggest, deposits, sources, members).
@@ -631,12 +824,50 @@ func Reports() ui.Node {
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), nm), shareBar(ms.Amount, maxMember)),
 			Span(css.Class("budget-amount"), fmtMinor(ms.Amount))))
 	}
-	whereGoes := rptaSection("rpta-05", "05", uistate.T("rpta.secWhere"), "neutral", uistate.T("rpta.secWhereSub"), Div(css.Class("rpta-cols2"),
+	var tagNodes []ui.Node
+	var maxTag int64
+	for _, ts := range tagSpend {
+		if ts.Amount > maxTag {
+			maxTag = ts.Amount
+		}
+	}
+	for i, ts := range tagSpend {
+		if i >= 12 {
+			break
+		}
+		hasDelta := ts.Prior > 0
+		var deltaPct int64
+		if hasDelta {
+			deltaPct = (ts.Amount - ts.Prior) * 100 / ts.Prior
+		}
+		tagNodes = append(tagNodes, Div(Attr("data-testid", "rpta-tag-row"), ui.CreateElement(rptaHistRow, rptaHistRowProps{
+			Label: "#" + ts.Tag, Chip: true,
+			Color:  rptaCatPalette[i%len(rptaCatPalette)],
+			Amount: ts.Amount, Max: maxTag, Meta: uistate.T("rpta.tagCharges", ts.Count),
+			HasDelta: hasDelta, DeltaPct: deltaPct, PriorZero: ts.Prior == 0 && ts.Amount > 0,
+			FmtMinor: fmtMinor,
+		})))
+	}
+	askWhere := ""
+	if len(payees) > 0 {
+		askWhere += fmt.Sprintf("top payee %s at %s; ", payees[0].Name, fmtMinor(payees[0].Amount))
+	}
+	if len(largest) > 0 {
+		askWhere += fmt.Sprintf("largest single expense %s at %s; ", largest[0].Desc, fmtMinor(largest[0].Amount))
+	}
+	if len(tagSpend) > 0 {
+		askWhere += fmt.Sprintf("most-spent tag #%s at %s", tagSpend[0].Tag, fmtMinor(tagSpend[0].Amount))
+	}
+	whereGoes := rptaSection("rpta-05", "05", uistate.T("rpta.secWhere"), "neutral", uistate.T("rpta.secWhereSub"), askWhere, Div(css.Class("rpta-cols2"),
 		Div(css.Class("rpta-col"),
 			rptaSub(uistate.T("reports.topPayees"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions"))),
 			listRows(payeeNodes),
 			rptaSub(uistate.T("reports.biggestDeposits"), nil),
 			listRows(depositNodes),
+			If(len(tagNodes) > 0, Fragment(
+				rptaSub(uistate.T("rpta.byTag"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "tags-drill"), uistate.T("reports.viewTransactions"))),
+				listRows(tagNodes),
+				P(css.Class("rpta-muted", "rpta-tag-note"), uistate.T("rpta.tagOverlapNote")))),
 		),
 		Div(css.Class("rpta-col"),
 			rptaSub(uistate.T("reports.biggestExpenses"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions"))),
@@ -649,7 +880,186 @@ func Reports() ui.Node {
 		),
 	))
 
-	// ── 06 · Watch list (rising, subscriptions, price creep). ────────────────
+	// ── 06 · Goal progress: every financial goal's year, coverage-first. ─────
+	tasks := app.Tasks()
+	nowT := time.Now()
+	var goalRows []ui.Node
+	archivedReached := 0
+	for _, g := range app.Goals() {
+		if g.TargetAmount.Amount <= 0 {
+			continue
+		}
+		if g.Archived {
+			archivedReached++
+			continue
+		}
+		state := goalsvc.Classify(g, tasks, nowT)
+		covPct := goalsvc.CoveragePercent(g)
+		savedPct := 0
+		if g.TargetAmount.Amount > 0 {
+			savedPct = int(g.CurrentAmount.Amount * 100 / g.TargetAmount.Amount)
+			if savedPct > 100 {
+				savedPct = 100
+			}
+			if savedPct < 0 {
+				savedPct = 0
+			}
+		}
+		tone, chipKey := "", "rpta.goalStateCurrent"
+		barColor := rptaToneUp
+		switch state {
+		case goalsvc.StateCompleted:
+			tone, chipKey = "up", "rpta.goalStateReached"
+		case goalsvc.StateMissed:
+			tone, chipKey, barColor = "down", "rpta.goalStateMissed", rptaToneDown
+		default:
+			tone = "dim"
+			if !g.TargetDate.IsZero() && g.TargetDate.Before(nowT.AddDate(0, 3, 0)) && covPct < 80 {
+				// Due within a quarter and materially short: worth amber.
+				tone, barColor = "warn", rptaToneWarn
+			}
+		}
+		deadline := ""
+		if !g.TargetDate.IsZero() {
+			deadline = uistate.T("rpta.goalBy", g.TargetDate.Format("Jan 2006"))
+		}
+		goalRows = append(goalRows, Div(css.Class("rpta-goal-row"), Attr("data-testid", "rpta-goal-row"),
+			Div(css.Class("rpta-goal-top"),
+				Span(css.Class("rpta-goal-name"), g.Name),
+				Span(ClassStr("rpta-goal-chip rpta-chip-"+tone), uistate.T(chipKey)),
+				Span(css.Class("rpta-goal-when", "rpta-muted"), deadline),
+				Span(css.Class("rpta-goal-fig", tw.FontDisplay), uistate.T("rpta.goalBacked", fmtMoney(money.New(goalsvc.CoverageMinor(g), base)), fmtMoney(g.TargetAmount), covPct)),
+			),
+			Div(css.Class("rpta-goal-track"), Attr("aria-hidden", "true"),
+				Div(css.Class("rpta-goal-cov"), Style(map[string]string{"width": fmt.Sprintf("%d%%", covPct), "background": barColor})),
+				Div(css.Class("rpta-goal-saved"), Style(map[string]string{"width": fmt.Sprintf("%d%%", savedPct), "background": barColor})),
+			),
+		))
+	}
+	askGoals := uistate.T("rpta.goalsSummary", gc.Completed, gc.Current, gc.Missed)
+	goalsSec := Fragment()
+	if len(goalRows) > 0 || gc.Completed+gc.Missed > 0 {
+		goalsSec = rptaSection("rpta-06", "06", uistate.T("rpta.secGoals"), "neutral", uistate.T("rpta.secGoalsSub"), askGoals, Fragment(
+			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-goals-summary"), askGoals+If2(archivedReached > 0, " "+uistate.T("rpta.goalsArchived", archivedReached), "")),
+			Div(css.Class("rpta-goal-rows"), goalRows),
+			A(css.Class("rpta-drill"), Href(uistate.RoutePath("/goals")), Attr("data-testid", "rpta-goals-drill"), uistate.T("rpta.openGoals")),
+		))
+	}
+
+	// ── 07 · Budget adherence: month-by-month cells per budget. ──────────────
+	periodsPerYear := func(p domain.Period) int64 {
+		switch p {
+		case domain.PeriodWeekly:
+			return 52
+		case domain.PeriodBiweekly:
+			return 26
+		case domain.PeriodSemimonthly:
+			return 24
+		case domain.PeriodQuarterly:
+			return 4
+		case domain.PeriodYearly:
+			return 1
+		default:
+			return 12
+		}
+	}
+	budgets := app.Budgets()
+	var budgetRows []ui.Node
+	budgetsClean := 0
+	budgetsCounted := 0
+	for _, bg := range budgets {
+		limConv, err := rates.Convert(bg.Limit, rates.Base)
+		if err != nil || limConv.Amount <= 0 {
+			continue
+		}
+		limit := limConv.Amount
+		name := bg.Name
+		if name == "" {
+			name = catName[bg.CategoryID]
+		}
+		budgetsCounted++
+		if bg.Period == domain.PeriodMonthly || bg.Period == "" {
+			var cells []ui.Node
+			over := 0
+			for k := 0; k+1 < len(bounds) && k < 12; k++ {
+				sp, err := budgeting.Spent(bg, scopedTxns, bounds[k], bounds[k+1], rates)
+				if err != nil {
+					continue
+				}
+				spent := sp.Amount
+				cls := "rpta-bud-cell "
+				switch {
+				case spent == 0:
+					cls += "rpta-bud-quiet"
+				case spent <= limit:
+					cls += "rpta-bud-under"
+				case spent <= limit+limit/10:
+					cls += "rpta-bud-near"
+				default:
+					cls += "rpta-bud-over"
+					over++
+				}
+				cells = append(cells, Span(ClassStr(cls), Title(bounds[k].Format("Jan")+": "+fmtMinor(spent)+" / "+fmtMinor(limit))))
+			}
+			if over == 0 {
+				budgetsClean++
+			}
+			verdictCls, verdictTxt := "rpta-tone-up", uistate.T("rpta.budWithin")
+			if over > 0 {
+				verdictCls, verdictTxt = "rpta-tone-down", uistate.T("rpta.budMonthsOver", over)
+			}
+			budgetRows = append(budgetRows, Div(css.Class("rpta-bud-row"), Attr("data-testid", "rpta-bud-row"),
+				Span(css.Class("rpta-bud-name"), name),
+				Div(css.Class("rpta-bud-cells"), cells),
+				Span(ClassStr("rpta-bud-verdict "+verdictCls), verdictTxt),
+			))
+		} else {
+			yearCap := limit * periodsPerYear(bg.Period)
+			sp, err := budgeting.Spent(bg, scopedTxns, as, ae, rates)
+			if err != nil {
+				continue
+			}
+			spent := sp.Amount
+			tone := rptaToneUp
+			verdictCls, verdictTxt := "rpta-tone-up", uistate.T("rpta.budWithin")
+			switch {
+			case spent > yearCap+yearCap/10:
+				tone, verdictCls, verdictTxt = rptaToneDown, "rpta-tone-down", uistate.T("rpta.budOverYear", fmtMinor(spent-yearCap))
+			case spent > yearCap:
+				tone, verdictCls, verdictTxt = rptaToneWarn, "rpta-tone-warn", uistate.T("rpta.budOverYear", fmtMinor(spent-yearCap))
+			default:
+				budgetsClean++
+			}
+			pct := int64(0)
+			if yearCap > 0 {
+				pct = spent * 100 / yearCap
+				if pct > 100 {
+					pct = 100
+				}
+			}
+			budgetRows = append(budgetRows, Div(css.Class("rpta-bud-row"), Attr("data-testid", "rpta-bud-row"),
+				Span(css.Class("rpta-bud-name"), name+" "+uistate.T("rpta.budAnnualized", string(bg.Period))),
+				Div(css.Class("rpta-hist-track"), Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct), "background": tone}))),
+				Span(ClassStr("rpta-bud-verdict "+verdictCls), verdictTxt),
+			))
+		}
+	}
+	askBudgets := uistate.T("rpta.budgetsSummary", budgetsClean, budgetsCounted)
+	budgetsSec := Fragment()
+	if len(budgetRows) > 0 {
+		budgetsSec = rptaSection("rpta-07", "07", uistate.T("rpta.secBudgets"), "neutral", uistate.T("rpta.secBudgetsSub"), askBudgets, Fragment(
+			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-budgets-summary"), askBudgets),
+			Div(css.Class("rpta-bud-rows"), budgetRows),
+			Div(css.Class("rpta-flow-key"),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaToneUp})), uistate.T("rpta.budKeyUnder")),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaToneWarn})), uistate.T("rpta.budKeyNear")),
+				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaToneDown})), uistate.T("rpta.budKeyOver")),
+			),
+			A(css.Class("rpta-drill"), Href(uistate.RoutePath("/budgets")), Attr("data-testid", "rpta-budgets-drill"), uistate.T("rpta.openBudgets")),
+		))
+	}
+
+	// ── 08 · Watch list (rising, subscriptions, price creep). ────────────────
 	var risingNodes []ui.Node
 	for _, tr := range catTrends {
 		if !tr.HasDelta || tr.DeltaPct < 25 || tr.Total < 10000 {
@@ -692,7 +1102,9 @@ func Reports() ui.Node {
 			Span(css.Class("rpta-watch-amt"), fmtMinor(pc.OldAmount)+" → "+fmtMinor(pc.NewAmount)),
 		))
 	}
-	watch := rptaSection("rpta-06", "06", uistate.T("rpta.secWatch"), "warn", uistate.T("rpta.secWatchSub"), Fragment(
+	askWatch := fmt.Sprintf("%d recurring charges ≈ %s a year; %d categories rising ≥25%%; %d price increases caught",
+		len(liveSubs), fmtMinor(subsAnnual), len(risingNodes), len(rises))
+	watch := rptaSection("rpta-08", "08", uistate.T("rpta.secWatch"), "warn", uistate.T("rpta.secWatchSub"), askWatch, Fragment(
 		If(len(risingNodes) == 0 && len(subNodes) == 0 && len(riseNodes) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.watchClear"))),
 		If(len(risingNodes) > 0, Fragment(rptaSub(uistate.T("rpta.watchRising"), nil), Div(Attr("data-testid", "rpta-rising"), risingNodes))),
 		If(len(subNodes) > 0, Fragment(
@@ -702,17 +1114,28 @@ func Reports() ui.Node {
 	))
 
 	// ── 07 · Problem spots. ───────────────────────────────────────────────────
+	var maxDebtInterest int64
+	for _, d := range debts {
+		if d.estYearMinor > maxDebtInterest {
+			maxDebtInterest = d.estYearMinor
+		}
+	}
 	var debtRowNodes []ui.Node
 	for _, d := range debts {
 		minStr := "—"
 		if d.minimum.Amount > 0 {
 			minStr = fmtMoney(d.minimum)
 		}
+		var dragBar ui.Node = Fragment()
+		if maxDebtInterest > 0 {
+			dragBar = Div(css.Class("rpta-bar-red"), Attr("aria-hidden", "true"),
+				Div(css.Class("rpta-bar-red-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", d.estYearMinor*100/maxDebtInterest)})))
+		}
 		debtRowNodes = append(debtRowNodes, Tr(
 			Td(css.Class("rpta-td-name"), d.name),
 			Td(css.Class("rpta-td-num"), fmtMoney(d.balance.Abs())),
 			Td(css.Class("rpta-td-num"), fmt.Sprintf("%.1f%%", d.apr)),
-			Td(css.Class("rpta-td-num", "rpta-tone-down"), fmtMinor(d.estYearMinor)),
+			Td(css.Class("rpta-td-num", "rpta-tone-down"), fmtMinor(d.estYearMinor), dragBar),
 			Td(css.Class("rpta-td-num"), minStr),
 		))
 	}
@@ -726,6 +1149,42 @@ func Reports() ui.Node {
 	}
 	if health.NegativeCashFlow {
 		problemBits = append(problemBits, P(css.Class("rpta-prob-line", "rpta-tone-down"), uistate.T("rpta.negCashFlow")))
+	}
+	// Money that bought nothing: the year's fee + interest charges, itemized.
+	if costs.FeeCount+costs.InterestCount > 0 {
+		head := ""
+		switch {
+		case costs.FeeCount > 0 && costs.InterestCount > 0:
+			head = uistate.T("rpta.probCosts", fmtMinor(costs.FeeTotal), costs.FeeCount, fmtMinor(costs.InterestTotal), costs.InterestCount)
+		case costs.FeeCount == 1:
+			head = uistate.T("rpta.probFeesOnlyOne", fmtMinor(costs.FeeTotal))
+		case costs.FeeCount > 1:
+			head = uistate.T("rpta.probFeesOnly", fmtMinor(costs.FeeTotal), costs.FeeCount)
+		case costs.InterestCount == 1:
+			head = uistate.T("rpta.probInterestOnlyOne", fmtMinor(costs.InterestTotal))
+		default:
+			head = uistate.T("rpta.probInterestOnly", fmtMinor(costs.InterestTotal), costs.InterestCount)
+		}
+		var costRows []ui.Node
+		for i, it := range costs.Items {
+			if i >= 8 {
+				costRows = append(costRows, Div(css.Class("row"), Span(css.Class("rpta-muted"), uistate.T("rpta.costMore", len(costs.Items)-8))))
+				break
+			}
+			kind := uistate.T("rpta.costFee")
+			if it.Interest {
+				kind = uistate.T("rpta.costInterest")
+			}
+			costRows = append(costRows, Div(css.Class("row"), Attr("data-testid", "rpta-cost-row"),
+				Div(css.Class("row-main"),
+					Span(css.Class("rpta-cost-kind"), kind),
+					Span(css.Class("row-desc"), it.Desc),
+					Span(css.Class("row-meta"), pr.FormatDate(it.Date))),
+				Span(css.Class("budget-amount", "rpta-tone-down"), fmtMinor(it.Amount))))
+		}
+		problemBits = append(problemBits,
+			rptaSub(head, A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "costs-drill"), uistate.T("reports.viewTransactions"))),
+			Div(css.Class("rows"), Attr("data-testid", "rpta-costs"), costRows))
 	}
 	if len(debtRowNodes) > 0 {
 		problemBits = append(problemBits,
@@ -744,7 +1203,14 @@ func Reports() ui.Node {
 	if len(problemBits) == 0 {
 		problemBits = append(problemBits, P(css.Class("rpta-muted"), uistate.T("rpta.noProblems")))
 	}
-	problems := rptaSection("rpta-07", "07", uistate.T("rpta.secProblems"), "down", uistate.T("rpta.secProblemsSub"), Fragment(anyify(problemBits)...))
+	askProblems := fmt.Sprintf("%d months in the red; %s estimated yearly debt interest; %s in fees; %s in interest charges",
+		monthsRed, fmtMinor(debtInterestTotal), fmtMinor(costs.FeeTotal), fmtMinor(costs.InterestTotal))
+	for _, f := range health.Factors {
+		if f.Weight > 0 && f.Score < 70 {
+			askProblems += fmt.Sprintf("; weak factor %s = %s (score %d)", f.Label, f.Value, f.Score)
+		}
+	}
+	problems := rptaSection("rpta-09", "09", uistate.T("rpta.secProblems"), "down", uistate.T("rpta.secProblemsSub"), askProblems, Fragment(anyify(problemBits)...))
 
 	// ── 08 · The plan (numbered, dollar-quantified). ──────────────────────────
 	var planItems []ui.Node
@@ -786,13 +1252,31 @@ func Reports() ui.Node {
 			uistate.T("rpta.planDebtDetail", fmtMinor(int64(d.apr*1000))),
 			"/debt", uistate.T("nav.debt"))
 	}
+	if costs.FeeTotal >= 2500 { // $25+/yr in fees is worth a line in the plan
+		feeDetail := ""
+		if len(costs.Items) > 0 && !costs.Items[0].Interest {
+			feeDetail = uistate.T("rpta.planFeesDetail", costs.Items[0].Desc, fmtMinor(costs.Items[0].Amount))
+		}
+		feeAction := uistate.T("rpta.planFees", fmtMinor(costs.FeeTotal), costs.FeeCount)
+		if costs.FeeCount == 1 {
+			feeAction = uistate.T("rpta.planFeesOne", fmtMinor(costs.FeeTotal))
+		}
+		addPlan(feeAction, feeDetail, "/transactions", uistate.T("nav.transactions"))
+	}
 	if len(liveSubs) >= 3 {
 		addPlan(
 			uistate.T("rpta.planSubs", len(liveSubs), fmtMinor(subsAnnual)),
 			If2(len(rises) > 0, uistate.T("rpta.planSubsRises", len(rises)), ""),
 			"/subscriptions", uistate.T("nav.subscriptions"))
 	}
-	plan := rptaSection("rpta-08", "08", uistate.T("rpta.secPlan"), "plan", uistate.T("rpta.secPlanSub"),
+	askPlan := ""
+	for i, st := range health.Steps {
+		if i >= 3 {
+			break
+		}
+		askPlan += st.Action + "; "
+	}
+	plan := rptaSection("rpta-10", "10", uistate.T("rpta.secPlan"), "plan", uistate.T("rpta.secPlanSub"), askPlan,
 		Div(css.Class("rpta-plan"), Attr("data-testid", "rpta-plan"), planItems))
 
 	// ── 09 · Appendix (tax, custom fields, metrics). ──────────────────────────
@@ -812,7 +1296,7 @@ func Reports() ui.Node {
 	}
 	var appendix ui.Node = Fragment()
 	if len(appendixBits) > 0 {
-		appendix = rptaSection("rpta-09", "09", uistate.T("rpta.secAppendix"), "dim", uistate.T("rpta.secAppendixSub"), Fragment(anyify(appendixBits)...))
+		appendix = rptaSection("rpta-11", "11", uistate.T("rpta.secAppendix"), "dim", uistate.T("rpta.secAppendixSub"), "", Fragment(anyify(appendixBits)...))
 	}
 
 	return Div(css.Class("rpta"),
@@ -824,6 +1308,8 @@ func Reports() ui.Node {
 		motion,
 		categories,
 		whereGoes,
+		goalsSec,
+		budgetsSec,
 		watch,
 		problems,
 		plan,
@@ -955,9 +1441,11 @@ func rptaFig(label, value, tone, sub string) ui.Node {
 	)
 }
 
-// rptaWin is one strengths-strip win chip.
+// rptaWin is one strengths-strip win chip, led by a check glyph.
 func rptaWin(text string) ui.Node {
-	return Span(css.Class("rpta-win"), text)
+	return Span(css.Class("rpta-win"),
+		Span(css.Class("rpta-win-check"), Attr("aria-hidden", "true"), "✓"),
+		text)
 }
 
 // rptaSub is a small in-section subheading with an optional right-aligned action.
@@ -989,13 +1477,17 @@ func rptaFactorRow(f healthscore.Factor) ui.Node {
 }
 
 // rptaSection wraps one numbered zone-toned document section.
-func rptaSection(id, num, title, zone, sub string, body ui.Node) ui.Node {
-	return rptaSectionWithAction(id, num, title, zone, sub, nil, body)
+func rptaSection(id, num, title, zone, sub, ask string, body ui.Node) ui.Node {
+	return rptaSectionWithAction(id, num, title, zone, sub, ask, nil, body)
 }
 
-func rptaSectionWithAction(id, num, title, zone, sub string, action, body ui.Node) ui.Node {
+func rptaSectionWithAction(id, num, title, zone, sub, ask string, action, body ui.Node) ui.Node {
 	if action == nil {
 		action = Fragment()
+	}
+	var askBtn ui.Node = Fragment()
+	if ask != "" {
+		askBtn = ui.CreateElement(rptaAskBtn, rptaAskProps{Title: title, Observations: ask})
 	}
 	return Section(ClassStr("rpta-sec rpta-z-"+zone), Attr("id", id), Attr("data-testid", id),
 		Div(css.Class("rpta-sec-head"),
@@ -1006,30 +1498,127 @@ func rptaSectionWithAction(id, num, title, zone, sub string, action, body ui.Nod
 					If(sub != "", P(css.Class("rpta-sec-sub"), sub)),
 				),
 			),
-			action,
+			Div(css.Class("rpta-sec-actions"), action, askBtn),
 		),
 		Div(css.Class("rpta-sec-body"), body),
 	)
 }
 
-// rptaIndex is the sticky jump index: 01-09 with zone dots.
+// rptaAskProps configures a section's "ask the assistant" affordance.
+type rptaAskProps struct {
+	Title        string
+	Observations string
+}
+
+// rptaAskBtn opens the assistant pre-seeded with this section's observations,
+// so the follow-up conversation starts already grounded in the report's
+// numbers (the same SeedExplain seam the Explain chips use). Its own component
+// so the click hook sits at a stable position per section.
+func rptaAskBtn(p rptaAskProps) ui.Node {
+	click := ui.UseEvent(Prevent(func() {
+		uistate.SeedExplain(uistate.T("rpta.askSeed", p.Title, p.Observations))
+		router.Navigate(uistate.RoutePath("/assistant"))
+	}))
+	return Button(css.Class("rpta-ask"), Type("button"), Attr("data-testid", "rpta-ask"),
+		Title(uistate.T("rpta.askTitle", p.Title)), OnClick(click),
+		Span(Attr("aria-hidden", "true"), "✦ "), uistate.T("rpta.ask"))
+}
+
+// rptaHistRowProps drives one histogram bar in the year-spend charts (§04
+// categories, §05 tags): a colored magnitude bar with the label, amount, and a
+// judgment-toned delta.
+type rptaHistRowProps struct {
+	Label     string
+	Chip      bool // render the label as a tag chip
+	Color     string
+	Amount    int64
+	Max       int64
+	Meta      string // right-edge secondary figure (share %, charge count)
+	HasDelta  bool
+	DeltaPct  int64
+	PriorZero bool
+	FmtMinor  func(int64) string
+	OnSelect  func() // nil = static row (no drill)
+}
+
+// rptaHistRow is one histogram bar. Its own component so a drill hook never
+// registers inside the caller's loop.
+func rptaHistRow(p rptaHistRowProps) ui.Node {
+	click := ui.UseEvent(Prevent(func() {
+		if p.OnSelect != nil {
+			p.OnSelect()
+		}
+	}))
+	pct := int64(0)
+	if p.Max > 0 {
+		pct = p.Amount * 100 / p.Max
+	}
+	if pct < 1 {
+		pct = 1
+	}
+	delta := ""
+	deltaCls := "rpta-hist-delta rpta-muted"
+	switch {
+	case p.PriorZero:
+		delta = uistate.T("rpta.newCat")
+	case p.HasDelta && p.DeltaPct > 0:
+		delta = fmt.Sprintf("▲ %d%%", p.DeltaPct)
+		deltaCls = "rpta-hist-delta rpta-tone-down" // spending UP is bad
+	case p.HasDelta && p.DeltaPct < 0:
+		delta = fmt.Sprintf("▼ %d%%", -p.DeltaPct)
+		deltaCls = "rpta-hist-delta rpta-tone-up"
+	case p.HasDelta:
+		delta = "0%"
+	}
+	labelCls := "rpta-hist-label"
+	if p.Chip {
+		labelCls += " rpta-tag-chip"
+	}
+	inner := []any{
+		Span(ClassStr(labelCls), p.Label),
+		Div(css.Class("rpta-hist-track"),
+			Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct), "background": p.Color}))),
+		Span(css.Class("rpta-hist-amt", tw.FontDisplay), p.FmtMinor(p.Amount)),
+		Span(ClassStr(deltaCls), delta),
+		Span(css.Class("rpta-hist-meta", "rpta-muted"), p.Meta),
+	}
+	if p.OnSelect == nil {
+		return Div(append([]any{css.Class("rpta-hist-row")}, inner...)...)
+	}
+	return Button(append([]any{css.Class("rpta-hist-row", "rpta-hist-btn"), Type("button"),
+		Title(uistate.T("reports.drillTitleCat")), OnClick(click)}, inner...)...)
+}
+
+// rptaIndex is the sticky jump index: 01-09 with zone dots. Items are buttons
+// that scroll their section into view — not raw #hash anchors, which would
+// push a fragment URL through the SPA router.
 func rptaIndex() ui.Node {
-	item := func(href, num, key, zone string) ui.Node {
-		return A(css.Class("rpta-idx-item"), Href(href),
+	scrollTo := func(id string) func() {
+		return func() {
+			doc := js.Global().Get("document")
+			if el := doc.Call("getElementById", id); el.Truthy() {
+				el.Call("scrollIntoView", map[string]any{"behavior": "smooth", "block": "start"})
+			}
+		}
+	}
+	item := func(id, num, key, zone string) ui.Node {
+		return Button(css.Class("rpta-idx-item"), Type("button"), OnClick(scrollTo(id)),
 			Span(ClassStr("rpta-idx-dot rpta-dot-"+zone)),
 			Span(css.Class("rpta-idx-num"), num),
 			Span(css.Class("rpta-idx-label"), uistate.T(key)),
 		)
 	}
 	return Nav(css.Class("rpta-index"), Attr("data-testid", "rpta-index"), Attr("aria-label", uistate.T("rpta.indexLabel")),
-		item("#rpta-01", "01", "rpta.idxStrong", "up"),
-		item("#rpta-02", "02", "rpta.idxFlow", "up"),
-		item("#rpta-03", "03", "rpta.idxMotion", "neutral"),
-		item("#rpta-04", "04", "rpta.idxCats", "neutral"),
-		item("#rpta-05", "05", "rpta.idxWhere", "neutral"),
-		item("#rpta-06", "06", "rpta.idxWatch", "warn"),
-		item("#rpta-07", "07", "rpta.idxProblems", "down"),
-		item("#rpta-08", "08", "rpta.idxPlan", "plan"),
+		item("rpta-01", "01", "rpta.idxStrong", "up"),
+		item("rpta-02", "02", "rpta.idxFlow", "up"),
+		item("rpta-03", "03", "rpta.idxMotion", "neutral"),
+		item("rpta-04", "04", "rpta.idxCats", "neutral"),
+		item("rpta-05", "05", "rpta.idxWhere", "neutral"),
+		item("rpta-06", "06", "rpta.idxGoals", "neutral"),
+		item("rpta-07", "07", "rpta.idxBudgets", "neutral"),
+		item("rpta-08", "08", "rpta.idxWatch", "warn"),
+		item("rpta-09", "09", "rpta.idxProblems", "down"),
+		item("rpta-10", "10", "rpta.idxPlan", "plan"),
 	)
 }
 
@@ -1124,6 +1713,7 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 // rptaCatRowProps drives one row of the full-year category review table.
 type rptaCatRowProps struct {
 	CategoryID, Name   string
+	Dot                string // the category's money-flow color (grey when it isn't a diagram node)
 	Amount, Prior      int64
 	HasDelta           bool
 	DeltaPct           int64
@@ -1173,7 +1763,9 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 	return Div(css.Class("rpta-cat-row"), Attr("data-testid", "reports-cat-row"), Attr("data-category-id", props.CategoryID),
 		Button(css.Class("rpta-cat-name"), Type("button"), Attr("data-testid", "reports-cat-drill"),
 			Title(uistate.T("reports.drillTitleCat")), OnClick(drill),
-			Span(props.Name),
+			Span(css.Class("rpta-cat-title"),
+				If(props.Dot != "", Span(css.Class("rpta-flow-dot", "rpta-cat-dot"), Attr("aria-hidden", "true"), Style(map[string]string{"background": props.Dot}))),
+				Span(props.Name)),
 			Div(css.Class("share-bar"), Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", widthPct)}))),
 		),
 		Span(css.Class("rpta-cat-amt", tw.FontDisplay), props.FmtMinor(amt)),

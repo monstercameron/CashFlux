@@ -1,3 +1,38 @@
+## 2026-07-16 — Annual Review round two: the flow diagram done right + six follow-on asks
+
+Cam, rapid-fire on the fresh page: (1) "the money flow is a style regression, the past style with the
+smooth svg lines looked better, I was hoping you would enhance that"; (2) "also track tags in the
+reports and make sure graphs have legends"; (3) "no raw hrefs for in-page links"; (4) "more charts,
+graphs, colors and glyphs where feasible and tasteful"; (5) "fees, interest payments, credit scores
+over time and useful metadata like this"; (6) "sections for goal progress and budget adherence";
+(7) "instead of a million lines use histograms for year cat and tag spends"; (8) "red is bad, yellow
+warn, green good — match the chart color with the value context"; (9) "each section: a button to ask
+the assistant about the report's observations".
+
+The flow regression's root cause: mermaid's sankey caps its own width (~600px in a 1180px column)
+and draws hair-thin fixed-palette ribbons. Replaced it wholesale: pure `reports.LayoutSankey`
+(3-column topology from the flows themselves, one shared value scale, min-height floor so a $265
+trickle stays visible, per-node ribbon offsets ordered by far-end Y so bands never cross at the
+bar), rendered as a string-built full-width SVG with cubic-bezier ribbons and per-link gradients.
+Two framework potholes: GWC's SVG-namespace tag set lacks `<text>`/`<title>` (labels built via vdom
+silently landed in the HTML namespace and never painted — that's why the first deploy had a mute
+diagram), so the SVG is injected via the Mermaid-style managed-container/innerHTML pattern with all
+user strings escaped; and `<a href="#…">` jump links would push fragments through the SPA router,
+so the index became scrollIntoView buttons. One data confound caught on my own screenshot: the
+diagram's "everything else" (beyond top-10) disagreed with the per-$100 table's (beyond top-6) —
+table now uses the same top-10. The palette threads on purpose: sankey ribbon hue = per-$100 dot =
+§04 histogram bar = category-table dot.
+
+The rest of the batch: `SpendingByTag` + `CostOfMoney` (whole-token matching — "Coffee"≠fee,
+"Pinterest"≠interest — with tests), credit proxy score time-sliced per month end into a fourth §03
+chart, §06 goal-coverage rows (saved band over earmark band, state chips), §07 adherence strips
+(12 month-cells per monthly budget, annualized bar for other cadences — honest about base limits,
+carryover aside), §04/§05 histograms with the detailed table folded, semantic strokes (each chart
+colored by its own verdict), and a per-section ✦ Ask AI button that seeds the assistant with that
+section's computed observations through the existing SeedExplain seam — the report is now also a
+conversation starter, not just a document. 11 sections, ~9,400px, both themes verified, 0 console
+errors; smoke + light-theme + a11y(/reports) green. v1.0.58, SW v333.
+
 ## 2026-07-16 — Reports rebuilt from scratch: the Annual Review
 
 Cam: "make it a long dense page, redesign from scratch, keep and enhance the money flow diagram,
