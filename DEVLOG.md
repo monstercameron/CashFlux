@@ -1,3 +1,20 @@
+## 2026-07-16 — UX punch-list from the 9-page review: notifications de-noised first
+
+Ran an aggressive UX review of the first 9 pages (drove the seeded build, dark+light, modals/filters)
+and turned it into a 19-item punch list tracked in the task tracker. Starting with the highest-leverage
+fix: **Notifications**. The seed feed was 13 cards, 7 of them near-identical "X needs a balance update"
+nags — a wall that desensitizes and violates our own "friendly, never naggy" rule, and buries the one
+Critical (a car loan due tomorrow) in a field of yellow.
+
+Fix is pure UI over the existing feed — no notify-engine changes. In `notifListWidget` I partition the
+visible feed by **rule kind** (the `ruleID@occurrence` ID prefix, so all `default-stale` items share a
+kind), and any kind with ≥3 items *and no critical member* collapses into one `notifGroupRow`: a summary
+line ("7 accounts need a balance update"), a Show all/Hide disclosure that reveals the pre-built child
+rows, and a Dismiss-all (via `RemoveFeedItems`). The critical-member exclusion is the important nuance —
+an urgent bill is never hidden inside a collapsed group. Child rows are built once and passed in as nodes
+so no hooks run inside a loop. Verified end-to-end: collapsed feed shows the group as one row, expand
+reveals all 7, dismiss-all clears them, 0 console errors. Next: the row-action overload on the list pages.
+
 ## 2026-07-16 — Annual Review round two: the flow diagram done right + six follow-on asks
 
 Cam, rapid-fire on the fresh page: (1) "the money flow is a style regression, the past style with the

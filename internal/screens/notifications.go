@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -18,6 +19,112 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/state"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
+
+// notifGroupMin is the number of same-kind, non-critical notifications above which
+// the feed collapses them into one summary row (task: "friendly, never naggy").
+// Below this, the individual cards read fine; at or above it, a wall of near-
+// identical nags (e.g. eight "needs a balance update" cards) is one tidy card.
+const notifGroupMin = 3
+
+// notifyGroupKind returns the rule kind a feed item belongs to — the ID prefix
+// before the first '@' (feed IDs are notify.DedupeKey(ruleID, occurrence) =
+// "ruleID@occurrence"). Same-kind items are the ones worth grouping.
+func notifyGroupKind(id string) string {
+	if i := strings.IndexByte(id, '@'); i >= 0 {
+		return id[:i]
+	}
+	return ""
+}
+
+// notifyGroupSummary renders the plain-English one-line summary shown on a
+// collapsed group ("8 accounts need a balance update"), by rule kind.
+func notifyGroupSummary(kind string, n int) string {
+	switch kind {
+	case "default-stale":
+		return uistate.T("notifications.groupStale", n)
+	case "default-bill-due":
+		return uistate.T("notifications.groupBill", n)
+	case "default-budget":
+		return uistate.T("notifications.groupBudget", n)
+	case "default-low-balance":
+		return uistate.T("notifications.groupLowBal", n)
+	case "default-large":
+		return uistate.T("notifications.groupLarge", n)
+	default:
+		return uistate.T("notifications.groupGeneric", n)
+	}
+}
+
+// notifGroupRowProps drive one collapsed group card. Children are the already-
+// built notifyRow nodes for the group's members (built in the list widget, which
+// owns the per-item callback closures); the group just shows/hides them.
+type notifGroupRowProps struct {
+	Kind         string
+	Severity     string
+	Summary      string
+	Count        int
+	Children      []ui.Node
+	OnDismissAll func()
+}
+
+// notifGroupRow renders a run of same-kind notifications as a single collapsed
+// card: a severity medallion, the plain-English summary + count, a "Dismiss all",
+// and a disclosure that expands to the individual rows. It owns its expanded
+// state so the surrounding feed stays a flat list.
+func notifGroupRow(props notifGroupRowProps) ui.Node {
+	expanded := ui.UseState(false)
+	open := expanded.Get()
+	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
+	dismissAll := ui.UseEvent(Prevent(func() {
+		if props.OnDismissAll != nil {
+			props.OnDismissAll()
+		}
+	}))
+
+	cardCls := "notif-group " + notifySeverityClass(props.Severity)
+	if open {
+		cardCls += " is-open"
+	}
+	discLabel := uistate.T("notifications.groupShow")
+	if open {
+		discLabel = uistate.T("notifications.groupHide")
+	}
+
+	head := Div(css.Class("notif-group-head"),
+		Button(css.Class("notif-group-toggle"), Type("button"),
+			Attr("data-testid", "notif-group-toggle-"+props.Kind),
+			Attr("aria-expanded", ariaBool(open)),
+			Attr("aria-label", uistate.T("notifications.groupExpandAria", props.Count)),
+			OnClick(toggle),
+			Div(css.Class("notif-badge"), Attr("aria-hidden", "true"),
+				uiw.Icon(notifySeverityIcon(props.Severity), css.Class(tw.W4, tw.H4))),
+			Div(css.Class("notif-group-body-text"),
+				Span(css.Class("notif-group-summary"), props.Summary),
+				Span(css.Class("notif-group-hint"), uistate.T("notifications.groupHint")),
+			),
+			Span(css.Class("notif-group-disc"), discLabel,
+				uiw.Icon(icon.ChevronDown, css.Class(tw.W4, tw.H4))),
+		),
+		Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"),
+			Attr("data-testid", "notif-group-dismiss-"+props.Kind),
+			Attr("aria-label", uistate.T("notifications.groupDismissAll")),
+			Title(uistate.T("notifications.groupDismissAll")),
+			OnClick(dismissAll), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+	)
+
+	var body ui.Node = Fragment()
+	if open {
+		bodyArgs := []any{css.Class("notif-group-list"), Attr("role", "list")}
+		for _, c := range props.Children {
+			bodyArgs = append(bodyArgs, c)
+		}
+		body = Div(bodyArgs...)
+	}
+
+	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-group-"+props.Kind),
+		head, body,
+	)
+}
 
 // notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second
 // timestamp of the last time the user viewed the Notification Center (C271).

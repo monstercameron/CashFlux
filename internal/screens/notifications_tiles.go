@@ -238,21 +238,89 @@ func notifListWidget(props notifProps) ui.Node {
 	}
 
 	pr := uistate.UsePrefs().Get()
-	rows := make([]ui.Node, 0, len(visible))
+
+	// Decide which kinds to collapse into a single summary card: a kind (rule) with
+	// >= notifGroupMin visible items, none of them critical. Critical membership
+	// disqualifies the whole kind so an urgent bill (due tomorrow) is never hidden
+	// inside a collapsed group. This is the "friendly, never naggy" fix — a wall of
+	// eight identical "needs a balance update" cards becomes one tidy row.
+	kindCount := map[string]int{}
+	kindHasCrit := map[string]bool{}
 	for _, it := range visible {
+		k := notifyGroupKind(it.ID)
+		if k == "" {
+			continue
+		}
+		kindCount[k]++
+		if it.Severity == "critical" {
+			kindHasCrit[k] = true
+		}
+	}
+	grouped := map[string]bool{}
+	for k, n := range kindCount {
+		if n >= notifGroupMin && !kindHasCrit[k] {
+			grouped[k] = true
+		}
+	}
+
+	buildRow := func(it uistate.FeedItem) ui.Node {
 		id := it.ID
 		isRead := it.Read
 		timeStr := relativeTime(it.At, now)
 		if timeStr == "" {
 			timeStr = pr.FormatDate(time.Unix(it.At, 0))
 		}
-		rows = append(rows, ui.CreateElement(notifyRow, notifyRowProps{
+		return ui.CreateElement(notifyRow, notifyRowProps{
 			Item:      it,
 			TimeStr:   timeStr,
 			OnRead:    func() { uistate.MarkFeedItemRead(id, !isRead) },
 			OnDismiss: func() { uistate.DismissFeedItem(id) },
 			OnSnooze:  func() { uistate.SnoozeFeedItem(id, time.Now().Unix()+86400) },
-		}))
+		})
+	}
+
+	// Pre-build each grouped kind's child rows in visible (severity-sorted) order,
+	// and record the kind's representative severity (its first, highest-tier member).
+	groupChildren := map[string][]ui.Node{}
+	groupSev := map[string]string{}
+	for _, it := range visible {
+		k := notifyGroupKind(it.ID)
+		if !grouped[k] {
+			continue
+		}
+		if _, ok := groupSev[k]; !ok {
+			groupSev[k] = it.Severity
+		}
+		groupChildren[k] = append(groupChildren[k], buildRow(it))
+	}
+
+	// Emit the feed: a grouped kind renders one collapsed group card at the position
+	// of its first (highest-severity) member; everything else renders as before.
+	rows := make([]ui.Node, 0, len(visible))
+	emitted := map[string]bool{}
+	for _, it := range visible {
+		k := notifyGroupKind(it.ID)
+		if grouped[k] {
+			if emitted[k] {
+				continue
+			}
+			emitted[k] = true
+			kind := k
+			rows = append(rows, ui.CreateElement(notifGroupRow, notifGroupRowProps{
+				Kind:     kind,
+				Severity: groupSev[kind],
+				Summary:  notifyGroupSummary(kind, kindCount[kind]),
+				Count:    kindCount[kind],
+				Children: groupChildren[kind],
+				OnDismissAll: func() {
+					uistate.RemoveFeedItems(func(fi uistate.FeedItem) bool {
+						return notifyGroupKind(fi.ID) == kind
+					})
+				},
+			}))
+			continue
+		}
+		rows = append(rows, buildRow(it))
 	}
 	listArgs := []any{css.Class("notif-list"), Attr("role", "list")}
 	for _, r := range rows {

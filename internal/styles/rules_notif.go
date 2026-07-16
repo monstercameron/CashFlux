@@ -127,4 +127,90 @@ func registerNotifySurface() {
 		fontSize("0.8rem"),
 		transition("border-color .12s ease, color .12s ease"),
 	)
+
+	// --- collapsed groups (task: friendly, never naggy) ------------------------
+	// A run of same-kind, non-critical alerts (e.g. eight "needs a balance update")
+	// collapses into ONE summary card. The card carries the same severity accent as
+	// a single row so it reads as part of the same triage log, plus a disclosure
+	// that expands to the individual rows.
+	rule(".notif-group",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flexWrap("wrap"),
+		padding("0.55rem 0.8rem"),
+		borderRadius("var(--radius)"),
+		border("1px solid var(--border)"),
+		background("var(--bg-card)"),
+	)
+	rule(".notif-group.sev-warning",
+		borderColor("color-mix(in srgb, #f59e0b 45%, var(--border))"),
+	)
+	rule(".notif-group.sev-info",
+		borderColor("var(--border)"),
+	)
+	// The head is the whole clickable summary bar; the toggle button fills it and the
+	// dismiss-all sits at the trailing edge.
+	rule(".notif-group-head",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		width("100%"),
+	)
+	rule(".notif-group-toggle",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flex("1 1 auto"),
+		minWidth("0"),
+		padding("0"),
+		border("none"),
+		background("transparent"),
+		color("var(--text)"),
+		textAlign("left"),
+	)
+	rule(".notif-group-body-text",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.05rem"),
+		minWidth("0"),
+	)
+	rule(".notif-group-summary",
+		fontWeight("600"),
+		fontSize("0.9rem"),
+		color("var(--text)"),
+	)
+	rule(".notif-group-hint",
+		fontSize("0.75rem"),
+		color("var(--text-faint)"),
+	)
+	// The disclosure pill: "Show all ⌄" / "Hide ⌄", chevron rotates when open.
+	rule(".notif-group-disc",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.2rem"),
+		marginLeft("auto"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".notif-group-disc svg",
+		transition("transform .15s ease"),
+	)
+	rule(".notif-group.is-open .notif-group-disc svg",
+		transform("rotate(180deg)"),
+	)
+	// The expanded child rows sit indented under the summary, spanning the full width.
+	rule(".notif-group-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+		width("100%"),
+		marginTop("0.5rem"),
+		paddingTop("0.5rem"),
+		borderTop("1px solid var(--border)"),
+	)
 }
