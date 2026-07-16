@@ -1,18 +1,11 @@
-## 2026-07-16 — Right-side spend-composition pie on composite budget cards
+## 2026-07-16 — Reports → primary rail, slot 9 (v1.0.55)
 
-Cam: "add a right side pie chart on the budget cell", then "piechart only shows for composite cats or
-cats+tags and handle dedupe carefully for cats+tags." Added `budgetPie(b)` → the card gets a conic-gradient
-donut + amount legend when the budget tracks 2+ dimensions (multi-cat, cats+tags, or multi-tag) and has
-spend; otherwise no pie (returns shown=false and the card stays a plain block). The wedges come from
-`budgetCompositionSlices`, which walks the budget's current period and attributes each charge ONCE with
-the same tag-priority as the engine: if the charge carries a tracked tag it goes whole to that tag (the
-first the budget lists), never also to a category — so a charge with several of the budget's tags (the
-seed's Nobu dinner: splurge+date-night+big-purchase) lands in exactly one wedge and the wedges sum to the
-budget's Spent ($910+$850+$240 = $2,000, verified). Card restructure: wrapped the content in `.budget-main`
-and made `.budget-has-pie` a flex ROW (had to override the bento card's `flex-direction:column`, which was
-stacking the pie below and left-aligning it) with the pie as the right column; a max-width:720px media
-query drops it below on a narrow column. Single-cat budgets show no pie (verified: Dining/Transportation
-have none). `budgets_row.go`, `.budget-pie*` in `rules_r4.go`.
+Cam: “move reports to top menu 9.” One-line route move in screens.go (GroupTools/Understand →
+GroupPrimary, appended after Assistant): the rail’s digit badges and Alt+N jumps derive from primary
+order, so Reports picks up badge 9 + Alt+9 with no shortcut wiring. Checked the traps first: the
+mobile tab bar is four hardcoded slots (unaffected), no e2e pins Reports to the Tools group, and the
+L34 hint code only labels the first nine primary items — we now sit at exactly nine. Live-verified:
+rail reads Dashboard 1 … Assistant 8, Reports 9; Alt+9 lands on /reports.
 
 ## 2026-07-16 — Accounts UX overhaul: all 18 audit items corrected (v1.0.54)
 
@@ -47,6 +40,22 @@ duplicated when an account's NAME already embeds its currency ("Travel Card (EUR
 Fixed with a name-carries-currency check; re-verified live on both transfer forms (zero duplicates,
 FX note intact) → 9/10. The critic's residual notes (the check is a heuristic; the institution prompt
 is plainer than a picker) were judged defensible, not defects.
+
+## 2026-07-16 — Right-side spend-composition pie on composite budget cards
+
+Cam: "add a right side pie chart on the budget cell", then "piechart only shows for composite cats or
+cats+tags and handle dedupe carefully for cats+tags." Added `budgetPie(b)` → the card gets a conic-gradient
+donut + amount legend when the budget tracks 2+ dimensions (multi-cat, cats+tags, or multi-tag) and has
+spend; otherwise no pie (returns shown=false and the card stays a plain block). The wedges come from
+`budgetCompositionSlices`, which walks the budget's current period and attributes each charge ONCE with
+the same tag-priority as the engine: if the charge carries a tracked tag it goes whole to that tag (the
+first the budget lists), never also to a category — so a charge with several of the budget's tags (the
+seed's Nobu dinner: splurge+date-night+big-purchase) lands in exactly one wedge and the wedges sum to the
+budget's Spent ($910+$850+$240 = $2,000, verified). Card restructure: wrapped the content in `.budget-main`
+and made `.budget-has-pie` a flex ROW (had to override the bento card's `flex-direction:column`, which was
+stacking the pie below and left-aligning it) with the pie as the right column; a max-width:720px media
+query drops it below on a narrow column. Single-cat budgets show no pie (verified: Dining/Transportation
+have none). `budgets_row.go`, `.budget-pie*` in `rules_r4.go`.
 
 ## 2026-07-16 — Redesign the tracked cats/tags editor: searchable tag picker + this-month meta
 

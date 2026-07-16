@@ -45,7 +45,7 @@ const (
 // renders by SubGroup; it owns no hardcoded path lists.
 const (
 	SubGroupPlan       = "plan"       // Plan & forecast: Debt, Investments, Allocate, Planning, Recurring
-	SubGroupUnderstand = "understand" // Understand: Reports, NetWorth, Health, Assistant
+	SubGroupUnderstand = "understand" // Understand: NetWorth, Health, Insights (Reports promoted to Primary)
 	SubGroupBills      = "bills"      // retained for const stability; no rail routes currently use it
 	SubGroupData       = "data"       // Data & people: Household, Categories, Rules, Artifacts, Activity
 	SubGroupBuild      = "build"      // Build: Customize, Fields, Studio, Workflows
@@ -71,6 +71,9 @@ func All() []Route {
 		{Path: "/todo", Label: "nav.todo", Title: "nav.todo", Subtitle: "screen.todoSub", Phase: 1, Group: GroupPrimary, View: Todo},
 		{Path: "/notifications", Label: "nav.notifications", Title: "nav.notifications", Subtitle: "screen.notificationsSub", Phase: 1, Group: GroupPrimary, View: NotificationCenter},
 		{Path: "/assistant", Label: "nav.assistant", Title: "nav.assistant", Subtitle: "screen.assistantSub", Phase: 1, Group: GroupPrimary, View: Assistant},
+		// Reports promoted from Tools→Understand to the primary rail (slot 9, so it
+		// picks up the Alt+9 jump + digit badge like its siblings).
+		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupPrimary, View: Reports},
 
 		// TOOLS / Plan & forecast — debt management, investing, allocation, forecasting.
 		{Path: "/debt", Label: "nav.debt", Title: "nav.debt", Subtitle: "screen.debtSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: DebtPlanner},
@@ -82,7 +85,6 @@ func All() []Route {
 
 		// TOOLS / Understand — reporting, net worth, and health. (The AI assistant
 		// moved to PRIMARY — it's an everyday surface, not a report.)
-		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: Reports},
 		{Path: "/networth", Label: "nav.netWorth", Title: "nav.netWorth", Subtitle: "screen.netWorthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: NetWorth},
 		{Path: "/health", Label: "nav.health", Title: "nav.health", Subtitle: "screen.healthSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupUnderstand, View: HealthScreen},
 
