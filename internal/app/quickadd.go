@@ -86,16 +86,26 @@ func QuickAddHost() uic.Node {
 			}
 		}
 		if effAcct == "" {
-			// Default to the first spending-type asset, not an investment/retirement/
-			// crypto account (none of which are natural places to record everyday
-			// spending transactions — C73/L78-T3).
+			// Default to the MOST-USED everyday spending account (by transaction count),
+			// not merely the first in store order — so the modal opens on the account the
+			// household actually records against (e.g. Joint Checking) instead of an
+			// incidental first-listed one (e.g. a rarely-touched business checking).
+			// Investment/retirement/crypto accounts are never everyday-spend accounts, so
+			// they're excluded (C73/L78-T3).
+			txnCount := map[string]int{}
+			for _, t := range app.Transactions() {
+				txnCount[t.AccountID]++
+			}
+			bestN := -1
 			for _, a := range accounts {
-				if a.Class == domain.ClassAsset && !a.Archived &&
-					a.Type != domain.TypeInvestment &&
-					a.Type != domain.TypeRetirement &&
-					a.Type != domain.TypeCrypto {
-					effAcct = a.ID
-					break
+				if a.Class != domain.ClassAsset || a.Archived ||
+					a.Type == domain.TypeInvestment ||
+					a.Type == domain.TypeRetirement ||
+					a.Type == domain.TypeCrypto {
+					continue
+				}
+				if n := txnCount[a.ID]; n > bestN {
+					effAcct, bestN = a.ID, n
 				}
 			}
 			if effAcct == "" && len(accounts) > 0 {
@@ -384,10 +394,6 @@ func QuickAddHost() uic.Node {
 		// TXT: the templates zone — chips one-click pre-fill the form below, and "Save
 		// as template" (disabled until an amount is present) snapshots the current form.
 		// Kept together at the top so the feature it teaches is visible without scrolling.
-		Div(css.Class("txt-zone"),
-			screens.TxnTemplatePicker(onPick),
-			saveTemplateBtn,
-		),
 		ui.FormField(uistate.T("quickAdd.account"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
 		ui.Segmented(ui.SegmentedProps{
@@ -435,6 +441,14 @@ func QuickAddHost() uic.Node {
 		// it can't persist an invalid row. Lives in the body (the panel's footer Save
 		// closes the panel; this one deliberately keeps it open).
 		quickAddAnotherBtn(formValid, saveAndAnother),
+		// TXT: the templates zone — one-click chips pre-fill the form, and "Save as
+		// template" snapshots it. Demoted to the BOTTOM (from the prime top slot) so a
+		// "No templates yet" placeholder no longer occupies the most valuable real estate;
+		// the Account/Amount fields the user needs first now lead the form.
+		Div(css.Class("txt-zone"),
+			screens.TxnTemplatePicker(onPick),
+			saveTemplateBtn,
+		),
 	)
 
 	return ui.FlipPanel(ui.FlipPanelProps{

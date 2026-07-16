@@ -237,6 +237,11 @@ func registerTxnToolbar() {
 		flexDirection("column"),
 		gap("0.5rem"),
 	)
+	rule(".filter-group-head",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.5rem"),
+	)
 	rule(".filter-group-label",
 		fontSize("0.7rem"),
 		fontWeight("600"),
@@ -244,12 +249,36 @@ func registerTxnToolbar() {
 		textTransform("uppercase"),
 		color("var(--text-dim)"),
 	)
+	// "· N selected" badge next to a collapsed group's label so an active filter stays visible.
+	rule(".filter-group-selcount",
+		fontSize("0.72rem"),
+		color("var(--accent)"),
+		fontWeight("600"),
+	)
 	rule(".filter-pills",
 		display("flex"),
 		flexWrap("wrap"),
 		gap("0.4rem"),
 		maxHeight("8.5rem"),
 		overflowY("auto"),
+	)
+	// The "Show all N / Show less" disclosure pill for large, collapsed filter groups —
+	// a quiet dashed chip that sits inline with the pills.
+	rule(".filter-group-disc",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		padding("0.3rem 0.7rem"),
+		borderRadius("999px"),
+		border("1px dashed var(--border)"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.78rem"),
+		whiteSpace("nowrap"),
+	)
+	rule(".filter-group-disc:hover",
+		color("var(--accent)"),
+		borderColor("var(--accent)"),
 	)
 	rule(".filter-pill",
 		padding("0.3rem 0.7rem"),

@@ -55,7 +55,7 @@ var txcFieldKeys = Catalog{
 	// TXC-3 quick-filter presets.
 	"transactions.presetsLabel":        "Quick filters",
 	"transactions.presetUncategorized": "Uncategorized",
-	"transactions.presetNeedsReview":   "Needs review",
+	"transactions.presetNeedsReview":   "Flagged",
 	"transactions.presetLarge":         "Large ($100+)",
 	"transactions.presetThisMonth":     "This month",
 }

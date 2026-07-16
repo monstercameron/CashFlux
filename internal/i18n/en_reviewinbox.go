@@ -7,7 +7,7 @@ package i18n
 // so this file never touches en.go.
 var reviewInboxKeys = Catalog{
 	"review.title":  "Review transactions",
-	"review.button": "Review %d", // toolbar entry with the live count
+	"review.button": "Review inbox (%d)", // guided-triage entry; count = uncategorized + flagged (distinct from the filter chips below)
 
 	"review.progress":            "%d of %d",
 	"review.leftCount":           "%d left",

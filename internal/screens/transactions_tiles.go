@@ -109,22 +109,96 @@ func FilterPill(props filterPillProps) ui.Node {
 // on at once (OR-within the dimension). The empty-value "All" option is skipped (an
 // empty set already means "all").
 func filterMultiGroup(label string, field txnfilter.FilterField, selected []string, opts []uiw.SelectOption, onToggle func(txnfilter.FilterField, string)) ui.Node {
+	return ui.CreateElement(filterGroup, filterGroupProps{
+		Label: label, Field: field, Selected: selected, Opts: opts, OnToggle: onToggle,
+	})
+}
+
+// filterGroupCollapseThreshold is the option count above which a filter dimension
+// collapses by default — beyond this, showing every pill turns the panel into a
+// chip wall that buries the ledger (a Category dimension has ~25, Tags ~40).
+const filterGroupCollapseThreshold = 12
+
+type filterGroupProps struct {
+	Label    string
+	Field    txnfilter.FilterField
+	Selected []string
+	Opts     []uiw.SelectOption
+	OnToggle func(txnfilter.FilterField, string)
+}
+
+// filterGroup renders one categorical filter dimension as a group of toggle pills.
+// Large dimensions collapse by default to just their SELECTED pills plus a "Show
+// all N" disclosure, so the filter panel stays scannable instead of rendering a
+// flat wall of every account/category/tag at once. It owns its expand state (a
+// stable per-dimension component, not a loop-level hook).
+func filterGroup(props filterGroupProps) ui.Node {
+	expanded := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
+
+	// Count real (non-"all") options and how many are selected.
+	total, selCount := 0, 0
+	for _, o := range props.Opts {
+		if o.Value == "" {
+			continue
+		}
+		total++
+		if containsStr(props.Selected, o.Value) {
+			selCount++
+		}
+	}
+	collapsible := total > filterGroupCollapseThreshold
+	open := expanded.Get()
+
+	// Collapsed + large: show only the selected pills (so the active filter stays
+	// visible); expanded or small: show them all.
+	shown := props.Opts
+	if collapsible && !open {
+		kept := make([]uiw.SelectOption, 0, selCount)
+		for _, o := range props.Opts {
+			if o.Value != "" && containsStr(props.Selected, o.Value) {
+				kept = append(kept, o)
+			}
+		}
+		shown = kept
+	}
+
+	pills := MapKeyed(shown,
+		func(o uiw.SelectOption) any { return o.Value },
+		func(o uiw.SelectOption) ui.Node {
+			if o.Value == "" {
+				return Fragment()
+			}
+			return ui.CreateElement(FilterPill, filterPillProps{
+				Field: props.Field, Value: o.Value, Label: o.Label,
+				Selected: containsStr(props.Selected, o.Value), OnToggle: props.OnToggle,
+			})
+		},
+	)
+
+	var discBtn ui.Node = Fragment()
+	if collapsible {
+		discLabel := uistate.T("transactions.filterShowAll", total)
+		if open {
+			discLabel = uistate.T("transactions.filterShowLess")
+		}
+		discBtn = Button(css.Class("filter-group-disc"), Type("button"),
+			Attr("data-testid", "filter-showall-"+string(props.Field)),
+			Attr("aria-expanded", ariaBool(open)), OnClick(toggle), discLabel)
+	}
+
+	// A "· N selected" badge on the label so a collapsed group still tells you it's active.
+	var selBadge ui.Node = Fragment()
+	if selCount > 0 {
+		selBadge = Span(css.Class("filter-group-selcount"), uistate.T("transactions.filterSelected", selCount))
+	}
+
 	return Div(css.Class("filter-group"),
-		Span(css.Class("filter-group-label"), label),
-		Div(css.Class("filter-pills"),
-			MapKeyed(opts,
-				func(o uiw.SelectOption) any { return o.Value },
-				func(o uiw.SelectOption) ui.Node {
-					if o.Value == "" {
-						return Fragment()
-					}
-					return ui.CreateElement(FilterPill, filterPillProps{
-						Field: field, Value: o.Value, Label: o.Label,
-						Selected: containsStr(selected, o.Value), OnToggle: onToggle,
-					})
-				},
-			),
+		Div(css.Class("filter-group-head"),
+			Span(css.Class("filter-group-label"), props.Label),
+			selBadge,
 		),
+		Div(css.Class("filter-pills"), pills, discBtn),
 	)
 }
 
@@ -214,12 +288,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	colsModalAtom := uistate.UseTxnColsModalOpen()
 	smartCatAtom := uistate.UseTxnSmartCatOpen()
-	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	importPanelAtom := uistate.UseImportPanelOpen()
-	openImportPanel := ui.UseEvent(Prevent(func() { importPanelAtom.Set(true) }))
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
-	openDuplicates := ui.UseEvent(Prevent(func() { dupModalAtom.Set(true) }))
 
 	// View-mode toggles: Calendar swaps the main slot (TX8); Register adds a running-
 	// balance column (TX12) and is only offered when the filter scopes to one account.
@@ -303,10 +374,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 		downloadBytes("transactions.csv", "text/csv", data)
 	}
-	// The 2-row toolbar has room for every action, so Export CSV and Columns are direct
-	// buttons now (no "⋯ More" overflow needed).
-	onExportCSV := ui.UseEvent(Prevent(doExportCSV))
-	openColumns := ui.UseEvent(Prevent(func() { colsModalAtom.Set(true) }))
+	// Export CSV and Columns are now items in the "⋯ More" overflow (built below), so
+	// they use the doExportCSV closure / colsModalAtom directly — no separate handlers.
 
 	selectAllFiltered := ui.UseEvent(Prevent(func() {
 		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
@@ -577,9 +646,23 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}
 
 	// The transactions toolbar has the most actions of any page — too many to fit one
-	// row at typical widths. The two least-frequent utilities (Export CSV, Columns) live
-	// in a labeled "⋯ More" overflow so the row stays single-line with the primary Add at
-	// its right end, matching the other pages' toolbars.
+	// row without reading as button-soup. The secondary utilities (Import, Review
+	// duplicates, Categorize, Export CSV, Columns) fold into a labeled "⋯ More" overflow
+	// so the resting row stays a short line of high-frequency actions with the primary
+	// Add at its right end. Each item keeps its original testid so e2e selectors still
+	// resolve it (the menu items live in the DOM, revealed on open).
+	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerText:   uistate.T("transactions.moreActions"),
+		TriggerTestID: "txn-more-btn",
+		TriggerClass:  "btn btn-tool",
+		Items: []uiw.OverflowMenuItem{
+			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
+			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
+			{Label: uistate.T("smartcat.button"), Icon: icon.Sparkles, TestID: "txn-smartcat-btn", OnSelect: func() { smartCatAtom.Set(true) }},
+			{Label: uistate.T("transactions.exportCsv"), Icon: icon.ArrowDown, TestID: "txn-export-btn", OnSelect: doExportCSV},
+			{Label: uistate.T("transactions.columns"), Icon: icon.List, TestID: "txn-columns-btn", OnSelect: func() { colsModalAtom.Set(true) }},
+		},
+	})
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
 		Search:       f.Text,
 		SearchLabel:  uistate.T("transactions.searchPlaceholder"),
@@ -610,9 +693,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// something needs review, with a live count so the backlog is visible.
 			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
-			toolbarIconBtnOpen("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, "", importPanelAtom.Get()),
-			toolbarIconBtnOpen("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, "", dupModalAtom.Get()),
-			toolbarIconBtnOpen("txn-smartcat-btn", icon.Sparkles, uistate.T("smartcat.button"), openSmartCat, "", smartCatAtom.Get()),
 			// Select-all lives in the toolbar row with the other labeled actions (shown
 			// once there are rows to select). Uses the SHORT "Select all" label — the
 			// verbose "…in the current filtered view" form was fine as a hover tooltip but
@@ -632,9 +712,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
 			// amount alerts. Own component so its popover + list hooks stay stable.
 			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: f, Rates: props.Rates, Base: props.Base}),
-			// Export CSV + Columns as direct buttons (the 2-row toolbar has the space).
-			toolbarIconBtn("txn-export-btn", icon.ArrowDown, uistate.T("transactions.exportCsv"), onExportCSV, ""),
-			toolbarIconBtn("txn-columns-btn", icon.List, uistate.T("transactions.columns"), openColumns, ""),
+			// Secondary utilities (Import, Duplicates, Categorize, Export CSV, Columns)
+			// folded into the "⋯ More" overflow built above.
+			moreMenu,
 			// Primary action last → right end of the left-justified group.
 			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 		},
