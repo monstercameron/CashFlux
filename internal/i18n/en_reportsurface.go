@@ -25,6 +25,7 @@ var reportSurfaceKeys = Catalog{
 	"reports.zeroedSummary":       "%d categories had spending last period but none this period",
 	"reports.savingsTrendHint":    "Savings rate over the last %d periods.",
 	"reports.customFieldUnvalued": "Nothing this period has a %s value yet — set it on transactions in the ledger to see this breakdown.",
+	"reports.customFieldMostUnvalued": "%d%% of spending has no %s value — the chart below shows only the classified transactions.",
 
 	// Metrics tile
 	"reports.formulaHint": "These report figures are live report_* engine variables — drop any of them into a formula or a dashboard widget.",

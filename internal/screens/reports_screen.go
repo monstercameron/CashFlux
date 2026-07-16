@@ -153,16 +153,41 @@ func customFieldSpendSection(
 		fieldOpts = append(fieldOpts, Option(Value(d.Key), SelectedIf(d.Key == activeDef.Key), d.Label))
 	}
 
+	// When "(no value)" DOMINATES (a field only a handful of transactions carry), a
+	// single giant "(no value)" bar drowns the real classifications and reads like a
+	// false insight (e.g. "(no value) $44,738" beside "Personal $180"). Detect that,
+	// drop the no-value row from the chart, and surface an honest note — the valued
+	// rows then scale to each other instead of to the unclassified mass.
+	var totalAmt, noValAmt int64
+	for _, r := range cfRows {
+		totalAmt += r.Amount
+		if r.Value == "" {
+			noValAmt += r.Amount
+		}
+	}
+	dominantUnvalued := totalAmt > 0 && !allUnvalued && noValAmt*100/totalAmt >= 70
+
+	displayRows := cfRows
+	if dominantUnvalued {
+		valued := make([]reports.CustomFieldSpend, 0, len(cfRows))
+		for _, r := range cfRows {
+			if r.Value != "" {
+				valued = append(valued, r)
+			}
+		}
+		displayRows = valued
+	}
+
 	// Value rows are plain display (no On* in the loop).
 	noValueLabel := uistate.T("reports.customFieldNoValue")
 	var rowNodes []ui.Node
 	var maxAmt int64
-	for _, r := range cfRows {
+	for _, r := range displayRows {
 		if r.Amount > maxAmt {
 			maxAmt = r.Amount
 		}
 	}
-	for _, r := range cfRows {
+	for _, r := range displayRows {
 		label := r.Value
 		if label == "" {
 			label = noValueLabel
@@ -182,6 +207,13 @@ func customFieldSpendSection(
 		))
 	}
 
+	// Honest note when most spending is unclassified for this field.
+	var domNote ui.Node = Fragment()
+	if dominantUnvalued {
+		domNote = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-dominant-unvalued"),
+			uistate.T("reports.customFieldMostUnvalued", int(noValAmt*100/totalAmt), activeDef.Label))
+	}
+
 	var body ui.Node
 	switch {
 	case allUnvalued:
@@ -189,7 +221,7 @@ func customFieldSpendSection(
 	case len(rowNodes) == 0:
 		body = P(css.Class("empty"), uistate.T("reports.empty"))
 	default:
-		body = Div(css.Class("rows"), rowNodes)
+		body = Fragment(domNote, Div(css.Class("rows"), rowNodes))
 	}
 
 	sectionLabel := uistate.T("reports.byCustomField", activeDef.Label)
