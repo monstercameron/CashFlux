@@ -29,6 +29,27 @@ import (
 // category" (named after the budget) instead of selecting an existing one.
 const budgetNewCatSentinel = "__new_category__"
 
+// parseTrackedTags splits a comma-separated tag input into a trimmed, "#"-stripped,
+// case-insensitively-deduped list — the cross-category tags a budget also tracks. The
+// dedupe means selecting the same tag twice never counts a charge twice.
+func parseTrackedTags(s string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(s, ",") {
+		t := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "#"))
+		if t == "" {
+			continue
+		}
+		key := strings.ToLower(t)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, t)
+	}
+	return out
+}
+
 // BudgetAddFormProps configures the BudgetAddForm component.
 type BudgetAddFormProps struct {
 	// OnDone is called after a successful add so the caller (e.g. AddHost) can
@@ -106,6 +127,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	rollover := ui.UseState(false)
 	methodology := ui.UseState("") // empty = inherit global method
 	customVals := ui.UseState(map[string]string{})
+	// trackTags: comma-separated tags this budget also counts, across categories (a
+	// "#vacation" cap spanning travel + dining + shopping). Parsed + deduped on submit.
+	trackTags := ui.UseState("")
+	onTrackTags := ui.UseEvent(func(v string) { trackTags.Set(v) })
 	// alsoTrack: extra existing categories this budget should also count (multi-category).
 	// The primary category above is always tracked; these add to it.
 	alsoTrack := ui.UseState(map[string]bool{})
@@ -185,6 +210,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				}
 			}
 			alsoTrack.Set(also)
+			trackTags.Set(strings.Join(b.TrackedTags, ", "))
 			advOpen.Set(true)
 			return
 		}
@@ -265,6 +291,9 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		if len(catIDs) > 1 {
 			b.CategoryIDs = catIDs
 		}
+		if tags := parseTrackedTags(trackTags.Get()); len(tags) > 0 {
+			b.TrackedTags = tags
+		}
 		if err := app.PutBudget(b); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -279,6 +308,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		catID.Set(budgetNewCatSentinel)
 		newCatName.Set("")
 		alsoTrack.Set(map[string]bool{})
+		trackTags.Set("")
 		customVals.Set(map[string]string{})
 		errMsg.Set("")
 		advOpen.Set(false)
@@ -512,6 +542,15 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					If(len(expenseCats) > 0, Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.catsAlsoTrack"),
 							ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: alsoTrack.Get(), OnToggle: toggleAlso})))),
+					// Optional cross-category tag tracking: count any charge with these tags,
+					// whatever its category. Comma-separated; parsed + deduped on save.
+					Div(css.Class("ba-full"),
+						labeledField(uistate.T("budgets.tagsFieldLabel"),
+							Fragment(
+								Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
+									Placeholder(uistate.T("budgets.tagsPlaceholder")),
+									Value(trackTags.Get()), OnInput(onTrackTags)),
+								Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
 					// Owner (hidden until members exist) with its scope consequence spelled out.
 					If(len(app.Members()) > 0, Fragment(
 						labeledField(uistate.T("common.owner"),

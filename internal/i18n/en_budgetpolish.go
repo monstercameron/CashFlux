@@ -18,10 +18,18 @@ var budgetPolishKeys = Catalog{
 	"budgets.searchNoMatch":     "No budgets match “%s”.",
 
 	// Cross-category tag tracking on a budget.
-	"budgets.tagsTracking":     "Also tracking tags:",
-	"budgets.tagsFieldLabel":   "Track tags (cross-category)",
-	"budgets.tagsFieldHint":    "Count any transaction with these tags, whatever its category. Comma-separated.",
-	"budgets.tagsPlaceholder":  "e.g. vacation, wedding",
+	"budgets.tagsTracking":    "Also tracking tags:",
+	"budgets.tagsFieldLabel":  "Track tags (cross-category)",
+	"budgets.tagsFieldHint":   "Count any transaction with these tags, whatever its category. Comma-separated.",
+	"budgets.tagsPlaceholder": "e.g. vacation, wedding",
+
+	// The tracked-categories editor now edits categories AND tags — override the
+	// category-only verbiage (base strings live in en.go; these win via init order).
+	"budgets.catsAction":        "Edit tracking",
+	"budgets.catsTitle":         "What this budget tracks",
+	"budgets.editCatsOpen":      "Edit what this budget tracks…",
+	"budgets.editCatsElsewhere": "Categories and tags are managed in their own editor.",
+	"budgets.tracksCount":       "%s · %s", // "2 categories · 1 tag"
 }
 
 func init() {

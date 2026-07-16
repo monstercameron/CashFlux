@@ -1,3 +1,20 @@
+## 2026-07-16 — Create/edit budget tracked tags in the UI; rename the editor
+
+Cam: add a way to set tags on a budget, "the button says edit tracked categories, but what if I want to
+edit tracked tags too?", and "the button verbiage is not great if it does both." Add form: a
+comma-separated "Track tags (cross-category)" field in Advanced, parsed by a shared `parseTrackedTags`
+(trim, strip leading '#', case-insensitive dedupe — Cam's dedupe requirement) and set as `TrackedTags`;
+copy-existing carries them over. Edit side: the tracked-categories modal (`BudgetCategoriesBody`) now
+also holds a tags field pre-seeded from the budget, and its Save writes both — a budget can be categories,
+tags, or both, and a tag-only save clears the category (CategoryID=""; the earlier validation relaxation
+allows it). Save is enabled when there's ≥1 category OR ≥1 tag. Verbiage: overrode the category-only base
+strings via `en_budgetpolish.go` (init runs after en.go, so keys win — the no-touch-en.go rule) —
+button "Edit tracking", modal "What this budget tracks", footer "N categories · N tags". Caught a
+pluralization bug: the shared `plural()` does word+"s" → "categorys"; used `pluralWord()` (handles
+y→ies) instead rather than touching the shared helper. Verified end-to-end: Edit tracking opens with the
+tags pre-filled, adding "wedding" + save shows a 5th chip on the card, 0 console errors.
+`budgetaddform.go`, `budgets_categories.go`, `en_budgetpolish.go`.
+
 ## 2026-07-16 — Seed a cross-category tag budget + show tracked tags on the card
 
 Cam: "update the seed to add a complex/specific budget that tracks via tags." Added **"Splurges &

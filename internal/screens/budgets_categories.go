@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -53,6 +54,10 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		nm[id] = !nm[id]
 		picked.Set(nm)
 	}
+	// Cross-category tags this budget also tracks (comma-separated). A budget may track
+	// categories, tags, or both — but at least one of them.
+	tagsState := ui.UseState(strings.Join(budget.TrackedTags, ", "))
+	onTags := ui.UseEvent(func(v string) { tagsState.Set(v) })
 
 	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set("") }))
 	onSave := ui.UseEvent(Prevent(func() {
@@ -62,18 +67,22 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 				sel = append(sel, c.ID)
 			}
 		}
-		if len(sel) == 0 {
+		tags := parseTrackedTags(tagsState.Get())
+		if len(sel) == 0 && len(tags) == 0 {
 			return // Save is disabled in this state; guard anyway.
 		}
 		b := budget
 		// Store a single category in the historical shape; only reach for CategoryIDs when
-		// tracking more than one, so single-category budgets stay unchanged.
-		b.CategoryID = sel[0]
-		if len(sel) > 1 {
-			b.CategoryIDs = sel
-		} else {
-			b.CategoryIDs = nil
+		// tracking more than one. A tag-only budget keeps no category at all.
+		switch {
+		case len(sel) == 0:
+			b.CategoryID, b.CategoryIDs = "", nil
+		case len(sel) == 1:
+			b.CategoryID, b.CategoryIDs = sel[0], nil
+		default:
+			b.CategoryID, b.CategoryIDs = sel[0], sel
 		}
+		b.TrackedTags = tags // nil when the field is empty
 		if err := app.PutBudget(b); err != nil {
 			uistate.PostNotice(err.Error(), true)
 			return
@@ -96,17 +105,28 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 			nSel++
 		}
 	}
+	nTags := len(parseTrackedTags(tagsState.Get()))
 
 	return Div(css.Class(tw.FlexCol),
-		Div(css.Class("modal-scroll"),
+		Div(css.Class("modal-scroll", tw.FlexCol, tw.Gap3),
+			// Categories checklist.
 			ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
 				Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID,
-			})),
+			}),
+			// Cross-category tags — count any charge with these tags, whatever its category.
+			Div(css.Class(tw.FlexCol, tw.Gap15),
+				Span(css.Class("budgetcats-taglabel"), uistate.T("budgets.tagsFieldLabel")),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "budgetcats-tags"),
+					Placeholder(uistate.T("budgets.tagsPlaceholder")),
+					Value(tagsState.Get()), OnInput(onTags)),
+				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.tagsFieldHint")))),
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
-				uistate.T("budgets.catsCount", plural(nSel, "category"))),
+				uistate.T("budgets.tracksCount",
+					fmt.Sprintf("%d %s", nSel, pluralWord(nSel, "category")),
+					fmt.Sprintf("%d %s", nTags, pluralWord(nTags, "tag")))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), OnClick(onSave)},
+			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), OnClick(onSave)},
 				uistate.T("budgets.catsSave"))))
 }
 
