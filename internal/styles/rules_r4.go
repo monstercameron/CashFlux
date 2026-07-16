@@ -107,4 +107,23 @@ func registerR4Surface() {
 	rule(".bento-budgets > .w[data-widget=\"budget-annualgrid\"]", order("4"))
 	rule(".bento-budgets > .w[data-widget=\"budget-savings\"]", order("5"))
 	rule(".bento-budgets > .w[data-widget=\"budget-formula\"]", order("6"))
+	// A budget's cross-category tracked-tag caption: a label + small #tag chips.
+	rule(".budget-tag-line",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.3rem"),
+	)
+	rule(".budget-tag-line-label",
+		color("var(--text-faint)"),
+	)
+	rule(".budget-tag-chip",
+		fontSize("0.72rem"),
+		lineHeight("1"),
+		padding("0.15rem 0.45rem"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
 }

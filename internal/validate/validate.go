@@ -144,7 +144,12 @@ func ValidateBudget(b domain.Budget) Issues {
 	var is Issues
 	is.require("name", b.Name)
 	is.require("ownerId", b.OwnerID)
-	is.require("categoryId", b.CategoryID)
+	// A budget must track something — a single category, several categories, or (cross-
+	// category) tags. Historically this was CategoryID-only; the check now also accepts a
+	// multi-category or tag-tracking budget.
+	if b.CategoryID == "" && len(b.CategoryIDs) == 0 && len(b.TrackedTags) == 0 {
+		is.add("categoryId", "is required (or track categories or tags)")
+	}
 	if !b.Scope.Valid() {
 		is.add("scope", "is invalid")
 	}

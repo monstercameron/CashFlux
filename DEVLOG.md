@@ -1,3 +1,18 @@
+## 2026-07-16 — Seed a cross-category tag budget + show tracked tags on the card
+
+Cam: "update the seed to add a complex/specific budget that tracks via tags." Added **"Splurges &
+getaways"** — a category-LESS budget with `TrackedTags: [splurge, vacation, date-night, big-purchase]`,
+yearly, $6k cap. It exercises the whole feature at once: cross-category (Nobu dinner=Dining, nursery
+furniture=Baby), and the overlap-dedupe (Nobu carries all of splurge/date-night/big-purchase → counts
+once). Two hidden requirements surfaced: (1) `validate.ValidateBudget` hard-required `categoryId` — relaxed
+to "must track a category OR categories OR tags" (a fully-blank budget still reports the categoryId
+issue, so validate_test stays green); (2) the sample integrity test's `categories[b.CategoryID]` guard
+rejected an empty CategoryID — rewrote it to skip when empty, validate any `CategoryIDs`, and assert the
+budget tracks *something*. UI: `budgetTagLine` renders an "Also tracking tags:" caption + `#tag` chips on
+the card (read-only, plain loop — no handlers). Verified: the card shows $2,000/$6,000 with all four tag
+chips and the cross-cat note, 0 console errors. Next: the add/edit-form input so users can create their
+own. `sample.go`, `sample_test.go`, `validate.go`, `budgets_row.go`, `rules_r4.go`, `en_budgetpolish.go`.
+
 ## 2026-07-16 — Budgets track tags for cross-category precision (engine + tests)
 
 Cam: "budgets can also track tags for cross-cat, precision tracking" + "add a dedupe layer as sometimes

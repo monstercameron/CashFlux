@@ -16,6 +16,12 @@ var budgetPolishKeys = Catalog{
 	"budgets.searchLabel":       "Filter budgets by name",
 	"budgets.searchPlaceholder": "Filter budgets…",
 	"budgets.searchNoMatch":     "No budgets match “%s”.",
+
+	// Cross-category tag tracking on a budget.
+	"budgets.tagsTracking":     "Also tracking tags:",
+	"budgets.tagsFieldLabel":   "Track tags (cross-category)",
+	"budgets.tagsFieldHint":    "Count any transaction with these tags, whatever its category. Comma-separated.",
+	"budgets.tagsPlaceholder":  "e.g. vacation, wedding",
 }
 
 func init() {

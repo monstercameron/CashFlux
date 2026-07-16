@@ -105,8 +105,18 @@ func TestSampleDatasetIntegrity(t *testing.T) {
 	}
 
 	for _, b := range ds.Budgets {
-		if !categories[b.CategoryID] {
+		// A budget tracks a single category, several categories, and/or tags (cross-
+		// category) — but it must track SOMETHING, and any category it names must be real.
+		if b.CategoryID != "" && !categories[b.CategoryID] {
 			t.Errorf("budget %s: unknown category %q", b.ID, b.CategoryID)
+		}
+		for _, cid := range b.CategoryIDs {
+			if !categories[cid] {
+				t.Errorf("budget %s: unknown tracked category %q", b.ID, cid)
+			}
+		}
+		if b.CategoryID == "" && len(b.CategoryIDs) == 0 && len(b.TrackedTags) == 0 {
+			t.Errorf("budget %s tracks nothing (no category or tag)", b.ID)
 		}
 		if !owns(b.OwnerID) {
 			t.Errorf("budget %s: unknown owner %q", b.ID, b.OwnerID)

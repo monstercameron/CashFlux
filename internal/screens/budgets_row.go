@@ -493,6 +493,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// Multi-category budgets: list the tracked categories so the combined total reads clearly.
 		If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
 			uistate.T("budgets.catsTracking", props.TrackedCats))),
+		// Cross-category tag tracking: the tags this budget also counts, whatever the category.
+		If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
 		// XC4: quiet committed-vs-free caption; XC3: the plain-English set-aside explainer.
 		// (A landing-month entry may carry only the explainer — no committed split.)
 		If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
@@ -586,4 +588,19 @@ func budgetMethodOptions(selected string) []uiw.SelectOption {
 		{Value: string(budgeting.MethodZeroBased), Label: uistate.T("settings.budgetMethodZero")},
 		{Value: string(budgeting.MethodEnvelope), Label: uistate.T("settings.budgetMethodEnvelope")},
 	}
+}
+
+// budgetTagLine renders the "Tracking #tag …" caption for a tag-tracking budget — the
+// cross-category dimension of what it counts. Read-only chips (no handlers), so building
+// them in a plain loop here is fine.
+func budgetTagLine(budgetID string, tags []string) ui.Node {
+	kids := []any{
+		css.Class("budget-sub", "budget-tag-line"),
+		Attr("data-testid", "budget-tracked-tags-"+budgetID),
+		Span(css.Class("budget-tag-line-label"), uistate.T("budgets.tagsTracking")),
+	}
+	for _, tg := range tags {
+		kids = append(kids, Span(css.Class("budget-tag-chip"), "#"+tg))
+	}
+	return Span(kids...)
 }

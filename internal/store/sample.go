@@ -830,6 +830,16 @@ func SampleDataset() Dataset {
 			{ID: "bud-vices", Name: "Guilty pleasures", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catVices, Period: domain.PeriodMonthly, Limit: usd(6000)},
 			{ID: "bud-fun", Name: "Entertainment", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catEntertain, Period: domain.PeriodWeekly, Limit: usd(2500)},
 			{ID: "bud-travel", Name: "Travel", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTravel, Period: domain.PeriodQuarterly, Limit: usd(60000)},
+			// A cross-category TAG budget (precision tracking): no category of its own — it
+			// counts anything tagged splurge / vacation / date-night / big-purchase, wherever
+			// it lands (a Nobu dinner under Dining, the nursery furniture under Baby, a getaway
+			// under Travel). A yearly cap so the sporadic big-ticket lifestyle spend reads as
+			// one number. Demonstrates TrackedTags + the overlap-dedupe (a charge with several
+			// of these tags counts once).
+			{ID: "bud-splurges", Name: "Splurges & getaways", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+				TrackedTags: []string{"splurge", "vacation", "date-night", "big-purchase"},
+				Period:      domain.PeriodYearly, Limit: usd(600000),
+				Notes: "Cross-category lifestyle cap — counts anything tagged splurge, vacation, date-night, or big-purchase, whatever the category."},
 		},
 		Goals: []domain.Goal{
 			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(1150000), TargetDate: date(2029, time.June, 1), AccountID: hysa},
