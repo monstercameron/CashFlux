@@ -101,26 +101,44 @@ func registerTxcFieldsSurface() {
 	)
 	rule(".txnfu-item",
 		display("flex"),
-		alignItems("baseline"),
-		gap("0.45rem"),
+		alignItems("center"),
+		gap("0.5rem"),
 		padding("0.3rem 0.35rem"),
 		borderRadius("7px"),
 		fontSize("0.85rem"),
 		color("var(--text)"),
 	)
-	rule(".txnfu-item svg",
-		flex("none"),
-		color("var(--accent)"),
-		alignSelf("center"),
+	rule(".txnfu-item:hover",
+		background("color-mix(in srgb, var(--text) 5%, transparent)"),
 	)
 	rule(".txnfu-item.is-done",
 		color("var(--text-dim)"),
 	)
-	rule(".txnfu-item.is-done svg",
-		color("var(--text-dim)"),
-	)
 	rule(".txnfu-item.is-done .txnfu-item-title",
 		textDecoration("line-through"),
+	)
+	// The check-off ring (mirrors the to-do list): a circular toggle that fills accent
+	// with a check when the follow-up is done. Marks/un-marks in place, no page change.
+	rule(".txnfu-item-check",
+		prop("appearance", "none"),
+		flex("none"),
+		width("17px"),
+		height("17px"),
+		borderRadius("50%"),
+		border("2px solid var(--border-strong)"),
+		background("transparent"),
+		cursor("pointer"),
+		display("grid"),
+		placeItems("center"),
+		color("#04140c"),
+		transition("border-color .12s ease, background .12s ease"),
+	)
+	rule(".txnfu-item-check:hover",
+		borderColor("var(--accent)"),
+	)
+	rule(".txnfu-item-check.is-done",
+		background("var(--accent)"),
+		borderColor("var(--accent)"),
 	)
 	rule(".txnfu-item-title",
 		flex("1 1 auto"),

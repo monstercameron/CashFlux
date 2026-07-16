@@ -47,6 +47,15 @@ moving fully away still closes after the grace window. Made the popover's footer
 button (now reachable). e2e-verified with stepped mouse moves: popover stays open after bridging into it,
 footer click → /todo filtered, and it closes when the pointer moves far away. 0 errors on all 8 pages.
 
+Then Cam: let the user un/mark the todos from the popover without leaving the page. Split each popover
+line into its own `txnFollowUpItem` component (owns its toggle hook — never On* in the map loop) with a
+check-off ring that mirrors the to-do list: `CompleteTask` (open→done, spawns a recurring next
+occurrence) / `PutTask` (done→open), then `BumpDataRevision`. The revision bump re-renders the
+transactions surface, which recomputes `followUpInfoByTxn` — and because the chip/popover state persists
+across the keyed reconcile, the popover STAYS OPEN and the item's strike-through + the open/total counts
+(chip "0/1" and the "0 open · 1 total" header) update live. e2e-verified: mark done → popover open, head
+0/1, chip 0/1, item struck; un-mark → back to 1/1; route never leaves /transactions. 0 errors.
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly

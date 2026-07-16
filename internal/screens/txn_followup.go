@@ -9,8 +9,10 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/id"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -21,6 +23,7 @@ import (
 
 // followUpItem is one linked to-do, shown in a transaction's follow-up hover popover.
 type followUpItem struct {
+	ID    string
 	Title string
 	Done  bool
 	Due   string // pre-formatted due date; "" when none
@@ -50,7 +53,7 @@ func followUpInfoByTxn(tasks []domain.Task, formatDue func(time.Time) string) ma
 		if !t.Due.IsZero() {
 			due = formatDue(t.Due)
 		}
-		info.Items = append(info.Items, followUpItem{Title: t.Title, Done: done, Due: due})
+		info.Items = append(info.Items, followUpItem{ID: t.ID, Title: t.Title, Done: done, Due: due})
 		m[t.RelatedID] = info
 	}
 	return m
@@ -65,6 +68,66 @@ func followUpChipMod(open int) string {
 		return " has-open"
 	}
 	return " all-done"
+}
+
+// toggleFollowUpTask flips a linked to-do's done state in place (open ↔ done) and bumps
+// the data revision so the transactions surface re-reads the counts. Mirrors the to-do
+// list's own check-off: completing goes through CompleteTask (which spawns a recurring
+// task's next occurrence atomically); re-opening is a plain PutTask.
+func toggleFollowUpTask(taskID string, currentlyDone bool) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	if currentlyDone {
+		for _, t := range app.Tasks() {
+			if t.ID == taskID {
+				t.Status = domain.StatusOpen
+				_ = app.PutTask(t)
+				break
+			}
+		}
+	} else {
+		_ = app.CompleteTask(taskID, id.New(), time.Now())
+	}
+	uistate.BumpDataRevision()
+}
+
+// txnFollowUpItemProps configure one to-do row inside the follow-up popover.
+type txnFollowUpItemProps struct {
+	ID    string
+	Title string
+	Done  bool
+	Due   string
+}
+
+// txnFollowUpItem is one to-do line in the popover with a check-off toggle, so a
+// follow-up can be marked done / re-opened right there without leaving the page. Its own
+// component so the toggle hook sits at a stable position (never inside the popover's map
+// loop).
+func txnFollowUpItem(props txnFollowUpItemProps) ui.Node {
+	onToggle := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		toggleFollowUpTask(props.ID, props.Done)
+	})
+	cls := "txnfu-item"
+	checkCls := "txnfu-item-check"
+	label := uistate.T("transactions.followUpMarkDone")
+	var checkGlyph ui.Node = Fragment()
+	if props.Done {
+		cls += " is-done"
+		checkCls += " is-done"
+		label = uistate.T("transactions.followUpMarkOpen")
+		checkGlyph = uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W3, tw.H3))
+	}
+	return Div(ClassStr(cls),
+		Button(ClassStr(checkCls), Type("button"),
+			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(props.Done)),
+			Attr("aria-label", label+" — "+props.Title), Title(label),
+			OnClick(onToggle), checkGlyph),
+		Span(css.Class("txnfu-item-title"), props.Title),
+		If(props.Due != "", Span(css.Class("txnfu-item-due"), props.Due)),
+	)
 }
 
 // txnFollowUpChipProps configure one row's follow-up chip + hover popover.
@@ -146,17 +209,9 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			Div(css.Class("txnfu-pop-head"), uistate.T("transactions.followUpsPopHead", props.Open, props.Total)),
 		}
 		for _, it := range props.Items {
-			cls := "txnfu-item"
-			ic := icon.CheckCircle
-			if it.Done {
-				cls += " is-done"
-				ic = icon.Check
-			}
-			kids = append(kids, Div(ClassStr(cls),
-				uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(css.Class("txnfu-item-title"), it.Title),
-				If(it.Due != "", Span(css.Class("txnfu-item-due"), it.Due)),
-			))
+			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{
+				ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due,
+			}))
 		}
 		kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"),
 			Attr("data-testid", "txn-followup-pop-link-"+props.TxnID), OnClick(onClick),
