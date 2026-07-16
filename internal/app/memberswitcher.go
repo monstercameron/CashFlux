@@ -8,8 +8,10 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/scope"
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -77,26 +79,32 @@ func MemberSwitcher() uic.Node {
 		))
 	}
 
+	// The <select> is a VIEW LENS (scope the figures to one member's perspective),
+	// not an identity switch — label it "View as" so it no longer reads as a second
+	// "profile" control competing with the device-profile button beside it (task:
+	// consolidate the two look-alike header controls).
 	args := []any{
 		css.Class("member-switcher", tw.Text13, tw.TextDim),
-		Attr("aria-label", uistate.T("member.switcherLabel")),
+		Attr("aria-label", uistate.T("member.viewAsLabel")),
 		Attr("data-testid", "member-switcher"),
-		Attr("title", uistate.T("member.switcherLabel")),
+		Attr("title", uistate.T("member.viewAsLabel")),
 		onChange,
 	}
 	args = append(args, opts...)
-	// C274: render the scope <select> alongside a "Switch profile…" button
-	// that opens the device-user-switching modal. Wrapped in a Span so the
-	// pair sits together in the top-bar without introducing a block element.
+	// C274: the "Switch profile…" (device-user) affordance is now an ICON-ONLY button
+	// so it stops presenting as a second text dropdown about "profiles". It's a
+	// distinct identity action (who's using this device), visually subordinate to the
+	// view-scope select, with its accessible name preserved on the icon button.
 	return Span(css.Class("cf-member-switcher-wrap"),
+		Span(css.Class("cf-viewas-label", tw.Text13, tw.TextFaint), uistate.T("member.viewAsPrefix")),
 		Select(args...),
-		Button(css.Class("btn", tw.Text13),
+		Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
 			Type("button"),
 			Attr("aria-label", uistate.T("profileSwitch.switchBtn")),
 			Attr("data-testid", "profile-switch-btn"),
 			Title(uistate.T("profileSwitch.switchBtn")),
 			OnClick(openSwitch),
-			uistate.T("profileSwitch.switchBtn"),
+			ui.Icon(icon.Users, css.Class(tw.W5, tw.H5)),
 		),
 	)
 }

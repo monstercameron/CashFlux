@@ -2172,9 +2172,8 @@ var english = Catalog{
 	"rpta.goalsSummary":             "%d reached · %d on the way · %d missed their deadline.",
 	"rpta.goalsArchived":            "%d more already achieved and archived.",
 	"rpta.openGoals":                "Open Goals",
-	"rpta.whereKeyOut":              "Money out",
-	"rpta.whereKeyIn":               "Money in",
-	"rpta.whereKeyScale":            "One scale for every bar in this section — twice the bar is twice the money",
+	"rpta.depTimes":                 "×%d over the year",
+	"rpta.histRest":                 "Everything else (%d categories)",
 	"rpta.secBudgets":               "Budget adherence",
 	"rpta.secBudgetsSub":            "Month by month against each budget's base limit — carryover and boosts aside.",
 	"rpta.idxBudgets":               "Budgets",
@@ -2589,6 +2588,8 @@ var english = Catalog{
 	// Member switcher (L21 — top-bar household-member perspective picker)
 	"member.everyone":      "Everyone",
 	"member.switcherLabel": "View as member",
+	"member.viewAsLabel":   "View the figures as this member",
+	"member.viewAsPrefix":  "Viewing as",
 	"member.activeNotice":  "Viewing %s's money",
 	"member.allNotice":     "Viewing all members",
 

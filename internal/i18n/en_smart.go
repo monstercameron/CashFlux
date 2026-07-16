@@ -17,8 +17,9 @@ var smartKeys = Catalog{
 	"smart.viewAll":    "View all",
 	// Collapsed "peek" bar (default) — a slim signal that there are alerts for the page.
 	"smart.collapse":       "Collapse",
+	"smart.peekInsights":   "Smart insights",
 	"smart.peekTools":      "Smart tools",
-	"smart.peekAlertsAria": "%d smart alerts for this page — click to show",
+	"smart.peekAlertsAria": "%d smart insights for this page — click to show",
 	"smart.peekToolsAria":  "Smart tools for this page — click to show",
 
 	// Empty-state helper (AffordanceEmptyState).

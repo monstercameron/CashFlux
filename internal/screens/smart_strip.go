@@ -294,11 +294,19 @@ func smartPeekBar(page smart.Page, alerts, aiTools int, sev smart.Severity, onOp
 	if pageKey == "" {
 		pageKey = "all"
 	}
-	title := uistate.T("smart.stripTitle")
+	// The collapsed peek used to read a bare "Smart" + a raw number (e.g. "Smart 232"),
+	// which said nothing about WHAT the number counts. Give it a clear noun ("Smart
+	// insights") and cap the badge at 9+ like the notify bell, so it reads as "a few
+	// insights to look at", never an alarming 232 (task: clarify the Smart badge).
+	title := uistate.T("smart.peekInsights")
 	aria := uistate.T("smart.peekToolsAria")
 	var badge ui.Node = Fragment()
 	if alerts > 0 {
-		badge = Span(ClassStr("smart-peek-badge "+tw.ColorClass(severityTone(sev))), itoaStrip(alerts))
+		badgeText := itoaStrip(alerts)
+		if alerts > 9 {
+			badgeText = "9+"
+		}
+		badge = Span(ClassStr("smart-peek-badge "+tw.ColorClass(severityTone(sev))), badgeText)
 		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), alerts)
 	} else {
 		title = uistate.T("smart.peekTools")
