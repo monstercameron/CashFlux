@@ -1,3 +1,16 @@
+## 2026-07-16 — Clickable tag chips filter the ledger; tag search confirmed
+
+Cam: "make sure tags are searchable in the search input and clicking on a tag filters the list for other
+txns that use that tag." Search: already done — `txnfilter.matchText` loops `t.Tags`, so the free-text
+box ("Search description, payee, or tag") matches tags; verified a tag-only term (`regret`) filters. New
+work: make the inline chips clickable. The chips render in the row's 0–3 tag loop, so a raw `OnClick`
+there would break the On*-in-loop rule — factored each into a `txnTagChip` component that owns its click
+hook. Click → `setTxFilterOn(filterAtom, x => { x.Tag = tag; x.Tags = "" })` (the single-tag `Criteria.Tag`
+field, clearing any multi-tag), StopPropagation so it doesn't also open the row's edit modal. The chip is
+now a real `<button>` (button-chrome reset + hover/focus tint) so it reads as interactive. Verified:
+clicking `#bonus` adds a removable "Tag: bonus" filter and the ledger narrows to the four bonus rows, 0
+console errors. `transactions_widget.go`, `rules_txcfields.go`, `en_txcfields.go`.
+
 ## 2026-07-16 — Seed: tags on the important transactions
 
 Cam: "add some txn tags to important txns in the seed." The five-year narrative charges mostly already

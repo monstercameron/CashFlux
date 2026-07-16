@@ -49,6 +49,8 @@ var txcFieldKeys = Catalog{
 	"todo.linkTransactionPl": "Linked to transactions",
 	// Overflow chip when a row has more tags than the description column shows inline.
 	"transactions.tagsMoreTitle": "%d more tag(s)",
+	// Tooltip / aria for a clickable tag chip that filters the ledger to that tag.
+	"transactions.tagFilterTitle": "Filter to #%s",
 
 	// TXC-3 quick-filter presets.
 	"transactions.presetsLabel":        "Quick filters",

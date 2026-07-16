@@ -303,6 +303,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		uistate.SetTodoFilterLink(uistate.TodoLinkTransaction)
 		nav.Navigate(uistate.RoutePath("/todo"))
 	}
+	// Clicking a tag chip on a row narrows the ledger to that single tag (replacing any
+	// multi-tag selection). Plain closure — the tag chip component owns its click hook.
+	onTagFilter := func(tag string) {
+		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Tag = tag; x.Tags = "" })
+	}
 
 	// Register mode (TX12): when the ledger is scoped to exactly one account and the
 	// toggle is on, compute each transaction's running balance from the account's FULL
@@ -644,6 +649,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			r.GroupTotal = fmtMoney(txnlinks.GroupSum(txnlinks.GroupMembers(g, txByID)))
 		}
 		r.OnOpen = openEdit
+		r.OnTagClick = onTagFilter
 		r.OnToggleSelect = toggleSelect
 		r.OnViewReceipt = viewReceipt
 		r.OnOpenLink = openLink
@@ -771,7 +777,8 @@ type txnFrameRowProps struct {
 	TrendMerchant string
 	ShowTrend     bool // defer chip mount until after the table settles (perf)
 	Desc          string
-	Tags          []string // appended after the description as small chips (capped, non-stretching)
+	Tags          []string          // appended after the description as small chips (capped, non-stretching)
+	OnTagClick    func(tag string)  // click a tag chip → filter the ledger to that tag
 	Account       string
 	Category      string
 	Source        string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
@@ -844,6 +851,30 @@ type txnFrameRowProps struct {
 // never in a loop). Clicking the row drills into the edit modal; the leading
 // checkbox toggles bulk selection (its cell stops click propagation so toggling
 // does not also open the modal); the paperclip opens the first receipt.
+// txnTagChipProps configure one clickable tag chip in the description column.
+type txnTagChipProps struct {
+	Tag     string
+	OnClick func(tag string)
+}
+
+// txnTagChip is a single "#tag" chip that, on click, filters the ledger to that tag. Its
+// own component so the click hook stays at a stable position (never registered inside the
+// row's variable-length tag loop). StopPropagation keeps the click from also opening the
+// row's edit modal.
+func txnTagChip(props txnTagChipProps) ui.Node {
+	onClick := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		if props.OnClick != nil {
+			props.OnClick(props.Tag)
+		}
+	})
+	return Button(ClassStr("txn-desc-tag txn-desc-tag-btn"), Type("button"),
+		Attr("data-testid", "txn-tag-"+props.Tag),
+		Attr("title", uistate.T("transactions.tagFilterTitle", props.Tag)),
+		Attr("aria-label", uistate.T("transactions.tagFilterTitle", props.Tag)),
+		OnClick(onClick), "#"+props.Tag)
+}
+
 func txnFrameRow(props txnFrameRowProps) ui.Node {
 	open := ui.UseEvent(func() { props.OnOpen(props.ID) })
 	selToggle := ui.UseEvent(func(e ui.Event) {
@@ -900,7 +931,9 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			if i >= maxTags {
 				break
 			}
-			kids = append(kids, Span(css.Class("txn-desc-tag"), Attr("title", tg), "#"+tg))
+			// Own component so each chip's click hook sits at a stable position (never an
+			// On* option inside this variable-length loop).
+			kids = append(kids, ui.CreateElement(txnTagChip, txnTagChipProps{Tag: tg, OnClick: props.OnTagClick}))
 		}
 		if extra := len(props.Tags) - maxTags; extra > 0 {
 			kids = append(kids, Span(css.Class("txn-desc-tag txn-desc-tag-more"),

@@ -263,11 +263,24 @@ func registerTxcFieldsSurface() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 		fontSize("0.68rem"),
+		fontFamily("inherit"),
 		lineHeight("1"),
 		padding("0.15rem 0.4rem"),
 		borderRadius("999px"),
+		border("1px solid transparent"),
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 		color("var(--text-dim)"),
+	)
+	// Clickable tag chips (a real <button>) filter the ledger to that tag — hover/focus
+	// lift the tint and text so they read as interactive, not decorative.
+	rule(".txn-desc-tag.txn-desc-tag-btn",
+		cursor("pointer"),
+		transition("background .12s ease, color .12s ease, border-color .12s ease"),
+	)
+	rule(".txn-desc-tag.txn-desc-tag-btn:hover, .txn-desc-tag.txn-desc-tag-btn:focus-visible",
+		background("color-mix(in srgb, var(--accent) 22%, transparent)"),
+		borderColor("color-mix(in srgb, var(--accent) 40%, transparent)"),
+		color("var(--text)"),
 	)
 	rule(".txn-desc-tag.txn-desc-tag-more",
 		background("transparent"),
