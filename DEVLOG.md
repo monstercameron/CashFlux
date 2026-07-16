@@ -1,3 +1,25 @@
+## 2026-07-16 — Annual Review polish round: quiet §05, axes on everything, source links
+
+Three rapid Cam directives on the fresh Annual Review. (1) "Section 5 visually doesn't make sense —
+the bars don't mean anything relative to each other" then, on my shared-scale fix, the sharper
+correction: "it's not about the bar length, it's that the report is too visually noisy." Root
+lesson logged: ~49 rows each carrying a locally-normalized share bar read as decoration, not data —
+the answer wasn't a better scale, it was NO bars. §05 is now short typographic ranked lists
+(top-6/top-4, muted meta, tabular numerals), identical repeated deposits folded to one "×8 over the
+year" line, columns balanced; the tag histogram moved to §04 onto the category histogram's exact
+scale (comparable bars), and that histogram now caps at top-12 + an aggregated grey "Everything
+else (13 categories)" row. (2) "All charts and graphs need all the axes labeled — no floating
+context-free graphics — and add glyphs": built rptaTrendChart (y-axis column of series max/mid/min
+beside the 120px plot — the in-house AreaChart normalizes to its data range so those three anchors
+ARE the axis), weekday chart got $max/$0, histograms got explicit scale captions, adherence strips
+got a month-initial header row; glyphs = ↘/↗ direction markers on every §05 subhead, ⚠ on watch
+subheads, captioned masthead sparkline. (3) "Add links that nav to the page the metrics come from,
+in a subtle way": rptaSrcLink — a faint "Page →" that hovers to accent — placed 11 times (verdict/
+§01/weak factors → /health, trend charts → /transactions /health /networth /credit, sparkline →
+/networth, watch subs + rises → /subscriptions, debt table → /debt). Verified live: 11 links, click
+lands on /transactions, axes render in both themes, 0 console errors; smoke/light/a11y green.
+v1.0.59, SW v334.
+
 ## 2026-07-16 — UX punch-list from the 9-page review: notifications de-noised first
 
 Ran an aggressive UX review of the first 9 pages (drove the seeded build, dark+light, modals/filters)

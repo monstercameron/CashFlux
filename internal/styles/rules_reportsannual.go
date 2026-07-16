@@ -372,6 +372,73 @@ func registerReportsAnnual() {
 		fontSize("0.75rem"),
 		color("var(--text-dim)"),
 	)
+	// Chart plot row: y-axis anchor values beside the plot, so no chart floats
+	// without its value scale. The column is exactly the SVG's 120px tall (the
+	// x-label row sits below the plot, outside the axis).
+	rule(".rpta-chart-body",
+		display("flex"),
+		gap("0.5rem"),
+		alignItems("flex-start"),
+	)
+	rule(".rpta-yaxis",
+		display("flex"),
+		flexDirection("column"),
+		justifyContent("space-between"),
+		height("120px"),
+		flexShrink("0"),
+		fontSize("0.62rem"),
+		textAlign("right"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".rpta-yaxis-wd",
+		height("56px"),
+	)
+	rule(".rpta-chart-plot",
+		flex("1"),
+		minWidth("0"),
+	)
+	// Histogram scale caption — states what full bar width means.
+	rule(".rpta-hist-scale",
+		fontSize("0.68rem"),
+		color("var(--text-faint)"),
+		textAlign("right"),
+		fontStyle("italic"),
+	)
+	// Subhead direction glyphs (↗ in, ↘ out, ⚠ watch).
+	rule(".rpta-sub-glyph",
+		fontWeight("700"),
+	)
+	// Adherence month header row.
+	rule(".rpta-bud-mon",
+		height("auto"),
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		textAlign("center"),
+		color("var(--text-faint)"),
+		background("transparent"),
+	)
+	// Masthead sparkline caption.
+	rule(".rpta-fig-spark-cap",
+		display("block"),
+		fontSize("0.62rem"),
+		color("var(--text-faint)"),
+	)
+	// Quiet source-page links ("Net worth →") beside metrics.
+	rule(".rpta-src",
+		fontSize("0.72rem"),
+		color("var(--text-faint)"),
+		textDecoration("none"),
+		whiteSpace("nowrap"),
+	)
+	rule(".rpta-src:hover",
+		color("var(--accent)"),
+		textDecoration("underline"),
+	)
+	rule(".rpta-srcrow",
+		display("flex"),
+		justifyContent("flex-end"),
+	)
 	// Spending-by-tag rows (§05): the tag reads as the chip it is elsewhere in
 	// the app; the delta column tones like the category table (spend up = red).
 	rule(".rpta-tag-chip",

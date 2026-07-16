@@ -322,7 +322,9 @@ func Reports() ui.Node {
 			Span(css.Class("rpta-fig-k"), uistate.T("dashboard.netWorth")),
 			Span(css.Class("rpta-fig-v", tw.FontDisplay), fmtMoney(nwNet)),
 			If(sub != "", Span(ClassStr("rpta-fig-sub rpta-tone-"+tone), sub)),
-			If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), sparklineSVG(nwInts))),
+			If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), Title(uistate.T("rpta.nwSparkTitle")),
+				sparklineSVG(nwInts),
+				Span(css.Class("rpta-fig-spark-cap"), uistate.T("rpta.nwSparkCap"), " · ", rptaSrcLink("nav.netWorth", "/networth")))),
 		))
 	}
 	masthead := Div(css.Class("rpta-masthead"), Attr("data-testid", "rpt-hero"), Attr("id", "rpta-top"),
@@ -331,6 +333,7 @@ func Reports() ui.Node {
 		Div(ClassStr("rpta-verdict rpta-tone-"+verdictTone), Attr("data-testid", "rpta-verdict"),
 			Span(css.Class("rpta-verdict-score", tw.FontDisplay), rptaScoreText(health)),
 			Span(css.Class("rpta-verdict-line"), verdict),
+			rptaSrcLink("nav.health", "/health"),
 		),
 		Div(css.Class("rpta-figs"), Attr("data-countup", ""), mastFigs),
 	)
@@ -383,6 +386,7 @@ func Reports() ui.Node {
 		If(len(strongFacts) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.noStrong"))),
 		Div(css.Class("rpta-facts"), strongFacts),
 		If(len(wins) > 0, Div(css.Class("rpta-wins"), Attr("data-testid", "rpta-wins"), wins)),
+		Div(css.Class("rpta-srcrow"), rptaSrcLink("nav.health", "/health")),
 	))
 
 	// ── 02 · The flow of money (in-house smooth-ribbon sankey + per-$100). ───
@@ -551,6 +555,8 @@ func Reports() ui.Node {
 	for _, v := range creditSeries {
 		creditFloat = append(creditFloat, float64(v))
 	}
+	axisMoney := func(v float64) string { return rptaShortMoney(int64(v), sankeyFactor, currency.Symbol(base)) }
+	axisPct := func(v float64) string { return fmt.Sprintf("%d%%", int(v)) }
 	pctlessVL := func(vals []float64) []string {
 		out := make([]string, len(vals))
 		for i, v := range vals {
@@ -624,7 +630,11 @@ func Reports() ui.Node {
 		}
 		weekdayChart = Div(css.Class("rpta-weekday"), Attr("data-testid", "rpta-weekday"),
 			Div(css.Class("rpta-subhead"), uistate.T("rpta.weekdayHead")),
-			Div(css.Class("rpta-wd-bars"), Attr("role", "img"), Attr("aria-label", uistate.T("rpta.weekdayHead")), wdCols),
+			Div(css.Class("rpta-chart-body"),
+				Div(css.Class("rpta-yaxis", "rpta-yaxis-wd"), Attr("aria-hidden", "true"),
+					Span(rptaShortMoney(maxWD, sankeyFactor, currency.Symbol(base))), Span(currency.Symbol(base)+"0")),
+				Div(css.Class("rpta-wd-bars"), Attr("role", "img"), Attr("aria-label", uistate.T("rpta.weekdayHead")), wdCols),
+			),
 			rptaChartLegend(accent, uistate.T("rpta.legendWeekday")),
 		)
 	}
@@ -644,22 +654,22 @@ func Reports() ui.Node {
 		If(statsLine != "", P(css.Class("rpta-muted"), statsLine)),
 		weekdayChart,
 		Div(css.Class("rpta-charts3"),
-			If(len(netSeries) >= 2, Div(css.Class("rpta-chart"),
-				Div(css.Class("rpta-subhead"), uistate.T("dashboard.cashFlow")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Stroke: cashStroke, GradientID: "rpta-net", Label: uistate.T("dashboard.cashFlow"), Labels: monthLabels, ValueLabels: moneyVL(netSeries)}),
-				rptaChartLegend(cashStroke, uistate.T("rpta.legendCash")))),
-			If(len(srSeries) >= 2, Div(css.Class("rpta-chart"),
-				Div(css.Class("rpta-subhead"), uistate.T("reports.savingsTrend")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, Stroke: srStroke, GradientID: "rpta-sr", Label: uistate.T("reports.savingsTrend"), Labels: monthLabels, ValueLabels: pctVL(srSeries)}),
-				rptaChartLegend(srStroke, uistate.T("rpta.legendSR")))),
-			If(len(nwFloat) >= 2, Div(css.Class("rpta-chart"),
-				Div(css.Class("rpta-subhead"), uistate.T("dashboard.netWorth")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: nwFloat, Stroke: nwStroke, GradientID: "rpta-nw", Label: uistate.T("dashboard.netWorth"), Labels: monthLabels, ValueLabels: moneyVL(nwFloat)}),
-				rptaChartLegend(nwStroke, uistate.T("rpta.legendNW")))),
-			If(len(creditSeries) >= 2, Div(css.Class("rpta-chart"), Attr("data-testid", "rpta-credit-chart"),
-				Div(css.Class("rpta-subhead"), uistate.T("rpta.creditHead")),
-				uiw.AreaChart(uiw.AreaChartProps{Values: creditFloat, Stroke: creditStroke, GradientID: "rpta-credit", Label: uistate.T("rpta.creditHead"), Labels: monthLabels, ValueLabels: pctlessVL(creditFloat)}),
-				rptaChartLegend(creditStroke, uistate.T("rpta.legendCredit")))),
+			If(len(netSeries) >= 2, rptaTrendChart(uistate.T("dashboard.cashFlow"), cashStroke, uistate.T("rpta.legendCash"),
+				rptaSrcLink("nav.transactions", "/transactions"),
+				axisMoney(seriesMax(netSeries)), axisMoney(seriesMid(netSeries)), axisMoney(seriesMin(netSeries)),
+				uiw.AreaChart(uiw.AreaChartProps{Values: netSeries, Stroke: cashStroke, GradientID: "rpta-net", Label: uistate.T("dashboard.cashFlow"), Labels: monthLabels, ValueLabels: moneyVL(netSeries)}))),
+			If(len(srSeries) >= 2, rptaTrendChart(uistate.T("reports.savingsTrend"), srStroke, uistate.T("rpta.legendSR"),
+				rptaSrcLink("nav.health", "/health"),
+				axisPct(seriesMax(srSeries)), axisPct(seriesMid(srSeries)), axisPct(seriesMin(srSeries)),
+				uiw.AreaChart(uiw.AreaChartProps{Values: srSeries, Stroke: srStroke, GradientID: "rpta-sr", Label: uistate.T("reports.savingsTrend"), Labels: monthLabels, ValueLabels: pctVL(srSeries)}))),
+			If(len(nwFloat) >= 2, rptaTrendChart(uistate.T("dashboard.netWorth"), nwStroke, uistate.T("rpta.legendNW"),
+				rptaSrcLink("nav.netWorth", "/networth"),
+				axisMoney(seriesMax(nwFloat)), axisMoney(seriesMid(nwFloat)), axisMoney(seriesMin(nwFloat)),
+				uiw.AreaChart(uiw.AreaChartProps{Values: nwFloat, Stroke: nwStroke, GradientID: "rpta-nw", Label: uistate.T("dashboard.netWorth"), Labels: monthLabels, ValueLabels: moneyVL(nwFloat)}))),
+			If(len(creditSeries) >= 2, Div(Attr("data-testid", "rpta-credit-chart"), rptaTrendChart(uistate.T("rpta.creditHead"), creditStroke, uistate.T("rpta.legendCredit"),
+				rptaSrcLink("nav.credit", "/credit"),
+				fmt.Sprintf("%d", int(seriesMax(creditFloat))), fmt.Sprintf("%d", int(seriesMid(creditFloat))), fmt.Sprintf("%d", int(seriesMin(creditFloat))),
+				uiw.AreaChart(uiw.AreaChartProps{Values: creditFloat, Stroke: creditStroke, GradientID: "rpta-credit", Label: uistate.T("rpta.creditHead"), Labels: monthLabels, ValueLabels: pctlessVL(creditFloat)})))),
 		),
 	))
 
@@ -692,12 +702,21 @@ func Reports() ui.Node {
 	// The year histogram: one colored magnitude bar per category (sankey-palette
 	// hues for the diagram's top ten), replacing a page of airy rows. The full
 	// analytic table (run rates, sparklines) folds beneath it.
+	// Top 12 bars + one aggregated "everything else" row — the long tail lives
+	// in the folded table, not as fifteen more sliver bars.
 	var catHist []ui.Node
+	var histRest int64
+	histRestN := 0
 	for _, r := range rows {
 		if r.Amount == 0 {
 			continue
 		}
 		amt := absMinor(r.Amount)
+		if len(catHist) >= 12 {
+			histRest += amt
+			histRestN++
+			continue
+		}
 		share := int64(0)
 		if flow.Expense > 0 {
 			share = amt * 100 / flow.Expense
@@ -710,6 +729,37 @@ func Reports() ui.Node {
 			FmtMinor: fmtMinor, OnSelect: func() { drillCategory(id) },
 		}))
 	}
+	if histRest > 0 {
+		share := int64(0)
+		if flow.Expense > 0 {
+			share = histRest * 100 / flow.Expense
+		}
+		catHist = append(catHist, ui.CreateElement(rptaHistRow, rptaHistRowProps{
+			Label: uistate.T("rpta.histRest", histRestN), Color: "#8a8f98",
+			Amount: histRest, Max: maxCat, Meta: fmt.Sprintf("%d%%", share),
+			FmtMinor: fmtMinor,
+		}))
+	}
+	// Tags render beside the categories on the SAME spending scale (maxCat), so
+	// a tag bar and a category bar are directly comparable.
+	var tagNodes []ui.Node
+	for i, ts := range tagSpend {
+		if i >= 10 {
+			break
+		}
+		hasDelta := ts.Prior > 0
+		var deltaPct int64
+		if hasDelta {
+			deltaPct = (ts.Amount - ts.Prior) * 100 / ts.Prior
+		}
+		tagNodes = append(tagNodes, Div(Attr("data-testid", "rpta-tag-row"), ui.CreateElement(rptaHistRow, rptaHistRowProps{
+			Label: "#" + ts.Tag, Chip: true,
+			Color:  rptaCatPalette[i%len(rptaCatPalette)],
+			Amount: ts.Amount, Max: maxCat, Meta: uistate.T("rpta.tagCharges", ts.Count),
+			HasDelta: hasDelta, DeltaPct: deltaPct, PriorZero: ts.Prior == 0 && ts.Amount > 0,
+			FmtMinor: fmtMinor,
+		})))
+	}
 	catActions := Div(css.Class(tw.Flex, tw.Gap2),
 		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 			Attr("aria-pressed", boolStr(rollupCats.Get())), Title(uistate.T("reports.rollupTitle")),
@@ -717,7 +767,13 @@ func Reports() ui.Node {
 	)
 	categories := rptaSectionWithAction("rpta-04", "04", uistate.T("rpta.secCats"), "neutral", uistate.T("rpta.secCatsSub"), narrative, catActions, Fragment(
 		P(css.Class("rpta-narrative", tw.FontDisplay), narrative),
+		Div(css.Class("rpta-hist-scale"), uistate.T("rpta.histScale", fmtMinor(maxCat))),
 		Div(css.Class("rpta-hist"), Attr("data-testid", "rpta-cat-hist"), catHist),
+		If(len(tagNodes) > 0, Fragment(
+			rptaSubG("↘", "down", uistate.T("rpta.byTag"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "tags-drill"), uistate.T("reports.viewTransactions"))),
+			Div(css.Class("rpta-hist-scale"), uistate.T("rpta.histScaleSame")),
+			Div(css.Class("rpta-hist"), tagNodes),
+			P(css.Class("rpta-muted", "rpta-tag-note"), uistate.T("rpta.tagOverlapNote")))),
 		Details(css.Class("rpta-zeroed"), Attr("data-testid", "rpta-cat-table"),
 			Summary(uistate.T("rpta.histTableFold")),
 			Div(css.Class("rpta-cat-head"),
@@ -736,117 +792,99 @@ func Reports() ui.Node {
 	))
 
 	// ── 05 · Where it actually goes (payees, biggest, deposits, sources, members).
-	shareBar := func(amount, max int64) ui.Node {
-		if max <= 0 {
-			return Fragment()
-		}
-		pct := absMinor(amount) * 100 / max
-		if pct > 100 {
-			pct = 100
-		}
-		return Div(css.Class("share-bar"), Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
-	}
+	//
+	// This section is deliberately QUIET: short typographic ranked lists — name,
+	// muted meta, right-aligned amount — with no bars at all. A first pass gave
+	// every row a bar and it read as noise (Cam: "too visually noisy"); ordering
+	// plus tabular numerals already carry the ranking. Repeated identical
+	// deposits (eight "Paycheck (net) $4,700" rows) collapse to one line with a
+	// count. The tag distribution lives in §04 beside the category histogram,
+	// where the shared spending scale makes its bars meaningful.
 	listRows := func(items []ui.Node) ui.Node { return Div(css.Class("rows"), items) }
-	var payeeNodes []ui.Node
-	var maxPayee int64
-	for _, p := range payees {
-		if a := absMinor(p.Amount); a > maxPayee {
-			maxPayee = a
-		}
+	quietRow := func(desc, meta string, amount int64) ui.Node {
+		return Div(css.Class("row"),
+			Div(css.Class("row-main"), Span(css.Class("row-desc"), desc), If(meta != "", Span(css.Class("row-meta"), meta))),
+			Span(css.Class("budget-amount"), fmtMinor(amount)))
 	}
-	for _, p := range payees {
+	var payeeNodes []ui.Node
+	for i, p := range payees {
+		if i >= 6 {
+			break
+		}
 		nm := p.Name
 		if nm == "" {
 			nm = uistate.T("reports.noPayee")
 		}
-		payeeNodes = append(payeeNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), nm), shareBar(p.Amount, maxPayee)),
-			Span(css.Class("budget-amount"), fmtMinor(p.Amount))))
+		payeeNodes = append(payeeNodes, quietRow(nm, "", p.Amount))
 	}
 	var largestNodes []ui.Node
-	var maxExp int64
-	for _, e := range largest {
-		if a := absMinor(e.Amount); a > maxExp {
-			maxExp = a
+	for i, e := range largest {
+		if i >= 6 {
+			break
 		}
-	}
-	for _, e := range largest {
 		desc := e.Desc
 		if desc == "" {
 			desc = nameOf(e.CategoryID)
 		}
-		largestNodes = append(largestNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), desc), Span(css.Class("row-meta"), pr.FormatDate(e.Date)), shareBar(e.Amount, maxExp)),
-			Span(css.Class("budget-amount"), fmtMinor(e.Amount))))
+		largestNodes = append(largestNodes, quietRow(desc, pr.FormatDate(e.Date), e.Amount))
+	}
+	// Deposits: fold repeats of the same description + amount into one row.
+	type depGroup struct {
+		desc   string
+		amount int64
+		count  int
+		last   time.Time
+	}
+	var depGroups []depGroup
+	for _, e := range bigIncome {
+		desc := e.Desc
+		if desc == "" {
+			desc = nameOf(e.CategoryID)
+		}
+		folded := false
+		for gi := range depGroups {
+			if depGroups[gi].desc == desc && depGroups[gi].amount == e.Amount {
+				depGroups[gi].count++
+				if e.Date.After(depGroups[gi].last) {
+					depGroups[gi].last = e.Date
+				}
+				folded = true
+				break
+			}
+		}
+		if !folded {
+			depGroups = append(depGroups, depGroup{desc: desc, amount: e.Amount, count: 1, last: e.Date})
+		}
 	}
 	var depositNodes []ui.Node
-	var maxDep int64
-	for _, e := range bigIncome {
-		if a := absMinor(e.Amount); a > maxDep {
-			maxDep = a
+	for i, g := range depGroups {
+		if i >= 4 {
+			break
 		}
-	}
-	for _, e := range bigIncome {
-		desc := e.Desc
-		if desc == "" {
-			desc = nameOf(e.CategoryID)
+		meta := pr.FormatDate(g.last)
+		if g.count > 1 {
+			meta = uistate.T("rpta.depTimes", g.count)
 		}
-		depositNodes = append(depositNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), desc), Span(css.Class("row-meta"), pr.FormatDate(e.Date)), shareBar(e.Amount, maxDep)),
-			Span(css.Class("budget-amount"), fmtMinor(e.Amount))))
+		depositNodes = append(depositNodes, quietRow(g.desc, meta, g.amount))
 	}
 	var srcNodes []ui.Node
 	for _, r := range incomeRows {
 		if r.Amount == 0 {
 			continue
 		}
-		srcNodes = append(srcNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID))),
-			Span(css.Class("budget-amount"), fmtMinor(r.Amount))))
+		srcNodes = append(srcNodes, quietRow(nameOf(r.CategoryID), "", r.Amount))
 	}
 	memberName := make(map[string]string, len(app.Members()))
 	for _, m := range app.Members() {
 		memberName[m.ID] = m.Name
 	}
 	var memberNodes []ui.Node
-	var maxMember int64
-	for _, ms := range memberSpend {
-		if a := absMinor(ms.Amount); a > maxMember {
-			maxMember = a
-		}
-	}
 	for _, ms := range memberSpend {
 		nm := memberName[ms.MemberID]
 		if nm == "" {
 			nm = uistate.T("reports.noMember")
 		}
-		memberNodes = append(memberNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), nm), shareBar(ms.Amount, maxMember)),
-			Span(css.Class("budget-amount"), fmtMinor(ms.Amount))))
-	}
-	var tagNodes []ui.Node
-	var maxTag int64
-	for _, ts := range tagSpend {
-		if ts.Amount > maxTag {
-			maxTag = ts.Amount
-		}
-	}
-	for i, ts := range tagSpend {
-		if i >= 12 {
-			break
-		}
-		hasDelta := ts.Prior > 0
-		var deltaPct int64
-		if hasDelta {
-			deltaPct = (ts.Amount - ts.Prior) * 100 / ts.Prior
-		}
-		tagNodes = append(tagNodes, Div(Attr("data-testid", "rpta-tag-row"), ui.CreateElement(rptaHistRow, rptaHistRowProps{
-			Label: "#" + ts.Tag, Chip: true,
-			Color:  rptaCatPalette[i%len(rptaCatPalette)],
-			Amount: ts.Amount, Max: maxTag, Meta: uistate.T("rpta.tagCharges", ts.Count),
-			HasDelta: hasDelta, DeltaPct: deltaPct, PriorZero: ts.Prior == 0 && ts.Amount > 0,
-			FmtMinor: fmtMinor,
-		})))
+		memberNodes = append(memberNodes, quietRow(nm, "", ms.Amount))
 	}
 	askWhere := ""
 	if len(payees) > 0 {
@@ -858,27 +896,23 @@ func Reports() ui.Node {
 	if len(tagSpend) > 0 {
 		askWhere += fmt.Sprintf("most-spent tag #%s at %s", tagSpend[0].Tag, fmtMinor(tagSpend[0].Amount))
 	}
-	whereGoes := rptaSection("rpta-05", "05", uistate.T("rpta.secWhere"), "neutral", uistate.T("rpta.secWhereSub"), askWhere, Div(css.Class("rpta-cols2"),
+	whereGoes := rptaSection("rpta-05", "05", uistate.T("rpta.secWhere"), "neutral", uistate.T("rpta.secWhereSub"), askWhere, Fragment(Div(css.Class("rpta-cols2"),
 		Div(css.Class("rpta-col"),
-			rptaSub(uistate.T("reports.topPayees"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSubG("↘", "down", uistate.T("reports.topPayees"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions"))),
 			listRows(payeeNodes),
-			rptaSub(uistate.T("reports.biggestDeposits"), nil),
+			rptaSubG("↗", "up", uistate.T("reports.biggestDeposits"), nil),
 			listRows(depositNodes),
-			If(len(tagNodes) > 0, Fragment(
-				rptaSub(uistate.T("rpta.byTag"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "tags-drill"), uistate.T("reports.viewTransactions"))),
-				listRows(tagNodes),
-				P(css.Class("rpta-muted", "rpta-tag-note"), uistate.T("rpta.tagOverlapNote")))),
-		),
-		Div(css.Class("rpta-col"),
-			rptaSub(uistate.T("reports.biggestExpenses"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions"))),
-			listRows(largestNodes),
-			rptaSub(uistate.T("reports.incomeBySource"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "income-drill"), uistate.T("reports.viewTransactions"))),
-			listRows(srcNodes),
 			If(len(app.Members()) >= 2 && len(memberNodes) > 0, Fragment(
-				rptaSub(uistate.T("reports.byMember"), nil),
+				rptaSubG("↘", "down", uistate.T("reports.byMember"), nil),
 				listRows(memberNodes))),
 		),
-	))
+		Div(css.Class("rpta-col"),
+			rptaSubG("↘", "down", uistate.T("reports.biggestExpenses"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions"))),
+			listRows(largestNodes),
+			rptaSubG("↗", "up", uistate.T("reports.incomeBySource"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "income-drill"), uistate.T("reports.viewTransactions"))),
+			listRows(srcNodes),
+		),
+	)))
 
 	// ── 06 · Goal progress: every financial goal's year, coverage-first. ─────
 	tasks := app.Tasks()
@@ -1044,12 +1078,22 @@ func Reports() ui.Node {
 			))
 		}
 	}
+	// Month-initial header so the twelve adherence cells have a labeled x-axis.
+	var budMonthCells []ui.Node
+	for k := 0; k+1 < len(bounds) && k < 12; k++ {
+		budMonthCells = append(budMonthCells, Span(css.Class("rpta-bud-cell", "rpta-bud-mon"), bounds[k].Format("Jan")[:1]))
+	}
+	budHeader := Div(css.Class("rpta-bud-row", "rpta-bud-header"), Attr("aria-hidden", "true"),
+		Span(css.Class("rpta-bud-name")),
+		Div(css.Class("rpta-bud-cells"), budMonthCells),
+		Span(css.Class("rpta-bud-verdict")),
+	)
 	askBudgets := uistate.T("rpta.budgetsSummary", budgetsClean, budgetsCounted)
 	budgetsSec := Fragment()
 	if len(budgetRows) > 0 {
 		budgetsSec = rptaSection("rpta-07", "07", uistate.T("rpta.secBudgets"), "neutral", uistate.T("rpta.secBudgetsSub"), askBudgets, Fragment(
 			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-budgets-summary"), askBudgets),
-			Div(css.Class("rpta-bud-rows"), budgetRows),
+			Div(css.Class("rpta-bud-rows"), budHeader, budgetRows),
 			Div(css.Class("rpta-flow-key"),
 				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaToneUp})), uistate.T("rpta.budKeyUnder")),
 				Span(css.Class("rpta-flow-key-item"), Span(css.Class("rpta-flow-dot"), Style(map[string]string{"background": rptaToneWarn})), uistate.T("rpta.budKeyNear")),
@@ -1106,11 +1150,11 @@ func Reports() ui.Node {
 		len(liveSubs), fmtMinor(subsAnnual), len(risingNodes), len(rises))
 	watch := rptaSection("rpta-08", "08", uistate.T("rpta.secWatch"), "warn", uistate.T("rpta.secWatchSub"), askWatch, Fragment(
 		If(len(risingNodes) == 0 && len(subNodes) == 0 && len(riseNodes) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.watchClear"))),
-		If(len(risingNodes) > 0, Fragment(rptaSub(uistate.T("rpta.watchRising"), nil), Div(Attr("data-testid", "rpta-rising"), risingNodes))),
+		If(len(risingNodes) > 0, Fragment(rptaSubG("⚠", "warn", uistate.T("rpta.watchRising"), nil), Div(Attr("data-testid", "rpta-rising"), risingNodes))),
 		If(len(subNodes) > 0, Fragment(
-			rptaSub(uistate.T("rpta.watchSubs", len(liveSubs), fmtMinor(subsAnnual)), nil),
+			rptaSubG("⚠", "warn", uistate.T("rpta.watchSubs", len(liveSubs), fmtMinor(subsAnnual)), rptaSrcLink("nav.subscriptions", "/subscriptions")),
 			Div(Attr("data-testid", "rpta-subs"), subNodes))),
-		If(len(riseNodes) > 0, Fragment(rptaSub(uistate.T("rpta.watchRises"), nil), Div(riseNodes))),
+		If(len(riseNodes) > 0, Fragment(rptaSubG("⚠", "warn", uistate.T("rpta.watchRises"), rptaSrcLink("nav.subscriptions", "/subscriptions")), Div(riseNodes))),
 	))
 
 	// ── 07 · Problem spots. ───────────────────────────────────────────────────
@@ -1141,7 +1185,7 @@ func Reports() ui.Node {
 	}
 	var problemBits []ui.Node
 	if len(weakFacts) > 0 {
-		problemBits = append(problemBits, rptaSub(uistate.T("rpta.probFactors"), nil), Div(css.Class("rpta-facts"), weakFacts))
+		problemBits = append(problemBits, rptaSub(uistate.T("rpta.probFactors"), rptaSrcLink("nav.health", "/health")), Div(css.Class("rpta-facts"), weakFacts))
 	}
 	if monthsRed > 0 {
 		problemBits = append(problemBits, P(css.Class("rpta-prob-line"), Attr("data-testid", "rpta-monthsred"),
@@ -1188,7 +1232,7 @@ func Reports() ui.Node {
 	}
 	if len(debtRowNodes) > 0 {
 		problemBits = append(problemBits,
-			rptaSub(uistate.T("rpta.probDebt", fmtMinor(debtInterestTotal)), nil),
+			rptaSub(uistate.T("rpta.probDebt", fmtMinor(debtInterestTotal)), rptaSrcLink("nav.debt", "/debt")),
 			Table(css.Class("rpta-table"), Attr("data-testid", "rpta-debt"),
 				Thead(Tr(Th(uistate.T("rpta.colDebt")), Th(uistate.T("rpta.colBalance")), Th("APR"), Th(uistate.T("rpta.colYearInterest")), Th(uistate.T("rpta.colMinimum")))),
 				Tbody(debtRowNodes)))
@@ -1450,12 +1494,48 @@ func rptaWin(text string) ui.Node {
 
 // rptaSub is a small in-section subheading with an optional right-aligned action.
 func rptaSub(title string, action ui.Node) ui.Node {
+	return rptaSubG("", "", title, action)
+}
+
+// rptaSubG is rptaSub with a leading toned glyph (↗ money in, ↘ money out,
+// ⚠ watch) so a list's direction/nature reads before its words do.
+func rptaSubG(glyph, tone, title string, action ui.Node) ui.Node {
 	if action == nil {
 		action = Fragment()
 	}
+	var g ui.Node = Fragment()
+	if glyph != "" {
+		g = Span(ClassStr("rpta-sub-glyph rpta-tone-"+tone), Attr("aria-hidden", "true"), glyph+" ")
+	}
 	return Div(css.Class("rpta-subrow"),
-		Span(css.Class("rpta-subhead"), title),
+		Span(css.Class("rpta-subhead"), g, title),
 		action,
+	)
+}
+
+// rptaSrcLink is the subtle "this number lives over there" affordance: a
+// small muted page-name link with a trailing arrow, placed beside a metric's
+// subhead or legend so drilling to the owning surface is one quiet click.
+func rptaSrcLink(labelKey, route string) ui.Node {
+	return A(css.Class("rpta-src"), Href(uistate.RoutePath(route)), Attr("data-testid", "rpta-src"),
+		uistate.T(labelKey), " →")
+}
+
+// rptaTrendChart wraps one §03 trend chart with its full context: subhead
+// (plus a quiet source-page link), a y-axis column (series max / mid / min,
+// aligned to the 120px plot), the chart itself with its month x-labels, and
+// the color-keyed legend beneath. No chart floats context-free.
+func rptaTrendChart(head, stroke, legend string, src ui.Node, maxL, midL, minL string, chart ui.Node) ui.Node {
+	if src == nil {
+		src = Fragment()
+	}
+	return Div(css.Class("rpta-chart"),
+		Div(css.Class("rpta-subrow"), Span(css.Class("rpta-subhead"), head), src),
+		Div(css.Class("rpta-chart-body"),
+			Div(css.Class("rpta-yaxis"), Attr("aria-hidden", "true"), Span(maxL), Span(midL), Span(minL)),
+			Div(css.Class("rpta-chart-plot"), chart),
+		),
+		rptaChartLegend(stroke, legend),
 	)
 }
 
@@ -1775,6 +1855,30 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 		Span(css.Class("rpta-cat-share", "rpta-muted"), fmt.Sprintf("%d%%", share)),
 	)
 }
+
+// seriesMax/seriesMin/seriesMid give a plotted series' y-axis anchor values —
+// the chart normalizes to its own data range, so these ARE the axis.
+func seriesMax(vs []float64) float64 {
+	m := vs[0]
+	for _, v := range vs {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+func seriesMin(vs []float64) float64 {
+	m := vs[0]
+	for _, v := range vs {
+		if v < m {
+			m = v
+		}
+	}
+	return m
+}
+
+func seriesMid(vs []float64) float64 { return (seriesMax(vs) + seriesMin(vs)) / 2 }
 
 // anyify converts a node slice to the []any Fragment expects.
 func anyify(nodes []ui.Node) []any {
