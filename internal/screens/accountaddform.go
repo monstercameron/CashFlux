@@ -305,15 +305,20 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		If(len(app.Accounts()) == 0,
 			P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
 				uistate.T("accounts.firstRunHint"))),
-		// G5: the copy-existing starter (only once accounts exist to copy).
-		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: acctCopyOptions(app.Accounts()), Selected: "", TestID: "account-copy-existing",
-				OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("accounts.copyExisting"),
-			}))),
+		// Name leads the form — the main path. (The "Copy an existing account…"
+		// shortcut is a secondary convenience, so it sits BELOW the name, not above
+		// it: an edge case shouldn't be the first field a new user meets.)
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
 				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...)...))),
+		// G5: the copy-existing starter (only once accounts exist to copy), demoted
+		// below the name field.
+		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
+			labeledField(uistate.T("accounts.copyExisting"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: acctCopyOptions(app.Accounts()), Selected: "", TestID: "account-copy-existing",
+					OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("accounts.copyExisting"),
+				})))),
 		labeledField(uistate.T("accounts.typeLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   typeOptions,

@@ -32,6 +32,10 @@ type accountRowProps struct {
 	Balance    money.Money
 	Cleared    money.Money
 	Stale      bool
+	// DaysStale is the days since the balance was last confirmed (−1 = never), shown
+	// on the stale badge so the row says HOW stale it is — matching the "it's been N
+	// days" wording of the balance-update notification. Only read when Stale is true.
+	DaysStale int
 	Members    []domain.Member
 	Accounts   []domain.Account // all non-archived accounts (for Transfer to-picker)
 	Categories []domain.Category
@@ -108,6 +112,29 @@ func updateActionKey(t domain.AccountType) string {
 		return "accounts.updateValue"
 	}
 	return "accounts.updateBalance"
+}
+
+// staleBadgeText renders the stale badge label with the days-since-confirmed
+// suffix ("Stale · 24d") so the row says HOW stale it is — mirroring the balance-
+// update notification. days < 0 means the balance was never confirmed.
+func staleBadgeText(t domain.AccountType, days int) string {
+	base := uistate.T(staleBadgeKey(t))
+	if days < 0 {
+		return base + uistate.T("accounts.staleNeverSuffix")
+	}
+	if days == 0 {
+		return base
+	}
+	return base + uistate.T("accounts.staleDaysSuffix", days)
+}
+
+// staleBadgeTitle is the badge's hover tooltip — a full-sentence version of the
+// same freshness the notification states.
+func staleBadgeTitle(t domain.AccountType, days int) string {
+	if days < 0 {
+		return uistate.T("accounts.staleNeverTitle")
+	}
+	return uistate.T("accounts.staleDaysTitle", days)
 }
 
 func moneyMajorOrEmpty(m money.Money, dec int) string {
@@ -396,7 +423,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(css.Class("acct-row-id"),
 				Div(css.Class("acct-row-name"),
 					Span(css.Class("row-desc"), a.Name),
-					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), uistate.T(staleBadgeKey(a.Type)))),
+					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Title(staleBadgeTitle(a.Type, props.DaysStale)), staleBadgeText(a.Type, props.DaysStale))),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),
@@ -428,18 +455,24 @@ func AccountRow(props accountRowProps) ui.Node {
 					Title(uistate.T("accounts.balanceTitle")),
 					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 					fmtMoney(dispBal))),
-			// Quick actions inline: "Update value/balance" for stale/valuation accounts
-			// (emphasized when stale), Transactions (the highest-frequency navigation —
-			// no longer buried beside Delete), then "Edit". The ⋯ menu holds the money
-			// rituals (type-gated) and, grouped last, security + lifecycle.
+			// Quick actions inline: ONE primary — Transactions (the highest-frequency
+			// navigation) — plus the conditional "Update value/balance" for accounts you
+			// actively maintain (stale/valuation, emphasized when stale). Everything else,
+			// Edit included, is demoted into the ⋯ menu so the resting row is a clean
+			// name → balance → [Transactions] [⋯] line instead of a wall of equal-weight
+			// buttons. The balance figure itself is already click-to-edit for updates.
 			Div(css.Class("acct-row-actions"),
 				If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
 				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID), Title(uistate.T("accounts.viewTxnsTitle")), OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 				Div(css.Class("add-wrap"), Attr("id", menuID),
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+						// Edit leads the menu — the most common of the demoted actions. (The
+						// everyday balance update stays inline / on the figure; Edit covers the
+						// rarer name/type/attribute changes.) Available on archived rows too,
+						// matching the prior inline behavior.
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 						// C1: reconcile-to-statement only where statements + transactions exist —
 						// a valuation account (property/vehicle/investment/…) uses Update value.
 						If(!a.Archived && !isValuationType(a.Type), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
