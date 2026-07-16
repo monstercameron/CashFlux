@@ -268,6 +268,19 @@ func todoListWidget(props todoListProps) ui.Node {
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the task currently being dragged (Custom order)
 
+	// The top field is a SEARCH box, but users reliably type a task title into it and
+	// expect it to add — then hit "No tasks match". When a search yields nothing, the
+	// empty state offers to add the typed text AS a task (opening the add-task modal
+	// pre-filled with that title via the TaskAddSeed seam), turning the dead end into
+	// the action they wanted.
+	addFromSearch := ui.UseEvent(Prevent(func() {
+		t := strings.TrimSpace(searchAtom.Get())
+		if t != "" {
+			uistate.SetTaskAddSeed(uistate.TaskAddSeed{Title: t})
+		}
+		uistate.SetAddTarget("task")
+	}))
+
 	tasks := app.Tasks()
 	accounts := app.Accounts()
 	budgets := app.Budgets()
@@ -478,7 +491,15 @@ func todoListWidget(props todoListProps) ui.Node {
 	case len(tasks) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("todo.empty"), CTALabel: uistate.T("todo.addFirst"), AddTarget: "task", Icon: icon.Todo})
 	case len(nodes) == 0:
-		if searchAtom.Get() != "" || linkAtom.Get() != uistate.TodoLinkAll || filterPrio.Get() != "" {
+		if q := strings.TrimSpace(searchAtom.Get()); q != "" {
+			// Search yielded nothing → offer to add the typed text as a task.
+			listBody = Div(css.Class("empty todo-nomatch"), Attr("data-testid", "todo-nomatch"),
+				P(css.Class("empty"), uistate.T("todo.noMatches")),
+				Button(css.Class("btn btn-primary btn-sm", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "todo-add-from-search"), OnClick(addFromSearch),
+					uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("todo.addFromSearch", q))))
+		} else if linkAtom.Get() != uistate.TodoLinkAll || filterPrio.Get() != "" {
 			listBody = P(css.Class("empty"), uistate.T("todo.noMatches"))
 		} else {
 			listBody = P(css.Class("empty"), uistate.T("todo.allDone"))

@@ -2651,6 +2651,7 @@ var english = Catalog{
 	"todo.linkBudgetPl":      "Budgets",
 	"todo.linkAccountPl":     "Accounts",
 	"todo.noMatches":         "No tasks match your filters.",
+	"todo.addFromSearch":     "Add “%s” as a task",
 	"todo.subtaskTitle":      "New sub-task",
 	"todo.sortManual":        "Custom order",
 	"todo.dragReorder":       "Drag to reorder",
