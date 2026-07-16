@@ -138,12 +138,16 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			props.OnDrill(s.Budget.TrackedCategoryIDs())
 		}
 	}))
-	// Jump to the To-dos page when this budget has linked to-dos (Task.RelatedType=budget).
-	openTodos := ui.UseEvent(Prevent(func() {
+	// Jump to the To-do list PRE-FILTERED to this budget's follow-ups (link=budget +
+	// the specific budget id), used by both a to-do row's title and the "+N more" link.
+	openBudgetTodos := func() {
+		uistate.SetTodoFilterLink(uistate.TodoLinkBudget)
+		uistate.SetTodoFilterLinkID(s.Budget.ID)
 		if props.OnViewTodos != nil {
 			props.OnViewTodos()
 		}
-	}))
+	}
+	openTodos := ui.UseEvent(Prevent(func() { openBudgetTodos() }))
 	removeRecurring := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
@@ -439,7 +443,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			if i >= maxTodos {
 				break
 			}
-			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due}))
+			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due, OnOpen: openBudgetTodos}))
 		}
 		if extra := len(linkedTodos) - maxTodos; extra > 0 {
 			kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"), Attr("data-testid", "budget-todos-more-"+s.Budget.ID),

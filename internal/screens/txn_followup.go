@@ -119,10 +119,11 @@ func toggleFollowUpTask(taskID string, currentlyDone bool) {
 
 // txnFollowUpItemProps configure one to-do row inside the follow-up popover.
 type txnFollowUpItemProps struct {
-	ID    string
-	Title string
-	Done  bool
-	Due   string
+	ID     string
+	Title  string
+	Done   bool
+	Due    string
+	OnOpen func() // when set, the title becomes a button that opens the task's list/detail
 }
 
 // txnFollowUpItem is one to-do line in the popover with a check-off toggle, so a
@@ -133,6 +134,12 @@ func txnFollowUpItem(props txnFollowUpItemProps) ui.Node {
 	onToggle := ui.UseEvent(func(e ui.Event) {
 		e.StopPropagation()
 		toggleFollowUpTask(props.ID, props.Done)
+	})
+	onOpen := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		if props.OnOpen != nil {
+			props.OnOpen()
+		}
 	})
 	cls := "txnfu-item"
 	checkCls := "txnfu-item-check"
@@ -149,7 +156,11 @@ func txnFollowUpItem(props txnFollowUpItemProps) ui.Node {
 			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(props.Done)),
 			Attr("aria-label", label+" — "+props.Title), Title(label),
 			OnClick(onToggle), checkGlyph),
-		Span(css.Class("txnfu-item-title"), props.Title),
+		IfElse(props.OnOpen != nil,
+			Button(css.Class("txnfu-item-title txnfu-item-open"), Type("button"),
+				Attr("data-testid", "txnfu-open-"+props.ID), Attr("aria-label", props.Title),
+				OnClick(onOpen), props.Title),
+			Span(css.Class("txnfu-item-title"), props.Title)),
 		If(props.Due != "", Span(css.Class("txnfu-item-due"), props.Due)),
 	)
 }

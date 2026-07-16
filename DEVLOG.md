@@ -1,3 +1,17 @@
+## 2026-07-16 — Budget to-dos deep-link to the To-do list filtered to that budget
+
+Cam: clicking a budget's follow-up should route to /todo filtered to THIS budget. The existing link
+filter is type-only (budget/goal/account/txn) — it can't target one budget. Added a parallel
+specific-entity narrowing: `UseTodoFilterLinkID`/`SetTodoFilterLinkID` (captured app-wide by AddHost, like
+the link-type filter), applied in the list tile AFTER the type filter (`t.RelatedID == id`), and cleared
+when the user changes the link dropdown so it never sticks invisibly. Budget card: `openBudgetTodos` sets
+link=budget + linkID=budget.ID then navigates; wired to both the "+N more" link and each to-do's title —
+gave `txnFollowUpItem` an optional `OnOpen` that turns the title into a chrome-stripped button (underline
+on hover). Verified: clicking a Groceries follow-up lands on /todo showing exactly its 7 tasks (LINKED =
+Budgets), no unrelated tasks, 0 console errors. (The 7-task Groceries seed from the prior commit is the
+multi-todo UI case.) `todopage.go`, `todo_tiles.go`, `txn_followup.go`, `budgets_row.go`, `addhost.go`,
+`rules_txcfields.go`.
+
 ## 2026-07-16 — Budget card layout: full-width bar, pie under it, note + to-dos side panel
 
 Iterated with Cam on the composite budget card. He wanted the status bar back to 100% (the right-side

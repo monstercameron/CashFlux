@@ -112,6 +112,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	sortMode := uistate.UseTodoSortMode()
 	search := uistate.UseTodoSearch()
 	linkFilter := uistate.UseTodoFilterLink()
+	linkID := uistate.UseTodoFilterLinkID()
 	page := uistate.UseTodoPage()
 	view := uistate.UseTodoView()
 	boardGroup := uistate.UseTodoBoardGroup()
@@ -122,7 +123,9 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()); page.Set(1) })
 	onSort := ui.UseEvent(func(e ui.Event) { sortMode.Set(e.GetValue()); page.Set(1) })
 	onSearch := ui.UseEvent(func(v string) { search.Set(v); page.Set(1) })
-	onLink := ui.UseEvent(func(e ui.Event) { linkFilter.Set(e.GetValue()); page.Set(1) })
+	// Changing the link-type filter clears any specific-entity narrowing (deep-link) so the
+	// dropdown always means what it says.
+	onLink := ui.UseEvent(func(e ui.Event) { linkFilter.Set(e.GetValue()); linkID.Set(""); page.Set(1) })
 	clearSearch := ui.UseEvent(Prevent(func() { search.Set(""); page.Set(1) }))
 	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
 	// View switch (list / board / calendar) + the board's group-by. Fixed set of
@@ -254,6 +257,7 @@ func todoListWidget(props todoListProps) ui.Node {
 	sortMode := uistate.UseTodoSortMode()
 	searchAtom := uistate.UseTodoSearch()
 	linkAtom := uistate.UseTodoFilterLink()
+	linkIDAtom := uistate.UseTodoFilterLinkID()
 	pageAtom := uistate.UseTodoPage()
 	pageSizeAtom := uistate.UseTodoPageSize()
 	collapsed := uistate.UseTodoCollapsed()
@@ -360,6 +364,17 @@ func todoListWidget(props todoListProps) ui.Node {
 				match = linked && string(t.RelatedType) == lf
 			}
 			if match {
+				kept = append(kept, t)
+			}
+		}
+		filtered = kept
+	}
+	// Specific-entity narrowing: a deep-link from e.g. a budget card's to-do panel filters
+	// to just that budget's follow-ups (on top of the link-type filter above).
+	if id := linkIDAtom.Get(); id != "" {
+		kept := filtered[:0:0]
+		for _, t := range filtered {
+			if t.RelatedID == id {
 				kept = append(kept, t)
 			}
 		}

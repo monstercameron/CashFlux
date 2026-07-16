@@ -131,6 +131,31 @@ func SetTodoFilterLink(v string) {
 	}
 }
 
+// capturedTodoFilterLinkID narrows the link filter to a SPECIFIC linked entity (e.g. one
+// budget's follow-ups), on top of the link-type filter. "" = no id narrowing. Deep-linked
+// from a budget card's to-do panel; cleared when the user changes the link-type dropdown.
+var (
+	capturedTodoFilterLinkID state.Atom[string]
+	todoFilterLinkIDCaptured bool
+)
+
+// UseTodoFilterLinkID is the shared "linked to this specific entity id" narrowing for the
+// to-do surface (applied together with the link-type filter). Read by the list tile.
+func UseTodoFilterLinkID() state.Atom[string] {
+	a := state.UseAtom("todo:filterLinkID", "")
+	capturedTodoFilterLinkID = a
+	todoFilterLinkIDCaptured = true
+	return a
+}
+
+// SetTodoFilterLinkID sets (or clears with "") the specific-entity narrowing from another
+// page. No-op until the atom has been captured.
+func SetTodoFilterLinkID(id string) {
+	if todoFilterLinkIDCaptured {
+		capturedTodoFilterLinkID.Set(id)
+	}
+}
+
 // UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
 // top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.
 func UseTodoPage() state.Atom[int] {

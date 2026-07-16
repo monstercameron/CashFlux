@@ -156,6 +156,22 @@ func registerTxcFieldsSurface() {
 		prop("text-overflow", "ellipsis"),
 		whiteSpace("nowrap"),
 	)
+	// When the title is a button (it deep-links to the filtered to-do list), strip the
+	// button chrome so it still reads as text; underline on hover to signal it's clickable.
+	rule("button.txnfu-item-open",
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		color("inherit"),
+		textAlign("left"),
+		cursor("pointer"),
+	)
+	rule("button.txnfu-item-open:hover, button.txnfu-item-open:focus-visible",
+		prop("text-decoration", "underline"),
+		prop("text-underline-offset", "2px"),
+	)
 	rule(".txnfu-item-due",
 		flex("none"),
 		fontSize("0.72rem"),

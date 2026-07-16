@@ -27,6 +27,7 @@ func AddHost() uic.Node {
 	taskSeed := uistate.UseTaskAddSeed()     // hook — the cross-surface pre-fill (e.g. txn → follow-up task)
 	budgetSeed := uistate.UseBudgetAddSeed() // hook — pre-fill for "Budget this" / copy-an-existing-budget
 	uistate.UseTodoFilterLink()              // hook — capture the to-do link filter so SetTodoFilterLink works app-wide (txn "N follow-ups" chip → filtered /todo)
+	uistate.UseTodoFilterLinkID()            // hook — capture the specific-entity narrowing so a budget card's to-do panel can deep-link to just that budget's follow-ups
 
 	if target.Get() == "" {
 		return Fragment()
