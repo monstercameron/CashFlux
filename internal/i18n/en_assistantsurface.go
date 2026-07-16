@@ -86,10 +86,13 @@ var assistantSurfaceKeys = Catalog{
 	// three verbs the intro just taught.
 	"insights.askPlaceholder":        "Ask, tell me what to do, or have me estimate something…",
 	"assistant.statusLive":           "Live — full agent",
-	"assistant.statusLocal":          "On-device answers — add a key for the full agent",
+	// The "add a key" call-to-action lives ONCE in the footer notice (insights.keyHint);
+	// the subtitle and the composer placeholder no longer repeat it (they said the same
+	// thing a third and second time on the same screen).
+	"assistant.statusLocal":          "On-device answers",
 	"assistant.composerHint":         "Enter to send · ↑ cycles your past questions",
 	"assistant.speaker":              "✦ Agent",
-	"insights.askPlaceholderKeyless": "Ask about your money — add a key in Settings to unlock the full agent…",
+	"insights.askPlaceholderKeyless": "Ask about your money…",
 	"insights.advancedTitle":         "Model backend and the agent's editable system prompt",
 }
 
