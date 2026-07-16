@@ -20,6 +20,30 @@ in a subtle way": rptaSrcLink — a faint "Page →" that hovers to accent — p
 lands on /transactions, axes render in both themes, 0 console errors; smoke/light/a11y green.
 v1.0.59, SW v334.
 
+## 2026-07-16 — UX punch-list from the 9-page review: the rest of the nine fixes
+
+Worked the full 19-item punch list (tracked in the task tracker) down to done. After the notification
+grouping, shipped eight more focused commits: header clarity (Smart-insights badge + a 9+ cap; the
+"Viewing as" scope select vs a demoted device-profile icon); the dashboard first-paint skeleton;
+the accounts row declutter (Edit → kebab, stale-days on the badge, name-first add modal); the big
+transactions pass (⋯ More overflow, Review-inbox vs Flagged naming, collapsible filter groups,
+most-used default account, templates demoted); the to-do search-to-add affordance; the assistant
+"add a key" de-dup; the budgets over-income chip; and the reports dominant-"(no value)" fix.
+
+Two of these were real bugs, not cosmetics. The **payday-waterfall** proposed "Income of \$385,373 just
+landed" because on a fresh install / the sample there's no handled-stamp, so incomeSinceStamp summed
+every income transaction in the 5-year ledger — clamped the detection floor to the last 35 days so it
+proposes from the most recent paycheck (\$7,053). The **reports custom-field breakdown** rendered a
+misleading giant "(no value) \$44,738" bar; now when unvalued spend ≥70% it drops that row and states
+the unclassified share, so the valued rows scale to each other.
+
+Concurrency was the running constraint — another agent was live in the reports/goals/budgets files the
+whole time. Kept to path-scoped staging (never `git add -A`), checked each file's diff was mine-only
+before committing, left entangled files (their in-flight CHANGELOG/en.go/reports_annual.go) alone, and
+timed builds for when their WIP compiled. Deferred the few sub-items that were either genuinely
+functional (the reports month-selector anchors the 12-month window) or already present (the section-nav
+chips are already sticky) or high-collision moderate features (budgets page-length collapse).
+
 ## 2026-07-16 — UX punch-list from the 9-page review: notifications de-noised first
 
 Ran an aggressive UX review of the first 9 pages (drove the seeded build, dark+light, modals/filters)
