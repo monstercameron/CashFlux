@@ -176,4 +176,75 @@ func registerR4Surface() {
 	rule(".budgettag-add:hover, .budgettag-add:focus-visible",
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 	)
+	// Composite budget cards get a right-side spend-composition donut: the card becomes a
+	// flex row (main content + pie); a single-dimension budget renders no pie and stays a
+	// plain block.
+	rule(".budget.budget-has-pie",
+		display("flex"),
+		flexDirection("row"), // override the bento card's column direction
+		alignItems("flex-start"),
+		gap("1.5rem"),
+	)
+	rule(".budget.budget-has-pie .budget-main",
+		flex("1 1 auto"),
+		minWidth("0"),
+	)
+	rule(".budget-pie",
+		flex("0 0 auto"),
+		display("flex"),
+		alignItems("center"),
+		gap("0.85rem"),
+		paddingTop("0.35rem"),
+	)
+	rule(".budget-pie-donut",
+		position("relative"),
+		width("96px"),
+		height("96px"),
+		borderRadius("50%"),
+		flexShrink("0"),
+	)
+	rule(".budget-pie-hole",
+		position("absolute"),
+		top("27%"),
+		left("27%"),
+		right("27%"),
+		bottom("27%"),
+		borderRadius("50%"),
+		background("var(--bg-card)"),
+	)
+	rule(".budget-pie-legend",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.28rem"),
+		minWidth("0"),
+	)
+	rule(".budget-pie-legrow",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		fontSize("0.75rem"),
+	)
+	rule(".budget-pie-dot",
+		width("9px"),
+		height("9px"),
+		borderRadius("2px"),
+		flexShrink("0"),
+	)
+	rule(".budget-pie-leglabel",
+		color("var(--text-dim)"),
+		maxWidth("10rem"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-pie-legval",
+		marginLeft("auto"),
+		paddingLeft("0.6rem"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	// On a narrow content column, drop the pie below the card content instead of squeezing.
+	ruleMedia("(max-width: 720px)", ".budget.budget-has-pie",
+		flexDirection("column"),
+	)
 }

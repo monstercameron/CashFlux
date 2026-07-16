@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -424,7 +426,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		)
 	}
 
-	return Div(css.Class("budget "+budgetRowStateClass(s, props.PaceOver)),
+	// A composite budget (multi-category, cats+tags, or multi-tag) gets a right-side
+	// spend-composition donut; a single-dimension budget shows none (the bar suffices).
+	pieNode, hasPie := budgetPie(s.Budget)
+	cardCls := "budget " + budgetRowStateClass(s, props.PaceOver)
+	if hasPie {
+		cardCls += " budget-has-pie"
+	}
+	return Div(css.Class(cardCls),
+		Div(css.Class("budget-main"),
 		Div(css.Class("budget-head"),
 			// The title gets the whole header line now (the spent/limit amount and the
 			// percent moved INTO the bar below), so a long budget name has room to breathe.
@@ -521,6 +531,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		todosLine,
 		notesNode,
 		actionsRow,
+		),
+		pieNode,
 	)
 }
 
@@ -603,4 +615,154 @@ func budgetTagLine(budgetID string, tags []string) ui.Node {
 		kids = append(kids, Span(css.Class("budget-tag-chip"), "#"+tg))
 	}
 	return Span(kids...)
+}
+
+// budgetSlice is one wedge of a composite budget's spend-composition pie.
+type budgetSlice struct {
+	Label  string
+	Amount int64 // minor units, base currency
+	ValStr string
+}
+
+// budgetOwnsScope mirrors the budgeting engine's scope rule for the pie: a shared budget
+// counts everyone; an individual budget counts only its owner's spend.
+func budgetOwnsScope(b domain.Budget, member string) bool {
+	if b.Scope != domain.ScopeIndividual {
+		return true
+	}
+	return member == b.OwnerID
+}
+
+// budgetCompositionSlices breaks a budget's CURRENT-period spend into wedges by tracked
+// dimension — one per tracked category and one per tracked tag. The cats+tags dedupe is the
+// careful bit: a charge that matches a tracked tag is attributed WHOLE to that tag (the
+// first of the budget's tags it carries, in the budget's tag order) and never also to a
+// category — exactly mirroring the engine's tag-priority spend, so the wedges sum to the
+// budget's Spent with no double-counting. Wedges are sorted largest-first; zero wedges drop.
+func budgetCompositionSlices(b domain.Budget) []budgetSlice {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	start, end := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+	catName := map[string]string{}
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
+	}
+	catSet := map[string]bool{}
+	for _, id := range b.TrackedCategoryIDs() {
+		catSet[id] = true
+	}
+	tagSet := b.TrackedTagSet()
+
+	amt := map[string]int64{}
+	label := map[string]string{}
+	var order []string
+	add := func(key, lbl string, m money.Money) {
+		conv, err := rates.Convert(m.Abs(), base)
+		if err != nil {
+			return
+		}
+		if _, ok := amt[key]; !ok {
+			order = append(order, key)
+			label[key] = lbl
+		}
+		amt[key] += conv.Amount
+	}
+	for _, t := range app.Transactions() {
+		if !t.CountsInReports() || t.IsTransfer() || !t.Amount.IsNegative() {
+			continue
+		}
+		if t.Date.Before(start) || !t.Date.Before(end) {
+			continue
+		}
+		if !budgetOwnsScope(b, t.MemberID) {
+			continue
+		}
+		// Tag priority (dedupe): the first tracked tag this charge carries wins the whole
+		// charge; it's never also counted under a category.
+		matched := ""
+		for _, tg := range b.TrackedTags {
+			k := strings.ToLower(strings.TrimSpace(tg))
+			if k == "" || !tagSet[k] {
+				continue
+			}
+			has := false
+			for _, tt := range t.Tags {
+				if strings.ToLower(strings.TrimSpace(tt)) == k {
+					has = true
+					break
+				}
+			}
+			if has {
+				matched = k
+				break
+			}
+		}
+		if matched != "" {
+			add("tag:"+matched, "#"+matched, t.Amount)
+			continue
+		}
+		if t.HasSplits() {
+			for _, s := range t.Splits {
+				if catSet[s.CategoryID] {
+					add("cat:"+s.CategoryID, catName[s.CategoryID], s.Amount)
+				}
+			}
+		} else if catSet[t.CategoryID] {
+			add("cat:"+t.CategoryID, catName[t.CategoryID], t.Amount)
+		}
+	}
+	var slices []budgetSlice
+	for _, k := range order {
+		if amt[k] > 0 {
+			slices = append(slices, budgetSlice{Label: label[k], Amount: amt[k], ValStr: fmtMoney(money.New(amt[k], base))})
+		}
+	}
+	sort.SliceStable(slices, func(i, j int) bool { return slices[i].Amount > slices[j].Amount })
+	return slices
+}
+
+// budgetPiePalette colours the composition wedges (theme-agnostic, distinct hues).
+var budgetPiePalette = []string{"#4f9d69", "#e0a458", "#5b8def", "#c05e5e", "#8b6fb0", "#3fa7a0", "#b0894f", "#7f8c99"}
+
+// budgetPie renders the right-side spend-composition donut for a COMPOSITE budget (2+
+// tracked dimensions — multi-category, cats+tags, or multi-tag). Returns (node, shown):
+// shown is false for a single-dimension budget or when there's no spend yet, so the caller
+// omits the pie column entirely.
+func budgetPie(b domain.Budget) (ui.Node, bool) {
+	if len(b.TrackedCategoryIDs())+len(b.TrackedTags) < 2 {
+		return Fragment(), false // not composite — the bar already tells the whole story
+	}
+	slices := budgetCompositionSlices(b)
+	var total int64
+	for _, s := range slices {
+		total += s.Amount
+	}
+	if total <= 0 || len(slices) == 0 {
+		return Fragment(), false // nothing spent yet — an empty pie helps no one
+	}
+	var stops []string
+	legend := []any{css.Class("budget-pie-legend")}
+	var acc float64
+	for i, s := range slices {
+		color := budgetPiePalette[i%len(budgetPiePalette)]
+		pct := float64(s.Amount) / float64(total) * 100
+		stops = append(stops, fmt.Sprintf("%s %.3f%% %.3f%%", color, acc, acc+pct))
+		acc += pct
+		legend = append(legend, Div(css.Class("budget-pie-legrow"),
+			Span(css.Class("budget-pie-dot"), Attr("style", "background:"+color)),
+			Span(css.Class("budget-pie-leglabel"), s.Label),
+			Span(css.Class("budget-pie-legval"), s.ValStr)))
+	}
+	donut := Div(css.Class("budget-pie-donut"), Attr("aria-hidden", "true"),
+		Attr("style", "background:conic-gradient("+strings.Join(stops, ", ")+")"),
+		Div(css.Class("budget-pie-hole")))
+	return Div(css.Class("budget-pie"), Attr("data-testid", "budget-pie-"+b.ID),
+		donut, Div(legend...)), true
 }
