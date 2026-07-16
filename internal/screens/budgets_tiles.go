@@ -305,7 +305,12 @@ func budgetAssignBanner(v budgetView) ui.Node {
 		case unbudgeted == 0:
 			diff = Span(uistate.T("budgets.simpleFullyAllocated"))
 		default:
-			diff = Span(css.Class(tw.TextDown), uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-unbudgeted, v.Base))))
+			// Over income is the one state worth flagging — you've budgeted more than you
+			// earn. Promote it from a dim-red inline phrase to a warning chip (icon + tinted
+			// pill) so it reads as an alert, not just another figure in the line.
+			diff = Span(css.Class("budget-overincome-chip"), Attr("data-testid", "budget-over-income"),
+				uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-unbudgeted, v.Base)))))
 		}
 		return P(css.Class("budget-sub", tw.FontDisplay),
 			uistate.T("budgets.simpleIncome", fmtMoney(money.New(v.BannerIncome, v.Base))), " · ",
