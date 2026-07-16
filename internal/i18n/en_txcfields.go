@@ -30,6 +30,10 @@ var txcFieldKeys = Catalog{
 	"duplicates.carryPayee":    "a payee",
 	"duplicates.carryLink":     "a linked bill/subscription",
 
+	// Transaction → follow-up task (kebab): create a to-do linked to this charge.
+	"transactions.followUpTask":      "Add follow-up task…",
+	"transactions.followUpTaskTitle": "Follow up: %s",
+
 	// TXC-3 quick-filter presets.
 	"transactions.presetsLabel":        "Quick filters",
 	"transactions.presetUncategorized": "Uncategorized",

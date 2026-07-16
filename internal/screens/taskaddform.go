@@ -106,6 +106,12 @@ type TaskAddFormProps struct {
 	// PresetDue, when set (ISO yyyy-mm-dd), seeds the Due date field — used by the
 	// To-do calendar view so clicking a day starts a task already scheduled for it.
 	PresetDue string
+	// PresetTitle / PresetLinkType / PresetLinkID pre-fill the form when it's opened
+	// from another surface — e.g. a transaction's "Add follow-up task…" seeds a title
+	// and a pre-selected transaction link. Empty values leave the field at its default.
+	PresetTitle    string
+	PresetLinkType string
+	PresetLinkID   string
 }
 
 // TaskAddForm is the standalone add-a-task form. It owns all its state and
@@ -131,13 +137,17 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	txns := app.Transactions()
 
 	pr := uistate.UsePrefs().Get()
-	title := ui.UseState("")
+	title := ui.UseState(props.PresetTitle)
 	priority := ui.UseState(string(domain.PriorityMedium))
 	dueStr := ui.UseState(props.PresetDue)
 	notes := ui.UseState("")
 	errMsg := ui.UseState("")
-	addLinkType := ui.UseState(string(domain.RelatedNone))
-	addLinkID := ui.UseState("")
+	presetLinkType := props.PresetLinkType
+	if presetLinkType == "" {
+		presetLinkType = string(domain.RelatedNone)
+	}
+	addLinkType := ui.UseState(presetLinkType)
+	addLinkID := ui.UseState(props.PresetLinkID)
 	addRecur := ui.UseState("")
 	addRemind := ui.UseState("0") // ReminderLeadDays as a string; only meaningful when recurring
 

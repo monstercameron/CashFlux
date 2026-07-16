@@ -981,6 +981,28 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			OnSelect: func() { props.OnToggleExclude(props.ID) },
 		})
 	}
+	// Add a follow-up task linked to THIS charge (return it, get reimbursed, dispute it,
+	// cancel the subscription…). Seeds the add-task modal with a suggested title + the
+	// transaction link pre-selected, then opens it (a due date is optional there).
+	{
+		merchant := props.TrendMerchant
+		if merchant == "" {
+			merchant = props.Desc
+		}
+		txnID := props.ID
+		items = append(items, uiw.OverflowMenuItem{
+			Label:  uistate.T("transactions.followUpTask"),
+			TestID: "txn-followup-task",
+			OnSelect: func() {
+				uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+					Title:    uistate.T("transactions.followUpTaskTitle", merchant),
+					LinkType: string(domain.RelatedTransaction),
+					LinkID:   txnID,
+				})
+				uistate.SetAddTarget("task")
+			},
+		})
+	}
 	// XC11: propose a split from a receipt image (BYO-key AI). Same transfer-leg
 	// gating as the manual split — a transfer leg has no category to split.
 	if props.OnReceiptSplit != nil && !props.IsTransfer {

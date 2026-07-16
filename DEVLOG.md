@@ -1,3 +1,17 @@
+## 2026-07-16 — Transaction → follow-up task (v1.0.48)
+
+Cam asked whether it makes sense to link todos to transactions. Turned out the task side already
+supported it (`domain.RelatedTransaction` + a "Transaction" option in the task link picker) — but the
+direction was backwards for usability (pick one charge out of thousands from the task form). Built the
+useful half per my rec: a **transaction → follow-up task** affordance. New `uistate.TaskAddSeed`
+(captured-atom pre-fill, same seam as the sub-task parent / calendar due presets), read by `AddHost`
+and passed to `TaskAddForm` via new `PresetTitle`/`PresetLinkType`/`PresetLinkID` props (which seed the
+title/link `UseState`s). The txn-row ⋯ kebab gets "Add follow-up task…" → seeds title "Follow up:
+<merchant>" + a `RelatedTransaction` link to that row + opens the add modal (due date optional there).
+e2e-verified: kebab → pre-filled modal (Transaction link pre-selected to the charge) → add → task
+lands on /todo with a "Car payment (Marcus)" link chip that drills back. Normal add-task/other-entity
+flows unchanged (empty seed = zero value). 0 console errors across all 8 pages.
+
 ## 2026-07-16 — Goal trajectory redesign + budgets full-width (Cam-directed)
 
 Cam: "the savings trajectory looks ugly, why is it so large and linear? give me a better design."

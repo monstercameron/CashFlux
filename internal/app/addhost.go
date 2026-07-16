@@ -24,14 +24,20 @@ func AddHost() uic.Node {
 	target := uistate.UseAddTarget()
 	taskParent := uistate.UseTaskAddParent() // hook — must run every render, before the early return
 	taskDue := uistate.UseTaskAddDue()       // hook — likewise (calendar day-click preset)
+	taskSeed := uistate.UseTaskAddSeed()     // hook — the cross-surface pre-fill (e.g. txn → follow-up task)
 
 	if target.Get() == "" {
 		return Fragment()
 	}
 
-	// Closing the add modal also clears any pending sub-task parent and calendar due
-	// preset so the next plain "Add task" starts at the top level with an empty date.
-	close := func() { uistate.SetAddTarget(""); uistate.SetTaskAddParent(""); uistate.SetTaskAddDue("") }
+	// Closing the add modal also clears any pending sub-task parent, calendar due preset,
+	// and cross-surface seed so the next plain "Add task" starts clean.
+	close := func() {
+		uistate.SetAddTarget("")
+		uistate.SetTaskAddParent("")
+		uistate.SetTaskAddDue("")
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{})
+	}
 
 	switch target.Get() {
 	case "goal":
@@ -82,7 +88,10 @@ func AddHost() uic.Node {
 			Height:   uiw.FlipMediumH,
 			NoFooter: true,
 			OnClose:  close,
-			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close, ParentID: taskParent.Get(), PresetDue: taskDue.Get()}),
+			Back: uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{
+				OnDone: close, ParentID: taskParent.Get(), PresetDue: taskDue.Get(),
+				PresetTitle: taskSeed.Get().Title, PresetLinkType: taskSeed.Get().LinkType, PresetLinkID: taskSeed.Get().LinkID,
+			}),
 		})
 	case "category":
 		return uiw.FlipPanel(uiw.FlipPanelProps{
