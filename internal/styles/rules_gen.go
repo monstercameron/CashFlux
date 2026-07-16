@@ -8270,6 +8270,23 @@ func registerGenerated() {
 		borderRadius("9px"),
 		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 	)
+	// An amount over the account's free balance: warn tint on the row + input (the
+	// save button errors on it — never a silent clamp).
+	rule(".goal-alloc-row.is-over",
+		borderColor("color-mix(in srgb, var(--warn, #d8a24a) 55%, var(--border))"),
+		background("color-mix(in srgb, var(--warn, #d8a24a) 7%, transparent)"),
+	)
+	rule(".goal-alloc-row.is-over .goal-alloc-input",
+		borderColor("var(--warn, #d8a24a)"),
+	)
+	rule(".goal-alloc-over",
+		fontSize("0.72rem"),
+	)
+	// The uncheck-all affordance sits quietly under the list.
+	rule(".goal-alloc-clear",
+		alignSelf("flex-start"),
+		marginTop("0.35rem"),
+	)
 	rule(".goal-alloc-row-main",
 		display("flex"),
 		flexDirection("column"),

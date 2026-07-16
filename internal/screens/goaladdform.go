@@ -78,9 +78,40 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	// change event internally so these handlers are no longer wired to DOM.
 	ui.UseEvent(func(e ui.Event) { owner.Set(e.GetValue()) })
 	ui.UseEvent(func(e ui.Event) { linkAcct.Set(e.GetValue()) })
-	// onToggleAdv kept for stable hook ordering (C176: toggle removed, fields
-	// are always visible); the state var advOpen remains registered too.
-	ui.UseEvent(func() { advOpen.Set(!advOpen.Get()) })
+	// Essentials-first: everything beyond Name / Type / Target / Date lives behind this
+	// disclosure so the common case reads as a three-field form.
+	toggleAdv := ui.UseEvent(Prevent(func() { advOpen.Set(!advOpen.Get()) }))
+	// Quick-start templates: one click seeds the name (and the sinking-fund flag where
+	// that's the right shape) so a blank form never stares back. Plain closure — the
+	// chips are a fixed set rendered by hook-owning child components.
+	applyTemplate := func(tName string, sinking bool) {
+		name.Set(tName)
+		isSinkingFund.Set(sinking)
+		kindS.Set(string(domain.GoalKindFinancial))
+		if sinking {
+			advOpen.Set(true) // the seeded flag lives in More options — show it
+		}
+	}
+	// Copy an existing goal: prefills the form from it (name gets a "copy" suffix) and
+	// opens More options so every carried-over value is visible, not silently applied.
+	copyFrom := func(gid string) {
+		for _, gg := range app.Goals() {
+			if gg.ID != gid {
+				continue
+			}
+			name.Set(uistate.T("budgets.copySuffix", gg.Name))
+			kindS.Set(string(gg.EffectiveKind()))
+			if gg.TargetAmount.Amount > 0 {
+				target.Set(money.FormatMinor(gg.TargetAmount.Amount, currency.Decimals(gg.TargetAmount.Currency)))
+			}
+			owner.Set(gg.OwnerID)
+			linkAcct.Set(gg.AccountID)
+			isSinkingFund.Set(gg.IsSinkingFund)
+			categoryID.Set(gg.CategoryID)
+			advOpen.Set(true)
+			return
+		}
+	}
 	// onSinkingFund / onCategoryID hooks kept for stable hook ordering; the
 	// checkbox uses OnChange(onSinkingFund) and SelectInput owns onCategoryID.
 	onSinkingFund := ui.UseEvent(func(e ui.Event) { isSinkingFund.Set(e.IsChecked()) })
@@ -139,6 +170,12 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			}
 			g.TargetAmount = money.New(tgt, base)
 			g.CurrentAmount = money.New(cur, base)
+			// C9 (one provenance regime): seed money entered at creation is RECORDED as
+			// the goal's first contribution, so it's itemised and undoable exactly like
+			// money added later — never an unexplained starting number.
+			if cur > 0 {
+				g = g.RecordContribution(domain.GoalContribution{Amount: money.New(cur, base), At: time.Now()})
+			}
 			g.AccountID = linkAcct.Get()
 			g.IsSinkingFund = isSinkingFund.Get()
 			g.CategoryID = categoryID.Get()
@@ -210,15 +247,39 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	kind := domain.GoalKind(kindS.Get())
 	financial := kind.IsFinancial()
 
+	advLabel := uistate.T("budgets.advancedShow")
+	if advOpen.Get() {
+		advLabel = uistate.T("budgets.advancedHide")
+	}
+	// Quick-start templates + copy-an-existing-goal shortcuts (a blank form never
+	// stares back). Copy options lead with a placeholder so the select reads as an action.
+	copyOptions := []uiw.SelectOption{{Value: "", Label: uistate.T("goals.copyExisting")}}
+	for _, gg := range app.Goals() {
+		if !gg.Archived {
+			copyOptions = append(copyOptions, uiw.SelectOption{Value: gg.ID, Label: gg.Name})
+		}
+	}
+
 	return Form(css.Class("acct-edit-form", "goal-add"), Attr("data-testid", "goal-add-form"), OnSubmit(add),
 		Div(css.Class("modal-scroll"),
+			// Start-from shortcuts: template chips + copy an existing goal.
+			Div(css.Class("goal-add-start"), Attr("data-testid", "goal-add-start"),
+				Div(css.Class("goal-add-start-chips"),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplEmergency"), Sinking: false, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplVacation"), Sinking: false, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplCar"), Sinking: false, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplRepairs"), Sinking: true, OnPick: applyTemplate}),
+				),
+				If(len(copyOptions) > 1, uiw.SelectInput(uiw.SelectInputProps{
+					Options: copyOptions, Selected: "", TestID: "goal-copy-existing",
+					OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("goals.copyExisting"),
+				})),
+			),
 			Div(css.Class("form-grid"),
-				// Name + goal-type both span the full width — they lead the form and their
-				// hint would otherwise ragged-align the paired fields beside them.
+				// The essentials: Name, Type, then the kind's defining figures + deadline.
 				Div(css.Class("fg-span"),
 					labeledField(uistate.T("common.name"),
 						Input(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...))),
-				// Goal type picker (savings / checklist / milestone / habit) with a one-line hint.
 				Div(css.Class("fg-span"),
 					labeledField(uistate.T("goals.kindLabel"),
 						Div(
@@ -228,13 +289,10 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 							}),
 							Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-kind-hint"), goalKindHint(kind)),
 						))),
-				// --- Financial-only: target / saved / linked account / sinking fund / category. ---
 				If(financial, wishAssist),
 				If(financial, labeledField(uistate.T("goals.targetLabel"),
 					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Value(target.Get()), Step("0.01"), OnInput(onTarget)))),
-				If(financial, labeledField(uistate.T("goals.savedSoFar"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
-				// --- Habit-only: check-in rhythm + how many check-ins finish it. ---
+				// Habit essentials: check-in rhythm + how many check-ins finish it.
 				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-add-cadence",
@@ -242,41 +300,52 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 					}))),
 				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitTargetLabel"),
 					Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-add-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Value(habitTargetS.Get()), Step("1"), OnInput(onHabitTarget)))),
-				// --- Common: an optional target date / deadline, and owner. ---
 				labeledField(uistate.T("goals.dateLabel"),
 					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), Value(dateStr.Get()), OnInput(onDate))),
-				labeledField(uistate.T("goals.owner"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   ownerOptions,
-						Selected:  owner.Get(),
-						OnChange:  func(v string) { owner.Set(v) },
-						AriaLabel: uistate.T("goals.owner"),
-					})),
-				If(financial, labeledField(uistate.T("goals.linkedOptional"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   linkOptions,
-						Selected:  linkAcct.Get(),
-						OnChange:  func(v string) { linkAcct.Set(v) },
-						AriaLabel: uistate.T("goals.linkedOptional"),
-					}))),
-				// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
-				If(financial, Div(css.Class("fg-span"),
-					labeledField(uistate.T("goals.sinkingFund"),
-						Label(css.Class("goal-check-row"),
-							Input(Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund), Checked(isSinkingFund.Get())),
-							Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
-						)))),
-				// C192: optional linked spending category for the fund (meaningful mainly for sinking funds).
-				If(financial, labeledField(uistate.T("goals.linkedCategory"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   catOptions,
-						Selected:  categoryID.Get(),
-						OnChange:  func(v string) { categoryID.Set(v) },
-						AriaLabel: uistate.T("goals.linkedCategory"),
-					}))),
-				MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-				}),
+				// More options: seed money, ownership, links, fund flags, custom fields.
+				Div(css.Class("fg-span"),
+					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "goal-add-advanced"),
+						Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(toggleAdv), Text(advLabel))),
+				If(advOpen.Get(), Fragment(
+					If(financial, labeledField(uistate.T("goals.savedSoFar"),
+						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Value(current.Get()), Step("0.01"), OnInput(onCurrent)))),
+					labeledField(uistate.T("goals.owner"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options:   ownerOptions,
+							Selected:  owner.Get(),
+							OnChange:  func(v string) { owner.Set(v) },
+							AriaLabel: uistate.T("goals.owner"),
+						})),
+					If(financial, Fragment(
+						labeledField(uistate.T("goals.linkedOptional"),
+							uiw.SelectInput(uiw.SelectInputProps{
+								Options:   linkOptions,
+								Selected:  linkAcct.Get(),
+								OnChange:  func(v string) { linkAcct.Set(v) },
+								AriaLabel: uistate.T("goals.linkedOptional"),
+							})),
+						// C6: what linking DOES (and does not do), said where it's chosen.
+						Div(css.Class("fg-span"),
+							Span(css.Class("budget-sub"), Attr("data-testid", "goal-add-link-hint"), uistate.T("goals.linkExplain"))))),
+					// C189: sinking-fund toggle — marks this goal as a regular-save-for-irregular-expense fund.
+					If(financial, Div(css.Class("fg-span"),
+						labeledField(uistate.T("goals.sinkingFund"),
+							Label(css.Class("goal-check-row"),
+								Input(Type("checkbox"), Attr("id", "goal-add-sinking"), OnChange(onSinkingFund), Checked(isSinkingFund.Get())),
+								Span(css.Class("budget-sub"), uistate.T("goals.sinkingFundHint")),
+							)))),
+					// C192: optional linked spending category for the fund (meaningful mainly for sinking funds).
+					If(financial, labeledField(uistate.T("goals.linkedCategory"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options:   catOptions,
+							Selected:  categoryID.Get(),
+							OnChange:  func(v string) { categoryID.Set(v) },
+							AriaLabel: uistate.T("goals.linkedCategory"),
+						}))),
+					MapKeyed(goalDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
+					}),
+				)),
 				errText("goal-err", errMsg.Get()),
 			),
 		),
@@ -285,4 +354,21 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("goals.add")),
 		),
 	)
+}
+
+// goalTemplateChipProps drives one quick-start template chip in the add-goal form.
+type goalTemplateChipProps struct {
+	Label   string
+	Sinking bool
+	OnPick  func(name string, sinking bool) // plain closure — the chip owns its hook
+}
+
+// goalTemplateChip seeds the add form with a template's name (and sinking-fund shape
+// where that fits). Its own component so the click hook sits at a stable call-site.
+func goalTemplateChip(props goalTemplateChipProps) ui.Node {
+	pick := ui.UseEvent(Prevent(func() { props.OnPick(props.Label, props.Sinking) }))
+	slug := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(props.Label), " ", "-"))
+	return Button(css.Class("goal-tmpl-chip"), Type("button"),
+		Attr("data-testid", "goal-tmpl-"+slug),
+		OnClick(pick), props.Label)
 }

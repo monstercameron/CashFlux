@@ -101,6 +101,9 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	ownerS := ui.UseState(g.OwnerID)
 	contribS := ui.UseState("")
 	postLedgerS := ui.UseState(false)
+	// Which linked account a ledger-posted contribution debits (a goal linked to
+	// several accounts gets a picker; defaults to the primary).
+	ledgerAcctS := ui.UseState(g.AccountID)
 	errS := ui.UseState("")
 	kindS := ui.UseState(kindInit)
 	cadenceS := ui.UseState(cadenceInit)
@@ -224,6 +227,9 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			break
 		}
 		uistate.BumpDataRevision()
+		// Same reversibility as the inline target editor — the full edit changes the
+		// same fields, so both write paths offer one-click Undo.
+		uistate.PostUndoable(uistate.T("goals.editSavedToast", strings.TrimSpace(nameS.Get())))
 		done()
 	}))
 
@@ -245,7 +251,17 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		after := g
 		after.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, c)
 		afterPct := goalsvc.Percent(after)
-		res, cerr := app.ContributeToGoal(g, money.New(amt, c), postLedgerS.Get())
+		// Debit the account the user picked (multi-linked goals choose; defaults to the
+		// first ELIGIBLE link) — without altering the goal's stored link. Resolved through
+		// the same liquid-only filter the picker uses, so an ineligible stored primary
+		// (e.g. a grandfathered 401(k) link) can never become a ledger-debit source.
+		fromAcct := ""
+		for _, a := range goalEligibleDebitAccounts(app.Accounts(), g) {
+			if fromAcct == "" || a.ID == ledgerAcctS.Get() {
+				fromAcct = a.ID
+			}
+		}
+		res, cerr := app.ContributeToGoalFrom(g, money.New(amt, c), postLedgerS.Get(), fromAcct)
 		if cerr != nil {
 			errS.Set(cerr.Error())
 			return
@@ -255,7 +271,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		if postLedgerS.Get() && res.TransactionID != "" {
 			notice += " " + uistate.T("goals.contributedLedger")
 		}
-		uistate.PostNotice(notice, false)
+		uistate.PostUndoable(notice) // money-state change → one-click reversible
 		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
 			uistate.PostNotice(uistate.T(fmt.Sprintf("goals.milestone%d", m)), false)
 		}
@@ -276,12 +292,45 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 
 	// --- Contribute: a single amount toward the goal (optionally posted to the ledger). ---
 	if props.Mode == uistate.GoalEditModeContribute {
-		linkedName := accountName(app.Accounts(), g.AccountID)
+		// Ledger-post source: ONLY liquid, unarchived linked accounts may be debited (C7:
+		// a manual expense against a 401(k)/mortgage is a data-integrity hazard, the same
+		// reasoning as the earmark picker). The effective account is the picker's choice
+		// when it's still eligible, else the first eligible link; none → memo-only (no row).
+		debitable := goalEligibleDebitAccounts(app.Accounts(), g)
+		effLedgerAcct := ""
+		for _, a := range debitable {
+			if a.ID == ledgerAcctS.Get() {
+				effLedgerAcct = a.ID
+				break
+			}
+		}
+		if effLedgerAcct == "" && len(debitable) > 0 {
+			effLedgerAcct = debitable[0].ID
+		}
+		linkedName := accountName(app.Accounts(), effLedgerAcct)
 		var ledgerRow ui.Node = Fragment()
 		if linkedName != "" {
-			ledgerRow = Label(css.Class("goal-check-row"), Attr("data-testid", "goal-contrib-ledger-row"),
-				Input(Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger), Checked(postLedgerS.Get())),
-				Span(uistate.T("goals.contributePostLedger", linkedName)),
+			// G7: a goal linked to several (eligible) accounts picks WHICH one the debit
+			// posts against, instead of being locked to the primary.
+			var acctPicker ui.Node = Fragment()
+			if len(debitable) > 1 {
+				opts := make([]uiw.SelectOption, 0, len(debitable))
+				for _, a := range debitable {
+					opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
+				}
+				acctPicker = Div(css.Class("goal-contrib-acct"),
+					labeledField(uistate.T("goals.contribFromLabel"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options: opts, Selected: effLedgerAcct, TestID: "goal-contrib-acct",
+							OnChange: func(v string) { ledgerAcctS.Set(v) }, AriaLabel: uistate.T("goals.contribFromLabel"),
+						})))
+			}
+			ledgerRow = Fragment(
+				Label(css.Class("goal-check-row"), Attr("data-testid", "goal-contrib-ledger-row"),
+					Input(Type("checkbox"), Attr("id", "goal-contrib-ledger-"+g.ID), OnChange(onPostLedger), Checked(postLedgerS.Get())),
+					Span(uistate.T("goals.contributePostLedger", linkedName)),
+				),
+				If(postLedgerS.Get(), acctPicker),
 			)
 		}
 		// Progress context: a compact bar (saved of target) and the amount left to go.
@@ -405,11 +454,14 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 					}),
 					Span(css.Class("budget-sub"), uistate.T("goals.reviewCadenceHint")),
 				)),
-			// Linked accounts (0..N) — the accounts this financial goal draws on.
+			// Linked accounts (0..N) — the accounts this financial goal draws on. C7: only
+			// LIQUID cash accounts are offered (same eligibility as the earmark picker —
+			// a goal's money doesn't live in a 401(k) or a mortgage). An ineligible account
+			// that's ALREADY linked stays listed so it can be unchecked, never silently lost.
 			If(financial, labeledField(uistate.T("goals.linkedAccounts"),
 				Div(css.Class("goal-link-list"), Attr("data-testid", "goal-link-accts"),
 					If(len(app.Accounts()) == 0, P(css.Class("budget-sub"), uistate.T("goals.noAccountsToLink"))),
-					MapKeyed(app.Accounts(), func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
+					MapKeyed(goalLinkableAccounts(app.Accounts(), acctSetS.Get()), func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
 						return ui.CreateElement(goalLinkRow, goalLinkRowProps{
 							ID: a.ID, Label: a.Name, Selected: acctSetS.Get()[a.ID],
 							TestPrefix: "goal-link-acct", OnToggle: onToggleAcct,
@@ -436,4 +488,32 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
 	)
+}
+
+// goalLinkableAccounts returns the accounts the goal-edit "Linked accounts" checklist
+// offers (C7): liquid, unarchived cash accounts — the same eligibility as the earmark
+// picker — PLUS any account already in the linked set (even if ineligible), so an
+// existing link can be unchecked but a 401(k)/mortgage can never be newly linked.
+func goalLinkableAccounts(accounts []domain.Account, linked map[string]bool) []domain.Account {
+	out := make([]domain.Account, 0, len(accounts))
+	for _, a := range accounts {
+		if linked[a.ID] || (!a.Archived && earmarkEligibleType(a.Type)) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// goalEligibleDebitAccounts returns the goal's linked accounts that may serve as a
+// ledger-debit source for a contribution: liquid, unarchived cash only. A grandfathered
+// ineligible link (e.g. an old 401(k)) is excluded — posting a manual expense against a
+// retirement account is a data-integrity hazard, the same reasoning as earmark eligibility.
+func goalEligibleDebitAccounts(accounts []domain.Account, g domain.Goal) []domain.Account {
+	var out []domain.Account
+	for _, aid := range g.LinkedAccountIDs() {
+		if a, ok := domain.AccountByID(accounts, aid); ok && !a.Archived && earmarkEligibleType(a.Type) {
+			out = append(out, a)
+		}
+	}
+	return out
 }

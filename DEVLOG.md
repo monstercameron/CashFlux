@@ -73,6 +73,43 @@ column alignment is untouched; the flex lives on the inner div. Re-probe: `chipV
 still opens on hover (verified, 0 console errors). Files: `transactions_widget.go`, `.row-desc-*` in
 `rules_txcfields.go`.
 
+## 2026-07-16 — Goals & earmarks UX overhaul: all 18 audit items corrected (v1.0.53)
+
+The goals/earmarks twin of the budgets audit — Cam: same research, fix all 18, adversarial grade must
+hit 9/10, "remember earmarks are a first class concept as we need to tie goals to funds." The audit's
+sharpest finding was self-inflicted from this morning's earmark-first pass: THREE names for one action
+(Set aside / Allocate funds / Earmark), a kebab entry duplicating the card primary, a master toggle
+re-asking intent AFTER the user clicked the intent button, a full-gap split prefill ($68.5k against
+$40.5k of actual cash), and a silent save-time clamp — combined, one tap of "Split evenly → Save"
+would quietly drain every liquid account to its cap and report success.
+
+Fixes of note beyond the checklist: the allocate modal now leads with the honest ceiling ("$40,570.40
+free to set aside across your accounts") and prefills min(gap, free); over-free amounts are an ERROR
+naming the account, never a clamp. `ContributeToGoalFrom` (appstate) lets a multi-linked goal choose
+its debit account without the copy-mutation trap (PutGoal persists the whole struct — overwriting
+AccountID on the copy would have silently re-linked the goal; learned that class of bug from the
+budgets critic's G1 catch and dodged it here). Creation-time "Saved so far" now records as the first
+contribution — one provenance regime, undoable. The Missed section reuses goals.Classify so the page
+and the dashboard widget can never disagree on what "missed" means. Drag-to-fund's job shipped as the
+one-click quick-fund chip — deliberately a click, not a drag (faster on desktop, keyboard/SR-equal;
+the waterfall still covers batch funding).
+
+Live-verified all 18 in one Playwright pass (0 console errors) + goals.spec rewritten to the new
+contracts (13/13 green).
+
+**Adversarial grade: 7/10 → fixes → 9/10 (pass).** The critic's first pass failed C7/G7 on a real
+data-integrity hazard I'd only half-fixed: the ADD form's linked picker was filtered to liquid
+accounts, but the EDIT form's multi-link checklist wasn't — and since edit is the only path to 2+
+links, a user could link a 401(k) and then get it offered as a ledger-DEBIT source in Contribute.
+Fixed in three layers: goalLinkableAccounts (checklist = liquid + grandfathered-for-unchecking),
+goalEligibleDebitAccounts (debit picker/checkbox = liquid links only; none → memo-only), and
+submitContribute resolving fromAcct through the same filter so stale state can't bypass the UI. Also
+fixed the critic's coherence nit (full-edit save now posts the same undoable toast as the inline
+target editor — it round-trip-verified Undo restoring the exact prior target). Residual noted by the
+critic: a pre-existing once-per-boot 404 unrelated to this changeset (separate ticket material).
+Lesson twice-learned this session: any surface with TWO paths to the same state (add vs edit, inline
+vs modal) must apply its invariants on BOTH, or the stricter path is just decoration.
+
 ## 2026-07-16 — Budgets UX overhaul: all 18 audit items corrected (v1.0.52)
 
 Cam ran a click-by-click workflow analysis on budget create/update, had me list the gaps (8) and

@@ -138,6 +138,25 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		),
 	})
 
+	// G3: the manager can START an earmark, not just trim one — a chip per financial,
+	// non-archived goal that has none yet, each opening its Set-aside modal directly.
+	var unearmarked []domain.Goal
+	for _, g := range goalsList {
+		if g.IsFinancial() && !g.Archived && g.AllocatedMinor() == 0 {
+			unearmarked = append(unearmarked, g)
+		}
+	}
+	var startStrip ui.Node = Fragment()
+	if len(unearmarked) > 0 {
+		chips := MapKeyed(unearmarked, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+			return ui.CreateElement(earmarkStartChip, earmarkStartChipProps{GoalID: g.ID, GoalName: g.Name})
+		})
+		startStrip = Div(css.Class("ea-start"), Attr("data-testid", "earmarks-start-strip"),
+			Span(css.Class("budget-sub"), uistate.T("goals.earmarksStartHint")),
+			Div(css.Class("ea-start-chips"), chips),
+		)
+	}
+
 	if len(goalsWithEarmarks) == 0 {
 		return uiw.Card(uiw.CardProps{
 			Attrs: []any{Attr("data-testid", "earmarks-empty")},
@@ -145,6 +164,7 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 				uiw.Icon(icon.Goals, css.Class(tw.W5, tw.H5, tw.TextDim)),
 				P(css.Class("ea-empty-title"), uistate.T("goals.earmarksEmpty")),
 				P(css.Class("budget-sub"), uistate.T("goals.earmarksEmptyHint")),
+				startStrip,
 			),
 		})
 	}
@@ -216,8 +236,28 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		exposureCard,
 		uiw.Card(uiw.CardProps{
 			Header: H2(css.Class("card-title"), uistate.T("goals.earmarksByGoal")),
-			Body:   Div(css.Class("ea-goals"), groups),
+			Body:   Fragment(Div(css.Class("ea-goals"), groups), startStrip),
 		}),
+	)
+}
+
+// earmarkStartChipProps drives one "Set aside for <goal>" starter chip.
+type earmarkStartChipProps struct {
+	GoalID, GoalName string
+}
+
+// earmarkStartChip opens a goal's Set-aside modal straight from the Earmarks tab, so
+// the manager can start a reservation, not only trim existing ones. Its own component
+// so the click hook sits at a stable call-site (no On* in the map loop).
+func earmarkStartChip(props earmarkStartChipProps) ui.Node {
+	open := ui.UseEvent(Prevent(func() {
+		uistate.SetGoalEdit(uistate.GoalEdit{ID: props.GoalID, Mode: uistate.GoalEditModeAllocate})
+	}))
+	return Button(css.Class("ea-start-chip"), Type("button"),
+		Attr("data-testid", "earmark-start-"+props.GoalID),
+		Title(uistate.T("goals.allocateTitle")), OnClick(open),
+		uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+		Span(uistate.T("goals.earmarksStartChip", props.GoalName)),
 	)
 }
 

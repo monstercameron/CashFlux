@@ -31,7 +31,8 @@ type goalView struct {
 	Categories  []domain.Category
 	Tasks       []domain.Task // for checklist-goal progress (linked to-do counts)
 	All         []domain.Goal // owner-visible goals (all sections)
-	Active      []domain.Goal // non-archived, non-fund; sorted most-actionable first
+	Active      []domain.Goal // non-archived, non-fund, not missed; sorted most-actionable first
+	Missed      []domain.Goal // dated goals whose deadline passed unreached (Classify=missed); longest-missed first
 	Fund        []domain.Goal // sinking funds; alphabetical
 	Achieved    []domain.Goal // archived; alphabetical
 	SavedTotal  money.Money   // Σ saved across active goals (base currency)
@@ -64,24 +65,34 @@ func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 			v.All = append(v.All, g)
 		}
 	}
+	now := time.Now()
 	for _, g := range v.All {
 		switch {
 		case g.Archived:
 			v.Achieved = append(v.Achieved, g)
 		case g.IsSinkingFund:
 			v.Fund = append(v.Fund, g)
+		case goalsvc.Classify(g, v.Tasks, now) == goalsvc.StateMissed:
+			// A dated goal whose deadline passed unreached gets its own section — the
+			// dashboard widget counts these, so the page must be able to SHOW them.
+			v.Missed = append(v.Missed, g)
 		default:
 			v.Active = append(v.Active, g)
 		}
 	}
-	// Active: most actionable first (nearest date → highest %); funds/achieved: alpha.
+	// Active: most actionable first (nearest date → highest %); missed: longest-missed
+	// first (the most overdue decision leads); funds/achieved: alpha.
 	sort.SliceStable(v.Active, func(i, j int) bool { return goalsvc.LessForList(v.Active[i], v.Active[j]) })
+	sort.SliceStable(v.Missed, func(i, j int) bool { return v.Missed[i].TargetDate.Before(v.Missed[j].TargetDate) })
 	sort.SliceStable(v.Fund, func(i, j int) bool { return v.Fund[i].Name < v.Fund[j].Name })
 	sort.SliceStable(v.Achieved, func(i, j int) bool { return v.Achieved[i].Name < v.Achieved[j].Name })
 
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	v.SavedTotal, v.TargetTotal = goalsvc.Totals(v.Active, rates, base, false)
-	v.OverallPct, _ = goalsvc.OverallProgress(v.Active, false)
+	// Headline totals span active + missed (a missed goal is still money in flight —
+	// sectioning it must not shrink the summary figures).
+	inFlight := append(append([]domain.Goal(nil), v.Active...), v.Missed...)
+	v.SavedTotal, v.TargetTotal = goalsvc.Totals(inFlight, rates, base, false)
+	v.OverallPct, _ = goalsvc.OverallProgress(inFlight, false)
 	return v
 }
 
@@ -247,10 +258,19 @@ func habitCadenceOptions() []uiw.SelectOption {
 }
 
 // goalAccountOptions builds the linked-account SelectOptions for a goal, with a
-// leading "no link" choice.
+// leading "no link" choice. C7: only LIQUID cash accounts are offered (the same
+// eligibility the earmark picker uses) — a goal's money doesn't live in a mortgage
+// or a 401(k). An already-linked ineligible account is grandfathered so an existing
+// choice never silently vanishes from its own picker.
 func goalAccountOptions(accounts []domain.Account, selected string) []uiw.SelectOption {
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("goals.noLink")}}
 	for _, a := range accounts {
+		if a.Archived && a.ID != selected {
+			continue
+		}
+		if !earmarkEligibleType(a.Type) && a.ID != selected {
+			continue
+		}
 		opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
 	}
 	return opts

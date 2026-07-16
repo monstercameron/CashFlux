@@ -45,18 +45,20 @@ test.describe("goals: decluttered toolbar", () => {
 });
 
 test.describe("goals: card actions moved into the ⋯ menu", () => {
-  test("Edit lives in the kebab (not inline) and a financial goal offers Allocate", async ({ app }) => {
+  test("Edit lives in the kebab; Set aside is the card primary and NOT duplicated in the menu", async ({ app }) => {
     await nav(app, "/goals");
     const gid = await firstGoalId(app);
     // No inline Edit button directly in the card footer.
     await expect(app.locator(`.goal-card-actions > [data-testid="goal-edit-btn-${gid}"]`)).toHaveCount(0);
-    // Open ONE menu (prefer a financial goal so we can check Allocate too) — Edit is a menu item.
     const fid = await firstFinancialGoalId(app);
     const target = fid || gid;
     await app.getByTestId(`goal-menu-btn-${target}`).click();
     await expect(app.locator(`.add-menu [data-testid="goal-edit-btn-${target}"]`)).toBeVisible();
     if (fid) {
-      await expect(app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`)).toBeVisible();
+      // One action, one entry point, one name: the old kebab "Allocate funds"
+      // duplicate is gone — Set aside lives on the card only.
+      await expect(app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`)).toHaveCount(0);
+      await expect(app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"]`)).toBeVisible();
     }
   });
 });
@@ -90,26 +92,21 @@ test.describe("goals: edit form — review cadence + multi-link", () => {
 });
 
 test.describe("goals: virtual allocation", () => {
-  test("a master toggle + selectable accounts earmark balances, showing coverage + a status badge", async ({ app }) => {
+  test("Set aside opens straight to the account list; earmarking shows coverage + a status badge", async ({ app }) => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
 
-    await app.getByTestId(`goal-menu-btn-${fid}`).click();
-    await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+    // The card's primary "Set aside" action IS the entry — no kebab hop, and inside
+    // there is no master toggle re-asking for intent: the picker is simply the modal.
+    await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const dialog = app.locator('[role="dialog"]');
-    // The master toggle controls the account list: off → no rows, on → the picker appears.
-    // (The goal may already have seed earmarks, so normalize to off first.)
-    const toggle = dialog.getByTestId("goal-alloc-toggle");
-    await expect(toggle).toBeVisible();
-    await toggle.uncheck();
-    await app.waitForTimeout(200);
-    await expect(dialog.locator('[data-testid^="goal-alloc-pick-"]')).toHaveCount(0);
-    await toggle.check();
-    await app.waitForTimeout(300);
-    // Now a selectable list of accounts appears; select the first + set an amount.
+    await expect(dialog.getByTestId("goal-alloc-toggle")).toHaveCount(0);
     await expect(dialog.locator('[data-testid^="goal-alloc-pick-"]').first()).toBeVisible();
+    // The free-cash ceiling is stated up front.
+    await expect(dialog.getByTestId("goal-alloc-free-total")).toContainText(/free to set aside/i);
+    // Select the first account + set an amount.
     await dialog.locator('[data-testid^="goal-alloc-pick-"]').first().check();
     await app.waitForTimeout(200);
     await dialog.locator('input[data-testid^="goal-alloc-acct"]').first().fill("500");
@@ -122,17 +119,31 @@ test.describe("goals: virtual allocation", () => {
     await expect(app.locator(`[data-testid="goal-earmark-status-${fid}"]`)).toContainText(/earmarked/i);
   });
 
+  test("an amount over the account's free balance blocks the save with a named error", async ({ app }) => {
+    await nav(app, "/goals");
+    const fid = await firstFinancialGoalId(app);
+    test.skip(!fid, "no financial goal in the seed");
+    await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    await dialog.locator('[data-testid^="goal-alloc-pick-"]').first().check();
+    await app.waitForTimeout(200);
+    // Absurdly over any seed account's free balance → live row warning + save error.
+    await dialog.locator('input[data-testid^="goal-alloc-acct"]').first().fill("99999999");
+    await expect(dialog.locator('[data-testid^="goal-alloc-over-"]').first()).toBeVisible();
+    await dialog.getByTestId("goal-alloc-save").click();
+    // Modal stays open with an error naming the shortfall — never a silent clamp.
+    await expect(dialog.locator(".err")).toContainText(/only has .* free/i);
+  });
+
   test("smart split fills per-account amounts that sum to the entered total", async ({ app }) => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
-    await app.getByTestId(`goal-menu-btn-${fid}`).click();
-    await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+    await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const d = app.locator('[role="dialog"]');
-    await d.getByTestId("goal-alloc-toggle").check();
-    await app.waitForTimeout(200);
-    await d.getByTestId("goal-alloc-total").fill("1000");
+        await d.getByTestId("goal-alloc-total").fill("1000");
     await d.getByTestId("goal-alloc-split-prop").click();
     await app.waitForTimeout(250);
     const vals = await d.locator(".goal-alloc-input").evaluateAll((els) => els.map((e) => parseFloat(e.value) || 0));
@@ -146,13 +157,10 @@ test.describe("goals: virtual allocation", () => {
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
     // Create earmarks: split $500 evenly across the liquid accounts (several rows).
-    await app.getByTestId(`goal-menu-btn-${fid}`).click();
-    await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+    await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const d = app.locator('[role="dialog"]');
-    await d.getByTestId("goal-alloc-toggle").check();
-    await app.waitForTimeout(200);
-    await d.getByTestId("goal-alloc-total").fill("500");
+        await d.getByTestId("goal-alloc-total").fill("500");
     await d.getByTestId("goal-alloc-split-even").click();
     await app.waitForTimeout(200);
     await d.getByTestId("goal-alloc-save").click();
@@ -177,13 +185,10 @@ test.describe("goals: virtual allocation", () => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
-    await app.getByTestId(`goal-menu-btn-${fid}`).click();
-    await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+    await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const dialog = app.locator('[role="dialog"]');
-    await dialog.getByTestId("goal-alloc-toggle").check();
-    await app.waitForTimeout(300);
-    const names = await dialog.locator(".goal-alloc-acct").allInnerTexts();
+        const names = await dialog.locator(".goal-alloc-acct").allInnerTexts();
     expect(names.length).toBeGreaterThan(0);
     // You can only earmark spendable cash — not liabilities, retirement, property, or brokerage.
     for (const n of names) {
@@ -195,13 +200,10 @@ test.describe("goals: virtual allocation", () => {
 // earmarkGoal opens a financial goal's allocate modal, reserves `total` split evenly
 // across the liquid accounts, and saves. Used by the earmark-first UI tests below.
 async function earmarkGoal(app, fid, total) {
-  await app.getByTestId(`goal-menu-btn-${fid}`).click();
-  await app.locator(`.add-menu [data-testid="goal-allocate-btn-${fid}"]`).click();
+  await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
   await app.waitForTimeout(650);
   const d = app.locator('[role="dialog"]');
-  await d.getByTestId("goal-alloc-toggle").check();
-  await app.waitForTimeout(200);
-  await d.getByTestId("goal-alloc-total").fill(String(total));
+    await d.getByTestId("goal-alloc-total").fill(String(total));
   await d.getByTestId("goal-alloc-split-even").click();
   await app.waitForTimeout(200);
   await d.getByTestId("goal-alloc-save").click();

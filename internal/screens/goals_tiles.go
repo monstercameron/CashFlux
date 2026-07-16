@@ -191,6 +191,8 @@ func goalListWidget(props goalListProps) ui.Node {
 				return
 			}
 			uistate.BumpDataRevision()
+			// Reversible in one click even after the confirm (global snapshot undo).
+			uistate.PostUndoable(uistate.T("goals.deletedToast", name))
 			focusRowAfterDelete(".goal-list", "[data-testid^='goal-row-']", focusIdx)
 		})
 	}
@@ -240,7 +242,8 @@ func goalListWidget(props goalListProps) ui.Node {
 					return
 				}
 				uistate.BumpDataRevision()
-				uistate.PostNotice(uistate.T("goals.resetToast", name), false)
+				// Resetting wipes the contribution history — make it one-click reversible.
+				uistate.PostUndoable(uistate.T("goals.resetToast", name))
 				return
 			}
 		})
@@ -278,7 +281,7 @@ func goalListWidget(props goalListProps) ui.Node {
 
 	// Active goals list, or the first-run empty state.
 	var listBody ui.Node
-	if len(v.Active) == 0 && len(v.Fund) == 0 {
+	if len(v.Active) == 0 && len(v.Fund) == 0 && len(v.Missed) == 0 {
 		pr := uistate.UsePrefs().Get()
 		in := buildSmartInput(app, pr.WeekStartWeekday())
 		listBody = Fragment(
@@ -292,6 +295,27 @@ func goalListWidget(props goalListProps) ui.Node {
 			return rowFor(g, 0, "")
 		})
 		listBody = Div(css.Class("goal-list"), rows)
+	}
+
+	// Missed-deadline card (G4): the goals the dashboard widget counts as "Missed" get
+	// their own named section here — longest-missed first, warn-tinted header — so the
+	// widget's count always has a place the page can show.
+	var missedSection ui.Node = Fragment()
+	if len(v.Missed) > 0 {
+		missedRows := MapKeyed(v.Missed, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+			return rowFor(g, 0, "")
+		})
+		missedSection = uiw.Card(uiw.CardProps{
+			Attrs: []any{Attr("aria-label", uistate.T("goals.missedSection")), Attr("data-testid", "goals-missed-section")},
+			Header: H2(css.Class("card-title", "goals-missed-title"),
+				uistate.T("goals.missedSection"),
+				Span(css.Class("budget-sub"), fmt.Sprintf(" · %d", len(v.Missed))),
+			),
+			Body: Fragment(
+				P(css.Class("budget-sub"), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("goals.missedHint")),
+				Div(css.Class("goal-list"), missedRows),
+			),
+		})
 	}
 
 	// Collapsible achieved card.
@@ -316,6 +340,9 @@ func goalListWidget(props goalListProps) ui.Node {
 
 	var body ui.Node = Div(
 		goalsWaterfallCard(),
+		// Missed deadlines lead — they're the section that needs a decision (re-date,
+		// re-fund, or archive), so they never hide below the healthy list.
+		missedSection,
 		fundsSection,
 		uiw.EntityListSection(uiw.EntityListSectionProps{
 			Title: uistate.T("nav.goals"),

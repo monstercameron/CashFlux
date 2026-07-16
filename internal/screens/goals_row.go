@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -97,6 +99,90 @@ func GoalRow(props goalRowProps) ui.Node {
 	planOpen := ui.UseState(false)
 	togglePlan := ui.UseEvent(Prevent(func() { planOpen.Set(!planOpen.Get()) }))
 
+	// Inline target editing (parity with the budgets limit): click the target figure in
+	// the bar → a compact number input (Enter/✓ saves, ✕ cancels), undoable. props.Goal
+	// is the STORED goal (no evaluation-copy trap here), but the save still resolves the
+	// budget from the store so seed and write share one source of truth.
+	targetEditing := ui.UseState(false)
+	targetDraft := ui.UseState("")
+	targetDec := currency.Decimals(g.TargetAmount.Currency)
+	startTargetEdit := ui.UseEvent(Prevent(func() {
+		seed := g.TargetAmount
+		if app := appstate.Default; app != nil {
+			for _, gg := range app.Goals() {
+				if gg.ID == g.ID {
+					seed = gg.TargetAmount
+					break
+				}
+			}
+		}
+		targetDraft.Set(money.FormatMinor(seed.Amount, targetDec))
+		targetEditing.Set(true)
+	}))
+	cancelTargetEdit := ui.UseEvent(Prevent(func() { targetEditing.Set(false) }))
+	// G8: the fast funding gesture — one click earmarks the whole remaining gap (or as
+	// much as the best account's free cash allows) without opening the modal. The
+	// deliberate desktop answer to "drag money onto the goal": a click is faster, and
+	// keyboard/screen-reader users get the same gesture. Recomputed inside the handler
+	// so a stale render can't over-reserve; undoable like every money-state change.
+	quickFund := ui.UseEvent(Prevent(func() {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		acctID, acctName, amt := bestQuickEarmark(app, g.ID)
+		if acctID == "" || amt <= 0 {
+			return
+		}
+		for _, gg := range app.Goals() {
+			if gg.ID != g.ID {
+				continue
+			}
+			cur := gg.TargetAmount.Currency
+			allocs := append([]domain.GoalAllocation(nil), gg.Allocations...)
+			merged := false
+			for i, al := range allocs {
+				if al.AccountID == acctID {
+					allocs[i].Amount = money.New(al.Amount.Amount+amt, cur)
+					merged = true
+					break
+				}
+			}
+			if !merged {
+				allocs = append(allocs, domain.GoalAllocation{AccountID: acctID, Amount: money.New(amt, cur)})
+			}
+			if err := app.SetGoalAllocations(gg.ID, allocs); err == nil {
+				uistate.PostUndoable(uistate.T("goals.quickFundToast", fmtMoney(money.New(amt, cur)), acctName))
+				uistate.BumpDataRevision()
+			}
+			return
+		}
+	}))
+	onTargetDraft := ui.UseEvent(func(v string) { targetDraft.Set(v) })
+	saveTargetEdit := ui.UseEvent(Prevent(func() {
+		amt, perr := money.ParseMinor(strings.TrimSpace(targetDraft.Get()), targetDec)
+		if perr != nil || amt <= 0 {
+			targetEditing.Set(false)
+			return
+		}
+		if app := appstate.Default; app != nil {
+			for _, gg := range app.Goals() {
+				if gg.ID != g.ID {
+					continue
+				}
+				if gg.TargetAmount.Amount != amt {
+					gg.TargetAmount = money.New(amt, gg.TargetAmount.Currency)
+					if err := app.PutGoal(gg); err == nil {
+						uistate.PostUndoable(uistate.T("goals.targetChangedToast", fmtMoney(gg.TargetAmount)))
+						uistate.BumpDataRevision()
+					}
+				}
+				break
+			}
+		}
+		targetEditing.Set(false)
+	}))
+
 	now := time.Now()
 	kind := g.EffectiveKind()
 	financial := kind.IsFinancial()
@@ -158,8 +244,30 @@ func GoalRow(props goalRowProps) ui.Node {
 		mainFig = Span(css.Class("budget-amount"), uistate.T("goals.checkInsFmt", prog.Done, prog.Total))
 	default: // financial — lead with the BACKED figure: coverage (saved + earmarked)
 		// against the target, so reserved money reads as real progress at a glance.
+		// The target figure is a direct affordance: click to edit in place (mirrors the
+		// budgets limit; reuses its editor styling).
 		cov := money.New(goalsvc.CoverageMinor(g), g.TargetAmount.Currency)
-		mainFig = Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(cov)), " / "+fmtMoney(g.TargetAmount))
+		switch {
+		case targetEditing.Get():
+			mainFig = Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(saveTargetEdit),
+				Span(css.Class("budget-spent"), fmtMoney(cov)), Span(" / "),
+				Input(css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+					Attr("data-testid", "goal-target-input-"+g.ID), Attr("aria-label", uistate.T("goals.targetLabel")),
+					Value(targetDraft.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTargetDraft)),
+				Button(css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "goal-target-save-"+g.ID),
+					Attr("aria-label", uistate.T("action.save")), Title(uistate.T("action.save")), uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))),
+				Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "goal-target-cancel-"+g.ID),
+					Attr("aria-label", uistate.T("action.cancel")), Title(uistate.T("action.cancel")), OnClick(cancelTargetEdit), uiw.Icon(icon.Close, css.Class(tw.W35, tw.H35))),
+			)
+		case !g.Archived:
+			mainFig = Span(css.Class("budget-amount"),
+				Span(css.Class("budget-spent"), fmtMoney(cov)), Span(" / "),
+				Button(css.Class("budget-limit-btn"), Type("button"), Attr("data-testid", "goal-target-btn-"+g.ID),
+					Title(uistate.T("goals.targetEditTitle")), Attr("aria-label", uistate.T("goals.targetEditTitle")),
+					OnClick(startTargetEdit), fmtMoney(g.TargetAmount)))
+		default: // archived: a plain, non-interactive figure
+			mainFig = Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(cov)), " / "+fmtMoney(g.TargetAmount))
+		}
 		pctFig = Span(css.Class("budget-pct"), fmt.Sprintf("%d%%", coveragePct))
 	}
 
@@ -213,6 +321,23 @@ func GoalRow(props goalRowProps) ui.Node {
 			earmarkChip = Span(ClassStr("pace-badge earmark-full"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkFull"))
 		case goalsvc.EarmarkPartial:
 			earmarkChip = Span(ClassStr("pace-badge earmark-partial"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkPartial"))
+		}
+	}
+
+	// G8 quick-fund chip (computed at render; the click handler re-derives the same
+	// figures so a stale card can never over-reserve).
+	var quickFundChip ui.Node = Fragment()
+	if financial && !g.Archived && !complete {
+		if app := appstate.Default; app != nil {
+			if _, qName, qAmt := bestQuickEarmark(app, g.ID); qAmt > 0 {
+				quickFundChip = Div(css.Class("goal-quickfund"),
+					Button(css.Class("goal-quickfund-btn"), Type("button"),
+						Attr("data-testid", "goal-quickfund-"+g.ID),
+						Title(uistate.T("goals.quickFundTitle")), OnClick(quickFund),
+						uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+						Span(uistate.T("goals.quickFundChip", fmtMoney(money.New(qAmt, g.TargetAmount.Currency)), qName)),
+					))
+			}
 		}
 	}
 
@@ -376,14 +501,10 @@ func GoalRow(props goalRowProps) ui.Node {
 			OnClick(openEdit), uistate.T("action.edit"))
 	}
 
-	// Allocate funds (financial goals): earmark account balances toward the goal without
-	// posting a transaction. Mark reviewed (any goal with a review cadence): clears the
-	// "review due" flag. Both hidden on archived goals.
-	var allocateItem, reviewItem ui.Node = Fragment(), Fragment()
-	if financial && !g.Archived {
-		allocateItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-			Attr("data-testid", "goal-allocate-btn-"+g.ID), OnClick(openAllocate), uistate.T("goals.allocate"))
-	}
+	// Mark reviewed (any goal with a review cadence): clears the "review due" flag.
+	// Hidden on archived goals. (Set aside is NOT duplicated here — it's the card's
+	// primary action; one action, one entry point, one name.)
+	var reviewItem ui.Node = Fragment()
 	if g.ReviewCadence != "" && !g.Archived {
 		reviewItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "goal-review-btn-"+g.ID), OnClick(doMarkReviewed), uistate.T("goals.markReviewed"))
@@ -485,7 +606,9 @@ func GoalRow(props goalRowProps) ui.Node {
 	// only when the slider itself would render (financial, active, with a sensible range),
 	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
 	_, _, _, sliderOK := goalsvc.SliderRange(g, now)
-	showPlanner := financial && !g.Archived && sliderOK
+	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
+	// (completion propagates to every sub-feature, not just the tint).
+	showPlanner := financial && !g.Archived && !complete && sliderOK
 	planLabel := uistate.T("goalsredesign.planShow")
 	if planOpen.Get() {
 		planLabel = uistate.T("goalsredesign.planHide")
@@ -521,6 +644,9 @@ func GoalRow(props goalRowProps) ui.Node {
 				pctFig,
 			),
 		),
+		// G8: the one-click funding gesture — "Set aside $X from <account>" earmarks the
+		// remaining gap (capped at the account's free cash) without opening the modal.
+		quickFundChip,
 		subSection,
 		// GL3: one-tap emergency-fund sizing from the derived essential month.
 		ui.CreateElement(GoalEmergencySizer, goalEmergencyProps{App: appstate.Default, Goal: g}),
@@ -552,7 +678,6 @@ func GoalRow(props goalRowProps) ui.Node {
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
 					editItem,
-					allocateItem,
 					reviewItem,
 					pauseItem,
 					undoItem,
@@ -712,6 +837,77 @@ func addHabitCheckIn(goalID string) {
 		}
 		return
 	}
+}
+
+// bestQuickEarmark picks the account and amount for the card's one-click "Set aside"
+// gesture: the goal's remaining coverage gap (target − saved − earmarked), funded from
+// the linked account when it has free cash, else the eligible account with the most —
+// never more than that account's free-to-earmark headroom. Returns ("", "", 0) when
+// there's nothing to fund or nothing free.
+func bestQuickEarmark(app *appstate.App, goalID string) (acctID, acctName string, amt int64) {
+	var g domain.Goal
+	found := false
+	for _, gg := range app.Goals() {
+		if gg.ID == goalID {
+			g, found = gg, true
+			break
+		}
+	}
+	if !found || !g.IsFinancial() || g.TargetAmount.Amount <= 0 {
+		return "", "", 0
+	}
+	gap := g.TargetAmount.Amount - goalsvc.CoverageMinor(g)
+	if gap <= 0 {
+		return "", "", 0
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	cur := g.TargetAmount.Currency
+	if cur == "" {
+		cur = base
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	txns := app.Transactions()
+	free := func(a domain.Account) int64 {
+		bal, _ := ledger.Balance(a, txns)
+		inGoal := bal.Amount
+		if bal.Currency != cur {
+			if conv, err := rates.Convert(bal, cur); err == nil {
+				inGoal = conv.Amount
+			}
+		}
+		return goalsvc.AvailableToEarmarkMinor(app.Goals(), a.ID, inGoal, g.ID)
+	}
+	var best domain.Account
+	var bestFree int64
+	for _, a := range app.Accounts() {
+		if a.Archived || !earmarkEligibleType(a.Type) {
+			continue
+		}
+		f := free(a)
+		if f <= 0 {
+			continue
+		}
+		// The linked account wins whenever it can cover the gap outright; otherwise
+		// the account with the most headroom.
+		if a.ID == g.AccountID && f >= gap {
+			best, bestFree = a, f
+			break
+		}
+		if f > bestFree {
+			best, bestFree = a, f
+		}
+	}
+	if best.ID == "" {
+		return "", "", 0
+	}
+	amt = gap
+	if bestFree < amt {
+		amt = bestFree
+	}
+	return best.ID, best.Name, amt
 }
 
 // goalFig renders one stat cell in a goal card's figures grid (redesign): a small

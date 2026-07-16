@@ -258,6 +258,117 @@ func registerGoalsSurface() {
 	rule(".ea-bar-fill.is-over",
 		background("var(--danger)"),
 	)
+	// Add-goal quick starts: template chips + the copy-existing select on one line.
+	rule(".goal-add-start",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+		marginBottom("0.75rem"),
+		paddingBottom("0.65rem"),
+		borderBottom("1px dashed var(--border)"),
+	)
+	rule(".goal-add-start-chips",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+	)
+	rule(".goal-tmpl-chip",
+		prop("appearance", "none"),
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.3rem 0.65rem"),
+		border("1px dashed var(--border)"),
+		borderRadius("999px"),
+		background("transparent"),
+		color("var(--text)"),
+		font("inherit"),
+		fontSize("0.82rem"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".goal-tmpl-chip:hover",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+	)
+	rule(".goal-tmpl-chip:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+
+	// G3: "start an earmark" chips — goals with nothing set aside yet, one click from
+	// their Set-aside modal. Dashed pill treatment so they read as invitations.
+	rule(".ea-start",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.45rem"),
+		marginTop("0.75rem"),
+		paddingTop("0.65rem"),
+		borderTop("1px dashed var(--border)"),
+	)
+	rule(".ea-start-chips",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+	)
+	rule(".ea-start-chip",
+		prop("appearance", "none"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		padding("0.35rem 0.7rem"),
+		border("1px dashed var(--border)"),
+		borderRadius("999px"),
+		background("transparent"),
+		color("var(--text)"),
+		font("inherit"),
+		fontSize("0.85rem"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".ea-start-chip:hover",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+	)
+	rule(".ea-start-chip:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	// G4: the missed-deadline section header carries the warn tone (a decision is due).
+	rule(".goals-missed-title",
+		color("var(--warn, #d8a24a)"),
+	)
+	// G8: the one-click quick-fund chip under the card's bar — accent-tinted (it's the
+	// primary planning gesture made instant), compact, self-explaining.
+	rule(".goal-quickfund",
+		margin("0.1rem 0 0.35rem"),
+	)
+	rule(".goal-quickfund-btn",
+		prop("appearance", "none"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		padding("0.32rem 0.7rem"),
+		border("1px solid color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		borderRadius("999px"),
+		background("color-mix(in srgb, var(--accent) 9%, transparent)"),
+		color("var(--text)"),
+		font("inherit"),
+		fontSize("0.83rem"),
+		fontWeight("500"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".goal-quickfund-btn:hover",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 16%, transparent)"),
+	)
+	rule(".goal-quickfund-btn:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+
 	// Money map: the household reconciliation strip at the top of the Earmarks tab —
 	// three figures (in accounts / earmarked / free) over one stacked share bar.
 	rule(".ea-map",

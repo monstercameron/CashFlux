@@ -41,6 +41,14 @@ type ContributeResult struct {
 // amt must be positive and share the goal's currency; the caller should validate
 // before calling (the UI does this already).
 func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) (ContributeResult, error) {
+	return a.ContributeToGoalFrom(g, amt, postLedger, g.AccountID)
+}
+
+// ContributeToGoalFrom is ContributeToGoal with an explicit ledger-post account:
+// fromAcctID names which account the debit posts against (a goal linked to several
+// accounts lets the user pick), WITHOUT altering the goal's stored primary
+// AccountID. An empty fromAcctID (or postLedger=false) is memo-only.
+func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bool, fromAcctID string) (ContributeResult, error) {
 	if amt.Amount <= 0 {
 		return ContributeResult{}, fmt.Errorf("appstate: contribute: amount must be positive")
 	}
@@ -58,13 +66,13 @@ func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) 
 	// later remove both the progress and the ledger entry in one action.
 	var txnID string
 	var postErr error
-	if postLedger && g.AccountID != "" {
-		// A debit (expense-signed, negative amount) against the linked account. No
+	if postLedger && fromAcctID != "" {
+		// A debit (expense-signed, negative amount) against the chosen account. No
 		// CategoryID so it doesn't distort budget rollups — the user can categorise
 		// it manually if they wish.
 		txn := domain.Transaction{
 			ID:        id.New(),
-			AccountID: g.AccountID,
+			AccountID: fromAcctID,
 			Date:      time.Now(),
 			Payee:     fmt.Sprintf("Goal contribution — %s", g.Name),
 			Desc:      fmt.Sprintf("Contribution to savings goal %q", g.Name),
